@@ -2,8 +2,8 @@ import type {
   Engine,
   NotebookCell,
   NotebookDocument,
-  NotebookGridSlot,
 } from "videobook-engine";
+import { firstEmptyNotebookGridSlot } from "videobook-engine";
 
 type ExtractFrameMode = "first" | "time" | "last";
 
@@ -28,20 +28,6 @@ function uniqueImageSlug(
   for (let ordinal = 2; ; ordinal += 1) {
     const candidate = `${base}-${String(ordinal).padStart(2, "0")}`;
     if (!occupied.has(candidate)) return candidate;
-  }
-}
-
-function firstEmptyRowBelow(
-  cells: readonly NotebookCell[],
-  slot: NotebookGridSlot,
-): NotebookGridSlot {
-  const occupied = new Set(
-    cells.map((cell) => `${cell.slot.row}:${cell.slot.column}`),
-  );
-  for (let row = slot.row + 1; ; row += 1) {
-    if (!occupied.has(`${row}:${slot.column}`)) {
-      return { row, column: slot.column };
-    }
   }
 }
 
@@ -223,7 +209,9 @@ export function ensureExtractFrameImageOutput(
       document.cells,
       outputSlugStem(extractFrame, selection),
     ),
-    slot: firstEmptyRowBelow(document.cells, extractFrame.slot),
+    slot: firstEmptyNotebookGridSlot(
+      document.cells.map((cell) => cell.slot),
+    ),
     inputs: extractFrameOutputInputs(
       { ...extractFrame, inputs: { state: "pending" } },
       extractFrame.id,

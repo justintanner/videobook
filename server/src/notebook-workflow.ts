@@ -5,6 +5,7 @@ import type {
   NotebookEdge,
   NotebookGridSlot,
 } from "videobook-engine";
+import { firstEmptyNotebookGridSlots } from "videobook-engine";
 import {
   DEFAULT_ANIMATION_TOOL,
   normalizeCellActionFields,
@@ -61,7 +62,7 @@ export const MULTYCULTY_FEATURES = [
     caption: "FEATURE 01 · IMPORT + ANALYZE",
     promptBrief:
       "Preserve the seated subject and original composition while a refined filmstrip, waveform, and precise scene markers materialize around the source. Show the app turning one imported video into an understood edit without adding text.",
-    column: -2,
+    column: 1,
   },
   {
     ordinal: 2,
@@ -71,7 +72,7 @@ export const MULTYCULTY_FEATURES = [
     caption: "FEATURE 02 · SPLIT + EXTRACT",
     promptBrief:
       "Preserve the people, car, and location while the moment separates into elegant first-frame, last-frame, and audio-wave components connected by clean editorial motion. Show reusable scene assets without adding text.",
-    column: -1,
+    column: 2,
   },
   {
     ordinal: 3,
@@ -81,7 +82,7 @@ export const MULTYCULTY_FEATURES = [
     caption: "FEATURE 03 · PROMPT + ANIMATE",
     promptBrief:
       "Preserve the character performance and identity while an abstract prompt ribbon becomes controlled motion paths that travel from the first frame to the last frame. Show grounded animation direction without adding text.",
-    column: 1,
+    column: 4,
   },
   {
     ordinal: 4,
@@ -91,7 +92,7 @@ export const MULTYCULTY_FEATURES = [
     caption: "FEATURE 04 · CONCATENATE",
     promptBrief:
       "Preserve the dialogue scene and natural performance while four luminous editorial lanes converge into one synchronized landscape timeline and a polished finished master. Show completion and continuity without adding text.",
-    column: 2,
+    column: 5,
   },
 ] as const;
 
@@ -194,7 +195,7 @@ function featureForShot(shot: NormalizedShot): Feature | null {
 }
 
 function featureColumn(shot: NormalizedShot): number {
-  return featureForShot(shot)?.column ?? (shot.ordinal - 1) * 2 - 3;
+  return featureForShot(shot)?.column ?? (shot.ordinal - 1) * 2;
 }
 
 function stateForDerivedCell(cell: NotebookCell | undefined): string {
@@ -342,26 +343,21 @@ function allocateBranchSlots(
   const created = branchCellList(branch).filter((cell) =>
     !retainedCellIds.has(cell.id));
   if (created.length === 0) return branch;
-  let rowOffset = 0;
-  while (true) {
-    const candidateSlots = new Set<string>();
-    const collision = created.some((cell) => {
-      const key = slotKey({
-        row: cell.slot.row + rowOffset,
-        column: cell.slot.column,
-      });
-      if (occupiedSlots.has(key) || candidateSlots.has(key)) return true;
-      candidateSlots.add(key);
-      return false;
-    });
-    if (!collision) break;
-    rowOffset += 1;
-  }
+  const allocatedSlots = firstEmptyNotebookGridSlots(
+    [...occupiedSlots].map((key) => {
+      const [row, column] = key.split(":").map(Number);
+      return { row: row!, column: column! };
+    }),
+    created.length,
+  );
+  const slotsByCellId = new Map(
+    created.map((cell, index) => [cell.id, allocatedSlots[index]!] as const),
+  );
   const allocate = (cell: NotebookCell): NotebookCell => {
     if (retainedCellIds.has(cell.id)) return cell;
     return {
       ...cell,
-      slot: gridSlot(cell.slot.row + rowOffset, cell.slot.column),
+      slot: slotsByCellId.get(cell.id)!,
     };
   };
   const allocated = {
@@ -1068,10 +1064,18 @@ export function buildSevenStageScaffold(
     const role = roleOf(cell);
     if (role && !roleCells.has(role)) roleCells.set(role, cell);
   }
+  const occupiedSlots = document.cells.map((cell) => cell.slot);
+  const scaffoldSlot = (role: string): NotebookGridSlot => {
+    const existing = roleCells.get(role);
+    if (existing) return existing.slot;
+    const slot = firstEmptyNotebookGridSlots(occupiedSlots, 1)[0]!;
+    occupiedSlots.push(slot);
+    return slot;
+  };
   const source = baseCell(engine, roleCells.get("source"), {
     type: "video",
     slug: "vid-source",
-    slot: gridSlot(0, 0),
+    slot: scaffoldSlot("source"),
     provider: undefined,
     operation: undefined,
     tool: undefined,
@@ -1084,7 +1088,7 @@ export function buildSevenStageScaffold(
   const analysis = baseCell(engine, roleCells.get("analysis"), {
     type: "analyze",
     slug: "analyze-splitter",
-    slot: gridSlot(1, 0),
+    slot: scaffoldSlot("analysis"),
     prompt: retainedAnalysisPrompt(roleCells.get("analysis")),
     provider: "openai",
     model: INTELLIGENCE_MODEL,
@@ -1098,7 +1102,7 @@ export function buildSevenStageScaffold(
     {
       type: "analysis",
       slug: "analysis-splitter",
-      slot: gridSlot(2, 0),
+      slot: scaffoldSlot("analysis-output"),
       provider: undefined,
       model: undefined,
       operation: undefined,
@@ -1117,7 +1121,7 @@ export function buildSevenStageScaffold(
     {
       type: "extract_audio",
       slug: "extract-audio-source",
-      slot: gridSlot(0, 1),
+      slot: scaffoldSlot("source-extract-audio"),
       provider: "local",
       operation: "extract_audio",
       tool: "ffmpeg",
@@ -1131,7 +1135,7 @@ export function buildSevenStageScaffold(
   const audio = baseCell(engine, roleCells.get("source-audio"), {
     type: "audio",
     slug: "aud-source",
-    slot: gridSlot(1, 1),
+    slot: scaffoldSlot("source-audio"),
     provider: undefined,
     model: undefined,
     operation: undefined,
@@ -1145,7 +1149,7 @@ export function buildSevenStageScaffold(
   const assembly = baseCell(engine, roleCells.get("assembly"), {
     type: "concat",
     slug: "concat-feature-edit",
-    slot: gridSlot(18, 0),
+    slot: scaffoldSlot("assembly"),
     provider: "local",
     operation: "concat_video",
     tool: "ffmpeg",

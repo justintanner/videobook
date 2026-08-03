@@ -425,7 +425,7 @@ describe("notebook local media and analysis fan-out", () => {
     const assembly = engine.notebooks.createCell({
       type: "concat",
       slug: "concat-scenes",
-      slot: { row: 11, column: -1 },
+      slot: { row: 11, column: 0 },
       operation: "concat_video",
       tool: "ffmpeg",
       inputs: { workflowRole: "assembly" },
@@ -433,7 +433,7 @@ describe("notebook local media and analysis fan-out", () => {
     const manual = engine.notebooks.createCell({
       type: "prompt",
       slug: "prompt-manual-note",
-      slot: { row: 12, column: -1 },
+      slot: { row: 12, column: 0 },
       prompt: "Keep this card in place",
     });
     const staged = {
@@ -484,22 +484,11 @@ describe("notebook local media and analysis fan-out", () => {
     expect(newBranch).toHaveLength(8);
     const stagedIds = new Set(staged.cells.map((cell) => cell.id));
     expect(newBranch.every((cell) => !stagedIds.has(cell.id))).toBe(true);
-    const preferredRows = new Map<string, number>([
-      ["split-video-2", 2],
-      ["scene-video-2", 6],
-      ["frame-first-2", 7],
-      ["frame-last-2", 7],
-      ["scene-extract-audio-2", 7],
-      ["scene-audio-2", 8],
-      ["prompt-2", 12],
-      ["animate-2", 13],
-    ]);
-    const rowOffsets = new Set(newBranch.map((cell) =>
-      cell.slot.row - (preferredRows.get(
-        cell.inputs?.workflowRole?.toString() ?? "",
-      ) ?? cell.slot.row)));
-    expect(rowOffsets.size).toBe(1);
-    expect([...rowOffsets][0]).toBeGreaterThan(0);
+    expect(newBranch.every((cell) =>
+      cell.slot.row >= 0
+      && cell.slot.row < 26
+      && cell.slot.column >= 0
+      && cell.slot.column < 13)).toBe(true);
     expect(new Set(changed.cells.map((cell) =>
       `${cell.slot.row}:${cell.slot.column}`)).size).toBe(changed.cells.length);
     expect(new Set(changed.cells.map((cell) => cell.slug)).size)

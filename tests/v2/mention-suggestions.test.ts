@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   assetMentionMetadata,
   assetMentionSuggestions,
+  notebookAddressSuggestions,
   notebookCellRenamePlan,
   notebookMentionAssets,
   resolveNotebookMentionAliases,
@@ -42,6 +43,50 @@ function mentionCandidate(
 }
 
 describe('asset mention suggestions', () => {
+  it('offers canonical occupied and empty grid addresses', () => {
+    expect(notebookAddressSuggestions([
+      { slot: { row: 0, column: 0 }, type: 'video' },
+      { slot: { row: 25, column: 12 }, type: 'prompt' },
+    ], '@a')).toEqual([
+      {
+        value: '@a1',
+        label: '@a1',
+        description: 'VIDEO cell',
+        type: 'cell',
+      },
+      ...Array.from({ length: 11 }, (_, index) => ({
+        value: `@a${index + 2}`,
+        label: `@a${index + 2}`,
+        description: 'Empty grid square',
+        type: 'cell',
+      })),
+    ])
+    expect(notebookAddressSuggestions([
+      { slot: { row: 25, column: 12 }, type: 'prompt' },
+    ], '@Z13')).toEqual([{
+      value: '@z13',
+      label: '@z13',
+      description: 'PROMPT cell',
+      type: 'cell',
+    }])
+  })
+
+  it('maps canonical cell addresses to backing asset aliases', () => {
+    const asset = mentionAsset('vid-source', 'artifact-video')
+    const candidate = notebookMentionAssets([{
+      slug: 'internal-video-slug',
+      slot: { row: 1, column: 2 },
+      type: 'video',
+      outputArtifactId: asset.artifactId,
+    }], [asset])[0]!
+
+    expect(candidate.cellAddress).toBe('b3')
+    expect(resolveNotebookMentionAliases(
+      'combine @B3 with @b4',
+      [candidate],
+    )).toBe('combine @vid-source with @b4')
+  })
+
   it('uses only deduplicated current outputs from the open notebook', () => {
     const currentVideo = mentionAsset('vid-current', 'artifact-current')
     const currentImage = mentionAsset('img-current', 'artifact-image', {

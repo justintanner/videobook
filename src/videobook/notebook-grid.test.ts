@@ -1,16 +1,17 @@
-import { describe, expect, it } from 'vitest'
 import type { Node } from '@xyflow/react'
+import { describe, expect, it } from 'vitest'
 import {
   changedNotebookGridNodes,
   nextNotebookGridSlot,
+  normalizeNotebookGridZoom,
   notebookGrid,
   notebookGridDropSlot,
   notebookGridFrameSize,
   notebookGridMetrics,
   notebookGridPosition,
   notebookGridSlot,
+  notebookGridTag,
   notebookGridViewport,
-  normalizeNotebookGridZoom,
   resolveNotebookGridGroupMove,
   resolveNotebookGridMove,
   snapNotebookGridMove,
@@ -31,22 +32,24 @@ function node(id: string, row: number, column: number): Node<TestData> {
 }
 
 describe('notebook grid', () => {
-  it('maps pixels to signed columns and non-negative rows without horizontal limits', () => {
+  it('maps pixels into the fixed @a1 through @z13 board', () => {
     expect(notebookGridSlot({ x: -800, y: -100 })).toEqual({
       row: 0,
-      column: -3,
+      column: 0,
     })
     expect(notebookGridSlot({
-      x: notebookGrid.columnPitch * 12,
-      y: notebookGrid.originY + notebookGrid.rowPitch * 2,
-    })).toEqual({ row: 2, column: 12 })
+      x: notebookGrid.originX + notebookGrid.columnPitch * 12,
+      y: notebookGrid.originY + notebookGrid.rowPitch * 25,
+    })).toEqual({ row: 25, column: 12 })
+    expect(notebookGridTag({ row: 0, column: 0 })).toBe('@a1')
+    expect(notebookGridTag({ row: 25, column: 12 })).toBe('@z13')
   })
 
-  it('snaps the moving node without changing its persisted source slot', () => {
+  it('snaps a single drag to the nearest bounded square', () => {
     const source = [node('a', 0, 0), node('b', 0, 1)]
-    const snapped = snapNotebookGridMove(source, 'a', { row: 2, column: -3 })
+    const snapped = snapNotebookGridMove(source, 'a', { row: 100, column: -3 })
     expect(snapped[0]?.position).toEqual(
-      notebookGridPosition({ row: 2, column: -3 }),
+      notebookGridPosition({ row: 25, column: 0 }),
     )
     expect(snapped[0]?.data.slot).toEqual({ row: 0, column: 0 })
   })
@@ -57,12 +60,12 @@ describe('notebook grid', () => {
       node('b', 1, 1),
     ], 'a', { row: 100, column: -17 })
     expect(moved.map((item) => ({ id: item.id, slot: item.data.slot }))).toEqual([
-      { id: 'a', slot: { row: 100, column: -17 } },
+      { id: 'a', slot: { row: 25, column: 0 } },
       { id: 'b', slot: { row: 1, column: 1 } },
     ])
   })
 
-  it('swaps both logical slots when the destination is occupied', () => {
+  it('swaps both logical slots when a single-cell destination is occupied', () => {
     const swapped = resolveNotebookGridMove([
       node('a', 0, 0),
       node('b', 2, 3),
@@ -73,44 +76,43 @@ describe('notebook grid', () => {
     ])
   })
 
-  it('moves selected cells together while preserving their relative slots', () => {
+  it('moves selected cells together while preserving relative slots', () => {
     const moved = resolveNotebookGridGroupMove([
-      node('a', 1, -1),
-      node('b', 2, 1),
+      node('a', 1, 1),
+      node('b', 2, 3),
       node('c', 7, 4),
     ], 'a', ['a', 'b'], { row: 4, column: 2 })
-    expect(moved.map((item) => ({
-      id: item.id,
-      slot: item.data.slot,
-      position: item.position,
-    }))).toEqual([
-      {
-        id: 'a',
-        slot: { row: 4, column: 2 },
-        position: notebookGridPosition({ row: 4, column: 2 }),
-      },
-      {
-        id: 'b',
-        slot: { row: 5, column: 4 },
-        position: notebookGridPosition({ row: 5, column: 4 }),
-      },
-      {
-        id: 'c',
-        slot: { row: 7, column: 4 },
-        position: notebookGridPosition({ row: 7, column: 4 }),
-      },
+    expect(moved.map((item) => item.data.slot)).toEqual([
+      { row: 4, column: 2 },
+      { row: 5, column: 4 },
+      { row: 7, column: 4 },
     ])
   })
 
-  it('clamps a group move with one shared offset at the top edge', () => {
-    const moved = resolveNotebookGridGroupMove([
-      node('a', 2, 0),
-      node('b', 1, 2),
-    ], 'a', ['a', 'b'], { row: 0, column: -3 })
-    expect(moved.map((item) => item.data.slot)).toEqual([
-      { row: 1, column: -3 },
+  it('rejects group moves that cross an edge or collide', () => {
+    const edgeSource = [node('a', 1, 1), node('b', 2, 3)]
+    expect(resolveNotebookGridGroupMove(
+      edgeSource,
+      'a',
+      ['a', 'b'],
       { row: 0, column: -1 },
-    ])
+    ).map((item) => item.data.slot)).toEqual(
+      edgeSource.map((item) => item.data.slot),
+    )
+
+    const collisionSource = [
+      node('a', 0, 0),
+      node('b', 0, 1),
+      node('c', 0, 2),
+    ]
+    expect(resolveNotebookGridGroupMove(
+      collisionSource,
+      'a',
+      ['a', 'b'],
+      { row: 0, column: 1 },
+    ).map((item) => item.data.slot)).toEqual(
+      collisionSource.map((item) => item.data.slot),
+    )
   })
 
   it('allows selected cells to move through their own source footprint', () => {
@@ -124,147 +126,70 @@ describe('notebook grid', () => {
     ])
   })
 
-  it('cancels a group move when an unselected destination is occupied', () => {
-    const source = [
-      node('a', 0, 0),
-      node('b', 0, 1),
-      node('c', 0, 2),
-    ]
-    const moved = resolveNotebookGridGroupMove(
-      source.map((item) => item.id === 'a' || item.id === 'b'
-        ? { ...item, position: { x: 900, y: 900 } }
-        : item),
-      'a',
-      ['a', 'b'],
-      { row: 0, column: 1 },
-    )
-    expect(moved.map((item) => ({
-      slot: item.data.slot,
-      position: item.position,
-    }))).toEqual(source.map((item) => ({
-      slot: item.data.slot,
-      position: item.position,
-    })))
-  })
-
   it('returns only cells whose persisted slots changed', () => {
-    const source = [
-      node('a', 0, 0),
-      node('b', 2, 3),
-      node('c', 4, -1),
-    ]
+    const source = [node('a', 0, 0), node('b', 2, 3), node('c', 4, 1)]
     const moved = resolveNotebookGridMove(source, 'a', { row: 2, column: 3 })
     expect(changedNotebookGridNodes(source, moved).map((item) => item.id))
       .toEqual(['a', 'b'])
     expect(changedNotebookGridNodes(source, source)).toEqual([])
   })
 
-  it('chooses empty squares from the center outward', () => {
+  it('chooses empty squares in address order and reports a full grid', () => {
     expect(nextNotebookGridSlot([
       node('a', 0, 0),
       node('b', 0, 2),
       node('c', 0, 3),
-    ])).toEqual({ row: 0, column: -1 })
+    ])).toEqual({ row: 0, column: 1 })
+    const full = Array.from({ length: 338 }, (_, index) =>
+      node(String(index), Math.floor(index / 13), index % 13))
+    expect(() => nextNotebookGridSlot(full)).toThrow('Notebook grid is full')
   })
 
-  it('opens one new column from either horizontal edge drop zone', () => {
-    const metrics = notebookGridMetrics([
-      { row: 0, column: -3 },
-      { row: 0, column: 3 },
-    ])
-    expect(notebookGridDropSlot({
-      x: metrics.minColumn * notebookGrid.columnPitch - 1,
-      y: notebookGrid.originY,
-    }, metrics)).toEqual({ row: 0, column: -4 })
-    expect(notebookGridDropSlot({
-      x: metrics.maxColumn * notebookGrid.columnPitch + notebookGrid.squareSize + 1,
-      y: notebookGrid.originY,
-    }, metrics)).toEqual({ row: 0, column: 4 })
-  })
-
-  it('measures an odd square board around a permanent center column', () => {
-    const metrics = notebookGridMetrics([
-      { row: 0, column: -3 },
-      { row: 9, column: 3 },
-    ])
-    expect(metrics).toEqual({
-      rowCount: 12,
-      columnCount: 7,
-      minColumn: -3,
-      maxColumn: 3,
-      centerX: 888,
-      width: 2016,
-      height: 3416,
+  it('keeps thirteen columns and grows visible rows to one trailing row', () => {
+    expect(notebookGridMetrics([
+      { row: 0, column: 0 },
+      { row: 9, column: 12 },
+    ])).toEqual({
+      rowCount: 11,
+      columnCount: 13,
+      minColumn: 0,
+      maxColumn: 12,
+      centerX: 1848,
+      width: 3696,
+      height: 3136,
     })
-    expect(metrics.centerX + notebookGrid.squareSize / 2).toBe(metrics.width / 2)
-  })
-
-  it('grows symmetrically for drag previews on either horizontal side', () => {
-    expect(notebookGridMetrics(
-      [{ row: 0, column: 0 }],
-      { preview: { row: 12, column: -7 } },
-    )).toEqual({
-      rowCount: 15,
-      columnCount: 15,
-      minColumn: -7,
-      maxColumn: 7,
-      centerX: 2008,
-      width: 4256,
-      height: 4256,
-    })
-  })
-
-  it('fills the viewport and leaves bottom rows for unlimited placement', () => {
     expect(notebookGridMetrics([], {
       viewportWidth: 2048,
       viewportHeight: 900,
       zoom: 0.5,
     })).toEqual({
       rowCount: 7,
-      columnCount: 15,
-      minColumn: -7,
-      maxColumn: 7,
-      centerX: 2008,
-      width: 4256,
+      columnCount: 13,
+      minColumn: 0,
+      maxColumn: 12,
+      centerX: 1848,
+      width: 3696,
       height: 2016,
     })
-    expect(notebookGridMetrics([])).toEqual({
-      rowCount: 3,
-      columnCount: 7,
-      minColumn: -3,
-      maxColumn: 3,
-      centerX: 888,
-      width: 2016,
-      height: 896,
-    })
+    expect(notebookGridMetrics([]).rowCount).toBe(3)
+    expect(notebookGridMetrics([{ row: 25, column: 12 }]).rowCount).toBe(26)
   })
 
-  it('opens a new bottom row from the lower edge drop zone', () => {
+  it('bounds edge drops and starts the viewport at the top left', () => {
     const metrics = notebookGridMetrics([{ row: 5, column: 0 }])
-    expect(notebookGridDropSlot({
-      x: 0,
-      y: notebookGrid.originY
-        + (metrics.rowCount - 1) * notebookGrid.rowPitch
-        + notebookGrid.squareSize
-        + 1,
-    }, metrics)).toEqual({ row: metrics.rowCount, column: 0 })
-  })
-
-  it('scales the frame while keeping column zero at its horizontal center', () => {
-    const metrics = notebookGridMetrics([{ row: 0, column: 0 }])
-    expect(notebookGridFrameSize(metrics, 1.5)).toEqual({
-      width: 3024,
+    expect(notebookGridDropSlot({ x: -100, y: -100 }, metrics))
+      .toEqual({ row: 0, column: 0 })
+    expect(notebookGridDropSlot({ x: 100_000, y: 100_000 }, metrics))
+      .toEqual({ row: 25, column: 12 })
+    expect(notebookGridFrameSize(notebookGridMetrics([]), 1.5)).toEqual({
+      width: 5544,
       height: 1344,
     })
     expect(notebookGridViewport(metrics, 1.5, -40)).toEqual({
-      x: 1332,
+      x: 0,
       y: -40,
       zoom: 1.5,
     })
-    expect(
-      notebookGridViewport(metrics, 1.5).x
-        + notebookGrid.squareSize * 1.5 / 2,
-    ).toBe(notebookGridFrameSize(metrics, 1.5).width / 2)
   })
 
   it('clamps invalid and out-of-range zoom values', () => {

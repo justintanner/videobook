@@ -62,6 +62,12 @@ describe('notebook image generation commands', () => {
       sourceReferences: ['img-01', 'img-02'],
     })
     expect(parseNotebookImageGenerationCommand(
+      'generate an image using @A1',
+    )).toEqual({
+      prompt: 'Create a new image based on the connected reference image.',
+      sourceReferences: ['a1'],
+    })
+    expect(parseNotebookImageGenerationCommand(
       'create an image of a sunset',
     )).toEqual({
       prompt: 'a sunset',
@@ -91,6 +97,14 @@ describe('notebook image generation commands', () => {
       mediaKind: 'video',
       prompt: 'Create new video media based on the connected references.',
       sourceReferences: ['vid-dance', 'generate-image-01'],
+    })
+    expect(parseNotebookChatGenerationCommand(
+      'gen vid with @A1 and @z13',
+    )).toEqual({
+      cellType: 'generate_video',
+      mediaKind: 'video',
+      prompt: 'Create new video media based on the connected references.',
+      sourceReferences: ['a1', 'z13'],
     })
   })
 
@@ -125,12 +139,14 @@ describe('notebook image generation commands', () => {
 
     expect(resolveNotebookImageGenerationSources(document, ['img-ready']))
       .toEqual([image])
+    expect(resolveNotebookImageGenerationSources(document, ['A1']))
+      .toEqual([image])
     expect(() => resolveNotebookImageGenerationSources(document, ['vid-source']))
-      .toThrow('@vid-source is not an image-producing cell')
+      .toThrow('@a2 is not an image-producing cell')
     expect(() => resolveNotebookImageGenerationSources(document, ['img-pending']))
-      .toThrow('@img-pending does not have an image output yet')
+      .toThrow('@a3 does not have an image output yet')
     expect(() => resolveNotebookImageGenerationSources(document, ['img-other']))
-      .toThrow('@img-other was not found in this notebook')
+      .toThrow('Notebook cell @img-other was not found')
   })
 
   it('creates a configured book cell, connects its image source, and produces a canonical plan', async () => {
@@ -268,7 +284,7 @@ describe('notebook image generation commands', () => {
       .toMatchObject({
         type: 'generate_image',
         slug: 'generate-image-01',
-        slot: { row: 2, column: 2 },
+        slot: { row: 0, column: 0 },
         prompt: 'neon rain',
         provider: 'kie',
         model: 'NanoBananaProRequestSchema',

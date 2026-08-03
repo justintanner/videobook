@@ -56,7 +56,7 @@ describe('notebook draft conversion', () => {
     })
   })
 
-  it('renders persisted slots without coordinate normalization', () => {
+  it('renders persisted bounded grid slots without coordinate normalization', () => {
     const placed: NotebookDocument = {
       ...source,
       cells: [
@@ -65,14 +65,14 @@ describe('notebook draft conversion', () => {
           ...source.cells[0]!,
           id: '018f7cf5-0d31-7d96-8c0f-800000000005',
           type: 'generate_image',
-          slot: { row: 2, column: -3 },
+          slot: { row: 2, column: 3 },
         },
       ],
     }
 
     expect(notebookNodes(placed).map((node) => node.data.slot)).toEqual([
       { row: 0, column: 0 },
-      { row: 2, column: -3 },
+      { row: 2, column: 3 },
     ])
   })
 
@@ -178,13 +178,13 @@ describe('notebook draft conversion', () => {
       cells: [{
         ...source.cells[0]!,
         type: 'prompt',
-        slot: { row: 9, column: -2 },
+        slot: { row: 9, column: 2 },
       }],
     }
 
     expect(notebookNodes(labeled)[0]).toMatchObject({
-      position: { x: -560, y: 2568 },
-      data: { slot: { row: 9, column: -2 } },
+      position: { x: 608, y: 2568 },
+      data: { slot: { row: 9, column: 2 } },
     })
     expect(notebookNodes(labeled)[0]?.draggable).toBeUndefined()
   })

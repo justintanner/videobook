@@ -8,8 +8,10 @@ import type {
   SearchQuery,
 } from "videobook-engine";
 import {
+  firstEmptyNotebookGridSlot,
   findAudioFile,
   findVideoFile,
+  isNotebookGridSlot,
   MVP_CONTRACT_VERSION,
   sourceTicksToSequenceFrames,
 } from "videobook-engine";
@@ -788,8 +790,8 @@ export function semanticSearchDefs(
         cell_id: z.string().uuid().optional(),
         cell_slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)+$/),
         slot: z.object({
-          row: z.number().int().nonnegative(),
-          column: z.number().int(),
+          row: z.number().int().min(0).max(25),
+          column: z.number().int().min(0).max(12),
         }).optional(),
         query: searchQuerySchema,
         hit: searchHitSchema,
@@ -1452,25 +1454,19 @@ function isSlot(value: unknown): value is { row: number; column: number } {
   if (typeof value !== "object" || value === null) return false;
   const slot = value as Record<string, unknown>;
   return Number.isSafeInteger(slot.row)
-    && Number(slot.row) >= 0
     && Number.isSafeInteger(slot.column)
-    && Number(slot.column) >= 0;
+    && isNotebookGridSlot({
+      row: Number(slot.row),
+      column: Number(slot.column),
+    });
 }
 
 function firstEmptyNotebookSlot(notebook: {
   cells: NotebookCell[];
 }): { row: number; column: number } {
-  const columnCount = 4;
-  const occupied = new Set(
-    notebook.cells.map((cell) => `${cell.slot.row}:${cell.slot.column}`),
+  return firstEmptyNotebookGridSlot(
+    notebook.cells.map((cell) => cell.slot),
   );
-  for (let index = 0; ; index += 1) {
-    const slot = {
-      row: Math.floor(index / columnCount),
-      column: index % columnCount,
-    };
-    if (!occupied.has(`${slot.row}:${slot.column}`)) return slot;
-  }
 }
 
 function uniqueNotebookCellSlug(

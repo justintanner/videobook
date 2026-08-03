@@ -1,7 +1,6 @@
 import {
   AudioWaveform,
   Braces,
-  Check,
   ChevronDown,
   CircleAlert,
   CircleX,
@@ -9,12 +8,14 @@ import {
   Image as ImageIcon,
   Layers2,
   Maximize2,
-  Pencil,
   Save,
-  X,
 } from 'lucide-react'
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import type { NotebookCell, NotebookEdge } from 'videobook-engine'
+import {
+  notebookGridAddress,
+  notebookGridTag,
+} from 'videobook-engine/notebook-grid'
 import {
   doltCellDisplayValue,
   doltCellRows,
@@ -364,7 +365,7 @@ type NotebookCellInspectorProps = {
   generationActions?: readonly NotebookGenerationAction[]
   onUpdate: NotebookCellUpdate
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
-  onRun: (cellId: string) => Promise<void>
+  onRun: (cellId: string) => Promise<unknown>
   onClearSlot: () => Promise<void>
   onDelete: () => Promise<void>
   onOpenFullscreen: () => void
@@ -824,114 +825,13 @@ function InputSources({
   )
 }
 
-function SlugField({
-  cell,
-  busy,
-  onUpdate,
-}: {
-  cell: NotebookCell
-  busy: boolean
-  onUpdate: NotebookCellInspectorProps['onUpdate']
-}) {
-  const [editing, setEditing] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [draft, setDraft] = useState(cell.slug)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (!editing) return
-    inputRef.current?.focus()
-    inputRef.current?.select()
-  }, [editing])
-
-  const beginEditing = () => {
-    if (editing || busy || saving) return
-    setDraft(cell.slug)
-    setEditing(true)
-  }
-  const cancel = () => {
-    setDraft(cell.slug)
-    setEditing(false)
-  }
-  const save = async () => {
-    const slug = draft.trim()
-    if (!slug || slug === cell.slug) {
-      cancel()
-      return
-    }
-    setSaving(true)
-    try {
-      await onUpdate({ slug })
-      setEditing(false)
-    } finally {
-      setSaving(false)
-    }
-  }
-
+function AddressField({ cell }: { cell: NotebookCell }) {
   return (
     <div className="inspector-slug-field">
-      <label htmlFor={`inspector-slug-${cell.id}`}>Slug</label>
-      <form
-        className={`inspector-slug-control${editing ? ' editing' : ''}`}
-        aria-busy={saving}
-        onSubmit={(event) => {
-          event.preventDefault()
-          void save()
-        }}
-      >
-        <span className="inspector-slug-prefix" aria-hidden="true">@</span>
-        <input
-          ref={inputRef}
-          id={`inspector-slug-${cell.id}`}
-          value={editing ? draft : cell.slug}
-          readOnly={!editing}
-          title={editing ? undefined : 'Click to edit slug'}
-          autoComplete="off"
-          spellCheck={false}
-          disabled={busy || saving}
-          onClick={beginEditing}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== 'Escape') return
-            event.preventDefault()
-            cancel()
-          }}
-        />
-        {editing ? (
-          <>
-            <button
-              type="submit"
-              className="inspector-slug-action inspector-slug-save"
-              aria-label="Save slug"
-              title="Save slug"
-              disabled={busy || saving || !draft.trim()}
-            >
-              <Check size={14} />
-            </button>
-            <button
-              type="button"
-              className="inspector-slug-action"
-              aria-label="Cancel slug edit"
-              title="Cancel slug edit"
-              disabled={busy || saving}
-              onClick={cancel}
-            >
-              <X size={14} />
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="inspector-slug-action"
-            aria-label="Edit slug"
-            title="Edit slug"
-            disabled={busy}
-            onClick={beginEditing}
-          >
-            <Pencil size={13} />
-          </button>
-        )}
-      </form>
+      <label>Address</label>
+      <div className="inspector-slug-control inspector-address-control">
+        <span className="inspector-slug-prefix">{notebookGridTag(cell.slot)}</span>
+      </div>
     </div>
   )
 }
@@ -1093,7 +993,6 @@ function MediaCellInspector({
   busy,
   clearing,
   deleting,
-  onUpdate,
   onSetInput,
   onClearSlot,
   onDelete,
@@ -1167,7 +1066,7 @@ function MediaCellInspector({
   return (
     <div className="inspector-body inspector-media-body">
       <div className="inspector-media-content">
-        <SlugField cell={cell} busy={busy} onUpdate={onUpdate} />
+        <AddressField cell={cell} />
         <span className="inspector-media-field-label">
           {cell.type.replaceAll('_', ' ').toUpperCase()}
         </span>
@@ -1184,7 +1083,7 @@ function MediaCellInspector({
         {previewAsset ? (
           <NotebookCellMedia
             asset={previewAsset}
-            slug={cell.slug}
+            slug={notebookGridAddress(cell.slot)}
             allowFullscreen={cell.type === 'image' || cell.type === 'video'}
             onOpenFullscreen={onOpenFullscreen}
           />
@@ -1460,7 +1359,6 @@ function AnalysisCellInspector({
   busy,
   clearing,
   deleting,
-  onUpdate,
   onSetInput,
   onClearSlot,
   onDelete,
@@ -1521,7 +1419,7 @@ function AnalysisCellInspector({
   return (
     <div className="inspector-body inspector-analysis-body">
       <div className="inspector-analysis-content">
-        <SlugField cell={cell} busy={busy} onUpdate={onUpdate} />
+        <AddressField cell={cell} />
         {artifactIds.length > 1 && (
           <OutputVersionSelector
             artifactIds={artifactIds}
@@ -1954,11 +1852,11 @@ function ExecutableCellInspector({
 
   return (
     <div className="inspector-body inspector-executable-body">
-      <SlugField cell={cell} busy={busy} onUpdate={onUpdate} />
+      <AddressField cell={cell} />
       {asset && previewCell && (
         <NotebookCellMedia
           asset={asset}
-          slug={cell.slug}
+          slug={notebookGridAddress(cell.slot)}
           allowFullscreen={false}
           onOpenFullscreen={onOpenFullscreen}
         />
@@ -2198,7 +2096,7 @@ function ExecutableCellInspector({
             className="inspector-payload-disclosure"
             label="Payload"
             summary={payloadSummary}
-            ariaLabel={`Provider payload preview for @${cell.slug}`}
+            ariaLabel={`Provider payload preview for ${notebookGridTag(cell.slot)}`}
             loadValue={() => onPreviewPayload(cell.id, {
               prompt: draft.prompt,
               provider: draft.provider,

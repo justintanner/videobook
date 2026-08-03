@@ -612,7 +612,7 @@ describe("notebook runner frames and concat", () => {
       cell.id === firstOutputEdges[0]!.target);
     expect(firstImage).toMatchObject({
       slug: "img-source-02",
-      slot: { row: 3, column: 0 },
+      slot: { row: 0, column: 1 },
       outputArtifactId: first.outputArtifactId,
       inputs: {
         mediaRole: "extract-frame-output",

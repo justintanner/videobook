@@ -198,10 +198,10 @@ describe("Multyculty workflow fixture", () => {
       noPaidCalls: true,
     }));
     expect(source?.outputArtifactId).toBe(sourceId);
-    expect(source?.slot).toEqual({ row: 0, column: 0 });
-    expect(analysis?.slot).toEqual({ row: 1, column: -1 });
-    expect(sourceExtractAudio?.slot).toEqual({ row: 1, column: 1 });
-    expect(analysisOutput?.slot).toEqual({ row: 2, column: -1 });
+    expect(source?.slot).toEqual({ row: 0, column: 3 });
+    expect(analysis?.slot).toEqual({ row: 1, column: 2 });
+    expect(sourceExtractAudio?.slot).toEqual({ row: 1, column: 4 });
+    expect(analysisOutput?.slot).toEqual({ row: 2, column: 2 });
     expect(analysis?.prompt).toContain("verified camera switches");
     expect(analysis?.inputs?.fixtureOwner).toBe("multyculty-default");
     expect(analysis?.inputs).not.toHaveProperty("fixtureAnalysis");
@@ -270,8 +270,8 @@ describe("Multyculty workflow fixture", () => {
       expect.objectContaining({ kind: "camera_cut", timestampSeconds: 15 }),
       expect.objectContaining({ kind: "source_end", timestampSeconds: 30 }),
     ]);
-    expect(audio?.slot).toEqual({ row: 2, column: 1 });
-    const featureColumns = [-2, 2];
+    expect(audio?.slot).toEqual({ row: 2, column: 4 });
+    const featureColumns = [1, 5];
     for (let ordinal = 1; ordinal <= 2; ordinal += 1) {
       const column = featureColumns[ordinal - 1];
       expect(first.cells.find((cell) =>
@@ -299,7 +299,7 @@ describe("Multyculty workflow fixture", () => {
         cell.inputs?.workflowRole === `animate-${ordinal}`)?.slot)
         .toEqual({ row: 7, column });
     }
-    expect(assembly?.slot).toEqual({ row: 8, column: 0 });
+    expect(assembly?.slot).toEqual({ row: 8, column: 3 });
     expect(assembly?.slug).toBe("concat-scenes");
     expect(first.cells.filter((cell) => cell.operation === "rewrite_prompt").every((cell) =>
       cell.inputs?.requiresConfirmation === true)).toBe(true);

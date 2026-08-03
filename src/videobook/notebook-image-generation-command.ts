@@ -1,3 +1,4 @@
+import { firstEmptyNotebookGridSlot } from 'videobook-engine/notebook-grid'
 import type {
   NotebookCell,
   NotebookDocument,
@@ -8,6 +9,11 @@ import {
   type NotebookGenerationAction,
 } from './notebook-generation-actions'
 import { nextNotebookCellSlug } from './notebook-download'
+import {
+  notebookCellTag,
+  notebookReferences,
+  resolveNotebookCellReference,
+} from './notebook-addressing'
 
 export type NotebookImageGenerationCommand = {
   prompt: string
@@ -42,16 +48,13 @@ function stringValue(value: unknown): string | null {
 }
 
 function uniqueReferences(input: string): string[] {
-  const references = [...input.matchAll(
-    /@([a-z0-9]+(?:-[a-z0-9]+)+)/giu,
-  )].map((match) => match[1]!.toLowerCase())
-  return [...new Set(references)]
+  return notebookReferences(input)
 }
 
 function imagePrompt(tail: string, referenceCount: number): string {
   const withoutReferences = tail
     .replace(
-      /(?:\b(?:with|using|from|based\s+on)\s+)?@[a-z0-9]+(?:-[a-z0-9]+)+/giu,
+      /(?:\b(?:with|using|from|based\s+on)\s+)?@[a-z0-9-]+/giu,
       ' ',
     )
     .replace(/\s+/gu, ' ')
@@ -64,19 +67,6 @@ function imagePrompt(tail: string, referenceCount: number): string {
   return referenceCount > 0
     ? 'Create a new image based on the connected reference image.'
     : 'Create a new image.'
-}
-
-function firstEmptyRowBelow(
-  cells: readonly NotebookCell[],
-  source: NotebookGridSlot,
-): NotebookGridSlot {
-  const occupied = new Set(cells.map((cell) =>
-    `${cell.slot.row}:${cell.slot.column}`))
-  for (let row = source.row + 1; ; row += 1) {
-    if (!occupied.has(`${row}:${source.column}`)) {
-      return { row, column: source.column }
-    }
-  }
 }
 
 export function parseNotebookImageGenerationCommand(
@@ -98,24 +88,12 @@ export function resolveNotebookImageGenerationSources(
   sourceReferences: readonly string[],
 ): NotebookCell[] {
   return sourceReferences.map((sourceReference) => {
-    const reference = sourceReference.replace(/^@/u, '').toLowerCase()
-    const exact = document.cells.find((cell) =>
-      cell.slug.toLowerCase() === reference
-      || cell.id.toLowerCase() === reference)
-    const prefixMatches = exact
-      ? []
-      : document.cells.filter((cell) =>
-          cell.id.toLowerCase().startsWith(reference))
-    if (prefixMatches.length > 1) {
-      throw new Error(`Cell reference @${reference} is ambiguous`)
-    }
-    const source = exact ?? prefixMatches[0]
-    if (!source) throw new Error(`Image cell @${reference} was not found in this notebook`)
+    const source = resolveNotebookCellReference(document, sourceReference)
     if (!imageSourceTypes.has(source.type)) {
-      throw new Error(`@${source.slug} is not an image-producing cell`)
+      throw new Error(`${notebookCellTag(source)} is not an image-producing cell`)
     }
     if (!source.outputArtifactId) {
-      throw new Error(`@${source.slug} does not have an image output yet`)
+      throw new Error(`${notebookCellTag(source)} does not have an image output yet`)
     }
     return source
   })
@@ -127,6 +105,7 @@ export async function materializeNotebookImageGenerationCommand(input: {
   callTool: NotebookToolCall
   command: NotebookImageGenerationCommand
   document: NotebookDocument
+  expectedRevision?: string
   fallbackSlot: NotebookGridSlot
 }): Promise<NotebookImageGenerationCommandRun> {
   const sources = resolveNotebookImageGenerationSources(
@@ -143,13 +122,16 @@ export async function materializeNotebookImageGenerationCommand(input: {
   }
   const slug = nextNotebookCellSlug('generate_image', input.document.cells)
   const slot = sources[0]
-    ? firstEmptyRowBelow(input.document.cells, sources[0].slot)
+    ? firstEmptyNotebookGridSlot(input.document.cells.map((cell) => cell.slot))
     : input.fallbackSlot
   let cellId: string | null = null
   try {
     const created = objectValue(await input.callTool('create_notebook_cell', {
       book_id: input.bookId,
       notebook_id: input.document.id,
+      ...(input.expectedRevision
+        ? { expected_revision: input.expectedRevision }
+        : {}),
       cell: {
         type: 'generate_image',
         slug,

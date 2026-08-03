@@ -144,10 +144,12 @@ import {
   nextNotebookGridSlot,
   normalizeNotebookGridZoom,
   notebookGrid,
+  notebookGridAddress,
   notebookGridDropSlot,
   notebookGridFrameSize,
   notebookGridMetrics,
   notebookGridSlot,
+  notebookGridTag,
   notebookGridViewport,
   resolveNotebookGridGroupMove,
   snapNotebookGridMove,
@@ -239,6 +241,15 @@ import {
 import { restoreCommandComposerFocus } from '@/videobook/command-composer-focus'
 import { parsePendingApplyCommand } from '@/videobook/command-composer-outcome'
 import { revealNotebookResult } from '@/videobook/notebook-result-reveal'
+import {
+  notebookAddressExpectationsAreStale,
+  parseNotebookCoordinateAction,
+  planNotebookCoordinateAction,
+  type NotebookAddressExpectation,
+  type NotebookCoordinateAction,
+  type NotebookCoordinateActionPlan,
+} from '@/videobook/notebook-coordinate-actions'
+import { notebookCellAtSlot } from '@/videobook/notebook-addressing'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
 
@@ -402,14 +413,30 @@ type PendingChatAction =
       previewError: string | null
       previewLoading: boolean
       previewStale: boolean
+      expectations: NotebookAddressExpectation[]
       reason: string
       summary: string
     }
   | {
       kind: 'frame'
       command: NotebookFrameCommand
+      expectations: NotebookAddressExpectation[]
+      notebookId: string
       reason: string
       summary: string
+    }
+  | {
+      kind: 'split'
+      command: NotebookSplitCommand
+      expectations: NotebookAddressExpectation[]
+      notebookId: string
+      reason: string
+      summary: string
+    }
+  | {
+      kind: 'notebook'
+      notebookId: string
+      plan: NotebookCoordinateActionPlan
     }
   | {
       kind: 'routed'
@@ -492,7 +519,9 @@ const MediaSlotContext = createContext<MediaSlotContextValue>({
   onFileError: () => undefined,
   onOpenLibrary: () => undefined,
 })
-const CellRunContext = createContext<(cellId: string) => Promise<void>>(
+const CellRunContext = createContext<(
+  cellId: string,
+) => Promise<ComposerOutcome | undefined>>(
   async () => undefined,
 )
 
@@ -752,6 +781,10 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
     || column === null
     || !Number.isInteger(row)
     || !Number.isInteger(column)
+    || row < 0
+    || row > 25
+    || column < 0
+    || column > 12
   ) return null
   if (!notebookCellTypes.has(type ?? '')) return null
   const inputs = record(item.inputs)
@@ -783,7 +816,9 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
   }
 }
 
-function asNotebook(value: unknown): NotebookDocument | null {
+type NotebookSnapshot = NotebookDocument & { revision?: string }
+
+function asNotebook(value: unknown): NotebookSnapshot | null {
   const item = record(value)
   const id = item && asString(item.id)
   const name = item && asString(item.name)
@@ -811,6 +846,7 @@ function asNotebook(value: unknown): NotebookDocument | null {
     id,
     name,
     createdAt,
+    ...(asString(item.revision) ? { revision: asString(item.revision)! } : {}),
     ...(asString(item.description) ? { description: asString(item.description)! } : {}),
     ...(asString(item.lifecycleState ?? item.lifecycle_state)
       ? { lifecycleState: asString(item.lifecycleState ?? item.lifecycle_state)! }
@@ -1695,7 +1731,7 @@ function emptyCellLabel(data: CanvasCellData): string {
   if (data.kind === 'split_video') return 'Configure a video range'
   if (data.kind === 'concat') return 'Connect clip:0 and clip:1'
   if (data.kind === 'splice') return 'Connect first and second'
-  return data.prompt || `@${data.slug}`
+  return data.prompt || notebookGridTag(data.slot)
 }
 
 function assetPreviewUrl(asset: AssetRecord | undefined): string | null {
@@ -2329,12 +2365,12 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           </div>
         )}
         <footer className="cell-node-footer">
-          <strong>@{data.slug}</strong>
+          <strong>{notebookGridTag(data.slot)}</strong>
           <CellStatusBadge status={statusLabel} />
         </footer>
         <CellStateOverlay
           kind={data.kind}
-          slug={data.slug}
+          slug={notebookGridAddress(data.slot)}
           status={data.status}
           statusStartedAt={data.statusStartedAt}
           statusError={data.statusError}
@@ -2590,7 +2626,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (!cell) return []
           return [{
             cellId,
-            slug: cell.slug,
+            slug: notebookGridAddress(cell.slot),
             type: cell.type,
             asset: cell.outputArtifactId
               ? assetById.get(cell.outputArtifactId) ?? null
@@ -3175,16 +3211,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }, [applyJobsSnapshot, applyNotebook, setCellRunError, setNotice])
 
-  const runCell = useCallback(async (cellId: string) => {
+  const runCell = useCallback(async (
+    cellId: string,
+    providedNotebook?: NotebookSnapshot,
+  ) => {
     if (!bookId || !notebook) return
     setBusy(true)
     setCellRunError(cellId, null)
     try {
-      const currentValue = await call('get_notebook', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-      })
-      const currentNotebook = asNotebook(currentValue)
+      const currentNotebook = providedNotebook ?? asNotebook(await call(
+        'get_notebook',
+        {
+          book_id: bookId,
+          notebook_id: notebook.id,
+        },
+      ))
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
@@ -3203,7 +3244,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (cloud) {
         const outcome = await prepareGenerationPlan(cellId, 'ui')
         setNotice(outcome.message, outcome.ok ? 'info' : 'error')
-        return
+        return outcome
       }
       const accepted = await startNotebookCellRun({
         start: () => call('run_notebook_cell', {
@@ -3211,6 +3252,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           notebook_id: currentNotebook.id,
           cell_id: cellId,
           actor: 'videobook-user',
+          ...(currentNotebook.revision
+            ? { expected_revision: currentNotebook.revision }
+            : {}),
         }),
         onStarting: () => setCellQueued(cellId, true),
         onRejected: () => setCellQueued(cellId, false),
@@ -3220,12 +3264,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!runId || !jobOperationId) {
         throw new Error('The server did not return a notebook run')
       }
-      setNotice(`@${cell.slug} queued`)
+      setNotice(`${notebookGridTag(cell.slot)} queued`)
       const outcome = await watchNotebookRun({
         bookId,
         notebookId: currentNotebook.id,
         cellId,
-        slug: cell.slug,
+        slug: notebookGridAddress(cell.slot),
         runId,
         jobOperationId,
         intervalMs: notebookRunPollIntervalMs,
@@ -3233,18 +3277,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         maxPollFailures: 1,
       })
       if (outcome.kind === 'failed') {
-        throw new Error(outcome.message ?? `@${cell.slug} failed`)
+        throw new Error(outcome.message ?? `${notebookGridTag(cell.slot)} failed`)
       }
       if (outcome.kind === 'timeout') {
         throw new Error('Notebook run did not finish within five minutes')
       }
       if (outcome.kind === 'completed') {
-        setNotice(`@${cell.slug} updated`)
+        setNotice(`${notebookGridTag(cell.slot)} updated`)
+      }
+      return {
+        ok: true,
+        message: `${notebookGridTag(cell.slot)} run accepted`,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setCellRunError(cellId, message)
       setNotice(message, 'error')
+      return { ok: false, message }
     } finally {
       setCellQueued(cellId, false)
       setBusy(false)
@@ -3550,16 +3599,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? current
           : next
       })
-      container.scrollLeft = Math.max(
-        0,
-        (container.scrollWidth - container.clientWidth) / 2,
-      )
     }
     sync()
     const observer = new ResizeObserver(sync)
     observer.observe(container)
     return () => observer.disconnect()
-  }, [notebookFrameSize.width])
+  }, [notebook?.id])
+
+  useLayoutEffect(() => {
+    const container = notebookScrollRef.current
+    if (!container) return
+    container.scrollLeft = 0
+    container.scrollTop = 0
+  }, [bookId, notebook?.id])
 
   const selectedCell = useMemo(
     () => presentedNodes.find((node) => node.id === selectedCellId) ?? null,
@@ -3979,7 +4031,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         },
       })
       await refreshBookData(bookId, notebook.id)
-      setNotice(`Added @${slug} cell`)
+      setNotice(`Added ${notebookGridTag(slot)} cell`)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
@@ -5574,19 +5626,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       bookId,
       notebookId: notebook.id,
       cellId: createdCellId,
-      slug: cell.slug,
+      slug: notebookGridAddress(cell.slot),
       artifactId: cell.output_artifact_id,
     })
     return {
       ok: true,
-      message: messageFor(result, `Download queued as @${cell.slug}`),
+      message: messageFor(result, `Download queued as ${notebookGridTag(cell.slot)}`),
     }
   }
 
   const watchNotebookSplitRun = async (input: {
+    actionAddress: string
     bookId: string
     notebookId: string
+    outputAddresses: string[]
     run: NotebookSplitRun
+    sourceAddress: string
   }) => {
     let outcome: Awaited<ReturnType<typeof watchNotebookRun>>
     try {
@@ -5594,7 +5649,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         bookId: input.bookId,
         notebookId: input.notebookId,
         cellId: input.run.actionCellId,
-        slug: input.run.actionSlug,
+        slug: input.actionAddress.slice(1),
         runId: input.run.runId,
         jobOperationId: input.run.jobId,
         intervalMs: notebookRunPollIntervalMs,
@@ -5604,7 +5659,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (outcome.kind === 'failed') {
         setCellRunError(
           input.run.actionCellId,
-          outcome.message ?? `@${input.run.actionSlug} failed`,
+          outcome.message ?? `${input.actionAddress} failed`,
         )
       }
     } catch (error) {
@@ -5615,25 +5670,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setCellQueued(input.run.actionCellId, false)
     }
     if (outcome.kind === 'failed') {
-      setNotice(outcome.message ?? `@${input.run.actionSlug} failed`, 'error')
+      setNotice(outcome.message ?? `${input.actionAddress} failed`, 'error')
       return
     }
     if (outcome.kind === 'timeout') {
       setNotice(
-        `@${input.run.sourceSlug} is still splitting — check the Jobs screen`,
+        `${input.sourceAddress} is still splitting — check the Jobs screen`,
       )
       return
     }
     if (outcome.kind === 'superseded') return
-    const outputSlugs = input.run.outputs.map((output) => `@${output.outputSlug}`)
     setSelectedCellId(input.run.outputs.at(-1)?.outputCellId ?? null)
     setNotice(
-      `Split @${input.run.sourceSlug} into ${outputSlugs.join(' and ')}`,
+      `Split ${input.sourceAddress} into ${input.outputAddresses.join(' and ')}`,
     )
   }
 
   const executeNotebookSplitCommand = async (
     command: NotebookSplitCommand,
+    currentNotebook: NotebookSnapshot,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before splitting a video.' }
@@ -5641,27 +5696,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     let actionCellId: string | null = null
     setBusy(true)
     try {
-      const [notebookValue, assetValue] = await Promise.all([
-        call('get_notebook', {
-          book_id: bookId,
-          notebook_id: notebook.id,
-        }),
-        call('list_assets', {
-          book_id: bookId,
-          sort: 'newest',
-          limit: 200,
-          include_referenced: true,
-        }),
-      ])
-      const currentNotebook = asNotebook(notebookValue)
-      if (!currentNotebook) {
-        throw new Error('The server returned an invalid notebook')
-      }
+      const assetValue = await call('list_assets', {
+        book_id: bookId,
+        sort: 'newest',
+        limit: 200,
+        include_referenced: true,
+      })
       const currentAssets = asAssets(assetValue)
       const source = resolveNotebookSplitSource(
         currentNotebook,
         command.sourceReference,
       )
+      const sourceAddress = notebookGridTag(source.slot)
       const sourceDuration = currentAssets.find((asset) =>
         asset.artifactId === source.outputArtifactId)?.duration
         ?? asNumber(source.inputs?.durationSeconds)
@@ -5670,6 +5716,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         document: currentNotebook,
         sourceDurationSeconds: sourceDuration ?? Number.NaN,
       })
+      const actionAddress = notebookGridTag(draft.actionCell.slot)
+      const outputAddresses = draft.outputs.map((output) =>
+        notebookGridTag(output.outputCell.slot))
       actionCellId = draft.actionCell.id
       setAssets(currentAssets)
       applyNotebook(draft.document, currentAssets, jobs)
@@ -5677,22 +5726,28 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
       setSelectedCellId(draft.outputs[0].outputCell.id)
-      setNotice(`Splitting @${draft.sourceSlug} at ${draft.splitAtSeconds}s`)
+      setNotice(`Splitting ${sourceAddress} at ${draft.splitAtSeconds}s`)
       const run = await enqueueNotebookSplitCommand({
         actor: 'videobook-user',
         bookId,
         callTool: call,
         draft,
+        ...(currentNotebook.revision
+          ? { expectedRevision: currentNotebook.revision }
+          : {}),
       })
       await refreshBookData(bookId, currentNotebook.id).catch(() => undefined)
       void watchNotebookSplitRun({
+        actionAddress,
         bookId,
         notebookId: currentNotebook.id,
+        outputAddresses,
         run,
+        sourceAddress,
       })
       return {
         ok: true,
-        message: `Splitting @${run.sourceSlug} into ${run.outputs.map((output) => `@${output.outputSlug}`).join(' and ')}`,
+        message: `Splitting ${sourceAddress} into ${outputAddresses.join(' and ')}`,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -5707,6 +5762,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const executeNotebookFrameCommand = async (
     command: NotebookFrameCommand,
+    currentNotebook: NotebookSnapshot,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before extracting a frame.' }
@@ -5714,30 +5770,31 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     let actionCellId: string | null = null
     setBusy(true)
     try {
-      const currentNotebook = asNotebook(await call('get_notebook', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-      }))
-      if (!currentNotebook) {
-        throw new Error('The server returned an invalid notebook')
-      }
+      const source = resolveNotebookFrameSource(
+        currentNotebook,
+        command.sourceReference,
+      )
+      const sourceAddress = notebookGridTag(source.slot)
       const run = await enqueueNotebookFrameCommand({
         actor: 'videobook-user',
         bookId,
         callTool: call,
         command,
         document: currentNotebook,
+        ...(currentNotebook.revision
+          ? { expectedRevision: currentNotebook.revision }
+          : {}),
       })
       actionCellId = run.actionCellId
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
       setSelectedCellId(run.outputCellId ?? actionCellId)
-      setNotice(`@${run.actionSlug} queued`)
+      setNotice(`Frame extraction queued for ${sourceAddress}`)
       const outcome = await watchNotebookRun({
         bookId,
         notebookId: currentNotebook.id,
         cellId: actionCellId,
-        slug: run.actionSlug,
+        slug: notebookGridAddress(source.slot),
         runId: run.runId,
         jobOperationId: run.jobId,
         intervalMs: notebookRunPollIntervalMs,
@@ -5745,18 +5802,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         maxPollFailures: 1,
       })
       if (outcome.kind === 'failed') {
-        throw new Error(outcome.message ?? `@${run.actionSlug} failed`)
+        throw new Error(outcome.message ?? `Frame extraction for ${sourceAddress} failed`)
       }
       if (outcome.kind === 'timeout') {
         throw new Error('Frame extraction did not finish within five minutes')
       }
       if (outcome.kind === 'superseded') {
-        throw new Error(`@${run.actionSlug} was superseded by a newer run`)
+        throw new Error(`Frame extraction for ${sourceAddress} was superseded by a newer run`)
       }
       setSelectedCellId(run.outputCellId ?? actionCellId)
       return {
         ok: true,
-        message: `Extracted the ${command.frameMode} frame of @${run.sourceSlug}`,
+        message: `Extracted the ${command.frameMode} frame of ${sourceAddress}`,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -5791,10 +5848,84 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setPendingChatAction({
         kind: 'frame',
         command,
+        expectations: [{
+          address: notebookGridTag(source.slot),
+          cellId: source.id,
+        }],
+        notebookId: currentNotebook.id,
         reason: 'This request creates and runs an Extract Frame cell',
-        summary: `Extract the ${command.frameMode} frame from @${source.slug}`,
+        summary: `Extract the ${command.frameMode} frame from ${notebookGridTag(source.slot)}`,
       })
       return applyReadyOutcome('Frame extraction ready to apply')
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  const previewNotebookCoordinateAction = async (
+    action: NotebookCoordinateAction,
+  ): Promise<ComposerOutcome> => {
+    if (!bookId || !notebook) {
+      return { ok: false, message: 'Open a notebook before changing its cells.' }
+    }
+    try {
+      const currentNotebook = asNotebook(await call('get_notebook', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+      }))
+      if (!currentNotebook) {
+        throw new Error('The server returned an invalid notebook')
+      }
+      const plan = planNotebookCoordinateAction(currentNotebook, action)
+      setPendingCommandPlan(null)
+      setPendingChatAction({
+        kind: 'notebook',
+        notebookId: currentNotebook.id,
+        plan,
+      })
+      return applyReadyOutcome('Notebook action ready to apply')
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  const previewNotebookSplitCommand = async (
+    command: NotebookSplitCommand,
+  ): Promise<ComposerOutcome> => {
+    if (!bookId || !notebook) {
+      return { ok: false, message: 'Open a notebook before splitting a video.' }
+    }
+    try {
+      const currentNotebook = asNotebook(await call('get_notebook', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+      }))
+      if (!currentNotebook) {
+        throw new Error('The server returned an invalid notebook')
+      }
+      const source = resolveNotebookSplitSource(
+        currentNotebook,
+        command.sourceReference,
+      )
+      setPendingCommandPlan(null)
+      setPendingChatAction({
+        kind: 'split',
+        command,
+        expectations: [{
+          address: notebookGridTag(source.slot),
+          cellId: source.id,
+        }],
+        notebookId: currentNotebook.id,
+        reason: 'This request creates and runs a Split Video workflow',
+        summary: `Split ${notebookGridTag(source.slot)} at ${command.splitAtSeconds}s`,
+      })
+      return applyReadyOutcome('Video split ready to apply')
     } catch (error) {
       return {
         ok: false,
@@ -5836,8 +5967,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? { routedParams: options.routedParams }
           : {}),
       })
-      const references = draft.sourceSlugs.length > 0
-        ? ` from ${draft.sourceSlugs.map((slug) => `@${slug}`).join(', ')}`
+      const references = draft.sourceCellIds.length > 0
+        ? ` from ${draft.sourceCellIds.flatMap((cellId) => {
+            const cell = currentNotebook.cells.find((candidate) => candidate.id === cellId)
+            return cell ? [notebookGridTag(cell.slot)] : []
+          }).join(', ')}`
         : ''
       setPendingCommandPlan(null)
       setPendingChatAction({
@@ -5848,13 +5982,27 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         previewError: null,
         previewLoading: true,
         previewStale: false,
+        expectations: [
+          ...draft.sourceCellIds.flatMap((cellId) => {
+            const cell = currentNotebook.cells.find((candidate) => candidate.id === cellId)
+            return cell
+              ? [{ address: notebookGridTag(cell.slot), cellId: cell.id }]
+              : []
+          }),
+          {
+            address: notebookGridTag(draft.cell.slot),
+            cellId: null,
+          },
+        ],
         reason: options?.reason
           ?? 'Generation can incur provider spend and sends the prompt and required references',
         summary: options?.summary
-          ?? `Generate ${command.mediaKind} as @${draft.cell.slug}${references}`,
+          ?? `Generate ${command.mediaKind} as ${notebookGridTag(draft.cell.slot)}${references}`,
       })
       requestPendingGenerationPreview(draft, currentNotebook)
-      return generationApplyReadyOutcome(`Generation ready to apply as @${draft.cell.slug}`)
+      return generationApplyReadyOutcome(
+        `Generation ready to apply as ${notebookGridTag(draft.cell.slot)}`,
+      )
     } catch (error) {
       return {
         ok: false,
@@ -5937,6 +6085,32 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook || notebook.id !== preparedAction.notebookId) {
       return { ok: false, message: 'The generation draft belongs to another notebook.' }
     }
+    let currentNotebook: NotebookSnapshot
+    try {
+      const value = asNotebook(await call('get_notebook', {
+        book_id: bookId,
+        notebook_id: preparedAction.notebookId,
+      }))
+      if (!value) throw new Error('The server returned an invalid notebook')
+      currentNotebook = value
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+        nextInput: retryInput,
+        selectInput: false,
+      }
+    }
+    if (notebookAddressExpectationsAreStale(
+      currentNotebook,
+      preparedAction.expectations,
+    )) {
+      setPendingChatAction(null)
+      return {
+        ok: false,
+        message: 'Notebook changed since this preview; prepare the action again.',
+      }
+    }
     if (!online) {
       return {
         ok: false,
@@ -5973,26 +6147,29 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       window.localStorage.setItem(consentKey, 'accepted')
     }
     const cellId = preparedAction.draft.cell.id
-    const slug = preparedAction.draft.cell.slug
+    const cellAddress = notebookGridTag(preparedAction.draft.cell.slot)
     let materialized = false
     let runAccepted = false
     setBusy(true)
     setCellRunError(cellId, null)
     setCellQueued(cellId, true)
     setSelectedCellId(cellId)
-    showOptimisticGeneration(preparedAction.draft, notebook)
+    showOptimisticGeneration(preparedAction.draft, currentNotebook)
     try {
       await materializeNotebookChatGeneration({
         bookId,
         callTool: call,
-        document: notebook,
+        document: currentNotebook,
         draft: preparedAction.draft,
+        ...(currentNotebook.revision
+          ? { expectedRevision: currentNotebook.revision }
+          : {}),
       })
       materialized = true
       const plan = await createGenerationPlan(cellId, 'chat')
       const accepted = await call('run_notebook_cell', {
         book_id: bookId,
-        notebook_id: notebook.id,
+        notebook_id: currentNotebook.id,
         cell_id: cellId,
         plan,
         actor: 'videobook-user',
@@ -6003,29 +6180,30 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setPendingChatAction(null)
       if (!runId || !jobOperationId) {
         setCellQueued(cellId, false)
-        await refreshBookData(bookId, notebook.id).catch(() => undefined)
+        await refreshBookData(bookId, currentNotebook.id).catch(() => undefined)
         return {
           ok: true,
-          message: `@${slug} was accepted; follow its status in Jobs`,
+          message: `${cellAddress} was accepted; follow its status in Jobs`,
         }
       }
-      setNotice(`@${slug} queued`)
+      setNotice(`${cellAddress} queued`)
       void watchGenerationRun({
         bookId,
-        notebookId: notebook.id,
+        notebookId: currentNotebook.id,
         cellId,
-        slug,
+        slug: notebookGridAddress(preparedAction.draft.cell.slot),
         runId,
         jobOperationId,
       })
-      await refreshBookData(bookId, notebook.id).catch(() => undefined)
-      return { ok: true, message: `@${slug} queued` }
+      await refreshBookData(bookId, currentNotebook.id).catch(() => undefined)
+      return { ok: true, message: `${cellAddress} queued` }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      const stale = message.startsWith('Stale notebook revision:')
       if (materialized && !runAccepted) {
         await call('delete_notebook_cell', {
           book_id: bookId,
-          notebook_id: notebook.id,
+          notebook_id: currentNotebook.id,
           cell_id: cellId,
         }).catch(() => undefined)
       }
@@ -6034,7 +6212,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         setCellQueued(cellId, false)
       }
       setCellRunError(cellId, message)
-      await refreshBookData(bookId, notebook.id).catch(() => undefined)
+      await refreshBookData(bookId, currentNotebook.id).catch(() => undefined)
+      if (stale) {
+        setPendingChatAction(null)
+        setNotice('Notebook changed since this preview; prepare the action again.', 'error')
+        return {
+          ok: false,
+          message: 'Notebook changed since this preview; prepare the action again.',
+        }
+      }
       setNotice(message, 'error')
       return {
         ok: false,
@@ -6056,10 +6242,189 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (pendingChatAction.kind === 'generation') {
       return await applyPendingGenerationAction(pendingChatAction, promptOverride)
     }
-    if (pendingChatAction.kind === 'frame') {
-      const outcome = await executeNotebookFrameCommand(pendingChatAction.command)
-      if (outcome.ok) setPendingChatAction(null)
-      return outcome
+    if (
+      pendingChatAction.kind === 'frame'
+      || pendingChatAction.kind === 'split'
+      || pendingChatAction.kind === 'notebook'
+    ) {
+      const currentNotebook = asNotebook(await call('get_notebook', {
+        book_id: bookId,
+        notebook_id: pendingChatAction.notebookId,
+      }))
+      if (!currentNotebook) {
+        return { ok: false, message: 'The server returned an invalid notebook' }
+      }
+      const expectations = pendingChatAction.kind === 'notebook'
+        ? pendingChatAction.plan.expectations
+        : pendingChatAction.expectations
+      if (notebookAddressExpectationsAreStale(currentNotebook, expectations)) {
+        setPendingChatAction(null)
+        return {
+          ok: false,
+          message: 'Notebook changed since this preview; prepare the action again.',
+        }
+      }
+      if (pendingChatAction.kind === 'frame') {
+        const outcome = await executeNotebookFrameCommand(
+          pendingChatAction.command,
+          currentNotebook,
+        )
+        if (outcome.ok) {
+          setPendingChatAction(null)
+        } else if (outcome.message.startsWith('Stale notebook revision:')) {
+          setPendingChatAction(null)
+          return {
+            ok: false,
+            message: 'Notebook changed since this preview; prepare the action again.',
+          }
+        }
+        return outcome
+      }
+      if (pendingChatAction.kind === 'split') {
+        const outcome = await executeNotebookSplitCommand(
+          pendingChatAction.command,
+          currentNotebook,
+        )
+        if (outcome.ok) {
+          setPendingChatAction(null)
+        } else if (outcome.message.startsWith('Stale notebook revision:')) {
+          setPendingChatAction(null)
+          return {
+            ok: false,
+            message: 'Notebook changed since this preview; prepare the action again.',
+          }
+        }
+        return outcome
+      }
+      const action = pendingChatAction.plan.action
+      if (action.kind === 'run') {
+        const cell = notebookCellAtSlot(currentNotebook, action.source)!
+        const outcome = await runCell(cell.id, currentNotebook)
+        if (!outcome?.ok) {
+          if (outcome?.message.startsWith('Stale notebook revision:')) {
+            setPendingChatAction(null)
+            return {
+              ok: false,
+              message: 'Notebook changed since this preview; prepare the action again.',
+            }
+          }
+          return outcome ?? {
+            ok: false,
+            message: `Could not run ${notebookGridTag(cell.slot)}`,
+          }
+        }
+        setPendingChatAction(null)
+        return {
+          ok: true,
+          message: `Run requested for ${notebookGridTag(cell.slot)}`,
+        }
+      }
+      setBusy(true)
+      try {
+        const revisionInput = currentNotebook.revision
+          ? { expected_revision: currentNotebook.revision }
+          : {}
+        if (action.kind === 'create') {
+          const destination = action.destination!
+          const slug = nextNotebookCellSlug(action.cellType, currentNotebook.cells)
+          const created = record(await call('create_notebook_cell', {
+            book_id: bookId,
+            notebook_id: currentNotebook.id,
+            ...revisionInput,
+            cell: {
+              type: action.cellType,
+              slug,
+              slot: destination,
+              ...(action.cellType === 'prompt'
+                || action.cellType === 'analyze'
+                || action.cellType === 'generate_video'
+                || action.cellType === 'generate_image'
+                || action.cellType === 'generate_audio'
+                ? { prompt: '' }
+                : {}),
+            },
+          }))
+          const cellId = asString(created?.id)
+          if (cellId) setSelectedCellId(cellId)
+        } else if (action.kind === 'move') {
+          const source = notebookCellAtSlot(currentNotebook, action.source)!
+          const target = notebookCellAtSlot(currentNotebook, action.destination)
+          await call('move_notebook_cells', {
+            book_id: bookId,
+            notebook_id: currentNotebook.id,
+            ...revisionInput,
+            slots: [
+              {
+                id: source.id,
+                row: action.destination.row,
+                column: action.destination.column,
+              },
+              ...(target
+                ? [{
+                    id: target.id,
+                    row: action.source.row,
+                    column: action.source.column,
+                  }]
+                : []),
+            ],
+          })
+        } else if (action.kind === 'delete') {
+          const cell = notebookCellAtSlot(currentNotebook, action.source)!
+          await call('delete_notebook_cell', {
+            book_id: bookId,
+            notebook_id: currentNotebook.id,
+            cell_id: cell.id,
+            ...revisionInput,
+          })
+        } else if (action.kind === 'clear') {
+          const cell = notebookCellAtSlot(currentNotebook, action.source)!
+          await call('clear_notebook_cell_slot', {
+            book_id: bookId,
+            notebook_id: currentNotebook.id,
+            cell_id: cell.id,
+            ...revisionInput,
+          })
+        } else if (action.kind === 'connect') {
+          const source = notebookCellAtSlot(currentNotebook, action.source)!
+          const target = notebookCellAtSlot(currentNotebook, action.target)!
+          const targetInput = action.targetInput ?? notebookConnectionTargetInput(
+            currentNotebook,
+            {
+              source: source.id,
+              target: target.id,
+              targetHandle: null,
+            },
+          )
+          await call('set_notebook_cell_input', {
+            book_id: bookId,
+            notebook_id: currentNotebook.id,
+            source_cell_id: source.id,
+            target_cell_id: target.id,
+            target_input: targetInput,
+            ...revisionInput,
+          })
+        } else {
+          throw new Error('Unsupported notebook action')
+        }
+        setPendingChatAction(null)
+        await refreshBookData(bookId, currentNotebook.id)
+        setNotice(pendingChatAction.plan.summary)
+        return { ok: true, message: pendingChatAction.plan.summary }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (message.startsWith('Stale notebook revision:')) {
+          setPendingChatAction(null)
+          setNotice('Notebook changed since this preview; prepare the action again.', 'error')
+          return {
+            ok: false,
+            message: 'Notebook changed since this preview; prepare the action again.',
+          }
+        }
+        setNotice(message, 'error')
+        return { ok: false, message, nextInput: '/apply', selectInput: true }
+      } finally {
+        setBusy(false)
+      }
     }
     setBusy(true)
     try {
@@ -6124,9 +6489,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return { ok: true, message: 'Pending action cancelled' }
       }
       if (!bookId) return { ok: false, message: 'Load or create a book first.' }
+      const notebookAction = parseNotebookCoordinateAction(input)
+      if (notebookAction) {
+        return await previewNotebookCoordinateAction(notebookAction)
+      }
       const splitCommand = parseNotebookSplitCommand(input)
       if (splitCommand) {
-        return await executeNotebookSplitCommand(splitCommand)
+        return await previewNotebookSplitCommand(splitCommand)
       }
       const resolvedAssetInput = resolveNotebookMentionAliases(
         input,
@@ -6487,7 +6856,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (commandToken === '/insert' || commandToken === '/overwrite') {
           const [source, startValue, durationValue] = values
           const mentionAsset = commandMentionAssets.find((candidate) =>
-            candidate.cellSlug.toLowerCase() === source?.toLowerCase())
+            candidate.cellAddress.toLowerCase() === source?.toLowerCase())
           const asset = mentionAsset ?? assets.find((candidate) =>
             candidate.id === source || candidate.artifactId === source)
           const startFrame = Number(startValue)
@@ -8198,14 +8567,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       {fullscreenCell && fullscreenNode?.data.asset && (
         <NotebookMediaFullscreen
           asset={fullscreenNode.data.asset}
-          slug={fullscreenCell.slug}
+          slug={notebookGridAddress(fullscreenCell.slot)}
           onClose={closeMediaFullscreen}
         />
       )}
 
       <CommandComposer
         commands={commands}
-        assets={commandMentionAssets}
+        cells={notebook?.cells ?? []}
         bookId={bookId}
         callTool={call}
         chatModels={chatModelCatalog.models}
@@ -8398,6 +8767,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               <div className="command-plan-heading">
                 <span className="section-label">ACTION · CHAT</span>
                 <h2>{pendingChatAction.kind === 'routed'
+                  || pendingChatAction.kind === 'notebook'
                   ? pendingChatAction.plan.summary
                   : pendingChatAction.summary}</h2>
               </div>
@@ -8424,14 +8794,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 <div className="command-plan-context">
                   <p>{pendingChatAction.kind === 'routed'
                     ? pendingChatAction.plan.confirmation.reason
-                    : pendingChatAction.reason}</p>
+                    : pendingChatAction.kind === 'notebook'
+                      ? pendingChatAction.plan.reason
+                      : pendingChatAction.reason}</p>
                 </div>
                 <ol className="command-plan-stages">
                   <li>
                     <span>{pendingChatAction.kind.toUpperCase()}</span>
                     <strong>{pendingChatAction.kind === 'routed'
                       ? pendingChatAction.plan.routedTool
-                      : `Extract ${pendingChatAction.command.frameMode} frame`}</strong>
+                      : pendingChatAction.kind === 'notebook'
+                        ? `${pendingChatAction.plan.action.kind} notebook cell`
+                        : pendingChatAction.kind === 'split'
+                          ? 'Split video'
+                          : `Extract ${pendingChatAction.command.frameMode} frame`}</strong>
                     {pendingChatAction.kind === 'routed' && (
                       <small>{pendingChatAction.plan.tool}</small>
                     )}

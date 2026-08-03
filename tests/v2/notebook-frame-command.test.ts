@@ -73,6 +73,12 @@ describe('notebook frame commands', () => {
       sourceReference: 'vid-ending',
     })
     expect(parseNotebookFrameCommand(
+      'grab the first frame from @Z13',
+    )).toEqual({
+      frameMode: 'first',
+      sourceReference: 'z13',
+    })
+    expect(parseNotebookFrameCommand(
       'generate an image inspired by @vid-01',
     )).toBeNull()
   })
@@ -160,10 +166,11 @@ describe('notebook frame commands', () => {
     const before: NotebookDocument = beforeResult.value
 
     expect(resolveNotebookFrameSource(before, 'vid-01').id).toBe(source.id)
+    expect(resolveNotebookFrameSource(before, 'A1').id).toBe(source.id)
     expect(() => resolveNotebookFrameSource(before, 'missing-video'))
-      .toThrow('Video cell @missing-video was not found')
+      .toThrow('Notebook cell @missing-video was not found')
     expect(() => resolveNotebookFrameSource(before, 'img-reference'))
-      .toThrow('@img-reference is not a video-producing cell')
+      .toThrow('@a2 is not a video-producing cell')
 
     const command = parseNotebookFrameCommand(
       'extract the first frame of @vid-01',

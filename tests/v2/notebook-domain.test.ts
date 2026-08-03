@@ -105,6 +105,7 @@ describe('v2 notebook domain tools', () => {
     }))
 
     const document = resultJson(await invoke('get_notebook', { notebook_id: notebookId })) as {
+      revision: string
       cells: Array<{ id: string; slug: string; slot: { row: number; column: number } }>
       edges: Array<{ source: string; target: string; targetInput: string }>
     }
@@ -120,7 +121,46 @@ describe('v2 notebook domain tools', () => {
 
     resultJson(await invoke('move_notebook_cells', {
       notebook_id: notebookId,
-      slots: [{ id: image.id, row: 37, column: -8 }],
+      expected_revision: document.revision,
+      slots: [{ id: image.id, row: 1, column: 0 }],
+    }))
+    const swapped = resultJson(await invoke('get_notebook', {
+      notebook_id: notebookId,
+    })) as {
+      revision: string
+      cells: Array<{ id: string; slot: { row: number; column: number } }>
+    }
+    expect(swapped.cells.find((cell) => cell.id === image.id)?.slot)
+      .toEqual({ row: 1, column: 0 })
+    expect(swapped.cells.find((cell) => cell.id === prompt.id)?.slot)
+      .toEqual({ row: 0, column: 0 })
+
+    const staleMove = await invoke('move_notebook_cells', {
+      notebook_id: notebookId,
+      expected_revision: document.revision,
+      slots: [{ id: image.id, row: 0, column: 0 }],
+    })
+    expect(staleMove.isError).toBe(true)
+    expect(staleMove.content[0]?.text).toContain('Stale notebook revision')
+
+    resultJson(await invoke('move_notebook_cells', {
+      notebook_id: notebookId,
+      expected_revision: swapped.revision,
+      slots: [{ id: image.id, row: 0, column: 0 }],
+    }))
+    const collidingGroupMove = await invoke('move_notebook_cells', {
+      notebook_id: notebookId,
+      slots: [
+        { id: image.id, row: 2, column: 2 },
+        { id: prompt.id, row: 2, column: 2 },
+      ],
+    })
+    expect(collidingGroupMove.isError).toBe(true)
+    expect(collidingGroupMove.content[0]?.text).toContain('@c3 is targeted twice')
+
+    resultJson(await invoke('move_notebook_cells', {
+      notebook_id: notebookId,
+      slots: [{ id: image.id, row: 25, column: 12 }],
     }))
     const expanded = resultJson(await invoke('get_notebook', {
       notebook_id: notebookId,
@@ -129,9 +169,16 @@ describe('v2 notebook domain tools', () => {
     }
     expect('grid' in expanded).toBe(false)
     expect(expanded.cells.find((cell) => cell.id === image.id)?.slot)
-      .toEqual({ row: 37, column: -8 })
+      .toEqual({ row: 25, column: 12 })
     expect(expanded.cells.find((cell) => cell.id === prompt.id)?.slot)
       .toEqual({ row: 1, column: 0 })
+
+    const offGridMove = await invoke('move_notebook_cells', {
+      notebook_id: notebookId,
+      slots: [{ id: image.id, row: 26, column: 12 }],
+    })
+    expect(offGridMove.isError).toBe(true)
+    expect(offGridMove.content[0]?.text).toContain('Cell slot must be within @a1-@z13')
 
     const output = await managed.value.engine.artifacts.create(
       'image',
@@ -322,7 +369,7 @@ describe('v2 notebook domain tools', () => {
     expect(imageOutput).toMatchObject({
       type: 'image',
       slug: 'img-source',
-      slot: { row: 2, column: 2 },
+      slot: { row: 0, column: 2 },
       inputs: {
         mediaRole: 'extract-frame-output',
         producerCellId: extractFrame.id,

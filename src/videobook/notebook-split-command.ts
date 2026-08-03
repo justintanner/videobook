@@ -1,9 +1,14 @@
 import { v7 as uuidv7 } from 'uuid'
+import { firstEmptyNotebookGridSlots } from 'videobook-engine/notebook-grid'
 import type {
   NotebookCell,
   NotebookDocument,
   NotebookGridSlot,
 } from 'videobook-engine'
+import {
+  notebookCellTag,
+  resolveNotebookCellReference,
+} from './notebook-addressing'
 
 export type NotebookSplitCommand = {
   sourceReference: string
@@ -129,27 +134,17 @@ function splitTimeSlug(seconds: number): string {
 
 function splitSlots(
   cells: readonly NotebookCell[],
-  source: NotebookGridSlot,
 ): {
   action: NotebookGridSlot
   outputs: [NotebookGridSlot, NotebookGridSlot]
 } {
-  const occupied = new Set(cells.map((cell) =>
-    `${cell.slot.row}:${cell.slot.column}`))
-  const columns = [source.column - 1, source.column + 1] as const
-  for (let actionRow = source.row + 1; ; actionRow += 2) {
-    const action = { row: actionRow, column: source.column }
-    const outputs = columns.map((column) => ({
-      row: actionRow + 1,
-      column,
-    })) as [NotebookGridSlot, NotebookGridSlot]
-    if (
-      !occupied.has(`${action.row}:${action.column}`)
-      && outputs.every((output) =>
-        !occupied.has(`${output.row}:${output.column}`))
-    ) {
-      return { action, outputs }
-    }
+  const [action, first, remaining] = firstEmptyNotebookGridSlots(
+    cells.map((cell) => cell.slot),
+    3,
+  )
+  return {
+    action: action!,
+    outputs: [first!, remaining!],
   }
 }
 
@@ -206,7 +201,7 @@ export function parseNotebookSplitCommand(
   input: string,
 ): NotebookSplitCommand | null {
   const match = input.trim().match(
-    /^(?:please\s+)?(?:\/split|split)\s+@([a-z0-9]+(?:-[a-z0-9]+)+)(?:\s+([\s\S]+?))?(?:\s+please)?[.!]?$/iu,
+    /^(?:please\s+)?(?:\/split|split)\s+@([a-z](?:1[0-3]|[1-9])|[a-z0-9]+(?:-[a-z0-9]+)+)(?:\s+([\s\S]+?))?(?:\s+please)?[.!]?$/iu,
   )
   if (!match) return null
   const splitAtSeconds = match[2]
@@ -227,24 +222,12 @@ export function resolveNotebookSplitSource(
   document: NotebookDocument,
   sourceReference: string,
 ): NotebookCell {
-  const reference = sourceReference.replace(/^@/u, '').toLowerCase()
-  const exact = document.cells.find((cell) =>
-    cell.slug.toLowerCase() === reference
-    || cell.id.toLowerCase() === reference)
-  const prefixMatches = exact
-    ? []
-    : document.cells.filter((cell) =>
-        cell.id.toLowerCase().startsWith(reference))
-  if (prefixMatches.length > 1) {
-    throw new Error(`Cell reference @${reference} is ambiguous`)
-  }
-  const source = exact ?? prefixMatches[0]
-  if (!source) throw new Error(`Video cell @${reference} was not found`)
+  const source = resolveNotebookCellReference(document, sourceReference)
   if (!videoSourceTypes.has(source.type)) {
-    throw new Error(`@${source.slug} is not a video-producing cell`)
+    throw new Error(`${notebookCellTag(source)} is not a video-producing cell`)
   }
   if (!source.outputArtifactId) {
-    throw new Error(`@${source.slug} does not have a video output yet`)
+    throw new Error(`${notebookCellTag(source)} does not have a video output yet`)
   }
   return source
 }
@@ -263,7 +246,7 @@ export function planNotebookSplitCommand(input: {
     || input.sourceDurationSeconds <= 0
   ) {
     throw new Error(
-      `@${source.slug} does not have a usable duration yet; wait for video processing to finish`,
+      `${notebookCellTag(source)} does not have a usable duration yet; wait for video processing to finish`,
     )
   }
   const firstDuration = input.command.splitAtSeconds
@@ -273,11 +256,11 @@ export function planNotebookSplitCommand(input: {
     || remainingDuration < minimumSplitChunkSeconds
   ) {
     throw new Error(
-      `Split @${source.slug} between ${minimumSplitChunkSeconds}s and ${(input.sourceDurationSeconds - minimumSplitChunkSeconds).toFixed(2)}s so both clips contain usable video`,
+      `Split ${notebookCellTag(source)} between ${minimumSplitChunkSeconds}s and ${(input.sourceDurationSeconds - minimumSplitChunkSeconds).toFixed(2)}s so both clips contain usable video`,
     )
   }
 
-  const slots = splitSlots(input.document.cells, source.slot)
+  const slots = splitSlots(input.document.cells)
   const timeSlug = splitTimeSlug(firstDuration)
   const sourceStem = source.slug.replace(/^vid-/u, '')
   const actionCell: NotebookCell = {
@@ -361,6 +344,7 @@ export async function enqueueNotebookSplitCommand(input: {
   bookId: string
   callTool: NotebookToolCall
   draft: NotebookSplitDraft
+  expectedRevision?: string
 }): Promise<NotebookSplitRun> {
   const createdCellIds: string[] = []
   let runRequested = false
@@ -369,11 +353,14 @@ export async function enqueueNotebookSplitCommand(input: {
       input.draft.actionCell,
       ...input.draft.outputs.map((output) => output.outputCell),
     ]
-    for (const cell of cells) {
+    for (const [index, cell] of cells.entries()) {
       createdCellIds.push(cell.id)
       const createdValue = await input.callTool('create_notebook_cell', {
         book_id: input.bookId,
         notebook_id: input.draft.document.id,
+        ...(index === 0 && input.expectedRevision
+          ? { expected_revision: input.expectedRevision }
+          : {}),
         cell: cellCreateInput(cell),
       })
       const created = objectValue(createdValue)

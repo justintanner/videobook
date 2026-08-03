@@ -1,9 +1,12 @@
-import type {
-  NotebookCell,
-  NotebookDocument,
-  NotebookGridSlot,
-} from 'videobook-engine'
+import {
+  firstEmptyNotebookGridSlot,
+} from 'videobook-engine/notebook-grid'
+import type { NotebookCell, NotebookDocument } from 'videobook-engine'
 import { nextNotebookCellSlug } from './notebook-download'
+import {
+  notebookCellTag,
+  resolveNotebookCellReference,
+} from './notebook-addressing'
 
 export type NotebookFrameMode = 'first' | 'last'
 
@@ -77,24 +80,11 @@ function matchingAction(
     && frameMode(cell) === requestedMode) ?? null
 }
 
-function firstEmptyRowBelow(
-  cells: readonly NotebookCell[],
-  source: NotebookGridSlot,
-): NotebookGridSlot {
-  const occupied = new Set(cells.map((cell) =>
-    `${cell.slot.row}:${cell.slot.column}`))
-  for (let row = source.row + 1; ; row += 1) {
-    if (!occupied.has(`${row}:${source.column}`)) {
-      return { row, column: source.column }
-    }
-  }
-}
-
 export function parseNotebookFrameCommand(
   input: string,
 ): NotebookFrameCommand | null {
   const match = input.trim().match(
-    /^(?:please\s+)?(?:extract|capture|grab|get)\s+(?:the\s+)?(first|last)\s+frame\s+(?:of|from)\s+@([a-z0-9]+(?:-[a-z0-9]+)+)(?:\s+please)?[.!]?$/iu,
+    /^(?:please\s+)?(?:extract|capture|grab|get)\s+(?:the\s+)?(first|last)\s+frame\s+(?:of|from)\s+@([a-z](?:1[0-3]|[1-9])|[a-z0-9]+(?:-[a-z0-9]+)+)(?:\s+please)?[.!]?$/iu,
   )
   if (!match) return null
   return {
@@ -107,24 +97,12 @@ export function resolveNotebookFrameSource(
   document: NotebookDocument,
   sourceReference: string,
 ): NotebookCell {
-  const reference = sourceReference.replace(/^@/u, '').toLowerCase()
-  const exact = document.cells.find((cell) =>
-    cell.slug.toLowerCase() === reference
-    || cell.id.toLowerCase() === reference)
-  const prefixMatches = exact
-    ? []
-    : document.cells.filter((cell) =>
-        cell.id.toLowerCase().startsWith(reference))
-  if (prefixMatches.length > 1) {
-    throw new Error(`Cell reference @${reference} is ambiguous`)
-  }
-  const source = exact ?? prefixMatches[0]
-  if (!source) throw new Error(`Video cell @${reference} was not found`)
+  const source = resolveNotebookCellReference(document, sourceReference)
   if (!videoSourceTypes.has(source.type)) {
-    throw new Error(`@${source.slug} is not a video-producing cell`)
+    throw new Error(`${notebookCellTag(source)} is not a video-producing cell`)
   }
   if (!source.outputArtifactId) {
-    throw new Error(`@${source.slug} does not have a video output yet`)
+    throw new Error(`${notebookCellTag(source)} does not have a video output yet`)
   }
   return source
 }
@@ -135,6 +113,7 @@ export async function enqueueNotebookFrameCommand(input: {
   callTool: NotebookToolCall
   command: NotebookFrameCommand
   document: NotebookDocument
+  expectedRevision?: string
 }): Promise<NotebookFrameCommandRun> {
   const source = resolveNotebookFrameSource(
     input.document,
@@ -155,10 +134,15 @@ export async function enqueueNotebookFrameCommand(input: {
     const created = objectValue(await input.callTool('create_notebook_cell', {
       book_id: input.bookId,
       notebook_id: input.document.id,
+      ...(input.expectedRevision
+        ? { expected_revision: input.expectedRevision }
+        : {}),
       cell: {
         type: 'extract_frame',
         slug: nextNotebookCellSlug('extract_frame', input.document.cells),
-        slot: firstEmptyRowBelow(input.document.cells, source.slot),
+        slot: firstEmptyNotebookGridSlot(
+          input.document.cells.map((cell) => cell.slot),
+        ),
         inputs: { frameMode: input.command.frameMode },
       },
     }))
@@ -182,6 +166,9 @@ export async function enqueueNotebookFrameCommand(input: {
     notebook_id: input.document.id,
     cell_id: actionCellId,
     actor: input.actor,
+    ...(existing && input.expectedRevision
+      ? { expected_revision: input.expectedRevision }
+      : {}),
   }))
   const jobId = stringValue(accepted?.job_id)
   const runId = stringValue(accepted?.run_id)

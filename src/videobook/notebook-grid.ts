@@ -1,4 +1,13 @@
 import type { Node, XYPosition } from '@xyflow/react'
+import {
+  firstEmptyNotebookGridSlot,
+  isNotebookGridSlot,
+  NOTEBOOK_GRID_COLUMN_COUNT,
+  NOTEBOOK_GRID_ROW_COUNT,
+  notebookGridAddress,
+  notebookGridTag,
+  parseNotebookGridAddress,
+} from 'videobook-engine/notebook-grid'
 import type { NotebookGridSlot } from 'videobook-engine'
 
 export interface NotebookGridData extends Record<string, unknown> {
@@ -12,18 +21,33 @@ export const notebookGrid = {
   gap: 40,
   columnPitch: 280,
   rowPitch: 280,
-  defaultColumnCount: 7,
+  columnCount: NOTEBOOK_GRID_COLUMN_COUNT,
+  maximumRowCount: NOTEBOOK_GRID_ROW_COUNT,
   minimumRowCount: 3,
-  trailingRowCount: 2,
+  trailingRowCount: 1,
   minimumZoom: 0.5,
   maximumZoom: 2,
   zoomStep: 0.25,
 } as const
 
-function normalizedSlot(slot: NotebookGridSlot): NotebookGridSlot {
+function roundedSlot(slot: NotebookGridSlot): NotebookGridSlot {
   return {
-    row: Math.max(0, Math.round(slot.row)),
+    row: Math.round(slot.row),
     column: Math.round(slot.column),
+  }
+}
+
+function boundedSlot(slot: NotebookGridSlot): NotebookGridSlot {
+  const rounded = roundedSlot(slot)
+  return {
+    row: Math.min(
+      NOTEBOOK_GRID_ROW_COUNT - 1,
+      Math.max(0, rounded.row),
+    ),
+    column: Math.min(
+      NOTEBOOK_GRID_COLUMN_COUNT - 1,
+      Math.max(0, rounded.column),
+    ),
   }
 }
 
@@ -31,33 +55,20 @@ export function notebookGridSlotKey(slot: NotebookGridSlot): string {
   return `${slot.row}:${slot.column}`
 }
 
-function normalizedColumnCount(columnCount: number): number {
-  const count = Math.max(1, Math.round(columnCount))
-  return count % 2 === 0 ? count + 1 : count
-}
-
-function centerOutColumns(columnCount: number): number[] {
-  const radius = Math.floor(normalizedColumnCount(columnCount) / 2)
-  return Array.from({ length: radius * 2 + 1 }, (_, index) => {
-    if (index === 0) return 0
-    const distance = Math.ceil(index / 2)
-    return index % 2 === 1 ? -distance : distance
-  })
-}
-
-export function notebookGridSlot(
-  position: XYPosition,
-): NotebookGridSlot {
-  return normalizedSlot({
+export function notebookGridSlot(position: XYPosition): NotebookGridSlot {
+  return boundedSlot({
     row: Math.round((position.y - notebookGrid.originY) / notebookGrid.rowPitch),
-    column: Math.round(position.x / notebookGrid.columnPitch),
+    column: Math.round(
+      (position.x - notebookGrid.originX) / notebookGrid.columnPitch,
+    ),
   })
 }
 
 export function notebookGridPosition(slot: NotebookGridSlot): XYPosition {
+  const bounded = boundedSlot(slot)
   return {
-    x: slot.column * notebookGrid.columnPitch,
-    y: notebookGrid.originY + slot.row * notebookGrid.rowPitch,
+    x: notebookGrid.originX + bounded.column * notebookGrid.columnPitch,
+    y: notebookGrid.originY + bounded.row * notebookGrid.rowPitch,
   }
 }
 
@@ -66,7 +77,7 @@ export function snapNotebookGridMove<T extends NotebookGridData>(
   id: string,
   requested: NotebookGridSlot,
 ): Array<Node<T>> {
-  const slot = normalizedSlot(requested)
+  const slot = boundedSlot(requested)
   return nodes.map((node) => node.id === id
     ? { ...node, position: notebookGridPosition(slot) }
     : node)
@@ -79,7 +90,7 @@ export function resolveNotebookGridMove<T extends NotebookGridData>(
 ): Array<Node<T>> {
   const moving = nodes.find((node) => node.id === id)
   if (!moving) return [...nodes]
-  const target = normalizedSlot(requested)
+  const target = boundedSlot(requested)
   const source = moving.data.slot
   const occupied = nodes.find((node) =>
     node.id !== id
@@ -115,28 +126,25 @@ export function resolveNotebookGridGroupMove<T extends NotebookGridData>(
   const anchor = moving.find((node) => node.id === anchorId)
   if (!anchor) return [...nodes]
 
-  const target = normalizedSlot(requested)
-  const minimumRow = Math.min(...moving.map((node) => node.data.slot.row))
-  const rowDelta = Math.max(
-    target.row - anchor.data.slot.row,
-    -minimumRow,
-  )
+  const target = roundedSlot(requested)
+  const rowDelta = target.row - anchor.data.slot.row
   const columnDelta = target.column - anchor.data.slot.column
   const targets = new Map(moving.map((node) => {
-    const slot = normalizedSlot({
+    const slot = {
       row: node.data.slot.row + rowDelta,
       column: node.data.slot.column + columnDelta,
-    })
+    }
     return [node.id, slot]
   }))
   const targetKeys = new Set(
     [...targets.values()].map(notebookGridSlotKey),
   )
-  const occupied = nodes.some((node) =>
-    !movingIds.has(node.id)
-    && targetKeys.has(notebookGridSlotKey(node.data.slot)))
+  const rejected = [...targets.values()].some((slot) => !isNotebookGridSlot(slot))
+    || nodes.some((node) =>
+      !movingIds.has(node.id)
+      && targetKeys.has(notebookGridSlotKey(node.data.slot)))
 
-  if (occupied) {
+  if (rejected) {
     return nodes.map((node) => movingIds.has(node.id)
       ? { ...node, position: notebookGridPosition(node.data.slot) }
       : node)
@@ -166,16 +174,8 @@ export function changedNotebookGridNodes<T extends NotebookGridData>(
 
 export function nextNotebookGridSlot<T extends NotebookGridData>(
   nodes: readonly Node<T>[],
-  columnCount = notebookGrid.defaultColumnCount,
 ): NotebookGridSlot {
-  const occupied = new Set(nodes.map((node) => notebookGridSlotKey(node.data.slot)))
-  const columns = centerOutColumns(columnCount)
-  for (let row = 0; ; row += 1) {
-    for (const column of columns) {
-      const slot = { row, column }
-      if (!occupied.has(notebookGridSlotKey(slot))) return slot
-    }
-  }
+  return firstEmptyNotebookGridSlot(nodes.map((node) => node.data.slot))
 }
 
 export interface NotebookGridMetrics {
@@ -203,31 +203,10 @@ export function normalizeNotebookGridZoom(zoom: number): number {
   )
 }
 
-function gridWidth(columnCount: number): number {
+function gridWidth(): number {
   return notebookGrid.originX * 2
-    + columnCount * notebookGrid.squareSize
-    + Math.max(0, columnCount - 1) * notebookGrid.gap
-}
-
-function fittingColumnCount(viewportWidth: number, zoom: number): number {
-  if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) {
-    return notebookGrid.defaultColumnCount
-  }
-  const target = viewportWidth / normalizeNotebookGridZoom(zoom)
-  const estimate = Math.max(
-    1,
-    Math.round(
-      (target - notebookGrid.originX * 2 + notebookGrid.gap)
-      / notebookGrid.columnPitch,
-    ),
-  )
-  const lower = estimate % 2 === 0 ? Math.max(1, estimate - 1) : estimate
-  const upper = lower + 2
-  const nearest = Math.abs(gridWidth(lower) - target)
-    <= Math.abs(gridWidth(upper) - target)
-    ? lower
-    : upper
-  return Math.max(notebookGrid.defaultColumnCount, nearest)
+    + NOTEBOOK_GRID_COLUMN_COUNT * notebookGrid.squareSize
+    + (NOTEBOOK_GRID_COLUMN_COUNT - 1) * notebookGrid.gap
 }
 
 function fittingRowCount(viewportHeight: number, zoom: number): number {
@@ -256,46 +235,21 @@ export function notebookGridFrameSize(
 }
 
 export function notebookGridViewport(
-  metrics: NotebookGridMetrics,
+  _metrics: NotebookGridMetrics,
   zoom: number,
   y = 0,
 ): { x: number; y: number; zoom: number } {
-  const normalizedZoom = normalizeNotebookGridZoom(zoom)
   return {
-    x: metrics.centerX * normalizedZoom,
+    x: 0,
     y: Number.isFinite(y) ? y : 0,
-    zoom: normalizedZoom,
+    zoom: normalizeNotebookGridZoom(zoom),
   }
 }
 
 export function notebookGridDropSlot(
   position: XYPosition,
-  metrics: NotebookGridMetrics,
+  _metrics: NotebookGridMetrics,
 ): NotebookGridSlot {
-  if (position.x < metrics.minColumn * notebookGrid.columnPitch) {
-    return normalizedSlot({
-      row: Math.round((position.y - notebookGrid.originY) / notebookGrid.rowPitch),
-      column: metrics.minColumn - 1,
-    })
-  }
-  if (
-    position.x
-    > metrics.maxColumn * notebookGrid.columnPitch + notebookGrid.squareSize
-  ) {
-    return normalizedSlot({
-      row: Math.round((position.y - notebookGrid.originY) / notebookGrid.rowPitch),
-      column: metrics.maxColumn + 1,
-    })
-  }
-  const bottom = notebookGrid.originY
-    + (metrics.rowCount - 1) * notebookGrid.rowPitch
-    + notebookGrid.squareSize
-  if (position.y > bottom) {
-    return {
-      row: metrics.rowCount,
-      column: Math.round(position.x / notebookGrid.columnPitch),
-    }
-  }
   return notebookGridSlot(position)
 }
 
@@ -303,39 +257,37 @@ export function notebookGridMetrics(
   slots: readonly NotebookGridSlot[],
   options: NotebookGridMetricsOptions = {},
 ): NotebookGridMetrics {
-  const preview = options.preview ?? null
-  const populated = preview ? [...slots, preview] : [...slots]
-  const contentRowCount = Math.max(
-    0,
-    ...populated.map((slot) => slot.row + 1),
+  const populated = options.preview ? [...slots, boundedSlot(options.preview)] : slots
+  const highestOccupiedRow = Math.max(
+    -1,
+    ...populated.map((slot) => boundedSlot(slot).row),
   )
-  const rowCount = Math.max(
-    fittingRowCount(options.viewportHeight ?? 0, options.zoom ?? 1),
-    contentRowCount + notebookGrid.trailingRowCount,
+  const rowCount = Math.min(
+    NOTEBOOK_GRID_ROW_COUNT,
+    Math.max(
+      notebookGrid.minimumRowCount,
+      fittingRowCount(options.viewportHeight ?? 0, options.zoom ?? 1),
+      highestOccupiedRow + 2,
+    ),
   )
-  const minimumRadius = Math.floor(
-    normalizedColumnCount(
-      fittingColumnCount(options.viewportWidth ?? 0, options.zoom ?? 1),
-    ) / 2,
-  )
-  const radius = Math.max(
-    minimumRadius,
-    ...populated.map((slot) => Math.abs(slot.column)),
-  )
-  const resolvedColumnCount = radius * 2 + 1
-  const width = gridWidth(resolvedColumnCount)
+  const width = gridWidth()
   const height = notebookGrid.originY * 2
     + rowCount * notebookGrid.squareSize
     + Math.max(0, rowCount - 1) * notebookGrid.gap
   return {
     rowCount,
-    columnCount: resolvedColumnCount,
-    minColumn: -radius,
-    maxColumn: radius,
-    centerX: notebookGrid.originX + radius * notebookGrid.columnPitch,
+    columnCount: NOTEBOOK_GRID_COLUMN_COUNT,
+    minColumn: 0,
+    maxColumn: NOTEBOOK_GRID_COLUMN_COUNT - 1,
+    centerX: width / 2,
     width,
     height,
   }
 }
 
-export type { NotebookGridSlot } from 'videobook-engine'
+export {
+  notebookGridAddress,
+  notebookGridTag,
+  parseNotebookGridAddress,
+}
+export type { NotebookGridSlot }

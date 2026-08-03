@@ -19,8 +19,10 @@ import type {
 } from "videobook-engine";
 import {
   MVP_CONTRACT_VERSION,
+  firstEmptyNotebookGridSlots,
   NOTEBOOK_CELL_SLUG_PREFIXES,
   NOTEBOOK_CELL_TYPES,
+  notebookGridTag,
   sequenceFramesToSourceTicks,
   sourceRangeEndTick,
   sourceTicksToSequenceFrames,
@@ -66,6 +68,10 @@ import {
 
 const bookSchema = { book_id: z.string().uuid() };
 const cellTypeSchema = z.enum(NOTEBOOK_CELL_TYPES);
+const notebookGridSlotSchema = z.object({
+  row: z.number().int().min(0).max(25),
+  column: z.number().int().min(0).max(12),
+});
 
 function notebookConnectionError(
   notebook: NotebookDocument,
@@ -251,22 +257,10 @@ function firstEmptyGridSlots(
   cells: readonly NotebookCell[],
   count: number,
 ): NotebookGridSlot[] {
-  const columnCount = 4;
-  const occupied = new Set(
-    cells.map((cell) => `${cell.slot.row}:${cell.slot.column}`),
+  return firstEmptyNotebookGridSlots(
+    cells.map((cell) => cell.slot),
+    count,
   );
-  const slots: NotebookGridSlot[] = [];
-  for (let index = 0; slots.length < count; index += 1) {
-    const slot = {
-      row: Math.floor(index / columnCount),
-      column: index % columnCount,
-    };
-    const key = `${slot.row}:${slot.column}`;
-    if (occupied.has(key)) continue;
-    occupied.add(key);
-    slots.push(slot);
-  }
-  return slots;
 }
 
 const cellReferenceSchema = z.object({
@@ -338,10 +332,7 @@ const cellInputSchema = z.object({
   id: z.string().uuid().optional(),
   type: cellTypeSchema,
   slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)+$/),
-  slot: z.object({
-    row: z.number().int().nonnegative(),
-    column: z.number().int(),
-  }),
+  slot: notebookGridSlotSchema,
   output_entity_id: z.string().uuid().optional(),
   prompt: z.string().optional(),
   provider: z.string().optional(),
@@ -374,20 +365,6 @@ function uniqueCellSlug(
   for (let ordinal = 2; ; ordinal += 1) {
     const candidate = `${base}-${String(ordinal).padStart(2, "0")}`;
     if (!occupied.has(candidate)) return candidate;
-  }
-}
-
-function firstEmptyRowBelow(
-  cells: readonly NotebookCell[],
-  slot: NotebookGridSlot,
-): NotebookGridSlot {
-  const occupied = new Set(
-    cells.map((cell) => `${cell.slot.row}:${cell.slot.column}`),
-  );
-  for (let row = slot.row + 1; ; row += 1) {
-    if (!occupied.has(`${row}:${slot.column}`)) {
-      return { row, column: slot.column };
-    }
   }
 }
 
@@ -1216,6 +1193,7 @@ function cellPayload(cell: NotebookCell): Record<string, unknown> {
     id: cell.id,
     type: cell.type,
     slug: cell.slug,
+    address: notebookGridTag(cell.slot),
     slot: cell.slot,
     ...(cell.outputEntityId
       ? { output_entity_id: cell.outputEntityId }
@@ -1270,6 +1248,7 @@ function notebookPayload(
   return {
     id: normalized.id,
     name: normalized.name,
+    revision: engine.head,
     created_at: normalized.createdAt,
     ...(normalized.description === undefined
       ? {}
@@ -3133,16 +3112,30 @@ export function videobookDomainDefs(
       name: "create_notebook_cell",
       description: "Create a UUIDv7 notebook cell",
       scope: "book",
-      schema: { ...bookSchema, notebook_id: z.string().uuid(), cell: cellInputSchema },
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        cell: cellInputSchema,
+        expected_revision: z.string().min(1).optional(),
+      },
       handler: async (args) => {
         let cell = engine.notebooks.createCell(cellFromInput(args.cell as CellInput));
         let outputCell: NotebookCell | null = null;
         let outputEdge: NotebookDocument["edges"][number] | null = null;
-        const result = await mutateNotebook(
-          engine,
-          String(args.notebook_id),
-          "create_notebook_cell",
-          (notebook) => {
+        try {
+          const result = await mutateNotebook(
+            engine,
+            String(args.notebook_id),
+            "create_notebook_cell",
+            (notebook) => {
+              if (
+                typeof args.expected_revision === "string"
+                && args.expected_revision !== engine.head
+              ) {
+                throw new Error(
+                  `Stale notebook revision: expected ${args.expected_revision}`,
+                );
+              }
             cell = normalizeCellActionFields(cell, notebook);
             if (cell.type === "analyze") {
               const cells = [...notebook.cells, cell];
@@ -3153,7 +3146,7 @@ export function videobookDomainDefs(
                   "analysis",
                   cell.slug.replace(/^analyze-/, ""),
                 ),
-                slot: firstEmptyRowBelow(cells, cell.slot),
+                slot: firstEmptyGridSlots(cells, 1)[0]!,
                 inputs: {
                   analysisRole: "result",
                   producerCellId: cell.id,
@@ -3191,16 +3184,19 @@ export function videobookDomainDefs(
                 ...(outputEdge ? [outputEdge] : []),
               ],
             };
-          },
-          { cellId: cell.id },
-        );
-        return result.ok
-          ? json({
-              ...cellPayload(cell),
-              ...(outputCell ? { output_cell: cellPayload(outputCell) } : {}),
-              ...(outputEdge ? { output_edge: outputEdge } : {}),
-            })
-          : failure(result.error.message);
+            },
+            { cellId: cell.id },
+          );
+          return result.ok
+            ? json({
+                ...cellPayload(cell),
+                ...(outputCell ? { output_cell: cellPayload(outputCell) } : {}),
+                ...(outputEdge ? { output_edge: outputEdge } : {}),
+              })
+            : failure(result.error.message);
+        } catch (cause) {
+          return failure(cause instanceof Error ? cause.message : String(cause));
+        }
       },
     },
     {
@@ -3289,33 +3285,96 @@ export function videobookDomainDefs(
         notebook_id: z.string().uuid(),
         slots: z.array(z.object({
           id: z.string().uuid(),
-          row: z.number().int().nonnegative(),
-          column: z.number().int(),
+          row: z.number().int().min(0).max(25),
+          column: z.number().int().min(0).max(12),
         })).min(1),
+        expected_revision: z.string().min(1).optional(),
       },
       handler: async (args) => {
-        const slots = new Map(
-          (args.slots as Array<{ id: string; row: number; column: number }>)
-            .map((slot) => [slot.id, slot]),
-        );
-        const result = await mutateNotebook(
-          engine,
-          String(args.notebook_id),
-          "move_notebook_cells",
-          (notebook) => {
-            return {
-              ...notebook,
-              cells: notebook.cells.map((cell) => {
-                const slot = slots.get(cell.id);
-                return slot
-                  ? { ...cell, slot: { row: slot.row, column: slot.column } }
-                  : cell;
-              }),
-            };
-          },
-          { cellIds: [...slots.keys()] },
-        );
-        return result.ok ? json({ notebook_id: args.notebook_id, revision: result.value.hash }) : failure(result.error.message);
+        const requested = args.slots as Array<{
+          id: string;
+          row: number;
+          column: number;
+        }>;
+        try {
+          const result = await mutateNotebook(
+            engine,
+            String(args.notebook_id),
+            "move_notebook_cells",
+            (notebook) => {
+              if (
+                typeof args.expected_revision === "string"
+                && args.expected_revision !== engine.head
+              ) {
+                throw new Error(
+                  `Stale notebook revision: expected ${args.expected_revision}`,
+                );
+              }
+              const slots = new Map(requested.map((slot) => [slot.id, slot]));
+              if (slots.size !== requested.length) {
+                throw new Error("Each moved notebook cell must appear once");
+              }
+              const cellsById = new Map(notebook.cells.map((cell) => [cell.id, cell]));
+              for (const id of slots.keys()) {
+                if (!cellsById.has(id)) throw new Error(`Cell not found: ${id}`);
+              }
+              if (requested.length === 1) {
+                const destination = requested[0]!;
+                const source = cellsById.get(destination.id)!;
+                const occupied = notebook.cells.find((cell) =>
+                  cell.id !== source.id
+                  && cell.slot.row === destination.row
+                  && cell.slot.column === destination.column);
+                return {
+                  ...notebook,
+                  cells: notebook.cells.map((cell) => {
+                    if (cell.id === source.id) {
+                      return {
+                        ...cell,
+                        slot: { row: destination.row, column: destination.column },
+                      };
+                    }
+                    return cell.id === occupied?.id
+                      ? { ...cell, slot: source.slot }
+                      : cell;
+                  }),
+                };
+              }
+              const targetKeys = new Set<string>();
+              for (const slot of requested) {
+                const key = `${slot.row}:${slot.column}`;
+                if (targetKeys.has(key)) {
+                  throw new Error(`Notebook grid square ${notebookGridTag(slot)} is targeted twice`);
+                }
+                targetKeys.add(key);
+              }
+              const movingIds = new Set(slots.keys());
+              const collision = notebook.cells.find((cell) =>
+                !movingIds.has(cell.id)
+                && targetKeys.has(`${cell.slot.row}:${cell.slot.column}`));
+              if (collision) {
+                throw new Error(
+                  `Notebook grid square ${notebookGridTag(collision.slot)} is occupied`,
+                );
+              }
+              return {
+                ...notebook,
+                cells: notebook.cells.map((cell) => {
+                  const slot = slots.get(cell.id);
+                  return slot
+                    ? { ...cell, slot: { row: slot.row, column: slot.column } }
+                    : cell;
+                }),
+              };
+            },
+            { cellIds: requested.map((slot) => slot.id) },
+          );
+          return result.ok
+            ? json({ notebook_id: args.notebook_id, revision: result.value.hash })
+            : failure(result.error.message);
+        } catch (cause) {
+          return failure(cause instanceof Error ? cause.message : String(cause));
+        }
       },
     },
     {
@@ -3356,8 +3415,19 @@ export function videobookDomainDefs(
       name: "delete_notebook_cell",
       description: "Delete one notebook cell and incident edges",
       scope: "book",
-      schema: { ...bookSchema, notebook_id: z.string().uuid(), cell_id: z.string().uuid() },
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        cell_id: z.string().uuid(),
+        expected_revision: z.string().min(1).optional(),
+      },
       handler: async (args) => {
+        if (
+          typeof args.expected_revision === "string"
+          && args.expected_revision !== engine.head
+        ) {
+          return failure(`Stale notebook revision: expected ${args.expected_revision}`);
+        }
         const notebookId = String(args.notebook_id);
         const cellId = String(args.cell_id);
         const result = await engine.notebooks.removeCell(notebookId, cellId);
@@ -3374,6 +3444,7 @@ export function videobookDomainDefs(
         source_cell_id: z.string().uuid(),
         target_cell_id: z.string().uuid(),
         target_input: z.string().min(1),
+        expected_revision: z.string().min(1).optional(),
       },
       handler: async (args) => {
         const edge = engine.notebooks.createEdge({
@@ -3387,6 +3458,14 @@ export function videobookDomainDefs(
             String(args.notebook_id),
             "connect_notebook_cells",
             (notebook) => {
+              if (
+                typeof args.expected_revision === "string"
+                && args.expected_revision !== engine.head
+              ) {
+                throw new Error(
+                  `Stale notebook revision: expected ${args.expected_revision}`,
+                );
+              }
               const error = notebookConnectionError(
                 notebook,
                 edge.source,
@@ -3520,10 +3599,7 @@ export function videobookDomainDefs(
         draft: z.object({
           type: cellTypeSchema.optional(),
           slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)+$/).optional(),
-          slot: z.object({
-            row: z.number().int().nonnegative(),
-            column: z.number().int(),
-          }).optional(),
+          slot: notebookGridSlotSchema.optional(),
           prompt: z.string(),
           provider: z.string().min(1),
           model: z.string().min(1),
@@ -3645,8 +3721,15 @@ export function videobookDomainDefs(
         cell_id: z.string().uuid(),
         plan: z.record(z.string(), z.unknown()).optional(),
         actor: z.string().min(1).optional(),
+        expected_revision: z.string().min(1).optional(),
       },
       handler: async (args) => {
+        if (
+          typeof args.expected_revision === "string"
+          && args.expected_revision !== engine.head
+        ) {
+          return failure(`Stale notebook revision: expected ${args.expected_revision}`);
+        }
         const jobId = `run-notebook-${String(args.notebook_id)}-${String(args.cell_id)}-${Date.now()}`;
         const notebook = engine.notebooks.read(String(args.notebook_id));
         if (!notebook.ok) return failure(notebook.error.message);

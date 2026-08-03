@@ -1,6 +1,7 @@
 import { ViewportPortal } from '@xyflow/react'
 import {
   notebookGrid,
+  notebookGridTag,
   notebookGridPosition,
   type NotebookGridMetrics,
   type NotebookGridSlot,
@@ -16,16 +17,14 @@ export function NotebookGridBoard({
   previewSlot,
 }: NotebookGridBoardProps) {
   const previewPosition = previewSlot ? notebookGridPosition(previewSlot) : null
-  const contentWidth = metrics.width - notebookGrid.originX * 2
 
   return (
     <ViewportPortal>
       <div
         className="notebook-grid-board"
         style={{
-          width: contentWidth,
+          width: metrics.width,
           height: metrics.height,
-          transform: `translateX(${metrics.minColumn * notebookGrid.columnPitch}px)`,
         }}
       >
         {Array.from({ length: metrics.rowCount }, (_, row) => (
@@ -38,9 +37,13 @@ export function NotebookGridBoard({
                 style={{
                   width: notebookGrid.squareSize,
                   height: notebookGrid.squareSize,
-                  transform: `translate(${index * notebookGrid.columnPitch}px, ${notebookGrid.originY + row * notebookGrid.rowPitch}px)`,
+                  transform: `translate(${notebookGrid.originX + index * notebookGrid.columnPitch}px, ${notebookGrid.originY + row * notebookGrid.rowPitch}px)`,
                 }}
-              />
+              >
+                <span className="notebook-grid-square-label">
+                  {notebookGridTag({ row, column })}
+                </span>
+              </span>
             )
           })
         ))}
@@ -50,7 +53,7 @@ export function NotebookGridBoard({
             style={{
               width: notebookGrid.squareSize,
               height: notebookGrid.squareSize,
-              transform: `translate(${previewPosition.x - metrics.minColumn * notebookGrid.columnPitch}px, ${previewPosition.y}px)`,
+              transform: `translate(${previewPosition.x}px, ${previewPosition.y}px)`,
             }}
           />
         )}

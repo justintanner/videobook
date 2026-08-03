@@ -378,7 +378,7 @@ export async function seedDancingWorkflow(
   const frame = engine.notebooks.createCell({
     type: "image",
     slug: "img-dancing-first-frame",
-    slot: { row: 2, column: -1 },
+    slot: { row: 2, column: 0 },
     outputArtifactId: frameArtifact.artifactId,
     inputs: {
       ...ownedInputs("first-frame-output"),

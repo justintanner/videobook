@@ -44,7 +44,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 25;
+export const MULTYCULTY_FIXTURE_VERSION = 26;
 
 const MULTYCULTY_FIXTURE_ANALYSIS: NotebookLiveAnalysis["rawOutput"] = {
   shots: [
@@ -165,28 +165,28 @@ const ANIMATION_SLUGS = [
 ] as const;
 
 const COMPACT_FIXTURE_SLOTS = new Map<string, NotebookCell["slot"]>([
-  ["source", { row: 0, column: 0 }],
-  ["analysis", { row: 1, column: -1 }],
-  ["source-extract-audio", { row: 1, column: 1 }],
-  ["analysis-output", { row: 2, column: -1 }],
-  ["source-audio", { row: 2, column: 1 }],
-  ["split-video-1", { row: 3, column: -2 }],
-  ["split-video-2", { row: 3, column: 2 }],
-  ["scene-video-1", { row: 4, column: -2 }],
-  ["scene-video-2", { row: 4, column: 2 }],
-  ["frame-first-1", { row: 5, column: -3 }],
-  ["frame-last-1", { row: 5, column: -2 }],
-  ["scene-extract-audio-1", { row: 5, column: -1 }],
-  ["frame-first-2", { row: 5, column: 1 }],
-  ["frame-last-2", { row: 5, column: 2 }],
-  ["scene-extract-audio-2", { row: 5, column: 3 }],
-  ["scene-audio-1", { row: 6, column: -1 }],
-  ["scene-audio-2", { row: 6, column: 3 }],
-  ["prompt-1", { row: 6, column: -2 }],
-  ["prompt-2", { row: 6, column: 2 }],
-  ["animate-1", { row: 7, column: -2 }],
-  ["animate-2", { row: 7, column: 2 }],
-  ["assembly", { row: 8, column: 0 }],
+  ["source", { row: 0, column: 3 }],
+  ["analysis", { row: 1, column: 2 }],
+  ["source-extract-audio", { row: 1, column: 4 }],
+  ["analysis-output", { row: 2, column: 2 }],
+  ["source-audio", { row: 2, column: 4 }],
+  ["split-video-1", { row: 3, column: 1 }],
+  ["split-video-2", { row: 3, column: 5 }],
+  ["scene-video-1", { row: 4, column: 1 }],
+  ["scene-video-2", { row: 4, column: 5 }],
+  ["frame-first-1", { row: 5, column: 0 }],
+  ["frame-last-1", { row: 5, column: 1 }],
+  ["scene-extract-audio-1", { row: 5, column: 2 }],
+  ["frame-first-2", { row: 5, column: 4 }],
+  ["frame-last-2", { row: 5, column: 5 }],
+  ["scene-extract-audio-2", { row: 5, column: 6 }],
+  ["scene-audio-1", { row: 6, column: 2 }],
+  ["scene-audio-2", { row: 6, column: 6 }],
+  ["prompt-1", { row: 6, column: 1 }],
+  ["prompt-2", { row: 6, column: 5 }],
+  ["animate-1", { row: 7, column: 1 }],
+  ["animate-2", { row: 7, column: 5 }],
+  ["assembly", { row: 8, column: 3 }],
 ]);
 
 const COMPACT_FIXTURE_ROLES = new Set(COMPACT_FIXTURE_SLOTS.keys());

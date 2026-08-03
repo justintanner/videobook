@@ -74,6 +74,12 @@ describe('notebook split commands', () => {
       splitAtSeconds: 65,
     })
     expect(parseNotebookSplitCommand(
+      'split @A1 at 2s',
+    )).toEqual({
+      sourceReference: 'a1',
+      splitAtSeconds: 2,
+    })
+    expect(parseNotebookSplitCommand(
       'please split @vid-slug into 1m 5s plus the rest please',
     )).toEqual({
       sourceReference: 'vid-slug',
@@ -164,6 +170,7 @@ describe('notebook split commands', () => {
     if (!beforeResult.ok) return
     const before: NotebookDocument = beforeResult.value
     expect(resolveNotebookSplitSource(before, 'vid-source').id).toBe(source.id)
+    expect(resolveNotebookSplitSource(before, 'a1').id).toBe(source.id)
 
     const command = parseNotebookSplitCommand(
       'split @vid-source into 1s and the remaining',
@@ -177,7 +184,7 @@ describe('notebook split commands', () => {
     expect(draft.actionCell).toMatchObject({
       type: 'split_video',
       operation: 'split_range',
-      slot: { row: 1, column: 0 },
+      slot: { row: 0, column: 1 },
       inputs: {
         startSeconds: 0,
         splitAtSeconds: 1,
@@ -190,7 +197,7 @@ describe('notebook split commands', () => {
         outputCell: {
           type: 'video',
           slug: 'vid-source-first-1s',
-          slot: { row: 2, column: -1 },
+          slot: { row: 0, column: 2 },
           inputs: { state: 'pending' },
         },
       },
@@ -199,7 +206,7 @@ describe('notebook split commands', () => {
         outputCell: {
           type: 'video',
           slug: 'vid-source-remaining',
-          slot: { row: 2, column: 1 },
+          slot: { row: 0, column: 3 },
           inputs: { state: 'pending' },
         },
       },

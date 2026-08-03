@@ -25,7 +25,7 @@ export async function persistAndRunNotebookCell(input: {
   valid: boolean
   patch: Record<string, unknown>
   onUpdate: NotebookCellUpdate
-  onRun: (cellId: string) => Promise<void>
+  onRun: (cellId: string) => Promise<unknown>
 }): Promise<boolean> {
   if (!input.valid) return false
   if (input.dirty) {

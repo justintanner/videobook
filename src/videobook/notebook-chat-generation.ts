@@ -1,3 +1,4 @@
+import { firstEmptyNotebookGridSlot } from 'videobook-engine/notebook-grid'
 import type {
   NotebookCell,
   NotebookDocument,
@@ -16,6 +17,11 @@ import {
   type NotebookGenerationAction,
 } from './notebook-generation-actions'
 import { nextNotebookCellSlug } from './notebook-download'
+import {
+  notebookCellTag,
+  notebookReferences,
+  resolveNotebookCellReference,
+} from './notebook-addressing'
 
 export type NotebookChatGenerationCommand = {
   cellType: GenerationCellType
@@ -80,10 +86,7 @@ function stringValue(value: unknown): string | null {
 }
 
 function uniqueReferences(input: string): string[] {
-  const references = [...input.matchAll(
-    /@([a-z0-9]+(?:-[a-z0-9]+)+)/giu,
-  )].map((match) => match[1]!.toLowerCase())
-  return [...new Set(references)]
+  return notebookReferences(input)
 }
 
 function generationPrompt(
@@ -93,7 +96,7 @@ function generationPrompt(
 ): string {
   const withoutReferences = tail
     .replace(
-      /(?:\b(?:with|using|from|based\s+on)\s+)?@[a-z0-9]+(?:-[a-z0-9]+)+/giu,
+      /(?:\b(?:with|using|from|based\s+on)\s+)?@[a-z0-9-]+/giu,
       ' ',
     )
     .replace(/\s+/gu, ' ')
@@ -148,19 +151,6 @@ function uniqueConnectionTargets(
     counts.set(input.target, count)
     return count === 1 ? input.target : `${input.target}_${count}`
   })
-}
-
-function firstEmptyRowBelow(
-  cells: readonly NotebookCell[],
-  source: NotebookGridSlot,
-): NotebookGridSlot {
-  const occupied = new Set(cells.map((cell) =>
-    `${cell.slot.row}:${cell.slot.column}`))
-  for (let row = source.row + 1; ; row += 1) {
-    if (!occupied.has(`${row}:${source.column}`)) {
-      return { row, column: source.column }
-    }
-  }
 }
 
 function connectedInputCandidates(
@@ -265,23 +255,11 @@ export function resolveNotebookChatGenerationSources(
   sourceReferences: readonly string[],
 ): GenerationSource[] {
   return sourceReferences.map((sourceReference) => {
-    const reference = sourceReference.replace(/^@/u, '').toLowerCase()
-    const exact = document.cells.find((cell) =>
-      cell.slug.toLowerCase() === reference
-      || cell.id.toLowerCase() === reference)
-    const prefixMatches = exact
-      ? []
-      : document.cells.filter((cell) =>
-          cell.id.toLowerCase().startsWith(reference))
-    if (prefixMatches.length > 1) {
-      throw new Error(`Cell reference @${reference} is ambiguous`)
-    }
-    const cell = exact ?? prefixMatches[0]
-    if (!cell) throw new Error(`Media cell @${reference} was not found in this notebook`)
+    const cell = resolveNotebookCellReference(document, sourceReference)
     const kind = mediaInputKind(cell)
-    if (!kind) throw new Error(`@${cell.slug} is not a media-producing cell`)
+    if (!kind) throw new Error(`${notebookCellTag(cell)} is not a media-producing cell`)
     if (!cell.outputArtifactId) {
-      throw new Error(`@${cell.slug} does not have media output yet`)
+      throw new Error(`${notebookCellTag(cell)} does not have media output yet`)
     }
     return { cell, kind }
   })
@@ -327,7 +305,7 @@ export function planNotebookChatGeneration(input: {
     ...(Object.keys(settings).length > 0 ? { generationSettings: settings } : {}),
   }
   const slot = sources[0]
-    ? firstEmptyRowBelow(input.document.cells, sources[0].cell.slot)
+    ? firstEmptyNotebookGridSlot(input.document.cells.map((cell) => cell.slot))
     : input.fallbackSlot
   const cell: NotebookCell = {
     id: input.cellId,
@@ -475,12 +453,16 @@ export async function materializeNotebookChatGeneration(input: {
   callTool: NotebookToolCall
   document: NotebookDocument
   draft: NotebookChatGenerationDraft
+  expectedRevision?: string
 }): Promise<NotebookChatGenerationRun> {
   let created = false
   try {
     const value = objectValue(await input.callTool('create_notebook_cell', {
       book_id: input.bookId,
       notebook_id: input.document.id,
+      ...(input.expectedRevision
+        ? { expected_revision: input.expectedRevision }
+        : {}),
       cell: {
         id: input.draft.cell.id,
         type: input.draft.cell.type,

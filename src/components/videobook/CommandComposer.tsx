@@ -1,25 +1,19 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  AudioWaveform,
   Bot,
   Check,
   ChevronDown,
   ChevronUp,
-  FileText,
-  Film,
-  Image as ImageIcon,
   Loader2,
   Send,
   X,
 } from 'lucide-react'
 import type { ServerCommand } from '@/lib/command-registry'
 import { RichPromptField } from '@/components/ui/RichPromptField'
-import { MediaLibraryAssetPreview } from './MediaLibraryAssetPreview'
 import {
-  assetMentionMetadata,
-  assetMentionSuggestions,
-  type AssetMentionCandidate,
-  type AssetMentionSuggestion,
+  notebookAddressSuggestions,
+  type NotebookAddressCell,
+  type NotebookAddressSuggestion,
 } from '@/videobook/mention-suggestions'
 import { applyReadlineEdit } from '@/videobook/readline'
 import {
@@ -61,7 +55,7 @@ export interface PromptSession {
 interface CommandComposerProps {
   children?: ReactNode
   commands: ServerCommand[]
-  assets: readonly AssetMentionCandidate[]
+  cells: readonly NotebookAddressCell[]
   bookId: string
   callTool: (tool: string, args: Record<string, unknown>) => Promise<unknown>
   chatModels: readonly ChatModelOption[]
@@ -88,7 +82,7 @@ interface CommandSuggestion {
   type: 'command'
 }
 
-type Suggestion = CommandSuggestion | AssetMentionSuggestion
+type Suggestion = CommandSuggestion | NotebookAddressSuggestion
 
 interface PromptHistoryEntry {
   prompt: string
@@ -137,7 +131,7 @@ function historyPayload(value: unknown): string[] {
 export function CommandComposer({
   children,
   commands,
-  assets,
+  cells,
   bookId,
   callTool,
   chatModels,
@@ -202,8 +196,8 @@ export function CommandComposer({
           type: 'command',
         }))
     }
-    return assetMentionSuggestions(assets, input)
-  }, [assets, commands, dismissed, input, pendingInput])
+    return notebookAddressSuggestions(cells, input)
+  }, [cells, commands, dismissed, input, pendingInput])
 
   const showOutcome = (next: ComposerOutcome) => {
     window.clearTimeout(successTimerRef.current)
@@ -483,35 +477,13 @@ export function CommandComposer({
             {suggestions.map((suggestion, index) => (
               <button
                 type="button"
-                key={suggestion.label}
-                className={`${index === selectedIndex ? 'active ' : ''}${
-                  suggestion.type === 'asset'
-                    ? 'command-asset-suggestion'
-                    : 'command-command-suggestion'
-                }`}
+                key={`${suggestion.type}:${suggestion.label}`}
+                className={`${index === selectedIndex ? 'active ' : ''}command-command-suggestion`}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => acceptSuggestion(suggestion)}
               >
-                {suggestion.type === 'asset' ? (
-                  <>
-                    <span className="command-asset-preview" aria-hidden="true">
-                      <AssetSuggestionPreview asset={suggestion.asset} />
-                    </span>
-                    <span className="command-asset-copy">
-                      <strong>{suggestion.label}</strong>
-                      <span className="command-asset-metadata">
-                        {assetMentionMetadata(suggestion.asset).map((item, itemIndex) => (
-                          <span key={`${item}-${itemIndex}`}>{item}</span>
-                        ))}
-                      </span>
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <strong>{suggestion.label}</strong>
-                    <span>{suggestion.description}</span>
-                  </>
-                )}
+                <strong>{suggestion.label}</strong>
+                <span>{suggestion.description}</span>
               </button>
             ))}
           </div>
@@ -619,27 +591,4 @@ export function CommandComposer({
       </form>
     </section>
   )
-}
-
-function AssetSuggestionPreview({
-  asset,
-}: {
-  asset: AssetMentionCandidate
-}) {
-  const visual = Boolean(
-    asset.thumbnailUrl
-    || (
-      asset.mediaUrl
-      && (
-        asset.type === 'image'
-        || asset.type === 'video'
-        || asset.type === 'final'
-      )
-    ),
-  )
-  if (visual) return <MediaLibraryAssetPreview asset={asset} eager />
-  if (asset.type === 'audio') return <AudioWaveform size={17} />
-  if (asset.type === 'image') return <ImageIcon size={17} />
-  if (asset.type === 'video' || asset.type === 'final') return <Film size={17} />
-  return <FileText size={17} />
 }

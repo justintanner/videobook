@@ -1,4 +1,11 @@
 import { formatMediaTime } from './notebook-cell-presentation'
+import {
+  NOTEBOOK_GRID_COLUMN_COUNT,
+  NOTEBOOK_GRID_ROW_COUNT,
+  notebookGridAddress,
+  notebookGridTag,
+} from 'videobook-engine/notebook-grid'
+import type { NotebookGridSlot } from 'videobook-engine'
 
 export interface AssetMentionRecord {
   id: string
@@ -14,6 +21,7 @@ export interface AssetMentionRecord {
 
 export interface AssetMentionCandidate
   extends Omit<AssetMentionRecord, 'id'> {
+  cellAddress: string
   cellSlug: string
   assetSlug: string
 }
@@ -21,6 +29,7 @@ export interface AssetMentionCandidate
 interface NotebookMentionCell {
   id?: string
   slug: string
+  slot?: NotebookGridSlot
   type: string
   outputArtifactId?: string
 }
@@ -37,6 +46,18 @@ export interface AssetMentionSuggestion {
   label: string
   asset: AssetMentionCandidate
   type: 'asset'
+}
+
+export interface NotebookAddressSuggestion {
+  value: string
+  label: string
+  description: string
+  type: 'cell'
+}
+
+export interface NotebookAddressCell {
+  slot: NotebookGridSlot
+  type: string
 }
 
 function positiveFinite(value: number | null): value is number {
@@ -69,6 +90,9 @@ export function notebookMentionAssets(
     const { id: assetSlug, ...assetFields } = asset
     return {
       ...assetFields,
+      cellAddress: cell.slot
+        ? notebookGridAddress(cell.slot)
+        : cell.slug,
       cellSlug: cell.slug,
       assetSlug,
     }
@@ -80,7 +104,10 @@ export function resolveNotebookMentionAliases(
   assets: readonly AssetMentionCandidate[],
 ): string {
   const assetSlugsByCellSlug = new Map(
-    assets.map((asset) => [asset.cellSlug.toLowerCase(), asset.assetSlug]),
+    assets.flatMap((asset) => [
+      [asset.cellAddress.toLowerCase(), asset.assetSlug] as const,
+      [asset.cellSlug.toLowerCase(), asset.assetSlug] as const,
+    ]),
   )
   return input.replace(/@([\w-]+)/gu, (mention, value: string) => {
     const assetSlug = assetSlugsByCellSlug.get(value.toLowerCase())
@@ -102,7 +129,8 @@ export function notebookCellRenamePlan(
   if (typeof oldAssetId !== 'string' || typeof newAssetId !== 'string') return null
   const requested = assetId.trim().replace(/^@/u, '').toLowerCase()
   const candidate = assets.find((asset) =>
-    asset.cellSlug.toLowerCase() === requested
+    (asset.cellAddress.toLowerCase() === requested
+      || asset.cellSlug.toLowerCase() === requested)
     && asset.assetSlug === oldAssetId)
   if (!candidate) return null
   const cell = cells.find((item) =>
@@ -151,13 +179,43 @@ export function assetMentionSuggestions(
   return assets
     .filter((asset) => (
       (!requiredType || asset.type.toLowerCase() === requiredType)
-      && asset.cellSlug.toLowerCase().includes(filter)
+      && asset.cellAddress.toLowerCase().includes(filter)
     ))
     .slice(0, 12)
     .map((asset) => ({
-      value: `@${asset.cellSlug}`,
-      label: `@${asset.cellSlug}`,
+      value: `@${asset.cellAddress}`,
+      label: `@${asset.cellAddress}`,
       asset,
       type: 'asset',
     }))
+}
+
+export function notebookAddressSuggestions(
+  cells: readonly NotebookAddressCell[],
+  input: string,
+): NotebookAddressSuggestion[] {
+  const match = input.match(/@([a-z0-9]*)$/iu)
+  if (!match) return []
+  const filter = match[1]!.toLowerCase()
+  const occupied = new Map(
+    cells.map((cell) => [`${cell.slot.row}:${cell.slot.column}`, cell]),
+  )
+  const suggestions: NotebookAddressSuggestion[] = []
+  for (let row = 0; row < NOTEBOOK_GRID_ROW_COUNT; row += 1) {
+    for (let column = 0; column < NOTEBOOK_GRID_COLUMN_COUNT; column += 1) {
+      const tag = notebookGridTag({ row, column })
+      if (!tag.slice(1).includes(filter)) continue
+      const cell = occupied.get(`${row}:${column}`)
+      suggestions.push({
+        value: tag,
+        label: tag,
+        description: cell
+          ? `${cell.type.replaceAll('_', ' ').toUpperCase()} cell`
+          : 'Empty grid square',
+        type: 'cell',
+      })
+      if (suggestions.length === 12) return suggestions
+    }
+  }
+  return suggestions
 }

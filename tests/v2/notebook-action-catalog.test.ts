@@ -173,7 +173,7 @@ describe("notebook action catalog", () => {
     expect(analysis.output_cell).toMatchObject({
       type: "analysis",
       slug: "analysis-source",
-      slot: { row: 1, column: 0 },
+      slot: { row: 0, column: 1 },
       inputs: {
         analysisRole: "result",
         producerCellId: analysis.id,
