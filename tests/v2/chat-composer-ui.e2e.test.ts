@@ -233,6 +233,20 @@ describe('chat composer browser flow', () => {
         },
       }))
     }
+    for (const prompt of [
+      'history-oldest',
+      'history-middle',
+      'history-newest',
+    ]) {
+      resultValue(await client.callTool({
+        name: 'record_prompt',
+        arguments: {
+          book_id: bookId,
+          surface: 'chat',
+          prompt,
+        },
+      }))
+    }
     await client.close()
     viteProcess = startProcess(
       [join(process.cwd(), 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(vitePort)],
@@ -267,6 +281,40 @@ describe('chat composer browser flow', () => {
       await rm(rootDir, { recursive: true, force: true, maxRetries: 3 })
     }
   })
+
+  it('recalls failed commands backwards and restores the unsent draft', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+    const failedCommand = 'history command expected to fail'
+    await input.fill(failedCommand)
+    await page.getByLabel('Send command').click()
+    await page.locator('.command-result-error').waitFor({ state: 'visible' })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.inputValue()).toBe('')
+
+    for (const expected of [
+      failedCommand,
+      'history-newest',
+      'history-middle',
+      'history-oldest',
+    ]) {
+      await input.press('ArrowUp')
+      await expect.poll(async () => await input.inputValue()).toBe(expected)
+    }
+    for (const expected of [
+      'history-middle',
+      'history-newest',
+      failedCommand,
+      '',
+    ]) {
+      await input.press('ArrowDown')
+      await expect.poll(async () => await input.inputValue()).toBe(expected)
+    }
+  }, 60_000)
 
   it('shows MCP motion and sends the selected model through the real UI', async () => {
     if (!page) throw new Error('Browser page was not initialized')
@@ -343,8 +391,8 @@ describe('chat composer browser flow', () => {
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
-    const reviewCell = page.locator('.cell-node').filter({
-      hasText: '@generate-image-review',
+    const reviewCell = page.locator('.cell-node.cell-kind-generate_image').filter({
+      hasText: '@b3',
     })
     const generate = reviewCell.getByRole('button', { name: 'Gen' })
     await expect.poll(async () => await generate.isEnabled()).toBe(true)

@@ -21,6 +21,10 @@ import {
   hasExactCommandSuggestion,
 } from '@/videobook/command-suggestions'
 import { composerInputAfterOutcome } from '@/videobook/command-composer-outcome'
+import {
+  commandHistoryPage,
+  navigateCommandHistory,
+} from '@/videobook/command-history'
 import type { ChatModelOption } from '@/videobook/chat-models'
 import {
   mcpToolLabel,
@@ -84,49 +88,7 @@ interface CommandSuggestion {
 
 type Suggestion = CommandSuggestion | NotebookAddressSuggestion
 
-interface PromptHistoryEntry {
-  prompt: string
-}
-
-function resultText(result: unknown): string | null {
-  if (typeof result !== 'object' || result === null || !('content' in result)) {
-    return null
-  }
-  const content = result.content
-  if (!Array.isArray(content)) return null
-  const item = content.find((candidate) => (
-    typeof candidate === 'object'
-    && candidate !== null
-    && 'type' in candidate
-    && candidate.type === 'text'
-    && 'text' in candidate
-    && typeof candidate.text === 'string'
-  ))
-  return item && 'text' in item ? item.text as string : null
-}
-
-function historyPayload(value: unknown): string[] {
-  const text = resultText(value)
-  let parsed = value
-  if (text) {
-    try {
-      parsed = JSON.parse(text) as unknown
-    } catch {
-      return []
-    }
-  }
-  if (typeof parsed !== 'object' || parsed === null || !('entries' in parsed)) return []
-  const entries = parsed.entries
-  if (!Array.isArray(entries)) return []
-  return entries.flatMap((entry) => (
-    typeof entry === 'object'
-    && entry !== null
-    && 'prompt' in entry
-    && typeof entry.prompt === 'string'
-      ? [entry as PromptHistoryEntry]
-      : []
-  )).map((entry) => entry.prompt).reverse()
-}
+const COMMAND_HISTORY_PAGE_SIZE = 250
 
 export function CommandComposer({
   children,
@@ -162,6 +124,10 @@ export function CommandComposer({
   const historyCursorRef = useRef(-1)
   const historyDraftRef = useRef('')
   const loadedHistoryProjectRef = useRef('')
+  const historyLoadRef = useRef<{
+    bookId: string
+    promise: Promise<void>
+  } | null>(null)
   const successTimerRef = useRef(0)
   const transmitting = sending || mcpActivity.phase === 'active'
   const mcpSucceeded = !transmitting && mcpActivity.phase === 'success'
@@ -207,20 +173,56 @@ export function CommandComposer({
     }
   }
 
-  const ensureHistory = async () => {
-    if (!bookId || loadedHistoryProjectRef.current === bookId) return
-    loadedHistoryProjectRef.current = bookId
+  const loadHistory = async (targetBookId: string): Promise<string[]> => {
+    const newestFirst: string[] = []
+    let offset = 0
+    while (true) {
+      const result = await callTool('list_prompt_history', {
+        book_id: targetBookId,
+        surface: 'chat',
+        limit: COMMAND_HISTORY_PAGE_SIZE,
+        offset,
+      })
+      const page = commandHistoryPage(result)
+      newestFirst.push(...page.values)
+      if (!page.hasMore) return newestFirst.reverse()
+      const nextOffset = page.offset + page.values.length
+      if (nextOffset <= offset) {
+        throw new Error('Prompt history pagination did not advance')
+      }
+      offset = nextOffset
+    }
+  }
+
+  const ensureHistory = async (): Promise<void> => {
+    const targetBookId = bookId
+    if (!targetBookId) return
+    const activeLoad = historyLoadRef.current
+    if (activeLoad?.bookId === targetBookId) {
+      await activeLoad.promise
+      return
+    }
+    if (loadedHistoryProjectRef.current === targetBookId) return
+    loadedHistoryProjectRef.current = targetBookId
     historyRef.current = []
     historyCursorRef.current = -1
-    try {
-      const result = await callTool('list_prompt_history', {
-        book_id: bookId,
-        surface: 'chat',
-        limit: 100,
-      })
-      historyRef.current = historyPayload(result)
-    } catch {
-      loadedHistoryProjectRef.current = ''
+    historyDraftRef.current = ''
+    const promise = (async () => {
+      try {
+        const history = await loadHistory(targetBookId)
+        if (loadedHistoryProjectRef.current === targetBookId) {
+          historyRef.current = history
+        }
+      } catch {
+        if (loadedHistoryProjectRef.current === targetBookId) {
+          loadedHistoryProjectRef.current = ''
+        }
+      }
+    })()
+    historyLoadRef.current = { bookId: targetBookId, promise }
+    await promise
+    if (historyLoadRef.current?.promise === promise) {
+      historyLoadRef.current = null
     }
   }
 
@@ -244,10 +246,11 @@ export function CommandComposer({
   const execute = async () => {
     const message = input.trim()
     if (!message || sending || disabled) return
+    setSending(true)
+    await ensureHistory()
     recordHistory(message)
     setInput('')
     setDismissed(false)
-    setSending(true)
     let selectInput = false
     try {
       const nextOutcome = await onExecute(message)
@@ -282,26 +285,24 @@ export function CommandComposer({
       setInput((current) => current.replace(/@[\w-]*$/, suggestion.value) + ' ')
     }
     setDismissed(true)
+    historyCursorRef.current = -1
     focusInput()
   }
 
-  const navigateHistory = (direction: -1 | 1) => {
-    const values = historyRef.current
-    if (values.length === 0) return
-    if (historyCursorRef.current === -1) {
-      if (direction === 1) return
-      historyDraftRef.current = input
-      historyCursorRef.current = values.length - 1
-    } else {
-      historyCursorRef.current += direction
-      if (historyCursorRef.current < 0) historyCursorRef.current = 0
-      if (historyCursorRef.current >= values.length) {
-        historyCursorRef.current = -1
-        setInput(historyDraftRef.current)
-        return
-      }
-    }
-    setInput(values[historyCursorRef.current] ?? '')
+  const navigateHistory = async (direction: -1 | 1) => {
+    await ensureHistory()
+    const next = navigateCommandHistory({
+      values: historyRef.current,
+      cursor: historyCursorRef.current,
+      draft: historyDraftRef.current,
+      current: input,
+      direction,
+    })
+    if (!next) return
+    historyCursorRef.current = next.cursor
+    historyDraftRef.current = next.draft
+    setInput(next.value)
+    setDismissed(true)
   }
 
   const applyInputReadline = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -546,12 +547,22 @@ export function CommandComposer({
             }
             if (event.ctrlKey && event.key.toLowerCase() === 'p') {
               event.preventDefault()
-              navigateHistory(-1)
+              void navigateHistory(-1)
               return
             }
             if (event.ctrlKey && event.key.toLowerCase() === 'n') {
               event.preventDefault()
-              navigateHistory(1)
+              void navigateHistory(1)
+              return
+            }
+            if (event.key === 'ArrowUp') {
+              event.preventDefault()
+              void navigateHistory(-1)
+              return
+            }
+            if (event.key === 'ArrowDown') {
+              event.preventDefault()
+              void navigateHistory(1)
               return
             }
             if (applyInputReadline(event)) return

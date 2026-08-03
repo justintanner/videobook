@@ -4,6 +4,7 @@ import type { ToolDef } from "./tool-def.js";
 import { PROMPT_SURFACES, isPromptSurface } from "../prompt-surfaces.js";
 
 const SURFACE_LIST = PROMPT_SURFACES.join(", ");
+const MAX_HISTORY_PAGE_SIZE = 1000;
 
 function invalidSurface(value: unknown) {
   return {
@@ -88,19 +89,31 @@ export function listPromptHistoryDef(fs: Engine): ToolDef {
         ),
       limit: z
         .number()
+        .int()
+        .positive()
+        .max(MAX_HISTORY_PAGE_SIZE)
         .optional()
-        .describe("Max entries to return (default 100, capped at 1000)"),
+        .describe(`Max entries to return (default 100, capped at ${MAX_HISTORY_PAGE_SIZE})`),
+      offset: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe("Number of newer entries to skip"),
     },
     handler: async (args) => {
-      const { surface, limit } = args as {
+      const { surface, limit, offset } = args as {
         surface: string;
         limit?: number;
+        offset?: number;
       };
       if (!isPromptSurface(surface)) return invalidSurface(surface);
 
+      const pageLimit = limit ?? 100;
+      const pageOffset = offset ?? 0;
       const entries = fs.prompts.list({
         surface,
-        ...(typeof limit === "number" ? { limit } : {}),
+        limit: pageOffset + pageLimit,
       });
       if (!entries.ok) {
         return {
@@ -108,7 +121,15 @@ export function listPromptHistoryDef(fs: Engine): ToolDef {
           content: [{ type: "text" as const, text: entries.error.message }],
         };
       }
-      const payload = entries.value.map((entry) => ({
+      const count = fs.prompts.count({ surface });
+      if (!count.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: count.error.message }],
+        };
+      }
+      const pageEntries = entries.value.slice(pageOffset);
+      const payload = pageEntries.map((entry) => ({
         id: entry.id,
         surface: entry.surface,
         prompt: entry.prompt,
@@ -117,7 +138,18 @@ export function listPromptHistoryDef(fs: Engine): ToolDef {
       }));
       return {
         content: [
-          { type: "text" as const, text: JSON.stringify({ entries: payload }) },
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              entries: payload,
+              page: {
+                offset: pageOffset,
+                limit: pageLimit,
+                total: count.value,
+                has_more: pageOffset + pageEntries.length < count.value,
+              },
+            }),
+          },
         ],
       };
     },
