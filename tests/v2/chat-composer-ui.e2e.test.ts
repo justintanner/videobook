@@ -282,6 +282,43 @@ describe('chat composer browser flow', () => {
     }
   })
 
+  it('keeps compact canvas controls clear of cells and narrows the inspector', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+    const canvas = page.locator('.canvas')
+    const toolbar = page.getByLabel('Notebook canvas controls')
+    const firstCell = page.locator('.cell-node').filter({ hasText: '@a1' })
+    await toolbar.waitFor({ state: 'visible' })
+    await firstCell.waitFor({ state: 'visible' })
+    const canvasBox = await canvas.boundingBox()
+    const toolbarBox = await toolbar.boundingBox()
+    const firstCellBox = await firstCell.boundingBox()
+    if (!canvasBox || !toolbarBox || !firstCellBox) {
+      throw new Error('Could not measure notebook layout')
+    }
+    expect(toolbarBox.x).toBeLessThan(canvasBox.x + canvasBox.width / 2)
+    expect(toolbarBox.x - canvasBox.x).toBeGreaterThanOrEqual(20)
+    expect(toolbarBox.x - canvasBox.x).toBeLessThanOrEqual(28)
+    expect(toolbarBox.y + toolbarBox.height).toBeLessThanOrEqual(firstCellBox.y)
+
+    const addCell = page.locator('.canvas-add-menu > summary')
+    expect(await addCell.getAttribute('aria-label')).toBe('Add cell')
+    expect((await addCell.textContent())?.trim()).toBe('')
+    await addCell.click()
+    await page.locator('.canvas-add-menu > div').waitFor({ state: 'visible' })
+    await addCell.click()
+
+    await page.getByLabel('Open inspector').click()
+    await wait(250)
+    const inspectorBox = await page.locator('.inspector').boundingBox()
+    expect(inspectorBox?.width).toBeGreaterThanOrEqual(280)
+    expect(inspectorBox?.width).toBeLessThanOrEqual(320)
+  }, 60_000)
+
   it('recalls failed commands backwards and restores the unsent draft', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await page.goto(appUrl, { waitUntil: 'commit' })

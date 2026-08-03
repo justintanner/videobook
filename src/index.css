@@ -90,7 +90,7 @@ textarea:focus-visible {
 }
 
 .app-shell {
-  --inspector-width: clamp(330px, 27vw, 380px);
+  --inspector-width: clamp(280px, 20vw, 320px);
   display: grid;
   grid-template: 72px minmax(0, 1fr) / minmax(0, 1fr) var(--inspector-width);
   width: 100%;
@@ -815,33 +815,31 @@ textarea:focus-visible {
   background: rgba(142, 31, 31, 0.28);
 }
 
-.canvas-add-panel {
-  position: sticky;
-  top: 62px;
+.canvas-toolbar {
+  position: absolute;
+  top: 10px;
   left: var(--notebook-edge-inset);
   z-index: 20;
-  width: max-content;
-  height: 0;
-  margin-left: var(--notebook-edge-inset);
+  display: flex;
+  height: 32px;
+  align-items: flex-start;
+  gap: 6px;
   pointer-events: none;
 }
 
+.canvas-toolbar > * {
+  pointer-events: auto;
+}
+
 .canvas-zoom-panel {
-  position: sticky;
-  top: 16px;
-  z-index: 20;
   display: flex;
-  width: 100%;
-  height: 0;
-  justify-content: flex-start;
-  padding-left: var(--notebook-edge-inset);
-  pointer-events: none;
+  height: 32px;
 }
 
 .canvas-zoom-panel button {
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   place-items: center;
   border: 1px solid rgba(114, 231, 170, 0.5);
@@ -868,8 +866,8 @@ textarea:focus-visible {
 }
 
 .canvas-zoom-panel .canvas-zoom-level {
-  width: 56px;
-  font-size: 10px;
+  width: 46px;
+  font-size: 9px;
   font-weight: 650;
   line-height: 1;
   letter-spacing: 0.06em;
@@ -880,7 +878,6 @@ textarea:focus-visible {
   pointer-events: auto;
 }
 
-.canvas-add-menu summary,
 .canvas-add-menu button {
   display: flex;
   align-items: center;
@@ -898,6 +895,15 @@ textarea:focus-visible {
 }
 
 .canvas-add-menu summary {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(114, 231, 170, 0.5);
+  color: #c7ecd7;
+  background: rgba(4, 19, 12, 0.96);
+  cursor: pointer;
   list-style: none;
 }
 
@@ -1048,8 +1054,7 @@ textarea:focus-visible {
   line-height: 1.55;
 }
 
-.canvas-welcome > button,
-.inspector-reopen {
+.canvas-welcome > button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1062,19 +1067,31 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
-.canvas-welcome > button:hover,
-.inspector-reopen:hover {
+.canvas-welcome > button:hover {
   border-color: var(--green);
   background: rgba(50, 145, 88, 0.4);
 }
 
 .inspector-reopen {
   position: absolute;
-  top: 18px;
+  top: 10px;
   right: var(--notebook-edge-inset);
-  z-index: 12;
-  width: 38px;
+  z-index: 20;
+  display: grid;
+  width: 32px;
+  height: 32px;
   padding: 0;
+  place-items: center;
+  border: 1px solid var(--line-bright);
+  color: #c6f2d8;
+  background: rgba(4, 19, 12, 0.96);
+  cursor: pointer;
+}
+
+.inspector-reopen:hover,
+.inspector-reopen:focus-visible {
+  border-color: var(--green);
+  background: rgba(50, 145, 88, 0.4);
 }
 
 .notebook-horizontal-scroll {
@@ -6233,7 +6250,7 @@ textarea:focus-visible {
     top: 72px;
     right: 0;
     bottom: 0;
-    width: min(380px, 90vw);
+    width: min(var(--inspector-width), 90vw);
     height: auto;
     border-top: 1px solid var(--line);
     background: rgba(3, 15, 9, 0.99);
@@ -6466,11 +6483,6 @@ textarea:focus-visible {
 
   .canvas-welcome > p {
     margin-bottom: 16px;
-  }
-
-  .inspector-reopen {
-    top: 66px;
-    right: 10px;
   }
 
   .moment-search-filters > div {

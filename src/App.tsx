@@ -7271,9 +7271,37 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             <>
               <section className="canvas">
                 {notebook && (
-                  <div className="canvas-add-panel">
+                  <div className="canvas-toolbar" aria-label="Notebook canvas controls">
+                    <div className="canvas-zoom-panel" aria-label="Notebook zoom controls">
+                      <button
+                        type="button"
+                        aria-label="Zoom out"
+                        disabled={notebookView.zoom <= notebookGrid.minimumZoom}
+                        onClick={() => adjustNotebookZoom(-notebookGrid.zoomStep)}
+                      >
+                        <ZoomOut size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        className="canvas-zoom-level"
+                        aria-label="Reset zoom"
+                        onClick={resetNotebookZoom}
+                      >
+                        {Math.round(notebookView.zoom * 100)}%
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Zoom in"
+                        disabled={notebookView.zoom >= notebookGrid.maximumZoom}
+                        onClick={() => adjustNotebookZoom(notebookGrid.zoomStep)}
+                      >
+                        <ZoomIn size={15} />
+                      </button>
+                    </div>
                     <details className="canvas-add-menu">
-                      <summary><Plus size={15} />Add cell</summary>
+                      <summary aria-label="Add cell" title="Add cell">
+                        <Plus size={15} />
+                      </summary>
                       <div>
                         {cellPaletteGroups.map((group) => (
                           <section key={group} className="canvas-add-group">
@@ -7298,34 +7326,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         ))}
                       </div>
                     </details>
-                  </div>
-                )}
-                {notebook && (
-                  <div className="canvas-zoom-panel" aria-label="Notebook zoom controls">
-                    <button
-                      type="button"
-                      aria-label="Zoom out"
-                      disabled={notebookView.zoom <= notebookGrid.minimumZoom}
-                      onClick={() => adjustNotebookZoom(-notebookGrid.zoomStep)}
-                    >
-                      <ZoomOut size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      className="canvas-zoom-level"
-                      aria-label="Reset zoom"
-                      onClick={resetNotebookZoom}
-                    >
-                      {Math.round(notebookView.zoom * 100)}%
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Zoom in"
-                      disabled={notebookView.zoom >= notebookGrid.maximumZoom}
-                      onClick={() => adjustNotebookZoom(notebookGrid.zoomStep)}
-                    >
-                      <ZoomIn size={15} />
-                    </button>
                   </div>
                 )}
                 {!notebook ? (
