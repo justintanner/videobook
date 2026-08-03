@@ -223,6 +223,7 @@ import {
   resolveChatModelSelection,
   type ChatModelCatalog,
 } from '@/videobook/chat-models'
+import { routedActionReview } from '@/videobook/chat-action-review'
 import {
   idleMcpActivity,
   shouldNotifyMcpActivity,
@@ -2589,6 +2590,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const pendingGenerationDraft = pendingChatAction?.kind === 'generation'
     ? pendingChatAction.draft
+    : null
+  const pendingRoutedActionReview = pendingChatAction?.kind === 'routed'
+    ? routedActionReview({
+        input: pendingChatAction.plan.prompt,
+        params: pendingChatAction.plan.params,
+        tool: pendingChatAction.plan.routedTool,
+      })
     : null
   const pendingGenerationConnectedInputs = useMemo(
     () => pendingGenerationDraft && notebook
@@ -8775,14 +8783,33 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   <li>
                     <span>{pendingChatAction.kind.toUpperCase()}</span>
                     <strong>{pendingChatAction.kind === 'routed'
-                      ? pendingChatAction.plan.routedTool
+                      ? pendingRoutedActionReview?.title
+                        ?? pendingChatAction.plan.routedTool
                       : pendingChatAction.kind === 'notebook'
                         ? `${pendingChatAction.plan.action.kind} notebook cell`
                         : pendingChatAction.kind === 'split'
                           ? 'Split video'
                           : `Extract ${pendingChatAction.command.frameMode} frame`}</strong>
                     {pendingChatAction.kind === 'routed' && (
-                      <small>{pendingChatAction.plan.tool}</small>
+                      <>
+                        <small>{pendingChatAction.plan.routedTool}</small>
+                        <dl
+                          className="routed-action-settings"
+                          aria-label="Action settings"
+                        >
+                          {pendingRoutedActionReview?.settings.map((setting) => (
+                            <div
+                              key={setting.label}
+                              className={setting.tone === 'warning'
+                                ? 'routed-action-setting-warning'
+                                : undefined}
+                            >
+                              <dt>{setting.label}</dt>
+                              <dd>{setting.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </>
                     )}
                   </li>
                 </ol>

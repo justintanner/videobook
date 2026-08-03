@@ -5323,6 +5323,43 @@ textarea:focus-visible {
   font-size: 11px;
 }
 
+.routed-action-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1px;
+  margin: 7px 0 0;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+.routed-action-settings > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 10px;
+  background: rgba(2, 11, 7, 0.88);
+}
+
+.routed-action-settings dt {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.routed-action-settings dd {
+  overflow: hidden;
+  margin: 0;
+  color: #b9dfcb;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.routed-action-setting-warning dd {
+  color: #e7c979;
+}
+
 .plan-warning {
   color: #e7c979;
 }
