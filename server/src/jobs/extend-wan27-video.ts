@@ -5,6 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildWan27FramesVideoPayload } from "../payload-builders.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -39,9 +40,13 @@ export function registerExtendWan27VideoJob(fs: Engine): void {
     requireApiKey("KIE_API_KEY");
 
     const firstClipUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename, bookId);
+    const normalizedPrompt = transformProviderPrompt(
+      "extend_kie_wan_2_7_video",
+      { prompt, video_slug: sourceVideo.assetId },
+    ) ?? "";
 
     const request = buildWan27FramesVideoPayload(
-      { prompt, negative_prompt, resolution, duration, prompt_extend, watermark, nsfw_checker, seed },
+      { prompt: normalizedPrompt, negative_prompt, resolution, duration, prompt_extend, watermark, nsfw_checker, seed },
       { firstClipUrl },
     );
     const taskId = await submitKieTask(fs, ctx, {

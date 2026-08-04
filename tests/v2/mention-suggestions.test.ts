@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   assetMentionMetadata,
   assetMentionSuggestions,
+  applyNotebookMentionSuggestion,
   notebookAddressSuggestions,
   notebookCellRenamePlan,
   notebookMentionAssets,
   resolveNotebookMentionAliases,
   restoreNotebookMentionAliases,
+  restoreSelectedNotebookMentionAliases,
   type AssetMentionCandidate,
   type AssetMentionRecord,
 } from '../../src/videobook/mention-suggestions'
@@ -44,6 +46,13 @@ function mentionCandidate(
 }
 
 describe('asset mention suggestions', () => {
+  it('applies a canonical mention completion at the end of input', () => {
+    expect(applyNotebookMentionSuggestion('use @A_', '@a2'))
+      .toBe('use @a2')
+    expect(applyNotebookMentionSuggestion('leave this alone', '@a2'))
+      .toBe('leave this alone')
+  })
+
   it('offers canonical occupied and empty grid addresses', () => {
     expect(notebookAddressSuggestions([
       { slot: { row: 0, column: 0 }, type: 'video' },
@@ -263,6 +272,30 @@ describe('asset mention suggestions', () => {
       'scene @img-generated-scene, character @img-fluffy-kitten, fluffy kitten standing',
       [scene, character],
     )).toBe('scene @a5, character @a1, fluffy kitten standing')
+  })
+
+  it('restores a routed asset tag to the selected cell sharing its artifact', () => {
+    const candidate = {
+      ...mentionCandidate(
+        'img-generated',
+        'img-shared-output',
+        'artifact-shared',
+        { type: 'image' },
+      ),
+      cellAddress: 'a1',
+    }
+
+    expect(restoreSelectedNotebookMentionAliases(
+      'restyle @img-shared-output',
+      [candidate],
+      [{
+        id: 'cell-media',
+        slug: 'img-media',
+        slot: { row: 0, column: 1 },
+        type: 'image',
+        outputArtifactId: 'artifact-shared',
+      }],
+    )).toBe('restyle @a2')
   })
 
   it('plans a visible cell rename from a completed backing asset rename', () => {

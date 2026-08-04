@@ -60,6 +60,7 @@ import { notebookGenerationControls } from "../notebook-generation-controls.js";
 import { hydrateNotebookProviderFailures } from "../notebook-provider-failure.js";
 import { buildSevenStageScaffold } from "../notebook-workflow.js";
 import { translateToolPayload } from "../payload-builders.js";
+import { applyPreviewPlaceholderUrls } from "../preview-payload.js";
 import {
   enqueueNotebookRunPlan,
   notebookRunPlanRecords,
@@ -3679,12 +3680,30 @@ export function videobookDomainDefs(
             previewNotebook,
             previewCell,
             String(args.book_id),
+            { allowReferenceIssues: true },
           );
-          const translated = translateToolPayload(
-            prepared.tool,
-            prepared.input,
-            prepared.provider,
-          );
+          const promptLeaks = [
+            ...prepared.mentions.unresolved.map((reference) => ({
+              token: reference.mention,
+              code: reference.code,
+              message: reference.message,
+            })),
+            ...prepared.mentions.unconnected.map((reference) => ({
+              token: reference.mention,
+              code: "not_connected",
+              message: reference.message,
+            })),
+          ];
+          const translated = promptLeaks.length === 0
+            ? translateToolPayload(
+                prepared.tool,
+                prepared.input,
+                prepared.provider,
+              )
+            : null;
+          const previewPayload = translated
+            ? applyPreviewPlaceholderUrls(translated.payload)
+            : null;
           const costResult = await estimateCostDef(engine).handler({
             calls: [{
               tool_name: prepared.tool,
@@ -3703,8 +3722,14 @@ export function videobookDomainDefs(
             ...(translated?.provider_path
               ? { provider_path: translated.provider_path }
               : {}),
-            payload: translated?.payload ?? prepared.input,
+            payload: promptLeaks.length > 0
+              ? null
+              : previewPayload?.payload ?? prepared.input,
             estimate: costValue.estimate ?? null,
+            mentions: {
+              prompt_leaks: promptLeaks,
+              url_placeholders: previewPayload?.placeholders ?? [],
+            },
           });
         } catch (cause) {
           return failure(cause instanceof Error ? cause.message : String(cause));

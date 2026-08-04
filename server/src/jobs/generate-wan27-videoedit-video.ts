@@ -5,7 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildWan27VideoEditPayload } from "../payload-builders.js";
-import { replaceHappyHorseAssetMentions } from "../google-flow-refs.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -56,11 +56,11 @@ export function registerGenerateWan27VideoeditVideoJob(fs: Engine): void {
     // Free-form edit prompt — rewrite confirmed @vid-*/@img-* to natural refs.
     const normalizedPrompt = prompt === undefined
       ? undefined
-      : replaceHappyHorseAssetMentions(
+      : transformProviderPrompt("generate_kie_wan_2_7_edit_video", {
         prompt,
-        videoInput.assetId,
-        imageInput ? [imageInput.assetId] : [],
-      );
+        video_slug: videoInput.assetId,
+        image_slug: imageInput?.assetId,
+      });
 
     const request = buildWan27VideoEditPayload(
       {

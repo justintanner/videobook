@@ -4,7 +4,7 @@ import { uploadAssetFile } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildXaiGrokImagineRefVideoPayload } from "../payload-builders.js";
-import { replaceNaturalAssetMentions } from "../google-flow-refs.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 import { callXaiPaid, createXaiPaygatedProvider, XAI_VIDEO_GENERATIONS_DOT_PATH } from "./xai-paygate.js";
 
 type RefImageInput = {
@@ -40,9 +40,14 @@ export function registerGenerateGrokImagineRefVideoJob(fs: Engine): void {
 
     const provider = createXaiPaygatedProvider(apiKey, 120_000);
 
-    const normalizedPrompt = replaceNaturalAssetMentions(prompt, {
-      imageSlugs: refImages.map((r) => r.assetId),
-    });
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_xai_grok_imagine_video",
+      {
+        prompt,
+        image_slugs: refImages.map((image) => image.assetId),
+      },
+      "xai",
+    ) ?? "";
     const request = buildXaiGrokImagineRefVideoPayload(
       { prompt: normalizedPrompt, duration, resolution, aspect_ratio: aspectRatio },
       imageUrls,

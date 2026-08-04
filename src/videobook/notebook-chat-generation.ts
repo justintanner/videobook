@@ -58,23 +58,6 @@ type GenerationSource = {
   kind: GenerationConnectedInput['kind']
 }
 
-const generationKinds: Record<string, {
-  cellType: GenerationCellType
-  mediaKind: NotebookChatGenerationCommand['mediaKind']
-}> = {
-  audio: { cellType: 'generate_audio', mediaKind: 'audio' },
-  music: { cellType: 'generate_audio', mediaKind: 'audio' },
-  song: { cellType: 'generate_audio', mediaKind: 'audio' },
-  soundtrack: { cellType: 'generate_audio', mediaKind: 'audio' },
-  voiceover: { cellType: 'generate_audio', mediaKind: 'audio' },
-  image: { cellType: 'generate_image', mediaKind: 'image' },
-  photo: { cellType: 'generate_image', mediaKind: 'image' },
-  picture: { cellType: 'generate_image', mediaKind: 'image' },
-  clip: { cellType: 'generate_video', mediaKind: 'video' },
-  vid: { cellType: 'generate_video', mediaKind: 'video' },
-  video: { cellType: 'generate_video', mediaKind: 'video' },
-}
-
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -87,29 +70,6 @@ function stringValue(value: unknown): string | null {
 
 function uniqueReferences(input: string): string[] {
   return notebookReferences(input)
-}
-
-function generationPrompt(
-  tail: string,
-  mediaKind: NotebookChatGenerationCommand['mediaKind'],
-  referenceCount: number,
-): string {
-  const withoutReferences = tail
-    .replace(
-      /(?:\b(?:with|using|from|based\s+on)\s+)?@[a-z0-9-]+/giu,
-      ' ',
-    )
-    .replace(/\s+/gu, ' ')
-    .trim()
-    .replace(/^(?:of|showing|that\s+shows?)\s+/iu, '')
-    .replace(/^(?:and|but)(?:\s+|$)/iu, '')
-    .replace(/\s+(?:and|with|using|from|based\s+on)$/iu, '')
-    .replace(/^[,;:\s]+|[,;:\s]+$/gu, '')
-  if (withoutReferences) return withoutReferences
-  if (referenceCount > 0) {
-    return `Create new ${mediaKind} media based on the connected references.`
-  }
-  return `Create new ${mediaKind} media.`
 }
 
 function mediaInputKind(cell: NotebookCell): GenerationConnectedInput['kind'] | null {
@@ -213,24 +173,6 @@ function generationSettings(
       ? [[control.name, value]]
       : []
   }))
-}
-
-export function parseNotebookChatGenerationCommand(
-  input: string,
-): NotebookChatGenerationCommand | null {
-  const match = input.trim().match(
-    /^(?:please\s+)?(?:generate|gen|create|make)\s+(?:me\s+)?(?:an?\s+)?(?:new\s+)?(image|photo|picture|video|vid|clip|audio|music|song|soundtrack|voice[\s-]?over)\b([\s\S]*?)(?:\s+please)?[.!]?$/iu,
-  )
-  if (!match) return null
-  const key = match[1]!.toLowerCase().replace(/[\s-]/gu, '')
-  const kind = generationKinds[key]
-  if (!kind) return null
-  const sourceReferences = uniqueReferences(match[2] ?? '')
-  return {
-    ...kind,
-    prompt: generationPrompt(match[2] ?? '', kind.mediaKind, sourceReferences.length),
-    sourceReferences,
-  }
 }
 
 export function notebookChatGenerationReferences(input: string): string[] {
@@ -341,6 +283,19 @@ export function planNotebookChatGeneration(input: {
     })),
     sourceCellIds: sources.map((source) => source.cell.id),
     sourceSlugs: sources.map((source) => source.cell.slug),
+  }
+}
+
+export function validateNotebookChatGenerationPromptSources(
+  draft: NotebookChatGenerationDraft,
+  document: NotebookDocument,
+): void {
+  const sourceCellIds = new Set(draft.sourceCellIds)
+  for (const reference of notebookReferences(draft.cell.prompt ?? '')) {
+    const cell = resolveNotebookCellReference(document, reference)
+    if (!sourceCellIds.has(cell.id)) {
+      throw new Error(`@${reference} is referenced but not connected`)
+    }
   }
 }
 

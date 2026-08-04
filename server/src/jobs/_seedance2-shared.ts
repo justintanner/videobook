@@ -4,8 +4,8 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildSeedance2VideoPayload } from "../payload-builders.js";
-import { rewriteSeedanceAssetMentions, stripSlugMentions } from "../google-flow-refs.js";
 import type { Seedance2FastRequest, Seedance2Request } from "@apicity/kie";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type Seedance2Model = Seedance2Request["model"] | Seedance2FastRequest["model"];
 type RefInput = { assetId: string; filename: string };
@@ -69,19 +69,19 @@ export function registerSeedance2Job(fs: Engine, jobType: string): void {
     const referenceVideoUrls = await uploadAll(fs, videoInputs, bookId);
     const referenceAudioUrls = await uploadAll(fs, audioInputs, bookId);
 
-    // Seedance r2v markers are @ImageN/@VideoN/@AudioN. First/last frames ride
-    // body fields only — strip confirmed frame @slugs after rewriting refs.
-    const normalizedPrompt = stripSlugMentions(
-      rewriteSeedanceAssetMentions(prompt, {
-        imageSlugs: imageInputs.map((i) => i.assetId),
-        videoSlugs: videoInputs.map((i) => i.assetId),
-        audioSlugs: audioInputs.map((i) => i.assetId),
-      }),
-      [
-        ...(firstFrame ? [firstFrame.assetId] : []),
-        ...(lastFrame ? [lastFrame.assetId] : []),
-      ],
-    );
+    const normalizedPrompt = transformProviderPrompt(
+      apiModel === "bytedance/seedance-2-fast"
+        ? "generate_kie_seedance_2_0_fast_video"
+        : "generate_kie_seedance_2_0_video",
+      {
+        prompt,
+        image_slugs: imageInputs.map((input) => input.assetId),
+        video_slugs: videoInputs.map((input) => input.assetId),
+        audio_slugs: audioInputs.map((input) => input.assetId),
+        first_frame_slug: firstFrame?.assetId,
+        last_frame_slug: lastFrame?.assetId,
+      },
+    ) ?? "";
 
     const request = buildSeedance2VideoPayload(
       {

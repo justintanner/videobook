@@ -4,6 +4,10 @@ import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildAlibabaImagePayload } from "../payload-builders.js";
+import {
+  assertProviderPayload,
+  transformProviderPrompt,
+} from "../provider-prompt-transform.js";
 
 type GenerateAlibabaImagePayload = {
   type: "generate_alibaba_image";
@@ -36,11 +40,22 @@ export function registerGenerateAlibabaImageJob(fs: Engine): void {
     }
 
     const provider = createAlibaba({ apiKey, timeout: 120_000 });
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_alibaba_wan_2_7_text_to_image",
+      {
+        prompt,
+        image_slugs: imageInputs.map((input) => input.assetId),
+      },
+    ) ?? "";
 
     const request = buildAlibabaImagePayload(
-      { prompt, model, size, n, watermark, thinking_mode: thinkingMode, seed },
+      { prompt: normalizedPrompt, model, size, n, watermark, thinking_mode: thinkingMode, seed },
       uploadedUrls,
     );
+    assertProviderPayload(request, {
+      toolName: "generate_alibaba_wan_2_7_text_to_image",
+      wire: true,
+    });
     await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request);
     const submitResult = await provider.post.api.v1.services.aigc.imageGeneration.generation(request);
     const taskId = submitResult.output.task_id;
@@ -83,11 +98,22 @@ export function registerGenerateAlibabaImageProJob(fs: Engine): void {
     }
 
     const provider = createAlibaba({ apiKey, timeout: 120_000 });
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_alibaba_wan_2_7_pro_text_to_image",
+      {
+        prompt,
+        image_slugs: imageInputs.map((input) => input.assetId),
+      },
+    ) ?? "";
 
     const request = buildAlibabaImagePayload(
-      { prompt, model: "wan2.7-image-pro", size, n, watermark, thinking_mode: thinkingMode, seed },
+      { prompt: normalizedPrompt, model: "wan2.7-image-pro", size, n, watermark, thinking_mode: thinkingMode, seed },
       uploadedUrls,
     );
+    assertProviderPayload(request, {
+      toolName: "generate_alibaba_wan_2_7_pro_text_to_image",
+      wire: true,
+    });
     await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request);
     const submitResult = await provider.post.api.v1.services.aigc.imageGeneration.generation(request);
     const taskId = submitResult.output.task_id;

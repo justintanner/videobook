@@ -2,14 +2,15 @@ import {
   notebookGridTag,
   parseNotebookGridAddress,
 } from 'videobook-engine/notebook-grid'
+import {
+  normalizeNotebookReference,
+  scanNotebookMentions,
+} from 'videobook-engine/notebook-mentions'
 import type {
   NotebookCell,
   NotebookDocument,
   NotebookGridSlot,
 } from 'videobook-engine'
-
-const NOTEBOOK_REFERENCE_PATTERN =
-  /@([a-z](?:1[0-3]|[1-9])|[a-z0-9]+(?:-[a-z0-9]+)+)/giu
 
 export function notebookCellAtSlot(
   document: NotebookDocument,
@@ -24,8 +25,8 @@ export function notebookCellTag(cell: NotebookCell): string {
 }
 
 export function notebookReferences(input: string): string[] {
-  const references = [...input.matchAll(NOTEBOOK_REFERENCE_PATTERN)]
-    .map((match) => match[1]!.toLowerCase())
+  const references = scanNotebookMentions(input)
+    .map((mention) => mention.reference)
   return [...new Set(references)]
 }
 
@@ -33,7 +34,7 @@ export function resolveNotebookCellReference(
   document: NotebookDocument,
   sourceReference: string,
 ): NotebookCell {
-  const reference = sourceReference.replace(/^@/u, '').toLowerCase()
+  const reference = normalizeNotebookReference(sourceReference)
   const slot = parseNotebookGridAddress(reference)
   if (slot) {
     const cell = notebookCellAtSlot(document, slot)

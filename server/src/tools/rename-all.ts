@@ -25,6 +25,11 @@ import {
   firstResponseText,
   intelligenceRequest,
 } from "../openai-intelligence.js";
+import {
+  replaceNotebookMentions,
+  scanNotebookMentions,
+  stripNotebookMentions,
+} from "videobook-engine/notebook-mentions";
 
 interface RenamePayload {
   asset_id: string;
@@ -304,8 +309,10 @@ async function loadVideoContext(
     const prompt = typeof meta.value.prompt === "string" ? meta.value.prompt.trim() : "";
     if (prompt) {
       // Strip long @refs so the model focuses on the scene description.
-      const cleaned = prompt
-        .replace(/@\w[\w-]*/g, "")
+      const cleaned = stripNotebookMentions(
+        prompt,
+        scanNotebookMentions(prompt).map((mention) => mention.reference),
+      )
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 500);
@@ -617,18 +624,15 @@ async function updateNotebookReferences(
   }
 }
 
-// rewriteDeep only swaps whole-string matches; notebook prompt text also
-// carries inline "@old-id" mentions (richPromptTokens renders them as chips),
-// so rewrite those substrings too. Asset ids are [a-z0-9-] slugs, so they are
-// regex-safe verbatim; the lookahead keeps prefix ids apart (img-fox vs
-// img-fox-2).
 function rewriteInlineMentions<T>(value: T, idMap: Map<string, string>): T {
   if (typeof value === "string") {
-    let out: string = value;
-    for (const [oldId, newId] of idMap) {
-      out = out.replace(new RegExp(`@${oldId}(?![a-z0-9-])`, "g"), `@${newId}`);
-    }
-    return out as unknown as T;
+    return replaceNotebookMentions(
+      value,
+      [...idMap].map(([reference, replacement]) => ({
+        reference,
+        replacement: `@${replacement}`,
+      })),
+    ) as unknown as T;
   }
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {

@@ -5,6 +5,7 @@ import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildWan27ImagePayload } from "../payload-builders.js";
 import type { Wan27ImageRequest } from "@apicity/kie";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type GenerateWan27ImagePayload = {
   type: "generate_wan27_image";
@@ -33,9 +34,16 @@ export function registerGenerateWan27ImageJob(fs: Engine): void {
     for (const { assetId: srcAssetId, filename } of imageInputs) {
       uploadedUrls.push(await uploadAssetToKie(fs, srcAssetId, filename, bookId));
     }
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_kie_wan_2_7_text_to_image",
+      {
+        prompt,
+        image_slugs: imageInputs.map((input) => input.assetId),
+      },
+    ) ?? "";
 
     const request = buildWan27ImagePayload(
-      { prompt, aspect_ratio: aspectRatio, resolution, seed, nsfw_checker: nsfwChecker },
+      { prompt: normalizedPrompt, aspect_ratio: aspectRatio, resolution, seed, nsfw_checker: nsfwChecker },
       uploadedUrls,
     );
     const taskId = await submitKieTask(fs, ctx, {

@@ -5,7 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildHappyHorseI2vPayload } from "../payload-builders.js";
-import { stripSlugMentions } from "../google-flow-refs.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -36,7 +36,10 @@ export function registerGenerateHappyhorseI2vVideoJob(fs: Engine): void {
     // First frame rides image_urls; strip confirmed @img-* from free-form prompt.
     const normalizedPrompt = prompt === undefined
       ? undefined
-      : stripSlugMentions(prompt, [firstFrame.assetId]);
+      : transformProviderPrompt("generate_kie_happyhorse_1_1_image_to_video", {
+        prompt,
+        first_frame_slug: firstFrame.assetId,
+      });
     const request = buildHappyHorseI2vPayload(
       { prompt: normalizedPrompt, resolution, duration },
       imageUrl,

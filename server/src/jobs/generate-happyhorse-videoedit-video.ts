@@ -5,7 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildHappyHorseVideoEditPayload } from "../payload-builders.js";
-import { replaceHappyHorseAssetMentions } from "../google-flow-refs.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -60,11 +60,14 @@ export function registerGenerateHappyhorseVideoeditVideoJob(fs: Engine): void {
     // video mention becomes "the source video" (video_url carries the asset);
     // each reference image mention becomes "reference image N" matching its
     // position in the reference_image[] field.
-    const normalizedPrompt = replaceHappyHorseAssetMentions(
-      prompt,
-      sourceVideo.assetId,
-      imageInputs.map((input) => input.assetId),
-    );
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_kie_happyhorse_1_1_edit_video",
+      {
+        prompt,
+        video_slug: sourceVideo.assetId,
+        image_slugs: imageInputs.map((input) => input.assetId),
+      },
+    ) ?? "";
     const request: MediaGenerationRequest = buildHappyHorseVideoEditPayload(
       { prompt: normalizedPrompt, resolution, audio_setting, seed },
       videoUrl,

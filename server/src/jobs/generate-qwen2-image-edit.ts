@@ -6,6 +6,7 @@ import { requireApiKey } from "../api-key.js";
 import { buildQwen2ImageEditPayload } from "../payload-builders.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
 import type { Qwen2ImageEditRequest } from "@apicity/kie";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type GenerateQwen2ImageEditPayload = {
   type: "generate_qwen2_image_edit";
@@ -35,9 +36,16 @@ export function registerGenerateQwen2ImageEditJob(fs: Engine): void {
       "url" in input
         ? input.url
         : await uploadAssetToKie(fs, input.assetId, input.filename, bookId);
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_kie_qwen_2_0_edit_image",
+      {
+        prompt,
+        image_slugs: "assetId" in input ? [input.assetId] : [],
+      },
+    ) ?? "";
 
     const request = buildQwen2ImageEditPayload(
-      { prompt, image_size: imageSize, output_format: outputFormat, seed },
+      { prompt: normalizedPrompt, image_size: imageSize, output_format: outputFormat, seed },
       imageUrl,
     );
     const taskId = await submitKieTask(fs, ctx, {

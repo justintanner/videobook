@@ -4,6 +4,7 @@ import { registerJobHandler } from "../queue.js";
 import { buildVeo31VideoPayload, type GoogleVeo31Model, type Veo31VideoArgs } from "../payload-builders.js";
 import { createGoogleFlowProvider, submitGoogleFlowVideoTask, uploadAssetToGoogleFlow } from "./_google-flow.js";
 import type { RefInput } from "../tools/_seedance2-shared.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type GenerateVeo31VideoPayload = {
   type: "generate_veo31_video";
@@ -36,11 +37,24 @@ export function registerGenerateVeo31VideoJob(fs: Engine): void {
     for (const input of p.imageInputs) {
       referenceImageIds.push(await uploadRef(provider, fs, input, p.bookId));
     }
+    const toolName = p.veoModel === "veo-3.1-quality"
+      ? "generate_google_flow_veo_3_1_quality_video"
+      : p.veoModel === "veo-3.1-fast"
+        ? "generate_google_flow_veo_3_1_fast_video"
+        : p.veoModel === "veo-3.1-lite-low-priority"
+          ? "generate_google_flow_veo_3_1_lite_low_priority_video"
+          : "generate_google_flow_veo_3_1_lite_video";
+    const normalizedPrompt = transformProviderPrompt(toolName, {
+      prompt: p.prompt,
+      image_slugs: p.imageInputs.map((input) => input.assetId),
+      first_frame_slug: p.firstFrame?.assetId,
+      last_frame_slug: p.lastFrame?.assetId,
+    }) ?? "";
 
     const request = buildVeo31VideoPayload(
       p.veoModel,
       {
-        prompt: p.prompt,
+        prompt: normalizedPrompt,
         ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
         ...(p.duration !== undefined ? { duration: p.duration } : {}),
         ...(p.seed !== undefined ? { seed: p.seed } : {}),

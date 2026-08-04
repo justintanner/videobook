@@ -11,6 +11,10 @@ import {
   withGoogleFlowCaptchaDefaults,
 } from "./_google-flow.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
+import {
+  assertProviderPayload,
+  transformProviderPrompt,
+} from "../provider-prompt-transform.js";
 
 type GenerateNanoBananaProGooglePayload = {
   type: "generate_nano_banana_pro_google";
@@ -65,11 +69,20 @@ export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
           : await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, p.bookId),
       );
     }
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_google_flow_nano_banana_pro_image",
+      {
+        prompt: p.prompt,
+        image_slugs: p.imageInputs
+          .map((input) => ("assetId" in input ? input.assetId : null))
+          .filter((assetId): assetId is string => assetId !== null),
+      },
+    ) ?? "";
 
     const request = withGoogleFlowCaptchaDefaults(
       buildGoogleNbpImagePayload(
         {
-          prompt: p.prompt,
+          prompt: normalizedPrompt,
           ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
           ...(p.seed !== undefined ? { seed: p.seed } : {}),
         },
@@ -77,6 +90,10 @@ export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
         p.character_refs,
       ) as Record<string, unknown>,
     ) as GoogleFlowImagesRequest;
+    assertProviderPayload(request, {
+      toolName: "generate_google_flow_nano_banana_pro_image",
+      wire: true,
+    });
     await fs.metadata.artifacts.write(p.imgAssetId, "generation-payload", request);
 
     const res = await callGoogleFlowWithCaptchaRetry(

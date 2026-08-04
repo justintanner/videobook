@@ -3,13 +3,12 @@ import {
   Bot,
   Check,
   ChevronDown,
-  ChevronUp,
   Send,
   X,
 } from 'lucide-react'
 import type { ServerCommand } from '@/lib/command-registry'
-import { RichPromptField } from '@/components/ui/RichPromptField'
 import {
+  applyNotebookMentionSuggestion,
   notebookAddressSuggestions,
   type NotebookAddressCell,
   type NotebookAddressSuggestion,
@@ -44,17 +43,6 @@ export interface ComposerNotice {
 
 export const COMMAND_COMPOSER_FORM_ID = 'videobook-command-composer-form'
 
-export interface PromptSession {
-  id: string
-  kind: string
-  slug: string
-  value: string
-  assetSlugs: string[]
-  onChange: (value: string) => void
-  onCommit: () => Promise<ComposerOutcome>
-  onCollapse: () => Promise<ComposerOutcome>
-}
-
 interface CommandComposerProps {
   children?: ReactNode
   commands: ServerCommand[]
@@ -66,7 +54,6 @@ interface CommandComposerProps {
   modelSelectionDisabled: boolean
   connectionLabel: string
   mcpActivity: McpActivity
-  promptSession: PromptSession | null
   selectedModel: string
   pendingInput?: string
   notice?: ComposerNotice | null
@@ -100,7 +87,6 @@ export function CommandComposer({
   modelSelectionDisabled,
   connectionLabel,
   mcpActivity,
-  promptSession,
   selectedModel,
   pendingInput,
   notice,
@@ -281,7 +267,8 @@ export function CommandComposer({
     if (suggestion.type === 'command') {
       setInput(suggestion.value)
     } else {
-      setInput((current) => current.replace(/@[\w-]*$/, suggestion.value) + ' ')
+      setInput((current) =>
+        `${applyNotebookMentionSuggestion(current, suggestion.value)} `)
     }
     setDismissed(true)
     historyCursorRef.current = -1
@@ -327,80 +314,8 @@ export function CommandComposer({
     return true
   }
 
-  const applyPromptReadline = (
-    event: React.KeyboardEvent<HTMLTextAreaElement>,
-  ) => {
-    if (!promptSession) return false
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-      event.preventDefault()
-      void promptSession.onCommit().then(showOutcome)
-      focusInput()
-      return true
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      void promptSession.onCollapse().then(showOutcome)
-      focusInput()
-      return true
-    }
-    const target = event.currentTarget
-    const edit = applyReadlineEdit({
-      value: promptSession.value,
-      selectionStart: target.selectionStart,
-      selectionEnd: target.selectionEnd,
-      key: event.key,
-      ctrlKey: event.ctrlKey,
-      altKey: event.altKey,
-      yankText: killBufferRef.current,
-      multiline: true,
-    })
-    if (!edit) return false
-    event.preventDefault()
-    promptSession.onChange(edit.value)
-    if (edit.killedText !== undefined) killBufferRef.current = edit.killedText
-    requestAnimationFrame(() => target.setSelectionRange(
-      edit.selectionStart,
-      edit.selectionEnd,
-    ))
-    return true
-  }
-
   return (
-    <section className={`command-composer ${promptSession ? 'command-composer-expanded' : ''}`}>
-      {promptSession && (
-        <div className="prompt-drawer">
-          <header>
-            <span>
-              {promptSession.kind === 'prompt'
-                ? 'note cell'
-                : `${promptSession.kind} prompt`}
-            </span>
-            <strong>{promptSession.slug}</strong>
-            <button
-              type="button"
-              onClick={() => void promptSession.onCollapse().then(showOutcome)}
-              aria-label="Commit and collapse prompt editor"
-            >
-              <ChevronUp size={15} />
-            </button>
-          </header>
-          <RichPromptField
-            value={promptSession.value}
-            onChange={promptSession.onChange}
-            resolveRef={() => null}
-            assetSlugs={promptSession.assetSlugs}
-            rows={7}
-            autoFocus
-            placeholder="Describe the desired result or reference reusable context…"
-            onKeyDownExtra={applyPromptReadline}
-            fieldClassName="w-full px-4 py-3 font-mono text-[13px] leading-6"
-            surfaceClassName="prompt-drawer-field"
-            textClassName="text-[#b9dfcb]"
-            caretClassName="caret-[#72e7aa]"
-          />
-        </div>
-      )}
-
+    <section className="command-composer">
       {notice && (
         <div
           className={`command-result ${notice.tone === 'error' ? 'command-result-error' : 'command-result-ok'}`}

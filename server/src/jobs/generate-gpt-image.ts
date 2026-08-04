@@ -6,6 +6,7 @@ import { requireApiKey } from "../api-key.js";
 import { buildGptImagePayload } from "../payload-builders.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
 import type { GptImage2ImageToImageRequest } from "@apicity/kie";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type GenerateGptImagePayload = {
   type: "generate_gpt_image";
@@ -37,9 +38,18 @@ export function registerGenerateGptImageJob(fs: Engine): void {
           : await uploadAssetToKie(fs, input.assetId, input.filename, bookId),
       );
     }
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_kie_gpt_image_2_image_to_image",
+      {
+        prompt,
+        image_slugs: imageInputs
+          .map((input) => ("assetId" in input ? input.assetId : null))
+          .filter((assetId): assetId is string => assetId !== null),
+      },
+    ) ?? "";
 
     const request = buildGptImagePayload(
-      { prompt, aspect_ratio: aspectRatio, resolution, nsfw_checker: nsfwChecker },
+      { prompt: normalizedPrompt, aspect_ratio: aspectRatio, resolution, nsfw_checker: nsfwChecker },
       uploadedUrls,
     );
     const taskId = await submitKieTask(fs, ctx, {

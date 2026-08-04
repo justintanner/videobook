@@ -1,4 +1,5 @@
 import { firstEmptyNotebookGridSlot } from 'videobook-engine/notebook-grid'
+import { NOTEBOOK_CELL_REFERENCE_SOURCE } from 'videobook-engine/notebook-mentions'
 import type {
   NotebookCell,
   NotebookDocument,
@@ -37,6 +38,11 @@ const imageSourceTypes = new Set<NotebookCell['type']>([
   'generate_image',
 ])
 
+const IMAGE_PROMPT_REFERENCE_PATTERN = new RegExp(
+  `(?:\\b(?:with|using|from|based\\s+on)\\s+)?@${NOTEBOOK_CELL_REFERENCE_SOURCE}(?![\\w-])`,
+  'giu',
+)
+
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -53,10 +59,7 @@ function uniqueReferences(input: string): string[] {
 
 function imagePrompt(tail: string, referenceCount: number): string {
   const withoutReferences = tail
-    .replace(
-      /(?:\b(?:with|using|from|based\s+on)\s+)?@[a-z0-9-]+/giu,
-      ' ',
-    )
+    .replace(IMAGE_PROMPT_REFERENCE_PATTERN, ' ')
     .replace(/\s+/gu, ' ')
     .trim()
     .replace(/^(?:of|showing)\s+/iu, '')

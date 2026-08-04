@@ -8,6 +8,7 @@ import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildGrokImagineVideoPayload, buildXaiGrokImagineVideoPayload } from "../payload-builders.js";
 import { callXaiPaid, createXaiPaygatedProvider, XAI_VIDEO_GENERATIONS_DOT_PATH } from "./xai-paygate.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type GenerateGrokImagineVideoPayload = {
   type: "generate_grok_imagine_video";
@@ -41,6 +42,13 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
     }
 
     const isXai = _provider !== undefined && _provider.startsWith("xai");
+    const normalizedPrompt = prompt === undefined
+      ? undefined
+      : transformProviderPrompt(
+        "generate_kie_grok_imagine_image_to_video",
+        { prompt, image_slugs: sourceImageIds },
+        _provider,
+      );
 
     if (isXai) {
       // xAI path — async video generation with pending task
@@ -53,7 +61,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
 
       const provider = createXaiPaygatedProvider(apiKey, 120_000);
       const request = buildXaiGrokImagineVideoPayload(
-        { prompt, duration, resolution, aspect_ratio, nsfw_checker },
+        { prompt: normalizedPrompt, duration, resolution, aspect_ratio, nsfw_checker },
         imageUrls,
       );
       await fs.metadata.artifacts.write(vidAssetId, "generation-payload", request);

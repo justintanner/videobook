@@ -1,3 +1,9 @@
+import {
+  normalizeNotebookReference,
+  replaceNotebookMentions,
+  stripNotebookMentions,
+} from "videobook-engine/notebook-mentions";
+
 // Omni Flash reference budget math. Google counts every reference input
 // against one 7-slot pool (5 alongside a V2V clip): each image_slugs ref costs
 // 1 slot, and each character costs a flat 2 — useapi.net submits every
@@ -44,14 +50,15 @@ export const OMNI_V2V_MAX_REFERENCE_SLOTS = 5;
 // param — any other @-token the API cannot resolve is rejected with an opaque
 // 400, so videocity @slug mentions must be rewritten (or removed) at submit.
 
-const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 // Mention boundary mirrors the client tokenizer (richPromptTokens): a slug
 // mention ends at any char that is not a word char or dash, so "@img-da"
 // never matches inside "@img-da-set". Longest slug first for the same reason.
 function slugMentionEntries(slugs: readonly string[]): { slug: string; index: number }[] {
   return slugs
-    .map((raw, index) => ({ slug: raw.replace(/^@/, "").trim(), index }))
+    .map((raw, index) => ({
+      slug: normalizeNotebookReference(raw),
+      index,
+    }))
     .filter((e) => e.slug !== "")
     .sort((a, b) => b.slug.length - a.slug.length);
 }
@@ -59,21 +66,22 @@ function slugMentionEntries(slugs: readonly string[]): { slug: string; index: nu
 /** Rewrite "@<slug>" mentions to a positional marker (e.g., "@referenceImage_N"),
  *  where N is the slug's 1-based position in `imageSlugs`. */
 export function rewriteImageSlugMentions(prompt: string, imageSlugs: readonly string[], marker: string = "referenceImage"): string {
-  let out = prompt;
-  for (const { slug, index } of slugMentionEntries(imageSlugs)) {
-    out = out.replace(new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"), `@${marker}_${index + 1}`);
-  }
-  return out;
+  return replaceNotebookMentions(
+    prompt,
+    slugMentionEntries(imageSlugs).map(({ slug, index }) => ({
+      reference: slug,
+      replacement: `@${marker}_${index + 1}`,
+    })),
+  );
 }
 
 /** Remove "@<slug>" mentions that have no inline marker form (reference video
  *  clips, first frames) — the asset still rides its body param. */
 export function stripSlugMentions(prompt: string, slugs: readonly string[]): string {
-  let out = prompt;
-  for (const { slug } of slugMentionEntries(slugs)) {
-    out = out.replace(new RegExp(` ?@${escapeRe(slug)}(?![\\w-])`, "g"), "");
-  }
-  return out;
+  return stripNotebookMentions(
+    prompt,
+    slugMentionEntries(slugs).map(({ slug }) => slug),
+  );
 }
 
 /** Replace "@<slug>" mentions with natural-language noun phrases for Kie
@@ -89,26 +97,26 @@ export function replaceHappyHorseAssetMentions(
   imageSlugs: readonly string[],
   audioSlugs: readonly string[] = [],
 ): string {
-  let out = prompt;
+  const replacements: Array<{ reference: string; replacement: string }> = [];
   if (videoSlug) {
-    const video = videoSlug.replace(/^@/, "").trim();
+    const video = normalizeNotebookReference(videoSlug);
     if (video) {
-      out = out.replace(new RegExp(`@${escapeRe(video)}(?![\\w-])`, "g"), "the source video");
+      replacements.push({ reference: video, replacement: "the source video" });
     }
   }
   for (const { slug, index } of slugMentionEntries(imageSlugs)) {
-    out = out.replace(
-      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
-      `reference image ${index + 1}`,
-    );
+    replacements.push({
+      reference: slug,
+      replacement: `reference image ${index + 1}`,
+    });
   }
   for (const { slug, index } of slugMentionEntries(audioSlugs)) {
-    out = out.replace(
-      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
-      `reference audio ${index + 1}`,
-    );
+    replacements.push({
+      reference: slug,
+      replacement: `reference audio ${index + 1}`,
+    });
   }
-  return out;
+  return replaceNotebookMentions(prompt, replacements);
 }
 
 /** HappyHorse 1.1 reference-to-video: rewrite confirmed @<image-slug> mentions
@@ -117,14 +125,13 @@ export function rewriteImageSlugMentionsToBrackets(
   prompt: string,
   imageSlugs: readonly string[],
 ): string {
-  let out = prompt;
-  for (const { slug, index } of slugMentionEntries(imageSlugs)) {
-    out = out.replace(
-      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
-      `[Image ${index + 1}]`,
-    );
-  }
-  return out;
+  return replaceNotebookMentions(
+    prompt,
+    slugMentionEntries(imageSlugs).map(({ slug, index }) => ({
+      reference: slug,
+      replacement: `[Image ${index + 1}]`,
+    })),
+  );
 }
 
 export type SeedanceMentionSlugs = {
@@ -139,26 +146,17 @@ export function rewriteSeedanceAssetMentions(
   prompt: string,
   refs: SeedanceMentionSlugs,
 ): string {
-  let out = prompt;
+  const replacements: Array<{ reference: string; replacement: string }> = [];
   for (const { slug, index } of slugMentionEntries(refs.imageSlugs ?? [])) {
-    out = out.replace(
-      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
-      `@Image${index + 1}`,
-    );
+    replacements.push({ reference: slug, replacement: `@Image${index + 1}` });
   }
   for (const { slug, index } of slugMentionEntries(refs.videoSlugs ?? [])) {
-    out = out.replace(
-      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
-      `@Video${index + 1}`,
-    );
+    replacements.push({ reference: slug, replacement: `@Video${index + 1}` });
   }
   for (const { slug, index } of slugMentionEntries(refs.audioSlugs ?? [])) {
-    out = out.replace(
-      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
-      `@Audio${index + 1}`,
-    );
+    replacements.push({ reference: slug, replacement: `@Audio${index + 1}` });
   }
-  return out;
+  return replaceNotebookMentions(prompt, replacements);
 }
 
 /** Free-form multi-ref natural rewrite when the provider has no inline marker
@@ -178,12 +176,15 @@ export function replaceNaturalAssetMentions(
     out = replaceHappyHorseAssetMentions(out, refs.sourceVideoSlug, [], []);
   }
   const multiVideos = refs.videoSlugs ?? [];
-  for (const { slug, index } of slugMentionEntries(multiVideos)) {
-    out = out.replace(
-      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
-      multiVideos.length === 1 ? "the source video" : `reference video ${index + 1}`,
-    );
-  }
+  out = replaceNotebookMentions(
+    out,
+    slugMentionEntries(multiVideos).map(({ slug, index }) => ({
+      reference: slug,
+      replacement: multiVideos.length === 1
+        ? "the source video"
+        : `reference video ${index + 1}`,
+    })),
+  );
   out = replaceHappyHorseAssetMentions(out, null, refs.imageSlugs ?? [], refs.audioSlugs ?? []);
   return out;
 }

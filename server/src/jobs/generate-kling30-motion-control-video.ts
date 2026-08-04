@@ -6,6 +6,7 @@ import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildKling30MotionControlPayload } from "../payload-builders.js";
 import { assertKlingMotionControlDuration } from "../kling-motion-control-duration.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -52,9 +53,16 @@ export function registerGenerateKling30MotionControlVideoJob(fs: Engine): void {
 
     const inputUrls = await uploadInputs(fs, imageInputs, bookId);
     const videoUrls = await uploadInputs(fs, videoInputs, bookId);
+    const normalizedPrompt = prompt === undefined
+      ? undefined
+      : transformProviderPrompt("generate_kie_kling_3_0_motion_control", {
+        prompt,
+        character_image_slugs: imageInputs.map((input) => input.assetId),
+        motion_video_slugs: videoInputs.map((input) => input.assetId),
+      });
 
     const request: MediaGenerationRequest = buildKling30MotionControlPayload(
-      { prompt, mode, character_orientation, background_source },
+      { prompt: normalizedPrompt, mode, character_orientation, background_source },
       inputUrls,
       videoUrls,
     );

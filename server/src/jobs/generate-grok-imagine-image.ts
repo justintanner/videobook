@@ -8,6 +8,7 @@ import { requireApiKey } from "../api-key.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { buildGrokImagineImagePayload, buildXaiGrokImagineImagePayload } from "../payload-builders.js";
 import { callXaiPaid, createXaiPaygatedProvider, XAI_IMAGE_EDITS_DOT_PATH } from "./xai-paygate.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type GenerateGrokImagineImagePayload = {
   type: "generate_grok_imagine_image";
@@ -29,6 +30,13 @@ export function registerGenerateGrokImagineImageJob(fs: Engine): void {
     } = payload as GenerateGrokImagineImagePayload;
 
     const isXai = _provider !== undefined && _provider.startsWith("xai");
+    const normalizedPrompt = prompt === undefined
+      ? undefined
+      : transformProviderPrompt(
+        "generate_kie_grok_imagine_image_to_image",
+        { prompt, image_slugs: [sourceImageId] },
+        _provider,
+      );
 
     if (isXai) {
       // xAI path — synchronous image generation
@@ -39,7 +47,7 @@ export function registerGenerateGrokImagineImageJob(fs: Engine): void {
       const imageUrl = await uploadAssetFile(fs, sourceImageId, imageFilename, bookId);
 
       const request = buildXaiGrokImagineImagePayload(
-        { prompt },
+        { prompt: normalizedPrompt },
         [imageUrl],
       );
       await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request);
@@ -80,7 +88,10 @@ export function registerGenerateGrokImagineImageJob(fs: Engine): void {
 
     const downloadUrl = await uploadAssetToKie(fs, sourceImageId, imageFilename, bookId);
 
-    const request = buildGrokImagineImagePayload({ prompt }, [downloadUrl]);
+    const request = buildGrokImagineImagePayload(
+      { prompt: normalizedPrompt },
+      [downloadUrl],
+    );
     const taskId = await submitKieTask(fs, ctx, {
       request,
       taskType: "grok_imagine_image",

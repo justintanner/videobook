@@ -6,6 +6,7 @@ import { requireApiKey } from "../api-key.js";
 import { buildSeedreamImageEditPayload } from "../payload-builders.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
 import type { SeedreamImageToImageRequest } from "@apicity/kie";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type GenerateSeedreamImagePayload = {
   type: "generate_seedream_image";
@@ -37,10 +38,19 @@ export function registerGenerateSeedreamImageJob(fs: Engine): void {
         uploadedUrls.push(await uploadAssetToKie(fs, input.assetId, input.filename, bookId));
       }
     }
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_kie_seedream_v5_lite_image_to_image",
+      {
+        prompt,
+        image_slugs: imageInputs
+          .map((input) => ("assetId" in input ? input.assetId : null))
+          .filter((assetId): assetId is string => assetId !== null),
+      },
+    ) ?? "";
 
     const request = buildSeedreamImageEditPayload(
       {
-        prompt,
+        prompt: normalizedPrompt,
         ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
         ...(quality !== undefined ? { quality } : {}),
         ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),

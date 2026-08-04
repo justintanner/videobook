@@ -8,6 +8,10 @@ import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildAlibabaVideoPayload } from "../payload-builders.js";
+import {
+  assertProviderPayload,
+  transformProviderPrompt,
+} from "../provider-prompt-transform.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -62,10 +66,21 @@ export function registerGenerateAlibabaVideoJob(fs: Engine): void {
     const videoUrl = videoRef ? await uploadInput(fs, videoRef, bookId, model) : undefined;
 
     const provider = createAlibaba({ apiKey, timeout: 120_000 });
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_alibaba_wan_2_7_video",
+      {
+        prompt,
+        first_frame_slug: firstFrame?.assetId,
+        last_frame_slug: lastFrame?.assetId,
+        first_clip_slug: firstClip?.assetId,
+        driving_audio_slug: drivingAudio?.assetId,
+        video_slug: videoRef?.assetId,
+      },
+    ) ?? "";
 
     const request = buildAlibabaVideoPayload(
       {
-        prompt,
+        prompt: normalizedPrompt,
         negative_prompt,
         model,
         resolution,
@@ -77,6 +92,10 @@ export function registerGenerateAlibabaVideoJob(fs: Engine): void {
       },
       { firstFrameUrl, lastFrameUrl, firstClipUrl, drivingAudioUrl, videoUrl },
     );
+    assertProviderPayload(request, {
+      toolName: "generate_alibaba_wan_2_7_video",
+      wire: true,
+    });
     await fs.metadata.artifacts.write(vidAssetId, "generation-payload", request);
     const submitResult = await provider.post.api.v1.services.aigc.videoGeneration.videoSynthesis(request);
     const taskId = submitResult.output.task_id;

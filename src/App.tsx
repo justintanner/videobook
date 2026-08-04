@@ -68,6 +68,7 @@ import type {
 } from 'videobook-engine'
 import { SCHEMA_VERSION } from 'videobook-engine/catalog-metadata'
 import enginePackage from 'videobook-engine/package.json'
+import { normalizeNotebookReference } from 'videobook-engine/notebook-mentions'
 import {
   adaptCommandArgs,
   parseCommandArgs,
@@ -212,6 +213,7 @@ import {
   reviseNotebookChatGenerationMode,
   reviseNotebookChatGenerationPrompt,
   reviseNotebookChatGenerationSetting,
+  validateNotebookChatGenerationPromptSources,
   type NotebookChatGenerationCommand,
   type NotebookChatGenerationDraft,
 } from '@/videobook/notebook-chat-generation'
@@ -244,6 +246,7 @@ import {
   notebookMentionAssets,
   resolveNotebookMentionAliases,
   restoreNotebookMentionAliases,
+  restoreSelectedNotebookMentionAliases,
 } from '@/videobook/mention-suggestions'
 import { restoreCommandComposerFocus } from '@/videobook/command-composer-focus'
 import { parsePendingApplyCommand } from '@/videobook/command-composer-outcome'
@@ -1213,7 +1216,7 @@ function asCommandPlan(value: unknown): CommandPlan {
 
 function sequenceClipReference(sequence: Sequence | null, value: string | undefined) {
   if (!sequence || !value) return null
-  const token = value.replace(/^@/u, '').toLowerCase()
+  const token = normalizeNotebookReference(value)
   const matches = sequence.clips.filter((clip) =>
     clip.clipId.toLowerCase().startsWith(token))
   return matches.length === 1 ? matches[0] : null
@@ -1221,7 +1224,7 @@ function sequenceClipReference(sequence: Sequence | null, value: string | undefi
 
 function sequenceTrackReference(sequence: Sequence | null, value: string | undefined) {
   if (!sequence || !value) return null
-  const token = value.replace(/^@/u, '').toLowerCase()
+  const token = normalizeNotebookReference(value)
   const matches = sequence.tracks.filter((track) =>
     track.trackId.toLowerCase().startsWith(token)
     || track.name.toLowerCase() === token)
@@ -6111,7 +6114,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
-      const draft = planNotebookChatGeneration({
+      let draft = planNotebookChatGeneration({
         actions: generationActions,
         cellId: uuidv7(),
         command,
@@ -6124,6 +6127,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? { routedParams: options.routedParams }
           : {}),
       })
+      const selectedSourceCells = draft.sourceCellIds.flatMap((cellId) => {
+        const cell = currentNotebook.cells.find((candidate) => candidate.id === cellId)
+        return cell ? [cell] : []
+      })
+      draft = reviseNotebookChatGenerationPrompt(
+        draft,
+        restoreSelectedNotebookMentionAliases(
+          command.prompt,
+          commandMentionAssets,
+          selectedSourceCells,
+        ),
+      )
+      validateNotebookChatGenerationPromptSources(draft, currentNotebook)
       const references = draft.sourceCellIds.length > 0
         ? ` from ${draft.sourceCellIds.flatMap((cellId) => {
             const cell = currentNotebook.cells.find((candidate) => candidate.id === cellId)
@@ -6204,8 +6220,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         plan.routedTool,
         generationActions,
       )
+      const rawRoutedPrompt = asString(plan.params.prompt) ?? originalInput
       const routedPrompt = restoreNotebookMentionAliases(
-        asString(plan.params.prompt) ?? originalInput,
+        rawRoutedPrompt,
         commandMentionAssets,
       )
       const parameterReferenceInput = notebookChatGenerationParameterReferences(
@@ -6221,7 +6238,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const command: NotebookChatGenerationCommand = {
         cellType,
         mediaKind: generationMediaKind(cellType),
-        prompt: routedPrompt,
+        prompt: rawRoutedPrompt,
         sourceReferences: parameterReferences.length > 0
           ? parameterReferences
           : promptReferences.length > 0
@@ -6768,7 +6785,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (!notebook || restParts.length !== 1) {
           return { ok: false, message: 'Usage: /generate-cell @cell-id' }
         }
-        const token = restParts[0].replace(/^@/u, '').toLowerCase()
+        const token = normalizeNotebookReference(restParts[0])
         const cell = notebook.cells.find((candidate) =>
           candidate.id.toLowerCase().startsWith(token))
         if (
@@ -8034,6 +8051,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     status={selectedCell.data.status}
                     error={selectedCellError}
                     generationActions={generationActions}
+                    mentionAssets={commandMentionAssets}
                     busy={busy || Boolean(selectedMediaSlotState?.operation)}
                     deleting={deletingCellIds.has(selectedNotebookCell.id)}
                     clearing={selectedMediaSlotState?.operation === 'clear'}
@@ -8915,7 +8933,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         modelSelectionDisabled={!bookId || mcp.state !== 'ready'}
         connectionLabel={mcp.state === 'ready' ? 'Load a book to begin' : 'Connecting to MCP…'}
         mcpActivity={mcpActivity}
-        promptSession={null}
         selectedModel={chatModel}
         pendingInput={pendingChatAction?.kind === 'generation'
           ? '/apply '

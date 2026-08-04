@@ -12,7 +12,7 @@ import {
   Maximize2,
   Save,
 } from 'lucide-react'
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import type { NotebookCell, NotebookEdge } from 'videobook-engine'
 import {
   notebookGridAddress,
@@ -39,6 +39,15 @@ import {
   type NotebookCellUpdate,
 } from '@/videobook/notebook-cell-actions'
 import {
+  assetMentionMetadata,
+  assetMentionSuggestions,
+  notebookAddressSuggestions,
+  type AssetMentionCandidate,
+} from '@/videobook/mention-suggestions'
+import {
+  providerPayloadPreviewMentions,
+} from '@/videobook/provider-payload-preview'
+import {
   compatibleGenerationActions,
   compatibleGenerationModes,
   effectiveGenerationControlValue,
@@ -61,6 +70,10 @@ import {
 } from '@/videobook/notebook-generation-actions'
 import { NotebookMediaMetadata } from './NotebookMediaMetadata'
 import { RichJson } from './RichJson'
+import {
+  AutocompleteDropdown,
+  type AutocompleteItem,
+} from '@/components/ui/AutocompleteDropdown'
 
 const actionCellTypes = new Set<NotebookCell['type']>([
   'extract_audio',
@@ -365,6 +378,7 @@ type NotebookCellInspectorProps = {
   deleting: boolean
   sourceVisible: boolean
   generationActions?: readonly NotebookGenerationAction[]
+  mentionAssets?: readonly AssetMentionCandidate[]
   onUpdate: NotebookCellUpdate
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
   onRun: (cellId: string) => Promise<unknown>
@@ -1125,6 +1139,7 @@ function AnalysisJsonDisclosure({
   const [resolvedValue, setResolvedValue] = useState(value)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const mentions = providerPayloadPreviewMentions(resolvedValue)
 
   return (
     <details
@@ -1164,9 +1179,38 @@ function AnalysisJsonDisclosure({
         {summary && <code className="inspector-json-summary">{summary}</code>}
       </summary>
       {open && resolvedValue !== undefined && (
-        <div className="inspector-analysis-json-scroll" tabIndex={0}>
-          <RichJson value={resolvedValue} ariaLabel={ariaLabel} />
-        </div>
+        <>
+          {(mentions.promptLeaks.length > 0
+            || mentions.urlPlaceholders.length > 0) && (
+            <div className="inspector-payload-mentions">
+              {mentions.promptLeaks.map((leak) => (
+                <span
+                  className="inspector-payload-mention leak"
+                  key={`${leak.token}:${leak.code}`}
+                  title={leak.message}
+                >
+                  <CircleAlert size={11} aria-hidden="true" />
+                  <code>{leak.token}</code>
+                  {leak.message}
+                </span>
+              ))}
+              {mentions.urlPlaceholders.map((placeholder) => (
+                <span
+                  className="inspector-payload-mention placeholder"
+                  key={`${placeholder.path}:${placeholder.url}`}
+                  title={placeholder.path}
+                >
+                  <Check size={11} aria-hidden="true" />
+                  <code>{placeholder.reference}</code>
+                  resolves at dispatch
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="inspector-analysis-json-scroll" tabIndex={0}>
+            <RichJson value={resolvedValue} ariaLabel={ariaLabel} />
+          </div>
+        </>
       )}
       {open && resolvedValue === undefined && (
         <div className="inspector-analysis-json-status" role="status">
@@ -1596,6 +1640,7 @@ function ExecutableCellInspector({
   onOpenFullscreen,
   onPreviewPayload,
   generationActions = [],
+  mentionAssets = [],
 }: Pick<
   NotebookCellInspectorProps,
   | 'cell'
@@ -1616,6 +1661,7 @@ function ExecutableCellInspector({
   | 'onOpenFullscreen'
   | 'onPreviewPayload'
   | 'generationActions'
+  | 'mentionAssets'
 >) {
   const [draft, setDraft] = useState(() =>
     cellFormDraft(
@@ -1631,6 +1677,17 @@ function ExecutableCellInspector({
   const [promptCopyState, setPromptCopyState] = useState<
     'idle' | 'copied' | 'failed'
   >('idle')
+  const promptFieldRef = useRef<HTMLDivElement | null>(null)
+  const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const promptPreviewRequestRef = useRef(0)
+  const [promptCaret, setPromptCaret] = useState(draft.prompt.length)
+  const [promptSuggestionIndex, setPromptSuggestionIndex] = useState(0)
+  const [promptSuggestionsDismissed, setPromptSuggestionsDismissed] = useState(false)
+  const [promptMentionPreview, setPromptMentionPreview] = useState<{
+    error: string | null
+    loading: boolean
+    value: unknown
+  }>({ error: null, loading: false, value: undefined })
   const textCell = cell.type === 'prompt'
     || cell.type === 'analyze'
     || cell.type === 'generate_video'
@@ -1722,6 +1779,35 @@ function ExecutableCellInspector({
     generationControls,
     draft.generationSettings,
   )
+  const promptSuggestionItems = useMemo<AutocompleteItem[]>(() => {
+    const input = draft.prompt.slice(0, promptCaret)
+    const seen = new Set<string>()
+    return [
+      ...assetMentionSuggestions(mentionAssets, input).map((suggestion) => ({
+        type: 'slug' as const,
+        value: suggestion.value,
+        label: suggestion.label,
+        description: assetMentionMetadata(suggestion.asset).join(' · '),
+        colorScheme: 'cyan' as const,
+      })),
+      ...notebookAddressSuggestions(cells, input).map((suggestion) => ({
+        type: 'slug' as const,
+        value: suggestion.value,
+        label: suggestion.label,
+        description: suggestion.description,
+        colorScheme: 'amber' as const,
+      })),
+    ].filter((suggestion) => {
+      if (seen.has(suggestion.value)) return false
+      seen.add(suggestion.value)
+      return true
+    }).slice(0, 12)
+  }, [cells, draft.prompt, mentionAssets, promptCaret])
+  const showPromptSuggestions = promptSuggestionItems.length > 0
+    && !promptSuggestionsDismissed
+  const promptMentions = providerPayloadPreviewMentions(
+    promptMentionPreview.value,
+  )
   const payloadSummary = JSON.stringify({
     ...(selectedGenerationAction
       ? {
@@ -1772,6 +1858,99 @@ function ExecutableCellInspector({
     : promptCopyState === 'failed'
       ? 'Retry copy'
       : 'Copy'
+
+  const generationPreviewDraft = (prompt: string): GenerationPreviewDraft => ({
+    prompt,
+    provider: draft.provider,
+    model: draft.model,
+    operation: draft.operation,
+    tool: draft.tool,
+    inputs: generationInputsForDraft(
+      cell,
+      {
+        ...draft,
+        prompt,
+        generationMode: effectiveGenerationMode,
+        generationSettings: payloadSettings,
+      },
+      allGenerationControls,
+    ),
+  })
+  const requestPromptMentionPreview = (prompt: string) => {
+    const requestId = promptPreviewRequestRef.current + 1
+    promptPreviewRequestRef.current = requestId
+    if (!generationCell || !onPreviewPayload || !prompt.includes('@')) {
+      setPromptMentionPreview({ error: null, loading: false, value: undefined })
+      return
+    }
+    setPromptMentionPreview({ error: null, loading: true, value: undefined })
+    void onPreviewPayload(cell.id, generationPreviewDraft(prompt))
+      .then((value) => {
+        if (promptPreviewRequestRef.current !== requestId) return
+        setPromptMentionPreview({ error: null, loading: false, value })
+      })
+      .catch((previewError: unknown) => {
+        if (promptPreviewRequestRef.current !== requestId) return
+        setPromptMentionPreview({
+          error: previewError instanceof Error
+            ? previewError.message
+            : String(previewError),
+          loading: false,
+          value: undefined,
+        })
+      })
+  }
+  const loadGenerationPreview = async (): Promise<unknown> => {
+    if (!onPreviewPayload) throw new Error('Payload preview is unavailable')
+    const requestId = promptPreviewRequestRef.current + 1
+    promptPreviewRequestRef.current = requestId
+    setPromptMentionPreview({ error: null, loading: true, value: undefined })
+    try {
+      const value = await onPreviewPayload(
+        cell.id,
+        generationPreviewDraft(draft.prompt),
+      )
+      if (promptPreviewRequestRef.current === requestId) {
+        setPromptMentionPreview({ error: null, loading: false, value })
+      }
+      return value
+    } catch (previewError) {
+      if (promptPreviewRequestRef.current === requestId) {
+        setPromptMentionPreview({
+          error: previewError instanceof Error
+            ? previewError.message
+            : String(previewError),
+          loading: false,
+          value: undefined,
+        })
+      }
+      throw previewError
+    }
+  }
+  const updatePrompt = (prompt: string, caret: number) => {
+    setPromptCopyState('idle')
+    setDraft((current) => ({ ...current, prompt }))
+    setPromptCaret(caret)
+    setPromptSuggestionIndex(0)
+    setPromptSuggestionsDismissed(false)
+    requestPromptMentionPreview(prompt)
+  }
+  const insertPromptSuggestion = (suggestion: AutocompleteItem) => {
+    const beforeCaret = draft.prompt.slice(0, promptCaret)
+    const mentionStart = beforeCaret.lastIndexOf('@')
+    if (mentionStart < 0) return
+    const before = draft.prompt.slice(0, mentionStart)
+    const after = draft.prompt.slice(promptCaret)
+    const separator = !after || /^\s/u.test(after) ? '' : ' '
+    const prompt = `${before}${suggestion.value}${separator}${after}`
+    const caret = before.length + suggestion.value.length + separator.length
+    updatePrompt(prompt, caret)
+    setPromptSuggestionsDismissed(true)
+    requestAnimationFrame(() => {
+      promptTextareaRef.current?.focus({ preventScroll: true })
+      promptTextareaRef.current?.setSelectionRange(caret, caret)
+    })
+  }
 
   const updateDraft = <Field extends keyof CellFormDraft,>(
     field: Field,
@@ -1917,16 +2096,79 @@ function ExecutableCellInspector({
                 <span aria-live="polite">{promptCopyLabel}</span>
               </button>
             </header>
-            <textarea
-              aria-label="Prompt"
-              className="inspector-prompt-textarea"
-              value={draft.prompt}
-              rows={8}
-              onChange={(event) => {
-                setPromptCopyState('idle')
-                updateDraft('prompt', event.target.value)
-              }}
-            />
+            <div className="inspector-prompt-editor" ref={promptFieldRef}>
+              {showPromptSuggestions && (
+                <AutocompleteDropdown
+                  items={promptSuggestionItems}
+                  selectedIndex={promptSuggestionIndex}
+                  onSelect={insertPromptSuggestion}
+                  onHover={setPromptSuggestionIndex}
+                  anchorRef={promptFieldRef}
+                  preferAbove={false}
+                />
+              )}
+              <textarea
+                ref={promptTextareaRef}
+                aria-label="Prompt"
+                className="inspector-prompt-textarea"
+                value={draft.prompt}
+                rows={8}
+                onChange={(event) => updatePrompt(
+                  event.target.value,
+                  event.target.selectionStart,
+                )}
+                onClick={(event) => setPromptCaret(event.currentTarget.selectionStart)}
+                onSelect={(event) => setPromptCaret(event.currentTarget.selectionStart)}
+                onBlur={() => setPromptSuggestionsDismissed(true)}
+                onKeyDown={(event) => {
+                  if (!showPromptSuggestions) return
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault()
+                    setPromptSuggestionIndex((current) =>
+                      (current + 1) % promptSuggestionItems.length)
+                    return
+                  }
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault()
+                    setPromptSuggestionIndex((current) =>
+                      (current - 1 + promptSuggestionItems.length)
+                      % promptSuggestionItems.length)
+                    return
+                  }
+                  if (event.key === 'Enter' || event.key === 'Tab') {
+                    event.preventDefault()
+                    insertPromptSuggestion(
+                      promptSuggestionItems[promptSuggestionIndex]!,
+                    )
+                    return
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    setPromptSuggestionsDismissed(true)
+                  }
+                }}
+              />
+            </div>
+            {(promptMentionPreview.loading
+              || promptMentionPreview.error
+              || promptMentions.promptLeaks.length > 0) && (
+              <div
+                className="inspector-prompt-mentions"
+                role={promptMentions.promptLeaks.length > 0 ? 'alert' : 'status'}
+              >
+                {promptMentionPreview.loading && <span>Checking references…</span>}
+                {promptMentionPreview.error && (
+                  <span>{promptMentionPreview.error}</span>
+                )}
+                {promptMentions.promptLeaks.map((leak) => (
+                  <span key={`${leak.token}:${leak.code}`} title={leak.message}>
+                    <CircleAlert size={11} aria-hidden="true" />
+                    <code>{leak.token}</code>
+                    {leak.message}
+                  </span>
+                ))}
+              </div>
+            )}
           </section>
         )}
         {cell.type === 'split_video' && (
@@ -2130,22 +2372,7 @@ function ExecutableCellInspector({
             label="Payload"
             summary={payloadSummary}
             ariaLabel={`Provider payload preview for ${notebookGridTag(cell.slot)}`}
-            loadValue={() => onPreviewPayload(cell.id, {
-              prompt: draft.prompt,
-              provider: draft.provider,
-              model: draft.model,
-              operation: draft.operation,
-              tool: draft.tool,
-              inputs: generationInputsForDraft(
-                cell,
-                {
-                  ...draft,
-                  generationMode: effectiveGenerationMode,
-                  generationSettings: payloadSettings,
-                },
-                allGenerationControls,
-              ),
-            })}
+            loadValue={loadGenerationPreview}
           />
         )}
         {dirty && (
@@ -2280,6 +2507,7 @@ export function NotebookCellInspector({
   onDelete,
   onOpenFullscreen,
   onPreviewPayload,
+  mentionAssets,
 }: NotebookCellInspectorProps) {
   if (sourceVisible) {
     return (
@@ -2350,6 +2578,7 @@ export function NotebookCellInspector({
       onOpenFullscreen={onOpenFullscreen}
       onPreviewPayload={onPreviewPayload}
       generationActions={generationActions}
+      mentionAssets={mentionAssets}
     />
   )
 }

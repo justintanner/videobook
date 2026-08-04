@@ -5,6 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildWan27TextToVideoPayload } from "../payload-builders.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -37,9 +38,13 @@ export function registerGenerateWan27T2vVideoJob(fs: Engine): void {
     requireApiKey("KIE_API_KEY");
 
     const audioUrl = audioRef ? await uploadAssetToKie(fs, audioRef.assetId, audioRef.filename, bookId) : undefined;
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_kie_wan_2_7_text_to_video",
+      { prompt, driving_audio_slug: audioRef?.assetId },
+    ) ?? "";
 
     const request = buildWan27TextToVideoPayload(
-      { prompt, negative_prompt, resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed },
+      { prompt: normalizedPrompt, negative_prompt, resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed },
       { audioUrl },
     );
     const taskId = await submitKieTask(fs, ctx, {

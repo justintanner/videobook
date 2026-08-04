@@ -1,7 +1,12 @@
 /**
  * chat MCP tool — natural language interface that routes to appropriate tools.
  */
-import type { ChatLogEntry, Engine, ResolvedArtifact } from "videobook-engine";
+import type {
+  ChatLogEntry,
+  Engine,
+  NotebookDocument,
+  ResolvedArtifact,
+} from "videobook-engine";
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import {
@@ -31,8 +36,8 @@ import {
 } from "../chat-models.js";
 import {
   notebookGridAddress,
-  parseNotebookGridAddress,
 } from "videobook-engine/notebook-grid";
+import { resolveNotebookPromptReferences } from "../notebook-reference-resolver.js";
 
 type ChatDecision = {
   tool: string;
@@ -81,15 +86,13 @@ export type ChatResolvedAsset = ResolvedArtifact;
 
 function buildChatNotebookContext(
   fs: Engine,
-  notebookId: string | undefined,
+  notebook: NotebookDocument | null,
 ): ChatRoutingNotebookContext | null {
-  if (!notebookId) return null;
-  const notebook = fs.notebooks.read(notebookId);
-  if (!notebook.ok) throw new Error(notebook.error.message);
+  if (!notebook) return null;
   return {
-    id: notebook.value.id,
-    name: notebook.value.name,
-    cells: notebook.value.cells.map((cell) => {
+    id: notebook.id,
+    name: notebook.name,
+    cells: notebook.cells.map((cell) => {
       const artifact = cell.outputArtifactId
         ? fs.artifacts.get(cell.outputArtifactId)
         : null;
@@ -102,24 +105,6 @@ function buildChatNotebookContext(
       };
     }),
   };
-}
-
-function promptForAssetResolution(
-  prompt: string,
-  notebookContext: ChatRoutingNotebookContext | null,
-): string {
-  if (!notebookContext) return prompt;
-  const references = new Map<string, string | null>();
-  for (const cell of notebookContext.cells) {
-    references.set(cell.address.slice(1).toLowerCase(), cell.outputAsset);
-    references.set(cell.slug.toLowerCase(), cell.outputAsset);
-    references.set(cell.cellId.toLowerCase(), cell.outputAsset);
-  }
-  return prompt.replace(/@([\w-]+)/gu, (mention, value: string) => {
-    const reference = value.toLowerCase();
-    if (references.has(reference)) return references.get(reference) ?? reference;
-    return parseNotebookGridAddress(reference) ? reference : mention;
-  });
 }
 
 function attachNotebookReferences(
@@ -459,20 +444,30 @@ export function chatDef(fs: Engine): ToolDef {
       if (!prompt) return error("A chat prompt is required");
       const chatModel = resolveChatModel(model);
       const book = fs.book.get();
-      let notebookContext: ChatRoutingNotebookContext | null;
+      let notebookDocument: NotebookDocument | null = null;
       try {
-        notebookContext = buildChatNotebookContext(fs, notebookId);
+        if (notebookId) {
+          const notebook = fs.notebooks.read(notebookId);
+          if (!notebook.ok) throw new Error(notebook.error.message);
+          notebookDocument = notebook.value;
+        }
       } catch (cause) {
         return error(cause instanceof Error ? cause.message : String(cause));
       }
+      const notebookContext = buildChatNotebookContext(fs, notebookDocument);
 
       // 1. Expand @s01 slot refs → actual asset slugs
       let expandedPrompt = prompt;
       expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineSlotSlugs(fs));
-      const resolutionPrompt = promptForAssetResolution(
-        expandedPrompt,
-        notebookContext,
-      );
+      const notebookResolution = notebookDocument
+        ? resolveNotebookPromptReferences({
+            engine: fs,
+            document: notebookDocument,
+            prompt: expandedPrompt,
+            requireMedia: false,
+          })
+        : null;
+      const resolutionPrompt = notebookResolution?.prompt ?? expandedPrompt;
 
       // 2. Resolve @asset tags
       const resolvedResult = await fs.resolver.resolveAll(resolutionPrompt);

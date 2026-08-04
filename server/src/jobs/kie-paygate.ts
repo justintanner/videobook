@@ -10,6 +10,7 @@ import { QUEUED_TASK_ID } from "videobook-engine";
 import type { PendingTask, TaskType, Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
 import { normalizeKieCostPayload, type KieCostHints } from "../cost-adapters.js";
+import { assertProviderPayload } from "../provider-prompt-transform.js";
 
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";
 export const VEO_PAYGATE_DOT_PATH = "api.v1.veo.generate";
@@ -94,6 +95,10 @@ export async function submitKieTask(
   ctx: JobHandlerContext,
   args: SubmitKieTaskArgs,
 ): Promise<string> {
+  assertProviderPayload(args.request, {
+    toolName: args.taskType,
+    wire: true,
+  });
   const apiKey = requireApiKey("KIE_API_KEY");
   await fs.metadata.artifacts.write(args.assetId, "generation-payload", args.request);
   if (args.costHints) {
@@ -127,6 +132,10 @@ export async function submitQueuedKieTask(
 
   const payloadResult = await fs.metadata.artifacts.read<MediaGenerationRequest>(task.artifactId, "generation-payload");
   if (!payloadResult.ok || payloadResult.value === null) throw new Error(`No prepared KIE payload found for ${task.artifactSlug}`);
+  assertProviderPayload(payloadResult.value, {
+    toolName: task.taskType,
+    wire: true,
+  });
 
   // Reload persisted cost hints (if any) so the OTP minted on resubmission
   // sees the same duration the original handler resolved, without leaking it
@@ -169,6 +178,10 @@ export async function submitVeoTask(
   ctx: JobHandlerContext,
   args: SubmitVeoTaskArgs,
 ): Promise<string> {
+  assertProviderPayload(args.request, {
+    toolName: args.taskType,
+    wire: true,
+  });
   const apiKey = requireApiKey("KIE_API_KEY");
   await fs.metadata.artifacts.write(args.assetId, "generation-payload", args.request);
   const provider = createKieProvider(apiKey);

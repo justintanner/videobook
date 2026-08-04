@@ -4,7 +4,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildNanoBananaImagePayload } from "../payload-builders.js";
-import { replaceNaturalAssetMentions } from "../google-flow-refs.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
 import type { NanoBananaProRequest } from "@apicity/kie";
 
@@ -39,11 +39,15 @@ export function registerGenerateNanoBananaImageJob(fs: Engine): void {
       );
     }
 
-    const normalizedPrompt = replaceNaturalAssetMentions(prompt, {
-      imageSlugs: imageInputs
-        .map((input) => ("assetId" in input ? input.assetId : null))
-        .filter((id): id is string => id !== null),
-    });
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_kie_nano_banana_pro_text_to_image",
+      {
+        prompt,
+        image_slugs: imageInputs
+          .map((input) => ("assetId" in input ? input.assetId : null))
+          .filter((id): id is string => id !== null),
+      },
+    ) ?? "";
     const request = buildNanoBananaImagePayload(
       { prompt: normalizedPrompt, aspect_ratio: aspectRatio, resolution, output_format: outputFormat },
       uploadedUrls,

@@ -4,6 +4,7 @@ import type { TaskType, Engine } from "videobook-engine";
 import type { JobHandlerContext } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { prepareAssetForUpload, prepareBytesForUpload } from "../upload.js";
+import { assertProviderPayload } from "../provider-prompt-transform.js";
 
 export const GOOGLE_FLOW_ENV_KEY = "GOOGLE_FLOW_API_KEY";
 
@@ -353,6 +354,10 @@ export async function submitGoogleFlowVideoTask(
 ): Promise<string> {
   const provider = createGoogleFlowProvider();
   const request = withGoogleFlowCaptchaDefaults(args.request as Record<string, unknown>) as GoogleFlowVideosRequest;
+  assertProviderPayload(request, {
+    toolName: "google_flow_video",
+    wire: true,
+  });
   await fs.metadata.artifacts.write(args.assetId, "generation-payload", request);
 
   let res: Record<string, unknown>;

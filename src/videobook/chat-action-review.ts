@@ -1,4 +1,5 @@
 import { formatMediaTime } from './notebook-cell-presentation'
+import { scanNotebookMentions } from 'videobook-engine/notebook-mentions'
 
 export type RoutedActionSettingTone = 'default' | 'warning'
 
@@ -44,7 +45,7 @@ function sourceValue(
   input: string,
   params: Record<string, unknown>,
 ): string {
-  const mentions = input.match(/@[\w-]+/gu) ?? []
+  const mentions = scanNotebookMentions(input).map((mention) => mention.raw)
   const source = textValue(params.asset_id)
   if (source?.startsWith('@')) return source
   if (mentions.length === 1) return mentions[0]

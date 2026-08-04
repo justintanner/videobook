@@ -5,6 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildWan27ReferenceVideoPayload } from "../payload-builders.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -66,9 +67,19 @@ export function registerGenerateWan27R2vVideoJob(fs: Engine): void {
     const referenceVideoUrls = await uploadInputs(fs, videoInputs, bookId);
     const firstFrameUrl = firstFrame ? await uploadSingle(fs, firstFrame, bookId) : undefined;
     const referenceVoiceUrl = voiceRef ? await uploadSingle(fs, voiceRef, bookId) : undefined;
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_kie_wan_2_7_reference_to_video",
+      {
+        prompt,
+        image_slugs: imageInputs.map((input) => input.assetId),
+        video_slugs: videoInputs.map((input) => input.assetId),
+        first_frame_slug: firstFrame?.assetId,
+        audio_slug: voiceRef?.assetId,
+      },
+    ) ?? "";
 
     const request = buildWan27ReferenceVideoPayload(
-      { prompt, negative_prompt, resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed },
+      { prompt: normalizedPrompt, negative_prompt, resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed },
       { referenceImageUrls, referenceVideoUrls, firstFrameUrl, referenceVoiceUrl },
     );
     const taskId = await submitKieTask(fs, ctx, {

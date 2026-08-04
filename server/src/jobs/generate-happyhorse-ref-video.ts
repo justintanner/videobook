@@ -5,7 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildHappyHorseRefPayload } from "../payload-builders.js";
-import { rewriteImageSlugMentionsToBrackets } from "../google-flow-refs.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -37,12 +37,13 @@ export function registerGenerateHappyhorseRefVideoJob(fs: Engine): void {
       referenceImages.push(await uploadAssetToKie(fs, assetId, filename, bookId));
     }
 
-    // 1.1 reference-to-video resolves "[Image N]" markers against reference_image[]
-    // order — rewrite confirmed @img-* slugs so local asset IDs never hit the wire.
-    const normalizedPrompt = rewriteImageSlugMentionsToBrackets(
-      prompt,
-      imageInputs.map((input) => input.assetId),
-    );
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_kie_happyhorse_1_1_reference_to_video",
+      {
+        prompt,
+        image_slugs: imageInputs.map((input) => input.assetId),
+      },
+    ) ?? "";
     const request = buildHappyHorseRefPayload(
       { prompt: normalizedPrompt, resolution, aspect_ratio, duration },
       referenceImages,

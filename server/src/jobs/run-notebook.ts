@@ -12,7 +12,6 @@ import type {
   NotebookRun,
 } from "videobook-engine";
 import { MVP_CONTRACT_VERSION } from "videobook-engine";
-import { notebookGridAddress } from "videobook-engine/notebook-grid";
 import { mutateNotebook } from "../notebook-mutations.js";
 import {
   ensureExtractFrameImageOutput,
@@ -53,6 +52,10 @@ import {
 } from "../notebook-generation-contract.js";
 import { notebookProviderFailureMessage } from "../notebook-provider-failure.js";
 import { assertKlingMotionControlDuration } from "../kling-motion-control-duration.js";
+import {
+  resolveNotebookPromptReferences,
+  type NotebookPromptResolution,
+} from "../notebook-reference-resolver.js";
 
 export interface RunNotebookPayload {
   type: "run_notebook";
@@ -743,47 +746,17 @@ function artifactSlugRef(engine: Engine, artifactId: string): string {
   return `@${artifactId}`;
 }
 
-function rewriteNotebookCellMentions(
-  prompt: string,
-  upstream: ReadonlyArray<{
-    cell: NotebookCell;
-    output: string | undefined;
-  }>,
-  refFor: (artifactId: string) => string,
-): string {
-  const aliases = new Map<string, string>();
-  for (const { cell, output } of upstream) {
-    if (
-      typeof output === "string"
-      && notebookCellMediaType(cell) !== null
-    ) {
-      const reference = refFor(output);
-      aliases.set(cell.slug.toLowerCase(), reference);
-      aliases.set(notebookGridAddress(cell.slot).toLowerCase(), reference);
-    }
-  }
-  if (aliases.size === 0) return prompt;
-  const pattern = [...aliases.keys()]
-    .sort((left, right) => right.length - left.length)
-    .map((slug) => slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("|");
-  return prompt.replace(
-    new RegExp(`@(${pattern})(?![\\w-])`, "gi"),
-    (mention, slug: string) => aliases.get(slug.toLowerCase()) ?? mention,
-  );
-}
-
 function isImageLikeCell(source: NotebookCell): boolean {
   return notebookCellMediaType(source) === "image";
 }
 
-export function modelArgs(
+export function modelArgsWithMentions(
   definition: ToolDef,
   document: NotebookDocument,
   cell: NotebookCell,
   bookId: string,
   engine?: Engine,
-): Record<string, unknown> {
+): { input: Record<string, unknown>; mentions: NotebookPromptResolution } {
   const settings = cell.inputs?.generationSettings;
   const generationSettings = settings
     && typeof settings === "object"
@@ -793,11 +766,20 @@ export function modelArgs(
   const upstream = upstreamValues(document, cell);
   const refFor = (artifactId: string): string =>
     engine ? artifactSlugRef(engine, artifactId) : `@${artifactId}`;
-  const prompt = rewriteNotebookCellMentions(
-    promptFor(document, cell),
-    upstream,
-    refFor,
+  const connectedArtifactIds = new Set(
+    upstream
+      .filter(({ cell: source, output }) =>
+        typeof output === "string"
+        && notebookCellMediaType(source) !== null)
+      .map(({ output }) => output!),
   );
+  const mentions = resolveNotebookPromptReferences({
+    engine,
+    document,
+    prompt: promptFor(document, cell),
+    connectedArtifactIds,
+  });
+  const prompt = mentions.prompt;
   const args: Record<string, unknown> = {
     ...(cell.inputs ?? {}),
     ...generationSettings,
@@ -905,7 +887,23 @@ export function modelArgs(
   if ("driving_audio_slug" in definition.schema && audioReferences[0]) {
     args.driving_audio_slug = audioReferences[0];
   }
-  return args;
+  return { input: args, mentions };
+}
+
+export function modelArgs(
+  definition: ToolDef,
+  document: NotebookDocument,
+  cell: NotebookCell,
+  bookId: string,
+  engine?: Engine,
+): Record<string, unknown> {
+  return modelArgsWithMentions(
+    definition,
+    document,
+    cell,
+    bookId,
+    engine,
+  ).input;
 }
 
 export function resolveNotebookGenerationTool(cell: NotebookCell): string | null {
@@ -929,11 +927,13 @@ export async function prepareNotebookGeneration(
   document: NotebookDocument,
   cell: NotebookCell,
   bookId: string,
+  options: { allowReferenceIssues?: boolean } = {},
 ): Promise<{
   tool: string;
   provider: string;
   model: string;
   input: Record<string, unknown>;
+  mentions: NotebookPromptResolution;
 }> {
   const tool = resolveNotebookGenerationTool(cell);
   if (!tool) throw new Error(`No generation model for ${cell.type} cell ${cell.id}`);
@@ -984,9 +984,25 @@ export async function prepareNotebookGeneration(
       `${tool}${generationMode ? ` mode ${generationMode}` : ""} does not accept the current media inputs for @${cell.slug}`,
     );
   }
-  const parsed = z.object(definition.schema).safeParse(
-    modelArgs(definition, document, cell, bookId, engine),
+  const preparedArgs = modelArgsWithMentions(
+    definition,
+    document,
+    cell,
+    bookId,
+    engine,
   );
+  const referenceIssues = [
+    ...preparedArgs.mentions.unresolved,
+    ...preparedArgs.mentions.unconnected,
+  ];
+  if (!options.allowReferenceIssues && referenceIssues.length > 0) {
+    throw new Error(
+      `Cannot prepare @${cell.slug}: ${referenceIssues
+        .map((reference) => reference.message)
+        .join("; ")}`,
+    );
+  }
+  const parsed = z.object(definition.schema).safeParse(preparedArgs.input);
   if (!parsed.success) {
     throw new Error(parsed.error.issues.map((issue) => issue.message).join("; "));
   }
@@ -1009,6 +1025,7 @@ export async function prepareNotebookGeneration(
     provider: spec?.provider ?? "unknown",
     model: spec?.apicity_identifier ?? cell.model ?? tool,
     input: parsed.data as Record<string, unknown>,
+    mentions: preparedArgs.mentions,
   };
 }
 

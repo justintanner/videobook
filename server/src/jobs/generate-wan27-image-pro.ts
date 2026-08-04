@@ -6,6 +6,7 @@ import { requireApiKey } from "../api-key.js";
 import { buildWan27ImageProPayload } from "../payload-builders.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
 import type { Wan27ImageProRequest } from "@apicity/kie";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type GenerateWan27ImageProPayload = {
   type: "generate_wan27_image_pro";
@@ -38,9 +39,18 @@ export function registerGenerateWan27ImageProJob(fs: Engine): void {
           : await uploadAssetToKie(fs, input.assetId, input.filename, bookId),
       );
     }
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_kie_wan_2_7_pro_text_to_image",
+      {
+        prompt,
+        image_slugs: imageInputs
+          .map((input) => ("assetId" in input ? input.assetId : null))
+          .filter((assetId): assetId is string => assetId !== null),
+      },
+    ) ?? "";
 
     const request = buildWan27ImageProPayload(
-      { prompt, aspect_ratio: aspectRatio, resolution, seed, nsfw_checker: nsfwChecker },
+      { prompt: normalizedPrompt, aspect_ratio: aspectRatio, resolution, seed, nsfw_checker: nsfwChecker },
       uploadedUrls,
     );
     const taskId = await submitKieTask(fs, ctx, {

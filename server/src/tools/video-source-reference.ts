@@ -1,16 +1,6 @@
 import type { Engine, NotebookDocument } from "videobook-engine";
-import { notebookGridTag, parseNotebookGridAddress } from "videobook-engine/notebook-grid";
-
-function outputAtAddress(
-  notebook: NotebookDocument,
-  row: number,
-  column: number,
-): string | null | undefined {
-  const cell = notebook.cells.find((candidate) =>
-    candidate.slot.row === row && candidate.slot.column === column);
-  if (!cell) return undefined;
-  return cell.outputArtifactId ?? null;
-}
+import { normalizeNotebookReference } from "videobook-engine/notebook-mentions";
+import { resolveNotebookArtifactReference } from "../notebook-reference-resolver.js";
 
 function notebookCandidates(
   engine: Engine,
@@ -27,41 +17,20 @@ export function resolveVideoAssetReference(
   reference: string,
   notebookId?: string,
 ): string {
-  const normalized = reference.trim().replace(/^@/u, "");
+  const normalized = normalizeNotebookReference(reference);
   if (!normalized) throw new Error("asset_id is required");
-
-  const direct = engine.artifacts.get(normalized);
-  if (direct.ok) return direct.value.slug;
-
-  const slot = parseNotebookGridAddress(normalized);
   const notebooks = notebookCandidates(engine, notebookId);
-  const matches = notebooks.flatMap((notebook) => {
-    if (slot) {
-      const outputArtifactId = outputAtAddress(notebook, slot.row, slot.column);
-      return outputArtifactId === undefined ? [] : [{ notebook, outputArtifactId }];
-    }
-    const cell = notebook.cells.find((candidate) =>
-      candidate.slug.toLowerCase() === normalized.toLowerCase()
-      || candidate.id.toLowerCase() === normalized.toLowerCase());
-    if (!cell?.outputArtifactId) return [];
-    return [{ notebook, outputArtifactId: cell.outputArtifactId }];
+  const result = resolveNotebookArtifactReference({
+    engine,
+    documents: notebooks,
+    reference: normalized,
   });
-  const resolvedMatches = matches.filter(
-    (match): match is { notebook: NotebookDocument; outputArtifactId: string } =>
-      match.outputArtifactId !== null,
-  );
-  if (resolvedMatches.length === 0) {
-    const label = slot ? notebookGridTag(slot) : `@${normalized}`;
-    if (matches.length > 0) {
-      throw new Error(`Video source ${label} has no media output yet`);
-    }
-    throw new Error(`Video source ${label} was not found`);
-  }
-  const artifactIds = [...new Set(resolvedMatches.map((match) => match.outputArtifactId))];
-  if (artifactIds.length > 1) {
+  if (!("code" in result)) return result.artifactSlug;
+  if (result.code === "ambiguous") {
     throw new Error(`Video source @${normalized} is ambiguous; include notebook_id`);
   }
-  const artifact = engine.artifacts.get(artifactIds[0]!);
-  if (!artifact.ok) throw new Error(artifact.error.message);
-  return artifact.value.slug;
+  if (result.code === "no_output" || result.code === "not_media") {
+    throw new Error(`Video source @${normalized} has no media output yet`);
+  }
+  throw new Error(`Video source @${normalized} was not found`);
 }

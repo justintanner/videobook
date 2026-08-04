@@ -9,6 +9,12 @@ import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 import { asNotebookGenerationActions } from '../../src/videobook/notebook-generation-actions'
 import {
+  notebookMentionAssets,
+  restoreNotebookMentionAliases,
+  restoreSelectedNotebookMentionAliases,
+  type AssetMentionRecord,
+} from '../../src/videobook/mention-suggestions'
+import {
   parseNotebookImageGenerationCommand,
   resolveNotebookImageGenerationSources,
 } from '../../src/videobook/notebook-image-generation-command'
@@ -16,13 +22,14 @@ import {
   materializeNotebookChatGeneration,
   notebookChatGenerationConnectedInputs,
   notebookChatGenerationParameterReferences,
+  notebookChatGenerationReferences,
   notebookChatGenerationSettings,
-  parseNotebookChatGenerationCommand,
   planNotebookChatGeneration,
   reviseNotebookChatGenerationAction,
   reviseNotebookChatGenerationMode,
   reviseNotebookChatGenerationPrompt,
   reviseNotebookChatGenerationSetting,
+  validateNotebookChatGenerationPromptSources,
   type NotebookChatGenerationCommand,
 } from '../../src/videobook/notebook-chat-generation'
 
@@ -77,36 +84,6 @@ describe('notebook image generation commands', () => {
     expect(parseNotebookImageGenerationCommand(
       'generate cell @generate-image-01',
     )).toBeNull()
-    expect(parseNotebookChatGenerationCommand(
-      'create a video of falling stars',
-    )).toMatchObject({
-      cellType: 'generate_video',
-      mediaKind: 'video',
-      prompt: 'falling stars',
-    })
-    expect(parseNotebookChatGenerationCommand(
-      'make a soundtrack of distant thunder',
-    )).toMatchObject({
-      cellType: 'generate_audio',
-      mediaKind: 'audio',
-      prompt: 'distant thunder',
-    })
-    expect(parseNotebookChatGenerationCommand(
-      'gen vid with @vid-dance and @generate-image-01',
-    )).toEqual({
-      cellType: 'generate_video',
-      mediaKind: 'video',
-      prompt: 'Create new video media based on the connected references.',
-      sourceReferences: ['vid-dance', 'generate-image-01'],
-    })
-    expect(parseNotebookChatGenerationCommand(
-      'gen vid with @A1 and @z13',
-    )).toEqual({
-      cellType: 'generate_video',
-      mediaKind: 'video',
-      prompt: 'Create new video media based on the connected references.',
-      sourceReferences: ['a1', 'z13'],
-    })
     expect(notebookChatGenerationParameterReferences({
       book_id: 'ignored',
       prompt: 'scene @a5, character @a1, fluffy kitten standing',
@@ -211,11 +188,12 @@ describe('notebook image generation commands', () => {
     const actions = asNotebookGenerationActions(
       await invoke('list_notebook_actions', { cell_type: 'generate_image' }),
     )
-    const command = parseNotebookChatGenerationCommand(
-      'generate an image of neon rain with @img-01',
-    )
-    expect(command).not.toBeNull()
-    if (!command) return
+    const command = {
+      cellType: 'generate_image',
+      mediaKind: 'image',
+      prompt: 'neon rain',
+      sourceReferences: ['img-01'],
+    } satisfies NotebookChatGenerationCommand
     const plannedCellId = '01900000-0000-7000-8000-000000000010'
     const draft = planNotebookChatGeneration({
       actions,
@@ -353,12 +331,21 @@ describe('notebook image generation commands', () => {
     )
     expect(firstArtifact.ok && secondArtifact.ok).toBe(true)
     if (!firstArtifact.ok || !secondArtifact.ok) return
+    const generatedSource = await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'generate_image',
+        slug: 'generate-image-shared',
+        slot: { row: 0, column: 0 },
+        output_artifact_id: firstArtifact.value.artifactId,
+      },
+    }) as { id: string }
     const firstSource = await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
         type: 'image',
         slug: 'img-ff2',
-        slot: { row: 0, column: 0 },
+        slot: { row: 0, column: 1 },
         output_artifact_id: firstArtifact.value.artifactId,
       },
     }) as { id: string }
@@ -367,7 +354,7 @@ describe('notebook image generation commands', () => {
       cell: {
         type: 'image',
         slug: 'img-jamie',
-        slot: { row: 0, column: 1 },
+        slot: { row: 0, column: 2 },
         output_artifact_id: secondArtifact.value.artifactId,
       },
     }) as { id: string }
@@ -377,13 +364,36 @@ describe('notebook image generation commands', () => {
     const actions = asNotebookGenerationActions(
       await invoke('list_notebook_actions', { cell_type: 'generate_image' }),
     )
+    const mentionRecords: AssetMentionRecord[] = [
+      firstArtifact.value,
+      secondArtifact.value,
+    ].map((artifact) => ({
+      id: artifact.slug,
+      artifactId: artifact.artifactId,
+      type: 'image',
+      mediaUrl: null,
+      thumbnailUrl: null,
+      width: null,
+      height: null,
+      duration: null,
+      status: 'ready',
+    }))
+    const mentionAssets = notebookMentionAssets(
+      current.value.cells,
+      mentionRecords,
+    )
+    const routedPrompt = `scene @${firstArtifact.value.slug}, character @${secondArtifact.value.slug}, fluffy kitten standing`
+    const restoredPrompt = restoreNotebookMentionAliases(
+      routedPrompt,
+      mentionAssets,
+    )
     const command = {
       cellType: 'generate_image',
       mediaKind: 'image',
-      prompt: 'scene @a1, character @a2, fluffy kitten standing',
-      sourceReferences: ['img-ff2', 'img-jamie'],
+      prompt: routedPrompt,
+      sourceReferences: notebookChatGenerationReferences(restoredPrompt),
     } satisfies NotebookChatGenerationCommand
-    const draft = planNotebookChatGeneration({
+    let draft = planNotebookChatGeneration({
       actions,
       cellId: '01900000-0000-7000-8000-000000000020',
       command,
@@ -391,6 +401,22 @@ describe('notebook image generation commands', () => {
       fallbackSlot: { row: 1, column: 0 },
       preferredTool: 'generate_google_flow_nano_banana_pro_image',
     })
+    const selectedCells = draft.sourceCellIds.flatMap((cellId) => {
+      const cell = current.value.cells.find((candidate) => candidate.id === cellId)
+      return cell ? [cell] : []
+    })
+    draft = reviseNotebookChatGenerationPrompt(
+      draft,
+      restoreSelectedNotebookMentionAliases(
+        draft.cell.prompt ?? '',
+        mentionAssets,
+        selectedCells,
+      ),
+    )
+    expect(draft.cell.prompt).toBe(
+      'scene @a2, character @a3, fluffy kitten standing',
+    )
+    expect(draft.sourceCellIds).not.toContain(generatedSource.id)
     expect(draft.connections).toEqual([
       { sourceCellId: firstSource.id, targetInput: 'image' },
       { sourceCellId: secondSource.id, targetInput: 'image_2' },
@@ -399,6 +425,23 @@ describe('notebook image generation commands', () => {
       { kind: 'image', target: 'image' },
       { kind: 'image', target: 'image' },
     ])
+    expect(() => validateNotebookChatGenerationPromptSources(
+      draft,
+      current.value,
+    )).not.toThrow()
+    expect(() => validateNotebookChatGenerationPromptSources({
+      ...draft,
+      cell: { ...draft.cell, prompt: 'use @a3' },
+      sourceCellIds: [firstSource.id],
+    }, current.value)).toThrow('@a3 is referenced but not connected')
+    expect(() => validateNotebookChatGenerationPromptSources({
+      ...draft,
+      cell: { ...draft.cell, prompt: 'use @missing-cell' },
+    }, current.value)).toThrow('Notebook cell @missing-cell was not found')
+    expect(() => validateNotebookChatGenerationPromptSources({
+      ...draft,
+      cell: { ...draft.cell, prompt: 'use @0' },
+    }, current.value)).toThrow('Cell reference @0 is ambiguous')
     const preview = await invoke('preview_notebook_generation', {
       notebook_id: notebookId,
       cell_id: draft.cell.id,
@@ -449,5 +492,9 @@ describe('notebook image generation commands', () => {
         targetInput: 'image_2',
       }),
     ]))
+    expect(connected.value.cells.find((cell) =>
+      cell.id === materialized.cellId)?.prompt).toBe(
+      'scene @a2, character @a3, fluffy kitten standing',
+    )
   })
 })

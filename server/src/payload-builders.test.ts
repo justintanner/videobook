@@ -12,8 +12,117 @@ import {
 import { GoogleFlowVideosRequestSchema } from "@apicity/googleflow/zod";
 import { normalizeKieCostPayload } from "./cost-adapters.js";
 import { translateToolPayload } from "./payload-builders.js";
+import {
+  inspectProviderPayload,
+  ProviderMentionError,
+} from "./provider-prompt-transform.js";
+
+const payloadCases: Array<{ tool: string; provider?: string }> = [
+  { tool: "generate_kie_kling_3_0_video" },
+  { tool: "generate_kie_kling_3_0_motion_control" },
+  { tool: "generate_kie_kling_3_0_turbo_video" },
+  { tool: "generate_kie_grok_imagine_image_to_video" },
+  { tool: "generate_kie_grok_imagine_image_to_video", provider: "xai" },
+  { tool: "generate_kie_grok_imagine_text_to_video" },
+  { tool: "generate_kie_grok_imagine_image_to_image" },
+  { tool: "generate_kie_grok_imagine_image_to_image", provider: "xai" },
+  { tool: "generate_kie_seedance_2_0_video" },
+  { tool: "generate_kie_seedance_2_0_fast_video" },
+  { tool: "generate_kie_seedance_2_0_mini_video" },
+  { tool: "generate_kie_gemini_omni_video" },
+  { tool: "generate_google_flow_veo_3_1_quality_video" },
+  { tool: "generate_google_flow_veo_3_1_fast_video" },
+  { tool: "generate_google_flow_veo_3_1_lite_video" },
+  { tool: "generate_google_flow_veo_3_1_lite_low_priority_video" },
+  { tool: "generate_google_flow_omni_flash_video" },
+  { tool: "generate_google_flow_nano_banana_pro_image" },
+  { tool: "generate_kie_grok_imagine_text_to_image" },
+  { tool: "generate_kie_grok_imagine_text_to_image", provider: "xai" },
+  { tool: "generate_xai_grok_imagine_video" },
+  { tool: "generate_kie_nano_banana_pro_text_to_image" },
+  { tool: "generate_kie_seedream_v5_lite_text_to_image" },
+  { tool: "generate_kie_seedream_v5_lite_image_to_image" },
+  { tool: "generate_kie_qwen_2_0_edit_image" },
+  { tool: "generate_kie_gpt_image_2_image_to_image" },
+  { tool: "generate_kie_gpt_image_2_text_to_image" },
+  { tool: "generate_kie_wan_2_7_text_to_image" },
+  { tool: "generate_kie_wan_2_7_pro_text_to_image" },
+  { tool: "generate_kie_wan_2_7_text_to_video" },
+  { tool: "generate_kie_wan_2_7_image_to_video" },
+  { tool: "generate_kie_wan_2_7_edit_video" },
+  { tool: "extend_kie_grok_imagine_video" },
+  { tool: "generate_kie_volcengine_video_to_video_lip_sync" },
+  { tool: "generate_kie_omnihuman_1_5_video" },
+  { tool: "generate_kie_wan_2_7_reference_to_video" },
+  { tool: "extend_kie_wan_2_7_video" },
+  { tool: "generate_kie_happyhorse_1_1_text_to_video" },
+  { tool: "generate_kie_happyhorse_1_1_image_to_video" },
+  { tool: "generate_kie_happyhorse_1_1_reference_to_video" },
+  { tool: "generate_kie_happyhorse_1_1_edit_video" },
+  { tool: "generate_alibaba_wan_2_7_text_to_image" },
+  { tool: "generate_alibaba_wan_2_7_pro_text_to_image" },
+  { tool: "generate_alibaba_wan_2_7_video" },
+];
+
+const payloadCaseArgs: Record<string, unknown> = {
+  prompt: "plain prompt",
+  image_slugs: ["https://example.test/image.png"],
+  character_image_slugs: ["https://example.test/character.png"],
+  motion_video_slugs: ["https://example.test/motion.mp4"],
+  video_slugs: ["https://example.test/video.mp4"],
+  audio_slugs: ["https://example.test/audio.mp3"],
+  character_refs: [],
+  voice_refs: [],
+  first_frame_slug: "https://example.test/first.png",
+  last_frame_slug: "https://example.test/last.png",
+  first_clip_slug: "https://example.test/clip.mp4",
+  driving_audio_slug: "https://example.test/driving.mp3",
+  video_slug: "https://example.test/source.mp4",
+  image_slug: "https://example.test/source.png",
+  audio_slug: "https://example.test/source.mp3",
+  extend_at: 0,
+  extend_times: 1,
+};
+
+function argsForPayloadCase(
+  tool: string,
+  prompt: string,
+): Record<string, unknown> {
+  return {
+    ...payloadCaseArgs,
+    prompt,
+    ...(tool === "generate_kie_volcengine_video_to_video_lip_sync"
+      ? { mode: "lite" }
+      : {}),
+  };
+}
 
 describe("translateToolPayload", () => {
+  it("enforces the mention leak gate across every provider payload case", () => {
+    for (const entry of payloadCases) {
+      const clean = translateToolPayload(
+        entry.tool,
+        argsForPayloadCase(entry.tool, "plain prompt"),
+        entry.provider,
+      );
+      expect(clean, entry.tool).not.toBeNull();
+      if (!clean) continue;
+      expect(inspectProviderPayload(clean.payload).promptLeaks, entry.tool)
+        .toEqual([]);
+      if (!JSON.stringify(clean.payload).includes("plain prompt")) continue;
+      expect(() => translateToolPayload(
+        entry.tool,
+        argsForPayloadCase(entry.tool, "leaked @a2"),
+        entry.provider,
+      ), entry.tool).toThrow(ProviderMentionError);
+      expect(() => translateToolPayload(
+        entry.tool,
+        argsForPayloadCase(entry.tool, "leaked @img-local"),
+        entry.provider,
+      ), entry.tool).toThrow(ProviderMentionError);
+    }
+  });
+
   it("materializes Kling motion-control defaults when controls are Auto", () => {
     const result = translateToolPayload("generate_kie_kling_3_0_motion_control", {
       character_image_slugs: ["@img-character"],

@@ -3,6 +3,7 @@ import { registerJobHandler } from "../queue.js";
 import { buildGoogleOmniVideoPayload, type GoogleOmniVideoArgs } from "../payload-builders.js";
 import { createGoogleFlowProvider, submitGoogleFlowVideoTask, uploadAssetToGoogleFlow } from "./_google-flow.js";
 import type { RefInput } from "../tools/_seedance2-shared.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type GenerateGoogleOmniVideoPayload = {
   type: "generate_google_omni_video";
@@ -39,10 +40,19 @@ export function registerGenerateGoogleOmniVideoJob(fs: Engine): void {
     const referenceVideoId = p.videoInput
       ? await uploadAssetToGoogleFlow(provider, fs, p.videoInput.assetId, p.videoInput.filename, p.bookId)
       : undefined;
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_google_flow_omni_flash_video",
+      {
+        prompt: p.prompt,
+        image_slugs: p.imageInputs.map((input) => input.assetId),
+        first_frame_slug: p.firstFrame?.assetId,
+        video_slug: p.videoInput?.assetId,
+      },
+    ) ?? "";
 
     const request = buildGoogleOmniVideoPayload(
       {
-        prompt: p.prompt,
+        prompt: normalizedPrompt,
         ...(p.duration !== undefined ? { duration: p.duration } : {}),
         ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
         ...(p.seed !== undefined ? { seed: p.seed } : {}),

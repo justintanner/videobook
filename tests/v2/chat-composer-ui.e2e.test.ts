@@ -724,8 +724,22 @@ describe('chat composer browser flow', () => {
     )
     expect(await headingStyles(promptHeading)).toEqual(await headingStyles(inputsHeading))
 
+    const promptInput = inspector.getByLabel('Prompt', { exact: true })
+    await promptInput.fill('use @a')
+    const mentionMenu = page.locator('.bg-background').filter({
+      has: page.getByRole('button', { name: /@a1/ }),
+    })
+    await mentionMenu.waitFor({ state: 'visible' })
+    expect(await mentionMenu.getByRole('button').count()).toBeGreaterThan(0)
+    await promptInput.fill('use @z13')
+    const mentionWarning = inspector.locator('.inspector-prompt-mentions')
+    await mentionWarning.waitFor({ state: 'visible' })
+    await expect.poll(async () => await mentionWarning.textContent())
+      .toContain('@z13')
+    expect(await mentionWarning.textContent()).toContain('was not found')
+
     const prompt = 'Inspector prompt clipboard check'
-    await inspector.getByLabel('Prompt', { exact: true }).fill(prompt)
+    await promptInput.fill(prompt)
     await inspector.getByLabel('Copy prompt').click()
     await inspector.getByLabel('Prompt copied').waitFor({ state: 'visible' })
     expect(await page.evaluate(() =>

@@ -15,6 +15,7 @@ import {
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
+import { scanNotebookMentions } from "videobook-engine/notebook-mentions";
 
 const bookSchema = { book_id: z.string().uuid() };
 
@@ -649,7 +650,7 @@ async function parseChatEditClause(
     /\b(insert|add|place)\b/iu.test(normalized)
     && !/\bgap\b/iu.test(normalized)
   ) {
-    const reference = /@([\w-]+)/u.exec(normalized)?.[1];
+    const reference = scanNotebookMentions(normalized)[0]?.reference;
     const startFrame = integerMatch(
       normalized,
       /\b(?:at|from|starting\s+at)\s+(?:frame\s+)?(\d+)\b/iu,

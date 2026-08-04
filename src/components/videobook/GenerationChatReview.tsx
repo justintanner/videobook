@@ -179,10 +179,13 @@ export function GenerationChatReview({
   const estimateUnknown = estimateWarnings.some((warning) =>
     /not found|unavailable|no cost adapter|unknown/iu.test(warning))
   const previewJson = previewValue ?? {
-    tool: draft.action.tool,
-    provider: draft.action.provider,
-    model: draft.action.model,
-    payload: {
+    status: 'unresolved_draft',
+    message: 'The server preview has not resolved this draft yet.',
+    payload: null,
+    draft: {
+      tool: draft.action.tool,
+      provider: draft.action.provider,
+      model: draft.action.model,
       prompt: draft.cell.prompt,
       inputs: draft.cell.inputs ?? {},
     },

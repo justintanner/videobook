@@ -8,6 +8,10 @@ import {
 import type { ActionLogEntry, ModelOption } from "../image-models.js";
 import type { ToolDef } from "./tool-def.js";
 import { timelineSlotSlugs } from "../timeline-helpers.js";
+import {
+  scanNotebookMentions,
+  stripNotebookMentions,
+} from "videobook-engine/notebook-mentions";
 
 type PreviewImageModelOption = Pick<ModelOption, "key" | "image_slots">;
 
@@ -88,7 +92,10 @@ export function previewImageGenDef(fs: Engine): ToolDef {
 
       // 4. Build model options for all image models
       // Strip @asset tags from prompt to get the user's text input
-      const cleanPrompt = prompt.replace(/@\S+/g, "").trim();
+      const cleanPrompt = stripNotebookMentions(
+        prompt,
+        scanNotebookMentions(prompt).map((mention) => mention.reference),
+      ).trim();
       const baseParams: Record<string, unknown> = { prompt: cleanPrompt };
 
       const imageModels = getImageModels();

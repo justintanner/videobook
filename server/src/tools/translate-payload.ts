@@ -7,6 +7,7 @@
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { translateToolPayload } from "../payload-builders.js";
+import { applyPreviewPlaceholderUrls } from "../preview-payload.js";
 
 export function translatePayloadDef(): ToolDef {
   return {
@@ -42,8 +43,19 @@ export function translatePayloadDef(): ToolDef {
             content: [{ type: "text" as const, text: `Unknown tool: ${tool_name}` }],
           };
         }
+        const preview = applyPreviewPlaceholderUrls(result.payload);
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              ...result,
+              payload: preview.payload,
+              mentions: {
+                prompt_leaks: [],
+                url_placeholders: preview.placeholders,
+              },
+            }),
+          }],
         };
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);

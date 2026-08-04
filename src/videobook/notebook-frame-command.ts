@@ -2,6 +2,7 @@ import {
   firstEmptyNotebookGridSlot,
 } from 'videobook-engine/notebook-grid'
 import type { NotebookCell, NotebookDocument } from 'videobook-engine'
+import { NOTEBOOK_REFERENCE_SOURCE } from 'videobook-engine/notebook-mentions'
 import { nextNotebookCellSlug } from './notebook-download'
 import {
   notebookCellTag,
@@ -37,6 +38,11 @@ const videoSourceTypes = new Set<NotebookCell['type']>([
   'concat',
   'splice',
 ])
+
+const NOTEBOOK_FRAME_COMMAND_PATTERN = new RegExp(
+  `^(?:please\\s+)?(?:extracte?|capture|grab|get)\\s+(?:the\\s+)?(first|last)\\s+frame\\s+(?:of|from)\\s+@(${NOTEBOOK_REFERENCE_SOURCE})(?:\\s+please)?[.!]?$`,
+  'iu',
+)
 
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -83,9 +89,7 @@ function matchingAction(
 export function parseNotebookFrameCommand(
   input: string,
 ): NotebookFrameCommand | null {
-  const match = input.trim().match(
-    /^(?:please\s+)?(?:extracte?|capture|grab|get)\s+(?:the\s+)?(first|last)\s+frame\s+(?:of|from)\s+@([a-z](?:1[0-3]|[1-9])|[a-z0-9]+(?:-[a-z0-9]+)+)(?:\s+please)?[.!]?$/iu,
-  )
+  const match = input.trim().match(NOTEBOOK_FRAME_COMMAND_PATTERN)
   if (!match) return null
   return {
     frameMode: match[1]!.toLowerCase() as NotebookFrameMode,

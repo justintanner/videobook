@@ -1,5 +1,6 @@
 import { v7 as uuidv7 } from 'uuid'
 import { firstEmptyNotebookGridSlots } from 'videobook-engine/notebook-grid'
+import { NOTEBOOK_REFERENCE_SOURCE } from 'videobook-engine/notebook-mentions'
 import type {
   NotebookCell,
   NotebookDocument,
@@ -14,6 +15,11 @@ export type NotebookSplitCommand = {
   sourceReference: string
   splitAtSeconds: number
 }
+
+const NOTEBOOK_SPLIT_COMMAND_PATTERN = new RegExp(
+  `^(?:please\\s+)?(?:/split|split)\\s+@(${NOTEBOOK_REFERENCE_SOURCE})(?:\\s+([\\s\\S]+?))?(?:\\s+please)?[.!]?$`,
+  'iu',
+)
 
 export type NotebookSplitOutputRole = 'first' | 'remaining'
 
@@ -200,9 +206,7 @@ function cellCreateInput(cell: NotebookCell): Record<string, unknown> {
 export function parseNotebookSplitCommand(
   input: string,
 ): NotebookSplitCommand | null {
-  const match = input.trim().match(
-    /^(?:please\s+)?(?:\/split|split)\s+@([a-z](?:1[0-3]|[1-9])|[a-z0-9]+(?:-[a-z0-9]+)+)(?:\s+([\s\S]+?))?(?:\s+please)?[.!]?$/iu,
-  )
+  const match = input.trim().match(NOTEBOOK_SPLIT_COMMAND_PATTERN)
   if (!match) return null
   const splitAtSeconds = match[2]
     ? timestampSeconds(splitBoundaryPhrase(match[2]))

@@ -5,6 +5,11 @@ import {
   notebookGridAddress,
   notebookGridTag,
 } from 'videobook-engine/notebook-grid'
+import {
+  notebookMentionPrefixAtEnd,
+  normalizeNotebookReference,
+  replaceNotebookMentions,
+} from 'videobook-engine/notebook-mentions'
 import type { NotebookGridSlot } from 'videobook-engine'
 
 export interface AssetMentionRecord {
@@ -103,29 +108,50 @@ export function resolveNotebookMentionAliases(
   input: string,
   assets: readonly AssetMentionCandidate[],
 ): string {
-  const assetSlugsByCellSlug = new Map(
-    assets.flatMap((asset) => [
-      [asset.cellAddress.toLowerCase(), asset.assetSlug] as const,
-      [asset.cellSlug.toLowerCase(), asset.assetSlug] as const,
-    ]),
-  )
-  return input.replace(/@([\w-]+)/gu, (mention, value: string) => {
-    const assetSlug = assetSlugsByCellSlug.get(value.toLowerCase())
-    return assetSlug ? `@${assetSlug}` : mention
-  })
+  return replaceNotebookMentions(input, assets.flatMap((asset) => [
+    { reference: asset.cellAddress, replacement: `@${asset.assetSlug}` },
+    { reference: asset.cellSlug, replacement: `@${asset.assetSlug}` },
+  ]))
 }
 
 export function restoreNotebookMentionAliases(
   input: string,
   assets: readonly AssetMentionCandidate[],
 ): string {
-  const cellAddressesByAssetSlug = new Map(
-    assets.map((asset) => [asset.assetSlug.toLowerCase(), asset.cellAddress]),
+  return replaceNotebookMentions(input, assets.map((asset) => ({
+    reference: asset.assetSlug,
+    replacement: `@${asset.cellAddress}`,
+  })))
+}
+
+export function restoreSelectedNotebookMentionAliases(
+  input: string,
+  assets: readonly AssetMentionCandidate[],
+  cells: readonly NotebookMentionCell[],
+): string {
+  const cellsByArtifactId = new Map(
+    cells.flatMap((cell) => cell.outputArtifactId
+      ? [[cell.outputArtifactId, cell] as const]
+      : []),
   )
-  return input.replace(/@([\w-]+)/gu, (mention, value: string) => {
-    const cellAddress = cellAddressesByAssetSlug.get(value.toLowerCase())
-    return cellAddress ? `@${cellAddress}` : mention
-  })
+  return replaceNotebookMentions(input, assets.flatMap((asset) => {
+    const cell = cellsByArtifactId.get(asset.artifactId)
+    if (!cell) return []
+    return [{
+      reference: asset.assetSlug,
+      replacement: `@${cell.slot ? notebookGridAddress(cell.slot) : cell.slug}`,
+    }]
+  }))
+}
+
+export function applyNotebookMentionSuggestion(
+  input: string,
+  suggestion: string,
+): string {
+  const prefix = notebookMentionPrefixAtEnd(input)
+  if (prefix === undefined) return input
+  const start = input.length - prefix.length - 1
+  return `${input.slice(0, start)}@${normalizeNotebookReference(suggestion)}`
 }
 
 export function notebookCellRenamePlan(
@@ -140,7 +166,7 @@ export function notebookCellRenamePlan(
   const oldAssetId = value.old_asset_id
   const newAssetId = value.new_asset_id
   if (typeof oldAssetId !== 'string' || typeof newAssetId !== 'string') return null
-  const requested = assetId.trim().replace(/^@/u, '').toLowerCase()
+  const requested = normalizeNotebookReference(assetId)
   const candidate = assets.find((asset) =>
     (asset.cellAddress.toLowerCase() === requested
       || asset.cellSlug.toLowerCase() === requested)
@@ -182,10 +208,9 @@ export function assetMentionSuggestions(
   assets: readonly AssetMentionCandidate[],
   input: string,
 ): AssetMentionSuggestion[] {
-  const match = input.match(/@([\w-]*)$/)
-  if (!match) return []
-  const filter = match[1].toLowerCase()
-  const context = input.slice(0, match.index ?? input.length).trim()
+  const filter = notebookMentionPrefixAtEnd(input)
+  if (filter === undefined) return []
+  const context = input.slice(0, input.lastIndexOf('@')).trim()
   const requiredType = /\b(?:generate|create|make)\s+(?:an?\s+)?(?:image|photo|picture)s?(?:\s+(?:of|from|using|with))?$/iu.test(context)
     ? 'image'
     : null
@@ -207,9 +232,8 @@ export function notebookAddressSuggestions(
   cells: readonly NotebookAddressCell[],
   input: string,
 ): NotebookAddressSuggestion[] {
-  const match = input.match(/@([a-z0-9]*)$/iu)
-  if (!match) return []
-  const filter = match[1]!.toLowerCase()
+  const filter = notebookMentionPrefixAtEnd(input)
+  if (filter === undefined) return []
   const occupied = new Map(
     cells.map((cell) => [`${cell.slot.row}:${cell.slot.column}`, cell]),
   )

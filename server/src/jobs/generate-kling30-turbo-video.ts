@@ -12,6 +12,7 @@ import type {
   KlingV3TurboTextToVideoDuration,
   KlingV3TurboTextToVideoRequest,
 } from "@apicity/kie";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -55,10 +56,17 @@ export function registerGenerateKling30TurboVideoJob(fs: Engine): void {
     requireApiKey("KIE_API_KEY");
 
     const imageUrls = await uploadAll(fs, imageInputs, bookId);
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_kie_kling_3_0_turbo_video",
+      {
+        prompt,
+        image_slugs: imageInputs.map((input) => input.assetId),
+      },
+    ) ?? "";
 
     const request = buildKlingV3TurboVideoPayload(
       {
-        prompt,
+        prompt: normalizedPrompt,
         ...(duration !== undefined ? { duration } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),

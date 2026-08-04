@@ -3,6 +3,7 @@ import type { XaiProvider } from "@apicity/xai";
 import { mintOtp } from "@apicity/cost";
 import type { PayGateApproval } from "@apicity/cost";
 import { ensurePaygateSecret } from "./kie-paygate.js";
+import { assertProviderPayload } from "../provider-prompt-transform.js";
 
 export const XAI_IMAGE_GENERATIONS_DOT_PATH = "v1.images.generations";
 export const XAI_IMAGE_EDITS_DOT_PATH = "v1.images.edits";
@@ -38,5 +39,6 @@ export async function callXaiPaid<TReq extends object, TRes>(
   dotPath: XaiPaidDotPath,
   request: TReq,
 ): Promise<TRes> {
+  assertProviderPayload(request, { toolName: dotPath, wire: true });
   return method(request, { otp: mintXaiOtp(dotPath, request) });
 }

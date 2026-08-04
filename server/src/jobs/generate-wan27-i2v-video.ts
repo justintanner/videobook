@@ -5,6 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildWan27FramesVideoPayload } from "../payload-builders.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -53,9 +54,19 @@ export function registerGenerateWan27I2vVideoJob(fs: Engine): void {
     const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame, bookId) : undefined;
     const firstClipUrl = firstClip ? await uploadInput(fs, firstClip, bookId) : undefined;
     const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, bookId) : undefined;
+    const normalizedPrompt = transformProviderPrompt(
+      "generate_kie_wan_2_7_image_to_video",
+      {
+        prompt,
+        first_frame_slug: firstFrame?.assetId,
+        last_frame_slug: lastFrame?.assetId,
+        first_clip_slug: firstClip?.assetId,
+        driving_audio_slug: drivingAudio?.assetId,
+      },
+    ) ?? "";
 
     const request = buildWan27FramesVideoPayload(
-      { prompt, negative_prompt, resolution, duration, prompt_extend, watermark, nsfw_checker, seed },
+      { prompt: normalizedPrompt, negative_prompt, resolution, duration, prompt_extend, watermark, nsfw_checker, seed },
       { firstFrameUrl, lastFrameUrl, firstClipUrl, drivingAudioUrl },
     );
     const taskId = await submitKieTask(fs, ctx, {
