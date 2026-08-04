@@ -19,7 +19,7 @@ type MediaCellType = "audio" | "image" | "video";
 
 export interface LibraryAsset extends SyncAsset {
   owning_book_id: string;
-  owning_book_slug: string;
+  owning_book_name: string;
   search_match?: {
     score: number;
     location: SearchHit["location"];
@@ -45,7 +45,6 @@ export interface CopiedLibraryAsset {
   sourceArtifactId: string;
   targetBookId: string;
   targetArtifactId: string;
-  targetArtifactSlug: string;
 }
 
 export interface AttachedLibraryAsset extends CopiedLibraryAsset {
@@ -212,11 +211,11 @@ function searchRank(
   query: string,
 ): number {
   if (!query) return 3;
-  const slug = asset.id.toLowerCase();
-  const book = asset.owning_book_slug.toLowerCase();
+  const label = asset.label?.toLowerCase() ?? "";
+  const book = asset.owning_book_name.toLowerCase();
   const prompt = asset.prompt?.toLowerCase() ?? "";
-  if (slug === query || book === query) return 0;
-  if (slug.startsWith(query) || book.startsWith(query)) return 1;
+  if ((label && label === query) || book === query) return 0;
+  if ((label && label.startsWith(query)) || book.startsWith(query)) return 1;
   return prompt.startsWith(query) ? 2 : 3;
 }
 
@@ -224,7 +223,8 @@ function matchesQuery(asset: LibraryAsset, query: string): boolean {
   if (!query) return true;
   return [
     asset.id,
-    asset.owning_book_slug,
+    asset.label ?? "",
+    asset.owning_book_name,
     asset.prompt ?? "",
   ].some((value) => value.toLowerCase().includes(query));
 }
@@ -269,7 +269,7 @@ export async function searchLibraryAssets(
         .map((asset): LibraryAsset => ({
           ...asset,
           owning_book_id: summary.bookId,
-          owning_book_slug: summary.slug,
+          owning_book_name: summary.name,
         }));
       let hits: SearchHit[] = [];
       let searchError: string | undefined;
@@ -420,8 +420,8 @@ export async function resolveBookReference(
   await books.ready();
   const byId = books.get(reference);
   if (byId.ok) return byId.value;
-  const bySlug = books.getBySlug(reference);
-  if (bySlug.ok) return bySlug.value;
+  const byName = books.getByName(reference);
+  if (byName.ok) return byName.value;
   throw new Error(`Book not found: ${reference}`);
 }
 
@@ -562,9 +562,10 @@ export async function copyLibraryAsset(
   const targetKind: ArtifactKind = sourceArtifact.kind === "final"
     ? "video"
     : sourceArtifact.kind;
+  const label = input.newName ?? sourceArtifact.label;
   const created = await targetBook.engine.artifacts.create({
     kind: targetKind,
-    name: input.newName ?? sourceArtifact.slug,
+    ...(label ? { label } : {}),
   });
   if (!created.ok) throw new Error(created.error.message);
   const targetArtifact = created.value;
@@ -607,7 +608,6 @@ export async function copyLibraryAsset(
       sourceArtifactId: sourceArtifact.artifactId,
       targetBookId: targetBook.bookId,
       targetArtifactId: targetArtifact.artifactId,
-      targetArtifactSlug: targetArtifact.slug,
     };
   } catch (cause) {
     if (lease) {

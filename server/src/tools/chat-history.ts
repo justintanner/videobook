@@ -10,7 +10,7 @@ export function pushChatHistoryDef(fs: Engine): ToolDef {
       message: z.string().describe("The chat message to store"),
       book_id: z
         .string()
-        .describe("Project slug"),
+        .describe("Book id"),
     },
     handler: async (args) => {
       const { message } = args as {
@@ -40,7 +40,7 @@ export function listChatHistoryDef(fs: Engine): ToolDef {
     schema: {
       book_id: z
         .string()
-        .describe("Project slug"),
+        .describe("Book id"),
       limit: z
         .number()
         .optional()

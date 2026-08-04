@@ -57,8 +57,8 @@ export function registerGenerateKling30MotionControlVideoJob(fs: Engine): void {
       ? undefined
       : transformProviderPrompt("generate_kie_kling_3_0_motion_control", {
         prompt,
-        character_image_slugs: imageInputs.map((input) => input.assetId),
-        motion_video_slugs: videoInputs.map((input) => input.assetId),
+        character_image_refs: imageInputs.map((input) => input.assetId),
+        motion_video_refs: videoInputs.map((input) => input.assetId),
       });
 
     const request: MediaGenerationRequest = buildKling30MotionControlPayload(

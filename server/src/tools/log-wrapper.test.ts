@@ -19,7 +19,7 @@ describe("MCP tool logging", () => {
     root = await mkdtemp(join(tmpdir(), "videobook-self-recorded-tool-"));
     const engine = createEngine({
       rootDir: root,
-      initialBookSlug: "self-recorded-tool",
+      initialBookName: "self-recorded-tool",
     });
     const wrapped = withLogging({
       name: "self_recorded_tool",
@@ -46,7 +46,7 @@ describe("MCP tool logging", () => {
     root = await mkdtemp(join(tmpdir(), "videobook-log-error-"));
     const engine = createEngine({
       rootDir: root,
-      initialBookSlug: "log-error",
+      initialBookName: "log-error",
     });
     const lines: string[] = [];
     const original = console.log;

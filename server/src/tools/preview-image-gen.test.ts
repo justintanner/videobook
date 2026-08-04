@@ -8,6 +8,9 @@ import { selectPreviewImageModel } from "./preview-image-gen.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
+/** A well-formed artifact id that is never created in these fixtures. */
+const MISSING_ARTIFACT_ID = "01890f1c-0000-7000-8000-0000000000aa";
+
 describe("preview_image tool", () => {
   let client: Client;
   let tempDir: string;
@@ -28,14 +31,20 @@ describe("preview_image tool", () => {
 
   it("resolves real @tags and returns preview with resolved assets", async () => {
     const data = Buffer.from("fake-png-data").toString("base64");
-    await client.callTool({
+    const upload = await client.callTool({
       name: "upload_file",
       arguments: { book_id: "test-proj", filename: "sunset.png", data },
     });
+    const uploaded = JSON.parse((upload.content as TextContent)[0].text) as {
+      artifactId: string;
+    };
 
     const result = await client.callTool({
       name: "prepare_image_generation",
-      arguments: { prompt: "edit @img-sunset to be colorful", book_id: "test-proj" },
+      arguments: {
+        prompt: `edit @${uploaded.artifactId} to be colorful`,
+        book_id: "test-proj",
+      },
     });
 
     expect(result.isError).toBeFalsy();
@@ -50,7 +59,7 @@ describe("preview_image tool", () => {
 
     // The resolved asset should appear
     expect(parsed.resolved_assets.length).toBeGreaterThanOrEqual(1);
-    expect(parsed.resolved_assets[0].slug).toBe("@img-sunset");
+    expect(parsed.resolved_assets[0].ref).toBe(`@${uploaded.artifactId}`);
     expect(parsed.resolved_assets[0].type).toBe("image");
   });
 
@@ -74,7 +83,10 @@ describe("preview_image tool", () => {
   it("includes unresolved @tag warnings in the preview", async () => {
     const result = await client.callTool({
       name: "prepare_image_generation",
-      arguments: { prompt: "transform @img-nonexistent", book_id: "test-proj" },
+      arguments: {
+        prompt: `transform @${MISSING_ARTIFACT_ID}`,
+        book_id: "test-proj",
+      },
     });
 
     expect(result.isError).toBeFalsy();

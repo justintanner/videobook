@@ -54,7 +54,8 @@ describe("upload_file tool", () => {
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const parsed = JSON.parse(content[0].text);
-    expect(parsed.assetId).toMatch(/^img-/);
+    const artifact = fs.artifacts.get(parsed.assetId);
+    expect(artifact.ok && artifact.value.kind).toBe("image");
     expect(parsed.filename).toBe("original.png");
 
     const written = await fs.files.read(parsed.assetId, "original.png");
@@ -94,7 +95,8 @@ describe("upload_file tool", () => {
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const parsed = JSON.parse(content[0].text);
-    expect(parsed.assetId).toMatch(/^script-/);
+    const artifact = fs.artifacts.get(parsed.assetId);
+    expect(artifact.ok && artifact.value.kind).toBe("script");
   });
 
   it("rejects unsupported extension", async () => {

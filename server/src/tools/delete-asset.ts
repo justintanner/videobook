@@ -62,7 +62,7 @@ export function deleteAssetDef(engine: Engine): ToolDef {
           text: JSON.stringify({
             status: "deleted",
             artifact_id: artifact.value.artifactId,
-            slug: artifact.value.slug,
+            ...(artifact.value.label ? { label: artifact.value.label } : {}),
             deleted_at: new Date().toISOString(),
             timeline,
           }),

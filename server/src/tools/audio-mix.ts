@@ -31,20 +31,13 @@ function normalizeAssetId(assetId: string): string {
   return assetId.replace(/^@/, "");
 }
 
-function assetKind(assetId: string): AudioMixAssetKind | null {
-  if (assetId.startsWith("vid-")) return "video";
-  if (assetId.startsWith("aud-")) return "audio";
-  return null;
-}
-
 function findMediaFile(
   files: ArtifactManifestFile[],
-  assetId: string,
   kind: AudioMixAssetKind,
 ): ArtifactManifestFile | null {
   return kind === "video"
     ? findVideoFile(files)
-    : findAudioFile(files, assetId);
+    : findAudioFile(files, kind);
 }
 
 export async function resolveAudioMixAsset(
@@ -53,17 +46,19 @@ export async function resolveAudioMixAsset(
   _bookId: string,
 ): Promise<ResolvedAudioMixAsset> {
   const assetId = normalizeAssetId(assetIdInput);
-  const kind = assetKind(assetId);
-  if (!kind) {
-    throw new Error(`Audio mix assets must start with vid-* or aud-*, got: ${assetId}`);
+  const artifact = fs.artifacts.get(assetId);
+  if (!artifact.ok) throw new Error(artifact.error.message);
+  if (artifact.value.kind !== "video" && artifact.value.kind !== "audio") {
+    throw new Error(`Audio mix artifacts must be video or audio, got ${artifact.value.kind} artifact ${assetId}`);
   }
+  const kind: AudioMixAssetKind = artifact.value.kind;
 
   const manifestResult = await fs.files.manifest(assetId);
   if (!manifestResult.ok) throw new Error(manifestResult.error.message);
 
-  const file = findMediaFile(manifestResult.value.files, assetId, kind);
+  const file = findMediaFile(manifestResult.value.files, kind);
   if (!file) {
-    throw new Error(`No ${kind} file found in asset ${assetId}`);
+    throw new Error(`No ${kind} file found in artifact ${assetId}`);
   }
 
   return {
@@ -79,14 +74,14 @@ export function audioMixDef(fs: Engine): ToolDef {
   return {
     name: "audio_mix",
     description:
-      "Mix audio from a vid-* or aud-* layer asset into a vid-* or aud-* target asset in-place. "
+      "Mix audio from a video or audio layer asset into a video or audio target asset in-place. "
       + "The layer starts at 0 seconds at the requested 0-100 volume. The target duration is preserved, "
       + "and video targets retain their original video stream with git versioning.",
     schema: {
-      target_asset_id: z.string().describe("Asset to edit in-place (vid-* or aud-*)"),
-      layer_asset_id: z.string().describe("Asset whose audio is layered onto the target (vid-* or aud-*)"),
+      target_asset_id: z.string().describe("Artifact id to edit in-place (video or audio)"),
+      layer_asset_id: z.string().describe("Artifact whose audio is layered onto the target (video or audio artifact id)"),
       volume: z.number().min(0).max(100).describe("Layer volume percentage from 0 to 100"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book UUID"),
     },
     handler: async (args) => {
       const { target_asset_id, layer_asset_id, volume, book_id } = args as {

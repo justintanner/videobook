@@ -1,35 +1,33 @@
-/** Short character names derived from image/char asset slugs (Google Flow display_name). */
+/** Short character names derived from source image labels (Google Flow display_name). */
 
 const MIN_STEM_LEN = 3;
 
 /** Strip @ and normalize to bare asset id. */
-export function bareAssetId(slug: string): string {
-  return slug.startsWith("@") ? slug.slice(1) : slug;
+export function bareAssetId(reference: string): string {
+  return reference.startsWith("@") ? reference.slice(1) : reference;
 }
 
 /**
- * Stem suitable for a short character name.
- * img-french-head → french-head
- * char-img-french-head → french-head
- * char-french-head → french-head
- * img-n → "" (degenerate)
+ * Stem suitable for a short character name. Artifact ids are opaque UUIDs, so
+ * the stem comes from the source artifact's free-text label.
+ * "french-head" → french-head
+ * "French Head" → French Head
+ * "n" → "" (degenerate)
+ * "" (unlabelled artifact) → ""
  */
-export function characterNameStem(slugOrId: string): string {
-  let s = bareAssetId(slugOrId).trim();
-  if (s.startsWith("char-")) s = s.slice("char-".length);
-  if (s.startsWith("img-")) s = s.slice("img-".length);
-  s = s.trim();
-  return s.length >= MIN_STEM_LEN ? s : "";
+export function characterNameStem(label: string): string {
+  const stem = label.trim();
+  return stem.length >= MIN_STEM_LEN ? stem : "";
 }
 
 /** Asset create name + display_name: stem or fallback. */
 export function resolveCharacterCreateName(
   explicitNameParts: string[],
-  imageSources: string[],
+  imageLabels: string[],
 ): string {
   if (explicitNameParts.length > 0) {
     return explicitNameParts.join("-");
   }
-  const fromImage = imageSources[0] ? characterNameStem(imageSources[0]) : "";
+  const fromImage = imageLabels[0] ? characterNameStem(imageLabels[0]) : "";
   return fromImage || "character";
 }

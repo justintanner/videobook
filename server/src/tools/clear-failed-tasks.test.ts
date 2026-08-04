@@ -11,7 +11,7 @@ import type { Engine } from "videobook-engine";
 async function createImageAsset(fs: Engine, bookId: string, name: string): Promise<string> {
   const result = await fs.artifacts.create("img", name);
   if (!result.ok) throw new Error(`createAsset failed: ${result.error.message}`);
-  return result.value.slug;
+  return result.value.artifactId;
 }
 
 async function writeSyntheticPendingTask(
@@ -100,7 +100,7 @@ describe("clear_failed_tasks tool", () => {
     // it has real media, so /clear-failed must not destroy it.
     const created = await fs.artifacts.create("vid", "real clip");
     if (!created.ok) throw new Error(created.error.message);
-    const videoAsset = created.value.slug;
+    const videoAsset = created.value.artifactId;
     const written = await fs.files.write(videoAsset, "original.mp4", Buffer.from("fake-video"));
     if (!written.ok) throw new Error(written.error.message);
     const errWritten = await fs.jobs.failures.write(videoAsset, {

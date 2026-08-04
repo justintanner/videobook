@@ -5,17 +5,18 @@ import type { ToolDef } from "./tool-def.js";
 export function renameAssetDef(fs: Engine): ToolDef {
   return {
     name: "rename_asset",
-    description: "Rename an asset with a new name",
+    description:
+      "Set an asset's display label. Labels are display-only — the artifact id and all references stay unchanged.",
     schema: {
-      asset_id: z.string().describe("Asset ID to rename (e.g. img-cute-cat)"),
-      new_name: z.string().describe("New name for slug generation (e.g. sunset beach)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Artifact id of the asset to relabel"),
+      new_name: z.string().describe("New display label (free text, e.g. sunset beach)"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, new_name } = args as { asset_id: string; new_name: string };
       const result = await fs.artifacts.rename({
         artifact: asset_id,
-        name: new_name,
+        label: new_name,
       });
       if (!result.ok) {
         return {
@@ -28,8 +29,8 @@ export function renameAssetDef(fs: Engine): ToolDef {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
-            old_asset_id: asset_id,
-            new_asset_id: result.value.slug,
+            artifact_id: result.value.artifactId,
+            label: result.value.label ?? new_name,
           }),
         }],
       };

@@ -15,7 +15,7 @@ export function detectScenesDef(fs: Engine): ToolDef {
       ".detect-scenes.json and is useful as a standalone read-only diagnostic.",
     schema: {
       source_asset_id: z.string().describe("Video asset id (vid-*) inside the project"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args): Promise<ToolResult> => {
       const { source_asset_id, book_id } = args as {

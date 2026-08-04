@@ -12,6 +12,7 @@ import type {
   NotebookRun,
 } from "videobook-engine";
 import { MVP_CONTRACT_VERSION } from "videobook-engine";
+import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { mutateNotebook } from "../notebook-mutations.js";
 import {
   ensureExtractFrameImageOutput,
@@ -320,8 +321,8 @@ async function executeSpliceCell(
     ? smoothSceneConcatDef(engine)
     : spliceVideoDef(engine);
   const response = await definition.handler({
-    first_asset_id: firstArtifact.value.slug,
-    second_asset_id: secondArtifact.value.slug,
+    first_asset_id: firstArtifact.value.artifactId,
+    second_asset_id: secondArtifact.value.artifactId,
     book_id: bookId,
     ...(smooth
       ? (transition === undefined ? {} : { transition_seconds: transition })
@@ -460,7 +461,7 @@ export function notebookCellFingerprint(
 ): string {
   const payload = {
     type: cell.type,
-    slug: cell.slug,
+    id: cell.id,
     prompt: cell.prompt ?? "",
     provider: cell.provider ?? "",
     model: cell.model ?? "",
@@ -498,7 +499,7 @@ export function notebookCellDefinitionFingerprint(
 ): string {
   const payload = {
     type: cell.type,
-    slug: cell.slug,
+    id: cell.id,
     prompt: cell.prompt ?? "",
     provider: cell.provider ?? "",
     model: cell.model ?? "",
@@ -509,7 +510,6 @@ export function notebookCellDefinitionFingerprint(
       targetInput,
       sourceId: source.id,
       sourceType: source.type,
-      slug: source.slug,
       prompt: source.prompt ?? "",
       provider: source.provider ?? "",
       model: source.model ?? "",
@@ -740,12 +740,6 @@ function promptFor(document: NotebookDocument, cell: NotebookCell): string {
     .trim();
 }
 
-function artifactSlugRef(engine: Engine, artifactId: string): string {
-  const artifact = engine.artifacts.get(artifactId);
-  if (artifact.ok && artifact.value.slug) return `@${artifact.value.slug}`;
-  return `@${artifactId}`;
-}
-
 function isImageLikeCell(source: NotebookCell): boolean {
   return notebookCellMediaType(source) === "image";
 }
@@ -764,8 +758,7 @@ export function modelArgsWithMentions(
     ? settings as Record<string, unknown>
     : {};
   const upstream = upstreamValues(document, cell);
-  const refFor = (artifactId: string): string =>
-    engine ? artifactSlugRef(engine, artifactId) : `@${artifactId}`;
+  const refFor = (artifactId: string): string => `@${artifactId}`;
   const connectedArtifactIds = new Set(
     upstream
       .filter(({ cell: source, output }) =>
@@ -810,14 +803,14 @@ export function modelArgsWithMentions(
     entry.targetInput === "last_frame"
     && typeof entry.output === "string"
     && isImageLikeCell(entry.cell));
-  if (firstFrame?.output && "first_frame_slug" in definition.schema) {
-    args.first_frame_slug = refFor(firstFrame.output);
+  if (firstFrame?.output && "first_frame_ref" in definition.schema) {
+    args.first_frame_ref = refFor(firstFrame.output);
   }
-  if (lastFrame?.output && "last_frame_slug" in definition.schema) {
-    args.last_frame_slug = refFor(lastFrame.output);
+  if (lastFrame?.output && "last_frame_ref" in definition.schema) {
+    args.last_frame_ref = refFor(lastFrame.output);
   }
-  if (lastFrame?.output && "end_frame_slug" in definition.schema) {
-    args.end_frame_slug = refFor(lastFrame.output);
+  if (lastFrame?.output && "end_frame_ref" in definition.schema) {
+    args.end_frame_ref = refFor(lastFrame.output);
   }
 
   const imageReferences = upstream
@@ -827,37 +820,37 @@ export function modelArgsWithMentions(
       && targetInput !== "first_frame"
       && targetInput !== "last_frame")
     .map(({ output }) => refFor(output!));
-  if ("image_slugs" in definition.schema && imageReferences.length > 0) {
-    args.image_slugs = imageReferences;
+  if ("image_refs" in definition.schema && imageReferences.length > 0) {
+    args.image_refs = imageReferences;
   }
   if (
-    "character_image_slugs" in definition.schema
+    "character_image_refs" in definition.schema
     && imageReferences.length > 0
   ) {
-    args.character_image_slugs = imageReferences;
+    args.character_image_refs = imageReferences;
   }
-  if ("image_slug" in definition.schema && imageReferences[0]) {
-    args.image_slug = imageReferences[0];
+  if ("image_ref" in definition.schema && imageReferences[0]) {
+    args.image_ref = imageReferences[0];
   }
   const videoReferences = upstream
     .filter(({ cell: source, output }) =>
       typeof output === "string"
       && notebookCellMediaType(source) === "video")
     .map(({ output }) => refFor(output!));
-  if ("video_slugs" in definition.schema && videoReferences.length > 0) {
-    args.video_slugs = videoReferences;
+  if ("video_refs" in definition.schema && videoReferences.length > 0) {
+    args.video_refs = videoReferences;
   }
   if (
-    "motion_video_slugs" in definition.schema
+    "motion_video_refs" in definition.schema
     && videoReferences.length > 0
   ) {
-    args.motion_video_slugs = videoReferences;
+    args.motion_video_refs = videoReferences;
   }
-  if ("video_slug" in definition.schema && videoReferences[0]) {
-    args.video_slug = videoReferences[0];
+  if ("video_ref" in definition.schema && videoReferences[0]) {
+    args.video_ref = videoReferences[0];
   }
-  if ("first_clip_slug" in definition.schema && videoReferences[0]) {
-    args.first_clip_slug = videoReferences[0];
+  if ("first_clip_ref" in definition.schema && videoReferences[0]) {
+    args.first_clip_ref = videoReferences[0];
   }
   const replacementAudio = upstream.find((entry) =>
     entry.targetInput === "replace_audio" && typeof entry.output === "string");
@@ -874,18 +867,18 @@ export function modelArgsWithMentions(
       && targetInput !== "replace_audio")
     .map(({ output }) => refFor(output!));
   if (
-    "audio_slugs" in definition.schema
+    "audio_refs" in definition.schema
     && audioReferences.length > 0
     && !firstFrame?.output
     && !lastFrame?.output
   ) {
-    args.audio_slugs = audioReferences;
+    args.audio_refs = audioReferences;
   }
-  if ("audio_slug" in definition.schema && audioReferences[0]) {
-    args.audio_slug = audioReferences[0];
+  if ("audio_ref" in definition.schema && audioReferences[0]) {
+    args.audio_ref = audioReferences[0];
   }
-  if ("driving_audio_slug" in definition.schema && audioReferences[0]) {
-    args.driving_audio_slug = audioReferences[0];
+  if ("driving_audio_ref" in definition.schema && audioReferences[0]) {
+    args.driving_audio_ref = audioReferences[0];
   }
   return { input: args, mentions };
 }
@@ -957,14 +950,14 @@ export async function prepareNotebookGeneration(
   if (!definition) throw new Error(`Unknown notebook generation model: ${tool}`);
   if (
     cell.type === "generate_image"
-    && !("image_slugs" in definition.schema)
-    && !("image_slug" in definition.schema)
+    && !("image_refs" in definition.schema)
+    && !("image_ref" in definition.schema)
   ) {
     const connectedImages = upstreamValues(document, cell).filter((entry) =>
       typeof entry.output === "string" && isImageLikeCell(entry.cell)).length;
     if (connectedImages > 0) {
       throw new Error(
-        `@${cell.slug} has ${connectedImages} image input(s) connected, but ${tool} `
+        `${notebookGridTag(cell.slot)} has ${connectedImages} image input(s) connected, but ${tool} `
         + "accepts no image and would ignore them — switch OPERATION to "
         + "image_to_image or edit_image, or disconnect the image input",
       );
@@ -981,7 +974,7 @@ export async function prepareNotebookGeneration(
     generationMode,
   )) {
     throw new Error(
-      `${tool}${generationMode ? ` mode ${generationMode}` : ""} does not accept the current media inputs for @${cell.slug}`,
+      `${tool}${generationMode ? ` mode ${generationMode}` : ""} does not accept the current media inputs for ${notebookGridTag(cell.slot)}`,
     );
   }
   const preparedArgs = modelArgsWithMentions(
@@ -997,7 +990,7 @@ export async function prepareNotebookGeneration(
   ];
   if (!options.allowReferenceIssues && referenceIssues.length > 0) {
     throw new Error(
-      `Cannot prepare @${cell.slug}: ${referenceIssues
+      `Cannot prepare ${notebookGridTag(cell.slot)}: ${referenceIssues
         .map((reference) => reference.message)
         .join("; ")}`,
     );
@@ -1007,16 +1000,16 @@ export async function prepareNotebookGeneration(
     throw new Error(parsed.error.issues.map((issue) => issue.message).join("; "));
   }
   if (tool === "generate_kie_kling_3_0_motion_control") {
-    const motionSlugs = parsed.data.motion_video_slugs;
-    const motionSlug = Array.isArray(motionSlugs)
-      ? motionSlugs.find((value): value is string => typeof value === "string")
+    const motionRefs = parsed.data.motion_video_refs;
+    const motionRef = Array.isArray(motionRefs)
+      ? motionRefs.find((value): value is string => typeof value === "string")
       : undefined;
-    if (!motionSlug) {
+    if (!motionRef) {
       throw new Error("Kling 3.0 Motion Control requires one motion video");
     }
     await assertKlingMotionControlDuration(
       engine,
-      motionSlug,
+      motionRef,
       parsed.data.character_orientation === "image" ? "image" : "video",
     );
   }
@@ -1097,7 +1090,7 @@ async function rewritePromptCell(
   }
   const artifact = await engine.artifacts.create({
     kind: "script",
-    name: `script ${cell.slug} resolved prompt`,
+    label: `script ${notebookGridTag(cell.slot)} resolved prompt`,
   });
   if (!artifact.ok) throw new Error(artifact.error.message);
   const written = await engine.files.write(
@@ -1132,9 +1125,9 @@ async function failedArtifact(
   const kind = notebookCellMediaType(cell) ?? "script";
   const result = await engine.artifacts.create({
     kind,
-    name: kind === "script"
-      ? `script ${cell.slug} failed`
-      : `${cell.slug} failed`,
+    label: kind === "script"
+      ? `script ${notebookGridTag(cell.slot)} failed`
+      : `${notebookGridTag(cell.slot)} failed`,
   });
   if (!result.ok) throw new Error(result.error.message);
   const written = await engine.files.write(
@@ -1384,7 +1377,7 @@ async function assembleCanonicalSequence(
   const sequenceRevision = engine.head;
   const script = await engine.artifacts.create({
     kind: "script",
-    name: `${cell.slug} assembly`,
+    label: `${notebookGridTag(cell.slot)} assembly`,
   });
   if (!script.ok) throw new Error(script.error.message);
   const written = await engine.files.write(
@@ -1455,7 +1448,7 @@ async function executeLocalOrGeneration(
         engine,
         sourceId,
         { startSeconds: 0, endSeconds: splitAtSeconds },
-        `${cell.slug} first`,
+        `${notebookGridTag(cell.slot)} first`,
       ),
       splitSourceRange(
         engine,
@@ -1464,17 +1457,17 @@ async function executeLocalOrGeneration(
           startSeconds: splitAtSeconds,
           endSeconds: sourceDurationSeconds,
         },
-        `${cell.slug} remaining`,
+        `${notebookGridTag(cell.slot)} remaining`,
       ),
     ]);
     const [firstFrame, lastFrame] = await Promise.all([
       captureFrame(engine, first.artifactId, {
         role: "first",
-        title: `${cell.slug} · first frame`,
+        title: `${notebookGridTag(cell.slot)} · first frame`,
       }),
       captureFrame(engine, remaining.artifactId, {
         role: "last",
-        title: `${cell.slug} · last frame`,
+        title: `${notebookGridTag(cell.slot)} · last frame`,
       }),
     ]);
     const withFirstOutput = withMediaOutput(
@@ -1514,15 +1507,15 @@ async function executeLocalOrGeneration(
       engine,
       sourceId,
       { startSeconds, endSeconds },
-      cell.slug,
+      notebookGridTag(cell.slot),
     );
     const firstFrame = await captureFrame(engine, result.artifactId, {
       role: "first",
-      title: `${cell.slug} · first frame`,
+      title: `${notebookGridTag(cell.slot)} · first frame`,
     });
     const lastFrame = await captureFrame(engine, result.artifactId, {
       role: "last",
-      title: `${cell.slug} · last frame`,
+      title: `${notebookGridTag(cell.slot)} · last frame`,
     });
     return {
       artifactId: result.artifactId,
@@ -1558,7 +1551,7 @@ async function executeLocalOrGeneration(
       cell,
       "audio",
     );
-    const result = await extractSourceAudio(engine, sourceId, cell.slug);
+    const result = await extractSourceAudio(engine, sourceId, notebookGridTag(cell.slot));
     return {
       artifactId: result.artifactId,
       tool: "ffmpeg",
@@ -1596,7 +1589,7 @@ async function executeLocalOrGeneration(
     const result = await captureFrame(engine, sourceId, {
       role: frameMode,
       ...timestampInput,
-      title: `${cell.slug} · ${frameMode} frame`,
+      title: `${notebookGridTag(cell.slot)} · ${frameMode} frame`,
     });
     const outputInputs = {
       frameMode,
@@ -1706,7 +1699,7 @@ async function executeLocalOrGeneration(
       engine,
       assembled.clipArtifactIds,
       assembled.audioArtifactId,
-      cell.slug,
+      notebookGridTag(cell.slot),
       { captions },
     );
     return {
@@ -1748,7 +1741,7 @@ async function executeLocalOrGeneration(
   if (cell.type === "prompt" && cell.operation === "rewrite_prompt") {
     if (!options.confirmPaid) {
       throw new Error(
-        `Paid prompt rewrite for @${cell.slug} requires confirmation before starting`,
+        `Paid prompt rewrite for ${notebookGridTag(cell.slot)} requires confirmation before starting`,
       );
     }
     const output = await rewritePromptCell(engine, document, cell, bookId);
@@ -1776,7 +1769,7 @@ async function executeLocalOrGeneration(
       || (cell.tool ?? cell.model) === DEFAULT_ANIMATION_TOOL;
     if (requiresConfirmation && !options.confirmPaid) {
       throw new Error(
-        `Paid generation for @${cell.slug} requires confirmation before starting`,
+        `Paid generation for ${notebookGridTag(cell.slot)} requires confirmation before starting`,
       );
     }
     const output = await generationTool(engine, document, cell, bookId);
@@ -2140,7 +2133,7 @@ async function finishAwaitingNotebookCell(
         engine,
         input.providerArtifactId,
         audioArtifactId,
-        `${cell.slug} normalized`,
+        `${notebookGridTag(cell.slot)} normalized`,
         durationSeconds,
       );
       outputArtifactId = normalized.artifactId;
@@ -2379,7 +2372,7 @@ export function registerRunNotebookJob(engine: Engine): void {
         .some((edge) => blocked.has(edge.source));
       if (upstreamBlocked) {
         blocked.add(cell.id);
-        errors.push(`@${cell.slug}: blocked by failed upstream dependency`);
+        errors.push(`${notebookGridTag(cell.slot)}: blocked by failed upstream dependency`);
         continue;
       }
       const upstreamWaiting = document.edges
@@ -2403,7 +2396,7 @@ export function registerRunNotebookJob(engine: Engine): void {
         && currentExecution.status === "error"
       ) {
         const message = currentExecution.error ?? "provider output failed";
-        errors.push(`@${cell.slug}: ${message}`);
+        errors.push(`${notebookGridTag(cell.slot)}: ${message}`);
         blocked.add(cell.id);
         continue;
       }
@@ -2417,7 +2410,7 @@ export function registerRunNotebookJob(engine: Engine): void {
       const paidAuthorized = paidCellAuthorized(document, cell, input);
       if (notebookCellIsPaid(cell) && !paidAuthorized) {
         const message =
-          `@${cell.slug}: paid execution requires a current persisted plan for this exact cell revision`;
+          `${notebookGridTag(cell.slot)}: paid execution requires a current persisted plan for this exact cell revision`;
         errors.push(message);
         blocked.add(cell.id);
         continue;
@@ -2476,7 +2469,7 @@ export function registerRunNotebookJob(engine: Engine): void {
         }
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);
-        errors.push(`@${cell.slug}: ${message}`);
+        errors.push(`${notebookGridTag(cell.slot)}: ${message}`);
         blocked.add(cell.id);
         if (
           input.generationPlan

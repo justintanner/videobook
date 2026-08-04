@@ -11,7 +11,7 @@ export function restoreAssetVersionDef(fs: Engine): ToolDef {
         .string()
         .describe("Stable artifact UUID, or the slug of an active artifact"),
       commit_hash: z.string().describe("DoltLite revision hash to restore from"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, commit_hash } = args as { asset_id: string; commit_hash: string; book_id: string };

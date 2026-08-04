@@ -23,7 +23,7 @@ export function timewarpVideoDef(fs: Engine): ToolDef {
     description: "Retime one video range and compensate the remaining picture to preserve the original duration and audio.",
     schema: {
       asset_id: z.string().describe("Video asset ID"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       start_seconds: z.number().describe("Selected range start in seconds"),
       end_seconds: z.number().describe("Selected range end in seconds"),
       stretch_factor: z.number().describe("Duration multiplier from 0.25 to 4; values above 1 lengthen the selection"),

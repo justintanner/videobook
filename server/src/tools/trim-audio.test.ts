@@ -102,12 +102,12 @@ describe("trim_audio tool", () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("aud", "empty");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "notes.txt", "hello");
+    await fs.files.write(asset.value.artifactId, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "test-proj",
         trim_start: 1,
       },
@@ -118,7 +118,7 @@ describe("trim_audio tool", () => {
     expect(content[0].text).toContain("No audio file found");
   });
 
-  it("rejects vid-* assets and directs callers to trim_video", async () => {
+  it("rejects video artifacts and directs callers to trim_video", async () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "video-clip");
     if (!asset.ok) throw new Error("Failed to create asset");
@@ -126,7 +126,7 @@ describe("trim_audio tool", () => {
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "test-proj",
         trim_start: 0.5,
       },
@@ -134,11 +134,11 @@ describe("trim_audio tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("requires an aud-* asset");
+    expect(content[0].text).toContain("requires an audio artifact");
     expect(content[0].text).toContain("trim_video");
   });
 
-  it("trims real aud-* MP3 in keep mode", async () => {
+  it("trims a real audio MP3 in keep mode", async () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("aud", "music-clip");
     if (!asset.ok) throw new Error("Failed to create asset");
@@ -146,12 +146,12 @@ describe("trim_audio tool", () => {
     const genPath = join(tempDir, "temp-sine.mp3");
     await generateTestMp3(genPath, 3.0);
     const audioData = await readFile(genPath);
-    await fs.files.write(asset.value.slug, "original.mp3", audioData);
+    await fs.files.write(asset.value.artifactId, "original.mp3", audioData);
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "test-proj",
         trim_start: 0.5,
         trim_end: 2.0,
@@ -163,7 +163,7 @@ describe("trim_audio tool", () => {
     }
     expect(result.isError).toBeFalsy();
 
-    const manifestResult = await fs.files.manifest(asset.value.slug);
+    const manifestResult = await fs.files.manifest(asset.value.artifactId);
     expect(manifestResult.ok).toBe(true);
     if (!manifestResult.ok) return;
 
@@ -171,13 +171,13 @@ describe("trim_audio tool", () => {
     const duration = await probeAudioDuration(trimmedPath);
     expect(duration).toBeGreaterThan(1.3);
     expect(duration).toBeLessThan(1.7);
-    const provenance = await fs.metadata.artifacts.read<Record<string, unknown>>(asset.value.slug, "original"
+    const provenance = await fs.metadata.artifacts.read<Record<string, unknown>>(asset.value.artifactId, "original"
     );
     expect(provenance.ok).toBe(true);
     if (provenance.ok) {
       expect(provenance.value).toMatchObject({
         origin: "trim_audio",
-        source_asset_id: asset.value.slug,
+        source_asset_id: asset.value.artifactId,
         mode: "keep",
         trim_start: 0.5,
         trim_end: 2,
@@ -185,7 +185,7 @@ describe("trim_audio tool", () => {
     }
   });
 
-  it("trims real aud-* MP3 in cut mode", async () => {
+  it("trims a real audio MP3 in cut mode", async () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("aud", "podcast-clip");
     if (!asset.ok) throw new Error("Failed to create asset");
@@ -193,12 +193,12 @@ describe("trim_audio tool", () => {
     const genPath = join(tempDir, "temp-sine.mp3");
     await generateTestMp3(genPath, 3.0);
     const audioData = await readFile(genPath);
-    await fs.files.write(asset.value.slug, "original.mp3", audioData);
+    await fs.files.write(asset.value.artifactId, "original.mp3", audioData);
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "test-proj",
         cut_start: 1.0,
         cut_end: 2.0,
@@ -207,7 +207,7 @@ describe("trim_audio tool", () => {
 
     expect(result.isError).toBeFalsy();
 
-    const manifestResult = await fs.files.manifest(asset.value.slug);
+    const manifestResult = await fs.files.manifest(asset.value.artifactId);
     expect(manifestResult.ok).toBe(true);
     if (!manifestResult.ok) return;
 
@@ -225,12 +225,12 @@ describe("trim_audio tool", () => {
     const genPath = join(tempDir, "temp-sine.mp3");
     await generateTestMp3(genPath, 2.0);
     const originalData = await readFile(genPath);
-    await fs.files.write(asset.value.slug, "original.mp3", originalData);
+    await fs.files.write(asset.value.artifactId, "original.mp3", originalData);
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "test-proj",
         trim_start: 0.5,
         trim_end: 8,
@@ -238,7 +238,7 @@ describe("trim_audio tool", () => {
     });
 
     expect(result.isError).toBe(true);
-    const restored = await fs.files.read(asset.value.slug, "original.mp3");
+    const restored = await fs.files.read(asset.value.artifactId, "original.mp3");
     expect(restored.ok).toBe(true);
     if (!restored.ok) return;
     expect(restored.value.equals(originalData)).toBe(true);

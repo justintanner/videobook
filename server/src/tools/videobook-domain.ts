@@ -20,7 +20,6 @@ import type {
 import {
   MVP_CONTRACT_VERSION,
   firstEmptyNotebookGridSlots,
-  NOTEBOOK_CELL_SLUG_PREFIXES,
   NOTEBOOK_CELL_TYPES,
   notebookGridTag,
   sequenceFramesToSourceTicks,
@@ -332,7 +331,7 @@ const pinnedSearchResultSchema = z.object({
 const cellInputSchema = z.object({
   id: z.string().uuid().optional(),
   type: cellTypeSchema,
-  slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)+$/),
+  label: z.string().optional(),
   slot: notebookGridSlotSchema,
   output_entity_id: z.string().uuid().optional(),
   prompt: z.string().optional(),
@@ -347,27 +346,6 @@ const cellInputSchema = z.object({
 });
 
 type CellInput = z.infer<typeof cellInputSchema>;
-
-function uniqueCellSlug(
-  cells: readonly NotebookCell[],
-  type: NotebookCellType,
-  stem: string,
-): string {
-  const prefix = NOTEBOOK_CELL_SLUG_PREFIXES[type];
-  const normalized = stem
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  const base = normalized.startsWith(`${prefix}-`)
-    ? normalized
-    : `${prefix}-${normalized || "cell"}`;
-  const occupied = new Set(cells.map((cell) => cell.slug));
-  if (!occupied.has(base)) return base;
-  for (let ordinal = 2; ; ordinal += 1) {
-    const candidate = `${base}-${String(ordinal).padStart(2, "0")}`;
-    if (!occupied.has(candidate)) return candidate;
-  }
-}
 
 function referenceFromInput(
   input: z.infer<typeof cellReferenceSchema>,
@@ -521,7 +499,7 @@ async function notebookGenerationPlan(
       sourceSurface,
       actor,
       bookId: engine.book.get().bookId,
-      summary: `Rewrite @${cell.slug} for Seedance 2`,
+      summary: `Rewrite ${notebookGridTag(cell.slot)} for Seedance 2`,
       normalizedReferences: [{
         kind: "notebook",
         targetId: notebook.id,
@@ -1168,7 +1146,7 @@ function cellFromInput(
   return {
     ...(input.id ? { id: input.id } : {}),
     type: input.type,
-    slug: input.slug,
+    ...(input.label === undefined ? {} : { label: input.label }),
     slot: input.slot,
     ...(input.output_entity_id
       ? { outputEntityId: input.output_entity_id }
@@ -1193,7 +1171,7 @@ function cellPayload(cell: NotebookCell): Record<string, unknown> {
   return {
     id: cell.id,
     type: cell.type,
-    slug: cell.slug,
+    ...(cell.label === undefined ? {} : { label: cell.label }),
     address: notebookGridTag(cell.slot),
     slot: cell.slot,
     ...(cell.outputEntityId
@@ -1364,9 +1342,9 @@ export function videobookDomainDefs(
       name: "create_book",
       description: "Create a book with a Main notebook",
       scope: "global",
-      schema: { slug: z.string().min(1) },
+      schema: { name: z.string().min(1) },
       handler: async (args) => {
-        const result = await books.create(String(args.slug));
+        const result = await books.create(String(args.name));
         return result.ok ? json(result.value) : failure(result.error.message);
       },
     },
@@ -1400,20 +1378,20 @@ export function videobookDomainDefs(
       name: "rename_book",
       description: "Rename a book",
       scope: "global",
-      schema: { ...bookSchema, slug: z.string().min(1) },
+      schema: { ...bookSchema, name: z.string().min(1) },
       handler: async (args) => {
-        const result = await books.rename(String(args.book_id), String(args.slug));
+        const result = await books.rename(String(args.book_id), String(args.name));
         return result.ok ? json(result.value) : failure(result.error.message);
       },
     },
     {
       name: "delete_book",
-      description: "Permanently delete a book after typed slug confirmation",
+      description: "Permanently delete a book after typed name confirmation",
       scope: "global",
-      schema: { ...bookSchema, confirm_slug: z.string().min(1) },
+      schema: { ...bookSchema, confirm_name: z.string().min(1) },
       handler: async (args) => {
         const result = await books.delete(String(args.book_id), {
-          confirmSlug: String(args.confirm_slug),
+          confirmName: String(args.confirm_name),
           beforeDelete: async (book) => stopBookQueue(book.bookId),
         });
         return result.ok ? json(result.value) : failure(result.error.message);
@@ -1444,7 +1422,7 @@ export function videobookDomainDefs(
             if (file.objectHash.toLowerCase() !== objectHash) continue;
             matches.push({
               artifact_id: artifact.artifactId,
-              slug: artifact.slug,
+              ...(artifact.label === undefined ? {} : { label: artifact.label }),
               kind: artifact.kind,
               filename: file.name,
               object_hash: file.objectHash,
@@ -2199,7 +2177,9 @@ export function videobookDomainDefs(
               firstEmptyGridSlots(retained, 3);
             const audioCell = engine.notebooks.createCell({
               type: "audio",
-              slug: uniqueCellSlug(retained, "audio", artifact.value.slug),
+              ...(artifact.value.label === undefined
+                ? {}
+                : { label: artifact.value.label }),
               slot: audioSlot!,
               inputs: {
                 audioSpineRole: "audio",
@@ -2209,11 +2189,7 @@ export function videobookDomainDefs(
             });
             const transcriptCell = engine.notebooks.createCell({
               type: "analyze",
-              slug: uniqueCellSlug(
-                [...retained, audioCell],
-                "analyze",
-                transcript ? `${artifact.value.slug}-transcript` : "transcript-pending",
-              ),
+              label: transcript ? "Transcript" : "Transcript pending",
               slot: transcriptSlot!,
               inputs: {
                 audioSpineRole: "transcript",
@@ -2228,11 +2204,7 @@ export function videobookDomainDefs(
             });
             const sequenceCell = engine.notebooks.createCell({
               type: "concat",
-              slug: uniqueCellSlug(
-                [...retained, audioCell, transcriptCell],
-                "concat",
-                committed.value.sequence.name,
-              ),
+              label: committed.value.sequence.name,
               slot: sequenceSlot!,
               inputs: {
                 audioSpineRole: "sequence",
@@ -2319,7 +2291,9 @@ export function videobookDomainDefs(
         return json({
           spine: {
             artifact_id: artifact.value.artifactId,
-            slug: artifact.value.slug,
+            ...(artifact.value.label === undefined
+              ? {}
+              : { label: artifact.value.label }),
             kind: artifact.value.kind,
             ...spineRecord,
           },
@@ -2483,11 +2457,7 @@ export function videobookDomainDefs(
             };
             const splitCell = engine.notebooks.createCell({
               type: "audio",
-              slug: uniqueCellSlug(
-                document.cells,
-                "audio",
-                "transcript-selection",
-              ),
+              label: "Transcript selection",
               slot: firstEmptyGridSlots(document.cells, 1)[0]!,
               inputs: {
                 selectionKind: "transcript",
@@ -2759,11 +2729,7 @@ export function videobookDomainDefs(
             };
             const splitCell = engine.notebooks.createCell({
               type: "audio",
-              slug: uniqueCellSlug(
-                document.cells,
-                "audio",
-                "timeline-selection",
-              ),
+              label: "Timeline selection",
               slot: firstEmptyGridSlots(document.cells, 1)[0]!,
               inputs: {
                 selectionKind: "timeline",
@@ -3142,11 +3108,7 @@ export function videobookDomainDefs(
               const cells = [...notebook.cells, cell];
               outputCell = engine.notebooks.createCell({
                 type: "analysis",
-                slug: uniqueCellSlug(
-                  cells,
-                  "analysis",
-                  cell.slug.replace(/^analyze-/, ""),
-                ),
+                ...(cell.label === undefined ? {} : { label: cell.label }),
                 slot: firstEmptyGridSlots(cells, 1)[0]!,
                 inputs: {
                   analysisRole: "result",
@@ -3235,7 +3197,7 @@ export function videobookDomainDefs(
                 }
                 const next = normalizeCellActionFields({
                   ...cell,
-                  ...(patch.slug === undefined ? {} : { slug: patch.slug }),
+                  ...(patch.label === undefined ? {} : { label: patch.label }),
                   ...(patch.slot === undefined ? {} : { slot: patch.slot }),
                   ...(patch.output_entity_id === undefined
                     ? {}
@@ -3599,7 +3561,7 @@ export function videobookDomainDefs(
         cell_id: z.string().uuid(),
         draft: z.object({
           type: cellTypeSchema.optional(),
-          slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)+$/).optional(),
+          label: z.string().optional(),
           slot: notebookGridSlotSchema.optional(),
           prompt: z.string(),
           provider: z.string().min(1),
@@ -3619,7 +3581,7 @@ export function videobookDomainDefs(
         try {
           const draft = args.draft as {
             type?: NotebookCellType;
-            slug?: string;
+            label?: string;
             slot?: NotebookGridSlot;
             prompt: string;
             provider: string;
@@ -3631,13 +3593,12 @@ export function videobookDomainDefs(
           const cellId = String(args.cell_id);
           const cell = notebook.value.cells.find((candidate) =>
             candidate.id === cellId);
-          if (!cell && (!draft?.type || !draft.slug || !draft.slot)) {
+          if (!cell && (!draft?.type || !draft.slot)) {
             return failure("Notebook cell not found");
           }
           const baseCell: NotebookCell = cell ?? {
             id: cellId,
             type: draft!.type!,
-            slug: draft!.slug!,
             slot: draft!.slot!,
           };
           const previewCell: NotebookCell = draft
@@ -3841,11 +3802,11 @@ export function videobookDomainDefs(
               candidate.id === cellId);
             if (!cell) return failure(`Notebook cell not found: ${cellId}`);
             if (!notebookCellIsRunnable(cell)) {
-              return failure(`Notebook cell @${cell.slug} is not runnable`);
+              return failure(`Notebook cell ${notebookGridTag(cell.slot)} is not runnable`);
             }
             if (notebookCellIsPaid(cell)) {
               return failure(
-                `Paid notebook cell @${cell.slug} requires its own persisted generation plan`,
+                `Paid notebook cell ${notebookGridTag(cell.slot)} requires its own persisted generation plan`,
               );
             }
           }

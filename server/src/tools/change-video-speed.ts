@@ -29,7 +29,7 @@ export function changeVideoSpeedDef(fs: Engine): ToolDef {
     description: "Change video playback speed (speed up or slow down). Operates in-place with git versioning.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-video)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       speed: z.number().optional().describe("Speed multiplier (0.25–4.0). >1 = faster, <1 = slower."),
       target_duration_seconds: z.number().optional().describe("Exact target output duration in seconds"),
     },

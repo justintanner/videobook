@@ -361,11 +361,12 @@ export function registerExportSequenceJob(engine: Engine): void {
         outputPath,
         request.captions === "burn-in" ? captionPath : undefined,
       ), { signal: context.signal });
-      const slug = `final-${request.orientation}-${request.captions}-${request.sequenceRevision.slice(0, 8)}`;
-      let final = engine.artifacts.get(slug);
-      if (!final.ok) {
-        final = await engine.artifacts.create("final", slug);
-      }
+      const label = `final-${request.orientation}-${request.captions}-${request.sequenceRevision.slice(0, 8)}`;
+      const existing = engine.artifacts.list().find((artifact) =>
+        artifact.kind === "final" && artifact.label === label);
+      const final = existing !== undefined
+        ? { ok: true as const, value: existing }
+        : await engine.artifacts.create({ kind: "final", label });
       if (!final.ok) throw new Error(final.error.message);
       await replaceArtifactFileFromPath(
         engine,
@@ -455,7 +456,7 @@ export function registerExportSequenceJob(engine: Engine): void {
       return {
         success: true,
         artifactId: final.value.artifactId,
-        artifactSlug: final.value.slug,
+        label: final.value.label,
         output: outputFilename,
         outputObjectHash: output.objectHash,
         provenance,

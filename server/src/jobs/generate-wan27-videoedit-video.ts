@@ -58,8 +58,8 @@ export function registerGenerateWan27VideoeditVideoJob(fs: Engine): void {
       ? undefined
       : transformProviderPrompt("generate_kie_wan_2_7_edit_video", {
         prompt,
-        video_slug: videoInput.assetId,
-        image_slug: imageInput?.assetId,
+        video_ref: videoInput.assetId,
+        image_ref: imageInput?.assetId,
       });
 
     const request = buildWan27VideoEditPayload(

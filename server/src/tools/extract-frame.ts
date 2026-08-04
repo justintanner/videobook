@@ -49,6 +49,13 @@ async function extractFrame(
   fs: Engine,
   customTimestamp?: number,
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
+  const sourceArtifact = fs.artifacts.get(videoAssetId);
+  if (!sourceArtifact.ok) {
+    return {
+      isError: true,
+      content: [{ type: "text" as const, text: sourceArtifact.error.message }],
+    };
+  }
   const manifestResult = await fs.files.manifest(videoAssetId);
   if (!manifestResult.ok) {
     return {
@@ -83,12 +90,12 @@ async function extractFrame(
     ? Math.max(0, Math.min(customTimestamp ?? 0, probe.duration))
     : mode === "first" ? 0.1 : Math.max(0, probe.duration - 0.1);
 
-  const baseName = videoAssetId.startsWith("vid-") ? videoAssetId.slice(4) : videoAssetId;
+  const baseName = sourceArtifact.value.label ?? sourceArtifact.value.artifactId;
   const imageName = mode === "custom"
     ? `${baseName}-frame-${String(Math.round((customTimestamp ?? 0) * 100) / 100).replace(".", "-")}s`
     : `${baseName}-${mode}-frame`;
 
-  const assetResult = await fs.artifacts.create("img", imageName);
+  const assetResult = await fs.artifacts.create("image", imageName);
   if (!assetResult.ok) {
     return {
       isError: true,
@@ -96,7 +103,7 @@ async function extractFrame(
     };
   }
 
-  const { slug: imageAssetId, path: imageAssetDir } = assetResult.value;
+  const { artifactId: imageAssetId, path: imageAssetDir } = assetResult.value;
 
   const jobId = `extract-frame-${imageAssetId}-${Date.now()}`;
 
@@ -122,8 +129,8 @@ async function extractFrame(
 }
 
 const extractFrameSchema = {
-  asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
-  book_id: z.string().describe("Project slug"),
+  asset_id: z.string().describe("Video artifact id"),
+  book_id: z.string().describe("Book UUID"),
 };
 
 export function extractFrameDefs(fs: Engine): ToolDef[] {
@@ -150,8 +157,8 @@ export function extractFrameDefs(fs: Engine): ToolDef[] {
       name: "extract_frame",
       description: "Extract a frame at a specific timestamp from a video asset as a new image asset (JPEG).",
       schema: {
-        asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
-        book_id: z.string().describe("Project slug"),
+        asset_id: z.string().describe("Video artifact id"),
+        book_id: z.string().describe("Book UUID"),
         timestamp: z.number().describe("Timestamp in seconds to extract the frame from"),
       },
       handler: async (args) => {

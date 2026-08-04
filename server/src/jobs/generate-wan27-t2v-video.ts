@@ -40,7 +40,7 @@ export function registerGenerateWan27T2vVideoJob(fs: Engine): void {
     const audioUrl = audioRef ? await uploadAssetToKie(fs, audioRef.assetId, audioRef.filename, bookId) : undefined;
     const normalizedPrompt = transformProviderPrompt(
       "generate_kie_wan_2_7_text_to_video",
-      { prompt, driving_audio_slug: audioRef?.assetId },
+      { prompt, driving_audio_ref: audioRef?.assetId },
     ) ?? "";
 
     const request = buildWan27TextToVideoPayload(

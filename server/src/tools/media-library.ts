@@ -59,7 +59,7 @@ export function mediaLibraryDefs(books: BookManager): ToolDef[] {
               type: "prepare_search_reference",
               bookId: sourceBookId,
               mediaKind: String(args.kind),
-              name: artifact.value.slug,
+              name: artifact.value.label ?? artifact.value.artifactId,
               assetId: artifact.value.artifactId,
               ...(typeof args.source_start_seconds === "number"
                 ? { sourceStartMs: args.source_start_seconds * 1_000 }
@@ -177,7 +177,6 @@ export function mediaLibraryDefs(books: BookManager): ToolDef[] {
             sourceArtifactId: string;
             targetBookId: string;
             targetArtifactId: string;
-            targetArtifactSlug: string;
             notebookId: string;
             cellId: string;
             revision: string;
@@ -206,7 +205,6 @@ export function mediaLibraryDefs(books: BookManager): ToolDef[] {
             source_artifact_id: result.sourceArtifactId,
             target_book_id: result.targetBookId,
             target_artifact_id: result.targetArtifactId,
-            target_artifact_slug: result.targetArtifactSlug,
             notebook_id: result.notebookId,
             cell_id: result.cellId,
             revision: result.revision,

@@ -22,7 +22,7 @@ export function analyzeJokesDef(fs: Engine): ToolDef {
       "Requires an ElevenLabs transcript — run /transcribe first if missing.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-* or @vid-slug)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, book_id } = args as { asset_id: string; book_id: string };

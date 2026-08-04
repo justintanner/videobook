@@ -46,7 +46,7 @@ const MODELS: readonly ModelSpec[] = [
 
 const schema = {
   prompt: z.string().describe("Text prompt for image generation"),
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   source_script_id: z.string().optional().describe("Optional script asset that originated this prompt"),
 } satisfies ZodRawShape;
 
@@ -69,7 +69,7 @@ async function enqueueModel(
   if (!assetResult.ok) {
     return { model: spec.canonicalName, error: assetResult.error.message };
   }
-  const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+  const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
   const jobId = `${spec.jobPrefix}-${imgAssetId}-${Date.now()}`;
   await queue.enqueue(jobId, {
@@ -87,7 +87,7 @@ export function genImagesAllDef(fs: Engine): ToolDef {
   return {
     name: "generate_image_model_comparison",
     description:
-      "Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Wan 2.7 Pro, Seedream v5 Lite, Grok Imagine). Creates one img-* asset per model and enqueues background jobs.",
+      "Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Wan 2.7 Pro, Seedream v5 Lite, Grok Imagine). Creates one image artifact per model and enqueues background jobs.",
     schema,
     handler: async (args) => {
       const { prompt, book_id, source_script_id } = args as Args;

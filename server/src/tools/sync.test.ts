@@ -173,11 +173,13 @@ describe("buildAssetList", () => {
   it("returns assets with metadata after creating an asset", async () => {
     const { buildAssetList } = await import("./sync.js");
     const createResult = await fs.artifacts.create("img", "test-asset");
-    expect(createResult.ok).toBe(true);
+    if (!createResult.ok) throw new Error(createResult.error.message);
 
     const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
-    expect(assets[0].id).toMatch(/^img-/);
+    expect(assets[0].id).toBe(createResult.value.artifactId);
+    expect(assets[0].artifact_id).toBe(createResult.value.artifactId);
+    expect(assets[0].label).toBe("test-asset");
     expect(assets[0].type).toBe("image");
     expect(assets[0]).toHaveProperty("status");
     expect(assets[0]).toHaveProperty("media_url");
@@ -422,7 +424,7 @@ describe("buildAssetList", () => {
     await fs.jobs.locks.acquire(assetDir, { durationMs: 60_000 });
 
     const assets = await buildAssetList(fs, fs.book.get().bookId);
-    const asset = assets.find(a => a.id === createResult.value.slug)!;
+    const asset = assets.find(a => a.id === createResult.value.artifactId)!;
     expect(asset.status).toBe("loading");
 
     await fs.jobs.locks.release(assetDir);
@@ -437,7 +439,7 @@ describe("buildAssetList", () => {
     // Until the job enqueue stamps meta.kind, the asset reads as "loading" —
     // not the orphan "error" that used to flash a red tile in the UI.
     const assets = await buildAssetList(fs, fs.book.get().bookId);
-    const asset = assets.find(a => a.id === createResult.value.slug)!;
+    const asset = assets.find(a => a.id === createResult.value.artifactId)!;
     expect(asset.status).toBe("loading");
   });
 
@@ -453,7 +455,7 @@ describe("buildAssetList", () => {
     try {
       vi.setSystemTime(Date.now() + 6 * 60_000);
       const assets = await buildAssetList(fs, fs.book.get().bookId);
-      const asset = assets.find(a => a.id === createResult.value.slug)!;
+      const asset = assets.find(a => a.id === createResult.value.artifactId)!;
       expect(asset.status).toBe("error");
     } finally {
       vi.useRealTimers();
@@ -473,7 +475,7 @@ describe("buildAssetList", () => {
     try {
       vi.setSystemTime(Date.now() + 6 * 60_000);
       const assets = await buildAssetList(fs, fs.book.get().bookId);
-      const asset = assets.find(a => a.id === createResult.value.slug)!;
+      const asset = assets.find(a => a.id === createResult.value.artifactId)!;
       expect(asset.status).toBe("error");
     } finally {
       vi.useRealTimers();
@@ -674,7 +676,7 @@ describe("performSync — never auto-renders from sync", () => {
     await writeNativeFile(fs, join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "Video with audio",
     }));
-    await fs.metadata.artifacts.write(createResult.value.slug, "original", { hasAudio: true });
+    await fs.metadata.artifacts.write(createResult.value.artifactId, "original", { hasAudio: true });
 
     const result = await performSync(fs, fs.book.get().bookId);
     expect(result.auto_render.length).toBe(0);
@@ -684,7 +686,7 @@ describe("performSync — never auto-renders from sync", () => {
     const { performSync } = await import("./sync.js");
     const createResult = await fs.artifacts.create("vid", "silent-clip");
     if (!createResult.ok) throw new Error(createResult.error.message);
-    const assetId = createResult.value.slug;
+    const assetId = createResult.value.artifactId;
     const assetDir = createResult.value.path;
 
     await writeNativeFile(fs, join(assetDir, "original.mp4"), "fake-video-data");
@@ -772,7 +774,7 @@ describe("performSync — auto-transcribe", () => {
     const { performSync } = await import("./sync.js");
     const createResult = await fs.artifacts.create("vid", "transcribe-candidate");
     if (!createResult.ok) throw new Error(createResult.error.message);
-    const assetId = createResult.value.slug;
+    const assetId = createResult.value.artifactId;
     const assetDir = createResult.value.path;
 
     await writeNativeFile(fs, join(assetDir, "original.mp4"), "fake-video-data");
@@ -813,7 +815,7 @@ describe("performSync — auto-transcribe", () => {
     const { performSync } = await import("./sync.js");
     const createResult = await fs.artifacts.create("vid", "prior-failure");
     if (!createResult.ok) throw new Error(createResult.error.message);
-    const assetId = createResult.value.slug;
+    const assetId = createResult.value.artifactId;
     const assetDir = createResult.value.path;
 
     await writeNativeFile(fs, join(assetDir, "original.mp4"), "fake-video-data");

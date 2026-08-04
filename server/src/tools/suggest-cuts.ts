@@ -13,7 +13,7 @@ export function suggestCutsDef(fs: Engine): ToolDef {
       "Requires a transcript — run /transcribe first if missing. Use /apply-cuts to splice the result.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-* or @vid-slug)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, book_id } = args as { asset_id: string; book_id: string };

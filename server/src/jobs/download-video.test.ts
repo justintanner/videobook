@@ -28,7 +28,7 @@ describe("applyRequestedDownloadRange", () => {
         sourcePath,
       ]);
       const written = await engine.files.writeFromPath(
-        artifact.value.slug,
+        artifact.value.artifactId,
         "original.mp4",
         sourcePath,
       );
@@ -37,7 +37,7 @@ describe("applyRequestedDownloadRange", () => {
       const applied = await applyRequestedDownloadRange(
         engine,
         engine.book.get().bookId,
-        artifact.value.slug,
+        artifact.value.artifactId,
         artifact.value.path,
         written.value,
         { start: 0, end: 30 },

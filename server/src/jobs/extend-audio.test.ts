@@ -134,7 +134,7 @@ describe("extend audio ElevenLabs job", () => {
     const output = await fs.artifacts.create("aud", "extended");
     if (!source.ok) throw new Error(source.error.message);
     if (!output.ok) throw new Error(output.error.message);
-    const sourceWrite = await fs.files.write(source.value.slug, "original.mp3", sourceAudio);
+    const sourceWrite = await fs.files.write(source.value.artifactId, "original.mp3", sourceAudio);
     if (!sourceWrite.ok) throw new Error(sourceWrite.error.message);
 
     const port = await listen(server);
@@ -145,8 +145,8 @@ describe("extend audio ElevenLabs job", () => {
     });
     const payload: ExtendAudioPayload = {
       type: "extend_audio",
-      audAssetId: output.value.slug,
-      sourceAssetId: source.value.slug,
+      audAssetId: output.value.artifactId,
+      sourceAssetId: source.value.artifactId,
       sourceFilename: "original.mp3",
       sourceDurationMs: 6_048,
       targetDurationMs: 15_000,
@@ -185,25 +185,25 @@ describe("extend audio ElevenLabs job", () => {
     expect(soundBody.text).toContain("No intro, unrelated sound, fade-in, early ending, or silent tail");
     expect(soundBody.text?.length).toBeLessThanOrEqual(450);
 
-    const written = await fs.files.read(output.value.slug, "original.mp3");
+    const written = await fs.files.read(output.value.artifactId, "original.mp3");
     expect(written.ok).toBe(true);
     if (!written.ok) return;
     expect(written.value).not.toEqual(sourceAudio);
     expect(written.value).not.toEqual(continuationAudio);
-    const manifest = await fs.files.manifest(output.value.slug);
+    const manifest = await fs.files.manifest(output.value.artifactId);
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     const probe = await probeVideo(join(manifest.value.path, "original.mp3"));
     expect(probe.audioDuration).toBeCloseTo(15, 1);
 
-    const metadata = await fs.metadata.artifacts.read(output.value.slug, "original");
+    const metadata = await fs.metadata.artifacts.read(output.value.artifactId, "original");
     expect(metadata.ok).toBe(true);
     if (metadata.ok) {
       expect(metadata.value).toMatchObject({
         origin: "elevenlabs_sound_generation_extend",
         transcription_model: "scribe_v2",
         generation_model: "eleven_text_to_sound_v2",
-        source_asset: source.value.slug,
+        source_asset: source.value.artifactId,
         source_description: "horse neighing",
         source_duration: 6.048,
         target_duration: 15,
@@ -221,7 +221,7 @@ describe("extend audio ElevenLabs job", () => {
     const output = await fs.artifacts.create("aud", "extended");
     if (!source.ok) throw new Error(source.error.message);
     if (!output.ok) throw new Error(output.error.message);
-    const sourceWrite = await fs.files.write(source.value.slug, "original.mp3", sourceAudio);
+    const sourceWrite = await fs.files.write(source.value.artifactId, "original.mp3", sourceAudio);
     if (!sourceWrite.ok) throw new Error(sourceWrite.error.message);
 
     const port = await listen(server);
@@ -232,8 +232,8 @@ describe("extend audio ElevenLabs job", () => {
     });
     const payload: ExtendAudioPayload = {
       type: "extend_audio",
-      audAssetId: output.value.slug,
-      sourceAssetId: source.value.slug,
+      audAssetId: output.value.artifactId,
+      sourceAssetId: source.value.artifactId,
       sourceFilename: "original.mp3",
       sourceDurationMs: 6_048,
       targetDurationMs: 15_000,
@@ -250,7 +250,7 @@ describe("extend audio ElevenLabs job", () => {
     expect(soundBody.text).not.toContain("unrelated sound");
     expect(soundBody.text?.length).toBeLessThanOrEqual(450);
 
-    const metadata = await fs.metadata.artifacts.read(output.value.slug, "original");
+    const metadata = await fs.metadata.artifacts.read(output.value.artifactId, "original");
     expect(metadata.ok).toBe(true);
     if (metadata.ok) {
       expect(metadata.value).toMatchObject({ continuation_prompt: "add outro music" });

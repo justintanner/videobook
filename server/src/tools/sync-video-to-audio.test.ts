@@ -13,6 +13,7 @@ import { createTestClient } from "../test-client.js";
 
 const execFileAsync = promisify(execFile);
 const PROJECT = "audio-sync-tool";
+const MISSING_ARTIFACT_ID = "019fcc6b-46ed-71ce-8f32-2b79cc4dfbbf";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -61,10 +62,10 @@ describe("sync_video_to_audio tool", () => {
       arguments: { book_id: PROJECT },
     });
     const created = valueOf(await fs.artifacts.create("vid", "silent sync source"));
-    silentAssetId = created.slug;
+    silentAssetId = created.artifactId;
     valueOf(await fs.files.write(silentAssetId, "original.mp4", await readFile(silentPath)));
     const audioCreated = valueOf(await fs.artifacts.create("vid", "audio sync source"));
-    audioAssetId = audioCreated.slug;
+    audioAssetId = audioCreated.artifactId;
     valueOf(await fs.files.write(audioAssetId, "original.mp4", await readFile(audioPath)));
   });
 
@@ -84,7 +85,7 @@ describe("sync_video_to_audio tool", () => {
     const result = await client.callTool({
       name: "sync_video_to_audio",
       arguments: {
-        asset_id: "vid-missing",
+        asset_id: MISSING_ARTIFACT_ID,
         book_id: PROJECT,
         anchors: [{ video_seconds: 1, audio_seconds: 1.2 }],
       },

@@ -46,7 +46,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
       ? undefined
       : transformProviderPrompt(
         "generate_kie_grok_imagine_image_to_video",
-        { prompt, image_slugs: sourceImageIds },
+        { prompt, image_refs: sourceImageIds },
         _provider,
       );
 
@@ -110,7 +110,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
         nsfw_checker,
         // Parallel asset ids so @img-* prompt mentions can reorder image_urls
         // to match first-mention order (@image1 = first named subject).
-        image_slugs: sourceImageIds,
+        image_refs: sourceImageIds,
       },
       downloadUrls,
     );

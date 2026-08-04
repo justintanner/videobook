@@ -196,7 +196,7 @@ describe("estimate_cost tool", () => {
       arguments: {
         calls: [{
           tool_name: "generate_gemini_omni_video",
-          input: { duration: "6", video_slug: "@vid-source" },
+          input: { duration: "6", video_ref: "@vid-source" },
         }],
       },
     });
@@ -230,7 +230,7 @@ describe("estimate_cost tool", () => {
     const assetResult = await fs.artifacts.create("vid", "long-motion");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
-    const motionAssetId = assetResult.value.slug;
+    const motionAssetId = assetResult.value.artifactId;
 
     const ACTUAL_DURATION = 30;
     const writeMeta = await fs.metadata.artifacts.write(motionAssetId, "original", { duration: ACTUAL_DURATION, width: 720, height: 1280 }
@@ -242,7 +242,7 @@ describe("estimate_cost tool", () => {
       arguments: {
         calls: [{
           tool_name: "generate_kling30_motion_control_video",
-          input: { mode: "1080p", motion_video_slugs: [motionAssetId] },
+          input: { mode: "1080p", motion_video_refs: [motionAssetId] },
         }],
       },
     });
@@ -256,7 +256,7 @@ describe("estimate_cost tool", () => {
           tool_name: "generate_kling30_motion_control_video",
           input: {
             mode: "1080p",
-            motion_video_slugs: [motionAssetId],
+            motion_video_refs: [motionAssetId],
             book_id: "est-proj",
           },
         }],
@@ -276,7 +276,7 @@ describe("estimate_cost tool", () => {
     const assetResult = await fs.artifacts.create("vid", "at-motion");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
-    const motionAssetId = assetResult.value.slug;
+    const motionAssetId = assetResult.value.artifactId;
 
     const ACTUAL_DURATION = 24;
     const writeMeta = await fs.metadata.artifacts.write(motionAssetId, "original", { duration: ACTUAL_DURATION, width: 720, height: 1280 }
@@ -290,7 +290,7 @@ describe("estimate_cost tool", () => {
           tool_name: "generate_kling30_motion_control_video",
           input: {
             mode: "1080p",
-            motion_video_slugs: [`@${motionAssetId}`],
+            motion_video_refs: [`@${motionAssetId}`],
             book_id: "est-at-proj",
           },
         }],
@@ -311,7 +311,7 @@ describe("estimate_cost tool", () => {
     const assetResult = await fs.artifacts.create("vid", "long-source");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
-    const sourceAssetId = assetResult.value.slug;
+    const sourceAssetId = assetResult.value.artifactId;
 
     const ACTUAL_DURATION = 30;
     const writeMeta = await fs.metadata.artifacts.write(sourceAssetId, "original", { duration: ACTUAL_DURATION, width: 1920, height: 1080 }
@@ -323,7 +323,7 @@ describe("estimate_cost tool", () => {
       arguments: {
         calls: [{
           tool_name: "generate_happyhorse_videoedit_video",
-          input: { resolution: "1080p", video_slug: sourceAssetId },
+          input: { resolution: "1080p", video_ref: sourceAssetId },
         }],
       },
     });
@@ -337,7 +337,7 @@ describe("estimate_cost tool", () => {
           tool_name: "generate_happyhorse_videoedit_video",
           input: {
             resolution: "1080p",
-            video_slug: `@${sourceAssetId}`,
+            video_ref: `@${sourceAssetId}`,
             book_id: "est-hh-proj",
           },
         }],
@@ -365,7 +365,7 @@ describe("estimate_cost tool", () => {
           tool_name: "generate_happyhorse_videoedit_video",
           input: {
             resolution: "1080p",
-            video_slug: assetResult.value.slug,
+            video_ref: assetResult.value.artifactId,
             book_id: "est-hh-fallback",
           },
         }],
@@ -383,7 +383,7 @@ describe("estimate_cost tool", () => {
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
 
-    const writeMeta = await fs.metadata.artifacts.write(assetResult.value.slug, "generation-payload", { model: "grok-imagine/image-to-video", input: { resolution: "720p" } }
+    const writeMeta = await fs.metadata.artifacts.write(assetResult.value.artifactId, "generation-payload", { model: "grok-imagine/image-to-video", input: { resolution: "720p" } }
     );
     expect(writeMeta.ok).toBe(true);
 
@@ -394,7 +394,7 @@ describe("estimate_cost tool", () => {
           tool_name: "extend_grok_imagine_video",
           input: {
             book_id: "grok-extend-estimate",
-            video_slug: `@${assetResult.value.slug}`,
+            video_ref: `@${assetResult.value.artifactId}`,
             extend_times: "10",
           },
         }],

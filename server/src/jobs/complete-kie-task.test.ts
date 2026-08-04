@@ -73,7 +73,7 @@ describe("complete_kie_task fal_qwen branches", () => {
     expect(asset.ok).toBe(true);
     if (!asset.ok) throw new Error(asset.error.message);
 
-    const lease = await cfs.jobs.artifactWork.begin(asset.value.slug, {
+    const lease = await cfs.jobs.artifactWork.begin(asset.value.artifactId, {
       kind: "generate",
       ownerKind: "job",
       durationMs: 60_000,
@@ -92,7 +92,7 @@ describe("complete_kie_task fal_qwen branches", () => {
     if (!written.ok) throw new Error(written.error.message);
 
     return {
-      assetId: asset.value.slug,
+      assetId: asset.value.artifactId,
       assetDir: asset.value.path,
       taskId,
       bookId,

@@ -8,7 +8,8 @@ import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
 import { queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
-import type { Engine } from "videobook-engine";
+import type { ArtifactKind, Engine } from "videobook-engine";
+import { isUuidV7 } from "videobook-engine";
 import { createEngineForTest } from "../fs.js";
 
 const execFileAsync = promisify(execFile);
@@ -23,7 +24,6 @@ type TextContent = Array<{ type: string; text: string }>;
 type ManifestFile = { name: string; size_bytes: number };
 
 const PROJECT = "e2e-tools";
-const TARGET_PROJECT = "e2e-export-target";
 
 function parse(result: { content: unknown }): Record<string, unknown> {
   return JSON.parse((result.content as TextContent)[0].text);
@@ -58,17 +58,20 @@ describe("MCP tools e2e", () => {
   let tempDir: string;
   let videoPath: string;
   let fs: Engine;
+  let bookId: string;
 
   // Shared state across sequential tests
   let imgAssetId: string;
-  let imgArtifactId: string;
   let scriptAssetId: string;
   let vidAssetId: string;
-  let renamedAssetId: string;
   let dupAssetId: string;
-  let exportedAssetId: string;
   let dupPreDeleteHash: string;
-  let dupArtifactId: string;
+
+  function assertKind(artifactId: string, kind: ArtifactKind): void {
+    const artifact = fs.artifacts.get(artifactId);
+    expect(artifact.ok).toBe(true);
+    expect(artifact.ok && artifact.value.kind).toBe(kind);
+  }
 
   beforeAll(async () => {
     await queue.start();
@@ -77,6 +80,7 @@ describe("MCP tools e2e", () => {
     await generateTestVideo(videoPath);
     client = await createTestClient(tempDir);
     fs = createEngineForTest(tempDir);
+    bookId = fs.book.get().bookId;
   });
 
   afterAll(async () => {
@@ -85,40 +89,27 @@ describe("MCP tools e2e", () => {
     if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  // ── Section 1: Project management ──────────────────────────────
+  // ── Section 1: Book management ─────────────────────────────────
 
-  it("creates a project", async () => {
+  it("creates a project alias for the active book", async () => {
     const result = await client.callTool({
       name: "create_project",
       arguments: { book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
-    const project = value(fs.projects.get(PROJECT));
-    expect(project.slug).toBe(PROJECT);
-    expect(project.isDefault).toBe(true);
+    const book = await client.callTool({
+      name: "get_book",
+      arguments: { book_id: PROJECT },
+    });
+    expect(book.isError).toBeFalsy();
+    expect(parse(book).bookId).toBe(bookId);
   });
 
-  it("creates a second project", async () => {
-    const result = await client.callTool({
-      name: "create_project",
-      arguments: { book_id: TARGET_PROJECT },
-    });
+  it("lists the active book", async () => {
+    const result = await client.callTool({ name: "list_books", arguments: {} });
     expect(result.isError).toBeFalsy();
-    expect(value(fs.projects.get(TARGET_PROJECT)).slug).toBe(
-      TARGET_PROJECT,
-    );
-  });
-
-  it("lists projects", async () => {
-    const result = await client.callTool({
-      name: "list_projects",
-      arguments: {},
-    });
-    expect(result.isError).toBeFalsy();
-    const projects = parse(result) as unknown as Array<{ slug: string }>;
-    const slugs = projects.map((p) => p.slug);
-    expect(slugs).toContain(PROJECT);
-    expect(slugs).toContain(TARGET_PROJECT);
+    const books = parse(result) as unknown as Array<{ bookId: string; name: string }>;
+    expect(books.every((book) => isUuidV7(book.bookId))).toBe(true);
   });
 
   // ── Section 2: File upload ─────────────────────────────────────
@@ -132,12 +123,12 @@ describe("MCP tools e2e", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     imgAssetId = parsed.assetId as string;
-    expect(imgAssetId).toMatch(/^img-/);
-    const artifact = value(fs.artifacts.get(PROJECT));
-    imgArtifactId = artifact.artifactId;
+    expect(isUuidV7(imgAssetId)).toBe(true);
+    expect(parsed.artifactId).toBe(imgAssetId);
+    assertKind(imgAssetId, "image");
     expect(
       value(
-        await fs.files.read(imgArtifactId, "original.png"),
+        await fs.files.read(imgAssetId, "original.png"),
       ).length,
     ).toBeGreaterThan(0);
   });
@@ -151,7 +142,8 @@ describe("MCP tools e2e", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     scriptAssetId = parsed.assetId as string;
-    expect(scriptAssetId).toMatch(/^script-/);
+    expect(isUuidV7(scriptAssetId)).toBe(true);
+    assertKind(scriptAssetId, "script");
     expect(
       value(
         await fs.files.read(scriptAssetId, "original.md"),
@@ -168,7 +160,8 @@ describe("MCP tools e2e", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     vidAssetId = parsed.assetId as string;
-    expect(vidAssetId).toMatch(/^vid-/);
+    expect(isUuidV7(vidAssetId)).toBe(true);
+    assertKind(vidAssetId, "video");
     expect(
       value(
         await fs.files.read(vidAssetId, "original.mp4"),
@@ -202,33 +195,28 @@ describe("MCP tools e2e", () => {
 
   // ── Section 4: Asset CRUD ──────────────────────────────────────
 
-  it("renames an asset", async () => {
+  it("relabels an asset without moving its id", async () => {
     const result = await client.callTool({
       name: "rename_asset",
       arguments: { asset_id: imgAssetId, new_name: "sunset beach", book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
-    expect(parsed.old_asset_id).toBe(imgAssetId);
-    renamedAssetId = parsed.new_asset_id as string;
-    expect(renamedAssetId).toMatch(/^img-sunset-beach/);
-    expect(fs.artifacts.resolveSlug(PROJECT).ok).toBe(false);
-    const renamed = value(
-      fs.artifacts.get(PROJECT),
-    );
-    expect(renamed.slug).toBe(renamedAssetId);
+    expect(parsed.artifact_id).toBe(imgAssetId);
+    expect(parsed.label).toBe("sunset beach");
+    const relabelled = fs.artifacts.get(imgAssetId);
+    expect(relabelled.ok && relabelled.value.label).toBe("sunset beach");
     expect(
       value(
-        await fs.files.read(imgArtifactId, "original.png"
-        ),
+        await fs.files.read(imgAssetId, "original.png"),
       ).length,
     ).toBeGreaterThan(0);
   });
 
-  it("reads renamed asset manifest", async () => {
+  it("reads the relabelled asset manifest under the same id", async () => {
     const result = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: renamedAssetId, book_id: PROJECT },
+      arguments: { asset_id: imgAssetId, book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const data = parse(result);
@@ -239,13 +227,15 @@ describe("MCP tools e2e", () => {
   it("duplicates an asset", async () => {
     const result = await client.callTool({
       name: "duplicate_asset",
-      arguments: { asset_id: renamedAssetId, book_id: PROJECT },
+      arguments: { asset_id: imgAssetId, book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
-    expect(parsed.source_asset_id).toBe(renamedAssetId);
+    expect(parsed.source_asset_id).toBe(imgAssetId);
     dupAssetId = parsed.new_asset_id as string;
-    expect(dupAssetId).toMatch(/^img-/);
+    expect(isUuidV7(dupAssetId)).toBe(true);
+    expect(dupAssetId).not.toBe(imgAssetId);
+    assertKind(dupAssetId, "image");
     expect(
       value(
         await fs.files.read(dupAssetId, "original.png"),
@@ -264,54 +254,24 @@ describe("MCP tools e2e", () => {
     expect(fileNames).toContain("original.png");
   });
 
-  it("exports asset to another project", async () => {
-    const result = await client.callTool({
-      name: "export_asset_to_project",
-      arguments: {
-        asset_id: renamedAssetId,
-        book_id: PROJECT,
-        target_project: TARGET_PROJECT,
-      },
-    });
-    expect(result.isError).toBeFalsy();
-    const parsed = parse(result);
-    expect(parsed.source_asset_id).toBe(renamedAssetId);
-    expect(parsed.target_project).toBe(TARGET_PROJECT);
-    exportedAssetId = parsed.new_asset_id as string;
-    expect(
-      value(
-        await fs.files.read(exportedAssetId, "original.png"
-        ),
-      ).length,
-    ).toBeGreaterThan(0);
-
-    // Verify manifest in target project
-    const manifest = await client.callTool({
-      name: "asset_manifest",
-      arguments: { asset_id: exportedAssetId, book_id: TARGET_PROJECT },
-    });
-    expect(manifest.isError).toBeFalsy();
-    const manifestData = parse(manifest);
-    const fileNames = (manifestData.files as ManifestFile[]).map((f) => f.name);
-    expect(fileNames).toContain("original.png");
-  });
-
   // ── Section 5: History & versioning ────────────────────────────
 
-  it("gets project history", async () => {
+  it("records book actions", async () => {
     const result = await client.callTool({
-      name: "project_history",
+      name: "list_book_actions",
       arguments: { book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
-    const commits = parse(result) as unknown as Array<{ hash: string }>;
-    expect(commits.length).toBeGreaterThanOrEqual(2);
+    const history = parse(result) as unknown as {
+      actions: Array<{ operation: string }>;
+    };
+    expect(history.actions.length).toBeGreaterThanOrEqual(2);
   });
 
   it("gets asset history", async () => {
     const result = await client.callTool({
       name: "asset_history",
-      arguments: { asset_id: renamedAssetId, book_id: PROJECT },
+      arguments: { asset_id: imgAssetId, book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const commits = parse(result) as unknown as Array<{ hash: string }>;
@@ -319,16 +279,13 @@ describe("MCP tools e2e", () => {
   });
 
   it("deletes an asset", async () => {
-    // First, get a commit hash where the dup exists (for restore later)
+    // First, get a revision hash where the dup exists (for restore later)
     const historyResult = await client.callTool({
       name: "asset_history",
       arguments: { asset_id: dupAssetId, book_id: PROJECT },
     });
     const commits = parse(historyResult) as unknown as Array<{ hash: string }>;
     dupPreDeleteHash = commits[0].hash;
-    dupArtifactId = value(
-      fs.artifacts.get(PROJECT),
-    ).artifactId;
 
     const result = await client.callTool({
       name: "delete_asset",
@@ -337,7 +294,7 @@ describe("MCP tools e2e", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     expect(parsed.status).toBe("deleted");
-    expect(fs.artifacts.get(PROJECT).ok).toBe(false);
+    expect(fs.artifacts.get(dupAssetId).ok).toBe(false);
 
     // Verify manifest returns error
     const manifest = await client.callTool({
@@ -351,7 +308,7 @@ describe("MCP tools e2e", () => {
     const result = await client.callTool({
       name: "restore_asset_version",
       arguments: {
-        asset_id: dupArtifactId,
+        asset_id: dupAssetId,
         commit_hash: dupPreDeleteHash,
         book_id: PROJECT,
       },
@@ -359,15 +316,13 @@ describe("MCP tools e2e", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     expect(parsed.status).toBe("restored");
-    expect(parsed.asset_id).toBe(dupArtifactId);
-    const restored = value(
-      fs.artifacts.get(PROJECT),
-    );
-    expect(restored.slug).toBe(dupAssetId);
+    expect(parsed.asset_id).toBe(dupAssetId);
+    const restored = fs.artifacts.get(dupAssetId);
+    expect(restored.ok).toBe(true);
+    expect(restored.ok && restored.value.artifactId).toBe(dupAssetId);
     expect(
       value(
-        await fs.files.read(dupArtifactId, "original.png"
-        ),
+        await fs.files.read(dupAssetId, "original.png"),
       ).length,
     ).toBeGreaterThan(0);
 
@@ -379,48 +334,7 @@ describe("MCP tools e2e", () => {
     expect(manifest.isError).toBeFalsy();
   });
 
-  it("rewinds project", async () => {
-    // Get earliest commit for the target project
-    const historyResult = await client.callTool({
-      name: "project_history",
-      arguments: { book_id: TARGET_PROJECT },
-    });
-    const commits = parse(historyResult) as unknown as Array<{ hash: string }>;
-    const earliestCommit = commits[commits.length - 1].hash;
-
-    const result = await client.callTool({
-      name: "rewind_project",
-      arguments: { commit_hash: earliestCommit, book_id: TARGET_PROJECT },
-    });
-    expect(result.isError).toBeFalsy();
-    const parsed = parse(result);
-    expect(parsed.status).toBe("rewound");
-    expect(
-      fs.artifacts.get(TARGET_PROJECT).ok,
-    ).toBe(false);
-
-    // Verify exported asset is gone
-    const manifest = await client.callTool({
-      name: "asset_manifest",
-      arguments: { asset_id: exportedAssetId, book_id: TARGET_PROJECT },
-    });
-    expect(manifest.isError).toBe(true);
-  });
-
-  // ── Section 6: Default project ─────────────────────────────────
-
-  it("gets default project", async () => {
-    const result = await client.callTool({
-      name: "ensure_default_project",
-      arguments: {},
-    });
-    expect(result.isError).toBeFalsy();
-    const parsed = parse(result);
-    expect(parsed.slug).toBe(PROJECT);
-    expect(value(fs.projects.get()).slug).toBe(PROJECT);
-  });
-
-  // ── Section 7: Timeline ────────────────────────────────────────
+  // ── Section 6: Timeline ────────────────────────────────────────
 
   it("gets empty timeline", async () => {
     const result = await client.callTool({
@@ -428,32 +342,32 @@ describe("MCP tools e2e", () => {
       arguments: { book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
-    const timeline = parse(result) as { slots: unknown[]; render: string };
+    const timeline = parse(result) as unknown as { slots: unknown[]; render: string };
     expect(timeline.slots).toEqual([]);
     expect(timeline.render).toBe("landscape");
   });
 
-  it("sets timeline slots", async () => {
-    const slots = [
-      { slug: "vid-intro", volume: 80, audioFadeIn: 100 },
-      { slug: "vid-outro", volume: 100, audioFadeOut: 200 },
-    ];
+  it("sets timeline slots by artifact id", async () => {
     const result = await client.callTool({
       name: "set_timeline",
-      arguments: { book_id: PROJECT, slots },
+      arguments: {
+        book_id: PROJECT,
+        render: "landscape",
+        slots: [{
+          artifact_id: vidAssetId,
+          volume: 80,
+          audioFadeIn: 0.1,
+          audioFadeOut: 0.2,
+        }],
+      },
     });
-    expect(result.isError).toBeFalsy();
-    const parsed = parse(result);
-    expect(parsed.path).toBeTruthy();
-    const timeline = value(
-      await fs.metadata.book.read<{
-        slots: Array<Record<string, unknown>>;
-        render: string;
-      }>("timeline"),
-    );
-    expect(timeline.slots).toHaveLength(2);
-    expect(timeline.slots[0].slug).toBe("vid-intro");
-    expect(timeline.slots[1].slug).toBe("vid-outro");
+    expect(result.isError, parseText(result)).toBeFalsy();
+    const timeline = parse(result) as unknown as {
+      slots: Array<{ id: string; artifact_id: string }>;
+    };
+    expect(timeline.slots).toHaveLength(1);
+    expect(timeline.slots[0].artifact_id).toBe(vidAssetId);
+    expect(isUuidV7(timeline.slots[0].id)).toBe(true);
   });
 
   it("reads back timeline", async () => {
@@ -462,22 +376,22 @@ describe("MCP tools e2e", () => {
       arguments: { book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
-    const timeline = parse(result) as { slots: Array<{
-      slug: string;
-      volume?: number;
-      audioFadeIn?: number;
-      audioFadeOut?: number;
-    }>; render: string };
-    expect(timeline.slots).toHaveLength(2);
-    expect(timeline.slots[0].slug).toBe("vid-intro");
+    const timeline = parse(result) as unknown as {
+      slots: Array<{
+        artifact_id: string;
+        volume?: number;
+        audioFadeIn?: number;
+        audioFadeOut?: number;
+      }>;
+      render: string;
+    };
+    expect(timeline.render).toBe("landscape");
+    expect(timeline.slots).toHaveLength(1);
+    expect(timeline.slots[0].artifact_id).toBe(vidAssetId);
     expect(timeline.slots[0].volume).toBe(80);
-    expect(timeline.slots[0].audioFadeIn).toBe(100);
-    expect(timeline.slots[1].slug).toBe("vid-outro");
-    expect(timeline.slots[1].volume).toBe(100);
-    expect(timeline.slots[1].audioFadeOut).toBe(200);
   });
 
-  // ── Section 8: Sync ────────────────────────────────────────────
+  // ── Section 7: Sync ────────────────────────────────────────────
 
   it("sync completes without error", async () => {
     const result = await client.callTool({
@@ -492,7 +406,7 @@ describe("MCP tools e2e", () => {
     expect(parsed).toHaveProperty("external_uploads");
   });
 
-  // ── Section 9: Video processing (requires ffmpeg + queue) ─────
+  // ── Section 8: Video processing (requires ffmpeg + queue) ─────
 
   it("waits for video processing", async () => {
     const meta = value(
@@ -588,13 +502,14 @@ describe("MCP tools e2e", () => {
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
-    expect(parsed.image_asset_id).toMatch(/^img-/);
+    const firstFrameId = parsed.image_asset_id as string;
+    expect(isUuidV7(firstFrameId)).toBe(true);
+    assertKind(firstFrameId, "image");
     expect(parsed.source_video).toBe(vidAssetId);
     expect(parsed.status).toBe("enqueued");
     await waitForJob(parsed.job_id as string);
 
     // Verify the image file exists
-    const firstFrameId = parsed.image_asset_id as string;
     const manifest = await client.callTool({
       name: "asset_manifest",
       arguments: { asset_id: firstFrameId, book_id: PROJECT },
@@ -626,12 +541,13 @@ describe("MCP tools e2e", () => {
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
-    expect(parsed.image_asset_id).toMatch(/^img-/);
+    const lastFrameId = parsed.image_asset_id as string;
+    expect(isUuidV7(lastFrameId)).toBe(true);
+    assertKind(lastFrameId, "image");
     expect(parsed.source_video).toBe(vidAssetId);
     expect(parsed.status).toBe("enqueued");
     await waitForJob(parsed.job_id as string);
 
-    const lastFrameId = parsed.image_asset_id as string;
     const manifest = await client.callTool({
       name: "asset_manifest",
       arguments: { asset_id: lastFrameId, book_id: PROJECT },
@@ -663,13 +579,14 @@ describe("MCP tools e2e", () => {
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
-    expect(parsed.audio_asset_id).toMatch(/^aud-/);
+    const audioId = parsed.audio_asset_id as string;
+    expect(isUuidV7(audioId)).toBe(true);
+    assertKind(audioId, "audio");
     expect(parsed.source_video).toBe(vidAssetId);
     expect(parsed.status).toBe("enqueued");
     await waitForJob(parsed.job_id as string);
 
     // Verify the audio file exists
-    const audioId = parsed.audio_asset_id as string;
     const manifest = await client.callTool({
       name: "asset_manifest",
       arguments: { asset_id: audioId, book_id: PROJECT },
@@ -690,7 +607,7 @@ describe("MCP tools e2e", () => {
     expect(audioMeta.origin).toBe("extract_audio");
   });
 
-  // ── Section 10: Render video (enqueue only) ────────────────────
+  // ── Section 9: Render video (enqueue only) ─────────────────────
 
   it("enqueues render for landscape without subtitles", async () => {
     const result = await client.callTool({
@@ -709,7 +626,7 @@ describe("MCP tools e2e", () => {
     // Don't waitForJob — Remotion rendering not available in test env
   });
 
-  // ── Section 11: Render timeline (error — no rendered files) ────
+  // ── Section 10: Render timeline (error — no rendered files) ────
 
   it("render_timeline errors when slots lack rendered files", async () => {
     const result = await client.callTool({
@@ -717,11 +634,14 @@ describe("MCP tools e2e", () => {
       arguments: { book_id: PROJECT },
     });
     expect(result.isError).toBe(true);
-    // Timeline slots reference vid-intro which doesn't exist as an asset
-    expect(parseText(result)).toContain("vid-intro");
+    // The single slot points at the uploaded video, which has no rendered
+    // orientation file yet, so the tool reports it by stable artifact id.
+    const parsed = parse(result);
+    expect(parsed.status).toBe("missing_renders");
+    expect(parsed.missing_artifact_ids).toEqual([vidAssetId]);
   });
 
-  // ── Section 12: Download video (validation) ────────────────────
+  // ── Section 11: Download video (validation) ────────────────────
 
   it("download_video rejects start >= end", async () => {
     const result = await client.callTool({
@@ -737,7 +657,7 @@ describe("MCP tools e2e", () => {
     expect(parseText(result)).toContain("start_time must be less than end_time");
   });
 
-  // ── Section 13: API status ─────────────────────────────────────
+  // ── Section 12: API status ─────────────────────────────────────
 
   it("api_status returns error without KIMI_CODING_API_KEY", async () => {
     if (hasKimiKey) return; // skip check when key is set
@@ -749,7 +669,7 @@ describe("MCP tools e2e", () => {
     expect(parseText(result)).toContain("KIMI_CODING_API_KEY");
   });
 
-  // ── Section 14: Transcribe (requires ELEVENLABS_API_KEY) ─────────
+  // ── Section 13: Transcribe (requires ELEVENLABS_API_KEY) ─────────
 
   it("transcribe returns error without ELEVENLABS_API_KEY", async () => {
     const result = await client.callTool({
@@ -763,7 +683,7 @@ describe("MCP tools e2e", () => {
     expect(parseText(result)).toContain("ELEVENLABS_API_KEY");
   });
 
-  // ── Section 15: Generation tools (require KIE_API_KEY) ─────────
+  // ── Section 14: Generation tools (require KIE_API_KEY) ─────────
 
   it("generate_nano_banana_image returns error without KIE_API_KEY", async () => {
     if (hasKieKey) return;
@@ -783,7 +703,7 @@ describe("MCP tools e2e", () => {
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
-        asset_id: renamedAssetId,
+        asset_id: imgAssetId,
         book_id: PROJECT,
       },
     });
@@ -796,7 +716,7 @@ describe("MCP tools e2e", () => {
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
-        asset_id: renamedAssetId,
+        asset_id: imgAssetId,
         book_id: PROJECT,
       },
     });
@@ -811,14 +731,14 @@ describe("MCP tools e2e", () => {
       arguments: {
         prompt: "a sunset",
         book_id: PROJECT,
-        image_slugs: [`@${renamedAssetId}`],
+        image_refs: [imgAssetId],
       },
     });
     expect(result.isError).toBe(true);
     expect(parseText(result)).toContain("KIE_API_KEY");
   });
 
-  // ── Section 16: Preview tools (require OPENAI_API_KEY) ─────────
+  // ── Section 15: Preview tools (require OPENAI_API_KEY) ─────────
 
   it("preview_video returns error without OPENAI_API_KEY", async () => {
     if (hasOpenAiKey) return;

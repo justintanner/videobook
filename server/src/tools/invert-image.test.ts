@@ -40,13 +40,13 @@ describe("invert_image tool", () => {
       0, 0, 0, 0, 0, 0,             // black, black
     ]);
     const png = await sharp(rawData, { raw: { width: 2, height: 2, channels: 3 } }).png().toBuffer();
-    await fs.files.write(asset.value.slug, "original.png", png);
+    await fs.files.write(asset.value.artifactId, "original.png", png);
 
     const result = await client!.callTool({
       name: "invert_image",
       arguments: {
         book_id: PROJECT,
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
       },
     });
 
@@ -54,7 +54,7 @@ describe("invert_image tool", () => {
       throw new Error(`Tool failed: ${JSON.stringify(result.content)}`);
     }
 
-    const read = await fs.files.read(asset.value.slug, "original.png");
+    const read = await fs.files.read(asset.value.artifactId, "original.png");
     expect(read.ok).toBe(true);
     if (!read.ok) return;
 

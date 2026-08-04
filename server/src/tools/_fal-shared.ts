@@ -1,4 +1,4 @@
-export { resolveImageSlugs } from "./_image-inputs.js";
+export { resolveImageRefs } from "./_image-inputs.js";
 
 export function slugify(text: string): string {
   return text

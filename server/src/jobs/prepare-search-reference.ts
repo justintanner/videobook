@@ -175,8 +175,8 @@ async function existingAssetSource(
   if (!manifest.ok) throw new Error(manifest.error.message);
   const file = mediaKind === "video"
     ? findVideoFile(manifest.value.files)
-      ?? findPrimaryMediaFile(manifest.value.files, artifact.value.slug)
-    : findPrimaryMediaFile(manifest.value.files, artifact.value.slug);
+      ?? findPrimaryMediaFile(manifest.value.files, artifact.value.kind)
+    : findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
   if (!file) throw new Error(`No ${mediaKind} file is available for this asset`);
   return {
     path: join(manifest.value.path, file.name),

@@ -38,10 +38,10 @@ async function createVideoAsset(
 ): Promise<string> {
   const created = await fs.artifacts.create("vid", name);
   if (!created.ok) throw created.error;
-  const written = await fs.files.write(created.value.slug, "original.mp4", await readFile(sourcePath)
+  const written = await fs.files.write(created.value.artifactId, "original.mp4", await readFile(sourcePath)
   );
   if (!written.ok) throw written.error;
-  return created.value.slug;
+  return created.value.artifactId;
 }
 
 describe("smooth_scene_concat tool", () => {
@@ -120,7 +120,10 @@ describe("smooth_scene_concat tool", () => {
       status: string;
       alignment_mode: string;
     };
-    expect(parsed.asset_id).toMatch(/^vid-scene-concat-first-second/);
+    const concatArtifact = fs.artifacts.get(parsed.asset_id);
+    expect(concatArtifact.ok && concatArtifact.value.kind).toBe("video");
+    expect(concatArtifact.ok && concatArtifact.value.label)
+      .toBe(`scene-concat-${firstAssetId}-${secondAssetId}`);
     expect(parsed.status).toBe("enqueued");
     expect(parsed.alignment_mode).toBe("fixed");
 

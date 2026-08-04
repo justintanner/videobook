@@ -52,7 +52,7 @@ describe("job deadlines", () => {
             return withLockedLocalLease(
               fs,
               bookId,
-              asset.value.slug,
+              asset.value.artifactId,
               asset.value.path,
               ctx,
               "render",
@@ -73,7 +73,7 @@ describe("job deadlines", () => {
     try {
       const enqueued = await fs.jobs.queue.enqueue({
         type: "deadline_probe",
-        assetId: asset.value.slug,
+        assetId: asset.value.artifactId,
         payload: {},
         dedupeKey: "deadline-probe",
         artifactWorkKind: "render",
@@ -87,7 +87,7 @@ describe("job deadlines", () => {
       expect(job?.state).toBe("failed");
       expect(job?.error?.code).toBe(JobDeadlineError.name);
 
-      const work = await fs.jobs.artifactWork.read(asset.value.slug);
+      const work = await fs.jobs.artifactWork.read(asset.value.artifactId);
       expect(work.ok).toBe(true);
       if (work.ok) {
         expect(work.value?.status).toBe("error");

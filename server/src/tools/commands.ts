@@ -19,7 +19,7 @@ const CANONICAL_COMMANDS: Command[] = [
     variant: "blue",
     chevron: "right",
     params: [
-      { name: "asset_slug", type: "string", required: false, description: "Asset to post (@vid-* or @img-*)" },
+      { name: "asset_ref", type: "string", required: false, description: "Asset to post (video or image artifact id)" },
       { name: "text", type: "string", required: false, description: "Post text (max 280 chars)" },
     ],
     uiAction: "open_post_composer",
@@ -35,7 +35,7 @@ const CANONICAL_COMMANDS: Command[] = [
     variant: "pink",
     chevron: "right",
     params: [
-      { name: "args", type: "string[]", required: true, description: "Name of the character OR one or more image asset slugs" },
+      { name: "args", type: "string[]", required: true, description: "Name of the character OR one or more image artifact ids" },
     ],
     mcpTool: { tool: "create_character", autoInject: ["book_id"] },
   },
@@ -54,7 +54,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/crop",
     description: "Crop video or image to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render)",
-    example: "/crop @img-cat 9:16",
+    example: "/crop @a1 9:16",
     category: "context_menu",
     icon: "Crop",
     size: "default",
@@ -69,7 +69,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/invert",
     description: "In-place inverts an image asset (negates colors)",
-    example: "/invert @img-cat",
+    example: "/invert @a1",
     category: "context_menu",
     icon: "ImageOff",
     size: "default",
@@ -83,7 +83,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/pad",
     description: "Add a whole-second video tail with black frames and silence",
-    example: "/pad @vid-me 2s",
+    example: "/pad @a1 2s",
     category: "context_menu",
     icon: "SquareSquare",
     size: "default",
@@ -98,7 +98,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/keywords",
     description: "Animate transcript keywords in face-safe open space, or omit words for automatic selection",
-    example: "/keywords @vid-interview Multicultural Revolution Success",
+    example: "/keywords @a1 Multicultural Revolution Success",
     category: "action",
     icon: "Sparkles",
     size: "default",
@@ -181,7 +181,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/folder",
     description: "Show asset folder",
-    example: "/folder @product-shot",
+    example: "/folder @a1",
     category: "context_menu",
     icon: "FolderOpen",
     size: "default",
@@ -195,7 +195,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/describe",
     description: "Describe image into a reproduction-ready prompt",
-    example: "/describe @product-shot",
+    example: "/describe @a1",
     category: "context_menu",
     icon: "ScanEye",
     size: "default",
@@ -209,7 +209,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/suggest-cuts",
     description: "Suggest trim cuts for a video (dead air, fillers, awkward sections)",
-    example: "/suggest-cuts @vid-full",
+    example: "/suggest-cuts @a1",
     category: "context_menu",
     icon: "Scissors",
     size: "default",
@@ -223,7 +223,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/recover",
     description: "Recover an asset stuck in the failed state (clears the error, keeps the media)",
-    example: "/recover @vid-florida",
+    example: "/recover @a1",
     category: "context_menu",
     icon: "RotateCcw",
     size: "default",
@@ -237,14 +237,14 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/doctor",
     description: "Diagnose project health across all asset types (broken + stuck assets). Add an asset and 'fix' to restore that asset to its last usable state.",
-    example: "/doctor   ·   /doctor @vid-florida fix",
+    example: "/doctor   ·   /doctor @a1 fix",
     category: "action",
     icon: "Stethoscope",
     size: "default",
     variant: "emerald",
     chevron: "right",
     params: [
-      { name: "asset_id", type: "string", required: false, description: "Asset to diagnose; required to fix (e.g. @vid-florida). Omit for a full project scan." },
+      { name: "asset_id", type: "string", required: false, description: "Asset to diagnose; required to fix (artifact id or grid address such as @a1). Omit for a full project scan." },
       { name: "fix", type: "boolean", required: false, description: "Restore the asset to its last usable state before the current error. Requires asset_id." },
     ],
     mcpTool: { tool: "doctor", autoInject: ["book_id"] },
@@ -252,7 +252,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/analyze-jokes",
     description: "Identify the jokes in a clip's transcript, classified by type",
-    example: "/analyze-jokes @vid-intro",
+    example: "/analyze-jokes @a1",
     category: "context_menu",
     icon: "Laugh",
     size: "default",
@@ -266,7 +266,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/suggest-sfx",
     description: "Suggest sound-effect placements for a video",
-    example: "/suggest-sfx @vid-full",
+    example: "/suggest-sfx @a1",
     category: "context_menu",
     icon: "Volume2",
     size: "default",
@@ -280,14 +280,14 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/apply-sfx",
     description: "Generate an ElevenLabs sound effect and mix it into a video in place",
-    example: "/apply-sfx @vid-full 2.5 whoosh fast cinematic transition whoosh",
+    example: "/apply-sfx @a1 2.5 whoosh fast cinematic transition whoosh",
     category: "action",
     icon: "Volume2",
     size: "default",
     variant: "emerald",
     chevron: "right",
     params: [
-      { name: "asset_id", type: "string", required: true, description: "Video asset to modify in place (@vid-*)" },
+      { name: "asset_id", type: "string", required: true, description: "Video artifact to modify in place" },
       { name: "timestamp", type: "number", required: true, description: "Seconds into the video where the effect starts" },
       { name: "type", type: "string", required: true, description: "Short effect type such as whoosh, impact, or ding" },
       { name: "description", type: "string", required: true, description: "Description of the sound effect to generate" },
@@ -478,20 +478,20 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/detect-scenes",
     description: "Run ffmpeg scdet over a video asset and report natural visual break candidates (camera cuts + motion-settle points).",
-    example: "/detect-scenes @vid-input",
+    example: "/detect-scenes @a1",
     category: "context_menu",
     icon: "Scissors",
     size: "default",
     variant: "default",
     chevron: "right",
     params: [
-      { name: "source_asset_id", type: "string", required: true, description: "Video asset id (vid-*) inside the project" },
+      { name: "source_asset_id", type: "string", required: true, description: "Video artifact id inside the project" },
     ],
     mcpTool: { tool: "detect_scenes", autoInject: ["book_id"] },
   },
   {
     command: "/rename-all",
-    description: "Bulk-rename vid-*/img-* assets with an explicit dry run: GPT-5.5 proposes descriptive names from each asset's stored context, you edit them in a side-by-side preview, then confirm to apply (updates timeline slots, OSG metadata, and plan/.plan.json references).",
+    description: "Bulk-rename video/image assets with an explicit dry run: GPT-5.5 proposes descriptive names from each asset's stored context, you edit them in a side-by-side preview, then confirm to apply (updates timeline slots, OSG metadata, and plan/.plan.json references).",
     example: "/rename-all",
     category: "action",
     icon: "Tags",
@@ -504,14 +504,14 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/watermark",
     description: "Open the watermark dialog to add a QR + 'X: <handle>' end-card to a video (shows over the last 2 seconds at render)",
-    example: "/watermark @vid-hero",
+    example: "/watermark @a1",
     category: "viewer",
     icon: "QrCode",
     size: "default",
     variant: "default",
     chevron: "right",
     params: [
-      { name: "asset_slug", type: "string", required: false, description: "Video to watermark (@vid-*); defaults to the open clip" },
+      { name: "asset_ref", type: "string", required: false, description: "Video to watermark (video artifact id); defaults to the open clip" },
     ],
     uiAction: "open_watermark",
     onMount: ["viewer"],
@@ -519,15 +519,15 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/qart",
-    description: "Create scan-safe color and monochrome QR mosaics from an img-* source",
-    example: "/qart @img-cover https://example.com",
+    description: "Create scan-safe color and monochrome QR mosaics from an image source",
+    example: "/qart @a1 https://example.com",
     category: "action",
     icon: "QrCode",
     size: "default",
     variant: "amber",
     chevron: "right",
     params: [
-      { name: "image_slug", type: "string", required: true, description: "Cover image asset (@img-*)" },
+      { name: "image_ref", type: "string", required: true, description: "Cover image artifact id" },
       { name: "value", type: "string", required: true, description: "URL or text to encode in the QR" },
     ],
     mcpTool: { tool: "create_qart", autoInject: ["book_id"] },
@@ -550,7 +550,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/outroqr",
     description: "Generate a 10-second animated QR outro with bundled impact sound",
-    example: "/outroqr @img-qr1 @img-qr2 16:9",
+    example: "/outroqr @a1 @a2 16:9",
     category: "action",
     icon: "QrCode",
     size: "default",
@@ -569,21 +569,21 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/concat",
     description: "Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell",
-    example: "/concat @img-left @img-right",
+    example: "/concat @a1 @a2",
     category: "action",
     icon: "Images",
     size: "default",
     variant: "default",
     chevron: "right",
     params: [
-      { name: "image_slugs", type: "string[]", required: true, description: "One or two image assets (@img-*); one asset leaves the second slot empty" },
+      { name: "image_refs", type: "string[]", required: true, description: "One or two image artifact ids; one leaves the second slot empty" },
     ],
     mcpTool: { tool: "concat_images", autoInject: ["book_id"] },
   },
   {
     command: "/grok-upscale",
     description: "Upscale a Grok-Imagine video via Kie",
-    example: "/grok-upscale @vid-clip",
+    example: "/grok-upscale @a1",
     category: "context_menu",
     icon: "Zap",
     size: "default",
@@ -597,7 +597,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/rewrite-script",
     description: "Rewrite a script asset in place with the full describe model",
-    example: "/rewrite-script @script-desc-product-shot",
+    example: "/rewrite-script @a1",
     category: "context_menu",
     icon: "RefreshCw",
     size: "default",
@@ -613,7 +613,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/tldr",
     description: "Rewrite a script asset in place as a 1–2 sentence TLDR",
-    example: "/tldr @script-desc-product-shot",
+    example: "/tldr @a1",
     category: "context_menu",
     icon: "Zap",
     size: "default",
@@ -715,7 +715,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/rename",
     description: "Rename an asset",
-    example: "/rename @product-shot product-hero",
+    example: "/rename @a1 product-hero",
     category: "context_menu",
     icon: "Pencil",
     size: "default",
@@ -723,22 +723,22 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to rename" },
-      { name: "new_name", type: "string", required: true, description: "New slug name" },
+      { name: "new_name", type: "string", required: true, description: "New display name" },
     ],
     mcpTool: { tool: "rename_asset", autoInject: ["book_id"] },
   },
   {
     command: "/inject-first-frame",
     description: "Replace frame zero of a video or final output with an image while preserving audio and timing",
-    example: "/inject-first-frame @vid-clip @img-cover",
+    example: "/inject-first-frame @a1 @a2",
     category: "context_menu",
     icon: "ImagePlus",
     size: "default",
     variant: "default",
     chevron: "right",
     params: [
-      { name: "target_asset_id", type: "string", required: true, description: "Target vid-* asset or final" },
-      { name: "image_asset_id", type: "string", required: true, description: "Source img-* asset" },
+      { name: "target_asset_id", type: "string", required: true, description: "Target video artifact id or final" },
+      { name: "image_asset_id", type: "string", required: true, description: "Source image artifact id" },
       { name: "orientation", type: "string", required: false, description: "For final: landscape, portrait, or square" },
     ],
     mcpTool: { tool: "inject_first_frame", autoInject: ["book_id"] },
@@ -746,7 +746,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/extract-first-frame",
     description: "Extract first frame from video as image asset",
-    example: "/extract-first-frame @vid-clip",
+    example: "/extract-first-frame @a1",
     category: "context_menu",
     icon: "Image",
     size: "default",
@@ -760,7 +760,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/extract-last-frame",
     description: "Extract last frame from video as image asset",
-    example: "/extract-last-frame @vid-clip",
+    example: "/extract-last-frame @a1",
     category: "context_menu",
     icon: "Image",
     size: "default",
@@ -774,7 +774,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/extract-audio",
     description: "Extract audio track from video as audio asset (MP3)",
-    example: "/extract-audio @vid-clip",
+    example: "/extract-audio @a1",
     category: "context_menu",
     icon: "Music",
     size: "default",
@@ -788,7 +788,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/archive",
     description: "Archive a full video or audio asset to the global clip archive and transcribe it",
-    example: "/archive @vid-clip ai interview",
+    example: "/archive @a1 ai interview",
     category: "context_menu",
     icon: "Archive",
     size: "default",
@@ -802,15 +802,15 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/extend-audio",
-    description: "Extend an aud-* asset to a longer total duration with a matching ElevenLabs continuation, creating a new aud-* asset",
-    example: "/extend-audio @aud-ext-google-omni-collabin 15 add outro music",
+    description: "Extend an audio asset to a longer total duration with a matching ElevenLabs continuation, creating a new audio asset",
+    example: "/extend-audio @a1 15 add outro music",
     category: "context_menu",
     icon: "AudioLines",
     size: "default",
     variant: "emerald",
     chevron: "right",
     params: [
-      { name: "asset_id", type: "string", required: true, description: "Source aud-* asset" },
+      { name: "asset_id", type: "string", required: true, description: "Source audio artifact id" },
       { name: "target_duration_seconds", type: "number", required: true, description: "Requested total duration in seconds" },
       { name: "continuation_prompt", type: "string", required: false, description: "Optional free-text direction for the continuation, e.g. add outro music" },
     ],
@@ -818,15 +818,15 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/remove-sound",
-    description: "Remove a described sound from a vid-* or aud-* asset in place by silencing its Scribe-tagged audio events",
-    example: "/remove-sound @vid-clip horse neighing",
+    description: "Remove a described sound from a video or audio asset in place by silencing its Scribe-tagged audio events",
+    example: "/remove-sound @a1 horse neighing",
     category: "context_menu",
     icon: "VolumeX",
     size: "default",
     variant: "emerald",
     chevron: "right",
     params: [
-      { name: "asset_id", type: "string", required: true, description: "Asset to edit in-place (vid-* or aud-*)" },
+      { name: "asset_id", type: "string", required: true, description: "Asset to edit in-place (video or audio artifact id)" },
       { name: "sound", type: "string", required: true, description: "Sound to remove, e.g. horse neighing" },
     ],
     mcpTool: { tool: "remove_sound", autoInject: ["book_id"] },
@@ -834,14 +834,14 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/audio-boost",
     description: "Boost audio volume of a video or audio asset (linear multiplier, 1.0–4.0). In-place with git versioning.",
-    example: "/audio-boost @vid-clip 2",
+    example: "/audio-boost @a1 2",
     category: "context_menu",
     icon: "Volume2",
     size: "default",
     variant: "emerald",
     chevron: "right",
     params: [
-      { name: "asset_id", type: "string", required: true, description: "Asset to boost (vid-* or aud-*)" },
+      { name: "asset_id", type: "string", required: true, description: "Asset to boost (video or audio artifact id)" },
       { name: "boost", type: "number", required: true, description: "Volume multiplier (1.0–4.0). >1 = louder." },
     ],
     mcpTool: { tool: "audio_boost", autoInject: ["book_id"] },
@@ -849,23 +849,23 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/audio-mix",
     description: "Mix a video or audio asset onto another at a lower volume, editing the target in-place.",
-    example: "/audio-mix @vid-main @aud-music 30",
+    example: "/audio-mix @a1 @a2 30",
     category: "context_menu",
     icon: "AudioLines",
     size: "default",
     variant: "emerald",
     chevron: "right",
     params: [
-      { name: "target_asset_id", type: "string", required: true, description: "Asset to edit in-place (vid-* or aud-*)" },
-      { name: "layer_asset_id", type: "string", required: true, description: "Asset whose audio is layered on (vid-* or aud-*)" },
+      { name: "target_asset_id", type: "string", required: true, description: "Asset to edit in-place (video or audio artifact id)" },
+      { name: "layer_asset_id", type: "string", required: true, description: "Asset whose audio is layered on (video or audio artifact id)" },
       { name: "volume", type: "number", required: true, description: "Layer volume percentage (0-100)" },
     ],
     mcpTool: { tool: "audio_mix", autoInject: ["book_id"] },
   },
   {
     command: "/replace-audio",
-    description: "Replace the audio track of a video asset with an aud- asset's audio",
-    example: "/replace-audio @vid-clip @aud-voice",
+    description: "Replace the audio track of a video asset with an audio asset's audio",
+    example: "/replace-audio @a1 @a2",
     category: "context_menu",
     icon: "Music",
     size: "default",
@@ -880,7 +880,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/splice",
     description: "Splice two videos with an overlap window; use 0 to concatenate both complete clips",
-    example: "/splice @vid-first @vid-second 0",
+    example: "/splice @a1 @a2 0",
     category: "context_menu",
     icon: "GitMerge",
     size: "default",
@@ -896,7 +896,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/scene-concat",
     description: "Smoothly join two video scenes, automatically aligning shared boundary audio",
-    example: "/scene-concat @vid-first @vid-second",
+    example: "/scene-concat @a1 @a2",
     category: "context_menu",
     icon: "GitMerge",
     size: "default",
@@ -912,7 +912,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/assign",
     description: "Assign asset to timeline slot",
-    example: "/assign @vid-clip @s02",
+    example: "/assign @a1 @s02",
     category: "action",
     icon: "LayoutGrid",
     size: "default",
@@ -984,14 +984,14 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/clean-audio",
     description: "Clean a video's audio in place with ElevenLabs while preserving vocals and key sound effects",
-    example: "/clean-audio @vid-interview true",
+    example: "/clean-audio @a1 true",
     category: "action",
     icon: "AudioLines",
     size: "default",
     variant: "emerald",
     chevron: "right",
     params: [
-      { name: "asset_id", type: "string", required: true, description: "Video asset to clean in place (@vid-*)" },
+      { name: "asset_id", type: "string", required: true, description: "Video artifact to clean in place" },
       { name: "add_light_music", type: "boolean", required: false, description: "Set true to add a light instrumental music bed" },
     ],
     mcpTool: { tool: "clean_video_audio", autoInject: ["book_id"] },
@@ -1013,7 +1013,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/transcribe",
     description: "Transcribe audio using ElevenLabs",
-    example: "/transcribe @vid-yt-iran-war-future",
+    example: "/transcribe @a1",
     category: "action",
     icon: "Mic",
     size: "default",
@@ -1265,14 +1265,14 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/audio-add",
     description: "Add an audio asset to the timeline audio lane (times in seconds)",
-    example: "/audio-add @aud-music 2 10",
+    example: "/audio-add @a1 2 10",
     category: "action",
     icon: "AudioLines",
     size: "default",
     variant: "emerald",
     chevron: "right",
     params: [
-      { name: "asset_id", type: "string", required: true, description: "Audio asset (aud-*)" },
+      { name: "asset_id", type: "string", required: true, description: "Audio artifact id" },
       { name: "start", type: "number", required: false, description: "Start position in seconds (default 0)" },
       { name: "duration", type: "number", required: false, description: "Duration in seconds (default full clip)" },
     ],
@@ -1281,14 +1281,14 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/audio-move",
     description: "Move a timeline audio clip to a new start position (seconds)",
-    example: "/audio-move @aud-music 5",
+    example: "/audio-move @a1 5",
     category: "action",
     icon: "AudioLines",
     size: "default",
     variant: "emerald",
     chevron: "right",
     params: [
-      { name: "audio_ref", type: "string", required: true, description: "Timeline audio clip (aud-* slug or clip id)" },
+      { name: "audio_ref", type: "string", required: true, description: "Timeline audio clip (audio artifact id or clip id)" },
       { name: "start", type: "number", required: true, description: "New start position in seconds" },
     ],
     uiAction: "timeline_audio_move",
@@ -1296,28 +1296,28 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/audio-remove",
     description: "Remove an audio clip from the timeline audio lane",
-    example: "/audio-remove @aud-music",
+    example: "/audio-remove @a1",
     category: "action",
     icon: "AudioLines",
     size: "default",
     variant: "emerald",
     chevron: "right",
     params: [
-      { name: "audio_ref", type: "string", required: true, description: "Timeline audio clip (aud-* slug or clip id)" },
+      { name: "audio_ref", type: "string", required: true, description: "Timeline audio clip (audio artifact id or clip id)" },
     ],
     uiAction: "timeline_audio_remove",
   },
   {
     command: "/audio-set",
     description: "Update a timeline audio clip: volume (0-100), fade-in or fade-out (ms)",
-    example: "/audio-set @aud-music volume 80",
+    example: "/audio-set @a1 volume 80",
     category: "action",
     icon: "AudioLines",
     size: "default",
     variant: "emerald",
     chevron: "right",
     params: [
-      { name: "audio_ref", type: "string", required: true, description: "Timeline audio clip (aud-* slug or clip id)" },
+      { name: "audio_ref", type: "string", required: true, description: "Timeline audio clip (audio artifact id or clip id)" },
       { name: "field", type: "string", required: true, description: "volume | fade-in | fade-out" },
       { name: "value", type: "number", required: true, description: "volume 0-100, fades in ms" },
     ],
@@ -1327,7 +1327,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/reverse",
     description: "Reverse video playback (play backwards)",
-    example: "/reverse @vid-clip",
+    example: "/reverse @a1",
     category: "context_menu",
     icon: "Rewind",
     size: "default",
@@ -1341,7 +1341,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/speed",
     description: "Change video playback speed (0.25-4.0x) or exact duration (e.g. 8.32s)",
-    example: "/speed @vid-clip 8.32s",
+    example: "/speed @a1 8.32s",
     category: "context_menu",
     icon: "Gauge",
     size: "default",
@@ -1356,7 +1356,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/timewarp",
     description: "Retime one scene while compensating the rest of the picture and preserving the original audio and duration",
-    example: "/timewarp @vid-clip 0-4.2s 1.5x",
+    example: "/timewarp @a1 0-4.2s 1.5x",
     category: "context_menu",
     icon: "Gauge",
     size: "default",
@@ -1372,7 +1372,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/sync-audio",
     description: "Smoothly retime video action to match fixed original-audio cues at multiple anchors",
-    example: "/sync-audio @vid-frankenstein 3s=England; 6s=America",
+    example: "/sync-audio @a1 3s=England; 6s=America",
     category: "context_menu",
     icon: "Gauge",
     size: "default",
@@ -1387,14 +1387,14 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/split",
     description: "Split a notebook video into a timed first clip and the remaining clip, then run both branches",
-    example: "/split @vid-clip into 15s and the remaining",
+    example: "/split @a1 into 15s and the remaining",
     category: "action",
     icon: "Scissors",
     size: "default",
     variant: "violet",
     chevron: "right",
     params: [
-      { name: "cell_slug", type: "string", required: true, description: "Notebook video cell to split" },
+      { name: "cell", type: "string", required: true, description: "Notebook video cell to split (grid address such as @a1)" },
       { name: "split_spec", type: "string", required: true, description: "Time boundary followed by the remaining clip" },
     ],
     exposure: "composite",
@@ -1417,7 +1417,7 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/export-to",
     description: "Export an asset into a different project",
-    example: "/export-to @img-hero other-project",
+    example: "/export-to @a1 other-project",
     category: "context_menu",
     icon: "FolderOutput",
     size: "default",
@@ -1425,7 +1425,7 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to export" },
-      { name: "target_project", type: "string", required: true, description: "Target project slug" },
+      { name: "target_project", type: "string", required: true, description: "Target book name" },
       { name: "new_name", type: "string", required: false, description: "Optional name for the exported asset" },
     ],
     mcpTool: { tool: "export_asset_to_project", autoInject: ["book_id"] },
@@ -1433,14 +1433,14 @@ const CANONICAL_COMMANDS: Command[] = [
   {
     command: "/skeleton",
     description: "Extract a pose skeleton image from an image asset",
-    example: "/skeleton @img-portrait",
+    example: "/skeleton @a1",
     category: "context_menu",
     icon: "PersonStanding",
     size: "default",
     variant: "default",
     chevron: "right",
     params: [
-      { name: "asset_id", type: "string", required: true, description: "Image asset (img-*)" },
+      { name: "asset_id", type: "string", required: true, description: "Image artifact id" },
     ],
     uiAction: "extract_skeleton",
   },
@@ -1557,13 +1557,16 @@ export function commandsDef(books: BookManager = bookManager): ToolDef {
     schema: {},
     handler: async () => {
       const commands: Command[] = [...CANONICAL_COMMANDS];
-      const reserved = new Set(commands.flatMap((command) => [command.command, ...(command.aliases ?? [])]));
+      const reserved = new Set(
+        commands.flatMap((command) => [command.command, ...(command.aliases ?? [])])
+          .map((name) => name.toLowerCase()),
+      );
       await books.ready();
       for (const book of books.list()) {
-        if (reserved.has(`/${book.slug}`)) continue;
+        if (reserved.has(`/${book.name}`.toLowerCase())) continue;
         commands.push({
-          command: `/${book.slug}`,
-          description: `Switch to book ${book.slug}`,
+          command: `/${book.name}`,
+          description: `Switch to book ${book.name}`,
           category: "project",
           icon: "FolderOpen",
           size: "default",

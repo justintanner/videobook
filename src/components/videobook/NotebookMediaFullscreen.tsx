@@ -4,13 +4,13 @@ import type { NotebookCellInspectorAsset } from './NotebookCellInspector'
 
 type NotebookMediaFullscreenProps = {
   asset: NotebookCellInspectorAsset
-  slug: string
+  address: string
   onClose: () => void
 }
 
 export function NotebookMediaFullscreen({
   asset,
-  slug,
+  address,
   onClose,
 }: NotebookMediaFullscreenProps) {
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -42,7 +42,7 @@ export function NotebookMediaFullscreen({
       className="notebook-media-fullscreen"
       role="dialog"
       aria-modal="true"
-      aria-label={`Fullscreen preview for @${slug}`}
+      aria-label={`Fullscreen preview for @${address}`}
     >
       {isVideo && asset.mediaUrl ? (
         <video
@@ -57,7 +57,7 @@ export function NotebookMediaFullscreen({
           preload="auto"
         />
       ) : (
-        <img src={mediaUrl} alt={`@${slug}`} />
+        <img src={mediaUrl} alt={`@${address}`} />
       )}
       <button
         ref={closeRef}

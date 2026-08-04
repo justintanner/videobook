@@ -38,7 +38,7 @@ function escapeXml(value: string): string {
 
 // Render the QR watermark card as a PNG buffer: a rounded near-black card with
 // an X logo + "@handle" header and the QR set on a rounded white tile. Persisted
-// as an img-* asset and composited via OSG.
+// as an image artifact and composited via OSG.
 async function buildCardPng(url: string, handle: string): Promise<Buffer> {
   const qrBuffer = await QRCode.toBuffer(url, {
     type: "png",
@@ -82,9 +82,9 @@ export function createWatermarkCardDef(fs: Engine): ToolDef {
   return {
     name: "create_watermark_card",
     description:
-      "Generate a black-and-white QR + 'X: <handle>' watermark card and store it as an img- asset. Apply it via the on-screen graphic (OSG) settings during render.",
+      "Generate a black-and-white QR + 'X: <handle>' watermark card and store it as an image artifact. Apply it via the on-screen graphic (OSG) settings during render.",
     schema: {
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       handle: z.string().optional().describe(`X handle without @ (default: ${DEFAULT_HANDLE})`),
       url: z.string().optional().describe("URL the QR code resolves to (default: https://x.com/<handle>)"),
       save_default: z
@@ -124,7 +124,7 @@ export function createWatermarkCardDef(fs: Engine): ToolDef {
           content: [{ type: "text" as const, text: `Failed to create image asset: ${created.error.message}` }],
         };
       }
-      const assetId = created.value.slug;
+      const assetId = created.value.artifactId;
 
       const writeResult = await fs.files.write(assetId, "original.png", buffer);
       if (!writeResult.ok) {

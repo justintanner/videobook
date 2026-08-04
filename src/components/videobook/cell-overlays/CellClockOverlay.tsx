@@ -16,13 +16,13 @@ function formatElapsed(ms: number): string {
 export function CellClockOverlay({
   icon,
   label,
-  slug,
+  address,
   startedAt,
   variant,
 }: {
   icon: ReactNode
   label: string
-  slug: string
+  address: string
   startedAt: number | null
   variant?: 'rise' | 'stream'
 }) {
@@ -41,7 +41,7 @@ export function CellClockOverlay({
     <div
       className="cell-state-overlay cell-state-overlay-clock"
       role="status"
-      aria-label={`@${slug} ${label.toLowerCase()}`}
+      aria-label={`@${address} ${label.toLowerCase()}`}
       aria-live="polite"
     >
       <CellAnimatedBackground variant={variant} />

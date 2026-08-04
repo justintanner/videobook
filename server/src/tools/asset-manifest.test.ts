@@ -44,7 +44,7 @@ describe("asset_manifest tool", () => {
     const parsed = JSON.parse(
       (result.content as Array<{ type: string; text: string }>)[0].text
     );
-    expect(parsed.slug).toBe(uploaded.assetId);
+    expect(parsed.artifactId).toBe(uploaded.assetId);
     expect(parsed.fileCount).toBeGreaterThanOrEqual(1);
     expect(parsed.files.some((f: { name: string }) => f.name === "original.png")).toBe(true);
   });

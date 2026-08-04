@@ -7,25 +7,37 @@ import { resolveCharacterCreateName } from "../character-name.js";
 export function createCharacterDef(fs: Engine): ToolDef {
   return {
     name: "create_character",
-    description: "Create a new character folder (char-*), optionally seeded from existing image assets",
+    description: "Create a new character artifact, optionally seeded from existing image artifacts",
     schema: {
-      book_id: z.string().describe("Project slug"),
-      args: z.array(z.string()).describe("Name of the character, OR one or more image asset slugs"),
+      book_id: z.string().describe("Book id"),
+      args: z.array(z.string()).describe("Name of the character, OR one or more image artifact ids"),
     },
     handler: async (payload) => {
       const { book_id: _book_id, args } = payload as { book_id: string; args: string[] };
 
       const imageSources: string[] = [];
+      // Parallel to imageSources: the free-text label each source carries, used
+      // as the character name stem when no explicit name is given.
+      const imageLabels: string[] = [];
       const nameParts: string[] = [];
 
       for (let arg of args) {
-        if (arg.startsWith("@")) arg = arg.slice(1);
-        if (arg.startsWith("img-")) {
+        const isTagged = arg.startsWith("@");
+        if (isTagged) arg = arg.slice(1);
+        const artifact = fs.artifacts.get(arg);
+        if (artifact.ok) {
+          if (artifact.value.kind !== "image") {
+            return {
+              isError: true as const,
+              content: [{ type: "text" as const, text: `Non-image source provided (${artifact.value.kind}): ${arg}` }],
+            };
+          }
           imageSources.push(arg);
-        } else if (arg.startsWith("vid-") || arg.startsWith("aud-") || arg.startsWith("char-") || arg.startsWith("script-")) {
+          imageLabels.push(artifact.value.label ?? "");
+        } else if (isTagged) {
           return {
             isError: true as const,
-            content: [{ type: "text" as const, text: `Non-image source provided: ${arg}` }],
+            content: [{ type: "text" as const, text: `Unknown artifact reference: @${arg}` }],
           };
         } else {
           nameParts.push(arg);
@@ -39,7 +51,7 @@ export function createCharacterDef(fs: Engine): ToolDef {
         };
       }
 
-      const displayName = resolveCharacterCreateName(nameParts, imageSources);
+      const displayName = resolveCharacterCreateName(nameParts, imageLabels);
 
       const uniqueSources = new Set(imageSources);
       if (uniqueSources.size !== imageSources.length) {
@@ -56,7 +68,7 @@ export function createCharacterDef(fs: Engine): ToolDef {
           content: [{ type: "text" as const, text: `Failed to create character: ${assetResult.error.message}` }],
         };
       }
-      const asset_id = assetResult.value.slug;
+      const asset_id = assetResult.value.artifactId;
 
       for (let i = 0; i < imageSources.length; i++) {
         const sourceId = imageSources[i];
@@ -68,7 +80,7 @@ export function createCharacterDef(fs: Engine): ToolDef {
           };
         }
 
-        const primaryFile = findPrimaryMediaFile(manifestResult.value.files, sourceId);
+        const primaryFile = findPrimaryMediaFile(manifestResult.value.files, "image");
         if (!primaryFile) {
           return {
             isError: true as const,

@@ -1,4 +1,3 @@
-import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -6,253 +5,236 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/client";
 import {
-  slugifyName,
-  humanizeSlug,
-  prefixOf,
-  isRenamable,
-  computeTargetSlug,
+  RENAME_KINDS,
+  isRenamableKind,
   buildRenameRows,
   validateEditedRenames,
   applyableRows,
   buildSuggestionPrompt,
   parseSuggestionResponse,
-  rewriteTimelineReferences,
-  rewriteDeep,
   isProcessOrigin,
-  leadingMnemonicTokens,
-  withPreservedMnemonic,
+  type AssetContext,
+  type RenameCandidate,
+  type RenameRow,
 } from "../rename-helpers.js";
 
 type TextContent = Array<{ type: string; text: string }>;
+
+// Artifact ids are UUIDv7 and are never derived from — or changed by — a
+// rename. These constants stand in for live artifacts in the pure unit tests.
+const VIDEO_ID = "01890f1c-0000-7000-8000-0000000000a1";
+const IMAGE_ID = "01890f1c-0000-7000-8000-0000000000a2";
+const SECOND_VIDEO_ID = "01890f1c-0000-7000-8000-0000000000a3";
+const AUDIO_ID = "01890f1c-0000-7000-8000-0000000000a4";
+/** A well-formed artifact id that never exists in these fixtures. */
+const MISSING_ID = "01890f1c-0000-7000-8000-0000000000ff";
 
 // ---------------------------------------------------------------------------
 // Pure helper unit tests
 // ---------------------------------------------------------------------------
 
-describe("slugifyName", () => {
-  it("lowercases and hyphenates", () => {
-    expect(slugifyName("Sunset Beach", "vid")).toBe("vid-sunset-beach");
-  });
-
-  it("strips non-alphanumeric characters", () => {
-    expect(slugifyName("Cat's Toy! 100%", "img")).toBe("img-cats-toy-100");
-  });
-
-  it("filters stop words", () => {
-    expect(slugifyName("The Dog on a Beach", "vid")).toBe("vid-dog-beach");
-  });
-
-  it("truncates to 4 content words", () => {
-    expect(slugifyName("one two three four five six", "vid")).toBe("vid-one-two-three-four");
-  });
-
-  it("deduplicates consecutive identical words", () => {
-    expect(slugifyName("neon neon fox", "img")).toBe("img-neon-fox");
-  });
-
-  it("falls back to untitled when all words filtered", () => {
-    expect(slugifyName("the a an of", "vid")).toBe("vid-untitled");
-    expect(slugifyName("", "img")).toBe("img-untitled");
-  });
-
-  it("filters the prefix word itself", () => {
-    expect(slugifyName("vid neon fox", "vid")).toBe("vid-neon-fox");
-  });
-});
-
-describe("humanizeSlug", () => {
-  it("strips prefix and title-cases", () => {
-    expect(humanizeSlug("vid-sunset-beach")).toBe("Sunset Beach");
-    expect(humanizeSlug("img-neon-fox")).toBe("Neon Fox");
-  });
-
-  it("handles single-word slugs", () => {
-    expect(humanizeSlug("vid-fox")).toBe("Fox");
-  });
-});
-
-describe("prefixOf / isRenamable", () => {
-  it("extracts prefix", () => {
-    expect(prefixOf("vid-abc")).toBe("vid");
-    expect(prefixOf("img-xyz")).toBe("img");
-  });
-
-  it("only vid/img are renamable", () => {
-    expect(isRenamable("vid-abc")).toBe(true);
-    expect(isRenamable("img-abc")).toBe(true);
-    expect(isRenamable("char-bob")).toBe(false);
-    expect(isRenamable("aud-clip")).toBe(false);
-  });
-});
-
-describe("computeTargetSlug", () => {
-  it("returns base slug when no batch-internal collision", () => {
-    const target = computeTargetSlug("sunset beach", "vid-old1", new Set());
-    expect(target).toBe("vid-sunset-beach");
-  });
-
-  it("suffixes on collision with a claimed batch target", () => {
-    const claimed = new Set(["vid-sunset-beach"]);
-    const target = computeTargetSlug("sunset beach", "vid-old1", claimed);
-    expect(target).toBe("vid-sunset-beach-2");
-  });
-
-  it("returns base unchanged when it equals the current id (no-op)", () => {
-    const target = computeTargetSlug("sunset-beach", "vid-sunset-beach", new Set());
-    expect(target).toBe("vid-sunset-beach");
+describe("isRenamableKind", () => {
+  it("accepts only the video and image kinds", () => {
+    expect(RENAME_KINDS).toEqual(["video", "image"]);
+    expect(isRenamableKind("video")).toBe(true);
+    expect(isRenamableKind("image")).toBe(true);
+    expect(isRenamableKind("audio")).toBe(false);
+    expect(isRenamableKind("character")).toBe(false);
+    expect(isRenamableKind("script")).toBe(false);
   });
 });
 
 describe("buildRenameRows", () => {
-  const assets = [
-    { asset_id: "vid-aaa123", type: "video", context_text: "a dog running on the beach" },
-    { asset_id: "img-bbb456", type: "image", context_text: "neon portrait of a fox" },
+  const assets: AssetContext[] = [
+    {
+      asset_id: VIDEO_ID,
+      type: "video",
+      label: "beach run",
+      context_text: "a dog running on the beach",
+    },
+    {
+      asset_id: IMAGE_ID,
+      type: "image",
+      label: "fox",
+      context_text: "neon portrait of a fox",
+    },
   ];
-  const allIds = ["vid-aaa123", "img-bbb456", "vid-other"];
 
   it("builds renamable rows from suggestions", () => {
-    const suggestions = {
-      "vid-aaa123": "dog beach run",
-      "img-bbb456": "neon fox",
-    };
-    const rows = buildRenameRows(assets, suggestions, allIds);
+    const rows = buildRenameRows(assets, {
+      [VIDEO_ID]: "dog beach run",
+      [IMAGE_ID]: "neon fox",
+    });
     expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual({
+      asset_id: VIDEO_ID,
+      type: "video",
+      current_name: "beach run",
+      suggested_name: "dog beach run",
+      status: "renamable",
+    });
+    expect(rows[1]).toEqual({
+      asset_id: IMAGE_ID,
+      type: "image",
+      current_name: "fox",
+      suggested_name: "neon fox",
+      status: "renamable",
+    });
+  });
+
+  it("falls back to the artifact id as the current name when unlabeled", () => {
+    const unlabeled: AssetContext[] = [
+      { asset_id: VIDEO_ID, type: "video", context_text: "a dog running" },
+    ];
+    const rows = buildRenameRows(unlabeled, { [VIDEO_ID]: "dog beach run" });
+    expect(rows[0].current_name).toBe(VIDEO_ID);
     expect(rows[0].status).toBe("renamable");
-    expect(rows[0].target_asset_id).toBe("vid-dog-beach-run");
-    expect(rows[0].current_name).toBe("Aaa123");
-    expect(rows[1].target_asset_id).toBe("img-neon-fox");
   });
 
   it("marks rows with no suggestion as skipped", () => {
-    const rows = buildRenameRows(assets, {}, allIds);
+    const rows = buildRenameRows(assets, {});
+    expect(rows[0].status).toBe("skipped");
+    expect(rows[0].reason).toBe("No suggestion produced");
+    expect(rows[0].suggested_name).toBe("beach run");
+  });
+
+  it("marks a blank suggestion as skipped", () => {
+    const rows = buildRenameRows([assets[0]], { [VIDEO_ID]: "   " });
     expect(rows[0].status).toBe("skipped");
     expect(rows[0].reason).toBe("No suggestion produced");
   });
 
-  it("marks unchanged when normalized slug equals current id", () => {
-    const suggestions = { "vid-aaa123": "aaa123" };
-    const rows = buildRenameRows([assets[0]], suggestions, ["vid-aaa123"]);
+  it("marks unchanged when the suggestion equals the current label", () => {
+    const rows = buildRenameRows([assets[0]], { [VIDEO_ID]: "beach run" });
     expect(rows[0].status).toBe("unchanged");
-    expect(rows[0].target_asset_id).toBe("vid-aaa123");
+    expect(rows[0].reason).toBe("Label already matches");
+    expect(rows[0].suggested_name).toBe("beach run");
   });
 
-  it("suffixes when two suggestions collide", () => {
-    const assets2 = [
-      { asset_id: "vid-a1", type: "video", context_text: "x" },
-      { asset_id: "vid-a2", type: "video", context_text: "x" },
+  it("lets two assets share one label — labels are not unique", () => {
+    const twoVideos: AssetContext[] = [
+      { asset_id: VIDEO_ID, type: "video", context_text: "x" },
+      { asset_id: SECOND_VIDEO_ID, type: "video", context_text: "x" },
     ];
-    const suggestions = { "vid-a1": "sunset", "vid-a2": "sunset" };
-    const rows = buildRenameRows(assets2, suggestions, ["vid-a1", "vid-a2", "vid-other"]);
-    expect(rows[0].target_asset_id).toBe("vid-sunset");
-    expect(rows[1].target_asset_id).toBe("vid-sunset-2");
-  });
-
-  it("preserves short img-nbp- mnemonic when the model omits it", () => {
-    const assetsNbp = [
-      { asset_id: "img-nbp-updat-ethe-device", type: "image", context_text: "green gadget" },
-    ];
-    const rows = buildRenameRows(
-      assetsNbp,
-      { "img-nbp-updat-ethe-device": "green device" },
-      ["img-nbp-updat-ethe-device"],
-    );
-    expect(rows[0].suggested_name).toBe("nbp green device");
-    expect(rows[0].target_asset_id).toBe("img-nbp-green-device");
-  });
-
-  it("does not duplicate an already-present mnemonic", () => {
-    const assetsNbp = [
-      { asset_id: "img-nbp-clear-table", type: "image", context_text: "table" },
-    ];
-    const rows = buildRenameRows(
-      assetsNbp,
-      { "img-nbp-clear-table": "nbp table" },
-      ["img-nbp-clear-table"],
-    );
-    expect(rows[0].suggested_name).toBe("nbp table");
-    expect(rows[0].target_asset_id).toBe("img-nbp-table");
-  });
-});
-
-describe("leadingMnemonicTokens / withPreservedMnemonic", () => {
-  it("extracts nbp and mmm-style codes", () => {
-    expect(leadingMnemonicTokens("img-nbp-updat-ethe-device")).toEqual(["nbp"]);
-    expect(leadingMnemonicTokens("img-mmm")).toEqual(["mmm"]);
-    expect(leadingMnemonicTokens("vid-google-omni-locked-off")).toEqual([]);
-    expect(leadingMnemonicTokens("img-replace-device-image")).toEqual([]);
-  });
-
-  it("prepends missing mnemonic once", () => {
-    expect(withPreservedMnemonic("green device", "img-nbp-old")).toBe("nbp green device");
-    expect(withPreservedMnemonic("nbp device", "img-nbp-old")).toBe("nbp device");
+    const rows = buildRenameRows(twoVideos, {
+      [VIDEO_ID]: "sunset",
+      [SECOND_VIDEO_ID]: "sunset",
+    });
+    expect(rows[0].suggested_name).toBe("sunset");
+    expect(rows[1].suggested_name).toBe("sunset");
+    expect(rows.map((row) => row.status)).toEqual(["renamable", "renamable"]);
   });
 });
 
 describe("validateEditedRenames", () => {
-  it("marks renamable when target is free", () => {
+  const candidates: RenameCandidate[] = [
+    { artifactId: VIDEO_ID, label: "beach run", kind: "video" },
+    { artifactId: IMAGE_ID, kind: "image" },
+    { artifactId: AUDIO_ID, label: "theme", kind: "audio" },
+  ];
+
+  it("marks renamable when the edited label differs from the current one", () => {
     const rows = validateEditedRenames(
-      [{ asset_id: "vid-old1", suggested_name: "sunset beach" }],
-      ["vid-old1", "img-keep"],
+      [{ asset_id: VIDEO_ID, suggested_name: "  sunset beach  " }],
+      candidates,
     );
-    expect(rows[0].status).toBe("renamable");
-    expect(rows[0].target_asset_id).toBe("vid-sunset-beach");
+    expect(rows[0]).toEqual({
+      asset_id: VIDEO_ID,
+      type: "video",
+      current_name: "beach run",
+      suggested_name: "sunset beach",
+      status: "renamable",
+    });
   });
 
-  it("marks conflict when target collides with another existing asset", () => {
+  it("falls back to the artifact id as the current name when unlabeled", () => {
     const rows = validateEditedRenames(
-      [{ asset_id: "vid-old1", suggested_name: "sunset beach" }],
-      ["vid-old1", "vid-sunset-beach"],
+      [{ asset_id: IMAGE_ID, suggested_name: "neon fox" }],
+      candidates,
     );
-    expect(rows[0].status).toBe("conflict");
+    expect(rows[0].current_name).toBe(IMAGE_ID);
+    expect(rows[0].status).toBe("renamable");
   });
 
   it("marks conflict when asset no longer exists", () => {
     const rows = validateEditedRenames(
-      [{ asset_id: "vid-gone", suggested_name: "whatever" }],
-      ["vid-other"],
+      [{ asset_id: MISSING_ID, suggested_name: "whatever" }],
+      candidates,
     );
     expect(rows[0].status).toBe("conflict");
     expect(rows[0].reason).toBe("Asset no longer exists");
   });
 
+  it("marks conflict for a kind that is not renamable here", () => {
+    const rows = validateEditedRenames(
+      [{ asset_id: AUDIO_ID, suggested_name: "new theme" }],
+      candidates,
+    );
+    expect(rows[0].status).toBe("conflict");
+    expect(rows[0].reason).toBe(
+      "Only video and image assets are renamable here (got audio)",
+    );
+  });
+
   it("marks conflict on empty name", () => {
     const rows = validateEditedRenames(
-      [{ asset_id: "vid-old1", suggested_name: "   " }],
-      ["vid-old1"],
+      [{ asset_id: VIDEO_ID, suggested_name: "   " }],
+      candidates,
     );
     expect(rows[0].status).toBe("conflict");
     expect(rows[0].reason).toBe("Empty name");
   });
 
-  it("marks unchanged when normalized slug matches current", () => {
+  it("marks unchanged when the label already matches", () => {
     const rows = validateEditedRenames(
-      [{ asset_id: "vid-sunset-beach", suggested_name: "sunset beach" }],
-      ["vid-sunset-beach"],
+      [{ asset_id: VIDEO_ID, suggested_name: "beach run" }],
+      candidates,
     );
     expect(rows[0].status).toBe("unchanged");
+    expect(rows[0].reason).toBe("Label already matches");
   });
 
-  it("suffixes collisions between two edits targeting the same slug", () => {
+  it("lets two edits target the same label — labels are not unique", () => {
     const rows = validateEditedRenames(
       [
-        { asset_id: "vid-a1", suggested_name: "sunset" },
-        { asset_id: "vid-a2", suggested_name: "sunset" },
+        { asset_id: VIDEO_ID, suggested_name: "sunset" },
+        { asset_id: IMAGE_ID, suggested_name: "sunset" },
       ],
-      ["vid-a1", "vid-a2"],
+      candidates,
     );
-    expect(rows[0].target_asset_id).toBe("vid-sunset");
-    expect(rows[1].target_asset_id).toBe("vid-sunset-2");
-    expect(rows[1].status).toBe("renamable");
+    expect(rows.map((row) => row.suggested_name)).toEqual(["sunset", "sunset"]);
+    expect(rows.map((row) => row.status)).toEqual(["renamable", "renamable"]);
   });
 });
 
 describe("applyableRows", () => {
   it("filters to renamable only", () => {
-    const rows = [
-      { asset_id: "a", type: "video" as const, current_slug: "a", current_name: "A", suggested_name: "b", target_asset_id: "vid-b", status: "renamable" as const },
-      { asset_id: "c", type: "image" as const, current_slug: "c", current_name: "C", suggested_name: "", target_asset_id: "c", status: "skipped" as const },
+    const rows: RenameRow[] = [
+      {
+        asset_id: VIDEO_ID,
+        type: "video",
+        current_name: "beach run",
+        suggested_name: "sunset beach",
+        status: "renamable",
+      },
+      {
+        asset_id: IMAGE_ID,
+        type: "image",
+        current_name: IMAGE_ID,
+        suggested_name: IMAGE_ID,
+        status: "skipped",
+        reason: "No suggestion produced",
+      },
+      {
+        asset_id: SECOND_VIDEO_ID,
+        type: "video",
+        current_name: "sunset",
+        suggested_name: "sunset",
+        status: "unchanged",
+        reason: "Label already matches",
+      },
     ];
-    expect(applyableRows(rows)).toHaveLength(1);
+    expect(applyableRows(rows)).toEqual([rows[0]]);
   });
 });
 
@@ -268,9 +250,9 @@ describe("isProcessOrigin", () => {
 describe("buildSuggestionPrompt", () => {
   it("lists each asset id, type, and context snippet", () => {
     const text = buildSuggestionPrompt([
-      { asset_id: "vid-beach-run", type: "video", context_text: "a dog running" },
+      { asset_id: VIDEO_ID, type: "video", context_text: "a dog running" },
     ]);
-    expect(text).toContain("vid-beach-run (video)");
+    expect(text).toContain(`${VIDEO_ID} (video)`);
     expect(text).toContain("a dog running");
     expect(text).toContain("JSON object");
     expect(text).toContain("last frame");
@@ -278,18 +260,22 @@ describe("buildSuggestionPrompt", () => {
     expect(text).toContain("1–2 content words");
   });
 
-  it("marks keep tokens for short mnemonics like nbp", () => {
+  it("includes the current display label when the asset has one", () => {
     const text = buildSuggestionPrompt([
-      { asset_id: "img-nbp-updat-ethe-device", type: "image", context_text: "gadget" },
+      {
+        asset_id: IMAGE_ID,
+        type: "image",
+        label: "green device",
+        context_text: "gadget",
+      },
     ]);
-    expect(text).toContain("keep token: nbp");
-    expect(text).toContain("MUST start");
+    expect(text).toContain(`${IMAGE_ID} (image; current label: green device)`);
   });
 
   it("truncates long context to 700 chars", () => {
     const long = "x".repeat(900);
     const text = buildSuggestionPrompt([
-      { asset_id: "vid-abc", type: "video", context_text: long },
+      { asset_id: VIDEO_ID, type: "video", context_text: long },
     ]);
     expect(text).toContain("x".repeat(700));
     expect(text).not.toContain("x".repeat(701));
@@ -297,7 +283,7 @@ describe("buildSuggestionPrompt", () => {
 
   it("notes missing text context and optional preview images", () => {
     const text = buildSuggestionPrompt(
-      [{ asset_id: "img-empty", type: "image", context_text: "" }],
+      [{ asset_id: IMAGE_ID, type: "image", context_text: "" }],
       { hasImages: true },
     );
     expect(text).toContain("no text context");
@@ -307,18 +293,20 @@ describe("buildSuggestionPrompt", () => {
 
 describe("parseSuggestionResponse", () => {
   it("parses a plain JSON object", () => {
-    const out = parseSuggestionResponse('{"vid-a": "sunset beach"}');
-    expect(out).toEqual({ "vid-a": "sunset beach" });
+    const out = parseSuggestionResponse(`{"${VIDEO_ID}": "sunset beach"}`);
+    expect(out).toEqual({ [VIDEO_ID]: "sunset beach" });
   });
 
   it("parses JSON inside a code fence", () => {
-    const out = parseSuggestionResponse('```json\n{"vid-a": "fox"}\n```');
-    expect(out).toEqual({ "vid-a": "fox" });
+    const out = parseSuggestionResponse(`\`\`\`json\n{"${VIDEO_ID}": "fox"}\n\`\`\``);
+    expect(out).toEqual({ [VIDEO_ID]: "fox" });
   });
 
   it("parses JSON embedded in prose", () => {
-    const out = parseSuggestionResponse('Here you go:\n{"vid-a": "fox"}\nDone!');
-    expect(out).toEqual({ "vid-a": "fox" });
+    const out = parseSuggestionResponse(
+      `Here you go:\n{"${VIDEO_ID}": "fox"}\nDone!`,
+    );
+    expect(out).toEqual({ [VIDEO_ID]: "fox" });
   });
 
   it("returns empty map on unparseable input", () => {
@@ -327,60 +315,30 @@ describe("parseSuggestionResponse", () => {
   });
 
   it("ignores non-string values", () => {
-    const out = parseSuggestionResponse('{"vid-a": "fox", "vid-b": 123}');
-    expect(out).toEqual({ "vid-a": "fox" });
-  });
-});
-
-describe("rewriteTimelineReferences", () => {
-  it("rewrites slot and audio slugs", () => {
-    const config = {
-      slots: [{ slug: "vid-old" }, { slug: "vid-keep" }],
-      audio: [{ slug: "aud-keep" }, { slug: "vid-old" }],
-    };
-    const idMap = new Map([["vid-old", "vid-new"]]);
-    rewriteTimelineReferences(config, idMap);
-    expect(config.slots[0].slug).toBe("vid-new");
-    expect(config.slots[1].slug).toBe("vid-keep");
-    expect(config.audio[1].slug).toBe("vid-new");
-  });
-
-  it("leaves unmatched slugs untouched", () => {
-    const config = { slots: [{ slug: "vid-other" }] };
-    rewriteTimelineReferences(config, new Map([["vid-old", "vid-new"]]));
-    expect(config.slots[0].slug).toBe("vid-other");
-  });
-});
-
-describe("rewriteDeep", () => {
-  it("rewrites string values anywhere in a nested structure", () => {
-    const plan = {
-      source_asset_id: "vid-old",
-      characters: [{ asset_id: "img-old", name: "Fox" }],
-      scenes: [{ swap: { image1: "img-old", image2_variants: { a: "vid-old" } } }],
-    };
-    const idMap = new Map([
-      ["vid-old", "vid-new"],
-      ["img-old", "img-new"],
-    ]);
-    rewriteDeep(plan, idMap);
-    expect(plan.source_asset_id).toBe("vid-new");
-    expect(plan.characters[0].asset_id).toBe("img-new");
-    expect(plan.scenes[0].swap.image1).toBe("img-new");
-    expect(plan.scenes[0].swap.image2_variants.a).toBe("vid-new");
-  });
-
-  it("leaves unmatched strings untouched", () => {
-    const obj = { a: "vid-keep", b: ["img-keep"] };
-    rewriteDeep(obj, new Map([["vid-old", "vid-new"]]));
-    expect(obj.a).toBe("vid-keep");
-    expect(obj.b[0]).toBe("img-keep");
+    const out = parseSuggestionResponse(
+      `{"${VIDEO_ID}": "fox", "${IMAGE_ID}": 123}`,
+    );
+    expect(out).toEqual({ [VIDEO_ID]: "fox" });
   });
 });
 
 // ---------------------------------------------------------------------------
 // MCP tool integration tests (apply path needs no OpenAI key)
 // ---------------------------------------------------------------------------
+
+interface AppliedRename {
+  asset_id: string;
+  label: string;
+  renamed: boolean;
+  error?: string;
+}
+
+interface AssetRow {
+  id: string;
+  artifact_id: string;
+  label?: string;
+  status: string;
+}
 
 describe("rename_all tool", () => {
   let client: Client;
@@ -402,6 +360,26 @@ describe("rename_all tool", () => {
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
+
+  async function listAssets(): Promise<AssetRow[]> {
+    const list = await client.callTool({
+      name: "list_assets",
+      arguments: { book_id: "test-proj" },
+    });
+    return JSON.parse((list.content as TextContent)[0].text).assets as AssetRow[];
+  }
+
+  async function uploadImage(filename: string): Promise<string> {
+    const data = Buffer.from("fake-png").toString("base64");
+    const upload = await client.callTool({
+      name: "upload_file",
+      arguments: { book_id: "test-proj", filename, data },
+    });
+    const uploaded = JSON.parse((upload.content as TextContent)[0].text) as {
+      artifactId: string;
+    };
+    return uploaded.artifactId;
+  }
 
   it("dry run returns error when OPENAI_API_KEY is not set", async () => {
     delete process.env.OPENAI_API_KEY;
@@ -442,7 +420,7 @@ describe("rename_all tool", () => {
       arguments: {
         book_id: "test-proj",
         dry_run: false,
-        renames: [{ asset_id: "vid-nonexistent", suggested_name: "whatever" }],
+        renames: [{ asset_id: MISSING_ID, suggested_name: "whatever" }],
       },
     });
     expect(result.isError).toBe(true);
@@ -455,37 +433,19 @@ describe("rename_all tool", () => {
       arguments: {
         book_id: "test-proj",
         dry_run: true,
-        renames: [{ asset_id: "vid-nope", suggested_name: "anything" }],
+        renames: [{ asset_id: MISSING_ID, suggested_name: "anything" }],
       },
     });
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.dry_run).toBe(true);
     expect(parsed.rows[0].status).toBe("conflict");
+    expect(parsed.rows[0].reason).toBe("Asset no longer exists");
   });
 
-  it("dry run does NOT rename any assets", async () => {
-    // Upload an image to create a real asset, then dry-run revalidation against it.
-    const data = Buffer.from("fake-png").toString("base64");
-    const uploadResult = await client.callTool({
-      name: "upload_file",
-      arguments: { book_id: "test-proj", filename: "photo.png", data },
-    });
-    const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
-
-    // Wait for the auto process_image job to leave 'working' state so rename is allowed.
-    const deadline = Date.now() + 8000;
-    const assetId = uploaded.assetId as string;
-    while (Date.now() < deadline) {
-      const beforeList = await client.callTool({
-        name: "list_assets",
-        arguments: { book_id: "test-proj" },
-      });
-      const beforeAssets = JSON.parse((beforeList.content as TextContent)[0].text).assets;
-      const found = beforeAssets.find((a: { id: string }) => a.id === assetId);
-      if (found && found.status !== "working") break;
-      await new Promise((r) => setTimeout(r, 100));
-    }
+  it("dry run does NOT relabel any assets", async () => {
+    // Uploading photo.png labels the new artifact "photo".
+    const assetId = await uploadImage("photo.png");
 
     const result = await client.callTool({
       name: "rename_all",
@@ -499,176 +459,19 @@ describe("rename_all tool", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.dry_run).toBe(true);
     expect(parsed.rows[0].status).toBe("renamable");
-    expect(parsed.rows[0].target_asset_id).toBe("img-sunset-beach");
+    expect(parsed.rows[0].asset_id).toBe(assetId);
+    expect(parsed.rows[0].current_name).toBe("photo");
+    expect(parsed.rows[0].suggested_name).toBe("sunset beach");
 
-    // The original asset must still exist unchanged.
-    const afterList = await client.callTool({
-      name: "list_assets",
-      arguments: { book_id: "test-proj" },
-    });
-    const afterAssets = JSON.parse((afterList.content as TextContent)[0].text).assets;
-    expect(afterAssets.some((a: { id: string }) => a.id === assetId)).toBe(true);
-    expect(afterAssets.some((a: { id: string }) => a.id === "img-sunset-beach")).toBe(false);
+    // The artifact keeps both its id and its original label.
+    const after = await listAssets();
+    const row = after.find((asset) => asset.id === assetId);
+    expect(row).toBeDefined();
+    expect(row?.label).toBe("photo");
   });
 
-  it("apply renames assets and reports the new ids", async () => {
-    const data = Buffer.from("fake-png").toString("base64");
-    const upload1 = await client.callTool({
-      name: "upload_file",
-      arguments: { book_id: "test-proj", filename: "a.png", data },
-    });
-    const id1 = JSON.parse((upload1.content as TextContent)[0].text).assetId as string;
-
-    // Wait for the working lease to release on both assets.
-    const deadline = Date.now() + 8000;
-    while (Date.now() < deadline) {
-      const list = await client.callTool({
-        name: "list_assets",
-        arguments: { book_id: "test-proj" },
-      });
-      const assets = JSON.parse((list.content as TextContent)[0].text).assets;
-      const found = assets.find((a: { id: string }) => a.id === id1);
-      if (found && found.status !== "working") break;
-      await new Promise((r) => setTimeout(r, 100));
-    }
-
-    const result = await client.callTool({
-      name: "rename_all",
-      arguments: {
-        book_id: "test-proj",
-        dry_run: false,
-        renames: [{ asset_id: id1, suggested_name: "sunset beach" }],
-      },
-    });
-    expect(result.isError).toBeFalsy();
-    const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.dry_run).toBe(false);
-    expect(parsed.applied[0].renamed).toBe(true);
-    expect(parsed.applied[0].new_asset_id).toBe("img-sunset-beach");
-
-    // Old id gone, new id present.
-    const afterList = await client.callTool({
-      name: "list_assets",
-      arguments: { book_id: "test-proj" },
-    });
-    const afterAssets = JSON.parse((afterList.content as TextContent)[0].text).assets;
-    expect(afterAssets.some((a: { id: string }) => a.id === id1)).toBe(false);
-    expect(afterAssets.some((a: { id: string }) => a.id === "img-sunset-beach")).toBe(true);
-  });
-
-  it("apply updates timeline slot references", async () => {
-    const data = Buffer.from("fake-png").toString("base64");
-    const upload = await client.callTool({
-      name: "upload_file",
-      arguments: { book_id: "test-proj", filename: "t.png", data },
-    });
-    const uploaded = JSON.parse((upload.content as TextContent)[0].text) as {
-      assetId: string;
-      artifactId: string;
-    };
-    const id = uploaded.assetId;
-
-    // Wait for working lease to release.
-    const deadline = Date.now() + 8000;
-    while (Date.now() < deadline) {
-      const list = await client.callTool({
-        name: "list_assets",
-        arguments: { book_id: "test-proj" },
-      });
-      const assets = JSON.parse((list.content as TextContent)[0].text).assets;
-      const found = assets.find((a: { id: string }) => a.id === id);
-      if (found && found.status !== "working") break;
-      await new Promise((r) => setTimeout(r, 100));
-    }
-
-    // Assign the asset to a timeline slot, then rename it.
-    await client.callTool({
-      name: "assign_slot",
-      arguments: { book_id: "test-proj", slot: "s01", asset_id: id },
-    });
-
-    const result = await client.callTool({
-      name: "rename_all",
-      arguments: {
-        book_id: "test-proj",
-        dry_run: false,
-        renames: [{ asset_id: id, suggested_name: "sunset beach" }],
-      },
-    });
-    expect(result.isError).toBeFalsy();
-    const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.references_updated).toBe(true);
-    expect(parsed.applied[0].new_asset_id).toBe("img-sunset-beach");
-
-    const timelineResult = await client.callTool({
-      name: "get_timeline",
-      arguments: { book_id: "test-proj" },
-    });
-    const timeline = JSON.parse((timelineResult.content as TextContent)[0].text);
-    const slots = timeline.slots ?? [];
-    expect(slots[0]?.artifact_id).toBe(uploaded.artifactId);
-  });
-
-  it("apply rewrites normalized notebook @-references and bare output ids", async () => {
-    const data = Buffer.from("fake-png").toString("base64");
-    const upload = await client.callTool({
-      name: "upload_file",
-      arguments: { book_id: "test-proj", filename: "plan.png", data },
-    });
-    const uploaded = JSON.parse((upload.content as TextContent)[0].text) as {
-      assetId: string;
-      artifactId: string;
-    };
-    const assetId = uploaded.assetId;
-
-    const deadline = Date.now() + 8000;
-    while (Date.now() < deadline) {
-      const list = await client.callTool({
-        name: "list_assets",
-        arguments: { book_id: "test-proj" },
-      });
-      const assets = JSON.parse((list.content as TextContent)[0].text).assets;
-      const found = assets.find((asset: { id: string; status: string }) => asset.id === assetId);
-      if (found && found.status !== "working") break;
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-
-    const fsObj = createEngineForTest(tempDir);
-    const notebook = await fsObj.notebooks.create("Main");
-    expect(notebook.ok).toBe(true);
-    if (!notebook.ok) return;
-    const sourceCell = fsObj.notebooks.createCell({
-      type: "image",
-      slug: "img-source",
-      slot: { row: 0, column: 1 },
-      inputs: { slug: `@${assetId}` },
-      outputArtifactId: uploaded.artifactId,
-    });
-    const imageCell = fsObj.notebooks.createCell({
-      type: "image",
-      slug: "img-key-frame",
-      slot: { row: 0, column: 0 },
-      inputs: {
-        model: "nano-banana-pro",
-        values: {
-          prompt: `Match the lighting of @${assetId} exactly.`,
-          image_slugs: [`@${assetId}`],
-          first_frame_slug: `@${assetId}`,
-        },
-        inputs: [sourceCell.id],
-        asset_ids: [assetId],
-      },
-    });
-    const saved = await fsObj.notebooks.write({
-      ...notebook.value,
-      cells: [imageCell, sourceCell],
-      edges: [fsObj.notebooks.createEdge({
-        source: sourceCell.id,
-        target: imageCell.id,
-        targetInput: "input-0",
-      })],
-    });
-    expect(saved.ok, saved.ok ? "" : saved.error.message).toBe(true);
+  it("apply relabels assets and keeps their artifact ids", async () => {
+    const assetId = await uploadImage("a.png");
 
     const result = await client.callTool({
       name: "rename_all",
@@ -678,23 +481,52 @@ describe("rename_all tool", () => {
         renames: [{ asset_id: assetId, suggested_name: "sunset beach" }],
       },
     });
-
     expect(result.isError).toBeFalsy();
-    const renamed = "img-sunset-beach";
-    const updated = fsObj.notebooks.read(notebook.value.id);
-    expect(updated.ok).toBe(true);
-    if (!updated.ok) return;
-    const imageInputs = updated.value.cells[0].inputs as {
-      values: Record<string, unknown>;
-      asset_ids: string[];
+    const parsed = JSON.parse((result.content as TextContent)[0].text) as {
+      dry_run: boolean;
+      applied: AppliedRename[];
     };
-    expect(imageInputs.values.image_slugs).toEqual([`@${renamed}`]);
-    expect(imageInputs.values.first_frame_slug).toBe(`@${renamed}`);
-    expect(imageInputs.asset_ids).toEqual([renamed]);
-    expect(imageInputs.values.prompt).toBe(
-      `Match the lighting of @${renamed} exactly.`,
+    expect(parsed.dry_run).toBe(false);
+    expect(parsed.applied).toEqual([
+      { asset_id: assetId, label: "sunset beach", renamed: true },
+    ]);
+
+    // Renaming is display-only: the id is unchanged and only the label moves.
+    const after = await listAssets();
+    const row = after.find((asset) => asset.id === assetId);
+    expect(row).toBeDefined();
+    expect(row?.artifact_id).toBe(assetId);
+    expect(row?.label).toBe("sunset beach");
+  });
+
+  it("apply relabels several assets in one batch, duplicate labels included", async () => {
+    const firstId = await uploadImage("one.png");
+    const secondId = await uploadImage("two.png");
+
+    const result = await client.callTool({
+      name: "rename_all",
+      arguments: {
+        book_id: "test-proj",
+        dry_run: false,
+        renames: [
+          { asset_id: firstId, suggested_name: "sunset" },
+          { asset_id: secondId, suggested_name: "sunset" },
+        ],
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text) as {
+      applied: AppliedRename[];
+    };
+    expect(parsed.applied).toEqual([
+      { asset_id: firstId, label: "sunset", renamed: true },
+      { asset_id: secondId, label: "sunset", renamed: true },
+    ]);
+
+    const after = await listAssets();
+    const labels = [firstId, secondId].map(
+      (id) => after.find((asset) => asset.id === id)?.label,
     );
-    expect(updated.value.cells[1].inputs?.slug).toBe(`@${renamed}`);
-    expect(updated.value.cells[1].outputArtifactId).toBe(uploaded.artifactId);
+    expect(labels).toEqual(["sunset", "sunset"]);
   });
 });

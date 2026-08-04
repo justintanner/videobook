@@ -1,4 +1,4 @@
-import type { Engine, ArtifactManifestFile } from "videobook-engine";
+import type { ArtifactKind, Engine, ArtifactManifestFile } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { KlingMotionControlRequestSchema } from "@apicity/kie/zod";
@@ -7,6 +7,7 @@ import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
+import { artifactKindOf, requireArtifactKind } from "./_shared.js";
 import { assertKlingMotionControlDuration } from "../kling-motion-control-duration.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -21,12 +22,12 @@ function getImagesFromManifest(files: ArtifactManifestFile[]): ArtifactManifestF
 type ImageOrientation = "landscape" | "portrait" | "square";
 
 export function selectMotionControlImageFiles(
-  assetId: string,
+  kind: ArtifactKind,
   files: ArtifactManifestFile[],
   preferredOrientation?: ImageOrientation,
 ): ArtifactManifestFile[] {
   const images = getImagesFromManifest(files);
-  if (assetId.startsWith("char-")) return images.slice(0, 2);
+  if (kind === "character") return images.slice(0, 2);
   const original = images.find((file) => /^original\.[^/]+$/i.test(file.name));
   const matching = preferredOrientation
     ? images.find((file) => file.name.toLowerCase() === `${preferredOrientation}.jpg`)
@@ -57,10 +58,10 @@ type RefInput = { assetId: string; filename: string };
 const motionControlInput = KlingMotionControlRequestSchema.shape.input.shape;
 
 const generateKling30MotionControlVideoSchema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(motionControlInput.prompt, "Optional motion description"),
-  character_image_slugs: apicityStringArrayField(motionControlInput.input_urls, "Character image @slugs (input_urls)", { required: true }),
-  motion_video_slugs: apicityStringArrayField(motionControlInput.video_urls, "Motion reference video @slugs (video_urls)", { required: true }).max(1),
+  character_image_refs: apicityStringArrayField(motionControlInput.input_urls, "Character image artifact ids (input_urls)", { required: true }),
+  motion_video_refs: apicityStringArrayField(motionControlInput.video_urls, "Motion reference video artifact ids (video_urls)", { required: true }).max(1),
   mode: apicityField(motionControlInput.mode, "Output resolution: 720p / 1080p (default 720p)"),
   character_orientation: apicityField(motionControlInput.character_orientation, "Character orientation source: video / image (default video)"),
   background_source: apicityField(motionControlInput.background_source, "Background source: input_video / input_image (default input_video)"),
@@ -72,22 +73,21 @@ type Args = SchemaArgs<typeof generateKling30MotionControlVideoSchema>;
 export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_kling_3_0_motion_control",
-    description: "Apply motion from reference videos to character images using Kling 3.0 motion-control. Creates a new vid- asset and enqueues a background job.",
+    description: "Apply motion from reference videos to character images using Kling 3.0 motion-control. Creates a new video artifact and enqueues a background job.",
     schema: generateKling30MotionControlVideoSchema,
     handler: async (args) => {
       const {
         book_id, prompt,
-        character_image_slugs, motion_video_slugs,
+        character_image_refs, motion_video_refs,
         mode, character_orientation, background_source,
       } = args as Args;
 
       const videoInputs: RefInput[] = [];
       let preferredImageOrientation: ImageOrientation | undefined;
-      for (const raw of motion_video_slugs) {
+      for (const raw of motion_video_refs) {
         const assetId = raw.replace(/^@/, "");
-        if (!assetId.startsWith("vid-")) {
-          return { isError: true as const, content: [{ type: "text" as const, text: `motion_video_slugs entries must be vid-* assets, got: ${assetId}` }] };
-        }
+        const kindGate = await requireArtifactKind(fs, assetId, ["video"], "motion_video_refs");
+        if (kindGate) return kindGate;
         const [manifest, metadata] = await Promise.all([
           fs.files.manifest(assetId),
           fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original"),
@@ -102,15 +102,16 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
       }
 
       const imageInputs: RefInput[] = [];
-      for (const raw of character_image_slugs) {
+      for (const raw of character_image_refs) {
         const assetId = raw.replace(/^@/, "");
-        if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
-          return { isError: true as const, content: [{ type: "text" as const, text: `character_image_slugs entries must be img-* or char-* assets, got: ${assetId}` }] };
+        const kind = artifactKindOf(fs, assetId);
+        if (kind !== "image" && kind !== "character") {
+          return { isError: true as const, content: [{ type: "text" as const, text: `character_image_refs entries must be image or character artifacts; ${assetId} is ${kind ?? "not a known artifact"}` }] };
         }
         const manifest = await fs.files.manifest(assetId);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
         const images = selectMotionControlImageFiles(
-          assetId,
+          kind,
           manifest.value.files,
           preferredImageOrientation,
         );
@@ -121,7 +122,7 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
       try {
         await assertKlingMotionControlDuration(
           fs,
-          motion_video_slugs[0],
+          motion_video_refs[0],
           character_orientation === "image" ? "image" : "video",
         );
       } catch (cause) {
@@ -141,14 +142,16 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const baseName = prompt ? slugify(prompt) : imageInputs[0].assetId.replace(/^img-/, "");
+      const firstImageArtifact = fs.artifacts.get(imageInputs[0].assetId);
+      const firstImageLabel = firstImageArtifact.ok ? firstImageArtifact.value.label ?? "" : "";
+      const baseName = prompt ? slugify(prompt) : slugify(firstImageLabel);
       const videoName = `${modelSlug("kie", "kling-3.0/motion-control")}-${baseName || Date.now()}`;
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInputs.map((i) => i.assetId);
       const sourceVideoIds = videoInputs.map((i) => i.assetId);
 

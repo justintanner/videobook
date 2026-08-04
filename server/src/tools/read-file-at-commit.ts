@@ -12,7 +12,7 @@ export function readFileAtCommitDef(fs: Engine): ToolDef {
       asset_id: z.string().describe("Asset ID (e.g. script-desc-*)"),
       filename: z.string().describe("Filename within the asset directory (e.g. original.md)"),
       commit_hash: z.string().describe("DoltLite revision hash"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args): Promise<ToolResult> => {
       const { asset_id, filename, commit_hash } = args as {

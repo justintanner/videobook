@@ -46,7 +46,7 @@ describe('notebookRunWatchStep', () => {
         [cellId]: { status: 'error', error: 'provider died', runId },
       }),
       job: null,
-      slug: 'scene-a',
+      address: 'scene-a',
       sawRun: true,
     })
     expect(withText).toEqual({ kind: 'failed', message: 'provider died' })
@@ -56,7 +56,7 @@ describe('notebookRunWatchStep', () => {
         [cellId]: { status: 'error', runId },
       }),
       job: null,
-      slug: 'scene-a',
+      address: 'scene-a',
       sawRun: true,
     })
     expect(withoutText).toEqual({ kind: 'failed', message: '@scene-a failed' })
@@ -68,7 +68,7 @@ describe('notebookRunWatchStep', () => {
         [cellId]: { status: 'completed', runId },
       }),
       job: job({ state: 'running' }),
-      slug: 'scene-a',
+      address: 'scene-a',
       sawRun: true,
     })).toEqual({ kind: 'completed' })
   })
@@ -79,7 +79,7 @@ describe('notebookRunWatchStep', () => {
         [cellId]: { status: 'awaiting-output', runId },
       }),
       job: job({ state: 'running' }),
-      slug: 'scene-a',
+      address: 'scene-a',
       sawRun: false,
     })).toEqual({ kind: 'continue', sawRun: true })
   })
@@ -90,7 +90,7 @@ describe('notebookRunWatchStep', () => {
         [cellId]: { status: 'running', runId: otherRunId },
       }),
       job: null,
-      slug: 'scene-a',
+      address: 'scene-a',
       sawRun: true,
     })).toEqual({ kind: 'superseded' })
   })
@@ -104,7 +104,7 @@ describe('notebookRunWatchStep', () => {
         state: 'failed',
         errorMessage: 'Job lease expired',
       }),
-      slug: 'scene-a',
+      address: 'scene-a',
       sawRun: false,
     })
     expect(step.kind).toBe('failed')
@@ -117,7 +117,7 @@ describe('notebookRunWatchStep', () => {
     expect(notebookRunWatchStep({
       observation: observation({}),
       job: job({ state: 'running' }),
-      slug: 'scene-a',
+      address: 'scene-a',
       sawRun: false,
     })).toEqual({ kind: 'continue', sawRun: false })
   })
@@ -128,7 +128,7 @@ describe('notebookRunWatchStep', () => {
         [cellId]: { status: 'error', error: 'cell error text', runId },
       }),
       job: job({ state: 'failed', errorMessage: 'job error' }),
-      slug: 'scene-a',
+      address: 'scene-a',
       sawRun: true,
     })).toEqual({ kind: 'failed', message: 'cell error text' })
   })

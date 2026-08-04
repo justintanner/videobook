@@ -65,7 +65,7 @@ export function trimVideoDef(fs: Engine): ToolDef {
     },
     schema: {
       asset_id: z.string().describe("Source video asset ID or notebook reference such as @a1"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       notebook_id: z.string().uuid().optional().describe("Notebook UUID when asset_id is a grid reference and the book has multiple matching notebooks"),
       trim_start: videoTimestampSchema.optional().describe("Start of range to keep"),
       trim_end: videoTimestampSchema.optional().describe("End of range to keep"),

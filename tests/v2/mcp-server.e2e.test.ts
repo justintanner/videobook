@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { isUuidV7 } from 'videobook-engine'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
 
 const execFileAsync = promisify(execFile)
@@ -19,7 +20,7 @@ interface StartedServer {
 
 interface BookPayload {
   bookId: string
-  slug: string
+  name: string
 }
 
 interface NotebookPayload {
@@ -32,7 +33,7 @@ interface CellPayload {
 }
 
 interface NotebookDocumentPayload {
-  cells: Array<{ id: string; slug: string }>
+  cells: Array<{ id: string; label?: string; address: string }>
   edges: Array<{ id: string; source: string; target: string; targetInput: string }>
 }
 
@@ -255,8 +256,8 @@ describe('v2 MCP server', () => {
       ],
     })
 
-    const book = await callTool<BookPayload>(client, 'create_book', { slug: 'mcp-story' })
-    expect(book).toMatchObject({ slug: 'mcp-story', bookId: expect.any(String) })
+    const book = await callTool<BookPayload>(client, 'create_book', { name: 'mcp-story' })
+    expect(book).toMatchObject({ name: 'mcp-story', bookId: expect.any(String) })
 
     const notebooks = await callTool<NotebookPayload[]>(client, 'list_notebooks', {
       book_id: book.bookId,
@@ -275,7 +276,7 @@ describe('v2 MCP server', () => {
       notebook_id: notebook.id,
       cell: {
         type: 'prompt',
-        slug: 'prompt-opening',
+        label: 'prompt-opening',
         slot: { row: 0, column: 0 },
         prompt: 'A green city at sunrise',
       },
@@ -285,7 +286,7 @@ describe('v2 MCP server', () => {
       notebook_id: notebook.id,
       cell: {
         type: 'generate_image',
-        slug: 'generate-image-opening',
+        label: 'generate-image-opening',
         slot: { row: 0, column: 1 },
         prompt: 'A green city at sunrise',
         model: 'generate_kie_gpt_image_2_text_to_image',
@@ -304,8 +305,16 @@ describe('v2 MCP server', () => {
       notebook_id: notebook.id,
     })
     expect(document.cells).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: prompt.id, slug: 'prompt-opening' }),
-      expect.objectContaining({ id: image.id, slug: 'generate-image-opening' }),
+      expect.objectContaining({
+        id: prompt.id,
+        label: 'prompt-opening',
+        address: '@a1',
+      }),
+      expect.objectContaining({
+        id: image.id,
+        label: 'generate-image-opening',
+        address: '@a2',
+      }),
     ]))
     expect(document.edges).toEqual([
       expect.objectContaining({ source: prompt.id, target: image.id, targetInput: 'prompt' }),
@@ -328,14 +337,15 @@ describe('v2 MCP server', () => {
       body: videoBody,
     })
     expect(uploaded.ok).toBe(true)
-    const upload = await uploaded.json() as { assetId: string }
-    expect(upload.assetId).toMatch(/^vid-/)
+    const upload = await uploaded.json() as { artifactId: string; assetId: string }
+    expect(isUuidV7(upload.assetId)).toBe(true)
+    expect(upload.artifactId).toBe(upload.assetId)
 
     const assets = await callTool<{ assets: AssetPayload[] }>(client, 'list_assets', {
       book_id: book.bookId,
     })
     const video = assets.assets.find((asset) => asset.id === upload.assetId)
-    expect(video).toMatchObject({ artifact_id: expect.any(String), type: 'video' })
+    expect(video).toMatchObject({ artifact_id: upload.assetId, type: 'video' })
     if (!video) throw new Error('Uploaded video was not listed')
 
     const timeline = await callTool<{ slots: Array<{ artifact_id: string; id: string }> }>(client, 'set_timeline', {
@@ -357,10 +367,10 @@ describe('v2 MCP server', () => {
     ]))
     expect(server.output.join('')).not.toContain('[mcp] history record failed')
 
-    const deleted = await callTool<{ bookId: string; slug: string }>(client, 'delete_book', {
+    const deleted = await callTool<BookPayload>(client, 'delete_book', {
       book_id: book.bookId,
-      confirm_slug: 'mcp-story',
+      confirm_name: 'mcp-story',
     })
-    expect(deleted).toEqual({ bookId: book.bookId, slug: 'mcp-story' })
+    expect(deleted).toEqual({ bookId: book.bookId, name: 'mcp-story' })
   })
 })

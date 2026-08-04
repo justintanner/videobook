@@ -14,7 +14,7 @@ import {
 const qwen = FalQwenImageRequestSchema.shape;
 
 const schema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(qwen.prompt, "Text prompt for image generation", { required: true }),
   image_size: apicityUnionEnumField(qwen.image_size, "Output size preset"),
   num_inference_steps: apicityField(qwen.num_inference_steps, "Inference steps (2-250)"),
@@ -33,7 +33,7 @@ type Args = SchemaArgs<typeof schema>;
 export function generateQwenImageFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_qwen_2_0_text_to_image",
-    description: "Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new img- asset and enqueues a background job.",
+    description: "Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new image artifact and enqueues a background job.",
     schema,
     handler: async (args) => {
       const { book_id, prompt, image_size, num_inference_steps, guidance_scale, num_images, output_format, negative_prompt, acceleration, enable_safety_checker, use_turbo, seed } = args as Args;
@@ -45,7 +45,7 @@ export function generateQwenImageFalDef(fs: Engine): ToolDef {
       const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "qwen2/text-to-image")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "qwen2/text-to-image")}-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

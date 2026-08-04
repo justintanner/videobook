@@ -75,7 +75,7 @@ export function registerGenerateKling30VideoJob(fs: Engine): void {
       ? undefined
       : transformProviderPrompt("generate_kie_kling_3_0_video", {
         prompt,
-        image_slugs: imageInputs.map((input) => input.assetId),
+        image_refs: imageInputs.map((input) => input.assetId),
       });
     const request = buildKling30VideoPayload(
       { prompt: normalizedPrompt, mode, duration, sound, aspect_ratio, multi_shots, multi_prompt },

@@ -9,7 +9,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const base = FalNanoBanana2LiteTextToImageRequestSchema.shape;
 
 const schema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(base.prompt, "Text prompt for image generation", { required: true }),
   num_images: apicityField(base.num_images, "Number of images to generate"),
   aspect_ratio: apicityField(base.aspect_ratio, "Aspect ratio"),
@@ -24,7 +24,7 @@ type Args = SchemaArgs<typeof schema>;
 export function generateNanoBanana2LiteFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_nano_banana_2_lite_text_to_image",
-    description: "Generate an image via fal.ai using Google Nano Banana 2 Lite from a text prompt. Creates a new img- asset and enqueues a background job.",
+    description: "Generate an image via fal.ai using Google Nano Banana 2 Lite from a text prompt. Creates a new image artifact and enqueues a background job.",
     schema,
     handler: async (args) => {
       const { book_id, prompt, num_images, aspect_ratio, output_format, safety_tolerance, thinking_level, seed } = args as Args;
@@ -36,7 +36,7 @@ export function generateNanoBanana2LiteFalDef(fs: Engine): ToolDef {
       const assetResult = await fs.artifacts.create("img", `nano-banana-2-lite-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `fal-nano-banana-2-lite-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

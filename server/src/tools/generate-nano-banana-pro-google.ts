@@ -3,11 +3,11 @@ import { z, type ZodRawShape } from "zod";
 import { modelSlug } from "@apicity/cost";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageSlugs } from "./_image-inputs.js";
+import { resolveImageRefs } from "./_image-inputs.js";
 import { slugify } from "./_seedance2-shared.js";
 import {
   canonicalCharacterId,
-  rewriteImageSlugMentions,
+  rewriteImageRefMentions,
   totalImageReferenceSlots,
   GOOGLE_IMAGE_MAX_REFERENCE_SLOTS,
 } from "../google-flow-refs.js";
@@ -20,9 +20,9 @@ import {
 const NBP_GOOGLE_ASPECT_RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16", "auto"] as const;
 
 const generateNanoBananaProGoogleSchema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: z.string().describe("Image description"),
-  image_slugs: z.array(z.string()).max(10).optional().describe("Reference image @slugs or http(s) URLs (0-10, e.g., @img-style)"),
+  image_refs: z.array(z.string()).max(10).optional().describe("Reference image artifact ids or http(s) URLs (0-10)"),
   character_refs: z.array(z.string()).max(7).optional().describe("Optional Google Flow character references (up to 7)"),
   aspect_ratio: z.enum(NBP_GOOGLE_ASPECT_RATIOS).optional().describe("Output aspect ratio ('auto' only with reference images; default 16:9)"),
   seed: z.number().int().min(0).optional().describe("Random seed for reproducibility"),
@@ -34,18 +34,18 @@ type Args = SchemaArgs<typeof generateNanoBananaProGoogleSchema>;
 export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
   return {
     name: "generate_google_flow_nano_banana_pro_image",
-    description: "Generate an image using Google Nano Banana Pro via Google Flow. Text-to-image or image-to-image from up to 10 reference images. Creates a new img- asset and enqueues a background job.",
+    description: "Generate an image using Google Nano Banana Pro via Google Flow. Text-to-image or image-to-image from up to 10 reference images. Creates a new image artifact and enqueues a background job.",
     schema: generateNanoBananaProGoogleSchema,
     handler: async (args) => {
       const raw = args as Args;
-      const { book_id, prompt, image_slugs, character_refs, aspect_ratio, seed } = raw;
+      const { book_id, prompt, image_refs, character_refs, aspect_ratio, seed } = raw;
       const blank = (v: unknown): v is "" => typeof v === "string" && v.trim() === "";
 
       if (!process.env.GOOGLE_FLOW_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "GOOGLE_FLOW_API_KEY environment variable is not set" }] };
       }
 
-      const rawSlugs = (image_slugs ?? []).filter((s) => !blank(s));
+      const rawSlugs = (image_refs ?? []).filter((s) => !blank(s));
       const rawCharRefs = (character_refs ?? []).filter((s) => !blank(s));
 
       const seenChars = new Set<string>();
@@ -68,7 +68,7 @@ export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "aspect_ratio 'auto' requires at least one reference image" }] };
       }
 
-      const resolution = await resolveImageSlugs(fs, rawSlugs, book_id);
+      const resolution = await resolveImageRefs(fs, rawSlugs, book_id);
       if (!resolution.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolution.error }] };
       }
@@ -77,14 +77,14 @@ export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
       // The kie slug ("nbp") keeps asset names consistent across providers of
       // the same model; @apicity/cost has no google slugs (gaps §15).
       const nameSlug = modelSlug("kie", "nano-banana-pro");
-      const normalizedPrompt = rewriteImageSlugMentions(prompt, rawSlugs, "reference").replace(/@referenceImage_/g, "@reference_");
+      const normalizedPrompt = rewriteImageRefMentions(prompt, rawSlugs, "reference").replace(/@referenceImage_/g, "@reference_");
       const imageName = `${nameSlug}-${slugify(normalizedPrompt) || String(Date.now())}`;
       const assetResult = await fs.artifacts.create("img", imageName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
       }
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
       const jobId = `google-${nameSlug}-${imgAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {

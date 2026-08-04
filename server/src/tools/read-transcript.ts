@@ -47,7 +47,7 @@ export function readTranscriptDef(fs: Engine): ToolDef {
       "Read the transcript for a video or audio asset. Prefers timed ElevenLabs word-level cues (elevenlabs.json), falling back to plain text (.analysis.gpt4otrans.json). Returns kind='timed' with per-word start/end cues, kind='plain' with full text, kind='silence' if a transcript exists but contains no dialog, or kind='missing' if no transcript file exists.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-clip)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };

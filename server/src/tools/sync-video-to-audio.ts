@@ -66,7 +66,7 @@ export function syncVideoToAudioDef(fs: Engine): ToolDef {
     description: "Smoothly retime a video's picture through multiple anchors while preserving its original audio unchanged.",
     schema: {
       asset_id: z.string().describe("Video asset ID"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       anchors: z.array(z.union([cueAnchor, videoAnchor])).min(1).describe("Visual timestamps mapped to transcript cues or numeric audio timestamps"),
     },
     handler: async (args) => {

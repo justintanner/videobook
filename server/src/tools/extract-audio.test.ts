@@ -82,7 +82,7 @@ describe("extract_audio tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("extracts audio as a new aud- asset", async () => {
+  it("extracts audio as a new audio asset", async () => {
     const uploaded = await uploadVideo(client, "audio-proj", videoPath);
 
     const result = await client.callTool({
@@ -95,7 +95,8 @@ describe("extract_audio tool", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.audio_asset_id).toMatch(/^aud-/);
+    const audioArtifact = fs.artifacts.get(parsed.audio_asset_id);
+    expect(audioArtifact.ok && audioArtifact.value.kind).toBe("audio");
     expect(parsed.source_video).toBe(uploaded.assetId);
     expect(parsed.status).toBe("enqueued");
 

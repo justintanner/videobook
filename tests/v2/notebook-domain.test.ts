@@ -35,7 +35,7 @@ describe('v2 notebook domain tools', () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const createBook = byName.get('create_book')!
-    const created = resultJson(await createBook.handler({ slug: 'story' })) as { bookId: string }
+    const created = resultJson(await createBook.handler({ name: 'story' })) as { bookId: string }
     const managed = books.get(created.bookId)
     expect(managed.ok).toBe(true)
     if (!managed.ok) return
@@ -58,7 +58,7 @@ describe('v2 notebook domain tools', () => {
       notebook_id: notebookId,
       cell: {
         type: 'prompt',
-        slug: 'prompt-opening',
+        label: 'prompt-opening',
         slot: { row: 0, column: 0 },
         prompt: 'A glowing moon garden',
       },
@@ -67,7 +67,7 @@ describe('v2 notebook domain tools', () => {
       notebook_id: notebookId,
       cell: {
         type: 'generate_image',
-        slug: 'generate-image-opening',
+        label: 'generate-image-opening',
         slot: { row: 0, column: 1 },
         prompt: 'A glowing moon garden',
       },
@@ -94,7 +94,7 @@ describe('v2 notebook domain tools', () => {
     resultJson(await invoke('update_notebook_cell', {
       notebook_id: notebookId,
       cell_id: image.id,
-      cell: { slug: 'generate-image-moon-garden', slot: { row: 1, column: 0 } },
+      cell: { label: 'generate-image-moon-garden', slot: { row: 1, column: 0 } },
     }))
     resultJson(await invoke('move_notebook_cells', {
       notebook_id: notebookId,
@@ -106,12 +106,18 @@ describe('v2 notebook domain tools', () => {
 
     const document = resultJson(await invoke('get_notebook', { notebook_id: notebookId })) as {
       revision: string
-      cells: Array<{ id: string; slug: string; slot: { row: number; column: number } }>
+      cells: Array<{
+        id: string
+        label: string
+        address: string
+        slot: { row: number; column: number }
+      }>
       edges: Array<{ source: string; target: string; targetInput: string }>
     }
     expect(document.cells).toHaveLength(2)
     expect(document.cells.find((cell) => cell.id === image.id)).toMatchObject({
-      slug: 'generate-image-moon-garden',
+      label: 'generate-image-moon-garden',
+      address: '@a1',
       slot: { row: 0, column: 0 },
     })
     expect(document.cells.find((cell) => cell.id === prompt.id)?.slot)
@@ -227,7 +233,7 @@ describe('v2 notebook domain tools', () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
-      slug: 'delete-generated-cell',
+      name: 'delete-generated-cell',
     })) as { bookId: string }
     const managed = books.get(created.bookId)
     expect(managed.ok).toBe(true)
@@ -247,7 +253,7 @@ describe('v2 notebook domain tools', () => {
       notebook_id: notebookId,
       cell: {
         type: 'prompt',
-        slug: 'prompt-source',
+        label: 'prompt-source',
         slot: { row: 0, column: 0 },
         prompt: 'Source prompt',
       },
@@ -256,7 +262,7 @@ describe('v2 notebook domain tools', () => {
       notebook_id: notebookId,
       cell: {
         type: 'generate_image',
-        slug: 'generate-image-ready',
+        label: 'generate-image-ready',
         slot: { row: 0, column: 1 },
         prompt: 'Generated image',
       },
@@ -313,7 +319,7 @@ describe('v2 notebook domain tools', () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
-      slug: 'typed-actions',
+      name: 'typed-actions',
     })) as { bookId: string }
     const managed = books.get(created.bookId)
     expect(managed.ok).toBe(true)
@@ -331,19 +337,20 @@ describe('v2 notebook domain tools', () => {
     const notebookId = notebooks[0]!.id
     const createCell = async (
       type: string,
-      slug: string,
+      label: string,
       row: number,
       column: number,
     ) => resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
-      cell: { type, slug, slot: { row, column } },
+      cell: { type, label, slot: { row, column } },
     })) as {
       id: string
       operation?: string
       output_cell?: {
         id: string
         type: string
-        slug: string
+        label: string
+        address: string
         slot: { row: number; column: number }
         inputs?: Record<string, unknown>
       }
@@ -368,7 +375,8 @@ describe('v2 notebook domain tools', () => {
     expect(extractFrame.operation).toBe('extract_frame')
     expect(imageOutput).toMatchObject({
       type: 'image',
-      slug: 'img-source',
+      label: 'extract-frame-source first frame',
+      address: '@a3',
       slot: { row: 0, column: 2 },
       inputs: {
         mediaRole: 'extract-frame-output',
@@ -600,7 +608,7 @@ describe('v2 notebook domain tools', () => {
   it('cancels a queued persistent job explicitly', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
-    const created = resultJson(await byName.get('create_book')!.handler({ slug: 'cancel-job' })) as {
+    const created = resultJson(await byName.get('create_book')!.handler({ name: 'cancel-job' })) as {
       bookId: string
     }
     const managed = books.get(created.bookId)
@@ -633,7 +641,7 @@ describe('v2 notebook domain tools', () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
-      slug: 'track-lifecycle',
+      name: 'track-lifecycle',
     })) as { bookId: string }
     const managed = books.get(created.bookId)
     expect(managed.ok).toBe(true)
@@ -674,7 +682,7 @@ describe('v2 notebook domain tools', () => {
   it('round-trips semantic cells, typed references, and pinned search results', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
-    const created = resultJson(await byName.get('create_book')!.handler({ slug: 'semantic-story' })) as {
+    const created = resultJson(await byName.get('create_book')!.handler({ name: 'semantic-story' })) as {
       bookId: string
     }
     const managed = books.get(created.bookId)
@@ -728,19 +736,19 @@ describe('v2 notebook domain tools', () => {
     const revision = managed.value.engine.head
     const referenceId = managed.value.engine.notebooks.createCell({
       type: 'prompt',
-      slug: 'prompt-reference-id',
+      label: 'prompt-reference-id',
       slot: { row: 0, column: 0 },
     }).id
     const resultId = managed.value.engine.notebooks.createCell({
       type: 'prompt',
-      slug: 'prompt-result-id',
+      label: 'prompt-result-id',
       slot: { row: 0, column: 0 },
     }).id
     const cell = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
         type: 'video',
-        slug: 'vid-warm-interview-moments',
+        label: 'vid-warm-interview-moments',
         slot: { row: 0, column: 0 },
         references: [{
           id: referenceId,
@@ -798,7 +806,7 @@ describe('v2 notebook domain tools', () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
-      slug: 'generation-lifecycle',
+      name: 'generation-lifecycle',
     })) as { bookId: string }
     const managed = books.get(created.bookId)
     expect(managed.ok).toBe(true)
@@ -816,7 +824,7 @@ describe('v2 notebook domain tools', () => {
       notebook_id: notebookId,
       cell: {
         type: 'generate_image',
-        slug: 'generate-image-opening',
+        label: 'generate-image-opening',
         slot: { row: 0, column: 0 },
         prompt: 'A moonlit garden',
         model: 'generate_kie_gpt_image_2_text_to_image',

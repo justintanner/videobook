@@ -126,12 +126,12 @@ export async function submitQueuedKieTask(
   bookId: string,
   task: PendingTask,
 ): Promise<PendingTask> {
-  if (task.taskId !== QUEUED_TASK_ID) throw new Error(`KIE task ${task.artifactSlug} is not locally queued`);
+  if (task.taskId !== QUEUED_TASK_ID) throw new Error(`KIE task ${task.artifactId} is not locally queued`);
   const ownerId = await fs.jobs.pending.getOwner(task.artifactId, QUEUED_TASK_ID);
-  if (!ownerId) throw new Error(`No active queued KIE lease found for ${task.artifactSlug}`);
+  if (!ownerId) throw new Error(`No active queued KIE lease found for ${task.artifactId}`);
 
   const payloadResult = await fs.metadata.artifacts.read<MediaGenerationRequest>(task.artifactId, "generation-payload");
-  if (!payloadResult.ok || payloadResult.value === null) throw new Error(`No prepared KIE payload found for ${task.artifactSlug}`);
+  if (!payloadResult.ok || payloadResult.value === null) throw new Error(`No prepared KIE payload found for ${task.artifactId}`);
   assertProviderPayload(payloadResult.value, {
     toolName: task.taskType,
     wire: true,
@@ -154,8 +154,8 @@ export async function submitQueuedKieTask(
     artifactId: task.artifactId,
     meta,
   }, ownerId);
-  if (!writeResult.ok) throw new Error(`Failed to write submitted pending-task for ${task.artifactSlug}: ${writeResult.error.message}`);
-  if (writeResult.value === null) throw new Error(`Lost queued KIE lease while submitting ${task.artifactSlug}`);
+  if (!writeResult.ok) throw new Error(`Failed to write submitted pending-task for ${task.artifactId}: ${writeResult.error.message}`);
+  if (writeResult.value === null) throw new Error(`Lost queued KIE lease while submitting ${task.artifactId}`);
 
   await fs.metadata.artifacts.write(task.artifactId, "kie-task-id", { taskId });
   return writeResult.value.task;

@@ -61,16 +61,16 @@ describe('notebook frame commands', () => {
 
   it('parses direct first and last frame requests without claiming other prompts', () => {
     expect(parseNotebookFrameCommand(
-      'extract the first frame of @vid-01',
+      'extract the first frame of @a1',
     )).toEqual({
       frameMode: 'first',
-      sourceReference: 'vid-01',
+      sourceReference: 'a1',
     })
     expect(parseNotebookFrameCommand(
-      'Please capture last frame from @VID-ENDING.',
+      'Please capture last frame from @019F0000-0D31-7D96-8C0F-800000000001.',
     )).toEqual({
       frameMode: 'last',
-      sourceReference: 'vid-ending',
+      sourceReference: '019f0000-0d31-7d96-8c0f-800000000001',
     })
     expect(parseNotebookFrameCommand(
       'grab the first frame from @Z13',
@@ -85,7 +85,7 @@ describe('notebook frame commands', () => {
       sourceReference: 'a2',
     })
     expect(parseNotebookFrameCommand(
-      'generate an image inspired by @vid-01',
+      'generate an image inspired by @a1',
     )).toBeNull()
   })
 
@@ -137,7 +137,7 @@ describe('notebook frame commands', () => {
     ])
     const artifact = await engine.artifacts.create({
       kind: 'video',
-      name: 'source',
+      label: 'source',
     })
     expect(artifact.ok).toBe(true)
     if (!artifact.ok) return
@@ -152,7 +152,7 @@ describe('notebook frame commands', () => {
       notebook_id: notebookId,
       cell: {
         type: 'video',
-        slug: 'vid-01',
+        label: 'Source clip',
         slot: { row: 0, column: 0 },
         output_artifact_id: artifact.value.artifactId,
       },
@@ -162,7 +162,7 @@ describe('notebook frame commands', () => {
       notebook_id: notebookId,
       cell: {
         type: 'image',
-        slug: 'img-reference',
+        label: 'Reference image',
         slot: { row: 0, column: 1 },
       },
     })
@@ -171,15 +171,17 @@ describe('notebook frame commands', () => {
     if (!beforeResult.ok) return
     const before: NotebookDocument = beforeResult.value
 
-    expect(resolveNotebookFrameSource(before, 'vid-01').id).toBe(source.id)
+    expect(resolveNotebookFrameSource(before, source.id).id).toBe(source.id)
+    expect(resolveNotebookFrameSource(before, source.id.slice(0, 30)).id)
+      .toBe(source.id)
     expect(resolveNotebookFrameSource(before, 'A1').id).toBe(source.id)
     expect(() => resolveNotebookFrameSource(before, 'missing-video'))
       .toThrow('Notebook cell @missing-video was not found')
-    expect(() => resolveNotebookFrameSource(before, 'img-reference'))
+    expect(() => resolveNotebookFrameSource(before, 'a2'))
       .toThrow('@a2 is not a video-producing cell')
 
     const command = parseNotebookFrameCommand(
-      'extract the first frame of @vid-01',
+      'extract the first frame of @a1',
     )!
     const firstRun = await enqueueNotebookFrameCommand({
       actor: 'frame-command-test',
@@ -191,7 +193,8 @@ describe('notebook frame commands', () => {
     expect(firstRun).toMatchObject({
       reusedAction: false,
       sourceCellId: source.id,
-      sourceSlug: 'vid-01',
+      sourceAddress: '@a1',
+      actionAddress: '@a3',
     })
     await waitForJob(firstRun.jobId)
 
@@ -205,6 +208,7 @@ describe('notebook frame commands', () => {
       cell.id === firstRun.outputCellId)
     expect(action).toMatchObject({
       type: 'extract_frame',
+      label: 'First frame',
       operation: 'extract_frame',
       inputs: { frameMode: 'first' },
     })

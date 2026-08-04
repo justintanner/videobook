@@ -84,7 +84,7 @@ describe("chat tool", () => {
     const result = await client.callTool({
       name: "chat",
       arguments: {
-        prompt: "do something with @nonexistent-asset",
+        prompt: "do something with @019fcc00-0000-7000-8000-00000000dead",
         book_id: "test-proj",
       },
     });
@@ -135,15 +135,15 @@ describe("chat tool", () => {
     const result = await client.callTool({
       name: "chat",
       arguments: {
-        prompt: "combine @img-foo and @vid-bar",
+        prompt: "combine @019fcc00-0000-7000-8000-0000000000f0 and @019fcc00-0000-7000-8000-0000000000f1",
         book_id: "test-proj",
       },
     });
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("Asset not found");
-    expect(content[0].text).toContain("@img-foo");
-    expect(content[0].text).toContain("@vid-bar");
+    expect(content[0].text).toContain("@019fcc00-0000-7000-8000-0000000000f0");
+    expect(content[0].text).toContain("@019fcc00-0000-7000-8000-0000000000f1");
   });
 
   it("prompt without @tags and no API key returns API key error", async () => {
@@ -162,24 +162,24 @@ describe("chat tool", () => {
 });
 
 describe("sanitizeGenerateImageParams", () => {
-  it("folds @vid-* image_slugs into prompt and keeps only @img-*", () => {
+  it("folds @vid-* image_refs into prompt and keeps only @img-*", () => {
     const out = sanitizeGenerateImageParams({
       prompt: "qr code",
-      image_slugs: ["@vid-og", "@img-style"],
+      image_refs: ["@vid-og", "@img-style"],
     });
-    expect(out.image_slugs).toEqual(["@img-style"]);
+    expect(out.image_refs).toEqual(["@img-style"]);
     expect(out.prompt).toBe("qr code (from source @vid-og)");
   });
 
   it("builds a prompt when only non-image slugs are present", () => {
     const out = sanitizeGenerateImageParams({
-      image_slugs: ["@vid-og"],
+      image_refs: ["@vid-og"],
     });
-    expect(out.image_slugs).toEqual([]);
+    expect(out.image_refs).toEqual([]);
     expect(out.prompt).toBe("from source @vid-og");
   });
 
-  it("leaves params unchanged when image_slugs is absent", () => {
+  it("leaves params unchanged when image_refs is absent", () => {
     const input = { prompt: "qr code image" };
     expect(sanitizeGenerateImageParams(input)).toEqual(input);
   });
@@ -248,7 +248,7 @@ describe("enrichAssetContext", () => {
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
-    await fs.metadata.artifacts.write(asset.value.slug, "original", {
+    await fs.metadata.artifacts.write(asset.value.artifactId, "original", {
         origin: "download",
         source_url: "https://www.youtube.com/watch?v=b-3853ow72Q",
       }
@@ -257,10 +257,10 @@ describe("enrichAssetContext", () => {
     const rows = await enrichAssetContext(
       fs,
       [{
-        tag: asset.value.slug,
+        tag: asset.value.artifactId,
         artifactType: "video",
         artifactId: asset.value.artifactId,
-        artifactSlug: asset.value.slug,
+        artifactSlug: asset.value.artifactId,
         filePath: join(asset.value.path, "original.mp4"),
         workspacePath: asset.value.path,
       }],
@@ -288,26 +288,26 @@ describe("loadScriptContentsForChat", () => {
     if (!script.ok) throw new Error(script.error.message);
 
     const body = "A pig sits upright on a red stool.";
-    const wrote = await fs.files.write(script.value.slug, SCRIPT_FILENAME, body);
+    const wrote = await fs.files.write(script.value.artifactId, SCRIPT_FILENAME, body);
     expect(wrote.ok).toBe(true);
 
-    const decoy = await fs.files.write(script.value.slug, "index.md", "WRONG PLAN FILE");
+    const decoy = await fs.files.write(script.value.artifactId, "index.md", "WRONG PLAN FILE");
     expect(decoy.ok).toBe(true);
 
     const contents = await loadScriptContentsForChat(
       fs,
       [{
-        tag: script.value.slug,
+        tag: script.value.artifactId,
         artifactType: "script",
         artifactId: script.value.artifactId,
-        artifactSlug: script.value.slug,
+        artifactSlug: script.value.artifactId,
         filePath: join(script.value.path, SCRIPT_FILENAME),
         workspacePath: script.value.path,
       }],
       "chat-script-proj",
     );
 
-    expect(contents).toEqual([{ tag: script.value.slug, content: body }]);
+    expect(contents).toEqual([{ tag: script.value.artifactId, content: body }]);
     expect(contents[0]?.content).not.toContain("WRONG PLAN FILE");
     fs.close();
   });
@@ -317,15 +317,15 @@ describe("loadScriptContentsForChat", () => {
     const fs = createEngineForTest(tempDir);
     const script = await fs.artifacts.create("script", "orphan");
     if (!script.ok) throw new Error(script.error.message);
-    await fs.files.write(script.value.slug, "index.md", "should not be loaded");
+    await fs.files.write(script.value.artifactId, "index.md", "should not be loaded");
 
     const contents = await loadScriptContentsForChat(
       fs,
       [{
-        tag: script.value.slug,
+        tag: script.value.artifactId,
         artifactType: "script",
         artifactId: script.value.artifactId,
-        artifactSlug: script.value.slug,
+        artifactSlug: script.value.artifactId,
         filePath: join(script.value.path, "index.md"),
         workspacePath: script.value.path,
       }],

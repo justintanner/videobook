@@ -32,7 +32,7 @@ describe("Kling motion-control duration", () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-kling-motion-duration-"));
     engine = createEngine({
       rootDir,
-      initialBookSlug: "kling-motion-duration",
+      initialBookName: "kling-motion-duration",
     });
     await engine.ready;
   });
@@ -43,7 +43,7 @@ describe("Kling motion-control duration", () => {
   });
 
   async function createMotionAsset(duration?: number): Promise<string> {
-    const created = await engine.artifacts.create("vid", "yt 3h3i_td5kce");
+    const created = await engine.artifacts.create("video", "yt 3h3i_td5kce");
     expect(created.ok).toBe(true);
     if (!created.ok) throw new Error(created.error.message);
     const written = await engine.files.write(
@@ -60,11 +60,11 @@ describe("Kling motion-control duration", () => {
       );
       expect(metadata.ok).toBe(true);
     }
-    return created.value.slug;
+    return created.value.artifactId;
   }
 
   it("accepts the exact duration boundaries for both orientations", async () => {
-    const motionSlug = await createMotionAsset(3);
+    const motionArtifactId = await createMotionAsset(3);
     const cases: Array<[KlingMotionControlOrientation, number]> = [
       ["image", 3],
       ["image", 10],
@@ -73,44 +73,44 @@ describe("Kling motion-control duration", () => {
     ];
     for (const [orientation, duration] of cases) {
       const metadata = await engine.metadata.artifacts.write(
-        motionSlug,
+        motionArtifactId,
         "original",
         { duration },
       );
       expect(metadata.ok).toBe(true);
       await expect(assertKlingMotionControlDuration(
         engine,
-        motionSlug,
+        motionArtifactId,
         orientation,
       )).resolves.toBe(duration);
     }
   });
 
   it("rejects durations outside each orientation range with actionable guidance", async () => {
-    const motionSlug = await createMotionAsset(2.5);
+    const motionArtifactId = await createMotionAsset(2.5);
     await expect(assertKlingMotionControlDuration(
       engine,
-      motionSlug,
+      motionArtifactId,
       "image",
     )).rejects.toThrow(/is 2\.5s.*at least 3s.*\/split/s);
 
-    await engine.metadata.artifacts.write(motionSlug, "original", { duration: 10.5 });
+    await engine.metadata.artifacts.write(motionArtifactId, "original", { duration: 10.5 });
     await expect(assertKlingMotionControlDuration(
       engine,
-      `@${motionSlug}`,
+      `@${motionArtifactId}`,
       "image",
     )).rejects.toThrow(/is 10\.5s.*character_orientation=image.*character_orientation=video.*\/split/s);
 
-    await engine.metadata.artifacts.write(motionSlug, "original", { duration: 30.5 });
+    await engine.metadata.artifacts.write(motionArtifactId, "original", { duration: 30.5 });
     await expect(assertKlingMotionControlDuration(
       engine,
-      motionSlug,
+      motionArtifactId,
       "video",
     )).rejects.toThrow(/is 30\.5s.*character_orientation=video.*\/split/s);
   });
 
   it("rejects an invalid direct tool call before credentials or output creation", async () => {
-    const image = await engine.artifacts.create("img", "character image");
+    const image = await engine.artifacts.create("image", "character image");
     expect(image.ok).toBe(true);
     if (!image.ok) return;
     expect((await engine.files.write(
@@ -118,15 +118,15 @@ describe("Kling motion-control duration", () => {
       "original.png",
       Buffer.from("character image"),
     )).ok).toBe(true);
-    const motionSlug = await createMotionAsset(12);
+    const motionArtifactId = await createMotionAsset(12);
     const before = engine.artifacts.list().length;
     const previousApiKey = process.env.KIE_API_KEY;
     delete process.env.KIE_API_KEY;
     try {
       const result = await generateKling30MotionControlVideoDef(engine).handler({
         book_id: engine.book.get().bookId,
-        character_image_slugs: [`@${image.value.slug}`],
-        motion_video_slugs: [`@${motionSlug}`],
+        character_image_refs: [`@${image.value.artifactId}`],
+        motion_video_refs: [`@${motionArtifactId}`],
         character_orientation: "image",
       });
       expect(result.isError).toBe(true);
@@ -144,7 +144,7 @@ describe("Kling motion-control duration", () => {
     ["original.png", "portrait"],
     ["original.jpg", "landscape"],
   ] as const)("selects %s instead of a generated %s crop", async (originalName, preferredOrientation) => {
-    const image = await engine.artifacts.create("img", `character ${preferredOrientation}`);
+    const image = await engine.artifacts.create("image", `character ${preferredOrientation}`);
     expect(image.ok).toBe(true);
     if (!image.ok) return;
     for (const filename of [
@@ -164,14 +164,14 @@ describe("Kling motion-control duration", () => {
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     expect(selectMotionControlImageFiles(
-      image.value.slug,
+      image.value.kind,
       manifest.value.files,
       preferredOrientation,
     ).map((file) => file.name)).toEqual([originalName]);
   });
 
   it("uses the motion-video orientation when an image has no canonical original", async () => {
-    const image = await engine.artifacts.create("img", "legacy character");
+    const image = await engine.artifacts.create("image", "legacy character");
     expect(image.ok).toBe(true);
     if (!image.ok) return;
     for (const filename of ["landscape.jpg", "portrait.jpg", "square.jpg"]) {
@@ -186,14 +186,14 @@ describe("Kling motion-control duration", () => {
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     expect(selectMotionControlImageFiles(
-      image.value.slug,
+      image.value.kind,
       manifest.value.files,
       "portrait",
     ).map((file) => file.name)).toEqual(["portrait.jpg"]);
   });
 
   it("returns the same preflight from the notebook preview surface", async () => {
-    const image = await engine.artifacts.create("img", "preview character");
+    const image = await engine.artifacts.create("image", "preview character");
     expect(image.ok).toBe(true);
     if (!image.ok) return;
     await engine.files.write(
@@ -201,8 +201,8 @@ describe("Kling motion-control duration", () => {
       "original.png",
       Buffer.from("preview character"),
     );
-    const motionSlug = await createMotionAsset(12);
-    const motion = engine.artifacts.get(motionSlug);
+    const motionArtifactId = await createMotionAsset(12);
+    const motion = engine.artifacts.get(motionArtifactId);
     expect(motion.ok).toBe(true);
     if (!motion.ok) return;
     const notebook = await engine.notebooks.create("Main");
@@ -210,19 +210,19 @@ describe("Kling motion-control duration", () => {
     if (!notebook.ok) return;
     const imageCell = engine.notebooks.createCell({
       type: "image",
-      slug: "img-preview-character",
+      label: "preview character",
       slot: { row: 0, column: 4 },
       outputArtifactId: image.value.artifactId,
     });
     const videoCell = engine.notebooks.createCell({
       type: "video",
-      slug: "vid-preview-motion",
+      label: "preview motion",
       slot: { row: 0, column: 1 },
       outputArtifactId: motion.value.artifactId,
     });
     const generationCell = engine.notebooks.createCell({
       type: "generate_video",
-      slug: "generate-video-preview-motion",
+      label: "preview motion generation",
       slot: { row: 2, column: 3 },
       prompt: "Follow the reference motion",
       provider: "kie",
@@ -315,20 +315,20 @@ describe("Kling motion-control duration", () => {
         "motion reference the source video, character and appearance reference image 1",
       );
       expect(value.payload.input.input_urls).toEqual([
-        `http://url.resolved.later.for/${image.value.slug}`,
+        `http://url.resolved.later.for/${image.value.artifactId}`,
       ]);
       expect(value.payload.input.video_urls).toEqual([
-        `http://url.resolved.later.for/${motion.value.slug}`,
+        `http://url.resolved.later.for/${motion.value.artifactId}`,
       ]);
       expect(value.mentions.prompt_leaks).toEqual([]);
       expect(value.mentions.url_placeholders).toMatchObject([
         {
           path: "input.input_urls[0]",
-          reference: `@${image.value.slug}`,
+          reference: `@${image.value.artifactId}`,
         },
         {
           path: "input.video_urls[0]",
-          reference: `@${motion.value.slug}`,
+          reference: `@${motion.value.artifactId}`,
         },
       ]);
       const preparedWire = await prepareNotebookGeneration(

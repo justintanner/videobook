@@ -3,51 +3,15 @@ import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27ImageToVideoRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
+import { resolveVideoRef, slugify } from "./_seedance2-shared.js";
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
-}
-
-type RefInput = { assetId: string; filename: string };
-type ResolveOk = { ok: true; value: RefInput };
-type ResolveErr = { ok: false; error: string };
 const wan27I2v = Wan27ImageToVideoRequestSchema.shape.input.shape;
 
-async function resolveVideoSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
-  // `@<assetId>/<filename>` form: address a specific sibling file inside an
-  // asset (e.g. `@plan/s1.mp4`). Bypasses the vid- prefix gate.
-  const stripped = raw.replace(/^@/, "");
-  const slashIdx = stripped.indexOf("/");
-  if (slashIdx >= 0) {
-    const assetId = stripped.slice(0, slashIdx);
-    const filename = stripped.slice(slashIdx + 1);
-    if (!assetId || !filename) return { ok: false, error: `Invalid slashed slug: ${raw}` };
-    const manifest = await fs.files.manifest(assetId);
-    if (!manifest.ok) return { ok: false, error: manifest.error.message };
-    const file = manifest.value.files.find((f) => f.name === filename);
-    if (!file) return { ok: false, error: `File ${filename} not found in asset ${assetId}` };
-    return { ok: true, value: { assetId, filename } };
-  }
-  const assetId = stripped;
-  if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slug must be a vid-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId);
-  if (!manifest.ok) return { ok: false, error: manifest.error.message };
-  const file = findVideoFile(manifest.value.files);
-  if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
-  return { ok: true, value: { assetId, filename: file.name } };
-}
-
 const extendWan27VideoSchema = {
-  book_id: z.string().describe("Project slug"),
-  video_slug: z.string().describe("Source video asset to extend (e.g., @vid-scene)"),
+  book_id: z.string().describe("Book id"),
+  video_ref: z.string().describe("Source video artifact id to extend"),
   prompt: apicityStringField(wan27I2v.prompt, "Video description (max 5000 chars)", { required: true }),
   negative_prompt: apicityStringField(wan27I2v.negative_prompt, "Negative prompt — things to avoid (max 500 chars)"),
   resolution: apicityField(wan27I2v.resolution, "Video resolution (default 1080p)"),
@@ -64,11 +28,11 @@ type Args = SchemaArgs<typeof extendWan27VideoSchema>;
 export function extendWan27VideoDef(fs: Engine): ToolDef {
   return {
     name: "extend_kie_wan_2_7_video",
-    description: "Extend an existing video asset using Wan 2.7 Image to Video by providing the source video as first_clip. Creates a new vid- asset and enqueues a background job.",
+    description: "Extend an existing video asset using Wan 2.7 Image to Video by providing the source video as first_clip. Creates a new video artifact and enqueues a background job.",
     schema: extendWan27VideoSchema,
     handler: async (args) => {
       const {
-        book_id, video_slug, prompt, negative_prompt,
+        book_id, video_ref, prompt, negative_prompt,
         resolution, duration, prompt_extend, watermark, nsfw_checker, seed,
       } = args as Args;
 
@@ -79,14 +43,14 @@ export function extendWan27VideoDef(fs: Engine): ToolDef {
         };
       }
 
-      if (!video_slug) {
+      if (!video_ref) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "video_slug is required" }],
+          content: [{ type: "text" as const, text: "video_ref is required" }],
         };
       }
 
-      const videoResult = await resolveVideoSlug(fs, video_slug, book_id);
+      const videoResult = await resolveVideoRef(fs, video_ref, book_id);
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const sourceVideo = videoResult.value;
 
@@ -99,7 +63,7 @@ export function extendWan27VideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceVideoIds = [sourceVideo.assetId];
       const sourceImageIds: string[] = [];
       const sourceAudioIds: string[] = [];

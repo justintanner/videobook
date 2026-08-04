@@ -3,39 +3,17 @@ import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27TextToVideoRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { findAudioFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
+import { resolveAudioRef, slugify, type RefInput } from "./_seedance2-shared.js";
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
-}
-
-type RefInput = { assetId: string; filename: string };
-type ResolveOk = { ok: true; value: RefInput };
-type ResolveErr = { ok: false; error: string };
 const wan27T2v = Wan27TextToVideoRequestSchema.shape.input.shape;
 
-async function resolveAudioSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
-  const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slug must be an aud-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId);
-  if (!manifest.ok) return { ok: false, error: manifest.error.message };
-  const file = findAudioFile(manifest.value.files, assetId);
-  if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
-  return { ok: true, value: { assetId, filename: file.name } };
-}
-
 const generateWan27T2vVideoSchema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(wan27T2v.prompt, "Video description (max 5000 chars)", { required: true }),
   negative_prompt: apicityStringField(wan27T2v.negative_prompt, "Negative prompt — things to avoid (max 500 chars)"),
-  audio_slug: apicityStringField(wan27T2v.audio_url, "Optional custom audio asset (e.g., @aud-music)"),
+  audio_ref: apicityStringField(wan27T2v.audio_url, "Optional custom audio artifact id"),
   resolution: apicityField(wan27T2v.resolution, "Video resolution (default 1080p)"),
   aspect_ratio: apicityField(wan27T2v.ratio, "Video aspect ratio"),
   duration: apicityStringNumberField(wan27T2v.duration, "Video duration in seconds (2-15)"),
@@ -51,11 +29,11 @@ type Args = SchemaArgs<typeof generateWan27T2vVideoSchema>;
 export function generateWan27T2vVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_wan_2_7_text_to_video",
-    description: "Generate a video from a prompt using Wan 2.7 Text to Video. Supports optional custom audio. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video from a prompt using Wan 2.7 Text to Video. Supports optional custom audio. Creates a new video artifact and enqueues a background job.",
     schema: generateWan27T2vVideoSchema,
     handler: async (args) => {
       const {
-        book_id, prompt, negative_prompt, audio_slug,
+        book_id, prompt, negative_prompt, audio_ref,
         resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed,
       } = args as Args;
 
@@ -67,8 +45,8 @@ export function generateWan27T2vVideoDef(fs: Engine): ToolDef {
       }
 
       let audioRef: RefInput | undefined;
-      if (audio_slug) {
-        const r = await resolveAudioSlug(fs, audio_slug, book_id);
+      if (audio_ref) {
+        const r = await resolveAudioRef(fs, audio_ref, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         audioRef = r.value;
       }
@@ -82,7 +60,7 @@ export function generateWan27T2vVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceAudioIds = audioRef ? [audioRef.assetId] : [];
 
       const jobId = `${modelSlug("kie", "wan/2-7-text-to-video")}-t2v-${vidAssetId}-${Date.now()}`;

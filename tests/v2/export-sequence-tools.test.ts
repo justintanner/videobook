@@ -29,7 +29,7 @@ describe('canonical sequence export tools', () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-export-plan-'))
     const engine = createEngine({
       rootDir,
-      initialBookSlug: 'export-plan',
+      initialBookName: 'export-plan',
     })
     const artifact = await engine.artifacts.create('image', 'frame')
     expect(artifact.ok).toBe(true)

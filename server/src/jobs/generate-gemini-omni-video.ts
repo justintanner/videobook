@@ -51,8 +51,8 @@ export function registerGenerateGeminiOmniVideoJob(fs: Engine): void {
       "generate_kie_gemini_omni_video",
       {
         prompt,
-        image_slugs: imageInputs.map((input) => input.assetId),
-        video_slug: videoInput?.assetId,
+        image_refs: imageInputs.map((input) => input.assetId),
+        video_ref: videoInput?.assetId,
       },
     ) ?? "";
     const request = buildGeminiOmniVideoPayload(

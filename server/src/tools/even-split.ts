@@ -1,4 +1,4 @@
-import type { Engine } from "videobook-engine";
+import type { Artifact, Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -111,12 +111,11 @@ function parseTargetSecs(input: Array<number | string> | undefined): number[] {
   return input.map(parseSingleTarget);
 }
 
-// Suffixes "1".."N" survive slugifyName's stop-word filter; trim source name to
-// last 2 words so the suffix fits inside the slug length cap. Mirrors split-video.ts.
-function deriveChunkName(originalAssetId: string, index: number): string {
-  const dashIdx = originalAssetId.indexOf("-");
-  const base = dashIdx >= 0 ? originalAssetId.slice(dashIdx + 1) : originalAssetId;
-  const words = base.split("-").filter((w) => w.length > 0);
+// Numeric suffixes "1".."N" mark chunk order; trim the source label to its
+// last 2 words so labels stay short. Mirrors split-video.ts.
+function deriveChunkName(source: Artifact, index: number): string {
+  const base = source.label ?? source.artifactId;
+  const words = base.split(/[\s-]+/u).filter((w) => w.length > 0);
   const tail = words.slice(-2).join("-") || base;
   return `${tail}-${index}`;
 }
@@ -125,10 +124,10 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
   return {
     name: "split_video_by_durations",
     description:
-      "Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved. When `destination` is provided, chunks are written as files inside an existing asset (one filename per target, no leftover) instead of minting fresh vid-* assets.",
+      "Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved. When `destination` is provided, chunks are written as files inside an existing asset (one filename per target, no leftover) instead of minting fresh video assets.",
     schema: {
-      asset_id: z.string().describe("Source video asset ID (e.g. vid-my-clip)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Source video artifact id"),
+      book_id: z.string().describe("Book UUID"),
       // Accept array of strings/numbers; chat positional args arrive as strings
       // (possibly with unit suffixes like "10s"), MCP clients typically pass numbers.
       target_secs: z
@@ -139,12 +138,12 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
         ),
       destination: z
         .object({
-          asset_id: z.string().describe("Existing asset to write chunk files into (e.g. \"plan\")"),
+          asset_id: z.string().describe("Existing artifact id to write chunk files into"),
           filenames: z.array(z.string()).describe("One filename per target_secs entry; written as siblings inside the destination asset's directory"),
         })
         .optional()
         .describe(
-          "When set, write each chunk to <destination.asset_id>/<filenames[i]> instead of minting fresh vid-* assets. filenames.length must equal target_secs.length; no leftover chunk is produced in destination mode.",
+          "When set, write each chunk to <destination.asset_id>/<filenames[i]> instead of minting fresh video assets. filenames.length must equal target_secs.length; no leftover chunk is produced in destination mode.",
         ),
     },
     handler: async (args) => {
@@ -167,6 +166,14 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
             type: "text" as const,
             text: `destination.filenames length (${destination.filenames.length}) must equal target_secs length (${targets.length})`,
           }],
+        };
+      }
+
+      const sourceArtifact = fs.artifacts.get(asset_id);
+      if (!sourceArtifact.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: sourceArtifact.error.message }],
         };
       }
 
@@ -267,12 +274,11 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
           exact: chunk.exact,
         }));
       } else {
-        const prefix = asset_id.split("-")[0];
         created = [];
         for (let i = 0; i < plan.chunks.length; i++) {
           const chunk = plan.chunks[i];
-          const name = deriveChunkName(asset_id, i + 1);
-          const c = await fs.artifacts.create(prefix, name);
+          const name = deriveChunkName(sourceArtifact.value, i + 1);
+          const c = await fs.artifacts.create(sourceArtifact.value.kind, name);
           if (!c.ok) {
             return {
               isError: true as const,
@@ -280,7 +286,7 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
             };
           }
           created.push({
-            assetId: c.value.slug,
+            assetId: c.value.artifactId,
             assetDir: c.value.path,
             outputPath: join(c.value.path, "original.mp4"),
             start: chunk.start,

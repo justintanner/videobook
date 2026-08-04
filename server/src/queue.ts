@@ -629,7 +629,7 @@ export async function setEngineRoot(
       activeTestBookId = null;
     }
   }
-  const next = engine ?? createEngine({ rootDir, initialBookSlug: "test-book" });
+  const next = engine ?? createEngine({ rootDir, initialBookName: "test-book" });
   await next.ready;
   const bookId = next.book.get().bookId;
   testEngines.set(bookId, next);

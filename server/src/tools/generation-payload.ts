@@ -21,8 +21,8 @@ export function generationPayloadDef(fs: Engine): ToolDef {
     name: "inspect_generation_request",
     description: "Read the persisted Kie request payload, task meta, and failure info for a single asset. Used by the /inbox hover inspector to show what was sent to the provider.",
     schema: {
-      book_id: z.string().describe("Project slug"),
-      asset_id: z.string().describe("Asset id (e.g. vid-something)"),
+      book_id: z.string().describe("Book id"),
+      asset_id: z.string().describe("Artifact id"),
     },
     handler: async (args) => {
       const { book_id: _book_id, asset_id } = args as { book_id: string; asset_id: string };

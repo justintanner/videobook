@@ -25,7 +25,7 @@ Guidance for AI coding agents working in the Videobook repository.
 
 - **Frontend (`src/`)**: React 19 + TypeScript + Vite 7 SPA. Entry: `main.tsx` → `App.tsx`. Uses `useMcpConnection()` over `@modelcontextprotocol/client` to connect to `/mcp` with MCP `2026-07-28` pinned.
 - **Backend (`server/src/`)**: Express MCP server on port 3001. Entry: `server/src/index.ts`. The modern-only `createMcpHandler` endpoint rejects legacy protocol traffic. Tools in `server/src/tools/*.ts` are registered via `server/src/tools/index.ts`.
-- **Domain/storage (`videobook-engine` 5.0.0, schema 20)**: one isolated UUIDv7 engine root per book, providing Dolt-native artifact, file/CAS, metadata, history, notebook, canonical-sequence, and runtime-job operations. All managed data goes through the scoped book `Engine`.
+- **Domain/storage (`videobook-engine` 5.0.0, schema 21)**: one isolated UUIDv7 engine root per book, providing Dolt-native artifact, file/CAS, metadata, history, notebook, canonical-sequence, and runtime-job operations. All managed data goes through the scoped book `Engine`. Artifacts and cells carry no slugs — identity is `artifact_id`/`cell_id` plus content-addressed `object_hash`, the user-facing handle is the grid address `@a1`-`@z13`, and `label` is display-only text that is never parsed or looked up.
 
 ## Code Style
 

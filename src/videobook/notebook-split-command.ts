@@ -1,6 +1,5 @@
 import { v7 as uuidv7 } from 'uuid'
 import { firstEmptyNotebookGridSlots } from 'videobook-engine/notebook-grid'
-import { NOTEBOOK_REFERENCE_SOURCE } from 'videobook-engine/notebook-mentions'
 import type {
   NotebookCell,
   NotebookDocument,
@@ -16,8 +15,12 @@ export type NotebookSplitCommand = {
   splitAtSeconds: number
 }
 
+// Accepts a grid address (@a3) or a cell id / id prefix; the resolver
+// validates whichever form arrives.
+const NOTEBOOK_SPLIT_REFERENCE_SOURCE = '[a-z0-9][a-z0-9-]*'
+
 const NOTEBOOK_SPLIT_COMMAND_PATTERN = new RegExp(
-  `^(?:please\\s+)?(?:/split|split)\\s+@(${NOTEBOOK_REFERENCE_SOURCE})(?:\\s+([\\s\\S]+?))?(?:\\s+please)?[.!]?$`,
+  `^(?:please\\s+)?(?:/split|split)\\s+@(${NOTEBOOK_SPLIT_REFERENCE_SOURCE})(?:\\s+([\\s\\S]+?))?(?:\\s+please)?[.!]?$`,
   'iu',
 )
 
@@ -34,22 +37,22 @@ export type NotebookSplitDraft = {
   document: NotebookDocument
   outputs: [NotebookSplitOutputDraft, NotebookSplitOutputDraft]
   sourceCellId: string
-  sourceSlug: string
+  sourceAddress: string
   splitAtSeconds: number
 }
 
 export type NotebookSplitRun = {
   actionCellId: string
-  actionSlug: string
+  actionAddress: string
   outputs: Array<{
     outputCellId: string
-    outputSlug: string
+    outputAddress: string
     role: NotebookSplitOutputRole
   }>
   jobId: string
   runId: string
   sourceCellId: string
-  sourceSlug: string
+  sourceAddress: string
   splitAtSeconds: number
 }
 
@@ -110,32 +113,8 @@ function splitBoundaryPhrase(value: string): string {
     .trim()
 }
 
-function normalizedSlugPart(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, '-')
-    .replace(/^-+|-+$/gu, '')
-}
-
-function uniqueSlug(
-  cells: readonly NotebookCell[],
-  prefix: string,
-  stem: string,
-): string {
-  const normalized = normalizedSlugPart(stem) || 'clip'
-  const base = normalized.startsWith(`${prefix}-`)
-    ? normalized
-    : `${prefix}-${normalized}`
-  const occupied = new Set(cells.map((cell) => cell.slug))
-  if (!occupied.has(base)) return base
-  for (let ordinal = 2; ; ordinal += 1) {
-    const candidate = `${base}-${String(ordinal).padStart(2, '0')}`
-    if (!occupied.has(candidate)) return candidate
-  }
-}
-
-function splitTimeSlug(seconds: number): string {
-  return `${String(seconds).replace('.', '-')}s`
+function splitTimeLabel(seconds: number): string {
+  return `${seconds}s`
 }
 
 function splitSlots(
@@ -156,26 +135,19 @@ function splitSlots(
 
 function createOutput(input: {
   actionCell: NotebookCell
-  cells: readonly NotebookCell[]
   endSeconds: number
   role: NotebookSplitOutputRole
   slot: NotebookGridSlot
   source: NotebookCell
   startSeconds: number
-  timeSlug: string
+  timeLabel: string
 }): NotebookSplitOutputDraft {
-  const sourceStem = input.source.slug.replace(/^vid-/u, '')
-  const stem = input.role === 'first'
-    ? `${sourceStem}-first-${input.timeSlug}`
-    : `${sourceStem}-remaining`
   const outputCell: NotebookCell = {
     id: uuidv7(),
     type: 'video',
-    slug: uniqueSlug(
-      input.cells,
-      'vid',
-      stem,
-    ),
+    label: input.role === 'first'
+      ? `First ${input.timeLabel}`
+      : 'Remaining',
     slot: input.slot,
     inputs: {
       endSeconds: input.endSeconds,
@@ -194,7 +166,7 @@ function cellCreateInput(cell: NotebookCell): Record<string, unknown> {
   return {
     id: cell.id,
     type: cell.type,
-    slug: cell.slug,
+    ...(cell.label === undefined ? {} : { label: cell.label }),
     slot: cell.slot,
     ...(cell.provider === undefined ? {} : { provider: cell.provider }),
     ...(cell.operation === undefined ? {} : { operation: cell.operation }),
@@ -213,7 +185,7 @@ export function parseNotebookSplitCommand(
     : null
   if (!Number.isFinite(splitAtSeconds) || !(splitAtSeconds! > 0)) {
     throw new Error(
-      'Name a positive split time, for example: split @vid-01 into 15s and the remaining',
+      'Name a positive split time, for example: split @a3 into 15s and the remaining',
     )
   }
   return {
@@ -265,16 +237,11 @@ export function planNotebookSplitCommand(input: {
   }
 
   const slots = splitSlots(input.document.cells)
-  const timeSlug = splitTimeSlug(firstDuration)
-  const sourceStem = source.slug.replace(/^vid-/u, '')
+  const timeLabel = splitTimeLabel(firstDuration)
   const actionCell: NotebookCell = {
     id: uuidv7(),
     type: 'split_video',
-    slug: uniqueSlug(
-      input.document.cells,
-      'split-video',
-      `${sourceStem}-at-${timeSlug}`,
-    ),
+    label: `Split at ${timeLabel}`,
     slot: slots.action,
     provider: 'local',
     operation: 'split_range',
@@ -290,27 +257,21 @@ export function planNotebookSplitCommand(input: {
   }
   const first = createOutput({
     actionCell,
-    cells: [...input.document.cells, actionCell],
     endSeconds: firstDuration,
     role: 'first',
     slot: slots.outputs[0],
     source,
     startSeconds: 0,
-    timeSlug,
+    timeLabel,
   })
   const remaining = createOutput({
     actionCell,
-    cells: [
-      ...input.document.cells,
-      actionCell,
-      first.outputCell,
-    ],
     endSeconds: input.sourceDurationSeconds,
     role: 'remaining',
     slot: slots.outputs[1],
     source,
     startSeconds: firstDuration,
-    timeSlug,
+    timeLabel,
   })
   const outputs: NotebookSplitDraft['outputs'] = [first, remaining]
   const createdCells = [actionCell, ...outputs.map((output) => output.outputCell)]
@@ -338,7 +299,7 @@ export function planNotebookSplitCommand(input: {
     },
     outputs,
     sourceCellId: source.id,
-    sourceSlug: source.slug,
+    sourceAddress: notebookCellTag(source),
     splitAtSeconds: firstDuration,
   }
 }
@@ -406,16 +367,16 @@ export async function enqueueNotebookSplitCommand(input: {
     }
     return {
       actionCellId: input.draft.actionCell.id,
-      actionSlug: input.draft.actionCell.slug,
+      actionAddress: notebookCellTag(input.draft.actionCell),
       outputs: input.draft.outputs.map((output) => ({
         outputCellId: output.outputCell.id,
-        outputSlug: output.outputCell.slug,
+        outputAddress: notebookCellTag(output.outputCell),
         role: output.role,
       })),
       jobId,
       runId,
       sourceCellId: input.draft.sourceCellId,
-      sourceSlug: input.draft.sourceSlug,
+      sourceAddress: input.draft.sourceAddress,
       splitAtSeconds: input.draft.splitAtSeconds,
     }
   } catch (error) {

@@ -1,7 +1,5 @@
-import {
-  classifyNotebookReference,
-  normalizeNotebookReference,
-} from "videobook-engine/notebook-mentions";
+import { isUuidV7 } from "videobook-engine";
+import { isNotebookGridAddress, normalizeNotebookReference } from "videobook-engine/notebook-mentions";
 
 export const PREVIEW_PLACEHOLDER_HOST = "url.resolved.later.for";
 export const PREVIEW_PLACEHOLDER_ORIGIN = `http://${PREVIEW_PLACEHOLDER_HOST}`;
@@ -28,17 +26,6 @@ const URL_FIELD_KEYS = new Set([
   "start_image",
   "end_image",
 ]);
-export const LOCAL_ASSET_SLUG_PREFIXES = [
-  "aud",
-  "char",
-  "img",
-  "nb",
-  "prompt",
-  "scene",
-  "script",
-  "vid",
-] as const;
-const LOCAL_ASSET_PREFIXES = new Set<string>(LOCAL_ASSET_SLUG_PREFIXES);
 
 export interface PreviewUrlPlaceholder {
   path: string;
@@ -70,13 +57,13 @@ function isUrlishKey(key: string): boolean {
     || key === "audios";
 }
 
+// Pre-dispatch payloads reference media as artifact ids (the internal
+// token) or, when still unresolved, grid addresses. Either form becomes a
+// placeholder URL in previews; real URLs are substituted only at dispatch.
 function localReference(value: string): string | null {
   if (/^https?:\/\//iu.test(value)) return null;
   const reference = normalizeNotebookReference(value);
-  const prefix = reference.split("-", 1)[0];
-  return classifyNotebookReference(reference) === "asset-slug"
-    && prefix
-    && LOCAL_ASSET_PREFIXES.has(prefix)
+  return isUuidV7(reference) || isNotebookGridAddress(reference)
     ? reference
     : null;
 }

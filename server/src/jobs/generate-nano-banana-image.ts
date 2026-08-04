@@ -43,7 +43,7 @@ export function registerGenerateNanoBananaImageJob(fs: Engine): void {
       "generate_kie_nano_banana_pro_text_to_image",
       {
         prompt,
-        image_slugs: imageInputs
+        image_refs: imageInputs
           .map((input) => ("assetId" in input ? input.assetId : null))
           .filter((id): id is string => id !== null),
       },

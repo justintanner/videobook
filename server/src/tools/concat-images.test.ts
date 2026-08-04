@@ -1,4 +1,5 @@
 import { createEngineForTest } from "../fs.js";
+import { isUuidV7 } from "videobook-engine";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -74,9 +75,9 @@ describe("concat_images tool", () => {
   async function createImageAsset(name: string, buffer: Buffer): Promise<string> {
     const asset = await fs.artifacts.create("img", name);
     if (!asset.ok) throw new Error(asset.error.message);
-    const write = await fs.files.write(asset.value.slug, "original.png", buffer);
+    const write = await fs.files.write(asset.value.artifactId, "original.png", buffer);
     if (!write.ok) throw new Error(write.error.message);
-    return asset.value.slug;
+    return asset.value.artifactId;
   }
 
   it("creates a 16:9 image asset while fitting sources without stretching", async () => {
@@ -87,7 +88,7 @@ describe("concat_images tool", () => {
       name: "concat_images",
       arguments: {
         book_id: PROJECT,
-        image_slugs: [`@${wide}`, `@${tall}`],
+        image_refs: [`@${wide}`, `@${tall}`],
       },
     });
 
@@ -99,7 +100,10 @@ describe("concat_images tool", () => {
       layout: string;
       aspect_ratio: string;
     };
-    expect(parsed.img_asset_id).toMatch(/^img-/);
+    expect(isUuidV7(parsed.img_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.img_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("image");
     expect(parsed.width).toBe(1920);
     expect(parsed.height).toBe(1080);
     expect(parsed.layout).toBe("horizontal");
@@ -136,7 +140,7 @@ describe("concat_images tool", () => {
       name: "concat_images",
       arguments: {
         book_id: PROJECT,
-        image_slugs: [`@${red}`],
+        image_refs: [`@${red}`],
         aspect_ratio: "9:16",
       },
     });
@@ -176,7 +180,7 @@ describe("concat_images tool", () => {
       name: "concat_images",
       arguments: {
         book_id: PROJECT,
-        image_slugs: [null, `@${blue}`],
+        image_refs: [null, `@${blue}`],
         aspect_ratio: "16:9",
       },
     });
@@ -204,18 +208,18 @@ describe("concat_images tool", () => {
   it("returns an error when a referenced asset has no image file", async () => {
     const asset = await fs.artifacts.create("img", "empty");
     if (!asset.ok) throw new Error(asset.error.message);
-    const write = await fs.files.write(asset.value.slug, "notes.txt", "hello");
+    const write = await fs.files.write(asset.value.artifactId, "notes.txt", "hello");
     if (!write.ok) throw new Error(write.error.message);
 
     const result = await client!.callTool({
       name: "concat_images",
       arguments: {
         book_id: PROJECT,
-        image_slugs: [`@${asset.value.slug}`, "@img-missing"],
+        image_refs: [`@${asset.value.artifactId}`, "@img-missing"],
       },
     });
 
     expect(result.isError).toBe(true);
-    expect(resultText(result)).toContain(`No image file found in asset ${asset.value.slug}`);
+    expect(resultText(result)).toContain(`No image file found in asset ${asset.value.artifactId}`);
   });
 });

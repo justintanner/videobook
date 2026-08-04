@@ -85,11 +85,11 @@ const kieSeedance = (
   defaultDuration: number,
 ): CostAdapter => (input) => {
   const hasInput =
-    Boolean(str(input.first_frame_slug)) ||
-    Boolean(str(input.last_frame_slug)) ||
-    (Array.isArray(input.image_slugs) && input.image_slugs.length > 0) ||
-    (Array.isArray(input.video_slugs) && input.video_slugs.length > 0) ||
-    (Array.isArray(input.audio_slugs) && input.audio_slugs.length > 0);
+    Boolean(str(input.first_frame_ref)) ||
+    Boolean(str(input.last_frame_ref)) ||
+    (Array.isArray(input.image_refs) && input.image_refs.length > 0) ||
+    (Array.isArray(input.video_refs) && input.video_refs.length > 0) ||
+    (Array.isArray(input.audio_refs) && input.audio_refs.length > 0);
   return {
     provider: "kie",
     payload: {
@@ -234,7 +234,7 @@ const kieGeminiOmniVideo: CostAdapter = (input) => ({
     input: {
       duration: input.duration ?? 4,
       resolution: str(input.resolution) || GEMINI_OMNI_RESOLUTION,
-      ...(str(input.video_slug) ? { video_list: [{ url: "stub", start: 0, ends: 4 }] } : {}),
+      ...(str(input.video_ref) ? { video_list: [{ url: "stub", start: 0, ends: 4 }] } : {}),
     },
   },
 });
@@ -295,8 +295,8 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
   generate_kie_kling_3_0_video: kieKling30Video,
   generate_kie_kling_3_0_motion_control: kieKling30MotionControl,
   generate_kie_kling_3_0_turbo_video: (args: Record<string, unknown>) => {
-    const imageSlugs = (args.image_slugs as string[] | undefined) ?? [];
-    const model = imageSlugs.length > 0 ? "kling/v3-turbo-image-to-video" : "kling/v3-turbo-text-to-video";
+    const imageRefs = (args.image_refs as string[] | undefined) ?? [];
+    const model = imageRefs.length > 0 ? "kling/v3-turbo-image-to-video" : "kling/v3-turbo-text-to-video";
     return kieResolutionVideo(model, KLING_TURBO_RESOLUTION, Number(KLING_TURBO_DURATION))(args);
   },
 

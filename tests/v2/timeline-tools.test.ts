@@ -63,7 +63,7 @@ describe('v2 typed timeline tools', () => {
 
     const assigned = json(await assignSlotDef(engine).handler({
       book_id: created.value.bookId,
-      asset_id: video.value.slug,
+      asset_id: video.value.artifactId,
       slot: 's02',
     })) as { slots: Array<{ artifact_id: string }> }
     expect(assigned.slots.map((slot) => slot.artifact_id)).toEqual([
@@ -73,7 +73,7 @@ describe('v2 typed timeline tools', () => {
 
     const gap = await assignSlotDef(engine).handler({
       book_id: created.value.bookId,
-      asset_id: image.value.slug,
+      asset_id: image.value.artifactId,
       slot: 's04',
     })
     expect(gap.isError).toBe(true)

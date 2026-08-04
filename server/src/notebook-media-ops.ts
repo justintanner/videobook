@@ -54,7 +54,7 @@ async function ingestOutput(
   fileName: string,
   filePath: string,
 ): Promise<string> {
-  const artifact = await engine.artifacts.create({ kind, name: title });
+  const artifact = await engine.artifacts.create({ kind, label: title });
   if (!artifact.ok) throw new Error(artifact.error.message);
   const written = await engine.files.writeFromPath(
     artifact.value.artifactId,

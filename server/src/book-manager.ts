@@ -6,7 +6,6 @@ import {
   dryRunV4Migration,
   err,
   isUuidV7,
-  isValidBookSlug,
   migrateV4,
   ok,
   readV4BookIdentity,
@@ -20,7 +19,7 @@ import {
 
 export interface BookSummary {
   bookId: string;
-  slug: string;
+  name: string;
   createdAt: number;
   artifactCount: number;
   notebookCount: number;
@@ -50,7 +49,7 @@ export interface BookManagerOptions {
 }
 
 export interface DeleteBookOptions {
-  confirmSlug: string;
+  confirmName: string;
   beforeDelete?: (book: ManagedBook) => Promise<void>;
 }
 
@@ -116,30 +115,36 @@ export class BookManager {
       : err(engineError("NOT_FOUND", `Book not found: ${bookId}`));
   }
 
-  getBySlug(slug: string): Result<ManagedBook, EngineError> {
-    const book = [...this.books.values()].find((item) => item.slug === slug);
+  getByName(name: string): Result<ManagedBook, EngineError> {
+    const wanted = name.trim().toLowerCase();
+    const book = [...this.books.values()].find(
+      (item) => item.name.toLowerCase() === wanted,
+    );
     return book
       ? ok(book)
-      : err(engineError("NOT_FOUND", `Book not found: ${slug}`));
+      : err(engineError("NOT_FOUND", `Book not found: ${name}`));
   }
 
-  async create(slug: string): Promise<Result<BookSummary, EngineError>> {
+  async create(name: string): Promise<Result<BookSummary, EngineError>> {
     await this.ready();
-    if (!isValidBookSlug(slug)) {
-      return err(engineError("INVALID_INPUT", `Invalid book slug: ${slug}`));
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return err(engineError("INVALID_INPUT", "Book name must be non-empty"));
     }
     if (
-      this.getBySlug(slug).ok
-      || [...this.legacyBooks.values()].some((book) => book.slug === slug)
+      this.getByName(trimmed).ok
+      || [...this.legacyBooks.values()].some(
+        (book) => book.slug.toLowerCase() === trimmed.toLowerCase(),
+      )
     ) {
-      return err(engineError("SLUG_CONFLICT", `Book slug already exists: ${slug}`));
+      return err(engineError("ALREADY_EXISTS", `Book name already exists: ${trimmed}`));
     }
 
     const temporaryRoot = join(this.libraryDir, `.creating-${randomUUID()}`);
     await mkdir(temporaryRoot, { recursive: false });
     let temporaryEngine: Engine | null = null;
     try {
-      temporaryEngine = this.createEngine(temporaryRoot, slug);
+      temporaryEngine = this.createEngine(temporaryRoot, trimmed);
       await temporaryEngine.ready;
       const created = temporaryEngine.book.get();
       temporaryEngine.close();
@@ -169,19 +174,20 @@ export class BookManager {
 
   async rename(
     bookId: string,
-    slug: string,
+    name: string,
   ): Promise<Result<BookSummary, EngineError>> {
     await this.ready();
     const existing = this.get(bookId);
     if (!existing.ok) return existing;
-    if (!isValidBookSlug(slug)) {
-      return err(engineError("INVALID_INPUT", `Invalid book slug: ${slug}`));
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return err(engineError("INVALID_INPUT", "Book name must be non-empty"));
     }
-    const conflict = this.getBySlug(slug);
+    const conflict = this.getByName(trimmed);
     if (conflict.ok && conflict.value.bookId !== bookId) {
-      return err(engineError("SLUG_CONFLICT", `Book slug already exists: ${slug}`));
+      return err(engineError("ALREADY_EXISTS", `Book name already exists: ${trimmed}`));
     }
-    const renamed = await existing.value.engine.book.rename(slug);
+    const renamed = await existing.value.engine.book.rename(trimmed);
     if (!renamed.ok) return renamed;
     const managed = this.toManagedBook(
       existing.value.engine,
@@ -195,13 +201,13 @@ export class BookManager {
   async delete(
     bookId: string,
     options: DeleteBookOptions,
-  ): Promise<Result<{ bookId: string; slug: string }, EngineError>> {
+  ): Promise<Result<{ bookId: string; name: string }, EngineError>> {
     await this.ready();
     const resolved = this.get(bookId);
     if (!resolved.ok) return resolved;
     const book = resolved.value;
-    if (options.confirmSlug !== book.slug) {
-      return err(engineError("INVALID_INPUT", "Confirmation must match the current book slug"));
+    if (options.confirmName.trim().toLowerCase() !== book.name.toLowerCase()) {
+      return err(engineError("INVALID_INPUT", "Confirmation must match the current book name"));
     }
     try {
       await options.beforeDelete?.(book);
@@ -212,7 +218,7 @@ export class BookManager {
       }
       await rm(root, { recursive: true, force: false });
       this.books.delete(book.bookId);
-      return ok({ bookId: book.bookId, slug: book.slug });
+      return ok({ bookId: book.bookId, name: book.name });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
       return err(engineError("IO_ERROR", `Could not delete book: ${message}`));
@@ -324,10 +330,10 @@ export class BookManager {
     }
   }
 
-  private createEngine(rootDir: string, initialBookSlug?: string): Engine {
+  private createEngine(rootDir: string, initialBookName?: string): Engine {
     const engine = createEngine({
       rootDir,
-      ...(initialBookSlug ? { initialBookSlug } : {}),
+      ...(initialBookName ? { initialBookName } : {}),
       ...(this.options.remoteObjects
         ? { remoteObjects: this.options.remoteObjects }
         : {}),
@@ -353,16 +359,20 @@ export class BookManager {
   }
 
   private assertUnique(book: ManagedBook): void {
-    const sameSlug = [...this.books.values()].find((item) => item.slug === book.slug);
-    if (sameSlug && sameSlug.bookId !== book.bookId) {
-      throw new Error(`Duplicate book slug: ${book.slug}`);
+    const sameName = [...this.books.values()].find(
+      (item) =>
+        item.name.toLowerCase() === book.name.toLowerCase()
+        && item.bookId !== book.bookId,
+    );
+    if (sameName) {
+      throw new Error(`Duplicate book name: ${book.name}`);
     }
   }
 
   private toManagedBook(
     engine: Engine,
     rootDir: string,
-    book: { bookId: string; slug: string; createdAt: number },
+    book: { bookId: string; name: string; createdAt: number },
   ): ManagedBook {
     return {
       ...book,
@@ -376,7 +386,7 @@ export class BookManager {
   private summary(book: ManagedBook): BookSummary {
     return {
       bookId: book.bookId,
-      slug: book.slug,
+      name: book.name,
       createdAt: book.createdAt,
       artifactCount: book.engine.artifacts.list().length,
       notebookCount: book.engine.notebooks.list().length,

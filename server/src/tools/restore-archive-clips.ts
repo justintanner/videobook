@@ -11,7 +11,6 @@ const MAX_RESTORE_IDS = 25;
 const ARCHIVE_ID_RE = /^[a-f0-9]{64}$/i;
 
 type ArchiveMediaTarget = {
-  prefix: "vid" | "aud";
   kind: "video" | "audio";
   filename: string;
 };
@@ -21,16 +20,16 @@ type ArchiveMetadata = {
 };
 
 const EXTENSION_TARGETS = new Map<string, Omit<ArchiveMediaTarget, "filename">>([
-  [".mp4", { prefix: "vid", kind: "video" }],
-  [".mov", { prefix: "vid", kind: "video" }],
-  [".webm", { prefix: "vid", kind: "video" }],
-  [".mkv", { prefix: "vid", kind: "video" }],
-  [".mp3", { prefix: "aud", kind: "audio" }],
-  [".wav", { prefix: "aud", kind: "audio" }],
-  [".m4a", { prefix: "aud", kind: "audio" }],
-  [".aac", { prefix: "aud", kind: "audio" }],
-  [".flac", { prefix: "aud", kind: "audio" }],
-  [".ogg", { prefix: "aud", kind: "audio" }],
+  [".mp4", { kind: "video" }],
+  [".mov", { kind: "video" }],
+  [".webm", { kind: "video" }],
+  [".mkv", { kind: "video" }],
+  [".mp3", { kind: "audio" }],
+  [".wav", { kind: "audio" }],
+  [".m4a", { kind: "audio" }],
+  [".aac", { kind: "audio" }],
+  [".flac", { kind: "audio" }],
+  [".ogg", { kind: "audio" }],
 ]);
 
 const CONTENT_TYPE_EXTENSIONS = new Map<string, string>([
@@ -116,11 +115,11 @@ async function existingArchiveAssets(
   const out = new Map<string, string>();
   const assets = await fs.artifacts.list();
   await Promise.all(assets.map(async (asset) => {
-    const meta = await fs.metadata.artifacts.read<ArchiveMetadata>(asset.slug, "archive");
+    const meta = await fs.metadata.artifacts.read<ArchiveMetadata>(asset.artifactId, "archive");
     if (!meta.ok) return;
     const archiveId = meta.value.archive_id;
     if (typeof archiveId === "string" && wanted.has(archiveId)) {
-      out.set(archiveId, asset.slug);
+      out.set(archiveId, asset.artifactId);
     }
   }));
   return out;
@@ -131,7 +130,7 @@ export function restoreArchiveClipsDef(fs: Engine): ToolDef {
     name: "restore_archive_clips",
     description: "Restore selected archived video/audio clips into the current videocity project as new assets.",
     schema: {
-      book_id: z.string().describe("Project slug to restore clips into"),
+      book_id: z.string().describe("Book id to restore clips into"),
       archive_ids: z.array(z.string()).min(1).max(MAX_RESTORE_IDS).describe("Archive IDs to restore"),
       skip_existing: z.boolean().optional().default(true).describe("Skip archive IDs already restored into this project"),
     },
@@ -172,21 +171,21 @@ export function restoreArchiveClipsDef(fs: Engine): ToolDef {
         const target = archiveMediaTarget(index);
         if (!target) return toolError(`Archive media type is not supported: ${index.media.filename}`);
 
-        const created = await fs.artifacts.create(target.prefix, archiveAssetName(index));
+        const created = await fs.artifacts.create(target.kind, archiveAssetName(index));
         if (!created.ok) return toolError(created.error.message);
 
-        const writeArchive = await fs.metadata.artifacts.write(created.value.slug, "archive", archiveMetadata(index));
+        const writeArchive = await fs.metadata.artifacts.write(created.value.artifactId, "archive", archiveMetadata(index));
         if (!writeArchive.ok) {
-          await fs.artifacts.delete(created.value.slug).catch(() => undefined);
+          await fs.artifacts.delete(created.value.artifactId).catch(() => undefined);
           return toolError(writeArchive.error.message);
         }
 
-        const jobId = `restore-archive-${created.value.slug}-${Date.now()}`;
+        const jobId = `restore-archive-${created.value.artifactId}-${Date.now()}`;
         try {
           await queue.enqueue(jobId, {
             type: "restore_archive_clip",
             bookId: book_id,
-            assetId: created.value.slug,
+            assetId: created.value.artifactId,
             assetDir: created.value.path,
             archiveId: index.archive_id,
             mediaKey: index.media.key,
@@ -199,13 +198,13 @@ export function restoreArchiveClipsDef(fs: Engine): ToolDef {
             people: tagLabels(index.people),
           } as unknown as Record<string, unknown>);
         } catch (error) {
-          await fs.artifacts.delete(created.value.slug).catch(() => undefined);
+          await fs.artifacts.delete(created.value.artifactId).catch(() => undefined);
           return toolError(error instanceof Error ? error.message : String(error));
         }
 
         restored.push({
           archive_id: index.archive_id,
-          asset_id: created.value.slug,
+          asset_id: created.value.artifactId,
           job_id: jobId,
         });
       }

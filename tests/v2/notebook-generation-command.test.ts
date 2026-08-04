@@ -9,25 +9,25 @@ import { parseNotebookGenerationCellCommand } from '../../src/videobook/notebook
 describe('notebook generation cell commands', () => {
   it('parses explicit configured-cell execution requests', () => {
     expect(parseNotebookGenerationCellCommand(
-      'generate cell @generate-image-01',
-    )).toBe('generate-image-01')
+      'generate cell @a1',
+    )).toBe('a1')
     expect(parseNotebookGenerationCellCommand(
       'run @018F7CF5-0D31-7D96-8C0F-800000000001',
     )).toBe('018f7cf5-0d31-7d96-8c0f-800000000001')
     expect(parseNotebookGenerationCellCommand(
-      'Please run the cell generate-video-02.',
-    )).toBe('generate-video-02')
+      'Please run the cell B2.',
+    )).toBe('b2')
   })
 
   it('leaves natural generation prompts for free-form routing', () => {
     expect(parseNotebookGenerationCellCommand(
-      'generate an image with @img-01',
+      'generate an image with @a1',
     )).toBeNull()
     expect(parseNotebookGenerationCellCommand(
       'generate an image of a sunset',
     )).toBeNull()
     expect(parseNotebookGenerationCellCommand(
-      'run a cinematic transformation with @img-01',
+      'run a cinematic transformation with @a1',
     )).toBeNull()
   })
 
@@ -35,7 +35,7 @@ describe('notebook generation cell commands', () => {
     const rootDir = await mkdtemp(join(tmpdir(), 'videobook-generation-route-'))
     const engine = createEngine({
       rootDir,
-      initialBookSlug: 'generation-route',
+      initialBookName: 'generation-route',
     })
     const originalApiKey = process.env.OPENAI_API_KEY
     try {
@@ -52,7 +52,7 @@ describe('notebook generation cell commands', () => {
 
       const result = await chatDef(engine).handler({
         book_id: engine.book.get().bookId,
-        prompt: `generate an image with @${artifact.value.slug}`,
+        prompt: `generate an image with @${artifact.value.artifactId}`,
       })
 
       expect(result.isError).toBe(true)

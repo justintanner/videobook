@@ -71,7 +71,7 @@ describe("estimateGoogleFlowCost — official API USD", () => {
   it("omni V2V is 40 credits; USD from clip window when present", () => {
     const e = estimateGoogleFlowCost(
       "generate_google_omni_video",
-      { duration: "4", video_slug: "@vid-clip", video_clip_start: 0, video_clip_ends: 6 },
+      { duration: "4", video_ref: "@vid-clip", video_clip_start: 0, video_clip_ends: 6 },
       { tier: "ultra99" },
     );
     expect(creditsOf(e!)).toBe(40);
@@ -82,7 +82,7 @@ describe("estimateGoogleFlowCost — official API USD", () => {
   it("omni V2V without clip window uses duration/default for USD", () => {
     const e = estimateGoogleFlowCost(
       "generate_google_omni_video",
-      { video_slug: "@vid-clip" },
+      { video_ref: "@vid-clip" },
       { tier: "ultra99" },
     );
     expect(creditsOf(e!)).toBe(40);

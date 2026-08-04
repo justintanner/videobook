@@ -23,7 +23,7 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
       "Set or clear the on-screen graphic overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.",
     schema: {
       asset_id: z.string().describe("Video asset ID (e.g. vid-my-clip)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       osg_asset_id: z
         .string()
         .nullable()

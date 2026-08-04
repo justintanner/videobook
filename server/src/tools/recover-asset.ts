@@ -15,7 +15,7 @@ export function recoverAssetDef(fs: Engine): ToolDef {
       "returning the card to its normal ready state. Use this instead of clean_failed_assets when the asset must be preserved.",
     schema: {
       asset_id: z.string().describe("Asset ID to recover (vid-*, img-*, etc., or @-prefixed)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };

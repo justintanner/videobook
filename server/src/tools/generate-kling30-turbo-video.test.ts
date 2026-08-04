@@ -1,4 +1,5 @@
 import { createEngineForTest } from "../fs.js";
+import { isUuidV7 } from "videobook-engine";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -54,6 +55,7 @@ describe("generate_kling30_turbo_video tool", () => {
   });
 
   it("enqueues kling30_turbo job (text-to-video)", async () => {
+    const fs = createEngineForTest(tempDir);
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_turbo_video",
       arguments: {
@@ -68,7 +70,10 @@ describe("generate_kling30_turbo_video tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.vid_asset_id).toMatch(/^vid-/);
+    expect(isUuidV7(parsed.vid_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.vid_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("video");
     expect(parsed.source_images).toEqual([]);
     expect(parsed.job_id).toBeDefined();
   });
@@ -77,22 +82,25 @@ describe("generate_kling30_turbo_video tool", () => {
     const fs = createEngineForTest(tempDir);
     const imageAsset = await fs.artifacts.create("img", "source-img");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
+    await fs.files.write(imageAsset.value.artifactId, "original.png", await makePng());
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_turbo_video",
       arguments: {
         book_id: "test-proj",
         prompt: "animate this image",
-        image_slugs: [`@${imageAsset.value.slug}`],
+        image_refs: [`@${imageAsset.value.artifactId}`],
       },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.vid_asset_id).toMatch(/^vid-/);
-    expect(parsed.source_images).toEqual([imageAsset.value.slug]);
+    expect(isUuidV7(parsed.vid_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.vid_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("video");
+    expect(parsed.source_images).toEqual([imageAsset.value.artifactId]);
     expect(parsed.job_id).toBeDefined();
   });
 });

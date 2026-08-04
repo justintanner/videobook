@@ -19,7 +19,7 @@ const grokTextToImageInputSchema = GrokTextToImageRequestSchema.shape.input.shap
 
 const generateGrokImagineTextImageSchema = {
   prompt: apicityStringField(grokTextToImageInputSchema.prompt, "Text prompt for image generation", { required: true }),
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   aspect_ratio: apicityField(grokTextToImageInputSchema.aspect_ratio, "Aspect ratio"),
   enable_pro: apicityField(grokTextToImageInputSchema.enable_pro, "Quality mode when true, speed mode when false"),
   nsfw_checker: apicityField(grokTextToImageInputSchema.nsfw_checker, "Enable NSFW content safety filter (default false)"),
@@ -32,7 +32,7 @@ export function generateGrokImagineTextImageDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_grok_imagine_text_to_image",
     description:
-      "Generate an image from a text prompt using Grok Imagine. Creates a new img- asset and enqueues a background job. No reference images needed.",
+      "Generate an image from a text prompt using Grok Imagine. Creates a new image artifact and enqueues a background job. No reference images needed.",
     schema: generateGrokImagineTextImageSchema,
     handler: async (args) => {
       const { prompt, book_id, aspect_ratio, enable_pro, nsfw_checker, _provider } = args as Args;
@@ -55,7 +55,7 @@ export function generateGrokImagineTextImageDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "grok-imagine/text-to-image")}-text-${imgAssetId}-${Date.now()}`;
 

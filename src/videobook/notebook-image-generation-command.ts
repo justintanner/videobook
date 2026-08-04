@@ -1,5 +1,7 @@
-import { firstEmptyNotebookGridSlot } from 'videobook-engine/notebook-grid'
-import { NOTEBOOK_CELL_REFERENCE_SOURCE } from 'videobook-engine/notebook-mentions'
+import {
+  firstEmptyNotebookGridSlot,
+  notebookGridTag,
+} from 'videobook-engine/notebook-grid'
 import type {
   NotebookCell,
   NotebookDocument,
@@ -9,12 +11,14 @@ import {
   initialGenerationSelection,
   type NotebookGenerationAction,
 } from './notebook-generation-actions'
-import { nextNotebookCellSlug } from './notebook-download'
 import {
   notebookCellTag,
   notebookReferences,
   resolveNotebookCellReference,
 } from './notebook-addressing'
+
+// Accepts a grid address (@a3) or a cell id / id prefix.
+const NOTEBOOK_IMAGE_REFERENCE_SOURCE = '[a-z0-9][a-z0-9-]*'
 
 export type NotebookImageGenerationCommand = {
   prompt: string
@@ -23,9 +27,9 @@ export type NotebookImageGenerationCommand = {
 
 export type NotebookImageGenerationCommandRun = {
   cellId: string
-  cellSlug: string
+  cellAddress: string
   sourceCellIds: string[]
-  sourceSlugs: string[]
+  sourceAddresses: string[]
 }
 
 type NotebookToolCall = (
@@ -39,7 +43,7 @@ const imageSourceTypes = new Set<NotebookCell['type']>([
 ])
 
 const IMAGE_PROMPT_REFERENCE_PATTERN = new RegExp(
-  `(?:\\b(?:with|using|from|based\\s+on)\\s+)?@${NOTEBOOK_CELL_REFERENCE_SOURCE}(?![\\w-])`,
+  `(?:\\b(?:with|using|from|based\\s+on)\\s+)?@${NOTEBOOK_IMAGE_REFERENCE_SOURCE}(?![\\w-])`,
   'giu',
 )
 
@@ -123,7 +127,6 @@ export async function materializeNotebookImageGenerationCommand(input: {
   if (!selection) {
     throw new Error('No available image generation action accepts these references')
   }
-  const slug = nextNotebookCellSlug('generate_image', input.document.cells)
   const slot = sources[0]
     ? firstEmptyNotebookGridSlot(input.document.cells.map((cell) => cell.slot))
     : input.fallbackSlot
@@ -137,14 +140,13 @@ export async function materializeNotebookImageGenerationCommand(input: {
         : {}),
       cell: {
         type: 'generate_image',
-        slug,
         slot,
         prompt: input.command.prompt,
         ...selection,
       },
     }))
     cellId = stringValue(created?.id)
-    const cellSlug = stringValue(created?.slug) ?? slug
+    const cellAddress = stringValue(created?.address) ?? notebookGridTag(slot)
     if (!cellId) {
       throw new Error('The server did not return the Generate Image cell')
     }
@@ -159,9 +161,9 @@ export async function materializeNotebookImageGenerationCommand(input: {
     }
     return {
       cellId,
-      cellSlug,
+      cellAddress,
       sourceCellIds: sources.map((source) => source.id),
-      sourceSlugs: sources.map((source) => source.slug),
+      sourceAddresses: sources.map((source) => notebookGridTag(source.slot)),
     }
   } catch (error) {
     if (cellId) {

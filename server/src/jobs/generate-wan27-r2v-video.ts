@@ -71,10 +71,10 @@ export function registerGenerateWan27R2vVideoJob(fs: Engine): void {
       "generate_kie_wan_2_7_reference_to_video",
       {
         prompt,
-        image_slugs: imageInputs.map((input) => input.assetId),
-        video_slugs: videoInputs.map((input) => input.assetId),
-        first_frame_slug: firstFrame?.assetId,
-        audio_slug: voiceRef?.assetId,
+        image_refs: imageInputs.map((input) => input.assetId),
+        video_refs: videoInputs.map((input) => input.assetId),
+        first_frame_ref: firstFrame?.assetId,
+        audio_ref: voiceRef?.assetId,
       },
     ) ?? "";
 

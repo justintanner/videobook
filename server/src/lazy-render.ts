@@ -92,14 +92,13 @@ export async function enqueueLazyAnalysisIfSlotted(
   bookId: string,
   assetId: string,
 ): Promise<LazyAnalysisResult | null> {
-  if (!assetId.startsWith("vid-")) return null;
   // Same provider gate as assign_slot's lazy analysis: truthy env check (not
   // getApiKey) so placeholder keys used in tests pass; the real placeholder
   // defense lives at the API call inside analyze-video.
   if (!process.env.OPENAI_API_KEY) return null;
 
   const asset = fs.artifacts.get(assetId);
-  if (!asset.ok) return null;
+  if (!asset.ok || asset.value.kind !== "video") return null;
   const timeline = readTimeline(fs);
   if (!timeline.slots.some((slot) => slot.artifactId === asset.value.artifactId)) return null;
 
@@ -142,20 +141,15 @@ export async function enqueueLazyTimelineRender(
   assetId: string,
   knownAsset?: Artifact,
 ): Promise<LazyRenderResult | null> {
-  if (!assetId.startsWith("vid-")) return null;
-
   const resolved = fs.artifacts.get(assetId);
-  if (!resolved.ok) return null;
+  if (!resolved.ok || resolved.value.kind !== "video") return null;
   const timeline = readTimeline(fs);
   if (!timeline.slots.some((slot) => slot.artifactId === resolved.value.artifactId)) return null;
 
   const orientation = timeline.render;
   if (await isRenderAlreadyQueued(fs, assetId, orientation)) return null;
 
-  const asset =
-    knownAsset ??
-    fs.artifacts.list().find((entry) => entry.slug === assetId);
-  if (!asset) return null;
+  const asset: Artifact = knownAsset ?? resolved.value;
 
   const renderActions = await findAutoRenderActions(fs, bookId, [asset], orientation);
   if (renderActions.length === 0) return null;

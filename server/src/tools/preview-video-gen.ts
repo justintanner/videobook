@@ -16,7 +16,8 @@ import type { ActionLogEntry } from "../video-models.js";
 import type { ToolDef } from "./tool-def.js";
 
 import { getCanonicalName } from "../generation-registry.js";
-import { timelineSlotSlugs } from "../timeline-helpers.js";
+import { expandTimelineSlotRefs, timelineSlotArtifactIds } from "../timeline-helpers.js";
+import { parseArtifactIdTags, resolveArtifactRefs } from "../artifact-refs.js";
 import {
   buildIntelligenceResponses,
   firstResponseText,
@@ -53,31 +54,26 @@ export function previewVideoGenDef(fs: Engine): ToolDef {
       "Route a natural language prompt to the best video generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available video models.",
     schema: {
       prompt: z.string().describe("Natural language generation prompt (e.g., 'gen a video of a sunset')"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       selected_model: z.string().optional().describe("Override: which model key to select (e.g. 'kling30')"),
       selected_provider: z.string().optional().describe("Override: which provider key to select (e.g. 'kie')"),
     },
     handler: async (args) => {
-      const { prompt, book_id: slug, selected_model: modelOverride, selected_provider: providerOverride } = args as {
+      const { prompt, book_id: bookId, selected_model: modelOverride, selected_provider: providerOverride } = args as {
         prompt: string;
         book_id: string;
         selected_model?: string;
         selected_provider?: string;
       };
 
-      // 1. Expand @s01 slot refs → actual asset slugs
-      let expandedPrompt = prompt;
-      expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineSlotSlugs(fs));
+      // 1. Expand @s01 slot refs → @<artifact-id> tokens
+      const expandedPrompt = expandTimelineSlotRefs(prompt, timelineSlotArtifactIds(fs));
 
-      // 2. Resolve @asset tags
-      const resolvedResult = await fs.resolver.resolveAll(expandedPrompt);
-      if (!resolvedResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: resolvedResult.error.message }],
-        };
-      }
-      const { resolved: resolvedAssets, unresolved } = resolvedResult.value;
+      // 2. Resolve @<artifact-id> tags
+      const { resolved: resolvedAssets, unresolved } = await resolveArtifactRefs(
+        fs,
+        parseArtifactIdTags(expandedPrompt),
+      );
 
       // 3. Route prompt (skip when model explicitly selected)
       let routedToolName = VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name;
@@ -100,7 +96,7 @@ export function previewVideoGenDef(fs: Engine): ToolDef {
           const assetContext = resolvedAssets.map((a) => ({
             tag: a.tag,
             type: a.artifactType,
-            asset_id: a.artifactSlug,
+            asset_id: a.artifactId,
             has_file: a.filePath !== null,
           }));
 
@@ -156,10 +152,10 @@ Determine which video generation tool to use and what parameters to pass.`;
         // action log unavailable
       }
 
-      // 4b. Build set of valid asset tags for the current project so
-      //     historical slug references that no longer exist are stripped.
+      // 4b. Build set of valid artifact-id tags for the current book so
+      //     historical references that no longer exist are stripped.
       const allProjectAssets = fs.artifacts.list();
-      const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.slug}`));
+      const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.artifactId}`));
 
       // 5. Build model options for all 5 video models
       // Only pass router params to the model that was actually routed to;
@@ -191,15 +187,15 @@ Determine which video generation tool to use and what parameters to pass.`;
       }
       const selectedOption = modelOptions.find((o) => o.key === selectedModel) ?? modelOptions[0];
 
-      // 7. Build resolved_assets output (slug/src/type for frontend ResolvedArtifact)
+      // 7. Build resolved_assets output (tag/src/type for the frontend)
       const assetDicts = resolvedAssets.map((a) => {
         const fileName = a.filePath?.split("/").pop() ?? "original.png";
-        const src = a.filePath ? `/files/${slug}/${a.artifactSlug}/${fileName}` : "";
+        const src = a.filePath ? `/files/${bookId}/${a.artifactId}/${fileName}` : "";
         const isVideo = a.artifactType === "video";
         return {
-          slug: a.tag,
+          ref: a.tag,
           src,
-          thumbnailSrc: isVideo && a.filePath ? `/files/${slug}/${a.artifactSlug}/original.jpg` : undefined,
+          thumbnailSrc: isVideo && a.filePath ? `/files/${bookId}/${a.artifactId}/original.jpg` : undefined,
           type: isVideo ? "video" as const : "image" as const,
         };
       });

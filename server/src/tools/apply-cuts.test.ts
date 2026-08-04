@@ -54,10 +54,10 @@ async function placeVideo(
   const asset = await fs.artifacts.create("vid", "test-source");
   if (!asset.ok) throw new Error(`createAsset failed: ${asset.error.message}`);
   const bytes = await readFile(videoPath);
-  const written = await fs.files.write(asset.value.slug, "original.mp4", bytes
+  const written = await fs.files.write(asset.value.artifactId, "original.mp4", bytes
   );
   if (!written.ok) throw new Error(`writeFile failed: ${written.error.message}`);
-  return { assetId: asset.value.slug, path: asset.value.path };
+  return { assetId: asset.value.artifactId, path: asset.value.path };
 }
 
 describe("apply_cuts tool", () => {
@@ -210,12 +210,12 @@ describe("apply_cuts tool", () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "no-video");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "notes.txt", "hello");
+    await fs.files.write(asset.value.artifactId, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "apply_cuts",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "cuts-proj",
         cuts: [{ cut_start: 1, cut_end: 2 }],
       },

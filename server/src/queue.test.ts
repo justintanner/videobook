@@ -73,7 +73,7 @@ describe("server queue (Dolt-native)", () => {
       withProviderHandoff(
         cfs,
         bookId,
-        asset.value.slug,
+        asset.value.artifactId,
         ctx,
         "generate",
         async (ownerId) => {
@@ -96,13 +96,13 @@ describe("server queue (Dolt-native)", () => {
       {
         type: "generate_provider_handoff_probe",
         bookId,
-        imgAssetId: asset.value.slug,
+        imgAssetId: asset.value.artifactId,
       },
       5_000,
     );
 
     expect(result.ok).toBe(true);
-    const pending = await cfs.jobs.pending.read(asset.value.slug);
+    const pending = await cfs.jobs.pending.read(asset.value.artifactId);
     expect(pending.ok).toBe(true);
     expect(pending.ok ? pending.value?.taskId : null).toBe(taskId);
     await appQueue.stop();
@@ -122,12 +122,12 @@ describe("server queue (Dolt-native)", () => {
       await appQueue.enqueue("sync-child-probe", {
         type: "sync_child_probe",
         bookId,
-        assetId: asset.value.slug,
+        assetId: asset.value.artifactId,
       });
       return { ok: true };
     });
     registerJobHandler("sync_child_probe", async () => {
-      const row = await cfs.jobs.artifactWork.read(asset.value.slug);
+      const row = await cfs.jobs.artifactWork.read(asset.value.artifactId);
       childSawReady =
         row.ok &&
         row.value?.status === "ready" &&
@@ -140,7 +140,7 @@ describe("server queue (Dolt-native)", () => {
       {
         type: "generate_sync_probe",
         bookId,
-        imgAssetId: asset.value.slug,
+        imgAssetId: asset.value.artifactId,
       },
       5_000,
     );

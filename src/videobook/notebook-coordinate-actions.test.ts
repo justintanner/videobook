@@ -10,7 +10,6 @@ function cell(id: string, row: number, column: number): NotebookCell {
   return {
     id,
     type: 'prompt',
-    slug: `prompt-${id}`,
     slot: { row, column },
   }
 }

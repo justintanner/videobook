@@ -50,11 +50,11 @@ describe("analyze_jokes tool", () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "no-transcript");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "original.mp4", Buffer.from([0]));
+    await fs.files.write(asset.value.artifactId, "original.mp4", Buffer.from([0]));
 
     const result = await client.callTool({
       name: "analyze_jokes",
-      arguments: { asset_id: asset.value.slug, book_id: "jokes-proj" },
+      arguments: { asset_id: asset.value.artifactId, book_id: "jokes-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -69,12 +69,12 @@ describe("analyze_jokes tool", () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "empty-words");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "elevenlabs.json", JSON.stringify({ text: "", words: [] })
+    await fs.files.write(asset.value.artifactId, "elevenlabs.json", JSON.stringify({ text: "", words: [] })
     );
 
     const result = await client.callTool({
       name: "analyze_jokes",
-      arguments: { asset_id: asset.value.slug, book_id: "jokes-proj" },
+      arguments: { asset_id: asset.value.artifactId, book_id: "jokes-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -91,11 +91,11 @@ describe("analyze_jokes tool", () => {
 
     const result = await client.callTool({
       name: "analyze_jokes",
-      arguments: { asset_id: `@${asset.value.slug}`, book_id: "jokes-proj" },
+      arguments: { asset_id: `@${asset.value.artifactId}`, book_id: "jokes-proj" },
     });
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain(asset.value.slug);
+    expect(content[0].text).toContain(asset.value.artifactId);
   });
 });

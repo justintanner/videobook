@@ -16,7 +16,6 @@ const source: NotebookDocument = {
   cells: [{
     id: '018f7cf5-0d31-7d96-8c0f-800000000002',
     type: 'generate_image',
-    slug: 'prompt-opening',
     slot: { row: 0, column: 0 },
     prompt: 'A moon garden',
     model: 'generate_kie_gpt_image_2_text_to_image',
@@ -127,14 +126,12 @@ describe('notebook draft conversion', () => {
       ...source.cells[0]!,
       id: '018f7cf5-0d31-7d96-8c0f-800000000007',
       type: 'video' as const,
-      slug: 'vid-reference',
       slot: { row: 0, column: 1 },
     }
     const target = {
       ...source.cells[0]!,
       id: '018f7cf5-0d31-7d96-8c0f-800000000008',
       type: 'generate_video' as const,
-      slug: 'generate-video-result',
       slot: { row: 1, column: 1 },
     }
     const connected: NotebookDocument = {

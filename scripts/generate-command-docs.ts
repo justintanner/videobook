@@ -23,7 +23,7 @@ const [
 
 const bookEngine = createEngine({
   rootDir: join(temporaryRoot, "reference-engine"),
-  initialBookSlug: "reference",
+  initialBookName: "reference",
 });
 const root = resolve(import.meta.dirname, "..");
 

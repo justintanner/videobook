@@ -3,21 +3,29 @@ import { z, type ZodRawShape } from "zod";
 import { Qwen2ImageEditRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { slugAsPlaceholderUrl, zodErrorToToolResult } from "./_shared.js";
-import { resolveImageSlugs } from "./_image-inputs.js";
+import { refAsPlaceholderUrl, zodErrorToToolResult } from "./_shared.js";
+import { resolveImageRefs } from "./_image-inputs.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
-function deriveImageName(imageAssetId: string): string {
-  const baseName = imageAssetId.startsWith("img-") ? imageAssetId.slice(4) : imageAssetId;
-  return `qwen2-${baseName}`;
+// The output artifact's label is free text; ids carry no name, so the stem
+// comes from the source image's own label (or a timestamp when there is none).
+function deriveImageName(stem: string): string {
+  return `qwen2-${stem}`;
+}
+
+function sourceImageLabel(fs: Engine, imageAssetId: string | undefined): string {
+  if (!imageAssetId) return `ephemeral-${Date.now()}`;
+  const artifact = fs.artifacts.get(imageAssetId);
+  const label = artifact.ok ? artifact.value.label?.trim() : undefined;
+  return label || imageAssetId;
 }
 
 const qwen2ImageEditInputSchema = Qwen2ImageEditRequestSchema.shape.input.shape;
 
 const generateQwen2ImageEditSchema = {
   prompt: apicityStringField(qwen2ImageEditInputSchema.prompt, "Image editing prompt (max 800 chars)", { required: true }),
-  book_id: z.string().describe("Project slug"),
-  image_slugs: apicityStringArrayField(qwen2ImageEditInputSchema.image_url, "Exactly 1 @img-* slug for the reference image to edit", { required: true }),
+  book_id: z.string().describe("Book id"),
+  image_refs: apicityStringArrayField(qwen2ImageEditInputSchema.image_url, "Exactly 1 image artifact id for the reference image to edit", { required: true }),
   image_size: apicityField(qwen2ImageEditInputSchema.image_size, "Output aspect ratio (default 16:9)"),
   output_format: apicityField(qwen2ImageEditInputSchema.output_format, "Output image format (default png)"),
   nsfw_checker: apicityField(qwen2ImageEditInputSchema.nsfw_checker, "Enable NSFW content safety filter"),
@@ -31,10 +39,10 @@ type Args = SchemaArgs<typeof generateQwen2ImageEditSchema>;
 export function generateQwen2ImageEditDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_qwen_2_0_edit_image",
-    description: "Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new img- asset and enqueues a background job.",
+    description: "Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new image artifact and enqueues a background job.",
     schema: generateQwen2ImageEditSchema,
     handler: async (args) => {
-      const { prompt, book_id, image_slugs, image_size, output_format, seed } = args as Args;
+      const { prompt, book_id, image_refs, image_size, output_format, seed } = args as Args;
       const prefix = "img";
 
       if (!process.env.KIE_API_KEY) {
@@ -44,7 +52,7 @@ export function generateQwen2ImageEditDef(fs: Engine): ToolDef {
         };
       }
 
-      const rawSlugs = image_slugs ?? [];
+      const rawSlugs = image_refs ?? [];
       if (rawSlugs.length !== 1) {
         return {
           isError: true as const,
@@ -56,14 +64,14 @@ export function generateQwen2ImageEditDef(fs: Engine): ToolDef {
       }
 
       // Apicity Qwen2ImageEditRequestSchema enforces image_url as z.string().url()
-      // and prompt .min(1). Local @img-* slugs are not URLs; use a placeholder so
+      // and prompt .min(1). Local artifact refs are not URLs; use a placeholder so
       // pre-upload validation still checks prompt/options. The job handler uploads
       // the asset and substitutes a real CDN URL before calling Kie.
       const apicityCheck = Qwen2ImageEditRequestSchema.safeParse({
         model: "qwen2/image-edit",
         input: {
           prompt,
-          image_url: slugAsPlaceholderUrl(rawSlugs[0]),
+          image_url: refAsPlaceholderUrl(rawSlugs[0]),
           ...(image_size !== undefined ? { image_size } : {}),
           ...(output_format !== undefined ? { output_format } : {}),
           ...(seed !== undefined ? { seed } : {}),
@@ -71,14 +79,13 @@ export function generateQwen2ImageEditDef(fs: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const resolved = await resolveImageSlugs(fs, rawSlugs, book_id);
+      const resolved = await resolveImageRefs(fs, rawSlugs, book_id);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
-      const nameSeed = sourceImageIds[0] ?? `ephemeral-${Date.now()}`;
-      const imgName = deriveImageName(nameSeed);
+      const imgName = deriveImageName(sourceImageLabel(fs, sourceImageIds[0]));
       const assetResult = await fs.artifacts.create(prefix, imgName);
       if (!assetResult.ok) {
         return {
@@ -87,7 +94,7 @@ export function generateQwen2ImageEditDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `qwen2-image-edit-${imgAssetId}-${Date.now()}`;
 

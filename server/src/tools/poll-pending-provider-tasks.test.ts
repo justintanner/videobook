@@ -23,7 +23,7 @@ async function seedPendingTask(
   const asset = await fs.artifacts.create("img", "poll-seed");
   if (!asset.ok) throw new Error(asset.error.message);
 
-  const lease = await fs.jobs.artifactWork.begin(asset.value.slug, {
+  const lease = await fs.jobs.artifactWork.begin(asset.value.artifactId, {
     kind: "generate",
     ownerKind: "job",
     durationMs: 60_000,
@@ -42,7 +42,7 @@ async function seedPendingTask(
   if (!written.ok) throw new Error(written.error.message);
   if (!written.value) throw new Error("pending write lost lease");
 
-  return { assetSlug: asset.value.slug, taskId };
+  return { assetSlug: asset.value.artifactId, taskId };
 }
 
 function sleep(ms: number): Promise<void> {

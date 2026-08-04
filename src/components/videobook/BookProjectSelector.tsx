@@ -34,16 +34,16 @@ type BookProjectSelectorProps = {
   error: string | null
   loading: boolean
   open: boolean
-  onCreate: (slug: string) => Promise<BookProjectMutationResult>
+  onCreate: (name: string) => Promise<BookProjectMutationResult>
   onDelete: (
     bookId: string,
-    confirmSlug: string,
+    confirmName: string,
   ) => Promise<BookProjectMutationResult>
   onOpenChange: (open: boolean) => void
   onRefresh: () => void
   onRename: (
     bookId: string,
-    slug: string,
+    name: string,
   ) => Promise<BookProjectMutationResult>
   onSelect: (bookId: string) => Promise<BookProjectMutationResult>
 }
@@ -144,7 +144,7 @@ export function BookProjectSelector({
     setDeletingBookId(null)
     setOperationError(null)
     setEditingBookId(book.bookId)
-    setEditValue(book.slug)
+    setEditValue(book.name)
   }
 
   const beginDelete = (bookId: string) => {
@@ -181,19 +181,19 @@ export function BookProjectSelector({
   const submitRename = async (event?: FormEvent) => {
     event?.preventDefault()
     if (!editingBookId || pending) return
-    const slug = editValue.trim()
+    const name = editValue.trim()
     const current = books.find((book) => book.bookId === editingBookId)
-    if (!slug) {
-      setOperationError('Enter a project slug')
+    if (!name) {
+      setOperationError('Enter a project name')
       return
     }
-    if (slug === current?.slug) {
+    if (name === current?.name) {
       cancelMode()
       return
     }
     setOperationError(null)
     setPending({ kind: 'rename', bookId: editingBookId })
-    const result = await onRename(editingBookId, slug)
+    const result = await onRename(editingBookId, name)
     setPending(null)
     if (!result.ok) {
       setOperationError(result.error)
@@ -205,14 +205,14 @@ export function BookProjectSelector({
   const submitCreate = async (event?: FormEvent) => {
     event?.preventDefault()
     if (pending) return
-    const slug = createValue.trim()
-    if (!slug) {
-      setOperationError('Enter a project slug')
+    const name = createValue.trim()
+    if (!name) {
+      setOperationError('Enter a project name')
       return
     }
     setOperationError(null)
     setPending({ kind: 'create' })
-    const result = await onCreate(slug)
+    const result = await onCreate(name)
     setPending(null)
     if (!result.ok) {
       setOperationError(result.error)
@@ -226,7 +226,7 @@ export function BookProjectSelector({
     if (pending || books.length < 2) return
     setOperationError(null)
     setPending({ kind: 'delete', bookId: book.bookId })
-    const result = await onDelete(book.bookId, book.slug)
+    const result = await onDelete(book.bookId, book.name)
     setPending(null)
     if (!result.ok) {
       setOperationError(result.error)
@@ -258,7 +258,7 @@ export function BookProjectSelector({
         aria-haspopup="menu"
         onClick={toggleMenu}
       >
-        <strong>{activeBook?.slug ?? 'select-project'}</strong>
+        <strong>{activeBook?.name ?? 'select-project'}</strong>
         {activeBook && (
           <span
             className="book-project-active-count"
@@ -326,7 +326,7 @@ export function BookProjectSelector({
                   >
                     <input
                       autoFocus
-                      aria-label={`New name for ${book.slug}`}
+                      aria-label={`New name for ${book.name}`}
                       disabled={pending !== null}
                       value={editValue}
                       onChange={(event) => setEditValue(event.target.value)}
@@ -367,11 +367,11 @@ export function BookProjectSelector({
                     key={book.bookId}
                     className="book-project-delete"
                     role="group"
-                    aria-label={`Delete ${book.slug}`}
+                    aria-label={`Delete ${book.name}`}
                   >
                     <Trash2 size={15} />
                     <div>
-                      <strong>Delete {book.slug}?</strong>
+                      <strong>Delete {book.name}?</strong>
                       <small>
                         {formatArtifactCount(book.artifactCount)} and{' '}
                         {formatNotebookCount(book.notebookCount)} will be removed
@@ -381,8 +381,8 @@ export function BookProjectSelector({
                       <button
                         type="button"
                         disabled={pending !== null}
-                        title={`Confirm deletion of ${book.slug}`}
-                        aria-label={`Confirm deletion of ${book.slug}`}
+                        title={`Confirm deletion of ${book.name}`}
+                        aria-label={`Confirm deletion of ${book.name}`}
                         onClick={() => void confirmDelete(book)}
                       >
                         {pending?.kind === 'delete'
@@ -424,7 +424,7 @@ export function BookProjectSelector({
                   >
                     <span className="book-project-marker" />
                     <span className="book-project-copy">
-                      <strong>{book.slug}</strong>
+                      <strong>{book.name}</strong>
                       <small>{formatNotebookCount(book.notebookCount)}</small>
                     </span>
                     <span
@@ -442,8 +442,8 @@ export function BookProjectSelector({
                     <button
                       type="button"
                       disabled={mutationDisabled}
-                      title={`Rename ${book.slug}`}
-                      aria-label={`Rename ${book.slug}`}
+                      title={`Rename ${book.name}`}
+                      aria-label={`Rename ${book.name}`}
                       onClick={() => beginRename(book)}
                     >
                       <Pencil size={13} />
@@ -452,9 +452,9 @@ export function BookProjectSelector({
                       type="button"
                       disabled={mutationDisabled || !canDelete}
                       title={canDelete
-                        ? `Delete ${book.slug}`
+                        ? `Delete ${book.name}`
                         : 'Create another project before deleting this one'}
-                      aria-label={`Delete ${book.slug}`}
+                      aria-label={`Delete ${book.name}`}
                       onClick={() => beginDelete(book.bookId)}
                     >
                       <Trash2 size={13} />
@@ -469,9 +469,9 @@ export function BookProjectSelector({
               <form className="book-project-form" onSubmit={submitCreate}>
                 <input
                   autoFocus
-                  aria-label="New project slug"
+                  aria-label="New project name"
                   disabled={pending !== null}
-                  placeholder="project-slug"
+                  placeholder="project-name"
                   value={createValue}
                   onChange={(event) => setCreateValue(event.target.value)}
                 />

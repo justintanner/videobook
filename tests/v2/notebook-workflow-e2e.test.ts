@@ -30,7 +30,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
   })
 
   it('runs video→analysis fixture→split/audio/image without paid generation', async () => {
-    expect(SCHEMA_VERSION).toBe(20)
+    expect(SCHEMA_VERSION).toBe(21)
     expect(NOTEBOOK_CELL_TYPES).toEqual([
       'audio',
       'image',
@@ -61,7 +61,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
     expect(listNotebookActions().some((action) => action.operation === 'analyze_source')).toBe(true)
 
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-dag-e2e-'))
-    engine = createEngine({ rootDir, initialBookSlug: 'dag-e2e' })
+    engine = createEngine({ rootDir, initialBookName: 'dag-e2e' })
     await engine.ready
 
     const sourcePath = join(rootDir, 'source.mp4')
@@ -72,7 +72,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest',
       sourcePath,
     ])
-    const sourceArtifact = await engine.artifacts.create({ kind: 'video', name: 'source' })
+    const sourceArtifact = await engine.artifacts.create({ kind: 'video', label: 'Source video' })
     expect(sourceArtifact.ok).toBe(true)
     if (!sourceArtifact.ok) return
     await engine.files.writeFromPath(sourceArtifact.value.artifactId, 'original.mp4', sourcePath)
@@ -122,6 +122,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
     expect(topologicalOrder(fanned).length).toBe(fanned.cells.length)
 
     const splitCell = fanned.cells.find((cell) => cell.operation === 'split_range')!
+    expect(splitCell.label).toMatch(/^Scene \d{2} split$/)
     const split = await splitSourceRange(
       engine,
       sourceArtifact.value.artifactId,
@@ -129,7 +130,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
         startSeconds: Number(splitCell.inputs?.startSeconds),
         endSeconds: Number(splitCell.inputs?.endSeconds),
       },
-      splitCell.slug,
+      splitCell.label!,
     )
     const first = await captureFrame(engine, split.artifactId, { role: 'first', title: 'first' })
     const last = await captureFrame(engine, split.artifactId, { role: 'last', title: 'last' })

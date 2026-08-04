@@ -46,9 +46,9 @@ export function registerGenerateVeo31VideoJob(fs: Engine): void {
           : "generate_google_flow_veo_3_1_lite_video";
     const normalizedPrompt = transformProviderPrompt(toolName, {
       prompt: p.prompt,
-      image_slugs: p.imageInputs.map((input) => input.assetId),
-      first_frame_slug: p.firstFrame?.assetId,
-      last_frame_slug: p.lastFrame?.assetId,
+      image_refs: p.imageInputs.map((input) => input.assetId),
+      first_frame_ref: p.firstFrame?.assetId,
+      last_frame_ref: p.lastFrame?.assetId,
     }) ?? "";
 
     const request = buildVeo31VideoPayload(

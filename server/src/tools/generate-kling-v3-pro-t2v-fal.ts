@@ -10,7 +10,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const base = FalKlingVideoV3ProTextToVideoRequestSchema.shape;
 
 const schema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(base.prompt, "Video description (max 2500 chars)", { required: true }),
   duration: apicityStringField(base.duration, "Video duration as string (model-specific)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
@@ -25,7 +25,7 @@ type Args = SchemaArgs<typeof schema>;
 export function generateKlingV3ProT2vFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_kling_video_v3_pro_text_to_video",
-    description: "Generate a video via fal.ai using Kling Video v3 Pro from a text prompt. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video via fal.ai using Kling Video v3 Pro from a text prompt. Creates a new video artifact and enqueues a background job.",
     schema,
     handler: async (args) => {
       const { book_id, prompt, duration, aspect_ratio, generate_audio, shot_type, negative_prompt, cfg_scale } = args as Args;
@@ -37,7 +37,7 @@ export function generateKlingV3ProT2vFalDef(fs: Engine): ToolDef {
       const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "kling-3.0/video/pro")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "kling-3.0/video/pro")}-t2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

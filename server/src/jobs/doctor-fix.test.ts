@@ -23,7 +23,7 @@ async function createAsset(
 ): Promise<string> {
   const result = await fs.artifacts.create(prefix, name);
   if (!result.ok) throw new Error(`createAsset failed: ${result.error.message}`);
-  return result.value.slug;
+  return result.value.artifactId;
 }
 
 /** Drive an asset into the error state: claim a lease, write a pending task,

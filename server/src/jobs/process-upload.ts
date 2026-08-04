@@ -32,10 +32,10 @@ export type UnprocessedUpload = {
   mediaType: UploadMediaType;
 };
 
-// The asset id prefix is authoritative for type — a vid- asset with a
+// The artifact kind is authoritative for type — a video asset with a
 // promoted OG thumbnail (original.jpg) must not be classified as an image
 // upload just because the .jpg sorts before the .mp4. Returns null for asset
-// types that aren't candidates for the upload sweep (character/final/plan).
+// kinds that aren't candidates for the upload sweep (character/final/plan).
 function uploadShapeFor(type: ArtifactKind): { mediaType: UploadMediaType; extensions: Set<string> } | null {
   switch (type) {
     case "video": return { mediaType: "video", extensions: VIDEO_EXTENSIONS };
@@ -53,17 +53,17 @@ export async function findUnprocessedUploads(
 ): Promise<UnprocessedUpload[]> {
   const results = await Promise.all(
     assets.map(async (asset): Promise<UnprocessedUpload | null> => {
-      if (asset.slug === "final") return null;
+      if (asset.kind === "final") return null;
       const shape = uploadShapeFor(asset.kind);
       if (!shape) return null;
 
       // Parallelize the independent disk/db reads — each was ~5-20ms serially,
       // multiplied by every asset on every sync.
       const [manifest, originResult, locked, work] = await Promise.all([
-        fs.files.manifest(asset.slug),
-        fs.metadata.artifacts.read(asset.slug, "original"),
+        fs.files.manifest(asset.artifactId),
+        fs.metadata.artifacts.read(asset.artifactId, "original"),
         fs.jobs.locks.isLocked(asset.path),
-        fs.jobs.artifactWork.read(asset.slug),
+        fs.jobs.artifactWork.read(asset.artifactId),
       ]);
       if (!manifest.ok) return null;
       if (originResult.ok) return null;
@@ -115,7 +115,7 @@ export async function findUnprocessedUploads(
       const ext = path.extname(mediaFile.name).toLowerCase();
 
       return {
-        assetId: asset.slug,
+        assetId: asset.artifactId,
         assetDir: asset.path,
         mediaFilename: mediaFile.name,
         extension: ext,

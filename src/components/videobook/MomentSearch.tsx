@@ -51,7 +51,7 @@ export interface MomentSearchHandle {
 type SearchMode = 'text' | ReverseSearchMode
 type PresentedSearchHit = SearchHit & {
   owningBookId?: string
-  owningBookSlug?: string
+  owningBookName?: string
   mediaUrl?: string | null
   thumbnailUrl?: string | null
 }
@@ -349,7 +349,7 @@ function MomentSearch({
 
   const pin = async (hit: PresentedSearchHit) => {
     if (hit.owningBookId && hit.owningBookId !== bookId) {
-      onNotice(`Switch to ${hit.owningBookSlug ?? 'the owning book'} before pinning`)
+      onNotice(`Switch to ${hit.owningBookName ?? 'the owning book'} before pinning`)
       return
     }
     if (!notebookId || !page || !lastQuery) {
@@ -361,12 +361,12 @@ function MomentSearch({
       await call('pin_search_moment', {
         book_id: bookId,
         notebook_id: notebookId,
-        cell_slug: `${hit.artifactSlug}-selects`,
+        cell_label: `${hit.artifactLabel ?? hit.artifactId} selects`,
         query: lastQuery,
         hit,
       })
       await onNotebookChanged()
-      onNotice(`Pinned ${hit.artifactSlug} to the notebook`)
+      onNotice(`Pinned ${(hit.artifactLabel ?? hit.artifactId)} to the notebook`)
     } catch (error) {
       onNotice(error instanceof Error ? error.message : String(error))
     } finally {
@@ -376,7 +376,7 @@ function MomentSearch({
 
   const sendToSequence = async (hit: PresentedSearchHit) => {
     if (hit.owningBookId && hit.owningBookId !== bookId) {
-      onNotice(`Switch to ${hit.owningBookSlug ?? 'the owning book'} before editing`)
+      onNotice(`Switch to ${hit.owningBookName ?? 'the owning book'} before editing`)
       return
     }
     setWorking(true)
@@ -388,7 +388,7 @@ function MomentSearch({
       if (value.preview?.valid === false) {
         onNotice(`Could not add moment: ${value.preview.conflicts?.length ?? 0} conflicts`)
       } else {
-        onNotice(`Added ${hit.artifactSlug} to the primary sequence`)
+        onNotice(`Added ${(hit.artifactLabel ?? hit.artifactId)} to the primary sequence`)
       }
     } catch (error) {
       onNotice(error instanceof Error ? error.message : String(error))
@@ -399,7 +399,7 @@ function MomentSearch({
 
   const attachToTranscript = async (hit: PresentedSearchHit) => {
     if (hit.owningBookId && hit.owningBookId !== bookId) {
-      onNotice(`Switch to ${hit.owningBookSlug ?? 'the owning book'} before editing`)
+      onNotice(`Switch to ${hit.owningBookName ?? 'the owning book'} before editing`)
       return
     }
     if (!notebookId || !lastQuery) {
@@ -415,7 +415,7 @@ function MomentSearch({
         hit,
       })
       await onNotebookChanged()
-      onNotice(`Covered the selected transcript range with ${hit.artifactSlug}`)
+      onNotice(`Covered the selected transcript range with ${(hit.artifactLabel ?? hit.artifactId)}`)
     } catch (error) {
       onNotice(error instanceof Error ? error.message : String(error))
     } finally {
@@ -425,7 +425,7 @@ function MomentSearch({
 
   const startReplace = async (hit: PresentedSearchHit) => {
     if (hit.owningBookId && hit.owningBookId !== bookId) {
-      onNotice(`Switch to ${hit.owningBookSlug ?? 'the owning book'} before editing`)
+      onNotice(`Switch to ${hit.owningBookName ?? 'the owning book'} before editing`)
       return
     }
     setWorking(true)
@@ -488,7 +488,7 @@ function MomentSearch({
       setReplaceTargets([])
       setReplaceTargetId('')
       setReplacePreview(null)
-      onNotice(`Replaced the selected clip with ${replaceHit.artifactSlug}`)
+      onNotice(`Replaced the selected clip with ${(replaceHit.artifactLabel ?? replaceHit.artifactId)}`)
     } catch (error) {
       setReplacePreview(null)
       onNotice(error instanceof Error ? error.message : String(error))
@@ -726,7 +726,7 @@ function MomentSearch({
           <header>
             <div>
               <span className="section-label">REPLACE CLIP</span>
-              <strong>{replaceHit.artifactSlug} · {formatMoment(replaceHit)}</strong>
+              <strong>{(replaceHit.artifactLabel ?? replaceHit.artifactId)} · {formatMoment(replaceHit)}</strong>
             </div>
             <button
               type="button"
@@ -837,7 +837,7 @@ function MomentSearch({
                     preload="metadata"
                   />
                 ) : mediaUrl ? (
-                  <img src={thumbnailUrl ?? mediaUrl} alt={hit.artifactSlug} />
+                  <img src={thumbnailUrl ?? mediaUrl} alt={(hit.artifactLabel ?? hit.artifactId)} />
                 ) : (
                   <Film size={28} />
                 )}
@@ -846,8 +846,8 @@ function MomentSearch({
               <div className="moment-card-body">
                 <header>
                   <strong>
-                    {hit.owningBookSlug ? `${hit.owningBookSlug} · ` : ''}
-                    {hit.artifactSlug}
+                    {hit.owningBookName ? `${hit.owningBookName} · ` : ''}
+                    {(hit.artifactLabel ?? hit.artifactId)}
                   </strong>
                   <span>{Math.round(hit.score * 100)}%</span>
                 </header>

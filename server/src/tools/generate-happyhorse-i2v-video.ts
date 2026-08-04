@@ -24,8 +24,8 @@ function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | nu
 }
 
 const generateHappyhorseI2vVideoSchema = {
-  book_id: z.string().describe("Project slug"),
-  first_frame_slug: z.string().describe("First frame image asset (e.g., @img-start)"),
+  book_id: z.string().describe("Book id"),
+  first_frame_ref: z.string().describe("First frame image artifact id"),
   prompt: apicityStringField(HappyHorse11ImageToVideoRequestSchema.shape.input.shape.prompt, "Optional video description (max 5000 chars / 2500 Chinese chars)"),
   resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
   duration: apicityStringNumberField(HappyHorseDurationSchema, "Video duration in seconds (3-15, default 5)"),
@@ -37,31 +37,33 @@ type Args = SchemaArgs<typeof generateHappyhorseI2vVideoSchema>;
 export function generateHappyhorseI2vVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_happyhorse_1_1_image_to_video",
-    description: "Generate a video from a single first-frame image using HappyHorse image-to-video. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video from a single first-frame image using HappyHorse image-to-video. Creates a new video artifact and enqueues a background job.",
     schema: generateHappyhorseI2vVideoSchema,
     handler: async (args) => {
-      const { book_id, first_frame_slug, prompt, resolution, duration } = args as Args;
+      const { book_id, first_frame_ref, prompt, resolution, duration } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }] };
       }
 
-      const assetId = first_frame_slug.replace(/^@/, "");
-      if (!assetId.startsWith("img-")) {
-        return { isError: true as const, content: [{ type: "text" as const, text: `first_frame_slug must be an img-* asset, got: ${assetId}` }] };
+      const assetId = first_frame_ref.replace(/^@/, "");
+      const artifact = fs.artifacts.get(assetId);
+      if (!artifact.ok) return { isError: true as const, content: [{ type: "text" as const, text: artifact.error.message }] };
+      if (artifact.value.kind !== "image") {
+        return { isError: true as const, content: [{ type: "text" as const, text: `first_frame_ref must be an image artifact, got ${artifact.value.kind}: ${assetId}` }] };
       }
       const manifest = await fs.files.manifest(assetId);
       if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
       const file = findImageFile(manifest.value.files);
       if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
 
-      const videoName = `${SLUG}-${assetId.replace(/^img-/, "")}`;
+      const videoName = `${SLUG}-${assetId}`;
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = [assetId];
       const jobId = `${SLUG}-i2v-${vidAssetId}-${Date.now()}`;
 

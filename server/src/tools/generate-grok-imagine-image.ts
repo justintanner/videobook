@@ -19,14 +19,13 @@ function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | nu
 }
 
 function deriveImageName(imageAssetId: string): string {
-  const baseName = imageAssetId.startsWith("img-") ? imageAssetId.slice(4) : imageAssetId;
-  return `grok-${baseName}`;
+  return `grok-${imageAssetId}`;
 }
 
 const generateGrokImagineImageSchema = {
-  asset_id: z.string().optional().describe("Image asset ID (must be img-*)"),
-  image_slugs: apicityStringArrayField(GrokImageToImageRequestSchema.shape.input.shape.image_urls, "Exactly one image slug (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
-  book_id: z.string().describe("Project slug"),
+  asset_id: z.string().optional().describe("Image artifact id"),
+  image_refs: apicityStringArrayField(GrokImageToImageRequestSchema.shape.input.shape.image_urls, "Exactly one image artifact id. Used as fallback when asset_id is not provided."),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(GrokImageToImageRequestSchema.shape.input.shape.prompt, "Optional prompt to guide image transformation"),
   nsfw_checker: apicityField(GrokImageToImageRequestSchema.shape.input.shape.nsfw_checker, "Enable NSFW content safety filter"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
@@ -37,10 +36,10 @@ type Args = SchemaArgs<typeof generateGrokImagineImageSchema>;
 export function generateGrokImagineImageDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_grok_imagine_image_to_image",
-    description: "Generate an image from an image asset using Grok Imagine image-to-image. Creates a new img- asset and enqueues a background job. Requires at least one of asset_id or image_slugs.",
+    description: "Generate an image from an image asset using Grok Imagine image-to-image. Creates a new image artifact and enqueues a background job. Requires at least one of asset_id or image_refs.",
     schema: generateGrokImagineImageSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, book_id, prompt, _provider } = args as Args;
+      const { asset_id: rawAssetId, image_refs, book_id, prompt, _provider } = args as Args;
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
@@ -50,18 +49,20 @@ export function generateGrokImagineImageDef(fs: Engine): ToolDef {
 
       const missingInput = requireAtLeastOne("generate_kie_grok_imagine_image_to_image", [
         { name: "asset_id", value: rawAssetId },
-        { name: "image_slugs", value: image_slugs },
+        { name: "image_refs", value: image_refs },
       ]);
       if (missingInput) return missingInput;
 
-      // Derive asset_id from image_slugs if not provided directly
-      const asset_id = rawAssetId ?? (image_slugs?.[0]?.replace(/^@/, "") || undefined);
+      // Derive asset_id from image_refs if not provided directly
+      const asset_id = rawAssetId ?? (image_refs?.[0]?.replace(/^@/, "") || undefined);
       if (!asset_id) {
-        return toolError("asset_id or image_slugs with at least one entry is required");
+        return toolError("asset_id or image_refs with at least one entry is required");
       }
 
-      if (!asset_id.startsWith("img-")) {
-        return toolError(`asset_id must start with img-, got: ${asset_id}`);
+      const sourceArtifact = fs.artifacts.get(asset_id);
+      if (!sourceArtifact.ok) return toolError(sourceArtifact.error.message);
+      if (sourceArtifact.value.kind !== "image") {
+        return toolError(`asset_id must be an image artifact, got ${sourceArtifact.value.kind}: ${asset_id}`);
       }
 
       const manifestResult = await fs.files.manifest(asset_id);
@@ -82,7 +83,7 @@ export function generateGrokImagineImageDef(fs: Engine): ToolDef {
         return toolError(`Failed to create image asset: ${assetResult.error.message}`);
       }
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "grok-imagine/text-to-image")}-${imgAssetId}-${Date.now()}`;
 

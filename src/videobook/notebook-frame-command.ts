@@ -2,8 +2,6 @@ import {
   firstEmptyNotebookGridSlot,
 } from 'videobook-engine/notebook-grid'
 import type { NotebookCell, NotebookDocument } from 'videobook-engine'
-import { NOTEBOOK_REFERENCE_SOURCE } from 'videobook-engine/notebook-mentions'
-import { nextNotebookCellSlug } from './notebook-download'
 import {
   notebookCellTag,
   resolveNotebookCellReference,
@@ -18,13 +16,13 @@ export type NotebookFrameCommand = {
 
 export type NotebookFrameCommandRun = {
   actionCellId: string
-  actionSlug: string
+  actionAddress: string
   outputCellId: string | null
   jobId: string
   runId: string
   reusedAction: boolean
   sourceCellId: string
-  sourceSlug: string
+  sourceAddress: string
 }
 
 type NotebookToolCall = (
@@ -39,8 +37,12 @@ const videoSourceTypes = new Set<NotebookCell['type']>([
   'splice',
 ])
 
+// Accepts a grid address (@a3) or a cell id / id prefix; the resolver
+// validates whichever form arrives.
+const NOTEBOOK_FRAME_REFERENCE_SOURCE = '[a-z0-9][a-z0-9-]*'
+
 const NOTEBOOK_FRAME_COMMAND_PATTERN = new RegExp(
-  `^(?:please\\s+)?(?:extracte?|capture|grab|get)\\s+(?:the\\s+)?(first|last)\\s+frame\\s+(?:of|from)\\s+@(${NOTEBOOK_REFERENCE_SOURCE})(?:\\s+please)?[.!]?$`,
+  `^(?:please\\s+)?(?:extracte?|capture|grab|get)\\s+(?:the\\s+)?(first|last)\\s+frame\\s+(?:of|from)\\s+@(${NOTEBOOK_FRAME_REFERENCE_SOURCE})(?:\\s+please)?[.!]?$`,
   'iu',
 )
 
@@ -129,12 +131,12 @@ export async function enqueueNotebookFrameCommand(input: {
     input.command.frameMode,
   )
   let actionCellId = existing?.id ?? null
-  let actionSlug = existing?.slug ?? null
+  let actionAddress = existing ? notebookCellTag(existing) : null
   let outputCellId = existing
     ? frameOutputCellId(input.document, existing.id)
     : null
 
-  if (!actionCellId || !actionSlug) {
+  if (!actionCellId || !actionAddress) {
     const created = objectValue(await input.callTool('create_notebook_cell', {
       book_id: input.bookId,
       notebook_id: input.document.id,
@@ -143,7 +145,7 @@ export async function enqueueNotebookFrameCommand(input: {
         : {}),
       cell: {
         type: 'extract_frame',
-        slug: nextNotebookCellSlug('extract_frame', input.document.cells),
+        label: `${input.command.frameMode === 'last' ? 'Last' : 'First'} frame`,
         slot: firstEmptyNotebookGridSlot(
           input.document.cells.map((cell) => cell.slot),
         ),
@@ -151,9 +153,9 @@ export async function enqueueNotebookFrameCommand(input: {
       },
     }))
     actionCellId = stringValue(created?.id)
-    actionSlug = stringValue(created?.slug)
+    actionAddress = stringValue(created?.address)
     outputCellId = stringValue(objectValue(created?.output_cell)?.id)
-    if (!actionCellId || !actionSlug) {
+    if (!actionCellId || !actionAddress) {
       throw new Error('The server did not return the Extract Frame cell')
     }
     await input.callTool('set_notebook_cell_input', {
@@ -181,12 +183,12 @@ export async function enqueueNotebookFrameCommand(input: {
   }
   return {
     actionCellId,
-    actionSlug,
+    actionAddress,
     outputCellId,
     jobId,
     runId,
     reusedAction: existing !== null,
     sourceCellId: source.id,
-    sourceSlug: source.slug,
+    sourceAddress: notebookCellTag(source),
   }
 }

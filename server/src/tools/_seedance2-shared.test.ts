@@ -18,7 +18,7 @@ describe("buildSeedance2Schema", () => {
 
     expect(schema.resolution.safeParse("720p").success).toBe(true);
     expect(schema.resolution.safeParse("1080p").success).toBe(false);
-    expect(schema.video_slugs.safeParse(["@vid-a", "@vid-b", "@vid-c"]).success).toBe(true);
-    expect(schema.video_slugs.safeParse(["@vid-a", "@vid-b", "@vid-c", "@vid-d"]).success).toBe(false);
+    expect(schema.video_refs.safeParse(["@vid-a", "@vid-b", "@vid-c"]).success).toBe(true);
+    expect(schema.video_refs.safeParse(["@vid-a", "@vid-b", "@vid-c", "@vid-d"]).success).toBe(false);
   });
 });

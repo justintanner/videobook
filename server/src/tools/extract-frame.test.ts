@@ -100,7 +100,8 @@ describe("extract_first_frame / extract_last_frame tools", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.image_asset_id).toMatch(/^img-/);
+    const imageArtifact = fs.artifacts.get(parsed.image_asset_id);
+    expect(imageArtifact.ok && imageArtifact.value.kind).toBe("image");
     expect(parsed.source_video).toBe(sharedUpload.assetId);
     expect(parsed.status).toBe("enqueued");
 
@@ -129,7 +130,8 @@ describe("extract_first_frame / extract_last_frame tools", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.image_asset_id).toMatch(/^img-/);
+    const imageArtifact = fs.artifacts.get(parsed.image_asset_id);
+    expect(imageArtifact.ok && imageArtifact.value.kind).toBe("image");
     expect(parsed.source_video).toBe(sharedUpload.assetId);
     expect(parsed.status).toBe("enqueued");
 

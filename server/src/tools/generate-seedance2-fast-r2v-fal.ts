@@ -3,50 +3,40 @@ import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalSeedance2p0FastReferenceToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
-import { findAudioFile, findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageSlugs, slugify } from "./_fal-shared.js";
+import { resolveImageRefs, slugify } from "./_fal-shared.js";
+import { resolveAudioRef, resolveVideoRef, type RefInput } from "./_seedance2-shared.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
 
-type MediaInput = { assetId: string; filename: string };
-
-async function resolveVideoSlugs(
+async function resolveVideoRefList(
   fs: Engine,
-  rawSlugs: readonly string[],
-  _bookId: string,
-): Promise<{ ok: true; inputs: MediaInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
-  const inputs: MediaInput[] = [];
+  rawRefs: readonly string[],
+  bookId: string,
+): Promise<{ ok: true; inputs: RefInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
+  const inputs: RefInput[] = [];
   const sourceVideoIds: string[] = [];
-  for (const raw of rawSlugs) {
-    const assetId = raw.replace(/^@/, "");
-    if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slugs entries must be vid-* assets, got: ${assetId}` };
-    const manifest = await fs.files.manifest(assetId);
-    if (!manifest.ok) return { ok: false, error: manifest.error.message };
-    const file = findVideoFile(manifest.value.files);
-    if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
-    inputs.push({ assetId, filename: file.name });
-    sourceVideoIds.push(assetId);
+  for (const raw of rawRefs) {
+    const r = await resolveVideoRef(fs, raw, bookId);
+    if (!r.ok) return { ok: false, error: r.error };
+    inputs.push(r.value);
+    sourceVideoIds.push(r.value.assetId);
   }
   return { ok: true, inputs, sourceVideoIds };
 }
 
-async function resolveAudioSlugs(
+async function resolveAudioRefList(
   fs: Engine,
-  rawSlugs: readonly string[],
-  _bookId: string,
-): Promise<{ ok: true; inputs: MediaInput[]; sourceAudioIds: string[] } | { ok: false; error: string }> {
-  const inputs: MediaInput[] = [];
+  rawRefs: readonly string[],
+  bookId: string,
+): Promise<{ ok: true; inputs: RefInput[]; sourceAudioIds: string[] } | { ok: false; error: string }> {
+  const inputs: RefInput[] = [];
   const sourceAudioIds: string[] = [];
-  for (const raw of rawSlugs) {
-    const assetId = raw.replace(/^@/, "");
-    if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slugs entries must be aud-* assets, got: ${assetId}` };
-    const manifest = await fs.files.manifest(assetId);
-    if (!manifest.ok) return { ok: false, error: manifest.error.message };
-    const file = findAudioFile(manifest.value.files, assetId);
-    if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
-    inputs.push({ assetId, filename: file.name });
-    sourceAudioIds.push(assetId);
+  for (const raw of rawRefs) {
+    const r = await resolveAudioRef(fs, raw, bookId);
+    if (!r.ok) return { ok: false, error: r.error };
+    inputs.push(r.value);
+    sourceAudioIds.push(r.value.assetId);
   }
   return { ok: true, inputs, sourceAudioIds };
 }
@@ -54,11 +44,11 @@ async function resolveAudioSlugs(
 const base = FalSeedance2p0FastReferenceToVideoRequestSchema.shape;
 
 const schema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(base.prompt, "Video description (reference items can be mentioned as @Image1, @Video1, @Audio1, etc.)", { required: true }),
-  image_slugs: apicityStringArrayField(base.image_urls, "0-9 reference image @slugs"),
-  video_slugs: apicityStringArrayField(base.video_urls, "0-3 reference video @slugs (combined 2-15s)"),
-  audio_slugs: apicityStringArrayField(base.audio_urls, "0-3 reference audio @slugs (combined ≤15s)"),
+  image_refs: apicityStringArrayField(base.image_urls, "0-9 reference image artifact ids"),
+  video_refs: apicityStringArrayField(base.video_urls, "0-3 reference video artifact ids (combined 2-15s)"),
+  audio_refs: apicityStringArrayField(base.audio_urls, "0-3 reference audio artifact ids (combined ≤15s)"),
   resolution: apicityField(base.resolution, "Output resolution (default 720p)"),
   duration: apicityField(base.duration, "Duration in seconds or 'auto' (default auto)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
@@ -71,12 +61,12 @@ type Args = SchemaArgs<typeof schema>;
 export function generateSeedance2FastR2vFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_seedance_2_0_fast_reference_to_video",
-    description: "Generate a video via fal.ai using ByteDance Seedance 2.0 Fast Reference-to-Video, guided by reference images, videos, and/or audio. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs, video_slugs, or audio_slugs (audio alone is not allowed — pair it with an image or video).",
+    description: "Generate a video via fal.ai using ByteDance Seedance 2.0 Fast Reference-to-Video, guided by reference images, videos, and/or audio. Creates a new video artifact and enqueues a background job. Requires at least one of image_refs, video_refs, or audio_refs (audio alone is not allowed — pair it with an image or video).",
     schema,
     handler: async (args) => {
       const {
         book_id, prompt,
-        image_slugs, video_slugs, audio_slugs,
+        image_refs, video_refs, audio_refs,
         resolution, duration, aspect_ratio, generate_audio, seed,
       } = args as Args;
 
@@ -85,36 +75,36 @@ export function generateSeedance2FastR2vFalDef(fs: Engine): ToolDef {
       }
 
       const missingInput = requireAtLeastOne("generate_fal_seedance_2_0_fast_reference_to_video", [
-        { name: "image_slugs", value: image_slugs },
-        { name: "video_slugs", value: video_slugs },
-        { name: "audio_slugs", value: audio_slugs },
+        { name: "image_refs", value: image_refs },
+        { name: "video_refs", value: video_refs },
+        { name: "audio_refs", value: audio_refs },
       ]);
       if (missingInput) return missingInput;
 
-      const imgSlugs = image_slugs ?? [];
-      const vidSlugs = video_slugs ?? [];
-      const audSlugs = audio_slugs ?? [];
+      const imgRefs = image_refs ?? [];
+      const vidRefs = video_refs ?? [];
+      const audRefs = audio_refs ?? [];
 
-      if (audSlugs.length > 0 && imgSlugs.length === 0 && vidSlugs.length === 0) {
-        return toolError("When audio_slugs is set, at least one reference image or video is required");
+      if (audRefs.length > 0 && imgRefs.length === 0 && vidRefs.length === 0) {
+        return toolError("When audio_refs is set, at least one reference image or video is required");
       }
-      if (imgSlugs.length + vidSlugs.length + audSlugs.length > 12) {
+      if (imgRefs.length + vidRefs.length + audRefs.length > 12) {
         return toolError("Total reference files across all modalities must not exceed 12");
       }
 
-      const resolvedImages = await resolveImageSlugs(fs, imgSlugs, book_id);
+      const resolvedImages = await resolveImageRefs(fs, imgRefs, book_id);
       if (!resolvedImages.ok) return toolError(resolvedImages.error);
 
-      const resolvedVideos = await resolveVideoSlugs(fs, vidSlugs, book_id);
+      const resolvedVideos = await resolveVideoRefList(fs, vidRefs, book_id);
       if (!resolvedVideos.ok) return toolError(resolvedVideos.error);
 
-      const resolvedAudios = await resolveAudioSlugs(fs, audSlugs, book_id);
+      const resolvedAudios = await resolveAudioRefList(fs, audRefs, book_id);
       if (!resolvedAudios.ok) return toolError(resolvedAudios.error);
 
       const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "bytedance/seedance-2-fast")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return toolError(`Failed to create video asset: ${assetResult.error.message}`);
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "bytedance/seedance-2-fast")}-r2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

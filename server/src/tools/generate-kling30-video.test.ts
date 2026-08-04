@@ -1,4 +1,5 @@
 import { createEngineForTest } from "../fs.js";
+import { isUuidV7 } from "videobook-engine";
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -74,6 +75,7 @@ describe("generate_kling30_video tool", () => {
   it("enqueues text-to-video job with no images", async () => {
     process.env.KIE_API_KEY = "test-key";
 
+    const fs = createEngineForTest(tempDir);
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_video",
       arguments: {
@@ -86,7 +88,10 @@ describe("generate_kling30_video tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.vid_asset_id).toMatch(/^vid-/);
+    expect(isUuidV7(parsed.vid_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.vid_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("video");
     expect(parsed.source_images).toEqual([]);
     expect(parsed.job_id).toBeDefined();
   });
@@ -99,7 +104,7 @@ describe("generate_kling30_video tool", () => {
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await makePng();
-    await fs.files.write(asset.value.slug, "original.png", png);
+    await fs.files.write(asset.value.artifactId, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_video",
@@ -107,19 +112,26 @@ describe("generate_kling30_video tool", () => {
         ...requiredKlingArgs,
         book_id: "test-proj",
         prompt: "animate this image",
-        image_slugs: [`@${asset.value.slug}`],
+        image_refs: [`@${asset.value.artifactId}`],
       },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.vid_asset_id).toMatch(/^vid-/);
-    expect(parsed.source_images).toEqual([asset.value.slug]);
+    expect(isUuidV7(parsed.vid_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.vid_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("video");
+    expect(parsed.source_images).toEqual([asset.value.artifactId]);
   });
 
-  it("returns error when image_slugs entry is not img-*", async () => {
+  it("returns error when an image_refs entry is not an image artifact", async () => {
     process.env.KIE_API_KEY = "test-key";
+
+    const fs = createEngineForTest(tempDir);
+    const video = await fs.artifacts.create("vid", "not-an-image");
+    if (!video.ok) throw new Error(video.error.message);
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_video",
@@ -127,16 +139,17 @@ describe("generate_kling30_video tool", () => {
         ...requiredKlingArgs,
         book_id: "test-proj",
         prompt: "test",
-        image_slugs: ["@vid-something"],
+        image_refs: [`@${video.value.artifactId}`],
       },
     });
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("must be img-*");
+    expect(content[0].text).toContain("image_refs requires image media");
+    expect(content[0].text).toContain(`${video.value.artifactId} is video`);
   });
 
-  it("returns error for nonexistent image asset in image_slugs", async () => {
+  it("returns error for nonexistent image asset in image_refs", async () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
@@ -145,7 +158,7 @@ describe("generate_kling30_video tool", () => {
         ...requiredKlingArgs,
         book_id: "test-proj",
         prompt: "test",
-        image_slugs: ["@img-does-not-exist"],
+        image_refs: ["@01890f1c-0000-7000-8000-0000000000aa"],
       },
     });
 
@@ -159,7 +172,7 @@ describe("generate_kling30_video tool", () => {
     const asset = await fs.artifacts.create("img", "empty-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
-    await fs.files.write(asset.value.slug, "notes.txt", "hello");
+    await fs.files.write(asset.value.artifactId, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_video",
@@ -167,7 +180,7 @@ describe("generate_kling30_video tool", () => {
         ...requiredKlingArgs,
         book_id: "test-proj",
         prompt: "test",
-        image_slugs: [`@${asset.value.slug}`],
+        image_refs: [`@${asset.value.artifactId}`],
       },
     });
 
@@ -176,7 +189,7 @@ describe("generate_kling30_video tool", () => {
     expect(content[0].text).toContain("No image file");
   });
 
-  it("enqueues job with element slugs", async () => {
+  it("enqueues job with element refs", async () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
@@ -184,7 +197,7 @@ describe("generate_kling30_video tool", () => {
     if (!asset.ok) throw new Error(asset.error.message);
 
     const png = await makePng();
-    await fs.files.write(asset.value.slug, "original.png", png);
+    await fs.files.write(asset.value.artifactId, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_video",
@@ -192,7 +205,7 @@ describe("generate_kling30_video tool", () => {
         ...requiredKlingArgs,
         book_id: "test-proj",
         prompt: "character walks down the street",
-        element1_slugs: [`@${asset.value.slug}`],
+        element1_refs: [`@${asset.value.artifactId}`],
         element1_name: "hero",
         element1_desc: "the main character",
       },
@@ -201,10 +214,13 @@ describe("generate_kling30_video tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.vid_asset_id).toMatch(/^vid-/);
+    expect(isUuidV7(parsed.vid_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.vid_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("video");
   });
 
-  it("returns error for nonexistent element slug", async () => {
+  it("returns error for nonexistent element ref", async () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
@@ -213,7 +229,7 @@ describe("generate_kling30_video tool", () => {
         ...requiredKlingArgs,
         book_id: "test-proj",
         prompt: "test",
-        element1_slugs: ["@img-nonexistent"],
+        element1_refs: ["@01890f1c-0000-7000-8000-0000000000aa"],
         element1_name: "test",
         element1_desc: "test",
       },

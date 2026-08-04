@@ -26,7 +26,7 @@ export function generateElevenlabsT2aDef(fs: Engine): ToolDef {
     name: "generate_elevenlabs_text_to_audio",
     description: "Generate an aud-* text-to-audio asset using an ElevenLabs voice.",
     schema: {
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       voice_id: z.string().describe("ElevenLabs voice ID"),
       text: apicityStringField(elevenLabsTts.text, "Text to synthesize", { required: true }),
       asset_name: z.string().optional().describe("Optional output audio asset name"),
@@ -68,7 +68,7 @@ export function generateElevenlabsT2aDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: audAssetId, path: audAssetDir } = assetResult.value;
+      const { artifactId: audAssetId, path: audAssetDir } = assetResult.value;
       const jobId = `elevenlabs-t2a-${audAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_elevenlabs_t2a",

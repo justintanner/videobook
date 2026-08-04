@@ -45,7 +45,7 @@ describe("notebook runner frames and concat", () => {
     const tool = resolveNotebookGenerationTool({
       id: "019f0000-0000-7000-8000-000000000001",
       type: "generate_video",
-      slug: "generate-video-animate",
+      label: "Animate scene",
       slot: { row: 0, column: 0 },
       model: "bytedance/seedance-2",
       tool: DEFAULT_ANIMATION_TOOL,
@@ -57,14 +57,14 @@ describe("notebook runner frames and concat", () => {
     const video = {
       id: "019f0000-0000-7000-8000-000000000010",
       type: "video" as const,
-      slug: "vid-reference",
+      label: "Reference video",
       slot: { row: 0, column: 0 },
       outputArtifactId: "019f0000-0000-7000-8000-000000000011",
     };
     const animate = {
       id: "019f0000-0000-7000-8000-000000000012",
       type: "generate_video" as const,
-      slug: "generate-video-reference",
+      label: "Animate from reference",
       slot: { row: 1, column: 0 },
       prompt: "Follow the reference motion",
     };
@@ -85,11 +85,11 @@ describe("notebook runner frames and concat", () => {
       schema: {
         book_id: {},
         prompt: {},
-        video_slugs: {},
+        video_refs: {},
       },
     } as unknown as ToolDef;
 
-    expect(modelArgs(definition, document, animate, "book-id").video_slugs)
+    expect(modelArgs(definition, document, animate, "book-id").video_refs)
       .toEqual([`@${video.outputArtifactId}`]);
   });
 
@@ -97,21 +97,21 @@ describe("notebook runner frames and concat", () => {
     const image = {
       id: "019f0000-0000-7000-8000-000000000020",
       type: "image" as const,
-      slug: "img-character",
+      label: "Character image",
       slot: { row: 0, column: 0 },
       outputArtifactId: "019f0000-0000-7000-8000-000000000021",
     };
     const video = {
       id: "019f0000-0000-7000-8000-000000000022",
       type: "video" as const,
-      slug: "vid-motion",
+      label: "Motion reference",
       slot: { row: 0, column: 1 },
       outputArtifactId: "019f0000-0000-7000-8000-000000000023",
     };
     const generate = {
       id: "019f0000-0000-7000-8000-000000000024",
       type: "generate_video" as const,
-      slug: "generate-video-motion",
+      label: "Motion control video",
       slot: { row: 1, column: 0 },
       prompt: "Follow the reference performance",
     };
@@ -140,14 +140,14 @@ describe("notebook runner frames and concat", () => {
       schema: {
         book_id: {},
         prompt: {},
-        character_image_slugs: {},
-        motion_video_slugs: {},
+        character_image_refs: {},
+        motion_video_refs: {},
       },
     } as unknown as ToolDef;
 
     expect(modelArgs(definition, document, generate, "book-id")).toMatchObject({
-      character_image_slugs: [`@${image.outputArtifactId}`],
-      motion_video_slugs: [`@${video.outputArtifactId}`],
+      character_image_refs: [`@${image.outputArtifactId}`],
+      motion_video_refs: [`@${video.outputArtifactId}`],
     });
   });
 
@@ -155,21 +155,21 @@ describe("notebook runner frames and concat", () => {
     const extractFrame = {
       id: "019f0000-0000-7000-8000-000000000030",
       type: "extract_frame" as const,
-      slug: "extract-frame-source",
+      label: "Extract source frame",
       slot: { row: 0, column: 0 },
       outputArtifactId: "019f0000-0000-7000-8000-000000000031",
     };
     const image = {
       id: "019f0000-0000-7000-8000-000000000032",
       type: "image" as const,
-      slug: "img-source",
+      label: "Source image",
       slot: { row: 1, column: 0 },
       outputArtifactId: "019f0000-0000-7000-8000-000000000033",
     };
     const generate = {
       id: "019f0000-0000-7000-8000-000000000034",
       type: "generate_image" as const,
-      slug: "generate-image-source",
+      label: "Generate from source image",
       slot: { row: 2, column: 0 },
     };
     const document: NotebookDocument = {
@@ -197,21 +197,21 @@ describe("notebook runner frames and concat", () => {
       schema: {
         book_id: {},
         prompt: {},
-        image_slugs: {},
+        image_refs: {},
       },
     } as unknown as ToolDef;
 
-    expect(modelArgs(definition, document, generate, "book-id").image_slugs)
+    expect(modelArgs(definition, document, generate, "book-id").image_refs)
       .toEqual([`@${image.outputArtifactId}`]);
   });
 
   it("maps first_frame and last_frame image cells into Seedance payload fields", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-frames-"));
-    engine = createEngine({ rootDir, initialBookSlug: "runner-frames" });
+    engine = createEngine({ rootDir, initialBookName: "runner-frames" });
     await engine.ready;
 
-    const first = await engine.artifacts.create({ kind: "image", name: "first frame" });
-    const last = await engine.artifacts.create({ kind: "image", name: "last frame" });
+    const first = await engine.artifacts.create({ kind: "image", label: "First frame" });
+    const last = await engine.artifacts.create({ kind: "image", label: "Last frame" });
     expect(first.ok && last.ok).toBe(true);
     if (!first.ok || !last.ok) return;
     await engine.files.write(first.value.artifactId, "original.jpg", Buffer.from("first"));
@@ -223,21 +223,21 @@ describe("notebook runner frames and concat", () => {
 
     const firstCell = engine.notebooks.createCell({
       type: "image",
-      slug: "img-first",
+      label: "First frame",
       slot: { row: 0, column: 0 },
       outputArtifactId: first.value.artifactId,
       inputs: { frameRole: "first" },
     });
     const lastCell = engine.notebooks.createCell({
       type: "image",
-      slug: "img-last",
+      label: "Last frame",
       slot: { row: 0, column: 1 },
       outputArtifactId: last.value.artifactId,
       inputs: { frameRole: "last" },
     });
     const animate = engine.notebooks.createCell({
       type: "generate_video",
-      slug: "generate-video-animate",
+      label: "Animate scene",
       slot: { row: 0, column: 2 },
       prompt: "Camera push in",
       provider: "kie",
@@ -269,8 +269,8 @@ describe("notebook runner frames and concat", () => {
       schema: {
         book_id: {},
         prompt: {},
-        first_frame_slug: {},
-        last_frame_slug: {},
+        first_frame_ref: {},
+        last_frame_ref: {},
       },
     } as unknown as ToolDef;
 
@@ -281,8 +281,8 @@ describe("notebook runner frames and concat", () => {
       engine.book.get().bookId,
       engine,
     );
-    expect(args.first_frame_slug).toBe(`@${first.value.slug}`);
-    expect(args.last_frame_slug).toBe(`@${last.value.slug}`);
+    expect(args.first_frame_ref).toBe(`@${first.value.artifactId}`);
+    expect(args.last_frame_ref).toBe(`@${last.value.artifactId}`);
 
     const prepared = await prepareNotebookGeneration(
       engine,
@@ -291,8 +291,8 @@ describe("notebook runner frames and concat", () => {
       engine.book.get().bookId,
     );
     expect(prepared.tool).toBe(DEFAULT_ANIMATION_TOOL);
-    expect(prepared.input.first_frame_slug).toBe(`@${first.value.slug}`);
-    expect(prepared.input.last_frame_slug).toBe(`@${last.value.slug}`);
+    expect(prepared.input.first_frame_ref).toBe(`@${first.value.artifactId}`);
+    expect(prepared.input.last_frame_ref).toBe(`@${last.value.artifactId}`);
     await expect(
       prepareNotebookGeneration(
         engine,
@@ -316,14 +316,14 @@ describe("notebook runner frames and concat", () => {
 
   it("propagates split output through a video asset cell before extraction", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-split-video-"));
-    engine = createEngine({ rootDir, initialBookSlug: "runner-split-video" });
+    engine = createEngine({ rootDir, initialBookName: "runner-split-video" });
     await engine.ready;
 
     const clipPath = join(rootDir, "source.mp4");
     await makeClip(clipPath, 2);
     const sourceArtifact = await engine.artifacts.create({
       kind: "video",
-      name: "source",
+      label: "Source video",
     });
     expect(sourceArtifact.ok).toBe(true);
     if (!sourceArtifact.ok) return;
@@ -339,13 +339,13 @@ describe("notebook runner frames and concat", () => {
 
     const source = engine.notebooks.createCell({
       type: "video",
-      slug: "vid-source",
+      label: "Source video",
       slot: { row: 0, column: 0 },
       outputArtifactId: sourceArtifact.value.artifactId,
     });
     const split = engine.notebooks.createCell({
       type: "split_video",
-      slug: "split-video-action",
+      label: "Split source",
       slot: { row: 1, column: 0 },
       provider: "local",
       operation: "split_range",
@@ -354,24 +354,24 @@ describe("notebook runner frames and concat", () => {
     });
     const video = engine.notebooks.createCell({
       type: "video",
-      slug: "vid-split",
+      label: "Split video",
       slot: { row: 2, column: 0 },
     });
     const firstFrame = engine.notebooks.createCell({
       type: "image",
-      slug: "img-first-frame",
+      label: "First frame",
       slot: { row: 3, column: 0 },
       inputs: { frameRole: "first" },
     });
     const lastFrame = engine.notebooks.createCell({
       type: "image",
-      slug: "img-last-frame",
+      label: "Last frame",
       slot: { row: 3, column: 1 },
       inputs: { frameRole: "last" },
     });
     const extractAudio = engine.notebooks.createCell({
       type: "extract_audio",
-      slug: "extract-audio-scene",
+      label: "Extract scene audio",
       slot: { row: 3, column: 2 },
       provider: "local",
       operation: "extract_audio",
@@ -379,7 +379,7 @@ describe("notebook runner frames and concat", () => {
     });
     const audio = engine.notebooks.createCell({
       type: "audio",
-      slug: "aud-scene",
+      label: "Scene audio",
       slot: { row: 4, column: 2 },
     });
     const document: NotebookDocument = {
@@ -514,14 +514,14 @@ describe("notebook runner frames and concat", () => {
 
   it("stacks matching frame extractions and separates different selections", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-extract-frame-"));
-    engine = createEngine({ rootDir, initialBookSlug: "runner-extract-frame" });
+    engine = createEngine({ rootDir, initialBookName: "runner-extract-frame" });
     await engine.ready;
 
     const clipPath = join(rootDir, "source.mp4");
     await makeClip(clipPath, 3);
     const sourceArtifact = await engine.artifacts.create({
       kind: "video",
-      name: "source",
+      label: "Source video",
     });
     expect(sourceArtifact.ok).toBe(true);
     if (!sourceArtifact.ok) return;
@@ -536,13 +536,13 @@ describe("notebook runner frames and concat", () => {
     if (!notebook.ok) return;
     const source = engine.notebooks.createCell({
       type: "video",
-      slug: "vid-source",
+      label: "Source video",
       slot: { row: 0, column: 0 },
       outputArtifactId: sourceArtifact.value.artifactId,
     });
     const extractFrame = engine.notebooks.createCell({
       type: "extract_frame",
-      slug: "extract-frame-source",
+      label: "Extract source frame",
       slot: { row: 1, column: 0 },
       provider: "local",
       operation: "extract_frame",
@@ -551,7 +551,7 @@ describe("notebook runner frames and concat", () => {
     });
     const occupiedBelow = engine.notebooks.createCell({
       type: "image",
-      slug: "img-source",
+      label: "Placeholder image",
       slot: { row: 2, column: 0 },
     });
     let current: NotebookDocument = {
@@ -611,7 +611,7 @@ describe("notebook runner frames and concat", () => {
     const firstImage = first.document.cells.find((cell) =>
       cell.id === firstOutputEdges[0]!.target);
     expect(firstImage).toMatchObject({
-      slug: "img-source-02",
+      label: "Extract source frame first frame",
       slot: { row: 0, column: 1 },
       outputArtifactId: first.outputArtifactId,
       inputs: {
@@ -723,12 +723,12 @@ describe("notebook runner frames and concat", () => {
 
   it("rejects extract audio actions connected to non-video media", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-audio-input-"));
-    engine = createEngine({ rootDir, initialBookSlug: "runner-audio-input" });
+    engine = createEngine({ rootDir, initialBookName: "runner-audio-input" });
     await engine.ready;
 
     const sourceArtifact = await engine.artifacts.create({
       kind: "audio",
-      name: "source audio",
+      label: "Source audio",
     });
     expect(sourceArtifact.ok).toBe(true);
     if (!sourceArtifact.ok) return;
@@ -743,13 +743,13 @@ describe("notebook runner frames and concat", () => {
 
     const source = engine.notebooks.createCell({
       type: "audio",
-      slug: "aud-source",
+      label: "Source audio",
       slot: { row: 0, column: 0 },
       outputArtifactId: sourceArtifact.value.artifactId,
     });
     const extractAudio = engine.notebooks.createCell({
       type: "extract_audio",
-      slug: "extract-audio-source",
+      label: "Extract source audio",
       slot: { row: 1, column: 0 },
       provider: "local",
       operation: "extract_audio",
@@ -757,7 +757,7 @@ describe("notebook runner frames and concat", () => {
     });
     const output = engine.notebooks.createCell({
       type: "audio",
-      slug: "aud-output",
+      label: "Extracted audio",
       slot: { row: 2, column: 0 },
     });
     const document: NotebookDocument = {
@@ -794,13 +794,13 @@ describe("notebook runner frames and concat", () => {
 
   it("concats ordered video cells into a playable H264 and AAC output", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-concat-"));
-    engine = createEngine({ rootDir, initialBookSlug: "runner-concat" });
+    engine = createEngine({ rootDir, initialBookName: "runner-concat" });
     await engine.ready;
 
     const clipPath = join(rootDir, "clip.mp4");
     await makeClip(clipPath, 1);
-    const clipA = await engine.artifacts.create({ kind: "video", name: "clip a" });
-    const clipB = await engine.artifacts.create({ kind: "video", name: "clip b" });
+    const clipA = await engine.artifacts.create({ kind: "video", label: "Clip A" });
+    const clipB = await engine.artifacts.create({ kind: "video", label: "Clip B" });
     expect(clipA.ok && clipB.ok).toBe(true);
     if (!clipA.ok || !clipB.ok) return;
     await engine.files.writeFromPath(clipA.value.artifactId, "original.mp4", clipPath);
@@ -812,19 +812,19 @@ describe("notebook runner frames and concat", () => {
 
     const videoA = engine.notebooks.createCell({
       type: "video",
-      slug: "vid-a",
+      label: "Clip A",
       slot: { row: 0, column: 0 },
       outputArtifactId: clipA.value.artifactId,
     });
     const videoB = engine.notebooks.createCell({
       type: "video",
-      slug: "vid-b",
+      label: "Clip B",
       slot: { row: 0, column: 1 },
       outputArtifactId: clipB.value.artifactId,
     });
     const concat = engine.notebooks.createCell({
       type: "concat",
-      slug: "concat-output",
+      label: "Concat clips",
       slot: { row: 0, column: 2 },
       provider: "local",
       operation: "concat_video",
@@ -850,7 +850,7 @@ describe("notebook runner frames and concat", () => {
 
     const invalidSplice = engine.notebooks.createCell({
       type: "splice",
-      slug: "splice-output",
+      label: "Splice clips",
       slot: { row: 1, column: 0 },
       operation: "splice_video",
       tool: "ffmpeg",

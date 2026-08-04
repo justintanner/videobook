@@ -11,7 +11,7 @@ describe('notebook queued execution status', () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-queued-cell-'))
-    engine = createEngine({ rootDir, initialBookSlug: 'queued-cell' })
+    engine = createEngine({ rootDir, initialBookName: 'queued-cell' })
   })
 
   afterEach(async () => {
@@ -26,7 +26,7 @@ describe('notebook queued execution status', () => {
     const notebook = created.value
     const cell = engine.notebooks.createCell({
       type: 'generate_image',
-      slug: 'generate-image-01',
+      label: 'Generate image',
       slot: { row: 0, column: 0 },
       prompt: 'neon rain',
       provider: 'kie',

@@ -169,20 +169,20 @@ describe("audio sync transcript preparation and rollback", () => {
       const bookId = fs.book.get().bookId;
       const created = await fs.artifacts.create("vid", "valid transcript");
       if (!created.ok) throw new Error(created.error.message);
-      const audio = await fs.files.write(created.value.slug, "original.mp3", Buffer.from("audio")
+      const audio = await fs.files.write(created.value.artifactId, "original.mp3", Buffer.from("audio")
       );
       if (!audio.ok) throw new Error(audio.error.message);
       const transcript = {
         words: [{ text: "England", start: 3.879, type: "word" }],
       };
-      const written = await fs.files.write(created.value.slug, "elevenlabs.json", JSON.stringify(transcript)
+      const written = await fs.files.write(created.value.artifactId, "elevenlabs.json", JSON.stringify(transcript)
       );
       if (!written.ok) throw new Error(written.error.message);
       delete process.env.ELEVENLABS_API_KEY;
 
       await expect(prepareAudioSyncTranscript(
         fs,
-        created.value.slug,
+        created.value.artifactId,
         bookId,
       )).resolves.toEqual({ transcript, replacement: null });
     } finally {
@@ -209,11 +209,11 @@ describe("audio sync transcript preparation and rollback", () => {
       const bookId = fs.book.get().bookId;
       const created = await fs.artifacts.create("vid", "replacement transcript");
       if (!created.ok) throw new Error(created.error.message);
-      const audio = await fs.files.write(created.value.slug, sourceFilename, Buffer.from("audio")
+      const audio = await fs.files.write(created.value.artifactId, sourceFilename, Buffer.from("audio")
       );
       if (!audio.ok) throw new Error(audio.error.message);
       if (contents !== null) {
-        const written = await fs.files.write(created.value.slug, "elevenlabs.json", contents
+        const written = await fs.files.write(created.value.artifactId, "elevenlabs.json", contents
         );
         if (!written.ok) throw new Error(written.error.message);
       }
@@ -222,11 +222,11 @@ describe("audio sync transcript preparation and rollback", () => {
 
       await expect(prepareAudioSyncTranscript(
         fs,
-        created.value.slug,
+        created.value.artifactId,
         bookId,
       )).rejects.toThrow("ELEVENLABS_API_KEY environment variable is not set");
 
-      const transcriptAfter = await fs.files.read(created.value.slug, "elevenlabs.json"
+      const transcriptAfter = await fs.files.read(created.value.artifactId, "elevenlabs.json"
       );
       if (contents === null) {
         expect(transcriptAfter.ok).toBe(false);
@@ -262,7 +262,7 @@ describe("audio sync transcript preparation and rollback", () => {
         ["elevenlabs.json", "original transcript"],
         [".original.analysis.json", "original analysis"],
       ] as const) {
-        const written = await fs.files.write(created.value.slug, filename, contents
+        const written = await fs.files.write(created.value.artifactId, filename, contents
         );
         if (!written.ok) throw new Error(written.error.message);
       }
@@ -275,17 +275,17 @@ describe("audio sync transcript preparation and rollback", () => {
         ["elevenlabs.json", "changed transcript"],
         [".suggest-cuts.json", "new derivative"],
       ] as const) {
-        const written = await fs.files.write(created.value.slug, filename, contents
+        const written = await fs.files.write(created.value.artifactId, filename, contents
         );
         if (!written.ok) throw new Error(written.error.message);
       }
-      const deleted = await fs.files.delete(created.value.slug, ".original.analysis.json"
+      const deleted = await fs.files.delete(created.value.artifactId, ".original.analysis.json"
       );
       if (!deleted.ok) throw new Error(deleted.error.message);
 
       await expect(restoreAudioSyncSnapshot(
         fs,
-        created.value.slug,
+        created.value.artifactId,
         bookId,
         restoreCommit,
       )).resolves.toMatch(/^[a-f0-9]{40}$/);
@@ -295,19 +295,19 @@ describe("audio sync transcript preparation and rollback", () => {
         ["elevenlabs.json", "original transcript"],
         [".original.analysis.json", "original analysis"],
       ] as const) {
-        const restored = await fs.files.read(created.value.slug, filename);
+        const restored = await fs.files.read(created.value.artifactId, filename);
         expect(restored.ok).toBe(true);
         if (restored.ok) expect(restored.value.toString("utf8")).toBe(contents);
       }
-      await expect(fs.files.read(created.value.slug, ".suggest-cuts.json"
+      await expect(fs.files.read(created.value.artifactId, ".suggest-cuts.json"
       )).resolves.toMatchObject({ ok: false });
       await expect(restoreAudioSyncSnapshot(
         fs,
-        created.value.slug,
+        created.value.artifactId,
         bookId,
         "0000000000000000000000000000000000000000",
       )).rejects.toThrow("Revision not found");
-      const work = await fs.jobs.artifactWork.read(created.value.slug);
+      const work = await fs.jobs.artifactWork.read(created.value.artifactId);
       expect(work.ok).toBe(true);
       if (work.ok) expect(work.value?.status).toBe("ready");
     } finally {
@@ -326,43 +326,43 @@ describe("audio sync transcript preparation and rollback", () => {
       const bookId = fs.book.get().bookId;
       const created = await fs.artifacts.create("vid", "job rollback");
       if (!created.ok) throw new Error(created.error.message);
-      const video = await fs.files.write(created.value.slug, "original.mp4", await readFile(sourcePath)
+      const video = await fs.files.write(created.value.artifactId, "original.mp4", await readFile(sourcePath)
       );
       if (!video.ok) throw new Error(video.error.message);
       const transcriptText = JSON.stringify({
         words: [{ text: "England", start: 1.2, type: "word" }],
       });
-      const transcript = await fs.files.write(created.value.slug, "elevenlabs.json", transcriptText
+      const transcript = await fs.files.write(created.value.artifactId, "elevenlabs.json", transcriptText
       );
       if (!transcript.ok) throw new Error(transcript.error.message);
-      const metadata = await fs.metadata.artifacts.write(created.value.slug, "original", {}
+      const metadata = await fs.metadata.artifacts.write(created.value.artifactId, "original", {}
       );
       if (!metadata.ok) throw new Error(metadata.error.message);
       const historyBefore = fs.history.artifact(created.value.artifactId);
       registerSyncVideoToAudioJob(fs);
 
       await expect(queue.enqueueAndWait(
-        `sync-audio-rollback-${created.value.slug}`,
+        `sync-audio-rollback-${created.value.artifactId}`,
         {
           type: "sync_video_to_audio",
           inputPath: join(created.value.path, "original.mp4"),
           outputPath: join(created.value.path, ".sync-audio-rollback.mp4"),
           anchors: [{ videoSeconds: 1, audioCue: "missing cue" }],
-          assetId: created.value.slug,
+          assetId: created.value.artifactId,
           assetDir: created.value.path,
           bookId,
         },
         30_000,
       )).rejects.toThrow("was not found");
 
-      const work = await fs.jobs.artifactWork.read(created.value.slug);
+      const work = await fs.jobs.artifactWork.read(created.value.artifactId);
       expect(work.ok).toBe(true);
       if (work.ok) expect(work.value?.status).toBe("ready");
-      const generationError = await fs.jobs.failures.read(created.value.slug
+      const generationError = await fs.jobs.failures.read(created.value.artifactId
       );
       expect(generationError.ok).toBe(true);
       if (generationError.ok) expect(generationError.value).toBeNull();
-      const transcriptAfter = await fs.files.read(created.value.slug, "elevenlabs.json"
+      const transcriptAfter = await fs.files.read(created.value.artifactId, "elevenlabs.json"
       );
       expect(transcriptAfter.ok).toBe(true);
       if (transcriptAfter.ok) expect(transcriptAfter.value.toString("utf8")).toBe(transcriptText);

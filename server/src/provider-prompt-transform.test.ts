@@ -7,21 +7,26 @@ import {
   unresolvedProviderMentions,
 } from "./provider-prompt-transform.js";
 
+const IMG_ID = "01890f1c-0000-7000-8000-0000000000aa";
+const VID_ID = "01890f1c-0000-7000-8000-0000000000bb";
+const VID_ID_2 = "01890f1c-0000-7000-8000-0000000000cc";
+const AUD_ID = "01890f1c-0000-7000-8000-0000000000dd";
+
 describe("provider prompt transforms", () => {
   it("rewrites Kling motion-control media by provider array order", () => {
     expect(transformProviderPrompt(
       "generate_kie_kling_3_0_motion_control",
       {
-        prompt: "motion @vid-one, look @img-one",
-        character_image_slugs: ["img-one"],
-        motion_video_slugs: ["vid-one"],
+        prompt: `motion @${VID_ID}, look @${IMG_ID}`,
+        character_image_refs: [IMG_ID],
+        motion_video_refs: [VID_ID],
       },
     )).toBe("motion the source video, look reference image 1");
     expect(transformProviderPrompt(
       "generate_kie_kling_3_0_motion_control",
       {
-        prompt: "blend @vid-one and @vid-two",
-        motion_video_slugs: ["vid-one", "vid-two"],
+        prompt: `blend @${VID_ID} and @${VID_ID_2}`,
+        motion_video_refs: [VID_ID, VID_ID_2],
       },
     )).toBe("blend reference video 1 and reference video 2");
   });
@@ -30,26 +35,26 @@ describe("provider prompt transforms", () => {
     expect(transformProviderPrompt(
       "generate_kie_seedance_2_0_mini_video",
       {
-        prompt: "@img-one follows @vid-one with @aud-one",
-        image_slugs: ["img-one"],
-        video_slugs: ["vid-one"],
-        audio_slugs: ["aud-one"],
+        prompt: `@${IMG_ID} follows @${VID_ID} with @${AUD_ID}`,
+        image_refs: [IMG_ID],
+        video_refs: [VID_ID],
+        audio_refs: [AUD_ID],
       },
     )).toBe("@Image1 follows @Video1 with @Audio1");
     expect(transformProviderPrompt(
       "generate_google_flow_nano_banana_pro_image",
-      { prompt: "paint @img-one", image_slugs: ["img-one"] },
+      { prompt: `paint @${IMG_ID}`, image_refs: [IMG_ID] },
     )).toBe("paint @reference_1");
   });
 
-  it("rejects unresolved grid and local asset mentions", () => {
+  it("rejects unresolved grid and artifact-id mentions", () => {
     expect(unresolvedProviderMentions(
-      "@a2 @img-local @element_1 @referenceImage_1 @Image1 @image1",
-    )).toEqual(["@a2", "@img-local"]);
+      `@a2 @${IMG_ID} @element_1 @referenceImage_1 @Image1 @image1`,
+    )).toEqual(["@a2", `@${IMG_ID}`]);
     expect(unresolvedProviderMentions(
-      "keep @scene-set-01 with @prompt-intro_v2 and @script-final",
-    )).toEqual(["@scene-set-01", "@prompt-intro_v2", "@script-final"]);
-    expect(() => assertNoUnresolvedMentions("use @vid-local", {
+      "keep @some-handle and plain @words alone",
+    )).toEqual([]);
+    expect(() => assertNoUnresolvedMentions(`use @${VID_ID}`, {
       toolName: "example_tool",
     })).toThrow(ProviderMentionError);
     expect(() => assertProviderPayload(
@@ -62,7 +67,7 @@ describe("provider prompt transforms", () => {
     const payload = {
       input: {
         prompt: "use @Image1",
-        image_urls: ["http://url.resolved.later.for/img-one"],
+        image_urls: [`http://url.resolved.later.for/${IMG_ID}`],
       },
     };
     expect(() => assertProviderPayload(payload, {

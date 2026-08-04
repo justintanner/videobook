@@ -9,7 +9,7 @@ export function listAssetsDef(fs: Engine): ToolDef {
     description:
       "List a bounded asset page with media and thumbnail URLs, optionally including notebook-referenced assets outside the page.",
     schema: {
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       sort: z.enum(["newest", "oldest"]).optional().describe("Sort order by creation date"),
       limit: z.number().int().positive().max(500).optional(),
       offset: z.number().int().nonnegative().optional(),

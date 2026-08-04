@@ -117,7 +117,7 @@ describe("notebook action catalog", () => {
   it("rejects invalid tools and returns 14-column raw rows via MCP", async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books);
     const byName = new Map(defs.map((def) => [def.name, def]));
-    const created = resultJson(await byName.get("create_book")!.handler({ slug: "catalog" })) as {
+    const created = resultJson(await byName.get("create_book")!.handler({ name: "catalog" })) as {
       bookId: string
     };
     const managed = books.get(created.bookId);
@@ -139,7 +139,7 @@ describe("notebook action catalog", () => {
       notebook_id: notebookId,
       cell: {
         type: "analyze",
-        slug: "analyze-source",
+        label: "analyze-source",
         slot: { row: 0, column: 0 },
         prompt: "Segment the source",
         provider: "kie",
@@ -155,7 +155,8 @@ describe("notebook action catalog", () => {
       output_cell: {
         id: string;
         type: string;
-        slug: string;
+        label: string;
+        address: string;
         slot: { row: number; column: number };
         inputs: Record<string, unknown>;
       };
@@ -172,7 +173,8 @@ describe("notebook action catalog", () => {
     });
     expect(analysis.output_cell).toMatchObject({
       type: "analysis",
-      slug: "analysis-source",
+      label: "analyze-source",
+      address: "@a2",
       slot: { row: 0, column: 1 },
       inputs: {
         analysisRole: "result",
@@ -245,14 +247,14 @@ describe("notebook action catalog", () => {
       id: "default",
       slots: [
         {
-          field: "character_image_slugs",
+          field: "character_image_refs",
           kind: "image",
           min: 1,
           max: 1,
           targets: ["image"],
         },
         {
-          field: "motion_video_slugs",
+          field: "motion_video_refs",
           kind: "video",
           min: 1,
           max: 1,
@@ -292,7 +294,7 @@ describe("notebook action catalog", () => {
       "notebook_id",
       "cell_id",
       "type",
-      "slug",
+      "label",
       "grid_row",
       "grid_column",
       "output_entity_id",
@@ -318,7 +320,7 @@ describe("notebook action catalog", () => {
       notebook_id: notebookId,
       cell: {
         type: "generate_image",
-        slug: "generate-image-01",
+        label: "generate-image-01",
         slot: { row: 2, column: 0 },
         prompt: "persisted prompt",
       },
@@ -369,7 +371,7 @@ describe("notebook action catalog", () => {
       cell_id: pendingCellId,
       draft: {
         type: "generate_image",
-        slug: "generate-image-pending",
+        label: "generate-image-pending",
         slot: { row: 2, column: 1 },
         prompt: "pending draft prompt",
         provider: "kie",
@@ -398,7 +400,7 @@ describe("notebook action catalog", () => {
       notebook_id: notebookId,
       cell: {
         type: "generate_video",
-        slug: "generate-video-01",
+        label: "generate-video-01",
         slot: { row: 3, column: 0 },
         prompt: "A moonlit garden in motion",
       },
@@ -464,7 +466,7 @@ describe("notebook action catalog", () => {
       notebook_id: notebookId,
       cell: {
         type: "generate_audio",
-        slug: "generate-audio-01",
+        label: "generate-audio-01",
         slot: { row: 4, column: 0 },
         prompt: "Welcome to the moon garden",
       },
@@ -492,7 +494,7 @@ describe("notebook action catalog", () => {
     const valid = validateCellConfiguration({
       id: analysis.id,
       type: "analyze",
-      slug: "analyze-source",
+      label: "analyze-source",
       slot: { row: 0, column: 0 },
       operation: "analyze_source",
       tool: "openai_responses_analysis",
@@ -512,7 +514,7 @@ describe("notebook action catalog", () => {
     const legacy = {
       id: "019f0000-0000-7000-8000-000000000001",
       type: "analyze" as const,
-      slug: "analyze-source",
+      label: "analyze-source",
       slot: { row: 0, column: 0 },
       prompt: "Segment",
       provider: "kie",
@@ -564,7 +566,7 @@ describe("notebook action catalog", () => {
     const defs = videobookDomainDefs(scopedBookEngine, books);
     const byName = new Map(defs.map((def) => [def.name, def]));
     const created = resultJson(await byName.get("create_book")!.handler({
-      slug: "legacy-notebook-read",
+      name: "legacy-notebook-read",
     })) as { bookId: string };
     const managed = books.get(created.bookId);
     expect(managed.ok).toBe(true);
@@ -572,7 +574,7 @@ describe("notebook action catalog", () => {
     const notebook = managed.value.engine.notebooks.list()[0]!;
     const legacy = managed.value.engine.notebooks.createCell({
       type: "analyze",
-      slug: "analyze-source",
+      label: "analyze-source",
       slot: { row: 0, column: 0 },
       prompt: "Segment",
       provider: "kie",

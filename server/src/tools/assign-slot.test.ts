@@ -310,7 +310,7 @@ describe("assign_slot lazy analysis trigger", () => {
     const fs = createEngineForTest(tempDir);
     const created = await fs.artifacts.create("vid", "fake-clip");
     if (!created.ok) throw new Error(created.error.message);
-    const assetId = created.value.slug;
+    const assetId = created.value.artifactId;
     const written = await fs.files.write(created.value.artifactId, "original.mp4", "fake-video-data");
     if (!written.ok) throw new Error(written.error.message);
     await registerTestVideoStream(fs, created.value.artifactId);

@@ -50,7 +50,7 @@ describe("animate_keywords tool", () => {
   async function createVideo(withTranscript: boolean): Promise<string> {
     const created = await fs.artifacts.create("vid", "interview");
     if (!created.ok) throw new Error(created.error.message);
-    const video = await fs.files.write(created.value.slug, "original.mp4", Buffer.from("video"));
+    const video = await fs.files.write(created.value.artifactId, "original.mp4", Buffer.from("video"));
     if (!video.ok) throw new Error(video.error.message);
     if (withTranscript) {
       const transcript = {
@@ -62,11 +62,11 @@ describe("animate_keywords tool", () => {
           { text: "forever", start: 11, end: 11.4, type: "word" },
         ],
       };
-      const written = await fs.files.write(created.value.slug, "elevenlabs.json", JSON.stringify(transcript)
+      const written = await fs.files.write(created.value.artifactId, "elevenlabs.json", JSON.stringify(transcript)
       );
       if (!written.ok) throw new Error(written.error.message);
     }
-    return created.value.slug;
+    return created.value.artifactId;
   }
 
   async function seedPlacementCache(assetId: string, keywords?: string[]): Promise<void> {

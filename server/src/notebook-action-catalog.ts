@@ -1,5 +1,6 @@
 import type { NotebookCell, NotebookCellType, NotebookDocument } from "videobook-engine";
 import { notebookCellTableRows } from "videobook-engine";
+import { notebookGridTag } from "videobook-engine/notebook-grid";
 import {
   GENERATION_ACTIONS,
   getActionSpec,
@@ -733,7 +734,8 @@ function sanitizeResolvedRequest(
 ): Record<string, unknown> {
   return {
     type: cell.type,
-    slug: cell.slug,
+    address: notebookGridTag(cell.slot),
+    label: cell.label ?? null,
     prompt: cell.prompt ?? null,
     provider: cell.provider ?? action?.provider ?? null,
     model: cell.model ?? action?.model ?? null,

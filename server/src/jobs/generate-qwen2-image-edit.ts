@@ -40,7 +40,7 @@ export function registerGenerateQwen2ImageEditJob(fs: Engine): void {
       "generate_kie_qwen_2_0_edit_image",
       {
         prompt,
-        image_slugs: "assetId" in input ? [input.assetId] : [],
+        image_refs: "assetId" in input ? [input.assetId] : [],
       },
     ) ?? "";
 

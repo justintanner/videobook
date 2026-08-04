@@ -3,10 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   findVideoFile,
+  type Artifact,
   type Engine,
   type NotebookCell,
   type NotebookDocument,
 } from "videobook-engine";
+import { notebookGridTag } from "videobook-engine/notebook-grid";
 import type {
   AnalysisBoundary,
   NotebookAnalysisEvidence,
@@ -37,12 +39,6 @@ import {
   ANALYSIS_REASONING_EFFORT,
   INTELLIGENCE_MODEL,
 } from "./openai-intelligence.js";
-
-type ArtifactRecord = {
-  artifactId: string;
-  slug: string;
-  kind: string;
-};
 
 export const MULTYCULTY_FIXTURE_VERSION = 26;
 
@@ -152,16 +148,19 @@ const MULTYCULTY_FIXTURE_BOUNDARIES: AnalysisBoundary[] = [
   },
 ];
 
-const SECTION_SLUGS = [
-  "vid-section-intro",
-  "vid-section-culture",
-  "vid-section-german",
-  "vid-section-dunka",
+const SOURCE_SELECTION_LABEL = "Source selection";
+const FINAL_LABEL = "Final";
+
+const SECTION_LABELS = [
+  "Intro section video",
+  "Culture section video",
+  "German section video",
+  "Dunka section video",
 ] as const;
 
-const ANIMATION_SLUGS = [
-  "vid-animated-intro",
-  "vid-animated-culture",
+const ANIMATION_LABELS = [
+  "Intro animated video",
+  "Culture animated video",
 ] as const;
 
 const COMPACT_FIXTURE_SLOTS = new Map<string, NotebookCell["slot"]>([
@@ -192,11 +191,11 @@ const COMPACT_FIXTURE_SLOTS = new Map<string, NotebookCell["slot"]>([
 const COMPACT_FIXTURE_ROLES = new Set(COMPACT_FIXTURE_SLOTS.keys());
 
 function requiredArtifact(
-  artifacts: ArtifactRecord[],
-  slug: string,
-): ArtifactRecord {
-  const artifact = artifacts.find((candidate) => candidate.slug === slug);
-  if (!artifact) throw new Error(`Multyculty fixture artifact is missing: ${slug}`);
+  artifacts: Artifact[],
+  label: string,
+): Artifact {
+  const artifact = artifacts.find((candidate) => candidate.label === label);
+  if (!artifact) throw new Error(`Multyculty fixture artifact is missing: ${label}`);
   return artifact;
 }
 
@@ -382,7 +381,7 @@ function compactFixture(document: NotebookDocument): NotebookDocument {
       return {
         ...cell,
         slot,
-        ...(role === "assembly" ? { slug: "concat-scenes" } : {}),
+        ...(role === "assembly" ? { label: "Concat scenes" } : {}),
       };
     });
   const cellIds = new Set(cells.map((cell) => cell.id));
@@ -400,7 +399,7 @@ async function promptFixtureArtifact(
 ): Promise<string> {
   const artifact = await engine.artifacts.create({
     kind: "script",
-    name: `script ${cell.slug} resolved prompt`,
+    label: `${cell.label ?? notebookGridTag(cell.slot)} resolved prompt`,
   });
   if (!artifact.ok) throw new Error(artifact.error.message);
   const result = {
@@ -425,16 +424,17 @@ async function promptFixtureArtifact(
 async function attachFixtureOutputs(
   engine: Engine,
   document: NotebookDocument,
-  artifacts: ArtifactRecord[],
+  artifacts: Artifact[],
 ): Promise<NotebookDocument> {
-  const sourceArtifact = requiredArtifact(artifacts, "vid-source-selection");
+  const sourceArtifact = requiredArtifact(artifacts, SOURCE_SELECTION_LABEL);
   const promptOutputs = new Map<string, string>();
   for (const cell of document.cells) {
     if (roleOf(cell)?.startsWith("prompt-") && !cell.outputArtifactId) {
       promptOutputs.set(cell.id, await promptFixtureArtifact(engine, cell));
     }
   }
-  const finalArtifact = artifacts.find((artifact) => artifact.slug === "final");
+  const finalArtifact = artifacts.find((artifact) =>
+    artifact.label === FINAL_LABEL);
   return {
     ...document,
     cells: document.cells.map((cell) => {
@@ -443,11 +443,12 @@ async function attachFixtureOutputs(
       const ordinal = ordinalForRole(cell);
       const feature = ordinal ? MULTYCULTY_FEATURES[ordinal - 1] : undefined;
       const section = ordinal
-        ? artifacts.find((artifact) => artifact.slug === SECTION_SLUGS[ordinal - 1])
-        : undefined;
-      const animation = ordinal && ordinal <= ANIMATION_SLUGS.length
         ? artifacts.find((artifact) =>
-            artifact.slug === ANIMATION_SLUGS[ordinal - 1])
+            artifact.label === SECTION_LABELS[ordinal - 1])
+        : undefined;
+      const animation = ordinal && ordinal <= ANIMATION_LABELS.length
+        ? artifacts.find((artifact) =>
+            artifact.label === ANIMATION_LABELS[ordinal - 1])
         : undefined;
       const promptOutput = promptOutputs.get(cell.id);
       const outputArtifactId = role === "source"
@@ -565,7 +566,7 @@ async function materializeLocalOutputs(
   current = await attachFixtureOutputs(
     engine,
     current,
-    engine.artifacts.list() as ArtifactRecord[],
+    engine.artifacts.list(),
   );
   for (const feature of MULTYCULTY_FEATURES.slice(0, 2)) {
     const animation = current.cells.find((cell) =>
@@ -579,7 +580,7 @@ async function materializeLocalOutputs(
       engine,
       animation.outputArtifactId,
       audio.outputArtifactId,
-      `${animation.slug} normalized fixture`,
+      `${animation.label ?? notebookGridTag(animation.slot)} normalized fixture`,
       15,
     );
     current = await writeNotebook(engine, {
@@ -649,7 +650,7 @@ async function materializeLocalOutputs(
 export async function bootstrapMultycultySource(
   engine: Engine,
 ): Promise<void> {
-  if (engine.book.get().slug !== "multyculty") {
+  if (engine.book.get().name !== "multyculty") {
     throw new Error("The Multyculty workflow can only seed the multyculty book");
   }
   if (engine.notebooks.list().length === 0) {
@@ -657,26 +658,30 @@ export async function bootstrapMultycultySource(
     if (!notebook.ok) throw new Error(notebook.error.message);
   }
   const artifactSpecs = [
-    ["video", "vid-source-selection"],
-    ["video", "vid-section-intro"],
-    ["video", "vid-section-culture"],
-    ["video", "vid-animated-intro"],
-    ["video", "vid-animated-culture"],
-    ["final", "final"],
+    ["video", SOURCE_SELECTION_LABEL],
+    ["video", SECTION_LABELS[0]],
+    ["video", SECTION_LABELS[1]],
+    ["video", ANIMATION_LABELS[0]],
+    ["video", ANIMATION_LABELS[1]],
+    ["final", FINAL_LABEL],
   ] as const;
   const existing = new Map(
-    (engine.artifacts.list() as ArtifactRecord[]).map((artifact) =>
-      [artifact.slug, artifact.artifactId] as const),
+    engine.artifacts.list().flatMap((artifact) =>
+      artifact.label
+        ? [[artifact.label, artifact.artifactId] as const]
+        : []),
   );
   const artifacts = new Map<string, string>(existing);
-  for (const [kind, slug] of artifactSpecs) {
-    if (artifacts.has(slug)) continue;
-    const created = await engine.artifacts.create(kind, slug);
+  for (const [kind, label] of artifactSpecs) {
+    if (artifacts.has(label)) continue;
+    const created = await engine.artifacts.create(kind, label);
     if (!created.ok) throw new Error(created.error.message);
-    artifacts.set(slug, created.value.artifactId);
+    artifacts.set(label, created.value.artifactId);
   }
-  const sourceId = artifacts.get("vid-source-selection");
-  if (!sourceId) throw new Error("Missing vid-source-selection artifact");
+  const sourceId = artifacts.get(SOURCE_SELECTION_LABEL);
+  if (!sourceId) {
+    throw new Error(`Missing the ${SOURCE_SELECTION_LABEL} artifact`);
+  }
   const sourceManifest = await engine.files.manifest(sourceId);
   const hasOriginal = sourceManifest.ok
     && sourceManifest.value.files.some((file) => file.name === "original.mp4");
@@ -702,8 +707,8 @@ export async function bootstrapMultycultySource(
         sourcePath,
       );
       if (!file.ok) throw new Error(file.error.message);
-      for (const slug of ["vid-animated-intro", "vid-animated-culture"]) {
-        const artifactId = artifacts.get(slug);
+      for (const label of ANIMATION_LABELS) {
+        const artifactId = artifacts.get(label);
         if (!artifactId) continue;
         const animationManifest = await engine.files.manifest(artifactId);
         const animationHasOriginal = animationManifest.ok
@@ -756,7 +761,7 @@ export async function seedMultycultyWorkflow(
     materializeLocalOutputs?: boolean;
   } = {},
 ): Promise<NotebookDocument> {
-  if (engine.book.get().slug !== "multyculty") {
+  if (engine.book.get().name !== "multyculty") {
     throw new Error("The Multyculty workflow can only seed the multyculty book");
   }
   await bootstrapMultycultySource(engine);
@@ -764,8 +769,8 @@ export async function seedMultycultyWorkflow(
     candidate.name.toLowerCase() === "multyculty")
     ?? engine.notebooks.list()[0];
   if (!notebook) throw new Error("The Multyculty book has no notebook");
-  const artifacts = engine.artifacts.list() as ArtifactRecord[];
-  const sourceArtifact = requiredArtifact(artifacts, "vid-source-selection");
+  const artifacts = engine.artifacts.list();
+  const sourceArtifact = requiredArtifact(artifacts, SOURCE_SELECTION_LABEL);
   await ensureFixtureAnalysisFrames(engine, sourceArtifact.artifactId, 30);
   if (isCurrentFixture(notebook)) {
     const runnable = withoutRunnableAnalysisFixture(notebook);
@@ -929,14 +934,14 @@ export async function ensureMultycultyWorkflow(
   revision?: string;
 }> {
   await books.ready();
-  let selected = books.getBySlug("multyculty");
+  let selected = books.getByName("multyculty");
   let created = false;
   if (!selected.ok) {
     const createdBook = await books.create("multyculty");
     if (!createdBook.ok) {
       throw new Error(createdBook.error.message);
     }
-    selected = books.getBySlug("multyculty");
+    selected = books.getByName("multyculty");
     if (!selected.ok) {
       throw new Error(selected.error.message);
     }
@@ -950,9 +955,11 @@ export async function ensureMultycultyWorkflow(
     throw new Error("The Multyculty book has no notebook after bootstrap");
   }
   const source = selected.value.engine.artifacts.list().find((artifact) =>
-    artifact.slug === "vid-source-selection");
+    artifact.label === SOURCE_SELECTION_LABEL);
   if (!source) {
-    throw new Error("The Multyculty book is missing vid-source-selection");
+    throw new Error(
+      `The Multyculty book is missing its ${SOURCE_SELECTION_LABEL} artifact`,
+    );
   }
   const fixture = fixtureRecord(notebook);
   const analysisFramesReady = await fixtureAnalysisFramesReady(

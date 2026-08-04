@@ -10,7 +10,7 @@ import { apicityField, apicityStringField, apicityUnionEnumField } from "./schem
 const wan = FalWanV2p7TextToImageRequestSchema.shape;
 
 const schema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(wan.prompt, "Text prompt for image generation", { required: true }),
   negative_prompt: apicityStringField(wan.negative_prompt, "Negative prompt"),
   image_size: apicityUnionEnumField(wan.image_size, "Output size preset"),
@@ -23,7 +23,7 @@ type Args = SchemaArgs<typeof schema>;
 export function generateWan27ProFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_wan_2_7_pro_text_to_image",
-    description: "Generate an image via fal.ai using Wan 2.7 Pro text-to-image (higher quality variant). Creates a new img- asset and enqueues a background job.",
+    description: "Generate an image via fal.ai using Wan 2.7 Pro text-to-image (higher quality variant). Creates a new image artifact and enqueues a background job.",
     schema,
     handler: async (args) => {
       const { book_id, prompt, negative_prompt, image_size, max_images, seed } = args as Args;
@@ -35,7 +35,7 @@ export function generateWan27ProFalDef(fs: Engine): ToolDef {
       const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "wan/2-7-image-pro")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "wan/2-7-image-pro")}-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

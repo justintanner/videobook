@@ -4,6 +4,7 @@ import type {
   NotebookDocument,
 } from "videobook-engine";
 import { firstEmptyNotebookGridSlot } from "videobook-engine";
+import { notebookGridTag } from "videobook-engine/notebook-grid";
 
 type ExtractFrameMode = "first" | "time" | "last";
 
@@ -13,23 +14,6 @@ type ExtractFrameSelection = {
   timestampSeconds: number | null;
   key: string;
 };
-
-function uniqueImageSlug(
-  cells: readonly NotebookCell[],
-  stem: string,
-): string {
-  const normalized = stem
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  const base = `img-${normalized || "frame"}`;
-  const occupied = new Set(cells.map((cell) => cell.slug));
-  if (!occupied.has(base)) return base;
-  for (let ordinal = 2; ; ordinal += 1) {
-    const candidate = `${base}-${String(ordinal).padStart(2, "0")}`;
-    if (!occupied.has(candidate)) return candidate;
-  }
-}
 
 function normalizedFrameMode(value: unknown): ExtractFrameMode {
   return value === "time" || value === "last" ? value : "first";
@@ -123,15 +107,14 @@ function frameSelectionMatches(
   return sourceCellId === null || sourceCellId === selection.sourceCellId;
 }
 
-function outputSlugStem(
+function outputFrameLabel(
   extractFrame: NotebookCell,
   selection: ExtractFrameSelection,
 ): string {
-  const base = extractFrame.slug.replace(/^extract-frame-/, "");
-  if (selection.frameMode === "last") return `${base}-last`;
-  if (selection.frameMode !== "time") return base;
-  const timestamp = String(selection.timestampSeconds ?? 0).replace(".", "-");
-  return `${base}-${timestamp}s`;
+  const base = extractFrame.label ?? notebookGridTag(extractFrame.slot);
+  if (selection.frameMode === "last") return `${base} last frame`;
+  if (selection.frameMode !== "time") return `${base} first frame`;
+  return `${base} frame at ${selection.timestampSeconds ?? 0}s`;
 }
 
 export function findExtractFrameImageOutput(
@@ -205,10 +188,7 @@ export function ensureExtractFrameImageOutput(
   }
   const outputCell = engine.notebooks.createCell({
     type: "image",
-    slug: uniqueImageSlug(
-      document.cells,
-      outputSlugStem(extractFrame, selection),
-    ),
+    label: outputFrameLabel(extractFrame, selection),
     slot: firstEmptyNotebookGridSlot(
       document.cells.map((cell) => cell.slot),
     ),

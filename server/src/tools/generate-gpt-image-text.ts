@@ -19,7 +19,7 @@ const gptImageTextInputSchema = GptImage2TextToImageRequestSchema.shape.input.sh
 
 const generateGptImageTextSchema = {
   prompt: apicityStringField(gptImageTextInputSchema.prompt, "Text prompt for image generation (1-20000 chars)", { required: true }),
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   aspect_ratio: apicityField(gptImageTextInputSchema.aspect_ratio, "Aspect ratio"),
   resolution: apicityField(gptImageTextInputSchema.resolution, "Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
   nsfw_checker: apicityField(gptImageTextInputSchema.nsfw_checker, "Enable NSFW content filter"),
@@ -31,7 +31,7 @@ type Args = SchemaArgs<typeof generateGptImageTextSchema>;
 export function generateGptImageTextDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_gpt_image_2_text_to_image",
-    description: "Generate an image using GPT Image 2.0 text-to-image. Creates a new img- asset and enqueues a background job.",
+    description: "Generate an image using GPT Image 2.0 text-to-image. Creates a new image artifact and enqueues a background job.",
     schema: generateGptImageTextSchema,
     handler: async (args) => {
       const { prompt, book_id, aspect_ratio, resolution, nsfw_checker } = args as Args;
@@ -63,7 +63,7 @@ export function generateGptImageTextDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `gpt-image-text-${imgAssetId}-${Date.now()}`;
 

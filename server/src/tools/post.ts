@@ -12,7 +12,7 @@ export function postDef(): ToolDef {
       "Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.",
     schema: {
       asset_id: z.string().describe("Asset to post (e.g. vid-clip-name, img-photo-name)"),
-      book_id: z.string().describe("Project slug containing the asset"),
+      book_id: z.string().describe("Book id containing the asset"),
       platform: z.enum(["x"]).default("x").describe("Target platform; defaults to 'x'"),
       text: z
         .string()

@@ -20,7 +20,7 @@ const seedreamInputSchema = SeedreamTextToImageRequestSchema.shape.input.shape;
 
 const generateSeedreamTextImageSchema = {
   prompt: apicityStringField(seedreamInputSchema.prompt, "Text description of the image to generate (3-3000 chars)", { required: true }),
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   aspect_ratio: apicityField(seedreamInputSchema.aspect_ratio, "Output aspect ratio (default 16:9)"),
   quality: apicityField(seedreamInputSchema.quality, "Output quality (basic=2K, high=4K)", { required: true }),
   nsfw_checker: apicityField(seedreamInputSchema.nsfw_checker, "Content safety filter"),
@@ -32,7 +32,7 @@ type Args = SchemaArgs<typeof generateSeedreamTextImageSchema>;
 export function generateSeedreamTextImageDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_seedream_v5_lite_text_to_image",
-    description: "Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new img- asset and enqueues a background job.",
+    description: "Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.",
     schema: generateSeedreamTextImageSchema,
     handler: async (args) => {
       const { prompt, book_id, aspect_ratio, quality, nsfw_checker } = args as Args;
@@ -64,7 +64,7 @@ export function generateSeedreamTextImageDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "seedream/5-lite-text-to-image")}-text-${imgAssetId}-${Date.now()}`;
 

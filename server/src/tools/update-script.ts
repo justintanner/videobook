@@ -9,7 +9,7 @@ export function updateScriptDef(fs: Engine): ToolDef {
     schema: {
       asset_id: z.string().describe("Asset ID of the script"),
       content: z.string().describe("New markdown content"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, content, book_id: _book_id } = args as {

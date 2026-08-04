@@ -4,7 +4,7 @@ import { GptImage2ImageToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
-import { resolveImageSlugs } from "./_image-inputs.js";
+import { resolveImageRefs } from "./_image-inputs.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
@@ -20,8 +20,8 @@ const gptImageToImageInputSchema = GptImage2ImageToImageRequestSchema.shape.inpu
 
 const generateGptImageSchema = {
   prompt: apicityStringField(gptImageToImageInputSchema.prompt, "Text prompt for image editing", { required: true }),
-  book_id: z.string().describe("Project slug"),
-  image_slugs: apicityStringArrayField(gptImageToImageInputSchema.input_urls, "1-16 @img-* slugs for reference images", { required: true }),
+  book_id: z.string().describe("Book id"),
+  image_refs: apicityStringArrayField(gptImageToImageInputSchema.input_urls, "1-16 image artifact ids for reference images", { required: true }),
   aspect_ratio: apicityField(gptImageToImageInputSchema.aspect_ratio, "Aspect ratio"),
   resolution: apicityField(gptImageToImageInputSchema.resolution, "Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
   nsfw_checker: apicityField(gptImageToImageInputSchema.nsfw_checker, "Enable NSFW content filter"),
@@ -34,13 +34,13 @@ type Args = SchemaArgs<typeof generateGptImageSchema>;
 export function generateGptImageDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_gpt_image_2_image_to_image",
-    description: "Generate an image using GPT Image 2.0 editing with 1-16 reference images. Creates a new img- asset and enqueues a background job.",
+    description: "Generate an image using GPT Image 2.0 editing with 1-16 reference images. Creates a new image artifact and enqueues a background job.",
     schema: generateGptImageSchema,
     handler: async (args) => {
-      const { prompt, book_id, image_slugs, aspect_ratio, resolution, nsfw_checker } = args as Args;
+      const { prompt, book_id, image_refs, aspect_ratio, resolution, nsfw_checker } = args as Args;
       const prefix = "img";
 
-      const rawSlugs = image_slugs ?? [];
+      const rawSlugs = image_refs ?? [];
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -62,7 +62,7 @@ export function generateGptImageDef(fs: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const resolved = await resolveImageSlugs(fs, rawSlugs, book_id);
+      const resolved = await resolveImageRefs(fs, rawSlugs, book_id);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
@@ -77,7 +77,7 @@ export function generateGptImageDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `gpt-image-${imgAssetId}-${Date.now()}`;
 

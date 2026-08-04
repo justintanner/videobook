@@ -75,11 +75,11 @@ export function registerSeedance2Job(fs: Engine, jobType: string): void {
         : "generate_kie_seedance_2_0_video",
       {
         prompt,
-        image_slugs: imageInputs.map((input) => input.assetId),
-        video_slugs: videoInputs.map((input) => input.assetId),
-        audio_slugs: audioInputs.map((input) => input.assetId),
-        first_frame_slug: firstFrame?.assetId,
-        last_frame_slug: lastFrame?.assetId,
+        image_refs: imageInputs.map((input) => input.assetId),
+        video_refs: videoInputs.map((input) => input.assetId),
+        audio_refs: audioInputs.map((input) => input.assetId),
+        first_frame_ref: firstFrame?.assetId,
+        last_frame_ref: lastFrame?.assetId,
       },
     ) ?? "";
 

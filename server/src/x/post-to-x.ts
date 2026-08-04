@@ -221,12 +221,16 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
     signal,
   } = args;
 
+  const artifactResult = fs.artifacts.get(assetId);
+  if (!artifactResult.ok) {
+    throw new Error(`Asset ${assetId} not found: ${artifactResult.error.message}`);
+  }
   const manifestResult = await fs.files.manifest(assetId);
   if (!manifestResult.ok) {
     throw new Error(`Asset ${assetId} not found: ${manifestResult.error.message}`);
   }
   const manifest = manifestResult.value;
-  const file = findPrimaryMediaFile(manifest.files, assetId);
+  const file = findPrimaryMediaFile(manifest.files, artifactResult.value.kind);
   if (!file) {
     throw new Error(`Asset ${assetId} has no primary media file to post`);
   }

@@ -47,7 +47,7 @@ export function getRenderSettingsDef(fs: Engine): ToolDef {
     description: "Fetch stored render settings for a single asset across all orientations, plus transcript language info (detected source language and cached subtitle translations)",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-running-dog)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, book_id } = args as { asset_id: string; book_id: string };

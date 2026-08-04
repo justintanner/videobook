@@ -1,56 +1,19 @@
-import type { Engine, ArtifactManifestFile } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
-import { extname } from "node:path";
 import { modelSlug } from "@apicity/cost";
 import { Omnihuman15RequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { findAudioFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
+import { resolveAudioRef, resolveImageRef } from "./_seedance2-shared.js";
 
 const SLUG = modelSlug("kie", "omnihuman-1-5");
 const omnihuman = Omnihuman15RequestSchema.shape.input.shape;
 
-const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
-
-function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
-  const images = files.filter((f) => {
-    const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
-    return IMAGE_EXTENSIONS.has(ext);
-  });
-  return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
-}
-
-type RefInput = { assetId: string; filename: string };
-type ResolveOk = { ok: true; value: RefInput };
-type ResolveErr = { ok: false; error: string };
-
-async function resolveImageSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
-  const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("img-")) {
-    return { ok: false, error: `image_slug must be an img-* asset, got: ${assetId}` };
-  }
-  const manifest = await fs.files.manifest(assetId);
-  if (!manifest.ok) return { ok: false, error: manifest.error.message };
-  const file = findImageFile(manifest.value.files);
-  if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
-  return { ok: true, value: { assetId, filename: file.name } };
-}
-
-async function resolveAudioSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
-  const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slug must be an aud-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId);
-  if (!manifest.ok) return { ok: false, error: manifest.error.message };
-  const file = findAudioFile(manifest.value.files, assetId);
-  if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
-  return { ok: true, value: { assetId, filename: file.name } };
-}
-
 const generateOmnihumanVideoSchema = {
-  book_id: z.string().describe("Project slug"),
-  image_slug: apicityStringField(omnihuman.image_url, "Portrait image asset to animate (e.g., @img-face)", { required: true }),
-  audio_slug: apicityStringField(omnihuman.audio_url, "Driving audio asset whose speech/song drives the avatar (max 60s, e.g., @aud-voice)", { required: true }),
+  book_id: z.string().describe("Book id"),
+  image_ref: apicityStringField(omnihuman.image_url, "Portrait image artifact id to animate", { required: true }),
+  audio_ref: apicityStringField(omnihuman.audio_url, "Driving audio artifact id whose speech/song drives the avatar (max 60s)", { required: true }),
   prompt: apicityStringField(omnihuman.prompt, "Optional motion/expression description (e.g. 'speaking naturally with gentle expressions')"),
   output_resolution: apicityField(omnihuman.output_resolution, "Output resolution: 720 / 1080 (default 1080)"),
   pe_fast_mode: apicityField(omnihuman.pe_fast_mode, "Prompt-enhance fast mode — faster, lower-fidelity (default false)"),
@@ -63,11 +26,11 @@ type Args = SchemaArgs<typeof generateOmnihumanVideoSchema>;
 export function generateOmnihumanVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_omnihuman_1_5_video",
-    description: "Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new vid- asset and enqueues a background job.",
+    description: "Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new video artifact and enqueues a background job.",
     schema: generateOmnihumanVideoSchema,
     handler: async (args) => {
       const {
-        book_id, image_slug, audio_slug,
+        book_id, image_ref, audio_ref,
         prompt, output_resolution, pe_fast_mode, seed,
       } = args as Args;
 
@@ -78,18 +41,18 @@ export function generateOmnihumanVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      if (!image_slug) {
-        return { isError: true as const, content: [{ type: "text" as const, text: "OmniHuman requires image_slug" }] };
+      if (!image_ref) {
+        return { isError: true as const, content: [{ type: "text" as const, text: "OmniHuman requires image_ref" }] };
       }
-      if (!audio_slug) {
-        return { isError: true as const, content: [{ type: "text" as const, text: "OmniHuman requires audio_slug" }] };
+      if (!audio_ref) {
+        return { isError: true as const, content: [{ type: "text" as const, text: "OmniHuman requires audio_ref" }] };
       }
 
-      const imageResult = await resolveImageSlug(fs, image_slug, book_id);
+      const imageResult = await resolveImageRef(fs, image_ref, book_id);
       if (!imageResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: imageResult.error }] };
       const imageInput = imageResult.value;
 
-      const audioResult = await resolveAudioSlug(fs, audio_slug, book_id);
+      const audioResult = await resolveAudioRef(fs, audio_ref, book_id);
       if (!audioResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: audioResult.error }] };
       const audioInput = audioResult.value;
 
@@ -102,7 +65,7 @@ export function generateOmnihumanVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = [imageInput.assetId];
       const sourceAudioIds = [audioInput.assetId];
 

@@ -53,10 +53,10 @@ describe('library moment search', () => {
     const result = await tool.handler({ query: { text: 'red van', limit: 10 } })
     expect(result.isError).toBeUndefined()
     const payload = JSON.parse(result.content[0]!.text) as {
-      hits: Array<{ owningBookId: string; owningBookSlug: string }>
+      hits: Array<{ owningBookId: string; owningBookName: string }>
       coverage: { state: string; indexedArtifactCount: number }
     }
-    expect(payload.hits.map((hit) => hit.owningBookSlug)).toEqual(['alpha', 'beta'])
+    expect(payload.hits.map((hit) => hit.owningBookName)).toEqual(['alpha', 'beta'])
     expect(payload.hits.map((hit) => hit.owningBookId)).toEqual([
       alpha.value.bookId,
       beta.value.bookId,
@@ -80,9 +80,9 @@ describe('library moment search', () => {
     })
     expect(reverseResult.isError).toBeUndefined()
     const reversePayload = JSON.parse(reverseResult.content[0]!.text) as {
-      hits: Array<{ owningBookSlug: string }>
+      hits: Array<{ owningBookName: string }>
     }
-    expect(reversePayload.hits[0]?.owningBookSlug).toBe('alpha')
+    expect(reversePayload.hits[0]?.owningBookName).toBe('alpha')
     searchReferenceStore.release(reference.reference_id)
   })
 })

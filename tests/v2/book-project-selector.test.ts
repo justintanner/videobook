@@ -14,14 +14,14 @@ import {
 const books: BookProjectSummary[] = [
   {
     bookId: '018f1000-0000-7000-8000-000000000001',
-    slug: 'active-story',
+    name: 'active-story',
     createdAt: 2,
     artifactCount: 5,
     notebookCount: 2,
   },
   {
     bookId: '018f1000-0000-7000-8000-000000000002',
-    slug: 'empty-story',
+    name: 'empty-story',
     createdAt: 1,
     artifactCount: 0,
     notebookCount: 1,

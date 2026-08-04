@@ -33,28 +33,28 @@ type InputFieldSpec = {
 };
 
 const inputFieldSpecs: Record<string, InputFieldSpec> = {
-  character_image_slugs: {
+  character_image_refs: {
     kind: "image",
     targets: ["image"],
   },
-  image_slugs: {
+  image_refs: {
     kind: "image",
     targets: ["image"],
   },
-  image_slug: {
+  image_ref: {
     kind: "image",
     targets: ["image"],
   },
-  first_frame_slug: { kind: "image", targets: ["first_frame"] },
-  last_frame_slug: { kind: "image", targets: ["last_frame"] },
-  end_frame_slug: { kind: "image", targets: ["last_frame"] },
-  video_slugs: { kind: "video", targets: ["video"] },
-  motion_video_slugs: { kind: "video", targets: ["video"] },
-  video_slug: { kind: "video", targets: ["video"] },
-  first_clip_slug: { kind: "video", targets: ["video"] },
-  audio_slugs: { kind: "audio", targets: ["audio"] },
-  audio_slug: { kind: "audio", targets: ["audio"] },
-  driving_audio_slug: { kind: "audio", targets: ["audio"] },
+  first_frame_ref: { kind: "image", targets: ["first_frame"] },
+  last_frame_ref: { kind: "image", targets: ["last_frame"] },
+  end_frame_ref: { kind: "image", targets: ["last_frame"] },
+  video_refs: { kind: "video", targets: ["video"] },
+  motion_video_refs: { kind: "video", targets: ["video"] },
+  video_ref: { kind: "video", targets: ["video"] },
+  first_clip_ref: { kind: "video", targets: ["video"] },
+  audio_refs: { kind: "audio", targets: ["audio"] },
+  audio_ref: { kind: "audio", targets: ["audio"] },
+  driving_audio_ref: { kind: "audio", targets: ["audio"] },
   replace_audio_with: { kind: "audio", targets: ["replace_audio"] },
 };
 
@@ -99,7 +99,7 @@ function seedanceContract(
   const replacement = slotsByField(slots, ["replace_audio_with"]);
   const references = slotsByField(
     slots,
-    ["image_slugs", "video_slugs", "audio_slugs", "replace_audio_with"],
+    ["image_refs", "video_refs", "audio_refs", "replace_audio_with"],
   );
   if (tool === "generate_kie_seedance_2_0_mini_video") {
     return {
@@ -108,14 +108,14 @@ function seedanceContract(
         mode(
           "r2v",
           references,
-          [["image_slugs", "video_slugs", "audio_slugs"]],
+          [["image_refs", "video_refs", "audio_refs"]],
         ),
       ],
     };
   }
   const frames = slotsByField(
     slots,
-    ["first_frame_slug", "last_frame_slug", "replace_audio_with"],
+    ["first_frame_ref", "last_frame_ref", "replace_audio_with"],
   );
   return {
     modes: [
@@ -123,12 +123,12 @@ function seedanceContract(
       mode(
         "i2v",
         frames,
-        [["first_frame_slug", "last_frame_slug"]],
+        [["first_frame_ref", "last_frame_ref"]],
       ),
       mode(
         "r2v",
         references,
-        [["image_slugs", "video_slugs", "audio_slugs"]],
+        [["image_refs", "video_refs", "audio_refs"]],
       ),
     ],
   };
@@ -142,13 +142,13 @@ function kieOmniContract(
       mode("t2v", []),
       mode(
         "r2v",
-        slotsByField(slots, ["image_slugs"]),
-        [["image_slugs"]],
+        slotsByField(slots, ["image_refs"]),
+        [["image_refs"]],
       ),
       mode(
         "v2v",
-        slotsByField(slots, ["video_slug", "image_slugs"]),
-        [["video_slug"]],
+        slotsByField(slots, ["video_ref", "image_refs"]),
+        [["video_ref"]],
       ),
     ],
   };
@@ -162,18 +162,18 @@ function googleOmniContract(
       mode("t2v", []),
       mode(
         "i2v",
-        slotsByField(slots, ["first_frame_slug"]),
-        [["first_frame_slug"]],
+        slotsByField(slots, ["first_frame_ref"]),
+        [["first_frame_ref"]],
       ),
       mode(
         "r2v",
-        slotsByField(slots, ["image_slugs"]),
-        [["image_slugs"]],
+        slotsByField(slots, ["image_refs"]),
+        [["image_refs"]],
       ),
       mode(
         "v2v",
-        slotsByField(slots, ["video_slug", "image_slugs"]),
-        [["video_slug"]],
+        slotsByField(slots, ["video_ref", "image_refs"]),
+        [["video_ref"]],
       ),
     ],
   };
@@ -188,14 +188,14 @@ function wanImageToVideoContract(
         "i2v",
         slotsByField(
           slots,
-          ["first_frame_slug", "last_frame_slug", "driving_audio_slug"],
+          ["first_frame_ref", "last_frame_ref", "driving_audio_ref"],
         ),
-        [["first_frame_slug", "last_frame_slug"]],
+        [["first_frame_ref", "last_frame_ref"]],
       ),
       mode(
         "v2v",
-        slotsByField(slots, ["first_clip_slug", "driving_audio_slug"]),
-        [["first_clip_slug"]],
+        slotsByField(slots, ["first_clip_ref", "driving_audio_ref"]),
+        [["first_clip_ref"]],
       ),
     ],
   };

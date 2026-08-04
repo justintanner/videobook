@@ -267,34 +267,34 @@ describe("getImageToolSchema", () => {
     const schema = getImageToolSchema("generate_nano_banana_pro_google");
     expect(schema).not.toBeNull();
     expect(schema!.required).toEqual(["prompt"]);
-    expect(Object.keys(schema!.properties)).toEqual(["prompt", "image_slugs", "character_refs", "aspect_ratio", "seed"]);
+    expect(Object.keys(schema!.properties)).toEqual(["prompt", "image_refs", "character_refs", "aspect_ratio", "seed"]);
     expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "4:3", "1:1", "3:4", "9:16", "auto"]);
     expect(schema!.properties).not.toHaveProperty("resolution");
     expect(schema!.properties).not.toHaveProperty("output_format");
   });
 
-  it("grok_imagine_image: prompt NOT required, image_slugs required", () => {
+  it("grok_imagine_image: prompt NOT required, image_refs required", () => {
     const schema = getImageToolSchema("generate_grok_imagine_image");
     expect(schema).not.toBeNull();
     expect(schema!.required).not.toContain("prompt");
-    expect(schema!.required).toContain("image_slugs");
+    expect(schema!.required).toContain("image_refs");
   });
 
-  it("gpt_image: both prompt and image_slugs required, aspect_ratio + resolution enums", () => {
+  it("gpt_image: both prompt and image_refs required, aspect_ratio + resolution enums", () => {
     const schema = getImageToolSchema("generate_gpt_image");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
-    expect(schema!.required).toContain("image_slugs");
+    expect(schema!.required).toContain("image_refs");
     expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "5:4", "9:16", "21:9", "16:9", "4:3", "3:2", "4:5", "3:4", "2:3"]);
     expect(schema!.properties.resolution.enum).toEqual(["1K", "2K", "4K"]);
     expect(schema!.properties).not.toHaveProperty("quality");
   });
 
-  it("gpt_image_text: prompt required, no image_slugs, aspect_ratio + resolution enums", () => {
+  it("gpt_image_text: prompt required, no image_refs, aspect_ratio + resolution enums", () => {
     const schema = getImageToolSchema("generate_gpt_image_text");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
-    expect(schema!.required).not.toContain("image_slugs");
+    expect(schema!.required).not.toContain("image_refs");
     expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "9:16", "16:9", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"]);
     expect(schema!.properties.resolution.enum).toEqual(["1K", "2K", "4K"]);
   });
@@ -317,14 +317,14 @@ describe("validateImageParams", () => {
 
   it("grok warns when no images provided", () => {
     const result = validateImageParams("generate_grok_imagine_image", {
-      image_slugs: [],
+      image_refs: [],
     });
     expect(result.warnings.some((w) => w.includes("requires at least"))).toBe(true);
   });
 
   it("grok warns when >1 image (Zod tuple caps at 1)", () => {
     const result = validateImageParams("generate_grok_imagine_image", {
-      image_slugs: ["@img-a", "@img-b"],
+      image_refs: ["@img-a", "@img-b"],
     });
     expect(result.warnings.some((w) => w.includes("supports 1 images"))).toBe(true);
   });
@@ -332,7 +332,7 @@ describe("validateImageParams", () => {
   it("gpt warns when >16 images (Zod array capped at 16)", () => {
     const result = validateImageParams("generate_gpt_image", {
       prompt: "edit this",
-      image_slugs: Array.from({ length: 17 }, (_, i) => `@img-${i}`),
+      image_refs: Array.from({ length: 17 }, (_, i) => `@img-${i}`),
     });
     expect(result.warnings.some((w) => w.includes("supports 1-16 images"))).toBe(true);
   });
@@ -340,7 +340,7 @@ describe("validateImageParams", () => {
   it("gpt warns when no images (Zod array requires at least 1)", () => {
     const result = validateImageParams("generate_gpt_image", {
       prompt: "edit this",
-      image_slugs: [],
+      image_refs: [],
     });
     expect(result.warnings.some((w) => w.includes("requires at least 1"))).toBe(true);
   });
@@ -348,7 +348,7 @@ describe("validateImageParams", () => {
   it("qwen2 warns when no images provided", () => {
     const result = validateImageParams("generate_qwen2_image_edit", {
       prompt: "edit this",
-      image_slugs: [],
+      image_refs: [],
     });
     expect(result.warnings.some((w) => w.includes("requires at least 1"))).toBe(true);
   });
@@ -356,7 +356,7 @@ describe("validateImageParams", () => {
   it("qwen2 warns when >1 image (single-image slot)", () => {
     const result = validateImageParams("generate_qwen2_image_edit", {
       prompt: "edit this",
-      image_slugs: ["@img-a", "@img-b"],
+      image_refs: ["@img-a", "@img-b"],
     });
     expect(result.warnings.some((w) => w.includes("supports 1 images"))).toBe(true);
   });
@@ -364,7 +364,7 @@ describe("validateImageParams", () => {
   it("qwen2 accepts exactly 1 image", () => {
     const result = validateImageParams("generate_qwen2_image_edit", {
       prompt: "edit this",
-      image_slugs: ["@img-a"],
+      image_refs: ["@img-a"],
     });
     expect(result.warnings.some((w) => w.toLowerCase().includes("images"))).toBe(false);
   });
@@ -394,9 +394,9 @@ describe("getImageModels", () => {
     expect(models).toHaveProperty("alibaba_qwen_image_edit");
   });
 
-  it("params come from Kie schemas with image field renamed to image_slugs", () => {
+  it("params come from Kie schemas with image field renamed to image_refs", () => {
     const models = getImageModels();
-    expect(models.nano_banana.params).toContain("image_slugs");
+    expect(models.nano_banana.params).toContain("image_refs");
     expect(models.nano_banana.params).toContain("prompt");
     expect(models.nano_banana.params).toContain("aspect_ratio");
     expect(models.nano_banana.params).not.toContain("image_input");
@@ -438,7 +438,7 @@ describe("getImageModels", () => {
     expect(generate?.required).toEqual(["prompt", "model"]);
 
     const edit = getImageToolSchema(models.alibaba_qwen_image_edit.tool_name);
-    expect(edit?.required).toEqual(["prompt", "image_slugs", "model"]);
+    expect(edit?.required).toEqual(["prompt", "image_refs", "model"]);
     expect(edit?.properties.model.enum).toContain("qwen-image-edit");
   });
 });
@@ -472,7 +472,7 @@ describe("google flow image provider", () => {
       );
       expect(noRefs.selected_provider).toBe("google");
       expect(noRefs.tool_name).toBe("generate_google_flow_nano_banana_pro_image");
-      expect(Object.keys(noRefs.schema!.properties)).toEqual(["prompt", "image_slugs", "character_refs", "aspect_ratio", "seed"]);
+      expect(Object.keys(noRefs.schema!.properties)).toEqual(["prompt", "image_refs", "character_refs", "aspect_ratio", "seed"]);
       expect(noRefs.prefilled_values).not.toHaveProperty("resolution");
       expect(noRefs.prefilled_values).not.toHaveProperty("output_format");
       expect(noRefs.image_slots).toEqual({ min: 0, max: 10 });

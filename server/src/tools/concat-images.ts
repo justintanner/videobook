@@ -10,11 +10,11 @@ const layoutOptions = ["horizontal", "vertical", "grid"] as const;
 const aspectRatioOptions = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const;
 
 const concatImagesSchema = {
-  image_slugs: z.array(z.string().nullable()).min(1).max(9).describe("Image asset slugs to concatenate. For a two-slot sheet, pass one slug to leave the second slot empty or use null for an explicit empty slot."),
-  book_id: z.string().describe("Project slug"),
+  image_refs: z.array(z.string().nullable()).min(1).max(9).describe("Image artifact ids to concatenate. For a two-slot sheet, pass one id to leave the second slot empty or use null for an explicit empty slot."),
+  book_id: z.string().describe("Book id"),
   layout: z.enum(layoutOptions).optional().describe("Cell layout. Defaults to horizontal for landscape two-slot sheets, vertical for portrait two-slot sheets, and grid for 3+ images."),
   aspect_ratio: z.enum(aspectRatioOptions).optional().describe("Output aspect ratio. Defaults to 16:9 for video generation."),
-  name: z.string().optional().describe("Optional name for the generated img-* asset"),
+  name: z.string().optional().describe("Optional name for the generated image artifact"),
   background: z.string().optional().describe("Background color for padding, e.g. #000000 or white. Defaults to #000000."),
 } satisfies ZodRawShape;
 
@@ -63,11 +63,11 @@ export function concatImagesDef(fs: Engine): ToolDef {
   return {
     name: "concat_images",
     description:
-      "Concatenate 1-9 image assets into a new img-* asset. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.",
+      "Concatenate 1-9 image artifacts into a new image artifact. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.",
     schema: concatImagesSchema,
     handler: async (args) => {
       const {
-        image_slugs,
+        image_refs,
         book_id,
         layout,
         aspect_ratio,
@@ -75,7 +75,7 @@ export function concatImagesDef(fs: Engine): ToolDef {
         background,
       } = args as Args;
 
-      const sourceResult = await readSourceImages(fs, image_slugs, book_id);
+      const sourceResult = await readSourceImages(fs, image_refs, book_id);
       if (!sourceResult.ok) return error(sourceResult.error);
       if (!sourceResult.value.some((source) => source !== null)) {
         return error("At least one image asset is required");
@@ -103,7 +103,7 @@ export function concatImagesDef(fs: Engine): ToolDef {
       const assetResult = await fs.artifacts.create("img", assetName);
       if (!assetResult.ok) return error(`Failed to create image asset: ${assetResult.error.message}`);
 
-      const imgAssetId = assetResult.value.slug;
+      const imgAssetId = assetResult.value.artifactId;
       const writeResult = await fs.files.write(imgAssetId, "original.png", output.buffer);
       if (!writeResult.ok) {
         await fs.artifacts.delete(imgAssetId).catch(() => undefined);
@@ -160,18 +160,20 @@ export function concatImagesDef(fs: Engine): ToolDef {
 
 async function readSourceImages(
   fs: Engine,
-  rawSlugs: readonly (string | null)[],
+  rawRefs: readonly (string | null)[],
   _bookId: string,
 ): Promise<{ ok: true; value: SourceImageSlot[] } | { ok: false; error: string }> {
   const sources: SourceImageSlot[] = [];
-  for (const rawSlug of rawSlugs) {
-    if (rawSlug === null || rawSlug.trim() === "") {
+  for (const rawRef of rawRefs) {
+    if (rawRef === null || rawRef.trim() === "") {
       sources.push(null);
       continue;
     }
-    const assetId = rawSlug.replace(/^@/, "");
-    if (!assetId.startsWith("img-")) {
-      return { ok: false, error: `image_slugs entries must be img-* assets, got: ${assetId}` };
+    const assetId = rawRef.replace(/^@/, "");
+    const artifact = fs.artifacts.get(assetId);
+    if (!artifact.ok) return { ok: false, error: artifact.error.message };
+    if (artifact.value.kind !== "image") {
+      return { ok: false, error: `image ref must be an image artifact, got ${artifact.value.kind}: ${assetId}` };
     }
 
     const manifestResult = await fs.files.manifest(assetId);
@@ -296,9 +298,7 @@ export async function writeImageVariants(
 }
 
 function deriveAssetName(assetIds: readonly string[]): string {
-  const base = assetIds
-    .map((assetId) => assetId.replace(/^(img|char)-/, ""))
-    .join("-");
+  const base = assetIds.join("-");
   return `concat-${slugify(base) || String(Date.now())}`;
 }
 

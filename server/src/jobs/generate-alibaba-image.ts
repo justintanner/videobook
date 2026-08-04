@@ -44,7 +44,7 @@ export function registerGenerateAlibabaImageJob(fs: Engine): void {
       "generate_alibaba_wan_2_7_text_to_image",
       {
         prompt,
-        image_slugs: imageInputs.map((input) => input.assetId),
+        image_refs: imageInputs.map((input) => input.assetId),
       },
     ) ?? "";
 
@@ -102,7 +102,7 @@ export function registerGenerateAlibabaImageProJob(fs: Engine): void {
       "generate_alibaba_wan_2_7_pro_text_to_image",
       {
         prompt,
-        image_slugs: imageInputs.map((input) => input.assetId),
+        image_refs: imageInputs.map((input) => input.assetId),
       },
     ) ?? "";
 

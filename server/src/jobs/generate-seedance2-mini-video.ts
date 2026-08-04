@@ -59,9 +59,9 @@ export function registerGenerateSeedance2MiniVideoJob(fs: Engine): void {
       ? undefined
       : transformProviderPrompt("generate_kie_seedance_2_0_mini_video", {
         prompt,
-        image_slugs: imageInputs.map((input) => input.assetId),
-        video_slugs: videoInputs.map((input) => input.assetId),
-        audio_slugs: audioInputs.map((input) => input.assetId),
+        image_refs: imageInputs.map((input) => input.assetId),
+        video_refs: videoInputs.map((input) => input.assetId),
+        audio_refs: audioInputs.map((input) => input.assetId),
       });
 
     const request = buildSeedance2MiniVideoPayload(

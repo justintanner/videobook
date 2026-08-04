@@ -246,15 +246,15 @@ export function registerDownloadVideoJob(fs: Engine): void {
   registerJobHandler("download_video", async (payload, ctx) => {
     const {
       url,
-      assetId, assetDir, bookId, exportVideos,
+      assetId, assetDir, exportVideos,
       sourcePrefix, requestedRange,
     } = payload as DownloadVideoPayload;
-    const slug = bookId ?? "";
+    const bookId = (payload as DownloadVideoPayload).bookId ?? "";
     const outputPath = join(assetDir, "original.mp4");
 
     return withLockedLocalLease(
       fs,
-      slug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -262,11 +262,11 @@ export function registerDownloadVideoJob(fs: Engine): void {
       { durationMs: LOCK_DURATION_MS, data: { state: "downloading" } },
       async () => {
       // (a) Pre-stage OG image as a hidden file. The b2 fallback (yt-dlp
-      // returns "no video") promotes this to original.jpg on a fresh img-
+      // returns "no video") promotes this to original.jpg on a fresh image
       // asset; a successful video download promotes it after step (d).
-      const ogData = await loadOpenGraphData(fs, url, assetId, slug);
+      const ogData = await loadOpenGraphData(fs, url, assetId, bookId);
       if (ogData) {
-        await stageOpenGraphImage(fs, ogData, assetId, slug);
+        await stageOpenGraphImage(fs, ogData, assetId, bookId);
       }
 
       // (b) Fetch ytdlp metadata
@@ -281,26 +281,24 @@ export function registerDownloadVideoJob(fs: Engine): void {
           const ogImageResult = await fs.files.read(assetId, OG_IMAGE_FILENAME);
           if (!ogImageResult.ok) throw new Error(`No video found and no OG image available: ${msg}`);
 
-          const slug = bookId ?? "";
-
           // Read OG metadata for asset naming and provenance
           let ogTitle = "image";
-          const fallbackOgData = ogData ?? await readOpenGraphData(fs, assetId, slug);
+          const fallbackOgData = ogData ?? await readOpenGraphData(fs, assetId, bookId);
           if (fallbackOgData?.ogTitle) ogTitle = cleanOgTitle(fallbackOgData.ogTitle);
 
           const assetName = [sourcePrefix, ogTitle].join(" ");
-          const imgResult = await fs.artifacts.create("img", assetName);
+          const imgResult = await fs.artifacts.create("image", assetName);
           if (!imgResult.ok) throw new Error(`Failed to create image asset: ${imgResult.error.message}`);
 
-          const imgAssetId = imgResult.value.slug;
+          const imgAssetId = imgResult.value.artifactId;
 
-          // Copy OG image and metadata to new img- asset
+          // Copy OG image and metadata to new image asset
           await fs.files.write(imgAssetId, "original.jpg", ogImageResult.value);
           try {
             await fs.files.copy(assetId, ".opengraph.json", imgAssetId, ".opengraph.json");
           } catch { /* non-fatal */ }
 
-          // Release lock and delete the old vid- asset
+          // Release lock and delete the old video asset
           await fs.jobs.locks.release(assetDir);
           await fs.artifacts.delete(assetId);
 
@@ -320,7 +318,7 @@ export function registerDownloadVideoJob(fs: Engine): void {
           await queue.enqueue(processJobId, {
             type: "process_image",
             assetId: imgAssetId,
-            bookId: slug,
+            bookId,
             extension: ".jpg",
             provenance,
           } as unknown as Record<string, unknown>);
@@ -340,13 +338,13 @@ export function registerDownloadVideoJob(fs: Engine): void {
         // Enqueue separate jobs for entries 2+
         for (let i = 1; i < info.entries.length; i++) {
           const entry = info.entries[i];
-          const entryPrefix = isImageContent(entry) ? "img" : "vid";
-          const entryName = `${sourcePrefix} ${entry.title ?? `${entryPrefix === "img" ? "image" : "video"} ${i + 1}`}`;
+          const entryKind = isImageContent(entry) ? "image" : "video";
+          const entryName = `${sourcePrefix} ${entry.title ?? `${entryKind} ${i + 1}`}`;
 
-          const assetResult = await fs.artifacts.create(entryPrefix, entryName);
+          const assetResult = await fs.artifacts.create(entryKind, entryName);
           if (!assetResult.ok) continue;
 
-          const { slug: newAssetId, path: newAssetDir } = assetResult.value;
+          const { artifactId: newAssetId, path: newAssetDir } = assetResult.value;
           const newFilename = "original.mp4";
           const newOutputPath = join(newAssetDir, newFilename);
           const newJobId = `download-${newAssetId}-${Date.now()}`;
@@ -382,15 +380,15 @@ export function registerDownloadVideoJob(fs: Engine): void {
 
       if (isImageContent(itemInfo)) {
         let effectiveAssetId = assetId;
-        const slug = bookId ?? "";
 
-        // Retype vid- asset to img- if needed
-        if (assetId.startsWith("vid-")) {
+        // Retype video asset to image if needed
+        const sourceArtifact = fs.artifacts.get(assetId);
+        if (sourceArtifact.ok && sourceArtifact.value.kind === "video") {
           const assetName = [sourcePrefix, itemInfo.title ?? "image"].join(" ");
-          const imgResult = await fs.artifacts.create("img", assetName);
+          const imgResult = await fs.artifacts.create("image", assetName);
           if (!imgResult.ok) throw new Error(`Failed to create image asset: ${imgResult.error.message}`);
 
-          effectiveAssetId = imgResult.value.slug;
+          effectiveAssetId = imgResult.value.artifactId;
 
           // Copy .opengraph.json to new asset
           try {
@@ -399,11 +397,11 @@ export function registerDownloadVideoJob(fs: Engine): void {
             // non-fatal — OG data may not exist
           }
 
-          // Release lock and delete the old vid- asset
+          // Release lock and delete the old video asset
           await fs.jobs.locks.release(assetDir);
           const delResult = await fs.artifacts.delete(assetId);
           if (!delResult.ok) {
-            // non-fatal — orphan vid- asset is acceptable
+            // non-fatal — an orphaned video asset is acceptable
           }
         }
 
@@ -412,7 +410,7 @@ export function registerDownloadVideoJob(fs: Engine): void {
         if (!imageUrl) throw new Error("No image URL found in content info");
 
         const ext = imageExtension(itemInfo);
-        await downloadUrlIntoAsset(fs, imageUrl, effectiveAssetId, `original${ext}`, slug, {
+        await downloadUrlIntoAsset(fs, imageUrl, effectiveAssetId, `original${ext}`, bookId, {
           kind: "image",
           fetchInit: { signal: AbortSignal.timeout(30_000), redirect: "follow" },
         });
@@ -435,7 +433,7 @@ export function registerDownloadVideoJob(fs: Engine): void {
         await queue.enqueue(processJobId, {
           type: "process_image",
           assetId: effectiveAssetId,
-          bookId: slug,
+          bookId,
           extension: ext,
           provenance,
         } as unknown as Record<string, unknown>);
@@ -463,7 +461,7 @@ export function registerDownloadVideoJob(fs: Engine): void {
       const rangeApplied = requestedRange
         ? await applyRequestedDownloadRange(
             fs,
-            slug,
+            bookId,
             assetId,
             assetDir,
             outputPath,
@@ -519,7 +517,7 @@ export function registerDownloadVideoJob(fs: Engine): void {
 
       await ingestWorkspaceOutputs(
         fs,
-        slug,
+        bookId,
         assetId,
         ["original.mp4", ...exports],
         "download_video",

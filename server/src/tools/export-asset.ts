@@ -15,9 +15,9 @@ export function exportAssetDef(
     description: "Export an asset from one project to a different project",
     ...(books ? { scope: "global" as const } : {}),
     schema: {
-      asset_id: z.string().describe("Asset ID to export (e.g. img-cute-cat)"),
-      book_id: z.string().describe("Source project slug"),
-      target_project: z.string().describe("Target project slug"),
+      asset_id: z.string().describe("Artifact id to export"),
+      book_id: z.string().describe("Source book UUID"),
+      target_project: z.string().describe("Target book name or UUID"),
       new_name: z.string().optional().describe("Optional custom name for the exported asset"),
     },
     handler: async (args) => {
@@ -52,7 +52,6 @@ export function exportAssetDef(
             sourceArtifactId: string;
             targetBookId: string;
             targetArtifactId: string;
-            targetArtifactSlug: string;
           }>(
             `copy-library-asset-${uuidv7()}`,
             {
@@ -70,7 +69,7 @@ export function exportAssetDef(
               type: "text" as const,
               text: JSON.stringify({
                 source_asset_id: asset_id,
-                new_asset_id: result.targetArtifactSlug,
+                new_asset_id: result.targetArtifactId,
                 source_project: book_id,
                 target_project,
                 source_artifact_id: result.sourceArtifactId,
@@ -91,6 +90,14 @@ export function exportAssetDef(
         }
       }
 
+      const sourceArtifact = fs.artifacts.get(asset_id);
+      if (!sourceArtifact.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: sourceArtifact.error.message }],
+        };
+      }
+
       const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
@@ -99,11 +106,12 @@ export function exportAssetDef(
         };
       }
 
-      const prefix = asset_id.split("-")[0];
-      const originalName = asset_id.slice(prefix.length + 1);
-      const name = new_name ?? originalName;
+      const name = new_name ?? sourceArtifact.value.label;
 
-      const createResult = await fs.artifacts.create(prefix, name);
+      const createResult = await fs.artifacts.create({
+        kind: sourceArtifact.value.kind,
+        ...(name ? { label: name } : {}),
+      });
       if (!createResult.ok) {
         return {
           isError: true as const,
@@ -111,7 +119,7 @@ export function exportAssetDef(
         };
       }
 
-      const newAssetId = createResult.value.slug;
+      const newAssetId = createResult.value.artifactId;
 
       for (const file of manifestResult.value.files) {
         const readResult = await fs.files.read(asset_id, file.name);

@@ -2,16 +2,13 @@ import { scanNotebookMentions } from "videobook-engine/notebook-mentions";
 import {
   replaceHappyHorseAssetMentions,
   replaceNaturalAssetMentions,
-  rewriteImageSlugMentions,
-  rewriteImageSlugMentionsToBrackets,
+  rewriteImageRefMentions,
+  rewriteImageRefMentionsToBrackets,
   rewriteSeedanceAssetMentions,
-  stripSlugMentions,
+  stripRefMentions,
 } from "./google-flow-refs.js";
 import { getCanonicalName } from "./generation-registry.js";
-import {
-  LOCAL_ASSET_SLUG_PREFIXES,
-  PREVIEW_PLACEHOLDER_HOST,
-} from "./preview-payload.js";
+import { PREVIEW_PLACEHOLDER_HOST } from "./preview-payload.js";
 
 const PROVIDER_MARKER_PATTERNS = [
   /^@element_[a-z0-9_]+$/iu,
@@ -20,10 +17,11 @@ const PROVIDER_MARKER_PATTERNS = [
   /^@(Image|Video|Audio)\d+$/u,
   /^@image\d+$/u,
 ];
-const LOCAL_ASSET_MENTION_PATTERN = new RegExp(
-  `^@(?:${LOCAL_ASSET_SLUG_PREFIXES.join("|")})-`,
-  "iu",
-);
+// An @<artifact-id> token is the internal reference currency between the
+// grid resolver and the per-tool dialect rewrite; one surviving into a
+// provider payload means the rewrite missed it.
+const ARTIFACT_ID_MENTION_PATTERN =
+  /@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\w-])/giu;
 
 export function isProviderNativeMention(value: string): boolean {
   return PROVIDER_MARKER_PATTERNS.some((pattern) => pattern.test(value));
@@ -77,20 +75,17 @@ function compact(values: Array<string | undefined>): string[] {
 
 function naturalImagePrompt(prompt: string, args: Record<string, unknown>): string {
   return replaceNaturalAssetMentions(prompt, {
-    imageSlugs: stringArray(args.image_slugs),
+    imageRefs: stringArray(args.image_refs),
   });
 }
 
 export function unresolvedProviderMentions(prompt: string): string[] {
-  const leaks = scanNotebookMentions(prompt)
-    .filter((mention) => {
-      if (mention.kind === "grid") return true;
-      if (isProviderNativeMention(mention.raw)) {
-        return false;
-      }
-      return LOCAL_ASSET_MENTION_PATTERN.test(mention.raw);
-    })
-    .map((mention) => mention.raw);
+  const leaks = [
+    ...scanNotebookMentions(prompt).map((mention) => mention.raw),
+    ...[...prompt.matchAll(ARTIFACT_ID_MENTION_PATTERN)].map(
+      (match) => match[0],
+    ),
+  ];
   return [...new Set(leaks)];
 }
 
@@ -174,7 +169,7 @@ export function transformProviderPrompt(
   const prompt = optionalString(args.prompt);
   if (prompt === undefined) return undefined;
   const toolName = getCanonicalName(rawToolName);
-  const imageSlugs = stringArray(args.image_slugs);
+  const imageRefs = stringArray(args.image_refs);
   let transformed = prompt;
 
   switch (toolName) {
@@ -201,126 +196,126 @@ export function transformProviderPrompt(
       break;
     case "generate_kie_kling_3_0_motion_control":
       transformed = replaceNaturalAssetMentions(prompt, {
-        imageSlugs: stringArray(args.character_image_slugs),
-        videoSlugs: stringArray(args.motion_video_slugs),
+        imageRefs: stringArray(args.character_image_refs),
+        videoRefs: stringArray(args.motion_video_refs),
       });
       break;
     case "generate_kie_seedance_2_0_video":
     case "generate_kie_seedance_2_0_fast_video":
-      transformed = stripSlugMentions(
+      transformed = stripRefMentions(
         rewriteSeedanceAssetMentions(prompt, {
-          imageSlugs,
-          videoSlugs: stringArray(args.video_slugs),
-          audioSlugs: stringArray(args.audio_slugs),
+          imageRefs,
+          videoRefs: stringArray(args.video_refs),
+          audioRefs: stringArray(args.audio_refs),
         }),
         compact([
-          nonempty(args.first_frame_slug),
-          nonempty(args.last_frame_slug),
+          nonempty(args.first_frame_ref),
+          nonempty(args.last_frame_ref),
         ]),
       );
       break;
     case "generate_kie_seedance_2_0_mini_video":
       transformed = rewriteSeedanceAssetMentions(prompt, {
-        imageSlugs,
-        videoSlugs: stringArray(args.video_slugs),
-        audioSlugs: stringArray(args.audio_slugs),
+        imageRefs,
+        videoRefs: stringArray(args.video_refs),
+        audioRefs: stringArray(args.audio_refs),
       });
       break;
     case "generate_kie_gemini_omni_video":
       transformed = replaceNaturalAssetMentions(prompt, {
-        imageSlugs,
-        sourceVideoSlug: nonempty(args.video_slug) ?? null,
+        imageRefs,
+        sourceVideoRef: nonempty(args.video_ref) ?? null,
       });
       break;
     case "generate_google_flow_veo_3_1_quality_video":
     case "generate_google_flow_veo_3_1_fast_video":
     case "generate_google_flow_veo_3_1_lite_video":
     case "generate_google_flow_veo_3_1_lite_low_priority_video":
-      transformed = stripSlugMentions(
-        rewriteImageSlugMentions(prompt, imageSlugs),
+      transformed = stripRefMentions(
+        rewriteImageRefMentions(prompt, imageRefs),
         compact([
-          nonempty(args.first_frame_slug),
-          nonempty(args.last_frame_slug),
+          nonempty(args.first_frame_ref),
+          nonempty(args.last_frame_ref),
         ]),
       );
       break;
     case "generate_google_flow_omni_flash_video":
-      transformed = stripSlugMentions(
-        rewriteImageSlugMentions(prompt, imageSlugs),
+      transformed = stripRefMentions(
+        rewriteImageRefMentions(prompt, imageRefs),
         compact([
-          nonempty(args.video_slug),
-          nonempty(args.first_frame_slug),
+          nonempty(args.video_ref),
+          nonempty(args.first_frame_ref),
         ]),
       );
       break;
     case "generate_google_flow_nano_banana_pro_image":
-      transformed = rewriteImageSlugMentions(prompt, imageSlugs, "reference");
+      transformed = rewriteImageRefMentions(prompt, imageRefs, "reference");
       break;
     case "generate_kie_wan_2_7_text_to_video":
       transformed = replaceNaturalAssetMentions(prompt, {
-        audioSlugs: compact([
-          nonempty(args.audio_url) ?? nonempty(args.driving_audio_slug),
+        audioRefs: compact([
+          nonempty(args.audio_url) ?? nonempty(args.driving_audio_ref),
         ]),
       });
       break;
     case "generate_kie_wan_2_7_image_to_video":
       transformed = replaceNaturalAssetMentions(prompt, {
-        imageSlugs: compact([
-          nonempty(args.first_frame_slug),
-          nonempty(args.last_frame_slug),
+        imageRefs: compact([
+          nonempty(args.first_frame_ref),
+          nonempty(args.last_frame_ref),
         ]),
-        videoSlugs: compact([nonempty(args.first_clip_slug)]),
-        audioSlugs: compact([nonempty(args.driving_audio_slug)]),
+        videoRefs: compact([nonempty(args.first_clip_ref)]),
+        audioRefs: compact([nonempty(args.driving_audio_ref)]),
       });
       break;
     case "generate_kie_wan_2_7_edit_video":
       transformed = replaceNaturalAssetMentions(prompt, {
-        videoSlugs: compact([nonempty(args.video_slug)]),
-        imageSlugs: compact([nonempty(args.image_slug)]),
+        videoRefs: compact([nonempty(args.video_ref)]),
+        imageRefs: compact([nonempty(args.image_ref)]),
       });
       break;
     case "generate_kie_wan_2_7_reference_to_video":
       transformed = replaceNaturalAssetMentions(prompt, {
-        imageSlugs: [
-          ...imageSlugs,
-          ...compact([nonempty(args.first_frame_slug)]),
+        imageRefs: [
+          ...imageRefs,
+          ...compact([nonempty(args.first_frame_ref)]),
         ],
-        videoSlugs: stringArray(args.video_slugs),
-        audioSlugs: compact([nonempty(args.audio_slug)]),
+        videoRefs: stringArray(args.video_refs),
+        audioRefs: compact([nonempty(args.audio_ref)]),
       });
       break;
     case "extend_kie_wan_2_7_video":
       transformed = replaceNaturalAssetMentions(prompt, {
-        videoSlugs: compact([nonempty(args.video_slug)]),
+        videoRefs: compact([nonempty(args.video_ref)]),
       });
       break;
     case "generate_kie_happyhorse_1_1_image_to_video":
-      transformed = stripSlugMentions(
+      transformed = stripRefMentions(
         prompt,
-        compact([nonempty(args.first_frame_slug)]),
+        compact([nonempty(args.first_frame_ref)]),
       );
       break;
     case "generate_kie_happyhorse_1_1_reference_to_video":
-      transformed = rewriteImageSlugMentionsToBrackets(prompt, imageSlugs);
+      transformed = rewriteImageRefMentionsToBrackets(prompt, imageRefs);
       break;
     case "generate_kie_happyhorse_1_1_edit_video":
       transformed = replaceHappyHorseAssetMentions(
         prompt,
-        nonempty(args.video_slug) ?? null,
-        imageSlugs,
+        nonempty(args.video_ref) ?? null,
+        imageRefs,
       );
       break;
     case "generate_alibaba_wan_2_7_video":
       transformed = replaceNaturalAssetMentions(prompt, {
-        imageSlugs: compact([
-          nonempty(args.first_frame_slug),
-          nonempty(args.last_frame_slug),
+        imageRefs: compact([
+          nonempty(args.first_frame_ref),
+          nonempty(args.last_frame_ref),
         ]),
-        videoSlugs: compact([
-          nonempty(args.first_clip_slug),
-          nonempty(args.video_slug),
+        videoRefs: compact([
+          nonempty(args.first_clip_ref),
+          nonempty(args.video_ref),
         ]),
-        audioSlugs: compact([nonempty(args.driving_audio_slug)]),
+        audioRefs: compact([nonempty(args.driving_audio_ref)]),
       });
       break;
   }

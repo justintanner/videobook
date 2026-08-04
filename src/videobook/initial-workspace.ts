@@ -68,7 +68,7 @@ async function loadInitialWorkspaceFromClient(
   const books = Array.isArray(bookValue) ? bookValue : []
   const selected = books
     .map(record)
-    .find((book) => book?.slug === 'dancing')
+    .find((book) => book?.name === 'dancing')
     ?? books.map(record).find(Boolean)
   const bookId = typeof selected?.bookId === 'string' ? selected.bookId : ''
   if (!bookId) return null

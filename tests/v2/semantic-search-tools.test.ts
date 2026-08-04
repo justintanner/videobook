@@ -52,7 +52,7 @@ describe('semantic search MCP tools', () => {
 
   it('returns bounded moments, reasons, coverage, and index status', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-search-tools-'))
-    const engine = createEngine({ rootDir, initialBookSlug: 'search-tools' })
+    const engine = createEngine({ rootDir, initialBookName: 'search-tools' })
     await engine.ready
     const artifact = await engine.artifacts.create('video', 'golden-hour-van')
     expect(artifact.ok).toBe(true)
@@ -375,7 +375,7 @@ describe('semantic search MCP tools', () => {
     const pinned = resultJson(await tools.get('pin_search_moment')!.handler({
       book_id: engine.book.get().bookId,
       notebook_id: notebook.value.id,
-      cell_slug: 'vid-red-van-selects',
+      cell_label: 'Red van selects',
       query: { text: 'red van' },
       hit: search.hits[0],
     })) as { cell: { type: string; pinnedResults: SearchHit[] } }

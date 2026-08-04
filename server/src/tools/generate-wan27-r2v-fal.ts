@@ -3,30 +3,24 @@ import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalWanV2p7ReferenceToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
-import { findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageSlugs, slugify } from "./_fal-shared.js";
+import { resolveImageRefs, slugify } from "./_fal-shared.js";
+import { resolveVideoRef, type RefInput } from "./_seedance2-shared.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
 
-type VideoInput = { assetId: string; filename: string };
-
-async function resolveVideoSlugs(
+async function resolveVideoRefList(
   fs: Engine,
-  rawSlugs: readonly string[],
-  _bookId: string,
-): Promise<{ ok: true; inputs: VideoInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
-  const inputs: VideoInput[] = [];
+  rawRefs: readonly string[],
+  bookId: string,
+): Promise<{ ok: true; inputs: RefInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
+  const inputs: RefInput[] = [];
   const sourceVideoIds: string[] = [];
-  for (const raw of rawSlugs) {
-    const assetId = raw.replace(/^@/, "");
-    if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slugs entries must be vid-* assets, got: ${assetId}` };
-    const manifest = await fs.files.manifest(assetId);
-    if (!manifest.ok) return { ok: false, error: manifest.error.message };
-    const file = findVideoFile(manifest.value.files);
-    if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
-    inputs.push({ assetId, filename: file.name });
-    sourceVideoIds.push(assetId);
+  for (const raw of rawRefs) {
+    const r = await resolveVideoRef(fs, raw, bookId);
+    if (!r.ok) return { ok: false, error: r.error };
+    inputs.push(r.value);
+    sourceVideoIds.push(r.value.assetId);
   }
   return { ok: true, inputs, sourceVideoIds };
 }
@@ -34,10 +28,10 @@ async function resolveVideoSlugs(
 const base = FalWanV2p7ReferenceToVideoRequestSchema.shape;
 
 const schema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(base.prompt, "Video description", { required: true }),
-  image_slugs: apicityStringArrayField(base.reference_image_urls, "Reference image @slugs (optional)"),
-  video_slugs: apicityStringArrayField(base.reference_video_urls, "Reference video @slugs (optional)"),
+  image_refs: apicityStringArrayField(base.reference_image_urls, "Reference image artifact ids (optional)"),
+  video_refs: apicityStringArrayField(base.reference_video_urls, "Reference video artifact ids (optional)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
   resolution: apicityField(base.resolution, "Output resolution"),
   duration: apicityField(base.duration, "Video duration in seconds (2-10)"),
@@ -52,12 +46,12 @@ type Args = SchemaArgs<typeof schema>;
 export function generateWan27R2vFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_wan_2_7_reference_to_video",
-    description: "Generate a video via fal.ai using Alibaba Wan v2.7 Reference-to-Video guided by reference images and/or videos. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs or video_slugs.",
+    description: "Generate a video via fal.ai using Alibaba Wan v2.7 Reference-to-Video guided by reference images and/or videos. Creates a new video artifact and enqueues a background job. Requires at least one of image_refs or video_refs.",
     schema,
     handler: async (args) => {
       const {
         book_id, prompt,
-        image_slugs, video_slugs,
+        image_refs, video_refs,
         aspect_ratio, resolution, duration, multi_shots,
         negative_prompt, enable_safety_checker, seed,
       } = args as Args;
@@ -67,24 +61,24 @@ export function generateWan27R2vFalDef(fs: Engine): ToolDef {
       }
 
       const missingInput = requireAtLeastOne("generate_fal_wan_2_7_reference_to_video", [
-        { name: "image_slugs", value: image_slugs },
-        { name: "video_slugs", value: video_slugs },
+        { name: "image_refs", value: image_refs },
+        { name: "video_refs", value: video_refs },
       ]);
       if (missingInput) return missingInput;
 
-      const imgSlugs = image_slugs ?? [];
-      const vidSlugs = video_slugs ?? [];
+      const imgRefs = image_refs ?? [];
+      const vidRefs = video_refs ?? [];
 
-      const resolvedImages = await resolveImageSlugs(fs, imgSlugs, book_id);
+      const resolvedImages = await resolveImageRefs(fs, imgRefs, book_id);
       if (!resolvedImages.ok) return toolError(resolvedImages.error);
 
-      const resolvedVideos = await resolveVideoSlugs(fs, vidSlugs, book_id);
+      const resolvedVideos = await resolveVideoRefList(fs, vidRefs, book_id);
       if (!resolvedVideos.ok) return toolError(resolvedVideos.error);
 
       const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-r2v")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return toolError(`Failed to create video asset: ${assetResult.error.message}`);
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "wan/2-7-r2v")}-r2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

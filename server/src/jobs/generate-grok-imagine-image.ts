@@ -34,7 +34,7 @@ export function registerGenerateGrokImagineImageJob(fs: Engine): void {
       ? undefined
       : transformProviderPrompt(
         "generate_kie_grok_imagine_image_to_image",
-        { prompt, image_slugs: [sourceImageId] },
+        { prompt, image_refs: [sourceImageId] },
         _provider,
       );
 

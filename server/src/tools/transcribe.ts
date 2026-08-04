@@ -10,8 +10,8 @@ export function transcribeDef(fs: Engine): ToolDef {
     name: "transcribe",
     description: "Transcribe audio from a video or audio asset using ElevenLabs speech-to-text. Writes elevenlabs.json into the asset directory.",
     schema: {
-      asset_id: z.string().describe("Asset ID (vid-* or aud-*)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Video or audio artifact id"),
+      book_id: z.string().describe("Book UUID"),
       language_code: z.string().optional().describe("Language code (e.g. 'en'). Auto-detected if omitted."),
       tag_audio_events: z.boolean().optional().default(true).describe("Tag audio events like laughter, music, etc."),
       diarize: z.boolean().optional().default(true).describe("Enable speaker diarization"),
@@ -34,6 +34,14 @@ export function transcribeDef(fs: Engine): ToolDef {
         };
       }
 
+      const artifactResult = fs.artifacts.get(asset_id);
+      if (!artifactResult.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: artifactResult.error.message }],
+        };
+      }
+
       const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
@@ -44,11 +52,11 @@ export function transcribeDef(fs: Engine): ToolDef {
 
       const manifest = manifestResult.value;
 
-      const audioFile = findAudioFile(manifest.files, asset_id);
+      const audioFile = findAudioFile(manifest.files, artifactResult.value.kind);
       if (!audioFile) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `No audio file found in asset ${asset_id}` }],
+          content: [{ type: "text" as const, text: `No audio file found in artifact ${asset_id}` }],
         };
       }
 

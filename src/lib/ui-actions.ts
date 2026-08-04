@@ -8,7 +8,7 @@ export interface UiActionCallbacks {
   open_split: (assetId: string, at?: string) => void;
   open_crop: (assetId: string, ratio?: string) => void;
   open_osg: (assetId: string, imageId?: string) => void;
-  switch_project: (slug: string) => void;
+  switch_project: (name: string) => void;
   viewer_set_original: () => void;
   viewer_set_landscape: () => void;
   viewer_set_portrait: () => void;
@@ -22,15 +22,15 @@ export interface UiActionCallbacks {
   settings_audio: (field: string, value: string) => void;
   settings_bg: (mode: string) => void;
   settings_osg: (field: string, value: string) => void;
-  open_watermark: (assetSlug: string) => void;
+  open_watermark: (assetId: string) => void;
 
-  open_post_composer: (assetSlug: string, text: string) => void;
+  open_post_composer: (assetId: string, text: string) => void;
   open_notebook: (name?: string) => void;
   open_rename_all: () => void;
   open_projects: () => void;
-  create_project: (slug: string) => void;
-  rename_project: (newSlug: string) => void;
-  delete_project: (slug: string) => void;
+  create_project: (name: string) => void;
+  rename_project: (newName: string) => void;
+  delete_project: (name: string) => void;
   close_viewer: () => void;
   sidebar_collapse: (side: string) => void;
   sidebar_expand: (side: string) => void;
@@ -79,8 +79,8 @@ export function executeUiAction(
       (fn as UiActionCallbacks['open_osg'])(ctx.args.asset_id ?? ctx.raw, ctx.args.image);
       break;
     case 'switch_project':
-      // The command is /{slug}, so extract slug from the command itself
-      (fn as UiActionCallbacks['switch_project'])(ctx.raw || ctx.args.slug || '');
+      // The command is /{name}, so extract the name from the command itself
+      (fn as UiActionCallbacks['switch_project'])(ctx.raw || ctx.args.name || '');
       break;
     case 'viewer_focus_file':
       (fn as UiActionCallbacks['viewer_focus_file'])(parseInt(ctx.args.position, 10) || 1);
@@ -98,11 +98,11 @@ export function executeUiAction(
       (fn as UiActionCallbacks['settings_osg'])(ctx.args.field ?? '', ctx.args.value ?? '');
       break;
     case 'open_watermark':
-      (fn as UiActionCallbacks['open_watermark'])(ctx.args.asset_slug ?? ctx.raw);
+      (fn as UiActionCallbacks['open_watermark'])(ctx.args.asset_ref ?? ctx.raw);
       break;
 
     case 'open_post_composer':
-      (fn as UiActionCallbacks['open_post_composer'])(ctx.args.asset_slug ?? '', ctx.args.text ?? '');
+      (fn as UiActionCallbacks['open_post_composer'])(ctx.args.asset_ref ?? '', ctx.args.text ?? '');
       break;
     case 'open_notebook': {
       const notebookName = (ctx.args.name || ctx.raw || '').trim();
@@ -113,7 +113,7 @@ export function executeUiAction(
       (fn as UiActionCallbacks['create_project'])(ctx.args.book_id ?? ctx.raw);
       break;
     case 'rename_project':
-      (fn as UiActionCallbacks['rename_project'])(ctx.args.new_slug ?? ctx.raw);
+      (fn as UiActionCallbacks['rename_project'])(ctx.args.new_name ?? ctx.raw);
       break;
     case 'delete_project':
       (fn as UiActionCallbacks['delete_project'])(ctx.args.book_id ?? '');

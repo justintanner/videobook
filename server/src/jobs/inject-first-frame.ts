@@ -181,6 +181,9 @@ export function registerInjectFirstFrameJob(fs: Engine): void {
       orientation,
     } = payload as InjectFirstFramePayload;
 
+    const artifact = fs.artifacts.get(assetId);
+    const isFinalAsset = artifact.ok && artifact.value.kind === "final";
+
     const result = await withLockedLocalLease(
       fs,
       bookId,
@@ -208,7 +211,7 @@ export function registerInjectFirstFrameJob(fs: Engine): void {
           await validateInjectedFirstFrame(inputPath, outputPath, ctx.signal);
           await replaceAssetFile(fs, assetId, targetFilename, outputPath, bookId);
 
-          if (assetId === "final") {
+          if (isFinalAsset) {
             await refreshFinalThumbnail(
               fs,
               assetId,
@@ -231,7 +234,7 @@ export function registerInjectFirstFrameJob(fs: Engine): void {
           });
         } catch (error) {
           await discardTemp(outputPath).catch(() => undefined);
-          if (restoreCommit) await fs.history.restoreArtifact(assetId, restoreCommit, bookId);
+          if (restoreCommit) await fs.history.restoreArtifact(assetId, restoreCommit);
           throw error;
         }
         return { videoPath: join(assetDir, targetFilename) };
@@ -239,7 +242,7 @@ export function registerInjectFirstFrameJob(fs: Engine): void {
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
     );
 
-    if (assetId !== "final") {
+    if (!isFinalAsset) {
       await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
         type: "process_video",
         videoPath: result.videoPath,

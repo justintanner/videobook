@@ -42,7 +42,7 @@ describe("findUnprocessedUploads", () => {
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
 
-    const assetId = assetResult.value.slug;
+    const assetId = assetResult.value.artifactId;
 
     const pngData = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
@@ -64,7 +64,7 @@ describe("findUnprocessedUploads", () => {
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
 
-    const assetId = assetResult.value.slug;
+    const assetId = assetResult.value.artifactId;
 
     const pngData = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
@@ -91,7 +91,7 @@ describe("findUnprocessedUploads", () => {
     const assetResult = await fs.artifacts.create("vid", "from-yt");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
-    const assetId = assetResult.value.slug;
+    const assetId = assetResult.value.artifactId;
 
     const pngData = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
@@ -117,7 +117,7 @@ describe("findUnprocessedUploads", () => {
     const assetResult = await fs.artifacts.create("img", "racey");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
-    const assetId = assetResult.value.slug;
+    const assetId = assetResult.value.artifactId;
 
     const pngData = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
@@ -150,7 +150,7 @@ describe("findUnprocessedUploads", () => {
     const assetResult = await fs.artifacts.create("img", "variants-only");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
-    const assetId = assetResult.value.slug;
+    const assetId = assetResult.value.artifactId;
 
     await fs.files.write(assetId, "landscape.jpg", Buffer.from("fake"));
     await fs.files.write(assetId, "portrait.jpg", Buffer.from("fake"));
@@ -170,7 +170,7 @@ describe("findUnprocessedUploads", () => {
     const assetResult = await fs.artifacts.create("vid", "broken");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
-    const assetId = assetResult.value.slug;
+    const assetId = assetResult.value.artifactId;
 
     await fs.files.write(assetId, "original.mp4", Buffer.from("fake-mp4-bytes"));
 

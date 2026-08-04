@@ -83,7 +83,8 @@ describe("create_qrbtf tool", () => {
         qr_version: number;
         bg_color: string;
       };
-      expect(parsed.asset_id).toMatch(/^img-/);
+      const artifact = fs.artifacts.get(parsed.asset_id);
+      expect(artifact.ok && artifact.value.kind).toBe("image");
       expect(parsed.value).toBe(value);
       expect(parsed.style).toBe(style);
       expect(parsed.size).toBe(DEFAULT_QRBTF_SIZE);

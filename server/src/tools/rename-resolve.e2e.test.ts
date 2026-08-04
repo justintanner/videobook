@@ -10,6 +10,13 @@ import type { Engine } from "videobook-engine";
 
 const PROJECT = "e2e-rename-resolve";
 
+type TextContent = Array<{ type: string; text: string }>;
+
+interface RenamePayload {
+  artifact_id: string;
+  label: string;
+}
+
 describe("rename and resolve e2e", () => {
   let client: Client;
   let tempDir: string;
@@ -34,31 +41,38 @@ describe("rename and resolve e2e", () => {
     if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("keeps stable identity while replacing the active slug", async () => {
+  it("relabels in place so the artifact id and every reference still resolve", async () => {
     const assetRes = await fs.artifacts.create("img", "original-name");
     expect(assetRes.ok).toBe(true);
-    const originalId = assetRes.ok ? assetRes.value.slug : "";
-    const artifactId = assetRes.ok ? assetRes.value.artifactId : "";
+    if (!assetRes.ok) throw new Error(assetRes.error.message);
+    const artifactId = assetRes.value.artifactId;
 
-    await fs.files.write(originalId, "original.png", Buffer.from("fake data"));
+    const written = await fs.files.write(artifactId, "original.png", Buffer.from("fake data"));
+    expect(written.ok).toBe(true);
 
     const renameRes = await client.callTool({
       name: "rename_asset",
       arguments: {
-        asset_id: originalId,
+        asset_id: artifactId,
         new_name: "new name",
         book_id: PROJECT,
       },
     });
     expect(renameRes.isError).toBeFalsy();
-    const parsed = JSON.parse((renameRes.content as Array<Record<string, unknown>>)[0].text as string);
-    const newId = parsed.new_asset_id;
-    expect(newId).not.toBe(originalId);
+    const parsed = JSON.parse(
+      (renameRes.content as TextContent)[0].text,
+    ) as RenamePayload;
 
-    expect(fs.artifacts.resolveSlug(PROJECT).ok).toBe(false);
-    const renamed = fs.artifacts.get(PROJECT);
+    // A rename is a display-label change only: the id is the reference handle
+    // and never moves, so nothing downstream has to be re-resolved.
+    expect(parsed.artifact_id).toBe(artifactId);
+    expect(parsed.label).toBe("new name");
+
+    const renamed = fs.artifacts.get(artifactId);
     expect(renamed.ok).toBe(true);
-    expect(renamed.ok && renamed.value.slug).toBe(newId);
+    expect(renamed.ok && renamed.value.artifactId).toBe(artifactId);
+    expect(renamed.ok && renamed.value.label).toBe("new name");
+    expect(renamed.ok && renamed.value.kind).toBe("image");
 
     const readRes = await fs.files.read(artifactId, "original.png");
     expect(readRes.ok).toBe(true);
@@ -66,5 +80,12 @@ describe("rename and resolve e2e", () => {
 
     const manifest = await fs.files.manifest(artifactId);
     expect(manifest.ok).toBe(true);
+    expect(manifest.ok && manifest.value.files.map((file) => file.name))
+      .toContain("original.png");
+
+    // The catalog still lists exactly one artifact for this id — a relabel
+    // never forks a second catalog row.
+    expect(fs.artifacts.list().filter((artifact) => artifact.artifactId === artifactId))
+      .toHaveLength(1);
   });
 });

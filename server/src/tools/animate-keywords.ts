@@ -10,6 +10,7 @@ import {
   readKeywordPlacementAnalysis,
 } from "../keyword-placement-cache.js";
 import { queue } from "../queue.js";
+import { artifactKindOf } from "./_shared.js";
 import {
   DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
   DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
@@ -115,8 +116,8 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
     description:
       "Configure transcript-timed keyword graphics for a video. Extracts exact word-time frames and waits for vision-guided placement that avoids faces, subtitles, and existing text or graphics. Pass keywords for exact transcript words, or omit them for automatic selection. Renders cinematic white serif over-the-shoulder titles. Use enabled=false to turn them off.",
     schema: {
-      asset_id: z.string().describe("Video asset ID (vid- prefix)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Video artifact id"),
+      book_id: z.string().describe("Book id"),
       enabled: z.boolean().optional().describe("Enable keyword graphics (default true)"),
       max_keywords: z
         .number()
@@ -155,8 +156,13 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
         keywords?: string[];
       };
 
-      if (!asset_id.startsWith("vid-")) {
-        return errorResult("invalid_asset", "asset_id must start with vid-");
+      // Kept on the structured errorResult contract instead of
+      // requireArtifactKind so callers keep parsing a status code. A missing
+      // artifact falls through to the manifest read below, which reports
+      // asset_not_found.
+      const kind = artifactKindOf(fs, asset_id);
+      if (kind !== null && kind !== "video") {
+        return errorResult("invalid_asset", `animate_keywords requires a video artifact; ${asset_id} is ${kind}`);
       }
 
       const manifestResult = await fs.files.manifest(asset_id);

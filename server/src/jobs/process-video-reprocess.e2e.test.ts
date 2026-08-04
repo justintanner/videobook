@@ -142,22 +142,22 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
     expect(created.ok).toBe(true);
     if (!created.ok) return;
 
-    const written = await fs.files.write(created.value.slug, "original.mp4", await readFile(audioOnlyPath)
+    const written = await fs.files.write(created.value.artifactId, "original.mp4", await readFile(audioOnlyPath)
     );
     expect(written.ok).toBe(true);
     if (!written.ok) return;
 
     await expect(queue.enqueueAndWait(
-      `process-video-audio-only-${created.value.slug}`,
+      `process-video-audio-only-${created.value.artifactId}`,
       {
         type: "process_video",
         videoPath: join(created.value.path, "original.mp4"),
-        assetId: created.value.slug,
+        assetId: created.value.artifactId,
         assetDir: created.value.path,
         bookId: PROJECT,
         provenance: { origin: "test-audio-only" },
         skipDownstreamJobs: true,
       } as unknown as Parameters<typeof queue.enqueueAndWait>[1],
-    )).rejects.toThrow(`process_video requires a video stream: ${created.value.slug}`);
+    )).rejects.toThrow(`process_video requires a video stream: ${created.value.artifactId}`);
   });
 });

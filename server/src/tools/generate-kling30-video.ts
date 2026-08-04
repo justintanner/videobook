@@ -7,6 +7,7 @@ import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
+import { artifactKindOf, requireArtifactKind } from "./_shared.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -43,9 +44,9 @@ const klingVideo = KlingVideoRequestSchema.shape.input.shape;
 const multiShotPrompt = MultiShotPromptSchema.shape;
 
 const generateKling30VideoSchema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(klingVideo.prompt, "Video description"),
-  image_slugs: apicityStringArrayField(klingVideo.image_urls, "0-2 reference image @slugs (e.g., @img-sunset)"),
+  image_refs: apicityStringArrayField(klingVideo.image_urls, "0-2 reference image artifact ids"),
   mode: apicityField(klingVideo.mode, "Resolution mode: std (standard) / pro (professional) / 4K", { required: true }),
   duration: apicityField(klingVideo.duration, "Video duration: 3s-15s", { required: true }),
   sound: apicityField(klingVideo.sound, "Generate audio for the video (optional; Kie defaults contextually under multi-shot)"),
@@ -55,13 +56,13 @@ const generateKling30VideoSchema = {
     prompt: apicityStringField(multiShotPrompt.prompt, undefined, { required: true }),
     duration: apicityField(multiShotPrompt.duration, undefined, { required: true }),
   })).optional().describe("Scene list for multi-shot mode"),
-  element1_slugs: z.array(z.string()).optional().describe("1-4 image @slugs or 1 video @slug for element 1"),
+  element1_refs: z.array(z.string()).optional().describe("1-4 image artifact ids or 1 video artifact id for element 1"),
   element1_name: z.string().optional().describe("Name for element 1"),
   element1_desc: z.string().optional().describe("Description for element 1"),
-  element2_slugs: z.array(z.string()).optional().describe("1-4 image @slugs or 1 video @slug for element 2"),
+  element2_refs: z.array(z.string()).optional().describe("1-4 image artifact ids or 1 video artifact id for element 2"),
   element2_name: z.string().optional().describe("Name for element 2"),
   element2_desc: z.string().optional().describe("Description for element 2"),
-  element3_slugs: z.array(z.string()).optional().describe("1-4 image @slugs or 1 video @slug for element 3"),
+  element3_refs: z.array(z.string()).optional().describe("1-4 image artifact ids or 1 video artifact id for element 3"),
   element3_name: z.string().optional().describe("Name for element 3"),
   element3_desc: z.string().optional().describe("Description for element 3"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
@@ -72,15 +73,15 @@ type Args = SchemaArgs<typeof generateKling30VideoSchema>;
 export function generateKling30VideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_kling_3_0_video",
-    description: "Generate a video using Kling 3.0 with optional reference images, character elements, and multi-shot mode. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video using Kling 3.0 with optional reference images, character elements, and multi-shot mode. Creates a new video artifact and enqueues a background job.",
     schema: generateKling30VideoSchema,
     handler: async (args) => {
       const {
-        book_id, prompt, image_slugs, mode, duration, sound,
+        book_id, prompt, image_refs, mode, duration, sound,
         aspect_ratio, multi_shots, multi_prompt,
-        element1_slugs, element1_name, element1_desc,
-        element2_slugs, element2_name, element2_desc,
-        element3_slugs, element3_name, element3_desc,
+        element1_refs, element1_name, element1_desc,
+        element2_refs, element2_name, element2_desc,
+        element3_refs, element3_name, element3_desc,
       } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
@@ -93,15 +94,11 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
       // Resolve reference images
       const imageInputs: ImageInput[] = [];
       const sourceImageIds: string[] = [];
-      const slugs = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
+      const slugs = (image_refs ?? []).map((s) => s.replace(/^@/, ""));
 
       for (const assetId of slugs) {
-        if (!assetId.startsWith("img-")) {
-          return {
-            isError: true as const,
-            content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${assetId}` }],
-          };
-        }
+        const kindGate = await requireArtifactKind(fs, assetId, ["image"], "image_refs");
+        if (kindGate) return kindGate;
         const manifestResult = await fs.files.manifest(assetId);
         if (!manifestResult.ok) {
           return {
@@ -122,9 +119,9 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
 
       // Resolve element slugs
       const elementSlotDefs = [
-        { slugs: element1_slugs, name: element1_name, desc: element1_desc },
-        { slugs: element2_slugs, name: element2_name, desc: element2_desc },
-        { slugs: element3_slugs, name: element3_name, desc: element3_desc },
+        { slugs: element1_refs, name: element1_name, desc: element1_desc },
+        { slugs: element2_refs, name: element2_name, desc: element2_desc },
+        { slugs: element3_refs, name: element3_name, desc: element3_desc },
       ];
 
       const elementInputs: ElementInput[] = [];
@@ -136,12 +133,13 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
         let hasVideo = false;
         for (const raw of rawSlugs) {
           const assetId = raw.replace(/^@/, "");
-          const isVideo = assetId.startsWith("vid-");
-          const isImage = assetId.startsWith("img-");
+          const kind = artifactKindOf(fs, assetId);
+          const isVideo = kind === "video";
+          const isImage = kind === "image";
           if (!isVideo && !isImage) {
             return {
               isError: true as const,
-              content: [{ type: "text" as const, text: `Element slugs must be img-* or vid-* assets, got: ${assetId}` }],
+              content: [{ type: "text" as const, text: `Element refs must be image or video artifacts; ${assetId} is ${kind ?? "not a known artifact"}` }],
             };
           }
           if (isVideo) hasVideo = true;
@@ -181,7 +179,7 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "kling-3.0/video")}-${vidAssetId}-${Date.now()}`;
 

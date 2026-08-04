@@ -49,15 +49,15 @@ async function diagnose(
   onlyAssetId?: string,
 ): Promise<DoctorReport> {
   const all = await fs.artifacts.list();
-  const assets = onlyAssetId ? all.filter((a) => a.slug === onlyAssetId) : all;
+  const assets = onlyAssetId ? all.filter((a) => a.artifactId === onlyAssetId) : all;
 
   const errorsRes = await fs.jobs.failures.findAll();
   const errorByAsset = new Map<string, GenerationError>();
-  if (errorsRes.ok) for (const e of errorsRes.value) errorByAsset.set(e.artifactSlug, e);
+  if (errorsRes.ok) for (const e of errorsRes.value) errorByAsset.set(e.artifactId, e);
 
   const workRes = await fs.jobs.artifactWork.list();
   const workByAsset = new Map<string, ArtifactView>();
-  if (workRes.ok) for (const w of workRes.value) workByAsset.set(w.slug, w);
+  if (workRes.ok) for (const w of workRes.value) workByAsset.set(w.artifactId, w);
 
   const nowMs = Date.now();
   const broken: BrokenAsset[] = [];
@@ -66,14 +66,14 @@ async function diagnose(
 
   await Promise.all(
     assets.map(async (a) => {
-      const statusRes = await fs.status.get(a.slug);
+      const statusRes = await fs.status.get(a.artifactId);
       const status = statusRes.ok ? statusRes.value : "error";
-      const work = workByAsset.get(a.slug);
+      const work = workByAsset.get(a.artifactId);
 
       if (status === "error") {
-        const ge = errorByAsset.get(a.slug);
+        const ge = errorByAsset.get(a.artifactId);
         broken.push({
-          asset_id: a.slug,
+          asset_id: a.artifactId,
           type: a.kind,
           error: ge
             ? { message: ge.message, fail_code: ge.failCode ?? null, failed_at: ge.failedAt }
@@ -86,7 +86,7 @@ async function diagnose(
         work.deadlineAt < nowMs
       ) {
         stuck.push({
-          asset_id: a.slug,
+          asset_id: a.artifactId,
           type: a.kind,
           work_status: work.status,
           deadline_at: work.deadlineAt,
@@ -123,11 +123,11 @@ export function doctorDef(fs: Engine): ToolDef {
       "lease when the media is intact, otherwise restores the asset from Dolt history. A bare " +
       "fix:true scan never bulk-fixes; it just reports.",
     schema: {
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       asset_id: z
         .string()
         .optional()
-        .describe("Limit diagnosis to one asset; REQUIRED when fix is true (e.g. vid-my-clip)"),
+        .describe("Limit diagnosis to one asset by artifact id; REQUIRED when fix is true"),
       fix: z
         .boolean()
         .optional()

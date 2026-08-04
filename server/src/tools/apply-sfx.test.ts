@@ -123,12 +123,12 @@ describe("apply_sfx tool", () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "no-video");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "notes.txt", "hello");
+    await fs.files.write(asset.value.artifactId, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "apply_sfx",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "sfx-proj",
         sfx: [{ timestamp: 1, type: "whoosh", description: "test" }],
       },

@@ -36,7 +36,7 @@ describe('CommandPlan edit tools', () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-command-plan-'))
     const engine = createEngine({
       rootDir,
-      initialBookSlug: 'command-plan',
+      initialBookName: 'command-plan',
     })
     const artifact = await engine.artifacts.create('image', 'cover')
     expect(artifact.ok).toBe(true)
@@ -662,7 +662,7 @@ describe('CommandPlan edit tools', () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-media-context-'))
     const engine = createEngine({
       rootDir,
-      initialBookSlug: 'media-context',
+      initialBookName: 'media-context',
     })
     const artifact = await engine.artifacts.create('image', 'boat')
     expect(artifact.ok).toBe(true)
@@ -677,7 +677,7 @@ describe('CommandPlan edit tools', () => {
     if (!notebook.ok) return
     const cell = engine.notebooks.createCell({
       type: 'image',
-      slug: 'img-boat',
+      label: 'boat',
       slot: { row: 0, column: 0 },
       outputArtifactId: artifact.value.artifactId,
     })

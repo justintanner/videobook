@@ -31,7 +31,7 @@ describe('video ingest stream identity', () => {
     ])
     const engine = createEngine({
       rootDir: join(rootDir, 'book'),
-      initialBookSlug: 'video-streams',
+      initialBookName: 'video-streams',
     })
     await engine.ready
     const artifact = await engine.artifacts.create('video', 'source-video')
@@ -115,7 +115,7 @@ describe('video ingest stream identity', () => {
     ])
     const engine = createEngine({
       rootDir: join(rootDir, 'book'),
-      initialBookSlug: 'video-proxy-repair',
+      initialBookName: 'video-proxy-repair',
     })
     await engine.ready
     const artifact = await engine.artifacts.create('video', 'repair-source')

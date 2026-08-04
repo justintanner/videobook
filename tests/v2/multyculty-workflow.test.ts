@@ -44,26 +44,26 @@ describe("Multyculty workflow fixture", () => {
 
   it("builds an idempotent compact video-to-concat graph", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-multyculty-"));
-    engine = createEngine({ rootDir, initialBookSlug: "multyculty" });
+    engine = createEngine({ rootDir, initialBookName: "multyculty" });
     await engine.ready;
     const notebook = await engine.notebooks.create("Main");
     expect(notebook.ok).toBe(true);
 
     const artifactSpecs = [
-      ["video", "vid-source-selection"],
-      ["video", "vid-section-intro"],
-      ["video", "vid-section-culture"],
-      ["video", "vid-animated-intro"],
-      ["video", "vid-animated-culture"],
-      ["final", "final"],
+      ["video", "Source selection"],
+      ["video", "Intro section video"],
+      ["video", "Culture section video"],
+      ["video", "Intro animated video"],
+      ["video", "Culture animated video"],
+      ["final", "Final"],
     ] as const;
     const artifacts = new Map<string, string>();
-    for (const [kind, slug] of artifactSpecs) {
-      const artifact = await engine.artifacts.create(kind, slug);
+    for (const [kind, label] of artifactSpecs) {
+      const artifact = await engine.artifacts.create(kind, label);
       expect(artifact.ok).toBe(true);
-      if (artifact.ok) artifacts.set(slug, artifact.value.artifactId);
+      if (artifact.ok) artifacts.set(label, artifact.value.artifactId);
     }
-    const sourceId = artifacts.get("vid-source-selection");
+    const sourceId = artifacts.get("Source selection");
     expect(sourceId).toBeTruthy();
     if (!sourceId) return;
     mediaDir = await mkdtemp(join(tmpdir(), "videobook-multyculty-media-"));
@@ -87,8 +87,8 @@ describe("Multyculty workflow fixture", () => {
     );
     expect(file.ok).toBe(true);
     if (!file.ok) return;
-    for (const slug of ["vid-animated-intro", "vid-animated-culture"]) {
-      const artifactId = artifacts.get(slug);
+    for (const label of ["Intro animated video", "Culture animated video"]) {
+      const artifactId = artifacts.get(label);
       expect(artifactId).toBeTruthy();
       if (!artifactId) return;
       const animationFile = await engine.files.writeFromPath(
@@ -300,7 +300,7 @@ describe("Multyculty workflow fixture", () => {
         .toEqual({ row: 7, column });
     }
     expect(assembly?.slot).toEqual({ row: 8, column: 3 });
-    expect(assembly?.slug).toBe("concat-scenes");
+    expect(assembly?.label).toBe("Concat scenes");
     expect(first.cells.filter((cell) => cell.operation === "rewrite_prompt").every((cell) =>
       cell.inputs?.requiresConfirmation === true)).toBe(true);
     expect(first.cells.filter((cell) => cell.operation === "image_to_video").every((cell) =>
@@ -394,7 +394,7 @@ describe("Multyculty workflow fixture", () => {
     if (!analysis) throw new Error("analysis cell missing");
     const manual = engine.notebooks.createCell({
       type: "prompt",
-      slug: "prompt-manual-note",
+      label: "Manual note",
       slot: { row: 9, column: 0 },
     });
     const legacyWritten = await engine.notebooks.write({

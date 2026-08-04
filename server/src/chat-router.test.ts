@@ -91,8 +91,8 @@ describe("chat routing catalog", () => {
       "generate_kie_kling_3_0_motion_control",
     );
     expect(motionControl?.requiredParams).toEqual([
-      "character_image_slugs",
-      "motion_video_slugs",
+      "character_image_refs",
+      "motion_video_refs",
     ]);
     expect(motionControl?.constraints).toEqual([
       'mode="720p"|"1080p"',

@@ -13,7 +13,7 @@ describe("Analysis output assets", () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-analysis-output-"));
     engine = createEngine({
       rootDir,
-      initialBookSlug: "analysis-output",
+      initialBookName: "analysis-output",
     });
     await engine.ready;
   });
@@ -26,7 +26,7 @@ describe("Analysis output assets", () => {
   it("projects normalized shot metadata through asset sync", async () => {
     const created = await engine.artifacts.create({
       kind: "script",
-      name: "analysis projection",
+      label: "analysis projection",
     });
     if (!created.ok) throw new Error(created.error.message);
     const written = await engine.metadata.artifacts.write(

@@ -11,7 +11,7 @@ import type { Engine } from "videobook-engine";
 async function createImageAsset(fs: Engine, bookId: string, name: string): Promise<string> {
   const result = await fs.artifacts.create("img", name);
   if (!result.ok) throw new Error(`createAsset failed: ${result.error.message}`);
-  return result.value.slug;
+  return result.value.artifactId;
 }
 
 async function failAsset(fs: Engine, bookId: string, assetId: string, taskId: string): Promise<void> {

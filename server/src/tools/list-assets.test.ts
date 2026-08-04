@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { isUuidV7 } from "videobook-engine";
 
 const MINIMAL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
@@ -70,9 +71,16 @@ describe("list_assets tool", () => {
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     expect(data.assets).toHaveLength(2);
-    const ids = data.assets.map((a: { id: string }) => a.id);
-    expect(ids.some((id: string) => id.startsWith("img-"))).toBe(true);
-    expect(ids.some((id: string) => id.startsWith("script-"))).toBe(true);
+    // Ids are UUIDv7 artifact ids now — media kind lives on `type`, never in a
+    // prefix.
+    const rows = data.assets as Array<{ id: string; artifact_id: string; type: string }>;
+    for (const row of rows) {
+      expect(isUuidV7(row.id)).toBe(true);
+      expect(row.artifact_id).toBe(row.id);
+    }
+    const types = rows.map((row) => row.type);
+    expect(types).toContain("image");
+    expect(types).toContain("script");
     const pageResult = await client.callTool({
       name: "list_assets",
       arguments: { book_id: slug, sort: "newest", limit: 1, offset: 1 },

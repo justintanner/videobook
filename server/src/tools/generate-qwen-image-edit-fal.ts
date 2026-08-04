@@ -6,7 +6,7 @@ import { Qwen2ImageEditRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { enumOptions, zodUnionEnumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageSlugs, slugify } from "./_fal-shared.js";
+import { resolveImageRefs, slugify } from "./_fal-shared.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalQwenImageEditRequestSchema.shape;
@@ -40,9 +40,9 @@ function normalizeImageSize(value: string | undefined): FalImageSize | undefined
 }
 
 const schema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(base.prompt, "Edit instruction", { required: true }),
-  image_slugs: apicityStringArrayField(base.image_url, "Exactly one @img-* slug for the reference image", { required: true }),
+  image_refs: apicityStringArrayField(base.image_url, "Exactly one image artifact id for the reference image", { required: true }),
   image_size: z.enum(ACCEPTED_IMAGE_SIZES).optional().describe("Output size — Fal enum (square_hd, landscape_16_9, ...) or aspect-ratio shorthand (1:1, 16:9, 9:16, 4:3, 3:4, ...)"),
   num_inference_steps: apicityField(base.num_inference_steps, "Inference steps (2-50)"),
   guidance_scale: apicityField(base.guidance_scale, "Guidance scale (0-20)"),
@@ -60,18 +60,18 @@ type Args = SchemaArgs<typeof schema>;
 export function generateQwenImageEditFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_qwen_2_0_edit_image",
-    description: "Edit an image via fal.ai using Alibaba Qwen Image edit with one @img-* reference input. Creates a new img- asset and enqueues a background job.",
+    description: "Edit an image via fal.ai using Alibaba Qwen Image edit with one image artifact reference input. Creates a new image artifact and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { book_id, prompt, image_slugs, image_size, num_inference_steps, guidance_scale, num_images, output_format, negative_prompt, acceleration, enable_safety_checker, seed } = args as Args;
+      const { book_id, prompt, image_refs, image_size, num_inference_steps, guidance_scale, num_images, output_format, negative_prompt, acceleration, enable_safety_checker, seed } = args as Args;
       const prefix = "img";
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const [firstSlug] = image_slugs;
-      const resolved = await resolveImageSlugs(fs, [firstSlug], book_id);
+      const [firstSlug] = image_refs;
+      const resolved = await resolveImageRefs(fs, [firstSlug], book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [refImage] = resolved.inputs;
@@ -80,7 +80,7 @@ export function generateQwenImageEditFalDef(fs: Engine): ToolDef {
       const assetResult = await fs.artifacts.create(prefix, `${modelSlug("kie", "qwen2/image-edit")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "qwen2/image-edit")}-edit-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

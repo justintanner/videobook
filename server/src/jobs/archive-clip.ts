@@ -1,4 +1,4 @@
-import type { Engine, ArtifactManifestFile } from "videobook-engine";
+import type { Engine, ArtifactKind, ArtifactManifestFile } from "videobook-engine";
 import type {
   ElevenLabsSpeechToTextRequest,
   ElevenLabsSpeechToTextResponse,
@@ -111,12 +111,12 @@ function sourceTitle(title: string | undefined, fallback: string | undefined): s
   return value || undefined;
 }
 
-function pickMediaFile(files: ArtifactManifestFile[], assetId: string): ArtifactManifestFile | null {
+function pickMediaFile(files: ArtifactManifestFile[], kind: ArtifactKind): ArtifactManifestFile | null {
   const full = files.find((file) => /^original_full\.(mp4|mov|webm|avi|mkv)$/i.test(file.name));
   return full
-    ?? findPrimaryMediaFile(files, assetId)
+    ?? findPrimaryMediaFile(files, kind)
     ?? findVideoFile(files)
-    ?? findAudioFile(files, assetId);
+    ?? findAudioFile(files, kind);
 }
 
 function buildAssetSnapshot(
@@ -174,7 +174,9 @@ async function prepareAssetMedia(
   }
   const manifest = await fs.files.manifest(payload.assetId);
   if (!manifest.ok) throw new Error(manifest.error.message);
-  const media = pickMediaFile(manifest.value.files, payload.assetId);
+  const artifact = fs.artifacts.get(payload.assetId);
+  if (!artifact.ok) throw new Error(artifact.error.message);
+  const media = pickMediaFile(manifest.value.files, artifact.value.kind);
   if (!media) throw new Error(`No media file found in asset ${payload.assetId}`);
   const extension = extname(media.name).toLowerCase();
   if (!MEDIA_EXTENSIONS.has(extension)) {

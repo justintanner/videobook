@@ -17,7 +17,7 @@ import {
 
 export type GenerationReviewSource = {
   cellId: string
-  slug: string
+  address: string
   type: string
   asset: MediaLibraryPreviewAsset | null
 }
@@ -227,7 +227,7 @@ export function GenerationChatReview({
                 key={source.cellId}
                 disabled={busy}
                 onClick={() => onSelectSource(source.cellId)}
-                title={`Select @${source.slug} on the board`}
+                title={`Select @${source.address} on the board`}
               >
                 <span className="generation-review-source-badge">Input</span>
                 <span className="generation-review-source-preview">
@@ -242,7 +242,7 @@ export function GenerationChatReview({
                   />
                 </span>
                 <span className="generation-review-source-copy">
-                  <strong>@{source.slug}</strong>
+                  <strong>@{source.address}</strong>
                   <small>{source.type.replaceAll('_', ' ')}</small>
                 </span>
               </button>

@@ -21,7 +21,7 @@ React 19 + TypeScript + Vite 7 SPA using MCP (Model Context Protocol) as the API
 
 **MCP Server:** `server/src/index.ts` — Express app exposing a modern-only `createMcpHandler` endpoint at `/mcp`. It serves MCP `2026-07-28` per request and rejects legacy protocol traffic. Tools are registered in `server/src/tools/`.
 
-**Domain/storage layer:** `videobook-engine` 5.0.0, schema 20 — each book has an isolated UUIDv7 root under `VIDEOBOOK_LIBRARY_DIR`, with its own Dolt-native catalog, files/CAS, metadata, history, notebooks, canonical primary sequence, and runtime jobs. Per-book schedules use engine runtime settings; only application credentials such as X OAuth tokens live at `VIDEOBOOK_APP_STATE_PATH`.
+**Domain/storage layer:** `videobook-engine` 5.0.0, schema 21 — each book has an isolated UUIDv7 root under `VIDEOBOOK_LIBRARY_DIR`, with its own Dolt-native catalog, files/CAS, metadata, history, notebooks, canonical primary sequence, and runtime jobs. Artifacts and cells have no slugs: identity is `artifact_id`/`cell_id` (UUIDv7) plus content-addressed `object_hash`, and the only user-facing handle is the grid address `@a1`-`@z13`. A free-text `label` column exists for display only — never parsed, never a lookup key. Per-book schedules use engine runtime settings; only application credentials such as X OAuth tokens live at `VIDEOBOOK_APP_STATE_PATH`.
 
 ## TypeScript
 

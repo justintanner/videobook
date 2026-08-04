@@ -1,4 +1,5 @@
 import { createEngineForTest } from "../fs.js";
+import { isUuidV7 } from "videobook-engine";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -42,23 +43,23 @@ describe("generate_gemini_omni_video tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("enqueues with image and video slugs before provider upload", async () => {
+  it("enqueues with image and video refs before provider upload", async () => {
     const fs = createEngineForTest(tempDir);
     const imageAsset = await fs.artifacts.create("img", "source-img");
     const videoAsset = await fs.artifacts.create("vid", "source-video");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
     if (!videoAsset.ok) throw new Error("Failed to create video asset");
 
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
-    await fs.files.write(videoAsset.value.slug, "original.mp4", Buffer.from("fake mp4"));
+    await fs.files.write(imageAsset.value.artifactId, "original.png", await makePng());
+    await fs.files.write(videoAsset.value.artifactId, "original.mp4", Buffer.from("fake mp4"));
 
     const result = await client.callTool({
       name: "generate_kie_gemini_omni_video",
       arguments: {
         book_id: "test-proj",
         prompt: "char swap",
-        image_slugs: [`@${imageAsset.value.slug}`],
-        video_slug: `@${videoAsset.value.slug}`,
+        image_refs: [`@${imageAsset.value.artifactId}`],
+        video_ref: `@${videoAsset.value.artifactId}`,
         video_clip_start: 0,
         video_clip_ends: 9.97,
         duration: "10",
@@ -69,8 +70,11 @@ describe("generate_gemini_omni_video tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.vid_asset_id).toMatch(/^vid-/);
-    expect(parsed.source_images).toEqual([imageAsset.value.slug]);
-    expect(parsed.source_videos).toEqual([videoAsset.value.slug]);
+    expect(isUuidV7(parsed.vid_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.vid_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("video");
+    expect(parsed.source_images).toEqual([imageAsset.value.artifactId]);
+    expect(parsed.source_videos).toEqual([videoAsset.value.artifactId]);
   });
 });

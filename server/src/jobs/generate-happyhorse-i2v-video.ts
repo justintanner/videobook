@@ -38,7 +38,7 @@ export function registerGenerateHappyhorseI2vVideoJob(fs: Engine): void {
       ? undefined
       : transformProviderPrompt("generate_kie_happyhorse_1_1_image_to_video", {
         prompt,
-        first_frame_slug: firstFrame.assetId,
+        first_frame_ref: firstFrame.assetId,
       });
     const request = buildHappyHorseI2vPayload(
       { prompt: normalizedPrompt, resolution, duration },

@@ -23,14 +23,14 @@ describe("list_assets notebook references", () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-list-referenced-"));
     engine = createEngine({
       rootDir,
-      initialBookSlug: "list-referenced",
+      initialBookName: "list-referenced",
     });
     await engine.ready;
 
     const notebook = await engine.notebooks.create("Main");
     const older = await engine.artifacts.create({
       kind: "image",
-      name: "older",
+      label: "older",
     });
     expect(notebook.ok && older.ok).toBe(true);
     if (!notebook.ok || !older.ok) return;
@@ -41,7 +41,7 @@ describe("list_assets notebook references", () => {
     );
     const referenced = engine.notebooks.createCell({
       type: "image",
-      slug: "img-referenced",
+      label: "referenced",
       slot: { row: 0, column: 0 },
       outputArtifactId: older.value.artifactId,
     });
@@ -53,7 +53,7 @@ describe("list_assets notebook references", () => {
     await new Promise((resolve) => setTimeout(resolve, 2));
     const newer = await engine.artifacts.create({
       kind: "image",
-      name: "newer",
+      label: "newer",
     });
     expect(newer.ok).toBe(true);
     if (!newer.ok) return;

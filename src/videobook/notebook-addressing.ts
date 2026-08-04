@@ -42,8 +42,7 @@ export function resolveNotebookCellReference(
     return cell
   }
   const exact = document.cells.find((cell) =>
-    cell.slug.toLowerCase() === reference
-    || cell.id.toLowerCase() === reference)
+    cell.id.toLowerCase() === reference)
   const prefixMatches = exact
     ? []
     : document.cells.filter((cell) =>

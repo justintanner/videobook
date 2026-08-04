@@ -8,11 +8,10 @@ import { parseVideoTimestamp, videoTimestampSchema } from "./video-time-input.js
 const MIN_CLIP_SECONDS = 0.5;
 
 function derivedClipName(
-  assetId: string,
+  base: string,
   startTime: number,
   endTime: number,
 ): string {
-  const base = assetId.replace(/^[a-z]+-/u, "");
   return `${base}-${startTime}s-${endTime}s`;
 }
 
@@ -28,8 +27,8 @@ export function extractVideoClipDef(fs: Engine): ToolDef {
       openWorldHint: false,
     },
     schema: {
-      asset_id: z.string().describe("Source video asset ID or notebook reference such as @a1"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Source video artifact id or notebook reference such as @a1"),
+      book_id: z.string().describe("Book UUID"),
       notebook_id: z.string().uuid().optional().describe("Notebook UUID when asset_id is a grid reference and the book has multiple matching notebooks"),
       start_time: videoTimestampSchema.optional().describe("Start of the new clip; defaults to 0 seconds"),
       end_time: videoTimestampSchema.describe("End of the new clip"),
@@ -71,6 +70,15 @@ export function extractVideoClipDef(fs: Engine): ToolDef {
         };
       }
 
+      const sourceArtifact = fs.artifacts.get(assetId);
+      if (!sourceArtifact.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: sourceArtifact.error.message }],
+        };
+      }
+      const clipBase = sourceArtifact.value.label ?? sourceArtifact.value.artifactId;
+
       const jobId = `extract-clip-${assetId}-${Date.now()}`;
       let extracted: { artifactId: string; durationSeconds: number };
       try {
@@ -79,7 +87,7 @@ export function extractVideoClipDef(fs: Engine): ToolDef {
           sourceAssetId: assetId,
           startTime,
           endTime,
-          title: name ?? derivedClipName(assetId, startTime, endTime),
+          title: name ?? derivedClipName(clipBase, startTime, endTime),
           bookId: book_id,
         });
       } catch (err) {
@@ -88,14 +96,7 @@ export function extractVideoClipDef(fs: Engine): ToolDef {
           content: [{ type: "text" as const, text: `Clip extraction failed: ${err instanceof Error ? err.message : String(err)}` }],
         };
       }
-      const outputArtifact = fs.artifacts.get(extracted.artifactId);
-      if (!outputArtifact.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: outputArtifact.error.message }],
-        };
-      }
-      const outputAssetId = outputArtifact.value.slug;
+      const outputAssetId = extracted.artifactId;
       const actualEndTime = startTime + extracted.durationSeconds;
 
       return {

@@ -14,7 +14,7 @@ describe("translate_payload tool", () => {
       args_json: JSON.stringify({
         prompt: "realistic cat lying in a galaxy 4k",
         aspect_ratio: "1:1",
-        image_slugs: ["@img-nbp-frame-reference-1", "@img-catblack"],
+        image_refs: ["@img-nbp-frame-reference-1", "@img-catblack"],
         character_refs: [],
         book_id: "realcat",
         _provider: "google",
@@ -39,7 +39,7 @@ describe("translate_payload tool", () => {
       tool_name: "generate_grok_imagine_image",
       args_json: JSON.stringify({
         prompt: "a cat",
-        image_slugs: ["@img-vancat"],
+        image_refs: ["@img-vancat"],
         _provider: "xai",
       }),
     });

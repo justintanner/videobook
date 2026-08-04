@@ -16,6 +16,7 @@ import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { scanNotebookMentions } from "videobook-engine/notebook-mentions";
+import { resolveArtifactRefs } from "../artifact-refs.js";
 
 const bookSchema = { book_id: z.string().uuid() };
 
@@ -542,7 +543,7 @@ async function operationsForRequest(
   }
   const manifest = await engine.files.manifest(artifact.value.artifactId);
   if (!manifest.ok) throw new Error(manifest.error.message);
-  const media = findPrimaryMediaFile(manifest.value.files, artifact.value.slug);
+  const media = findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
   if (!media) throw new Error("The artifact has no insertable source media");
   const track = requiredTrack(sequence, request.track_id, "video");
   return [{
@@ -643,7 +644,7 @@ async function parseChatEditClause(
   engine: Engine,
   sequence: Sequence,
   clause: string,
-  mediaContext?: { artifactId: string; slug: string },
+  mediaContext?: { artifactId: string },
 ): Promise<EditRequest | string> {
   const normalized = clause.trim();
   if (
@@ -670,11 +671,11 @@ async function parseChatEditClause(
         ...(durationFrames === null ? {} : { duration_frames: durationFrames }),
       };
     }
-    const resolved = await engine.resolver.resolveAll(`@${reference!}`);
-    if (!resolved.ok || resolved.value.unresolved.length > 0) {
+    const resolved = await resolveArtifactRefs(engine, [reference!]);
+    if (resolved.unresolved.length > 0) {
       return `I could not resolve @${reference}. Choose a source from the library.`;
     }
-    const artifact = resolved.value.resolved[0];
+    const artifact = resolved.resolved[0];
     if (!artifact) return `I could not resolve @${reference}.`;
     return {
       kind: "insert",
@@ -901,7 +902,7 @@ async function parseChatEditClause(
 export async function parseChatEditRequest(
   engine: Engine,
   prompt: string,
-  mediaContext?: { artifactId: string; slug: string },
+  mediaContext?: { artifactId: string },
 ): Promise<ChatEditParse> {
   const clauses = prompt.split(/\s*(?:;|\band\s+then\b|\bthen\b)\s*/iu)
     .filter((clause) => clause.trim().length > 0);
@@ -1110,7 +1111,7 @@ export function commandPlanDefs(engine: Engine): ToolDef[] {
       },
       handler: async (args) => {
         try {
-          let mediaContext: { artifactId: string; slug: string } | undefined;
+          let mediaContext: { artifactId: string } | undefined;
           if (args.media_context) {
             const context = args.media_context as {
               notebook_id: string;
@@ -1129,10 +1130,7 @@ export function commandPlanDefs(engine: Engine): ToolDef[] {
             }
             const artifact = engine.artifacts.get(context.artifact_id);
             if (!artifact.ok) throw new Error(artifact.error.message);
-            mediaContext = {
-              artifactId: artifact.value.artifactId,
-              slug: artifact.value.slug,
-            };
+            mediaContext = { artifactId: artifact.value.artifactId };
           }
           const parsed = await parseChatEditRequest(
             engine,

@@ -6,23 +6,19 @@ import { probeVideo, type ProbeResult } from "../ffmpeg.js";
 import { findVideoFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 
-function stripVidPrefix(id: string): string {
-  return id.startsWith("vid-") ? id.slice(4) : id;
-}
-
 function deriveSpliceName(firstId: string, secondId: string): string {
-  return `splice-${stripVidPrefix(firstId)}-${stripVidPrefix(secondId)}`;
+  return `splice-${firstId}-${secondId}`;
 }
 
 export function spliceVideoDef(fs: Engine): ToolDef {
   return {
     name: "splice_video",
-    description: "Splice two videos with an explicit overlap window. An overlap of 0 concatenates both complete videos; a positive overlap searches that many seconds at the end of the first video for the frame that best matches the first frame of the second. Creates a new vid- asset.",
+    description: "Splice two videos with an explicit overlap window. An overlap of 0 concatenates both complete videos; a positive overlap searches that many seconds at the end of the first video for the frame that best matches the first frame of the second. Creates a new video asset.",
     schema: {
-      first_asset_id: z.string().describe("Base video asset ID (e.g. vid-clip-a). The match point is searched within this video."),
-      second_asset_id: z.string().describe("Continuation video asset ID (e.g. vid-clip-b). Its first frame is the search target."),
+      first_asset_id: z.string().describe("Base video artifact id. The match point is searched within this video."),
+      second_asset_id: z.string().describe("Continuation video artifact id. Its first frame is the search target."),
       overlap: z.number().min(0).describe("Possible overlap in seconds. Use 0 to concatenate both videos without trimming either one."),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book UUID"),
     },
     handler: async (args) => {
       const { first_asset_id, second_asset_id, overlap, book_id } = args as {
@@ -87,7 +83,7 @@ export function spliceVideoDef(fs: Engine): ToolDef {
       }
 
       const spliceName = deriveSpliceName(first_asset_id, second_asset_id);
-      const assetResult = await fs.artifacts.create("vid", spliceName);
+      const assetResult = await fs.artifacts.create("video", spliceName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -95,7 +91,7 @@ export function spliceVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: assetId, path: assetDir } = assetResult.value;
+      const { artifactId: assetId, path: assetDir } = assetResult.value;
       const outputPath = join(assetDir, "original.mp4");
       const jobId = `splice-${assetId}-${Date.now()}`;
 

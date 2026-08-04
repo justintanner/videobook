@@ -59,18 +59,18 @@ async function createImage(
   const image = await sharp({
     create: { width, height, channels: 3, background: color },
   }).png().toBuffer();
-  const written = await fs.files.write(asset.value.slug, "original.png", image);
+  const written = await fs.files.write(asset.value.artifactId, "original.png", image);
   if (!written.ok) throw new Error(written.error.message);
-  return asset.value.slug;
+  return asset.value.artifactId;
 }
 
 async function createAudio(fs: Engine): Promise<string> {
   const asset = await fs.artifacts.create("aud", "impact");
   if (!asset.ok) throw new Error(asset.error.message);
-  const written = await fs.files.write(asset.value.slug, "original.wav", createImpactWav()
+  const written = await fs.files.write(asset.value.artifactId, "original.wav", createImpactWav()
   );
   if (!written.ok) throw new Error(written.error.message);
-  return asset.value.slug;
+  return asset.value.artifactId;
 }
 
 async function extractFrame(videoPath: string, seconds: number, outputPath: string): Promise<void> {
@@ -129,8 +129,8 @@ describe("create_qr_outro e2e", () => {
       name: "create_qr_outro",
       arguments: {
         book_id: PROJECT,
-        qr_image_slugs: [`@${qrOne}`, `@${qrTwo}`],
-        sound_effect_slug: `@${sound}`,
+        qr_image_refs: [`@${qrOne}`, `@${qrTwo}`],
+        sound_effect_ref: `@${sound}`,
         aspect_ratio: "16:9",
       },
     });
@@ -147,7 +147,7 @@ describe("create_qr_outro e2e", () => {
       name: "create_qr_outro",
       arguments: {
         book_id: PROJECT,
-        qr_image_slugs: [qrOne],
+        qr_image_refs: [qrOne],
         aspect_ratio: "1:1",
       },
     });
@@ -164,7 +164,7 @@ describe("create_qr_outro e2e", () => {
       name: "create_qr_outro",
       arguments: {
         book_id: PROJECT,
-        qr_image_slugs: [qrOne],
+        qr_image_refs: [qrOne],
         aspect_ratio: "16:9",
         duration_seconds: 10,
         include_audio: false,
@@ -217,8 +217,8 @@ describe("create_qr_outro e2e", () => {
     if (!metadata.ok) throw new Error(metadata.error.message);
     expect(metadata.value).toMatchObject({
       origin: "create_qr_outro",
-      qr_image_slugs: [qrOne, qrTwo],
-      sound_effect_slug: expect.stringMatching(/^aud-/),
+      qr_image_refs: [qrOne, qrTwo],
+      sound_effect_ref: expect.stringMatching(/^aud-/),
       sound_effect_source: "asset",
       aspect_ratio: "16:9",
       fps: 30,
@@ -247,7 +247,7 @@ describe("create_qr_outro e2e", () => {
     );
     if (!metadata.ok) throw new Error(metadata.error.message);
     expect(metadata.value).toMatchObject({
-      sound_effect_slug: null,
+      sound_effect_ref: null,
       sound_effect_source: "bundled_default",
       sound_effect_filename: "qr-outro-impact.wav",
     });
@@ -284,7 +284,7 @@ describe("create_qr_outro e2e", () => {
     );
     if (!metadata.ok) throw new Error(metadata.error.message);
     expect(metadata.value).toMatchObject({
-      sound_effect_slug: null,
+      sound_effect_ref: null,
       sound_effect_source: "none",
       sound_effect_filename: null,
       include_audio: false,
@@ -378,21 +378,21 @@ describe("create_qr_outro e2e", () => {
       name: "create_qr_outro",
       arguments: {
         book_id: PROJECT,
-        qr_image_slugs: [],
+        qr_image_refs: [],
       },
     });
     const tooMany = await client.callTool({
       name: "create_qr_outro",
       arguments: {
         book_id: PROJECT,
-        qr_image_slugs: [qrOne, qrOne, qrOne, qrOne, qrOne],
+        qr_image_refs: [qrOne, qrOne, qrOne, qrOne, qrOne],
       },
     });
     const invalidRatio = await client.callTool({
       name: "create_qr_outro",
       arguments: {
         book_id: PROJECT,
-        qr_image_slugs: [qrOne],
+        qr_image_refs: [qrOne],
         aspect_ratio: "4:3",
       },
     });
@@ -400,8 +400,8 @@ describe("create_qr_outro e2e", () => {
       name: "create_qr_outro",
       arguments: {
         book_id: PROJECT,
-        qr_image_slugs: [qrOne],
-        sound_effect_slug: qrTwo,
+        qr_image_refs: [qrOne],
+        sound_effect_ref: qrTwo,
       },
     });
 
@@ -419,7 +419,7 @@ describe("create_qr_outro e2e", () => {
     await queue.enqueue(jobId, {
       type: "render_qr_outro",
       bookId: PROJECT,
-      assetId: output.value.slug,
+      assetId: output.value.artifactId,
       orientation: "landscape",
       qrImages: [{ assetId: "img-missing", filename: "original.png" }],
       soundEffect: null,
@@ -427,7 +427,7 @@ describe("create_qr_outro e2e", () => {
     });
 
     await expect(waitForJob(jobId, 60_000)).rejects.toThrow("Failed to read");
-    const status = await fs.status.get(output.value.slug);
+    const status = await fs.status.get(output.value.artifactId);
     expect(status.ok && status.value).toBe("error");
   });
 

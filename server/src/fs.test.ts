@@ -47,7 +47,7 @@ describe("fs module", () => {
   it("createEngineForTest returns an Engine instance", () => {
     const testFs = currentTestEngine();
     expect(testFs).toBeDefined();
-    expect(testFs.book.get().slug).toBe("test-book");
+    expect(testFs.book.get().name).toBe("test-book");
     expect(typeof testFs.artifacts.list).toBe("function");
     expect(typeof testFs.artifacts.create).toBe("function");
     expect(typeof testFs.files.manifest).toBe("function");

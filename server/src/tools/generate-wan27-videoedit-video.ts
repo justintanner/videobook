@@ -1,4 +1,4 @@
-import type { Engine, ArtifactManifestFile } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import {
@@ -8,62 +8,24 @@ import {
   Wan27VideoEditDurationValues,
   Wan27VideoEditRequestSchema,
 } from "@apicity/kie/zod";
-import { extname } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
+import {
+  resolveImageRef,
+  resolveVideoRef,
+  slugify,
+  type RefInput,
+} from "./_seedance2-shared.js";
 
-const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 const WAN27_VIDEO_EDIT_DURATIONS = Wan27VideoEditDurationValues.map(String) as [string, ...string[]];
 
-function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
-  const images = files.filter((f) => {
-    const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
-    return IMAGE_EXTENSIONS.has(ext);
-  });
-  return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
-}
-
-type RefInput = { assetId: string; filename: string };
-type ResolveOk = { ok: true; value: RefInput };
-type ResolveErr = { ok: false; error: string };
-
-async function resolveVideoSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
-  const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slug must be a vid-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId);
-  if (!manifest.ok) return { ok: false, error: manifest.error.message };
-  const file = findVideoFile(manifest.value.files);
-  if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
-  return { ok: true, value: { assetId, filename: file.name } };
-}
-
-async function resolveImageSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
-  const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("img-")) return { ok: false, error: `image_slug must be an img-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId);
-  if (!manifest.ok) return { ok: false, error: manifest.error.message };
-  const file = findImageFile(manifest.value.files);
-  if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
-  return { ok: true, value: { assetId, filename: file.name } };
-}
-
 const generateWan27VideoeditVideoSchema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(Wan27VideoEditRequestSchema.shape.input.shape.prompt, "Edit description (max 5000 chars)"),
   negative_prompt: apicityStringField(Wan27VideoEditRequestSchema.shape.input.shape.negative_prompt, "Negative prompt — things to avoid (max 500 chars)"),
-  video_slug: z.string().describe("Source video asset to edit (e.g., @vid-scene)"),
-  image_slug: z.string().optional().describe("Reference image for character/style guidance (e.g., @img-outfit)"),
+  video_ref: z.string().describe("Source video artifact id to edit"),
+  image_ref: z.string().optional().describe("Reference image artifact id for character/style guidance"),
   resolution: apicityField(Wan27ResolutionSchema, "Video resolution (default 1080p)"),
   aspect_ratio: apicityField(Wan27AspectRatioSchema, "Video aspect ratio (omit to match source)"),
   duration: z.enum(WAN27_VIDEO_EDIT_DURATIONS).optional().describe("Video duration in seconds (0=full source, or 2-10)"),
@@ -80,12 +42,12 @@ type Args = SchemaArgs<typeof generateWan27VideoeditVideoSchema>;
 export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_wan_2_7_edit_video",
-    description: "Edit a video using Wan 2.7 Video Edit with optional reference image for character, clothing, or style guidance. Creates a new vid- asset and enqueues a background job.",
+    description: "Edit a video using Wan 2.7 Video Edit with optional reference image for character, clothing, or style guidance. Creates a new video artifact and enqueues a background job.",
     schema: generateWan27VideoeditVideoSchema,
     handler: async (args) => {
       const {
         book_id, prompt, negative_prompt,
-        video_slug, image_slug,
+        video_ref, image_ref,
         resolution, aspect_ratio, duration, audio_setting, prompt_extend, watermark, nsfw_checker, seed,
       } = args as Args;
 
@@ -96,14 +58,14 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      if (!video_slug) {
+      if (!video_ref) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "Wan 2.7 Video Edit requires video_slug" }],
+          content: [{ type: "text" as const, text: "Wan 2.7 Video Edit requires video_ref" }],
         };
       }
 
-      const videoResult = await resolveVideoSlug(fs, video_slug, book_id);
+      const videoResult = await resolveVideoRef(fs, video_ref, book_id);
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const videoInput = videoResult.value;
 
@@ -121,8 +83,8 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
       }
 
       let imageInput: RefInput | undefined;
-      if (image_slug) {
-        const r = await resolveImageSlug(fs, image_slug, book_id);
+      if (image_ref) {
+        const r = await resolveImageRef(fs, image_ref, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInput = r.value;
       }
@@ -136,7 +98,7 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInput ? [imageInput.assetId] : [];
       const sourceVideoIds = [videoInput.assetId];
       const sourceAudioIds: string[] = [];

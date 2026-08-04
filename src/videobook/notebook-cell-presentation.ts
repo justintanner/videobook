@@ -17,24 +17,6 @@ const generationCellTypes = new Set<NotebookCellType>([
   'generate_video',
 ])
 
-const cellSlugPrefixes = {
-  audio: 'aud',
-  image: 'img',
-  video: 'vid',
-  character: 'char',
-  extract_audio: 'extract-audio',
-  extract_frame: 'extract-frame',
-  split_video: 'split-video',
-  prompt: 'prompt',
-  analyze: 'analyze',
-  analysis: 'analysis',
-  generate_video: 'generate-video',
-  generate_image: 'generate-image',
-  generate_audio: 'generate-audio',
-  concat: 'concat',
-  splice: 'splice',
-} satisfies Record<NotebookCellType, string>
-
 const activeStatuses = new Set([
   'analyzing',
   'archiving',
@@ -197,10 +179,6 @@ export function isNotebookMediaCellType(type: NotebookCellType): boolean {
 
 export function isNotebookGenerationCellType(type: NotebookCellType): boolean {
   return generationCellTypes.has(type)
-}
-
-export function notebookCellSlugPrefix(type: NotebookCellType): string {
-  return cellSlugPrefixes[type]
 }
 
 export function notebookCellSupportsExecution(cell: ActionCell): boolean {

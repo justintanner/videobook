@@ -29,7 +29,7 @@ export function invertImageDef(fs: Engine): ToolDef {
     description: "In-place inverts an img-* asset and regenerates crops.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. img-my-photo)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, book_id } = args as { asset_id: string; book_id: string };

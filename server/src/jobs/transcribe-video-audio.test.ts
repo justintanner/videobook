@@ -45,7 +45,7 @@ describe("runTranscribeVideoAudio", () => {
     bookId = fs.book.get().bookId;
     const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
-    assetId = created.value.slug;
+    assetId = created.value.artifactId;
     const manifest = await fs.files.manifest(assetId);
     if (!manifest.ok) throw new Error(manifest.error.message);
     assetDir = manifest.value.path;

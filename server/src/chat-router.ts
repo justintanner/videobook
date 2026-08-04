@@ -28,7 +28,7 @@ type ChatRoutingNotebookContext = {
   cells: Array<{
     address: string;
     cellId: string;
-    slug: string;
+    label?: string;
     type: string;
     outputAsset: string | null;
   }>;
@@ -180,7 +180,7 @@ function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
 }
 
 function buildChatRoutingPrompt(
-  slug: string,
+  bookName: string,
   tools: RoutableToolInfo[],
   historyContext?: string,
 ): string {
@@ -203,7 +203,7 @@ function buildChatRoutingPrompt(
 Available tools:
 ${toolLines}
 
-Current book: ${slug}
+Current book: ${bookName}
 ${historyBlock}
 Given a user query (possibly with @asset references), determine:
 1. tool: Which tool to use
@@ -224,15 +224,16 @@ Parameter guidelines:
 - Keep generation prompts short, concrete, and role-based. Prefer compact clauses such as "scene @a5, character @a1, fluffy kitten standing" and do not add a preamble such as "Create an image of"
 - Preserve every consumed notebook @address in the generation prompt at the semantic position where it belongs. Do not strip, rename, or expand notebook references into prose
 - For generate_video: put the compact generation description in "prompt" and preserve every consumed @ reference
-- For generate_image: put the compact image description in "prompt" and preserve every consumed image @address there; use image_slugs ONLY for the corresponding resolved @img-* asset tags, in the same order (include @ prefix). Never put @vid-* or @aud-* in image_slugs — if the user wants an image inspired by a video, describe that source without connecting it as an image
+- For generate_image: put the compact image description in "prompt" and preserve every consumed image @address there; use image_refs ONLY for the corresponding resolved asset tags whose asset context type is "image", in the same order (include @ prefix). Never put a video or audio asset tag in image_refs — if the user wants an image inspired by a video, describe that source without connecting it as an image
 - For create_watermark_card (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
-- For create_qart (artistic / picture QR): use when turning an @img-* into scan-safe color and monochrome QR mosaics; pass image_slug and value (URL/text). Prefer over create_watermark_card when the user wants a photo integrated into the QR modules
+- For create_qart (artistic / picture QR): use when turning an image asset into scan-safe color and monochrome QR mosaics; pass image_ref and value (URL/text). Prefer over create_watermark_card when the user wants a photo integrated into the QR modules
 - For create_qrbtf (parametric / styled QR): use when the user wants a stylized QR code (normal, line, dsj, bubble, or func styles) from the qrbtf library; pass value (URL/text) and optional style. No source image needed — the QR is generated parametrically with a black background by default
-- For create_qr_outro: use when the user asks for an animated QR outro video from one to four QR images. Pass every referenced QR image in order through qr_image_slugs (array of img- IDs), plus sound_effect_slug only for an explicit aud-* override and aspect_ratio ("16:9", "9:16", or "1:1"). Without an audio override, the bundled impact sound is used. This creates a vid-* asset, it is NOT generate_video or create_watermark_card.
-- For concat_images: use image_slugs for the referenced @img-* assets; one slug leaves the second two-slot cell empty, and null explicitly leaves a slot empty. Use aspect_ratio 16:9 or 9:16; layout is automatic unless overridden
+- For create_qr_outro: use when the user asks for an animated QR outro video from one to four QR images. Pass every referenced QR image in order through qr_image_refs (array of image asset ids), plus sound_effect_ref only for an explicit audio asset override and aspect_ratio ("16:9", "9:16", or "1:1"). Without an audio override, the bundled impact sound is used. This creates a video asset, it is NOT generate_video or create_watermark_card.
+- For concat_images: use image_refs for the referenced image assets; a single ref leaves the second two-slot cell empty, and null explicitly leaves a slot empty. Use aspect_ratio 16:9 or 9:16; layout is automatic unless overridden
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
 - Do NOT include book_id in params — it is injected automatically
-- When @script- tags are referenced, use the script content as the prompt for generation tools
+- Asset @tags are opaque artifact ids; the asset context lists each tag's media type ("image", "video", "audio", "script"). Use that type — never the tag text — to decide which parameter an asset belongs in
+- When a referenced asset has type "script", use its script content as the prompt for generation tools
 
 Respond with JSON only (strict JSON: double-quoted keys/strings, no trailing commas, no comments):
 {"tool": "tool_name", "params": {"param1": "value1"}, "message": "Status message."}`;

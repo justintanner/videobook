@@ -286,7 +286,10 @@ async function maybeEnqueueAutoTranscribe(
   const dialog = await readAndAssessDialog(fs, assetId, bookId);
   if (!dialog.hasDialog) return;
 
-  const audioFile = findAudioFile(manifest.files, assetId);
+  const artifact = fs.artifacts.get(assetId);
+  if (!artifact.ok) return;
+
+  const audioFile = findAudioFile(manifest.files, artifact.value.kind);
   if (!audioFile) return;
 
   // Stable dedupe key, shared with sync's auto-transcribe: when this trigger

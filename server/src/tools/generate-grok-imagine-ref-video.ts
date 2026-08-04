@@ -33,10 +33,10 @@ type RefImageInput = {
 
 const generateGrokImagineRefVideoSchema = {
   prompt: apicityStringField(XaiVideoGenerateRequestSchema.shape.prompt, "Text prompt for video generation", { required: true }),
-  book_id: z.string().describe("Project slug"),
-  image_slugs: apicityStringArrayField(
+  book_id: z.string().describe("Book id"),
+  image_refs: apicityStringArrayField(
     XaiVideoGenerateRequestSchema.shape.reference_images,
-    "Optional reference image slugs (0-7, e.g., ['@img-sunset'])",
+    "Optional reference image artifact ids (0-7)",
   ),
   duration: apicityStringNumberField(XaiVideoGenerateRequestSchema.shape.duration, "Video duration in seconds (1-15; max 10 with references)"),
   resolution: apicityField(XaiVideoGenerateRequestSchema.shape.resolution, "Output resolution"),
@@ -50,10 +50,10 @@ export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_xai_grok_imagine_video",
     description:
-      "Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new vid- asset and enqueues a background job.",
+      "Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new video artifact and enqueues a background job.",
     schema: generateGrokImagineRefVideoSchema,
     handler: async (args) => {
-      const { prompt, book_id, image_slugs, duration, resolution, aspect_ratio } = args as Args;
+      const { prompt, book_id, image_refs, duration, resolution, aspect_ratio } = args as Args;
 
       if (!process.env.XAI_API_KEY) {
         return {
@@ -63,20 +63,27 @@ export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
       }
 
       const refImages: RefImageInput[] = [];
-      const slugs = image_slugs ?? [];
-      if (slugs.length > 0 && duration !== undefined && Number(duration) > 10) {
+      const refs = image_refs ?? [];
+      if (refs.length > 0 && duration !== undefined && Number(duration) > 10) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "xAI reference-to-video supports at most 10 seconds" }],
         };
       }
 
-      for (const rawSlug of slugs) {
-        const assetId = rawSlug.replace(/^@/, "");
-        if (!assetId.startsWith("img-")) {
+      for (const rawRef of refs) {
+        const assetId = rawRef.replace(/^@/, "");
+        const artifact = fs.artifacts.get(assetId);
+        if (!artifact.ok) {
           return {
             isError: true as const,
-            content: [{ type: "text" as const, text: `Reference asset must start with img-, got: ${assetId}` }],
+            content: [{ type: "text" as const, text: artifact.error.message }],
+          };
+        }
+        if (artifact.value.kind !== "image") {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `Reference must be an image artifact, got ${artifact.value.kind}: ${assetId}` }],
           };
         }
 
@@ -108,7 +115,7 @@ export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("xai", "grok-imagine-video")}-${vidAssetId}-${Date.now()}`;
 

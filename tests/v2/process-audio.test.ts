@@ -28,7 +28,7 @@ describe('audio ingest', () => {
     ])
     const engine = createEngine({
       rootDir: join(rootDir, 'book'),
-      initialBookSlug: 'audio-ingest',
+      initialBookName: 'audio-ingest',
     })
     await engine.ready
     const artifact = await engine.artifacts.create('audio', 'recording')

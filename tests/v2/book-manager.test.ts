@@ -75,7 +75,7 @@ describe('v2 book manager', () => {
     expect(readTimeline(secondBook.value.engine).slots).toEqual([])
   })
 
-  it('requires a typed slug confirmation before permanently deleting the book root', async () => {
+  it('requires a typed name confirmation before permanently deleting the book root', async () => {
     const created = await books.create('discard-me')
     expect(created.ok).toBe(true)
     if (!created.ok) return
@@ -83,11 +83,11 @@ describe('v2 book manager', () => {
     expect(managed.ok).toBe(true)
     if (!managed.ok) return
 
-    const rejected = await books.delete(created.value.bookId, { confirmSlug: 'wrong' })
+    const rejected = await books.delete(created.value.bookId, { confirmName: 'wrong' })
     expect(rejected.ok).toBe(false)
     expect(books.get(created.value.bookId).ok).toBe(true)
 
-    const deleted = await books.delete(created.value.bookId, { confirmSlug: 'discard-me' })
+    const deleted = await books.delete(created.value.bookId, { confirmName: 'discard-me' })
     expect(deleted.ok).toBe(true)
     await expect(access(managed.value.rootDir)).rejects.toThrow()
     expect(books.get(created.value.bookId).ok).toBe(false)
@@ -129,7 +129,7 @@ describe('v2 book manager', () => {
     const reopened = books.get(created.value.bookId)
     expect(reopened.ok).toBe(true)
     if (!reopened.ok) return
-    expect(reopened.value.engine.book.get().slug).toBe('restart-recovery')
+    expect(reopened.value.engine.book.get().name).toBe('restart-recovery')
 
     const recovery = await reopened.value.engine.jobs.queue.reap()
     expect(recovery).toEqual({ requeued: 4, failed: 0 })

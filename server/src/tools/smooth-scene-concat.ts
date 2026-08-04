@@ -12,12 +12,8 @@ function error(text: string) {
   };
 }
 
-function stripVideoPrefix(assetId: string): string {
-  return assetId.startsWith("vid-") ? assetId.slice(4) : assetId;
-}
-
 function concatName(firstAssetId: string, secondAssetId: string): string {
-  return `vid-scene-concat-${stripVideoPrefix(firstAssetId)}-${stripVideoPrefix(secondAssetId)}`;
+  return `scene-concat-${firstAssetId}-${secondAssetId}`;
 }
 
 function validVideoProbe(probe: ProbeResult): boolean {
@@ -27,12 +23,12 @@ function validVideoProbe(probe: ProbeResult): boolean {
 export function smoothSceneConcatDef(fs: Engine): ToolDef {
   return {
     name: "smooth_scene_concat",
-    description: "Smoothly concatenate two video scenes into a new vid-* asset. When their boundary audio overlaps, automatically aligns the shared waveform to avoid duplicated speech and dissolves the picture across that overlap. Otherwise uses a short crossfade.",
+    description: "Smoothly concatenate two video scenes into a new video asset. When their boundary audio overlaps, automatically aligns the shared waveform to avoid duplicated speech and dissolves the picture across that overlap. Otherwise uses a short crossfade.",
     schema: {
-      first_asset_id: z.string().describe("First vid-* asset in playback order"),
-      second_asset_id: z.string().describe("Second vid-* asset in playback order"),
+      first_asset_id: z.string().describe("First video artifact id in playback order"),
+      second_asset_id: z.string().describe("Second video artifact id in playback order"),
       transition_seconds: z.number().min(0.05).max(5).optional().describe("Optional fixed crossfade duration in seconds. Omit to auto-align shared boundary audio, falling back to 0.35 seconds."),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book UUID"),
     },
     handler: async (args) => {
       const {
@@ -47,8 +43,12 @@ export function smoothSceneConcatDef(fs: Engine): ToolDef {
         book_id: string;
       };
 
-      if (!first_asset_id.startsWith("vid-") || !second_asset_id.startsWith("vid-")) {
-        return error("smooth_scene_concat requires two vid-* assets");
+      const firstArtifact = fs.artifacts.get(first_asset_id);
+      if (!firstArtifact.ok) return error(`First asset: ${firstArtifact.error.message}`);
+      const secondArtifact = fs.artifacts.get(second_asset_id);
+      if (!secondArtifact.ok) return error(`Second asset: ${secondArtifact.error.message}`);
+      if (firstArtifact.value.kind !== "video" || secondArtifact.value.kind !== "video") {
+        return error("smooth_scene_concat requires two video artifacts");
       }
       if (first_asset_id === second_asset_id) {
         return error("first_asset_id and second_asset_id must differ");
@@ -92,13 +92,13 @@ export function smoothSceneConcatDef(fs: Engine): ToolDef {
         return error("transition_seconds must be shorter than both video clips");
       }
 
-      const assetResult = await fs.artifacts.create("vid", concatName(first_asset_id, second_asset_id)
+      const assetResult = await fs.artifacts.create("video", concatName(first_asset_id, second_asset_id)
       );
       if (!assetResult.ok) {
         return error(`Failed to create scene concat asset: ${assetResult.error.message}`);
       }
 
-      const { slug: assetId, path: assetDir } = assetResult.value;
+      const { artifactId: assetId, path: assetDir } = assetResult.value;
       const outputPath = join(assetDir, "original.mp4");
       const jobId = `scene-concat-${assetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

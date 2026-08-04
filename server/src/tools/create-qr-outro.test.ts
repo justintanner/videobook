@@ -41,18 +41,18 @@ describe("create_qr_outro", () => {
         background: color,
       },
     }).png().toBuffer();
-    const written = await fs.files.write(asset.value.slug, "original.png", png);
+    const written = await fs.files.write(asset.value.artifactId, "original.png", png);
     if (!written.ok) throw new Error(written.error.message);
-    return asset.value.slug;
+    return asset.value.artifactId;
   }
 
   async function createAudio(name: string): Promise<string> {
     const asset = await fs.artifacts.create("aud", name);
     if (!asset.ok) throw new Error(asset.error.message);
-    const written = await fs.files.write(asset.value.slug, "original.wav", Buffer.from("RIFF0000WAVE")
+    const written = await fs.files.write(asset.value.artifactId, "original.wav", Buffer.from("RIFF0000WAVE")
     );
     if (!written.ok) throw new Error(written.error.message);
-    return asset.value.slug;
+    return asset.value.artifactId;
   }
 
   it("normalizes references and queues a portrait render", async () => {
@@ -62,8 +62,8 @@ describe("create_qr_outro", () => {
 
     const result = await createQrOutroDef(fs).handler({
       book_id: bookId,
-      qr_image_slugs: [`@${qrOne}`, qrTwo],
-      sound_effect_slug: `@${sound}`,
+      qr_image_refs: [`@${qrOne}`, qrTwo],
+      sound_effect_ref: `@${sound}`,
       aspect_ratio: "9:16",
     });
 
@@ -73,11 +73,13 @@ describe("create_qr_outro", () => {
       status: "enqueued",
       aspect_ratio: "9:16",
       duration_seconds: 3,
-      qr_image_slugs: [qrOne, qrTwo],
-      sound_effect_slug: sound,
+      qr_image_refs: [qrOne, qrTwo],
+      sound_effect_ref: sound,
       sound_effect_source: "asset",
     });
-    expect(data.asset_id).toBe("vid-qr-outro-qr-one");
+    const outro = fs.artifacts.get(String(data.asset_id));
+    expect(outro.ok && outro.value.kind).toBe("video");
+    expect(outro.ok && outro.value.label).toBe(`qr-outro-${qrOne}`);
     expect(data.job_id).toMatch(/^render-qr-outro-/);
 
     const status = await fs.status.get(String(data.asset_id));
@@ -89,17 +91,17 @@ describe("create_qr_outro", () => {
 
     const result = await createQrOutroDef(fs).handler({
       book_id: bookId,
-      qr_image_slugs: [qr],
+      qr_image_refs: [qr],
     });
 
     expect(result.isError).toBeUndefined();
     expect(parseResult(result)).toMatchObject({
       aspect_ratio: "16:9",
       duration_seconds: 3,
-      qr_image_slugs: [qr],
+      qr_image_refs: [qr],
       sound_effect_source: "bundled_default",
     });
-    expect(parseResult(result)).not.toHaveProperty("sound_effect_slug");
+    expect(parseResult(result)).not.toHaveProperty("sound_effect_ref");
   });
 
   it("queues a silent ten-second outro", async () => {
@@ -107,7 +109,7 @@ describe("create_qr_outro", () => {
 
     const result = await createQrOutroDef(fs).handler({
       book_id: bookId,
-      qr_image_slugs: [qr],
+      qr_image_refs: [qr],
       duration_seconds: 10,
       include_audio: false,
     });
@@ -118,7 +120,7 @@ describe("create_qr_outro", () => {
       include_audio: false,
       sound_effect_source: "none",
     });
-    expect(parseResult(result)).not.toHaveProperty("sound_effect_slug");
+    expect(parseResult(result)).not.toHaveProperty("sound_effect_ref");
   });
 
   it("rejects an audio override for a silent outro", async () => {
@@ -127,13 +129,13 @@ describe("create_qr_outro", () => {
 
     const result = await createQrOutroDef(fs).handler({
       book_id: bookId,
-      qr_image_slugs: [qr],
-      sound_effect_slug: sound,
+      qr_image_refs: [qr],
+      sound_effect_ref: sound,
       include_audio: false,
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("sound_effect_slug cannot be used");
+    expect(result.content[0].text).toContain("sound_effect_ref cannot be used");
   });
 
   it("rejects missing media files before creating an output", async () => {
@@ -143,7 +145,7 @@ describe("create_qr_outro", () => {
 
     const result = await createQrOutroDef(fs).handler({
       book_id: bookId,
-      qr_image_slugs: [empty.value.slug],
+      qr_image_refs: [empty.value.artifactId],
     });
 
     expect(result.isError).toBe(true);
@@ -156,10 +158,10 @@ describe("create_qr_outro", () => {
 
     const result = await createQrOutroDef(fs).handler({
       book_id: bookId,
-      qr_image_slugs: [sound],
+      qr_image_refs: [sound],
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("must be an img-* asset");
+    expect(result.content[0].text).toContain("must be an image artifact");
   });
 });

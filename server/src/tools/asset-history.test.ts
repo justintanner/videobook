@@ -56,7 +56,7 @@ describe("asset_history tool", () => {
     const createResult = await fs.artifacts.create("script", "desc-x-pig-1");
     expect(createResult.ok).toBe(true);
     if (!createResult.ok) return;
-    const scriptAssetId = createResult.value.slug;
+    const scriptAssetId = createResult.value.artifactId;
 
     await fs.files.write(scriptAssetId, "original.md", "a pig sits upright");
     await fs.metadata.artifacts.write(scriptAssetId, "original", {

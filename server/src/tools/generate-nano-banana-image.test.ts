@@ -1,4 +1,5 @@
 import { createEngineForTest } from "../fs.js";
+import { isUuidV7 } from "videobook-engine";
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -65,7 +66,7 @@ describe("generate_nano_banana_image tool", () => {
       arguments: {
         prompt: "test prompt",
         book_id: "test-proj",
-        image_slugs: [
+        image_refs: [
           "@img-a", "@img-b", "@img-c", "@img-d",
           "@img-e", "@img-f", "@img-g", "@img-h", "@img-i",
         ],
@@ -77,21 +78,25 @@ describe("generate_nano_banana_image tool", () => {
     expect(content[0].text).toMatch(/at most 8 element|<=8 items/);
   });
 
-  it("returns error when image_slugs entry does not start with img-", async () => {
+  it("returns error when an image_refs entry is not an image artifact", async () => {
     process.env.KIE_API_KEY = "test-key";
+
+    const fs = createEngineForTest(tempDir);
+    const video = await fs.artifacts.create("vid", "not-an-image");
+    if (!video.ok) throw new Error("Failed to create asset");
 
     const result = await client.callTool({
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "test prompt",
         book_id: "test-proj",
-        image_slugs: ["@vid-something"],
+        image_refs: [`@${video.value.artifactId}`],
       },
     });
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("image_slugs entries must be img-* assets");
+    expect(content[0].text).toContain("image ref must be an image artifact, got video");
   });
 
   it("returns error for nonexistent reference image asset", async () => {
@@ -102,7 +107,7 @@ describe("generate_nano_banana_image tool", () => {
       arguments: {
         prompt: "test prompt",
         book_id: "test-proj",
-        image_slugs: ["@img-does-not-exist"],
+        image_refs: ["@01890f1c-0000-7000-8000-0000000000aa"],
       },
     });
 
@@ -116,14 +121,14 @@ describe("generate_nano_banana_image tool", () => {
     const asset = await fs.artifacts.create("img", "empty-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
-    await fs.files.write(asset.value.slug, "notes.txt", "hello");
+    await fs.files.write(asset.value.artifactId, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "test prompt",
         book_id: "test-proj",
-        image_slugs: [`@${asset.value.slug}`],
+        image_refs: [`@${asset.value.artifactId}`],
       },
     });
 
@@ -135,6 +140,7 @@ describe("generate_nano_banana_image tool", () => {
   it("enqueues job with prompt only (no reference images)", async () => {
     process.env.KIE_API_KEY = "test-key";
 
+    const fs = createEngineForTest(tempDir);
     const result = await client.callTool({
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
@@ -146,7 +152,10 @@ describe("generate_nano_banana_image tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.img_asset_id).toMatch(/^img-/);
+    expect(isUuidV7(parsed.img_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.img_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("image");
     expect(parsed.job_id).toBeDefined();
   });
 
@@ -160,21 +169,24 @@ describe("generate_nano_banana_image tool", () => {
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.files.write(asset.value.slug, "original.png", png);
+    await fs.files.write(asset.value.artifactId, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "transform this image",
         book_id: "test-proj",
-        image_slugs: [`@${asset.value.slug}`],
+        image_refs: [`@${asset.value.artifactId}`],
       },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.img_asset_id).toMatch(/^img-/);
+    expect(isUuidV7(parsed.img_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.img_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("image");
     expect(parsed.job_id).toBeDefined();
   });
 });

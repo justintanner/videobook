@@ -463,12 +463,12 @@ function compatibleSource(
 
 function NotebookCellMedia({
   asset,
-  slug,
+  address,
   allowFullscreen,
   onOpenFullscreen,
 }: {
   asset: NotebookCellInspectorAsset
-  slug: string
+  address: string
   allowFullscreen: boolean
   onOpenFullscreen: () => void
 }) {
@@ -505,7 +505,7 @@ function NotebookCellMedia({
         ) : isAudio && mediaUrl ? (
           <audio key={mediaUrl} src={mediaUrl} controls preload="metadata" />
         ) : (
-          <img key={previewUrl} src={previewUrl} alt={`@${slug}`} />
+          <img key={previewUrl} src={previewUrl} alt={`@${address}`} />
         )}
         {!isAudio && (
           <NotebookMediaMetadata
@@ -538,7 +538,7 @@ function NotebookCellMedia({
         <button
           type="button"
           className="inspector-fullscreen-button"
-          aria-label={`Open @${slug} fullscreen`}
+          aria-label={`Open @${address} fullscreen`}
           onClick={onOpenFullscreen}
         >
           <Maximize2 size={14} />Fullscreen
@@ -719,7 +719,7 @@ function SourceCellPicker({
               asset={cellAssets?.get(selectedCell.id)}
             />
             <span className="inspector-source-picker-copy">
-              <strong>@{selectedCell.slug}</strong>
+              <strong>{notebookGridTag(selectedCell.slot)}</strong>
               <small>{sourceCellTypeLabel(selectedCell)}</small>
             </span>
           </>
@@ -780,7 +780,7 @@ function SourceCellPicker({
               asset={cellAssets?.get(candidate.id)}
             />
             <span className="inspector-source-picker-copy">
-              <strong>@{candidate.slug}</strong>
+              <strong>{notebookGridTag(candidate.slot)}</strong>
               <small>{sourceCellTypeLabel(candidate)}</small>
             </span>
           </button>
@@ -820,7 +820,9 @@ function InputSources({
             .filter((candidate) =>
               compatibleSource(cell, input, candidate)
               || candidate.id === edge?.source)
-            .sort((left, right) => left.slug.localeCompare(right.slug))
+            .sort((left, right) =>
+              left.slot.row - right.slot.row
+              || left.slot.column - right.slot.column)
           return (
             <div
               className="inspector-input-source-row"
@@ -1088,7 +1090,7 @@ function MediaCellInspector({
         {previewAsset ? (
           <NotebookCellMedia
             asset={previewAsset}
-            slug={notebookGridAddress(cell.slot)}
+            address={notebookGridAddress(cell.slot)}
             allowFullscreen={cell.type === 'image' || cell.type === 'video'}
             onOpenFullscreen={onOpenFullscreen}
           />
@@ -1784,14 +1786,14 @@ function ExecutableCellInspector({
     const seen = new Set<string>()
     return [
       ...assetMentionSuggestions(mentionAssets, input).map((suggestion) => ({
-        type: 'slug' as const,
+        type: 'mention' as const,
         value: suggestion.value,
         label: suggestion.label,
         description: assetMentionMetadata(suggestion.asset).join(' · '),
         colorScheme: 'cyan' as const,
       })),
       ...notebookAddressSuggestions(cells, input).map((suggestion) => ({
-        type: 'slug' as const,
+        type: 'mention' as const,
         value: suggestion.value,
         label: suggestion.label,
         description: suggestion.description,
@@ -2040,7 +2042,7 @@ function ExecutableCellInspector({
       {asset && previewCell && (
         <NotebookCellMedia
           asset={asset}
-          slug={notebookGridAddress(cell.slot)}
+          address={notebookGridAddress(cell.slot)}
           allowFullscreen={asset.type === 'image'
             || asset.type === 'video'
             || asset.type === 'final'}

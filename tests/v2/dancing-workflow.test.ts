@@ -64,7 +64,7 @@ describe("Dancing workflow fixture", () => {
       "-shortest",
       sourcePath,
     ]);
-    engine = createEngine({ rootDir, initialBookSlug: "dancing" });
+    engine = createEngine({ rootDir, initialBookName: "dancing" });
     await engine.ready;
     const created = await engine.notebooks.create("Main");
     expect(created.ok).toBe(true);
@@ -180,8 +180,8 @@ describe("Dancing workflow fixture", () => {
       mode: "720p",
       character_orientation: "video",
       background_source: "input_image",
-      character_image_slugs: ["@img-kittens-freeway-first-frame"],
-      motion_video_slugs: ["@vid-dancing-motion-reference"],
+      character_image_refs: [`@${kittens?.outputArtifactId}`],
+      motion_video_refs: [`@${source.outputArtifactId}`],
     }));
     if (!extract || !kittens) {
       throw new Error("Dancing fixture preparation cells are missing");

@@ -21,8 +21,8 @@ export function audioBoostDef(fs: Engine): ToolDef {
     description:
       "Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.",
     schema: {
-      asset_id: z.string().describe("Asset ID (vid-* or aud-*)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Video or audio artifact id"),
+      book_id: z.string().describe("Book UUID"),
       boost: z.number().describe("Volume multiplier (1.0–4.0). >1 = louder."),
     },
     handler: async (args) => {
@@ -40,14 +40,21 @@ export function audioBoostDef(fs: Engine): ToolDef {
         };
       }
 
-      const isVideo = asset_id.startsWith("vid-");
-      const isAudio = asset_id.startsWith("aud-");
+      const artifactResult = fs.artifacts.get(asset_id);
+      if (!artifactResult.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: artifactResult.error.message }],
+        };
+      }
+      const isVideo = artifactResult.value.kind === "video";
+      const isAudio = artifactResult.value.kind === "audio";
       if (!isVideo && !isAudio) {
         return {
           isError: true as const,
           content: [{
             type: "text" as const,
-            text: `audio_boost only supports vid-* or aud-* assets, got ${asset_id}`,
+            text: `audio_boost only supports video or audio artifacts, got ${artifactResult.value.kind} artifact ${asset_id}`,
           }],
         };
       }
@@ -63,7 +70,7 @@ export function audioBoostDef(fs: Engine): ToolDef {
       const manifest = manifestResult.value;
       const file = isVideo
         ? findVideoFile(manifest.files)
-        : findAudioFile(manifest.files, asset_id);
+        : findAudioFile(manifest.files, artifactResult.value.kind);
       if (!file) {
         return {
           isError: true as const,

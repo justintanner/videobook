@@ -186,7 +186,7 @@ export function registerTimewarpVideoJob(fs: Engine): void {
             await deleteIfPresent(fs, assetId, filename, bookId);
           }
         } catch (error) {
-          if (restoreCommit) await fs.history.restoreArtifact(assetId, restoreCommit, bookId);
+          if (restoreCommit) await fs.history.restoreArtifact(assetId, restoreCommit);
           throw error;
         }
 

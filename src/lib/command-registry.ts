@@ -64,7 +64,7 @@ export interface ServerCommand {
 export type CommandDescriptor = ServerCommand;
 
 export interface QrOutroCommandArgs {
-  qr_image_slugs: string[];
+  qr_image_refs: string[];
   aspect_ratio?: '16:9' | '9:16' | '1:1';
 }
 
@@ -96,15 +96,20 @@ export function filterCommandsByMountKeys(
 
 const stripAt = (token: string): string => (token.startsWith('@') ? token.slice(1) : token);
 
+// A user-typed media reference is either a grid address (`@a1`) or a bare
+// artifact id. Media kind is not encoded in the token and cannot be resolved
+// client-side, so parsing only checks the token shape; the MCP tool looks the
+// artifact up in the catalog and rejects wrong-kind references.
+const ASSET_REF_PATTERN = /^[a-z0-9][a-z0-9-]*$/i;
+
 export function normalizeKeywordCommandArgs(
   args: Readonly<Record<string, unknown>>,
 ): KeywordCommandArgs {
   const assetValue = args.asset_id
   if (typeof assetValue !== 'string' || !assetValue.trim()) {
-    throw new Error('/keywords requires a video asset')
+    throw new Error('/keywords requires a video cell or asset')
   }
   const assetId = stripAt(assetValue.trim())
-  if (!assetId.startsWith('vid-')) throw new Error('/keywords requires a vid-* asset')
 
   const inputsValue = args.inputs
   if (inputsValue === undefined) return { asset_id: assetId }
@@ -146,27 +151,26 @@ export function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroC
   let aspectRatio: QrOutroCommandArgs['aspect_ratio'];
 
   for (const token of inputs) {
-    if (token.startsWith('img-')) {
-      qrImages.push(token);
-      if (qrImages.length > 4) {
-        throw new Error('/outroqr accepts at most 4 QR images');
-      }
-      continue;
-    }
     if (token === '16:9' || token === '9:16' || token === '1:1') {
       if (aspectRatio) throw new Error('/outroqr accepts only one aspect ratio');
       aspectRatio = token;
       continue;
     }
-    throw new Error(`Unrecognized /outroqr input: ${token}`);
+    if (!ASSET_REF_PATTERN.test(token)) {
+      throw new Error(`Unrecognized /outroqr input: ${token}`);
+    }
+    qrImages.push(token);
+    if (qrImages.length > 4) {
+      throw new Error('/outroqr accepts at most 4 QR images');
+    }
   }
 
   if (qrImages.length === 0) {
-    throw new Error('/outroqr requires at least one QR img-* asset');
+    throw new Error('/outroqr requires at least one QR image cell or asset');
   }
 
   return {
-    qr_image_slugs: qrImages,
+    qr_image_refs: qrImages,
     ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
   };
 }
@@ -179,12 +183,9 @@ export function normalizeApplySfxCommandArgs(
   const typeValue = args.type;
   const descriptionValue = args.description;
   if (typeof assetValue !== 'string' || !assetValue.trim()) {
-    throw new Error('/apply-sfx requires a video asset');
+    throw new Error('/apply-sfx requires a video cell or asset');
   }
   const assetId = stripAt(assetValue.trim());
-  if (!assetId.startsWith('vid-')) {
-    throw new Error('/apply-sfx requires a vid-* asset');
-  }
   if (typeof timestampValue !== 'string' && typeof timestampValue !== 'number') {
     throw new Error('/apply-sfx requires a timestamp');
   }
@@ -236,10 +237,9 @@ export function normalizeTimewarpCommandArgs(
   const rangeValue = args.range;
   const factorValue = args.factor;
   if (typeof assetValue !== 'string' || !assetValue.trim()) {
-    throw new Error('/timewarp requires a video asset');
+    throw new Error('/timewarp requires a video cell or asset');
   }
   const assetId = stripAt(assetValue.trim());
-  if (!assetId.startsWith('vid-')) throw new Error('/timewarp requires a vid-* asset');
   if (typeof rangeValue !== 'string') {
     throw new Error('/timewarp requires a <start>-<end> range');
   }
@@ -309,10 +309,9 @@ export function normalizeSyncAudioCommandArgs(
   const assetValue = args.asset_id;
   const mappingsValue = args.mappings;
   if (typeof assetValue !== 'string' || !assetValue.trim()) {
-    throw new Error('/sync-audio requires a video asset');
+    throw new Error('/sync-audio requires a video cell or asset');
   }
   const assetId = stripAt(assetValue.trim());
-  if (!assetId.startsWith('vid-')) throw new Error('/sync-audio requires a vid-* asset');
   if (typeof mappingsValue !== 'string' || !mappingsValue.trim()) {
     throw new Error('/sync-audio requires at least one video-time=audio-target mapping');
   }
@@ -422,7 +421,7 @@ export function normalizeApplyCutsCommandArgs(
 ): { asset_id: string; cuts: Array<{ cut_start: number; cut_end: number }> } {
   const assetValue = args.asset_id;
   if (typeof assetValue !== 'string' || !assetValue.trim()) {
-    throw new Error('/apply-cuts requires a video asset');
+    throw new Error('/apply-cuts requires a video cell or asset');
   }
   const assetId = stripAt(assetValue.trim());
 
@@ -623,7 +622,7 @@ export function parseCommandArgs(rest: string, params: CommandParam[]): Record<s
       args[param.name] = tokens.slice(i, tokenLimit).map(stripAt);
     } else if (isLast && param.type === 'string') {
       // Last string param gets all remaining tokens joined.
-      // Strip leading "to" connector (e.g. "/rename @slug to new-name")
+      // Strip leading "to" connector (e.g. "/rename @a3 to new-name")
       let remaining = tokens.slice(i, tokenLimit);
       if (remaining.length > 1 && remaining[0].toLowerCase() === 'to') {
         remaining = remaining.slice(1);
@@ -647,7 +646,7 @@ export function selectCommandForInput(commands: ServerCommand[], commandStr: str
 
   const firstToken = rest.split(/\s+/).find(Boolean) ?? '';
   const firstParam = (cmd: ServerCommand) => cmd.params[0]?.name ?? '';
-  const takesAssetFirst = (cmd: ServerCommand) => /asset|slug|source/.test(firstParam(cmd));
+  const takesAssetFirst = (cmd: ServerCommand) => /asset|ref|source/.test(firstParam(cmd));
 
   if (firstToken.startsWith('@')) {
     return matches.find(takesAssetFirst) ?? matches[0];

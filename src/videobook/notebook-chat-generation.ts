@@ -16,7 +16,6 @@ import {
   type GenerationControlValue,
   type NotebookGenerationAction,
 } from './notebook-generation-actions'
-import { nextNotebookCellSlug } from './notebook-download'
 import {
   notebookCellTag,
   notebookReferences,
@@ -38,14 +37,14 @@ export type NotebookChatGenerationDraft = {
     targetInput: string
   }>
   sourceCellIds: string[]
-  sourceSlugs: string[]
+  sourceAddresses: string[]
 }
 
 export type NotebookChatGenerationRun = {
   cellId: string
-  cellSlug: string
+  cellAddress: string
   sourceCellIds: string[]
-  sourceSlugs: string[]
+  sourceAddresses: string[]
 }
 
 type NotebookToolCall = (
@@ -183,7 +182,7 @@ export function notebookChatGenerationParameterReferences(
   params: Record<string, unknown>,
 ): string[] {
   const values = Object.entries(params).flatMap(([name, value]) => {
-    if (!/(?:^|_)(?:slug|slugs)$/u.test(name)) return []
+    if (!/(?:^|_)(?:ref|refs)$/u.test(name)) return []
     if (typeof value === 'string') return [value]
     return Array.isArray(value)
       ? value.filter((entry): entry is string => typeof entry === 'string')
@@ -267,7 +266,6 @@ export function planNotebookChatGeneration(input: {
   const cell: NotebookCell = {
     id: input.cellId,
     type: input.command.cellType,
-    slug: nextNotebookCellSlug(input.command.cellType, input.document.cells),
     slot,
     prompt: input.command.prompt,
     ...selection,
@@ -282,7 +280,7 @@ export function planNotebookChatGeneration(input: {
       targetInput: targetInputs[index] ?? source.kind,
     })),
     sourceCellIds: sources.map((source) => source.cell.id),
-    sourceSlugs: sources.map((source) => source.cell.slug),
+    sourceAddresses: sources.map((source) => notebookCellTag(source.cell)),
   }
 }
 
@@ -436,7 +434,6 @@ export async function materializeNotebookChatGeneration(input: {
       cell: {
         id: input.draft.cell.id,
         type: input.draft.cell.type,
-        slug: input.draft.cell.slug,
         slot: input.draft.cell.slot,
         prompt: input.draft.cell.prompt,
         provider: input.draft.cell.provider,
@@ -462,9 +459,10 @@ export async function materializeNotebookChatGeneration(input: {
     }
     return {
       cellId,
-      cellSlug: stringValue(value?.slug) ?? input.draft.cell.slug,
+      cellAddress: stringValue(value?.address)
+        ?? notebookCellTag(input.draft.cell),
       sourceCellIds: input.draft.sourceCellIds,
-      sourceSlugs: input.draft.sourceSlugs,
+      sourceAddresses: input.draft.sourceAddresses,
     }
   } catch (error) {
     if (created) {

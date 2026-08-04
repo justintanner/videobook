@@ -44,9 +44,9 @@ export function registerGenerateGoogleOmniVideoJob(fs: Engine): void {
       "generate_google_flow_omni_flash_video",
       {
         prompt: p.prompt,
-        image_slugs: p.imageInputs.map((input) => input.assetId),
-        first_frame_slug: p.firstFrame?.assetId,
-        video_slug: p.videoInput?.assetId,
+        image_refs: p.imageInputs.map((input) => input.assetId),
+        first_frame_ref: p.firstFrame?.assetId,
+        video_ref: p.videoInput?.assetId,
       },
     ) ?? "";
 

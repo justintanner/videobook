@@ -302,7 +302,7 @@ describe("findPreviousErrorForPrompt", () => {
   async function createAsset(fs: Engine, name: string): Promise<string> {
     const result = await fs.artifacts.create("vid", name);
     if (!result.ok) throw new Error(result.error.message);
-    return result.value.slug;
+    return result.value.artifactId;
   }
 
   async function writeError(
@@ -414,20 +414,20 @@ describe("extractSceneContext", () => {
   it("extracts elements from numbered params", () => {
     const params = {
       prompt: "test",
-      input_element1_slugs: ["@img-a"],
+      input_element1_refs: ["@019fcc00-0000-7000-8000-0000000000a1"],
       element1_name: "Character",
       element1_desc: "A character",
-      input_element2_slugs: ["@img-b"],
+      input_element2_refs: ["@019fcc00-0000-7000-8000-0000000000b1"],
       element2_name: "Background",
       element2_desc: "A background",
     };
     const ctx = extractSceneContext(params);
     expect(ctx.elements).toHaveLength(2);
     expect(ctx.elements[0].name).toBe("Character");
-    expect(ctx.elements[1].slugs).toEqual(["@img-b"]);
+    expect(ctx.elements[1].refs).toEqual(["@019fcc00-0000-7000-8000-0000000000b1"]);
   });
 
-  it("skips elements without slugs", () => {
+  it("skips elements without refs", () => {
     const params = {
       prompt: "test",
       element1_name: "Character",
@@ -437,16 +437,25 @@ describe("extractSceneContext", () => {
     expect(ctx.elements).toHaveLength(0);
   });
 
-  it("extracts refSlugs from input_image_slugs", () => {
-    const params = { prompt: "test", input_image_slugs: ["@img-sunset", "@img-dawn"] };
+  it("extracts refs from input_image_refs", () => {
+    const params = {
+      prompt: "test",
+      input_image_refs: [
+        "@019fcc00-0000-7000-8000-0000000000c1",
+        "@019fcc00-0000-7000-8000-0000000000c2",
+      ],
+    };
     const ctx = extractSceneContext(params);
-    expect(ctx.refSlugs).toEqual(["@img-sunset", "@img-dawn"]);
+    expect(ctx.refs).toEqual([
+      "@019fcc00-0000-7000-8000-0000000000c1",
+      "@019fcc00-0000-7000-8000-0000000000c2",
+    ]);
   });
 
-  it("defaults refSlugs to empty array", () => {
+  it("defaults refs to empty array", () => {
     const params = { prompt: "test" };
     const ctx = extractSceneContext(params);
-    expect(ctx.refSlugs).toEqual([]);
+    expect(ctx.refs).toEqual([]);
   });
 
   it("extracts aspect_ratio with default 16:9", () => {
@@ -621,7 +630,7 @@ describe("rewrite_prompt tool", () => {
       arguments: {
         model: "kling30",
         book_id: "test-proj",
-        asset_slug: uploaded.assetId,
+        asset_ref: uploaded.assetId,
         scene_index: 0,
       },
     });
@@ -630,14 +639,14 @@ describe("rewrite_prompt tool", () => {
     expect(content[0].text).toContain("No .tool.params.json");
   });
 
-  it("returns error when image_slugs resolve to no files", async () => {
+  it("returns error when image_refs resolve to no files", async () => {
     process.env.OPENAI_API_KEY = "test-key-for-validation";
     const result = await client.callTool({
       name: "rewrite_prompt",
       arguments: {
         prompt: "a cat",
         model: "nano_banana",
-        image_slugs: ["nonexistent-slug"],
+        image_refs: ["nonexistent-slug"],
         book_id: "test-proj",
       },
     });
@@ -649,7 +658,7 @@ describe("rewrite_prompt tool", () => {
   it("accepts model=gemini_omni and forces provider-docs mode", async () => {
     process.env.OPENAI_API_KEY = "test-key-for-validation";
     // gemini_omni forces provider-docs mode even without provider_docs=true.
-    // With unresolvable image_slugs, provider-docs branch returns "Could not
+    // With unresolvable image_refs, provider-docs branch returns "Could not
     // resolve any image files" — the standard branch would return "No prompting
     // guide available for model: gemini_omni".
     const result = await client.callTool({
@@ -657,7 +666,7 @@ describe("rewrite_prompt tool", () => {
       arguments: {
         prompt: "a cat",
         model: "gemini_omni",
-        image_slugs: ["nonexistent-slug"],
+        image_refs: ["nonexistent-slug"],
         book_id: "test-proj",
       },
     });
@@ -703,7 +712,7 @@ describe("rewrite_prompt tool", () => {
   it("returns isError when provider-docs guide is unreadable (does not throw)", async () => {
     process.env.OPENAI_API_KEY = "test-key-for-validation";
     // gemini_omni forces provider-docs mode which calls loadUseapiGuide().
-    // With unresolvable image_slugs, we get "Could not resolve" which proves
+    // With unresolvable image_refs, we get "Could not resolve" which proves
     // the guide loaded past the try/catch. This test documents that the
     // try/catch returns isError instead of throwing on guide load failure.
     const result = await client.callTool({
@@ -711,7 +720,7 @@ describe("rewrite_prompt tool", () => {
       arguments: {
         prompt: "a cat",
         model: "gemini_omni",
-        image_slugs: ["nonexistent-slug"],
+        image_refs: ["nonexistent-slug"],
         book_id: "test-proj",
       },
     });

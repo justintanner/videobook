@@ -22,10 +22,10 @@ export function describeImageDef(fs: Engine): ToolDef {
   return {
     name: "describe_image",
     description:
-      "Analyze an image asset with vision and create a new script-* asset containing a reproduction-ready prompt (index.md). Returns immediately after enqueueing; reconcile_project_work reports status=\"generating\" until the markdown is written.",
+      "Analyze an image asset with vision and create a new script asset containing a reproduction-ready prompt (index.md). Returns immediately after enqueueing; reconcile_project_work reports status=\"generating\" until the markdown is written.",
     schema: {
-      asset_id: z.string().describe("Image asset ID (img-*)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Image artifact id"),
+      book_id: z.string().describe("Book UUID"),
     },
     handler: async (args) => {
       const { asset_id, book_id } = args as {
@@ -33,8 +33,10 @@ export function describeImageDef(fs: Engine): ToolDef {
         book_id: string;
       };
 
-      if (!asset_id.startsWith("img-")) {
-        return error(`describe_image only accepts img-* assets, got: ${asset_id}`);
+      const sourceArtifact = fs.artifacts.get(asset_id);
+      if (!sourceArtifact.ok) return error(sourceArtifact.error.message);
+      if (sourceArtifact.value.kind !== "image") {
+        return error(`describe_image only accepts image artifacts, got ${sourceArtifact.value.kind} artifact ${asset_id}`);
       }
 
       if (!process.env.OPENAI_API_KEY) {
@@ -48,15 +50,15 @@ export function describeImageDef(fs: Engine): ToolDef {
 
       const imageFile = findImageFile(manifestResult.value.files);
       if (!imageFile) {
-        return error(`No image file found in asset ${asset_id}`);
+        return error(`No image file found in artifact ${asset_id}`);
       }
 
-      const scriptName = `desc ${asset_id.replace(/^img-/, "")}`;
+      const scriptName = `desc ${sourceArtifact.value.label ?? asset_id}`;
       const createResult = await fs.artifacts.create("script", scriptName);
       if (!createResult.ok) {
         return error(`Failed to create script asset: ${createResult.error.message}`);
       }
-      const { slug: scriptAssetId } = createResult.value;
+      const { artifactId: scriptAssetId } = createResult.value;
 
       const jobId = `describe-image-${asset_id}-${Date.now()}`;
       await queue.enqueue(jobId, {

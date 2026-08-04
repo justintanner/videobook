@@ -1,23 +1,21 @@
-import type { Artifact, Engine, NotebookDocument } from "videobook-engine";
+import type { Artifact, Engine } from "videobook-engine";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { OpenAiContentPart } from "@apicity/openai";
 import {
-  isRenamable,
-  humanizeSlug,
+  isRenamableKind,
   buildSuggestionPrompt,
   parseSuggestionResponse,
   buildRenameRows,
   validateEditedRenames,
   applyableRows,
-  rewriteDeep,
   isProcessOrigin,
   type RenameRow,
   type AssetContext,
   type EditedRename,
+  type RenameCandidate,
 } from "../rename-helpers.js";
-import { RENDER_ORIENTATIONS } from "./sync.js";
 import type { ToolDef } from "./tool-def.js";
 import {
   INTELLIGENCE_MODEL,
@@ -26,7 +24,6 @@ import {
   intelligenceRequest,
 } from "../openai-intelligence.js";
 import {
-  replaceNotebookMentions,
   scanNotebookMentions,
   stripNotebookMentions,
 } from "videobook-engine/notebook-mentions";
@@ -37,7 +34,7 @@ interface RenamePayload {
 }
 
 const schema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   dry_run: z
     .boolean()
     .describe("true = preview only (no renames). false = apply the confirmed renames."),
@@ -51,17 +48,26 @@ const schema = {
     .optional()
     .describe(
       "Edited renames for revalidation (dry_run:true) or confirmed renames to apply (dry_run:false). " +
-        "Omit on the first dry run to let GPT-5.6 Sol propose names.",
+        "Omit on the first dry run to let GPT-5.6 Sol propose labels.",
     ),
 };
+
+function renameCandidates(assets: Artifact[]): RenameCandidate[] {
+  return assets.map((a) => ({
+    artifactId: a.artifactId,
+    ...(a.label ? { label: a.label } : {}),
+    kind: a.kind,
+  }));
+}
 
 export function renameAllDef(fs: Engine): ToolDef {
   return {
     name: "rename_all",
     description:
-      "Bulk-rename vid-*/img-* assets with an explicit dry run. Dry run proposes descriptive names via GPT-5.6 Sol " +
-      "over stored analysis/transcript/prompt context; re-run dry_run with edited `renames` to revalidate; " +
-      "set dry_run=false to apply via fs.renameAsset and update timeline/OSG/plan references.",
+      "Bulk-relabel video and image assets with an explicit dry run. Dry run proposes descriptive display " +
+      "labels via GPT-5.6 Sol over stored analysis/transcript/prompt context; re-run dry_run with edited " +
+      "`renames` to revalidate; set dry_run=false to apply. Labels are display-only — artifact ids and " +
+      "references never change.",
     schema,
     handler: async (args) => {
       const { book_id, dry_run, renames } = args as {
@@ -71,12 +77,11 @@ export function renameAllDef(fs: Engine): ToolDef {
       };
 
       const assets = await fs.artifacts.list();
-      const allAssetIds = assets.map((a) => a.slug);
 
       if (dry_run) {
         return renames && renames.length > 0
-          ? handleDryRunRevalidation(renames, allAssetIds)
-          : handleDryRunSuggest(fs, assets, book_id, allAssetIds);
+          ? handleDryRunRevalidation(renames, renameCandidates(assets))
+          : handleDryRunSuggest(fs, assets, book_id);
       }
 
       if (!renames || renames.length === 0) {
@@ -89,7 +94,7 @@ export function renameAllDef(fs: Engine): ToolDef {
         };
       }
 
-      return handleApply(fs, book_id, renames, allAssetIds);
+      return handleApply(fs, book_id, renames, renameCandidates(assets));
     },
   };
 }
@@ -98,7 +103,6 @@ async function handleDryRunSuggest(
   fs: Engine,
   assets: Artifact[],
   bookId: string,
-  allAssetIds: string[],
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -111,7 +115,7 @@ async function handleDryRunSuggest(
     };
   }
 
-  const candidates = assets.filter((a) => isRenamable(a.slug));
+  const candidates = assets.filter((a) => isRenamableKind(a.kind));
   if (candidates.length === 0) {
     return {
       content: [{
@@ -119,7 +123,7 @@ async function handleDryRunSuggest(
         text: JSON.stringify({
           dry_run: true,
           rows: [],
-          note: "No vid/img assets found.",
+          note: "No video or image assets found.",
         }),
       }],
     };
@@ -127,14 +131,15 @@ async function handleDryRunSuggest(
 
   const contexts: AssetContext[] = [];
   for (const a of candidates) {
-    const ctx = await loadAssetContext(fs, a.slug, a.kind, bookId);
-    contexts.push(
-      ctx ?? {
-        asset_id: a.slug,
-        type: a.slug.startsWith("vid-") ? "video" : "image",
+    const ctx = await loadAssetContext(fs, a, bookId);
+    contexts.push({
+      ...(ctx ?? {
+        asset_id: a.artifactId,
+        type: a.kind,
         context_text: "",
-      },
-    );
+      }),
+      ...(a.label ? { label: a.label } : {}),
+    });
   }
 
   const previews = await loadPreviewStills(fs, contexts, bookId);
@@ -152,7 +157,7 @@ async function handleDryRunSuggest(
   }));
   const suggestions = parseSuggestionResponse(firstResponseText(result));
 
-  const rows = buildRenameRows(contexts, suggestions, allAssetIds);
+  const rows = buildRenameRows(contexts, suggestions);
   return {
     content: [{
       type: "text" as const,
@@ -163,13 +168,13 @@ async function handleDryRunSuggest(
 
 async function handleDryRunRevalidation(
   renames: RenamePayload[],
-  allAssetIds: string[],
+  candidates: RenameCandidate[],
 ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   const edits: EditedRename[] = renames.map((r) => ({
     asset_id: r.asset_id,
     suggested_name: r.suggested_name,
   }));
-  const rows = validateEditedRenames(edits, allAssetIds);
+  const rows = validateEditedRenames(edits, candidates);
   return {
     content: [{
       type: "text" as const,
@@ -180,15 +185,15 @@ async function handleDryRunRevalidation(
 
 async function handleApply(
   fs: Engine,
-  bookId: string,
+  _bookId: string,
   renames: RenamePayload[],
-  allAssetIds: string[],
+  candidates: RenameCandidate[],
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
   const edits: EditedRename[] = renames.map((r) => ({
     asset_id: r.asset_id,
     suggested_name: r.suggested_name,
   }));
-  const rows = validateEditedRenames(edits, allAssetIds);
+  const rows = validateEditedRenames(edits, candidates);
   const toApply = applyableRows(rows);
 
   if (toApply.length === 0) {
@@ -203,42 +208,35 @@ async function handleApply(
 
   const applied: Array<{
     asset_id: string;
-    target_asset_id: string;
-    new_asset_id: string;
+    label: string;
     renamed: boolean;
     error?: string;
   }> = [];
-  const idMap = new Map<string, string>();
 
+  // Relabeling is display-only: artifact ids are the sole reference currency,
+  // so no prompts, timeline slots, or notebook cells need rewriting.
   for (const row of toApply) {
     const result = await fs.artifacts.rename(row.asset_id, row.suggested_name);
     if (!result.ok) {
       applied.push({
         asset_id: row.asset_id,
-        target_asset_id: row.target_asset_id,
-        new_asset_id: row.asset_id,
+        label: row.current_name,
         renamed: false,
         error: result.error.message,
       });
       continue;
     }
-    idMap.set(row.asset_id, result.value.slug);
     applied.push({
-      asset_id: row.asset_id,
-      target_asset_id: row.target_asset_id,
-      new_asset_id: result.value.slug,
+      asset_id: result.value.artifactId,
+      label: result.value.label ?? row.suggested_name,
       renamed: true,
     });
-  }
-
-  if (idMap.size > 0) {
-    await updateReferences(fs, idMap);
   }
 
   return {
     content: [{
       type: "text" as const,
-      text: JSON.stringify({ dry_run: false, applied, references_updated: idMap.size > 0 }),
+      text: JSON.stringify({ dry_run: false, applied }),
     }],
   };
 }
@@ -249,15 +247,14 @@ async function handleApply(
  *  extracted frames. Returns null when no useful text is available. */
 async function loadAssetContext(
   fs: Engine,
-  assetId: string,
-  type: string,
+  artifact: Artifact,
   bookId: string,
 ): Promise<AssetContext | null> {
-  if (type === "video" || assetId.startsWith("vid-")) {
-    return loadVideoContext(fs, assetId, bookId);
+  if (artifact.kind === "video") {
+    return loadVideoContext(fs, artifact.artifactId, bookId);
   }
-  if (type === "image" || assetId.startsWith("img-")) {
-    return loadImageContext(fs, assetId, bookId);
+  if (artifact.kind === "image") {
+    return loadImageContext(fs, artifact.artifactId, bookId);
   }
   return null;
 }
@@ -367,12 +364,14 @@ async function loadImageContext(
     } else if (sourceAssets.length > 0) {
       // Composite / edit images: briefly describe source materials, then edit intent.
       for (const src of sourceAssets.slice(0, 3)) {
-        if (src.startsWith("vid-")) {
+        const srcArtifact = fs.artifacts.get(src);
+        if (!srcArtifact.ok) continue;
+        if (srcArtifact.value.kind === "video") {
           const parent = await loadVideoContext(fs, src, bookId);
           if (parent?.context_text) {
             parts.push(`source ${src}: ${parent.context_text.slice(0, 200)}`);
           }
-        } else if (src.startsWith("img-")) {
+        } else if (srcArtifact.value.kind === "image") {
           const srcAnalysis = await readAnalysisParts(fs, src, bookId);
           if (srcAnalysis.length > 0) {
             parts.push(`source ${src}: ${srcAnalysis.join(" ").slice(0, 200)}`);
@@ -436,10 +435,9 @@ async function loadPreviewStills(
 ): Promise<AssetPreview[]> {
   const out: AssetPreview[] = [];
   for (const ctx of contexts) {
-    const parts =
-      ctx.type === "video" || ctx.asset_id.startsWith("vid-")
-        ? await loadVideoPreviewParts(fs, ctx.asset_id, bookId)
-        : await loadImagePreviewParts(fs, ctx.asset_id, bookId);
+    const parts = ctx.type === "video"
+      ? await loadVideoPreviewParts(fs, ctx.asset_id, bookId)
+      : await loadImagePreviewParts(fs, ctx.asset_id, bookId);
     out.push({ asset_id: ctx.asset_id, parts });
   }
   return out;
@@ -562,97 +560,6 @@ function responseContentFromChat(
         image_url: part.image_url.url,
         detail: part.image_url.detail ?? "auto",
       });
-}
-
-/** Rewrite first-class references after a batch rename: timeline slots/audio,
- *  per-asset OSG render metadata (osgAssetId), and plan/.plan.json ids. */
-async function updateReferences(
-  fs: Engine,
-  idMap: Map<string, string>,
-): Promise<void> {
-  await updateOsgReferences(fs, idMap);
-  await updateNotebookReferences(fs, idMap);
-}
-
-async function updateOsgReferences(
-  fs: Engine,
-  idMap: Map<string, string>,
-): Promise<void> {
-  const assets = await fs.artifacts.list();
-  for (const asset of assets) {
-    if (!asset.slug.startsWith("vid-")) continue;
-    let changed = false;
-    for (const orient of RENDER_ORIENTATIONS) {
-      const metaKey = `${orient}.render`;
-      const read = await fs.metadata.artifacts.read<Record<string, unknown>>(asset.slug, metaKey
-      );
-      if (!read.ok) continue;
-      const osgId = read.value.osgAssetId;
-      if (typeof osgId === "string" && idMap.has(osgId)) {
-        read.value.osgAssetId = idMap.get(osgId);
-        changed = true;
-        await fs.metadata.artifacts.write(asset.slug, metaKey, read.value);
-      }
-    }
-    void changed;
-  }
-}
-
-async function updateNotebookReferences(
-  fs: Engine,
-  idMap: Map<string, string>,
-): Promise<void> {
-  for (const notebook of fs.notebooks.list()) {
-    const before = JSON.stringify(notebook);
-    const planIdMap = new Map(idMap);
-    for (const [oldId, newId] of idMap) {
-      planIdMap.set(`@${oldId}`, `@${newId}`);
-    }
-    let rewritten = rewriteDeep(
-      structuredClone(notebook),
-      planIdMap,
-    ) as NotebookDocument;
-    rewritten = rewriteInlineMentions(rewritten, idMap);
-    if (JSON.stringify(rewritten) !== before) {
-      const result = await fs.notebooks.write(rewritten);
-      if (!result.ok) {
-        throw new Error(
-          `Failed to update notebook ${notebook.id}: ${result.error.message}`,
-        );
-      }
-    }
-  }
-}
-
-function rewriteInlineMentions<T>(value: T, idMap: Map<string, string>): T {
-  if (typeof value === "string") {
-    return replaceNotebookMentions(
-      value,
-      [...idMap].map(([reference, replacement]) => ({
-        reference,
-        replacement: `@${replacement}`,
-      })),
-    ) as unknown as T;
-  }
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i++) {
-      value[i] = rewriteInlineMentions(value[i], idMap);
-    }
-    return value;
-  }
-  if (value && typeof value === "object") {
-    for (const key of Object.keys(value as Record<string, unknown>)) {
-      const v = (value as Record<string, unknown>)[key];
-      (value as Record<string, unknown>)[key] = rewriteInlineMentions(v, idMap);
-    }
-  }
-  return value;
-}
-
-/** Build the display name for an asset id (used by the UI; also exported for
- *  server-side consistency checks). */
-export function displayName(assetId: string): string {
-  return humanizeSlug(assetId);
 }
 
 export type { RenameRow };

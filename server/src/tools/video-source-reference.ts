@@ -25,7 +25,7 @@ export function resolveVideoAssetReference(
     documents: notebooks,
     reference: normalized,
   });
-  if (!("code" in result)) return result.artifactSlug;
+  if (!("code" in result)) return result.artifactId;
   if (result.code === "ambiguous") {
     throw new Error(`Video source @${normalized} is ambiguous; include notebook_id`);
   }

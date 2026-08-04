@@ -17,7 +17,7 @@ describe('ElevenLabs transcript import', () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-transcript-import-'))
     const engine = createEngine({
       rootDir: join(rootDir, 'book'),
-      initialBookSlug: 'transcript-import',
+      initialBookName: 'transcript-import',
     })
     await engine.ready
     const artifact = await engine.artifacts.create('audio', 'interview')

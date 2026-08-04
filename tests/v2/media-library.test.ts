@@ -169,18 +169,18 @@ describe('media Library slots', () => {
     const notebook = engine.notebooks.list()[0]!
     const producer = cell(engine, {
       type: 'split_video',
-      slug: 'split-video-source',
+      label: 'split video source',
       slot: { row: 0, column: 0 },
     })
     const media = cell(engine, {
       type: 'video',
-      slug: 'vid-source',
+      label: 'source clip',
       slot: { row: 0, column: 1 },
       outputArtifactId: artifact.artifactId,
     })
     const downstream = cell(engine, {
       type: 'analyze',
-      slug: 'analyze-source',
+      label: 'analyze source',
       slot: { row: 0, column: 2 },
     })
     const incoming = engine.notebooks.createEdge({
@@ -212,7 +212,7 @@ describe('media Library slots', () => {
       item.id === media.id)
     expect(clearedCell).toMatchObject({
       id: media.id,
-      slug: 'vid-source',
+      label: 'source clip',
       slot: { row: 0, column: 1 },
     })
     expect(clearedCell?.outputArtifactId).toBeUndefined()
@@ -227,7 +227,7 @@ describe('media Library slots', () => {
     const attached = await setNotebookMediaSlot(engine, {
       notebookId: notebook.id,
       cellId: media.id,
-      artifactRef: artifact.slug,
+      artifactRef: artifact.artifactId,
     })
     expect(attached.outputArtifactId).toBe(artifact.artifactId)
     const afterAttach = engine.notebooks.read(notebook.id)
@@ -249,7 +249,7 @@ describe('media Library slots', () => {
     const betaBook = books.get(beta.value.bookId)
     expect(alphaBook.ok && betaBook.ok).toBe(true)
     if (!alphaBook.ok || !betaBook.ok) return
-    await readyArtifact(
+    const moonGarden = await readyArtifact(
       alphaBook.value.engine,
       'image',
       'moon garden',
@@ -271,9 +271,11 @@ describe('media Library slots', () => {
     })
     expect(images.assets).toHaveLength(1)
     expect(images.assets[0]).toMatchObject({
-      id: 'img-moon-garden',
+      id: moonGarden.artifactId,
+      artifact_id: moonGarden.artifactId,
+      label: 'moon garden',
       owning_book_id: alpha.value.bookId,
-      owning_book_slug: 'alpha',
+      owning_book_name: 'alpha',
       type: 'image',
     })
     expect(images.page).toMatchObject({
@@ -356,7 +358,7 @@ describe('media Library slots', () => {
     const notebook = targetBook.value.engine.notebooks.list()[0]!
     const media = cell(targetBook.value.engine, {
       type: 'image',
-      slug: 'img-slot',
+      label: 'image slot',
       slot: { row: 0, column: 0 },
     })
     await writeNotebook(targetBook.value.engine, {
@@ -432,7 +434,7 @@ describe('media Library slots', () => {
     const notebook = targetBook.value.engine.notebooks.list()[0]!
     const media = cell(targetBook.value.engine, {
       type: 'image',
-      slug: 'img-slot',
+      label: 'image slot',
       slot: { row: 0, column: 0 },
     })
     await writeNotebook(targetBook.value.engine, {

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import jsQR from "jsqr";
 import QRCode from "qrcode";
 import sharp from "sharp";
+import type { ArtifactKind } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import {
   buildQartPng,
@@ -75,15 +76,21 @@ describe("create_qart tool", () => {
   async function createImageAsset(name: string, buffer: Buffer): Promise<string> {
     const asset = await fs.artifacts.create("img", name);
     if (!asset.ok) throw new Error(asset.error.message);
-    const write = await fs.files.write(asset.value.slug, "original.png", buffer);
+    const write = await fs.files.write(asset.value.artifactId, "original.png", buffer);
     if (!write.ok) throw new Error(write.error.message);
-    return asset.value.slug;
+    return asset.value.artifactId;
   }
 
   async function readAssetFile(assetId: string, name: string): Promise<Buffer> {
     const read = await fs.files.read(assetId, name);
     if (!read.ok) throw new Error(read.error.message);
     return Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
+  }
+
+  function kindOf(assetId: string): ArtifactKind {
+    const artifact = fs.artifacts.get(assetId);
+    if (!artifact.ok) throw new Error(artifact.error.message);
+    return artifact.value.kind;
   }
 
   it("creates scan-safe inverted and monochrome QR mosaic assets by default", async () => {
@@ -94,7 +101,7 @@ describe("create_qart tool", () => {
       name: "create_qart",
       arguments: {
         book_id: PROJECT,
-        image_slug: `@${coverId}`,
+        image_ref: `@${coverId}`,
         value,
         size,
       },
@@ -109,8 +116,8 @@ describe("create_qart tool", () => {
       source_image: string;
       qr_version: number;
     };
-    expect(parsed.inverted_asset_id).toMatch(/^img-/);
-    expect(parsed.monochrome_asset_id).toMatch(/^img-/);
+    expect(kindOf(parsed.inverted_asset_id)).toBe("image");
+    expect(kindOf(parsed.monochrome_asset_id)).toBe("image");
     expect(parsed.inverted_asset_id).not.toBe(parsed.monochrome_asset_id);
     expect(parsed.value).toBe(value);
     expect(parsed.size).toBe(size);
@@ -203,7 +210,7 @@ describe("create_qart tool", () => {
       name: "create_qart",
       arguments: {
         book_id: PROJECT,
-        image_slug: coverId,
+        image_ref: coverId,
         value: "https://example.com/color",
         style: "color",
       },
@@ -231,7 +238,7 @@ describe("create_qart tool", () => {
       name: "create_qart",
       arguments: {
         book_id: PROJECT,
-        image_slug: coverId,
+        image_ref: coverId,
         value: "https://example.com",
         size: 256,
       },
@@ -240,16 +247,19 @@ describe("create_qart tool", () => {
     expect(resultText(result)).toContain("minimum is 315px");
   });
 
-  it("rejects non-img assets", async () => {
+  it("rejects artifacts that are not images", async () => {
+    const created = await fs.artifacts.create({ kind: "video", label: "not-an-image" });
+    if (!created.ok) throw new Error(created.error.message);
     const result = await client!.callTool({
       name: "create_qart",
       arguments: {
         book_id: PROJECT,
-        image_slug: "vid-not-an-image",
+        image_ref: created.value.artifactId,
         value: "https://example.com",
       },
     });
     expect(result.isError).toBe(true);
+    expect(resultText(result)).toContain("must be an image artifact");
   });
 
   it("rejects missing cover images", async () => {
@@ -257,7 +267,7 @@ describe("create_qart tool", () => {
       name: "create_qart",
       arguments: {
         book_id: PROJECT,
-        image_slug: "@img-does-not-exist",
+        image_ref: "@019fcc6b-46ed-71ce-8f32-2b79cc4dfbbf",
         value: "https://example.com",
       },
     });

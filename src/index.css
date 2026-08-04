@@ -2632,7 +2632,7 @@ textarea:focus-visible {
   }
 }
 
-.inspector-slug {
+.inspector-spine-title {
   min-width: 0;
   margin: 0 0 20px;
   overflow-wrap: anywhere;
@@ -2643,7 +2643,7 @@ textarea:focus-visible {
   line-height: 1.4;
 }
 
-.inspector-slug:focus-visible {
+.inspector-spine-title:focus-visible {
   outline: 1px solid var(--green);
   outline-offset: 4px;
 }

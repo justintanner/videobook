@@ -19,7 +19,6 @@ function cell(id: string, row: number, column: number): NotebookDocument['cells'
   return {
     id,
     type: 'prompt',
-    slug: `prompt-${id}`,
     slot: { row, column },
   }
 }

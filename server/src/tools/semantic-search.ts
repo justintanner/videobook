@@ -137,7 +137,7 @@ const preparedReferenceFields = {
 };
 const searchHitSchema = z.object({
   artifactId: z.string().uuid(),
-  artifactSlug: z.string().min(1),
+  artifactLabel: z.string().min(1).optional(),
   artifactKind: z.enum([
     "video",
     "image",
@@ -248,7 +248,7 @@ export function semanticSearchDefs(
           const files = manifest.ok ? manifest.value.files : [];
           const sourceFile = artifact.kind === "video"
             ? findVideoFile(files.filter((file) => file.name !== "proxy.mp4"))
-            : findPrimaryMediaFile(files, artifact.slug);
+            : findPrimaryMediaFile(files, artifact.kind);
           const proxyFile = files.find((file) => file.name === "proxy.mp4");
           const hasValidVideoProxy = sourceFile !== null
             && proxyFile !== undefined
@@ -284,7 +284,7 @@ export function semanticSearchDefs(
           const readiness = ingestReadiness(artifact.kind, phases, hasAudio);
           return {
             artifactId: artifact.artifactId,
-            slug: artifact.slug,
+            ...(artifact.label ? { label: artifact.label } : {}),
             kind: artifact.kind,
             state: readiness.state,
             missingOutputs: readiness.missingOutputs,
@@ -308,7 +308,7 @@ export function semanticSearchDefs(
         const source = artifact.value.kind === "video"
           ? findVideoFile(manifest.value.files)
           : artifact.value.kind === "audio"
-            ? findAudioFile(manifest.value.files, artifact.value.slug)
+            ? findAudioFile(manifest.value.files, artifact.value.kind)
             : manifest.value.files.find((file) =>
                 /^original\.(?:jpe?g|png|webp|gif|svg)$/i.test(file.name));
         if (!source) return failure("No source file is available for retry");
@@ -722,7 +722,7 @@ export function semanticSearchDefs(
           suggestions: selected.map((item) => ({
             suggestionId: item.moment.beat_id,
             label: item.moment.text,
-            detail: item.hit.artifactSlug,
+            detail: item.hit.artifactLabel ?? item.hit.artifactId,
             category: "sound-effect",
             included: true,
             hit: item.hit,
@@ -803,7 +803,8 @@ export function semanticSearchDefs(
         ...bookSchema,
         notebook_id: z.string().uuid(),
         cell_id: z.string().uuid().optional(),
-        cell_slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)+$/),
+        cell_label: z.string().min(1).optional()
+          .describe("Optional free-text display label for a newly created cell"),
         slot: z.object({
           row: z.number().int().min(0).max(25),
           column: z.number().int().min(0).max(12),
@@ -861,10 +862,9 @@ export function semanticSearchDefs(
                 : hit.location.kind === "timed"
                   ? "video"
                   : "image",
-              slug: uniqueNotebookCellSlug(
-                notebook.cells,
-                String(args.cell_slug),
-              ),
+              ...(typeof args.cell_label === "string" && args.cell_label.trim()
+                ? { label: args.cell_label.trim() }
+                : {}),
               slot: isSlot(args.slot)
                 ? args.slot
                 : firstEmptyNotebookSlot(notebook),
@@ -874,7 +874,9 @@ export function semanticSearchDefs(
                 targetId: hit.artifactId,
                 snapshot: {
                   objectHash: pinnedResult.objectHash,
-                  artifactSlug: hit.artifactSlug,
+                  ...(hit.artifactLabel
+                    ? { artifactLabel: hit.artifactLabel }
+                    : {}),
                 },
                 ordinal: 0,
               }],
@@ -1394,11 +1396,11 @@ function librarySearchDef(books: BookManager): ToolDef {
           ...hit,
           score: 1 / (60 + index + 1),
           owningBookId: entry.summary.bookId,
-          owningBookSlug: entry.summary.slug,
+          owningBookName: entry.summary.name,
         })) ?? []);
       hits.sort((left, right) =>
         right.score - left.score
-        || left.owningBookSlug.localeCompare(right.owningBookSlug)
+        || left.owningBookName.localeCompare(right.owningBookName)
         || left.artifactId.localeCompare(right.artifactId)
         || JSON.stringify(left.location).localeCompare(JSON.stringify(right.location)));
       const limit = Math.min(query.limit ?? 30, 100);
@@ -1420,7 +1422,7 @@ function librarySearchDef(books: BookManager): ToolDef {
           ),
           books: pages.map((entry) => ({
             bookId: entry.summary.bookId,
-            slug: entry.summary.slug,
+            name: entry.summary.name,
             ...(entry.page ? { coverage: entry.page.coverage } : {}),
             ...(entry.error ? { error: entry.error } : {}),
           })),
@@ -1484,14 +1486,3 @@ function firstEmptyNotebookSlot(notebook: {
   );
 }
 
-function uniqueNotebookCellSlug(
-  cells: NotebookCell[],
-  requested: string,
-): string {
-  const used = new Set(cells.map((cell) => cell.slug));
-  if (!used.has(requested)) return requested;
-  for (let suffix = 2; ; suffix += 1) {
-    const candidate = `${requested}-${String(suffix).padStart(2, "0")}`;
-    if (!used.has(candidate)) return candidate;
-  }
-}

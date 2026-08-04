@@ -52,7 +52,7 @@ describe("sleep tool", () => {
     const result = await client.callTool({
       name: "wait_for_asset_ready",
       arguments: {
-        asset_id: created.value.slug,
+        asset_id: created.value.artifactId,
         book_id: "test-proj",
         timeout_seconds: 1,
       },
@@ -61,7 +61,7 @@ describe("sleep tool", () => {
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     expect(data.status).toBe("ready");
-    expect(data.asset_id).toBe(created.value.slug);
+    expect(data.asset_id).toBe(created.value.artifactId);
   });
 });
 
@@ -81,7 +81,7 @@ describe("sleepDef handler", () => {
   it("returns timeout for asset with pending task that never completes", async () => {
     const assetResult = await fs.artifacts.create("vid", "pending-asset");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
-    const assetId = assetResult.value.slug;
+    const assetId = assetResult.value.artifactId;
 
     {
       const lease = await fs.jobs.artifactWork.begin(assetId, {
@@ -129,13 +129,13 @@ describe("sleepDef handler", () => {
     if (!assetResult.ok) throw new Error(assetResult.error.message);
     const options = {
       type: "test_generation",
-      artifactId: assetResult.value.slug,
+      artifactId: assetResult.value.artifactId,
       payload: {},
       artifactWorkKind: "generate" as const,
     };
     expect(options.artifactWorkKind).toBe("generate");
     fs.jobs.queue.enqueue(options);
-    const queuedWork = await fs.jobs.artifactWork.read(assetResult.value.slug
+    const queuedWork = await fs.jobs.artifactWork.read(assetResult.value.artifactId
     );
     expect(queuedWork.ok).toBe(true);
     if (!queuedWork.ok) throw new Error(queuedWork.error.message);
@@ -145,12 +145,12 @@ describe("sleepDef handler", () => {
     });
     expect(
       fs.jobs.queue.list({
-        artifactId: assetResult.value.slug,
+        artifactId: assetResult.value.artifactId,
       })[0]?.state,
     ).toBe("queued");
 
     const result = await sleepDef(fs).handler({
-      asset_id: assetResult.value.slug,
+      asset_id: assetResult.value.artifactId,
       book_id: "test-proj",
       timeout_seconds: 0.01,
     });

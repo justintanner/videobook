@@ -1,79 +1,30 @@
-import type { Engine, ArtifactManifestFile } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27RefToVideoRequestSchema } from "@apicity/kie/zod";
-import { extname } from "node:path";
 import { queue } from "../queue.js";
-import { findAudioFile, findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringArrayField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
+import {
+  resolveAudioRef,
+  resolveImageRef,
+  resolveVideoRef,
+  slugify,
+  type RefInput,
+} from "./_seedance2-shared.js";
 
-const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 const wan27R2v = Wan27RefToVideoRequestSchema.shape.input.shape;
 
-function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
-  const images = files.filter((f) => {
-    const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
-    return IMAGE_EXTENSIONS.has(ext);
-  });
-  return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
-}
-
-type RefInput = { assetId: string; filename: string };
-type ResolveOk = { ok: true; value: RefInput };
-type ResolveErr = { ok: false; error: string };
-
-async function resolveImageSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
-  const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("img-")) {
-    return { ok: false, error: `image_slugs entries must be img-* assets, got: ${assetId}` };
-  }
-  const manifest = await fs.files.manifest(assetId);
-  if (!manifest.ok) return { ok: false, error: manifest.error.message };
-  const file = findImageFile(manifest.value.files);
-  if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
-  return { ok: true, value: { assetId, filename: file.name } };
-}
-
-async function resolveVideoSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
-  const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slugs entries must be vid-* assets, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId);
-  if (!manifest.ok) return { ok: false, error: manifest.error.message };
-  const file = findVideoFile(manifest.value.files);
-  if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
-  return { ok: true, value: { assetId, filename: file.name } };
-}
-
-async function resolveAudioSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
-  const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slug must be an aud-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId);
-  if (!manifest.ok) return { ok: false, error: manifest.error.message };
-  const file = findAudioFile(manifest.value.files, assetId);
-  if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
-  return { ok: true, value: { assetId, filename: file.name } };
-}
-
 const generateWan27R2vVideoSchema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(wan27R2v.prompt, "Video description (max 5000 chars)", { required: true }),
   negative_prompt: apicityStringField(wan27R2v.negative_prompt, "Negative prompt — things to avoid (max 500 chars)"),
-  image_slugs: apicityStringArrayField(wan27R2v.reference_image, "Reference image @slugs (max 5 combined with videos)"),
-  video_slugs: apicityStringArrayField(wan27R2v.reference_video, "Reference video @slugs (max 5 combined with images)"),
-  first_frame_slug: apicityStringField(wan27R2v.first_frame, "First frame image asset (overrides aspect_ratio, e.g., @img-start)"),
-  audio_slug: apicityStringField(wan27R2v.reference_voice, "Voice timbre audio asset (wav/mp3, 1-10s, e.g., @aud-voice)"),
+  image_refs: apicityStringArrayField(wan27R2v.reference_image, "Reference image artifact ids (max 5 combined with videos)"),
+  video_refs: apicityStringArrayField(wan27R2v.reference_video, "Reference video artifact ids (max 5 combined with images)"),
+  first_frame_ref: apicityStringField(wan27R2v.first_frame, "First frame image artifact id (overrides aspect_ratio)"),
+  audio_ref: apicityStringField(wan27R2v.reference_voice, "Voice timbre audio artifact id (wav/mp3, 1-10s)"),
   resolution: apicityField(wan27R2v.resolution, "Video resolution (default 1080p)"),
-  aspect_ratio: apicityField(wan27R2v.aspect_ratio, "Video aspect ratio (ignored if first_frame_slug set)"),
+  aspect_ratio: apicityField(wan27R2v.aspect_ratio, "Video aspect ratio (ignored if first_frame_ref set)"),
   duration: apicityStringNumberField(wan27R2v.duration, "Video duration in seconds (2-10)"),
   prompt_extend: apicityField(wan27R2v.prompt_extend, "Intelligent prompt rewriting (default true)"),
   watermark: apicityField(wan27R2v.watermark, "Add provider watermark to output (default false)"),
@@ -87,12 +38,12 @@ type Args = SchemaArgs<typeof generateWan27R2vVideoSchema>;
 export function generateWan27R2vVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_wan_2_7_reference_to_video",
-    description: "Generate a video using Wan 2.7 Reference guided by reference images (0-5), videos (0-5), voice timbre, and optional first frame. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video using Wan 2.7 Reference guided by reference images (0-5), videos (0-5), voice timbre, and optional first frame. Creates a new video artifact and enqueues a background job.",
     schema: generateWan27R2vVideoSchema,
     handler: async (args) => {
       const {
         book_id, prompt, negative_prompt,
-        image_slugs, video_slugs, first_frame_slug, audio_slug,
+        image_refs, video_refs, first_frame_ref, audio_ref,
         resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed,
       } = args as Args;
 
@@ -103,8 +54,8 @@ export function generateWan27R2vVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const imgs = image_slugs ?? [];
-      const vids = video_slugs ?? [];
+      const imgs = image_refs ?? [];
+      const vids = video_refs ?? [];
       const totalRefs = imgs.length + vids.length;
 
       if (totalRefs > 5) {
@@ -116,28 +67,28 @@ export function generateWan27R2vVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const raw of imgs) {
-        const r = await resolveImageSlug(fs, raw, book_id);
+        const r = await resolveImageRef(fs, raw, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       const videoInputs: RefInput[] = [];
       for (const raw of vids) {
-        const r = await resolveVideoSlug(fs, raw, book_id);
+        const r = await resolveVideoRef(fs, raw, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInputs.push(r.value);
       }
 
       let firstFrame: RefInput | undefined;
-      if (first_frame_slug) {
-        const r = await resolveImageSlug(fs, first_frame_slug, book_id);
+      if (first_frame_ref) {
+        const r = await resolveImageRef(fs, first_frame_ref, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let voiceRef: RefInput | undefined;
-      if (audio_slug) {
-        const r = await resolveAudioSlug(fs, audio_slug, book_id);
+      if (audio_ref) {
+        const r = await resolveAudioRef(fs, audio_ref, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         voiceRef = r.value;
       }
@@ -151,7 +102,7 @@ export function generateWan27R2vVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = [...imageInputs.map((i) => i.assetId), ...(firstFrame ? [firstFrame.assetId] : [])];
       const sourceVideoIds = videoInputs.map((i) => i.assetId);
       const sourceAudioIds = voiceRef ? [voiceRef.assetId] : [];

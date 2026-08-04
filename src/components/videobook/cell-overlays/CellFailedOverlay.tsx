@@ -4,19 +4,19 @@ import { RotateCcw } from 'lucide-react'
 export function CellFailedOverlay({
   error,
   label,
-  slug,
+  address,
   onRetry,
 }: {
   error: string
   label: string
-  slug: string
+  address: string
   onRetry?: () => void
 }) {
   return (
     <div
       className="cell-state-overlay cell-state-overlay-failed"
       role="alert"
-      aria-label={`@${slug} ${label.toLowerCase()}`}
+      aria-label={`@${address} ${label.toLowerCase()}`}
       title={error}
     >
       <div className="cell-state-scanlines" aria-hidden="true" />
@@ -28,7 +28,7 @@ export function CellFailedOverlay({
           <button
             type="button"
             className="cell-state-retry nodrag"
-            aria-label={`Retry @${slug}`}
+            aria-label={`Retry @${address}`}
             title="Retry generation"
             onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
               event.stopPropagation()

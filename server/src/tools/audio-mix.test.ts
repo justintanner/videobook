@@ -49,8 +49,8 @@ describe("audio_mix tool", () => {
     const layer = await fs.artifacts.create("aud", "layer");
     if (!target.ok) throw new Error(target.error.message);
     if (!layer.ok) throw new Error(layer.error.message);
-    targetAssetId = target.value.slug;
-    layerAssetId = layer.value.slug;
+    targetAssetId = target.value.artifactId;
+    layerAssetId = layer.value.artifactId;
     const targetWrite = await fs.files.write(targetAssetId, "original.wav", await readFile(targetFixture)
     );
     const layerWrite = await fs.files.write(layerAssetId, "original.wav", await readFile(layerFixture)
@@ -91,7 +91,7 @@ describe("audio_mix tool", () => {
     });
     const manifest = await fs.files.manifest(targetAssetId);
     if (!manifest.ok) throw new Error(manifest.error.message);
-    const targetFile = findAudioFile(manifest.value.files, targetAssetId);
+    const targetFile = findAudioFile(manifest.value.files, "audio");
     expect(targetFile?.name).toBe("original.wav");
     expect(manifest.value.files.some((file) => file.name.includes("audio_mix_pending"))).toBe(false);
     expect(manifest.value.files.some((file) => file.name.includes("audio_mix_backup"))).toBe(false);

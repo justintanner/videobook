@@ -27,23 +27,13 @@ export interface AssetMentionRecord {
 export interface AssetMentionCandidate
   extends Omit<AssetMentionRecord, 'id'> {
   cellAddress: string
-  cellSlug: string
-  assetSlug: string
 }
 
 interface NotebookMentionCell {
   id?: string
-  slug: string
-  slot?: NotebookGridSlot
+  slot: NotebookGridSlot
   type: string
   outputArtifactId?: string
-}
-
-export interface NotebookCellRenamePlan {
-  cellId: string
-  previousSlug: string
-  nextSlug: string
-  conflict: boolean
 }
 
 export interface AssetMentionSuggestion {
@@ -92,14 +82,10 @@ export function notebookMentionAssets(
   }
   return [...cellsByArtifactId.entries()].map(([artifactId, cell]) => {
     const asset = assetsByArtifactId.get(artifactId)!
-    const { id: assetSlug, ...assetFields } = asset
+    const { id: _id, ...assetFields } = asset
     return {
       ...assetFields,
-      cellAddress: cell.slot
-        ? notebookGridAddress(cell.slot)
-        : cell.slug,
-      cellSlug: cell.slug,
-      assetSlug,
+      cellAddress: notebookGridAddress(cell.slot),
     }
   })
 }
@@ -108,18 +94,38 @@ export function resolveNotebookMentionAliases(
   input: string,
   assets: readonly AssetMentionCandidate[],
 ): string {
-  return replaceNotebookMentions(input, assets.flatMap((asset) => [
-    { reference: asset.cellAddress, replacement: `@${asset.assetSlug}` },
-    { reference: asset.cellSlug, replacement: `@${asset.assetSlug}` },
-  ]))
+  return replaceNotebookMentions(input, assets.map((asset) => ({
+    reference: asset.cellAddress,
+    replacement: `@${asset.artifactId}`,
+  })))
+}
+
+function escapeMentionToken(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function replaceMentionTokens(
+  input: string,
+  replacements: ReadonlyArray<{ token: string; replacement: string }>,
+): string {
+  let output = input
+  for (const { token, replacement } of replacements) {
+    const bare = normalizeNotebookReference(token)
+    if (!bare) continue
+    output = output.replace(
+      new RegExp(`@${escapeMentionToken(bare)}(?![\\w-])`, 'giu'),
+      replacement,
+    )
+  }
+  return output
 }
 
 export function restoreNotebookMentionAliases(
   input: string,
   assets: readonly AssetMentionCandidate[],
 ): string {
-  return replaceNotebookMentions(input, assets.map((asset) => ({
-    reference: asset.assetSlug,
+  return replaceMentionTokens(input, assets.map((asset) => ({
+    token: asset.artifactId,
     replacement: `@${asset.cellAddress}`,
   })))
 }
@@ -134,12 +140,12 @@ export function restoreSelectedNotebookMentionAliases(
       ? [[cell.outputArtifactId, cell] as const]
       : []),
   )
-  return replaceNotebookMentions(input, assets.flatMap((asset) => {
+  return replaceMentionTokens(input, assets.flatMap((asset) => {
     const cell = cellsByArtifactId.get(asset.artifactId)
     if (!cell) return []
     return [{
-      reference: asset.assetSlug,
-      replacement: `@${cell.slot ? notebookGridAddress(cell.slot) : cell.slug}`,
+      token: asset.artifactId,
+      replacement: `@${notebookGridAddress(cell.slot)}`,
     }]
   }))
 }
@@ -152,39 +158,6 @@ export function applyNotebookMentionSuggestion(
   if (prefix === undefined) return input
   const start = input.length - prefix.length - 1
   return `${input.slice(0, start)}@${normalizeNotebookReference(suggestion)}`
-}
-
-export function notebookCellRenamePlan(
-  assetId: unknown,
-  result: unknown,
-  cells: readonly NotebookMentionCell[],
-  assets: readonly AssetMentionCandidate[],
-): NotebookCellRenamePlan | null {
-  if (typeof assetId !== 'string' || !assetId.trim()) return null
-  if (!result || typeof result !== 'object' || Array.isArray(result)) return null
-  const value = result as Record<string, unknown>
-  const oldAssetId = value.old_asset_id
-  const newAssetId = value.new_asset_id
-  if (typeof oldAssetId !== 'string' || typeof newAssetId !== 'string') return null
-  const requested = normalizeNotebookReference(assetId)
-  const candidate = assets.find((asset) =>
-    (asset.cellAddress.toLowerCase() === requested
-      || asset.cellSlug.toLowerCase() === requested)
-    && asset.assetSlug === oldAssetId)
-  if (!candidate) return null
-  const cell = cells.find((item) =>
-    item.id
-    && item.slug.toLowerCase() === candidate.cellSlug.toLowerCase()
-    && item.outputArtifactId === candidate.artifactId)
-  if (!cell?.id) return null
-  return {
-    cellId: cell.id,
-    previousSlug: cell.slug,
-    nextSlug: newAssetId,
-    conflict: cells.some((item) =>
-      item.id !== cell.id
-      && item.slug.toLowerCase() === newAssetId.toLowerCase()),
-  }
 }
 
 export function assetMentionMetadata(

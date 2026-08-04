@@ -170,7 +170,7 @@ describe("slash_commands tool", () => {
     const qart = commands.find((c) => c.command === "/qart")!;
     expect(qart.mcpTool?.tool).toBe("create_qart");
     expect(qart.mcpTool?.autoInject).toContain("book_id");
-    expect(qart.params.map((p) => p.name)).toEqual(["image_slug", "value"]);
+    expect(qart.params.map((p) => p.name)).toEqual(["image_ref", "value"]);
 
     expect(commandNames).toContain("/qrbtf");
 

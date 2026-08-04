@@ -86,7 +86,7 @@ describe("notebook local media and analysis fan-out", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-media-dag-"));
-    engine = createEngine({ rootDir, initialBookSlug: "media-dag" });
+    engine = createEngine({ rootDir, initialBookName: "media-dag" });
     await engine.ready;
   });
 
@@ -94,7 +94,7 @@ describe("notebook local media and analysis fan-out", () => {
     if (!engine || !rootDir) throw new Error("engine missing");
     const sourcePath = join(rootDir, "source.mp4");
     await makeSourceMp4(sourcePath, 6);
-    const source = await engine.artifacts.create({ kind: "video", name: "source clip" });
+    const source = await engine.artifacts.create({ kind: "video", label: "source clip" });
     expect(source.ok).toBe(true);
     if (!source.ok) return;
     const ingested = await engine.files.writeFromPath(
@@ -141,7 +141,7 @@ describe("notebook local media and analysis fan-out", () => {
     await makeLowRateMp4(sourcePath);
     const source = await engine.artifacts.create({
       kind: "video",
-      name: "low-rate clip",
+      label: "low-rate clip",
     });
     expect(source.ok).toBe(true);
     if (!source.ok) return;
@@ -175,7 +175,7 @@ describe("notebook local media and analysis fan-out", () => {
     await makeSourceMp4(sourcePath, 2);
     const source = await engine.artifacts.create({
       kind: "video",
-      name: "short source",
+      label: "short source",
     });
     expect(source.ok).toBe(true);
     if (!source.ok) return;
@@ -200,7 +200,7 @@ describe("notebook local media and analysis fan-out", () => {
     await makeAudioOnlyMp4(sourcePath);
     const source = await engine.artifacts.create({
       kind: "video",
-      name: "audio-only source",
+      label: "audio-only source",
     });
     expect(source.ok).toBe(true);
     if (!source.ok) return;
@@ -228,21 +228,21 @@ describe("notebook local media and analysis fan-out", () => {
     const notebook = await engine.notebooks.create("Workflow");
     expect(notebook.ok).toBe(true);
     if (!notebook.ok) return;
-    const sourceArtifact = await engine.artifacts.create({ kind: "video", name: "source" });
+    const sourceArtifact = await engine.artifacts.create({ kind: "video", label: "source" });
     expect(sourceArtifact.ok).toBe(true);
     if (!sourceArtifact.ok) return;
     await engine.files.write(sourceArtifact.value.artifactId, "original.mp4", Buffer.from("fixture"));
 
     const source = engine.notebooks.createCell({
       type: "video",
-      slug: "vid-source",
+      label: "vid-source",
       slot: { row: 0, column: 0 },
       outputArtifactId: sourceArtifact.value.artifactId,
       inputs: { workflowRole: "source" },
     });
     const analysis = engine.notebooks.createCell({
       type: "analyze",
-      slug: "analyze-source",
+      label: "analyze-source",
       slot: { row: 1, column: 0 },
       prompt: "Segment",
       provider: "kie",
@@ -253,7 +253,7 @@ describe("notebook local media and analysis fan-out", () => {
     });
     const analysisOutput = engine.notebooks.createCell({
       type: "analysis",
-      slug: "analysis-source",
+      label: "analysis-source",
       slot: { row: 2, column: 0 },
       inputs: {
         workflowRole: "analysis-output",
@@ -424,7 +424,7 @@ describe("notebook local media and analysis fan-out", () => {
 
     const assembly = engine.notebooks.createCell({
       type: "concat",
-      slug: "concat-scenes",
+      label: "concat-scenes",
       slot: { row: 11, column: 0 },
       operation: "concat_video",
       tool: "ffmpeg",
@@ -432,7 +432,7 @@ describe("notebook local media and analysis fan-out", () => {
     });
     const manual = engine.notebooks.createCell({
       type: "prompt",
-      slug: "prompt-manual-note",
+      label: "prompt-manual-note",
       slot: { row: 12, column: 0 },
       prompt: "Keep this card in place",
     });
@@ -470,7 +470,7 @@ describe("notebook local media and analysis fan-out", () => {
     for (const retained of retainedBranch) {
       const reconciled = changed.cells.find((cell) => cell.id === retained.id);
       expect(reconciled?.slot).toEqual(retained.slot);
-      expect(reconciled?.slug).toBe(retained.slug);
+      expect(reconciled?.label).toBe(retained.label);
       expect(reconciled?.inputs?.ordinal).toBe(3);
     }
     const newSplit = changed.cells.find((cell) =>
@@ -491,7 +491,7 @@ describe("notebook local media and analysis fan-out", () => {
       && cell.slot.column < 13)).toBe(true);
     expect(new Set(changed.cells.map((cell) =>
       `${cell.slot.row}:${cell.slot.column}`)).size).toBe(changed.cells.length);
-    expect(new Set(changed.cells.map((cell) => cell.slug)).size)
+    expect(new Set(changed.cells.map((cell) => cell.id)).size)
       .toBe(changed.cells.length);
     expect(newBranch.every((cell) =>
       cell.slot.row !== assembly.slot.row
@@ -502,7 +502,7 @@ describe("notebook local media and analysis fan-out", () => {
 
     const removedArtifact = await engine.artifacts.create({
       kind: "video",
-      name: "removed branch output",
+      label: "removed branch output",
     });
     expect(removedArtifact.ok).toBe(true);
     if (!removedArtifact.ok) return;
@@ -555,7 +555,7 @@ describe("notebook local media and analysis fan-out", () => {
     if (!notebook.ok) return;
     const analyze = engine.notebooks.createCell({
       type: "analyze",
-      slug: "analyze-invariant",
+      label: "analyze-invariant",
       slot: { row: 0, column: 0 },
     });
     const run = (document: typeof notebook.value) =>
@@ -575,7 +575,7 @@ describe("notebook local media and analysis fan-out", () => {
 
     const first = engine.notebooks.createCell({
       type: "analysis",
-      slug: "analysis-invariant-one",
+      label: "analysis-invariant-one",
       slot: { row: 1, column: 0 },
       inputs: {
         analysisRole: "result",
@@ -584,7 +584,7 @@ describe("notebook local media and analysis fan-out", () => {
     });
     const second = engine.notebooks.createCell({
       type: "analysis",
-      slug: "analysis-invariant-two",
+      label: "analysis-invariant-two",
       slot: { row: 2, column: 0 },
       inputs: {
         analysisRole: "result",

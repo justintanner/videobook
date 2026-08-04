@@ -6,7 +6,7 @@
  *
  * Only identity, labels, and image slot limits are configured here.
  */
-import type { ResolvedArtifact } from "videobook-engine";
+import type { ResolvedArtifactRef } from "./artifact-refs.js";
 import { createKie } from "@apicity/kie";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
 import { canonicalCharacterId, totalImageReferenceSlots, GOOGLE_IMAGE_MAX_REFERENCE_SLOTS } from "./google-flow-refs.js";
@@ -92,7 +92,7 @@ type ImageModelConfig = {
   kieImageField?: string;
   defaultSchemas?: Record<string, ZodLike>;
   /** Optional fal.ai routing — when set, adds "fal" as a provider option.
-   *  Tool name is picked by image-slug count at submit time: withRefs when
+   *  Tool name is picked by image-ref count at submit time: withRefs when
    *  one or more reference images are present, noRefs otherwise. */
   falToolNames?: { noRefs?: string; withRefs?: string };
   /** Optional Google Flow (useapi.net) routing — when set, adds "google" as a
@@ -344,11 +344,11 @@ type ToolSchema = {
 
 function kieFieldToParam(field: PayloadFieldSchema, config: ImageModelConfig, fieldName: string): ParamSchema {
   const isImageField = fieldName === config.kieImageField;
-  const outputName = isImageField ? "image_slugs" : fieldName;
+  const outputName = isImageField ? "image_refs" : fieldName;
   const defaults = getImageDefaultsForConfig(config);
 
   const param: ParamSchema = {
-    // Image fields are exposed to the frontend as `image_slugs: string[]` even
+    // Image fields are exposed to the frontend as `image_refs: string[]` even
     // when the underlying provider takes a singular `image_url` string.
     type: isImageField ? "array" : field.type,
     description: isImageField
@@ -421,11 +421,11 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
       type: "object",
       properties: {
         prompt: { type: "string", description: "Natural language generation prompt" },
-        image_slugs: {
+        image_refs: {
           type: "array",
           items: { type: "string" },
           maxItems: GOOGLE_IMAGE_MAX_REFERENCE_SLOTS,
-          description: `Optional reference image asset slugs (up to ${GOOGLE_IMAGE_MAX_REFERENCE_SLOTS})`,
+          description: `Optional reference image artifact ids (up to ${GOOGLE_IMAGE_MAX_REFERENCE_SLOTS})`,
         },
         character_refs: {
           type: "array",
@@ -458,7 +458,7 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
     const properties: Record<string, ParamSchema> = {};
     const required: string[] = [];
     for (const [fieldName, field] of Object.entries(modelSchema.fields) as [string, PayloadFieldSchema][]) {
-      const outputName = fieldName === config.kieImageField ? "image_slugs" : fieldName;
+      const outputName = fieldName === config.kieImageField ? "image_refs" : fieldName;
       properties[outputName] = kieFieldToParam(field, config, fieldName);
       if (field.required) required.push(outputName);
     }
@@ -488,7 +488,7 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
   if (config.key === "alibaba_image" || config.key === "alibaba_image_pro") {
     const properties: Record<string, ParamSchema> = {
       prompt: zodFieldToParam(AlibabaImageTextContentSchema.shape.text, "Text prompt for image generation (max 5000 chars)"),
-      image_slugs: {
+      image_refs: {
         type: "array",
         items: { type: "string" },
         description: imageSlotsDescription(getImageSlotsForConfig(config)),
@@ -508,7 +508,7 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
     const modelEnum = isEdit ? [...QWEN_EDIT_MODEL_VALUES] : [...QWEN_GENERATION_MODEL_VALUES];
     const properties: Record<string, ParamSchema> = {
       prompt: { type: "string", description: isEdit ? "Edit instruction text" : "Text prompt for image generation" },
-      image_slugs: {
+      image_refs: {
         type: "array",
         items: { type: "string" },
         description: imageSlotsDescription(getImageSlotsForConfig(config)),
@@ -521,7 +521,7 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
       watermark: zodFieldToParam(AlibabaMultimodalGenerationParametersSchema.shape.watermark, "Add watermark to generated image"),
       seed: zodFieldToParam(AlibabaMultimodalGenerationParametersSchema.shape.seed, "Random seed for reproducibility (0-2147483647)"),
     };
-    const required = isEdit ? ["prompt", "image_slugs", "model"] : ["prompt", "model"];
+    const required = isEdit ? ["prompt", "image_refs", "model"] : ["prompt", "model"];
     return { type: "object", properties, required, defaults };
   }
 
@@ -600,19 +600,19 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
   return providers;
 }
 
-function resolveSwapToolName(names: { noRefs?: string; withRefs?: string } | undefined, imageSlugCount: number): string | null {
+function resolveSwapToolName(names: { noRefs?: string; withRefs?: string } | undefined, imageRefCount: number): string | null {
   if (!names) return null;
-  if (imageSlugCount > 0 && names.withRefs) return names.withRefs;
-  if (imageSlugCount === 0 && names.noRefs) return names.noRefs;
+  if (imageRefCount > 0 && names.withRefs) return names.withRefs;
+  if (imageRefCount === 0 && names.noRefs) return names.noRefs;
   return names.withRefs ?? names.noRefs ?? null;
 }
 
-function resolveFalToolName(config: ImageModelConfig, imageSlugCount: number): string | null {
-  return resolveSwapToolName(config.falToolNames, imageSlugCount);
+function resolveFalToolName(config: ImageModelConfig, imageRefCount: number): string | null {
+  return resolveSwapToolName(config.falToolNames, imageRefCount);
 }
 
-function resolveGoogleToolName(config: ImageModelConfig, imageSlugCount: number): string | null {
-  return resolveSwapToolName(config.googleToolNames, imageSlugCount);
+function resolveGoogleToolName(config: ImageModelConfig, imageRefCount: number): string | null {
+  return resolveSwapToolName(config.googleToolNames, imageRefCount);
 }
 
 function getImageModels(): Record<string, ImageModelInfo> {
@@ -624,7 +624,7 @@ function getImageModels(): Record<string, ImageModelInfo> {
 
     if (modelSchema) {
       for (const fieldName of Object.keys(modelSchema.fields)) {
-        params.push(fieldName === config.kieImageField ? "image_slugs" : fieldName);
+        params.push(fieldName === config.kieImageField ? "image_refs" : fieldName);
       }
     } else if (config.xaiSchemaOverride) {
       params.push(...Object.keys(config.xaiSchemaOverride));
@@ -685,8 +685,8 @@ function validateImageParams(rawToolName: string, params: Record<string, unknown
 
   const imageSlots = getImageSlotsForToolName(rawToolName);
   const label = getImageToolLabel(rawToolName, config);
-  const imageSlugs = params.image_slugs as string[] | undefined;
-  const totalImages = imageSlugs?.length ?? 0;
+  const imageRefs = params.image_refs as string[] | undefined;
+  const totalImages = imageRefs?.length ?? 0;
 
   if (imageSlots && imageSlots.min > 0 && totalImages < imageSlots.min) {
     warnings.push(`${label} requires at least ${imageSlots.min} reference image${imageSlots.min > 1 ? "s" : ""}`);
@@ -815,15 +815,15 @@ type ModelOption = {
   selected_provider: string;
 };
 
-function filterInvalidSlugs(
+function filterInvalidRefs(
   params: Record<string, unknown>,
   validTags: Set<string>,
 ): void {
   for (const [k, v] of Object.entries(params)) {
-    if (k.endsWith("_slug") && typeof v === "string" && v.startsWith("@") && !validTags.has(v)) {
+    if (k.endsWith("_ref") && typeof v === "string" && v.startsWith("@") && !validTags.has(v)) {
       params[k] = "";
     }
-    if (k.endsWith("_slugs") && Array.isArray(v)) {
+    if (k.endsWith("_refs") && Array.isArray(v)) {
       params[k] = v.filter(
         (s) => typeof s === "string" && (!s.startsWith("@") || validTags.has(s)),
       );
@@ -835,7 +835,7 @@ function buildImageModelOption(
   modelKey: string,
   modelInfo: ImageModelInfo,
   baseParams: Record<string, unknown>,
-  resolvedAssets: ResolvedArtifact[],
+  resolvedAssets: ResolvedArtifactRef[],
   historyEntries?: ActionLogEntry[],
   providerOverride?: string,
   projectAssetTags?: Set<string>,
@@ -865,7 +865,7 @@ function buildImageModelOption(
   const imageTags = resolvedAssets
     .filter((a) => a.artifactType === "image" && a.filePath)
     .map((a) => a.tag);
-  params.image_slugs = imageTags.length > 0 ? imageTags : [];
+  params.image_refs = imageTags.length > 0 ? imageTags : [];
 
   const availableProviders = modelInfo.providers.filter((p) => process.env[p.envKey]);
   const providerList = availableProviders.length > 0 ? availableProviders : modelInfo.providers;
@@ -878,9 +878,9 @@ function buildImageModelOption(
   let effectiveToolName = toolName;
   if (selectedProvider === "fal" || selectedProvider === "google") {
     const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
-    const slugCount = Array.isArray(params.image_slugs) ? (params.image_slugs as unknown[]).length : 0;
+    const refCount = Array.isArray(params.image_refs) ? (params.image_refs as unknown[]).length : 0;
     const swapName = config
-      ? (selectedProvider === "fal" ? resolveFalToolName(config, slugCount) : resolveGoogleToolName(config, slugCount))
+      ? (selectedProvider === "fal" ? resolveFalToolName(config, refCount) : resolveGoogleToolName(config, refCount))
       : null;
     if (swapName) effectiveToolName = swapName;
   }
@@ -896,7 +896,7 @@ function buildImageModelOption(
   }
 
   if (projectAssetTags) {
-    filterInvalidSlugs(params, projectAssetTags);
+    filterInvalidRefs(params, projectAssetTags);
   }
 
   if (schema) {

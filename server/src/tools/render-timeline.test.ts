@@ -143,8 +143,8 @@ describe("render_timeline tool", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("missing_renders");
     expect(parsed.orientation).toBe("landscape");
-    expect(parsed.missing_slugs).toEqual([uploaded.assetId]);
-    expect(parsed.message).toContain(uploaded.assetId);
+    expect(parsed.missing_artifact_ids).toEqual([uploaded.artifactId]);
+    expect(parsed.message).toContain(uploaded.artifactId);
   });
 
   it("uses explicit orientation arg over timeline fields", async () => {

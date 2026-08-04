@@ -58,10 +58,10 @@ export function registerGenerateWan27I2vVideoJob(fs: Engine): void {
       "generate_kie_wan_2_7_image_to_video",
       {
         prompt,
-        first_frame_slug: firstFrame?.assetId,
-        last_frame_slug: lastFrame?.assetId,
-        first_clip_slug: firstClip?.assetId,
-        driving_audio_slug: drivingAudio?.assetId,
+        first_frame_ref: firstFrame?.assetId,
+        last_frame_ref: lastFrame?.assetId,
+        first_clip_ref: firstClip?.assetId,
+        driving_audio_ref: drivingAudio?.assetId,
       },
     ) ?? "";
 

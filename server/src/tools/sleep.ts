@@ -14,7 +14,7 @@ export function sleepDef(fs: Engine): ToolDef {
       "Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.",
     schema: {
       asset_id: z.string().describe("Asset ID to wait on"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       timeout_seconds: z
         .number()
         .default(300)

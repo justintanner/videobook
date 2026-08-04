@@ -50,7 +50,7 @@ export function applyCutsDef(fs: Engine): ToolDef {
       + "Pair with /suggest-cuts to source ranges, or hand-pick them.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-*)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       cuts: z
         .array(
           z.object({

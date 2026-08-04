@@ -3,7 +3,7 @@ import { findVideoFile } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
-import { toolError } from "./_shared.js";
+import { requireArtifactKind, toolError } from "./_shared.js";
 
 const DEFAULT_SOURCE_MIX = 0.22;
 const DEFAULT_EDGE_FADE_MS = 250;
@@ -13,10 +13,10 @@ export function cleanVideoAudioDef(fs: Engine): ToolDef {
   return {
     name: "clean_video_audio",
     description:
-      "Clean a vid-* asset's audio in place with ElevenLabs Voice Isolator. Preserves dialogue as the main track, keeps a quiet denoised source bed for important sound effects, suppresses odd start/end sounds with fades, and can add subtle instrumental ElevenLabs music. The video stream is copied unchanged and process_video refreshes derived audio artifacts.",
+      "Clean a video artifact's audio in place with ElevenLabs Voice Isolator. Preserves dialogue as the main track, keeps a quiet denoised source bed for important sound effects, suppresses odd start/end sounds with fades, and can add subtle instrumental ElevenLabs music. The video stream is copied unchanged and process_video refreshes derived audio artifacts.",
     schema: {
-      asset_id: z.string().describe("Video asset ID (vid-* or @vid-*)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Video artifact id (with or without a leading @)"),
+      book_id: z.string().describe("Book id"),
       source_mix: z
         .number()
         .min(0)
@@ -70,9 +70,8 @@ export function cleanVideoAudioDef(fs: Engine): ToolDef {
         music_volume?: number;
       };
       const assetId = asset_id.replace(/^@/, "");
-      if (!assetId.startsWith("vid-")) {
-        return toolError(`clean_video_audio requires a vid-* asset, got ${asset_id}`);
-      }
+      const kindGate = await requireArtifactKind(fs, assetId, ["video"], "clean_video_audio");
+      if (kindGate) return kindGate;
 
       const manifestResult = await fs.files.manifest(assetId);
       if (!manifestResult.ok) return toolError(manifestResult.error.message);

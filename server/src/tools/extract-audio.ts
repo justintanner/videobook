@@ -1,4 +1,4 @@
-import type { Engine } from "videobook-engine";
+import type { Artifact, Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -26,26 +26,25 @@ async function hasAudioStream(filePath: string): Promise<boolean> {
   ) ?? false;
 }
 
-function deriveAudioName(videoAssetId: string): string {
-  const baseName = videoAssetId.startsWith("vid-") ? videoAssetId.slice(4) : videoAssetId;
-  return `ext-${baseName}`;
+function deriveAudioName(source: Artifact): string {
+  return `ext-${source.label ?? source.artifactId}`;
 }
 
 export function extractAudioDef(fs: Engine): ToolDef {
   return {
     name: "extract_audio",
-    description: "Extract the audio track from a video asset as MP3. By default creates a new aud-* asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset (e.g. plan/s1.mp3). Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).",
+    description: "Extract the audio track from a video asset as MP3. By default creates a new audio asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset. Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).",
     schema: {
-      asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Video artifact id"),
+      book_id: z.string().describe("Book UUID"),
       destination: z
         .object({
-          asset_id: z.string().describe("Existing asset to write the mp3 into (e.g. \"plan\")"),
+          asset_id: z.string().describe("Existing artifact id to write the mp3 into"),
           filename: z.string().describe("Filename for the mp3 inside the destination asset (e.g. \"s1.mp3\")"),
         })
         .optional()
         .describe(
-          "When set, write the mp3 to <destination.asset_id>/<destination.filename> instead of minting a fresh aud-* asset.",
+          "When set, write the mp3 to <destination.asset_id>/<destination.filename> instead of minting a fresh audio asset.",
         ),
       range: z
         .object({
@@ -64,6 +63,13 @@ export function extractAudioDef(fs: Engine): ToolDef {
         destination?: { asset_id: string; filename: string };
         range?: { start_s: number; duration_s: number };
       };
+      const sourceArtifact = fs.artifacts.get(asset_id);
+      if (!sourceArtifact.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: sourceArtifact.error.message }],
+        };
+      }
       const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
@@ -128,15 +134,15 @@ export function extractAudioDef(fs: Engine): ToolDef {
         audioAssetDir = destManifest.value.path;
         outputPath = join(audioAssetDir, destination.filename);
       } else {
-        const audioName = deriveAudioName(asset_id);
-        const assetResult = await fs.artifacts.create("aud", audioName);
+        const audioName = deriveAudioName(sourceArtifact.value);
+        const assetResult = await fs.artifacts.create("audio", audioName);
         if (!assetResult.ok) {
           return {
             isError: true as const,
             content: [{ type: "text" as const, text: `Failed to create audio asset: ${assetResult.error.message}` }],
           };
         }
-        audioAssetId = assetResult.value.slug;
+        audioAssetId = assetResult.value.artifactId;
         audioAssetDir = assetResult.value.path;
         outputPath = join(audioAssetDir, "original.mp3");
       }

@@ -178,12 +178,12 @@ describe("notebook live analysis", () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-live-analysis-"));
     engine = createEngine({
       rootDir,
-      initialBookSlug: "live-analysis",
+      initialBookName: "live-analysis",
     });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
-      name: "source",
+      label: "source",
     });
     expect(source.ok).toBe(true);
     if (!source.ok) return;
@@ -299,12 +299,12 @@ describe("notebook live analysis", () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-camera-cuts-"));
     engine = createEngine({
       rootDir,
-      initialBookSlug: "camera-cuts",
+      initialBookName: "camera-cuts",
     });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
-      name: "source",
+      label: "source",
     });
     expect(source.ok).toBe(true);
     if (!source.ok) return;
@@ -431,7 +431,7 @@ describe("notebook live analysis", () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-camera-pipeline-"));
     engine = createEngine({
       rootDir,
-      initialBookSlug: "camera-pipeline",
+      initialBookName: "camera-pipeline",
     });
     await engine.ready;
     const videoPath = join(rootDir, "camera-pipeline.mp4");
@@ -449,7 +449,7 @@ describe("notebook live analysis", () => {
     ]);
     const source = await engine.artifacts.create({
       kind: "video",
-      name: "source",
+      label: "source",
     });
     expect(source.ok).toBe(true);
     if (!source.ok) return;
@@ -527,12 +527,12 @@ describe("notebook live analysis", () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-audio-cuts-"));
     engine = createEngine({
       rootDir,
-      initialBookSlug: "audio-cuts",
+      initialBookName: "audio-cuts",
     });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
-      name: "source",
+      label: "source",
     });
     expect(source.ok).toBe(true);
     if (!source.ok) return;
@@ -622,12 +622,12 @@ describe("notebook live analysis", () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-transcript-fallback-"));
     engine = createEngine({
       rootDir,
-      initialBookSlug: "transcript-fallback",
+      initialBookName: "transcript-fallback",
     });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
-      name: "source",
+      label: "source",
     });
     expect(source.ok).toBe(true);
     if (!source.ok) return;
@@ -690,7 +690,7 @@ describe("notebook live analysis", () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-analysis-prompt-"));
     engine = createEngine({
       rootDir,
-      initialBookSlug: "analysis-prompt",
+      initialBookName: "analysis-prompt",
     });
     await engine.ready;
     const notebook = await engine.notebooks.create("Main");
@@ -731,12 +731,12 @@ describe("notebook live analysis", () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-live-duration-"));
     engine = createEngine({
       rootDir,
-      initialBookSlug: "live-duration",
+      initialBookName: "live-duration",
     });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
-      name: "source",
+      label: "source",
     });
     expect(source.ok).toBe(true);
     if (!source.ok) return;
@@ -752,12 +752,12 @@ describe("notebook live analysis", () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-live-frames-"));
     engine = createEngine({
       rootDir,
-      initialBookSlug: "live-frames",
+      initialBookName: "live-frames",
     });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
-      name: "source",
+      label: "source",
     });
     expect(source.ok).toBe(true);
     if (!source.ok) return;
@@ -776,12 +776,12 @@ describe("notebook live analysis", () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-live-runner-"));
     engine = createEngine({
       rootDir,
-      initialBookSlug: "live-runner",
+      initialBookName: "live-runner",
     });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
-      name: "source",
+      label: "source",
     });
     expect(source.ok).toBe(true);
     if (!source.ok) return;

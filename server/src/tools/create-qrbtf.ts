@@ -122,7 +122,7 @@ async function persistQrbtfAsset(
 ): Promise<{ ok: true; assetId: string } | { ok: false; error: string }> {
   const created = await fs.artifacts.create("img", assetName);
   if (!created.ok) return { ok: false, error: `Failed to create image asset: ${created.error.message}` };
-  const assetId = created.value.slug;
+  const assetId = created.value.artifactId;
   const writes = await Promise.all([
     fs.files.write(assetId, "original.png", files.original),
     fs.files.write(assetId, "landscape.jpg", files.landscape),
@@ -149,7 +149,7 @@ export function createQrbtfDef(fs: Engine): ToolDef {
     description:
       "Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) from the qrbtf library. Renders SVG and rasterizes to image assets. Black background with bright modules by default.",
     schema: {
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       value: z.string().min(1).describe("Text or URL encoded in the QR code"),
       style: z
         .enum(["normal", "line", "dsj", "bubble", "func"])

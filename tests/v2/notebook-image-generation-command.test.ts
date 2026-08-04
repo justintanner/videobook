@@ -58,16 +58,16 @@ describe('notebook image generation commands', () => {
 
   it('parses natural image requests without consuming configured-cell commands', () => {
     expect(parseNotebookImageGenerationCommand(
-      'generate an image with @img-01',
+      'generate an image with @a1',
     )).toEqual({
       prompt: 'Create a new image based on the connected reference image.',
-      sourceReferences: ['img-01'],
+      sourceReferences: ['a1'],
     })
     expect(parseNotebookImageGenerationCommand(
-      'Please make a picture of a moonlit garden using @img-01 and @img-02.',
+      'Please make a picture of a moonlit garden using @a1 and @a2.',
     )).toEqual({
       prompt: 'a moonlit garden',
-      sourceReferences: ['img-01', 'img-02'],
+      sourceReferences: ['a1', 'a2'],
     })
     expect(parseNotebookImageGenerationCommand(
       'generate an image using @A1',
@@ -82,35 +82,35 @@ describe('notebook image generation commands', () => {
       sourceReferences: [],
     })
     expect(parseNotebookImageGenerationCommand(
-      'generate cell @generate-image-01',
+      'generate cell @a1',
     )).toBeNull()
     expect(notebookChatGenerationParameterReferences({
       book_id: 'ignored',
       prompt: 'scene @a5, character @a1, fluffy kitten standing',
-      image_slugs: ['@img-scene', 'img-character'],
-      first_frame_slug: '@img-opening',
-    })).toEqual(['img-scene', 'img-character', 'img-opening'])
+      image_refs: ['@b1', 'b2'],
+      first_frame_ref: '@b3',
+    })).toEqual(['b1', 'b2', 'b3'])
   })
 
   it('rejects non-image and unfinished sources before materialization', () => {
     const image = {
       id: '01900000-0000-7000-8000-000000000001',
       type: 'image' as const,
-      slug: 'img-ready',
+      label: 'img-ready',
       slot: { row: 0, column: 0 },
       outputArtifactId: '01900000-0000-7000-8000-000000000002',
     }
     const video = {
       id: '01900000-0000-7000-8000-000000000003',
       type: 'video' as const,
-      slug: 'vid-source',
+      label: 'vid-source',
       slot: { row: 0, column: 1 },
       outputArtifactId: '01900000-0000-7000-8000-000000000004',
     }
     const pending = {
       id: '01900000-0000-7000-8000-000000000005',
       type: 'image' as const,
-      slug: 'img-pending',
+      label: 'img-pending',
       slot: { row: 0, column: 2 },
     }
     const document = {
@@ -121,13 +121,13 @@ describe('notebook image generation commands', () => {
       createdAt: new Date(0).toISOString(),
     } satisfies NotebookDocument
 
-    expect(resolveNotebookImageGenerationSources(document, ['img-ready']))
+    expect(resolveNotebookImageGenerationSources(document, [image.id]))
       .toEqual([image])
     expect(resolveNotebookImageGenerationSources(document, ['A1']))
       .toEqual([image])
-    expect(() => resolveNotebookImageGenerationSources(document, ['vid-source']))
+    expect(() => resolveNotebookImageGenerationSources(document, ['a2']))
       .toThrow('@a2 is not an image-producing cell')
-    expect(() => resolveNotebookImageGenerationSources(document, ['img-pending']))
+    expect(() => resolveNotebookImageGenerationSources(document, ['a3']))
       .toThrow('@a3 does not have an image output yet')
     expect(() => resolveNotebookImageGenerationSources(document, ['img-other']))
       .toThrow('Notebook cell @img-other was not found')
@@ -137,7 +137,7 @@ describe('notebook image generation commands', () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
-      slug: 'connected-image-generation',
+      name: 'connected-image-generation',
     })) as { bookId: string }
     const managed = books.get(created.bookId)
     expect(managed.ok).toBe(true)
@@ -168,7 +168,7 @@ describe('notebook image generation commands', () => {
       notebook_id: notebookId,
       cell: {
         type: 'image',
-        slug: 'img-01',
+        label: 'Reference image',
         slot: { row: 0, column: 2 },
         output_artifact_id: artifact.value.artifactId,
       },
@@ -177,7 +177,7 @@ describe('notebook image generation commands', () => {
       notebook_id: notebookId,
       cell: {
         type: 'prompt',
-        slug: 'prompt-occupied',
+        label: 'Occupied note',
         slot: { row: 1, column: 2 },
         prompt: 'Occupied',
       },
@@ -192,7 +192,7 @@ describe('notebook image generation commands', () => {
       cellType: 'generate_image',
       mediaKind: 'image',
       prompt: 'neon rain',
-      sourceReferences: ['img-01'],
+      sourceReferences: ['a3'],
     } satisfies NotebookChatGenerationCommand
     const plannedCellId = '01900000-0000-7000-8000-000000000010'
     const draft = planNotebookChatGeneration({
@@ -268,7 +268,6 @@ describe('notebook image generation commands', () => {
     expect(connected.value.cells.find((cell) => cell.id === materialized.cellId))
       .toMatchObject({
         type: 'generate_image',
-        slug: 'generate-image-01',
         slot: { row: 0, column: 0 },
         prompt: 'neon rain',
         provider: 'kie',
@@ -290,7 +289,7 @@ describe('notebook image generation commands', () => {
       timeline_start_frame: 0,
     }) as {
       stages: Array<{
-        input: { cell_id: string; generation_input: { image_slugs: string[] } }
+        input: { cell_id: string; generation_input: { image_refs: string[] } }
         tool: string
       }>
     }
@@ -298,7 +297,9 @@ describe('notebook image generation commands', () => {
       tool: 'run_notebook_cell',
       input: {
         cell_id: materialized.cellId,
-        generation_input: { image_slugs: [`@${artifact.value.slug}`] },
+        generation_input: {
+          image_refs: [`@${artifact.value.artifactId}`],
+        },
       },
     })
   })
@@ -307,7 +308,7 @@ describe('notebook image generation commands', () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
-      slug: 'aliased-image-generation',
+      name: 'aliased-image-generation',
     })) as { bookId: string }
     const managed = books.get(created.bookId)
     expect(managed.ok).toBe(true)
@@ -335,7 +336,7 @@ describe('notebook image generation commands', () => {
       notebook_id: notebookId,
       cell: {
         type: 'generate_image',
-        slug: 'generate-image-shared',
+        label: 'Shared generated image',
         slot: { row: 0, column: 0 },
         output_artifact_id: firstArtifact.value.artifactId,
       },
@@ -344,7 +345,7 @@ describe('notebook image generation commands', () => {
       notebook_id: notebookId,
       cell: {
         type: 'image',
-        slug: 'img-ff2',
+        label: 'img ff',
         slot: { row: 0, column: 1 },
         output_artifact_id: firstArtifact.value.artifactId,
       },
@@ -353,7 +354,7 @@ describe('notebook image generation commands', () => {
       notebook_id: notebookId,
       cell: {
         type: 'image',
-        slug: 'img-jamie',
+        label: 'img jamie',
         slot: { row: 0, column: 2 },
         output_artifact_id: secondArtifact.value.artifactId,
       },
@@ -368,7 +369,7 @@ describe('notebook image generation commands', () => {
       firstArtifact.value,
       secondArtifact.value,
     ].map((artifact) => ({
-      id: artifact.slug,
+      id: artifact.artifactId,
       artifactId: artifact.artifactId,
       type: 'image',
       mediaUrl: null,
@@ -382,7 +383,7 @@ describe('notebook image generation commands', () => {
       current.value.cells,
       mentionRecords,
     )
-    const routedPrompt = `scene @${firstArtifact.value.slug}, character @${secondArtifact.value.slug}, fluffy kitten standing`
+    const routedPrompt = `scene @${firstArtifact.value.artifactId}, character @${secondArtifact.value.artifactId}, fluffy kitten standing`
     const restoredPrompt = restoreNotebookMentionAliases(
       routedPrompt,
       mentionAssets,
@@ -436,18 +437,18 @@ describe('notebook image generation commands', () => {
     }, current.value)).toThrow('@a3 is referenced but not connected')
     expect(() => validateNotebookChatGenerationPromptSources({
       ...draft,
-      cell: { ...draft.cell, prompt: 'use @missing-cell' },
-    }, current.value)).toThrow('Notebook cell @missing-cell was not found')
+      cell: { ...draft.cell, prompt: 'use @z13' },
+    }, current.value)).toThrow('Notebook cell @z13 is empty')
     expect(() => validateNotebookChatGenerationPromptSources({
       ...draft,
-      cell: { ...draft.cell, prompt: 'use @0' },
-    }, current.value)).toThrow('Cell reference @0 is ambiguous')
+      cell: { ...draft.cell, prompt: 'use @missing-cell' },
+    }, current.value)).not.toThrow()
     const preview = await invoke('preview_notebook_generation', {
       notebook_id: notebookId,
       cell_id: draft.cell.id,
       draft: {
         type: draft.cell.type,
-        slug: draft.cell.slug,
+        label: draft.cell.label,
         slot: draft.cell.slot,
         prompt: draft.cell.prompt,
         provider: draft.cell.provider,
@@ -469,8 +470,8 @@ describe('notebook image generation commands', () => {
     }
     expect(preview.payload).toMatchObject({
       prompt: 'scene @reference_1, character @reference_2, fluffy kitten standing',
-      reference_1: `@${firstArtifact.value.slug}`,
-      reference_2: `@${secondArtifact.value.slug}`,
+      reference_1: `@${firstArtifact.value.artifactId}`,
+      reference_2: `@${secondArtifact.value.artifactId}`,
     })
     const materialized = await materializeNotebookChatGeneration({
       bookId: created.bookId,

@@ -19,14 +19,13 @@ import type { Engine } from "videobook-engine";
 describe("enqueue status (no red-flash window)", () => {
   let tempDir: string;
   let fs: Engine;
-  const slug = "test-proj";
+  let bookId: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-enqstatus-"));
     fs = createEngineForTest(tempDir);
     await setEngineRoot(tempDir, fs);
-    const created = await fs.projects.create(slug);
-    expect(created.ok).toBe(true);
+    bookId = fs.book.get().bookId;
   });
 
   afterEach(async () => {
@@ -34,19 +33,19 @@ describe("enqueue status (no red-flash window)", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("vid- generation: status is 'generating' immediately after enqueue", async () => {
+  it("video generation: status is 'generating' immediately after enqueue", async () => {
     const asset = await fs.artifacts.create("vid", "gen-test");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
     await queue.enqueue(`gen-${Date.now()}`, {
       type: "generate_grok_imagine_video",
-      bookId: slug,
-      vidAssetId: asset.value.slug,
+      bookId,
+      vidAssetId: asset.value.artifactId,
       prompt: "ignored — handler is not registered",
     });
 
-    const status = await fs.status.get(asset.value.slug);
+    const status = await fs.status.get(asset.value.artifactId);
     expect(status.ok).toBe(true);
     if (!status.ok) return;
     expect(status.value).toBe("generating");
@@ -59,12 +58,12 @@ describe("enqueue status (no red-flash window)", () => {
 
     await queue.enqueue(`ren-${Date.now()}`, {
       type: "render_project",
-      bookId: slug,
-      assetId: asset.value.slug,
+      bookId,
+      assetId: asset.value.artifactId,
       orientation: "landscape",
     });
 
-    const status = await fs.status.get(asset.value.slug);
+    const status = await fs.status.get(asset.value.artifactId);
     expect(status.ok).toBe(true);
     if (!status.ok) return;
     expect(status.value).toBe("render-queued-landscape");
@@ -77,12 +76,12 @@ describe("enqueue status (no red-flash window)", () => {
 
     await queue.enqueue(`ren-p-${Date.now()}`, {
       type: "render_project",
-      bookId: slug,
-      assetId: asset.value.slug,
+      bookId,
+      assetId: asset.value.artifactId,
       orientation: "portrait",
     });
 
-    const status = await fs.status.get(asset.value.slug);
+    const status = await fs.status.get(asset.value.artifactId);
     expect(status.ok && status.value).toBe("render-queued-portrait");
   });
 
@@ -93,12 +92,12 @@ describe("enqueue status (no red-flash window)", () => {
 
     await queue.enqueue(`qr-outro-${Date.now()}`, {
       type: "render_qr_outro",
-      bookId: slug,
-      assetId: asset.value.slug,
+      bookId,
+      assetId: asset.value.artifactId,
       orientation: "landscape",
     });
 
-    const status = await fs.status.get(asset.value.slug);
+    const status = await fs.status.get(asset.value.artifactId);
     expect(status.ok && status.value).toBe("render-queued-landscape");
   });
 
@@ -109,13 +108,13 @@ describe("enqueue status (no red-flash window)", () => {
 
     await queue.enqueue(`trim-${Date.now()}`, {
       type: "trim_video",
-      bookId: slug,
-      assetId: asset.value.slug,
+      bookId,
+      assetId: asset.value.artifactId,
       start: 0,
       end: 1,
     });
 
-    const status = await fs.status.get(asset.value.slug);
+    const status = await fs.status.get(asset.value.artifactId);
     expect(status.ok && status.value).toBe("trimming");
   });
 
@@ -131,11 +130,11 @@ describe("enqueue status (no red-flash window)", () => {
 
     await queue.enqueue(`an-${type}-${Date.now()}`, {
       type,
-      bookId: slug,
-      assetId: asset.value.slug,
+      bookId,
+      assetId: asset.value.artifactId,
     });
 
-    const status = await fs.status.get(asset.value.slug);
+    const status = await fs.status.get(asset.value.artifactId);
     expect(status.ok && status.value).toBe("analyzing");
   });
 
@@ -146,12 +145,12 @@ describe("enqueue status (no red-flash window)", () => {
 
     await queue.enqueue(`dl-${Date.now()}`, {
       type: "download_video",
-      bookId: slug,
-      assetId: asset.value.slug,
+      bookId,
+      assetId: asset.value.artifactId,
       url: "https://example.com/x.mp4",
     });
 
-    const status = await fs.status.get(asset.value.slug);
+    const status = await fs.status.get(asset.value.artifactId);
     expect(status.ok && status.value).toBe("downloading");
   });
 });

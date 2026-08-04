@@ -1,4 +1,5 @@
 import { createEngineForTest } from "../fs.js";
+import { isUuidV7 } from "videobook-engine";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -43,6 +44,7 @@ describe("generate_nano_banana_pro_google tool", () => {
   });
 
   it("enqueues a text-to-image job", async () => {
+    const fs = createEngineForTest(tempDir);
     const result = await client.callTool({
       name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
@@ -55,7 +57,10 @@ describe("generate_nano_banana_pro_google tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.img_asset_id).toMatch(/^img-/);
+    expect(isUuidV7(parsed.img_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.img_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("image");
     expect(parsed.source_images).toEqual([]);
     expect(parsed.character_refs).toEqual([]);
   });
@@ -64,14 +69,14 @@ describe("generate_nano_banana_pro_google tool", () => {
     const fs = createEngineForTest(tempDir);
     const imageAsset = await fs.artifacts.create("img", "style-ref");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
+    await fs.files.write(imageAsset.value.artifactId, "original.png", await makePng());
 
     const result = await client.callTool({
       name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
         book_id: "test-proj",
         prompt: "same style, new scene",
-        image_slugs: [`@${imageAsset.value.slug}`],
+        image_refs: [`@${imageAsset.value.artifactId}`],
         aspect_ratio: "auto",
       },
     });
@@ -79,7 +84,7 @@ describe("generate_nano_banana_pro_google tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.source_images).toEqual([imageAsset.value.slug]);
+    expect(parsed.source_images).toEqual([imageAsset.value.artifactId]);
   });
 
   it("rejects aspect_ratio 'auto' without reference images", async () => {
@@ -129,14 +134,14 @@ describe("generate_nano_banana_pro_google tool", () => {
     const fs = createEngineForTest(tempDir);
     const imageAsset = await fs.artifacts.create("img", "style-ref");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
+    await fs.files.write(imageAsset.value.artifactId, "original.png", await makePng());
 
     const result = await client.callTool({
       name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
         book_id: "test-proj",
         prompt: "too many refs",
-        image_slugs: [`@${imageAsset.value.slug}`],
+        image_refs: [`@${imageAsset.value.artifactId}`],
         character_refs: ["character:a-imgs:5", "character:b-imgs:5"],
       },
     });

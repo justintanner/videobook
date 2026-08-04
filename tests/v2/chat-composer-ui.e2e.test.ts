@@ -176,14 +176,14 @@ describe('chat composer browser flow', () => {
       },
     )
     await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
-    await client.callTool({ name: 'create_book', arguments: { slug: 'chat-ui-e2e' } })
+    await client.callTool({ name: 'create_book', arguments: { name: 'chat-ui-e2e' } })
     const booksValue = resultValue(await client.callTool({
       name: 'list_books',
       arguments: { sort: 'newest' },
     }))
     const book = (Array.isArray(booksValue) ? booksValue : [])
       .map(record)
-      .find((entry) => entry?.slug === 'chat-ui-e2e')
+      .find((entry) => entry?.name === 'chat-ui-e2e')
     bookId = typeof book?.bookId === 'string' ? book.bookId : ''
     if (!bookId) throw new Error('Could not create browser fixture book')
     const notebooksValue = resultValue(await client.callTool({
@@ -206,17 +206,17 @@ describe('chat composer browser flow', () => {
     }
     videoCellId = await createCell({
       type: 'video',
-      slug: 'vid-source-one',
+      label: 'vid-source-one',
       slot: { row: 0, column: 0 },
     })
     imageCellId = await createCell({
       type: 'image',
-      slug: 'img-source-two',
+      label: 'img-source-two',
       slot: { row: 0, column: 2 },
     })
     const generationCellId = await createCell({
       type: 'generate_video',
-      slug: 'generate-video-target',
+      label: 'generate-video-target',
       slot: { row: 1, column: 0 },
       provider: 'kie',
       model: 'Seedance2MiniInputSchema',
@@ -226,7 +226,7 @@ describe('chat composer browser flow', () => {
     })
     reviewGenerationCellId = await createCell({
       type: 'generate_image',
-      slug: 'generate-image-review',
+      label: 'generate-image-review',
       slot: { row: 1, column: 2 },
       prompt: 'A moonlit garden ready for review',
     })
@@ -287,7 +287,7 @@ describe('chat composer browser flow', () => {
     }
     fullscreenImageCellId = await createCell({
       type: 'generate_image',
-      slug: 'generate-image-fullscreen',
+      label: 'generate-image-fullscreen',
       slot: { row: 2, column: 2 },
       prompt: 'A fullscreen image fixture',
       output_artifact_id: uploadedImageArtifactId,
@@ -486,13 +486,13 @@ describe('chat composer browser flow', () => {
 
       const secondImageCellId = await createCell({
         type: 'image',
-        slug: 'img-source-dynamic',
+        label: 'img-source-dynamic',
         slot: { row: 0, column: 4 },
       })
       dynamicCellIds.push(secondImageCellId)
       const imageTargetCellId = await createCell({
         type: 'generate_image',
-        slug: 'generate-image-dynamic-target',
+        label: 'generate-image-dynamic-target',
         slot: { row: 1, column: 4 },
         prompt: 'Dynamic image target',
       })
@@ -515,7 +515,7 @@ describe('chat composer browser flow', () => {
 
       const videoTargetCellId = await createCell({
         type: 'generate_video',
-        slug: 'generate-video-dynamic-target',
+        label: 'generate-video-dynamic-target',
         slot: { row: 2, column: 4 },
         provider: 'kie',
         model: 'Seedance2MiniInputSchema',
@@ -706,7 +706,9 @@ describe('chat composer browser flow', () => {
     const inspector = page.locator('.inspector')
     await inspector.locator('.inspector-cell-address').waitFor({ state: 'visible' })
     expect(await inspector.locator('.inspector-cell-address').textContent()).toBe('@b1')
-    expect(await inspector.locator('.inspector-slug-field').count()).toBe(0)
+    // The grid address is the cell handle, so the compact header carries no
+    // editable identity field of its own.
+    expect(await inspector.locator('header input, header textarea').count()).toBe(0)
 
     const inputsHeading = inspector.locator('.inspector-input-sources h3')
     const promptHeading = inspector.locator('.inspector-prompt-header h3')
@@ -875,7 +877,9 @@ describe('chat composer browser flow', () => {
     expect(await page.evaluate(() => window.localStorage.getItem('videobook.chat-model')))
       .toBe('gpt-5.6-sol')
 
-    const routedPrompt = 'generate image scene @a3, character @a1, fluffy kitten standing'
+    // @c3 is the only fixture cell with real media output, so it is the grid
+    // address the server-side resolver can rewrite to an artifact id.
+    const routedPrompt = 'generate image scene @c3, fluffy kitten standing'
     await input.fill(routedPrompt)
     await wait(700)
     observedCalls.length = 0

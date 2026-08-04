@@ -20,12 +20,12 @@ async function setup(): Promise<{
 }> {
   const root = await mkdtemp(join(tmpdir(), "videobook-ref-resolver-"));
   roots.push(root);
-  const engine = createEngine({ rootDir: root, initialBookSlug: "mentions" });
+  const engine = createEngine({ rootDir: root, initialBookName: "mentions" });
   const video = await engine.artifacts.create({
     kind: "video",
-    name: "yt 3h3i_td5kce",
+    label: "yt 3h3i_td5kce",
   });
-  const image = await engine.artifacts.create({ kind: "image", name: "hero" });
+  const image = await engine.artifacts.create({ kind: "image", label: "hero" });
   if (!video.ok || !image.ok) throw new Error("fixture artifact creation failed");
   const notebook = await engine.notebooks.create("Main");
   if (!notebook.ok) throw new Error(notebook.error.message);
@@ -34,19 +34,18 @@ async function setup(): Promise<{
     cells: [
       engine.notebooks.createCell({
         type: "video",
-        slug: "vid-source",
+        label: "Source video",
         slot: { row: 0, column: 1 },
         outputArtifactId: video.value.artifactId,
       }),
       engine.notebooks.createCell({
         type: "image",
-        slug: "img-source",
+        label: "Hero image",
         slot: { row: 0, column: 4 },
         outputArtifactId: image.value.artifactId,
       }),
       engine.notebooks.createCell({
         type: "image",
-        slug: "img-empty",
         slot: { row: 0, column: 6 },
       }),
     ],
@@ -65,13 +64,17 @@ describe("notebook reference resolver", () => {
     const result = resolveNotebookPromptReferences({
       engine: fixture.engine,
       document: fixture.document,
-      prompt: "motion @a2 and @vid-yt-3h3i_td5kce, appearance @a5",
+      prompt: "motion @a2 with @not-a-grid-token, appearance @a5",
       connectedArtifactIds: new Set([fixture.videoId]),
     });
-    expect(result.prompt).toContain("@vid-yt-3h3i_td5kce");
-    expect(result.prompt.match(/@vid-yt-3h3i_td5kce/gu)).toHaveLength(2);
-    expect(result.prompt).toContain("@img-hero");
+    expect(result.prompt).toContain(`@${fixture.videoId}`);
+    expect(result.prompt).toContain(`@${fixture.imageId}`);
+    expect(result.prompt).toContain("@not-a-grid-token");
     expect(result.unresolved).toEqual([]);
+    expect(result.resolved).toMatchObject([
+      { mention: "@a2", artifactId: fixture.videoId, cellAddress: "@a2" },
+      { mention: "@a5", artifactId: fixture.imageId, cellAddress: "@a5" },
+    ]);
     expect(result.unconnected).toMatchObject([{
       mention: "@a5",
       artifactId: fixture.imageId,

@@ -18,7 +18,7 @@ describe("notebook provider failures", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-provider-failure-"));
-    engine = createEngine({ rootDir, initialBookSlug: "provider-failure" });
+    engine = createEngine({ rootDir, initialBookName: "provider-failure" });
     await engine.ready;
   });
 
@@ -33,7 +33,7 @@ describe("notebook provider failures", () => {
   ): Promise<{ input: AwaitNotebookOutputPayload; cellId: string }> {
     const artifact = await engine.artifacts.create({
       kind: "video",
-      name: "provider output",
+      label: "provider output",
     });
     expect(artifact.ok).toBe(true);
     if (!artifact.ok) throw new Error(artifact.error.message);
@@ -42,7 +42,7 @@ describe("notebook provider failures", () => {
     if (!notebook.ok) throw new Error(notebook.error.message);
     const cell = engine.notebooks.createCell({
       type: "generate_video",
-      slug: "generate-video-01",
+      label: "Generate video",
       slot: { row: 0, column: 0 },
       provider,
       model: tool,

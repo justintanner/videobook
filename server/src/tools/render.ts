@@ -6,6 +6,7 @@ import { findVideoFile } from "videobook-engine";
 import { isValidHex } from "../remotion/util.js";
 import type { Orientation, OsgPosition } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
+import { requireArtifactKind } from "./_shared.js";
 import {
   readTimeline,
   timelineInput,
@@ -22,10 +23,10 @@ export function renderVideoDef(fs: Engine): ToolDef {
   return {
     name: "render_video",
     description:
-      "Render a vid- asset into landscape.mp4, portrait.mp4, or square.mp4. Renders all 3 orientations when orientation is omitted.",
+      "Render a video artifact into landscape.mp4, portrait.mp4, or square.mp4. Renders all 3 orientations when orientation is omitted.",
     schema: {
-      asset_id: z.string().describe("Asset ID (vid- prefix)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Video artifact id"),
+      book_id: z.string().describe("Book id"),
       orientation: z
         .enum(["landscape", "portrait", "square"])
         .optional()
@@ -217,12 +218,8 @@ export function renderVideoDef(fs: Engine): ToolDef {
         shadow_opacity?: number;
       };
 
-      if (!asset_id.startsWith("vid-")) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "asset_id must start with vid-" }],
-        };
-      }
+      const kindGate = await requireArtifactKind(fs, asset_id, ["video"], "render_video");
+      if (kindGate) return kindGate;
 
       if (text_color && !isValidHex(text_color)) {
         return {
@@ -301,12 +298,8 @@ export function renderVideoDef(fs: Engine): ToolDef {
       // Resolve OSG image
       let osgImagePath: string | null = null;
       if (osg_asset_id) {
-        if (!osg_asset_id.startsWith("img-")) {
-          return {
-            isError: true as const,
-            content: [{ type: "text" as const, text: "osg_asset_id must start with img-" }],
-          };
-        }
+        const osgGate = await requireArtifactKind(fs, osg_asset_id, ["image"], "osg_asset_id");
+        if (osgGate) return osgGate;
         const osgManifest = await fs.files.manifest(osg_asset_id);
         if (!osgManifest.ok) {
           return {

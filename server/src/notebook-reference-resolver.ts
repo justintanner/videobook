@@ -3,6 +3,7 @@ import type {
   NotebookCell,
   NotebookDocument,
 } from "videobook-engine";
+import { isUuidV7 } from "videobook-engine";
 import {
   notebookGridTag,
   parseNotebookGridAddress,
@@ -12,7 +13,6 @@ import {
   replaceNotebookMentions,
   scanNotebookMentions,
 } from "videobook-engine/notebook-mentions";
-import { isProviderNativeMention } from "./provider-prompt-transform.js";
 
 export type NotebookReferenceIssueCode =
   | "not_found"
@@ -24,9 +24,8 @@ export interface ResolvedNotebookReference {
   mention: string;
   reference: string;
   artifactId: string;
-  artifactSlug: string;
+  artifactLabel?: string;
   cellId?: string;
-  cellSlug?: string;
   cellAddress?: string;
 }
 
@@ -74,13 +73,13 @@ function mediaType(cell: NotebookCell): "image" | "video" | "audio" | null {
 function artifactRecord(
   engine: Engine | undefined,
   artifactId: string,
-): { artifactId: string; artifactSlug: string } | null {
-  if (!engine) return { artifactId, artifactSlug: artifactId };
+): { artifactId: string; artifactLabel?: string } | null {
+  if (!engine) return { artifactId };
   const artifact = engine.artifacts.get(artifactId);
   return artifact.ok
     ? {
         artifactId: artifact.value.artifactId,
-        artifactSlug: artifact.value.slug,
+        ...(artifact.value.label ? { artifactLabel: artifact.value.label } : {}),
       }
     : null;
 }
@@ -88,15 +87,9 @@ function artifactRecord(
 function directArtifact(
   engine: Engine | undefined,
   reference: string,
-): { artifactId: string; artifactSlug: string } | null {
-  if (!engine) return null;
-  const artifact = engine.artifacts.get(reference);
-  return artifact.ok
-    ? {
-        artifactId: artifact.value.artifactId,
-        artifactSlug: artifact.value.slug,
-      }
-    : null;
+): { artifactId: string; artifactLabel?: string } | null {
+  if (!engine || !isUuidV7(reference)) return null;
+  return artifactRecord(engine, reference);
 }
 
 function cellMatches(
@@ -114,9 +107,7 @@ function cellMatches(
   }
   const exact = documents.flatMap((document) =>
     document.cells
-      .filter((cell) =>
-        cell.slug.toLowerCase() === reference
-        || cell.id.toLowerCase() === reference)
+      .filter((cell) => cell.id.toLowerCase() === reference)
       .map((cell) => ({ document, cell })));
   if (exact.length > 0) return exact;
   return documents.flatMap((document) =>
@@ -203,7 +194,6 @@ export function resolveNotebookArtifactReference(input: {
     reference,
     ...artifact,
     cellId: match.cell.id,
-    cellSlug: match.cell.slug,
     cellAddress: notebookGridTag(match.cell.slot),
   };
 }
@@ -219,9 +209,7 @@ export function resolveNotebookPromptReferences(input: {
   const unresolved: NotebookReferenceIssue[] = [];
   const seen = new Set<string>();
   for (const mention of scanNotebookMentions(input.prompt)) {
-    if (seen.has(mention.reference) || isProviderNativeMention(mention.raw)) {
-      continue;
-    }
+    if (seen.has(mention.reference)) continue;
     seen.add(mention.reference);
     const result = resolveNotebookArtifactReference({
       engine: input.engine,
@@ -239,7 +227,7 @@ export function resolveNotebookPromptReferences(input: {
     input.prompt,
     resolved.map((item) => ({
       reference: item.reference,
-      replacement: `@${item.artifactSlug}`,
+      replacement: `@${item.artifactId}`,
     })),
   );
   const unconnected = input.connectedArtifactIds

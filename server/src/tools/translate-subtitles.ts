@@ -2,6 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
+import { requireArtifactKind } from "./_shared.js";
 
 export function translateSubtitlesDef(fs: Engine): ToolDef {
   return {
@@ -9,8 +10,8 @@ export function translateSubtitlesDef(fs: Engine): ToolDef {
     description:
       "Translate an asset's transcribed subtitles into another language. Writes elevenlabs.<lang>.json next to elevenlabs.json; renders with subtitle_language set to that language use it. Cached per language — re-runs only after re-transcription.",
     schema: {
-      asset_id: z.string().describe("Asset ID (vid-* or aud-*)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Video or audio artifact id"),
+      book_id: z.string().describe("Book id"),
       language: z
         .string()
         .regex(/^[a-z]{2}$/)
@@ -23,12 +24,8 @@ export function translateSubtitlesDef(fs: Engine): ToolDef {
         language: string;
       };
 
-      if (!asset_id.startsWith("vid-") && !asset_id.startsWith("aud-")) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "asset_id must start with vid- or aud-" }],
-        };
-      }
+      const kindGate = await requireArtifactKind(fs, asset_id, ["video", "audio"], "translate_subtitles");
+      if (kindGate) return kindGate;
 
       if (!process.env.OPENAI_API_KEY) {
         return {

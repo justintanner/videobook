@@ -40,13 +40,13 @@ describe("restore archive clips helpers", () => {
   it("maps archived video media to restored video assets", () => {
     expect(__restoreArchiveClipsTest.archiveMediaTarget(
       archiveIndex("original.mov", "video/quicktime"),
-    )).toEqual({ prefix: "vid", kind: "video", filename: "original.mov" });
+    )).toEqual({ kind: "video", filename: "original.mov" });
   });
 
   it("maps archived audio media to restored audio assets", () => {
     expect(__restoreArchiveClipsTest.archiveMediaTarget(
       archiveIndex("original", "audio/mpeg"),
-    )).toEqual({ prefix: "aud", kind: "audio", filename: "original.mp3" });
+    )).toEqual({ kind: "audio", filename: "original.mp3" });
   });
 
   it("rejects unsupported archive media", () => {

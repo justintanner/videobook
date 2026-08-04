@@ -29,11 +29,11 @@ async function enqueueLazyAnalysis(
       asset.artifactId,
       ".analysis.gpt4otrans.json",
     );
-    const jobId = `auto-analyze-${asset.slug}`;
+    const jobId = `auto-analyze-${asset.artifactId}`;
     await queue.enqueue(jobId, {
       type: "analyze_video",
       bookId,
-      assetId: asset.slug,
+      assetId: asset.artifactId,
       assetDir: manifest.value.path,
       hasTranscription: transcription.ok,
     });
@@ -41,11 +41,11 @@ async function enqueueLazyAnalysis(
   }
   const original = manifest.value.files.find((file) => /^original\.(jpe?g|png|webp)$/i.test(file.name));
   if (!original) return null;
-  const jobId = `auto-describe-${asset.slug}`;
+  const jobId = `auto-describe-${asset.artifactId}`;
   await queue.enqueue(jobId, {
     type: "describe_image",
     bookId,
-    sourceAssetId: asset.slug,
+    sourceAssetId: asset.artifactId,
     sourceImageFilename: original.name,
   });
   return { jobId, kind: "describe_image" };
@@ -92,7 +92,7 @@ export function assignSlotDef(engine: Engine): ToolDef {
         delete response.auto_analyze;
       }
       try {
-        const render = await enqueueLazyTimelineRender(engine, bookId, asset.slug, asset);
+        const render = await enqueueLazyTimelineRender(engine, bookId, asset.artifactId, asset);
         if (render) response.auto_render = render;
       } catch {
         delete response.auto_render;

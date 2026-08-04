@@ -42,7 +42,7 @@ export function registerExtendWan27VideoJob(fs: Engine): void {
     const firstClipUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename, bookId);
     const normalizedPrompt = transformProviderPrompt(
       "extend_kie_wan_2_7_video",
-      { prompt, video_slug: sourceVideo.assetId },
+      { prompt, video_ref: sourceVideo.assetId },
     ) ?? "";
 
     const request = buildWan27FramesVideoPayload(

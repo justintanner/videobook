@@ -176,8 +176,8 @@ export function registerRenderQrOutroJob(fs: Engine): void {
           );
           const provenance = {
             origin: "create_qr_outro",
-            qr_image_slugs: qrImages.map((image) => image.assetId),
-            sound_effect_slug: includeAudio ? soundEffect?.assetId ?? null : null,
+            qr_image_refs: qrImages.map((image) => image.assetId),
+            sound_effect_ref: includeAudio ? soundEffect?.assetId ?? null : null,
             sound_effect_source: includeAudio
               ? soundEffect ? "asset" : "bundled_default"
               : "none",

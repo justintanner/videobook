@@ -43,9 +43,13 @@ describe("translate_subtitles tool", () => {
   });
 
   it("returns error when OPENAI_API_KEY is not set", async () => {
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create({ kind: "video", label: "needs-key" });
+    if (!asset.ok) throw new Error(asset.error.message);
+
     const result = await client.callTool({
       name: "translate_subtitles",
-      arguments: { asset_id: "vid-test", book_id: "test-proj", language: "en" },
+      arguments: { asset_id: asset.value.artifactId, book_id: "test-proj", language: "en" },
     });
 
     expect(result.isError).toBe(true);
@@ -53,16 +57,21 @@ describe("translate_subtitles tool", () => {
     expect(content[0].text).toContain("not set");
   });
 
-  it("rejects asset ids that are not vid- or aud-", async () => {
+  it("rejects artifacts that are neither video nor audio", async () => {
     process.env.OPENAI_API_KEY = "test-key";
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create({ kind: "image", label: "not-media" });
+    if (!asset.ok) throw new Error(asset.error.message);
+
     const result = await client.callTool({
       name: "translate_subtitles",
-      arguments: { asset_id: "img-test", book_id: "test-proj", language: "en" },
+      arguments: { asset_id: asset.value.artifactId, book_id: "test-proj", language: "en" },
     });
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("vid- or aud-");
+    expect(content[0].text).toContain("video or audio");
+    expect(content[0].text).toContain(asset.value.artifactId);
   });
 
   it("returns error when the asset has no elevenlabs.json", async () => {
@@ -70,11 +79,11 @@ describe("translate_subtitles tool", () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "untranscribed");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-video"));
+    await fs.files.write(asset.value.artifactId, "original.mp4", Buffer.from("fake-video"));
 
     const result = await client.callTool({
       name: "translate_subtitles",
-      arguments: { asset_id: asset.value.slug, book_id: "test-proj", language: "en" },
+      arguments: { asset_id: asset.value.artifactId, book_id: "test-proj", language: "en" },
     });
 
     expect(result.isError).toBe(true);
@@ -87,17 +96,17 @@ describe("translate_subtitles tool", () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "transcribed");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "elevenlabs.json", JSON.stringify({ words: [] }));
+    await fs.files.write(asset.value.artifactId, "elevenlabs.json", JSON.stringify({ words: [] }));
 
     const result = await client.callTool({
       name: "translate_subtitles",
-      arguments: { asset_id: asset.value.slug, book_id: "test-proj", language: "en" },
+      arguments: { asset_id: asset.value.artifactId, book_id: "test-proj", language: "en" },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
     expect(parsed.language).toBe("en");
-    expect(parsed.job_id).toContain(`translate-${asset.value.slug}-en`);
+    expect(parsed.job_id).toContain(`translate-${asset.value.artifactId}-en`);
   });
 });

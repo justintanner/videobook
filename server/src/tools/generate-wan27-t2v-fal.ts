@@ -10,7 +10,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const base = FalWanV2p7TextToVideoRequestSchema.shape;
 
 const schema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(base.prompt, "Video description", { required: true }),
   aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
   resolution: apicityField(base.resolution, "Output resolution"),
@@ -26,7 +26,7 @@ type Args = SchemaArgs<typeof schema>;
 export function generateWan27T2vFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_wan_2_7_text_to_video",
-    description: "Generate a video via fal.ai using Alibaba Wan v2.7 from a text prompt only. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video via fal.ai using Alibaba Wan v2.7 from a text prompt only. Creates a new video artifact and enqueues a background job.",
     schema,
     handler: async (args) => {
       const { book_id, prompt, aspect_ratio, resolution, duration, negative_prompt, enable_prompt_expansion, enable_safety_checker, seed } = args as Args;
@@ -38,7 +38,7 @@ export function generateWan27T2vFalDef(fs: Engine): ToolDef {
       const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-text-to-video")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "wan/2-7-text-to-video")}-t2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

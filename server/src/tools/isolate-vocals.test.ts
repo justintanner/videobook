@@ -78,12 +78,12 @@ describe("isolate_vocals tool", () => {
     if (!asset.ok) throw new Error("Failed to create asset");
 
     // Write a non-audio file so the asset exists but has no audio
-    await fs.files.write(asset.value.slug, "notes.txt", "hello");
+    await fs.files.write(asset.value.artifactId, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "isolate_vocals",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "test-proj",
       },
     });
@@ -101,12 +101,12 @@ describe("isolate_vocals tool", () => {
     if (!asset.ok) throw new Error("Failed to create asset");
 
     // Write a dummy audio_original.mp3 file
-    await fs.files.write(asset.value.slug, "audio_original.mp3", Buffer.from("fake-mp3-data"));
+    await fs.files.write(asset.value.artifactId, "audio_original.mp3", Buffer.from("fake-mp3-data"));
 
     const result = await client.callTool({
       name: "isolate_vocals",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "test-proj",
       },
     });
@@ -114,7 +114,7 @@ describe("isolate_vocals tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.asset_id).toBe(asset.value.slug);
+    expect(parsed.asset_id).toBe(asset.value.artifactId);
     expect(parsed.job_id).toBeDefined();
   });
 });

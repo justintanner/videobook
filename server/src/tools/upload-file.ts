@@ -8,7 +8,7 @@ export function uploadFileDef(fs: Engine): ToolDef {
     name: "upload_file",
     description: "Upload a media or markdown file into a videocity project as an asset",
     schema: {
-      book_id: z.string().describe("Project slug to upload into"),
+      book_id: z.string().describe("Book id to upload into"),
       filename: z.string().describe("Original filename with extension"),
       data: z.string().describe("Base64-encoded file contents"),
     },

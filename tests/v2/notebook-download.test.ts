@@ -1,24 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import type { NotebookCell } from 'videobook-engine'
 import {
   downloadWatchStep,
   downloadVideoCellInput,
-  nextNotebookCellSlug,
 } from '../../src/videobook/notebook-download'
 
-const cells = [
-  { slug: 'vid-01' },
-  { slug: 'vid-03' },
-] as NotebookCell[]
-
 describe('notebook download placement', () => {
-  it('builds a video cell for the downloaded artifact in the first free slot', () => {
+  it('builds a video cell for the downloaded artifact in the requested slot', () => {
     expect(downloadVideoCellInput({
       artifact_id: '019fabcd-1234-7000-8000-000000000001',
       job_id: 'download-vid-example-123',
-    }, 'https://example.com/video', { row: 2, column: 1 }, cells)).toEqual({
+    }, 'https://example.com/video', { row: 2, column: 1 })).toEqual({
       type: 'video',
-      slug: 'vid-02',
       slot: { row: 2, column: 1 },
       inputs: {
         sourceOperation: 'download_video',
@@ -34,12 +26,7 @@ describe('notebook download placement', () => {
       { assetId: 'vid-example' },
       'https://example.com/video',
       { row: 0, column: 0 },
-      [],
     )).toThrow('did not return an artifact')
-  })
-
-  it('uses the first unoccupied slug for any cell type', () => {
-    expect(nextNotebookCellSlug('video', cells)).toBe('vid-02')
   })
 
   it('keeps watching while the downloaded artifact is active', () => {

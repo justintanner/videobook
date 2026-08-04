@@ -69,7 +69,7 @@ describe("export_asset_to_project tool", () => {
     if (!written.ok) throw new Error(written.error.message);
 
     const result = await definition.handler({
-      asset_id: created.value.slug,
+      asset_id: created.value.artifactId,
       book_id: source.bookId,
       target_project: target.bookId,
     });
@@ -77,14 +77,15 @@ describe("export_asset_to_project tool", () => {
     expect(result.isError, result.content[0]?.text).toBeFalsy();
     const parsed = parse(result);
     expect(parsed).toMatchObject({
-      source_asset_id: created.value.slug,
+      source_asset_id: created.value.artifactId,
       source_project: source.bookId,
       target_project: target.bookId,
       source_artifact_id: created.value.artifactId,
       source_book_id: source.bookId,
       target_book_id: target.bookId,
     });
-    expect(parsed.new_asset_id).toMatch(/^img-/);
+    const exported = target.engine.artifacts.get(parsed.new_asset_id);
+    expect(exported.ok && exported.value.kind).toBe("image");
     expect(parsed.target_artifact_id).toMatch(/^[0-9a-f-]{36}$/);
     const manifest = await target.engine.files.manifest(parsed.target_artifact_id);
     expect(manifest.ok).toBe(true);

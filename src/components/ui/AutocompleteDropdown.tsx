@@ -7,7 +7,7 @@ import { resolveIcon } from '@/lib/command-icons';
 type ColorScheme = 'cyan' | 'amber' | 'violet';
 
 interface AutocompleteItem {
-  type: 'command' | 'slug';
+  type: 'command' | 'mention';
   value: string;
   label: string;
   description: string;
@@ -19,7 +19,6 @@ interface AutocompleteItem {
   thumbnailSrc?: string | null;
   // When set, this item is a project image asset; committing it appends a ref
   // and inserts @referenceImage_N (handled by the consumer via onPickAsset).
-  assetSlug?: string;
 }
 
 interface AutocompleteDropdownProps {

@@ -43,7 +43,7 @@ describe("create_watermark tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("creates a ready img- asset holding the QR card", async () => {
+  it("creates a ready image asset holding the QR card", async () => {
     const result = await client!.callTool({
       name: "create_watermark_card",
       arguments: { book_id: PROJECT, handle: "@someone" },
@@ -55,7 +55,8 @@ describe("create_watermark tool", () => {
       handle: string;
       url: string;
     };
-    expect(parsed.asset_id).toMatch(/^img-/);
+    const artifact = fs.artifacts.get(parsed.asset_id);
+    expect(artifact.ok && artifact.value.kind).toBe("image");
     expect(parsed.handle).toBe("someone");
     expect(parsed.url).toBe("https://x.com/someone");
 

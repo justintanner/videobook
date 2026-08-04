@@ -133,20 +133,20 @@ describe("clean-video-audio job media mix", () => {
     const bookId = fs.book.get().bookId;
     const asset = await fs.artifacts.create("vid", "source");
     if (!asset.ok) throw new Error(asset.error.message);
-    const sourceWrite = await fs.files.write(asset.value.slug, "original.mp4", await readFile(sourcePath)
+    const sourceWrite = await fs.files.write(asset.value.artifactId, "original.mp4", await readFile(sourcePath)
     );
     if (!sourceWrite.ok) throw new Error(sourceWrite.error.message);
     const historyBefore = fs.history.artifact(asset.value.artifactId);
 
     await replaceVideoAssetInPlace(
       fs,
-      asset.value.slug,
+      asset.value.artifactId,
       "original.mp4",
       outputPath,
       bookId,
     );
 
-    const stored = await fs.files.read(asset.value.slug, "original.mp4");
+    const stored = await fs.files.read(asset.value.artifactId, "original.mp4");
     if (!stored.ok) throw new Error(stored.error.message);
     expect(stored.value.equals(await readFile(outputPath))).toBe(true);
     expect(fs.history.artifact(asset.value.artifactId).length).toBeGreaterThan(historyBefore.length);

@@ -47,7 +47,7 @@ ${toolLines.join("\n")}
 ## Slash commands (${commands.length} static commands)
 
 ${commandLines.join("\n")}
-- \`/<project-slug>\` — Switch to that project; generated dynamically for each project whose slug does not conflict with a command or alias.
+- \`/<project-name>\` — Switch to that project; generated dynamically for each project whose name does not conflict with a command or alias.
 `;
 }
 

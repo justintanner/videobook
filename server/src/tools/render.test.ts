@@ -35,9 +35,9 @@ describe("render tool", () => {
   async function createVideoAsset(): Promise<string> {
     const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
-    const write = await fs.files.write(created.value.slug, "original.mp4", Buffer.from("fake-video"));
+    const write = await fs.files.write(created.value.artifactId, "original.mp4", Buffer.from("fake-video"));
     if (!write.ok) throw new Error(write.error.message);
-    return created.value.slug;
+    return created.value.artifactId;
   }
 
   it("enqueues one render job per orientation when none is specified", async () => {

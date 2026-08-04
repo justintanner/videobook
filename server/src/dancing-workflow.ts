@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { YtDlp } from "ytdlp-nodejs";
 import {
   findVideoFile,
+  type Artifact,
   type Engine,
   type NotebookCell,
   type NotebookDocument,
@@ -14,12 +15,6 @@ import { probeImage } from "./image.js";
 import { notebookCellFingerprint } from "./jobs/run-notebook.js";
 import { probeVideo, runFfmpeg } from "./ffmpeg.js";
 import { extractFrameSelectionKey } from "./notebook-cell-outputs.js";
-
-type ArtifactRecord = {
-  artifactId: string;
-  slug: string;
-  kind: string;
-};
 
 export type DancingFixtureOptions = {
   sourceVideoPath?: string;
@@ -36,9 +31,9 @@ const DEFAULT_KITTEN_IMAGE_PATH = resolve(
   __dirname,
   "../../public/dancing-kittens-first-frame.png",
 );
-const SOURCE_SLUG = "vid-dancing-motion-reference";
-const FIRST_FRAME_SLUG = "img-dancing-first-frame";
-const KITTEN_IMAGE_SLUG = "img-kittens-freeway-first-frame";
+const SOURCE_LABEL = "Dancing motion reference";
+const FIRST_FRAME_LABEL = "Dancing first frame";
+const KITTEN_IMAGE_LABEL = "Kittens freeway first frame";
 const IMAGE_PROMPT = "Replace the two dancers with two kittens standing in the same pose on the shoulder at the side of a freeway.";
 const MOTION_PROMPT = "Two kittens perform the same synchronized dance as the reference video while standing on the freeway shoulder.";
 const FIXTURE_ROLES = [
@@ -83,23 +78,23 @@ function isCurrentFixture(document: NotebookDocument): boolean {
 }
 
 function requiredArtifact(
-  artifacts: ArtifactRecord[],
-  slug: string,
-): ArtifactRecord {
-  const artifact = artifacts.find((candidate) => candidate.slug === slug);
-  if (!artifact) throw new Error(`Dancing fixture artifact is missing: ${slug}`);
+  artifacts: Artifact[],
+  label: string,
+): Artifact {
+  const artifact = artifacts.find((candidate) => candidate.label === label);
+  if (!artifact) throw new Error(`Dancing fixture artifact is missing: ${label}`);
   return artifact;
 }
 
 async function ensureArtifact(
   engine: Engine,
   kind: "video" | "image",
-  slug: string,
-): Promise<ArtifactRecord> {
-  const existing = (engine.artifacts.list() as ArtifactRecord[]).find((artifact) =>
-    artifact.slug === slug);
+  label: string,
+): Promise<Artifact> {
+  const existing = engine.artifacts.list().find((artifact) =>
+    artifact.label === label);
   if (existing) return existing;
-  const created = await engine.artifacts.create({ kind, slug });
+  const created = await engine.artifacts.create({ kind, label });
   if (!created.ok) throw new Error(created.error.message);
   return created.value;
 }
@@ -126,7 +121,7 @@ async function downloadDancingVideo(destination: string): Promise<void> {
 
 async function ensureSourceVideo(
   engine: Engine,
-  artifact: ArtifactRecord,
+  artifact: Artifact,
   options: DancingFixtureOptions,
 ): Promise<void> {
   if (await hasFile(engine, artifact.artifactId, "original.mp4")) return;
@@ -185,8 +180,8 @@ async function ensureSourceVideo(
 
 async function ensureFirstFrame(
   engine: Engine,
-  source: ArtifactRecord,
-  frame: ArtifactRecord,
+  source: Artifact,
+  frame: Artifact,
 ): Promise<void> {
   if (await hasFile(engine, frame.artifactId, "original.jpg")) return;
   const sourceManifest = await engine.files.manifest(source.artifactId);
@@ -218,7 +213,7 @@ async function ensureFirstFrame(
       "original",
       {
         origin: "first_frame",
-        source_asset: source.slug,
+        source_asset: source.artifactId,
         timestamp: 0.1,
         ...dimensions,
         fixture: true,
@@ -232,8 +227,8 @@ async function ensureFirstFrame(
 
 async function ensureKittenImage(
   engine: Engine,
-  frame: ArtifactRecord,
-  kitten: ArtifactRecord,
+  frame: Artifact,
+  kitten: Artifact,
   options: DancingFixtureOptions,
 ): Promise<void> {
   if (await hasFile(engine, kitten.artifactId, "original.png")) return;
@@ -252,7 +247,7 @@ async function ensureKittenImage(
     "original",
     {
       origin: "fixture_baseline",
-      source_asset: frame.slug,
+      source_asset: frame.artifactId,
       prompt: IMAGE_PROMPT,
       provider: "codex-imagegen",
       ...dimensions,
@@ -266,16 +261,16 @@ export async function bootstrapDancingAssets(
   engine: Engine,
   options: DancingFixtureOptions = {},
 ): Promise<void> {
-  if (engine.book.get().slug !== "dancing") {
+  if (engine.book.get().name !== "dancing") {
     throw new Error("The Dancing workflow can only seed the dancing book");
   }
   if (engine.notebooks.list().length === 0) {
     const notebook = await engine.notebooks.create("Main");
     if (!notebook.ok) throw new Error(notebook.error.message);
   }
-  const source = await ensureArtifact(engine, "video", SOURCE_SLUG);
-  const frame = await ensureArtifact(engine, "image", FIRST_FRAME_SLUG);
-  const kitten = await ensureArtifact(engine, "image", KITTEN_IMAGE_SLUG);
+  const source = await ensureArtifact(engine, "video", SOURCE_LABEL);
+  const frame = await ensureArtifact(engine, "image", FIRST_FRAME_LABEL);
+  const kitten = await ensureArtifact(engine, "image", KITTEN_IMAGE_LABEL);
   await ensureSourceVideo(engine, source, options);
   await ensureFirstFrame(engine, source, frame);
   await ensureKittenImage(engine, frame, kitten, options);
@@ -317,7 +312,7 @@ export async function seedDancingWorkflow(
   engine: Engine,
   options: DancingFixtureOptions = {},
 ): Promise<NotebookDocument> {
-  if (engine.book.get().slug !== "dancing") {
+  if (engine.book.get().name !== "dancing") {
     throw new Error("The Dancing workflow can only seed the dancing book");
   }
   await bootstrapDancingAssets(engine, options);
@@ -327,10 +322,10 @@ export async function seedDancingWorkflow(
   if (!notebook) throw new Error("The Dancing book has no notebook");
   if (isCurrentFixture(notebook)) return notebook;
 
-  const artifacts = engine.artifacts.list() as ArtifactRecord[];
-  const sourceArtifact = requiredArtifact(artifacts, SOURCE_SLUG);
-  const frameArtifact = requiredArtifact(artifacts, FIRST_FRAME_SLUG);
-  const kittenArtifact = requiredArtifact(artifacts, KITTEN_IMAGE_SLUG);
+  const artifacts = engine.artifacts.list();
+  const sourceArtifact = requiredArtifact(artifacts, SOURCE_LABEL);
+  const frameArtifact = requiredArtifact(artifacts, FIRST_FRAME_LABEL);
+  const kittenArtifact = requiredArtifact(artifacts, KITTEN_IMAGE_LABEL);
   const previousFixtureCells = fixtureCells(notebook);
   const previousFixtureIds = new Set(previousFixtureCells.map((cell) => cell.id));
   const preservedCells = notebook.cells.filter((cell) =>
@@ -348,7 +343,7 @@ export async function seedDancingWorkflow(
 
   const source = engine.notebooks.createCell({
     type: "video",
-    slug: "vid-dancing-reference",
+    label: "Dancing reference video",
     slot: { row: 0, column: 0 },
     outputArtifactId: sourceArtifact.artifactId,
     inputs: {
@@ -362,7 +357,7 @@ export async function seedDancingWorkflow(
   });
   const extract = engine.notebooks.createCell({
     type: "extract_frame",
-    slug: "extract-frame-first",
+    label: "Extract first frame",
     slot: { row: 1, column: 0 },
     provider: "local",
     operation: "extract_frame",
@@ -377,7 +372,7 @@ export async function seedDancingWorkflow(
   });
   const frame = engine.notebooks.createCell({
     type: "image",
-    slug: "img-dancing-first-frame",
+    label: "Dancing first frame",
     slot: { row: 2, column: 0 },
     outputArtifactId: frameArtifact.artifactId,
     inputs: {
@@ -393,7 +388,7 @@ export async function seedDancingWorkflow(
   });
   const kittens = engine.notebooks.createCell({
     type: "generate_image",
-    slug: "generate-image-kittens-freeway",
+    label: "Kittens freeway image",
     slot: { row: 2, column: 1 },
     prompt: IMAGE_PROMPT,
     provider: "google_flow",
@@ -412,7 +407,7 @@ export async function seedDancingWorkflow(
   });
   const motion = engine.notebooks.createCell({
     type: "generate_video",
-    slug: "generate-video-kittens-dancing",
+    label: "Kittens dancing motion",
     slot: { row: 3, column: 0 },
     prompt: MOTION_PROMPT,
     provider: "kie",
@@ -497,12 +492,12 @@ export async function ensureDancingWorkflow(
   revision: string;
 }> {
   await books.ready();
-  let selected = books.getBySlug("dancing");
+  let selected = books.getByName("dancing");
   let created = false;
   if (!selected.ok) {
     const createdBook = await books.create("dancing");
     if (!createdBook.ok) throw new Error(createdBook.error.message);
-    selected = books.getBySlug("dancing");
+    selected = books.getByName("dancing");
     if (!selected.ok) throw new Error(selected.error.message);
     created = true;
   }

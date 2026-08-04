@@ -139,7 +139,7 @@ export function verifyXMentionsDef(): ToolDef {
     description: "Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.",
     schema: {
       text: z.string().min(1).max(MAX_TEXT_CHARS).describe("Post text containing @handles to verify"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { text } = args as { text: string; book_id: string };

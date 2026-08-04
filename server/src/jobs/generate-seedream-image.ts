@@ -42,7 +42,7 @@ export function registerGenerateSeedreamImageJob(fs: Engine): void {
       "generate_kie_seedream_v5_lite_image_to_image",
       {
         prompt,
-        image_slugs: imageInputs
+        image_refs: imageInputs
           .map((input) => ("assetId" in input ? input.assetId : null))
           .filter((assetId): assetId is string => assetId !== null),
       },

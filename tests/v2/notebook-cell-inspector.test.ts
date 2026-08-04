@@ -6,6 +6,7 @@ import {
   type NotebookCell,
   type NotebookEdge,
 } from 'videobook-engine'
+import { notebookGridAddress } from 'videobook-engine/notebook-grid'
 import { NotebookCellInspector } from '../../src/components/videobook/NotebookCellInspector'
 import { NotebookMediaFullscreen } from '../../src/components/videobook/NotebookMediaFullscreen'
 import {
@@ -24,7 +25,7 @@ import type {
 const cell: NotebookCell = {
   id: '01900000-0000-7000-8000-000000000001',
   type: 'video',
-  slug: 'vid-source',
+  label: 'vid-source',
   slot: { row: 1, column: 2 },
   inputs: {
     operation: 'download_video',
@@ -41,7 +42,7 @@ const optionalImageContract: GenerationInputContract = {
   modes: [{
     id: 'default',
     slots: [{
-      field: 'image_slugs',
+      field: 'image_refs',
       kind: 'image',
       targets: ['image'],
       min: 0,
@@ -106,24 +107,24 @@ const generationActions: NotebookGenerationAction[] = [
         {
           id: 'r2v',
           slots: [{
-            field: 'image_slugs',
+            field: 'image_refs',
             kind: 'image',
             targets: ['image'],
             min: 0,
             max: 7,
           }],
-          requiredGroups: [['image_slugs']],
+          requiredGroups: [['image_refs']],
         },
         {
           id: 'v2v',
           slots: [{
-            field: 'video_slug',
+            field: 'video_ref',
             kind: 'video',
             targets: ['video'],
             min: 0,
             max: 1,
           }],
-          requiredGroups: [['video_slug']],
+          requiredGroups: [['video_ref']],
         },
       ],
     },
@@ -165,7 +166,7 @@ describe('NotebookCellInspector', () => {
     const generationCell: NotebookCell = {
       ...cell,
       type: 'generate_image',
-      slug: 'generate-image-01',
+      label: 'generate-image-01',
       prompt: '',
       provider: undefined,
       model: undefined,
@@ -226,7 +227,7 @@ describe('NotebookCellInspector', () => {
     const generationCell: NotebookCell = {
       ...cell,
       type: 'generate_video',
-      slug: 'generate-video-01',
+      label: 'generate-video-01',
       prompt: 'A moonlit garden',
       provider: undefined,
       model: undefined,
@@ -281,7 +282,7 @@ describe('NotebookCellInspector', () => {
     const generationCell: NotebookCell = {
       ...cell,
       type: 'generate_image',
-      slug: 'generate-image-01',
+      label: 'generate-image-01',
       prompt: 'Edit this image',
       provider: 'kie',
       model: 'GptImage2TextToImageRequestSchema',
@@ -293,7 +294,7 @@ describe('NotebookCellInspector', () => {
       ...cell,
       id: '01900000-0000-7000-8000-000000000020',
       type: 'image',
-      slug: 'img-source',
+      label: 'img-source',
       outputArtifactId: '01900000-0000-7000-8000-000000000021',
     }
     const edge: NotebookEdge = {
@@ -417,11 +418,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('dateTime="PT30S"')
     expect(html).toContain('aria-label="Duration 0:30"')
     expect(html).not.toContain('role="tab"')
-    expect(html).not.toContain('class="inspector-slug-field"')
     expect(html).not.toContain('<label>Address</label>')
-    expect(html).not.toContain('value="vid-source"')
-    expect(html).not.toContain('aria-label="Edit slug"')
-    expect(html).not.toContain('aria-label="Save slug"')
     expect(html).toContain('class="inspector-media-field-label">VIDEO</span>')
     expect(html).toContain('<h3>Inputs</h3>')
     expect(html.indexOf('class="inspector-media-field-label"')).toBeLessThan(
@@ -453,7 +450,7 @@ describe('NotebookCellInspector', () => {
     const generationCell: NotebookCell = {
       ...cell,
       type: 'generate_video',
-      slug: 'generated-video',
+      label: 'generated-video',
       prompt: 'A cat running on a track',
       provider: 'kie',
       model: 'GeminiOmniVideoRequestSchema',
@@ -501,7 +498,7 @@ describe('NotebookCellInspector', () => {
     const audioCell: NotebookCell = {
       ...cell,
       type: 'audio',
-      slug: 'aud-source',
+      label: 'aud-source',
       inputs: {
         audioRole: 'continuous-source',
       },
@@ -555,7 +552,7 @@ describe('NotebookCellInspector', () => {
     const audioCell: NotebookCell = {
       ...cell,
       type: 'audio',
-      slug: 'aud-source',
+      label: 'aud-source',
       inputs: {
         audioRole: 'continuous-source',
         outputVersionArtifactIds: ['audio-one', 'audio-two'],
@@ -627,7 +624,7 @@ describe('NotebookCellInspector', () => {
     const imageCell: NotebookCell = {
       ...cell,
       type: 'image',
-      slug: 'img-frame',
+      label: 'img-frame',
       inputs: {
         frameMode: 'time',
         atSeconds: 1.25,
@@ -689,7 +686,7 @@ describe('NotebookCellInspector', () => {
     const analysisCell: NotebookCell = {
       ...cell,
       type: 'analysis',
-      slug: 'analysis-source',
+      label: 'analysis-source',
       inputs: {
         analysisRole: 'result',
         producerCellId: '01900000-0000-7000-8000-000000000010',
@@ -872,7 +869,7 @@ describe('NotebookCellInspector', () => {
     const splitCell: NotebookCell = {
       ...cell,
       type: 'split_video',
-      slug: 'split-video-02',
+      label: 'split-video-02',
       operation: 'split_range',
       provider: 'local',
       tool: 'ffmpeg',
@@ -884,13 +881,15 @@ describe('NotebookCellInspector', () => {
     const videoSource: NotebookCell = {
       ...cell,
       id: '01900000-0000-7000-8000-000000000004',
-      slug: 'vid-continuous-source',
+      label: 'vid-continuous-source',
+      slot: { row: 0, column: 0 },
     }
     const analysisSource: NotebookCell = {
       ...cell,
       id: '01900000-0000-7000-8000-000000000005',
       type: 'analysis',
-      slug: 'analysis-splitter',
+      label: 'analysis-splitter',
+      slot: { row: 0, column: 1 },
       outputArtifactId: '01900000-0000-7000-8000-000000000006',
     }
     const edges: NotebookEdge[] = [
@@ -909,7 +908,7 @@ describe('NotebookCellInspector', () => {
     ]
     const videoSourceAsset = {
       artifactId: videoSource.outputArtifactId!,
-      id: videoSource.slug,
+      id: videoSource.outputArtifactId!,
       type: 'video',
       mediaUrl: '/files/vid-continuous-source/original.mp4',
       thumbnailUrl: '/files/vid-continuous-source/thumb.jpg',
@@ -956,8 +955,8 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="analysis input"')
     expect(html).toContain('role="listbox" aria-label="video input options"')
     expect(html).toContain('role="option" aria-selected="true"')
-    expect(html).toContain('<strong>@vid-continuous-source</strong>')
-    expect(html).toContain('<strong>@analysis-splitter</strong>')
+    expect(html).toContain('<strong>@a1</strong>')
+    expect(html).toContain('<strong>@a2</strong>')
     expect(html).toContain('/files/vid-continuous-source/thumb.jpg')
     expect(html).toContain('inspector-source-picker-chevron')
     expect(html).not.toContain('placeholder="Provider"')
@@ -981,7 +980,7 @@ describe('NotebookCellInspector', () => {
     const splitCell: NotebookCell = {
       ...cell,
       type: 'split_video',
-      slug: 'split-video-02',
+      label: 'split-video-02',
       operation: 'split_range',
       provider: 'local',
       tool: 'ffmpeg',
@@ -1028,7 +1027,7 @@ describe('NotebookCellInspector', () => {
     const analyzeCell: NotebookCell = {
       ...cell,
       type: 'analyze',
-      slug: 'analyze-splitter',
+      label: 'analyze-splitter',
       prompt: 'Split the source into narrative shots.',
       provider: 'openai',
       model: 'gpt-5.6-sol',
@@ -1039,7 +1038,7 @@ describe('NotebookCellInspector', () => {
     const sourceCell: NotebookCell = {
       ...cell,
       id: '01900000-0000-7000-8000-000000000010',
-      slug: 'vid-source',
+      label: 'vid-source',
     }
     const edges: NotebookEdge[] = [{
       id: '01900000-0000-7000-8000-000000000011',
@@ -1086,7 +1085,7 @@ describe('NotebookCellInspector', () => {
     const extractFrameCell: NotebookCell = {
       ...cell,
       type: 'extract_frame',
-      slug: 'extract-frame-source',
+      label: 'extract-frame-source',
       provider: 'local',
       operation: 'extract_frame',
       tool: 'ffmpeg',
@@ -1099,7 +1098,7 @@ describe('NotebookCellInspector', () => {
     const sourceCell: NotebookCell = {
       ...cell,
       id: '01900000-0000-7000-8000-000000000010',
-      slug: 'vid-source',
+      label: 'vid-source',
     }
     const edges: NotebookEdge[] = [{
       id: '01900000-0000-7000-8000-000000000011',
@@ -1241,7 +1240,7 @@ describe('NotebookCellInspector', () => {
         duration: 30,
         audioInfo: null,
       },
-      slug: cell.slug,
+      address: notebookGridAddress(cell.slot),
       onClose: () => undefined,
     }))
 
@@ -1264,7 +1263,7 @@ describe('NotebookCellInspector', () => {
       'notebook_id',
       'cell_id',
       'type',
-      'slug',
+      'label',
       'grid_row',
       'grid_column',
       'output_entity_id',
@@ -1303,7 +1302,7 @@ describe('NotebookCellInspector', () => {
       value: '{malformed',
     })
     expect(doltCellDisplayValue({
-      column: 'slug',
+      column: 'label',
       type: 'TEXT',
       value: '{"raw":"scalar"}',
     })).toEqual({
@@ -1356,7 +1355,6 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('class="json-key"')
     expect(html).toContain('<code class="dolt-null">NULL</code>')
     expect(html).not.toContain('inspector-delete-cell-button')
-    expect(html).not.toContain('class="inspector-slug-field"')
     expect(html).not.toContain('Clear slot')
   })
 
@@ -1387,7 +1385,6 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).not.toContain('class="inspector-slug-field"')
     expect(html).toContain('inspector-clear-slot-button')
     expect(html).toContain('Clear slot')
     expect(html).toContain('inspector-delete-cell-button')

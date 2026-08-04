@@ -76,8 +76,8 @@ function numField(input: Record<string, unknown>, key: string): number | undefin
 }
 
 function hasVideoRef(input: Record<string, unknown>): boolean {
-  const slug = input.video_slug;
-  return typeof slug === "string" && slug.trim() !== "";
+  const ref = input.video_ref;
+  return typeof ref === "string" && ref.trim() !== "";
 }
 
 /** Billable output duration in seconds for USD. */

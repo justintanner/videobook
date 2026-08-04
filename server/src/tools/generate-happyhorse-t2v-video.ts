@@ -23,7 +23,7 @@ function slugify(text: string): string {
 }
 
 const generateHappyhorseT2vVideoSchema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(HappyHorse11TextToVideoRequestSchema.shape.input.shape.prompt, "Video description (max 5000 chars / 2500 Chinese chars)", { required: true }),
   resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
   aspect_ratio: apicityField(HappyHorse11AspectRatioSchema, "Output aspect ratio (default 16:9)"),
@@ -36,7 +36,7 @@ type Args = SchemaArgs<typeof generateHappyhorseT2vVideoSchema>;
 export function generateHappyhorseT2vVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_happyhorse_1_1_text_to_video",
-    description: "Generate a video from a prompt using HappyHorse text-to-video. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video from a prompt using HappyHorse text-to-video. Creates a new video artifact and enqueues a background job.",
     schema: generateHappyhorseT2vVideoSchema,
     handler: async (args) => {
       const { book_id, prompt, resolution, aspect_ratio, duration } = args as Args;
@@ -51,7 +51,7 @@ export function generateHappyhorseT2vVideoDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const jobId = `${SLUG}-t2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {

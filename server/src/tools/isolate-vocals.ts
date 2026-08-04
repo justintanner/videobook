@@ -16,8 +16,8 @@ export function isolateVocalsDef(fs: Engine): ToolDef {
       "Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. " +
       "Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).",
     schema: {
-      asset_id: z.string().describe("Asset ID (vid-* or aud-*)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Video or audio artifact id"),
+      book_id: z.string().describe("Book UUID"),
     },
     handler: async (args) => {
       const { asset_id, book_id } = args as {
@@ -32,6 +32,14 @@ export function isolateVocalsDef(fs: Engine): ToolDef {
         };
       }
 
+      const artifactResult = fs.artifacts.get(asset_id);
+      if (!artifactResult.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: artifactResult.error.message }],
+        };
+      }
+
       const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
@@ -41,7 +49,7 @@ export function isolateVocalsDef(fs: Engine): ToolDef {
       }
 
       const manifest = manifestResult.value;
-      const audioFile = findAudioFile(manifest.files, asset_id);
+      const audioFile = findAudioFile(manifest.files, artifactResult.value.kind);
       if (!audioFile) {
         return {
           isError: true as const,
@@ -62,7 +70,7 @@ export function isolateVocalsDef(fs: Engine): ToolDef {
         assetId: asset_id,
         assetDir: manifest.path,
         bookId: book_id,
-        isAudioAsset: asset_id.startsWith("aud-"),
+        isAudioAsset: artifactResult.value.kind === "audio",
       } as unknown as Record<string, unknown>);
 
       return {

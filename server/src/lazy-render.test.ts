@@ -70,7 +70,7 @@ describe("enqueueLazyTimelineRender", () => {
   async function createVideoAsset(): Promise<string> {
     const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
-    const assetId = created.value.slug;
+    const assetId = created.value.artifactId;
     for (const [filename, contents] of [
       ["original.mp4", Buffer.from("fake-video")],
       [".original.analysis.json", Buffer.from(JSON.stringify({ burnedInSubtitles: null }))],
@@ -189,7 +189,7 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
   async function createTrimmedVideoAsset(): Promise<string> {
     const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
-    const assetId = created.value.slug;
+    const assetId = created.value.artifactId;
     for (const [filename, contents] of [
       ["original.mp4", Buffer.from("fake-video")],
       [".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" }))],

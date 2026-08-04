@@ -73,7 +73,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
       "generate_google_flow_nano_banana_pro_image",
       {
         prompt: p.prompt,
-        image_slugs: p.imageInputs
+        image_refs: p.imageInputs
           .map((input) => ("assetId" in input ? input.assetId : null))
           .filter((assetId): assetId is string => assetId !== null),
       },

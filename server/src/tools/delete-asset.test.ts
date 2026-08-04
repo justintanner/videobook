@@ -43,7 +43,7 @@ describe("delete_asset tool", () => {
     );
     expect(parsed.status).toBe("deleted");
     expect(parsed.artifact_id).toBe(uploaded.artifactId);
-    expect(parsed.slug).toBe(uploaded.assetId);
+    expect(parsed.label).toBe("photo");
     expect(parsed.deleted_at).toBeDefined();
 
     // Verify asset is gone via manifest

@@ -64,8 +64,8 @@ export function registerGenerateHappyhorseVideoeditVideoJob(fs: Engine): void {
       "generate_kie_happyhorse_1_1_edit_video",
       {
         prompt,
-        video_slug: sourceVideo.assetId,
-        image_slugs: imageInputs.map((input) => input.assetId),
+        video_ref: sourceVideo.assetId,
+        image_refs: imageInputs.map((input) => input.assetId),
       },
     ) ?? "";
     const request: MediaGenerationRequest = buildHappyHorseVideoEditPayload(

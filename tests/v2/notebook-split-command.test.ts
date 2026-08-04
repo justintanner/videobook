@@ -62,15 +62,15 @@ describe('notebook split commands', () => {
 
   it('parses chat and slash phrasing without claiming timeline edits', () => {
     expect(parseNotebookSplitCommand(
-      'split @vid-slug into 15s and the remaining',
+      'split @019abcde into 15s and the remaining',
     )).toEqual({
-      sourceReference: 'vid-slug',
+      sourceReference: '019abcde',
       splitAtSeconds: 15,
     })
     expect(parseNotebookSplitCommand(
-      '/split @VID-SLUG at 1:05',
+      '/split @019ABCDE at 1:05',
     )).toEqual({
-      sourceReference: 'vid-slug',
+      sourceReference: '019abcde',
       splitAtSeconds: 65,
     })
     expect(parseNotebookSplitCommand(
@@ -80,15 +80,15 @@ describe('notebook split commands', () => {
       splitAtSeconds: 2,
     })
     expect(parseNotebookSplitCommand(
-      'please split @vid-slug into 1m 5s plus the rest please',
+      'please split @019abcde into 1m 5s plus the rest please',
     )).toEqual({
-      sourceReference: 'vid-slug',
+      sourceReference: '019abcde',
       splitAtSeconds: 65,
     })
     expect(parseNotebookSplitCommand(
       'split clip @01900000-0000-7000-8000-000000000001 at frame 45',
     )).toBeNull()
-    expect(() => parseNotebookSplitCommand('/split @vid-slug'))
+    expect(() => parseNotebookSplitCommand('/split @019abcde'))
       .toThrow('Name a positive split time')
   })
 
@@ -97,6 +97,7 @@ describe('notebook split commands', () => {
     books = new BookManager({
       libraryDir: join(rootDir, 'books'),
       objectPrefix: 'test-objects',
+      catalogBackupName: 'backup',
     })
     await books.ready()
     const created = await books.create('split-command')
@@ -140,7 +141,7 @@ describe('notebook split commands', () => {
     ])
     const artifact = await engine.artifacts.create({
       kind: 'video',
-      name: 'source',
+      label: 'Source video',
     })
     expect(artifact.ok).toBe(true)
     if (!artifact.ok) return
@@ -160,20 +161,23 @@ describe('notebook split commands', () => {
       notebook_id: notebookId,
       cell: {
         type: 'video',
-        slug: 'vid-source',
+        label: 'Source video',
         slot: { row: 0, column: 0 },
         output_artifact_id: artifact.value.artifactId,
       },
-    }) as { id: string }
+    }) as { id: string; address: string }
+    expect(source.address).toBe('@a1')
     const beforeResult = engine.notebooks.read(notebookId)
     expect(beforeResult.ok).toBe(true)
     if (!beforeResult.ok) return
     const before: NotebookDocument = beforeResult.value
-    expect(resolveNotebookSplitSource(before, 'vid-source').id).toBe(source.id)
+    expect(resolveNotebookSplitSource(before, source.id).id).toBe(source.id)
+    expect(resolveNotebookSplitSource(before, source.id.slice(0, 8)).id)
+      .toBe(source.id)
     expect(resolveNotebookSplitSource(before, 'a1').id).toBe(source.id)
 
     const command = parseNotebookSplitCommand(
-      'split @vid-source into 1s and the remaining',
+      'split @a1 into 1s and the remaining',
     )!
     const draft = planNotebookSplitCommand({
       command,
@@ -181,8 +185,10 @@ describe('notebook split commands', () => {
       sourceDurationSeconds: 3,
     })
     expect(draft.createdCellIds).toHaveLength(3)
+    expect(draft.sourceAddress).toBe('@a1')
     expect(draft.actionCell).toMatchObject({
       type: 'split_video',
+      label: 'Split at 1s',
       operation: 'split_range',
       slot: { row: 0, column: 1 },
       inputs: {
@@ -196,7 +202,7 @@ describe('notebook split commands', () => {
         role: 'first',
         outputCell: {
           type: 'video',
-          slug: 'vid-source-first-1s',
+          label: 'First 1s',
           slot: { row: 0, column: 2 },
           inputs: { state: 'pending' },
         },
@@ -205,7 +211,7 @@ describe('notebook split commands', () => {
         role: 'remaining',
         outputCell: {
           type: 'video',
-          slug: 'vid-source-remaining',
+          label: 'Remaining',
           slot: { row: 0, column: 3 },
           inputs: { state: 'pending' },
         },
@@ -219,6 +225,10 @@ describe('notebook split commands', () => {
       draft,
     })
     expect(run.outputs).toHaveLength(2)
+    expect(run.sourceAddress).toBe('@a1')
+    expect(run.actionAddress).toBe('@a2')
+    expect(run.outputs.map((output) => output.outputAddress))
+      .toEqual(['@a3', '@a4'])
     const activeResult = engine.notebooks.read(notebookId)
     expect(activeResult.ok).toBe(true)
     if (!activeResult.ok) return

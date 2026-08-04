@@ -3,7 +3,6 @@ import { firstEmptyNotebookGridSlots } from 'videobook-engine/notebook-grid'
 
 export interface RoutedVideoCellInput {
   type: 'video'
-  slug: string
   slot: { row: number; column: number }
   inputs: Record<string, unknown>
   output_artifact_id: string
@@ -11,7 +10,6 @@ export interface RoutedVideoCellInput {
 
 interface RoutedVideoOutput {
   artifactId: string
-  assetId: string
   inputs: Record<string, unknown>
 }
 
@@ -51,11 +49,6 @@ function extractOutput(value: Record<string, unknown>): RoutedVideoOutput {
       'output_artifact_id',
       'The extracted clip did not return an artifact for the notebook',
     ),
-    assetId: requiredString(
-      value,
-      'output_asset_id',
-      'The extracted clip did not return an asset name for the notebook',
-    ),
     inputs: {
       sourceOperation: 'extract_video_clip',
       ...selectedValues(value, [
@@ -84,11 +77,6 @@ function splitOutputs(value: Record<string, unknown>): RoutedVideoOutput[] {
         'chunk_a_artifact_id',
         'The first split clip did not return an artifact for the notebook',
       ),
-      assetId: requiredString(
-        value,
-        'chunk_a_asset_id',
-        'The first split clip did not return an asset name for the notebook',
-      ),
       inputs: {
         sourceOperation: 'split_video',
         splitOutput: 'first',
@@ -100,11 +88,6 @@ function splitOutputs(value: Record<string, unknown>): RoutedVideoOutput[] {
         value,
         'chunk_b_artifact_id',
         'The remaining split clip did not return an artifact for the notebook',
-      ),
-      assetId: requiredString(
-        value,
-        'chunk_b_asset_id',
-        'The remaining split clip did not return an asset name for the notebook',
       ),
       inputs: {
         sourceOperation: 'split_video',
@@ -132,7 +115,6 @@ export function routedVideoCellInputs(
   )
   return outputs.map((output, index) => ({
     type: 'video',
-    slug: output.assetId,
     slot: slots[index]!,
     inputs: output.inputs,
     output_artifact_id: output.artifactId,

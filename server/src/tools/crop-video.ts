@@ -29,7 +29,7 @@ export function cropVideoDef(fs: Engine): ToolDef {
       "Crop a video asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source frame (0..1). Re-renders in place to canonical dims (1920x1080 / 1080x1920 / 1080x1080) with git versioning.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-video)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       ratio: z.enum(["16:9", "9:16", "1:1"]).describe("Target aspect ratio"),
       x: z.number().min(0).max(1).describe("Crop origin X as fraction of source width (0..1)"),
       y: z.number().min(0).max(1).describe("Crop origin Y as fraction of source height (0..1)"),

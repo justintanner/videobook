@@ -5,7 +5,6 @@ import type {
   ChatLogEntry,
   Engine,
   NotebookDocument,
-  ResolvedArtifact,
 } from "videobook-engine";
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
@@ -23,7 +22,13 @@ import { withLogging } from "./log-wrapper.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getApiKey } from "../api-key.js";
 import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
-import { timelineSlotSlugs } from "../timeline-helpers.js";
+import { timelineSlotArtifactIds } from "../timeline-helpers.js";
+import {
+  expandSlotRefs,
+  parseArtifactIdTags,
+  resolveArtifactRefs,
+  type ResolvedArtifactRef,
+} from "../artifact-refs.js";
 import {
   buildIntelligenceResponses,
   firstResponseText,
@@ -82,7 +87,7 @@ const chatActionPlanSchema = z.object({
 const CHAT_ROUTING_MAX_OUTPUT_TOKENS = 2048;
 const CHAT_ROUTING_TIMEOUT_MS = 45_000;
 
-export type ChatResolvedAsset = ResolvedArtifact;
+export type ChatResolvedAsset = ResolvedArtifactRef;
 
 function buildChatNotebookContext(
   fs: Engine,
@@ -99,9 +104,9 @@ function buildChatNotebookContext(
       return {
         address: `@${notebookGridAddress(cell.slot)}`,
         cellId: cell.id,
-        slug: cell.slug,
+        ...(cell.label === undefined ? {} : { label: cell.label }),
         type: cell.type,
-        outputAsset: artifact?.ok ? `@${artifact.value.slug}` : null,
+        outputAsset: artifact?.ok ? `@${artifact.value.artifactId}` : null,
       };
     }),
   };
@@ -137,11 +142,11 @@ function formatHistoryForPrompt(lines: ChatLogEntry[]): string {
 export function sanitizeGenerateImageParams(
   params: Record<string, unknown>,
 ): Record<string, unknown> {
-  if (!Array.isArray(params.image_slugs)) return params;
-  const slugs = params.image_slugs.map(String);
+  if (!Array.isArray(params.image_refs)) return params;
+  const slugs = params.image_refs.map(String);
   const imageOnly = slugs.filter((s) => /^@?img-/.test(s));
   const dropped = slugs.filter((s) => !/^@?img-/.test(s));
-  const next: Record<string, unknown> = { ...params, image_slugs: imageOnly };
+  const next: Record<string, unknown> = { ...params, image_refs: imageOnly };
   if (dropped.length > 0) {
     const base = typeof params.prompt === "string" ? params.prompt : "";
     const note = `from source ${dropped.join(", ")}`;
@@ -318,7 +323,7 @@ export async function enrichAssetContext(
     const row: Record<string, unknown> = {
       tag: a.tag,
       type: a.artifactType,
-      asset_id: a.artifactSlug,
+      asset_id: a.artifactId,
       has_file: a.filePath !== null,
     };
     const metaResult = await fs.metadata.artifacts.read<AssetOriginMeta>(a.artifactId, "original"
@@ -456,9 +461,8 @@ export function chatDef(fs: Engine): ToolDef {
       }
       const notebookContext = buildChatNotebookContext(fs, notebookDocument);
 
-      // 1. Expand @s01 slot refs → actual asset slugs
-      let expandedPrompt = prompt;
-      expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineSlotSlugs(fs));
+      // 1. Expand @s01 slot refs → the artifact ids they occupy
+      const expandedPrompt = expandSlotRefs(prompt, timelineSlotArtifactIds(fs));
       const notebookResolution = notebookDocument
         ? resolveNotebookPromptReferences({
             engine: fs,
@@ -469,13 +473,24 @@ export function chatDef(fs: Engine): ToolDef {
         : null;
       const resolutionPrompt = notebookResolution?.prompt ?? expandedPrompt;
 
-      // 2. Resolve @asset tags
-      const resolvedResult = await fs.resolver.resolveAll(resolutionPrompt);
-      if (!resolvedResult.ok) return error(resolvedResult.error.message);
-      const { resolved: resolvedAssets, unresolved } = resolvedResult.value;
+      // A grid address naming an empty or outputless square must not reach the
+      // router as literal text — it would read as prose to the model.
+      if (notebookResolution && notebookResolution.unresolved.length > 0) {
+        return error(`Asset not found: ${
+          notebookResolution.unresolved
+            .map((issue) => `${issue.mention} (${issue.code})`)
+            .join(", ")
+        }`);
+      }
+
+      // 2. Resolve @<artifact-id> tags
+      const { resolved: resolvedAssets, unresolved } = await resolveArtifactRefs(
+        fs,
+        parseArtifactIdTags(resolutionPrompt),
+      );
 
       if (unresolved.length > 0) {
-        return error(`Asset not found: ${unresolved.map((t) => `@${t}`).join(", ")}`);
+        return error(`Asset not found: ${unresolved.join(", ")}`);
       }
 
       // 3. Build asset context for the LLM (include source_url when known)
@@ -485,13 +500,13 @@ export function chatDef(fs: Engine): ToolDef {
       );
 
       const imageFiles = resolvedAssets
-        .filter((a) => a.artifactType === "image")
-        .map((a) => a.filePath)
-        .filter(Boolean);
+        .filter((asset) => asset.artifactType === "image")
+        .map((asset) => asset.filePath)
+        .filter((path): path is string => path !== null);
       const videoFiles = resolvedAssets
-        .filter((a) => a.artifactType === "video")
-        .map((a) => a.filePath)
-        .filter(Boolean);
+        .filter((asset) => asset.artifactType === "video")
+        .map((asset) => asset.filePath)
+        .filter((path): path is string => path !== null);
 
       const scriptContents = await loadScriptContentsForChat(fs, resolvedAssets);
 
@@ -510,7 +525,7 @@ export function chatDef(fs: Engine): ToolDef {
       const allDefs = getAllToolDefs(fs);
       const routableTools = buildRoutableTools(allDefs);
       const systemPrompt = buildChatRoutingPrompt(
-        book.slug,
+        book.name,
         routableTools,
         historyContext || undefined,
       );
@@ -584,7 +599,7 @@ export function chatDef(fs: Engine): ToolDef {
       }
 
       // generate_image only accepts @img-* refs; models often put @vid-* in
-      // image_slugs for "from the source of @vid-…". Drop non-image slugs and
+      // image_refs for "from the source of @vid-…". Drop non-image slugs and
       // fold them into the text prompt so generation still has the intent.
       if (decision.tool === "generate_image") {
         Object.assign(params, sanitizeGenerateImageParams(params));

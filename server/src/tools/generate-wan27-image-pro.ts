@@ -4,7 +4,7 @@ import { z, type ZodRawShape } from "zod";
 import { Wan27ImageInputSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageSlugs } from "./_image-inputs.js";
+import { resolveImageRefs } from "./_image-inputs.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const wan27ImageInput = Wan27ImageInputSchema.shape;
@@ -20,8 +20,8 @@ function slugify(text: string): string {
 
 const generateWan27ImageProSchema = {
   prompt: apicityStringField(wan27ImageInput.prompt, "Text prompt for image generation (max 5000 chars)", { required: true }),
-  book_id: z.string().describe("Project slug"),
-  image_slugs: apicityStringArrayField(wan27ImageInput.input_urls, "0-9 @img-* slugs for reference images"),
+  book_id: z.string().describe("Book id"),
+  image_refs: apicityStringArrayField(wan27ImageInput.input_urls, "0-9 image artifact ids for reference images"),
   aspect_ratio: apicityField(wan27ImageInput.aspect_ratio, "Output aspect ratio (default 16:9)"),
   resolution: apicityField(wan27ImageInput.resolution, "Output resolution (default 2K)"),
   seed: apicityField(wan27ImageInput.seed, "Random seed (0-2147483647)"),
@@ -41,13 +41,13 @@ type Args = SchemaArgs<typeof generateWan27ImageProSchema>;
 export function generateWan27ImageProDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_wan_2_7_pro_text_to_image",
-    description: "Generate an image using Wan 2.7 Image Pro. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).",
+    description: "Generate an image using Wan 2.7 Image Pro. Creates a new image artifact and enqueues a background job. Prompt is required; reference images are optional (0-9).",
     schema: generateWan27ImageProSchema,
     handler: async (args) => {
-      const { prompt, book_id, image_slugs, aspect_ratio, resolution, seed, nsfw_checker } = args as Args;
+      const { prompt, book_id, image_refs, aspect_ratio, resolution, seed, nsfw_checker } = args as Args;
       const prefix = "img";
 
-      const rawSlugs = image_slugs ?? [];
+      const rawSlugs = image_refs ?? [];
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -63,7 +63,7 @@ export function generateWan27ImageProDef(fs: Engine): ToolDef {
         };
       }
 
-      const resolved = await resolveImageSlugs(fs, rawSlugs, book_id);
+      const resolved = await resolveImageRefs(fs, rawSlugs, book_id);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
@@ -78,7 +78,7 @@ export function generateWan27ImageProDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "wan/2-7-image-pro")}-${imgAssetId}-${Date.now()}`;
 

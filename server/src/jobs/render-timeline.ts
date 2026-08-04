@@ -17,7 +17,7 @@ const PORTRAIT_OUTPUT = "timeline_portrait.mp4";
 const SQUARE_OUTPUT = "timeline_square.mp4";
 
 type ResolvedSlot = {
-  slug: string;
+  artifactId: string;
   volume: number;
   fadeIn: number;
   fadeOut: number;
@@ -26,7 +26,7 @@ type ResolvedSlot = {
 
 type ResolvedAudioOverlay = {
   id: string;
-  slug: string;
+  artifactId: string;
   audioPath: string;
   startMs: number;
   durationMs: number;
@@ -311,20 +311,20 @@ export function registerRenderTimelineJob(fs: Engine): void {
       resolvedAudio = [],
     } = payload as RenderTimelinePayload;
 
-    let finalResult = fs.artifacts.get("final");
-    if (!finalResult.ok) {
-      const created = await fs.artifacts.create({kind: "final", slug: "final"
-      });
-      if (!created.ok) throw new Error(created.error.message);
-      finalResult = created;
-    }
+    const existingFinal = fs.artifacts.list().find((artifact) =>
+      artifact.kind === "final" && artifact.label === "final");
+    const finalResult = existingFinal !== undefined
+      ? { ok: true as const, value: existingFinal }
+      : await fs.artifacts.create({ kind: "final", label: "final" });
+    if (!finalResult.ok) throw new Error(finalResult.error.message);
+    const finalId = finalResult.value.artifactId;
     const finalDir = finalResult.value.path;
     await mkdir(finalDir, { recursive: true });
 
     return withLockedLocalLease(
       fs,
       bookId,
-      "final",
+      finalId,
       finalDir,
       ctx,
       "final",
@@ -400,7 +400,7 @@ export function registerRenderTimelineJob(fs: Engine): void {
       await ingestWorkspaceOutputs(
         fs,
         bookId,
-        "final",
+        finalId,
         [outputFilename, "original.jpg"],
         "render_timeline",
         { orientation, slotCount: n },
@@ -408,11 +408,11 @@ export function registerRenderTimelineJob(fs: Engine): void {
 
       const renderMeta = {
         slotCount: n,
-        slots: resolvedSlots.map((s) => s.slug),
+        slots: resolvedSlots.map((s) => s.artifactId),
         output: outputFilename,
         renderedAt: new Date().toISOString(),
       };
-      await fs.metadata.artifacts.write("final", `${orientation}.render`, renderMeta);
+      await fs.metadata.artifacts.write(finalId, `${orientation}.render`, renderMeta);
 
       return { success: true, output: outputFilename };
       },

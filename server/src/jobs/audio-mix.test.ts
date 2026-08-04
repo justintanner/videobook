@@ -20,10 +20,10 @@ async function createAssetWithFile(
 ): Promise<string> {
   const created = await fs.artifacts.create(prefix, name);
   if (!created.ok) throw new Error(created.error.message);
-  const written = await fs.files.write(created.value.slug, filename, Buffer.from(`fixture-${name}`)
+  const written = await fs.files.write(created.value.artifactId, filename, Buffer.from(`fixture-${name}`)
   );
   if (!written.ok) throw new Error(written.error.message);
-  return created.value.slug;
+  return created.value.artifactId;
 }
 
 function projectedAmplitude(samples: Buffer, frequency: number, sampleRate: number): number {

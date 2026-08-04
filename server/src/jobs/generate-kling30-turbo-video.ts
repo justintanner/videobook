@@ -60,7 +60,7 @@ export function registerGenerateKling30TurboVideoJob(fs: Engine): void {
       "generate_kie_kling_3_0_turbo_video",
       {
         prompt,
-        image_slugs: imageInputs.map((input) => input.assetId),
+        image_refs: imageInputs.map((input) => input.assetId),
       },
     ) ?? "";
 

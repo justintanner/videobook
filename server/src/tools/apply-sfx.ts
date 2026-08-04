@@ -79,7 +79,7 @@ export function applySfxDef(fs: Engine): ToolDef {
       + "Re-runs process_video downstream. Pair with /suggest-sfx to source entries.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-*)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       sfx: z
         .array(
           z.object({

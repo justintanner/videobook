@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   OMNI_MAX_REFERENCE_SLOTS,
   OMNI_V2V_MAX_REFERENCE_SLOTS,
-  stripSlugMentions,
+  stripRefMentions,
   totalOmniReferenceSlots,
   characterRefImageCount,
   totalImageReferenceSlots,
-  rewriteImageSlugMentions,
+  rewriteImageRefMentions,
   replaceHappyHorseAssetMentions,
-  rewriteImageSlugMentionsToBrackets,
+  rewriteImageRefMentionsToBrackets,
   rewriteSeedanceAssetMentions,
   replaceNaturalAssetMentions,
 } from "./google-flow-refs.js";
@@ -53,46 +53,46 @@ describe("characterRefImageCount & totalImageReferenceSlots", () => {
   });
 });
 
-describe("rewriteImageSlugMentions", () => {
+describe("rewriteImageRefMentions", () => {
   it("rewrites @slug to the positional @referenceImage_N marker", () => {
-    expect(rewriteImageSlugMentions("fade-in to @img-da-set slowly", ["img-da-set"]))
+    expect(rewriteImageRefMentions("fade-in to @img-da-set slowly", ["img-da-set"]))
       .toBe("fade-in to @referenceImage_1 slowly");
   });
 
-  it("numbers markers by image_slugs position, tolerating @-prefixed slugs", () => {
-    expect(rewriteImageSlugMentions("@img-b then @img-a", ["@img-a", "@img-b"]))
+  it("numbers markers by image_refs position, tolerating @-prefixed slugs", () => {
+    expect(rewriteImageRefMentions("@img-b then @img-a", ["@img-a", "@img-b"]))
       .toBe("@referenceImage_2 then @referenceImage_1");
   });
 
   it("does not rewrite a slug inside a longer slug mention", () => {
-    expect(rewriteImageSlugMentions("@img-da-set and @img-da", ["img-da", "img-da-set"]))
+    expect(rewriteImageRefMentions("@img-da-set and @img-da", ["img-da", "img-da-set"]))
       .toBe("@referenceImage_2 and @referenceImage_1");
   });
 
   it("leaves unrelated mentions and plain text alone", () => {
-    expect(rewriteImageSlugMentions("@character_1 waves at @img-x", ["img-y"]))
+    expect(rewriteImageRefMentions("@character_1 waves at @img-x", ["img-y"]))
       .toBe("@character_1 waves at @img-x");
   });
 
   it("accepts a custom marker", () => {
-    expect(rewriteImageSlugMentions("@img-a", ["img-a"], "reference"))
+    expect(rewriteImageRefMentions("@img-a", ["img-a"], "reference"))
       .toBe("@reference_1");
   });
 });
 
-describe("stripSlugMentions", () => {
+describe("stripRefMentions", () => {
   it("removes clip mentions, which have no inline marker form", () => {
-    expect(stripSlugMentions("zoom into @vid-motion suddenly", ["@vid-motion"]))
+    expect(stripRefMentions("zoom into @vid-motion suddenly", ["@vid-motion"]))
       .toBe("zoom into suddenly");
   });
 
   it("removes a mention at the start of the prompt", () => {
-    expect(stripSlugMentions("@vid-motion but slower", ["vid-motion"]))
+    expect(stripRefMentions("@vid-motion but slower", ["vid-motion"]))
       .toBe(" but slower");
   });
 
   it("keeps mentions of other slugs", () => {
-    expect(stripSlugMentions("keep @img-ref here", ["vid-motion"]))
+    expect(stripRefMentions("keep @img-ref here", ["vid-motion"]))
       .toBe("keep @img-ref here");
   });
 });
@@ -106,7 +106,7 @@ describe("replaceHappyHorseAssetMentions", () => {
     )).toBe("the character in reference image 1 and reference image 2 are fighting");
   });
 
-  it("numbers noun phrases by imageSlugs position, tolerating @-prefixed slugs", () => {
+  it("numbers noun phrases by imageRefs position, tolerating @-prefixed slugs", () => {
     expect(replaceHappyHorseAssetMentions(
       "@img-b then @img-a",
       null,
@@ -166,23 +166,23 @@ describe("replaceHappyHorseAssetMentions", () => {
   });
 });
 
-describe("rewriteImageSlugMentionsToBrackets", () => {
+describe("rewriteImageRefMentionsToBrackets", () => {
   it("rewrites confirmed @img-* to [Image N] for HappyHorse 1.1", () => {
-    expect(rewriteImageSlugMentionsToBrackets(
+    expect(rewriteImageRefMentionsToBrackets(
       "the woman in a red qipao in @img-char waves",
       ["img-char", "img-other"],
     )).toBe("the woman in a red qipao in [Image 1] waves");
   });
 
-  it("numbers by image_slugs order", () => {
-    expect(rewriteImageSlugMentionsToBrackets(
+  it("numbers by image_refs order", () => {
+    expect(rewriteImageRefMentionsToBrackets(
       "@img-b then @img-a",
       ["@img-a", "@img-b"],
     )).toBe("[Image 2] then [Image 1]");
   });
 
   it("leaves unconfirmed @tokens alone", () => {
-    expect(rewriteImageSlugMentionsToBrackets("@notify @img-x", ["img-y"]))
+    expect(rewriteImageRefMentionsToBrackets("@notify @img-x", ["img-y"]))
       .toBe("@notify @img-x");
   });
 });
@@ -192,9 +192,9 @@ describe("rewriteSeedanceAssetMentions", () => {
     expect(rewriteSeedanceAssetMentions(
       "put @img-hero into @vid-clip with @aud-score",
       {
-        imageSlugs: ["img-hero"],
-        videoSlugs: ["vid-clip"],
-        audioSlugs: ["aud-score"],
+        imageRefs: ["img-hero"],
+        videoRefs: ["vid-clip"],
+        audioRefs: ["aud-score"],
       },
     )).toBe("put @Image1 into @Video1 with @Audio1");
   });
@@ -202,7 +202,7 @@ describe("rewriteSeedanceAssetMentions", () => {
   it("numbers by array position", () => {
     expect(rewriteSeedanceAssetMentions(
       "@img-b then @img-a",
-      { imageSlugs: ["@img-a", "@img-b"] },
+      { imageRefs: ["@img-a", "@img-b"] },
     )).toBe("@Image2 then @Image1");
   });
 });
@@ -212,8 +212,8 @@ describe("replaceNaturalAssetMentions", () => {
     expect(replaceNaturalAssetMentions(
       "blend @vid-a with @vid-b using @img-style",
       {
-        videoSlugs: ["vid-a", "vid-b"],
-        imageSlugs: ["img-style"],
+        videoRefs: ["vid-a", "vid-b"],
+        imageRefs: ["img-style"],
       },
     )).toBe("blend reference video 1 with reference video 2 using reference image 1");
   });
@@ -221,7 +221,7 @@ describe("replaceNaturalAssetMentions", () => {
   it("uses 'the source video' for a single video slug list", () => {
     expect(replaceNaturalAssetMentions(
       "edit @vid-clip",
-      { videoSlugs: ["vid-clip"] },
+      { videoRefs: ["vid-clip"] },
     )).toBe("edit the source video");
   });
 });

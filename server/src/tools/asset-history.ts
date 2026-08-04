@@ -1,4 +1,4 @@
-import type { Engine, Revision } from "videobook-engine";
+import type { Artifact, Engine, Revision } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
@@ -24,14 +24,13 @@ type OriginalMetadata = {
 async function enrichCommitsWithRewrite(
   fs: Engine,
   commits: Revision[],
-  artifact: string,
-  _project: string,
+  artifact: Artifact,
 ): Promise<EnrichedCommit[]> {
-  if (!artifact.startsWith("script-")) return commits;
+  if (artifact.kind !== "script") return commits;
   return Promise.all(
     commits.map(async (commit): Promise<EnrichedCommit> => {
       const result =
-        await fs.metadata.artifacts.readAtRevision<OriginalMetadata>(artifact, "original", commit.hash
+        await fs.metadata.artifacts.readAtRevision<OriginalMetadata>(artifact.artifactId, "original", commit.hash
         );
       if (!result.ok || result.value.origin !== "describe_image") {
         return commit;
@@ -60,12 +59,12 @@ export function assetHistoryDef(fs: Engine): ToolDef {
     name: "asset_history",
     description: "Get immutable Dolt revision history for an asset",
     schema: {
-      asset_id: z.string().describe("Active artifact slug or stable UUID"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Artifact UUID"),
+      book_id: z.string().describe("Book id"),
       limit: z.number().optional().describe("Maximum revisions (default 20)"),
     },
     handler: async (args) => {
-      const { asset_id, book_id, limit } = args as {
+      const { asset_id, limit } = args as {
         asset_id: string;
         book_id: string;
         limit?: number;
@@ -78,12 +77,7 @@ export function assetHistoryDef(fs: Engine): ToolDef {
           content: [{
             type: "text" as const,
             text: JSON.stringify(
-              await enrichCommitsWithRewrite(
-                fs,
-                commits,
-                artifact.value.slug,
-                book_id,
-              ),
+              await enrichCommitsWithRewrite(fs, commits, artifact.value),
             ),
           }],
         };

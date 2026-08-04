@@ -41,7 +41,7 @@ export function registerGenerateHappyhorseRefVideoJob(fs: Engine): void {
       "generate_kie_happyhorse_1_1_reference_to_video",
       {
         prompt,
-        image_slugs: imageInputs.map((input) => input.assetId),
+        image_refs: imageInputs.map((input) => input.assetId),
       },
     ) ?? "";
     const request = buildHappyHorseRefPayload(

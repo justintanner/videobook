@@ -9,7 +9,7 @@ export function markAssetSeenDef(fs: Engine): ToolDef {
       "Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.",
     schema: {
       asset_id: z.string().describe("Asset ID to mark seen (e.g. img-cute-cat)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, book_id } = args as {

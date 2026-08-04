@@ -6,7 +6,7 @@ import {
 import type { GoogleFlowProvider } from "@apicity/googleflow";
 import { createGoogleFlowProvider, uploadAssetToGoogleFlow } from "../jobs/_google-flow.js";
 import { apicityField } from "./schema-from-apicity.js";
-import { toolError } from "./_shared.js";
+import { artifactKindOf, toolError } from "./_shared.js";
 
 import { extname } from "node:path";
 import type { ArtifactManifestFile } from "videobook-engine";
@@ -34,7 +34,7 @@ import {
 // bundles 1-2 reference images (plus optional personality notes and a voice)
 // into a ref that feeds character_1..N on generate_google_flow_omni_flash_video
 // (character_refs). Each character costs a flat 2 of omni's 7 reference slots
-// shared with image_slugs, regardless of its image count (google-flow-refs.ts).
+// shared with image_refs, regardless of its image count (google-flow-refs.ts).
 // GET/DELETE-by-ref paths ride the googleFlowFetch raw
 // -path hook in createGoogleFlowProvider (docs/apicity-gaps.md §16).
 // ---------------------------------------------------------------------------
@@ -249,18 +249,18 @@ function jsonResult(payload: unknown): ToolResult {
 }
 
 const createGoogleFlowCharacterSchema = {
-  book_id: z.string().describe("Project slug (source of the character images)"),
+  book_id: z.string().describe("Book id (source of the character images)"),
   display_name: apicityField(
     GoogleFlowCharactersCreateRequestSchema.shape.displayName,
     "Character name (1-200 chars)",
     { required: true },
   ),
-  image_slugs: z
+  image_refs: z
     .array(z.string())
     .min(1)
     .max(2)
     .describe(
-      "1-2 character image @slugs; uploaded to Google Flow as imageReference_1/2. The character costs a flat 2 of Omni's 7 reference slots regardless of image count",
+      "1-2 image or character artifact ids; uploaded to Google Flow as imageReference_1/2. The character costs a flat 2 of Omni's 7 reference slots regardless of image count",
     ),
   personality_notes: apicityField(
     GoogleFlowCharactersCreateRequestSchema.shape.personalityNotes,
@@ -284,23 +284,24 @@ export function createGoogleFlowCharacterDef(fs: Engine): ToolDef {
         return toolError("GOOGLE_FLOW_API_KEY environment variable is not set");
       }
       const blank = (v: unknown): v is "" => typeof v === "string" && v.trim() === "";
-      const slugs = (a.image_slugs ?? []).filter((s) => !blank(s));
-      if (slugs.length < 1) return toolError("image_slugs requires at least one non-empty image @slug");
+      const slugs = (a.image_refs ?? []).filter((s) => !blank(s));
+      if (slugs.length < 1) return toolError("image_refs requires at least one non-empty image @slug");
       if (slugs.length > 2) return toolError("A Google Flow character accepts at most 2 image references");
 
       const resolved: Array<{ assetId: string; filename: string }> = [];
       for (const slug of slugs) {
         const assetId = slug.replace(/^@/, "");
-        if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
-          return toolError(`image_slugs entries must be img-* or char-* assets, got: ${assetId}`);
+        const kind = artifactKindOf(fs, assetId);
+        if (kind !== "image" && kind !== "character") {
+          return toolError(`image_refs entries must be image or character artifacts; ${assetId} is ${kind ?? "not a known artifact"}`);
         }
         const manifest = await fs.files.manifest(assetId);
-        if (!manifest.ok) return toolError(`image_slugs: ${manifest.error.message}`);
+        if (!manifest.ok) return toolError(`image_refs: ${manifest.error.message}`);
         const images = getImagesFromManifest(manifest.value.files);
-        if (images.length === 0) return toolError(`image_slugs: No image files found in asset ${assetId}`);
-        
+        if (images.length === 0) return toolError(`image_refs: No image files found in asset ${assetId}`);
+
         resolved.push({ assetId, filename: images[0].name });
-        if (assetId.startsWith("char-") && images.length > 1 && resolved.length < 2) {
+        if (kind === "character" && images.length > 1 && resolved.length < 2) {
           resolved.push({ assetId, filename: images[1].name });
         }
       }
@@ -460,7 +461,7 @@ export async function replaceGoogleFlowCharacter(
   ref: string,
   opts: {
     displayName?: string;
-    imageSlugs?: string[];
+    imageRefs?: string[];
     personalityNotes?: string;
     voice?: string;
     clearPersonalityNotes?: boolean;
@@ -471,26 +472,27 @@ export async function replaceGoogleFlowCharacter(
   const raw = (detail.raw ?? {}) as Record<string, unknown>;
 
   let imageReferences: string[] = [];
-  if (opts.imageSlugs && opts.imageSlugs.length > 0) {
-    if (!fs) throw new Error("fs is required when providing new image_slugs");
-    if (!bookId) throw new Error("book_id is required when providing new image_slugs");
+  if (opts.imageRefs && opts.imageRefs.length > 0) {
+    if (!fs) throw new Error("fs is required when providing new image_refs");
+    if (!bookId) throw new Error("book_id is required when providing new image_refs");
     const blank = (v: unknown): v is "" => typeof v === "string" && v.trim() === "";
-    const slugs = opts.imageSlugs.filter((s) => !blank(s));
+    const slugs = opts.imageRefs.filter((s) => !blank(s));
     if (slugs.length > 2) throw new Error("A Google Flow character accepts at most 2 image references");
 
     const resolved: Array<{ assetId: string; filename: string }> = [];
     for (const slug of slugs) {
       const assetId = slug.replace(/^@/, "");
-      if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
-        throw new Error(`image_slugs entries must be img-* or char-* assets, got: ${assetId}`);
+      const kind = artifactKindOf(fs, assetId);
+      if (kind !== "image" && kind !== "character") {
+        throw new Error(`image_refs entries must be image or character artifacts; ${assetId} is ${kind ?? "not a known artifact"}`);
       }
       const manifest = await fs.files.manifest(assetId);
-      if (!manifest.ok) throw new Error(`image_slugs: ${manifest.error.message}`);
+      if (!manifest.ok) throw new Error(`image_refs: ${manifest.error.message}`);
       const images = getImagesFromManifest(manifest.value.files);
-      if (images.length === 0) throw new Error(`image_slugs: No image files found in asset ${assetId}`);
-      
+      if (images.length === 0) throw new Error(`image_refs: No image files found in asset ${assetId}`);
+
       resolved.push({ assetId, filename: images[0].name });
-      if (assetId.startsWith("char-") && images.length > 1 && resolved.length < 2) {
+      if (kind === "character" && images.length > 1 && resolved.length < 2) {
         resolved.push({ assetId, filename: images[1].name });
       }
     }
@@ -555,12 +557,12 @@ export async function replaceGoogleFlowCharacter(
 
 const replaceGoogleFlowCharacterSchema = {
   ref: z.string().min(1).describe("Character ref to replace"),
-  book_id: z.string().optional().describe("Project slug (required if providing new image_slugs)"),
+  book_id: z.string().optional().describe("Book id (required if providing new image_refs)"),
   display_name: apicityField(
     GoogleFlowCharactersCreateRequestSchema.shape.displayName,
     "New display name (1-200 chars)",
   ).optional(),
-  image_slugs: z.array(z.string()).max(2).optional().describe("New image slugs to replace the existing ones"),
+  image_refs: z.array(z.string()).max(2).optional().describe("New image slugs to replace the existing ones"),
   personality_notes: apicityField(
     GoogleFlowCharactersCreateRequestSchema.shape.personalityNotes,
     "New personality notes",
@@ -584,7 +586,7 @@ export function replaceGoogleFlowCharacterDef(fs: Engine): ToolDef {
         const provider = createGoogleFlowProvider();
         return jsonResult(await replaceGoogleFlowCharacter(provider, fs, a.book_id, a.ref, {
           displayName: a.display_name as string | undefined,
-          imageSlugs: a.image_slugs as string[] | undefined,
+          imageRefs: a.image_refs as string[] | undefined,
           personalityNotes: a.personality_notes as string | undefined,
           clearPersonalityNotes: a.clear_personality_notes,
           voice: a.voice,

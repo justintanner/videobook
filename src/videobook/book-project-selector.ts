@@ -1,6 +1,6 @@
 export type BookProjectSummary = {
   bookId: string
-  slug: string
+  name: string
   createdAt: number
   artifactCount: number
   notebookCount: number

@@ -296,19 +296,28 @@ describe("inject_first_frame tool", () => {
       await waitForJob(String(renderResult.job_id));
     }
 
-    const finalManifest = await fs.files.manifest("final");
+    // render_timeline writes into a `final`-kind artifact addressed by its
+    // artifact id — there is no reserved "final" slug any more.
+    const finalArtifact = fs.artifacts.list().find((artifact) => artifact.kind === "final");
+    if (!finalArtifact) throw new Error("render_timeline did not create a final artifact");
+    const finalManifest = await fs.files.manifest(finalArtifact.artifactId);
     if (!finalManifest.ok) throw new Error(finalManifest.error.message);
     const portraitPath = join(finalManifest.value.path, "timeline_portrait.mp4");
     const beforeProbe = await probeSummary(portraitPath);
     const beforeAudioHash = await audioPacketHash(portraitPath);
     const beforeFrameCount = await frameCount(portraitPath);
-    const landscapeHash = await assetHash(fs, "final", "timeline_landscape.mp4", bookId);
+    const landscapeHash = await assetHash(
+      fs,
+      finalArtifact.artifactId,
+      "timeline_landscape.mp4",
+      bookId,
+    );
 
     const result = await client.callTool({
       name: "inject_first_frame",
       arguments: {
-        target_asset_id: "final",
-        image_asset_id: image.assetId,
+        target_asset_id: finalArtifact.artifactId,
+        image_asset_id: image.artifactId,
         book_id: bookId,
       },
     });
@@ -325,7 +334,9 @@ describe("inject_first_frame tool", () => {
     expect(afterProbe.duration).toBeCloseTo(beforeProbe.duration, 2);
     expect(afterProbe.videoDuration).toBeCloseTo(beforeProbe.videoDuration, 2);
     expect(afterProbe.audioDuration).toBeCloseTo(beforeProbe.audioDuration!, 2);
-    expect(await assetHash(fs, "final", "timeline_landscape.mp4", bookId)).toBe(landscapeHash);
+    expect(
+      await assetHash(fs, finalArtifact.artifactId, "timeline_landscape.mp4", bookId),
+    ).toBe(landscapeHash);
 
     const first = await frameColor(portraitPath, 0, tempDir, "final-first");
     const second = await frameColor(portraitPath, 1, tempDir, "final-second");

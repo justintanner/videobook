@@ -14,11 +14,11 @@ const JOB_TIMEOUT_MS = 30 * 60_000;
 export function removeSoundDef(fs: Engine): ToolDef {
   return {
     name: "remove_sound",
-    description: "Remove a described sound (e.g. a horse neigh) from a vid-* or aud-* asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.",
+    description: "Remove a described sound (e.g. a horse neigh) from a video or audio asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.",
     schema: {
-      asset_id: z.string().describe("Asset to edit in-place (vid-* or aud-*)"),
+      asset_id: z.string().describe("Artifact id to edit in-place (video or audio)"),
       sound: z.string().min(1).max(200).describe('Description of the sound to remove, e.g. "horse neighing"'),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book UUID"),
     },
     handler: async (args) => {
       const { asset_id, sound, book_id } = args as {
@@ -32,20 +32,22 @@ export function removeSoundDef(fs: Engine): ToolDef {
       }
 
       const assetId = asset_id.replace(/^@/, "");
-      const kind: RemoveSoundAssetKind | null = assetId.startsWith("vid-")
+      const artifact = fs.artifacts.get(assetId);
+      if (!artifact.ok) return toolError(artifact.error.message);
+      const kind: RemoveSoundAssetKind | null = artifact.value.kind === "video"
         ? "video"
-        : assetId.startsWith("aud-") ? "audio" : null;
+        : artifact.value.kind === "audio" ? "audio" : null;
       if (!kind) {
-        return toolError(`remove_sound only supports vid-* or aud-* assets, got ${assetId}`);
+        return toolError(`remove_sound only supports video or audio artifacts, got ${artifact.value.kind} artifact ${assetId}`);
       }
 
       const manifest = await fs.files.manifest(assetId);
       if (!manifest.ok) return toolError(manifest.error.message);
       const file = kind === "video"
         ? findVideoFile(manifest.value.files)
-        : findAudioFile(manifest.value.files, assetId);
+        : findAudioFile(manifest.value.files, artifact.value.kind);
       if (!file) {
-        return toolError(`No ${kind} file found in asset ${assetId}`);
+        return toolError(`No ${kind} file found in artifact ${assetId}`);
       }
 
       const jobId = `remove-sound-${assetId}-${Date.now()}`;

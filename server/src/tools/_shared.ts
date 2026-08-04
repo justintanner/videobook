@@ -1,3 +1,5 @@
+import type { ArtifactKind, Engine } from "videobook-engine";
+
 type ToolErrorResult = {
   isError: true;
   content: Array<{ type: "text"; text: string }>;
@@ -16,7 +18,7 @@ type ZodLikeError = {
 // as z.string().url() on the wire, but tools pass local @img-*/@vid-*/@aud-*
 // slugs until the job uploads and substitutes real CDN URLs. Use this only
 // for schema validation — never as the outbound provider payload.
-export function slugAsPlaceholderUrl(slug: string): string {
+export function refAsPlaceholderUrl(slug: string): string {
   const bare = slug.replace(/^@/, "").trim();
   return `https://placeholder.local/${bare || "asset"}`;
 }
@@ -58,4 +60,30 @@ function isProvided(value: unknown): boolean {
 export function requireAtLeastOne(label: string, inputs: NamedInput[]): ToolErrorResult | null {
   if (inputs.some((i) => isProvided(i.value))) return null;
   return toolError(`${label} requires at least one of: ${inputs.map((i) => i.name).join(", ")}`);
+}
+
+// Artifact kind gate. Media kind used to be readable from a slug prefix
+// (`vid-`, `img-`, …); references are artifact ids now, so the kind has to
+// come from the catalog row.
+export async function requireArtifactKind(
+  engine: Engine,
+  assetId: string,
+  allowed: readonly ArtifactKind[],
+  label: string,
+): Promise<ToolErrorResult | null> {
+  const artifact = engine.artifacts.get(assetId.replace(/^@/u, ""));
+  if (!artifact.ok) return toolError(`${label}: ${artifact.error.message}`);
+  return allowed.includes(artifact.value.kind)
+    ? null
+    : toolError(
+      `${label} requires ${allowed.join(" or ")} media; ${assetId} is ${artifact.value.kind}`,
+    );
+}
+
+export function artifactKindOf(
+  engine: Engine,
+  assetId: string,
+): ArtifactKind | null {
+  const artifact = engine.artifacts.get(assetId.replace(/^@/u, ""));
+  return artifact.ok ? artifact.value.kind : null;
 }

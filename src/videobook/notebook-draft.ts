@@ -23,7 +23,7 @@ export type NotebookFlowEdge = Edge<NotebookBusRiverRoute, 'busRiver'>
 
 export interface NotebookCellData extends Record<string, unknown> {
   kind: NotebookCellType
-  slug: string
+  label?: string
   subtitle: string
   slot: NotebookCell['slot']
   status: string
@@ -143,7 +143,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
       position: notebookGridPosition(cell.slot),
       data: {
         kind: cell.type,
-        slug: cell.slug,
+        ...(cell.label === undefined ? {} : { label: cell.label }),
         subtitle: `${cell.type.toUpperCase()} · CELL`,
         slot: cell.slot,
         status: 'ready',
@@ -247,7 +247,7 @@ function cellFromNode(node: Node<NotebookCellData>): NotebookCell {
   return {
     id: node.id,
     type: node.data.kind,
-    slug: node.data.slug,
+    ...(node.data.label === undefined ? {} : { label: node.data.label }),
     slot: node.data.slot,
     ...(node.data.prompt === undefined ? {} : { prompt: node.data.prompt }),
     ...(node.data.provider === undefined ? {} : { provider: node.data.provider }),

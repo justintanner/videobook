@@ -258,14 +258,14 @@ async function requiredTimedStream(
   if (!manifest.ok) throw new Error(manifest.error.message);
   const file = kind === "video"
     ? findVideoFile(manifest.value.files)
-    : findAudioFile(manifest.value.files, artifact.slug)
-      ?? findPrimaryMediaFile(manifest.value.files, artifact.slug);
+    : findAudioFile(manifest.value.files, artifact.kind)
+      ?? findPrimaryMediaFile(manifest.value.files, artifact.kind);
   if (!file) {
-    throw new Error(`${artifact.slug} has no ${kind} source file`);
+    throw new Error(`${artifact.label ?? artifact.artifactId} has no ${kind} source file`);
   }
   const probe = await probeVideo(join(manifest.value.path, file.name));
   const stream = kind === "video" ? probe.videoStream : probe.audioStream;
-  if (!stream) throw new Error(`${artifact.slug} has no ${kind} stream`);
+  if (!stream) throw new Error(`${artifact.label ?? artifact.artifactId} has no ${kind} stream`);
   const result = await engine.streams.register({
     artifactId: artifact.artifactId,
     sourcePath: file.name,
@@ -291,8 +291,8 @@ async function slotSource(
   if (artifact.kind === "image") {
     const manifest = await engine.files.manifest(artifact.artifactId);
     if (!manifest.ok) throw new Error(manifest.error.message);
-    const file = findPrimaryMediaFile(manifest.value.files, artifact.slug);
-    if (!file) throw new Error(`${artifact.slug} has no image source file`);
+    const file = findPrimaryMediaFile(manifest.value.files, artifact.kind);
+    if (!file) throw new Error(`${artifact.label ?? artifact.artifactId} has no image source file`);
     return {
       source: {
         kind: "still",
@@ -613,9 +613,20 @@ export function resolveArtifact(
   return result.ok ? result.value : null;
 }
 
-export function timelineSlotSlugs(engine: Engine): Array<{ slug: string }> {
-  return readTimeline(engine).slots.flatMap((slot) => {
-    const artifact = engine.artifacts.get(slot.artifactId);
-    return artifact.ok ? [{ slug: artifact.value.slug }] : [];
+const SLOT_REF_PATTERN = /@s(\d{1,3})\b/giu;
+
+export function timelineSlotArtifactIds(engine: Engine): string[] {
+  return readTimeline(engine).slots.map((slot) => slot.artifactId);
+}
+
+/** Replace `@s01`-style timeline slot refs with `@<artifact-id>` tokens. */
+export function expandTimelineSlotRefs(
+  text: string,
+  slotArtifactIds: readonly string[],
+): string {
+  return text.replace(SLOT_REF_PATTERN, (token: string, digits: string) => {
+    const index = Number.parseInt(digits, 10) - 1;
+    const artifactId = index >= 0 ? slotArtifactIds[index] : undefined;
+    return artifactId ? `@${artifactId}` : token;
   });
 }

@@ -8,11 +8,11 @@ import type { ToolDef } from "./tool-def.js";
 export function replaceVideoAudioDef(fs: Engine): ToolDef {
   return {
     name: "replace_video_audio",
-    description: "Replace the audio track of a video asset in-place with audio from an aud-* asset, or a specific file inside another asset via the `<assetId>/<filename>` form (e.g. `plan/s1.mp3`). Operates on the vid- asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.",
+    description: "Replace the audio track of a video asset in-place with audio from an audio asset, or a specific file inside another asset via the `<artifactId>/<filename>` form. Operates on the video asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.",
     schema: {
-      asset_id: z.string().describe("Video asset whose audio is being replaced (vid-*)"),
-      audio_asset_id: z.string().describe("Audio source: an aud-* asset id, or `<assetId>/<filename>` to point at a specific file inside another asset (e.g. `plan/s1.mp3`)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Video artifact whose audio is being replaced"),
+      audio_asset_id: z.string().describe("Audio source: an audio artifact id, or `<artifactId>/<filename>` to point at a specific file inside another artifact"),
+      book_id: z.string().describe("Book UUID"),
     },
     handler: async (args) => {
       const { asset_id, audio_asset_id, book_id } = args as {
@@ -21,23 +21,37 @@ export function replaceVideoAudioDef(fs: Engine): ToolDef {
         book_id: string;
       };
 
-      if (!asset_id.startsWith("vid-")) {
+      const videoArtifact = fs.artifacts.get(asset_id);
+      if (!videoArtifact.ok) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `asset_id must be a vid-* asset, got: ${asset_id}` }],
+          content: [{ type: "text" as const, text: videoArtifact.error.message }],
+        };
+      }
+      if (videoArtifact.value.kind !== "video") {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: `asset_id must be a video artifact, got ${videoArtifact.value.kind} artifact ${asset_id}` }],
         };
       }
 
-      // `<assetId>/<filename>` addresses a specific sibling file. Used by
+      // `<artifactId>/<filename>` addresses a specific sibling file. Used by
       // PlanViewer to splice the per-scene `plan/sN.mp3` into a freshly-
-      // generated seedance vid-* output. Bare ids must remain aud-* prefixed.
+      // generated seedance video output. Bare ids must be audio artifacts.
       const slashIdx = audio_asset_id.indexOf("/");
       const audioAssetIdResolved = slashIdx >= 0 ? audio_asset_id.slice(0, slashIdx) : audio_asset_id;
       const audioFilenameOverride = slashIdx >= 0 ? audio_asset_id.slice(slashIdx + 1) : null;
-      if (slashIdx < 0 && !audio_asset_id.startsWith("aud-")) {
+      const audioArtifact = fs.artifacts.get(audioAssetIdResolved);
+      if (!audioArtifact.ok) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `audio_asset_id must be an aud-* asset or <assetId>/<filename>, got: ${audio_asset_id}` }],
+          content: [{ type: "text" as const, text: audioArtifact.error.message }],
+        };
+      }
+      if (slashIdx < 0 && audioArtifact.value.kind !== "audio") {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: `audio_asset_id must be an audio artifact or <artifactId>/<filename>, got ${audioArtifact.value.kind} artifact ${audio_asset_id}` }],
         };
       }
 
@@ -74,7 +88,7 @@ export function replaceVideoAudioDef(fs: Engine): ToolDef {
         }
         audioFileName = file.name;
       } else {
-        const file = findAudioFile(audioManifest.value.files, audioAssetIdResolved);
+        const file = findAudioFile(audioManifest.value.files, audioArtifact.value.kind);
         if (!file) {
           return {
             isError: true as const,

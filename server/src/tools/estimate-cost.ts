@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { CostEstimate } from "@apicity/cost";
-import type { Engine } from "videobook-engine";
+import type { ArtifactKind, Engine } from "videobook-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
+import { artifactKindOf } from "./_shared.js";
 import { getCostProvider } from "../cost.js";
 import { getCostAdapter } from "../cost-adapters.js";
 import { estimateGoogleFlowCost } from "../google-flow-cost.js";
@@ -42,8 +43,8 @@ async function enrichMotionControlInput(
   if (typeof input.duration === "number") return input;
 
   const bookId = typeof input.book_id === "string" ? input.book_id : null;
-  const motionSlugs = Array.isArray(input.motion_video_slugs)
-    ? (input.motion_video_slugs as unknown[]).filter((s): s is string => typeof s === "string")
+  const motionSlugs = Array.isArray(input.motion_video_refs)
+    ? (input.motion_video_refs as unknown[]).filter((s): s is string => typeof s === "string")
     : [];
   if (!bookId || motionSlugs.length === 0) return input;
 
@@ -62,8 +63,8 @@ async function enrichGrokExtendInput(
 ): Promise<Record<string, unknown>> {
   if (typeof input.resolution === "string" && input.resolution) return input;
   const bookId = typeof input.book_id === "string" ? input.book_id : null;
-  const source = typeof input.video_slug === "string"
-    ? input.video_slug
+  const source = typeof input.video_ref === "string"
+    ? input.video_ref
     : typeof input.asset_id === "string"
       ? input.asset_id
       : null;
@@ -90,11 +91,11 @@ async function enrichHappyHorseVideoEditInput(
   if (typeof input.duration === "number") return input;
 
   const bookId = typeof input.book_id === "string" ? input.book_id : null;
-  const videoSlug = typeof input.video_slug === "string" ? input.video_slug : null;
-  if (!bookId || !videoSlug) return input;
+  const videoRef = typeof input.video_ref === "string" ? input.video_ref : null;
+  if (!bookId || !videoRef) return input;
 
-  const assetId = videoSlug.replace(/^@/, "");
-  if (!assetId.startsWith("vid-")) return input;
+  const assetId = videoRef.replace(/^@/, "");
+  if (artifactKindOf(fs, assetId) !== "video") return input;
 
   const meta = await fs.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original");
   if (!meta.ok) return input;
@@ -107,15 +108,15 @@ async function enrichHappyHorseVideoEditInput(
 async function enrichSourceDuration(
   fs: Engine,
   input: Record<string, unknown>,
-  slugField: string,
-  expectedPrefix: "vid-" | "aud-",
+  refField: string,
+  expectedKind: ArtifactKind,
 ): Promise<Record<string, unknown>> {
   if (typeof input.duration === "number") return input;
   const bookId = typeof input.book_id === "string" ? input.book_id : null;
-  const raw = typeof input[slugField] === "string" ? input[slugField] as string : null;
+  const raw = typeof input[refField] === "string" ? input[refField] as string : null;
   if (!bookId || !raw) return input;
   const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith(expectedPrefix)) return input;
+  if (artifactKindOf(fs, assetId) !== expectedKind) return input;
   const meta = await fs.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original");
   if (!meta.ok) return input;
   const duration = meta.value.duration;
@@ -139,10 +140,10 @@ async function enrichInput(
     return enrichHappyHorseVideoEditInput(fs, input);
   }
   if (toolName === "generate_kie_omnihuman_1_5_video") {
-    return enrichSourceDuration(fs, input, "audio_slug", "aud-");
+    return enrichSourceDuration(fs, input, "audio_ref", "audio");
   }
   if (toolName === "generate_kie_volcengine_video_to_video_lip_sync") {
-    return enrichSourceDuration(fs, input, "video_slug", "vid-");
+    return enrichSourceDuration(fs, input, "video_ref", "video");
   }
   return input;
 }

@@ -106,7 +106,6 @@ import {
 import {
   normalizeNotebookReference,
   replaceNotebookMentions,
-  scanNotebookMentions,
 } from "videobook-engine/notebook-mentions";
 
 // ---------------------------------------------------------------------------
@@ -221,7 +220,7 @@ type GrokImagineVideoArgs = {
   index?: number;
   nsfw_checker?: boolean;
   /** Asset ids parallel to `imageUrls` (job path) so prompt @img-* mentions can reorder urls. */
-  image_slugs?: string[];
+  image_refs?: string[];
 };
 
 function numericDuration(value: number | string | undefined): number | undefined {
@@ -246,9 +245,12 @@ function numericDuration(value: number | string | undefined): number | undefined
  * - `mode: "spicy"` is only valid on the task_id path; external URLs normalize
  *   spicy → normal.
  */
-function bareImageSlug(raw: string): string {
+function bareImageRef(raw: string): string {
   return normalizeNotebookReference(raw);
 }
+
+const ARTIFACT_ID_TOKEN_PATTERN =
+  /@([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?![\w-])/giu;
 
 /**
  * Align `image_urls` with prompt mention order so `@image1` is the first
@@ -256,14 +258,14 @@ function bareImageSlug(raw: string): string {
  * Images present in the list but never mentioned keep their relative order
  * after the mentioned ones.
  *
- * `slugKeys` is parallel to `imageUrls` when urls are already https (job path).
+ * `refKeys` is parallel to `imageUrls` when urls are already https (job path).
  * When omitted, slug identity is taken from the url itself if it still looks
  * like an `@img-*` / `img-*` asset ref (preview/translate path).
  */
 function alignGrokImageUrlsAndPrompt(
   prompt: string | undefined,
   imageUrls: string[],
-  slugKeys?: readonly string[],
+  refKeys?: readonly string[],
 ): { prompt?: string; imageUrls: string[] } {
   if (imageUrls.length === 0) {
     return prompt === undefined ? { imageUrls } : { prompt, imageUrls };
@@ -271,8 +273,8 @@ function alignGrokImageUrlsAndPrompt(
 
   // Parallel keys for each url: asset slug when known, else the url itself.
   const keys = imageUrls.map((url, i) => {
-    if (slugKeys && slugKeys[i] !== undefined) return bareImageSlug(slugKeys[i]);
-    return bareImageSlug(url);
+    if (refKeys && refKeys[i] !== undefined) return bareImageRef(refKeys[i]);
+    return bareImageRef(url);
   });
 
   const urlByKey = new Map<string, string>();
@@ -282,16 +284,16 @@ function alignGrokImageUrlsAndPrompt(
 
   if (prompt === undefined) return { imageUrls };
 
-  // Mention order from the prompt (first occurrence wins).
+  // Mention order from the prompt (first occurrence wins). Post-resolution
+  // prompts reference media as @<artifact-id> tokens.
   const mentioned: string[] = [];
-  for (const mention of scanNotebookMentions(prompt)) {
-    const bare = mention.reference;
-    if (!bare.startsWith("img-")) continue;
+  for (const match of prompt.matchAll(ARTIFACT_ID_TOKEN_PATTERN)) {
+    const bare = (match[1] ?? "").toLowerCase();
     if (urlByKey.has(bare) && !mentioned.includes(bare)) mentioned.push(bare);
   }
 
-  // If the prompt has no @img-* tokens that match our keys, leave order alone
-  // but still return the prompt unchanged (nothing to rewrite).
+  // If the prompt has no @<artifact-id> tokens that match our keys, leave
+  // order alone but still return the prompt unchanged (nothing to rewrite).
   if (mentioned.length === 0) {
     return { prompt, imageUrls };
   }
@@ -347,9 +349,9 @@ function buildGrokImagineVideoPayload(
   ) as GrokImageToVideoRequest["input"]["aspect_ratio"];
   const nsfwChecker = valueOrZodDefault(args.nsfw_checker, GrokImageToVideoRequestSchema.shape.input.shape.nsfw_checker) as boolean;
 
-  // Preview passes slugs as imageUrls; job passes https urls + parallel image_slugs.
-  const slugKeys = args.image_slugs?.map(bareImageSlug);
-  const aligned = alignGrokImageUrlsAndPrompt(args.prompt, imageUrls, slugKeys);
+  // Preview passes slugs as imageUrls; job passes https urls + parallel image_refs.
+  const refKeys = args.image_refs?.map(bareImageRef);
+  const aligned = alignGrokImageUrlsAndPrompt(args.prompt, imageUrls, refKeys);
   const hasImageUrls = aligned.imageUrls.length > 0;
   const hasTaskId = typeof args.task_id === "string" && args.task_id.length > 0;
   // Prefer image_urls when both are present (tool path always supplies urls).
@@ -1471,7 +1473,7 @@ function buildAlibabaVideoPayload(
 function extractKlingElements(args: Record<string, unknown>): KlingElement[] {
   const elements: KlingElement[] = [];
   for (let slot = 1; slot <= 3; slot++) {
-    const slugs = args[`element${slot}_slugs`] as string[] | undefined;
+    const slugs = args[`element${slot}_refs`] as string[] | undefined;
     const name = args[`element${slot}_name`] as string | undefined;
     const desc = args[`element${slot}_desc`] as string | undefined;
 
@@ -1482,13 +1484,15 @@ function extractKlingElements(args: Record<string, unknown>): KlingElement[] {
     if (!hasSlugs && !hasName && !hasDesc) continue;
 
     const element: KlingElement = {
-      name: hasName ? name : (hasSlugs ? slugs[0] : ""),
+      name: hasName ? name : `element ${slot}`,
       description: hasDesc ? desc : "",
     };
 
     if (hasSlugs) {
-      const hasVideo = slugs.some((s) => s.startsWith("vid-") || s.startsWith("@vid-"));
-      if (hasVideo) {
+      // Refs are artifact ids, so media kind cannot be sniffed from the
+      // value; the tool layer passes element<N>_video when the element
+      // holds a video reference.
+      if (args[`element${slot}_video`] === true) {
         element.element_input_video_urls = slugs;
       } else {
         element.element_input_urls = slugs;
@@ -1525,21 +1529,21 @@ function translateToolPayloadUnchecked(
   const args = transformedPrompt === undefined
     ? rawArgs
     : { ...rawArgs, prompt: transformedPrompt };
-  const imageSlugs = (args.image_slugs as string[] | undefined) ?? [];
+  const imageRefs = (args.image_refs as string[] | undefined) ?? [];
 
   switch (toolName) {
     case "generate_kie_kling_3_0_video": {
       const elements = extractKlingElements(args);
       const payload = buildKling30VideoPayload(
         args as Kling30Args,
-        imageSlugs,
+        imageRefs,
         elements,
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_kling_3_0_motion_control": {
-      const characterImageUrls = (args.character_image_slugs as string[] | undefined) ?? [];
-      const motionVideoUrls = (args.motion_video_slugs as string[] | undefined) ?? [];
+      const characterImageUrls = (args.character_image_refs as string[] | undefined) ?? [];
+      const motionVideoUrls = (args.motion_video_refs as string[] | undefined) ?? [];
       const payload = buildKling30MotionControlPayload(
         args as Kling30MotionControlArgs,
         characterImageUrls,
@@ -1550,7 +1554,7 @@ function translateToolPayloadUnchecked(
     case "generate_kie_kling_3_0_turbo_video": {
       const payload = buildKlingV3TurboVideoPayload(
         args as unknown as { prompt: string; duration?: string; resolution?: KlingV3TurboResolution; aspect_ratio?: KlingV3TurboAspectRatio },
-        imageSlugs,
+        imageRefs,
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
@@ -1558,15 +1562,15 @@ function translateToolPayloadUnchecked(
       if (isXaiProvider(provider)) {
         const payload = buildXaiGrokImagineVideoPayload(
           args as GrokImagineVideoArgs,
-          imageSlugs,
+          imageRefs,
         );
         return { provider_path: "xai.post.v1.videos.generations(request, { otp })", payload: payload as unknown as Record<string, unknown> };
       }
-      // Pass image_slugs explicitly so mention-order alignment works even when
+      // Pass image_refs explicitly so mention-order alignment works even when
       // the preview still shows asset slugs in image_urls.
       const payload = buildGrokImagineVideoPayload(
-        { ...(args as GrokImagineVideoArgs), image_slugs: imageSlugs },
-        imageSlugs,
+        { ...(args as GrokImagineVideoArgs), image_refs: imageRefs },
+        imageRefs,
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
@@ -1578,11 +1582,11 @@ function translateToolPayloadUnchecked(
       if (isXaiProvider(provider)) {
         const payload = buildXaiGrokImagineImagePayload(
           args as GrokImagineImageArgs,
-          imageSlugs,
+          imageRefs,
         );
         return { provider_path: "xai.post.v1.images.edits(request, { otp })", payload: payload as unknown as Record<string, unknown> };
       }
-      const payload = buildGrokImagineImagePayload(args as GrokImagineImageArgs, imageSlugs);
+      const payload = buildGrokImagineImagePayload(args as GrokImagineImageArgs, imageRefs);
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_seedance_2_0_video":
@@ -1591,11 +1595,11 @@ function translateToolPayloadUnchecked(
       const apiModel: Seedance2Model = isFast
         ? "bytedance/seedance-2-fast"
         : "bytedance/seedance-2";
-      const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
-      const lastFrameUrl = (args.last_frame_slug as string | undefined) ?? undefined;
-      const referenceImageUrls = imageSlugs.length > 0 ? imageSlugs : undefined;
-      const referenceVideoUrls = (args.video_slugs as string[] | undefined) ?? undefined;
-      const referenceAudioUrls = (args.audio_slugs as string[] | undefined) ?? undefined;
+      const firstFrameUrl = (args.first_frame_ref as string | undefined) ?? undefined;
+      const lastFrameUrl = (args.last_frame_ref as string | undefined) ?? undefined;
+      const referenceImageUrls = imageRefs.length > 0 ? imageRefs : undefined;
+      const referenceVideoUrls = (args.video_refs as string[] | undefined) ?? undefined;
+      const referenceAudioUrls = (args.audio_refs as string[] | undefined) ?? undefined;
       const payload = buildSeedance2VideoPayload(
         { ...(args as Seedance2VideoArgs), model: apiModel },
         {
@@ -1609,9 +1613,9 @@ function translateToolPayloadUnchecked(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_seedance_2_0_mini_video": {
-      const referenceImageUrls = imageSlugs.length > 0 ? imageSlugs : undefined;
-      const referenceVideoUrls = (args.video_slugs as string[] | undefined) ?? undefined;
-      const referenceAudioUrls = (args.audio_slugs as string[] | undefined) ?? undefined;
+      const referenceImageUrls = imageRefs.length > 0 ? imageRefs : undefined;
+      const referenceVideoUrls = (args.video_refs as string[] | undefined) ?? undefined;
+      const referenceAudioUrls = (args.audio_refs as string[] | undefined) ?? undefined;
       const payload = buildSeedance2MiniVideoPayload(
         args as Seedance2MiniVideoArgs,
         {
@@ -1623,12 +1627,12 @@ function translateToolPayloadUnchecked(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_gemini_omni_video": {
-      const videoSlug = args.video_slug as string | undefined;
+      const videoRef = args.video_ref as string | undefined;
       const payload = buildGeminiOmniVideoPayload(
         args as GeminiOmniVideoArgs,
         {
-          ...(imageSlugs.length > 0 ? { imageUrls: imageSlugs } : {}),
-          ...(videoSlug !== undefined && videoSlug.trim() !== "" ? { videoUrl: videoSlug } : {}),
+          ...(imageRefs.length > 0 ? { imageUrls: imageRefs } : {}),
+          ...(videoRef !== undefined && videoRef.trim() !== "" ? { videoUrl: videoRef } : {}),
         },
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
@@ -1644,24 +1648,24 @@ function translateToolPayloadUnchecked(
           : toolName === "generate_google_flow_veo_3_1_lite_low_priority_video"
             ? "veo-3.1-lite-low-priority"
             : "veo-3.1-lite";
-      const startImage = args.first_frame_slug as string | undefined;
-      const endImage = args.last_frame_slug as string | undefined;
+      const startImage = args.first_frame_ref as string | undefined;
+      const endImage = args.last_frame_ref as string | undefined;
       const payload = buildVeo31VideoPayload(model, args as Veo31VideoArgs, {
         ...(startImage !== undefined && startImage.trim() !== "" ? { startImageId: startImage } : {}),
         ...(endImage !== undefined && endImage.trim() !== "" ? { endImageId: endImage } : {}),
-        ...(imageSlugs.length > 0 ? { referenceImageIds: imageSlugs } : {}),
+        ...(imageRefs.length > 0 ? { referenceImageIds: imageRefs } : {}),
       });
       return { provider_path: "googleflow.v1.videos({ async: true })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_google_flow_omni_flash_video": {
-      const startImage = args.first_frame_slug as string | undefined;
-      const videoSlug = args.video_slug as string | undefined;
+      const startImage = args.first_frame_ref as string | undefined;
+      const videoRef = args.video_ref as string | undefined;
       const voiceRefs = ((args.voice_refs as string[] | undefined) ?? []).filter((s) => s.trim() !== "");
       const characterRefs = ((args.character_refs as string[] | undefined) ?? []).filter((s) => s.trim() !== "");
       const payload = buildGoogleOmniVideoPayload(args as GoogleOmniVideoArgs, {
         ...(startImage !== undefined && startImage.trim() !== "" ? { startImageId: startImage } : {}),
-        ...(imageSlugs.length > 0 ? { referenceImageIds: imageSlugs } : {}),
-        ...(videoSlug !== undefined && videoSlug.trim() !== "" ? { referenceVideoId: videoSlug } : {}),
+        ...(imageRefs.length > 0 ? { referenceImageIds: imageRefs } : {}),
+        ...(videoRef !== undefined && videoRef.trim() !== "" ? { referenceVideoId: videoRef } : {}),
         ...(voiceRefs.length > 0 ? { voiceRefs } : {}),
         ...(characterRefs.length > 0 ? { characterRefs } : {}),
       });
@@ -1669,7 +1673,7 @@ function translateToolPayloadUnchecked(
     }
     case "generate_google_flow_nano_banana_pro_image": {
       const characterRefs = ((args.character_refs as string[] | undefined) ?? []).filter((s) => s.trim() !== "");
-      const payload = buildGoogleNbpImagePayload(args as GoogleNbpImageArgs, imageSlugs, characterRefs);
+      const payload = buildGoogleNbpImagePayload(args as GoogleNbpImageArgs, imageRefs, characterRefs);
       return { provider_path: "googleflow.v1.images()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_grok_imagine_text_to_image": {
@@ -1688,14 +1692,14 @@ function translateToolPayloadUnchecked(
     case "generate_xai_grok_imagine_video": {
       const payload = buildXaiGrokImagineRefVideoPayload(
         args as GrokImagineRefVideoArgs,
-        imageSlugs,
+        imageRefs,
       );
       return { provider_path: "xai.post.v1.videos.generations(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_nano_banana_pro_text_to_image": {
       const payload = buildNanoBananaImagePayload(
         args as NanoBananaImageArgs,
-        imageSlugs,
+        imageRefs,
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
@@ -1706,21 +1710,21 @@ function translateToolPayloadUnchecked(
     case "generate_kie_seedream_v5_lite_image_to_image": {
       const payload = buildSeedreamImageEditPayload(
         args as SeedreamImageArgs,
-        imageSlugs,
+        imageRefs,
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_qwen_2_0_edit_image": {
       const payload = buildQwen2ImageEditPayload(
         args as Qwen2ImageEditArgs,
-        imageSlugs[0] ?? "",
+        imageRefs[0] ?? "",
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_gpt_image_2_image_to_image": {
       const payload = buildGptImagePayload(
         args as GptImageArgs,
-        imageSlugs,
+        imageRefs,
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
@@ -1731,19 +1735,19 @@ function translateToolPayloadUnchecked(
     case "generate_kie_wan_2_7_text_to_image": {
       const payload = buildWan27ImagePayload(
         args as Wan27ImageArgs,
-        imageSlugs,
+        imageRefs,
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_wan_2_7_pro_text_to_image": {
       const payload = buildWan27ImageProPayload(
         args as Wan27ImageArgs,
-        imageSlugs,
+        imageRefs,
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_wan_2_7_text_to_video": {
-      const audioUrl = (args.audio_url as string | undefined) ?? (args.driving_audio_slug as string | undefined) ?? undefined;
+      const audioUrl = (args.audio_url as string | undefined) ?? (args.driving_audio_ref as string | undefined) ?? undefined;
       const payload = buildWan27TextToVideoPayload(
         args as Wan27TextToVideoArgs,
         { audioUrl },
@@ -1751,10 +1755,10 @@ function translateToolPayloadUnchecked(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_wan_2_7_image_to_video": {
-      const firstFrameSlug = (args.first_frame_slug as string | undefined) ?? undefined;
-      const lastFrameSlug = (args.last_frame_slug as string | undefined) ?? undefined;
-      const firstClipSlug = (args.first_clip_slug as string | undefined) ?? undefined;
-      const drivingAudioSlug = (args.driving_audio_slug as string | undefined) ?? undefined;
+      const firstFrameSlug = (args.first_frame_ref as string | undefined) ?? undefined;
+      const lastFrameSlug = (args.last_frame_ref as string | undefined) ?? undefined;
+      const firstClipSlug = (args.first_clip_ref as string | undefined) ?? undefined;
+      const drivingAudioSlug = (args.driving_audio_ref as string | undefined) ?? undefined;
       const payload = buildWan27FramesVideoPayload(
         args as Wan27FramesVideoArgs,
         {
@@ -1767,13 +1771,13 @@ function translateToolPayloadUnchecked(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_wan_2_7_edit_video": {
-      const videoSlug = (args.video_slug as string) ?? "";
-      const imageSlug = (args.image_slug as string | undefined) ?? undefined;
+      const videoRef = (args.video_ref as string) ?? "";
+      const imageRef = (args.image_ref as string | undefined) ?? undefined;
       const payload = buildWan27VideoEditPayload(
         args as Wan27VideoEditArgs,
         {
-          videoUrl: videoSlug,
-          referenceImageUrl: imageSlug,
+          videoUrl: videoRef,
+          referenceImageUrl: imageRef,
         },
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
@@ -1791,28 +1795,28 @@ function translateToolPayloadUnchecked(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_volcengine_video_to_video_lip_sync": {
-      const videoSlug = (args.video_slug as string) ?? "";
-      const audioSlug = (args.audio_slug as string) ?? "";
+      const videoRef = (args.video_ref as string) ?? "";
+      const audioRef = (args.audio_ref as string) ?? "";
       const payload = buildVolcengineLipSyncPayload(args as VolcengineLipSyncArgs, {
-        videoUrl: videoSlug,
-        audioUrl: audioSlug,
+        videoUrl: videoRef,
+        audioUrl: audioRef,
       });
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_omnihuman_1_5_video": {
-      const imageSlug = (args.image_slug as string) ?? "";
-      const audioSlug = (args.audio_slug as string) ?? "";
+      const imageRef = (args.image_ref as string) ?? "";
+      const audioRef = (args.audio_ref as string) ?? "";
       const payload = buildOmnihumanPayload(args as OmnihumanArgs, {
-        imageUrl: imageSlug,
-        audioUrl: audioSlug,
+        imageUrl: imageRef,
+        audioUrl: audioRef,
       });
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_wan_2_7_reference_to_video": {
-      const referenceImageUrls = imageSlugs;
-      const referenceVideoUrls = (args.video_slugs as string[] | undefined) ?? [];
-      const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
-      const referenceVoiceUrl = (args.audio_slug as string | undefined) ?? undefined;
+      const referenceImageUrls = imageRefs;
+      const referenceVideoUrls = (args.video_refs as string[] | undefined) ?? [];
+      const firstFrameUrl = (args.first_frame_ref as string | undefined) ?? undefined;
+      const referenceVoiceUrl = (args.audio_ref as string | undefined) ?? undefined;
       const payload = buildWan27ReferenceVideoPayload(args as Wan27ReferenceVideoArgs, {
         referenceImageUrls,
         referenceVideoUrls,
@@ -1822,7 +1826,7 @@ function translateToolPayloadUnchecked(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "extend_kie_wan_2_7_video": {
-      const firstClipSlug = (args.video_slug as string) ?? "";
+      const firstClipSlug = (args.video_ref as string) ?? "";
       const payload = buildWan27FramesVideoPayload(args as Wan27FramesVideoArgs, {
         firstClipUrl: firstClipSlug,
       });
@@ -1833,7 +1837,7 @@ function translateToolPayloadUnchecked(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_happyhorse_1_1_image_to_video": {
-      const imageUrl = (args.first_frame_slug as string | undefined) ?? "";
+      const imageUrl = (args.first_frame_ref as string | undefined) ?? "";
       const payload = buildHappyHorseI2vPayload(
         args as HappyHorseI2vArgs,
         imageUrl,
@@ -1841,7 +1845,7 @@ function translateToolPayloadUnchecked(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_happyhorse_1_1_reference_to_video": {
-      const referenceImages = (args.image_slugs as string[] | undefined) ?? [];
+      const referenceImages = (args.image_refs as string[] | undefined) ?? [];
       const payload = buildHappyHorseRefPayload(
         args as HappyHorseRefArgs,
         referenceImages,
@@ -1849,18 +1853,18 @@ function translateToolPayloadUnchecked(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_happyhorse_1_1_edit_video": {
-      const videoSlug = (args.video_slug as string | undefined) ?? "";
-      const referenceImages = (args.image_slugs as string[] | undefined) ?? [];
+      const videoRef = (args.video_ref as string | undefined) ?? "";
+      const referenceImages = (args.image_refs as string[] | undefined) ?? [];
       const payload = buildHappyHorseVideoEditPayload(
         args as HappyHorseVideoEditArgs,
-        videoSlug,
+        videoRef,
         referenceImages,
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
 
     case "generate_alibaba_wan_2_7_text_to_image": {
-      const imageUrls = imageSlugs;
+      const imageUrls = imageRefs;
       const payload = buildAlibabaImagePayload(
         { prompt: args.prompt as string, model: (args.model as AlibabaImageModel) ?? "wan2.7-image", size: args.size as string | undefined, n: args.n as number | undefined, watermark: args.watermark as boolean | undefined, thinking_mode: args.thinking_mode as boolean | undefined, seed: args.seed as number | undefined },
         imageUrls,
@@ -1868,7 +1872,7 @@ function translateToolPayloadUnchecked(
       return { provider_path: "alibaba.post.api.v1.services.aigc.imageGeneration.generation()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_alibaba_wan_2_7_pro_text_to_image": {
-      const imageUrls = imageSlugs;
+      const imageUrls = imageRefs;
       const payload = buildAlibabaImagePayload(
         { prompt: args.prompt as string, model: "wan2.7-image-pro", size: args.size as string | undefined, n: args.n as number | undefined, watermark: args.watermark as boolean | undefined, thinking_mode: args.thinking_mode as boolean | undefined, seed: args.seed as number | undefined },
         imageUrls,
@@ -1876,11 +1880,11 @@ function translateToolPayloadUnchecked(
       return { provider_path: "alibaba.post.api.v1.services.aigc.imageGeneration.generation()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_alibaba_wan_2_7_video": {
-      const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
-      const lastFrameUrl = (args.last_frame_slug as string | undefined) ?? undefined;
-      const firstClipUrl = (args.first_clip_slug as string | undefined) ?? undefined;
-      const drivingAudioUrl = (args.driving_audio_slug as string | undefined) ?? undefined;
-      const videoUrl = (args.video_slug as string | undefined) ?? undefined;
+      const firstFrameUrl = (args.first_frame_ref as string | undefined) ?? undefined;
+      const lastFrameUrl = (args.last_frame_ref as string | undefined) ?? undefined;
+      const firstClipUrl = (args.first_clip_ref as string | undefined) ?? undefined;
+      const drivingAudioUrl = (args.driving_audio_ref as string | undefined) ?? undefined;
+      const videoUrl = (args.video_ref as string | undefined) ?? undefined;
       const payload = buildAlibabaVideoPayload(
         {
           prompt: args.prompt as string,

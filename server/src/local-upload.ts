@@ -6,25 +6,25 @@ import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { queue } from "./queue.js";
 
-const extensionToPrefix: Record<string, string> = {
-  ".mp4": "vid",
-  ".mov": "vid",
-  ".webm": "vid",
-  ".avi": "vid",
-  ".mkv": "vid",
-  ".jpg": "img",
-  ".jpeg": "img",
-  ".png": "img",
-  ".gif": "img",
-  ".webp": "img",
-  ".svg": "img",
-  ".mp3": "aud",
-  ".wav": "aud",
-  ".aac": "aud",
-  ".flac": "aud",
-  ".ogg": "aud",
-  ".m4a": "aud",
-  ".weba": "aud",
+const extensionToKind: Record<string, string> = {
+  ".mp4": "video",
+  ".mov": "video",
+  ".webm": "video",
+  ".avi": "video",
+  ".mkv": "video",
+  ".jpg": "image",
+  ".jpeg": "image",
+  ".png": "image",
+  ".gif": "image",
+  ".webp": "image",
+  ".svg": "image",
+  ".mp3": "audio",
+  ".wav": "audio",
+  ".aac": "audio",
+  ".flac": "audio",
+  ".ogg": "audio",
+  ".m4a": "audio",
+  ".weba": "audio",
   ".md": "script",
 };
 
@@ -167,8 +167,8 @@ async function uploadLocal(
   args: UploadLocalArgs,
 ): Promise<LocalUploadOutcome> {
   const ext = path.extname(args.filename).toLowerCase();
-  const prefix = extensionToPrefix[ext];
-  if (!prefix && !args.targetAssetId) {
+  const kind = extensionToKind[ext];
+  if (!kind && !args.targetAssetId) {
     return {
       ok: false,
       statusCode: 400,
@@ -179,10 +179,19 @@ async function uploadLocal(
   let assetId: string;
   let artifactId: string;
   let assetPath: string;
+  let assetKind: string;
   let isNewAsset = false;
 
   if (args.targetAssetId) {
-    if (!args.targetAssetId.startsWith("char-")) {
+    const artifact = fs.artifacts.get(args.targetAssetId);
+    if (!artifact.ok) {
+      return {
+        ok: false,
+        statusCode: statusCodeForFsError(artifact.error),
+        message: artifact.error.message,
+      };
+    }
+    if (artifact.value.kind !== "character") {
       return { ok: false, statusCode: 400, message: "Target asset must be a character folder" };
     }
     const resolveResult = await fs.workspaces.resolveArtifact(args.targetAssetId);
@@ -191,18 +200,11 @@ async function uploadLocal(
     }
     assetId = args.targetAssetId;
     assetPath = resolveResult.value;
-    const artifact = fs.artifacts.get(assetId);
-    if (!artifact.ok) {
-      return {
-        ok: false,
-        statusCode: statusCodeForFsError(artifact.error),
-        message: artifact.error.message,
-      };
-    }
     artifactId = artifact.value.artifactId;
+    assetKind = artifact.value.kind;
   } else {
     const assetName = path.basename(args.filename, ext);
-    const assetResult = await fs.artifacts.create(prefix!, assetName);
+    const assetResult = await fs.artifacts.create(kind!, assetName);
     if (!assetResult.ok) {
       return {
         ok: false,
@@ -210,9 +212,10 @@ async function uploadLocal(
         message: assetResult.error.message,
       };
     }
-    assetId = assetResult.value.slug;
+    assetId = assetResult.value.artifactId;
     artifactId = assetResult.value.artifactId;
     assetPath = assetResult.value.path;
+    assetKind = assetResult.value.kind;
     isNewAsset = true;
   }
 
@@ -260,7 +263,7 @@ async function uploadLocal(
     } else {
       const provenance = { origin: args.origin ?? "upload", processed_at: new Date().toISOString() };
       let processingError: string | null = null;
-      if (assetId.startsWith("vid-")) {
+      if (assetKind === "video") {
         const videoPath = path.join(assetPath, writtenFilename);
         const jobId = `process-video-${assetId}-${Date.now()}`;
         // Downstream speech-to-text stays enqueued even when the caller waits:
@@ -279,7 +282,7 @@ async function uploadLocal(
           provenance,
         } as unknown as Record<string, unknown>;
         processingError = await runProcessingJob(jobId, payload, args.waitForProcessing);
-      } else if (assetId.startsWith("img-")) {
+      } else if (assetKind === "image") {
         const jobId = `process-image-${assetId}-${Date.now()}`;
         const payload = {
           type: "process_image",
@@ -289,7 +292,7 @@ async function uploadLocal(
           provenance,
         } as unknown as Record<string, unknown>;
         processingError = await runProcessingJob(jobId, payload, args.waitForProcessing);
-      } else if (assetId.startsWith("aud-")) {
+      } else if (assetKind === "audio") {
         const audioPath = path.join(assetPath, writtenFilename);
         const jobId = `process-audio-${assetId}-${Date.now()}`;
         const payload = {

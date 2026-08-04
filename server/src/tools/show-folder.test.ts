@@ -43,7 +43,7 @@ describe("show_folder tool", () => {
     });
     const assetResult = await fs.artifacts.create("img", "landscape-photo");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
-    const assetId = assetResult.value.slug;
+    const assetId = assetResult.value.artifactId;
 
     const result = await client.callTool({
       name: "show_folder",

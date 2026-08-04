@@ -66,20 +66,20 @@ const payloadCases: Array<{ tool: string; provider?: string }> = [
 
 const payloadCaseArgs: Record<string, unknown> = {
   prompt: "plain prompt",
-  image_slugs: ["https://example.test/image.png"],
-  character_image_slugs: ["https://example.test/character.png"],
-  motion_video_slugs: ["https://example.test/motion.mp4"],
-  video_slugs: ["https://example.test/video.mp4"],
-  audio_slugs: ["https://example.test/audio.mp3"],
+  image_refs: ["https://example.test/image.png"],
+  character_image_refs: ["https://example.test/character.png"],
+  motion_video_refs: ["https://example.test/motion.mp4"],
+  video_refs: ["https://example.test/video.mp4"],
+  audio_refs: ["https://example.test/audio.mp3"],
   character_refs: [],
   voice_refs: [],
-  first_frame_slug: "https://example.test/first.png",
-  last_frame_slug: "https://example.test/last.png",
-  first_clip_slug: "https://example.test/clip.mp4",
-  driving_audio_slug: "https://example.test/driving.mp3",
-  video_slug: "https://example.test/source.mp4",
-  image_slug: "https://example.test/source.png",
-  audio_slug: "https://example.test/source.mp3",
+  first_frame_ref: "https://example.test/first.png",
+  last_frame_ref: "https://example.test/last.png",
+  first_clip_ref: "https://example.test/clip.mp4",
+  driving_audio_ref: "https://example.test/driving.mp3",
+  video_ref: "https://example.test/source.mp4",
+  image_ref: "https://example.test/source.png",
+  audio_ref: "https://example.test/source.mp3",
   extend_at: 0,
   extend_times: 1,
 };
@@ -117,7 +117,10 @@ describe("translateToolPayload", () => {
       ), entry.tool).toThrow(ProviderMentionError);
       expect(() => translateToolPayload(
         entry.tool,
-        argsForPayloadCase(entry.tool, "leaked @img-local"),
+        argsForPayloadCase(
+          entry.tool,
+          "leaked @01890f1c-0000-7000-8000-0000000000aa",
+        ),
         entry.provider,
       ), entry.tool).toThrow(ProviderMentionError);
     }
@@ -125,8 +128,8 @@ describe("translateToolPayload", () => {
 
   it("materializes Kling motion-control defaults when controls are Auto", () => {
     const result = translateToolPayload("generate_kie_kling_3_0_motion_control", {
-      character_image_slugs: ["@img-character"],
-      motion_video_slugs: ["@vid-motion"],
+      character_image_refs: ["@img-character"],
+      motion_video_refs: ["@vid-motion"],
       mode: "",
       character_orientation: "",
       background_source: "",
@@ -153,8 +156,8 @@ describe("translateToolPayload", () => {
 
   it("preserves explicit Kling motion-control settings", () => {
     const result = translateToolPayload("generate_kie_kling_3_0_motion_control", {
-      character_image_slugs: ["@img-character"],
-      motion_video_slugs: ["@vid-motion"],
+      character_image_refs: ["@img-character"],
+      motion_video_refs: ["@vid-motion"],
       mode: "1080p",
       character_orientation: "image",
       background_source: "input_image",
@@ -188,7 +191,7 @@ describe("translateToolPayload", () => {
   it("honors Kling Turbo image-to-video resolution and applies shared defaults", () => {
     const result = translateToolPayload("generate_kling30_turbo_video", {
       prompt: "turn toward the camera",
-      image_slugs: ["https://example.test/input.png"],
+      image_refs: ["https://example.test/input.png"],
       resolution: "1080p",
     });
 
@@ -223,8 +226,8 @@ describe("translateToolPayload", () => {
 
   it("uses Apicity defaults for Volcengine lip sync", () => {
     const result = translateToolPayload("generate_volcengine_lipsync_video", {
-      video_slug: "https://example.test/input.mp4",
-      audio_slug: "https://example.test/input.mp3",
+      video_ref: "https://example.test/input.mp4",
+      audio_ref: "https://example.test/input.mp3",
       mode: "lite",
     });
 
@@ -246,7 +249,7 @@ describe("translateToolPayload", () => {
 
   it("builds current Kie Grok image-to-video payload with mode", () => {
     const result = translateToolPayload("generate_grok_imagine_video", {
-      image_slugs: ["https://example.test/input.png"],
+      image_refs: ["https://example.test/input.png"],
       prompt: "wave at camera",
       mode: "fun",
       duration: 8,
@@ -274,7 +277,7 @@ describe("translateToolPayload", () => {
 
   it("materializes all Kie Grok image-to-video defaults in previews", () => {
     const result = translateToolPayload("generate_grok_imagine_video", {
-      image_slugs: ["@img-input"],
+      image_refs: ["@img-input"],
       prompt: "wave at camera",
       aspect_ratio: "9:16",
     });
@@ -293,10 +296,11 @@ describe("translateToolPayload", () => {
     });
   });
 
-  it("rewrites @img-* prompt mentions to Kie @imageN form", () => {
+  it("rewrites @<artifact-id> prompt mentions to Kie @imageN form", () => {
+    const IMG = "01890f1c-0000-7000-8000-0000000000aa";
     const result = translateToolPayload("generate_grok_imagine_video", {
-      image_slugs: ["@img-nbp-reference-1-reference"],
-      prompt: "@img-nbp-reference-1-reference in bangkok high on shrooms",
+      image_refs: [`@${IMG}`],
+      prompt: `@${IMG} in bangkok high on shrooms`,
       mode: "fun",
       duration: 6,
       resolution: "720p",
@@ -306,7 +310,7 @@ describe("translateToolPayload", () => {
     expect(result?.payload).toMatchObject({
       model: "grok-imagine/image-to-video",
       input: {
-        image_urls: ["@img-nbp-reference-1-reference"],
+        image_urls: [`@${IMG}`],
         prompt: "@image1 in bangkok high on shrooms",
         mode: "fun",
         duration: 6,
@@ -318,12 +322,14 @@ describe("translateToolPayload", () => {
   });
 
   it("orders image_urls by first prompt mention so @image1 is the first named image", () => {
-    // Tool-call list order is [lay, catblack] but the prompt names catblack first.
-    // Kie @imageN is the Nth entry of image_urls — reorder so mentions stay
-    // natural: "@image1 morphs into @image2".
+    // Tool-call list order is [lay, catblack] but the prompt names catblack
+    // first. Kie @imageN is the Nth entry of image_urls — reorder so
+    // mentions stay natural: "@image1 morphs into @image2".
+    const LAY = "01890f1c-0000-7000-8000-00000000ce11";
+    const CATBLACK = "01890f1c-0000-7000-8000-00000000cafe";
     const result = translateToolPayload("generate_grok_imagine_video", {
-      image_slugs: ["@img-lay", "@img-catblack"],
-      prompt: "@img-catblack morphs into @img-lay",
+      image_refs: [`@${LAY}`, `@${CATBLACK}`],
+      prompt: `@${CATBLACK} morphs into @${LAY}`,
       mode: "normal",
       duration: 6,
       resolution: "720p",
@@ -334,7 +340,7 @@ describe("translateToolPayload", () => {
     expect(result?.payload).toEqual({
       model: "grok-imagine/image-to-video",
       input: {
-        image_urls: ["@img-catblack", "@img-lay"],
+        image_urls: [`@${CATBLACK}`, `@${LAY}`],
         prompt: "@image1 morphs into @image2",
         mode: "normal",
         aspect_ratio: "1:1",
@@ -347,7 +353,7 @@ describe("translateToolPayload", () => {
 
   it("normalizes spicy mode for uploaded Grok image-to-video inputs", () => {
     const result = translateToolPayload("generate_grok_imagine_video", {
-      image_slugs: ["https://example.test/input.png"],
+      image_refs: ["https://example.test/input.png"],
       mode: "spicy",
     });
 
@@ -378,8 +384,8 @@ describe("translateToolPayload", () => {
   it("builds a schema-valid Seedance 2 Mini payload (refs, no first/last frame)", () => {
     const result = translateToolPayload("generate_seedance2_mini_video", {
       prompt: "a tiny horse trotting",
-      image_slugs: ["https://example.test/ref.png"],
-      video_slugs: ["https://example.test/motion.mp4"],
+      image_refs: ["https://example.test/ref.png"],
+      video_refs: ["https://example.test/motion.mp4"],
       aspect_ratio: "adaptive",
       resolution: "720p",
       duration: "12",
@@ -410,7 +416,7 @@ describe("translateToolPayload", () => {
   it("defaults Seedance 2 Mini resolution/duration so cost can key video rates", () => {
     const result = translateToolPayload("generate_seedance2_mini_video", {
       prompt: "scene continuity",
-      video_slugs: ["https://example.test/scene.mp4"],
+      video_refs: ["https://example.test/scene.mp4"],
     });
 
     expect(result?.payload).toMatchObject({
@@ -430,7 +436,7 @@ describe("translateToolPayload", () => {
       prompt: "slow clouds",
       duration: "4",
       aspect_ratio: "16:9",
-      image_slugs: ["ref-1"],
+      image_refs: ["ref-1"],
     });
     expect(result?.provider_path).toBe("googleflow.v1.videos({ async: true })");
     // Reference-to-video requires duration 8 under the current Google Flow schema.
@@ -447,7 +453,7 @@ describe("translateToolPayload", () => {
   it("builds Google Omni I2V payload with startImage", () => {
     const result = translateToolPayload("generate_google_omni_video", {
       prompt: "animate the first frame",
-      first_frame_slug: "user:123-email:test-image:start",
+      first_frame_ref: "user:123-email:test-image:start",
       duration: "6",
       aspect_ratio: "9:16",
     });
@@ -465,7 +471,7 @@ describe("translateToolPayload", () => {
   it("builds Google Omni R2V payload with reference images and default duration", () => {
     const result = translateToolPayload("generate_google_omni_video", {
       prompt: "use these references",
-      image_slugs: ["ref-1", "ref-2"],
+      image_refs: ["ref-1", "ref-2"],
       aspect_ratio: "16:9",
     });
 
@@ -482,8 +488,8 @@ describe("translateToolPayload", () => {
   it("builds Google Omni V2V payload without duration and with explicit frame indexes", () => {
     const result = translateToolPayload("generate_google_omni_video", {
       prompt: "edit the clip",
-      video_slug: "user:123-email:test-video:clip",
-      image_slugs: ["ref-1"],
+      video_ref: "user:123-email:test-video:clip",
+      image_refs: ["ref-1"],
       duration: "10",
       video_clip_start: 2,
       video_clip_ends: 10,
@@ -504,8 +510,8 @@ describe("translateToolPayload", () => {
     // it anyway when a clip is present. Both must yield the identical payload.
     const result = translateToolPayload("generate_google_omni_video", {
       prompt: "edit the clip",
-      video_slug: "user:123-email:test-video:clip",
-      image_slugs: ["ref-1"],
+      video_ref: "user:123-email:test-video:clip",
+      image_refs: ["ref-1"],
       video_clip_start: 2,
       video_clip_ends: 10,
     });
@@ -523,7 +529,7 @@ describe("translateToolPayload", () => {
   it("builds Google Omni V2V payload without fabricated trim indexes", () => {
     const result = translateToolPayload("generate_google_omni_video", {
       prompt: "edit the clip",
-      video_slug: "user:123-email:test-video:clip",
+      video_ref: "user:123-email:test-video:clip",
       duration: "8",
     });
 
@@ -537,7 +543,7 @@ describe("translateToolPayload", () => {
   it("builds Google Omni R2V payload with voice refs (referenceAudio_N) and character refs (character_N)", () => {
     const result = translateToolPayload("generate_google_omni_video", {
       prompt: "cast these",
-      image_slugs: ["ref-1"],
+      image_refs: ["ref-1"],
       voice_refs: ["voice:aaa", "voice:bbb"],
       character_refs: ["character:ccc"],
       aspect_ratio: "16:9",
@@ -561,7 +567,7 @@ describe("translateToolPayload", () => {
   it("builds Google Omni V2V payload with voice refs and no duration", () => {
     const result = translateToolPayload("generate_google_omni_video", {
       prompt: "edit with narration",
-      video_slug: "user:123-email:test-video:clip",
+      video_ref: "user:123-email:test-video:clip",
       voice_refs: ["voice:aaa"],
       duration: "8",
     });
@@ -578,7 +584,7 @@ describe("translateToolPayload", () => {
   it("rewrites @slug prompt mentions to @reference_N for Nano Banana Pro (Google)", () => {
     const result = translateToolPayload("generate_nano_banana_pro_google", {
       prompt: "@img-vancat in multiple poses like @img-shots in the purple nebula",
-      image_slugs: ["@img-shots", "@img-vcprof", "@img-vancat"],
+      image_refs: ["@img-shots", "@img-vcprof", "@img-vancat"],
       aspect_ratio: "16:9",
       book_id: "realcat",
     }, "google");
@@ -598,8 +604,8 @@ describe("translateToolPayload", () => {
   it("rewrites @slug mentions to @referenceImage_N and strips frame mentions for Veo 3.1", () => {
     const result = translateToolPayload("generate_veo31_video", {
       prompt: "pan across @img-set starting from @img-open",
-      image_slugs: ["img-set"],
-      first_frame_slug: "img-open",
+      image_refs: ["img-set"],
+      first_frame_ref: "img-open",
       duration: "4",
       aspect_ratio: "16:9",
     });
@@ -618,8 +624,8 @@ describe("translateToolPayload", () => {
   it("rewrites @slug mentions and strips the clip mention for Google Omni V2V", () => {
     const result = translateToolPayload("generate_google_omni_video", {
       prompt: "put @img-hat into @vid-clip",
-      video_slug: "vid-clip",
-      image_slugs: ["img-hat"],
+      video_ref: "vid-clip",
+      image_refs: ["img-hat"],
     });
 
     expect(result?.payload).toEqual({
@@ -637,8 +643,8 @@ describe("translateToolPayload", () => {
     // still unambiguous by position).
     const result = translateToolPayload("generate_happyhorse_videoedit_video", {
       prompt: "Replace the boy in @vid-scene-1 with the character in @img-spongebob, then add @img-extra style",
-      video_slug: "@vid-scene-1",
-      image_slugs: ["@img-spongebob", "img-extra"],
+      video_ref: "@vid-scene-1",
+      image_refs: ["@img-spongebob", "img-extra"],
       resolution: "1080p",
     });
 
@@ -660,8 +666,8 @@ describe("translateToolPayload", () => {
     // IDs to HappyHorse. Both the preview and the runtime path now rewrite.
     const result = translateToolPayload("generate_happyhorse_videoedit_video", {
       prompt: "scene @vid-full-notats replace attress with @img-nbp-scene-reference-1-5",
-      video_slug: "vid-full-notats",
-      image_slugs: ["img-nbp-scene-reference-1-5"],
+      video_ref: "vid-full-notats",
+      image_refs: ["img-nbp-scene-reference-1-5"],
     });
 
     const prompt = (result?.payload as { input: { prompt: string } }).input.prompt;
@@ -671,12 +677,12 @@ describe("translateToolPayload", () => {
   });
 
   it("leaves non-asset @text untouched in HappyHorse video-edit prompts", () => {
-    // Stray @tokens that aren't in video_slug/image_slugs stay literal — only
+    // Stray @tokens that aren't in video_ref/image_refs stay literal — only
     // confirmed asset slugs are rewritten.
     const result = translateToolPayload("generate_happyhorse_videoedit_video", {
       prompt: "@notify support about @vid-clip and @img-char",
-      video_slug: "vid-clip",
-      image_slugs: ["img-char"],
+      video_ref: "vid-clip",
+      image_refs: ["img-char"],
     });
 
     expect((result?.payload as { input: { prompt: string } }).input.prompt).toBe(
@@ -687,8 +693,8 @@ describe("translateToolPayload", () => {
   it("passes HappyHorse video-edit prompts that already read naturally", () => {
     const result = translateToolPayload("generate_happyhorse_videoedit_video", {
       prompt: "Replace the teenage boy in the video with SpongeBob SquarePants.",
-      video_slug: "vid-clip",
-      image_slugs: ["img-char"],
+      video_ref: "vid-clip",
+      image_refs: ["img-char"],
     });
 
     expect((result?.payload as { input: { prompt: string } }).input.prompt).toBe(
@@ -699,7 +705,7 @@ describe("translateToolPayload", () => {
   it("rewrites HappyHorse ref prompts to [Image N] markers", () => {
     const result = translateToolPayload("generate_happyhorse_ref_video", {
       prompt: "the woman in @img-char waves at the camera",
-      image_slugs: ["img-char", "img-bg"],
+      image_refs: ["img-char", "img-bg"],
     });
 
     expect((result?.payload as { input: { prompt: string } }).input.prompt).toBe(
@@ -710,9 +716,9 @@ describe("translateToolPayload", () => {
   it("rewrites Seedance @slug mentions to @ImageN/@VideoN/@AudioN", () => {
     const result = translateToolPayload("generate_seedance2_video", {
       prompt: "animate @img-hero like @vid-motion with @aud-score",
-      image_slugs: ["img-hero"],
-      video_slugs: ["vid-motion"],
-      audio_slugs: ["aud-score"],
+      image_refs: ["img-hero"],
+      video_refs: ["vid-motion"],
+      audio_refs: ["aud-score"],
     });
 
     expect((result?.payload as { input: { prompt: string } }).input.prompt).toBe(
@@ -727,8 +733,8 @@ describe("translateToolPayload", () => {
     // outbound text; URL fields may still show local slugs as placeholders.
     const result = translateToolPayload("generate_seedance2_mini_video", {
       prompt: "scene @vid-full-notats replace attress with @img-actress",
-      image_slugs: ["@img-actress"],
-      video_slugs: ["@vid-full-notats"],
+      image_refs: ["@img-actress"],
+      video_refs: ["@vid-full-notats"],
       aspect_ratio: "16:9",
       resolution: "720p",
       duration: "15",
@@ -755,8 +761,8 @@ describe("translateToolPayload", () => {
   it("rewrites free-form wan video-edit @slugs to natural language", () => {
     const result = translateToolPayload("generate_wan27_videoedit_video", {
       prompt: "make @vid-clip match @img-style",
-      video_slug: "vid-clip",
-      image_slug: "img-style",
+      video_ref: "vid-clip",
+      image_ref: "img-style",
     });
 
     expect((result?.payload as { input: { prompt: string } }).input.prompt).toBe(

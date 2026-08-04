@@ -8,7 +8,8 @@ import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
 import { getCanonicalName } from "../generation-registry.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import type { ToolDef } from "./tool-def.js";
-import { timelineSlotSlugs } from "../timeline-helpers.js";
+import { expandTimelineSlotRefs, timelineSlotArtifactIds } from "../timeline-helpers.js";
+import { resolveArtifactRefs } from "../artifact-refs.js";
 import {
   buildIntelligenceResponses,
   firstResponseText,
@@ -260,11 +261,11 @@ export async function findPreviousErrorForPrompt(
 }
 
 type SceneDef = { prompt: string; duration: number };
-type ElementDef = { name: string; desc: string; slugs: string[] };
+type ElementDef = { name: string; desc: string; refs: string[] };
 
 export function extractSceneContext(
   toolParams: Record<string, unknown>,
-): { scenes: SceneDef[]; elements: ElementDef[]; refSlugs: string[]; aspectRatio: string } {
+): { scenes: SceneDef[]; elements: ElementDef[]; refs: string[]; aspectRatio: string } {
   const multiPrompt = toolParams.multi_prompt as SceneDef[] | undefined;
   const scenes: SceneDef[] = multiPrompt
     ? multiPrompt
@@ -272,19 +273,19 @@ export function extractSceneContext(
 
   const elements: ElementDef[] = [];
   for (let i = 1; i <= 3; i++) {
-    const slugs = toolParams[`input_element${i}_slugs`] as string[] | undefined;
-    if (!slugs) continue;
+    const refs = toolParams[`input_element${i}_refs`] as string[] | undefined;
+    if (!refs) continue;
     elements.push({
       name: (toolParams[`element${i}_name`] as string) ?? "",
       desc: (toolParams[`element${i}_desc`] as string) ?? "",
-      slugs,
+      refs,
     });
   }
 
-  const refSlugs = (toolParams.input_image_slugs as string[]) ?? [];
+  const refs = (toolParams.input_image_refs as string[]) ?? [];
   const aspectRatio = (toolParams.aspect_ratio as string) ?? "16:9";
 
-  return { scenes, elements, refSlugs, aspectRatio };
+  return { scenes, elements, refs, aspectRatio };
 }
 
 export function validateSceneRewrite(
@@ -369,14 +370,11 @@ function buildSceneResult(
 }
 
 async function resolveImageDataUris(
-  imageSlugs: string[],
+  imageRefs: string[],
   fs: Engine,
   _bookId: string,
 ): Promise<string[]> {
-  const tagText = imageSlugs.map((s) => `@${s.replace(/^@/, "")}`).join(" ");
-  const resolvedResult = await fs.resolver.resolveAll(tagText);
-  if (!resolvedResult.ok) return [];
-  const { resolved } = resolvedResult.value;
+  const { resolved } = await resolveArtifactRefs(fs, imageRefs);
 
   const dataUris: string[] = [];
   for (const asset of resolved) {
@@ -407,13 +405,13 @@ export function rewritePromptDef(fs: Engine): ToolDef {
         .enum(["nano_banana", "gpt_image", "kling30", "grok_imagine", "grok_image", "seedance2", "gemini_omni"])
         .default("kling30")
         .describe("Target model for prompt optimization"),
-      image_slugs: z
+      image_refs: z
         .array(z.string())
         .optional()
-        .describe("Optional image asset slugs for visual context (e.g. ['img-sunset'])"),
-      book_id: z.string().describe("Project slug"),
-      asset_slug: z.string().optional().describe("Asset slug for scene-context rewrite (requires scene_index)"),
-      scene_index: z.number().int().optional().describe("0-based scene index to rewrite (requires asset_slug)"),
+        .describe("Optional image artifact ids for visual context"),
+      book_id: z.string().describe("Book id"),
+      asset_ref: z.string().optional().describe("Artifact id for scene-context rewrite (requires scene_index)"),
+      scene_index: z.number().int().optional().describe("0-based scene index to rewrite (requires asset_ref)"),
       platform: z
         .enum(["ig", "tiktok", "youtube"])
         .optional()
@@ -443,14 +441,14 @@ export function rewritePromptDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const {
-        prompt, model, image_slugs, book_id,
-        asset_slug, scene_index, platform, custom_prompt, provider_docs, previous_error,
+        prompt, model, image_refs, book_id,
+        asset_ref, scene_index, platform, custom_prompt, provider_docs, previous_error,
       } = args as {
         prompt?: string;
         model: string;
-        image_slugs?: string[];
+        image_refs?: string[];
         book_id: string;
-        asset_slug?: string;
+        asset_ref?: string;
         scene_index?: number;
         platform?: Platform;
         custom_prompt?: string;
@@ -467,18 +465,18 @@ export function rewritePromptDef(fs: Engine): ToolDef {
       }
 
       // Scene rewrite mode
-      if (asset_slug !== undefined && scene_index !== undefined) {
-        return handleSceneRewrite(fs, apiKey, asset_slug, scene_index, prompt, book_id);
+      if (asset_ref !== undefined && scene_index !== undefined) {
+        return handleSceneRewrite(fs, apiKey, asset_ref, scene_index, prompt, book_id);
       }
 
       // Standard rewrite mode — require prompt OR reference images
-      const hasImages = !!image_slugs && image_slugs.length > 0;
+      const hasImages = !!image_refs && image_refs.length > 0;
       if (!prompt && !hasImages) {
         return {
           isError: true as const,
           content: [{
             type: "text" as const,
-            text: "Provide a prompt, or reference image_slugs (for vision-based description), or both.",
+            text: "Provide a prompt, or reference image_refs (for vision-based description), or both.",
           }],
         };
       }
@@ -499,13 +497,13 @@ export function rewritePromptDef(fs: Engine): ToolDef {
         }
       }
 
-      // Expand @s01 slot refs → actual asset slugs
+      // Expand @s01 slot refs → @<artifact-id> tokens
       let expandedPrompt = prompt ?? "";
       if (expandedPrompt) {
-        expandedPrompt = fs.resolver.expandSlotRefs(expandedPrompt, timelineSlotSlugs(fs));
+        expandedPrompt = expandTimelineSlotRefs(expandedPrompt, timelineSlotArtifactIds(fs));
       }
 
-      return handleStandardRewrite(fs, apiKey, expandedPrompt, model, image_slugs, book_id, platform, custom_prompt, provider_docs, previousError);
+      return handleStandardRewrite(fs, apiKey, expandedPrompt, model, image_refs, book_id, platform, custom_prompt, provider_docs, previousError);
     },
   };
 }
@@ -515,7 +513,7 @@ async function handleStandardRewrite(
   apiKey: string,
   prompt: string,
   model: string,
-  imageSlugs: string[] | undefined,
+  imageRefs: string[] | undefined,
   bookId: string,
   platform: Platform | undefined,
   customPrompt: string | undefined,
@@ -548,12 +546,12 @@ async function handleStandardRewrite(
     : { maxChars, platform, customPrompt, previousError };
 
   let messages: OpenAiMessage[];
-  if (imageSlugs && imageSlugs.length > 0) {
-    const dataUris = await resolveImageDataUris(imageSlugs, fs, bookId);
+  if (imageRefs && imageRefs.length > 0) {
+    const dataUris = await resolveImageDataUris(imageRefs, fs, bookId);
     if (dataUris.length === 0) {
       return {
         isError: true as const,
-        content: [{ type: "text" as const, text: "Could not resolve any image files from provided slugs" }],
+        content: [{ type: "text" as const, text: "Could not resolve any image files from provided refs" }],
       };
     }
     messages = buildVisionMessages(guide, prompt, dataUris, extras);
@@ -578,18 +576,18 @@ async function handleStandardRewrite(
 async function handleSceneRewrite(
   fs: Engine,
   apiKey: string,
-  assetSlug: string,
+  assetRef: string,
   sceneIndex: number,
   instruction: string | undefined,
   _bookId: string,
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
-  const assetId = assetSlug.replace(/^@/, "");
+  const assetId = assetRef.replace(/^@/, "");
 
   const metaResult = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "tool.params");
   if (!metaResult.ok) {
     return {
       isError: true as const,
-      content: [{ type: "text" as const, text: `No .tool.params.json found for ${assetSlug}` }],
+      content: [{ type: "text" as const, text: `No .tool.params.json found for ${assetRef}` }],
     };
   }
 

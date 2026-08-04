@@ -302,17 +302,17 @@ describe("getVideoToolSchema", () => {
     expect(schema!.required).toContain("prompt");
     expect(schema!.required).not.toContain("aspect_ratio");
     expect(schema!.required).not.toContain("duration");
-    expect(schema!.required).not.toContain("first_frame_slug");
-    expect(schema!.required).not.toContain("last_frame_slug");
-    expect(schema!.required).not.toContain("image_slugs");
+    expect(schema!.required).not.toContain("first_frame_ref");
+    expect(schema!.required).not.toContain("last_frame_ref");
+    expect(schema!.required).not.toContain("image_refs");
     expect(schema!.properties.aspect_ratio.enum).toEqual(["1:1", "4:3", "3:4", "16:9", "9:16", "21:9", "adaptive"]);
     expect(schema!.properties.resolution.enum).toEqual(["480p", "720p", "1080p"]);
     expect(schema!.properties.duration.enum).toEqual(["4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]);
-    expect(schema!.properties.first_frame_slug).toBeDefined();
-    expect(schema!.properties.last_frame_slug).toBeDefined();
-    expect(schema!.properties.image_slugs).toBeDefined();
-    expect(schema!.properties.video_slugs).toBeDefined();
-    expect(schema!.properties.audio_slugs).toBeDefined();
+    expect(schema!.properties.first_frame_ref).toBeDefined();
+    expect(schema!.properties.last_frame_ref).toBeDefined();
+    expect(schema!.properties.image_refs).toBeDefined();
+    expect(schema!.properties.video_refs).toBeDefined();
+    expect(schema!.properties.audio_refs).toBeDefined();
     expect(schema!.properties.nsfw_checker).toBeDefined();
     expect(schema!.defaults.duration).toBe("5");
     expect(schema!.defaults.nsfw_checker).toBe(false);
@@ -325,15 +325,15 @@ describe("getVideoToolSchema", () => {
     const schema = getVideoToolSchema("generate_kie_seedance_2_0_fast_video");
     expect(schema).not.toBeNull();
     expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
-    expect(schema!.properties.first_frame_slug).toBeDefined();
-    expect(schema!.properties.image_slugs).toBeDefined();
+    expect(schema!.properties.first_frame_ref).toBeDefined();
+    expect(schema!.properties.image_refs).toBeDefined();
     expect(schema!.properties.model).toBeUndefined();
   });
 
   it("grok_imagine: uses Kie Grok Imagine Video 1.5 defaults", () => {
     const schema = getVideoToolSchema("generate_kie_grok_imagine_image_to_video");
     expect(schema).not.toBeNull();
-    expect(schema!.required).toContain("image_slugs");
+    expect(schema!.required).toContain("image_refs");
     expect(schema!.required).not.toContain("prompt");
     expect(schema!.properties.mode.enum).toEqual(["fun", "normal"]);
     expect(schema!.properties.duration.type).toBe("integer");
@@ -341,8 +341,8 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.duration.maximum).toBe(30);
     expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
     expect(schema!.properties.aspect_ratio.enum).toEqual(["2:3", "3:2", "1:1", "16:9", "9:16"]);
-    expect(schema!.properties.image_slugs.minItems).toBe(1);
-    expect(schema!.properties.image_slugs.maxItems).toBe(7);
+    expect(schema!.properties.image_refs.minItems).toBe(1);
+    expect(schema!.properties.image_refs.maxItems).toBe(7);
     expect(schema!.properties.nsfw_checker).toBeDefined();
     expect(schema!.properties.nsfw_checker.type).toBe("boolean");
     expect(schema!.defaults).toEqual({
@@ -366,13 +366,13 @@ describe("getVideoToolSchema", () => {
     const schema = getVideoToolSchema("generate_kie_gemini_omni_video");
     expect(schema).not.toBeNull();
     expect(schema!.required).toEqual(expect.arrayContaining(["prompt", "duration"]));
-    expect(schema!.required).not.toContain("video_slug");
-    expect(schema!.required).not.toContain("image_slugs");
+    expect(schema!.required).not.toContain("video_ref");
+    expect(schema!.required).not.toContain("image_refs");
     expect(schema!.properties.duration.enum).toEqual(["4", "6", "8", "10"]);
     expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16"]);
     expect(schema!.properties.resolution.enum).toEqual(["720p", "1080p", "4k"]);
     expect(schema!.properties.seed.type).toBe("integer");
-    expect(schema!.properties.image_slugs.maxItems).toBe(7);
+    expect(schema!.properties.image_refs.maxItems).toBe(7);
     expect(schema!.defaults).toEqual({ resolution: "720p" });
   });
 
@@ -384,7 +384,7 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.duration.enum).toEqual([
       "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
     ]);
-    expect(schema!.properties.image_slugs.maxItems).toBe(7);
+    expect(schema!.properties.image_refs.maxItems).toBe(7);
   });
 
   it("derives Fal Grok reference and extension duration ranges", () => {
@@ -418,8 +418,8 @@ describe("getVideoToolSchema", () => {
   it("derives Fal Wan reference and edit contracts from their matching schemas", () => {
     const reference = getVideoToolSchema("generate_wan27_r2v_fal_video");
     const edit = getVideoToolSchema("generate_wan27_videoedit_fal_video");
-    expect(reference!.properties.image_slugs.maxItems).toBe(4);
-    expect(reference!.properties.video_slugs.maxItems).toBe(4);
+    expect(reference!.properties.image_refs.maxItems).toBe(4);
+    expect(reference!.properties.video_refs.maxItems).toBe(4);
     expect(reference!.properties.duration.minimum).toBe(2);
     expect(reference!.properties.duration.maximum).toBe(10);
     expect(reference!.properties.prompt.maxLength).toBe(5000);
@@ -472,7 +472,7 @@ describe("validateVideoParams", () => {
   it("kling30: warns when multi-shot with >1 image", () => {
     const result = validateVideoParams("generate_kie_kling_3_0_video", {
       prompt: "test",
-      image_slugs: ["@img-a", "@img-b"],
+      image_refs: ["@img-a", "@img-b"],
       multi_prompt: [{ prompt: "s1", duration: 5 }],
     });
     expect(result.warnings.some((w) => w.includes("multi-shot mode allows max 1"))).toBe(true);
@@ -501,7 +501,7 @@ describe("validateVideoParams", () => {
   it("seedance2 (full): 1080p resolution is accepted without warning", () => {
     const result = validateVideoParams("generate_kie_seedance_2_0_video", {
       prompt: "test",
-      first_frame_slug: "@img-a",
+      first_frame_ref: "@img-a",
       aspect_ratio: "16:9",
       duration: "8",
       resolution: "1080p",
@@ -513,9 +513,9 @@ describe("validateVideoParams", () => {
     const klingResult = validateVideoParams("generate_kie_kling_3_0_video", { prompt: "test" });
     expect(klingResult.image_slots).toEqual({ min: 0, max: null });
 
-    const grokResult = validateVideoParams("generate_kie_grok_imagine_image_to_video", { image_slugs: ["@img-a"] });
+    const grokResult = validateVideoParams("generate_kie_grok_imagine_image_to_video", { image_refs: ["@img-a"] });
     expect(grokResult.image_slots).toEqual({ min: 1, max: 7 });
-    const tooManyGrokImages = validateVideoParams("generate_kie_grok_imagine_image_to_video", { image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e", "@img-f", "@img-g", "@img-h"] });
+    const tooManyGrokImages = validateVideoParams("generate_kie_grok_imagine_image_to_video", { image_refs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e", "@img-f", "@img-g", "@img-h"] });
     expect(tooManyGrokImages.warnings).toContain("Grok Imagine 1.5 supports up to 7 reference images (got 8)");
   });
 
@@ -523,7 +523,7 @@ describe("validateVideoParams", () => {
     const withReference = validateVideoParams("generate_grok_imagine_ref_video", {
       prompt: "test",
       duration: "15",
-      image_slugs: ["@img-a"],
+      image_refs: ["@img-a"],
     });
     const withoutReference = validateVideoParams("generate_grok_imagine_ref_video", {
       prompt: "test",
@@ -536,7 +536,7 @@ describe("validateVideoParams", () => {
   it("tools without image-array fields return null image_slots", () => {
     const extendResult = validateVideoParams("extend_wan27_video", {
       prompt: "test",
-      video_slug: "@vid-a",
+      video_ref: "@vid-a",
     });
     expect(extendResult.image_slots).toBeNull();
   });
@@ -563,16 +563,16 @@ describe("validateVideoParams", () => {
 
   it("gemini_omni: warns when a reference clip has bad timing", () => {
     const result = validateVideoParams("generate_kie_gemini_omni_video", {
-      prompt: "a sunset", duration: "6", video_slug: "@vid-motion", video_clip_start: 2, video_clip_ends: 2,
+      prompt: "a sunset", duration: "6", video_ref: "@vid-motion", video_clip_start: 2, video_clip_ends: 2,
     });
     expect(result.warnings.some((w) => w.includes("video_clip_ends"))).toBe(true);
   });
 
-  it("gemini_omni: warns when clip timecodes are set without a video_slug", () => {
+  it("gemini_omni: warns when clip timecodes are set without a video_ref", () => {
     const result = validateVideoParams("generate_kie_gemini_omni_video", {
       prompt: "a sunset", duration: "6", video_clip_start: 1, video_clip_ends: 5,
     });
-    expect(result.warnings.some((w) => w.includes("require a video_slug"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("require a video_ref"))).toBe(true);
   });
 });
 
@@ -652,8 +652,8 @@ describe("PARAM_SCHEMAS", () => {
     expect(PARAM_SCHEMAS.prompt.type).toBe("string");
   });
 
-  it("image_slugs param has type array", () => {
-    expect(PARAM_SCHEMAS.image_slugs.type).toBe("array");
+  it("image_refs param has type array", () => {
+    expect(PARAM_SCHEMAS.image_refs.type).toBe("array");
   });
 });
 
@@ -662,12 +662,12 @@ describe("PARAM_SCHEMAS", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildModelOption resolved assets and coercion", () => {
-  it("fills image_slugs from resolved image assets", () => {
+  it("fills image_refs from resolved image assets", () => {
     const resolvedAssets = [
       { tag: "@img-sunset", artifactId: "id-image", artifactSlug: "img-sunset", artifactType: "image" as const, filePath: "/some/path.png", workspacePath: "/some" },
     ];
     const option = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, resolvedAssets);
-    expect(option.prefilled_values.image_slugs).toEqual(["@img-sunset"]);
+    expect(option.prefilled_values.image_refs).toEqual(["@img-sunset"]);
   });
 
   it("skips image assets without file_path", () => {
@@ -675,30 +675,30 @@ describe("buildModelOption resolved assets and coercion", () => {
       { tag: "@img-sunset", artifactId: "id-image", artifactSlug: "img-sunset", artifactType: "image" as const, filePath: null, workspacePath: "/some" },
     ];
     const option = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, resolvedAssets);
-    expect(option.prefilled_values.image_slugs).toEqual([]);
+    expect(option.prefilled_values.image_refs).toEqual([]);
   });
 
-  it("extend_wan27 prefills video_slug from video assets", () => {
+  it("extend_wan27 prefills video_ref from video assets", () => {
     const resolvedAssets = [
       { tag: "@vid-clip", artifactId: "id-video", artifactSlug: "vid-clip", artifactType: "video" as const, filePath: "/path/clip.mp4", workspacePath: "/path" },
     ];
     const option = buildModelOption("wan27_extend", VIDEO_MODELS.wan27_extend, {}, resolvedAssets);
-    expect(option.prefilled_values.video_slug).toBe("@vid-clip");
+    expect(option.prefilled_values.video_ref).toBe("@vid-clip");
   });
 
-  it("gemini_omni prefills video_slug from a prompt-referenced video (both providers)", () => {
+  it("gemini_omni prefills video_ref from a prompt-referenced video (both providers)", () => {
     const resolvedAssets = [
       { tag: "@vid-clip", artifactId: "id-video", artifactSlug: "vid-clip", artifactType: "video" as const, filePath: "/path/clip.mp4", workspacePath: "/path" },
     ];
     const kie = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, resolvedAssets, undefined, "kie");
-    expect(kie.prefilled_values.video_slug).toBe("@vid-clip");
+    expect(kie.prefilled_values.video_ref).toBe("@vid-clip");
     const google = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, resolvedAssets, undefined, "google");
-    expect(google.prefilled_values.video_slug).toBe("@vid-clip");
+    expect(google.prefilled_values.video_ref).toBe("@vid-clip");
   });
 
-  it("gemini_omni leaves video_slug unset with no prompt-referenced video", () => {
+  it("gemini_omni leaves video_ref unset with no prompt-referenced video", () => {
     const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, [], undefined, "google");
-    expect(option.prefilled_values.video_slug).toBeUndefined();
+    expect(option.prefilled_values.video_ref).toBeUndefined();
   });
 });
 
@@ -736,9 +736,9 @@ describe("VIDEO_TOOL_MODES contract", () => {
     expect(google.modes).not.toBeNull();
     expect(google.modes!.modes.map((m) => m.key)).toEqual(["t2v", "i2v", "r2v", "edit"]);
     const edit = google.modes!.modes.find((m) => m.key === "edit")!;
-    expect(edit.required).toEqual(["video_slug"]);
+    expect(edit.required).toEqual(["video_ref"]);
     expect(edit.param_overrides?.voice_refs?.maxItems).toBe(3);
-    const imageSlot = edit.asset_slots?.find((s) => s.param === "image_slugs");
+    const imageSlot = edit.asset_slots?.find((s) => s.param === "image_refs");
     expect(imageSlot?.max).toBe(5);
 
     const kie = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, [], undefined, "kie");
@@ -756,10 +756,10 @@ describe("VIDEO_TOOL_MODES contract", () => {
     expect(option.modes!.default_mode).toBe("text");
     expect(option.modes!.modes.map((m) => m.key)).toEqual(["text", "refs"]);
     const refs = option.modes!.modes.find((m) => m.key === "refs")!;
-    expect(refs.params).toEqual(["image_slugs", "video_slugs", "audio_slugs"]);
-    expect(refs.asset_slots?.map((s) => s.param)).toEqual(["image_slugs", "video_slugs", "audio_slugs"]);
-    expect(refs.asset_slots?.find((s) => s.param === "video_slugs")?.max).toBe(3);
-    expect(refs.asset_slots?.find((s) => s.param === "audio_slugs")?.max).toBe(3);
+    expect(refs.params).toEqual(["image_refs", "video_refs", "audio_refs"]);
+    expect(refs.asset_slots?.map((s) => s.param)).toEqual(["image_refs", "video_refs", "audio_refs"]);
+    expect(refs.asset_slots?.find((s) => s.param === "video_refs")?.max).toBe(3);
+    expect(refs.asset_slots?.find((s) => s.param === "audio_refs")?.max).toBe(3);
   });
 
   it("seedance2 full/fast ship text + frames + refs (audio/frames exclusive)", () => {
@@ -768,11 +768,11 @@ describe("VIDEO_TOOL_MODES contract", () => {
       expect(option.modes, key).not.toBeNull();
       expect(option.modes!.modes.map((m) => m.key)).toEqual(["text", "frames", "refs"]);
       const frames = option.modes!.modes.find((m) => m.key === "frames")!;
-      expect(frames.params).toEqual(["first_frame_slug", "last_frame_slug"]);
-      expect(frames.asset_slots?.some((s) => s.param === "audio_slugs")).toBe(false);
+      expect(frames.params).toEqual(["first_frame_ref", "last_frame_ref"]);
+      expect(frames.asset_slots?.some((s) => s.param === "audio_refs")).toBe(false);
       const refs = option.modes!.modes.find((m) => m.key === "refs")!;
-      expect(refs.params).toContain("audio_slugs");
-      expect(refs.params).not.toContain("first_frame_slug");
+      expect(refs.params).toContain("audio_refs");
+      expect(refs.params).not.toContain("first_frame_ref");
     }
   });
 
@@ -793,7 +793,7 @@ describe("VIDEO_TOOL_MODES contract", () => {
 
   it("initializes kling30 element defaults", () => {
     const option = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, []);
-    expect(option.prefilled_values.element1_slugs).toEqual([]);
+    expect(option.prefilled_values.element1_refs).toEqual([]);
     expect(option.prefilled_values.element1_name).toBe("");
     expect(option.prefilled_values.element1_desc).toBe("");
     expect(option.prefilled_values.multi_prompt).toEqual([]);
@@ -823,19 +823,19 @@ describe("google flow video models", () => {
     expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16", "1:1", "4:3", "3:4"]);
     expect(schema!.properties.duration.enum).toEqual(["4", "6", "8"]);
     expect(schema!.defaults).toEqual({ duration: "8" });
-    expect(schema!.properties.image_slugs.maxItems).toBe(3);
+    expect(schema!.properties.image_refs.maxItems).toBe(3);
 
     const validation = validateVideoParams("generate_google_flow_veo_3_1_fast_video", { prompt: "a sunset" });
     expect(validation.image_slots).toEqual({ min: 0, max: 3 });
   });
 
-  it("veo31 quality: no image_slugs or duration params, image_slots null", () => {
+  it("veo31 quality: no image_refs or duration params, image_slots null", () => {
     const schema = getVideoToolSchema("generate_google_flow_veo_3_1_quality_video");
     expect(schema).not.toBeNull();
-    expect(schema!.properties.image_slugs).toBeUndefined();
+    expect(schema!.properties.image_refs).toBeUndefined();
     expect(schema!.properties.duration).toBeUndefined();
-    expect(schema!.properties.first_frame_slug).toBeDefined();
-    expect(schema!.properties.last_frame_slug).toBeDefined();
+    expect(schema!.properties.first_frame_ref).toBeDefined();
+    expect(schema!.properties.last_frame_ref).toBeDefined();
 
     const validation = validateVideoParams("generate_google_flow_veo_3_1_quality_video", { prompt: "a sunset" });
     expect(validation.valid).toBe(true);
@@ -843,30 +843,30 @@ describe("google flow video models", () => {
   });
 
   it("veo31: warns on last frame without first frame and refs with start frame", () => {
-    const lastOnly = validateVideoParams("generate_google_flow_veo_3_1_fast_video", { prompt: "x", last_frame_slug: "@img-end" });
-    expect(lastOnly.warnings.some((w) => w.includes("requires first_frame_slug"))).toBe(true);
+    const lastOnly = validateVideoParams("generate_google_flow_veo_3_1_fast_video", { prompt: "x", last_frame_ref: "@img-end" });
+    expect(lastOnly.warnings.some((w) => w.includes("requires first_frame_ref"))).toBe(true);
 
     const refsWithFrame = validateVideoParams("generate_google_flow_veo_3_1_fast_video", {
-      prompt: "x", first_frame_slug: "@img-start", image_slugs: ["@img-a"],
+      prompt: "x", first_frame_ref: "@img-start", image_refs: ["@img-a"],
     });
     expect(refsWithFrame.warnings.some((w) => w.includes("pick one mode"))).toBe(true);
 
     const tooManyRefs = validateVideoParams("generate_google_flow_veo_3_1_lite_video", {
-      prompt: "x", image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d"],
+      prompt: "x", image_refs: ["@img-a", "@img-b", "@img-c", "@img-d"],
     });
     expect(tooManyRefs.warnings.some((w) => w.includes("up to 3 reference images"))).toBe(true);
 
-    // The quality tier does not expose image_slugs, so auto-populated context
+    // The quality tier does not expose image_refs, so auto-populated context
     // images must not raise a ref warning.
-    const qualityRefs = validateVideoParams("generate_google_flow_veo_3_1_quality_video", { prompt: "x", image_slugs: ["@img-a"] });
+    const qualityRefs = validateVideoParams("generate_google_flow_veo_3_1_quality_video", { prompt: "x", image_refs: ["@img-a"] });
     expect(qualityRefs.warnings.some((w) => w.includes("reference images"))).toBe(false);
   });
 
   it("veo31 lite-low-priority: same ref slots as lite, distinct tool", () => {
     const schema = getVideoToolSchema("generate_google_flow_veo_3_1_lite_low_priority_video");
     expect(schema).toBeDefined();
-    expect(schema!.properties.image_slugs).toBeDefined();
-    expect(schema!.properties.image_slugs.maxItems).toBe(3);
+    expect(schema!.properties.image_refs).toBeDefined();
+    expect(schema!.properties.image_refs.maxItems).toBe(3);
     expect(schema!.properties.duration.enum).toEqual(["4", "6", "8"]);
     const validation = validateVideoParams("generate_google_flow_veo_3_1_lite_low_priority_video", { prompt: "a sunset" });
     expect(validation.valid).toBe(true);
@@ -897,7 +897,7 @@ describe("google flow video models", () => {
       expect(option.providers.map((p) => p.key)).toEqual(expect.arrayContaining(["kie", "google"]));
       expect(option.selected_provider).toBe("google");
       expect(option.tool_name).toBe("generate_google_flow_omni_flash_video");
-      expect(option.schema!.properties.first_frame_slug).toBeDefined();
+      expect(option.schema!.properties.first_frame_ref).toBeDefined();
       expect(option.schema!.properties.resolution).toBeUndefined();
       expect(option.schema!.properties.duration.enum).toEqual(["4", "6", "8", "10"]);
       expect(option.schema!.defaults.duration).toBe("8");
@@ -915,7 +915,7 @@ describe("google flow video models", () => {
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
     expect(schema!.required).not.toContain("duration");
-    expect(schema!.properties.first_frame_slug).toBeDefined();
+    expect(schema!.properties.first_frame_ref).toBeDefined();
     expect(schema!.properties.resolution).toBeUndefined();
     expect(schema!.properties.duration.enum).toEqual(["4", "6", "8", "10"]);
     expect(schema!.properties.duration.default).toBe("8");
@@ -938,29 +938,29 @@ describe("google flow video models", () => {
   });
 
   it("google omni validates I2V/R2V/V2V mode constraints", () => {
-    const valid = validateVideoParams("generate_google_flow_omni_flash_video", { prompt: "x", video_slug: "@vid-a" });
+    const valid = validateVideoParams("generate_google_flow_omni_flash_video", { prompt: "x", video_ref: "@vid-a" });
     expect(valid.valid).toBe(true);
     expect(valid.warnings).toHaveLength(0);
 
     const firstWithRefs = validateVideoParams("generate_google_flow_omni_flash_video", {
-      prompt: "x", first_frame_slug: "@img-start", image_slugs: ["@img-a"],
+      prompt: "x", first_frame_ref: "@img-start", image_refs: ["@img-a"],
     });
-    expect(firstWithRefs.warnings.some((w) => w.includes("first_frame_slug cannot be combined with image_slugs"))).toBe(true);
+    expect(firstWithRefs.warnings.some((w) => w.includes("first_frame_ref cannot be combined with image_refs"))).toBe(true);
 
     const firstWithVideo = validateVideoParams("generate_google_flow_omni_flash_video", {
-      prompt: "x", first_frame_slug: "@img-start", video_slug: "@vid-a",
+      prompt: "x", first_frame_ref: "@img-start", video_ref: "@vid-a",
     });
-    expect(firstWithVideo.warnings.some((w) => w.includes("first_frame_slug cannot be combined with video_slug"))).toBe(true);
+    expect(firstWithVideo.warnings.some((w) => w.includes("first_frame_ref cannot be combined with video_ref"))).toBe(true);
 
     const tooManyV2vRefs = validateVideoParams("generate_google_flow_omni_flash_video", {
       prompt: "x",
-      video_slug: "@vid-a",
-      image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e", "@img-f"],
+      video_ref: "@vid-a",
+      image_refs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e", "@img-f"],
     });
     expect(tooManyV2vRefs.warnings.some((w) => w.includes("up to 5 reference images"))).toBe(true);
 
     const badClip = validateVideoParams("generate_google_flow_omni_flash_video", {
-      prompt: "x", video_slug: "@vid-a", video_clip_start: 2, video_clip_ends: 12,
+      prompt: "x", video_ref: "@vid-a", video_clip_start: 2, video_clip_ends: 12,
     });
     expect(badClip.warnings.some((w) => w.includes("<= 10s"))).toBe(true);
   });
@@ -972,7 +972,7 @@ describe("google flow video models", () => {
     expect(tooManyVoices.warnings.some((w) => w.includes("up to 5 voice refs"))).toBe(true);
 
     const voicesWithClip = validateVideoParams("generate_google_flow_omni_flash_video", {
-      prompt: "x", video_slug: "@vid-a", voice_refs: ["v1", "v2", "v3", "v4"],
+      prompt: "x", video_ref: "@vid-a", voice_refs: ["v1", "v2", "v3", "v4"],
     });
     expect(voicesWithClip.warnings.some((w) => w.includes("up to 3 voice refs alongside the clip"))).toBe(true);
 
@@ -982,12 +982,12 @@ describe("google flow video models", () => {
     expect(tooManyChars.warnings.some((w) => w.includes("up to 3 character refs"))).toBe(true);
 
     const firstWithChars = validateVideoParams("generate_google_flow_omni_flash_video", {
-      prompt: "x", first_frame_slug: "@img-start", character_refs: ["c1"],
+      prompt: "x", first_frame_ref: "@img-start", character_refs: ["c1"],
     });
-    expect(firstWithChars.warnings.some((w) => w.includes("first_frame_slug cannot be combined with character_refs"))).toBe(true);
+    expect(firstWithChars.warnings.some((w) => w.includes("first_frame_ref cannot be combined with character_refs"))).toBe(true);
 
     const budgetBust = validateVideoParams("generate_google_flow_omni_flash_video", {
-      prompt: "x", image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d"], character_refs: ["c1", "c2", "c3", "c4"],
+      prompt: "x", image_refs: ["@img-a", "@img-b", "@img-c", "@img-d"], character_refs: ["c1", "c2", "c3", "c4"],
     });
     expect(budgetBust.warnings.some((w) => w.includes("reference budget exceeded"))).toBe(true);
   });
@@ -996,20 +996,20 @@ describe("google flow video models", () => {
     const history: ActionLogEntry[] = [{
       hash: "abc123",
       action: "tool-generate-google-omni-video",
-      payload: { book_id: "p", _provider: "google", prompt: "old", first_frame_slug: "@img-start" },
+      payload: { book_id: "p", _provider: "google", prompt: "old", first_frame_ref: "@img-start" },
       date: "2026-07-07T00:00:00Z",
     }];
 
     expect(extractLastSettingsPerModel(history).get("generate_google_flow_omni_flash_video")).toMatchObject({
       _provider: "google",
-      first_frame_slug: "@img-start",
+      first_frame_ref: "@img-start",
     });
     expect(extractLastUsedModel(history)).toBe("gemini_omni");
 
     const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, [], history);
     expect(option.selected_provider).toBe("google");
     expect(option.tool_name).toBe("generate_google_flow_omni_flash_video");
-    expect(option.prefilled_values.first_frame_slug).toBe("@img-start");
+    expect(option.prefilled_values.first_frame_ref).toBe("@img-start");
   });
 
   it("gemini_omni keeps the kie tool when kie is selected", () => {

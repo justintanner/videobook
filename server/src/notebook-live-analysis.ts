@@ -367,7 +367,9 @@ async function transcribeMissingText(
   if (!apiKey) return transcript;
   const manifest = await engine.files.manifest(sourceArtifactId);
   if (!manifest.ok) return transcript;
-  const audio = findAudioFile(manifest.value.files, sourceArtifactId)
+  const artifact = engine.artifacts.get(sourceArtifactId);
+  if (!artifact.ok) return transcript;
+  const audio = findAudioFile(manifest.value.files, artifact.value.kind)
     ?? manifest.value.files.find((file) =>
       /\.(?:mp3|wav|m4a|aac|ogg|flac|weba)$/i.test(file.name));
   if (!audio) return transcript;

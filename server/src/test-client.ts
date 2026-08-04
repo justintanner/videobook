@@ -44,7 +44,7 @@ export async function createTestClient(projectsDir?: string): Promise<Client> {
             bookId: book.bookId,
             book_id: book.bookId,
             isDefault: true,
-            slug: alias,
+            name: alias,
           }),
         }],
       };

@@ -70,11 +70,11 @@ describe("suggest_sfx tool", () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "empty-vid");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "notes.txt", "hello");
+    await fs.files.write(asset.value.artifactId, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "suggest_sfx",
-      arguments: { asset_id: asset.value.slug, book_id: "sfx-proj" },
+      arguments: { asset_id: asset.value.artifactId, book_id: "sfx-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -88,11 +88,11 @@ describe("suggest_sfx tool", () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "no-frames-vid");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "original.mp4", Buffer.from([0]));
+    await fs.files.write(asset.value.artifactId, "original.mp4", Buffer.from([0]));
 
     const result = await client.callTool({
       name: "suggest_sfx",
-      arguments: { asset_id: asset.value.slug, book_id: "sfx-proj" },
+      arguments: { asset_id: asset.value.artifactId, book_id: "sfx-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -106,13 +106,13 @@ describe("suggest_sfx tool", () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "no-transcript-vid");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "original.mp4", Buffer.from([0]));
-    await fs.files.write(asset.value.slug, "original_frames/0.000.jpg", Buffer.from([0xff, 0xd8, 0xff])
+    await fs.files.write(asset.value.artifactId, "original.mp4", Buffer.from([0]));
+    await fs.files.write(asset.value.artifactId, "original_frames/0.000.jpg", Buffer.from([0xff, 0xd8, 0xff])
     );
 
     const result = await client.callTool({
       name: "suggest_sfx",
-      arguments: { asset_id: asset.value.slug, book_id: "sfx-proj" },
+      arguments: { asset_id: asset.value.artifactId, book_id: "sfx-proj" },
     });
 
     expect(result.isError).toBe(true);

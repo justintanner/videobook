@@ -27,7 +27,7 @@ export function recordPromptDef(fs: Engine): ToolDef {
       SURFACE_LIST +
       ".",
     schema: {
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       surface: z
         .string()
         .describe(
@@ -81,7 +81,7 @@ export function listPromptHistoryDef(fs: Engine): ToolDef {
     description:
       "List recent prompts for a given surface in the current project, newest-first.",
     schema: {
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       surface: z
         .string()
         .describe(

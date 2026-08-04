@@ -46,7 +46,8 @@ describe("duplicate_asset tool", () => {
       (result.content as Array<{ type: string; text: string }>)[0].text
     );
     expect(parsed.source_asset_id).toBe(uploaded.assetId);
-    expect(parsed.new_asset_id).toMatch(/^img-/);
+    const copy = fs.artifacts.get(parsed.new_asset_id);
+    expect(copy.ok && copy.value.kind).toBe("image");
     expect(parsed.new_asset_id).not.toBe(uploaded.assetId);
 
     // Verify copy has the same file
@@ -82,7 +83,9 @@ describe("duplicate_asset tool", () => {
     const parsed = JSON.parse(
       (result.content as Array<{ type: string; text: string }>)[0].text
     );
-    expect(parsed.new_asset_id).toMatch(/^img-/);
+    const copy = fs.artifacts.get(parsed.new_asset_id);
+    expect(copy.ok && copy.value.kind).toBe("image");
+    expect(copy.ok && copy.value.label).toBe("my custom copy");
   });
 
   it("returns error for nonexistent asset", async () => {
@@ -96,7 +99,7 @@ describe("duplicate_asset tool", () => {
   it("video duplicate skips in-flight job markers", async () => {
     const created = await fs.artifacts.create("vid", "in-flight-source");
     if (!created.ok) throw new Error(created.error.message);
-    const sourceId = created.value.slug;
+    const sourceId = created.value.artifactId;
     await fs.files.write(sourceId, "original.mp4", "fake");
     await fs.files.write(sourceId, ".kie-task.json", "{}");
     await fs.files.write(sourceId, ".generation-error.json", "{}");

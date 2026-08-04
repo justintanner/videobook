@@ -50,7 +50,7 @@ describe("source-preserving video clip tools", () => {
     const source = await engine.artifacts.create({ kind: "video", name: "source" });
     expect(source.ok).toBe(true);
     if (!source.ok) return;
-    sourceAssetId = source.value.slug;
+    sourceAssetId = source.value.artifactId;
     sourceArtifactId = source.value.artifactId;
     const written = await engine.files.writeFromPath(
       sourceArtifactId,
@@ -64,7 +64,7 @@ describe("source-preserving video clip tools", () => {
     notebookId = notebook.value.id;
     const inserted = await engine.notebooks.insertCell(notebookId, engine.notebooks.createCell({
       type: "video",
-      slug: "vid-source-cell",
+      label: "vid-source-cell",
       slot: { row: 0, column: 0 },
       outputArtifactId: sourceArtifactId,
     }));

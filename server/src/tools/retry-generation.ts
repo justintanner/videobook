@@ -18,7 +18,7 @@ export function retryGenerationDef(fs: Engine): ToolDef {
       "Retry a failed generation by replaying its original request payload. Reads the persisted generation-request metadata for the asset, clears its error record, and re-enqueues the same job. Use this on a failed asset card to re-run the exact inputs without re-resolving references.",
     schema: {
       asset_id: z.string().describe("Asset ID of the failed generation to retry (vid-*, or @-prefixed)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };

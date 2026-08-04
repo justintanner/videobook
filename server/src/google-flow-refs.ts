@@ -5,7 +5,7 @@ import {
 } from "videobook-engine/notebook-mentions";
 
 // Omni Flash reference budget math. Google counts every reference input
-// against one 7-slot pool (5 alongside a V2V clip): each image_slugs ref costs
+// against one 7-slot pool (5 alongside a V2V clip): each image_refs ref costs
 // 1 slot, and each character costs a flat 2 — useapi.net submits every
 // character entity twice in videoGenerationEntityInputs, regardless of its
 // `-imgs:N` suffix or whether the prompt mentions it (verified empirically
@@ -48,113 +48,114 @@ export const OMNI_V2V_MAX_REFERENCE_SLOTS = 5;
 // Google Flow prompts support inline positional mentions (@character_N,
 // @referenceImage_N, @referenceAudio_N) that resolve to the matching body
 // param — any other @-token the API cannot resolve is rejected with an opaque
-// 400, so videocity @slug mentions must be rewritten (or removed) at submit.
+// 400, so local @<artifact-id> mentions must be rewritten (or removed) at
+// submit.
 
-// Mention boundary mirrors the client tokenizer (richPromptTokens): a slug
-// mention ends at any char that is not a word char or dash, so "@img-da"
-// never matches inside "@img-da-set". Longest slug first for the same reason.
-function slugMentionEntries(slugs: readonly string[]): { slug: string; index: number }[] {
-  return slugs
+// Mention boundary: a reference ends at any char that is not a word char or
+// dash, so "@a1" never matches inside "@a13". Longest reference first for the
+// same reason.
+function refMentionEntries(refs: readonly string[]): { ref: string; index: number }[] {
+  return refs
     .map((raw, index) => ({
-      slug: normalizeNotebookReference(raw),
+      ref: normalizeNotebookReference(raw),
       index,
     }))
-    .filter((e) => e.slug !== "")
-    .sort((a, b) => b.slug.length - a.slug.length);
+    .filter((e) => e.ref !== "")
+    .sort((a, b) => b.ref.length - a.ref.length);
 }
 
-/** Rewrite "@<slug>" mentions to a positional marker (e.g., "@referenceImage_N"),
- *  where N is the slug's 1-based position in `imageSlugs`. */
-export function rewriteImageSlugMentions(prompt: string, imageSlugs: readonly string[], marker: string = "referenceImage"): string {
+/** Rewrite "@<ref>" mentions to a positional marker (e.g., "@referenceImage_N"),
+ *  where N is the ref's 1-based position in `imageRefs`. */
+export function rewriteImageRefMentions(prompt: string, imageRefs: readonly string[], marker: string = "referenceImage"): string {
   return replaceNotebookMentions(
     prompt,
-    slugMentionEntries(imageSlugs).map(({ slug, index }) => ({
-      reference: slug,
+    refMentionEntries(imageRefs).map(({ ref, index }) => ({
+      reference: ref,
       replacement: `@${marker}_${index + 1}`,
     })),
   );
 }
 
-/** Remove "@<slug>" mentions that have no inline marker form (reference video
+/** Remove "@<ref>" mentions that have no inline marker form (reference video
  *  clips, first frames) — the asset still rides its body param. */
-export function stripSlugMentions(prompt: string, slugs: readonly string[]): string {
+export function stripRefMentions(prompt: string, refs: readonly string[]): string {
   return stripNotebookMentions(
     prompt,
-    slugMentionEntries(slugs).map(({ slug }) => slug),
+    refMentionEntries(refs).map(({ ref }) => ref),
   );
 }
 
-/** Replace "@<slug>" mentions with natural-language noun phrases for Kie
+/** Replace "@<ref>" mentions with natural-language noun phrases for Kie
  *  happyhorse/video-edit and other free-form prompt models with no inline
  *  marker syntax (the "[Image N]" form belongs to happyhorse 1.1 t2v/i2v/ref
  *  only). The prompt is a free-form instruction; media rides separate URL
- *  fields. Rewrite confirmed @<video-slug> → "the source video", each
- *  @<image-slug> → "reference image N" (1-based in imageSlugs), and each
- *  @<audio-slug> → "reference audio N". Unlisted mentions stay literal. */
+ *  fields. Rewrite confirmed @<video-ref> → "the source video", each
+ *  @<image-ref> → "reference image N" (1-based in imageRefs), and each
+ *  @<audio-ref> → "reference audio N". Unlisted mentions stay literal. */
 export function replaceHappyHorseAssetMentions(
   prompt: string,
-  videoSlug: string | null,
-  imageSlugs: readonly string[],
-  audioSlugs: readonly string[] = [],
+  videoRef: string | null,
+  imageRefs: readonly string[],
+  audioRefs: readonly string[] = [],
 ): string {
   const replacements: Array<{ reference: string; replacement: string }> = [];
-  if (videoSlug) {
-    const video = normalizeNotebookReference(videoSlug);
+  if (videoRef) {
+    const video = normalizeNotebookReference(videoRef);
     if (video) {
       replacements.push({ reference: video, replacement: "the source video" });
     }
   }
-  for (const { slug, index } of slugMentionEntries(imageSlugs)) {
+  for (const { ref, index } of refMentionEntries(imageRefs)) {
     replacements.push({
-      reference: slug,
+      reference: ref,
       replacement: `reference image ${index + 1}`,
     });
   }
-  for (const { slug, index } of slugMentionEntries(audioSlugs)) {
+  for (const { ref, index } of refMentionEntries(audioRefs)) {
     replacements.push({
-      reference: slug,
+      reference: ref,
       replacement: `reference audio ${index + 1}`,
     });
   }
   return replaceNotebookMentions(prompt, replacements);
 }
 
-/** HappyHorse 1.1 reference-to-video: rewrite confirmed @<image-slug> mentions
+/** HappyHorse 1.1 reference-to-video: rewrite confirmed @<image-ref> mentions
  *  to positional `[Image N]` markers matching the reference_image[] order. */
-export function rewriteImageSlugMentionsToBrackets(
+export function rewriteImageRefMentionsToBrackets(
   prompt: string,
-  imageSlugs: readonly string[],
+  imageRefs: readonly string[],
 ): string {
   return replaceNotebookMentions(
     prompt,
-    slugMentionEntries(imageSlugs).map(({ slug, index }) => ({
-      reference: slug,
+    refMentionEntries(imageRefs).map(({ ref, index }) => ({
+      reference: ref,
       replacement: `[Image ${index + 1}]`,
     })),
   );
 }
 
-export type SeedanceMentionSlugs = {
-  imageSlugs?: readonly string[];
-  videoSlugs?: readonly string[];
-  audioSlugs?: readonly string[];
+export type SeedanceMentionRefs = {
+  imageRefs?: readonly string[];
+  videoRefs?: readonly string[];
+  audioRefs?: readonly string[];
 };
 
-/** Seedance r2v: rewrite confirmed asset @slugs to `@ImageN` / `@VideoN` /
+/** Seedance r2v: rewrite confirmed asset @refs to `@ImageN` / `@VideoN` /
  *  `@AudioN` (1-based, matching upload order in each modality array). */
 export function rewriteSeedanceAssetMentions(
   prompt: string,
-  refs: SeedanceMentionSlugs,
+  refs: SeedanceMentionRefs,
 ): string {
   const replacements: Array<{ reference: string; replacement: string }> = [];
-  for (const { slug, index } of slugMentionEntries(refs.imageSlugs ?? [])) {
-    replacements.push({ reference: slug, replacement: `@Image${index + 1}` });
+  for (const { ref, index } of refMentionEntries(refs.imageRefs ?? [])) {
+    replacements.push({ reference: ref, replacement: `@Image${index + 1}` });
   }
-  for (const { slug, index } of slugMentionEntries(refs.videoSlugs ?? [])) {
-    replacements.push({ reference: slug, replacement: `@Video${index + 1}` });
+  for (const { ref, index } of refMentionEntries(refs.videoRefs ?? [])) {
+    replacements.push({ reference: ref, replacement: `@Video${index + 1}` });
   }
-  for (const { slug, index } of slugMentionEntries(refs.audioSlugs ?? [])) {
-    replacements.push({ reference: slug, replacement: `@Audio${index + 1}` });
+  for (const { ref, index } of refMentionEntries(refs.audioRefs ?? [])) {
+    replacements.push({ reference: ref, replacement: `@Audio${index + 1}` });
   }
   return replaceNotebookMentions(prompt, replacements);
 }
@@ -165,26 +166,26 @@ export function rewriteSeedanceAssetMentions(
 export function replaceNaturalAssetMentions(
   prompt: string,
   refs: {
-    sourceVideoSlug?: string | null;
-    imageSlugs?: readonly string[];
-    videoSlugs?: readonly string[];
-    audioSlugs?: readonly string[];
+    sourceVideoRef?: string | null;
+    imageRefs?: readonly string[];
+    videoRefs?: readonly string[];
+    audioRefs?: readonly string[];
   },
 ): string {
   let out = prompt;
-  if (refs.sourceVideoSlug) {
-    out = replaceHappyHorseAssetMentions(out, refs.sourceVideoSlug, [], []);
+  if (refs.sourceVideoRef) {
+    out = replaceHappyHorseAssetMentions(out, refs.sourceVideoRef, [], []);
   }
-  const multiVideos = refs.videoSlugs ?? [];
+  const multiVideos = refs.videoRefs ?? [];
   out = replaceNotebookMentions(
     out,
-    slugMentionEntries(multiVideos).map(({ slug, index }) => ({
-      reference: slug,
+    refMentionEntries(multiVideos).map(({ ref, index }) => ({
+      reference: ref,
       replacement: multiVideos.length === 1
         ? "the source video"
         : `reference video ${index + 1}`,
     })),
   );
-  out = replaceHappyHorseAssetMentions(out, null, refs.imageSlugs ?? [], refs.audioSlugs ?? []);
+  out = replaceHappyHorseAssetMentions(out, null, refs.imageRefs ?? [], refs.audioRefs ?? []);
   return out;
 }

@@ -78,12 +78,12 @@ describe("transcribe tool", () => {
     if (!asset.ok) throw new Error("Failed to create asset");
 
     // Write a non-audio file so the asset exists but has no audio
-    await fs.files.write(asset.value.slug, "notes.txt", "hello");
+    await fs.files.write(asset.value.artifactId, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "transcribe",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "test-proj",
       },
     });
@@ -100,12 +100,12 @@ describe("transcribe tool", () => {
     const asset = await fs.artifacts.create("aud", "podcast");
     if (!asset.ok) throw new Error("Failed to create asset");
 
-    await fs.files.write(asset.value.slug, "original.mp3", Buffer.from("fake-mp3"));
+    await fs.files.write(asset.value.artifactId, "original.mp3", Buffer.from("fake-mp3"));
 
     const result = await client.callTool({
       name: "transcribe",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "test-proj",
       },
     });
@@ -113,7 +113,7 @@ describe("transcribe tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.asset_id).toBe(asset.value.slug);
+    expect(parsed.asset_id).toBe(asset.value.artifactId);
     expect(parsed.job_id).toBeDefined();
   });
 
@@ -126,12 +126,12 @@ describe("transcribe tool", () => {
     const asset = await fs.artifacts.create("aud", "waitcase");
     if (!asset.ok) throw new Error("Failed to create asset");
 
-    await fs.files.write(asset.value.slug, "original.mp3", Buffer.from("fake-mp3"));
+    await fs.files.write(asset.value.artifactId, "original.mp3", Buffer.from("fake-mp3"));
 
     const result = await client.callTool({
       name: "transcribe",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "test-proj",
         wait: true,
       },

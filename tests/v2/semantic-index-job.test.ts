@@ -17,7 +17,7 @@ describe('progressive semantic index job', () => {
 
   it('indexes bounded scene text and exact frame references with real engine storage', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-index-job-'))
-    const engine = createEngine({ rootDir, initialBookSlug: 'index-job' })
+    const engine = createEngine({ rootDir, initialBookName: 'index-job' })
     await engine.ready
     const created = await engine.artifacts.create('video', 'red-van')
     expect(created.ok).toBe(true)
@@ -126,7 +126,7 @@ describe('progressive semantic index job', () => {
 
   it('indexes corrected typed transcript segments at their exact source ranges', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-index-transcript-'))
-    const engine = createEngine({ rootDir, initialBookSlug: 'index-transcript' })
+    const engine = createEngine({ rootDir, initialBookName: 'index-transcript' })
     await engine.ready
     const created = await engine.artifacts.create('audio', 'interview')
     expect(created.ok).toBe(true)
@@ -205,7 +205,7 @@ describe('progressive semantic index job', () => {
 
   it('resumes deep model batches from the durable cursor after interruption', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-index-resume-'))
-    const engine = createEngine({ rootDir, initialBookSlug: 'index-resume' })
+    const engine = createEngine({ rootDir, initialBookName: 'index-resume' })
     await engine.ready
     const created = await engine.artifacts.create('video', 'resume-source')
     expect(created.ok).toBe(true)

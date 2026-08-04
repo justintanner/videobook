@@ -31,8 +31,8 @@ function slugify(text: string): string {
 
 const generateAlibabaImageSchema = {
   prompt: apicityStringField(AlibabaImageTextContentSchema.shape.text, "Text prompt for image generation (max 5000 chars)", { required: true }),
-  book_id: z.string().describe("Project slug"),
-  image_slugs: apicityStringArrayField(AlibabaImageReferenceSlotsSchema, "0-9 @img-* slugs for reference images"),
+  book_id: z.string().describe("Book id"),
+  image_refs: apicityStringArrayField(AlibabaImageReferenceSlotsSchema, "0-9 image artifact ids for reference images"),
   size: apicityStringField(AlibabaImageGenerationParametersSchema.shape.size, "Output size (e.g., '1024*1024', '720*1280', '1280*720')"),
   n: apicityField(AlibabaImageGenerationParametersSchema.shape.n, "Number of images to generate (1-12)"),
   watermark: apicityField(AlibabaImageGenerationParametersSchema.shape.watermark, "Add watermark to generated image"),
@@ -46,12 +46,12 @@ type Args = SchemaArgs<typeof generateAlibabaImageSchema>;
 export function generateAlibabaImageDef(fs: Engine): ToolDef {
   return {
     name: "generate_alibaba_wan_2_7_text_to_image",
-    description: "Generate an image using Alibaba Cloud Wan 2.7 Image. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).",
+    description: "Generate an image using Alibaba Cloud Wan 2.7 Image. Creates a new image artifact and enqueues a background job. Prompt is required; reference images are optional (0-9).",
     schema: generateAlibabaImageSchema,
     handler: async (args) => {
-      const { prompt, book_id, image_slugs, size, n, watermark, thinking_mode, seed } = args as Args;
+      const { prompt, book_id, image_refs, size, n, watermark, thinking_mode, seed } = args as Args;
 
-      const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
+      const ids = (image_refs ?? []).map((s) => s.replace(/^@/, ""));
 
       if (!process.env.DASHSCOPE_API_KEY) {
         return {
@@ -72,10 +72,17 @@ export function generateAlibabaImageDef(fs: Engine): ToolDef {
         }
 
         for (const id of ids) {
-          if (!id.startsWith("img-")) {
+          const artifact = fs.artifacts.get(id);
+          if (!artifact.ok) {
             return {
               isError: true as const,
-              content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${id}` }],
+              content: [{ type: "text" as const, text: artifact.error.message }],
+            };
+          }
+          if (artifact.value.kind !== "image") {
+            return {
+              isError: true as const,
+              content: [{ type: "text" as const, text: `image_refs entries must be image artifacts, got ${artifact.value.kind}: ${id}` }],
             };
           }
 
@@ -110,7 +117,7 @@ export function generateAlibabaImageDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `alibaba-image-${imgAssetId}-${Date.now()}`;
 

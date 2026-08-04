@@ -33,8 +33,8 @@ function slugify(text: string): string {
 
 const generateAlibabaQwenImageEditSchema = {
   prompt: apicityStringField(AlibabaImageTextContentSchema.shape.text, "Edit instruction text", { required: true }),
-  book_id: z.string().describe("Project slug"),
-  image_slugs: apicityStringArrayField(AlibabaQwenImageEditImageSlotsSchema, "1-3 @img-* slugs for source images (required)", { required: true }),
+  book_id: z.string().describe("Book id"),
+  image_refs: apicityStringArrayField(AlibabaQwenImageEditImageSlotsSchema, "1-3 image artifact ids for source images (required)", { required: true }),
   model: apicityField(AlibabaQwenImageEditStableModelSchema, "Qwen edit model", { required: true }),
   size: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.size, "Output size. Not allowed when model is 'qwen-image-edit'"),
   n: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.n, "Number of images (1-6). 'qwen-image-edit' supports only n=1"),
@@ -54,7 +54,7 @@ export function generateAlibabaQwenImageEditDef(fs: Engine): ToolDef {
     schema: generateAlibabaQwenImageEditSchema,
     handler: async (args) => {
       const {
-        prompt, book_id, image_slugs, model, size, n,
+        prompt, book_id, image_refs, model, size, n,
         negative_prompt, prompt_extend, watermark, seed,
       } = args as Args;
 
@@ -65,7 +65,7 @@ export function generateAlibabaQwenImageEditDef(fs: Engine): ToolDef {
         };
       }
 
-      const ids = image_slugs.map((s) => s.replace(/^@/, ""));
+      const ids = image_refs.map((s) => s.replace(/^@/, ""));
       if (ids.length < 1 || ids.length > 3) {
         return {
           isError: true as const,
@@ -100,10 +100,17 @@ export function generateAlibabaQwenImageEditDef(fs: Engine): ToolDef {
       const sourceImageIds: string[] = [];
 
       for (const id of ids) {
-        if (!id.startsWith("img-")) {
+        const artifact = fs.artifacts.get(id);
+        if (!artifact.ok) {
           return {
             isError: true as const,
-            content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${id}` }],
+            content: [{ type: "text" as const, text: artifact.error.message }],
+          };
+        }
+        if (artifact.value.kind !== "image") {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `image_refs entries must be image artifacts, got ${artifact.value.kind}: ${id}` }],
           };
         }
         const manifestResult = await fs.files.manifest(id);
@@ -132,7 +139,7 @@ export function generateAlibabaQwenImageEditDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `alibaba-${modelSlug("alibaba", resolvedModel)}-edit-${imgAssetId}-${Date.now()}`;
 

@@ -37,8 +37,10 @@ async function resolveImageRef(
   field: string,
 ): Promise<RefResult> {
   const assetId = normalizeAssetId(raw);
-  if (!assetId.startsWith("img-")) {
-    return { ok: false, error: `${field} must be an img-* asset, got: ${assetId}` };
+  const artifact = fs.artifacts.get(assetId);
+  if (!artifact.ok) return { ok: false, error: artifact.error.message };
+  if (artifact.value.kind !== "image") {
+    return { ok: false, error: `${field} must be an image artifact, got ${artifact.value.kind}: ${assetId}` };
   }
   const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
@@ -53,15 +55,17 @@ async function resolveAudioRef(
   _bookId: string,
 ): Promise<RefResult> {
   const assetId = normalizeAssetId(raw);
-  if (!assetId.startsWith("aud-")) {
+  const artifact = fs.artifacts.get(assetId);
+  if (!artifact.ok) return { ok: false, error: artifact.error.message };
+  if (artifact.value.kind !== "audio") {
     return {
       ok: false,
-      error: `sound_effect_slug must be an aud-* asset, got: ${assetId}`,
+      error: `sound_effect_ref must be an audio artifact, got ${artifact.value.kind}: ${assetId}`,
     };
   }
   const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
-  const file = findAudioFile(manifest.value.files, assetId);
+  const file = findAudioFile(manifest.value.files, "audio");
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
@@ -72,16 +76,16 @@ export function createQrOutroDef(fs: Engine): ToolDef {
     description:
       "Build a standalone animated outro from 1-4 QR image assets with configurable duration and optional impact audio.",
     schema: {
-      book_id: z.string().describe("Project slug"),
-      qr_image_slugs: z
+      book_id: z.string().describe("Book id"),
+      qr_image_refs: z
         .array(z.string())
         .min(1)
         .max(4)
-        .describe("One to four QR code image asset IDs (img- prefix)"),
-      sound_effect_slug: z
+        .describe("One to four QR code image artifact ids"),
+      sound_effect_ref: z
         .string()
         .optional()
-        .describe("Optional impact sound override (aud- prefix); defaults to the bundled sound"),
+        .describe("Optional impact sound override (audio artifact id); defaults to the bundled sound"),
       aspect_ratio: z
         .enum(["16:9", "9:16", "1:1"])
         .optional()
@@ -100,39 +104,39 @@ export function createQrOutroDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const {
         book_id,
-        qr_image_slugs,
-        sound_effect_slug,
+        qr_image_refs,
+        sound_effect_ref,
         aspect_ratio = "16:9",
         duration_seconds,
         include_audio = true,
       } = args as {
         book_id: string;
-        qr_image_slugs: string[];
-        sound_effect_slug?: string;
+        qr_image_refs: string[];
+        sound_effect_ref?: string;
         aspect_ratio?: AspectRatio;
         duration_seconds?: number;
         include_audio?: boolean;
       };
 
-      if (!include_audio && sound_effect_slug) {
-        return toolError("sound_effect_slug cannot be used when include_audio is false");
+      if (!include_audio && sound_effect_ref) {
+        return toolError("sound_effect_ref cannot be used when include_audio is false");
       }
 
       const qrImages: QrOutroAssetRef[] = [];
-      for (const raw of qr_image_slugs) {
+      for (const raw of qr_image_refs) {
         const resolved = await resolveImageRef(
           fs,
           raw,
           book_id,
-          "qr_image_slugs entry",
+          "qr_image_refs entry",
         );
         if (!resolved.ok) return toolError(resolved.error);
         qrImages.push(resolved.value);
       }
 
       let soundEffect: QrOutroAssetRef | null = null;
-      if (include_audio && sound_effect_slug) {
-        const resolved = await resolveAudioRef(fs, sound_effect_slug, book_id);
+      if (include_audio && sound_effect_ref) {
+        const resolved = await resolveAudioRef(fs, sound_effect_ref, book_id);
         if (!resolved.ok) return toolError(resolved.error);
         soundEffect = resolved.value;
       }
@@ -142,14 +146,13 @@ export function createQrOutroDef(fs: Engine): ToolDef {
         qrImages.length,
         duration_seconds,
       );
-      const firstQrStem = qrImages[0].assetId.replace(/^img-/, "");
-      const created = await fs.artifacts.create("vid", `qr-outro-${firstQrStem}`
+      const created = await fs.artifacts.create("vid", `qr-outro-${qrImages[0].assetId}`
       );
       if (!created.ok) {
         return toolError(`Failed to create output asset: ${created.error.message}`);
       }
 
-      const assetId = created.value.slug;
+      const assetId = created.value.artifactId;
       const jobId = `render-qr-outro-${assetId}-${Date.now()}`;
       try {
         await queue.enqueue(jobId, {
@@ -183,12 +186,12 @@ export function createQrOutroDef(fs: Engine): ToolDef {
             status: "enqueued",
             aspect_ratio,
             duration_seconds: spec.totalDurationSeconds,
-            qr_image_slugs: qrImages.map((image) => image.assetId),
+            qr_image_refs: qrImages.map((image) => image.assetId),
             include_audio,
             sound_effect_source: include_audio
               ? soundEffect ? "asset" : "bundled_default"
               : "none",
-            ...(soundEffect ? { sound_effect_slug: soundEffect.assetId } : {}),
+            ...(soundEffect ? { sound_effect_ref: soundEffect.assetId } : {}),
           }),
         }],
       };

@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   }
   const engine = createEngine({
     rootDir: bookRoot,
-    initialBookSlug: 'benchmark',
+    initialBookName: 'benchmark',
   })
   await engine.ready
   try {

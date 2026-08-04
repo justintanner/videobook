@@ -13,7 +13,7 @@ export function padVideoDef(fs: Engine): ToolDef {
     description: "Append black video frames at the end to make a whole-second video tail. Retains original audio and makes the appended tail silent.",
     schema: {
       asset_id: z.string().describe("Source video asset ID"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       padding: z.string().describe("Padding duration (e.g. 2s)"),
     },
     handler: async (args) => {

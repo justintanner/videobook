@@ -8,7 +8,7 @@ export function assetManifestDef(fs: Engine): ToolDef {
     description: "List all files in an asset directory",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. img-cute-cat, vid-running-dog)"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };

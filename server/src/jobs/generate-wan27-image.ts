@@ -38,7 +38,7 @@ export function registerGenerateWan27ImageJob(fs: Engine): void {
       "generate_kie_wan_2_7_text_to_image",
       {
         prompt,
-        image_slugs: imageInputs.map((input) => input.assetId),
+        image_refs: imageInputs.map((input) => input.assetId),
       },
     ) ?? "";
 

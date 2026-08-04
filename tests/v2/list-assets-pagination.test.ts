@@ -14,16 +14,16 @@ describe('bounded asset listing', () => {
 
   it('returns page metadata and never sends the full catalog by default', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-asset-page-'))
-    const engine = createEngine({ rootDir, initialBookSlug: 'asset-page' })
+    const engine = createEngine({ rootDir, initialBookName: 'asset-page' })
     await engine.ready
-    for (const slug of ['one', 'two', 'three', 'four']) {
-      const artifact = await engine.artifacts.create('image', slug)
+    for (const label of ['one', 'two', 'three', 'four']) {
+      const artifact = await engine.artifacts.create('image', label)
       expect(artifact.ok).toBe(true)
       if (!artifact.ok) return
       expect((await engine.files.write(
         artifact.value.artifactId,
         'original.png',
-        Buffer.from(slug),
+        Buffer.from(label),
       )).ok).toBe(true)
     }
     const result = await listAssetsDef(engine).handler({

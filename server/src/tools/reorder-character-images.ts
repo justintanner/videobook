@@ -8,7 +8,7 @@ export function reorderCharacterImagesDef(fs: Engine): ToolDef {
     name: "reorder_character_images",
     description: "Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).",
     schema: {
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Character asset ID"),
       ordered_filenames: z.array(z.string()).describe("List of image filenames in the desired new order"),
     },

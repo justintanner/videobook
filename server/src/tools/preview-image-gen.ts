@@ -7,7 +7,8 @@ import {
 } from "../image-models.js";
 import type { ActionLogEntry, ModelOption } from "../image-models.js";
 import type { ToolDef } from "./tool-def.js";
-import { timelineSlotSlugs } from "../timeline-helpers.js";
+import { expandTimelineSlotRefs, timelineSlotArtifactIds } from "../timeline-helpers.js";
+import { parseArtifactIdTags, resolveArtifactRefs } from "../artifact-refs.js";
 import {
   scanNotebookMentions,
   stripNotebookMentions,
@@ -50,31 +51,26 @@ export function previewImageGenDef(fs: Engine): ToolDef {
       "Return a preview with schema, prefilled parameters, validation, and model options for all available image models.",
     schema: {
       prompt: z.string().describe("Natural language generation prompt (e.g., 'generate an image of a sunset')"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
       selected_model: z.string().optional().describe("Override: which model key to select (e.g. 'nano_banana')"),
       selected_provider: z.string().optional().describe("Override: which provider key to select (e.g. 'xai')"),
     },
     handler: async (args) => {
-      const { prompt, book_id: slug, selected_model: modelOverride, selected_provider: providerOverride } = args as {
+      const { prompt, book_id: bookId, selected_model: modelOverride, selected_provider: providerOverride } = args as {
         prompt: string;
         book_id: string;
         selected_model?: string;
         selected_provider?: string;
       };
 
-      // 1. Expand @s01 slot refs → actual asset slugs
-      let expandedPrompt = prompt;
-      expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineSlotSlugs(fs));
+      // 1. Expand @s01 slot refs → @<artifact-id> tokens
+      const expandedPrompt = expandTimelineSlotRefs(prompt, timelineSlotArtifactIds(fs));
 
-      // 2. Resolve @asset tags
-      const resolvedResult = await fs.resolver.resolveAll(expandedPrompt);
-      if (!resolvedResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: resolvedResult.error.message }],
-        };
-      }
-      const { resolved: resolvedAssets, unresolved } = resolvedResult.value;
+      // 2. Resolve @<artifact-id> tags
+      const { resolved: resolvedAssets, unresolved } = await resolveArtifactRefs(
+        fs,
+        parseArtifactIdTags(expandedPrompt),
+      );
 
       // 3. Load prompt history from action log
       let historyEntries: ActionLogEntry[] = [];
@@ -85,10 +81,10 @@ export function previewImageGenDef(fs: Engine): ToolDef {
         // action log unavailable
       }
 
-      // 3b. Build set of valid asset tags for the current project so
-      //     historical slug references that no longer exist are stripped.
+      // 3b. Build set of valid artifact-id tags for the current book so
+      //     historical references that no longer exist are stripped.
       const allProjectAssets = fs.artifacts.list();
-      const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.slug}`));
+      const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.artifactId}`));
 
       // 4. Build model options for all image models
       // Strip @asset tags from prompt to get the user's text input
@@ -130,12 +126,12 @@ export function previewImageGenDef(fs: Engine): ToolDef {
       // 6. Build resolved_assets output
       const assetDicts = resolvedAssets.map((a) => {
         const fileName = a.filePath?.split("/").pop() ?? "original.png";
-        const src = a.filePath ? `/files/${slug}/${a.artifactSlug}/${fileName}` : "";
+        const src = a.filePath ? `/files/${bookId}/${a.artifactId}/${fileName}` : "";
         const isVideo = a.artifactType === "video";
         return {
-          slug: a.tag,
+          ref: a.tag,
           src,
-          thumbnailSrc: isVideo && a.filePath ? `/files/${slug}/${a.artifactSlug}/original.jpg` : undefined,
+          thumbnailSrc: isVideo && a.filePath ? `/files/${bookId}/${a.artifactId}/original.jpg` : undefined,
           type: isVideo ? "video" as const : "image" as const,
         };
       });

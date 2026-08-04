@@ -1,6 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
+import { requireArtifactKind } from "./_shared.js";
 
 /**
  * Normalize the metadata arg into a plain object.
@@ -54,8 +55,8 @@ export function setCharacterMetadataDef(fs: Engine): ToolDef {
       "Accepts a JSON object, a JSON-stringified object, or plain-text notes " +
       "(stored as { notes: \"...\" }).",
     schema: {
-      book_id: z.string().describe("Project slug"),
-      char_asset_id: z.string().describe("Character asset ID (must start with char-)"),
+      book_id: z.string().describe("Book id"),
+      char_asset_id: z.string().describe("Character artifact id"),
       metadata: z
         .union([z.string(), z.record(z.string(), z.unknown())])
         .describe(
@@ -78,12 +79,8 @@ export function setCharacterMetadataDef(fs: Engine): ToolDef {
       }
 
       const id = char_asset_id.replace(/^@/, "").trim();
-      if (!id.startsWith("char-")) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Asset ID must start with char-, got: ${id}` }],
-        };
-      }
+      const kindGate = await requireArtifactKind(fs, id, ["character"], "set_character_metadata");
+      if (kindGate) return kindGate;
 
       const writeResult = await fs.metadata.artifacts.write(id, "character", parsed.value);
       if (!writeResult.ok) {

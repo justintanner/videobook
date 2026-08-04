@@ -45,7 +45,7 @@ describe("retry_generation tool", () => {
   it("requeues the original payload and clears the error row", async () => {
     const assetResult = await fs.artifacts.create("vid", "failed-clip");
     if (!assetResult.ok) throw new Error("createAsset failed");
-    const assetId = assetResult.value.slug;
+    const assetId = assetResult.value.artifactId;
     await failAsset(fs, "retry-proj", assetId, "task-original");
 
     // Persist a replayable generation-request payload (mirrors what the omni
@@ -78,7 +78,7 @@ describe("retry_generation tool", () => {
   it("returns an error when no generation-request metadata exists", async () => {
     const assetResult = await fs.artifacts.create("vid", "no-meta");
     if (!assetResult.ok) throw new Error("createAsset failed");
-    const assetId = assetResult.value.slug;
+    const assetId = assetResult.value.artifactId;
 
     const res = await client.callTool({
       name: "retry_generation",
@@ -92,16 +92,16 @@ describe("retry_generation tool", () => {
     const a = await fs.artifacts.create("vid", "target");
     const b = await fs.artifacts.create("vid", "other");
     if (!a.ok || !b.ok) throw new Error("createAsset failed");
-    await fs.metadata.artifacts.write(a.value.slug, "generation-request", {
+    await fs.metadata.artifacts.write(a.value.artifactId, "generation-request", {
       type: "generate_google_omni_video",
-      vidAssetId: b.value.slug,
+      vidAssetId: b.value.artifactId,
       bookId: "retry-proj",
       prompt: "x",
     });
 
     const res = await client.callTool({
       name: "retry_generation",
-      arguments: { asset_id: a.value.slug, book_id: "retry-proj" },
+      arguments: { asset_id: a.value.artifactId, book_id: "retry-proj" },
     });
     expect(res.isError).toBe(true);
     expect((res.content as TextContent)[0].text).toContain("different asset");

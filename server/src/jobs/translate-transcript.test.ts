@@ -50,7 +50,7 @@ describe("runTranslateTranscript", () => {
   async function createTranscribedAsset(): Promise<string> {
     const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
-    const assetId = created.value.slug;
+    const assetId = created.value.artifactId;
     const write = await fs.files.write(assetId, "elevenlabs.json", JSON.stringify(transcriptJson));
     if (!write.ok) throw new Error(write.error.message);
     return assetId;
@@ -61,7 +61,7 @@ describe("runTranslateTranscript", () => {
     if (!created.ok) throw new Error(created.error.message);
     await expect(runTranslateTranscript(fs, {
       type: "translate_transcript",
-      assetId: created.value.slug,
+      assetId: created.value.artifactId,
       bookId,
       targetLanguage: "en",
     }, testCtx)).rejects.toThrow(/No transcript/);

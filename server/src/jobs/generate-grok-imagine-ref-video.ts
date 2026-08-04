@@ -44,7 +44,7 @@ export function registerGenerateGrokImagineRefVideoJob(fs: Engine): void {
       "generate_xai_grok_imagine_video",
       {
         prompt,
-        image_slugs: refImages.map((image) => image.assetId),
+        image_refs: refImages.map((image) => image.assetId),
       },
       "xai",
     ) ?? "";

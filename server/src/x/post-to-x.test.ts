@@ -64,7 +64,7 @@ async function uploadFakeAsset(
 ): Promise<string> {
   const created = await fs.artifacts.create(prefix, `clip-${prefix}`);
   if (!created.ok) throw new Error(created.error.message);
-  const assetId = created.value.slug;
+  const assetId = created.value.artifactId;
   const writeResult = await fs.files.write(assetId, `original${ext}`, Buffer.from("fake-bytes-for-test")
   );
   if (!writeResult.ok) throw new Error(writeResult.error.message);
@@ -223,12 +223,12 @@ describe("postToX helper", () => {
   it("rejects unsupported file extensions", async () => {
     const created = await fs.artifacts.create("aud", "song");
     if (!created.ok) throw new Error(created.error.message);
-    await fs.files.write(created.value.slug, "original.mp3", Buffer.from("audio")
+    await fs.files.write(created.value.artifactId, "original.mp3", Buffer.from("audio")
     );
 
     const x = createX({ accessToken: "test-token", fetch: makeStubFetch([]).fetch });
     await expect(
-      postToX({ fs, assetId: created.value.slug, bookId, x }),
+      postToX({ fs, assetId: created.value.artifactId, bookId, x }),
     ).rejects.toThrow(/unsupported media file/i);
   });
 

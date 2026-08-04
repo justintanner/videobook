@@ -36,9 +36,9 @@ function slugify(text: string): string {
 type RefInput = { assetId: string; filename: string };
 
 const generateHappyhorseRefVideoSchema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.prompt, "Video description (max 5000 chars / 2500 Chinese chars)", { required: true }),
-  image_slugs: apicityStringArrayField(HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.reference_image, "1-9 reference image @slugs (order defines character1, character2, ...)", { required: true }),
+  image_refs: apicityStringArrayField(HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.reference_image, "1-9 reference image artifact ids (order defines character1, character2, ...)", { required: true }),
   resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
   aspect_ratio: apicityField(HappyHorse11AspectRatioSchema, "Output aspect ratio (default 16:9)"),
   duration: apicityStringNumberField(HappyHorseDurationSchema, "Video duration in seconds (3-15, default 5)"),
@@ -50,20 +50,22 @@ type Args = SchemaArgs<typeof generateHappyhorseRefVideoSchema>;
 export function generateHappyhorseRefVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_happyhorse_1_1_reference_to_video",
-    description: "Generate a multi-character video using HappyHorse reference-to-video (1-9 reference images, order defines character1/character2/...). Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a multi-character video using HappyHorse reference-to-video (1-9 reference images, order defines character1/character2/...). Creates a new video artifact and enqueues a background job.",
     schema: generateHappyhorseRefVideoSchema,
     handler: async (args) => {
-      const { book_id, prompt, image_slugs, resolution, aspect_ratio, duration } = args as Args;
+      const { book_id, prompt, image_refs, resolution, aspect_ratio, duration } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }] };
       }
 
       const imageInputs: RefInput[] = [];
-      for (const raw of image_slugs) {
+      for (const raw of image_refs) {
         const assetId = raw.replace(/^@/, "");
-        if (!assetId.startsWith("img-")) {
-          return { isError: true as const, content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${assetId}` }] };
+        const artifact = fs.artifacts.get(assetId);
+        if (!artifact.ok) return { isError: true as const, content: [{ type: "text" as const, text: artifact.error.message }] };
+        if (artifact.value.kind !== "image") {
+          return { isError: true as const, content: [{ type: "text" as const, text: `image_refs entries must be image artifacts, got ${artifact.value.kind}: ${assetId}` }] };
         }
         const manifest = await fs.files.manifest(assetId);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
@@ -78,7 +80,7 @@ export function generateHappyhorseRefVideoDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInputs.map((i) => i.assetId);
       const jobId = `${SLUG}-r2v-${vidAssetId}-${Date.now()}`;
 

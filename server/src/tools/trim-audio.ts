@@ -54,10 +54,10 @@ function validateTrimParams(
 export function trimAudioDef(fs: Engine): ToolDef {
   return {
     name: "trim_audio",
-    description: "Trim an aud-* asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for vid-* assets so picture and sound remain synchronized. Operates in-place with git versioning.",
+    description: "Trim an audio asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for video assets so picture and sound remain synchronized. Operates in-place with git versioning.",
     schema: {
-      asset_id: z.string().describe("Audio asset ID (aud-* prefix)"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Audio artifact id"),
+      book_id: z.string().describe("Book UUID"),
       trim_start: z.number().optional().describe("Start of range to keep (seconds)"),
       trim_end: z.number().optional().describe("End of range to keep (seconds)"),
       cut_start: z.number().optional().describe("Start of chunk to remove (seconds)"),
@@ -77,10 +77,17 @@ export function trimAudioDef(fs: Engine): ToolDef {
       }
 
       const assetId = asset_id.replace(/^@/, "");
-      if (!assetId.startsWith("aud-")) {
+      const artifact = fs.artifacts.get(assetId);
+      if (!artifact.ok) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "trim_audio requires an aud-* asset. Use trim_video for vid-* assets." }],
+          content: [{ type: "text" as const, text: artifact.error.message }],
+        };
+      }
+      if (artifact.value.kind !== "audio") {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "trim_audio requires an audio artifact. Use trim_video for video artifacts." }],
         };
       }
 
@@ -94,11 +101,11 @@ export function trimAudioDef(fs: Engine): ToolDef {
 
       const manifest = manifestResult.value;
       const files = manifest.files || [];
-      const mediaFile = findAudioFile(files, assetId);
+      const mediaFile = findAudioFile(files, artifact.value.kind);
       if (!mediaFile) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `No audio file found in asset ${assetId}` }],
+          content: [{ type: "text" as const, text: `No audio file found in artifact ${assetId}` }],
         };
       }
 

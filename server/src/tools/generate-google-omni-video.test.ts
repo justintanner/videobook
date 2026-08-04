@@ -1,4 +1,5 @@
 import { createEngineForTest } from "../fs.js";
+import { isUuidV7 } from "videobook-engine";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -42,23 +43,23 @@ describe("generate_google_omni_video tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("enqueues with image and video slugs before provider upload", async () => {
+  it("enqueues with image and video refs before provider upload", async () => {
     const fs = createEngineForTest(tempDir);
     const imageAsset = await fs.artifacts.create("img", "source-img");
     const videoAsset = await fs.artifacts.create("vid", "source-video");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
     if (!videoAsset.ok) throw new Error("Failed to create video asset");
 
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
-    await fs.files.write(videoAsset.value.slug, "original.mp4", Buffer.from("fake mp4"));
+    await fs.files.write(imageAsset.value.artifactId, "original.png", await makePng());
+    await fs.files.write(videoAsset.value.artifactId, "original.mp4", Buffer.from("fake mp4"));
 
     const result = await client.callTool({
       name: "generate_google_flow_omni_flash_video",
       arguments: {
         book_id: "test-proj",
         prompt: "char swap",
-        image_slugs: [`@${imageAsset.value.slug}`],
-        video_slug: `@${videoAsset.value.slug}`,
+        image_refs: [`@${imageAsset.value.artifactId}`],
+        video_ref: `@${videoAsset.value.artifactId}`,
         video_clip_start: 0,
         video_clip_ends: 10,
         duration: "10",
@@ -68,28 +69,31 @@ describe("generate_google_omni_video tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.vid_asset_id).toMatch(/^vid-/);
-    expect(parsed.source_images).toEqual([imageAsset.value.slug]);
-    expect(parsed.source_videos).toEqual([videoAsset.value.slug]);
+    expect(isUuidV7(parsed.vid_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.vid_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("video");
+    expect(parsed.source_images).toEqual([imageAsset.value.artifactId]);
+    expect(parsed.source_videos).toEqual([videoAsset.value.artifactId]);
   });
 
-  it("normalizes prompt @slug mentions to positional markers before enqueue", async () => {
+  it("normalizes prompt @artifact mentions to positional markers before enqueue", async () => {
     const fs = createEngineForTest(tempDir);
     const imageAsset = await fs.artifacts.create("img", "da-set");
     const videoAsset = await fs.artifacts.create("vid", "motion");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
     if (!videoAsset.ok) throw new Error("Failed to create video asset");
 
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
-    await fs.files.write(videoAsset.value.slug, "original.mp4", Buffer.from("fake mp4"));
+    await fs.files.write(imageAsset.value.artifactId, "original.png", await makePng());
+    await fs.files.write(videoAsset.value.artifactId, "original.mp4", Buffer.from("fake mp4"));
 
     const result = await client.callTool({
       name: "generate_google_flow_omni_flash_video",
       arguments: {
         book_id: "test-proj",
-        prompt: `fade to @${imageAsset.value.slug} inside @${videoAsset.value.slug} while @character_1 waves`,
-        image_slugs: [`@${imageAsset.value.slug}`],
-        video_slug: `@${videoAsset.value.slug}`,
+        prompt: `fade to @${imageAsset.value.artifactId} inside @${videoAsset.value.artifactId} while @character_1 waves`,
+        image_refs: [`@${imageAsset.value.artifactId}`],
+        video_ref: `@${videoAsset.value.artifactId}`,
         character_refs: ["character:bbb"],
       },
     });
@@ -99,31 +103,31 @@ describe("generate_google_omni_video tool", () => {
     const meta = await fs.metadata.artifacts.read<{ prompt: string }>(parsed.vid_asset_id, "generation-request"
     );
     expect(meta.ok && meta.value).toBeTruthy();
-    // Image slug → @referenceImage_1; clip mention removed (no inline form);
+    // Image ref → @referenceImage_1; clip mention removed (no inline form);
     // already-positional @character_1 untouched.
     expect(meta.value!.prompt).toBe("fade to @referenceImage_1 inside while @character_1 waves");
   });
 
-  it("enqueues with a first-frame image slug before provider upload", async () => {
+  it("enqueues with a first-frame image ref before provider upload", async () => {
     const fs = createEngineForTest(tempDir);
     const imageAsset = await fs.artifacts.create("img", "start-frame");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
 
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
+    await fs.files.write(imageAsset.value.artifactId, "original.png", await makePng());
 
     const result = await client.callTool({
       name: "generate_google_flow_omni_flash_video",
       arguments: {
         book_id: "test-proj",
         prompt: "animate this frame",
-        first_frame_slug: `@${imageAsset.value.slug}`,
+        first_frame_ref: `@${imageAsset.value.artifactId}`,
       },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.source_first_frame).toBe(imageAsset.value.slug);
+    expect(parsed.source_first_frame).toBe(imageAsset.value.artifactId);
     expect(parsed.source_images).toEqual([]);
     expect(parsed.source_videos).toEqual([]);
   });
@@ -133,21 +137,21 @@ describe("generate_google_omni_video tool", () => {
     const videoAsset = await fs.artifacts.create("vid", "source-video");
     if (!videoAsset.ok) throw new Error("Failed to create video asset");
 
-    await fs.files.write(videoAsset.value.slug, "original.mp4", Buffer.from("fake mp4"));
+    await fs.files.write(videoAsset.value.artifactId, "original.mp4", Buffer.from("fake mp4"));
 
     const result = await client.callTool({
       name: "generate_google_flow_omni_flash_video",
       arguments: {
         book_id: "test-proj",
         prompt: "edit this",
-        video_slug: `@${videoAsset.value.slug}`,
+        video_ref: `@${videoAsset.value.artifactId}`,
       },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.source_videos).toEqual([videoAsset.value.slug]);
+    expect(parsed.source_videos).toEqual([videoAsset.value.artifactId]);
   });
 
   it("rejects a reference clip window over 10 seconds", async () => {
@@ -156,7 +160,7 @@ describe("generate_google_omni_video tool", () => {
       arguments: {
         book_id: "test-proj",
         prompt: "edit this",
-        video_slug: "@vid-motion",
+        video_ref: "@vid-motion",
         video_clip_start: 0,
         video_clip_ends: 12,
         duration: "8",
@@ -172,24 +176,24 @@ describe("generate_google_omni_video tool", () => {
       arguments: {
         book_id: "test-proj",
         prompt: "animate this",
-        first_frame_slug: "@img-start",
-        image_slugs: ["@img-ref"],
+        first_frame_ref: "@img-start",
+        image_refs: ["@img-ref"],
       },
     });
     expect(refsResult.isError).toBe(true);
-    expect((refsResult.content as TextContent)[0].text).toContain("first_frame_slug cannot be combined with image_slugs");
+    expect((refsResult.content as TextContent)[0].text).toContain("first_frame_ref cannot be combined with image_refs");
 
     const videoResult = await client.callTool({
       name: "generate_google_flow_omni_flash_video",
       arguments: {
         book_id: "test-proj",
         prompt: "animate this",
-        first_frame_slug: "@img-start",
-        video_slug: "@vid-motion",
+        first_frame_ref: "@img-start",
+        video_ref: "@vid-motion",
       },
     });
     expect(videoResult.isError).toBe(true);
-    expect((videoResult.content as TextContent)[0].text).toContain("first_frame_slug cannot be combined with video_slug");
+    expect((videoResult.content as TextContent)[0].text).toContain("first_frame_ref cannot be combined with video_ref");
   });
 
   it("rejects more than 5 reference images alongside a clip", async () => {
@@ -198,8 +202,8 @@ describe("generate_google_omni_video tool", () => {
       arguments: {
         book_id: "test-proj",
         prompt: "edit this",
-        image_slugs: ["@img-1", "@img-2", "@img-3", "@img-4", "@img-5", "@img-6"],
-        video_slug: "@vid-motion",
+        image_refs: ["@img-1", "@img-2", "@img-3", "@img-4", "@img-5", "@img-6"],
+        video_ref: "@vid-motion",
         video_clip_start: 0,
         video_clip_ends: 5,
         duration: "8",
@@ -255,7 +259,7 @@ describe("generate_google_omni_video tool", () => {
       arguments: {
         book_id: "test-proj",
         prompt: "x",
-        video_slug: "@vid-motion",
+        video_ref: "@vid-motion",
         voice_refs: ["v1", "v2", "v3", "v4"],
       },
     });
@@ -269,12 +273,12 @@ describe("generate_google_omni_video tool", () => {
       arguments: {
         book_id: "test-proj",
         prompt: "x",
-        first_frame_slug: "@img-start",
+        first_frame_ref: "@img-start",
         character_refs: ["character:bbb"],
       },
     });
     expect(result.isError).toBe(true);
-    expect((result.content as TextContent)[0].text).toContain("first_frame_slug cannot be combined with character_refs");
+    expect((result.content as TextContent)[0].text).toContain("first_frame_ref cannot be combined with character_refs");
   });
 
   it("rejects an image + character reference budget over 7", async () => {
@@ -283,7 +287,7 @@ describe("generate_google_omni_video tool", () => {
       arguments: {
         book_id: "test-proj",
         prompt: "x",
-        image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d"],
+        image_refs: ["@img-a", "@img-b", "@img-c", "@img-d"],
         character_refs: ["c1", "c2"],
       },
     });
@@ -324,15 +328,15 @@ describe("generate_google_omni_video tool", () => {
     for (let i = 0; i < 4; i++) {
       const a = await fs.artifacts.create("img", `img-${i}`);
       if (!a.ok) throw new Error("createAsset failed");
-      await fs.files.write(a.value.slug, "original.png", await makePng());
-      imageAssets.push(a.value.slug);
+      await fs.files.write(a.value.artifactId, "original.png", await makePng());
+      imageAssets.push(a.value.artifactId);
     }
     const result = await client.callTool({
       name: "generate_google_flow_omni_flash_video",
       arguments: {
         book_id: "test-proj",
         prompt: "x",
-        image_slugs: imageAssets.map((id) => `@${id}`),
+        image_refs: imageAssets.map((id) => `@${id}`),
         character_refs: ["character:a-imgs:2", "character:b-imgs:2"],
       },
     });
@@ -346,15 +350,15 @@ describe("generate_google_omni_video tool", () => {
     for (let i = 0; i < 3; i++) {
       const a = await fs.artifacts.create("img", `img-${i}`);
       if (!a.ok) throw new Error("createAsset failed");
-      await fs.files.write(a.value.slug, "original.png", await makePng());
-      imageAssets.push(a.value.slug);
+      await fs.files.write(a.value.artifactId, "original.png", await makePng());
+      imageAssets.push(a.value.artifactId);
     }
     const result = await client.callTool({
       name: "generate_google_flow_omni_flash_video",
       arguments: {
         book_id: "test-proj",
         prompt: "x",
-        image_slugs: imageAssets.map((id) => `@${id}`),
+        image_refs: imageAssets.map((id) => `@${id}`),
         character_refs: ["character:a-imgs:2", "character:b-imgs:2"],
       },
     });

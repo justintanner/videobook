@@ -10,7 +10,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const base = FalSeedance2p0FastTextToVideoRequestSchema.shape;
 
 const schema = {
-  book_id: z.string().describe("Project slug"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(base.prompt, "Video description", { required: true }),
   resolution: apicityField(base.resolution, "Output resolution"),
   duration: apicityField(base.duration, "Video duration in seconds"),
@@ -24,7 +24,7 @@ type Args = SchemaArgs<typeof schema>;
 export function generateSeedance2FastT2vFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_seedance_2_0_fast_text_to_video",
-    description: "Generate a video via fal.ai using ByteDance Seedance 2.0 Fast from a text prompt only. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video via fal.ai using ByteDance Seedance 2.0 Fast from a text prompt only. Creates a new video artifact and enqueues a background job.",
     schema,
     handler: async (args) => {
       const { book_id, prompt, resolution, duration, aspect_ratio, generate_audio, seed } = args as Args;
@@ -36,7 +36,7 @@ export function generateSeedance2FastT2vFalDef(fs: Engine): ToolDef {
       const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "bytedance/seedance-2-fast")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "bytedance/seedance-2-fast")}-t2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

@@ -7,7 +7,7 @@ import { queue } from "../queue.js";
 import { enumOptions } from "../zod-slots.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
-import { resolveAudioSlug, type RefInput } from "./_seedance2-shared.js";
+import { resolveAudioRef, type RefInput } from "./_seedance2-shared.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -21,8 +21,7 @@ function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | nu
 }
 
 function deriveVideoName(firstAssetId: string): string {
-  const baseName = firstAssetId.startsWith("img-") ? firstAssetId.slice(4) : firstAssetId;
-  return `grok-${baseName}`;
+  return `grok-${firstAssetId}`;
 }
 
 // Apicity's mode enum includes "spicy", which this i2v endpoint rejects (docs/apicity-gaps.md).
@@ -30,9 +29,9 @@ const grokI2v = GrokImageToVideoRequestSchema.shape.input.shape;
 const GROK_IMAGE_TO_VIDEO_MODES = enumOptions(grokI2v.mode).filter((mode) => mode !== "spicy") as [string, ...string[]];
 
 const generateGrokImagineVideoSchema = {
-  image_slugs: apicityStringArrayField(grokI2v.image_urls, "1-7 reference image asset slugs (e.g., ['@img-sunset'])"),
-  asset_id: z.string().optional().describe("Single image asset ID (must be img-*); back-compat alias for image_slugs[0]"),
-  book_id: z.string().describe("Project slug"),
+  image_refs: apicityStringArrayField(grokI2v.image_urls, "1-7 reference image artifact ids"),
+  asset_id: z.string().optional().describe("Single image asset ID (must be img-*); back-compat alias for image_refs[0]"),
+  book_id: z.string().describe("Book id"),
   prompt: apicityStringField(grokI2v.prompt, "Optional prompt to guide video generation (max 4096 chars)"),
   mode: z.enum(GROK_IMAGE_TO_VIDEO_MODES).optional().describe("Generation mode: fun / normal"),
   duration: apicityField(grokI2v.duration, "Video duration in seconds (6-30)"),
@@ -48,10 +47,10 @@ type Args = SchemaArgs<typeof generateGrokImagineVideoSchema>;
 export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_grok_imagine_image_to_video",
-    description: "Generate a video from image asset(s) using Kie Grok Imagine Video 1.5. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs or asset_id.",
+    description: "Generate a video from image asset(s) using Kie Grok Imagine Video 1.5. Creates a new video artifact and enqueues a background job. Requires at least one of image_refs or asset_id.",
     schema: generateGrokImagineVideoSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, book_id, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, replace_audio_with, _provider } = args as Args;
+      const { asset_id: rawAssetId, image_refs, book_id, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, replace_audio_with, _provider } = args as Args;
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
@@ -60,22 +59,24 @@ export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
       }
 
       const missingInput = requireAtLeastOne("generate_kie_grok_imagine_image_to_video", [
-        { name: "image_slugs", value: image_slugs },
+        { name: "image_refs", value: image_refs },
         { name: "asset_id", value: rawAssetId },
       ]);
       if (missingInput) return missingInput;
 
-      // Normalize asset_id back-compat into image_slugs. The schema caps
-      // image_slugs at 7, so the resolved list can never exceed 7 here.
-      const slugs = (image_slugs && image_slugs.length > 0)
-        ? image_slugs.map((s) => s.replace(/^@/, ""))
+      // Normalize asset_id back-compat into image_refs. The schema caps
+      // image_refs at 7, so the resolved list can never exceed 7 here.
+      const refs = (image_refs && image_refs.length > 0)
+        ? image_refs.map((s) => s.replace(/^@/, ""))
         : (rawAssetId ? [rawAssetId.replace(/^@/, "")] : []);
 
       const assetIds: string[] = [];
       const imageFilenames: string[] = [];
-      for (const assetId of slugs) {
-        if (!assetId.startsWith("img-")) {
-          return toolError(`image asset must start with img-, got: ${assetId}`);
+      for (const assetId of refs) {
+        const artifact = fs.artifacts.get(assetId);
+        if (!artifact.ok) return toolError(artifact.error.message);
+        if (artifact.value.kind !== "image") {
+          return toolError(`image ref must be an image artifact, got ${artifact.value.kind}: ${assetId}`);
         }
 
         const manifestResult = await fs.files.manifest(assetId);
@@ -93,7 +94,7 @@ export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
 
       let replaceAudioWith: RefInput | undefined;
       if (replace_audio_with !== undefined && replace_audio_with.trim().length > 0) {
-        const resolvedAudio = await resolveAudioSlug(fs, replace_audio_with, book_id);
+        const resolvedAudio = await resolveAudioRef(fs, replace_audio_with, book_id);
         if (!resolvedAudio.ok) {
           return toolError(resolvedAudio.error);
         }
@@ -106,7 +107,7 @@ export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
         return toolError(`Failed to create video asset: ${assetResult.error.message}`);
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "grok-imagine/image-to-video")}-${vidAssetId}-${Date.now()}`;
 

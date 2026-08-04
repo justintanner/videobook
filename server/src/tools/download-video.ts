@@ -39,7 +39,7 @@ export function downloadVideoDef(fs: Engine): ToolDef {
       url: z.string().describe("Video URL (YouTube, Twitter/X, Instagram, TikTok, etc.)"),
       start_time: z.union([z.string(), z.number()]).optional().describe("Range start in seconds or timestamp notation (e.g. '30', '1:30', '2m20s')"),
       end_time: z.union([z.string(), z.number()]).optional().describe("Range end in seconds or timestamp notation (e.g. '60', '2:00', '3m')"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book UUID"),
       export_videos: z.boolean().optional().default(false).describe("Auto-export 16:9 and 9:16 versions (default: off)"),
       full: z.boolean().optional().default(false).describe("Deprecated; omit start_time and end_time to keep the full source"),
     },
@@ -83,7 +83,7 @@ export function downloadVideoDef(fs: Engine): ToolDef {
       const prefix = sourcePrefix(normalizedUrl);
       const title = new URL(normalizedUrl).pathname.split("/").filter(Boolean).pop() ?? "video";
       const assetName = `${prefix} ${title}`;
-      const assetResult = await fs.artifacts.create("vid", assetName);
+      const assetResult = await fs.artifacts.create("video", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -93,9 +93,9 @@ export function downloadVideoDef(fs: Engine): ToolDef {
 
       const {
         artifactId,
-        slug: assetId,
         path: assetDir,
       } = assetResult.value;
+      const assetId = artifactId;
 
       const outputPath = join(assetDir, "original.mp4");
       const jobId = `download-${assetId}-${Date.now()}`;

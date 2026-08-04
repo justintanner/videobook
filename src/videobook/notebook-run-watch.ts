@@ -60,13 +60,13 @@ export function selectEffectiveNotebookRunJob(input: {
 export function notebookRunWatchStep(input: {
   observation: NotebookCellRunObservation
   job: NotebookRunJobView | null
-  slug: string
+  address: string
   sawRun: boolean
 }): NotebookRunWatchStep {
   if (input.observation.state === 'error') {
     return {
       kind: 'failed',
-      message: input.observation.error ?? `@${input.slug} failed`,
+      message: input.observation.error ?? `@${input.address} failed`,
     }
   }
   if (input.observation.state === 'completed') {

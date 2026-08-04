@@ -1,4 +1,4 @@
-import { findVideoFile, type Engine } from "videobook-engine";
+import { findVideoFile, type Artifact, type Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -37,14 +37,11 @@ function validateSplitParams(
   return { chunkAEnd, chunkBStart };
 }
 
-// slugifyName in videobook-engine truncates to 4 words AND filters stop words
-// (which include "a"), so naming chunks "...-a" and "...-b" loses the suffix
-// asymmetrically. Use numeric suffixes 1/2 — they survive both filters — and
-// trim the source name to its last 2 words so the suffix fits in the cap.
-function deriveChunkName(originalAssetId: string, suffix: "1" | "2"): string {
-  const dashIdx = originalAssetId.indexOf("-");
-  const base = dashIdx >= 0 ? originalAssetId.slice(dashIdx + 1) : originalAssetId;
-  const words = base.split("-").filter((w) => w.length > 0);
+// Numeric suffixes 1/2 mark chunk order; trim the source label to its last
+// 2 words so labels stay short. Mirrors even-split.ts.
+function deriveChunkName(source: Artifact, suffix: "1" | "2"): string {
+  const base = source.label ?? source.artifactId;
+  const words = base.split(/[\s-]+/u).filter((w) => w.length > 0);
   const tail = words.slice(-2).join("-") || base;
   return `${tail}-${suffix}`;
 }
@@ -62,8 +59,8 @@ export function splitVideoDef(fs: Engine): ToolDef {
       openWorldHint: false,
     },
     schema: {
-      asset_id: z.string().describe("Source video asset ID or notebook reference such as @a1"),
-      book_id: z.string().describe("Project slug"),
+      asset_id: z.string().describe("Source video artifact id or notebook reference such as @a1"),
+      book_id: z.string().describe("Book UUID"),
       notebook_id: z.string().uuid().optional().describe("Notebook UUID when asset_id is a grid reference and the book has multiple matching notebooks"),
       chunk_a_end: videoTimestampSchema.describe("End of the first clip in seconds or a timestamp such as 15s or 1:30"),
       chunk_b_start: videoTimestampSchema.optional().describe("Start of the remaining clip; defaults to chunk_a_end for a clean split"),
@@ -96,6 +93,14 @@ export function splitVideoDef(fs: Engine): ToolDef {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: validated.error }],
+        };
+      }
+
+      const sourceArtifact = fs.artifacts.get(assetId);
+      if (!sourceArtifact.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: sourceArtifact.error.message }],
         };
       }
 
@@ -151,18 +156,17 @@ export function splitVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const prefix = assetId.split("-")[0];
-      const nameA = deriveChunkName(assetId, "1");
-      const nameB = deriveChunkName(assetId, "2");
+      const nameA = deriveChunkName(sourceArtifact.value, "1");
+      const nameB = deriveChunkName(sourceArtifact.value, "2");
 
-      const createA = await fs.artifacts.create(prefix, nameA);
+      const createA = await fs.artifacts.create(sourceArtifact.value.kind, nameA);
       if (!createA.ok) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: `Failed to create chunk A asset: ${createA.error.message}` }],
         };
       }
-      const createB = await fs.artifacts.create(prefix, nameB);
+      const createB = await fs.artifacts.create(sourceArtifact.value.kind, nameB);
       if (!createB.ok) {
         return {
           isError: true as const,
@@ -170,8 +174,8 @@ export function splitVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const assetIdA = createA.value.slug;
-      const assetIdB = createB.value.slug;
+      const assetIdA = createA.value.artifactId;
+      const assetIdB = createB.value.artifactId;
       const assetDirA = createA.value.path;
       const assetDirB = createB.value.path;
       const outputPathA = join(assetDirA, "original.mp4");

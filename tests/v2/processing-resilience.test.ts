@@ -58,7 +58,7 @@ describe('processing resilience', () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-processing-resilience-'))
     engine = createEngine({
       rootDir,
-      initialBookSlug: 'processing-resilience',
+      initialBookName: 'processing-resilience',
     })
     await engine.ready
     await setEngineRoot(rootDir, engine)
@@ -122,7 +122,7 @@ describe('processing resilience', () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-processing-image-'))
     engine = createEngine({
       rootDir,
-      initialBookSlug: 'processing-image',
+      initialBookName: 'processing-image',
     })
     await engine.ready
     await setEngineRoot(rootDir, engine)

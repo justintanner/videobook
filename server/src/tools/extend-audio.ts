@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { findAudioFile, type Engine } from "videobook-engine";
+import { findAudioFile, type Artifact, type Engine } from "videobook-engine";
 import { z } from "zod";
 import {
   MAX_AUDIO_CONTINUATION_MS,
@@ -13,8 +13,8 @@ import { queue } from "../queue.js";
 import { toolError } from "./_shared.js";
 import type { ToolDef } from "./tool-def.js";
 
-function defaultExtendedName(assetId: string, targetDurationSeconds: number): string {
-  const base = assetId.replace(/^aud-/, "");
+function defaultExtendedName(source: Artifact, targetDurationSeconds: number): string {
+  const base = source.label ?? source.artifactId;
   const duration = String(targetDurationSeconds).replace(".", "-");
   return `extended-${base}-${duration}s`;
 }
@@ -22,13 +22,13 @@ function defaultExtendedName(assetId: string, targetDurationSeconds: number): st
 export function extendAudioDef(fs: Engine): ToolDef {
   return {
     name: "extend_audio_asset",
-    description: "Extend an existing aud-* asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new aud-* asset.",
+    description: "Extend an existing audio asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new audio asset.",
     schema: {
-      asset_id: z.string().describe("Source aud-* asset ID"),
+      asset_id: z.string().describe("Source audio artifact id"),
       target_duration_seconds: z.number().positive().describe("Requested total output duration in seconds"),
       continuation_prompt: z.string().min(1).max(MAX_SOUND_GENERATION_PROMPT_CHARS).optional().describe('Optional direction for what should follow the source audio, e.g. "add outro music"'),
-      asset_name: z.string().min(1).optional().describe("Optional name for the new aud-* asset"),
-      book_id: z.string().describe("Project slug"),
+      asset_name: z.string().min(1).optional().describe("Optional name for the new audio asset"),
+      book_id: z.string().describe("Book UUID"),
     },
     handler: async (args) => {
       const {
@@ -50,8 +50,10 @@ export function extendAudioDef(fs: Engine): ToolDef {
       }
 
       const sourceAssetId = asset_id.replace(/^@/, "");
-      if (!sourceAssetId.startsWith("aud-")) {
-        return toolError(`extend_audio requires an aud-* source, got ${sourceAssetId}`);
+      const sourceArtifact = fs.artifacts.get(sourceAssetId);
+      if (!sourceArtifact.ok) return toolError(sourceArtifact.error.message);
+      if (sourceArtifact.value.kind !== "audio") {
+        return toolError(`extend_audio requires an audio source, got ${sourceArtifact.value.kind} artifact ${sourceAssetId}`);
       }
 
       const continuationPrompt = normalizeContinuationPrompt(continuation_prompt);
@@ -61,8 +63,8 @@ export function extendAudioDef(fs: Engine): ToolDef {
 
       const manifest = await fs.files.manifest(sourceAssetId);
       if (!manifest.ok) return toolError(manifest.error.message);
-      const audioFile = findAudioFile(manifest.value.files, sourceAssetId);
-      if (!audioFile) return toolError(`No audio file found in asset ${sourceAssetId}`);
+      const audioFile = findAudioFile(manifest.value.files, sourceArtifact.value.kind);
+      if (!audioFile) return toolError(`No audio file found in artifact ${sourceAssetId}`);
 
       let sourceDurationSeconds: number;
       try {
@@ -88,14 +90,14 @@ export function extendAudioDef(fs: Engine): ToolDef {
         return toolError(`ElevenLabs Sound Generation supports at most ${(MAX_AUDIO_CONTINUATION_MS / 1000).toFixed(1)}s of new continuation per request`);
       }
 
-      const name = asset_name?.trim() || defaultExtendedName(sourceAssetId, target_duration_seconds);
-      const created = await fs.artifacts.create("aud", name);
+      const name = asset_name?.trim() || defaultExtendedName(sourceArtifact.value, target_duration_seconds);
+      const created = await fs.artifacts.create("audio", name);
       if (!created.ok) return toolError(`Failed to create audio asset: ${created.error.message}`);
 
-      const jobId = `extend-audio-${created.value.slug}-${Date.now()}`;
+      const jobId = `extend-audio-${created.value.artifactId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "extend_audio",
-        audAssetId: created.value.slug,
+        audAssetId: created.value.artifactId,
         sourceAssetId,
         sourceFilename: audioFile.name,
         sourceDurationMs,
@@ -108,7 +110,7 @@ export function extendAudioDef(fs: Engine): ToolDef {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
-            aud_asset_id: created.value.slug,
+            aud_asset_id: created.value.artifactId,
             source_audio_asset_id: sourceAssetId,
             source_duration_seconds: sourceDurationMs / 1000,
             target_duration_seconds: targetDurationMs / 1000,

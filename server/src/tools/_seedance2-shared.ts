@@ -46,9 +46,13 @@ export type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-export async function resolveImageSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
+export async function resolveImageRef(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("img-")) return { ok: false, error: `image slug must be img-* asset, got: ${assetId}` };
+  const artifact = fs.artifacts.get(assetId);
+  if (!artifact.ok) return { ok: false, error: artifact.error.message };
+  if (artifact.value.kind !== "image") {
+    return { ok: false, error: `image ref must be an image artifact, got ${artifact.value.kind}: ${assetId}` };
+  }
   const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
@@ -58,9 +62,9 @@ export async function resolveImageSlug(fs: Engine, raw: string, _bookId: string)
 
 // `@<assetId>/<filename>` addresses a specific sibling file inside an
 // asset. Used by plan-driven render (e.g. `@plan/s1.mp4`); bypasses the
-// vid-/aud- prefix gate since the destination asset doesn't have to be
-// media-prefixed and may hold multiple media files.
-async function resolveSlashedSlug(
+// artifact-kind gate since the destination asset may hold multiple media
+// files of mixed kinds.
+async function resolveSlashedRef(
   fs: Engine,
   raw: string,
   _bookId: string,
@@ -70,7 +74,7 @@ async function resolveSlashedSlug(
   if (slashIdx < 0) return null;
   const assetId = stripped.slice(0, slashIdx);
   const filename = stripped.slice(slashIdx + 1);
-  if (!assetId || !filename) return { ok: false, error: `Invalid slashed slug: ${raw}` };
+  if (!assetId || !filename) return { ok: false, error: `Invalid slashed ref: ${raw}` };
   const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = manifest.value.files.find((f) => f.name === filename);
@@ -78,11 +82,15 @@ async function resolveSlashedSlug(
   return { ok: true, value: { assetId, filename } };
 }
 
-export async function resolveVideoSlug(fs: Engine, raw: string, bookId: string): Promise<ResolveOk | ResolveErr> {
-  const slashed = await resolveSlashedSlug(fs, raw, bookId);
+export async function resolveVideoRef(fs: Engine, raw: string, bookId: string): Promise<ResolveOk | ResolveErr> {
+  const slashed = await resolveSlashedRef(fs, raw, bookId);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("vid-")) return { ok: false, error: `video slug must be vid-* asset, got: ${assetId}` };
+  const artifact = fs.artifacts.get(assetId);
+  if (!artifact.ok) return { ok: false, error: artifact.error.message };
+  if (artifact.value.kind !== "video") {
+    return { ok: false, error: `video ref must be a video artifact, got ${artifact.value.kind}: ${assetId}` };
+  }
   const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
@@ -92,12 +100,16 @@ export async function resolveVideoSlug(fs: Engine, raw: string, bookId: string):
 
 // Audio replacement always targets a first-class audio artifact. Notebook
 // cells reference artifact identities; they do not expose nested file paths.
-export async function resolveAudioSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
+export async function resolveAudioRef(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("aud-")) return { ok: false, error: `audio slug must be aud-* asset, got: ${assetId}` };
+  const artifact = fs.artifacts.get(assetId);
+  if (!artifact.ok) return { ok: false, error: artifact.error.message };
+  if (artifact.value.kind !== "audio") {
+    return { ok: false, error: `audio ref must be an audio artifact, got ${artifact.value.kind}: ${assetId}` };
+  }
   const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
-  const file = findAudioFile(manifest.value.files, assetId);
+  const file = findAudioFile(manifest.value.files, "audio");
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
@@ -107,20 +119,20 @@ export function buildSeedance2Schema(apiModel: Seedance2Model) {
     ? Seedance2InputSchema.shape
     : Seedance2FastInputSchema.shape;
   return {
-    book_id: z.string().describe("Project slug"),
+    book_id: z.string().describe("Book id"),
     prompt: apicityStringField(inputSchema.prompt, "Video description (3-20000 characters)", { required: true }),
-    first_frame_slug: apicityStringField(inputSchema.first_frame_url, "First frame image asset (e.g., @img-start)"),
-    last_frame_slug: apicityStringField(inputSchema.last_frame_url, "Last frame image asset (e.g., @img-end)"),
-    image_slugs: apicityStringArrayField(inputSchema.reference_image_urls, "Reference image @slugs (0-9, e.g., @img-style)"),
-    video_slugs: apicityStringArrayField(inputSchema.reference_video_urls, "Reference video @slugs (0-3, total ≤15s, e.g., @vid-motion)"),
-    audio_slugs: apicityStringArrayField(inputSchema.reference_audio_urls, "Reference audio @slugs (0-3, total ≤15s, e.g., @aud-music)"),
+    first_frame_ref: apicityStringField(inputSchema.first_frame_url, "First frame image artifact id"),
+    last_frame_ref: apicityStringField(inputSchema.last_frame_url, "Last frame image artifact id"),
+    image_refs: apicityStringArrayField(inputSchema.reference_image_urls, "Reference image artifact ids (0-9)"),
+    video_refs: apicityStringArrayField(inputSchema.reference_video_urls, "Reference video artifact ids (0-3, total ≤15s)"),
+    audio_refs: apicityStringArrayField(inputSchema.reference_audio_urls, "Reference audio artifact ids (0-3, total ≤15s)"),
     aspect_ratio: apicityField(inputSchema.aspect_ratio, "Output aspect ratio"),
     resolution: apicityField(inputSchema.resolution, "Output resolution"),
     duration: apicityStringNumberField(inputSchema.duration, "Video duration in seconds (4-15)"),
     generate_audio: apicityField(inputSchema.generate_audio, "Generate accompanying audio (default true)"),
     web_search: apicityField(inputSchema.web_search, "Use web search for grounding (default false)"),
     nsfw_checker: apicityField(inputSchema.nsfw_checker, "Content safety filter (default false)"),
-    replace_audio_with: z.string().optional().describe("After generation, splice an aud-* artifact over the Seedance output. Runs server-side as part of the generation pipeline so the asset only reaches 'ready' once the splice is in."),
+    replace_audio_with: z.string().optional().describe("After generation, splice an audio artifact over the Seedance output. Runs server-side as part of the generation pipeline so the asset only reaches 'ready' once the splice is in."),
     _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
   } satisfies ZodRawShape;
 }
@@ -147,13 +159,13 @@ export function buildSeedance2ToolDef(
       const raw = args as Args;
       const {
         book_id, prompt,
-        image_slugs, video_slugs, audio_slugs,
+        image_refs, video_refs, audio_refs,
         aspect_ratio, resolution, duration,
         generate_audio, web_search, nsfw_checker,
       } = raw;
       const blank = (v: unknown): v is "" => typeof v === "string" && v.trim() === "";
-      const first_frame_slug = blank(raw.first_frame_slug) ? undefined : raw.first_frame_slug;
-      const last_frame_slug = blank(raw.last_frame_slug) ? undefined : raw.last_frame_slug;
+      const first_frame_ref = blank(raw.first_frame_ref) ? undefined : raw.first_frame_ref;
+      const last_frame_ref = blank(raw.last_frame_ref) ? undefined : raw.last_frame_ref;
       const replace_audio_with = blank(raw.replace_audio_with) ? undefined : raw.replace_audio_with;
 
       if (!process.env.KIE_API_KEY) {
@@ -165,11 +177,11 @@ export function buildSeedance2ToolDef(
 
       const dropBlanks = (xs: string[] | undefined): string[] =>
         (xs ?? []).filter((s) => !blank(s));
-      const imgs = dropBlanks(image_slugs);
-      const vids = dropBlanks(video_slugs);
-      const auds = dropBlanks(audio_slugs);
+      const imgs = dropBlanks(image_refs);
+      const vids = dropBlanks(video_refs);
+      const auds = dropBlanks(audio_refs);
 
-      if (auds.length > 0 && (first_frame_slug !== undefined || last_frame_slug !== undefined)) {
+      if (auds.length > 0 && (first_frame_ref !== undefined || last_frame_ref !== undefined)) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "Seedance 2 does not support reference audio combined with first/last frame — pick one or the other" }],
@@ -185,8 +197,8 @@ export function buildSeedance2ToolDef(
           prompt,
           web_search: web_search ?? false,
           nsfw_checker: nsfw_checker ?? false,
-          ...(first_frame_slug !== undefined ? { first_frame_url: first_frame_slug } : {}),
-          ...(last_frame_slug !== undefined ? { last_frame_url: last_frame_slug } : {}),
+          ...(first_frame_ref !== undefined ? { first_frame_url: first_frame_ref } : {}),
+          ...(last_frame_ref !== undefined ? { last_frame_url: last_frame_ref } : {}),
           ...(imgs.length > 0 ? { reference_image_urls: imgs } : {}),
           ...(vids.length > 0 ? { reference_video_urls: vids } : {}),
           ...(auds.length > 0 ? { reference_audio_urls: auds } : {}),
@@ -199,43 +211,43 @@ export function buildSeedance2ToolDef(
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
       let firstFrame: RefInput | undefined;
-      if (first_frame_slug !== undefined) {
-        const r = await resolveImageSlug(fs, first_frame_slug, book_id);
+      if (first_frame_ref !== undefined) {
+        const r = await resolveImageRef(fs, first_frame_ref, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let lastFrame: RefInput | undefined;
-      if (last_frame_slug !== undefined) {
-        const r = await resolveImageSlug(fs, last_frame_slug, book_id);
+      if (last_frame_ref !== undefined) {
+        const r = await resolveImageRef(fs, last_frame_ref, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         lastFrame = r.value;
       }
 
       const imageInputs: RefInput[] = [];
       for (const raw of imgs) {
-        const r = await resolveImageSlug(fs, raw, book_id);
+        const r = await resolveImageRef(fs, raw, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       const videoInputs: RefInput[] = [];
       for (const raw of vids) {
-        const r = await resolveVideoSlug(fs, raw, book_id);
+        const r = await resolveVideoRef(fs, raw, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInputs.push(r.value);
       }
 
       const audioInputs: RefInput[] = [];
       for (const raw of auds) {
-        const r = await resolveAudioSlug(fs, raw, book_id);
+        const r = await resolveAudioRef(fs, raw, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         audioInputs.push(r.value);
       }
 
       let replaceAudioWith: RefInput | undefined;
       if (replace_audio_with !== undefined) {
-        const r = await resolveAudioSlug(fs, replace_audio_with, book_id);
+        const r = await resolveAudioRef(fs, replace_audio_with, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `replace_audio_with: ${r.error}` }] };
         replaceAudioWith = r.value;
       }
@@ -249,7 +261,7 @@ export function buildSeedance2ToolDef(
         };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds: string[] = [];
       if (firstFrame) sourceImageIds.push(firstFrame.assetId);
       if (lastFrame && lastFrame.assetId !== firstFrame?.assetId) sourceImageIds.push(lastFrame.assetId);

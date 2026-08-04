@@ -5,29 +5,29 @@ import { notebookGenerationInputContract } from "../../server/src/notebook-gener
 describe("notebook generation input contracts", () => {
   it("reads media kinds and slot limits from registered-style schemas", () => {
     expect(notebookGenerationInputContract("generate_test", {
-      image_slugs: z.array(z.string()).min(1).max(3),
-      video_slug: z.string().optional(),
-      audio_slug: z.string(),
+      image_refs: z.array(z.string()).min(1).max(3),
+      video_ref: z.string().optional(),
+      audio_ref: z.string(),
     })).toEqual({
       modes: [{
         id: "default",
         slots: [
           {
-            field: "image_slugs",
+            field: "image_refs",
             kind: "image",
             targets: ["image"],
             min: 1,
             max: 3,
           },
           {
-            field: "video_slug",
+            field: "video_ref",
             kind: "video",
             targets: ["video"],
             min: 0,
             max: 1,
           },
           {
-            field: "audio_slug",
+            field: "audio_ref",
             kind: "audio",
             targets: ["audio"],
             min: 1,
@@ -43,22 +43,22 @@ describe("notebook generation input contracts", () => {
     expect(notebookGenerationInputContract(
       "generate_kie_kling_3_0_motion_control",
       {
-        character_image_slugs: z.array(z.string()).min(1).max(1),
-        motion_video_slugs: z.array(z.string()).min(1).max(1),
+        character_image_refs: z.array(z.string()).min(1).max(1),
+        motion_video_refs: z.array(z.string()).min(1).max(1),
       },
     )).toEqual({
       modes: [{
         id: "default",
         slots: [
           {
-            field: "character_image_slugs",
+            field: "character_image_refs",
             kind: "image",
             targets: ["image"],
             min: 1,
             max: 1,
           },
           {
-            field: "motion_video_slugs",
+            field: "motion_video_refs",
             kind: "video",
             targets: ["video"],
             min: 1,
@@ -74,11 +74,11 @@ describe("notebook generation input contracts", () => {
     const contract = notebookGenerationInputContract(
       "generate_kie_seedance_2_0_video",
       {
-        first_frame_slug: z.string().optional(),
-        last_frame_slug: z.string().optional(),
-        image_slugs: z.array(z.string()).max(9).optional(),
-        video_slugs: z.array(z.string()).max(3).optional(),
-        audio_slugs: z.array(z.string()).max(3).optional(),
+        first_frame_ref: z.string().optional(),
+        last_frame_ref: z.string().optional(),
+        image_refs: z.array(z.string()).max(9).optional(),
+        video_refs: z.array(z.string()).max(3).optional(),
+        audio_refs: z.array(z.string()).max(3).optional(),
         replace_audio_with: z.string().optional(),
       },
     );
@@ -89,15 +89,15 @@ describe("notebook generation input contracts", () => {
     ]);
     expect(contract.modes.find((mode) => mode.id === "i2v")?.slots
       .map((slot) => slot.field)).toEqual([
-      "first_frame_slug",
-      "last_frame_slug",
+      "first_frame_ref",
+      "last_frame_ref",
       "replace_audio_with",
     ]);
     expect(contract.modes.find((mode) => mode.id === "r2v")?.slots
       .map((slot) => slot.field)).toEqual([
-      "image_slugs",
-      "video_slugs",
-      "audio_slugs",
+      "image_refs",
+      "video_refs",
+      "audio_refs",
       "replace_audio_with",
     ]);
   });
@@ -106,9 +106,9 @@ describe("notebook generation input contracts", () => {
     const contract = notebookGenerationInputContract(
       "generate_google_flow_omni_flash_video",
       {
-        first_frame_slug: z.string().optional(),
-        image_slugs: z.array(z.string()).max(7).optional(),
-        video_slug: z.string().optional(),
+        first_frame_ref: z.string().optional(),
+        image_refs: z.array(z.string()).max(7).optional(),
+        video_ref: z.string().optional(),
       },
     );
     expect(contract.modes.map((mode) => ({
@@ -116,9 +116,9 @@ describe("notebook generation input contracts", () => {
       requiredGroups: mode.requiredGroups,
     }))).toEqual([
       { id: "t2v", requiredGroups: [] },
-      { id: "i2v", requiredGroups: [["first_frame_slug"]] },
-      { id: "r2v", requiredGroups: [["image_slugs"]] },
-      { id: "v2v", requiredGroups: [["video_slug"]] },
+      { id: "i2v", requiredGroups: [["first_frame_ref"]] },
+      { id: "r2v", requiredGroups: [["image_refs"]] },
+      { id: "v2v", requiredGroups: [["video_ref"]] },
     ]);
   });
 
@@ -126,8 +126,8 @@ describe("notebook generation input contracts", () => {
     const contract = notebookGenerationInputContract(
       "generate_kie_gemini_omni_video",
       {
-        image_slugs: z.array(z.string()).max(7).optional(),
-        video_slug: z.string().optional(),
+        image_refs: z.array(z.string()).max(7).optional(),
+        video_ref: z.string().optional(),
       },
     );
     expect(contract.modes.map((mode) => ({
@@ -135,8 +135,8 @@ describe("notebook generation input contracts", () => {
       requiredGroups: mode.requiredGroups,
     }))).toEqual([
       { id: "t2v", requiredGroups: [] },
-      { id: "r2v", requiredGroups: [["image_slugs"]] },
-      { id: "v2v", requiredGroups: [["video_slug"]] },
+      { id: "r2v", requiredGroups: [["image_refs"]] },
+      { id: "v2v", requiredGroups: [["video_ref"]] },
     ]);
   });
 });

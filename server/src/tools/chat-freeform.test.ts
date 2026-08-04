@@ -195,20 +195,20 @@ describe("freeform chat commands", () => {
       const result = await client.callTool({
         name: "chat",
         arguments: {
-          prompt: "trim @nonexistent-video from 5 to 10",
+          prompt: "trim @019fcc00-0000-7000-8000-00000000aa01 from 5 to 10",
           book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
       expect(resultText(result)).toContain("Asset not found");
-      expect(resultText(result)).toContain("@nonexistent-video");
+      expect(resultText(result)).toContain("@019fcc00-0000-7000-8000-00000000aa01");
     });
 
-    it("errors for 'reverse @fake-clip'", async () => {
+    it("errors for an unknown artifact id reference", async () => {
       const result = await client.callTool({
         name: "chat",
         arguments: {
-          prompt: "reverse @fake-clip",
+          prompt: "reverse @019fcc00-0000-7000-8000-00000000aa01",
           book_id: "test-proj",
         },
       });
@@ -216,20 +216,20 @@ describe("freeform chat commands", () => {
       expect(resultText(result)).toContain("Asset not found");
     });
 
-    it("errors for 'combine @alpha-clip and @beta-clip' (both invalid)", async () => {
+    it("errors when both artifact id references are unknown", async () => {
       const result = await client.callTool({
         name: "chat",
         arguments: {
-          prompt: "combine @alpha-clip and @beta-clip",
+          prompt: "combine @019fcc00-0000-7000-8000-00000000aa01 and @019fcc00-0000-7000-8000-00000000aa02",
           book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("@alpha-clip");
-      expect(resultText(result)).toContain("@beta-clip");
+      expect(resultText(result)).toContain("@019fcc00-0000-7000-8000-00000000aa01");
+      expect(resultText(result)).toContain("@019fcc00-0000-7000-8000-00000000aa02");
     });
 
-    it("errors for mixed valid and invalid: 'merge @real-asset and @fake-asset'", async () => {
+    it("errors when one of a valid and an unknown reference is unknown", async () => {
       const data = Buffer.from("fake-png-data").toString("base64");
       const upload = await client.callTool({
         name: "upload_file",
@@ -240,13 +240,13 @@ describe("freeform chat commands", () => {
       const result = await client.callTool({
         name: "chat",
         arguments: {
-          prompt: `merge @${parsed.assetId} and @fake-asset`,
+          prompt: `merge @${parsed.assetId} and @019fcc00-0000-7000-8000-00000000aa01`,
           book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
       expect(resultText(result)).toContain("Asset not found");
-      expect(resultText(result)).toContain("@fake-asset");
+      expect(resultText(result)).toContain("@019fcc00-0000-7000-8000-00000000aa01");
     });
   });
 
@@ -477,13 +477,13 @@ describe("freeform chat commands", () => {
       const result = await client.callTool({
         name: "chat",
         arguments: {
-          prompt: `merge @${asset1} with @nonexistent-clip`,
+          prompt: `merge @${asset1} with @019fcc00-0000-7000-8000-00000000aa01`,
           book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
       expect(resultText(result)).toContain("Asset not found");
-      expect(resultText(result)).toContain("@nonexistent-clip");
+      expect(resultText(result)).toContain("@019fcc00-0000-7000-8000-00000000aa01");
     });
   });
 
@@ -496,12 +496,12 @@ describe("freeform chat commands", () => {
       const fs = createEngineForTest(tempDir);
       const scriptResult = await fs.artifacts.create("script", "my-scene");
       if (!scriptResult.ok) throw new Error("Failed to create script asset");
-      await fs.files.write(scriptResult.value.slug, "original.md", "A beautiful sunset over the ocean");
+      await fs.files.write(scriptResult.value.artifactId, "original.md", "A beautiful sunset over the ocean");
 
       const result = await client.callTool({
         name: "chat",
         arguments: {
-          prompt: `generate a video from @${scriptResult.value.slug}`,
+          prompt: `generate a video from @${scriptResult.value.artifactId}`,
           book_id: "test-proj",
         },
       });

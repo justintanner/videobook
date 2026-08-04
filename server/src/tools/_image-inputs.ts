@@ -27,21 +27,23 @@ function isHttpUrl(s: string): boolean {
   return s.startsWith("http://") || s.startsWith("https://");
 }
 
-export async function resolveImageSlugs(
+export async function resolveImageRefs(
   fs: Engine,
-  rawSlugs: readonly string[],
+  rawRefs: readonly string[],
   _bookId: string,
 ): Promise<SlugResolution> {
   const inputs: ImageInput[] = [];
   const sourceImageIds: string[] = [];
-  for (const raw of rawSlugs) {
+  for (const raw of rawRefs) {
     if (isHttpUrl(raw)) {
       inputs.push({ url: raw });
       continue;
     }
     const assetId = raw.replace(/^@/, "");
-    if (!assetId.startsWith("img-")) {
-      return { ok: false, error: `image_slugs entries must be img-* assets or http(s) URLs, got: ${assetId}` };
+    const artifact = fs.artifacts.get(assetId);
+    if (!artifact.ok) return { ok: false, error: artifact.error.message };
+    if (artifact.value.kind !== "image") {
+      return { ok: false, error: `image ref must be an image artifact, got ${artifact.value.kind}: ${assetId}` };
     }
     const manifestResult = await fs.files.manifest(assetId);
     if (!manifestResult.ok) return { ok: false, error: manifestResult.error.message };

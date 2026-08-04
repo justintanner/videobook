@@ -11,7 +11,7 @@ export function readAssetMetadataDef(fs: Engine): ToolDef {
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. script-desc-*)"),
       name: z.string().describe("Metadata key without dot/extension (e.g. \"original\")"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args): Promise<ToolResult> => {
       const { asset_id, name, book_id: _book_id } = args as {

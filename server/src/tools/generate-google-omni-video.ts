@@ -4,21 +4,21 @@ import { queue } from "../queue.js";
 import {
   totalOmniReferenceSlots,
   canonicalCharacterId,
-  rewriteImageSlugMentions,
-  stripSlugMentions,
+  rewriteImageRefMentions,
+  stripRefMentions,
   OMNI_CHARACTER_SLOT_COST,
   OMNI_MAX_REFERENCE_SLOTS,
   OMNI_V2V_MAX_REFERENCE_SLOTS,
 } from "../google-flow-refs.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageSlug, resolveVideoSlug, slugify, type RefInput } from "./_seedance2-shared.js";
+import { resolveImageRef, resolveVideoRef, slugify, type RefInput } from "./_seedance2-shared.js";
 
 // Literal slug — @apicity/cost has no google provider pricing, so modelSlug()
 // would throw (docs/apicity-gaps.md §15).
 const SLUG = "google-omni";
 
 // Omni Flash reference budgets: R2V allows 7 reference slots, 5 alongside a
-// V2V edit clip. Each image_slugs ref costs 1 slot and each character a flat 2
+// V2V edit clip. Each image_refs ref costs 1 slot and each character a flat 2
 // (Google receives every character entity twice — see google-flow-refs.ts), so
 // at most 3 characters ever fit despite the API exposing character_1..7.
 // Voices feed referenceAudio_1..5 (3 alongside a clip). Enums are hand-typed —
@@ -52,18 +52,18 @@ const GOOGLE_OMNI_ASPECT_RATIOS = ["16:9", "9:16"] as const;
 //   - trimStart / trimEnd — removed from the videos type in 0.7.2; omni trims
 //     via startFrameIndex_1 / endFrameIndex_1 (derived from the clip timecodes).
 const generateGoogleOmniVideoSchema = {
-  book_id: z.string().describe("Project slug"),
-  prompt: z.string().max(20000).describe("Multimodal video generation prompt (max 20000 characters). Inline mentions must use the positional markers @referenceImage_1..7 / @character_1..7 / @referenceAudio_1..5 (matching the body param order); @<image-slug> mentions are rewritten to @referenceImage_N automatically, and reference clips cannot be mentioned inline"),
-  first_frame_slug: z.string().optional().describe("First-frame image asset for image-to-video (e.g., @img-start); not combinable with image_slugs or video_slug"),
-  image_slugs: z.array(z.string()).max(7).optional().describe("Reference image @slugs (0-7, or 0-5 with a reference clip, e.g., @img-style); not combinable with first_frame_slug"),
-  video_slug: z.string().optional().describe("Reference video clip @slug for video editing (one clip, e.g., @vid-motion); not combinable with first_frame_slug"),
-  video_clip_start: z.number().min(0).max(10).optional().describe("Reference clip start time in seconds on a 10s timeline (requires video_slug)"),
-  video_clip_ends: z.number().min(0).max(10).optional().describe("Reference clip end time in seconds on a 10s timeline; must be > start (requires video_slug)"),
+  book_id: z.string().describe("Book id"),
+  prompt: z.string().max(20000).describe("Multimodal video generation prompt (max 20000 characters). Inline mentions must use the positional markers @referenceImage_1..7 / @character_1..7 / @referenceAudio_1..5 (matching the body param order); @<artifact-id> mentions are rewritten to @referenceImage_N automatically, and reference clips cannot be mentioned inline"),
+  first_frame_ref: z.string().optional().describe("First-frame image artifact id for image-to-video; not combinable with image_refs or video_ref"),
+  image_refs: z.array(z.string()).max(7).optional().describe("Reference image artifact ids (0-7, or 0-5 with a reference clip); not combinable with first_frame_ref"),
+  video_ref: z.string().optional().describe("Reference video clip artifact id for video editing (one clip); not combinable with first_frame_ref"),
+  video_clip_start: z.number().min(0).max(10).optional().describe("Reference clip start time in seconds on a 10s timeline (requires video_ref)"),
+  video_clip_ends: z.number().min(0).max(10).optional().describe("Reference clip end time in seconds on a 10s timeline; must be > start (requires video_ref)"),
   duration: z.enum(GOOGLE_OMNI_DURATIONS).optional().describe("Output duration in seconds: 4 / 6 / 8 / 10 (ignored when a reference video clip is supplied; default 8)"),
   aspect_ratio: z.enum(GOOGLE_OMNI_ASPECT_RATIOS).optional().describe("Output aspect ratio: 16:9 / 9:16 (sent as landscape / portrait)"),
   seed: z.number().int().min(0).optional().describe("Random seed for reproducibility"),
   voice_refs: z.array(z.string()).max(OMNI_MAX_VOICES).optional().describe("Google Flow voice refs from create_google_flow_voice (up to 5; up to 3 alongside a reference clip); sent as referenceAudio_1..5"),
-  character_refs: z.array(z.string()).max(GOOGLE_FLOW_MAX_CHARACTER_PARAMS).optional().describe("Google Flow character refs from create_google_flow_character (up to 3); each character costs 2 of the 7 reference slots shared with image_slugs (5 with a reference clip); not combinable with first_frame_slug"),
+  character_refs: z.array(z.string()).max(GOOGLE_FLOW_MAX_CHARACTER_PARAMS).optional().describe("Google Flow character refs from create_google_flow_character (up to 3); each character costs 2 of the 7 reference slots shared with image_refs (5 with a reference clip); not combinable with first_frame_ref"),
   _provider: z.string().optional().describe("Provider key (e.g., 'google')"),
 } satisfies ZodRawShape;
 
@@ -72,13 +72,13 @@ type Args = SchemaArgs<typeof generateGoogleOmniVideoSchema>;
 export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_google_flow_omni_flash_video",
-    description: "Generate a video using Google Gemini Omni via Google Flow. Multimodal: a text prompt plus optional first frame, reference images (0-7), or one reference video clip with in/out timecodes. Creates a new vid- asset and enqueues a background job.",
+    description: "Generate a video using Google Gemini Omni via Google Flow. Multimodal: a text prompt plus optional first frame, reference images (0-7), or one reference video clip with in/out timecodes. Creates a new video artifact and enqueues a background job.",
     schema: generateGoogleOmniVideoSchema,
     handler: async (args) => {
       const raw = args as Args;
       const {
         book_id, prompt,
-        first_frame_slug, image_slugs, video_slug,
+        first_frame_ref, image_refs, video_ref,
         video_clip_start, video_clip_ends,
         duration, aspect_ratio, seed,
         voice_refs, character_refs,
@@ -89,25 +89,25 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "GOOGLE_FLOW_API_KEY environment variable is not set" }] };
       }
 
-      const imgs = (image_slugs ?? []).filter((s) => !blank(s));
-      const videoSlug = blank(video_slug) ? undefined : video_slug;
-      const firstFrameSlug = blank(first_frame_slug) ? undefined : first_frame_slug;
+      const imgs = (image_refs ?? []).filter((s) => !blank(s));
+      const videoRef = blank(video_ref) ? undefined : video_ref;
+      const firstFrameSlug = blank(first_frame_ref) ? undefined : first_frame_ref;
       const voiceRefs = (voice_refs ?? []).filter((s) => !blank(s));
       const charRefs = (character_refs ?? []).filter((s) => !blank(s));
 
       // Omni Flash modes are mutually exclusive: startImage I2V
-      // (first_frame_slug) cannot combine with referenceImage_* (image_slugs)
-      // or referenceVideo_1 V2V (video_slug). Characters are reference-mode
+      // (first_frame_ref) cannot combine with referenceImage_* (image_refs)
+      // or referenceVideo_1 V2V (video_ref). Characters are reference-mode
       // inputs, so they cannot ride start-image I2V either.
       if (firstFrameSlug !== undefined) {
         if (imgs.length > 0) {
-          return { isError: true as const, content: [{ type: "text" as const, text: "first_frame_slug cannot be combined with image_slugs — Omni Flash start-image I2V does not accept reference images" }] };
+          return { isError: true as const, content: [{ type: "text" as const, text: "first_frame_ref cannot be combined with image_refs — Omni Flash start-image I2V does not accept reference images" }] };
         }
-        if (videoSlug !== undefined) {
-          return { isError: true as const, content: [{ type: "text" as const, text: "first_frame_slug cannot be combined with video_slug — Omni Flash start-image I2V and reference-video V2V are mutually exclusive" }] };
+        if (videoRef !== undefined) {
+          return { isError: true as const, content: [{ type: "text" as const, text: "first_frame_ref cannot be combined with video_ref — Omni Flash start-image I2V and reference-video V2V are mutually exclusive" }] };
         }
         if (charRefs.length > 0) {
-          return { isError: true as const, content: [{ type: "text" as const, text: "first_frame_slug cannot be combined with character_refs — Omni Flash characters are reference-mode inputs" }] };
+          return { isError: true as const, content: [{ type: "text" as const, text: "first_frame_ref cannot be combined with character_refs — Omni Flash characters are reference-mode inputs" }] };
         }
       }
 
@@ -118,7 +118,7 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
       if (voiceRefs.length > OMNI_MAX_VOICES) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash supports at most ${OMNI_MAX_VOICES} voice refs (got ${voiceRefs.length})` }] };
       }
-      if (videoSlug !== undefined && voiceRefs.length > OMNI_V2V_MAX_VOICES) {
+      if (videoRef !== undefined && voiceRefs.length > OMNI_V2V_MAX_VOICES) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash video edit supports at most ${OMNI_V2V_MAX_VOICES} voice refs alongside the clip (got ${voiceRefs.length})` }] };
       }
       if (charRefs.length > OMNI_MAX_CHARACTERS) {
@@ -132,17 +132,17 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
         }
         seenChars.add(canonical);
       }
-      const omniSlotBudget = videoSlug !== undefined ? OMNI_V2V_MAX_REFERENCE_SLOTS : OMNI_MAX_REFERENCE_SLOTS;
+      const omniSlotBudget = videoRef !== undefined ? OMNI_V2V_MAX_REFERENCE_SLOTS : OMNI_MAX_REFERENCE_SLOTS;
       const omniSlotTotal = totalOmniReferenceSlots(imgs.length, charRefs);
       if (omniSlotTotal > omniSlotBudget) {
-        const budgetLabel = videoSlug !== undefined ? `${OMNI_V2V_MAX_REFERENCE_SLOTS} alongside a reference clip` : `${OMNI_MAX_REFERENCE_SLOTS}`;
-        return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash reference budget exceeded: image_slugs cost 1 slot each and characters ${OMNI_CHARACTER_SLOT_COST} each, at most ${budgetLabel} total (got ${omniSlotTotal}: ${imgs.length} image_slugs + ${charRefs.length} character ref${charRefs.length === 1 ? "" : "s"} × ${OMNI_CHARACTER_SLOT_COST})` }] };
+        const budgetLabel = videoRef !== undefined ? `${OMNI_V2V_MAX_REFERENCE_SLOTS} alongside a reference clip` : `${OMNI_MAX_REFERENCE_SLOTS}`;
+        return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash reference budget exceeded: image_refs cost 1 slot each and characters ${OMNI_CHARACTER_SLOT_COST} each, at most ${budgetLabel} total (got ${omniSlotTotal}: ${imgs.length} image_refs + ${charRefs.length} character ref${charRefs.length === 1 ? "" : "s"} × ${OMNI_CHARACTER_SLOT_COST})` }] };
       }
 
       // Clip-timing pre-check mirroring the kie gemini-omni tool. Omni Flash
       // trims on a 24fps / 240-frame timeline, so the window may span up to
       // but not exceed exactly 10 seconds.
-      if (videoSlug !== undefined) {
+      if (videoRef !== undefined) {
         const start = video_clip_start ?? 0;
         const ends = video_clip_ends;
         if (video_clip_start !== undefined && video_clip_start >= 10) {
@@ -155,21 +155,21 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageSlug(fs, slug, book_id);
+        const r = await resolveImageRef(fs, slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       let firstFrame: RefInput | undefined;
       if (firstFrameSlug !== undefined) {
-        const r = await resolveImageSlug(fs, firstFrameSlug, book_id);
+        const r = await resolveImageRef(fs, firstFrameSlug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let videoInput: RefInput | undefined;
-      if (videoSlug !== undefined) {
-        const r = await resolveVideoSlug(fs, videoSlug, book_id);
+      if (videoRef !== undefined) {
+        const r = await resolveVideoRef(fs, videoRef, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInput = r.value;
       }
@@ -177,12 +177,12 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
       // Google Flow resolves inline @-mentions against the positional markers
       // only (@referenceImage_N / @character_N / @referenceAudio_N); any other
       // @-token — an asset slug, a character handle — draws an opaque 400 at
-      // submit. Rewrite image-slug mentions to their positional marker and
+      // submit. Rewrite image-artifact mentions to their positional marker and
       // drop clip/first-frame mentions, which have no inline form.
-      const normalizedPrompt = stripSlugMentions(
-        rewriteImageSlugMentions(prompt, imgs),
+      const normalizedPrompt = stripRefMentions(
+        rewriteImageRefMentions(prompt, imgs),
         [
-          ...(videoSlug !== undefined ? [videoSlug] : []),
+          ...(videoRef !== undefined ? [videoRef] : []),
           ...(firstFrameSlug !== undefined ? [firstFrameSlug] : []),
         ],
       );
@@ -193,7 +193,7 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInputs.map((i) => i.assetId);
       const sourceVideoIds = videoInput ? [videoInput.assetId] : [];
       const sourceFirstFrameId = firstFrame ? firstFrame.assetId : undefined;

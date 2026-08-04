@@ -187,7 +187,6 @@ import {
 import {
   downloadWatchStep,
   downloadVideoCellInput,
-  nextNotebookCellSlug,
 } from '@/videobook/notebook-download'
 import { routedVideoCellInputs } from '@/videobook/notebook-routed-action'
 import {
@@ -242,7 +241,6 @@ import type {
   BookProjectSummary,
 } from '@/videobook/book-project-selector'
 import {
-  notebookCellRenamePlan,
   notebookMentionAssets,
   resolveNotebookMentionAliases,
   restoreNotebookMentionAliases,
@@ -292,7 +290,7 @@ type MediaSlotState = {
 
 type LibraryAssetRecord = AssetRecord & {
   owningBookId: string
-  owningBookSlug: string
+  owningBookName: string
 }
 
 type LibrarySearchPage = {
@@ -371,7 +369,7 @@ type AudioTranscriptSegment = {
 type AudioNotebookState = {
   spine: {
     artifactId: string
-    slug: string
+    label: string | null
     kind: string
   } | null
   waveform: number[] | null
@@ -657,7 +655,7 @@ function messageFor(value: unknown, fallback: string): string {
   if (typeof value === 'string') return value
   const item = record(value)
   if (!item) return fallback
-  for (const key of ['message', 'job_id', 'notebook_id', 'slug', 'bookId']) {
+  for (const key of ['message', 'job_id', 'notebook_id', 'address', 'bookId']) {
     const candidate = asString(item[key])
     if (candidate) return `${fallback}: ${candidate}`
   }
@@ -748,12 +746,12 @@ function asBooks(value: unknown): BookProjectSummary[] {
   return value.flatMap((entry) => {
     const item = record(entry)
     const bookId = item && asString(item.bookId)
-    const slug = item && asString(item.slug)
+    const name = item && asString(item.name)
     const createdAt = item && asNumber(item.createdAt)
-    if (!item || !bookId || !slug || createdAt === null) return []
+    if (!item || !bookId || !name || createdAt === null) return []
     return [{
       bookId,
-      slug,
+      name,
       createdAt,
       artifactCount: asNumber(item.artifactCount) ?? 0,
       notebookCount: asNumber(item.notebookCount) ?? 0,
@@ -776,14 +774,13 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
   const item = record(value)
   const id = item && asString(item.id)
   const type = item && asString(item.type)
-  const slug = item && asString(item.slug)
+  const label = item && asString(item.label)
   const slot = item && record(item.slot)
   const row = slot && asNumber(slot.row)
   const column = slot && asNumber(slot.column)
   if (
     !item
     || !id
-    || !slug
     || row === null
     || column === null
     || !Number.isInteger(row)
@@ -804,7 +801,7 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
   return {
     id,
     type: type as NotebookCellType,
-    slug,
+    ...(label ? { label } : {}),
     slot: { row, column },
     ...(asString(item.output_entity_id)
       ? { outputEntityId: asString(item.output_entity_id)! }
@@ -1064,9 +1061,9 @@ function asLibrarySearchResult(value: unknown): LibrarySearchResult {
       const item = record(entry)
       const asset = asAsset(item)
       const owningBookId = item && asString(item.owning_book_id)
-      const owningBookSlug = item && asString(item.owning_book_slug)
-      return asset && owningBookId && owningBookSlug
-        ? [{ ...asset, owningBookId, owningBookSlug }]
+      const owningBookName = item && asString(item.owning_book_name)
+      return asset && owningBookId && owningBookName
+        ? [{ ...asset, owningBookId, owningBookName }]
         : []
     }),
     page: {
@@ -1110,7 +1107,7 @@ function asAudioNotebook(value: unknown): AudioNotebookState {
   const item = record(value)
   const spineValue = record(item?.spine)
   const artifactId = asString(spineValue?.artifact_id ?? spineValue?.artifactId)
-  const slug = asString(spineValue?.slug)
+  const label = asString(spineValue?.label)
   const kind = asString(spineValue?.kind)
   const waveformValue = record(item?.waveform)
   const waveform = Array.isArray(waveformValue?.peaks)
@@ -1165,7 +1162,7 @@ function asAudioNotebook(value: unknown): AudioNotebookState {
     })
     : []
   return {
-    spine: artifactId && slug && kind ? { artifactId, slug, kind } : null,
+    spine: artifactId && kind ? { artifactId, label, kind } : null,
     waveform,
     transcript: transcriptId && language
       ? { transcriptId, language, segments }
@@ -2092,7 +2089,7 @@ function MediaLibraryDialog({
                     <span className="media-library-asset-copy">
                       <strong>@{asset.id}</strong>
                       <small>
-                        {asset.owningBookSlug}
+                        {asset.owningBookName}
                         {asset.owningBookId === targetBookId ? ' · this book' : ' · copy'}
                       </small>
                     </span>
@@ -2116,7 +2113,7 @@ function MediaLibraryDialog({
                       <button
                         type="button"
                         disabled={busy}
-                        aria-label={`Use @${asset.id} from ${asset.owningBookSlug}`}
+                        aria-label={`Use @${asset.id} from ${asset.owningBookName}`}
                         onClick={() => onAttach(asset)}
                       >
                         Use
@@ -2347,7 +2344,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             {playableVideo && mediaUrl ? (
               <video src={mediaUrl} poster={thumbnailUrl ?? undefined} muted playsInline preload="metadata" />
             ) : (
-              <img src={thumbnailUrl ?? mediaUrl ?? ''} alt={data.slug} />
+              <img src={thumbnailUrl ?? mediaUrl ?? ''} alt={data.label ?? notebookGridTag(data.slot)} />
             )}
             <NotebookMediaMetadata
               className="cell-media-metadata"
@@ -2368,7 +2365,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         </footer>
         <CellStateOverlay
           kind={data.kind}
-          slug={notebookGridAddress(data.slot)}
+          address={notebookGridAddress(data.slot)}
           status={data.status}
           statusStartedAt={data.statusStartedAt}
           statusError={data.statusError}
@@ -2641,7 +2638,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (!cell) return []
           return [{
             cellId,
-            slug: notebookGridAddress(cell.slot),
+            address: notebookGridAddress(cell.slot),
             type: cell.type,
             asset: cell.outputArtifactId
               ? assetById.get(cell.outputArtifactId) ?? null
@@ -2976,7 +2973,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     bookId: string
     notebookId: string
     cellId: string
-    slug: string
+    address: string
     runId: string
     jobOperationId: string
     intervalMs: number
@@ -3052,7 +3049,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           const step = notebookRunWatchStep({
             observation,
             job: effectiveJob,
-            slug: params.slug,
+            address: params.address,
             sawRun,
           })
           if (step.kind === 'continue') {
@@ -3089,7 +3086,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             return {
               kind: 'failed',
               message:
-                `Lost contact with the server while watching @${params.slug}: ${detail}`,
+                `Lost contact with the server while watching @${params.address}: ${detail}`,
             }
           }
           await delay(params.intervalMs)
@@ -3107,7 +3104,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     bookId: string
     notebookId: string
     cellId: string
-    slug: string
+    address: string
     runId: string
     jobOperationId: string
   }) => {
@@ -3119,19 +3116,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         maxPollFailures: 10,
       })
       if (outcome.kind === 'completed') {
-        setNotice(`@${params.slug} generated`)
+        setNotice(`@${params.address} generated`)
         setCellRunError(params.cellId, null)
         return
       }
       if (outcome.kind === 'failed') {
-        const message = outcome.message ?? `@${params.slug} failed`
+        const message = outcome.message ?? `@${params.address} failed`
         setCellRunError(params.cellId, message)
         setNotice(message, 'error')
         return
       }
       if (outcome.kind === 'timeout') {
         setNotice(
-          `@${params.slug} is still running — check the Jobs screen`,
+          `@${params.address} is still running — check the Jobs screen`,
         )
       }
     } catch (error) {
@@ -3147,7 +3144,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     bookId: string
     notebookId: string
     cellId: string
-    slug: string
+    address: string
     artifactId: string
   }) => {
     const token = `download:${params.artifactId}`
@@ -3214,7 +3211,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           )
           if (step.kind === 'completed') {
             setCellRunError(params.cellId, null)
-            setNotice(`@${params.slug} downloaded`)
+            setNotice(`@${params.address} downloaded`)
             return
           }
           if (step.kind === 'failed') {
@@ -3228,7 +3225,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (consecutiveFailures >= 10) {
             const detail = error instanceof Error ? error.message : String(error)
             setNotice(
-              `Stopped watching @${params.slug}: ${detail}. Check the Jobs screen.`,
+              `Stopped watching @${params.address}: ${detail}. Check the Jobs screen.`,
               'error',
             )
             return
@@ -3237,7 +3234,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
       }
       setNotice(
-        `@${params.slug} is still downloading — check the Jobs screen`,
+        `@${params.address} is still downloading — check the Jobs screen`,
       )
     } finally {
       if (activeWatchesRef.current.get(params.cellId) === token) {
@@ -3304,7 +3301,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         bookId,
         notebookId: currentNotebook.id,
         cellId,
-        slug: notebookGridAddress(cell.slot),
+        address: notebookGridAddress(cell.slot),
         runId,
         jobOperationId,
         intervalMs: notebookRunPollIntervalMs,
@@ -3479,7 +3476,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       cell_id: draft.cell.id,
       draft: {
         type: draft.cell.type,
-        slug: draft.cell.slug,
+        ...(draft.cell.label === undefined ? {} : { label: draft.cell.label }),
         slot: draft.cell.slot,
         prompt: draft.cell.prompt ?? '',
         provider: draft.cell.provider ?? draft.action.provider,
@@ -3859,12 +3856,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         refreshChatModels(),
       ])
       const target = nextBooks.find((book) => book.bookId === preferredBookId)
-        ?? nextBooks.find((book) => book.slug === 'dancing')
+        ?? nextBooks.find((book) => book.name.toLowerCase() === 'dancing')
         ?? nextBooks.find((book) => book.bookId === bookId)
         ?? nextBooks[0]
       if (target) {
         await refreshBookData(target.bookId)
-        setNotice(`Loaded ${target.slug}`)
+        setNotice(`Loaded ${target.name}`)
       } else {
         setBookId('')
         setNotebook(null)
@@ -3927,7 +3924,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     try {
       await refreshBookData(nextBookId)
       const next = books.find((book) => book.bookId === nextBookId)
-      setNotice(next ? `Opened ${next.slug}` : 'Book opened')
+      setNotice(next ? `Opened ${next.name}` : 'Book opened')
       setScreen('notebook')
       handleBookMenuOpenChange(false)
       return { ok: true }
@@ -3941,11 +3938,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [books, handleBookMenuOpenChange, refreshBookData, setNotice])
 
   const createBookProject = useCallback(async (
-    slug: string,
+    name: string,
   ): Promise<BookProjectMutationResult> => {
     setBusy(true)
     try {
-      const created = asBook(await call('create_book', { slug }))
+      const created = asBook(await call('create_book', { name }))
       if (!created) throw new Error('The server returned an invalid project')
       setBooks((current) => [
         created,
@@ -3956,8 +3953,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setScreen('notebook')
       handleBookMenuOpenChange(false)
       setNotice(commandError
-        ? `Created ${created.slug}; commands could not refresh: ${commandError}`
-        : `Created ${created.slug}`)
+        ? `Created ${created.name}; commands could not refresh: ${commandError}`
+        : `Created ${created.name}`)
       return { ok: true }
     } catch (error) {
       const result = bookProjectFailure(error)
@@ -3976,21 +3973,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const renameBookProject = useCallback(async (
     targetBookId: string,
-    slug: string,
+    name: string,
   ): Promise<BookProjectMutationResult> => {
     setBusy(true)
     try {
       const renamed = asBook(await call('rename_book', {
         book_id: targetBookId,
-        slug,
+        name,
       }))
       if (!renamed) throw new Error('The server returned an invalid project')
       setBooks((current) => current.map((book) =>
         book.bookId === targetBookId ? renamed : book))
       const commandError = await refreshBookCommandsAfterMutation()
       setNotice(commandError
-        ? `Renamed to ${renamed.slug}; commands could not refresh: ${commandError}`
-        : `Renamed to ${renamed.slug}`)
+        ? `Renamed to ${renamed.name}; commands could not refresh: ${commandError}`
+        : `Renamed to ${renamed.name}`)
       return { ok: true }
     } catch (error) {
       const result = bookProjectFailure(error)
@@ -4003,7 +4000,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const deleteBookProject = useCallback(async (
     targetBookId: string,
-    confirmSlug: string,
+    confirmName: string,
   ): Promise<BookProjectMutationResult> => {
     if (books.length < 2) {
       return { ok: false, error: 'Create another project before deleting this one' }
@@ -4017,7 +4014,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     try {
       await call('delete_book', {
         book_id: targetBookId,
-        confirm_slug: confirmSlug,
+        confirm_name: confirmName,
       })
       setBooks((current) => current.filter((book) => book.bookId !== targetBookId))
       if (targetBookId === bookId) {
@@ -4027,8 +4024,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       const commandError = await refreshBookCommandsAfterMutation()
       setNotice(commandError
-        ? `Deleted ${target.slug}; commands could not refresh: ${commandError}`
-        : `Deleted ${target.slug}`)
+        ? `Deleted ${target.name}; commands could not refresh: ${commandError}`
+        : `Deleted ${target.name}`)
       return { ok: true }
     } catch (error) {
       const result = bookProjectFailure(error)
@@ -4061,7 +4058,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice('Choose an empty grid square for the new cell', 'error')
       return
     }
-    const slug = nextNotebookCellSlug(type, notebook.cells)
     setBusy(true)
     try {
       await call('create_notebook_cell', {
@@ -4069,7 +4065,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         notebook_id: notebook.id,
         cell: {
           type,
-          slug,
           slot,
           ...(type === 'prompt'
             || type === 'analyze'
@@ -4330,7 +4325,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const duplicateKind = value && asString(value.kind)
         return duplicateKind !== null && isCompatibleLibraryAsset(kind, duplicateKind)
       })
-    const existingArtifactRef = duplicate && asString(duplicate.slug)
+    const existingArtifactRef = duplicate && asString(duplicate.artifact_id)
     if (existingArtifactRef) {
       return { artifactRef: existingArtifactRef, reusedExisting: true }
     }
@@ -4344,7 +4339,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       throw new Error(asString(payload?.error) ?? `Upload failed: ${file.name}`)
     }
     const artifactRef = asString(payload?.assetId)
-    if (!artifactRef) throw new Error('Upload did not return an asset slug')
+    if (!artifactRef) throw new Error('Upload did not return an asset id')
     return { artifactRef, reusedExisting: false }
   }
 
@@ -4418,7 +4413,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         notebook_id: notebook.id,
         cell: {
           type: kind,
-          slug: nextNotebookCellSlug(kind, notebook.cells),
           slot,
         },
       }))
@@ -4634,7 +4628,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setMediaSlotOperation(cellId, null)
       setNotice(asset.owningBookId === bookId
         ? `Attached @${asset.id}`
-        : `Copied and attached @${asset.id} from ${asset.owningBookSlug}`)
+        : `Copied and attached @${asset.id} from ${asset.owningBookName}`)
       closeMediaLibrary()
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -4668,9 +4662,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : []
         if (matches.length > 0) {
           const first = record(matches[0])
-          const slug = asString(first?.slug) ?? 'existing source'
+          const existing = asString(first?.label)
+            ?? asString(first?.artifact_id)
+            ?? 'existing source'
           const importAgain = window.confirm(
-            `${file.name} has the same bytes as ${slug}.\n\n`
+            `${file.name} has the same bytes as ${existing}.\n\n`
             + 'Choose OK to import another copy, or Cancel to reuse the existing source.',
           )
           if (!importAgain) {
@@ -5470,13 +5466,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             setCellQueued(cellId, false)
             throw new Error('The server did not return a notebook run')
           }
-          const slug = notebook?.cells.find((cell) => cell.id === cellId)?.slug
-            ?? cellId.slice(0, 8)
+          const watchedCell = notebook?.cells.find((cell) => cell.id === cellId)
+          const address = watchedCell
+            ? notebookGridAddress(watchedCell.slot)
+            : cellId.slice(0, 8)
           void watchGenerationRun({
             bookId,
             notebookId,
             cellId,
-            slug,
+            address,
             runId,
             jobOperationId,
           })
@@ -5788,7 +5786,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       result,
       sourceUrl,
       nextNotebookGridSlot(nodes),
-      notebook.cells,
     )
     let createdCellId: string
     try {
@@ -5816,7 +5813,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       bookId,
       notebookId: notebook.id,
       cellId: createdCellId,
-      slug: notebookGridAddress(cell.slot),
+      address: notebookGridAddress(cell.slot),
       artifactId: cell.output_artifact_id,
     })
     return {
@@ -5839,7 +5836,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         bookId: input.bookId,
         notebookId: input.notebookId,
         cellId: input.run.actionCellId,
-        slug: input.actionAddress.slice(1),
+        address: input.actionAddress.slice(1),
         runId: input.run.runId,
         jobOperationId: input.run.jobId,
         intervalMs: notebookRunPollIntervalMs,
@@ -5984,7 +5981,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         bookId,
         notebookId: currentNotebook.id,
         cellId: actionCellId,
-        slug: notebookGridAddress(source.slot),
+        address: notebookGridAddress(source.slot),
         runId: run.runId,
         jobOperationId: run.jobId,
         intervalMs: notebookRunPollIntervalMs,
@@ -6409,7 +6406,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         bookId,
         notebookId: currentNotebook.id,
         cellId,
-        slug: notebookGridAddress(preparedAction.draft.cell.slot),
+        address: notebookGridAddress(preparedAction.draft.cell.slot),
         runId,
         jobOperationId,
       })
@@ -6544,14 +6541,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : {}
         if (action.kind === 'create') {
           const destination = action.destination!
-          const slug = nextNotebookCellSlug(action.cellType, currentNotebook.cells)
           const created = record(await call('create_notebook_cell', {
             book_id: bookId,
             notebook_id: currentNotebook.id,
             ...revisionInput,
             cell: {
               type: action.cellType,
-              slug,
               slot: destination,
               ...(action.cellType === 'prompt'
                 || action.cellType === 'analyze'
@@ -6681,7 +6676,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             throw new Error('The server did not return the new notebook cell')
           }
           firstCellId ??= cellId
-          placements.push(`@${cell.slug} at ${notebookGridTag(cell.slot)}`)
+          placements.push(notebookGridTag(cell.slot))
         }
         selectCanvasCell(firstCellId)
         await refreshBookData(bookId, notebook.id)
@@ -7108,12 +7103,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const command = selectCommandForInput(commands, commandToken, resolvedRest)
       if (!command) return { ok: false, message: `Unknown command: ${commandToken}` }
       if (command.uiAction === 'switch_book') {
-        const slug = command.command.slice(1)
-        const target = books.find((book) => book.slug === slug)
-        if (!target) return { ok: false, message: `Book not found: ${slug}` }
+        const name = command.command.slice(1)
+        const target = books.find((book) =>
+          book.name.toLowerCase() === name.toLowerCase())
+        if (!target) return { ok: false, message: `Book not found: ${name}` }
         const result = await chooseBook(target.bookId)
         return result.ok
-          ? { ok: true, message: `Opened ${slug}` }
+          ? { ok: true, message: `Opened ${target.name}` }
           : { ok: false, message: result.error }
       }
       if (command.uiAction === 'open_projects') {
@@ -7136,9 +7132,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return { ok: false, message: 'Open a notebook before downloading media.' }
       }
       const parsed = parseCommandArgs(resolvedRest, command.params)
-      const renameAssetId = command.mcpTool.tool === 'rename_asset'
-        ? parseCommandArgs(rest, command.params).asset_id
-        : undefined
       const adapted = adaptCommandArgs(command.mcpTool.adapter, command.mcpTool.tool, parsed)
       const args: CommandToolArgs = {
         ...adapted,
@@ -7149,43 +7142,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (command.mcpTool.tool === 'download_video' && notebook) {
         return await completeVideoDownload(result, asString(args.url) ?? '')
       }
-      const renamePlan = command.mcpTool.tool === 'rename_asset' && notebook
-        ? notebookCellRenamePlan(
-            renameAssetId,
-            result,
-            notebook.cells,
-            commandMentionAssets,
-          )
-        : null
-      if (
-        renamePlan
-        && notebook
-        && !renamePlan.conflict
-        && renamePlan.previousSlug !== renamePlan.nextSlug
-      ) {
-        await call('update_notebook_cell', {
-          book_id: bookId,
-          notebook_id: notebook.id,
-          cell_id: renamePlan.cellId,
-          cell: { slug: renamePlan.nextSlug },
-        })
-      }
       await refreshBookData(bookId, notebook?.id)
       if (command.mcpTool.tool === 'rename_asset') {
         const renamed = record(result)
-        const oldAssetId = asString(renamed?.old_asset_id)
-        const newAssetId = asString(renamed?.new_asset_id)
-        if (oldAssetId && newAssetId) {
-          if (renamePlan?.conflict) {
-            return {
-              ok: true,
-              message: `Renamed asset @${oldAssetId} to @${newAssetId}; cell @${renamePlan.previousSlug} kept because @${newAssetId} is already in use`,
-            }
-          }
-          return {
-            ok: true,
-            message: `Renamed @${renamePlan?.previousSlug ?? oldAssetId} to @${newAssetId}`,
-          }
+        const newLabel = asString(renamed?.label)
+        return {
+          ok: true,
+          message: newLabel ? `Renamed asset to ${newLabel}` : 'Asset renamed',
         }
       }
       return { ok: true, message: messageFor(result, `${command.command} complete`) }
@@ -7858,8 +7821,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 {!selectedCell ? (
                   <div className="inspector-body audio-notebook-inspector">
                     <span className="section-label">AUDIO NOTEBOOK</span>
-                    <h2 className="inspector-slug">
-                      {audioNotebook.spine?.slug ?? 'Choose an audio spine'}
+                    <h2 className="inspector-spine-title">
+                      {audioNotebook.spine
+                        ? audioNotebook.spine.label
+                          ?? audioNotebook.spine.artifactId
+                        : 'Choose an audio spine'}
                     </h2>
                     <label>
                       Audio or video source
@@ -8088,7 +8054,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               }}
             >
               <header>
-                <div><span className="section-label">SEARCHABLE SOURCE LIBRARY</span><h1>Find the exact moment.</h1><p>Search language, speech, OCR, imagery, video motion, and audio across {activeBook?.slug ?? 'the active project'}.</p></div>
+                <div><span className="section-label">SEARCHABLE SOURCE LIBRARY</span><h1>Find the exact moment.</h1><p>Search language, speech, OCR, imagery, video motion, and audio across {activeBook?.name ?? 'the active project'}.</p></div>
                 <div className="library-ingest-actions">
                   <button
                     type="button"
@@ -8918,7 +8884,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       {fullscreenCell && fullscreenNode?.data.asset && (
         <NotebookMediaFullscreen
           asset={fullscreenNode.data.asset}
-          slug={notebookGridAddress(fullscreenCell.slot)}
+          address={notebookGridAddress(fullscreenCell.slot)}
           onClose={closeMediaFullscreen}
         />
       )}

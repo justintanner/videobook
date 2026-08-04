@@ -59,33 +59,37 @@ describe("google flow character tools — handler guards", () => {
     const result = await createGoogleFlowCharacterDef(fs).handler({
       book_id: "test-proj",
       display_name: "Hero",
-      image_slugs: ["@img-hero"],
+      image_refs: ["@01890f1c-0000-7000-8000-0000000000aa"],
     });
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("GOOGLE_FLOW_API_KEY");
   });
 
-  it("create rejects more than two image slugs", async () => {
+  it("create rejects more than two image refs", async () => {
     process.env.GOOGLE_FLOW_API_KEY = "test-key";
     const result = await createGoogleFlowCharacterDef(fs).handler({
       book_id: "test-proj",
       display_name: "Hero",
-      image_slugs: ["@img-a", "@img-b", "@img-c"],
+      image_refs: [
+        "@01890f1c-0000-7000-8000-0000000000aa",
+        "@01890f1c-0000-7000-8000-0000000000bb",
+        "@01890f1c-0000-7000-8000-0000000000cc",
+      ],
     });
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("at most 2 image references");
   });
 
-  it("create resolves real slugs then fails closed on a placeholder key", async () => {
+  it("create resolves real artifact refs then fails closed on a placeholder key", async () => {
     process.env.GOOGLE_FLOW_API_KEY = "test-key";
     const asset = await fs.artifacts.create("img", "hero");
     if (!asset.ok) throw new Error("failed to create image asset");
-    await fs.files.write(asset.value.slug, "original.png", await makePng());
+    await fs.files.write(asset.value.artifactId, "original.png", await makePng());
 
     const result = await createGoogleFlowCharacterDef(fs).handler({
       book_id: "test-proj",
       display_name: "Hero",
-      image_slugs: [`@${asset.value.slug}`],
+      image_refs: [`@${asset.value.artifactId}`],
     });
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("placeholder");
@@ -311,10 +315,10 @@ describe("replaceGoogleFlowCharacter — stubbed provider", () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("img", "newimg");
     if (!asset.ok) throw new Error("failed to create asset");
-    await fs.files.write(asset.value.slug, "original.png", await makePng());
+    await fs.files.write(asset.value.artifactId, "original.png", await makePng());
 
     const result = await replaceGoogleFlowCharacter(provider, fs, "test-proj", OLD_REF, {
-      imageSlugs: [`@${asset.value.slug}`],
+      imageRefs: [`@${asset.value.artifactId}`],
       personalityNotes: "new notes",
     });
     expect(result.character_ref).toBe(NEW_REF);
@@ -327,7 +331,7 @@ describe("replaceGoogleFlowCharacter — stubbed provider", () => {
       voice: "Kore",
     });
     expect(create.body).toHaveProperty("imageReference_1");
-    // Should have only 1 imageReference because we only gave 1 image slug
+    // Should have only 1 imageReference because we only gave 1 image ref
     expect(create.body).not.toHaveProperty("imageReference_2");
     
     await rm(tempDir, { recursive: true, force: true });

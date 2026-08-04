@@ -2,6 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
+import { requireArtifactKind } from "./_shared.js";
 
 type RewriteVariant = "full" | "tldr";
 type RewritePlatform = "ig" | "tiktok" | "youtube";
@@ -28,13 +29,13 @@ export function rewriteScriptDef(fs: Engine): ToolDef {
       "Previous versions are preserved as immutable Dolt revisions. " +
       "Returns immediately; reconcile_project_work reports status=\"generating\" until the new markdown is written.",
     schema: {
-      asset_id: z.string().describe("Script asset ID (script-*)"),
+      asset_id: z.string().describe("Script artifact id"),
       variant: z.enum(["full", "tldr"]).describe("Rewrite style"),
       platform: z.enum(["ig", "tiktok", "youtube"]).optional()
         .describe("Platform preset — tunes authentic-capture cues for the target feed"),
       custom_prompt: z.string().max(CUSTOM_PROMPT_MAX).optional()
         .describe("Optional transformation instruction, e.g. 'replace the pig with a man in a blue suit'"),
-      book_id: z.string().describe("Project slug"),
+      book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
       const { asset_id, variant, platform, custom_prompt, book_id } = args as {
@@ -45,9 +46,8 @@ export function rewriteScriptDef(fs: Engine): ToolDef {
         book_id: string;
       };
 
-      if (!asset_id.startsWith("script-")) {
-        return error(`rewrite_script only accepts script-* assets, got: ${asset_id}`);
-      }
+      const kindGate = await requireArtifactKind(fs, asset_id, ["script"], "rewrite_script");
+      if (kindGate) return kindGate;
 
       const originalResult = await fs.metadata.artifacts.read<OriginalMeta>(asset_id, "original");
       if (!originalResult.ok) {

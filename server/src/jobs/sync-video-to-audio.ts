@@ -172,7 +172,9 @@ export async function prepareAudioSyncTranscript(
 
   const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) throw new Error(`auto-transcribe failed: ${manifest.error.message}`);
-  const audioFile = findAudioFile(manifest.value.files, assetId)
+  const artifact = fs.artifacts.get(assetId);
+  if (!artifact.ok) throw new Error(`auto-transcribe failed: ${artifact.error.message}`);
+  const audioFile = findAudioFile(manifest.value.files, artifact.value.kind)
     ?? findVideoFile(manifest.value.files);
   if (!audioFile) throw new Error(`auto-transcribe failed: no audio file found in asset ${assetId}`);
   const replacement = await requestElevenLabsTranscript(

@@ -30,13 +30,13 @@ export function addTimelineAudioDef(engine: Engine): ToolDef {
     },
     handler: async (args) => {
       const asset = resolveArtifact(engine, String(args.asset_id));
-      if (!asset || !asset.slug.startsWith("aud-")) {
+      if (!asset || asset.kind !== "audio") {
         return timelineFailure(`Audio artifact not found: ${String(args.asset_id)}`);
       }
       const manifest = await engine.files.manifest(asset.artifactId);
       if (!manifest.ok) return timelineFailure(manifest.error.message);
-      const audioFile = findAudioFile(manifest.value.files, asset.slug);
-      if (!audioFile) return timelineFailure(`No audio file found in ${asset.slug}`);
+      const audioFile = findAudioFile(manifest.value.files, asset.kind);
+      if (!audioFile) return timelineFailure(`No audio file found in ${asset.label ?? asset.artifactId}`);
       let durationFrames = args.duration_frames as number | undefined;
       if (durationFrames === undefined) {
         try {

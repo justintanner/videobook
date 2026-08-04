@@ -43,7 +43,7 @@ export function registerGenerateWan27ImageProJob(fs: Engine): void {
       "generate_kie_wan_2_7_pro_text_to_image",
       {
         prompt,
-        image_slugs: imageInputs
+        image_refs: imageInputs
           .map((input) => ("assetId" in input ? input.assetId : null))
           .filter((assetId): assetId is string => assetId !== null),
       },

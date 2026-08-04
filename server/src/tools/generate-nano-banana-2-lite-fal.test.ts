@@ -1,4 +1,5 @@
 import { createEngineForTest } from "../fs.js";
+import { isUuidV7 } from "videobook-engine";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -55,6 +56,7 @@ describe("generate_nano_banana_2_lite_fal / generate_nano_banana_2_lite_edit_fal
   });
 
   it("enqueues generate_nano_banana_2_lite_fal job (text-to-image)", async () => {
+    const fs = createEngineForTest(tempDir);
     const result = await client.callTool({
       name: "generate_fal_nano_banana_2_lite_text_to_image",
       arguments: {
@@ -67,7 +69,10 @@ describe("generate_nano_banana_2_lite_fal / generate_nano_banana_2_lite_edit_fal
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.img_asset_id).toMatch(/^img-/);
+    expect(isUuidV7(parsed.img_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.img_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("image");
     expect(parsed.job_id).toBeDefined();
   });
 
@@ -75,22 +80,25 @@ describe("generate_nano_banana_2_lite_fal / generate_nano_banana_2_lite_edit_fal
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("img", "ref-img");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "original.png", await makePng());
+    await fs.files.write(asset.value.artifactId, "original.png", await makePng());
 
     const result = await client.callTool({
       name: "generate_fal_nano_banana_2_lite_edit_image",
       arguments: {
         prompt: "add a sunset",
         book_id: "test-proj",
-        image_slugs: [`@${asset.value.slug}`],
+        image_refs: [`@${asset.value.artifactId}`],
       },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.img_asset_id).toMatch(/^img-/);
-    expect(parsed.source_images).toEqual([asset.value.slug]);
+    expect(isUuidV7(parsed.img_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.img_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("image");
+    expect(parsed.source_images).toEqual([asset.value.artifactId]);
     expect(parsed.job_id).toBeDefined();
   });
 });

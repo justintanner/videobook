@@ -9,7 +9,7 @@ import { CellFailedOverlay } from './CellFailedOverlay'
 
 export function CellStateOverlay({
   kind,
-  slug,
+  address,
   status,
   statusStartedAt,
   statusError,
@@ -17,7 +17,7 @@ export function CellStateOverlay({
   onRetry,
 }: {
   kind: NotebookCellType
-  slug: string
+  address: string
   status: string
   statusStartedAt?: string
   statusError?: string
@@ -34,7 +34,7 @@ export function CellStateOverlay({
       <CellClockOverlay
         icon={icon}
         label={presentation.label}
-        slug={slug}
+        address={address}
         startedAt={presentation.startedAt}
         variant={status === 'downloading' ? 'stream' : 'rise'}
       />
@@ -46,7 +46,7 @@ export function CellStateOverlay({
       <CellFailedOverlay
         error={presentation.error}
         label={isNotebookMediaCellType(kind) ? 'MEDIA FAILED' : 'GENERATION FAILED'}
-        slug={slug}
+        address={address}
         onRetry={onRetry}
       />
     )

@@ -1,4 +1,5 @@
 import { createEngineForTest } from "../fs.js";
+import { isUuidV7 } from "videobook-engine";
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -47,7 +48,7 @@ describe("generate_grok_imagine_image tool", () => {
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
-        asset_id: "img-test",
+        asset_id: "01890f1c-0000-7000-8000-0000000000aa",
         book_id: "test-proj",
       },
     });
@@ -57,20 +58,24 @@ describe("generate_grok_imagine_image tool", () => {
     expect(content[0].text).toContain("not set");
   });
 
-  it("returns error when asset_id does not start with img-", async () => {
+  it("returns error when asset_id is not an image artifact", async () => {
     process.env.KIE_API_KEY = "test-key";
+
+    const fs = createEngineForTest(tempDir);
+    const video = await fs.artifacts.create("vid", "not-an-image");
+    if (!video.ok) throw new Error("Failed to create asset");
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
-        asset_id: "vid-something",
+        asset_id: video.value.artifactId,
         book_id: "test-proj",
       },
     });
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("must start with img-");
+    expect(content[0].text).toContain("asset_id must be an image artifact, got video");
   });
 
   it("returns error for nonexistent image asset", async () => {
@@ -79,7 +84,7 @@ describe("generate_grok_imagine_image tool", () => {
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
-        asset_id: "img-does-not-exist",
+        asset_id: "01890f1c-0000-7000-8000-0000000000aa",
         book_id: "test-proj",
       },
     });
@@ -94,12 +99,12 @@ describe("generate_grok_imagine_image tool", () => {
     const asset = await fs.artifacts.create("img", "empty-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
-    await fs.files.write(asset.value.slug, "notes.txt", "hello");
+    await fs.files.write(asset.value.artifactId, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "test-proj",
       },
     });
@@ -119,12 +124,12 @@ describe("generate_grok_imagine_image tool", () => {
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.files.write(asset.value.slug, "original.png", png);
+    await fs.files.write(asset.value.artifactId, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
-        asset_id: asset.value.slug,
+        asset_id: asset.value.artifactId,
         book_id: "test-proj",
       },
     });
@@ -132,8 +137,11 @@ describe("generate_grok_imagine_image tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.img_asset_id).toMatch(/^img-/);
-    expect(parsed.source_image).toBe(asset.value.slug);
+    expect(isUuidV7(parsed.img_asset_id)).toBe(true);
+    const created = fs.artifacts.get(parsed.img_asset_id);
+    expect(created.ok).toBe(true);
+    if (created.ok) expect(created.value.kind).toBe("image");
+    expect(parsed.source_image).toBe(asset.value.artifactId);
     expect(parsed.job_id).toBeDefined();
   });
 });

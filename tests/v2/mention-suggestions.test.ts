@@ -4,7 +4,6 @@ import {
   assetMentionSuggestions,
   applyNotebookMentionSuggestion,
   notebookAddressSuggestions,
-  notebookCellRenamePlan,
   notebookMentionAssets,
   resolveNotebookMentionAliases,
   restoreNotebookMentionAliases,
@@ -12,15 +11,23 @@ import {
   type AssetMentionCandidate,
   type AssetMentionRecord,
 } from '../../src/videobook/mention-suggestions'
+import type { NotebookGridSlot } from 'videobook-engine'
+
+const VIDEO_ARTIFACT = '019fcc6b-0000-7000-8000-0000000000a1'
+const IMAGE_ARTIFACT = '019fcc6b-0000-7000-8000-0000000000b2'
+const AUDIO_ARTIFACT = '019fcc6b-0000-7000-8000-0000000000c3'
+
+function artifactId(index: number): string {
+  return `019fcc6b-0000-7000-8000-${String(index).padStart(12, '0')}`
+}
 
 function mentionAsset(
   id: string,
-  artifactId: string,
   overrides: Partial<AssetMentionRecord> = {},
 ): AssetMentionRecord {
   return {
     id,
-    artifactId,
+    artifactId: id,
     type: 'video',
     mediaUrl: `/files/book/${id}/original.mp4`,
     thumbnailUrl: `/files/book/${id}/original.jpg`,
@@ -33,21 +40,20 @@ function mentionAsset(
 }
 
 function mentionCandidate(
-  cellSlug: string,
-  assetSlug: string,
-  artifactId: string,
-  overrides: Partial<AssetMentionCandidate> = {},
+  slot: NotebookGridSlot,
+  id: string,
+  overrides: Partial<AssetMentionRecord> = {},
 ): AssetMentionCandidate {
-  const asset = mentionAsset(assetSlug, artifactId, overrides)
+  const asset = mentionAsset(id, overrides)
   return notebookMentionAssets(
-    [{ slug: cellSlug, type: asset.type, outputArtifactId: artifactId }],
+    [{ slot, type: asset.type, outputArtifactId: asset.artifactId }],
     [asset],
   )[0]!
 }
 
 describe('asset mention suggestions', () => {
   it('applies a canonical mention completion at the end of input', () => {
-    expect(applyNotebookMentionSuggestion('use @A_', '@a2'))
+    expect(applyNotebookMentionSuggestion('use @A', '@a2'))
       .toBe('use @a2')
     expect(applyNotebookMentionSuggestion('leave this alone', '@a2'))
       .toBe('leave this alone')
@@ -81,10 +87,10 @@ describe('asset mention suggestions', () => {
     }])
   })
 
-  it('maps canonical cell addresses to backing asset aliases', () => {
-    const asset = mentionAsset('vid-source', 'artifact-video')
+  it('maps canonical cell addresses to backing artifact aliases', () => {
+    const asset = mentionAsset(VIDEO_ARTIFACT)
     const candidate = notebookMentionAssets([{
-      slug: 'internal-video-slug',
+      id: 'cell-video',
       slot: { row: 1, column: 2 },
       type: 'video',
       outputArtifactId: asset.artifactId,
@@ -94,130 +100,137 @@ describe('asset mention suggestions', () => {
     expect(resolveNotebookMentionAliases(
       'combine @B3 with @b4',
       [candidate],
-    )).toBe('combine @vid-source with @b4')
+    )).toBe(`combine @${VIDEO_ARTIFACT} with @b4`)
   })
 
   it('uses only deduplicated current outputs from the open notebook', () => {
-    const currentVideo = mentionAsset('vid-current', 'artifact-current')
-    const currentImage = mentionAsset('img-current', 'artifact-image', {
-      type: 'image',
-    })
-    const olderVersion = mentionAsset('vid-older', 'artifact-older')
-    const unrelated = mentionAsset('vid-unrelated', 'artifact-unrelated')
+    const currentVideo = mentionAsset(VIDEO_ARTIFACT)
+    const currentImage = mentionAsset(IMAGE_ARTIFACT, { type: 'image' })
+    const olderVersion = mentionAsset(artifactId(11))
+    const unrelated = mentionAsset(artifactId(12))
 
     expect(notebookMentionAssets([
-      { slug: 'vid-01', type: 'video', outputArtifactId: currentVideo.artifactId },
-      { slug: 'empty', type: 'image' },
-      { slug: 'vid-copy', type: 'video', outputArtifactId: currentVideo.artifactId },
-      { slug: 'missing', type: 'image', outputArtifactId: 'artifact-missing' },
-      { slug: 'img-01', type: 'image', outputArtifactId: currentImage.artifactId },
+      {
+        slot: { row: 0, column: 0 },
+        type: 'video',
+        outputArtifactId: currentVideo.artifactId,
+      },
+      { slot: { row: 0, column: 1 }, type: 'image' },
+      {
+        slot: { row: 0, column: 2 },
+        type: 'video',
+        outputArtifactId: currentVideo.artifactId,
+      },
+      {
+        slot: { row: 0, column: 3 },
+        type: 'image',
+        outputArtifactId: artifactId(13),
+      },
+      {
+        slot: { row: 0, column: 4 },
+        type: 'image',
+        outputArtifactId: currentImage.artifactId,
+      },
     ], [unrelated, olderVersion, currentImage, currentVideo])).toEqual([
       expect.objectContaining({
-        cellSlug: 'vid-01',
-        assetSlug: currentVideo.id,
+        cellAddress: 'a1',
         artifactId: currentVideo.artifactId,
+        type: 'video',
       }),
       expect.objectContaining({
-        cellSlug: 'img-01',
-        assetSlug: currentImage.id,
+        cellAddress: 'a5',
         artifactId: currentImage.artifactId,
+        type: 'image',
       }),
     ])
   })
 
   it('prefers a concrete media cell over an action sharing its artifact', () => {
-    const frame = mentionAsset('img-frame-source', 'artifact-frame', {
-      type: 'image',
-    })
+    const frame = mentionAsset(IMAGE_ARTIFACT, { type: 'image' })
 
     expect(notebookMentionAssets([
       {
-        slug: 'extract-frame-01',
+        slot: { row: 0, column: 0 },
         type: 'extract_frame',
         outputArtifactId: frame.artifactId,
       },
       {
-        slug: 'img-01',
+        slot: { row: 0, column: 1 },
         type: 'image',
         outputArtifactId: frame.artifactId,
       },
     ], [frame])).toEqual([
       expect.objectContaining({
-        cellSlug: 'img-01',
-        assetSlug: frame.id,
+        cellAddress: 'a2',
         artifactId: frame.artifactId,
+        type: 'image',
       }),
     ])
   })
 
-  it('uses the notebook cell slug while retaining backing asset metadata', () => {
-    const video = mentionCandidate(
-      'vid-Dance-Move',
-      'vid-yt-source-2',
-      'artifact-video',
-    )
-    const image = mentionCandidate('img-cover', 'img-source', 'artifact-image', {
+  it('uses the notebook cell address while retaining backing asset metadata', () => {
+    const video = mentionCandidate({ row: 1, column: 2 }, VIDEO_ARTIFACT)
+    const image = mentionCandidate({ row: 0, column: 0 }, IMAGE_ARTIFACT, {
       type: 'image',
     })
 
-    expect(assetMentionSuggestions([video, image], 'extract @dance')).toEqual([{
-      value: '@vid-Dance-Move',
-      label: '@vid-Dance-Move',
+    expect(assetMentionSuggestions([video, image], 'extract @b')).toEqual([{
+      value: '@b3',
+      label: '@b3',
       asset: video,
       type: 'asset',
     }])
+    expect(assetMentionSuggestions([video, image], 'extract @b')[0]?.asset)
+      .toMatchObject({
+        artifactId: VIDEO_ARTIFACT,
+        mediaUrl: `/files/book/${VIDEO_ARTIFACT}/original.mp4`,
+        thumbnailUrl: `/files/book/${VIDEO_ARTIFACT}/original.jpg`,
+      })
     expect(assetMentionSuggestions([video], 'no active mention')).toEqual([])
   })
 
   it('offers only images in image-generation reference context', () => {
-    const video = mentionCandidate(
-      'vid-01',
-      'vid-source',
-      'artifact-video',
-    )
-    const image = mentionCandidate('img-01', 'img-source', 'artifact-image', {
+    const video = mentionCandidate({ row: 0, column: 0 }, VIDEO_ARTIFACT)
+    const image = mentionCandidate({ row: 0, column: 1 }, IMAGE_ARTIFACT, {
       type: 'image',
     })
 
     expect(assetMentionSuggestions(
       [video, image],
       'generate an image of @',
-    ).map((suggestion) => suggestion.label)).toEqual(['@img-01'])
+    ).map((suggestion) => suggestion.label)).toEqual(['@a2'])
     expect(assetMentionSuggestions(
       [video, image],
       'combine @',
-    ).map((suggestion) => suggestion.label)).toEqual(['@vid-01', '@img-01'])
+    ).map((suggestion) => suggestion.label)).toEqual(['@a1', '@a2'])
   })
 
   it('caps the visible candidate list at twelve assets', () => {
     const assets = Array.from({ length: 14 }, (_, index) =>
       mentionCandidate(
-        `vid-${index + 1}`,
-        `vid-source-${index + 1}`,
-        `artifact-${index + 1}`,
+        { row: Math.floor(index / 13), column: index % 13 },
+        artifactId(index + 1),
       ))
 
     expect(assetMentionSuggestions(assets, '@')).toHaveLength(12)
-    expect(assetMentionSuggestions(assets, '@').at(-1)?.label).toBe('@vid-12')
+    expect(assetMentionSuggestions(assets, '@').at(-1)?.label).toBe('@a12')
   })
 
   it('formats available media metadata and surfaces non-ready status', () => {
     expect(assetMentionMetadata(mentionCandidate(
-      'vid-portrait',
-      'vid-source',
-      'artifact-video',
+      { row: 0, column: 0 },
+      VIDEO_ARTIFACT,
       {
-      width: 1080,
-      height: 1920,
-      duration: 29,
-      status: 'processing_media',
+        width: 1080,
+        height: 1920,
+        duration: 29,
+        status: 'processing_media',
       },
     ))).toEqual(['VIDEO', '1080×1920', '0:29', 'PROCESSING MEDIA'])
 
     expect(assetMentionMetadata(mentionCandidate(
-      'aud-voice',
-      'aud-source',
-      'artifact-audio',
+      { row: 0, column: 1 },
+      AUDIO_ARTIFACT,
       {
         type: 'audio',
         width: null,
@@ -228,151 +241,47 @@ describe('asset mention suggestions', () => {
   })
 
   it('translates exact cell mentions at generic backend boundaries', () => {
-    const video = mentionCandidate(
-      'vid-01',
-      'vid-yt-8gwzvebyrji-2',
-      'artifact-video',
-    )
-    const image = mentionCandidate(
-      'img-01',
-      'img-generated-source',
-      'artifact-image',
-      { type: 'image' },
-    )
+    const video = mentionCandidate({ row: 0, column: 0 }, VIDEO_ARTIFACT)
+    const image = mentionCandidate({ row: 0, column: 1 }, IMAGE_ARTIFACT, {
+      type: 'image',
+    })
 
     expect(resolveNotebookMentionAliases(
-      'combine @VID-01 with @img-01 and leave @vid-010 alone',
+      'combine @A1 with @a2 and leave @a10 alone',
       [video, image],
     )).toBe(
-      'combine @vid-yt-8gwzvebyrji-2 with @img-generated-source and leave @vid-010 alone',
+      `combine @${VIDEO_ARTIFACT} with @${IMAGE_ARTIFACT} and leave @a10 alone`,
     )
   })
 
   it('restores routed asset tags to visible notebook addresses', () => {
-    const scene = {
-      ...mentionCandidate(
-        'img-scene',
-        'img-generated-scene',
-        'artifact-scene',
-        { type: 'image' },
-      ),
-      cellAddress: 'a5',
-    }
-    const character = {
-      ...mentionCandidate(
-        'img-character',
-        'img-fluffy-kitten',
-        'artifact-character',
-        { type: 'image' },
-      ),
-      cellAddress: 'a1',
-    }
+    const scene = mentionCandidate({ row: 0, column: 4 }, IMAGE_ARTIFACT, {
+      type: 'image',
+    })
+    const character = mentionCandidate({ row: 0, column: 0 }, artifactId(21), {
+      type: 'image',
+    })
 
     expect(restoreNotebookMentionAliases(
-      'scene @img-generated-scene, character @img-fluffy-kitten, fluffy kitten standing',
+      `scene @${scene.artifactId}, character @${character.artifactId}, fluffy kitten standing`,
       [scene, character],
     )).toBe('scene @a5, character @a1, fluffy kitten standing')
   })
 
   it('restores a routed asset tag to the selected cell sharing its artifact', () => {
-    const candidate = {
-      ...mentionCandidate(
-        'img-generated',
-        'img-shared-output',
-        'artifact-shared',
-        { type: 'image' },
-      ),
-      cellAddress: 'a1',
-    }
+    const candidate = mentionCandidate({ row: 0, column: 0 }, IMAGE_ARTIFACT, {
+      type: 'image',
+    })
 
     expect(restoreSelectedNotebookMentionAliases(
-      'restyle @img-shared-output',
+      `restyle @${candidate.artifactId}`,
       [candidate],
       [{
         id: 'cell-media',
-        slug: 'img-media',
         slot: { row: 0, column: 1 },
         type: 'image',
-        outputArtifactId: 'artifact-shared',
+        outputArtifactId: IMAGE_ARTIFACT,
       }],
     )).toBe('restyle @a2')
-  })
-
-  it('plans a visible cell rename from a completed backing asset rename', () => {
-    const candidate = mentionCandidate(
-      'img-02',
-      'img-extract-frame-first',
-      'artifact-image',
-      { type: 'image' },
-    )
-    const cells = [
-      {
-        id: 'cell-image',
-        slug: 'img-02',
-        type: 'image',
-        outputArtifactId: 'artifact-image',
-      },
-      {
-        id: 'cell-other',
-        slug: 'img-other',
-        type: 'image',
-        outputArtifactId: 'artifact-other',
-      },
-    ]
-
-    expect(notebookCellRenamePlan(
-      'img-02',
-      {
-        old_asset_id: 'img-extract-frame-first',
-        new_asset_id: 'img-hero-frame',
-      },
-      cells,
-      [candidate],
-    )).toEqual({
-      cellId: 'cell-image',
-      previousSlug: 'img-02',
-      nextSlug: 'img-hero-frame',
-      conflict: false,
-    })
-  })
-
-  it('keeps raw asset renames asset-only and detects cell slug conflicts', () => {
-    const candidate = mentionCandidate(
-      'img-02',
-      'img-source',
-      'artifact-image',
-      { type: 'image' },
-    )
-    const cells = [
-      {
-        id: 'cell-image',
-        slug: 'img-02',
-        type: 'image',
-        outputArtifactId: 'artifact-image',
-      },
-      {
-        id: 'cell-existing',
-        slug: 'img-hero',
-        type: 'image',
-        outputArtifactId: 'artifact-existing',
-      },
-    ]
-    const result = {
-      old_asset_id: 'img-source',
-      new_asset_id: 'img-hero',
-    }
-
-    expect(notebookCellRenamePlan(
-      'img-source',
-      result,
-      cells,
-      [candidate],
-    )).toBeNull()
-    expect(notebookCellRenamePlan(
-      'img-02',
-      result,
-      cells,
-      [candidate],
-    )?.conflict).toBe(true)
   })
 })
