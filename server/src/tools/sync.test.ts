@@ -14,22 +14,20 @@ async function writeNativeFile(
   data: Buffer | string,
 ): Promise<void> {
   const absoluteTarget = resolve(targetPath);
-  for (const _project of fs.projects.list()) {
-    for (const artifact of fs.artifacts.list()) {
-      const filename = relative(artifact.path, absoluteTarget);
-      if (
-        filename.length === 0 ||
-        filename === ".." ||
-        filename.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) ||
-        isAbsolute(filename)
-      ) {
-        continue;
-      }
-      const written = await fs.files.write(artifact.artifactId, filename, data
-      );
-      if (!written.ok) throw new Error(written.error.message);
-      return;
+  for (const artifact of fs.artifacts.list()) {
+    const filename = relative(artifact.path, absoluteTarget);
+    if (
+      filename.length === 0 ||
+      filename === ".." ||
+      filename.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) ||
+      isAbsolute(filename)
+    ) {
+      continue;
     }
+    const written = await fs.files.write(artifact.artifactId, filename, data
+    );
+    if (!written.ok) throw new Error(written.error.message);
+    return;
   }
   throw new Error(`No native artifact workspace owns ${targetPath}`);
 }
@@ -90,25 +88,21 @@ describe("sync tool", () => {
   });
 });
 
-// Per-test createTestClient + create_project under parallel test load was
-// racing on the queue's global projectsDir, intermittently failing with
-// ENOENT on .project.lock. Mirror asset-manifest.test.ts: a single
-// beforeAll/afterAll, with a unique project slug per test for isolation.
 describe("list_assets tool", () => {
   let client: Client;
   let tempDir: string;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("new project returns its scratch notebook", async () => {
+  it("new book returns no artifacts", async () => {
     const slug = "list-empty";
     await client.callTool({
       name: "create_project",
@@ -122,14 +116,7 @@ describe("list_assets tool", () => {
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
-    expect(data.assets).toHaveLength(1);
-    expect(data.assets[0]).toMatchObject({
-      type: "notebook",
-      status: "ready",
-    });
-    expect(data.assets[0].id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
+    expect(data.assets).toEqual([]);
   });
 
   it("lists assets after upload", async () => {
@@ -168,7 +155,6 @@ describe("buildAssetList", () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     fs = createEngineForTest(tempDir);
     await setEngineRoot(tempDir, fs);
-    await fs.projects.create("test-proj");
   });
 
   afterEach(async () => {
@@ -180,7 +166,7 @@ describe("buildAssetList", () => {
 
   it("returns empty array for project with no assets", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets).toEqual([]);
   });
 
@@ -189,7 +175,7 @@ describe("buildAssetList", () => {
     const createResult = await fs.artifacts.create("img", "test-asset");
     expect(createResult.ok).toBe(true);
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].id).toMatch(/^img-/);
     expect(assets[0].type).toBe("image");
@@ -208,7 +194,7 @@ describe("buildAssetList", () => {
 
     await writeNativeFile(fs, join(assetDir, "original.mp4"), "fake-video-data");
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].media_url).toContain("original.mp4");
   });
@@ -219,7 +205,7 @@ describe("buildAssetList", () => {
     if (!createResult.ok) throw new Error(createResult.error.message);
     await writeNativeFile(fs, join(createResult.value.path, "original.mp4"), "fake-video-data");
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     // An uncached video does NOT run ffmpeg inline — waveform is deferred.
     expect(assets[0].waveform).toBeNull();
 
@@ -245,7 +231,7 @@ describe("buildAssetList", () => {
 
     await writeNativeFile(fs, join(assetDir, "original.png"), "fake-png-data");
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].media_url).toContain("original.png");
   });
@@ -258,7 +244,7 @@ describe("buildAssetList", () => {
 
     await writeNativeFile(fs, join(assetDir, "original.mp3"), "fake-audio-data");
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].media_url).toContain("original.mp3");
   });
@@ -274,7 +260,7 @@ describe("buildAssetList", () => {
       "fake-m4a-data",
     );
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets).toHaveLength(1);
     expect(assets[0].media_url).toContain("original.m4a");
     expect(assets[0].status).toBe("ready");
@@ -305,7 +291,7 @@ describe("buildAssetList", () => {
     );
     expect(initialMetadata.ok).toBe(true);
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].duration).toBeGreaterThan(1.2);
     expect(assets[0].duration).toBeLessThan(2.0);
@@ -329,7 +315,7 @@ describe("buildAssetList", () => {
 
     await writeNativeFile(fs, join(assetDir, "original.md"), "# Hello");
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].media_url).toContain("original.md");
   });
@@ -343,7 +329,7 @@ describe("buildAssetList", () => {
     await writeNativeFile(fs, join(assetDir, "original.mp4"), "fake-video-data");
     await writeNativeFile(fs, join(assetDir, "original.jpg"), "fake-thumb");
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].thumbnail_url).toContain("original.jpg");
   });
@@ -356,7 +342,7 @@ describe("buildAssetList", () => {
 
     await writeNativeFile(fs, join(assetDir, "original.mp4"), "fake-video-data");
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].thumbnail_url).toBeNull();
   });
@@ -369,7 +355,7 @@ describe("buildAssetList", () => {
 
     await writeNativeFile(fs, join(assetDir, "original.mp4"), "fake-video-data");
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].status).toBe("processing");
   });
@@ -384,7 +370,7 @@ describe("buildAssetList", () => {
     await fs.metadata.artifacts.write(createResult.value.artifactId, "original", { width: 1, height: 1, duration: 1 }
     );
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].status).toBe("ready");
   });
@@ -400,7 +386,7 @@ describe("buildAssetList", () => {
     );
     await writeNativeFile(fs, join(assetDir, ".original.analysis.json"), JSON.stringify({ summary: "" }));
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].status).toBe("ready");
   });
@@ -419,7 +405,7 @@ describe("buildAssetList", () => {
     );
     expect(renderMetadata.ok).toBe(true);
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].status).toBe("ready");
   });
@@ -435,7 +421,7 @@ describe("buildAssetList", () => {
     // Whitelist clamp is gone — the lock state passes through unchanged.
     await fs.jobs.locks.acquire(assetDir, { durationMs: 60_000 });
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     const asset = assets.find(a => a.id === createResult.value.slug)!;
     expect(asset.status).toBe("loading");
 
@@ -450,7 +436,7 @@ describe("buildAssetList", () => {
     // createAsset co-writes a pending assets row with a 5-minute deadline.
     // Until the job enqueue stamps meta.kind, the asset reads as "loading" —
     // not the orphan "error" that used to flash a red tile in the UI.
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     const asset = assets.find(a => a.id === createResult.value.slug)!;
     expect(asset.status).toBe("loading");
   });
@@ -466,7 +452,7 @@ describe("buildAssetList", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(Date.now() + 6 * 60_000);
-      const assets = await buildAssetList(fs, "test-proj");
+      const assets = await buildAssetList(fs, fs.book.get().bookId);
       const asset = assets.find(a => a.id === createResult.value.slug)!;
       expect(asset.status).toBe("error");
     } finally {
@@ -486,7 +472,7 @@ describe("buildAssetList", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(Date.now() + 6 * 60_000);
-      const assets = await buildAssetList(fs, "test-proj");
+      const assets = await buildAssetList(fs, fs.book.get().bookId);
       const asset = assets.find(a => a.id === createResult.value.slug)!;
       expect(asset.status).toBe("error");
     } finally {
@@ -503,7 +489,6 @@ describe("performSync", () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-sync-test-"));
     fs = createEngineForTest(tempDir);
     await setEngineRoot(tempDir, fs);
-    await fs.projects.create("test-proj");
   });
 
   afterEach(async () => {
@@ -512,7 +497,7 @@ describe("performSync", () => {
 
   it("performSync on empty project returns empty result", async () => {
     const { performSync } = await import("./sync.js");
-    const result = await performSync(fs, "test-proj");
+    const result = await performSync(fs, fs.book.get().bookId);
     expect(result.pending).toEqual([]);
     expect(result.completed).toEqual([]);
     expect(result.failed).toEqual([]);
@@ -530,7 +515,7 @@ describe("performSync", () => {
       const createResult = await fs.artifacts.create("vid", "sync-test");
       if (!createResult.ok) throw new Error(createResult.error.message);
 
-      const result = await performSync(fs, "test-proj");
+      const result = await performSync(fs, fs.book.get().bookId);
       // Should complete without errors, no KIE polling
       expect(result.pending).toEqual([]);
       expect(result.completed).toEqual([]);
@@ -551,7 +536,6 @@ describe("buildAssetList — failed download detection (RC3)", () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-rc3-test-"));
     fs = createEngineForTest(tempDir);
     await setEngineRoot(tempDir, fs);
-    await fs.projects.create("test-proj");
   });
 
   afterEach(async () => {
@@ -570,7 +554,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
     // Simulate failed download: 0-byte .part file, no original.mp4
     await writeNativeFile(fs, join(assetDir, "original.mp4.part"), "");
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     // The clamp now allows "error" through so failed downloads surface in
     // the inbox instead of appearing stuck in "generating" forever.
@@ -587,7 +571,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
     await writeNativeFile(fs, join(assetDir, "original.jpg"), "fake-thumbnail");
     await writeNativeFile(fs, join(assetDir, "original.mp4.part"), "");
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].status).toBe("error");
   });
@@ -603,7 +587,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
     await writeNativeFile(fs, join(assetDir, "original.mp4"), "fake-video");
     await writeNativeFile(fs, join(assetDir, "original.mp4.part"), "");
 
-    const assets = await buildAssetList(fs, "test-proj");
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets.length).toBe(1);
     expect(assets[0].status).not.toBe("error");
   });
@@ -629,7 +613,6 @@ describe("performSync — never auto-renders from sync", () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-rc2-test-"));
     fs = createEngineForTest(tempDir);
     await setEngineRoot(tempDir, fs);
-    await fs.projects.create("test-proj");
     savedKieKey = process.env.KIE_API_KEY;
     delete process.env.KIE_API_KEY;
   });
@@ -640,6 +623,7 @@ describe("performSync — never auto-renders from sync", () => {
     } else {
       delete process.env.KIE_API_KEY;
     }
+    await queue.stop();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -657,7 +641,7 @@ describe("performSync — never auto-renders from sync", () => {
       text: "So money is infinite. Why do we have poor people then? Because we don't want people to all have money.",
     }));
 
-    const result = await performSync(fs, "test-proj");
+    const result = await performSync(fs, fs.book.get().bookId);
     expect(result.auto_render.length).toBe(0);
   });
 
@@ -676,7 +660,7 @@ describe("performSync — never auto-renders from sync", () => {
     }));
     await writeNativeFile(fs, join(assetDir, "elevenlabs.json"), JSON.stringify({ words: [] }));
 
-    const result = await performSync(fs, "test-proj");
+    const result = await performSync(fs, fs.book.get().bookId);
     expect(result.auto_render.length).toBe(0);
   });
 
@@ -692,7 +676,7 @@ describe("performSync — never auto-renders from sync", () => {
     }));
     await fs.metadata.artifacts.write(createResult.value.slug, "original", { hasAudio: true });
 
-    const result = await performSync(fs, "test-proj");
+    const result = await performSync(fs, fs.book.get().bookId);
     expect(result.auto_render.length).toBe(0);
   });
 
@@ -709,7 +693,7 @@ describe("performSync — never auto-renders from sync", () => {
     }));
     await fs.metadata.artifacts.write(assetId, "original", { hasAudio: false });
 
-    const result = await performSync(fs, "test-proj");
+    const result = await performSync(fs, fs.book.get().bookId);
     expect(result.auto_render.length).toBe(0);
   });
 
@@ -730,7 +714,7 @@ describe("performSync — never auto-renders from sync", () => {
       taskId: "task-123", taskType: "transcribe",
     }));
 
-    const result = await performSync(fs, "test-proj");
+    const result = await performSync(fs, fs.book.get().bookId);
     expect(result.auto_render.length).toBe(0);
   });
 
@@ -748,7 +732,7 @@ describe("performSync — never auto-renders from sync", () => {
       text: "[music]",
     }));
 
-    const result = await performSync(fs, "test-proj");
+    const result = await performSync(fs, fs.book.get().bookId);
     expect(result.auto_render.length).toBe(0);
   });
 });
@@ -770,7 +754,6 @@ describe("performSync — auto-transcribe", () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-autotranscribe-test-"));
     fs = createEngineForTest(tempDir);
     await setEngineRoot(tempDir, fs);
-    await fs.projects.create("test-proj");
     savedKey = process.env.ELEVENLABS_API_KEY;
     process.env.ELEVENLABS_API_KEY = "test-key";
   });
@@ -781,6 +764,7 @@ describe("performSync — auto-transcribe", () => {
     } else {
       delete process.env.ELEVENLABS_API_KEY;
     }
+    await queue.stop();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -800,7 +784,7 @@ describe("performSync — auto-transcribe", () => {
       text: "So money is infinite. Why do we have poor people then? Because we don't want people to all have money.",
     }));
 
-    const result = await performSync(fs, "test-proj");
+    const result = await performSync(fs, fs.book.get().bookId);
     expect(result.auto_transcribe.length).toBe(1);
     expect(result.auto_transcribe[0].assetId).toBe(assetId);
   });
@@ -821,7 +805,7 @@ describe("performSync — auto-transcribe", () => {
     }));
     await writeNativeFile(fs, join(assetDir, "elevenlabs.json"), JSON.stringify({ words: [] }));
 
-    const result = await performSync(fs, "test-proj");
+    const result = await performSync(fs, fs.book.get().bookId);
     expect(result.auto_transcribe.length).toBe(0);
   });
 
@@ -846,7 +830,7 @@ describe("performSync — auto-transcribe", () => {
     });
     if (!writeErr.ok) throw new Error(writeErr.error.message);
 
-    const result = await performSync(fs, "test-proj");
+    const result = await performSync(fs, fs.book.get().bookId);
     expect(result.auto_transcribe.length).toBe(0);
   });
 
@@ -865,7 +849,7 @@ describe("performSync — auto-transcribe", () => {
       text: "[music]",
     }));
 
-    const result = await performSync(fs, "test-proj");
+    const result = await performSync(fs, fs.book.get().bookId);
     expect(result.auto_transcribe.length).toBe(0);
   });
 });

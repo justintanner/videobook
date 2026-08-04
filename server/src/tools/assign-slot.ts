@@ -23,15 +23,19 @@ async function enqueueLazyAnalysis(
   if (asset.kind !== "video" && asset.kind !== "image") return null;
   const manifest = await engine.files.manifest(asset.artifactId);
   if (!manifest.ok) return null;
-  if (manifest.value.files.some((file) => file.name === ".original.analysis.json")) return null;
+  if ((await engine.files.read(asset.artifactId, ".original.analysis.json")).ok) return null;
   if (asset.kind === "video") {
+    const transcription = await engine.files.read(
+      asset.artifactId,
+      ".analysis.gpt4otrans.json",
+    );
     const jobId = `auto-analyze-${asset.slug}`;
     await queue.enqueue(jobId, {
       type: "analyze_video",
       bookId,
       assetId: asset.slug,
       assetDir: manifest.value.path,
-      hasTranscription: manifest.value.files.some((file) => file.name === ".analysis.gpt4otrans.json"),
+      hasTranscription: transcription.ok,
     });
     return { jobId, kind: "analyze_video" };
   }

@@ -1,16 +1,18 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createTestClient } from "../test-client.js";
+
+type TextContent = Array<{ type: string; text: string }>;
 
 describe("get_timeline tool", () => {
   let client: Client;
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-get-timeline-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
@@ -23,25 +25,43 @@ describe("get_timeline tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns empty slots and default render when no timeline set", async () => {
+  async function upload(name: string): Promise<{ artifactId: string }> {
+    const result = await client.callTool({
+      name: "upload_file",
+      arguments: {
+        book_id: "test-proj",
+        filename: `${name}.png`,
+        data: Buffer.from(name).toString("base64"),
+      },
+    });
+    return JSON.parse((result.content as TextContent)[0].text) as { artifactId: string };
+  }
+
+  it("returns an empty canonical timeline for a new book", async () => {
     const result = await client.callTool({
       name: "get_timeline",
       arguments: { book_id: "test-proj" },
     });
+
     expect(result.isError).toBeFalsy();
-    const content = result.content as Array<{ type: string; text: string }>;
-    const data = JSON.parse(content[0].text);
-    expect(data).toEqual({ slots: [], render: "landscape" });
+    const data = JSON.parse((result.content as TextContent)[0].text);
+    expect(data).toMatchObject({ slots: [], audio: [], render: "landscape" });
+    expect(data.book_id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it("returns matching data after edit_timeline", async () => {
-    const slots = [
-      { slug: "vid-intro", volume: 0.8 },
-      { slug: "vid-outro", audioFadeOut: 500 },
-    ];
+  it("returns stable artifact references after set_timeline", async () => {
+    const intro = await upload("intro");
+    const outro = await upload("outro");
     await client.callTool({
       name: "set_timeline",
-      arguments: { book_id: "test-proj", slots, render: "portrait" },
+      arguments: {
+        book_id: "test-proj",
+        render: "portrait",
+        slots: [
+          { artifact_id: intro.artifactId, volume: 80 },
+          { artifact_id: outro.artifactId, audioFadeOut: 0.5 },
+        ],
+      },
     });
 
     const result = await client.callTool({
@@ -49,27 +69,24 @@ describe("get_timeline tool", () => {
       arguments: { book_id: "test-proj" },
     });
     expect(result.isError).toBeFalsy();
-    const content = result.content as Array<{ type: string; text: string }>;
-    const data = JSON.parse(content[0].text);
-    expect(data.slots).toEqual(slots);
+    const data = JSON.parse((result.content as TextContent)[0].text);
     expect(data.render).toBe("portrait");
+    expect(data.slots).toEqual([
+      expect.objectContaining({ artifact_id: intro.artifactId, volume: 80 }),
+      expect.objectContaining({ artifact_id: outro.artifactId, audioFadeOut: 0.5 }),
+    ]);
   });
 
-
-  it("round-trips: edit then get returns matching data", async () => {
-    const slots = [{ slug: "vid-a" }, { slug: "vid-b", volume: 1.0, audioFadeIn: 200 }];
+  it("round-trips a square canvas with an empty timeline", async () => {
     await client.callTool({
       name: "set_timeline",
-      arguments: { book_id: "test-proj", slots, render: "square" },
+      arguments: { book_id: "test-proj", render: "square", slots: [], audio: [] },
     });
-
     const result = await client.callTool({
       name: "get_timeline",
       arguments: { book_id: "test-proj" },
     });
-    const content = result.content as Array<{ type: string; text: string }>;
-    const data = JSON.parse(content[0].text);
-    expect(data.slots).toEqual(slots);
-    expect(data.render).toBe("square");
+    const data = JSON.parse((result.content as TextContent)[0].text);
+    expect(data).toMatchObject({ slots: [], audio: [], render: "square" });
   });
 });

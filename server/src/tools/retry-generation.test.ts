@@ -54,7 +54,7 @@ describe("retry_generation tool", () => {
       type: "generate_google_omni_video",
       vidAssetId: assetId,
       vidAssetDir: assetId,
-      bookId: "retry-proj",
+      bookId: fs.book.get().bookId,
       prompt: "a sunset",
     };
     await fs.metadata.artifacts.write(assetId, "generation-request", payload);

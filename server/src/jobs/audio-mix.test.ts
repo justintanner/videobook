@@ -1,4 +1,4 @@
-import { createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../fs.js";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,7 +11,6 @@ import { resolveAudioMixAsset } from "../tools/audio-mix.js";
 import { buildAudioMixFilter, mixAudioMedia } from "./audio-mix.js";
 
 const execFileAsync = promisify(execFile);
-const BOOK_ID = "audio-mix-test";
 
 async function createAssetWithFile(
   fs: Engine,
@@ -42,7 +41,9 @@ function projectedAmplitude(samples: Buffer, frequency: number, sampleRate: numb
 
 describe("audio mix", () => {
   let tempDir: string;
+  let engineRoot: string;
   let fs: Engine;
+  let bookId: string;
   let videoTargetId: string;
   let videoLayerId: string;
   let audioTargetId: string;
@@ -50,9 +51,9 @@ describe("audio mix", () => {
 
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-audio-mix-"));
-    fs = createEngineForTest(join(tempDir, "projects"));
-    const project = await fs.projects.create(BOOK_ID);
-    if (!project.ok) throw new Error(project.error.message);
+    engineRoot = join(tempDir, "projects");
+    fs = createEngineForTest(engineRoot);
+    bookId = fs.book.get().bookId;
     videoTargetId = await createAssetWithFile(fs, "vid", "video target", "original.mp4");
     videoLayerId = await createAssetWithFile(fs, "vid", "video layer", "original.mkv");
     audioTargetId = await createAssetWithFile(fs, "aud", "audio target", "original.wav");
@@ -60,7 +61,7 @@ describe("audio mix", () => {
   });
 
   afterAll(async () => {
-    fs.close();
+    closeEngineForTest(engineRoot, fs);
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -73,8 +74,8 @@ describe("audio mix", () => {
     const targetId = targetKind === "video" ? videoTargetId : audioTargetId;
     const layerId = layerKind === "video" ? videoLayerId : audioLayerId;
     const [target, layer] = await Promise.all([
-      resolveAudioMixAsset(fs, targetId, BOOK_ID),
-      resolveAudioMixAsset(fs, layerId, BOOK_ID),
+      resolveAudioMixAsset(fs, targetId, bookId),
+      resolveAudioMixAsset(fs, layerId, bookId),
     ]);
     expect(target.kind).toBe(targetKind);
     expect(layer.kind).toBe(layerKind);

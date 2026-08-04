@@ -56,7 +56,10 @@ describe("sync_video_to_audio tool", () => {
 
     client = await createTestClient(tempDir);
     fs = createEngineForTest(tempDir);
-    valueOf(await fs.projects.create(PROJECT));
+    await client.callTool({
+      name: "create_project",
+      arguments: { book_id: PROJECT },
+    });
     const created = valueOf(await fs.artifacts.create("vid", "silent sync source"));
     silentAssetId = created.slug;
     valueOf(await fs.files.write(silentAssetId, "original.mp4", await readFile(silentPath)));

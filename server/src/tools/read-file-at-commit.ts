@@ -15,21 +15,16 @@ export function readFileAtCommitDef(fs: Engine): ToolDef {
       book_id: z.string().describe("Project slug"),
     },
     handler: async (args): Promise<ToolResult> => {
-      const { asset_id: _asset_id, filename, commit_hash, book_id } = args as {
+      const { asset_id, filename, commit_hash } = args as {
         asset_id: string;
         filename: string;
         commit_hash: string;
         book_id: string;
       };
-      const artifact = fs.artifacts.get(book_id);
-      if (!artifact.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: artifact.error.message }],
-        };
-      }
+      const artifact = fs.artifacts.get(asset_id);
+      const artifactId = artifact.ok ? artifact.value.artifactId : asset_id;
       const result = await fs.files.readAtRevision(
-        artifact.value.artifactId,
+        artifactId,
         filename,
         commit_hash,
       );

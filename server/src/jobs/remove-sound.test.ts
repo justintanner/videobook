@@ -1,4 +1,4 @@
-import { createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../fs.js";
 import { execFile } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -20,7 +20,6 @@ import {
 } from "./remove-sound.js";
 
 const execFileAsync = promisify(execFile);
-const BOOK_ID = "remove-sound-test";
 
 const HORSE_EVENT: SoundEvent = { text: "horse neighing", start: 1.5, end: 2.5 };
 const DOG_EVENT: SoundEvent = { text: "dog barking", start: 4, end: 4.5 };
@@ -96,7 +95,9 @@ describe("sound event matching", () => {
 
 describe("remove sound ElevenLabs job", () => {
   let tempDir: string;
+  let engineRoot: string;
   let fs: Engine;
+  let bookId: string;
   let server: Server;
 
   async function listen(): Promise<number> {
@@ -124,13 +125,13 @@ describe("remove sound ElevenLabs job", () => {
         response.end();
       });
     });
-    fs = createEngineForTest(join(tempDir, "projects"));
-    const project = await fs.projects.create(BOOK_ID);
-    if (!project.ok) throw new Error(project.error.message);
+    engineRoot = join(tempDir, "projects");
+    fs = createEngineForTest(engineRoot);
+    bookId = fs.book.get().bookId;
   });
 
   afterEach(async () => {
-    fs.close();
+    closeEngineForTest(engineRoot, fs);
     if (server.listening) {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => error ? reject(error) : resolve());
@@ -185,7 +186,7 @@ describe("remove sound ElevenLabs job", () => {
       assetDir: assetDir.value,
       filename: "original.mp3",
       sound: "horse sound",
-      bookId: BOOK_ID,
+      bookId,
     };
     const result = await removeSoundWithElevenLabs(fs, payload, await makeProvider());
 
@@ -235,7 +236,7 @@ describe("remove sound ElevenLabs job", () => {
       assetDir: assetDir.value,
       filename: "original.mp4",
       sound: "horse neighing",
-      bookId: BOOK_ID,
+      bookId,
     };
     const result = await removeSoundWithElevenLabs(fs, payload, await makeProvider());
     expect(result.removed_segments).toEqual([{ start: 1.35, end: 2.65 }]);
@@ -274,7 +275,7 @@ describe("remove sound ElevenLabs job", () => {
       assetDir: assetDir.value,
       filename: "original.mp3",
       sound: "car engine",
-      bookId: BOOK_ID,
+      bookId,
     };
     await expect(removeSoundWithElevenLabs(fs, payload, await makeProvider()))
       .rejects.toThrow(/No audio event matching "car engine".*horse neighing.*dog barking/);

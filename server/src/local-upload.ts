@@ -29,6 +29,7 @@ const extensionToPrefix: Record<string, string> = {
 };
 
 export interface LocalUploadResult {
+  artifactId: string;
   assetId: string;
   path: string;
   filename: string;
@@ -176,6 +177,7 @@ async function uploadLocal(
   }
 
   let assetId: string;
+  let artifactId: string;
   let assetPath: string;
   let isNewAsset = false;
 
@@ -189,6 +191,15 @@ async function uploadLocal(
     }
     assetId = args.targetAssetId;
     assetPath = resolveResult.value;
+    const artifact = fs.artifacts.get(assetId);
+    if (!artifact.ok) {
+      return {
+        ok: false,
+        statusCode: statusCodeForFsError(artifact.error),
+        message: artifact.error.message,
+      };
+    }
+    artifactId = artifact.value.artifactId;
   } else {
     const assetName = path.basename(args.filename, ext);
     const assetResult = await fs.artifacts.create(prefix!, assetName);
@@ -200,6 +211,7 @@ async function uploadLocal(
       };
     }
     assetId = assetResult.value.slug;
+    artifactId = assetResult.value.artifactId;
     assetPath = assetResult.value.path;
     isNewAsset = true;
   }
@@ -296,6 +308,7 @@ async function uploadLocal(
       outcome = {
         ok: true,
         value: {
+          artifactId,
           assetId,
           path: assetPath,
           filename: writtenFilename,

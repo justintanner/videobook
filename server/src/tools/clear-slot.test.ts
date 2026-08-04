@@ -11,6 +11,7 @@ describe("clear_slot tool", () => {
   let client: Client;
   let tempDir: string;
   let assetId: string;
+  let artifactId: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
@@ -29,6 +30,7 @@ describe("clear_slot tool", () => {
       (uploadResult.content as TextContent)[0].text,
     );
     assetId = uploaded.assetId;
+    artifactId = uploaded.artifactId;
     await client.callTool({
       name: "assign_slot",
       arguments: {
@@ -55,7 +57,8 @@ describe("clear_slot tool", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.slots[0].slug).toBe("");
+    expect(parsed.slots).toEqual([]);
+    expect(parsed.removed_artifact_id).toBe(artifactId);
   });
 
   it("preserves other slots when clearing one", async () => {
@@ -86,8 +89,9 @@ describe("clear_slot tool", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.slots[0].slug).toBe("");
-    expect(parsed.slots[1].slug).toBe(asset2.assetId);
+    expect(parsed.slots).toEqual([
+      expect.objectContaining({ artifact_id: asset2.artifactId }),
+    ]);
   });
 
   it("returns error for invalid slot format", async () => {
@@ -101,28 +105,26 @@ describe("clear_slot tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("Invalid slot format");
+    expect(content[0].text).toContain("Slot must use the form");
   });
 
-  it("returns error when project has no slots assigned", async () => {
-    // Create a fresh project with no timeline slots
+  it("returns error after all slots are removed", async () => {
     await client.callTool({
-      name: "create_project",
-      arguments: { book_id: "empty-proj" },
+      name: "unassign_slot",
+      arguments: { book_id: "test-proj", slot: "s01" },
     });
 
     const result = await client.callTool({
       name: "unassign_slot",
       arguments: {
-        book_id: "empty-proj",
+        book_id: "test-proj",
         slot: "s01",
       },
     });
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    // Either "No timeline" or "out of range" depending on whether metadata exists
-    expect(content[0].text).toMatch(/No timeline|out of range/);
+    expect(content[0].text).toContain("outside the current timeline");
   });
 
   it("returns error for out-of-range slot index", async () => {
@@ -137,7 +139,7 @@ describe("clear_slot tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("out of range");
+    expect(content[0].text).toContain("outside the current timeline");
   });
 
   it("returns error for slot s00", async () => {
@@ -152,23 +154,18 @@ describe("clear_slot tool", () => {
     expect(result.isError).toBe(true);
   });
 
-  it("clearing already-empty slot resets volume/fade", async () => {
-    // Clear slot 1 first
+  it("rejects clearing an already-removed slot", async () => {
     await client.callTool({
       name: "unassign_slot",
       arguments: { book_id: "test-proj", slot: "s01" },
     });
 
-    // Clear it again (already empty)
     const result = await client.callTool({
       name: "unassign_slot",
       arguments: { book_id: "test-proj", slot: "s01" },
     });
 
-    expect(result.isError).toBeFalsy();
-    const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.slots[0].slug).toBe("");
-    // Volume/fade fields should not exist since clear does a full reset
-    expect(parsed.slots[0].volume).toBeUndefined();
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("outside the current timeline");
   });
 });

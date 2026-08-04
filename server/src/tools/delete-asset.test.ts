@@ -42,7 +42,8 @@ describe("delete_asset tool", () => {
       (result.content as Array<{ type: string; text: string }>)[0].text
     );
     expect(parsed.status).toBe("deleted");
-    expect(parsed.asset_id).toBe(uploaded.assetId);
+    expect(parsed.artifact_id).toBe(uploaded.artifactId);
+    expect(parsed.slug).toBe(uploaded.assetId);
     expect(parsed.deleted_at).toBeDefined();
 
     // Verify asset is gone via manifest
@@ -86,8 +87,8 @@ describe("delete_asset tool", () => {
     });
     const timeline = JSON.parse(
       (timelineResult.content as Array<{ type: string; text: string }>)[0].text
-    ) as { slots: Array<{ slug: string }> };
-    expect(timeline.slots[0]?.slug).toBe("");
+    ) as { slots: Array<{ artifact_id: string }> };
+    expect(timeline.slots).toEqual([]);
   });
 
   it("returns error for nonexistent asset", async () => {

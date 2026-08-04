@@ -292,7 +292,6 @@ describe("findPreviousErrorForPrompt", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-err-"));
     fs = createEngineForTest(tempDir);
-    await fs.projects.create("err-proj");
   });
 
   afterEach(async () => {

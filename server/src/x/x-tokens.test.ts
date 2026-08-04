@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import type { Engine } from "videobook-engine";
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import type { ApplicationStateStore } from "../app-state.js";
 import {
   getValidAccessToken,
   readTokens,
@@ -17,6 +13,19 @@ interface RecordedRequest {
   method: string;
   body: string | null;
   authorization: string | null;
+}
+
+function createStore(): ApplicationStateStore {
+  const values = new Map<string, unknown>();
+  return {
+    get<T>(key: string): Promise<T | null> {
+      return Promise.resolve(values.has(key) ? values.get(key) as T : null);
+    },
+    set<T>(key: string, value: T): Promise<void> {
+      values.set(key, value);
+      return Promise.resolve();
+    },
+  };
 }
 
 function makeStubFetch(responses: Array<{ status: number; body: unknown }>): {
@@ -59,57 +68,59 @@ function makeStubFetch(responses: Array<{ status: number; body: unknown }>): {
 }
 
 describe("x-tokens", () => {
-  let tempDir: string;
-  let fs: Engine;
+  let store: ApplicationStateStore;
   const originalEnv = {
     X_ACCESS_TOKEN: process.env.X_ACCESS_TOKEN,
     X_CLIENT_ID: process.env.X_CLIENT_ID,
     X_CLIENT_SECRET: process.env.X_CLIENT_SECRET,
   };
 
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "videocity-xtok-"));
-    fs = createEngineForTest(tempDir);
+  beforeEach(() => {
+    store = createStore();
     delete process.env.X_ACCESS_TOKEN;
     delete process.env.X_CLIENT_ID;
     delete process.env.X_CLIENT_SECRET;
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     if (originalEnv.X_ACCESS_TOKEN !== undefined) {
       process.env.X_ACCESS_TOKEN = originalEnv.X_ACCESS_TOKEN;
+    } else {
+      delete process.env.X_ACCESS_TOKEN;
     }
     if (originalEnv.X_CLIENT_ID !== undefined) {
       process.env.X_CLIENT_ID = originalEnv.X_CLIENT_ID;
+    } else {
+      delete process.env.X_CLIENT_ID;
     }
     if (originalEnv.X_CLIENT_SECRET !== undefined) {
       process.env.X_CLIENT_SECRET = originalEnv.X_CLIENT_SECRET;
+    } else {
+      delete process.env.X_CLIENT_SECRET;
     }
-    closeEngineForTest(tempDir, fs);
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns access_token from Dolt runtime state when not near expiry", async () => {
+  it("returns access_token from application state when not near expiry", async () => {
     const state: XTokenState = {
       access_token: "live-tok",
       refresh_token: "rt-1",
       expires_at: new Date(Date.now() + 60 * 60_000).toISOString(),
     };
-    await writeTokens(state, fs);
+    await writeTokens(state, store);
 
-    const tok = await getValidAccessToken({ engine: fs });
+    const tok = await getValidAccessToken({ store });
     expect(tok).toBe("live-tok");
   });
 
   it("falls back to X_ACCESS_TOKEN env when no state file", async () => {
     process.env.X_ACCESS_TOKEN = "static-fallback";
-    const tok = await getValidAccessToken({ engine: fs });
+    const tok = await getValidAccessToken({ store });
     expect(tok).toBe("static-fallback");
   });
 
   it("throws a helpful error when no token configured at all", async () => {
-    await expect(getValidAccessToken({ engine: fs })).rejects.toThrow(
-      /No X access token available/,
+    await expect(getValidAccessToken({ store })).rejects.toThrow(
+      /No X access token is configured/,
     );
   });
 
@@ -121,7 +132,7 @@ describe("x-tokens", () => {
       refresh_token: "old-refresh",
       expires_at: new Date(Date.now() + 5_000).toISOString(),
     };
-    await writeTokens(expiringState, fs);
+    await writeTokens(expiringState, store);
 
     const { fetch: stubFetch, calls } = makeStubFetch([
       {
@@ -137,7 +148,7 @@ describe("x-tokens", () => {
 
     const refreshed = await refreshTokens(expiringState, {
       fetchImpl: stubFetch,
-      engine: fs,
+      store,
     });
     expect(refreshed.access_token).toBe("new-access");
     expect(refreshed.refresh_token).toBe("new-refresh");
@@ -152,7 +163,7 @@ describe("x-tokens", () => {
     expect(calls[0].body).toContain("grant_type=refresh_token");
     expect(calls[0].body).toContain("refresh_token=old-refresh");
 
-    const persisted = await readTokens(fs);
+    const persisted = await readTokens(store);
     expect(persisted).not.toBeNull();
     if (!persisted) throw new Error("Missing persisted token state");
     expect(persisted.access_token).toBe("new-access");
@@ -167,7 +178,7 @@ describe("x-tokens", () => {
       refresh_token: "keep-me",
       expires_at: new Date(Date.now() + 1_000).toISOString(),
     };
-    await writeTokens(state, fs);
+    await writeTokens(state, store);
     const { fetch: stubFetch } = makeStubFetch([
       {
         status: 200,
@@ -176,7 +187,7 @@ describe("x-tokens", () => {
     ]);
     const refreshed = await refreshTokens(state, {
       fetchImpl: stubFetch,
-      engine: fs,
+      store,
     });
     expect(refreshed.refresh_token).toBe("keep-me");
   });
@@ -194,7 +205,7 @@ describe("x-tokens", () => {
     ]);
     await expect(refreshTokens(state, {
       fetchImpl: stubFetch,
-      engine: fs,
+      store,
     })).rejects.toThrow(
       /token refresh failed.*invalid_grant/i,
     );
@@ -206,16 +217,15 @@ describe("x-tokens", () => {
       refresh_token: "rt",
       expires_at: new Date().toISOString(),
     };
-    await expect(refreshTokens(state, { engine: fs })).rejects.toThrow(
+    await expect(refreshTokens(state, { store })).rejects.toThrow(
       /X_CLIENT_ID\/X_CLIENT_SECRET/,
     );
   });
 
   it("readTokens returns null on malformed runtime state", async () => {
-    const result = fs.settings.set("x.oauth.tokens", {
+    await store.set("x.oauth.tokens", {
       access_token: 42,
     });
-    expect(result.ok).toBe(true);
-    expect(await readTokens(fs)).toBeNull();
+    expect(await readTokens(store)).toBeNull();
   });
 });

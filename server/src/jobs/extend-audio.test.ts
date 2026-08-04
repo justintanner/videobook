@@ -1,4 +1,4 @@
-import { createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../fs.js";
 import { execFile } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -17,7 +17,6 @@ import {
 } from "./extend-audio.js";
 
 const execFileAsync = promisify(execFile);
-const BOOK_ID = "extend-audio-test";
 
 type CapturedRequest = {
   contentType: string;
@@ -45,7 +44,9 @@ async function closeServer(server: Server): Promise<void> {
 
 describe("extend audio ElevenLabs job", () => {
   let tempDir: string;
+  let engineRoot: string;
   let fs: Engine;
+  let bookId: string;
   let server: Server;
   let sourceAudio: Buffer;
   let continuationAudio: Buffer;
@@ -117,13 +118,13 @@ describe("extend audio ElevenLabs job", () => {
       });
     });
 
-    fs = createEngineForTest(join(tempDir, "projects"));
-    const project = await fs.projects.create(BOOK_ID);
-    if (!project.ok) throw new Error(project.error.message);
+    engineRoot = join(tempDir, "projects");
+    fs = createEngineForTest(engineRoot);
+    bookId = fs.book.get().bookId;
   });
 
   afterEach(async () => {
-    fs.close();
+    closeEngineForTest(engineRoot, fs);
     await closeServer(server);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
@@ -149,7 +150,7 @@ describe("extend audio ElevenLabs job", () => {
       sourceFilename: "original.mp3",
       sourceDurationMs: 6_048,
       targetDurationMs: 15_000,
-      bookId: BOOK_ID,
+      bookId,
     };
 
     const result = await extendAudioWithElevenLabs(fs, payload, provider);
@@ -189,7 +190,7 @@ describe("extend audio ElevenLabs job", () => {
     if (!written.ok) return;
     expect(written.value).not.toEqual(sourceAudio);
     expect(written.value).not.toEqual(continuationAudio);
-    const manifest = await fs.files.manifest(output.value.slug, BOOK_ID);
+    const manifest = await fs.files.manifest(output.value.slug);
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     const probe = await probeVideo(join(manifest.value.path, "original.mp3"));
@@ -237,7 +238,7 @@ describe("extend audio ElevenLabs job", () => {
       sourceDurationMs: 6_048,
       targetDurationMs: 15_000,
       continuationPrompt: "add outro music",
-      bookId: BOOK_ID,
+      bookId,
     };
 
     const result = await extendAudioWithElevenLabs(fs, payload, provider);

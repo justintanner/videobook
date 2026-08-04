@@ -1,4 +1,4 @@
-import { createEngineForTest } from "./fs.js";
+import { closeEngineForTest, createEngineForTest } from "./fs.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fsP from "node:fs/promises";
 import * as os from "node:os";
@@ -10,19 +10,23 @@ import { withLockedLocalLease } from "./jobs/_lease.js";
 
 describe("job deadlines", () => {
   let projectsDir: string;
+  let fs: ReturnType<typeof createEngineForTest> | undefined;
 
   beforeEach(async () => {
     projectsDir = await fsP.mkdtemp(path.join(os.tmpdir(), "vc-job-deadline-"));
   });
 
   afterEach(async () => {
+    if (fs) {
+      closeEngineForTest(projectsDir, fs);
+      fs = undefined;
+    }
     await fsP.rm(projectsDir, { recursive: true, force: true });
   });
 
   it("fails the job and releases its asset lease and file lock", async () => {
-    const fs = createEngineForTest(projectsDir);
-    const project = await fs.projects.create("p");
-    expect(project.ok).toBe(true);
+    fs = createEngineForTest(projectsDir);
+    const bookId = fs.book.get().bookId;
     const asset = await fs.artifacts.create("vid", "deadline");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
@@ -47,7 +51,7 @@ describe("job deadlines", () => {
             };
             return withLockedLocalLease(
               fs,
-              "p",
+              bookId,
               asset.value.slug,
               asset.value.path,
               ctx,
@@ -83,7 +87,7 @@ describe("job deadlines", () => {
       expect(job?.state).toBe("failed");
       expect(job?.error?.code).toBe(JobDeadlineError.name);
 
-      const work = await fs.jobs.artifactWork.read("p");
+      const work = await fs.jobs.artifactWork.read(asset.value.slug);
       expect(work.ok).toBe(true);
       if (work.ok) {
         expect(work.value?.status).toBe("error");
@@ -95,7 +99,6 @@ describe("job deadlines", () => {
       if (lock.ok) await fs.jobs.locks.release(asset.value.path);
     } finally {
       await runner.stop();
-      fs.close();
     }
   });
 });

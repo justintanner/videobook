@@ -45,8 +45,6 @@ describe("audio_mix tool", () => {
     ]);
 
     fs = createEngineForTest(tempDir);
-    const project = await fs.projects.create(BOOK_ID);
-    if (!project.ok) throw new Error(project.error.message);
     const target = await fs.artifacts.create("aud", "target");
     const layer = await fs.artifacts.create("aud", "layer");
     if (!target.ok) throw new Error(target.error.message);
@@ -60,6 +58,10 @@ describe("audio_mix tool", () => {
     if (!targetWrite.ok) throw new Error(targetWrite.error.message);
     if (!layerWrite.ok) throw new Error(layerWrite.error.message);
     client = await createTestClient(tempDir);
+    await client.callTool({
+      name: "create_project",
+      arguments: { book_id: BOOK_ID },
+    });
   });
 
   afterEach(async () => {

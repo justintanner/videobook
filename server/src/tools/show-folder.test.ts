@@ -24,7 +24,10 @@ describe("show_folder tool", () => {
 
   it("show folder for nonexistent asset returns error", async () => {
     client = await createTestClient(tempDir);
-    await fs.projects.create("test");
+    await client.callTool({
+      name: "create_project",
+      arguments: { book_id: "test" },
+    });
     const result = await client.callTool({
       name: "show_folder",
       arguments: { asset_id: "img-nonexistent", book_id: "test" },
@@ -34,7 +37,10 @@ describe("show_folder tool", () => {
 
   it("show folder for existing asset returns a result without throwing", async () => {
     client = await createTestClient(tempDir);
-    await fs.projects.create("test");
+    await client.callTool({
+      name: "create_project",
+      arguments: { book_id: "test" },
+    });
     const assetResult = await fs.artifacts.create("img", "landscape-photo");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
     const assetId = assetResult.value.slug;

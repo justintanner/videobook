@@ -562,7 +562,11 @@ describe("rename_all tool", () => {
       name: "upload_file",
       arguments: { book_id: "test-proj", filename: "t.png", data },
     });
-    const id = JSON.parse((upload.content as TextContent)[0].text).assetId as string;
+    const uploaded = JSON.parse((upload.content as TextContent)[0].text) as {
+      assetId: string;
+      artifactId: string;
+    };
+    const id = uploaded.assetId;
 
     // Wait for working lease to release.
     const deadline = Date.now() + 8000;
@@ -596,14 +600,13 @@ describe("rename_all tool", () => {
     expect(parsed.references_updated).toBe(true);
     expect(parsed.applied[0].new_asset_id).toBe("img-sunset-beach");
 
-    // Timeline should now reference the new id.
     const timelineResult = await client.callTool({
       name: "get_timeline",
       arguments: { book_id: "test-proj" },
     });
     const timeline = JSON.parse((timelineResult.content as TextContent)[0].text);
     const slots = timeline.slots ?? [];
-    expect(slots[0]?.slug).toBe("img-sunset-beach");
+    expect(slots[0]?.artifact_id).toBe(uploaded.artifactId);
   });
 
   it("apply rewrites normalized notebook @-references and bare output ids", async () => {
@@ -612,7 +615,11 @@ describe("rename_all tool", () => {
       name: "upload_file",
       arguments: { book_id: "test-proj", filename: "plan.png", data },
     });
-    const assetId = JSON.parse((upload.content as TextContent)[0].text).assetId as string;
+    const uploaded = JSON.parse((upload.content as TextContent)[0].text) as {
+      assetId: string;
+      artifactId: string;
+    };
+    const assetId = uploaded.assetId;
 
     const deadline = Date.now() + 8000;
     while (Date.now() < deadline) {
@@ -630,38 +637,38 @@ describe("rename_all tool", () => {
     const notebook = await fsObj.notebooks.create("Main");
     expect(notebook.ok).toBe(true);
     if (!notebook.ok) return;
+    const sourceCell = fsObj.notebooks.createCell({
+      type: "image",
+      slug: "img-source",
+      slot: { row: 0, column: 1 },
+      inputs: { slug: `@${assetId}` },
+      outputArtifactId: uploaded.artifactId,
+    });
+    const imageCell = fsObj.notebooks.createCell({
+      type: "image",
+      slug: "img-key-frame",
+      slot: { row: 0, column: 0 },
+      inputs: {
+        model: "nano-banana-pro",
+        values: {
+          prompt: `Match the lighting of @${assetId} exactly.`,
+          image_slugs: [`@${assetId}`],
+          first_frame_slug: `@${assetId}`,
+        },
+        inputs: [sourceCell.id],
+        asset_ids: [assetId],
+      },
+    });
     const saved = await fsObj.notebooks.write({
       ...notebook.value,
-      cells: [{
-          id: "image-1",
-          type: "image",
-          title: "Key frame",
-          slot: { row: 0, column: 0 },
-          inputs: {
-            model: "nano-banana-pro",
-            values: {
-              prompt: `Match the lighting of @${assetId} exactly.`,
-              image_slugs: [`@${assetId}`],
-              first_frame_slug: `@${assetId}`,
-            },
-            inputs: ["asset-source"],
-            asset_ids: [assetId],
-          },
-        }, {
-          id: "asset-source",
-          type: "image",
-          title: "Source",
-          slot: { row: 0, column: 1 },
-          inputs: { slug: `@${assetId}` },
-        }],
-      edges: [{
-        id: "asset-source:image-1",
-        source: "asset-source",
-        target: "image-1",
+      cells: [imageCell, sourceCell],
+      edges: [fsObj.notebooks.createEdge({
+        source: sourceCell.id,
+        target: imageCell.id,
         targetInput: "input-0",
-      }],
+      })],
     });
-    expect(saved.ok).toBe(true);
+    expect(saved.ok, saved.ok ? "" : saved.error.message).toBe(true);
 
     const result = await client.callTool({
       name: "rename_all",
@@ -688,5 +695,6 @@ describe("rename_all tool", () => {
       `Match the lighting of @${renamed} exactly.`,
     );
     expect(updated.value.cells[1].inputs?.slug).toBe(`@${renamed}`);
+    expect(updated.value.cells[1].outputArtifactId).toBe(uploaded.artifactId);
   });
 });

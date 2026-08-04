@@ -127,7 +127,7 @@ export function sleepDef(fs: Engine): ToolDef {
         const ptRead = await fs.jobs.pending.read(asset_id);
         const pendingTask = ptRead.ok ? ptRead.value : null;
         const locked = await fs.jobs.locks.isLocked(assetDir);
-        const workRead = await fs.jobs.artifactWork.read(book_id
+        const workRead = await fs.jobs.artifactWork.read(asset_id
         );
         const activeWork =
           workRead.ok &&

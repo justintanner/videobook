@@ -1,4 +1,4 @@
-import { createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../fs.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fsP from "node:fs/promises";
 import * as path from "node:path";
@@ -33,10 +33,10 @@ describe("complete_kie_task fal_qwen branches", () => {
   let projectsDir: string;
   let imageServer: Server;
   let imageUrl: string;
+  let testEngine: ReturnType<typeof createEngineForTest> | undefined;
 
   beforeEach(async () => {
     projectsDir = await fsP.mkdtemp(path.join(os.tmpdir(), "vc-complete-qwen-"));
-    await setEngineRoot(projectsDir);
 
     imageServer = createServer((_req, res) => {
       res.writeHead(200, { "Content-Type": "image/png", "Content-Length": TINY_PNG.length });
@@ -52,6 +52,10 @@ describe("complete_kie_task fal_qwen branches", () => {
 
   afterEach(async () => {
     await appQueue.stop();
+    if (testEngine) {
+      closeEngineForTest(projectsDir, testEngine);
+      testEngine = undefined;
+    }
     await new Promise<void>((resolve, reject) => {
       imageServer.close((err) => (err ? reject(err) : resolve()));
     });
@@ -60,11 +64,11 @@ describe("complete_kie_task fal_qwen branches", () => {
 
   async function seedPendingQwenTask(
     taskType: "fal_qwen_image" | "fal_qwen_image_edit",
-  ): Promise<{ assetId: string; assetDir: string; taskId: string; fs: ReturnType<typeof createEngineForTest> }> {
+  ): Promise<{ assetId: string; assetDir: string; taskId: string; bookId: string; fs: ReturnType<typeof createEngineForTest> }> {
     const cfs = createEngineForTest(projectsDir);
+    testEngine = cfs;
     await setEngineRoot(projectsDir, cfs);
-    const created = await cfs.projects.create("p");
-    expect(created.ok).toBe(true);
+    const bookId = cfs.book.get().bookId;
     const asset = await cfs.artifacts.create("img", "qwen-out");
     expect(asset.ok).toBe(true);
     if (!asset.ok) throw new Error(asset.error.message);
@@ -91,12 +95,13 @@ describe("complete_kie_task fal_qwen branches", () => {
       assetId: asset.value.slug,
       assetDir: asset.value.path,
       taskId,
+      bookId,
       fs: cfs,
     };
   }
 
   it("downloads fal_qwen_image_edit result instead of marking ready empty", async () => {
-    const { assetId, assetDir, taskId, fs: cfs } = await seedPendingQwenTask("fal_qwen_image_edit");
+    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingQwenTask("fal_qwen_image_edit");
     registerCompleteKieTaskJob(cfs);
     // Swallow process_image follow-up so the completion path alone is under test.
     registerJobHandler("process_image", async () => ({ ok: true }));
@@ -109,7 +114,7 @@ describe("complete_kie_task fal_qwen branches", () => {
         taskType: "fal_qwen_image_edit",
         assetId,
         assetDir,
-        bookId: "p",
+        bookId,
         meta: { prompt: "a cat", sourceImageIds: [] },
         resultUrls: [],
         resultObject: { images: [{ url: imageUrl }] },
@@ -131,12 +136,10 @@ describe("complete_kie_task fal_qwen branches", () => {
     const pending = await cfs.jobs.pending.read(assetId);
     expect(pending.ok).toBe(true);
     expect(pending.ok ? pending.value : "fail").toBeNull();
-
-    cfs.close();
   });
 
   it("downloads fal_qwen_image (T2I) result", async () => {
-    const { assetId, assetDir, taskId, fs: cfs } = await seedPendingQwenTask("fal_qwen_image");
+    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingQwenTask("fal_qwen_image");
     registerCompleteKieTaskJob(cfs);
     registerJobHandler("process_image", async () => ({ ok: true }));
 
@@ -148,7 +151,7 @@ describe("complete_kie_task fal_qwen branches", () => {
         taskType: "fal_qwen_image",
         assetId,
         assetDir,
-        bookId: "p",
+        bookId,
         meta: { prompt: "a dog", sourceImageIds: [] },
         resultUrls: [],
         resultObject: { images: [{ url: imageUrl }] },
@@ -160,12 +163,10 @@ describe("complete_kie_task fal_qwen branches", () => {
 
     const original = await cfs.files.read(assetId, "original.png");
     expect(original.ok).toBe(true);
-
-    cfs.close();
   });
 
   it("fails when fal_qwen result has no image URLs (no silent ready)", async () => {
-    const { assetId, assetDir, taskId, fs: cfs } = await seedPendingQwenTask("fal_qwen_image_edit");
+    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingQwenTask("fal_qwen_image_edit");
     registerCompleteKieTaskJob(cfs);
 
     await expect(
@@ -177,7 +178,7 @@ describe("complete_kie_task fal_qwen branches", () => {
           taskType: "fal_qwen_image_edit",
           assetId,
           assetDir,
-          bookId: "p",
+          bookId,
           meta: { prompt: "a cat", sourceImageIds: [] },
           resultUrls: [],
           resultObject: { images: [] },
@@ -189,7 +190,5 @@ describe("complete_kie_task fal_qwen branches", () => {
     // Regression: prior bug deleted the pending task and left the asset empty.
     const original = await cfs.files.read(assetId, "original.png");
     expect(original.ok).toBe(false);
-
-    cfs.close();
   });
 });

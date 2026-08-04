@@ -63,7 +63,7 @@ export async function findUnprocessedUploads(
         fs.files.manifest(asset.slug),
         fs.metadata.artifacts.read(asset.slug, "original"),
         fs.jobs.locks.isLocked(asset.path),
-        fs.jobs.artifactWork.read(bookId),
+        fs.jobs.artifactWork.read(asset.slug),
       ]);
       if (!manifest.ok) return null;
       if (originResult.ok) return null;

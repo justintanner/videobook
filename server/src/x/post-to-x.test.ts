@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createX } from "@apicity/x";
 import type { Engine } from "videobook-engine";
-import { createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../fs.js";
 import { postToX } from "./post-to-x.js";
 import { readXPostMetadata, POST_METADATA_FILE } from "./post-metadata.js";
 
@@ -74,17 +74,16 @@ async function uploadFakeAsset(
 describe("postToX helper", () => {
   let fs: Engine;
   let tempDir: string;
-  const bookId = "post-test";
+  let bookId: string;
 
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-postx-"));
     fs = createEngineForTest(tempDir);
-    const created = await fs.projects.create(bookId);
-    if (!created.ok) throw new Error(created.error.message);
+    bookId = fs.book.get().bookId;
   });
 
   afterAll(async () => {
-    fs.close();
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 

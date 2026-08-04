@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Engine } from "videobook-engine";
-import { createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../fs.js";
 import type { JobHandlerContext } from "../queue.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import { computeSourceTextHash } from "./_translate-transcript.js";
@@ -13,20 +13,20 @@ const testCtx: JobHandlerContext = {
   signal: new AbortController().signal,
   setLease: () => {},
   getOwnerId: () => "test-owner",
+  markAssetFailureHandled: () => {},
 };
 
 describe("runTranslateTranscript", () => {
   let fs: Engine;
   let tempDir: string;
-  const bookId = "test-proj";
+  let bookId: string;
   const originalKey = process.env.OPENAI_API_KEY;
 
   beforeEach(async () => {
     delete process.env.OPENAI_API_KEY;
     tempDir = await mkdtemp(join(tmpdir(), "videocity-translate-test-"));
     fs = createEngineForTest(tempDir);
-    const project = await fs.projects.create(bookId);
-    if (!project.ok) throw new Error(project.error.message);
+    bookId = fs.book.get().bookId;
   });
 
   afterEach(async () => {
@@ -35,6 +35,7 @@ describe("runTranslateTranscript", () => {
     } else {
       delete process.env.OPENAI_API_KEY;
     }
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 

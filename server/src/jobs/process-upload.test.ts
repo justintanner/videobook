@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../fs.js";
 import { findUnprocessedUploads } from "./process-upload.js";
 import { queue } from "../queue.js";
 import type { Engine } from "videobook-engine";
@@ -10,6 +10,7 @@ import type { Engine } from "videobook-engine";
 describe("findUnprocessedUploads", () => {
   let tempDir: string;
   let fs: Engine;
+  let bookId: string;
 
   beforeAll(async () => {
     await queue.start();
@@ -22,24 +23,20 @@ describe("findUnprocessedUploads", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-upload-test-"));
     fs = createEngineForTest(tempDir);
+    bookId = fs.book.get().bookId;
   });
 
   afterEach(async () => {
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   it("returns empty array when project has no assets", async () => {
-    const createResult = await fs.projects.create("test-proj");
-    expect(createResult.ok).toBe(true);
-
-    const result = await findUnprocessedUploads(fs, "test-proj", []);
+    const result = await findUnprocessedUploads(fs, bookId, []);
     expect(result).toEqual([]);
   });
 
   it("returns empty array when all assets are already processed", async () => {
-    const createResult = await fs.projects.create("test-proj");
-    expect(createResult.ok).toBe(true);
-
     // Create an asset via fs with prefix + name
     const assetResult = await fs.artifacts.create("img", "photo");
     expect(assetResult.ok).toBe(true);
@@ -57,14 +54,11 @@ describe("findUnprocessedUploads", () => {
     const assets = await fs.artifacts.list();
     expect(assets.length).toBeGreaterThan(0);
 
-    const result = await findUnprocessedUploads(fs, "test-proj", assets);
+    const result = await findUnprocessedUploads(fs, bookId, assets);
     expect(result).toEqual([]);
   });
 
   it("detects an externally-placed file without origin metadata", async () => {
-    const createResult = await fs.projects.create("test-proj");
-    expect(createResult.ok).toBe(true);
-
     // Create an asset and write a media file but skip origin metadata
     const assetResult = await fs.artifacts.create("img", "external");
     expect(assetResult.ok).toBe(true);
@@ -81,7 +75,7 @@ describe("findUnprocessedUploads", () => {
     const assets = await fs.artifacts.list();
     expect(assets.length).toBeGreaterThan(0);
 
-    const result = await findUnprocessedUploads(fs, "test-proj", assets);
+    const result = await findUnprocessedUploads(fs, bookId, assets);
     expect(result.length).toBe(1);
     expect(result[0].assetId).toBe(assetId);
     expect(result[0].mediaFilename).toBe("photo.png");
@@ -94,9 +88,6 @@ describe("findUnprocessedUploads", () => {
     // fails leaves original.mp4 + original.jpg (the promoted OG thumbnail) on
     // disk. The previous extension-first selector picked original.jpg and
     // enqueued process_image in a tight retry loop.
-    const createResult = await fs.projects.create("test-proj");
-    expect(createResult.ok).toBe(true);
-
     const assetResult = await fs.artifacts.create("vid", "from-yt");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
@@ -110,7 +101,7 @@ describe("findUnprocessedUploads", () => {
     await fs.files.write(assetId, "original.mp4", Buffer.from("fake-mp4-bytes"));
 
     const assets = await fs.artifacts.list();
-    const result = await findUnprocessedUploads(fs, "test-proj", assets);
+    const result = await findUnprocessedUploads(fs, bookId, assets);
 
     expect(result.length).toBe(1);
     expect(result[0].assetId).toBe(assetId);
@@ -123,9 +114,6 @@ describe("findUnprocessedUploads", () => {
     // variant writes, a sync-sweep race used to pick `landscape.jpg` (the
     // alphabetically first matching file) and rename it to `original.jpg`,
     // permanently cropping a portrait PNG into a 1920x1080 landscape JPG.
-    const createResult = await fs.projects.create("test-proj");
-    expect(createResult.ok).toBe(true);
-
     const assetResult = await fs.artifacts.create("img", "racey");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
@@ -143,7 +131,7 @@ describe("findUnprocessedUploads", () => {
     await fs.files.write(assetId, "square.jpg", Buffer.from("fake"));
 
     const assets = await fs.artifacts.list();
-    const result = await findUnprocessedUploads(fs, "test-proj", assets);
+    const result = await findUnprocessedUploads(fs, bookId, assets);
 
     // The upload that gets processed must be the canonical original.png —
     // never landscape.jpg, which would be promoted into original.jpg by
@@ -159,9 +147,6 @@ describe("findUnprocessedUploads", () => {
     // variants stayed behind, the sweep must not promote a variant to
     // `original.jpg`. Better to leave the asset alone and surface the
     // anomaly than to silently rewrite the canonical original.
-    const createResult = await fs.projects.create("test-proj");
-    expect(createResult.ok).toBe(true);
-
     const assetResult = await fs.artifacts.create("img", "variants-only");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
@@ -172,7 +157,7 @@ describe("findUnprocessedUploads", () => {
     await fs.files.write(assetId, "square.jpg", Buffer.from("fake"));
 
     const assets = await fs.artifacts.list();
-    const result = await findUnprocessedUploads(fs, "test-proj", assets);
+    const result = await findUnprocessedUploads(fs, bookId, assets);
 
     expect(result).toEqual([]);
   });
@@ -182,9 +167,6 @@ describe("findUnprocessedUploads", () => {
     // The engine's lease guard then refuses any new owner, so re-enqueuing
     // produces an infinite "could not claim local lease" failure loop. The
     // sweep must wait for explicit recovery (e.g. /clear-failed-tasks).
-    const createResult = await fs.projects.create("test-proj");
-    expect(createResult.ok).toBe(true);
-
     const assetResult = await fs.artifacts.create("vid", "broken");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
@@ -199,7 +181,7 @@ describe("findUnprocessedUploads", () => {
     await fs.jobs.artifactWork.fail(assetId, begun.ownerId, { message: "moov atom not found" });
 
     const assets = await fs.artifacts.list();
-    const result = await findUnprocessedUploads(fs, "test-proj", assets);
+    const result = await findUnprocessedUploads(fs, bookId, assets);
 
     expect(result).toEqual([]);
   });

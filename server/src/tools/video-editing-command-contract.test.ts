@@ -32,7 +32,7 @@ describe("video editing command contract", () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-command-contract-"));
     const fs = createEngineForTest(tempDir);
     toolDefs = getVideoEditingToolDefs(fs);
-    const result = await commandsDef(fs).handler({});
+    const result = await commandsDef().handler({});
     commands = JSON.parse((result.content as TextContent)[0].text) as ServerCommand[];
   });
 
@@ -82,7 +82,7 @@ describe("video editing command contract", () => {
       expect(commandToken).toBe(command.command);
       const parsed: Record<string, unknown> = parseCommandArgs(tokens.join(" "), command.params);
       for (const key of command.mcpTool.autoInject ?? []) {
-        if (key === "book_id") parsed[key] = "test-project";
+        if (key === "book_id") parsed[key] = "00000000-0000-0000-0000-000000000000";
       }
       Object.assign(parsed, command.mcpTool.injectParams ?? {});
       const adapted = adaptCommandArgs(command.mcpTool.adapter, command.mcpTool.tool, parsed);

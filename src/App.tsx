@@ -20,6 +20,7 @@ import {
   SelectionMode,
   applyEdgeChanges,
   applyNodeChanges,
+  useUpdateNodeInternals,
   type Connection,
   type Node,
   type NodeProps,
@@ -2184,6 +2185,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const slotContext = useContext(MediaSlotContext)
   const runCell = useContext(CellRunContext)
   const primaryCellId = useContext(PrimaryCellContext)
+  const updateNodeInternals = useUpdateNodeInternals()
   const primarySelected = selected && primaryCellId === id
   const mediaUrl = data.asset?.mediaUrl
   const thumbnailUrl = data.asset?.thumbnailUrl
@@ -2204,6 +2206,15 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     || data.kind === 'generate_image'
   const textCell = data.kind === 'prompt' || data.kind === 'analyze'
   const isTopRow = data.slot.row === 0
+  const handleLayoutSignature = [
+    isTopRow ? 'top' : 'lower',
+    ...targetInputs,
+    '|',
+    ...(data.sourcePorts ?? []),
+  ].join('\u0000')
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [handleLayoutSignature, id, updateNodeInternals])
   const action = notebookCellActionPresentation({
     type: data.kind,
     model: data.model,

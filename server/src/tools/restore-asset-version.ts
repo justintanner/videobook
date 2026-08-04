@@ -14,13 +14,12 @@ export function restoreAssetVersionDef(fs: Engine): ToolDef {
       book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, commit_hash, book_id } = args as { asset_id: string; commit_hash: string; book_id: string };
-      const artifact = fs.artifacts.get(book_id);
+      const { asset_id, commit_hash } = args as { asset_id: string; commit_hash: string; book_id: string };
+      const artifact = fs.artifacts.get(asset_id);
       const artifactId = artifact.ok ? artifact.value.artifactId : asset_id;
       const restored = await fs.history.restoreArtifact(
         artifactId,
         commit_hash,
-        book_id,
       );
       if (!restored.ok) {
         return {

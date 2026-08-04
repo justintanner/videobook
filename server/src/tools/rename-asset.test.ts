@@ -126,7 +126,7 @@ describe("rename_asset tool", () => {
     const newManifest = await fs.files.manifest(parsed.new_asset_id);
     expect(oldManifest.ok).toBe(false);
     expect(newManifest.ok).toBe(true);
-    const renamed = fs.artifacts.get("test-proj");
+    const renamed = fs.artifacts.get(parsed.new_asset_id);
     expect(renamed.ok).toBe(true);
     if (renamed.ok) expect(renamed.value.artifactId).toBe(stableArtifactId);
     const renamedWaveform = await fs.metadata.waveforms.read(parsed.new_asset_id);

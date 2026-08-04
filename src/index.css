@@ -3715,6 +3715,7 @@ textarea:focus-visible {
 
 .inspector-fullscreen-button {
   display: flex;
+  width: 100%;
   min-height: 44px;
   align-items: center;
   justify-content: center;

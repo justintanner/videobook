@@ -8,8 +8,6 @@ import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 
-const SLUG = "doc-proj";
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -30,7 +28,12 @@ async function createAsset(
 
 /** Drive an asset into the error state: claim a lease, write a pending task,
  *  then fail it — exactly the path a crashed generation job leaves behind. */
-async function breakAsset(fs: Engine, assetId: string, taskId: string): Promise<void> {
+async function breakAsset(
+  fs: Engine,
+  bookId: string,
+  assetId: string,
+  taskId: string,
+): Promise<void> {
   const lease = await fs.jobs.artifactWork.begin(assetId, {
     kind: "generate",
     ownerKind: "job",
@@ -40,7 +43,7 @@ async function breakAsset(fs: Engine, assetId: string, taskId: string): Promise<
   const written = await fs.jobs.pending.write({ taskId, taskType: "alibaba_image", artifactId: assetId, meta: {} }, lease.ownerId
   );
   if (!written.ok || !written.value) throw new Error(`pendingTasks.write failed for ${assetId}`);
-  await failPendingTaskAndLog(fs, SLUG, assetId, taskId, { message: "lease expired" });
+  await failPendingTaskAndLog(fs, bookId, assetId, taskId, { message: "lease expired" });
 }
 
 interface DoctorReport {
@@ -63,12 +66,13 @@ describe("doctor tool", () => {
   let client: Client;
   let tempDir: string;
   let fs: Engine;
+  let bookId: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-doctor-test-"));
     client = await createTestClient(tempDir);
     fs = createEngineForTest(tempDir);
-    await client.callTool({ name: "create_project", arguments: { book_id: SLUG } });
+    bookId = fs.book.get().bookId;
   });
 
   afterEach(async () => {
@@ -84,7 +88,7 @@ describe("doctor tool", () => {
     // Broken image asset (intact media but a recorded generation error).
     const broken = await createAsset(fs, "img", "failed one");
     await fs.files.write(broken, "original.png", Buffer.from([0xff]));
-    await breakAsset(fs, broken, "task-broken");
+    await breakAsset(fs, bookId, broken, "task-broken");
 
     // Stuck audio asset: a working lease whose deadline has already elapsed.
     const stuck = await createAsset(fs, "aud", "wedged one");
@@ -97,7 +101,7 @@ describe("doctor tool", () => {
     expect(lease).toBeTruthy();
     await sleep(1200);
 
-    const res = await client.callTool({ name: "doctor", arguments: { book_id: SLUG } });
+    const res = await client.callTool({ name: "doctor", arguments: { book_id: bookId } });
     expect(res.isError).toBeFalsy();
     const report = parse<DoctorReport>(res);
 
@@ -112,14 +116,14 @@ describe("doctor tool", () => {
   it("fix recovers an asset in place when its media is intact (tier 1)", async () => {
     const assetId = await createAsset(fs, "img", "recoverable");
     await fs.files.write(assetId, "original.png", Buffer.from([0xff]));
-    await breakAsset(fs, assetId, "task-recover");
+    await breakAsset(fs, bookId, assetId, "task-recover");
 
     const before = await fs.status.get(assetId);
     expect(before.ok && before.value).toBe("error");
 
     const res = await client.callTool({
       name: "doctor",
-      arguments: { book_id: SLUG, asset_id: assetId, fix: true },
+      arguments: { book_id: bookId, asset_id: assetId, fix: true },
     });
     expect(res.isError).toBeFalsy();
     const result = parse<DoctorFixResult>(res);
@@ -140,7 +144,7 @@ describe("doctor tool", () => {
     // Break the working tree: remove the primary media and record a failure, so
     // the asset is genuinely in 'error' and can't be recovered in place.
     await fs.files.delete(assetId, "original.png");
-    await breakAsset(fs, assetId, "task-restore");
+    await breakAsset(fs, bookId, assetId, "task-restore");
     await fs.history.recordOperation("doctor-test-break", assetId, {});
 
     const before = await fs.status.get(assetId);
@@ -148,7 +152,7 @@ describe("doctor tool", () => {
 
     const res = await client.callTool({
       name: "doctor",
-      arguments: { book_id: SLUG, asset_id: assetId, fix: true },
+      arguments: { book_id: bookId, asset_id: assetId, fix: true },
     });
     expect(res.isError).toBeFalsy();
     const result = parse<DoctorFixResult>(res);
@@ -165,7 +169,7 @@ describe("doctor tool", () => {
   it("rejects fix without an explicit asset_id", async () => {
     const res = await client.callTool({
       name: "doctor",
-      arguments: { book_id: SLUG, fix: true },
+      arguments: { book_id: bookId, fix: true },
     });
     expect(res.isError).toBe(true);
     const text = (res.content as Array<{ type: string; text: string }>)[0].text;

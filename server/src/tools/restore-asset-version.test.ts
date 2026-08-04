@@ -33,11 +33,7 @@ describe("restore_asset_version tool", () => {
     const uploaded = JSON.parse(
       (uploadResult.content as Array<{ type: string; text: string }>)[0].text
     );
-    const { createEngineForTest } = await import("../fs.js");
-    const fs = createEngineForTest(tempDir);
-    const artifact = fs.artifacts.get("test-proj");
-    if (!artifact.ok) throw new Error(artifact.error.message);
-    const stableArtifactId = artifact.value.artifactId;
+    const stableArtifactId = uploaded.artifactId as string;
 
     // Get the commit hash for the initial version
     const historyResult = await client.callTool({

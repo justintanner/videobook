@@ -24,6 +24,43 @@ export async function createTestClient(projectsDir?: string): Promise<Client> {
     },
   );
   await client.connect(transport);
+  const callTool = client.callTool.bind(client);
+  const bookAliases = new Set<string>();
+  client.callTool = async (params, options) => {
+    if (params.name === "create_project" && fs) {
+      const alias = params.arguments?.book_id;
+      if (typeof alias !== "string") {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "book_id is required" }],
+        };
+      }
+      bookAliases.add(alias);
+      const book = fs.book.get();
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            bookId: book.bookId,
+            book_id: book.bookId,
+            isDefault: true,
+            slug: alias,
+          }),
+        }],
+      };
+    }
+    const bookId = params.arguments?.book_id;
+    if (fs && typeof bookId === "string" && bookAliases.has(bookId)) {
+      return callTool({
+        ...params,
+        arguments: {
+          ...params.arguments,
+          book_id: fs.book.get().bookId,
+        },
+      }, options);
+    }
+    return callTool(params, options);
+  };
   const close = client.close.bind(client);
   let closed = false;
   client.close = async () => {

@@ -10,8 +10,7 @@ describe("Character lifecycle (create + metadata)", () => {
   it("creates a character and writes free-form metadata", async () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-test-"));
     const fs = createEngineForTest(dir);
-    const slug = "test-proj";
-    await fs.projects.create(slug);
+    const slug = fs.book.get().bookId;
     
     // Create
     const createTool = createCharacterDef(fs);
@@ -43,8 +42,7 @@ describe("Character lifecycle (create + metadata)", () => {
   it("accepts plain-text notes and structured object metadata", async () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-meta-"));
     const fs = createEngineForTest(dir);
-    const slug = "test-proj";
-    await fs.projects.create(slug);
+    const slug = fs.book.get().bookId;
 
     const createTool = createCharacterDef(fs);
     const createResult = await createTool.handler({ book_id: slug, args: ["ada"] }, {});
@@ -90,8 +88,7 @@ describe("Character lifecycle (create + metadata)", () => {
   it("creates a character seeded from one or more existing image assets", async () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-test-asset-"));
     const fs = createEngineForTest(dir);
-    const slug = "test-proj";
-    await fs.projects.create(slug);
+    const slug = fs.book.get().bookId;
 
     // Create dummy image assets to serve as sources
     const faceAsset = await fs.artifacts.create("img", "face");
@@ -138,8 +135,7 @@ describe("Character lifecycle (create + metadata)", () => {
   it("seeds display_name when creating a named character with no images", async () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-name-only-"));
     const fs = createEngineForTest(dir);
-    const slug = "test-proj";
-    await fs.projects.create(slug);
+    const slug = fs.book.get().bookId;
     const createTool = createCharacterDef(fs);
     // Native slugs preserve meaningful normalized words from the display name.
     const res = await createTool.handler({ book_id: slug, args: ["the-guy"] }, {});

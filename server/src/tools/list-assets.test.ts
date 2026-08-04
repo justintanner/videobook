@@ -1,9 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 
 const MINIMAL_PNG = Buffer.from(
@@ -11,27 +10,21 @@ const MINIMAL_PNG = Buffer.from(
   "base64",
 );
 
-// Per-test createTestClient + create_project under parallel test load was
-// racing on the queue's global projectsDir, intermittently failing with
-// ENOENT on .project.lock. Mirror asset-manifest.test.ts: a single
-// beforeAll/afterAll, with a unique project slug per test for isolation.
 describe("list_assets tool", () => {
   let client: Client;
   let tempDir: string;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
-    await queue.start();
   });
 
-  afterAll(async () => {
-    await queue.stop();
+  afterEach(async () => {
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns the scratch notebook for a new project", async () => {
+  it("returns no artifacts for a new book", async () => {
     const slug = "list-empty";
     await client.callTool({
       name: "create_project",
@@ -44,13 +37,13 @@ describe("list_assets tool", () => {
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
-    expect(data.assets).toHaveLength(1);
-    expect(data.assets[0]).toMatchObject({
-      type: "notebook",
+    expect(data.assets).toEqual([]);
+    expect(data.page).toEqual({
+      offset: 0,
+      limit: 200,
+      total: 0,
+      hasMore: false,
     });
-    expect(data.assets[0].id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
   });
 
   it("lists uploaded assets", async () => {
@@ -76,7 +69,7 @@ describe("list_assets tool", () => {
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
-    expect(data.assets).toHaveLength(3);
+    expect(data.assets).toHaveLength(2);
     const ids = data.assets.map((a: { id: string }) => a.id);
     expect(ids.some((id: string) => id.startsWith("img-"))).toBe(true);
     expect(ids.some((id: string) => id.startsWith("script-"))).toBe(true);
@@ -90,8 +83,8 @@ describe("list_assets tool", () => {
     expect(page.page).toEqual({
       offset: 1,
       limit: 1,
-      total: 3,
-      hasMore: true,
+      total: 2,
+      hasMore: false,
     });
   });
 

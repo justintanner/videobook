@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Engine } from "videobook-engine";
-import { createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../fs.js";
 import { claimLockedLease } from "./_lease.js";
 
 const LOCK = { durationMs: 60_000 };
@@ -17,13 +17,12 @@ describe("claimLockedLease", () => {
   let tempDir: string;
   let assetId: string;
   let assetDir: string;
-  const bookId = "test-proj";
+  let bookId: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-claim-lease-test-"));
     fs = createEngineForTest(tempDir);
-    const project = await fs.projects.create(bookId);
-    if (!project.ok) throw new Error(project.error.message);
+    bookId = fs.book.get().bookId;
     const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
     assetId = created.value.slug;
@@ -33,6 +32,7 @@ describe("claimLockedLease", () => {
   });
 
   afterEach(async () => {
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 

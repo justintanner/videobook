@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { chromium } from 'playwright'
-import type { Browser, Page, Route } from 'playwright'
+import type { Browser, ConsoleMessage, Page, Route } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 interface StartedProcess {
@@ -136,7 +136,14 @@ describe('chat composer browser flow', () => {
   let browser: Browser | undefined
   let page: Page | undefined
   let appUrl = ''
+  let mcpOrigin = ''
+  let bookId = ''
+  let notebookId = ''
+  let videoCellId = ''
+  let imageCellId = ''
   let reviewGenerationCellId = ''
+  let fullscreenImageCellId = ''
+  let fullscreenImageMediaUrl = ''
   const observedCalls: ToolCall[] = []
   let delayedBootstrap = false
   let mockedChatActionPlan: {
@@ -148,7 +155,7 @@ describe('chat composer browser flow', () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-chat-ui-e2e-'))
     const mcpPort = await availablePort()
     const vitePort = await availablePort()
-    const mcpOrigin = `http://127.0.0.1:${mcpPort}`
+    mcpOrigin = `http://127.0.0.1:${mcpPort}`
     appUrl = `http://127.0.0.1:${vitePort}`
     mcpProcess = startProcess(
       ['--import', 'tsx', 'server/src/index.ts'],
@@ -177,7 +184,7 @@ describe('chat composer browser flow', () => {
     const book = (Array.isArray(booksValue) ? booksValue : [])
       .map(record)
       .find((entry) => entry?.slug === 'chat-ui-e2e')
-    const bookId = typeof book?.bookId === 'string' ? book.bookId : ''
+    bookId = typeof book?.bookId === 'string' ? book.bookId : ''
     if (!bookId) throw new Error('Could not create browser fixture book')
     const notebooksValue = resultValue(await client.callTool({
       name: 'list_notebooks',
@@ -186,7 +193,7 @@ describe('chat composer browser flow', () => {
     const notebook = (Array.isArray(notebooksValue) ? notebooksValue : [])
       .map(record)
       .find(Boolean)
-    const notebookId = typeof notebook?.id === 'string' ? notebook.id : ''
+    notebookId = typeof notebook?.id === 'string' ? notebook.id : ''
     if (!notebookId) throw new Error('Could not create browser fixture notebook')
     const createCell = async (cell: Record<string, unknown>): Promise<string> => {
       const value = record(resultValue(await client.callTool({
@@ -197,12 +204,12 @@ describe('chat composer browser flow', () => {
       if (!id) throw new Error('Could not create browser fixture cell')
       return id
     }
-    const videoCellId = await createCell({
+    videoCellId = await createCell({
       type: 'video',
       slug: 'vid-source-one',
       slot: { row: 0, column: 0 },
     })
-    const imageCellId = await createCell({
+    imageCellId = await createCell({
       type: 'image',
       slug: 'img-source-two',
       slot: { row: 0, column: 2 },
@@ -251,6 +258,40 @@ describe('chat composer browser flow', () => {
         },
       }))
     }
+    const uploadedImage = record(resultValue(await client.callTool({
+      name: 'upload_file',
+      arguments: {
+        book_id: bookId,
+        filename: 'fullscreen-generation.png',
+        data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
+      },
+    })))
+    const uploadedImageId = typeof uploadedImage?.assetId === 'string'
+      ? uploadedImage.assetId
+      : ''
+    const assetsValue = record(resultValue(await client.callTool({
+      name: 'list_assets',
+      arguments: { book_id: bookId, sort: 'newest' },
+    })))
+    const uploadedImageAsset = (Array.isArray(assetsValue?.assets) ? assetsValue.assets : [])
+      .map(record)
+      .find((asset) => asset?.id === uploadedImageId)
+    const uploadedImageArtifactId = typeof uploadedImageAsset?.artifact_id === 'string'
+      ? uploadedImageAsset.artifact_id
+      : ''
+    fullscreenImageMediaUrl = typeof uploadedImageAsset?.media_url === 'string'
+      ? uploadedImageAsset.media_url
+      : ''
+    if (!uploadedImageArtifactId || !fullscreenImageMediaUrl) {
+      throw new Error('Could not create fullscreen image fixture asset')
+    }
+    fullscreenImageCellId = await createCell({
+      type: 'generate_image',
+      slug: 'generate-image-fullscreen',
+      slot: { row: 2, column: 2 },
+      prompt: 'A fullscreen image fixture',
+      output_artifact_id: uploadedImageArtifactId,
+    })
     await client.close()
     viteProcess = startProcess(
       [join(process.cwd(), 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(vitePort)],
@@ -373,6 +414,205 @@ describe('chat composer browser flow', () => {
     expect(detailInspectorBox.width).toBeLessThanOrEqual(440)
     expect(Math.abs(scrollBox.x + scrollBox.width - detailInspectorBox.x))
       .toBeLessThanOrEqual(1)
+  }, 60_000)
+
+  it('renders edges whose target handles are added after mount', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+    const warnings: string[] = []
+    const onConsole = (message: ConsoleMessage) => {
+      if (message.type() === 'warning' || message.type() === 'error') {
+        warnings.push(message.text())
+      }
+    }
+    page.on('console', onConsole)
+    const client = new Client(
+      { name: 'videobook-dynamic-handles-e2e', version: '1.0.0' },
+      {
+        capabilities: {},
+        supportedProtocolVersions: ['2026-07-28'],
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+      },
+    )
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    const dynamicCellIds: string[] = []
+    try {
+      const createCell = async (cell: Record<string, unknown>): Promise<string> => {
+        const value = record(resultValue(await client.callTool({
+          name: 'create_notebook_cell',
+          arguments: { book_id: bookId, notebook_id: notebookId, cell },
+        })))
+        const id = typeof value?.id === 'string' ? value.id : ''
+        if (!id) throw new Error('Could not create dynamic handle fixture cell')
+        return id
+      }
+      const refreshNotebook = async (): Promise<void> => {
+        observedCalls.length = 0
+        await page.getByLabel('Refresh books').click()
+        await expect.poll(() => observedCalls.some((call) => call.name === 'list_books'))
+          .toBe(true)
+        await expect.poll(async () => await input.isEnabled()).toBe(true)
+      }
+      const connect = async (
+        sourceCellId: string,
+        targetCellId: string,
+        targetInput: string,
+      ): Promise<string> => {
+        const value = record(resultValue(await client.callTool({
+          name: 'connect_notebook_cells',
+          arguments: {
+            book_id: bookId,
+            notebook_id: notebookId,
+            source_cell_id: sourceCellId,
+            target_cell_id: targetCellId,
+            target_input: targetInput,
+          },
+        })))
+        const id = typeof value?.id === 'string' ? value.id : ''
+        if (!id) throw new Error('Could not create dynamic handle fixture edge')
+        return id
+      }
+      const assertEdge = async (edgeId: string): Promise<void> => {
+        const path = page.locator(
+          `.notebook-flow .react-flow__edge[data-id="${edgeId}"] .react-flow__edge-path`,
+        )
+        await expect.poll(async () => await path.count()).toBe(1)
+        expect(await path.getAttribute('d')).toMatch(/^M /)
+      }
+
+      const secondImageCellId = await createCell({
+        type: 'image',
+        slug: 'img-source-dynamic',
+        slot: { row: 0, column: 4 },
+      })
+      dynamicCellIds.push(secondImageCellId)
+      const imageTargetCellId = await createCell({
+        type: 'generate_image',
+        slug: 'generate-image-dynamic-target',
+        slot: { row: 1, column: 4 },
+        prompt: 'Dynamic image target',
+      })
+      dynamicCellIds.push(imageTargetCellId)
+      await refreshNotebook()
+      const imageTargetNode = page.locator(
+        `.notebook-flow .react-flow__node[data-id="${imageTargetCellId}"]`,
+      )
+      await imageTargetNode.waitFor({ state: 'visible' })
+      expect(await imageTargetNode.locator('.cell-target-handle').count()).toBe(1)
+
+      const imageEdgeIds = [
+        await connect(imageCellId, imageTargetCellId, 'image'),
+        await connect(secondImageCellId, imageTargetCellId, 'image_2'),
+      ]
+      await refreshNotebook()
+      expect(await imageTargetNode.locator('.cell-target-handle').count()).toBe(2)
+      expect(await imageTargetNode.locator('.cell-target-connection-count').textContent()).toBe('2')
+      for (const edgeId of imageEdgeIds) await assertEdge(edgeId)
+
+      const videoTargetCellId = await createCell({
+        type: 'generate_video',
+        slug: 'generate-video-dynamic-target',
+        slot: { row: 2, column: 4 },
+        provider: 'kie',
+        model: 'Seedance2MiniInputSchema',
+        operation: 'image_to_video',
+        tool: 'generate_kie_seedance_2_0_mini_video',
+      })
+      dynamicCellIds.push(videoTargetCellId)
+      await refreshNotebook()
+      const videoTargetNode = page.locator(
+        `.notebook-flow .react-flow__node[data-id="${videoTargetCellId}"]`,
+      )
+      await videoTargetNode.waitFor({ state: 'visible' })
+      expect(await videoTargetNode.locator('.cell-target-handle').count()).toBe(1)
+
+      const firstVideoEdgeId = await connect(imageCellId, videoTargetCellId, 'image')
+      await refreshNotebook()
+      await assertEdge(firstVideoEdgeId)
+      const secondVideoEdgeId = await connect(secondImageCellId, videoTargetCellId, 'image_2')
+      await refreshNotebook()
+      expect(await videoTargetNode.locator('.cell-target-handle').count()).toBe(2)
+      for (const edgeId of [firstVideoEdgeId, secondVideoEdgeId]) await assertEdge(edgeId)
+
+      const notebookValue = record(resultValue(await client.callTool({
+        name: 'get_notebook',
+        arguments: { book_id: bookId, notebook_id: notebookId },
+      })))
+      const documentEdgeIds = (Array.isArray(notebookValue?.edges) ? notebookValue.edges : [])
+        .map(record)
+        .flatMap((edge) => typeof edge?.id === 'string' ? [edge.id] : [])
+      const routePaths = page.locator('.notebook-flow .workflow-edge .react-flow__edge-path')
+      await expect.poll(async () => await routePaths.count()).toBe(documentEdgeIds.length)
+      for (const edgeId of documentEdgeIds) await assertEdge(edgeId)
+      expect(warnings.filter((message) => /handle id|couldn't create edge/i.test(message)))
+        .toEqual([])
+    } finally {
+      page.off('console', onConsole)
+      for (const cellId of dynamicCellIds.reverse()) {
+        resultValue(await client.callTool({
+          name: 'delete_notebook_cell',
+          arguments: { book_id: bookId, notebook_id: notebookId, cell_id: cellId },
+        }))
+      }
+      await client.close()
+    }
+  }, 60_000)
+
+  it('opens generation output fullscreen and restores the trigger focus', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await page.getByLabel('Open inspector').click()
+    const fullscreenNode = page.locator(
+      `.notebook-flow .react-flow__node[data-id="${fullscreenImageCellId}"]`,
+    )
+    await fullscreenNode.click()
+    const trigger = page.getByLabel('Open @c3 fullscreen')
+    await trigger.waitFor({ state: 'visible' })
+    await wait(250)
+    const triggerBox = await trigger.boundingBox()
+    if (!triggerBox) throw new Error('Could not measure fullscreen trigger')
+    const previewBox = await trigger.locator('..').boundingBox()
+    if (!previewBox) throw new Error('Could not measure fullscreen preview')
+    expect(Math.abs(triggerBox.width - previewBox.width)).toBeLessThanOrEqual(2)
+    expect(triggerBox.height).toBeGreaterThanOrEqual(44)
+    const triggerPoint = {
+      x: previewBox.x + previewBox.width - 10,
+      y: triggerBox.y + triggerBox.height / 2,
+    }
+    expect(await page.evaluate(({ x, y }) =>
+      document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label'), {
+      x: triggerPoint.x,
+      y: triggerPoint.y,
+    })).toBe('Open @c3 fullscreen')
+
+    await page.mouse.click(triggerPoint.x, triggerPoint.y)
+    const dialog = page.getByRole('dialog', { name: 'Fullscreen preview for @c3' })
+    await dialog.waitFor({ state: 'visible' })
+    const image = dialog.locator('img')
+    expect(await image.getAttribute('src')).toContain(fullscreenImageMediaUrl)
+    await expect.poll(async () => await image.evaluate((element) => ({
+      complete: element.complete,
+      naturalWidth: element.naturalWidth,
+    }))).toEqual({ complete: true, naturalWidth: 1 })
+    const close = page.getByLabel('Close fullscreen preview')
+    expect(await close.evaluate((element) => document.activeElement === element)).toBe(true)
+
+    await page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'hidden' })
+    expect(await trigger.evaluate((element) => document.activeElement === element)).toBe(true)
+
+    await trigger.click()
+    await dialog.waitFor({ state: 'visible' })
+    await close.click()
+    await dialog.waitFor({ state: 'hidden' })
+    expect(await trigger.evaluate((element) => document.activeElement === element)).toBe(true)
   }, 60_000)
 
   it('turns every open notebook square into a media file dropzone', async () => {

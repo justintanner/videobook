@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Client } from "@modelcontextprotocol/client";
 import { createTestClient } from "../test-client.js";
-import { createEngineForTest } from "../fs.js";
 import { queue, registerJobHandler } from "../queue.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -62,6 +61,7 @@ function setValidArchiveEnv(): void {
 }
 
 const sha = "a".repeat(64);
+const TEST_BOOK = "archive-test";
 
 async function seedLocalArchiveClip(archiveDir: string): Promise<void> {
   const clipDir = join(archiveDir, "clips", sha);
@@ -113,6 +113,10 @@ describe("archive MCP tools", () => {
     envSnapshot = captureEnv();
     tempDir = await mkdtemp(join(tmpdir(), "videocity-archive-tool-test-"));
     client = await createTestClient(join(tempDir, "projects"));
+    await client.callTool({
+      name: "create_project",
+      arguments: { book_id: TEST_BOOK },
+    });
     return client;
   }
 
@@ -126,7 +130,7 @@ describe("archive MCP tools", () => {
     const c = await makeClient();
     const result = await c.callTool({
       name: "archive_clip",
-      arguments: { url: "https://example.com/video", asset_id: "vid" },
+      arguments: { url: "https://example.com/video", asset_id: "vid", book_id: TEST_BOOK },
     });
 
     expect(result.isError).toBe(true);
@@ -139,7 +143,7 @@ describe("archive MCP tools", () => {
     clearArchiveEnv();
     const result = await c.callTool({
       name: "archive_clip",
-      arguments: { url: "https://example.com/video" },
+      arguments: { url: "https://example.com/video", book_id: TEST_BOOK },
     });
 
     expect(result.isError).toBe(true);
@@ -156,7 +160,7 @@ describe("archive MCP tools", () => {
 
     const result = await c.callTool({
       name: "archive_clip",
-      arguments: { url: "https://example.com/video" },
+      arguments: { url: "https://example.com/video", book_id: TEST_BOOK },
     });
 
     expect(result.isError).toBeFalsy();
@@ -209,7 +213,7 @@ describe("archive MCP tools", () => {
     clearArchiveEnv();
     const result = await c.callTool({
       name: "restore_archive_clips",
-      arguments: { book_id: "test-proj", archive_ids: ["not-an-id"] },
+      arguments: { book_id: TEST_BOOK, archive_ids: ["not-an-id"] },
     });
 
     expect(result.isError).toBe(true);
@@ -221,13 +225,10 @@ describe("archive MCP tools", () => {
     const c = await makeClient();
     clearArchiveEnv();
     useLocalArchiveDir();
-    const fs = createEngineForTest(join(tempDir!, "projects"));
-    const created = await fs.projects.create();
-    if (!created.ok) throw new Error(created.error.message);
 
     const result = await c.callTool({
       name: "restore_archive_clips",
-      arguments: { book_id: created.value.slug, archive_ids: [sha] },
+      arguments: { book_id: TEST_BOOK, archive_ids: [sha] },
     });
 
     expect(result.isError).toBe(true);
@@ -235,7 +236,7 @@ describe("archive MCP tools", () => {
     expect(content[0]?.text).toContain("Archive clip not found");
   });
 
-  it("enqueues a URL archive without requiring a caller-supplied project", async () => {
+  it("enqueues a URL archive for the current book", async () => {
     const c = await makeClient();
     setValidArchiveEnv();
     registerJobHandler("archive_clip", async (payload) => payload);
@@ -243,6 +244,7 @@ describe("archive MCP tools", () => {
     const result = await c.callTool({
       name: "archive_clip",
       arguments: {
+        book_id: TEST_BOOK,
         url: "example.com/video",
         title: "Interview",
         topics: ["AI", "Cinema"],

@@ -25,84 +25,34 @@ describe("insert_timeline_slot tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("inserts an empty slot before the selected slot and preserves metadata", async () => {
-    const audio = [
-      { id: "aud-1", slug: "aud-music", startFrame: 10, durationFrames: 120, volume: 80 },
-    ];
-    await client.callTool({
-      name: "set_timeline",
-      arguments: {
-        book_id: "test-proj",
-        slots: [
-          { slug: "vid-intro", volume: 75 },
-          { slug: "vid-outro", audioFadeIn: 200 },
-        ],
-        audio,
-        render: "portrait",
-        currentOrientation: "square",
-      },
-    });
-
+  it("rejects inserting an empty slot before a typed slot", async () => {
     const result = await client.callTool({
       name: "insert_timeline_slot",
       arguments: { book_id: "test-proj", slot: "s02", position: "before" },
     });
 
-    expect(result.isError).toBeFalsy();
-    const config = JSON.parse((result.content as TextContent)[0].text);
-    expect(config.slots).toEqual([
-      { slug: "vid-intro", volume: 75 },
-      { slug: "" },
-      { slug: "vid-outro", audioFadeIn: 200 },
-    ]);
-    expect(config.audio).toEqual(audio);
-    expect(config.render).toBe("portrait");
-    expect(config.currentOrientation).toBe("square");
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("Empty slots are not supported");
   });
 
-  it("inserts an empty slot after the selected slot", async () => {
-    await client.callTool({
-      name: "set_timeline",
-      arguments: {
-        book_id: "test-proj",
-        slots: [{ slug: "vid-a" }, { slug: "vid-b" }, { slug: "vid-c" }],
-      },
-    });
-
+  it("rejects inserting an empty slot after a typed slot", async () => {
     const result = await client.callTool({
       name: "insert_timeline_slot",
       arguments: { book_id: "test-proj", slot: "s02", position: "after" },
     });
 
-    expect(result.isError).toBeFalsy();
-    const config = JSON.parse((result.content as TextContent)[0].text);
-    expect(config.slots).toEqual([
-      { slug: "vid-a" },
-      { slug: "vid-b" },
-      { slug: "" },
-      { slug: "vid-c" },
-    ]);
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("use assign_slot");
   });
 
-  it("pads through a displayed virtual slot before inserting", async () => {
-    await client.callTool({
-      name: "set_timeline",
-      arguments: { book_id: "test-proj", slots: [{ slug: "vid-a" }] },
-    });
-
+  it("rejects inserting through a displayed virtual slot", async () => {
     const result = await client.callTool({
       name: "insert_timeline_slot",
       arguments: { book_id: "test-proj", slot: "s03", position: "after" },
     });
 
-    expect(result.isError).toBeFalsy();
-    const config = JSON.parse((result.content as TextContent)[0].text);
-    expect(config.slots).toEqual([
-      { slug: "vid-a" },
-      { slug: "" },
-      { slug: "" },
-      { slug: "" },
-    ]);
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("Empty slots are not supported");
   });
 
   it.each(["slot2", "s00"])("rejects invalid slot identifier %s", async (slot) => {
@@ -112,7 +62,7 @@ describe("insert_timeline_slot tool", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect((result.content as TextContent)[0].text).toContain("Invalid slot format");
+    expect((result.content as TextContent)[0].text).toContain("Slot must use the form");
   });
 
   it("returns an error for a nonexistent project", async () => {

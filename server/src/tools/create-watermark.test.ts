@@ -102,7 +102,7 @@ describe("create_watermark tool", () => {
     });
 
     // Most-recent-first; saved default stays pinned to the save_default handle.
-    const config = await readWatermarkConfig();
+    const config = await readWatermarkConfig(fs);
     expect(config.recent).toEqual(["bob", "alice"]);
     expect(config.savedHandle).toBe("alice");
 

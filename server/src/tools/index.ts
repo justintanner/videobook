@@ -271,9 +271,19 @@ export function getVideoEditingToolDefs(fs: Engine): ToolDef[] {
   ];
 }
 
-function scopeTool(def: ToolDef, books: BookManager): ToolDef {
+function scopeTool(
+  def: ToolDef,
+  books: BookManager,
+  injectedEngine: Engine,
+): ToolDef {
   const scope = def.scope ?? ("book_id" in def.schema ? "book" : "global");
   if (scope === "global") return def;
+  let injectedBookId: string | null = null;
+  try {
+    injectedBookId = injectedEngine.book.get().bookId;
+  } catch {
+    injectedBookId = null;
+  }
   return {
     ...def,
     scope,
@@ -284,6 +294,12 @@ function scopeTool(def: ToolDef, books: BookManager): ToolDef {
           isError: true,
           content: [{ type: "text", text: "book_id is required" }],
         };
+      }
+      if (bookId === injectedBookId) {
+        return withBookContext(
+          { bookId, engine: injectedEngine },
+          () => def.handler(args),
+        );
       }
       await books.ready();
       const book = books.get(bookId);
@@ -308,7 +324,7 @@ export function registerAllTools(
 ): void {
   const defs = getAllToolDefs(fs, books)
     .map((def) => withLogging(def, fs))
-    .map((def) => scopeTool(def, books));
+    .map((def) => scopeTool(def, books, fs));
   for (const def of defs) {
     server.registerTool(def.name, {
       description: def.description,
@@ -426,7 +442,7 @@ export function getAllToolDefs(
     rewritePromptDef(fs),
     describeImageDef(fs),
     rewriteScriptDef(fs),
-    commandsDef(),
+    commandsDef(books),
     translatePayloadDef(),
     updateScriptDef(fs),
     generateSeedance2I2vFalDef(fs),

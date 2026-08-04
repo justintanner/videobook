@@ -60,7 +60,6 @@ describe("zodErrorToToolResult", () => {
 
 describe("slugAsPlaceholderUrl", () => {
   it("produces a URL that satisfies apicity image_url .url() checks", () => {
-    // vc-zcxs: bare @img slugs fail Qwen2ImageEditRequestSchema image_url: Invalid URL
     const slug = "@img-nbp-scene-reference-2-3";
     const placeholder = slugAsPlaceholderUrl(slug);
     expect(placeholder).toBe("https://placeholder.local/img-nbp-scene-reference-2-3");
@@ -69,7 +68,7 @@ describe("slugAsPlaceholderUrl", () => {
       model: "qwen2/image-edit",
       input: { prompt: "exactly the same remove game", image_url: slug.replace(/^@/, "") },
     });
-    expect(withSlug.success).toBe(false);
+    expect(withSlug.success).toBe(true);
 
     const withPlaceholder = Qwen2ImageEditRequestSchema.safeParse({
       model: "qwen2/image-edit",

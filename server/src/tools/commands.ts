@@ -1,4 +1,5 @@
 import { bookManager } from "../fs.js";
+import type { BookManager } from "../book-manager.js";
 import type { ToolDef } from "./tool-def.js";
 import {
   VIDEO_EDITING_COMMANDS,
@@ -358,7 +359,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "name", type: "string", required: true, description: "Prompt entity name" },
       { name: "prompt", type: "string", required: false, description: "Reusable prompt text" },
     ],
-    mcpTool: { tool: "create_prompt", autoInject: ["book_id"] },
+    mcpTool: { tool: "create_prompt_entity", autoInject: ["book_id"] },
   },
   {
     command: "/character-new",
@@ -388,7 +389,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "name", type: "string", required: true, description: "Scene entity name" },
       { name: "prompt", type: "string", required: false, description: "Reusable scene prompt" },
     ],
-    mcpTool: { tool: "create_scene", autoInject: ["book_id"] },
+    mcpTool: { tool: "create_scene_entity", autoInject: ["book_id"] },
   },
   {
     command: "/entities",
@@ -1548,7 +1549,7 @@ export function getCanonicalCommands(): Command[] {
   return canonicalizeCommands(CANONICAL_COMMANDS);
 }
 
-export function commandsDef(): ToolDef {
+export function commandsDef(books: BookManager = bookManager): ToolDef {
   return {
     name: "slash_commands",
     description: "List all available UI commands with scope metadata",
@@ -1557,8 +1558,8 @@ export function commandsDef(): ToolDef {
     handler: async () => {
       const commands: Command[] = [...CANONICAL_COMMANDS];
       const reserved = new Set(commands.flatMap((command) => [command.command, ...(command.aliases ?? [])]));
-      await bookManager.ready();
-      for (const book of bookManager.list()) {
+      await books.ready();
+      for (const book of books.list()) {
         if (reserved.has(`/${book.slug}`)) continue;
         commands.push({
           command: `/${book.slug}`,

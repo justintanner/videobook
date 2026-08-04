@@ -31,13 +31,30 @@ async function uploadVideo(
   client: Client,
   bookId: string,
   videoPath: string,
-): Promise<{ assetId: string; path: string }> {
+): Promise<{ artifactId: string; assetId: string; path: string }> {
   const data = (await readFile(videoPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
     arguments: { book_id: bookId, filename: "original.mp4", data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
+}
+
+async function setTimeline(
+  client: Client,
+  bookId: string,
+  artifactId: string,
+  render: "landscape" | "portrait" | "square",
+): Promise<void> {
+  const result = await client.callTool({
+    name: "set_timeline",
+    arguments: {
+      book_id: bookId,
+      render,
+      slots: [{ artifact_id: artifactId }],
+    },
+  });
+  expect(result.isError, (result.content as TextContent)[0]?.text).toBeFalsy();
 }
 
 describe("render_timeline tool", () => {
@@ -79,14 +96,10 @@ describe("render_timeline tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("no slots");
+    expect(content[0].text).toContain("no assigned artifacts");
   });
 
-  it("returns error when timeline has no slots with assets", async () => {
-    const fs = createEngineForTest(tempDir);
-    // Write an empty slots array as timeline data (render_timeline expects an array)
-    await fs.metadata.book.write("timeline", { slots: [{ slug: "" }, { slug: "" }], render: "landscape" });
-
+  it("returns error when the typed timeline has no slots", async () => {
     const result = await client.callTool({
       name: "render_timeline",
       arguments: {
@@ -96,34 +109,28 @@ describe("render_timeline tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("no slots");
+    expect(content[0].text).toContain("no assigned artifacts");
   });
 
-  it("returns error when slot references nonexistent asset", async () => {
-    const fs = createEngineForTest(tempDir);
-    await fs.metadata.book.write("timeline", { slots: [{ slug: "vid-nonexistent" }], render: "landscape" }
-    );
-
+  it("rejects a typed timeline that references a nonexistent artifact", async () => {
     const result = await client.callTool({
-      name: "render_timeline",
+      name: "set_timeline",
       arguments: {
         book_id: "timeline-proj",
+        render: "landscape",
+        slots: [{ artifact_id: "00000000-0000-0000-0000-000000000000" }],
       },
     });
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("vid-nonexistent");
-    expect(content[0].text).toContain("not found");
+    expect(content[0].text).toContain("Artifact not found");
   });
 
   it("returns missing_renders when slot asset is missing rendered file", async () => {
     // Upload a video to create a real asset (it won't have the rendered mp4)
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
-
-    const fs = createEngineForTest(tempDir);
-    await fs.metadata.book.write("timeline", { slots: [{ slug: uploaded.assetId }], render: "landscape" }
-    );
+    await setTimeline(client, "timeline-proj", uploaded.artifactId, "landscape");
 
     const result = await client.callTool({
       name: "render_timeline",
@@ -143,10 +150,9 @@ describe("render_timeline tool", () => {
   it("uses explicit orientation arg over timeline fields", async () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
     const fs = createEngineForTest(tempDir);
-    expect((await fs.files.writeFromPath(uploaded.assetId, "portrait.mp4", videoPath
+    expect((await fs.files.writeFromPath(uploaded.artifactId, "portrait.mp4", videoPath
     )).ok).toBe(true);
-    await fs.metadata.book.write("timeline", { slots: [{ slug: uploaded.assetId }], render: "landscape", currentOrientation: "square" }
-    );
+    await setTimeline(client, "timeline-proj", uploaded.artifactId, "landscape");
 
     const result = await client.callTool({
       name: "render_timeline",
@@ -158,13 +164,12 @@ describe("render_timeline tool", () => {
     expect(parsed.orientation).toBe("portrait");
   });
 
-  it("falls back to currentOrientation when no orientation arg given", async () => {
+  it("uses the stored typed timeline orientation when no override is given", async () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
     const fs = createEngineForTest(tempDir);
-    expect((await fs.files.writeFromPath(uploaded.assetId, "portrait.mp4", videoPath
+    expect((await fs.files.writeFromPath(uploaded.artifactId, "portrait.mp4", videoPath
     )).ok).toBe(true);
-    await fs.metadata.book.write("timeline", { slots: [{ slug: uploaded.assetId }], render: "landscape", currentOrientation: "portrait" }
-    );
+    await setTimeline(client, "timeline-proj", uploaded.artifactId, "portrait");
 
     const result = await client.callTool({
       name: "render_timeline",
@@ -176,13 +181,12 @@ describe("render_timeline tool", () => {
     expect(parsed.orientation).toBe("portrait");
   });
 
-  it("falls back to render field when currentOrientation is unset or 'original'", async () => {
+  it("uses the stored square orientation", async () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
     const fs = createEngineForTest(tempDir);
-    expect((await fs.files.writeFromPath(uploaded.assetId, "square.mp4", videoPath
+    expect((await fs.files.writeFromPath(uploaded.artifactId, "square.mp4", videoPath
     )).ok).toBe(true);
-    await fs.metadata.book.write("timeline", { slots: [{ slug: uploaded.assetId }], render: "square", currentOrientation: "original" }
-    );
+    await setTimeline(client, "timeline-proj", uploaded.artifactId, "square");
 
     const result = await client.callTool({
       name: "render_timeline",
@@ -199,10 +203,9 @@ describe("render_timeline tool", () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
 
     const fs = createEngineForTest(tempDir);
-    expect((await fs.files.writeFromPath(uploaded.assetId, "landscape.mp4", videoPath
+    expect((await fs.files.writeFromPath(uploaded.artifactId, "landscape.mp4", videoPath
     )).ok).toBe(true);
-    await fs.metadata.book.write("timeline", { slots: [{ slug: uploaded.assetId }], render: "landscape" }
-    );
+    await setTimeline(client, "timeline-proj", uploaded.artifactId, "landscape");
 
     const result = await client.callTool({
       name: "render_timeline",

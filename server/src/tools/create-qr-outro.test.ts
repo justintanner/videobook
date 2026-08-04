@@ -8,8 +8,6 @@ import { createEngineForTest } from "../fs.js";
 import { queue, setEngineRoot } from "../queue.js";
 import { createQrOutroDef } from "./create-qr-outro.js";
 
-const PROJECT = "qr-outro-test";
-
 function parseResult(result: { content: Array<{ text: string }> }): Record<string, unknown> {
   return JSON.parse(result.content[0].text) as Record<string, unknown>;
 }
@@ -17,13 +15,13 @@ function parseResult(result: { content: Array<{ text: string }> }): Record<strin
 describe("create_qr_outro", () => {
   let tempDir: string;
   let fs: Engine;
+  let bookId: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-qr-outro-tool-"));
     fs = createEngineForTest(tempDir);
     await setEngineRoot(tempDir, fs);
-    const project = await fs.projects.create(PROJECT);
-    expect(project.ok).toBe(true);
+    bookId = fs.book.get().bookId;
   });
 
   afterEach(async () => {
@@ -63,7 +61,7 @@ describe("create_qr_outro", () => {
     const sound = await createAudio("slap");
 
     const result = await createQrOutroDef(fs).handler({
-      book_id: PROJECT,
+      book_id: bookId,
       qr_image_slugs: [`@${qrOne}`, qrTwo],
       sound_effect_slug: `@${sound}`,
       aspect_ratio: "9:16",
@@ -90,7 +88,7 @@ describe("create_qr_outro", () => {
     const qr = await createImage("qr", "#ffffff");
 
     const result = await createQrOutroDef(fs).handler({
-      book_id: PROJECT,
+      book_id: bookId,
       qr_image_slugs: [qr],
     });
 
@@ -108,7 +106,7 @@ describe("create_qr_outro", () => {
     const qr = await createImage("silent-qr", "#ffffff");
 
     const result = await createQrOutroDef(fs).handler({
-      book_id: PROJECT,
+      book_id: bookId,
       qr_image_slugs: [qr],
       duration_seconds: 10,
       include_audio: false,
@@ -128,7 +126,7 @@ describe("create_qr_outro", () => {
     const sound = await createAudio("slap");
 
     const result = await createQrOutroDef(fs).handler({
-      book_id: PROJECT,
+      book_id: bookId,
       qr_image_slugs: [qr],
       sound_effect_slug: sound,
       include_audio: false,
@@ -144,7 +142,7 @@ describe("create_qr_outro", () => {
     const before = await fs.artifacts.list();
 
     const result = await createQrOutroDef(fs).handler({
-      book_id: PROJECT,
+      book_id: bookId,
       qr_image_slugs: [empty.value.slug],
     });
 
@@ -157,7 +155,7 @@ describe("create_qr_outro", () => {
     const sound = await createAudio("sound");
 
     const result = await createQrOutroDef(fs).handler({
-      book_id: PROJECT,
+      book_id: bookId,
       qr_image_slugs: [sound],
     });
 

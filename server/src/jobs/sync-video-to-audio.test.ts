@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { createAudioSyncPlan } from "../audio-sync.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
-import { createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../fs.js";
 import { queue, setEngineRoot } from "../queue.js";
 import {
   prepareAudioSyncTranscript,
@@ -166,8 +166,7 @@ describe("audio sync transcript preparation and rollback", () => {
     const fs = createEngineForTest(projectsDir);
     const savedApiKey = process.env.ELEVENLABS_API_KEY;
     try {
-      const project = await fs.projects.create("transcript-test");
-      if (!project.ok) throw new Error(project.error.message);
+      const bookId = fs.book.get().bookId;
       const created = await fs.artifacts.create("vid", "valid transcript");
       if (!created.ok) throw new Error(created.error.message);
       const audio = await fs.files.write(created.value.slug, "original.mp3", Buffer.from("audio")
@@ -184,7 +183,7 @@ describe("audio sync transcript preparation and rollback", () => {
       await expect(prepareAudioSyncTranscript(
         fs,
         created.value.slug,
-        "transcript-test",
+        bookId,
       )).resolves.toEqual({ transcript, replacement: null });
     } finally {
       if (savedApiKey === undefined) {
@@ -192,7 +191,7 @@ describe("audio sync transcript preparation and rollback", () => {
       } else {
         process.env.ELEVENLABS_API_KEY = savedApiKey;
       }
-      fs.close();
+      closeEngineForTest(projectsDir, fs);
       await rm(projectsDir, { recursive: true, force: true, maxRetries: 3 });
     }
   });
@@ -207,8 +206,7 @@ describe("audio sync transcript preparation and rollback", () => {
     const fs = createEngineForTest(projectsDir);
     const savedApiKey = process.env.ELEVENLABS_API_KEY;
     try {
-      const project = await fs.projects.create("replacement-test");
-      if (!project.ok) throw new Error(project.error.message);
+      const bookId = fs.book.get().bookId;
       const created = await fs.artifacts.create("vid", "replacement transcript");
       if (!created.ok) throw new Error(created.error.message);
       const audio = await fs.files.write(created.value.slug, sourceFilename, Buffer.from("audio")
@@ -219,14 +217,13 @@ describe("audio sync transcript preparation and rollback", () => {
         );
         if (!written.ok) throw new Error(written.error.message);
       }
-      const historyBefore = await fs.history.artifact(created.value.slug, "replacement-test"
-      );
+      const historyBefore = fs.history.artifact(created.value.artifactId);
       delete process.env.ELEVENLABS_API_KEY;
 
       await expect(prepareAudioSyncTranscript(
         fs,
         created.value.slug,
-        "replacement-test",
+        bookId,
       )).rejects.toThrow("ELEVENLABS_API_KEY environment variable is not set");
 
       const transcriptAfter = await fs.files.read(created.value.slug, "elevenlabs.json"
@@ -237,8 +234,7 @@ describe("audio sync transcript preparation and rollback", () => {
         expect(transcriptAfter.ok).toBe(true);
         if (transcriptAfter.ok) expect(transcriptAfter.value.toString("utf8")).toBe(contents);
       }
-      const historyAfter = await fs.history.artifact(created.value.slug, "replacement-test"
-      );
+      const historyAfter = fs.history.artifact(created.value.artifactId);
       expect(historyAfter.map((entry) => entry.hash)).toEqual(
         historyBefore.map((entry) => entry.hash),
       );
@@ -248,7 +244,7 @@ describe("audio sync transcript preparation and rollback", () => {
       } else {
         process.env.ELEVENLABS_API_KEY = savedApiKey;
       }
-      fs.close();
+      closeEngineForTest(projectsDir, fs);
       await rm(projectsDir, { recursive: true, force: true, maxRetries: 3 });
     }
   });
@@ -257,8 +253,7 @@ describe("audio sync transcript preparation and rollback", () => {
     const projectsDir = await mkdtemp(join(tmpdir(), "videocity-audio-sync-restore-"));
     const fs = createEngineForTest(projectsDir);
     try {
-      const project = await fs.projects.create("restore-test");
-      if (!project.ok) throw new Error(project.error.message);
+      const bookId = fs.book.get().bookId;
       const created = await fs.artifacts.create("vid", "restore source");
       if (!created.ok) throw new Error(created.error.message);
       for (const [filename, contents] of [
@@ -271,7 +266,7 @@ describe("audio sync transcript preparation and rollback", () => {
         );
         if (!written.ok) throw new Error(written.error.message);
       }
-      const history = await fs.history.artifact(created.value.slug, "restore-test");
+      const history = fs.history.artifact(created.value.artifactId);
       const restoreCommit = history[0]?.hash;
       if (!restoreCommit) throw new Error("missing restore commit");
 
@@ -291,7 +286,7 @@ describe("audio sync transcript preparation and rollback", () => {
       await expect(restoreAudioSyncSnapshot(
         fs,
         created.value.slug,
-        "restore-test",
+        bookId,
         restoreCommit,
       )).resolves.toMatch(/^[a-f0-9]{40}$/);
 
@@ -309,14 +304,14 @@ describe("audio sync transcript preparation and rollback", () => {
       await expect(restoreAudioSyncSnapshot(
         fs,
         created.value.slug,
-        "restore-test",
+        bookId,
         "0000000000000000000000000000000000000000",
-      )).rejects.toThrow("ref not found");
-      const work = await fs.jobs.artifactWork.read("restore-test");
+      )).rejects.toThrow("Revision not found");
+      const work = await fs.jobs.artifactWork.read(created.value.slug);
       expect(work.ok).toBe(true);
       if (work.ok) expect(work.value?.status).toBe("ready");
     } finally {
-      fs.close();
+      closeEngineForTest(projectsDir, fs);
       await rm(projectsDir, { recursive: true, force: true, maxRetries: 3 });
     }
   });
@@ -328,8 +323,7 @@ describe("audio sync transcript preparation and rollback", () => {
     const fs = createEngineForTest(projectsDir);
     await setEngineRoot(projectsDir, fs);
     try {
-      const project = await fs.projects.create("job-rollback-test");
-      if (!project.ok) throw new Error(project.error.message);
+      const bookId = fs.book.get().bookId;
       const created = await fs.artifacts.create("vid", "job rollback");
       if (!created.ok) throw new Error(created.error.message);
       const video = await fs.files.write(created.value.slug, "original.mp4", await readFile(sourcePath)
@@ -344,8 +338,7 @@ describe("audio sync transcript preparation and rollback", () => {
       const metadata = await fs.metadata.artifacts.write(created.value.slug, "original", {}
       );
       if (!metadata.ok) throw new Error(metadata.error.message);
-      const historyBefore = await fs.history.artifact(created.value.slug, "job-rollback-test"
-      );
+      const historyBefore = fs.history.artifact(created.value.artifactId);
       registerSyncVideoToAudioJob(fs);
 
       await expect(queue.enqueueAndWait(
@@ -357,12 +350,12 @@ describe("audio sync transcript preparation and rollback", () => {
           anchors: [{ videoSeconds: 1, audioCue: "missing cue" }],
           assetId: created.value.slug,
           assetDir: created.value.path,
-          bookId: "job-rollback-test",
+          bookId,
         },
         30_000,
       )).rejects.toThrow("was not found");
 
-      const work = await fs.jobs.artifactWork.read("job-rollback-test");
+      const work = await fs.jobs.artifactWork.read(created.value.slug);
       expect(work.ok).toBe(true);
       if (work.ok) expect(work.value?.status).toBe("ready");
       const generationError = await fs.jobs.failures.read(created.value.slug
@@ -373,18 +366,13 @@ describe("audio sync transcript preparation and rollback", () => {
       );
       expect(transcriptAfter.ok).toBe(true);
       if (transcriptAfter.ok) expect(transcriptAfter.value.toString("utf8")).toBe(transcriptText);
-      const historyAfter = await fs.history.artifact(created.value.slug, "job-rollback-test"
+      const historyAfter = fs.history.artifact(created.value.artifactId);
+      expect(historyAfter.map((entry) => entry.hash)).toEqual(
+        historyBefore.map((entry) => entry.hash),
       );
-      expect(historyAfter.length).toBeGreaterThan(historyBefore.length);
-      expect(historyAfter.some((entry) => entry.operation === "restore_artifact"))
-        .toBe(true);
-      const restoredHashes = new Set(historyAfter.map((entry) => entry.hash));
-      for (const entry of historyBefore) {
-        expect(restoredHashes.has(entry.hash)).toBe(true);
-      }
     } finally {
       await queue.stop();
-      fs.close();
+      closeEngineForTest(projectsDir, fs);
       await rm(projectsDir, { recursive: true, force: true, maxRetries: 3 });
     }
   });

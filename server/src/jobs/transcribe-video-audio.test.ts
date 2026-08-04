@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Engine } from "videobook-engine";
-import { createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../fs.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import type { JobHandlerContext, LeaseToken } from "../queue.js";
 import { registerTranscribeVideoAudioJob, runTranscribeVideoAudio } from "./transcribe-video-audio.js";
@@ -19,6 +19,7 @@ function makeContext(): JobHandlerContext {
       if (lease?.kind === "owner") return lease.ownerId;
       throw new Error("no owner lease set");
     },
+    markAssetFailureHandled(): void {},
   };
 }
 
@@ -35,14 +36,13 @@ describe("runTranscribeVideoAudio", () => {
   let assetId: string;
   let assetDir: string;
   let savedApiKey: string | undefined;
-  const bookId = "test-proj";
+  let bookId: string;
 
   beforeEach(async () => {
     savedApiKey = process.env.OPENAI_API_KEY;
     tempDir = await mkdtemp(join(tmpdir(), "videocity-transcribe-test-"));
     fs = createEngineForTest(tempDir);
-    const project = await fs.projects.create(bookId);
-    if (!project.ok) throw new Error(project.error.message);
+    bookId = fs.book.get().bookId;
     const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
     assetId = created.value.slug;
@@ -57,6 +57,7 @@ describe("runTranscribeVideoAudio", () => {
     } else {
       process.env.OPENAI_API_KEY = savedApiKey;
     }
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -76,7 +77,7 @@ describe("runTranscribeVideoAudio", () => {
     const result = await runTranscribeVideoAudio(fs, payload(), makeContext());
 
     expect(result).toEqual({ success: false, reason: "OPENAI_API_KEY not set" });
-    const work = await fs.jobs.artifactWork.read(bookId);
+    const work = await fs.jobs.artifactWork.read(assetId);
     expect(work.ok).toBe(true);
     if (work.ok && work.value) expect(work.value.status).not.toBe("error");
   });
@@ -100,7 +101,7 @@ describe("runTranscribeVideoAudio", () => {
     expect(result.reason).toBeTruthy();
 
     // The asset must stay clean: lease completed, no persisted error.
-    const work = await fs.jobs.artifactWork.read(bookId);
+    const work = await fs.jobs.artifactWork.read(assetId);
     expect(work.ok).toBe(true);
     if (!work.ok) return;
     expect(work.value?.status).toBe("ready");

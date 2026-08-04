@@ -72,7 +72,6 @@ describe("sleepDef handler", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-sleep-test-"));
     fs = createEngineForTest(tempDir);
-    await fs.projects.create("test-proj");
   });
 
   afterEach(async () => {
@@ -136,7 +135,7 @@ describe("sleepDef handler", () => {
     };
     expect(options.artifactWorkKind).toBe("generate");
     fs.jobs.queue.enqueue(options);
-    const queuedWork = await fs.jobs.artifactWork.read("test-proj"
+    const queuedWork = await fs.jobs.artifactWork.read(assetResult.value.slug
     );
     expect(queuedWork.ok).toBe(true);
     if (!queuedWork.ok) throw new Error(queuedWork.error.message);

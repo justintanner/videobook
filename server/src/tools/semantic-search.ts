@@ -236,13 +236,14 @@ export function semanticSearchDefs(
         const limit = Number(args.limit) || 200;
         const artifacts = engine.artifacts.list().slice(-limit).reverse();
         const statuses = await Promise.all(artifacts.map(async (artifact) => {
-          const [manifest, streams, waveform, transcripts, coverage, proxyMetadata] = await Promise.all([
+          const [manifest, streams, waveform, transcripts, coverage, proxyMetadata, legacyTranscript] = await Promise.all([
             engine.files.manifest(artifact.artifactId),
             Promise.resolve(engine.streams.list(artifact.artifactId)),
             engine.metadata.waveforms.read(artifact.artifactId),
             Promise.resolve(engine.transcripts.list(artifact.artifactId)),
             Promise.resolve(engine.temporalSearch.coverage(artifact.artifactId)),
             engine.metadata.artifacts.read<VideoProxyAssessment>(artifact.artifactId, "proxy"),
+            engine.files.read(artifact.artifactId, ".analysis.gpt4otrans.json"),
           ]);
           const files = manifest.ok ? manifest.value.files : [];
           const sourceFile = artifact.kind === "video"
@@ -273,7 +274,7 @@ export function semanticSearchDefs(
               ? "ready"
               : artifact.kind === "image" || !hasAudio ? "not-applicable" : "not-indexed",
             transcript: transcripts.ok && transcripts.value.length > 0
-            || files.some((file) => file.name === ".analysis.gpt4otrans.json")
+            || legacyTranscript.ok
               ? "ready"
               : artifact.kind === "image" || !hasAudio ? "not-applicable" : "not-indexed",
             visual: phase("visual"),

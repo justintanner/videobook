@@ -220,6 +220,8 @@ describe('notebook draft conversion', () => {
       data: {
         sourceSide: 'right',
         sourcePortIndex: 1,
+        targetSide: 'left',
+        targetPortIndex: 1,
         sourceBusOffset: 20,
         targetBusOffset: 20,
         riverOffset: 20,

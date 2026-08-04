@@ -1,4 +1,4 @@
-import { createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../fs.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -31,6 +31,8 @@ describe("clean-video-audio job media mix", () => {
   let sourcePath: string;
   let voicePath: string;
   let musicPath: string;
+  let engineRoot: string | undefined;
+  let engine: ReturnType<typeof createEngineForTest> | undefined;
 
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-clean-audio-mix-test-"));
@@ -65,6 +67,7 @@ describe("clean-video-audio job media mix", () => {
   }, 60_000);
 
   afterAll(async () => {
+    if (engine && engineRoot) closeEngineForTest(engineRoot, engine);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -124,29 +127,28 @@ describe("clean-video-audio job media mix", () => {
       },
     );
 
-    const projectsDir = join(tempDir, "projects");
-    const fs = createEngineForTest(projectsDir);
-    const project = await fs.projects.create("in-place");
-    if (!project.ok) throw new Error(project.error.message);
+    engineRoot = join(tempDir, "projects");
+    engine = createEngineForTest(engineRoot);
+    const fs = engine;
+    const bookId = fs.book.get().bookId;
     const asset = await fs.artifacts.create("vid", "source");
     if (!asset.ok) throw new Error(asset.error.message);
     const sourceWrite = await fs.files.write(asset.value.slug, "original.mp4", await readFile(sourcePath)
     );
     if (!sourceWrite.ok) throw new Error(sourceWrite.error.message);
-    const historyBefore = await fs.history.artifact(asset.value.slug, "in-place");
+    const historyBefore = fs.history.artifact(asset.value.artifactId);
 
     await replaceVideoAssetInPlace(
       fs,
       asset.value.slug,
       "original.mp4",
       outputPath,
-      "in-place",
+      bookId,
     );
 
     const stored = await fs.files.read(asset.value.slug, "original.mp4");
     if (!stored.ok) throw new Error(stored.error.message);
     expect(stored.value.equals(await readFile(outputPath))).toBe(true);
-    expect((await fs.history.artifact(asset.value.slug, "in-place")).length).toBeGreaterThan(historyBefore.length);
-    fs.close();
+    expect(fs.history.artifact(asset.value.artifactId).length).toBeGreaterThan(historyBefore.length);
   }, 60_000);
 });

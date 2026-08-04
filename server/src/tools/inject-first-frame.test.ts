@@ -22,6 +22,7 @@ type TextContent = Array<{ type: string; text: string }>;
 
 type UploadedAsset = {
   assetId: string;
+  artifactId: string;
   path: string;
 };
 
@@ -271,15 +272,19 @@ describe("inject_first_frame tool", () => {
     const writes = await Promise.all([
       fs.files.write(video.assetId, "landscape.mp4", original.value),
       fs.files.write(video.assetId, "portrait.mp4", original.value),
-      fs.metadata.book.write("timeline", {
-        slots: [{ slug: video.assetId }],
-        render: "portrait",
-        currentOrientation: "portrait",
-      }),
     ]);
     for (const write of writes) {
       if (!write.ok) throw new Error(write.error.message);
     }
+    const timeline = await client.callTool({
+      name: "set_timeline",
+      arguments: {
+        book_id: bookId,
+        render: "portrait",
+        slots: [{ artifact_id: video.artifactId }],
+      },
+    });
+    if (timeline.isError) throw new Error((timeline.content as TextContent)[0].text);
 
     for (const orientation of ["landscape", "portrait"] as const) {
       const render = await client.callTool({

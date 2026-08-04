@@ -1549,16 +1549,20 @@ export async function findAutoRenderActions(
       const manifest = manifestResult.value;
       const files = manifest.files;
       const fileNames = new Set(files.map((f) => f.name));
+      const [analysis, transcription] = await Promise.all([
+        fs.files.read(asset.artifactId, ".original.analysis.json"),
+        fs.files.read(asset.artifactId, ".analysis.gpt4otrans.json"),
+      ]);
 
       // Skip: already rendered for target orientation
       const renderMetadata = await fs.metadata.artifacts.read<Record<string, unknown>>(asset.artifactId, `${orientation}.render`
       );
       if (renderMetadata.ok && typeof renderMetadata.value.renderedAt === "string") return null;
       // Skip: process_video incomplete
-      if (!fileNames.has(".original.analysis.json")) return null;
+      if (!analysis.ok) return null;
 
       // Skip if speech-to-text analysis not yet complete (unless video has no audio)
-      if (!fileNames.has(".analysis.gpt4otrans.json")) {
+      if (!transcription.ok) {
         const meta = await fs.metadata.artifacts.read<{ hasAudio?: boolean }>(asset.slug, "original");
         if (meta.ok && meta.value.hasAudio) return null;
       }
@@ -1611,7 +1615,7 @@ async function findAutoTranscribeActions(
       const fileNames = new Set(files.map((f) => f.name));
 
       // Must have completed analysis
-      if (!fileNames.has(".original.analysis.json")) return null;
+      if (!(await fs.files.read(asset.artifactId, ".original.analysis.json")).ok) return null;
       // Skip if already transcribed
       if (fileNames.has("elevenlabs.json")) return null;
       // Skip if a prior transcription attempt failed — do not auto-retry.

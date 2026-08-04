@@ -3,24 +3,67 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Engine } from "videobook-engine";
-import { createEngineForTest } from "./fs.js";
+import { closeEngineForTest, createEngineForTest } from "./fs.js";
 import { enqueueLazyAnalysisIfSlotted, enqueueLazyTimelineRender } from "./lazy-render.js";
 import { queue } from "./queue.js";
+import { writeTimeline, type TimelineRender } from "./timeline-helpers.js";
+
+async function registerTestVideoStream(
+  fs: Engine,
+  artifactId: string,
+): Promise<void> {
+  const manifest = await fs.files.manifest(artifactId);
+  if (!manifest.ok) throw new Error(manifest.error.message);
+  const file = manifest.value.files.find((entry) => entry.name === "original.mp4");
+  if (!file) throw new Error("Missing original.mp4");
+  const registered = await fs.streams.register({
+    artifactId,
+    sourcePath: file.name,
+    objectHash: file.objectHash,
+    streamIndex: 0,
+    kind: "video",
+    timeBase: { numerator: 1, denominator: 1_000 },
+    durationTicks: 12_000,
+    codec: "h264",
+    video: {
+      width: 1920,
+      height: 1080,
+      rotationDegrees: 0,
+      pixelAspect: { numerator: 1, denominator: 1 },
+      nominalFrameRate: { numerator: 30, denominator: 1 },
+    },
+  });
+  if (!registered.ok) throw new Error(registered.error.message);
+}
+
+async function setTimelineSlot(
+  fs: Engine,
+  assetId: string,
+  render: TimelineRender,
+): Promise<void> {
+  const asset = fs.artifacts.get(assetId);
+  if (!asset.ok) throw new Error(asset.error.message);
+  const timeline = await writeTimeline(fs, {
+    render,
+    slots: [{ artifactId: asset.value.artifactId }],
+  });
+  if (!timeline.ok) throw new Error(timeline.error.message);
+}
 
 describe("enqueueLazyTimelineRender", () => {
   let fs: Engine;
   let tempDir: string;
-  const bookId = "test-proj";
+  let bookId: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-lazy-render-test-"));
     fs = createEngineForTest(tempDir);
-    const project = await fs.projects.create(bookId);
-    if (!project.ok) throw new Error(project.error.message);
+    bookId = fs.book.get().bookId;
   });
 
   afterEach(async () => {
     vi.restoreAllMocks();
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -28,26 +71,23 @@ describe("enqueueLazyTimelineRender", () => {
     const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
     const assetId = created.value.slug;
-    const writes = await Promise.all([
-      fs.files.write(assetId, "original.mp4", Buffer.from("fake-video")),
-      fs.files.write(assetId, ".original.analysis.json", Buffer.from(JSON.stringify({ burnedInSubtitles: null }))),
-      fs.files.write(assetId, ".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" }))),
-      fs.files.write(assetId, "elevenlabs.json", Buffer.from(JSON.stringify({ words: [] }))),
-    ]);
-    for (const write of writes) {
+    for (const [filename, contents] of [
+      ["original.mp4", Buffer.from("fake-video")],
+      [".original.analysis.json", Buffer.from(JSON.stringify({ burnedInSubtitles: null }))],
+      [".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" }))],
+      ["elevenlabs.json", Buffer.from(JSON.stringify({ words: [] }))],
+    ] as const) {
+      const write = await fs.files.write(assetId, filename, contents);
       if (!write.ok) throw new Error(write.error.message);
     }
+    await registerTestVideoStream(fs, created.value.artifactId);
     return assetId;
   }
 
   it("enqueues assigned video renders with clean audio and subtitles off by default", async () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createVideoAsset();
-    const timeline = await fs.metadata.book.write("timeline", {
-      slots: [{ slug: assetId }],
-      render: "portrait",
-    });
-    if (!timeline.ok) throw new Error(timeline.error.message);
+    await setTimelineSlot(fs, assetId, "portrait");
 
     const result = await enqueueLazyTimelineRender(fs, bookId, assetId);
 
@@ -76,10 +116,7 @@ describe("enqueueLazyTimelineRender", () => {
       audioFadeIn: 200,
       audioFadeOut: 300,
     });
-    await fs.metadata.book.write("timeline", {
-      slots: [{ slug: assetId }],
-      render: "portrait",
-    });
+    await setTimelineSlot(fs, assetId, "portrait");
 
     await enqueueLazyTimelineRender(fs, bookId, assetId);
 
@@ -97,10 +134,7 @@ describe("enqueueLazyTimelineRender", () => {
     // Settings live on another orientation: target-orientation metadata would
     // mark the clip already rendered, and readStoredRenderDefaults falls back.
     await fs.metadata.artifacts.write(assetId, "landscape.render", { subtitleLanguage: "en" });
-    await fs.metadata.book.write("timeline", {
-      slots: [{ slug: assetId }],
-      render: "portrait",
-    });
+    await setTimelineSlot(fs, assetId, "portrait");
 
     await enqueueLazyTimelineRender(fs, bookId, assetId);
 
@@ -112,10 +146,7 @@ describe("enqueueLazyTimelineRender", () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createVideoAsset();
     await fs.metadata.artifacts.write(assetId, "landscape.render", { subtitleLanguage: "english!!" });
-    await fs.metadata.book.write("timeline", {
-      slots: [{ slug: assetId }],
-      render: "portrait",
-    });
+    await setTimelineSlot(fs, assetId, "portrait");
 
     await enqueueLazyTimelineRender(fs, bookId, assetId);
 
@@ -137,19 +168,19 @@ describe("enqueueLazyTimelineRender", () => {
 describe("enqueueLazyAnalysisIfSlotted", () => {
   let fs: Engine;
   let tempDir: string;
-  const bookId = "test-proj";
+  let bookId: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-lazy-analysis-test-"));
     fs = createEngineForTest(tempDir);
+    bookId = fs.book.get().bookId;
     vi.stubEnv("OPENAI_API_KEY", "test-key");
-    const project = await fs.projects.create(bookId);
-    if (!project.ok) throw new Error(project.error.message);
   });
 
   afterEach(async () => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -159,22 +190,19 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
     const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
     const assetId = created.value.slug;
-    const writes = await Promise.all([
-      fs.files.write(assetId, "original.mp4", Buffer.from("fake-video")),
-      fs.files.write(assetId, ".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" }))),
-    ]);
-    for (const write of writes) {
+    for (const [filename, contents] of [
+      ["original.mp4", Buffer.from("fake-video")],
+      [".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" }))],
+    ] as const) {
+      const write = await fs.files.write(assetId, filename, contents);
       if (!write.ok) throw new Error(write.error.message);
     }
+    await registerTestVideoStream(fs, created.value.artifactId);
     return assetId;
   }
 
   async function assignToTimeline(assetId: string): Promise<void> {
-    const timeline = await fs.metadata.book.write("timeline", {
-      slots: [{ slug: assetId }],
-      render: "landscape",
-    });
-    if (!timeline.ok) throw new Error(timeline.error.message);
+    await setTimelineSlot(fs, assetId, "landscape");
   }
 
   it("enqueues analyze_video for a slotted video missing its analysis", async () => {

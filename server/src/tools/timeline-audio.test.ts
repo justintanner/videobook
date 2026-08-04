@@ -28,7 +28,7 @@ async function uploadAudio(
   client: Client,
   bookId: string,
   audioPath: string,
-): Promise<{ assetId: string }> {
+): Promise<{ artifactId: string; assetId: string }> {
   const data = (await readFile(audioPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
@@ -67,7 +67,7 @@ describe("timeline audio tools", () => {
   });
 
   it("add_timeline_audio appends a clip with auto-probed duration", async () => {
-    const { assetId } = await uploadAudio(client, "audio-proj", audioPath);
+    const { artifactId, assetId } = await uploadAudio(client, "audio-proj", audioPath);
 
     const result = await client.callTool({
       name: "add_timeline_audio",
@@ -80,7 +80,7 @@ describe("timeline audio tools", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.clip.id).toMatch(/.+/);
-    expect(parsed.clip.slug).toBe(assetId);
+    expect(parsed.clip.artifactId).toBe(artifactId);
     expect(parsed.clip.startFrame).toBe(60);
     // ~2 seconds at 30 fps → ~60 frames (allow rounding tolerance)
     expect(parsed.clip.durationFrames).toBeGreaterThanOrEqual(58);
@@ -118,8 +118,8 @@ describe("timeline audio tools", () => {
     });
     expect(moveResult.isError).toBeFalsy();
     const moved = JSON.parse((moveResult.content as TextContent)[0].text);
-    expect(moved.clip.startFrame).toBe(120);
     expect(moved.audio).toHaveLength(1);
+    expect(moved.audio[0].start_frame).toBe(120);
   });
 
   it("remove_timeline_audio drops the clip by id", async () => {
@@ -162,9 +162,9 @@ describe("timeline audio tools", () => {
     });
     expect(updateResult.isError).toBeFalsy();
     const updated = JSON.parse((updateResult.content as TextContent)[0].text);
-    expect(updated.clip.volume).toBe(50);
-    expect(updated.clip.fadeIn).toBe(500);
-    expect(updated.clip.fadeOut).toBe(250);
+    expect(updated.audio[0].volume).toBe(50);
+    expect(updated.audio[0].fadeIn).toBe(500);
+    expect(updated.audio[0].fadeOut).toBeCloseTo(266.667, 3);
 
     // Confirm round-trip via get_timeline
     const getResult = await client.callTool({
@@ -174,7 +174,7 @@ describe("timeline audio tools", () => {
     const config = JSON.parse((getResult.content as TextContent)[0].text);
     expect(config.audio[0].volume).toBe(50);
     expect(config.audio[0].fadeIn).toBe(500);
-    expect(config.audio[0].fadeOut).toBe(250);
+    expect(config.audio[0].fadeOut).toBeCloseTo(266.667, 3);
   });
 
   it("update_timeline_audio rejects when nothing to update", async () => {
@@ -193,7 +193,7 @@ describe("timeline audio tools", () => {
   });
 
   it("get_timeline returns the audio array after additions", async () => {
-    const { assetId } = await uploadAudio(client, "audio-proj", audioPath);
+    const { artifactId, assetId } = await uploadAudio(client, "audio-proj", audioPath);
     await client.callTool({
       name: "add_timeline_audio",
       arguments: { book_id: "audio-proj", asset_id: assetId, start_frame: 30 },
@@ -207,7 +207,7 @@ describe("timeline audio tools", () => {
     const config = JSON.parse((result.content as TextContent)[0].text);
     expect(config.audio).toBeDefined();
     expect(config.audio).toHaveLength(1);
-    expect(config.audio[0].slug).toBe(assetId);
-    expect(config.audio[0].startFrame).toBe(30);
+    expect(config.audio[0].artifact_id).toBe(artifactId);
+    expect(config.audio[0].start_frame).toBe(30);
   });
 });

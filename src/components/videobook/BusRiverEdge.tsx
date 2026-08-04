@@ -7,6 +7,7 @@ import {
 } from '@xyflow/react'
 import {
   notebookBusRiverPath,
+  notebookSourcePortOffsets,
   type NotebookBusRiverRoute,
 } from '@/videobook/notebook-routing'
 import { notebookGrid } from '@/videobook/notebook-grid'
@@ -18,7 +19,9 @@ interface BusRiverNodeBounds {
   sourceRightX: number
   sourceBottomY: number
   targetCenterX: number
+  targetLeftX: number
   targetTopY: number
+  targetHeight: number
 }
 
 function nodeBoundsEqual(
@@ -31,7 +34,9 @@ function nodeBoundsEqual(
     && left.sourceRightX === right.sourceRightX
     && left.sourceBottomY === right.sourceBottomY
     && left.targetCenterX === right.targetCenterX
+    && left.targetLeftX === right.targetLeftX
     && left.targetTopY === right.targetTopY
+    && left.targetHeight === right.targetHeight
 }
 
 export const BusRiverEdge = memo(function BusRiverEdge(
@@ -52,22 +57,35 @@ export const BusRiverEdge = memo(function BusRiverEdge(
       ?? notebookGrid.squareSize
     const targetWidth = targetNode.measured?.width
       ?? notebookGrid.squareSize
+    const targetHeight = targetNode.measured?.height
+      ?? notebookGrid.squareSize
     return {
       sourceLeftX: sourcePosition.x,
       sourceRightX: sourcePosition.x + sourceWidth,
       sourceBottomY: sourcePosition.y + sourceHeight,
       targetCenterX: targetPosition.x + targetWidth / 2,
+      targetLeftX: targetPosition.x,
       targetTopY: targetPosition.y,
+      targetHeight,
     }
   }, nodeBoundsEqual)
   if (!data || !bounds) return null
+
+  const targetPortOffset = notebookSourcePortOffsets[data.targetPortIndex]
+    ?? notebookSourcePortOffsets[1]
+  const targetX = data.targetSide === 'left'
+    ? bounds.targetLeftX
+    : bounds.targetCenterX
+  const targetY = data.targetSide === 'left'
+    ? bounds.targetTopY + bounds.targetHeight * targetPortOffset
+    : bounds.targetTopY
 
   const path = notebookBusRiverPath(
     {
       sourceX,
       sourceY,
-      targetX: bounds.targetCenterX,
-      targetY: bounds.targetTopY,
+      targetX,
+      targetY,
       ...bounds,
     },
     data,

@@ -1,11 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { Client } from "@modelcontextprotocol/client";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Client } from "@modelcontextprotocol/client";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTestClient } from "../test-client.js";
 
 type TextContent = Array<{ type: string; text: string }>;
+type UploadedAsset = { artifactId: string; assetId: string };
 
 describe("remove_timeline_slot tool", () => {
   let client: Client;
@@ -25,24 +26,33 @@ describe("remove_timeline_slot tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("removes a filled slot, shifts later slots, and preserves timeline settings", async () => {
-    const audio = [
-      { id: "aud-1", slug: "aud-music", startFrame: 10, durationFrames: 120, volume: 80 },
-    ];
-    await client.callTool({
-      name: "set_timeline",
+  async function upload(name: string): Promise<UploadedAsset> {
+    const result = await client.callTool({
+      name: "upload_file",
       arguments: {
         book_id: "test-proj",
-        slots: [
-          { slug: "vid-a", volume: 75 },
-          { slug: "vid-b", audioFadeIn: 200 },
-          { slug: "vid-c", audioFadeOut: 300 },
-        ],
-        audio,
-        render: "portrait",
-        currentOrientation: "square",
+        filename: `${name}.png`,
+        data: Buffer.from(name).toString("base64"),
       },
     });
+    return JSON.parse((result.content as TextContent)[0].text) as UploadedAsset;
+  }
+
+  async function assign(assetId: string, slot: string): Promise<void> {
+    const result = await client.callTool({
+      name: "assign_slot",
+      arguments: { book_id: "test-proj", asset_id: assetId, slot },
+    });
+    expect(result.isError).toBeFalsy();
+  }
+
+  it("removes a filled slot and shifts later slots left", async () => {
+    const first = await upload("first");
+    const second = await upload("second");
+    const third = await upload("third");
+    await assign(first.assetId, "s01");
+    await assign(second.assetId, "s02");
+    await assign(third.assetId, "s03");
 
     const result = await client.callTool({
       name: "remove_timeline_slot",
@@ -51,79 +61,16 @@ describe("remove_timeline_slot tool", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.slots).toEqual([
-      { slug: "vid-a", volume: 75 },
-      { slug: "vid-c", audioFadeOut: 300 },
+    expect(parsed.slots.map((slot: { artifact_id: string }) => slot.artifact_id)).toEqual([
+      first.artifactId,
+      third.artifactId,
     ]);
-    expect(parsed.audio).toEqual(audio);
-    expect(parsed.render).toBe("portrait");
-    expect(parsed.currentOrientation).toBe("square");
-    expect(parsed.removed_slot).toBe("s02");
-    expect(parsed.removed_asset_id).toBe("vid-b");
-    expect(parsed.trimmed_trailing_slots).toBe(0);
-  });
-
-  it("removes an internal empty and trims every trailing empty", async () => {
-    await client.callTool({
-      name: "set_timeline",
-      arguments: {
-        book_id: "test-proj",
-        slots: [
-          { slug: "vid-a" },
-          { slug: "" },
-          { slug: "vid-b" },
-          { slug: "" },
-          { slug: "" },
-        ],
-      },
-    });
-
-    const result = await client.callTool({
-      name: "remove_timeline_slot",
-      arguments: { book_id: "test-proj", slot: "s02" },
-    });
-
-    expect(result.isError).toBeFalsy();
-    const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.slots).toEqual([{ slug: "vid-a" }, { slug: "vid-b" }]);
-    expect(parsed.removed_asset_id).toBeNull();
-    expect(parsed.trimmed_trailing_slots).toBe(2);
-  });
-
-  it("removing the last filled slot also removes newly trailing gaps", async () => {
-    await client.callTool({
-      name: "set_timeline",
-      arguments: {
-        book_id: "test-proj",
-        slots: [
-          { slug: "vid-a" },
-          { slug: "" },
-          { slug: "vid-b" },
-          { slug: "" },
-          { slug: "" },
-        ],
-      },
-    });
-
-    const result = await client.callTool({
-      name: "remove_timeline_slot",
-      arguments: { book_id: "test-proj", slot: "s03" },
-    });
-
-    expect(result.isError).toBeFalsy();
-    const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.slots).toEqual([{ slug: "vid-a" }]);
-    expect(parsed.trimmed_trailing_slots).toBe(3);
+    expect(parsed.removed_artifact_id).toBe(second.artifactId);
   });
 
   it("removing the only stored slot leaves an empty timeline", async () => {
-    await client.callTool({
-      name: "set_timeline",
-      arguments: {
-        book_id: "test-proj",
-        slots: [{ slug: "vid-a" }],
-      },
-    });
+    const asset = await upload("only");
+    await assign(asset.assetId, "s01");
 
     const result = await client.callTool({
       name: "remove_timeline_slot",
@@ -133,6 +80,7 @@ describe("remove_timeline_slot tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.slots).toEqual([]);
+    expect(parsed.removed_artifact_id).toBe(asset.artifactId);
   });
 
   it.each(["slot2", "s00"])("rejects invalid slot identifier %s", async (slot) => {
@@ -142,24 +90,18 @@ describe("remove_timeline_slot tool", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect((result.content as TextContent)[0].text).toContain("Invalid slot format");
+    expect((result.content as TextContent)[0].text).toContain("Slot must use the form");
   });
 
-  it("rejects virtual slots and timelines that do not exist", async () => {
-    await client.callTool({
-      name: "set_timeline",
-      arguments: {
-        book_id: "test-proj",
-        slots: [{ slug: "vid-a" }],
-      },
-    });
-
-    const virtual = await client.callTool({
+  it("rejects slots outside the typed timeline and unknown books", async () => {
+    const asset = await upload("first");
+    await assign(asset.assetId, "s01");
+    const outside = await client.callTool({
       name: "remove_timeline_slot",
       arguments: { book_id: "test-proj", slot: "s02" },
     });
-    expect(virtual.isError).toBe(true);
-    expect((virtual.content as TextContent)[0].text).toContain("stored slots");
+    expect(outside.isError).toBe(true);
+    expect((outside.content as TextContent)[0].text).toContain("outside the current timeline");
 
     const missing = await client.callTool({
       name: "remove_timeline_slot",

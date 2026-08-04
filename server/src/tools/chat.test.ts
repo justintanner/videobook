@@ -244,7 +244,6 @@ describe("enrichAssetContext", () => {
   it("attaches source_url from native original metadata", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-chat-enrich-"));
     const fs = createEngineForTest(tempDir);
-    await fs.projects.create("enrich-proj");
     const asset = await fs.artifacts.create("vid", "og");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
@@ -284,12 +283,9 @@ describe("loadScriptContentsForChat", () => {
   it("reads script body from original.md (not index.md)", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-chat-script-"));
     const fs = createEngineForTest(tempDir);
-    const project = await fs.projects.create("chat-script-proj");
-    expect(project.ok).toBe(true);
 
-    const script = await fs.artifacts.create("script", "scene-one");
-    expect(script.ok).toBe(true);
-    if (!script.ok) return;
+    const script = await fs.artifacts.create("script", "chapter-one");
+    if (!script.ok) throw new Error(script.error.message);
 
     const body = "A pig sits upright on a red stool.";
     const wrote = await fs.files.write(script.value.slug, SCRIPT_FILENAME, body);
@@ -319,7 +315,6 @@ describe("loadScriptContentsForChat", () => {
   it("returns empty when only index.md exists (legacy wrong path)", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-chat-script-bad-"));
     const fs = createEngineForTest(tempDir);
-    await fs.projects.create("chat-script-proj");
     const script = await fs.artifacts.create("script", "orphan");
     if (!script.ok) throw new Error(script.error.message);
     await fs.files.write(script.value.slug, "index.md", "should not be loaded");

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { assessDialogQuality, readAndAssessDialog } from "./dialog-quality.js";
-import { createEngineForTest } from "./fs.js";
+import { closeEngineForTest, createEngineForTest } from "./fs.js";
 import type { Engine } from "videobook-engine";
 
 describe("assessDialogQuality", () => {
@@ -99,14 +99,16 @@ describe("assessDialogQuality", () => {
 describe("readAndAssessDialog", () => {
   let fs: Engine;
   let tempDir: string;
+  let bookId: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-dialog-test-"));
     fs = createEngineForTest(tempDir);
-    await fs.projects.create("test-proj");
+    bookId = fs.book.get().bookId;
   });
 
   afterEach(async () => {
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -118,7 +120,7 @@ describe("readAndAssessDialog", () => {
     const transcription = JSON.stringify({ text: "The quick brown fox jumps over the lazy dog" });
     await fs.files.write(assetId, ".analysis.gpt4otrans.json", transcription);
 
-    const result = await readAndAssessDialog(fs, assetId, "test-proj");
+    const result = await readAndAssessDialog(fs, assetId, bookId);
     expect(result.hasDialog).toBe(true);
     expect(result.reason).toBe("real_dialog");
     expect(result.wordCount).toBe(9);
@@ -129,7 +131,7 @@ describe("readAndAssessDialog", () => {
     if (!assetResult.ok) throw new Error(assetResult.error.message);
     const assetId = assetResult.value.slug;
 
-    const result = await readAndAssessDialog(fs, assetId, "test-proj");
+    const result = await readAndAssessDialog(fs, assetId, bookId);
     expect(result.hasDialog).toBe(false);
     expect(result.reason).toBe("no_transcription");
     expect(result.text).toBe("");
@@ -143,7 +145,7 @@ describe("readAndAssessDialog", () => {
 
     await fs.files.write(assetId, ".analysis.gpt4otrans.json", "not valid json {{{");
 
-    const result = await readAndAssessDialog(fs, assetId, "test-proj");
+    const result = await readAndAssessDialog(fs, assetId, bookId);
     expect(result.hasDialog).toBe(false);
     expect(result.reason).toBe("no_transcription");
     expect(result.text).toBe("");

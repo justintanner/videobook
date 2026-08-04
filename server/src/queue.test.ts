@@ -1,4 +1,4 @@
-import { createEngineForTest } from "./fs.js";
+import { closeEngineForTest, createEngineForTest } from "./fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import * as fsP from "node:fs/promises";
 import * as path from "node:path";
@@ -14,6 +14,7 @@ import { withProviderHandoff } from "./jobs/_lease.js";
 
 describe("server queue (Dolt-native)", () => {
   let projectsDir: string;
+  let testEngine: ReturnType<typeof createEngineForTest> | undefined;
 
   beforeEach(async () => {
     projectsDir = await fsP.mkdtemp(path.join(os.tmpdir(), "cfs-srv-q-"));
@@ -21,13 +22,16 @@ describe("server queue (Dolt-native)", () => {
 
   afterEach(async () => {
     await appQueue.stop();
+    if (testEngine) {
+      closeEngineForTest(projectsDir, testEngine);
+      testEngine = undefined;
+    }
     await fsP.rm(projectsDir, { recursive: true, force: true });
   });
 
   it("enqueues, runs a handler, and waits for the native queue result", async () => {
     const cfs = createEngineForTest(projectsDir);
-    const created = await cfs.projects.create("p");
-    expect(created.ok).toBe(true);
+    testEngine = cfs;
 
     const runner = (await cfs.jobs.queue.createRunner({
       concurrency: 2,
@@ -52,15 +56,14 @@ describe("server queue (Dolt-native)", () => {
       expect(result.ref).toBe("abc");
     } finally {
       await runner.stop();
-      cfs.close();
     }
   });
 
   it("lets provider handoff helpers reuse the queue wrapper owner", async () => {
     const cfs = createEngineForTest(projectsDir);
+    testEngine = cfs;
     await setEngineRoot(projectsDir, cfs);
-    const created = await cfs.projects.create("p");
-    expect(created.ok).toBe(true);
+    const bookId = cfs.book.get().bookId;
     const asset = await cfs.artifacts.create("img", "handoff");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
@@ -69,7 +72,7 @@ describe("server queue (Dolt-native)", () => {
     registerJobHandler("generate_provider_handoff_probe", async (_payload, ctx) =>
       withProviderHandoff(
         cfs,
-        "p",
+        bookId,
         asset.value.slug,
         ctx,
         "generate",
@@ -92,7 +95,7 @@ describe("server queue (Dolt-native)", () => {
       "provider-handoff-probe",
       {
         type: "generate_provider_handoff_probe",
-        bookId: "p",
+        bookId,
         imgAssetId: asset.value.slug,
       },
       5_000,
@@ -103,14 +106,13 @@ describe("server queue (Dolt-native)", () => {
     expect(pending.ok).toBe(true);
     expect(pending.ok ? pending.value?.taskId : null).toBe(taskId);
     await appQueue.stop();
-    cfs.close();
   });
 
   it("releases a wrapper-owned synchronous generate before child jobs run", async () => {
     const cfs = createEngineForTest(projectsDir);
+    testEngine = cfs;
     await setEngineRoot(projectsDir, cfs);
-    const created = await cfs.projects.create("p");
-    expect(created.ok).toBe(true);
+    const bookId = cfs.book.get().bookId;
     const asset = await cfs.artifacts.create("img", "sync");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
@@ -119,13 +121,13 @@ describe("server queue (Dolt-native)", () => {
     registerJobHandler("generate_sync_probe", async () => {
       await appQueue.enqueue("sync-child-probe", {
         type: "sync_child_probe",
-        bookId: "p",
+        bookId,
         assetId: asset.value.slug,
       });
       return { ok: true };
     });
     registerJobHandler("sync_child_probe", async () => {
-      const row = await cfs.jobs.artifactWork.read("p");
+      const row = await cfs.jobs.artifactWork.read(asset.value.slug);
       childSawReady =
         row.ok &&
         row.value?.status === "ready" &&
@@ -137,7 +139,7 @@ describe("server queue (Dolt-native)", () => {
       "sync-parent-probe",
       {
         type: "generate_sync_probe",
-        bookId: "p",
+        bookId,
         imgAssetId: asset.value.slug,
       },
       5_000,
@@ -150,7 +152,6 @@ describe("server queue (Dolt-native)", () => {
       if (status?.state === "completed") {
         expect(childSawReady).toBe(true);
         await appQueue.stop();
-        cfs.close();
         return;
       }
       await new Promise((r) => setTimeout(r, 25));
@@ -160,15 +161,15 @@ describe("server queue (Dolt-native)", () => {
 
   it("drops the jobIdIndex entry once a job reaches a terminal state", async () => {
     const cfs = createEngineForTest(projectsDir);
+    testEngine = cfs;
     await setEngineRoot(projectsDir, cfs);
-    const created = await cfs.projects.create("p");
-    expect(created.ok).toBe(true);
+    const bookId = cfs.book.get().bookId;
 
     registerJobHandler("index_cleanup_probe", async () => ({ ok: true }));
 
     await appQueue.enqueue("index-cleanup-probe", {
       type: "index_cleanup_probe",
-      bookId: "p",
+      bookId,
     });
 
     // The getStatus call that first observes a terminal state also evicts the
@@ -189,7 +190,6 @@ describe("server queue (Dolt-native)", () => {
     expect(await appQueue.getStatus("index-cleanup-probe")).toBeNull();
 
     await appQueue.stop();
-    cfs.close();
   });
 });
 

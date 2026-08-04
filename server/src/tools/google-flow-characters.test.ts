@@ -46,7 +46,6 @@ describe("google flow character tools — handler guards", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-gf-characters-test-"));
     fs = createEngineForTest(tempDir);
-    await fs.projects.create("test-proj");
   });
 
   afterEach(async () => {
@@ -310,7 +309,6 @@ describe("replaceGoogleFlowCharacter — stubbed provider", () => {
 
     const tempDir = await mkdtemp(join(tmpdir(), "videocity-replace-test-"));
     const fs = createEngineForTest(tempDir);
-    await fs.projects.create("test-proj");
     const asset = await fs.artifacts.create("img", "newimg");
     if (!asset.ok) throw new Error("failed to create asset");
     await fs.files.write(asset.value.slug, "original.png", await makePng());

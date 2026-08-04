@@ -71,7 +71,9 @@ export function assetHistoryDef(fs: Engine): ToolDef {
         limit?: number;
       };
       try {
-        const commits = fs.history.artifact(asset_id, limit);
+        const artifact = fs.artifacts.get(asset_id);
+        if (!artifact.ok) throw new Error(artifact.error.message);
+        const commits = fs.history.artifact(artifact.value.artifactId, limit);
         return {
           content: [{
             type: "text" as const,
@@ -79,7 +81,7 @@ export function assetHistoryDef(fs: Engine): ToolDef {
               await enrichCommitsWithRewrite(
                 fs,
                 commits,
-                asset_id,
+                artifact.value.slug,
                 book_id,
               ),
             ),

@@ -226,8 +226,6 @@ describe("estimate_cost tool", () => {
     // always charged the 5s default, so a 30s motion video showed the price
     // for 5s at /generate. Server now resolves the duration from metadata.
     const fs = createEngineForTest(tempDir);
-    const projectResult = await fs.projects.create("est-proj");
-    expect(projectResult.ok).toBe(true);
 
     const assetResult = await fs.artifacts.create("vid", "long-motion");
     expect(assetResult.ok).toBe(true);
@@ -274,8 +272,6 @@ describe("estimate_cost tool", () => {
 
   it("enriches motion-control duration when motion slug has a leading @", async () => {
     const fs = createEngineForTest(tempDir);
-    const projectResult = await fs.projects.create("est-at-proj");
-    expect(projectResult.ok).toBe(true);
 
     const assetResult = await fs.artifacts.create("vid", "at-motion");
     expect(assetResult.ok).toBe(true);
@@ -311,8 +307,6 @@ describe("estimate_cost tool", () => {
     // Server now resolves the duration from `original` metadata, mirroring the
     // cost hint the job handler forwards to the paygate.
     const fs = createEngineForTest(tempDir);
-    const projectResult = await fs.projects.create("est-hh-proj");
-    expect(projectResult.ok).toBe(true);
 
     const assetResult = await fs.artifacts.create("vid", "long-source");
     expect(assetResult.ok).toBe(true);
@@ -359,8 +353,6 @@ describe("estimate_cost tool", () => {
 
   it("falls back to the 5s happyhorse/video-edit default when source has no duration metadata", async () => {
     const fs = createEngineForTest(tempDir);
-    const projectResult = await fs.projects.create("est-hh-fallback");
-    expect(projectResult.ok).toBe(true);
 
     const assetResult = await fs.artifacts.create("vid", "legacy-source");
     expect(assetResult.ok).toBe(true);
@@ -386,8 +378,6 @@ describe("estimate_cost tool", () => {
 
   it("uses the source video's stored resolution for Grok extension pricing", async () => {
     const fs = createEngineForTest(tempDir);
-    const projectResult = await fs.projects.create("grok-extend-estimate");
-    expect(projectResult.ok).toBe(true);
 
     const assetResult = await fs.artifacts.create("vid", "grok-source");
     expect(assetResult.ok).toBe(true);

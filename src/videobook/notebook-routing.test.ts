@@ -39,8 +39,8 @@ function notebook(
 
 function horizontalLaneDocument(count: number): NotebookDocument {
   const cells = Array.from({ length: count }, (_, index) => [
-    cell(`source-${index}`, 0, index),
-    cell(`target-${index}`, 2, index + 4),
+    cell(`source-${index}`, 0, index + 4),
+    cell(`target-${index}`, 2, index),
   ]).flat()
   const edges = Array.from({ length: count }, (_, index) => ({
     id: `edge-${index}`,
@@ -91,8 +91,8 @@ function fanOutDocument(count: number): NotebookDocument {
 function fanInDocument(count: number): NotebookDocument {
   const cells = [
     ...Array.from({ length: count }, (_, index) =>
-      cell(`source-${index}`, 0, index - count)),
-    cell('target', 3, 0),
+      cell(`source-${index}`, 0, index)),
+    cell('target', 3, count + 1),
   ]
   const edges = Array.from({ length: count }, (_, index) => ({
     id: `edge-${index}`,
@@ -125,6 +125,44 @@ function sourceCoordinates(
   return {
     sourceX: position.x + notebookGrid.squareSize * offset,
     sourceY: position.y + notebookGrid.squareSize + 4.5,
+  }
+}
+
+function targetCoordinates(
+  slot: NotebookGridSlot,
+  route: NotebookBusRiverRoute,
+): { targetX: number; targetY: number } {
+  const position = notebookGridPosition(slot)
+  if (route.targetSide === 'left') {
+    const offset = notebookSourcePortOffsets[route.targetPortIndex]
+      ?? notebookSourcePortOffsets[1]
+    return {
+      targetX: position.x,
+      targetY: position.y + notebookGrid.squareSize * offset,
+    }
+  }
+  return {
+    targetX: position.x + notebookGrid.squareSize / 2,
+    targetY: position.y,
+  }
+}
+
+function routeCoordinates(
+  sourceSlot: NotebookGridSlot,
+  targetSlot: NotebookGridSlot,
+  route: NotebookBusRiverRoute,
+) {
+  const sourcePosition = notebookGridPosition(sourceSlot)
+  const targetPosition = notebookGridPosition(targetSlot)
+  return {
+    ...sourceCoordinates(sourceSlot, route),
+    ...targetCoordinates(targetSlot, route),
+    sourceLeftX: sourcePosition.x,
+    sourceRightX: sourcePosition.x + notebookGrid.squareSize,
+    sourceBottomY: sourcePosition.y + notebookGrid.squareSize,
+    targetLeftX: targetPosition.x,
+    targetTopY: targetPosition.y,
+    targetHeight: notebookGrid.squareSize,
   }
 }
 
@@ -171,12 +209,14 @@ describe('notebook bus and river routing', () => {
     ])
   })
 
-  it('shares one target bus lane across a card fan-in', () => {
-    expect(edgeOffsets(fanInDocument(4), 'targetBusOffset')).toEqual([
-      notebookGutterLaneOffsets[1],
-      notebookGutterLaneOffsets[1],
-      notebookGutterLaneOffsets[1],
-      notebookGutterLaneOffsets[1],
+  it('prefers separate left target ports before deterministic reuse', () => {
+    const document = fanInDocument(4)
+    const routes = notebookBusRiverRoutes(document)
+    expect(document.edges.map((edge) => routes.get(edge.id)?.targetPortIndex)).toEqual([
+      0,
+      1,
+      2,
+      0,
     ])
   })
 
@@ -223,16 +263,19 @@ describe('notebook bus and river routing', () => {
     expect(routes.get('left-edge')).toMatchObject({
       sourceSide: 'left',
       sourcePortIndex: 1,
+      targetSide: 'top',
       riverSide: 'left',
     })
     expect(routes.get('right-edge')).toMatchObject({
       sourceSide: 'right',
       sourcePortIndex: 1,
+      targetSide: 'left',
       riverSide: 'right',
     })
     expect(routes.get('below-edge')).toMatchObject({
       sourceSide: 'bottom',
       sourcePortIndex: 1,
+      targetSide: 'top',
     })
   })
 
@@ -278,14 +321,15 @@ describe('notebook bus and river routing', () => {
     expect(route?.targetBusOffset).toBe(notebookGutterLaneOffsets[1])
   })
 
-  it('assigns the same routes regardless of document edge order', () => {
-    const document = horizontalLaneDocument(4)
-    const reversed = { ...document, edges: [...document.edges].reverse() }
-    const routes = notebookBusRiverRoutes(document)
-    const reversedRoutes = notebookBusRiverRoutes(reversed)
+  it('assigns the same top and lateral routes regardless of edge order', () => {
+    for (const document of [horizontalLaneDocument(4), fanInDocument(4)]) {
+      const reversed = { ...document, edges: [...document.edges].reverse() }
+      const routes = notebookBusRiverRoutes(document)
+      const reversedRoutes = notebookBusRiverRoutes(reversed)
 
-    for (const edge of document.edges) {
-      expect(reversedRoutes.get(edge.id)).toEqual(routes.get(edge.id))
+      for (const edge of document.edges) {
+        expect(reversedRoutes.get(edge.id)).toEqual(routes.get(edge.id))
+      }
     }
   })
 
@@ -299,11 +343,15 @@ describe('notebook bus and river routing', () => {
         sourceLeftX: -20,
         sourceRightX: 220,
         sourceBottomY: 196,
+        targetLeftX: 280,
         targetTopY: 774,
+        targetHeight: 240,
       },
       {
         sourceSide: 'bottom',
         sourcePortIndex: 1,
+        targetSide: 'top',
+        targetPortIndex: 1,
         sourceBusOffset: 10,
         targetBusOffset: 30,
         riverOffset: 20,
@@ -324,11 +372,15 @@ describe('notebook bus and river routing', () => {
         sourceLeftX: -20,
         sourceRightX: 220,
         sourceBottomY: 196,
+        targetLeftX: 280,
         targetTopY: 774,
+        targetHeight: 240,
       },
       {
         sourceSide: 'right',
         sourcePortIndex: 1,
+        targetSide: 'top',
+        targetPortIndex: 1,
         sourceBusOffset: 10,
         targetBusOffset: 30,
         riverOffset: 20,
@@ -349,11 +401,15 @@ describe('notebook bus and river routing', () => {
         sourceLeftX: -20,
         sourceRightX: 220,
         sourceBottomY: 196,
+        targetLeftX: 20,
         targetTopY: 236,
+        targetHeight: 240,
       },
       {
         sourceSide: 'bottom',
         sourcePortIndex: 1,
+        targetSide: 'top',
+        targetPortIndex: 1,
         sourceBusOffset: 20,
         targetBusOffset: 20,
         riverOffset: 20,
@@ -364,12 +420,75 @@ describe('notebook bus and river routing', () => {
     )).toBe('M 100 200 V 216 H 140 V 225')
   })
 
+  it('routes adjacent same-row forward connections as one horizontal segment', () => {
+    const sourceSlot = { row: 1, column: 1 }
+    const targetSlot = { row: 1, column: 2 }
+    const document = notebook(
+      [cell('source', sourceSlot.row, sourceSlot.column), cell('target', targetSlot.row, targetSlot.column)],
+      [{ id: 'edge', source: 'source', target: 'target', targetInput: 'input' }],
+    )
+    const route = notebookBusRiverRoutes(document).get('edge')
+    expect(route).toMatchObject({
+      sourceSide: 'right',
+      sourcePortIndex: 1,
+      targetSide: 'left',
+      targetPortIndex: 1,
+    })
+    const coordinates = routeCoordinates(sourceSlot, targetSlot, route!)
+    const points = notebookBusRiverPoints(coordinates, route!)
+
+    expect(points).toEqual([
+      { x: 572.5, y: 448 },
+      { x: 608, y: 448 },
+    ])
+    expect(notebookBusRiverPath(coordinates, route!)).toBe('M 572.5 448 H 608')
+    expect(points.every((point) => point.y >= notebookGridPosition(sourceSlot).y)).toBe(true)
+    expect(segmentIntersectsCard(points[0]!, points[1]!, targetSlot)).toBe(false)
+  })
+
+  it('routes distant same-row forward connections directly into the target left edge', () => {
+    const sourceSlot = { row: 0, column: 0 }
+    const targetSlot = { row: 0, column: 3 }
+    const document = notebook(
+      [cell('source', sourceSlot.row, sourceSlot.column), cell('target', targetSlot.row, targetSlot.column)],
+      [{ id: 'edge', source: 'source', target: 'target', targetInput: 'input' }],
+    )
+    const route = notebookBusRiverRoutes(document).get('edge')
+    expect(route?.targetSide).toBe('left')
+    expect(notebookBusRiverPath(routeCoordinates(sourceSlot, targetSlot, route!), route!))
+      .toBe('M 292.5 168 H 888')
+  })
+
+  it('routes cross-row forward connections through the target-column gutter', () => {
+    const sourceSlot = { row: 0, column: 0 }
+    const targetSlot = { row: 2, column: 2 }
+    const document = notebook(
+      [cell('source', sourceSlot.row, sourceSlot.column), cell('target', targetSlot.row, targetSlot.column)],
+      [{ id: 'edge', source: 'source', target: 'target', targetInput: 'input' }],
+    )
+    const route = notebookBusRiverRoutes(document).get('edge')
+    expect(route).toMatchObject({ targetSide: 'left', riverOffset: 20 })
+    expect(notebookBusRiverPath(routeCoordinates(sourceSlot, targetSlot, route!), route!))
+      .toBe('M 292.5 168 H 588 V 728 H 608')
+  })
+
+  it('keeps backward connections on the target top edge', () => {
+    const sourceSlot = { row: 1, column: 2 }
+    const targetSlot = { row: 0, column: 0 }
+    const document = notebook(
+      [cell('source', sourceSlot.row, sourceSlot.column), cell('target', targetSlot.row, targetSlot.column)],
+      [{ id: 'edge', source: 'source', target: 'target', targetInput: 'input' }],
+    )
+    const route = notebookBusRiverRoutes(document).get('edge')
+    expect(route?.targetSide).toBe('top')
+    const points = notebookBusRiverPoints(routeCoordinates(sourceSlot, targetSlot, route!), route!)
+    expect(points.at(-1)).toEqual({ x: 168, y: 48 })
+  })
+
   it.each([
-    ['same-row right', { row: 1, column: -2 }, { row: 1, column: 2 }],
     ['same-row left', { row: 1, column: 2 }, { row: 1, column: -2 }],
     ['down same-column', { row: 0, column: 0 }, { row: 3, column: 0 }],
     ['adjacent down same-column', { row: 1, column: 0 }, { row: 2, column: 0 }],
-    ['up right', { row: 3, column: -1 }, { row: 0, column: 2 }],
     ['adjacent down-left', { row: 1, column: 1 }, { row: 2, column: -2 }],
   ])('keeps %s paths outside every card square', (_name, sourceSlot, targetSlot) => {
     const document = notebook(
@@ -382,17 +501,7 @@ describe('notebook bus and river routing', () => {
     const route = notebookBusRiverRoutes(document).get('edge')
     expect(route).toBeDefined()
 
-    const sourcePosition = notebookGridPosition(sourceSlot)
-    const targetPosition = notebookGridPosition(targetSlot)
-    const coordinates = {
-      ...sourceCoordinates(sourceSlot, route!),
-      targetX: targetPosition.x + notebookGrid.squareSize / 2,
-      targetY: targetPosition.y,
-      sourceLeftX: sourcePosition.x,
-      sourceRightX: sourcePosition.x + notebookGrid.squareSize,
-      sourceBottomY: sourcePosition.y + notebookGrid.squareSize,
-      targetTopY: targetPosition.y,
-    }
+    const coordinates = routeCoordinates(sourceSlot, targetSlot, route!)
     const points = notebookBusRiverPoints(coordinates, route!)
     const slots = Array.from({ length: 4 }, (_, row) =>
       Array.from({ length: 7 }, (_, index) => ({ row, column: index - 3 })),

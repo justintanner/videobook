@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/client";
 import { COMMAND_ADAPTERS } from "@/lib/command-registry";
+import { BookManager } from "../book-manager.js";
+import { commandsDef } from "./commands.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -21,6 +23,7 @@ interface Command {
   uiAction?: string;
   onMount?: string[];
   aliases?: string[];
+  exposure?: string;
 }
 
 describe("slash_commands tool", () => {
@@ -106,10 +109,11 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/providers");
     expect(commandNames).toContain("/diagnostics");
     expect(commandNames).not.toContain("/plan");
-    expect(commandNames).toContain("/projects");
-    expect(commandNames).toContain("/project-new");
-    expect(commandNames).toContain("/project-rename");
-    expect(commandNames).toContain("/project-delete");
+    expect(commandNames).toContain("/books");
+    expect(commandNames).not.toContain("/projects");
+    expect(commandNames).not.toContain("/project-new");
+    expect(commandNames).not.toContain("/project-rename");
+    expect(commandNames).not.toContain("/project-delete");
     expect(commandNames).toContain("/close");
     expect(commandNames).toContain("/collapse");
     expect(commandNames).toContain("/expand");
@@ -277,11 +281,11 @@ describe("slash_commands tool", () => {
     expect(run.onMount).toEqual(["notebook"]);
 
     expect(commands.find((c) => c.command === "/prompt-new")?.mcpTool?.tool)
-      .toBe("create_prompt");
+      .toBe("create_prompt_entity");
     expect(commands.find((c) => c.command === "/character-new")?.mcpTool?.tool)
       .toBe("create_character_entity");
     expect(commands.find((c) => c.command === "/scene-new")?.mcpTool?.tool)
-      .toBe("create_scene");
+      .toBe("create_scene_entity");
 
     const archive = commands.find((c) => c.command === "/archive")!;
     expect(archive.category).toBe("context_menu");
@@ -313,19 +317,15 @@ describe("slash_commands tool", () => {
   });
 
   it("includes dynamic project commands", async () => {
-    await client.callTool({
-      name: "create_project",
-      arguments: { book_id: "alpha" },
+    const books = new BookManager({
+      libraryDir: join(tempDir, "books"),
+      objectPrefix: "test-objects",
+      catalogBackupName: "backup",
     });
-    await client.callTool({
-      name: "create_project",
-      arguments: { book_id: "beta" },
-    });
-
-    const result = await client.callTool({
-      name: "slash_commands",
-      arguments: {},
-    });
+    await books.ready();
+    await books.create("alpha");
+    await books.create("beta");
+    const result = await commandsDef(books).handler({});
 
     const commands: Command[] = JSON.parse(
       (result.content as TextContent)[0].text,
@@ -336,7 +336,8 @@ describe("slash_commands tool", () => {
 
     const alphaCmd = commands.find((c) => c.command === "/alpha")!;
     expect(alphaCmd.category).toBe("project");
-    expect(alphaCmd.uiAction).toBe("switch_project");
+    expect(alphaCmd.uiAction).toBe("switch_book");
+    await books.close();
   });
 
   it("every command has required fields", async () => {
@@ -444,7 +445,7 @@ describe("slash_commands tool", () => {
 
     // All known editing slash commands now have explicit mcpTool or uiAction
     const chatFallbackCommands = commands.filter(
-      (c) => !c.mcpTool && !c.uiAction,
+      (c) => !c.mcpTool && !c.uiAction && c.exposure !== "composite",
     );
     expect(chatFallbackCommands).toHaveLength(0);
   });
@@ -473,7 +474,7 @@ describe("slash_commands tool", () => {
     }
   });
 
-  it("returns no switch-project commands when no projects exist", async () => {
+  it("returns no switch-book commands when no books exist", async () => {
     const result = await client.callTool({
       name: "slash_commands",
       arguments: {},
@@ -482,20 +483,19 @@ describe("slash_commands tool", () => {
     const commands: Command[] = JSON.parse(
       (result.content as TextContent)[0].text,
     );
-    const switchCommands = commands.filter((c) => c.uiAction === "switch_project");
+    const switchCommands = commands.filter((c) => c.uiAction === "switch_book");
     expect(switchCommands).toHaveLength(0);
   });
 
   it("skips dynamic project commands that collide with hardcoded names", async () => {
-    await client.callTool({
-      name: "create_project",
-      arguments: { book_id: "play" },
+    const books = new BookManager({
+      libraryDir: join(tempDir, "books"),
+      objectPrefix: "test-objects",
+      catalogBackupName: "backup",
     });
-
-    const result = await client.callTool({
-      name: "slash_commands",
-      arguments: {},
-    });
+    await books.ready();
+    await books.create("play");
+    const result = await commandsDef(books).handler({});
 
     const commands: Command[] = JSON.parse(
       (result.content as TextContent)[0].text,
@@ -503,5 +503,6 @@ describe("slash_commands tool", () => {
     const playCommands = commands.filter((c) => c.command === "/play");
     expect(playCommands).toHaveLength(1);
     expect(playCommands[0].uiAction).toBe("open_slot_player");
+    await books.close();
   });
 });

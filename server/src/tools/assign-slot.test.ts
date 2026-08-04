@@ -1,17 +1,47 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/client";
+import type { Engine } from "videobook-engine";
 
 type TextContent = Array<{ type: string; text: string }>;
+
+async function registerTestVideoStream(
+  fs: Engine,
+  artifactId: string,
+): Promise<void> {
+  const manifest = await fs.files.manifest(artifactId);
+  if (!manifest.ok) throw new Error(manifest.error.message);
+  const file = manifest.value.files.find((entry) => entry.name === "original.mp4");
+  if (!file) throw new Error("Missing original.mp4");
+  const registered = await fs.streams.register({
+    artifactId,
+    sourcePath: file.name,
+    objectHash: file.objectHash,
+    streamIndex: 0,
+    kind: "video",
+    timeBase: { numerator: 1, denominator: 1_000 },
+    durationTicks: 1_000,
+    codec: "h264",
+    video: {
+      width: 1920,
+      height: 1080,
+      rotationDegrees: 0,
+      pixelAspect: { numerator: 1, denominator: 1 },
+      nominalFrameRate: { numerator: 30, denominator: 1 },
+    },
+  });
+  if (!registered.ok) throw new Error(registered.error.message);
+}
 
 describe("assign_slot tool", () => {
   let client: Client;
   let tempDir: string;
   let assetId: string;
+  let artifactId: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
@@ -30,6 +60,7 @@ describe("assign_slot tool", () => {
       (uploadResult.content as TextContent)[0].text,
     );
     assetId = uploaded.assetId;
+    artifactId = uploaded.artifactId;
   });
 
   afterEach(async () => {
@@ -50,10 +81,10 @@ describe("assign_slot tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.slots).toBeDefined();
-    expect(parsed.slots[0].slug).toBe(assetId);
+    expect(parsed.slots[0].artifact_id).toBe(artifactId);
   });
 
-  it("assigns to a higher slot, padding with empty slots", async () => {
+  it("rejects a higher slot that would create empty gaps", async () => {
     const result = await client.callTool({
       name: "assign_slot",
       arguments: {
@@ -63,12 +94,8 @@ describe("assign_slot tool", () => {
       },
     });
 
-    expect(result.isError).toBeFalsy();
-    const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.slots).toHaveLength(3);
-    expect(parsed.slots[0].slug).toBe("");
-    expect(parsed.slots[1].slug).toBe("");
-    expect(parsed.slots[2].slug).toBe(assetId);
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("cannot contain empty gaps");
   });
 
   it("preserves existing slots when assigning to a new one", async () => {
@@ -102,8 +129,8 @@ describe("assign_slot tool", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.slots[0].slug).toBe(assetId);
-    expect(parsed.slots[1].slug).toBe(asset2.assetId);
+    expect(parsed.slots[0].artifact_id).toBe(artifactId);
+    expect(parsed.slots[1].artifact_id).toBe(asset2.artifactId);
   });
 
   it("returns error for invalid slot format", async () => {
@@ -118,7 +145,7 @@ describe("assign_slot tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("Invalid slot format");
+    expect(content[0].text).toContain("Slot must use the form");
   });
 
   it("returns error for nonexistent asset", async () => {
@@ -242,9 +269,8 @@ describe("assign_slot lazy analysis trigger", () => {
       arguments: { book_id: "test-proj", asset_id: assetId, slot: "s01" },
     });
 
-    expect(result.isError).toBeFalsy();
-    const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.auto_analyze).toBeUndefined();
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("no image source file");
   });
 
   it("does not enqueue analysis when OPENAI_API_KEY is missing", async () => {
@@ -285,7 +311,9 @@ describe("assign_slot lazy analysis trigger", () => {
     const created = await fs.artifacts.create("vid", "fake-clip");
     if (!created.ok) throw new Error(created.error.message);
     const assetId = created.value.slug;
-    await writeFile(join(created.value.path, "original.mp4"), "fake-video-data");
+    const written = await fs.files.write(created.value.artifactId, "original.mp4", "fake-video-data");
+    if (!written.ok) throw new Error(written.error.message);
+    await registerTestVideoStream(fs, created.value.artifactId);
 
     const result = await client.callTool({
       name: "assign_slot",

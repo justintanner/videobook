@@ -210,13 +210,19 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function preserveArtifactState(error: unknown): Error {
+  const preserved = error instanceof Error ? error : new Error(String(error));
+  Object.assign(preserved, { preserveArtifactState: true });
+  return preserved;
+}
+
 export async function restoreAudioSyncSnapshot(
   fs: Engine,
   assetId: string,
   bookId: string,
   restoreCommit: string,
 ): Promise<string> {
-  const artifact = fs.artifacts.get(bookId);
+  const artifact = fs.artifacts.get(assetId);
   if (!artifact.ok) {
     throw new Error(
       `Failed to resolve ${assetId} for restore: ${artifact.error.message}`,
@@ -225,7 +231,6 @@ export async function restoreAudioSyncSnapshot(
   const restored = await fs.history.restoreArtifact(
     artifact.value.artifactId,
     restoreCommit,
-    bookId,
   );
   if (!restored.ok) {
     throw new Error(
@@ -279,7 +284,7 @@ async function rollbackAudioSyncFailure(
   }
   if (failures.length > 0) throw rollbackError(original, failures);
   markFailureHandled();
-  throw original;
+  throw preserveArtifactState(original);
 }
 
 async function restoreAfterEnqueueFailure(
@@ -480,7 +485,7 @@ export function registerSyncVideoToAudioJob(fs: Engine): void {
       } catch (restoreError) {
         throw rollbackError(error, [restoreError]);
       }
-      throw error;
+      throw preserveArtifactState(error);
     }
 
     return {

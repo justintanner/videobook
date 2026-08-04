@@ -52,7 +52,7 @@ async function fixAsset(
   assetId: string,
 ): Promise<DoctorFixResult> {
   // Refuse to touch an asset a job is actively working (live, unexpired lease).
-  const work = await fs.jobs.artifactWork.read(bookId);
+  const work = await fs.jobs.artifactWork.read(assetId);
   if (
     work.ok &&
     work.value &&
@@ -74,7 +74,7 @@ async function fixAsset(
   }
   const dirRes = await fs.workspaces.resolveArtifact(assetId);
   if (dirRes.ok) await fs.jobs.locks.cleanStale(dirRes.value);
-  await fs.jobs.recoverArtifact(bookId);
+  await fs.jobs.recoverArtifact(assetId);
 
   const afterTier1 = await statusOf(fs, bookId, assetId);
   if (afterTier1 === "ready") {
@@ -86,7 +86,7 @@ async function fixAsset(
   }
 
   // Tier 2 — restore from immutable Dolt history using stable identity.
-  const artifact = fs.artifacts.get(bookId);
+  const artifact = fs.artifacts.get(assetId);
   if (!artifact.ok) {
     return {
       status: "unfixable",

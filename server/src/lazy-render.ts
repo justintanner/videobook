@@ -105,8 +105,11 @@ export async function enqueueLazyAnalysisIfSlotted(
 
   const manifestResult = await fs.files.manifest(assetId);
   if (!manifestResult.ok) return null;
-  const fileNames = new Set(manifestResult.value.files.map((f) => f.name));
-  if (fileNames.has(".original.analysis.json")) return null;
+  const [analysis, transcription] = await Promise.all([
+    fs.files.read(assetId, ".original.analysis.json"),
+    fs.files.read(assetId, ".analysis.gpt4otrans.json"),
+  ]);
+  if (analysis.ok) return null;
 
   // Stable dedupe key: concurrent triggers collapse onto one queued job.
   const jobId = `auto-analyze-${assetId}`;
@@ -115,7 +118,7 @@ export async function enqueueLazyAnalysisIfSlotted(
     assetId,
     assetDir: manifestResult.value.path,
     bookId,
-    hasTranscription: fileNames.has(".analysis.gpt4otrans.json"),
+    hasTranscription: transcription.ok,
   });
   return { jobId };
 }

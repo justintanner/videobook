@@ -379,7 +379,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/play` — Open the timeline player at a slot (default: first filled slot); UI: `open_slot_player`
 - `/portrait` — Show portrait crop (1080x1920); UI: `viewer_set_portrait`
 - `/post` — Post a video or image asset to X (Twitter), now or scheduled; UI: `open_post_composer`
-- `/prompt-new` — Create a reusable prompt entity; MCP: `create_prompt`
+- `/prompt-new` — Create a reusable prompt entity; MCP: `create_prompt_entity`
 - `/providers` — Open provider credentials and routing settings; UI: `open_provider_keys`
 - `/qart` — Create scan-safe color and monochrome QR mosaics from an img-* source; MCP: `create_qart`
 - `/qrbtf` — Generate a parametric QR code in an artistic style (normal, line, dsj, bubble, func); MCP: `create_qrbtf`
@@ -399,7 +399,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/save` — Save the active notebook as a new revision; UI: `save_notebook`
 - `/say` — Generate speech audio from text using an ElevenLabs voice ID; MCP: `generate_elevenlabs_text_to_audio`
 - `/scene-concat` — Smoothly join two video scenes, automatically aligning shared boundary audio; MCP: `smooth_scene_concat`
-- `/scene-new` — Create a reusable scene entity; MCP: `create_scene`
+- `/scene-new` — Create a reusable scene entity; MCP: `create_scene_entity`
 - `/settings` — Show render settings; UI: `viewer_show_settings`
 - `/settings-landscape` — Settings for landscape orientation; UI: `settings_landscape`
 - `/settings-portrait` — Settings for portrait orientation; UI: `settings_portrait`
