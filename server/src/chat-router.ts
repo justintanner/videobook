@@ -22,12 +22,25 @@ type ChatToolAlias = {
   description: string;
 };
 
+type ChatRoutingNotebookContext = {
+  id: string;
+  name: string;
+  cells: Array<{
+    address: string;
+    cellId: string;
+    slug: string;
+    type: string;
+    outputAsset: string | null;
+  }>;
+};
+
 type ChatRoutingUserMessageContext = {
   query: string;
   assetContext: Array<Record<string, unknown>>;
   imageFiles: unknown[];
   videoFiles: unknown[];
   scriptContents: Array<{ tag: string; content: string }>;
+  notebookContext: ChatRoutingNotebookContext | null;
 };
 
 type ZodConstraintSchema = { _def?: unknown; unwrap?: () => unknown };
@@ -202,13 +215,16 @@ Parameter guidelines:
 - Include every required parameter. Omit optional parameters unless the user explicitly requests them so the tool can apply its defaults
 - For parameters with listed allowed values, use exactly one listed value and never borrow an option from another tool
 - For asset_id: use the resolved asset ID from the referenced @tag (e.g., @vid-foo → asset_id: "vid-foo")
+- Use the current notebook ID for notebook_id. Resolve notebook addresses through the supplied notebook context and use cell UUIDs for cell ID parameters
 - When the user wants a first clip of a stated length plus the remaining/rest/remainder, use split_video with chunk_a_end set to that length and omit chunk_b_start
 - When the user asks to cut, extract, or create a new clip from a start time to an end time, use extract_video_clip; use trim_video only when the existing source should be changed in place
 - For timestamps (trim_start, trim_end, cut_start, cut_end, chunk_a_end, chunk_b_start, start_time, end_time, start_seconds, end_seconds): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
 - For timewarp_video: stretch_factor is a duration multiplier; values above 1 slow and lengthen the selected picture, while values below 1 accelerate and shorten it
 - For sync_video_to_audio: anchors is an ordered array. Each anchor has video_seconds plus exactly one target: audio_seconds for an explicit audio time or audio_cue for transcript words. Convert nested timestamp values to seconds and preserve audio_cue text exactly. The original audio stays fixed; only the picture is retimed
-- For generate_video: put the generation description in "prompt" and preserve every @asset reference
-- For generate_image: put the image description in "prompt"; use image_slugs ONLY for @img-* reference images (include @ prefix). Never put @vid-* or @aud-* in image_slugs — if the user wants an image inspired by a video, describe that in the text prompt instead
+- Keep generation prompts short, concrete, and role-based. Prefer compact clauses such as "scene @a5, character @a1, fluffy kitten standing" and do not add a preamble such as "Create an image of"
+- Preserve every consumed notebook @address in the generation prompt at the semantic position where it belongs. Do not strip, rename, or expand notebook references into prose
+- For generate_video: put the compact generation description in "prompt" and preserve every consumed @ reference
+- For generate_image: put the compact image description in "prompt" and preserve every consumed image @address there; use image_slugs ONLY for the corresponding resolved @img-* asset tags, in the same order (include @ prefix). Never put @vid-* or @aud-* in image_slugs — if the user wants an image inspired by a video, describe that source without connecting it as an image
 - For create_watermark_card (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
 - For create_qart (artistic / picture QR): use when turning an @img-* into scan-safe color and monochrome QR mosaics; pass image_slug and value (URL/text). Prefer over create_watermark_card when the user wants a photo integrated into the QR modules
 - For create_qrbtf (parametric / styled QR): use when the user wants a stylized QR code (normal, line, dsj, bubble, or func styles) from the qrbtf library; pass value (URL/text) and optional style. No source image needed — the QR is generated parametrically with a black background by default
@@ -239,6 +255,11 @@ ${context.scriptContents.length > 0
     ? JSON.stringify(context.scriptContents, null, 2)
     : "None"}
 
+Current notebook:
+${context.notebookContext
+    ? JSON.stringify(context.notebookContext, null, 2)
+    : "None"}
+
 Determine which tool to use and what parameters to pass. Return the routing decision as a JSON object.`;
 }
 
@@ -260,3 +281,4 @@ export {
   getRoutableTool,
 };
 export type { RoutableToolInfo };
+export type { ChatRoutingNotebookContext };

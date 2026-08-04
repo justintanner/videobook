@@ -9,12 +9,14 @@ export interface ChatModelCatalog {
   models: readonly ChatModelOption[]
 }
 
+const chatModelId = 'gpt-5.6-sol'
+
 export const fallbackChatModelCatalog: ChatModelCatalog = {
   defaultModel: 'gpt-5.6-sol',
   models: [{
-    id: 'gpt-5.6-sol',
+    id: chatModelId,
     label: 'Sol',
-    description: 'Deeper reasoning for complex edits',
+    description: 'Routes every composer request and configures its tools',
   }],
 }
 
@@ -32,6 +34,7 @@ export function asChatModelCatalog(value: unknown): ChatModelCatalog {
         return typeof model?.id === 'string'
           && typeof model.label === 'string'
           && typeof model.description === 'string'
+          && model.id === chatModelId
           ? [{
               id: model.id,
               label: model.label,
@@ -40,9 +43,7 @@ export function asChatModelCatalog(value: unknown): ChatModelCatalog {
           : []
       })
     : []
-  const requestedDefault = typeof source?.defaultModel === 'string'
-    ? source.defaultModel
-    : ''
+  const requestedDefault = chatModelId
   const defaultModel = models.some((model) => model.id === requestedDefault)
     ? requestedDefault
     : models[0]?.id

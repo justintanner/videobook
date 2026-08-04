@@ -12,6 +12,7 @@ import {
   NESTED_TIMESTAMP_PARAMS,
   TIMESTAMP_PARAMS,
 } from "../chat-router.js";
+import type { ChatRoutingNotebookContext } from "../chat-router.js";
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -28,6 +29,10 @@ import {
   resolveChatModel,
   type ChatModelId,
 } from "../chat-models.js";
+import {
+  notebookGridAddress,
+  parseNotebookGridAddress,
+} from "videobook-engine/notebook-grid";
 
 type ChatDecision = {
   tool: string;
@@ -73,6 +78,65 @@ const CHAT_ROUTING_MAX_OUTPUT_TOKENS = 2048;
 const CHAT_ROUTING_TIMEOUT_MS = 45_000;
 
 export type ChatResolvedAsset = ResolvedArtifact;
+
+function buildChatNotebookContext(
+  fs: Engine,
+  notebookId: string | undefined,
+): ChatRoutingNotebookContext | null {
+  if (!notebookId) return null;
+  const notebook = fs.notebooks.read(notebookId);
+  if (!notebook.ok) throw new Error(notebook.error.message);
+  return {
+    id: notebook.value.id,
+    name: notebook.value.name,
+    cells: notebook.value.cells.map((cell) => {
+      const artifact = cell.outputArtifactId
+        ? fs.artifacts.get(cell.outputArtifactId)
+        : null;
+      return {
+        address: `@${notebookGridAddress(cell.slot)}`,
+        cellId: cell.id,
+        slug: cell.slug,
+        type: cell.type,
+        outputAsset: artifact?.ok ? `@${artifact.value.slug}` : null,
+      };
+    }),
+  };
+}
+
+function promptForAssetResolution(
+  prompt: string,
+  notebookContext: ChatRoutingNotebookContext | null,
+): string {
+  if (!notebookContext) return prompt;
+  const references = new Map<string, string | null>();
+  for (const cell of notebookContext.cells) {
+    references.set(cell.address.slice(1).toLowerCase(), cell.outputAsset);
+    references.set(cell.slug.toLowerCase(), cell.outputAsset);
+    references.set(cell.cellId.toLowerCase(), cell.outputAsset);
+  }
+  return prompt.replace(/@([\w-]+)/gu, (mention, value: string) => {
+    const reference = value.toLowerCase();
+    if (references.has(reference)) return references.get(reference) ?? reference;
+    return parseNotebookGridAddress(reference) ? reference : mention;
+  });
+}
+
+function attachNotebookReferences(
+  assetContext: Array<Record<string, unknown>>,
+  notebookContext: ChatRoutingNotebookContext | null,
+): Array<Record<string, unknown>> {
+  if (!notebookContext) return assetContext;
+  return assetContext.map((asset) => {
+    const assetId = typeof asset.asset_id === "string" ? asset.asset_id : "";
+    const references = notebookContext.cells
+      .filter((cell) => cell.outputAsset === `@${assetId}`)
+      .map((cell) => cell.address);
+    return references.length > 0
+      ? { ...asset, notebook_references: references }
+      : asset;
+  });
+}
 
 function formatHistoryForPrompt(lines: ChatLogEntry[]): string {
   if (lines.length === 0) return "";
@@ -379,13 +443,15 @@ export function chatDef(fs: Engine): ToolDef {
     schema: {
       prompt: z.string().min(1).optional().describe("Natural language query with optional @asset tags"),
       book_id: z.string().uuid().describe("Book UUID"),
+      notebook_id: z.string().uuid().optional().describe("Open notebook UUID for resolving grid addresses"),
       model: chatModelSchema.optional().describe("Chat routing model"),
       action_plan: chatActionPlanSchema.optional().describe("Previously previewed action to apply"),
     },
     handler: async (args) => {
-      const { prompt, book_id: bookId, model, action_plan: actionPlan } = args as {
+      const { prompt, book_id: bookId, notebook_id: notebookId, model, action_plan: actionPlan } = args as {
         prompt?: string;
         book_id: string;
+        notebook_id?: string;
         model?: ChatModelId;
         action_plan?: ChatActionPlan;
       };
@@ -393,13 +459,23 @@ export function chatDef(fs: Engine): ToolDef {
       if (!prompt) return error("A chat prompt is required");
       const chatModel = resolveChatModel(model);
       const book = fs.book.get();
+      let notebookContext: ChatRoutingNotebookContext | null;
+      try {
+        notebookContext = buildChatNotebookContext(fs, notebookId);
+      } catch (cause) {
+        return error(cause instanceof Error ? cause.message : String(cause));
+      }
 
       // 1. Expand @s01 slot refs → actual asset slugs
       let expandedPrompt = prompt;
       expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineSlotSlugs(fs));
+      const resolutionPrompt = promptForAssetResolution(
+        expandedPrompt,
+        notebookContext,
+      );
 
       // 2. Resolve @asset tags
-      const resolvedResult = await fs.resolver.resolveAll(expandedPrompt);
+      const resolvedResult = await fs.resolver.resolveAll(resolutionPrompt);
       if (!resolvedResult.ok) return error(resolvedResult.error.message);
       const { resolved: resolvedAssets, unresolved } = resolvedResult.value;
 
@@ -408,7 +484,10 @@ export function chatDef(fs: Engine): ToolDef {
       }
 
       // 3. Build asset context for the LLM (include source_url when known)
-      const assetContext = await enrichAssetContext(fs, resolvedAssets);
+      const assetContext = attachNotebookReferences(
+        await enrichAssetContext(fs, resolvedAssets),
+        notebookContext,
+      );
 
       const imageFiles = resolvedAssets
         .filter((a) => a.artifactType === "image")
@@ -446,6 +525,7 @@ export function chatDef(fs: Engine): ToolDef {
         imageFiles,
         videoFiles,
         scriptContents,
+        notebookContext,
       });
 
       let decision: ChatDecision;
@@ -500,6 +580,13 @@ export function chatDef(fs: Engine): ToolDef {
 
       // Inject book_id
       params.book_id = bookId;
+      if (
+        notebookId
+        && routableTool.params.includes("notebook_id")
+        && params.notebook_id === undefined
+      ) {
+        params.notebook_id = notebookId;
+      }
 
       // generate_image only accepts @img-* refs; models often put @vid-* in
       // image_slugs for "from the source of @vid-…". Drop non-image slugs and

@@ -6,6 +6,7 @@ import {
   notebookCellRenamePlan,
   notebookMentionAssets,
   resolveNotebookMentionAliases,
+  restoreNotebookMentionAliases,
   type AssetMentionCandidate,
   type AssetMentionRecord,
 } from '../../src/videobook/mention-suggestions'
@@ -236,6 +237,32 @@ describe('asset mention suggestions', () => {
     )).toBe(
       'combine @vid-yt-8gwzvebyrji-2 with @img-generated-source and leave @vid-010 alone',
     )
+  })
+
+  it('restores routed asset tags to visible notebook addresses', () => {
+    const scene = {
+      ...mentionCandidate(
+        'img-scene',
+        'img-generated-scene',
+        'artifact-scene',
+        { type: 'image' },
+      ),
+      cellAddress: 'a5',
+    }
+    const character = {
+      ...mentionCandidate(
+        'img-character',
+        'img-fluffy-kitten',
+        'artifact-character',
+        { type: 'image' },
+      ),
+      cellAddress: 'a1',
+    }
+
+    expect(restoreNotebookMentionAliases(
+      'scene @img-generated-scene, character @img-fluffy-kitten, fluffy kitten standing',
+      [scene, character],
+    )).toBe('scene @a5, character @a1, fluffy kitten standing')
   })
 
   it('plans a visible cell rename from a completed backing asset rename', () => {

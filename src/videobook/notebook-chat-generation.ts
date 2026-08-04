@@ -237,6 +237,21 @@ export function notebookChatGenerationReferences(input: string): string[] {
   return uniqueReferences(input)
 }
 
+export function notebookChatGenerationParameterReferences(
+  params: Record<string, unknown>,
+): string[] {
+  const values = Object.entries(params).flatMap(([name, value]) => {
+    if (!/(?:^|_)(?:slug|slugs)$/u.test(name)) return []
+    if (typeof value === 'string') return [value]
+    return Array.isArray(value)
+      ? value.filter((entry): entry is string => typeof entry === 'string')
+      : []
+  })
+  return uniqueReferences(values.map((value) => (
+    value.startsWith('@') ? value : `@${value}`
+  )).join(' '))
+}
+
 export function generationCellTypeForRoutedTool(
   tool: string,
   routedTool: string,

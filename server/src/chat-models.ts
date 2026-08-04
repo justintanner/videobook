@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { IntelligenceReasoningEffort } from "./openai-intelligence.js";
 import type { ToolDef } from "./tools/tool-def.js";
 
-const CHAT_MODEL_IDS = ["gpt-5.6-sol", "gpt-5.6-terra"] as const;
+const CHAT_MODEL_IDS = ["gpt-5.6-sol"] as const;
 
 export type ChatModelId = typeof CHAT_MODEL_IDS[number];
 
@@ -19,14 +19,8 @@ export const CHAT_MODEL_OPTIONS: readonly ChatModelOption[] = [
   {
     id: "gpt-5.6-sol",
     label: "Sol",
-    description: "Deeper reasoning for complex edits",
+    description: "Routes every composer request and configures its tools",
     reasoningEffort: "medium",
-  },
-  {
-    id: "gpt-5.6-terra",
-    label: "Terra",
-    description: "Faster routing for everyday work",
-    reasoningEffort: "low",
   },
 ];
 

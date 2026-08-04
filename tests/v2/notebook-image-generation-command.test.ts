@@ -15,6 +15,7 @@ import {
 import {
   materializeNotebookChatGeneration,
   notebookChatGenerationConnectedInputs,
+  notebookChatGenerationParameterReferences,
   notebookChatGenerationSettings,
   parseNotebookChatGenerationCommand,
   planNotebookChatGeneration,
@@ -106,6 +107,12 @@ describe('notebook image generation commands', () => {
       prompt: 'Create new video media based on the connected references.',
       sourceReferences: ['a1', 'z13'],
     })
+    expect(notebookChatGenerationParameterReferences({
+      book_id: 'ignored',
+      prompt: 'scene @a5, character @a1, fluffy kitten standing',
+      image_slugs: ['@img-scene', 'img-character'],
+      first_frame_slug: '@img-opening',
+    })).toEqual(['img-scene', 'img-character', 'img-opening'])
   })
 
   it('rejects non-image and unfinished sources before materialization', () => {
@@ -373,7 +380,7 @@ describe('notebook image generation commands', () => {
     const command = {
       cellType: 'generate_image',
       mediaKind: 'image',
-      prompt: 'exactly frame as @img-ff2 but the man in the red hat is on the piano @img-jamie',
+      prompt: 'scene @a1, character @a2, fluffy kitten standing',
       sourceReferences: ['img-ff2', 'img-jamie'],
     } satisfies NotebookChatGenerationCommand
     const draft = planNotebookChatGeneration({
@@ -418,7 +425,7 @@ describe('notebook image generation commands', () => {
       }
     }
     expect(preview.payload).toMatchObject({
-      prompt: 'exactly frame as @reference_1 but the man in the red hat is on the piano @reference_2',
+      prompt: 'scene @reference_1, character @reference_2, fluffy kitten standing',
       reference_1: `@${firstArtifact.value.slug}`,
       reference_2: `@${secondArtifact.value.slug}`,
     })

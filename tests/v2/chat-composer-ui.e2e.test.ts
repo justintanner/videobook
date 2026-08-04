@@ -617,15 +617,12 @@ describe('chat composer browser flow', () => {
     expect(await runningCell.locator('.cell-state-shimmer > span').count()).toBe(0)
     expect(await runningCell.locator('.cell-target-connection-count').textContent()).toBe('2')
     const selector = page.getByLabel('Chat model')
-    expect(await selector.locator('option').allTextContents()).toEqual([
-      'gpt-5.6-sol',
-      'gpt-5.6-terra',
-    ])
-    await selector.selectOption('gpt-5.6-terra')
+    expect(await selector.locator('option').allTextContents()).toEqual(['gpt-5.6-sol'])
     expect(await page.evaluate(() => window.localStorage.getItem('videobook.chat-model')))
-      .toBe('gpt-5.6-terra')
+      .toBe('gpt-5.6-sol')
 
-    await input.fill('Show me every asset in this book')
+    const routedPrompt = 'generate image scene @a3, character @a1, fluffy kitten standing'
+    await input.fill(routedPrompt)
     await wait(700)
     observedCalls.length = 0
     await page.getByLabel('Send command').click()
@@ -651,7 +648,9 @@ describe('chat composer browser flow', () => {
       timeout: 20_000,
     }).toBeTruthy()
     const chatCall = observedCalls.find((call) => call.name === 'chat')
-    expect(chatCall?.arguments.model).toBe('gpt-5.6-terra')
+    expect(chatCall?.arguments.model).toBe('gpt-5.6-sol')
+    expect(chatCall?.arguments.notebook_id).toEqual(expect.any(String))
+    expect(chatCall?.arguments.prompt).toBe(routedPrompt)
     expect(observedCalls.some((call) => call.name === 'plan_chat_command')).toBe(false)
     const errorResult = page.locator('.command-result-error')
     await errorResult.waitFor({ state: 'visible' })

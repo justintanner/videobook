@@ -7,15 +7,12 @@ import {
 } from "./chat-models.js";
 
 describe("chat models", () => {
-  it("offers deep and fast routing while preserving the current default", () => {
+  it("uses Sol for every chat routing request", () => {
     expect(DEFAULT_CHAT_MODEL).toBe("gpt-5.6-sol");
-    expect(CHAT_MODEL_OPTIONS.map((model) => model.id)).toEqual([
-      "gpt-5.6-sol",
-      "gpt-5.6-terra",
-    ]);
-    expect(resolveChatModel("gpt-5.6-terra")).toMatchObject({
-      id: "gpt-5.6-terra",
-      reasoningEffort: "low",
+    expect(CHAT_MODEL_OPTIONS.map((model) => model.id)).toEqual(["gpt-5.6-sol"]);
+    expect(resolveChatModel(undefined)).toMatchObject({
+      id: "gpt-5.6-sol",
+      reasoningEffort: "medium",
     });
   });
 

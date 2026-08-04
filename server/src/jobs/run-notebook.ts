@@ -12,6 +12,7 @@ import type {
   NotebookRun,
 } from "videobook-engine";
 import { MVP_CONTRACT_VERSION } from "videobook-engine";
+import { notebookGridAddress } from "videobook-engine/notebook-grid";
 import { mutateNotebook } from "../notebook-mutations.js";
 import {
   ensureExtractFrameImageOutput,
@@ -756,7 +757,9 @@ function rewriteNotebookCellMentions(
       typeof output === "string"
       && notebookCellMediaType(cell) !== null
     ) {
-      aliases.set(cell.slug, refFor(output));
+      const reference = refFor(output);
+      aliases.set(cell.slug.toLowerCase(), reference);
+      aliases.set(notebookGridAddress(cell.slot).toLowerCase(), reference);
     }
   }
   if (aliases.size === 0) return prompt;
@@ -765,8 +768,8 @@ function rewriteNotebookCellMentions(
     .map((slug) => slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|");
   return prompt.replace(
-    new RegExp(`@(${pattern})(?![\\w-])`, "g"),
-    (mention, slug: string) => aliases.get(slug) ?? mention,
+    new RegExp(`@(${pattern})(?![\\w-])`, "gi"),
+    (mention, slug: string) => aliases.get(slug.toLowerCase()) ?? mention,
   );
 }
 

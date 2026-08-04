@@ -22,7 +22,14 @@ describe('CommandPlan edit tools', () => {
   let rootDir: string | undefined
 
   afterEach(async () => {
-    if (rootDir) await rm(rootDir, { recursive: true, force: true })
+    if (rootDir) {
+      await rm(rootDir, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 100,
+      })
+    }
   })
 
   it('shares preview, atomic commit, stale review, audit, and forward restore', async () => {

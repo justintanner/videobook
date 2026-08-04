@@ -152,9 +152,17 @@ describe("chat routing catalog", () => {
       imageFiles: [],
       videoFiles: [],
       scriptContents: [],
+      notebookContext: null,
     });
     expect(input).toMatch(/\bJSON\b/u);
     expect(input).toContain("download the first 30 seconds");
+  });
+
+  it("keeps routed generation prompts compact and preserves notebook roles", () => {
+    const prompt = buildChatRoutingPrompt("my-book", buildRoutableTools(definitions));
+    expect(prompt).toContain("scene @a5, character @a1, fluffy kitten standing");
+    expect(prompt).toContain("Preserve every consumed notebook @address");
+    expect(prompt).toContain("same order");
   });
 });
 

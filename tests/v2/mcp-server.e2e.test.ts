@@ -252,7 +252,6 @@ describe('v2 MCP server', () => {
       defaultModel: 'gpt-5.6-sol',
       models: [
         expect.objectContaining({ id: 'gpt-5.6-sol', label: 'Sol' }),
-        expect.objectContaining({ id: 'gpt-5.6-terra', label: 'Terra' }),
       ],
     })
 

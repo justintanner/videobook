@@ -115,6 +115,19 @@ export function resolveNotebookMentionAliases(
   })
 }
 
+export function restoreNotebookMentionAliases(
+  input: string,
+  assets: readonly AssetMentionCandidate[],
+): string {
+  const cellAddressesByAssetSlug = new Map(
+    assets.map((asset) => [asset.assetSlug.toLowerCase(), asset.cellAddress]),
+  )
+  return input.replace(/@([\w-]+)/gu, (mention, value: string) => {
+    const cellAddress = cellAddressesByAssetSlug.get(value.toLowerCase())
+    return cellAddress ? `@${cellAddress}` : mention
+  })
+}
+
 export function notebookCellRenamePlan(
   assetId: unknown,
   result: unknown,

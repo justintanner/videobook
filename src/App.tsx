@@ -190,13 +190,11 @@ import {
 import { routedVideoCellInputs } from '@/videobook/notebook-routed-action'
 import {
   enqueueNotebookFrameCommand,
-  parseNotebookFrameCommand,
   resolveNotebookFrameSource,
   type NotebookFrameCommand,
 } from '@/videobook/notebook-frame-command'
 import {
   enqueueNotebookSplitCommand,
-  parseNotebookSplitCommand,
   planNotebookSplitCommand,
   resolveNotebookSplitSource,
   type NotebookSplitCommand,
@@ -206,8 +204,8 @@ import {
   generationCellTypeForRoutedTool,
   materializeNotebookChatGeneration,
   notebookChatGenerationConnectedInputs,
+  notebookChatGenerationParameterReferences,
   notebookChatGenerationReferences,
-  parseNotebookChatGenerationCommand,
   planNotebookChatGeneration,
   reviseNotebookChatGenerationAction,
   reviseNotebookChatGenerationMode,
@@ -216,7 +214,6 @@ import {
   type NotebookChatGenerationCommand,
   type NotebookChatGenerationDraft,
 } from '@/videobook/notebook-chat-generation'
-import { parseNotebookGenerationCellCommand } from '@/videobook/notebook-generation-command'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
 import {
   mediaFileAccept,
@@ -245,16 +242,14 @@ import {
   notebookCellRenamePlan,
   notebookMentionAssets,
   resolveNotebookMentionAliases,
+  restoreNotebookMentionAliases,
 } from '@/videobook/mention-suggestions'
 import { restoreCommandComposerFocus } from '@/videobook/command-composer-focus'
 import { parsePendingApplyCommand } from '@/videobook/command-composer-outcome'
 import { revealNotebookResult } from '@/videobook/notebook-result-reveal'
 import {
   notebookAddressExpectationsAreStale,
-  parseNotebookCoordinateAction,
-  planNotebookCoordinateAction,
   type NotebookAddressExpectation,
-  type NotebookCoordinateAction,
   type NotebookCoordinateActionPlan,
 } from '@/videobook/notebook-coordinate-actions'
 import { notebookCellAtSlot } from '@/videobook/notebook-addressing'
@@ -6046,36 +6041,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const previewNotebookCoordinateAction = async (
-    action: NotebookCoordinateAction,
-  ): Promise<ComposerOutcome> => {
-    if (!bookId || !notebook) {
-      return { ok: false, message: 'Open a notebook before changing its cells.' }
-    }
-    try {
-      const currentNotebook = asNotebook(await call('get_notebook', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-      }))
-      if (!currentNotebook) {
-        throw new Error('The server returned an invalid notebook')
-      }
-      const plan = planNotebookCoordinateAction(currentNotebook, action)
-      setPendingCommandPlan(null)
-      setPendingChatAction({
-        kind: 'notebook',
-        notebookId: currentNotebook.id,
-        plan,
-      })
-      return applyReadyOutcome('Notebook action ready to apply')
-    } catch (error) {
-      return {
-        ok: false,
-        message: error instanceof Error ? error.message : String(error),
-      }
-    }
-  }
-
   const previewNotebookSplitCommand = async (
     command: NotebookSplitCommand,
   ): Promise<ComposerOutcome> => {
@@ -6196,17 +6161,61 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     plan: ChatActionPlan,
     originalInput: string,
   ): Promise<ComposerOutcome> => {
+    const routedAssetReference = (value: unknown): string | null => {
+      const assetId = asString(value)
+      if (!assetId) return null
+      return notebookChatGenerationReferences(restoreNotebookMentionAliases(
+        assetId.startsWith('@') ? assetId : `@${assetId}`,
+        commandMentionAssets,
+      ))[0] ?? null
+    }
+    if (plan.tool === 'extract_first_frame' || plan.tool === 'extract_last_frame') {
+      const sourceReference = routedAssetReference(plan.params.asset_id)
+      if (!sourceReference) {
+        return { ok: false, message: 'Sol did not select a video source.' }
+      }
+      return await previewNotebookFrameCommand({
+        frameMode: plan.tool === 'extract_last_frame' ? 'last' : 'first',
+        sourceReference,
+      })
+    }
+    if (plan.tool === 'split_video') {
+      const sourceReference = routedAssetReference(plan.params.asset_id)
+      const splitAtSeconds = asNumber(plan.params.chunk_a_end)
+      if (!sourceReference || !splitAtSeconds || splitAtSeconds <= 0) {
+        return { ok: false, message: 'Sol did not select a valid split source and time.' }
+      }
+      return await previewNotebookSplitCommand({ sourceReference, splitAtSeconds })
+    }
     if (plan.effect === 'generation') {
       const cellType = generationCellTypeForRoutedTool(
         plan.tool,
         plan.routedTool,
         generationActions,
       )
+      const routedPrompt = restoreNotebookMentionAliases(
+        asString(plan.params.prompt) ?? originalInput,
+        commandMentionAssets,
+      )
+      const parameterReferenceInput = notebookChatGenerationParameterReferences(
+        plan.params,
+      ).map((reference) => restoreNotebookMentionAliases(
+        `@${reference}`,
+        commandMentionAssets,
+      )).join(' ')
+      const parameterReferences = notebookChatGenerationReferences(
+        parameterReferenceInput,
+      )
+      const promptReferences = notebookChatGenerationReferences(routedPrompt)
       const command: NotebookChatGenerationCommand = {
         cellType,
         mediaKind: generationMediaKind(cellType),
-        prompt: asString(plan.params.prompt) ?? originalInput,
-        sourceReferences: notebookChatGenerationReferences(originalInput),
+        prompt: routedPrompt,
+        sourceReferences: parameterReferences.length > 0
+          ? parameterReferences
+          : promptReferences.length > 0
+            ? promptReferences
+            : notebookChatGenerationReferences(originalInput),
       }
       return await previewNotebookGenerationCommand(command, {
         preferredTool: plan.tool,
@@ -6704,55 +6713,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return { ok: true, message: 'Pending action cancelled' }
       }
       if (!bookId) return { ok: false, message: 'Load or create a book first.' }
-      const notebookAction = parseNotebookCoordinateAction(input)
-      if (notebookAction) {
-        return await previewNotebookCoordinateAction(notebookAction)
-      }
-      const splitCommand = parseNotebookSplitCommand(input)
-      if (splitCommand) {
-        return await previewNotebookSplitCommand(splitCommand)
-      }
-      const resolvedAssetInput = resolveNotebookMentionAliases(
-        input,
-        commandMentionAssets,
-      )
       if (!input.startsWith('/')) {
-        const frameCommand = parseNotebookFrameCommand(input)
-        if (frameCommand) {
-          return await previewNotebookFrameCommand(frameCommand)
-        }
-        const generationCommand = parseNotebookChatGenerationCommand(input)
-        if (generationCommand) {
-          return await previewNotebookGenerationCommand(generationCommand)
-        }
-        const generationCellReference = parseNotebookGenerationCellCommand(input)
-        if (generationCellReference && notebook) {
-          const cell = notebook.cells.find((candidate) =>
-            candidate.id.toLowerCase().startsWith(generationCellReference)
-            || candidate.slug === generationCellReference)
-          if (
-            !cell
-            || !isGenerationCell(cell)
-          ) {
-            return {
-              ok: false,
-              message: 'Name a configured generation cell, for example: generate cell @cell-id',
-            }
-          }
-          return await prepareGenerationPlan(cell.id, 'chat')
-        }
-        if (/\brough[\s-]?cut\b/iu.test(input)) {
-          return await prepareRoughCut('chat')
-        }
-        if (/\bsound[\s-]?effects?\b|\bsfx\b/iu.test(input)) {
-          return await prepareSoundEffects('chat')
-        }
-        if (/\b(?:clean(?:up)?|filler|long silence|weak section)\b/iu.test(input)) {
-          return await prepareNotebookCleanup('chat')
-        }
         const routed = await call('chat', {
           book_id: bookId,
-          prompt: resolvedAssetInput,
+          ...(notebook ? { notebook_id: notebook.id } : {}),
+          prompt: input,
           model: chatModel,
         })
         const routedRecord = record(routed)

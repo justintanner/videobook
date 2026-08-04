@@ -10,7 +10,7 @@ import {
 } from '../../src/videobook/mcp-activity'
 
 describe('chat model catalog', () => {
-  it('parses the server catalog and retains only complete options', () => {
+  it('retains only Sol from the server catalog', () => {
     expect(asChatModelCatalog({
       defaultModel: 'gpt-5.6-terra',
       models: [
@@ -27,10 +27,9 @@ describe('chat model catalog', () => {
         { id: 'broken' },
       ],
     })).toEqual({
-      defaultModel: 'gpt-5.6-terra',
+      defaultModel: 'gpt-5.6-sol',
       models: [
         { id: 'gpt-5.6-sol', label: 'Sol', description: 'Deep' },
-        { id: 'gpt-5.6-terra', label: 'Terra', description: 'Fast' },
       ],
     })
   })
