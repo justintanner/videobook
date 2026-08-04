@@ -273,10 +273,25 @@ describe("sync_video_to_audio end to end", () => {
     expect((await fs.files.read(created.artifactId, ".original.analysis.json")).ok).toBe(true);
     // The rollback rewinds the artifact to the revision it held before the
     // job started, so its history is byte-for-byte the pre-job history.
+    // Artifact history records what the book *contains*; the record that an
+    // attempt happened and failed lives in the runtime tables below.
     expect(fs.history.artifact(created.artifactId).map((revision) => revision.hash))
       .toEqual(historyBefore);
     await expect(stat(outputPath)).rejects.toThrow();
     const manifest = valueOf(await fs.files.manifest(created.artifactId));
     expect(manifest.files.some((file) => file.name.startsWith(".sync-audio-"))).toBe(false);
+
+    // A clean rollback leaves the artifact healthy — no error badge, no
+    // lingering failure record, since its content is intact.
+    expect(valueOf(await fs.jobs.failures.read(created.artifactId))).toBeNull();
+    expect(valueOf(await fs.status.get(created.artifactId))).not.toBe("error");
+    // The attempt is still auditable in the append-only action log; without
+    // it a failed-then-restored job would leave no record that it ran.
+    const jobErrors = fs.logs.read("job-error", { limit: 25 }) as unknown as
+      Array<{ assetId?: string; error?: string; rolledBack?: boolean }>;
+    expect(jobErrors.some((entry) =>
+      entry.assetId === created.artifactId
+      && entry.rolledBack === true
+      && (entry.error ?? "").includes("ffmpeg failed"))).toBe(true);
   }, 120_000);
 });

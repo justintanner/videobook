@@ -7,15 +7,7 @@ import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 import { resolveImageRefs } from "./_image-inputs.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
-}
+import { generationLabel } from "../artifact-label.js";
 
 const seedreamInputSchema = SeedreamImageToImageRequestSchema.shape.input.shape;
 
@@ -70,7 +62,7 @@ export function generateSeedreamImageDef(fs: Engine): ToolDef {
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
-      const assetName = `${modelSlug("kie", "seedream/5-lite-image-to-image")}-${slugify(prompt) || String(Date.now())}`;
+      const assetName = generationLabel(modelSlug("kie", "seedream/5-lite-image-to-image"), prompt);
       const assetResult = await fs.artifacts.create(prefix, assetName);
       if (!assetResult.ok) {
         return {

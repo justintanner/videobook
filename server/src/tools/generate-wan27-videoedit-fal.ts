@@ -5,9 +5,10 @@ import { FalWanV2p7EditVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageRefs, slugify } from "./_fal-shared.js";
+import { resolveImageRefs } from "./_fal-shared.js";
 import type { ImageInput } from "./_image-inputs.js";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const editBase = FalWanV2p7EditVideoRequestSchema.shape;
 
@@ -64,7 +65,7 @@ export function generateWan27VideoeditFalDef(fs: Engine): ToolDef {
         refImageAssetId = resolved.sourceImageIds[0];
       }
 
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-videoedit")}-${slugify(prompt) || String(Date.now())}`);
+      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "wan/2-7-videoedit"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

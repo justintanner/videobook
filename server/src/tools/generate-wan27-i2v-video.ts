@@ -10,9 +10,9 @@ import {
   resolveAudioRef,
   resolveImageRef,
   resolveVideoRef,
-  slugify,
   type RefInput,
 } from "./_seedance2-shared.js";
+import { generationLabel } from "../artifact-label.js";
 
 const wan27I2v = Wan27ImageToVideoRequestSchema.shape.input.shape;
 
@@ -99,7 +99,7 @@ export function generateWan27I2vVideoDef(fs: Engine): ToolDef {
         drivingAudio = r.value;
       }
 
-      const videoName = `${modelSlug("kie", "wan/2-7-image-to-video")}-${slugify(prompt) || String(Date.now())}`;
+      const videoName = generationLabel(modelSlug("kie", "wan/2-7-image-to-video"), prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {

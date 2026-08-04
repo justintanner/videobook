@@ -4,9 +4,9 @@ import { FalXaiGrokImagineVideoExtendVideoRequestSchema } from "@apicity/fal/zod
 import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const grok = FalXaiGrokImagineVideoExtendVideoRequestSchema.shape;
 
@@ -42,7 +42,7 @@ export function generateGrokImagineVideoExtendFalDef(fs: Engine): ToolDef {
       const sourceVideoFile = findVideoFile(manifest.value.files);
       if (!sourceVideoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${sourceVideoAssetId}` }] };
 
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "grok-imagine/extend")}-${slugify(prompt) || String(Date.now())}`);
+      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "grok-imagine/extend"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

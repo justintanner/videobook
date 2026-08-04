@@ -368,11 +368,16 @@ function makeWrappedResolver(
           const message = cause instanceof Error ? cause.message : String(cause);
           if (assetId && !assetFailureHandled) {
             await dispatchFailure(engine, assetId, lease.current, message, job);
-          } else if (!assetId) {
+          } else {
+            // A job that rolled itself back owns the artifact's status — it
+            // stays clean rather than showing a spurious error. The attempt
+            // still belongs in the append-only log, or a failed-then-restored
+            // job would leave no record anywhere that it ran.
             await engine.logs.append("job-error", {
               jobType: type,
               operationId: job.operationId,
               error: message,
+              ...(assetId ? { assetId, rolledBack: true } : {}),
               ...(typeof job.payload.bookId === "string"
                 ? { bookId: job.payload.bookId }
                 : {}),

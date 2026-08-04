@@ -4,8 +4,9 @@ import { z, type ZodRawShape } from "zod";
 import { FalNanoBananaProEditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageRefs, slugify } from "./_fal-shared.js";
+import { resolveImageRefs } from "./_fal-shared.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const base = FalNanoBananaProEditRequestSchema.shape;
 
@@ -41,7 +42,7 @@ export function generateNanoBananaProEditFalDef(fs: Engine): ToolDef {
       const resolved = await resolveImageRefs(fs, image_refs, book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.artifacts.create(prefix, `${modelSlug("kie", "nano-banana-pro")}-${slugify(prompt) || String(Date.now())}`);
+      const assetResult = await fs.artifacts.create(prefix, generationLabel(modelSlug("kie", "nano-banana-pro"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;

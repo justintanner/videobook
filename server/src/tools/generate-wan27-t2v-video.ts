@@ -5,7 +5,8 @@ import { Wan27TextToVideoRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
-import { resolveAudioRef, slugify, type RefInput } from "./_seedance2-shared.js";
+import { resolveAudioRef, type RefInput } from "./_seedance2-shared.js";
+import { generationLabel } from "../artifact-label.js";
 
 const wan27T2v = Wan27TextToVideoRequestSchema.shape.input.shape;
 
@@ -51,7 +52,7 @@ export function generateWan27T2vVideoDef(fs: Engine): ToolDef {
         audioRef = r.value;
       }
 
-      const videoName = `${modelSlug("kie", "wan/2-7-text-to-video")}-${slugify(prompt) || String(Date.now())}`;
+      const videoName = generationLabel(modelSlug("kie", "wan/2-7-text-to-video"), prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {

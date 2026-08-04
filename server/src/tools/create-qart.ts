@@ -4,7 +4,7 @@ import QRCode, { type QRCode as QrCode } from "qrcode";
 import sharp from "sharp";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { findImageFile } from "./_image-inputs.js";
-import { slugify } from "./_fal-shared.js";
+import { derivedLabel } from "../artifact-label.js";
 
 export const DEFAULT_QART_SIZE = 2520;
 export const QART_QUIET_MODULES = 4;
@@ -295,8 +295,7 @@ export function createQartDef(fs: Engine): ToolDef {
       const qr = createQr(resolvedValue);
       const sampled = await sampleCover(cover.buffer, qr.modules.size);
 
-      const stem = slugify(name ?? cover.assetId) || String(Date.now());
-      const stamp = Date.now().toString(36);
+      const stem = name ?? cover.assetId;
       const createdAt = new Date().toISOString();
       const baseMeta = {
         origin: "create_qart",
@@ -328,7 +327,7 @@ export function createQartDef(fs: Engine): ToolDef {
         const resultAsset = await persistQartAsset(
           fs,
           book_id,
-          `qart-${s}-${stem}-${stamp}`,
+          derivedLabel(`qart ${s}`, stem),
           buildFiles,
           { ...baseMeta, color_mode: s, module_pixels: buildFiles.modulePx },
         );

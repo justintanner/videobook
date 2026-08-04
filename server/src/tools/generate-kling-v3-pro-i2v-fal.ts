@@ -4,8 +4,9 @@ import { z, type ZodRawShape } from "zod";
 import { FalKlingVideoV3ProImageToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageRefs, slugify } from "./_fal-shared.js";
+import { resolveImageRefs } from "./_fal-shared.js";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const kling = FalKlingVideoV3ProImageToVideoRequestSchema.shape;
 
@@ -40,7 +41,7 @@ export function generateKlingV3ProI2vFalDef(fs: Engine): ToolDef {
 
       const [firstFrame, endFrame] = resolved.inputs;
       const nameSource = prompt ?? first_frame_ref;
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "kling-3.0/video/pro")}-${slugify(nameSource) || String(Date.now())}`);
+      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "kling-3.0/video/pro"), nameSource));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

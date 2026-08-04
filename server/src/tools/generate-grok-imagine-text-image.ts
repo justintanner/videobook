@@ -5,15 +5,7 @@ import { GrokTextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
-}
+import { generationLabel } from "../artifact-label.js";
 
 const grokTextToImageInputSchema = GrokTextToImageRequestSchema.shape.input.shape;
 
@@ -46,7 +38,7 @@ export function generateGrokImagineTextImageDef(fs: Engine): ToolDef {
         };
       }
 
-      const assetName = `${modelSlug("kie", "grok-imagine/text-to-image")}-${slugify(prompt) || String(Date.now())}`;
+      const assetName = generationLabel(modelSlug("kie", "grok-imagine/text-to-image"), prompt);
       const assetResult = await fs.artifacts.create("img", assetName);
       if (!assetResult.ok) {
         return {

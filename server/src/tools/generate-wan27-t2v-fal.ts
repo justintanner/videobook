@@ -3,9 +3,9 @@ import { z, type ZodRawShape } from "zod";
 import { FalWanV2p7TextToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const base = FalWanV2p7TextToVideoRequestSchema.shape;
 
@@ -35,7 +35,7 @@ export function generateWan27T2vFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-text-to-video")}-${slugify(prompt) || String(Date.now())}`);
+      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "wan/2-7-text-to-video"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

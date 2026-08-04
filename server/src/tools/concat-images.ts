@@ -3,7 +3,7 @@ import sharp from "sharp";
 import { z, type ZodRawShape } from "zod";
 import { cropToFill, probeImage } from "../image.js";
 import { findImageFile } from "./_image-inputs.js";
-import { slugify } from "./_fal-shared.js";
+import { derivedLabel } from "../artifact-label.js";
 import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
 
 const layoutOptions = ["horizontal", "vertical", "grid"] as const;
@@ -99,7 +99,7 @@ export function concatImagesDef(fs: Engine): ToolDef {
         return error(`Failed to concatenate images: ${message}`);
       }
 
-      const assetName = name ?? deriveAssetName(sourceImageIds);
+      const assetName = name ?? deriveAssetName(fs, sourceImageIds);
       const assetResult = await fs.artifacts.create("img", assetName);
       if (!assetResult.ok) return error(`Failed to create image asset: ${assetResult.error.message}`);
 
@@ -297,9 +297,12 @@ export async function writeImageVariants(
   return { ok: true };
 }
 
-function deriveAssetName(assetIds: readonly string[]): string {
-  const base = assetIds.join("-");
-  return `concat-${slugify(base) || String(Date.now())}`;
+function deriveAssetName(fs: Engine, assetIds: readonly string[]): string {
+  const sources = assetIds.map((assetId) => {
+    const artifact = fs.artifacts.get(assetId);
+    return (artifact.ok ? artifact.value.label?.trim() : "") || assetId;
+  });
+  return derivedLabel("concat", sources.join(" + "));
 }
 
 function error(text: string): ToolResult {

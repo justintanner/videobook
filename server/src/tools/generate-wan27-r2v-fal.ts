@@ -4,10 +4,11 @@ import { z, type ZodRawShape } from "zod";
 import { FalWanV2p7ReferenceToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageRefs, slugify } from "./_fal-shared.js";
+import { resolveImageRefs } from "./_fal-shared.js";
 import { resolveVideoRef, type RefInput } from "./_seedance2-shared.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
+import { generationLabel } from "../artifact-label.js";
 
 async function resolveVideoRefList(
   fs: Engine,
@@ -75,7 +76,7 @@ export function generateWan27R2vFalDef(fs: Engine): ToolDef {
       const resolvedVideos = await resolveVideoRefList(fs, vidRefs, book_id);
       if (!resolvedVideos.ok) return toolError(resolvedVideos.error);
 
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-r2v")}-${slugify(prompt) || String(Date.now())}`);
+      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "wan/2-7-r2v"), prompt));
       if (!assetResult.ok) return toolError(`Failed to create video asset: ${assetResult.error.message}`);
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

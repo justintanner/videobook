@@ -19,6 +19,7 @@ import {
   apicityStringField,
   apicityStringNumberField,
 } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 type Seedance2Model = Seedance2Request["model"] | Seedance2FastRequest["model"];
 
@@ -30,15 +31,6 @@ function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | nu
     return IMAGE_EXTENSIONS.has(ext);
   });
   return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
-}
-
-export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
 }
 
 export type RefInput = { assetId: string; filename: string };
@@ -252,7 +244,7 @@ export function buildSeedance2ToolDef(
         replaceAudioWith = r.value;
       }
 
-      const videoName = `${modelSlug("kie", opts.apiModel)}-${slugify(prompt) || String(Date.now())}`;
+      const videoName = generationLabel(modelSlug("kie", opts.apiModel), prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {

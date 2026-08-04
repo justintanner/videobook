@@ -4,7 +4,8 @@ import type { GoogleVeo31Model } from "../payload-builders.js";
 import { queue } from "../queue.js";
 import { rewriteImageRefMentions, stripRefMentions } from "../google-flow-refs.js";
 import type { ToolDef } from "./tool-def.js";
-import { resolveImageRef, slugify, type RefInput } from "./_seedance2-shared.js";
+import { resolveImageRef, type RefInput } from "./_seedance2-shared.js";
+import { generationLabel } from "../artifact-label.js";
 
 // Allowed values are hand-typed from the useapi.net Google Flow docs — the
 // 0.7.3 @apicity/googleflow schemas carry only loose `.or(z.string())`
@@ -108,7 +109,7 @@ function makeVeo31VideoTool(
       );
 
       const modelSlugLiteral = VEO31_SLUGS[model];
-      const videoName = `${modelSlugLiteral}-${slugify(prompt) || Date.now().toString(36)}`;
+      const videoName = generationLabel(modelSlugLiteral, prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };

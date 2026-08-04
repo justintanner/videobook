@@ -9,6 +9,7 @@ import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { artifactKindOf, requireArtifactKind } from "./_shared.js";
 import { assertKlingMotionControlDuration } from "../kling-motion-control-duration.js";
+import { generationLabel } from "../artifact-label.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -42,15 +43,6 @@ function imageOrientation(width: unknown, height: unknown): ImageOrientation | u
   }
   if (width === height) return "square";
   return width > height ? "landscape" : "portrait";
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
 }
 
 type RefInput = { assetId: string; filename: string };
@@ -144,8 +136,10 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
 
       const firstImageArtifact = fs.artifacts.get(imageInputs[0].assetId);
       const firstImageLabel = firstImageArtifact.ok ? firstImageArtifact.value.label ?? "" : "";
-      const baseName = prompt ? slugify(prompt) : slugify(firstImageLabel);
-      const videoName = `${modelSlug("kie", "kling-3.0/motion-control")}-${baseName || Date.now()}`;
+      const videoName = generationLabel(
+        modelSlug("kie", "kling-3.0/motion-control"),
+        prompt || firstImageLabel,
+      );
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };

@@ -17,9 +17,9 @@ import {
   resolveAudioRef,
   resolveImageRef,
   resolveVideoRef,
-  slugify,
   type RefInput,
 } from "./_seedance2-shared.js";
+import { generationLabel } from "../artifact-label.js";
 
 const generateAlibabaVideoSchema = {
   book_id: z.string().describe("Book id"),
@@ -103,7 +103,7 @@ export function generateAlibabaVideoDef(fs: Engine): ToolDef {
         videoRef = r.value;
       }
 
-      const videoName = `alibaba-${slugify(prompt) || String(Date.now())}`;
+      const videoName = generationLabel("alibaba", prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return toolError(`Failed to create video asset: ${assetResult.error.message}`);

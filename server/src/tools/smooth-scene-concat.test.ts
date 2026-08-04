@@ -122,8 +122,9 @@ describe("smooth_scene_concat tool", () => {
     };
     const concatArtifact = fs.artifacts.get(parsed.asset_id);
     expect(concatArtifact.ok && concatArtifact.value.kind).toBe("video");
+    // The label reads as prose and names both sources it was joined from.
     expect(concatArtifact.ok && concatArtifact.value.label)
-      .toBe(`scene-concat-${firstAssetId}-${secondAssetId}`);
+      .toBe("scene concat — first + second");
     expect(parsed.status).toBe("enqueued");
     expect(parsed.alignment_mode).toBe("fixed");
 

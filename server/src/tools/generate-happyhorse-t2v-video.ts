@@ -10,17 +10,9 @@ import {
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const SLUG = modelSlug("kie", "happyhorse-1-1/text-to-video");
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
-}
 
 const generateHappyhorseT2vVideoSchema = {
   book_id: z.string().describe("Book id"),
@@ -45,7 +37,7 @@ export function generateHappyhorseT2vVideoDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }] };
       }
 
-      const videoName = `${SLUG}-${slugify(prompt) || String(Date.now())}`;
+      const videoName = generationLabel(SLUG, prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };

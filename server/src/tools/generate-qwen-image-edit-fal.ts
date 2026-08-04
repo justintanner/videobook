@@ -6,8 +6,9 @@ import { Qwen2ImageEditRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { enumOptions, zodUnionEnumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageRefs, slugify } from "./_fal-shared.js";
+import { resolveImageRefs } from "./_fal-shared.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const base = FalQwenImageEditRequestSchema.shape;
 
@@ -77,7 +78,7 @@ export function generateQwenImageEditFalDef(fs: Engine): ToolDef {
       const [refImage] = resolved.inputs;
       const normalizedSize = normalizeImageSize(image_size);
 
-      const assetResult = await fs.artifacts.create(prefix, `${modelSlug("kie", "qwen2/image-edit")}-${slugify(prompt) || String(Date.now())}`);
+      const assetResult = await fs.artifacts.create(prefix, generationLabel(modelSlug("kie", "qwen2/image-edit"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;

@@ -5,7 +5,8 @@ import { Wan27ImageToVideoRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
-import { resolveVideoRef, slugify } from "./_seedance2-shared.js";
+import { resolveVideoRef } from "./_seedance2-shared.js";
+import { generationLabel } from "../artifact-label.js";
 
 const wan27I2v = Wan27ImageToVideoRequestSchema.shape.input.shape;
 
@@ -54,7 +55,7 @@ export function extendWan27VideoDef(fs: Engine): ToolDef {
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const sourceVideo = videoResult.value;
 
-      const videoName = `${modelSlug("kie", "wan/2-7-image-to-video")}-${slugify(prompt) || String(Date.now())}`;
+      const videoName = generationLabel(modelSlug("kie", "wan/2-7-image-to-video"), prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {

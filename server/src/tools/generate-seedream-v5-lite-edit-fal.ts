@@ -4,8 +4,9 @@ import { z, type ZodRawShape } from "zod";
 import { FalSeedreamV5LiteEditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageRefs, slugify } from "./_fal-shared.js";
+import { resolveImageRefs } from "./_fal-shared.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const seedream = FalSeedreamV5LiteEditRequestSchema.shape;
 
@@ -37,7 +38,7 @@ export function generateSeedreamV5LiteEditFalDef(fs: Engine): ToolDef {
       const resolved = await resolveImageRefs(fs, image_refs, book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.artifacts.create(prefix, `${modelSlug("kie", "seedream/5-lite-image-to-image")}-${slugify(prompt) || String(Date.now())}`);
+      const assetResult = await fs.artifacts.create(prefix, generationLabel(modelSlug("kie", "seedream/5-lite-image-to-image"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;

@@ -6,7 +6,8 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
-import { resolveImageRef, resolveVideoRef, slugify, type RefInput } from "./_seedance2-shared.js";
+import { resolveImageRef, resolveVideoRef, type RefInput } from "./_seedance2-shared.js";
+import { generationLabel } from "../artifact-label.js";
 
 const SLUG = modelSlug("kie", "gemini-omni-video");
 
@@ -87,7 +88,7 @@ export function generateGeminiOmniVideoDef(fs: Engine): ToolDef {
         videoInput = r.value;
       }
 
-      const videoName = `${SLUG}-${slugify(prompt) || String(Date.now())}`;
+      const videoName = generationLabel(SLUG, prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };

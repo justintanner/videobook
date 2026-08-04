@@ -4,13 +4,13 @@ import { modelSlug } from "@apicity/cost";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageRefs } from "./_image-inputs.js";
-import { slugify } from "./_seedance2-shared.js";
 import {
   canonicalCharacterId,
   rewriteImageRefMentions,
   totalImageReferenceSlots,
   GOOGLE_IMAGE_MAX_REFERENCE_SLOTS,
 } from "../google-flow-refs.js";
+import { generationLabel } from "../artifact-label.js";
 
 // Allowed values are hand-typed from the useapi.net Google Flow docs — the
 // 0.7.3 @apicity/googleflow images.aspectRatio enum mixes ratio + keyword forms
@@ -78,7 +78,7 @@ export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
       // the same model; @apicity/cost has no google slugs (gaps §15).
       const nameSlug = modelSlug("kie", "nano-banana-pro");
       const normalizedPrompt = rewriteImageRefMentions(prompt, rawSlugs, "reference").replace(/@referenceImage_/g, "@reference_");
-      const imageName = `${nameSlug}-${slugify(normalizedPrompt) || String(Date.now())}`;
+      const imageName = generationLabel(nameSlug, normalizedPrompt);
       const assetResult = await fs.artifacts.create("img", imageName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };

@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import sharp from "sharp";
 import type { ToolDef, ToolResult } from "./tool-def.js";
-import { slugify } from "./_fal-shared.js";
+import { derivedLabel } from "../artifact-label.js";
 import {
   buildQrbtfSvg,
   wrapQrbtfSvg,
@@ -251,8 +251,7 @@ export function createQrbtfDef(fs: Engine): ToolDef {
         return error(`Failed to render QR: ${err instanceof Error ? err.message : String(err)}`);
       }
 
-      const stem = slugify(name ?? resolvedStyle) || String(Date.now());
-      const stamp = Date.now().toString(36);
+      const stem = name ?? resolvedStyle;
       const createdAt = new Date().toISOString();
 
       const metadata: Record<string, unknown> = {
@@ -277,7 +276,7 @@ export function createQrbtfDef(fs: Engine): ToolDef {
       const resultAsset = await persistQrbtfAsset(
         fs,
         book_id,
-        `qrbtf-${stem}-${stamp}`,
+        derivedLabel("qrbtf", stem),
         files,
         metadata,
       );

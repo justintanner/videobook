@@ -4,8 +4,9 @@ import { KlingV3TurboImageToVideoRequestSchema, KlingV3TurboTextToVideoRequestSc
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
-import { resolveImageRef, slugify, type RefInput } from "./_seedance2-shared.js";
+import { resolveImageRef, type RefInput } from "./_seedance2-shared.js";
 import { modelSlug } from "@apicity/cost";
+import { generationLabel } from "../artifact-label.js";
 
 const klingTurboI2v = KlingV3TurboImageToVideoRequestSchema.shape.input.shape;
 const klingTurboT2v = KlingV3TurboTextToVideoRequestSchema.shape.input.shape;
@@ -47,7 +48,7 @@ export function generateKling30TurboVideoDef(fs: Engine): ToolDef {
       const isI2V = imageInputs.length > 0;
       const model = isI2V ? "kling/v3-turbo-image-to-video" : "kling/v3-turbo-text-to-video";
 
-      const videoName = `${modelSlug("kie", model)}-${slugify(prompt) || Date.now().toString(36)}`;
+      const videoName = generationLabel(modelSlug("kie", model), prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };

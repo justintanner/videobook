@@ -5,7 +5,8 @@ import type { VeoModel } from "@apicity/kie";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
-import { resolveImageRef, slugify, type RefInput } from "./_seedance2-shared.js";
+import { resolveImageRef, type RefInput } from "./_seedance2-shared.js";
+import { generationLabel } from "../artifact-label.js";
 
 const veoInput = VeoGenerateRequestSchema.shape;
 
@@ -48,7 +49,7 @@ function makeVeo3VideoTool(
         imageInputs.push(r.value);
       }
 
-      const videoName = `${model}-${slugify(prompt) || Date.now().toString(36)}`;
+      const videoName = generationLabel(model, prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };

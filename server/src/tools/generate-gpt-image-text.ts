@@ -5,15 +5,7 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
-}
+import { generationLabel } from "../artifact-label.js";
 
 const gptImageTextInputSchema = GptImage2TextToImageRequestSchema.shape.input.shape;
 
@@ -54,7 +46,7 @@ export function generateGptImageTextDef(fs: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const assetName = slugify(prompt);
+      const assetName = generationLabel("gpt-image-text", prompt);
       const assetResult = await fs.artifacts.create("img", assetName);
       if (!assetResult.ok) {
         return {

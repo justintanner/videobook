@@ -5,6 +5,7 @@ import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { requireArtifactKind } from "./_shared.js";
+import { derivedLabel } from "../artifact-label.js";
 
 const upscaleGrokImagineVideoSchema = {
   asset_id: z.string().optional().describe("Video artifact id"),
@@ -81,7 +82,7 @@ export function upscaleGrokImagineVideoDef(fs: Engine): ToolDef {
       // label; the id carries no name to reuse.
       const sourceArtifact = fs.artifacts.get(asset_id);
       const baseName = (sourceArtifact.ok ? sourceArtifact.value.label?.trim() : "") || asset_id;
-      const videoName = `upscale-${baseName}`;
+      const videoName = derivedLabel("upscaled", baseName);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {

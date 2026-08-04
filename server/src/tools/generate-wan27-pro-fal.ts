@@ -3,9 +3,9 @@ import { z, type ZodRawShape } from "zod";
 import { FalWanV2p7TextToImageRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
 import { apicityField, apicityStringField, apicityUnionEnumField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const wan = FalWanV2p7TextToImageRequestSchema.shape;
 
@@ -32,7 +32,7 @@ export function generateWan27ProFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "wan/2-7-image-pro")}-${slugify(prompt) || String(Date.now())}`);
+      const assetResult = await fs.artifacts.create("img", generationLabel(modelSlug("kie", "wan/2-7-image-pro"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;

@@ -15,9 +15,9 @@ import {
   resolveAudioRef,
   resolveImageRef,
   resolveVideoRef,
-  slugify,
   type RefInput,
 } from "./_seedance2-shared.js";
+import { generationLabel } from "../artifact-label.js";
 
 // @apicity/cost@0.6.1 registers the Seedance 2 Mini slug ("sd2m"), matching the
 // sibling fast/regular tools' modelSlug-based naming.
@@ -112,7 +112,7 @@ export function generateSeedance2MiniVideoDef(fs: Engine): ToolDef {
         replaceAudioWith = r.value;
       }
 
-      const videoName = `${SLUG}-${slugify(prompt ?? "") || String(Date.now())}`;
+      const videoName = generationLabel(SLUG, prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };

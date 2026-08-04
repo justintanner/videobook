@@ -4,10 +4,11 @@ import { z, type ZodRawShape } from "zod";
 import { FalSeedance2p0FastReferenceToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageRefs, slugify } from "./_fal-shared.js";
+import { resolveImageRefs } from "./_fal-shared.js";
 import { resolveAudioRef, resolveVideoRef, type RefInput } from "./_seedance2-shared.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
+import { generationLabel } from "../artifact-label.js";
 
 async function resolveVideoRefList(
   fs: Engine,
@@ -101,7 +102,7 @@ export function generateSeedance2FastR2vFalDef(fs: Engine): ToolDef {
       const resolvedAudios = await resolveAudioRefList(fs, audRefs, book_id);
       if (!resolvedAudios.ok) return toolError(resolvedAudios.error);
 
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "bytedance/seedance-2-fast")}-${slugify(prompt) || String(Date.now())}`);
+      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "bytedance/seedance-2-fast"), prompt));
       if (!assetResult.ok) return toolError(`Failed to create video asset: ${assetResult.error.message}`);
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

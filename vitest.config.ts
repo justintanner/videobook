@@ -28,6 +28,7 @@ export default defineConfig({
       'src/videobook/mvp-gates.test.ts',
       'src/videobook/search-benchmark-corpus.test.ts',
       'server/src/archive-store.test.ts',
+      'server/src/artifact-label.test.ts',
       'server/src/archive-b2.test.ts',
       'server/src/audio-cue.test.ts',
       'server/src/audio-sync.test.ts',

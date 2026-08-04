@@ -6,17 +6,9 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageRefs } from "./_image-inputs.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const wan27ImageInput = Wan27ImageInputSchema.shape;
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
-}
 
 const generateWan27ImageProSchema = {
   prompt: apicityStringField(wan27ImageInput.prompt, "Text prompt for image generation (max 5000 chars)", { required: true }),
@@ -69,7 +61,7 @@ export function generateWan27ImageProDef(fs: Engine): ToolDef {
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
-      const assetName = `${modelSlug("kie", "wan/2-7-image-pro")}-${slugify(prompt) || String(Date.now())}`;
+      const assetName = generationLabel(modelSlug("kie", "wan/2-7-image-pro"), prompt);
       const assetResult = await fs.artifacts.create(prefix, assetName);
       if (!assetResult.ok) {
         return {

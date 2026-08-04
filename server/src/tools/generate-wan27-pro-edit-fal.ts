@@ -4,13 +4,14 @@ import { z, type ZodRawShape } from "zod";
 import { FalWanV2p7EditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageRefs, slugify } from "./_fal-shared.js";
+import { resolveImageRefs } from "./_fal-shared.js";
 import {
   apicityField,
   apicityStringArrayField,
   apicityStringField,
   apicityUnionEnumField,
 } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const wan = FalWanV2p7EditRequestSchema.shape;
 
@@ -43,7 +44,7 @@ export function generateWan27ProEditFalDef(fs: Engine): ToolDef {
       const resolved = await resolveImageRefs(fs, image_refs, book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.artifacts.create(prefix, `${modelSlug("kie", "wan/2-7-image-pro")}-${slugify(prompt) || String(Date.now())}`);
+      const assetResult = await fs.artifacts.create(prefix, generationLabel(modelSlug("kie", "wan/2-7-image-pro"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;

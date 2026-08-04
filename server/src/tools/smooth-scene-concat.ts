@@ -1,9 +1,10 @@
 import { join } from "node:path";
 import { z } from "zod";
-import { findVideoFile, type Engine } from "videobook-engine";
+import { findVideoFile, type Artifact, type Engine } from "videobook-engine";
 import { probeVideo, type ProbeResult } from "../ffmpeg.js";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
+import { derivedLabel } from "../artifact-label.js";
 
 function error(text: string) {
   return {
@@ -12,8 +13,12 @@ function error(text: string) {
   };
 }
 
-function concatName(firstAssetId: string, secondAssetId: string): string {
-  return `scene-concat-${firstAssetId}-${secondAssetId}`;
+function sourceName(artifact: Artifact): string {
+  return artifact.label?.trim() || artifact.artifactId;
+}
+
+function concatName(first: Artifact, second: Artifact): string {
+  return derivedLabel("scene concat", `${sourceName(first)} + ${sourceName(second)}`);
 }
 
 function validVideoProbe(probe: ProbeResult): boolean {
@@ -92,7 +97,9 @@ export function smoothSceneConcatDef(fs: Engine): ToolDef {
         return error("transition_seconds must be shorter than both video clips");
       }
 
-      const assetResult = await fs.artifacts.create("video", concatName(first_asset_id, second_asset_id)
+      const assetResult = await fs.artifacts.create(
+        "video",
+        concatName(firstArtifact.value, secondArtifact.value),
       );
       if (!assetResult.ok) {
         return error(`Failed to create scene concat asset: ${assetResult.error.message}`);

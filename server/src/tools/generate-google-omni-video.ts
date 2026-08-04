@@ -11,7 +11,8 @@ import {
   OMNI_V2V_MAX_REFERENCE_SLOTS,
 } from "../google-flow-refs.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { resolveImageRef, resolveVideoRef, slugify, type RefInput } from "./_seedance2-shared.js";
+import { resolveImageRef, resolveVideoRef, type RefInput } from "./_seedance2-shared.js";
+import { generationLabel } from "../artifact-label.js";
 
 // Literal slug — @apicity/cost has no google provider pricing, so modelSlug()
 // would throw (docs/apicity-gaps.md §15).
@@ -187,7 +188,7 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
         ],
       );
 
-      const videoName = `${SLUG}-${slugify(prompt) || String(Date.now())}`;
+      const videoName = generationLabel(SLUG, prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };

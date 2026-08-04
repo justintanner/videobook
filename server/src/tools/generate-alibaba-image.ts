@@ -1,4 +1,5 @@
 import type { Engine, ArtifactManifestFile } from "videobook-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import {
   AlibabaImageGenerationParametersSchema,
@@ -9,6 +10,7 @@ import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -18,15 +20,6 @@ function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | nu
     return IMAGE_EXTENSIONS.has(ext);
   });
   return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
 }
 
 const generateAlibabaImageSchema = {
@@ -108,7 +101,7 @@ export function generateAlibabaImageDef(fs: Engine): ToolDef {
         }
       }
 
-      const assetName = slugify(prompt);
+      const assetName = generationLabel(modelSlug("alibaba", "wan2.7-image"), prompt);
       const assetResult = await fs.artifacts.create("img", assetName);
       if (!assetResult.ok) {
         return {

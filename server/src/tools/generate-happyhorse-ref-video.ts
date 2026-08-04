@@ -11,6 +11,7 @@ import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringArrayField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const SLUG = modelSlug("kie", "happyhorse-1-1/reference-to-video");
 
@@ -22,15 +23,6 @@ function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | nu
     return IMAGE_EXTENSIONS.has(ext);
   });
   return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
 }
 
 type RefInput = { assetId: string; filename: string };
@@ -74,7 +66,7 @@ export function generateHappyhorseRefVideoDef(fs: Engine): ToolDef {
         imageInputs.push({ assetId, filename: file.name });
       }
 
-      const videoName = `${SLUG}-${slugify(prompt) || String(Date.now())}`;
+      const videoName = generationLabel(SLUG, prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };

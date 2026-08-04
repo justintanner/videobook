@@ -11,6 +11,7 @@ import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -20,15 +21,6 @@ function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | nu
     return IMAGE_EXTENSIONS.has(ext);
   });
   return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
 }
 
 const generateAlibabaQwenImageSchema = {
@@ -110,7 +102,7 @@ export function generateAlibabaQwenImageDef(fs: Engine): ToolDef {
 
       const resolvedModel = AlibabaQwenImageGenerationStableModelSchema.parse(model);
 
-      const assetResult = await fs.artifacts.create("img", `${modelSlug("alibaba", resolvedModel)}-${slugify(prompt) || String(Date.now())}`);
+      const assetResult = await fs.artifacts.create("img", generationLabel(modelSlug("alibaba", resolvedModel), prompt));
       if (!assetResult.ok) {
         return {
           isError: true as const,

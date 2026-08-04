@@ -14,9 +14,9 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 import {
   resolveImageRef,
   resolveVideoRef,
-  slugify,
   type RefInput,
 } from "./_seedance2-shared.js";
+import { generationLabel } from "../artifact-label.js";
 
 const WAN27_VIDEO_EDIT_DURATIONS = Wan27VideoEditDurationValues.map(String) as [string, ...string[]];
 
@@ -89,7 +89,7 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
         imageInput = r.value;
       }
 
-      const videoName = `${modelSlug("kie", "wan/2-7-videoedit")}-${slugify(prompt ?? "") || String(Date.now())}`;
+      const videoName = generationLabel(modelSlug("kie", "wan/2-7-videoedit"), prompt);
       const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {

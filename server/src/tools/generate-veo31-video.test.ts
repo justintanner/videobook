@@ -103,7 +103,7 @@ describe("generate_veo31_video tools", () => {
     expect(created.ok).toBe(true);
     if (created.ok) {
       expect(created.value.kind).toBe("video");
-      expect(created.value.label).toMatch(/^veo31-lite-lp-/);
+      expect(created.value.label).toBe("veo31-lite-lp — a fog bank rolling over hills");
     }
   });
 

@@ -5,21 +5,11 @@ import { queue } from "../queue.js";
 
 import type { ToolDef } from "./tool-def.js";
 import { apicityStringField } from "./schema-from-apicity.js";
+import { generationLabel } from "../artifact-label.js";
 
 const DEFAULT_MODEL_ID = "eleven_multilingual_v2";
 const DEFAULT_OUTPUT_FORMAT = "mp3_44100_128";
 const elevenLabsTts = ElevenLabsTextToSpeechRequestSchema.shape;
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 30)
-    .replace(/-$/, "");
-}
-
-
 
 export function generateElevenlabsT2aDef(fs: Engine): ToolDef {
   return {
@@ -59,7 +49,7 @@ export function generateElevenlabsT2aDef(fs: Engine): ToolDef {
 
       const voiceId = voice_id.trim();
 
-      const name = asset_name?.trim() || `elevenlabs-${slugify(text) || Date.now()}`;
+      const name = asset_name?.trim() || generationLabel("elevenlabs", text);
       const assetResult = await fs.artifacts.create("aud", name);
       if (!assetResult.ok) {
         return {
