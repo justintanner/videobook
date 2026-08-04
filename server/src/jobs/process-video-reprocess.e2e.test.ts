@@ -68,6 +68,7 @@ async function pollForFile(filePath: string, timeoutMs = 60_000): Promise<void> 
 describe("process_video force re-process tolerates byte-identical original.mp3", () => {
   let client: Client;
   let tempDir: string;
+  let bookId: string;
   let assetId: string;
   let assetDir: string;
 
@@ -83,6 +84,7 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
       arguments: { book_id: PROJECT },
     });
     expect(createResult.isError).toBeFalsy();
+    bookId = createEngineForTest(getEngineRoot()).book.get().bookId;
 
     const data = (await readFile(videoPath)).toString("base64");
     const uploaded = await client.callTool({
@@ -115,7 +117,7 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
       videoPath: join(assetDir, "original.mp4"),
       assetId,
       assetDir,
-      bookId: PROJECT,
+      bookId,
       provenance: { origin: "test-reprocess" },
       force: true,
       skipDownstreamJobs: true,
@@ -154,7 +156,7 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
         videoPath: join(created.value.path, "original.mp4"),
         assetId: created.value.artifactId,
         assetDir: created.value.path,
-        bookId: PROJECT,
+        bookId,
         provenance: { origin: "test-audio-only" },
         skipDownstreamJobs: true,
       } as unknown as Parameters<typeof queue.enqueueAndWait>[1],

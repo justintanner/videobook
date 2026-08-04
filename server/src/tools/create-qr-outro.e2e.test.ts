@@ -118,8 +118,11 @@ describe("create_qr_outro e2e", () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-qr-outro-e2e-"));
     client = await createTestClient(tempDir);
     fs = createEngineForTest(tempDir);
-    const project = await fs.projects.create(PROJECT);
-    if (!project.ok) throw new Error(project.error.message);
+    const project = await client.callTool({
+      name: "create_project",
+      arguments: { book_id: PROJECT },
+    });
+    expect(project.isError).toBeFalsy();
 
     qrOne = await createImage(fs, "red-qr", 512, 512, "#ef2020");
     qrTwo = await createImage(fs, "green-qr", 512, 512, "#20d050");
@@ -218,7 +221,9 @@ describe("create_qr_outro e2e", () => {
     expect(metadata.value).toMatchObject({
       origin: "create_qr_outro",
       qr_image_refs: [qrOne, qrTwo],
-      sound_effect_ref: expect.stringMatching(/^aud-/),
+      sound_effect_ref: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+      ),
       sound_effect_source: "asset",
       aspect_ratio: "16:9",
       fps: 30,
@@ -418,10 +423,13 @@ describe("create_qr_outro e2e", () => {
     const jobId = `broken-qr-outro-${Date.now()}`;
     await queue.enqueue(jobId, {
       type: "render_qr_outro",
-      bookId: PROJECT,
+      bookId: fs.book.get().bookId,
       assetId: output.value.artifactId,
       orientation: "landscape",
-      qrImages: [{ assetId: "img-missing", filename: "original.png" }],
+      qrImages: [{
+        assetId: "019fcc00-0000-7000-8000-0000000000ff",
+        filename: "original.png",
+      }],
       soundEffect: null,
       aspectRatio: "16:9",
     });
