@@ -8,6 +8,10 @@ import {
   stripSlugMentions,
 } from "./google-flow-refs.js";
 import { getCanonicalName } from "./generation-registry.js";
+import {
+  LOCAL_ASSET_SLUG_PREFIXES,
+  PREVIEW_PLACEHOLDER_HOST,
+} from "./preview-payload.js";
 
 const PROVIDER_MARKER_PATTERNS = [
   /^@element_[a-z0-9_]+$/iu,
@@ -16,7 +20,10 @@ const PROVIDER_MARKER_PATTERNS = [
   /^@(Image|Video|Audio)\d+$/u,
   /^@image\d+$/u,
 ];
-const LOCAL_ASSET_MENTION_PATTERN = /^@(img|vid|aud|char|nb)-/iu;
+const LOCAL_ASSET_MENTION_PATTERN = new RegExp(
+  `^@(?:${LOCAL_ASSET_SLUG_PREFIXES.join("|")})-`,
+  "iu",
+);
 
 export function isProviderNativeMention(value: string): boolean {
   return PROVIDER_MARKER_PATTERNS.some((pattern) => pattern.test(value));
@@ -108,7 +115,7 @@ function visitProviderPayload(
   placeholders: string[],
 ): void {
   if (typeof value === "string") {
-    if (value.includes("url.resolved.later.for")) placeholders.push(path);
+    if (value.includes(PREVIEW_PLACEHOLDER_HOST)) placeholders.push(path);
     if (key.toLowerCase().includes("prompt") || key === "text") {
       for (const token of unresolvedProviderMentions(value)) {
         leaks.push({ path, token });

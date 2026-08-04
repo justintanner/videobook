@@ -28,7 +28,7 @@ const URL_FIELD_KEYS = new Set([
   "start_image",
   "end_image",
 ]);
-const LOCAL_ASSET_PREFIXES = new Set([
+export const LOCAL_ASSET_SLUG_PREFIXES = [
   "aud",
   "char",
   "img",
@@ -37,7 +37,8 @@ const LOCAL_ASSET_PREFIXES = new Set([
   "scene",
   "script",
   "vid",
-]);
+] as const;
+const LOCAL_ASSET_PREFIXES = new Set<string>(LOCAL_ASSET_SLUG_PREFIXES);
 
 export interface PreviewUrlPlaceholder {
   path: string;

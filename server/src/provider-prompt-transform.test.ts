@@ -46,6 +46,9 @@ describe("provider prompt transforms", () => {
     expect(unresolvedProviderMentions(
       "@a2 @img-local @element_1 @referenceImage_1 @Image1 @image1",
     )).toEqual(["@a2", "@img-local"]);
+    expect(unresolvedProviderMentions(
+      "keep @scene-set-01 with @prompt-intro_v2 and @script-final",
+    )).toEqual(["@scene-set-01", "@prompt-intro_v2", "@script-final"]);
     expect(() => assertNoUnresolvedMentions("use @vid-local", {
       toolName: "example_tool",
     })).toThrow(ProviderMentionError);
