@@ -4,7 +4,6 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  Loader2,
   Send,
   X,
 } from 'lucide-react'
@@ -585,7 +584,7 @@ export function CommandComposer({
             onChange={(event) => onModelChange(event.target.value)}
           >
             {chatModels.map((model) => (
-              <option key={model.id} value={model.id}>{model.label}</option>
+              <option key={model.id} value={model.id}>{model.id}</option>
             ))}
           </select>
           <ChevronDown size={12} aria-hidden="true" />
@@ -596,7 +595,9 @@ export function CommandComposer({
           disabled={disabled || sending || !input.trim()}
           aria-label="Send command"
         >
-          {sending ? <Loader2 size={16} className="spin" /> : <Send size={16} />}
+          {sending
+            ? <span className="command-send-working" aria-hidden="true" />
+            : <Send size={16} />}
         </button>
         {transmitting && <span className="command-transmit-scan" aria-hidden="true" />}
       </form>

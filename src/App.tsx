@@ -149,6 +149,7 @@ import {
   notebookGridFrameSize,
   notebookGridMetrics,
   notebookGridSlot,
+  notebookGridSquareAt,
   notebookGridTag,
   notebookGridViewport,
   resolveNotebookGridGroupMove,
@@ -217,6 +218,11 @@ import {
 } from '@/videobook/notebook-chat-generation'
 import { parseNotebookGenerationCellCommand } from '@/videobook/notebook-generation-command'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
+import {
+  mediaFileAccept,
+  mediaKindForFile,
+  type PassiveMediaKind,
+} from '@/videobook/notebook-media-drop'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
 import {
   asChatModelCatalog,
@@ -276,7 +282,6 @@ type AssetRecord = {
   analysisInfo: NotebookAnalysisInfo | null
 }
 
-type PassiveMediaKind = 'audio' | 'image' | 'video'
 type MediaSearchMode = 'text' | ReverseSearchMode
 
 type MediaSlotOperation = 'attach' | 'clear' | 'upload'
@@ -1454,18 +1459,6 @@ function saveValue(key: string, value: string): void {
   }
 }
 
-const mediaFileExtensions: Record<PassiveMediaKind, ReadonlySet<string>> = {
-  audio: new Set(['aac', 'flac', 'm4a', 'mp3', 'ogg', 'wav', 'weba']),
-  image: new Set(['gif', 'jpeg', 'jpg', 'png', 'svg', 'webp']),
-  video: new Set(['avi', 'mkv', 'mov', 'mp4', 'webm']),
-}
-
-const mediaFileAccept: Record<PassiveMediaKind, string> = {
-  audio: 'audio/*,.aac,.flac,.m4a,.mp3,.ogg,.wav,.weba',
-  image: 'image/*,.gif,.jpeg,.jpg,.png,.svg,.webp',
-  video: 'video/*,.avi,.mkv,.mov,.mp4,.webm',
-}
-
 const emptyLibraryPage: LibrarySearchPage = {
   offset: 0,
   limit: 24,
@@ -1475,20 +1468,6 @@ const emptyLibraryPage: LibrarySearchPage = {
 
 function passiveMediaKind(kind: NotebookCellType): PassiveMediaKind | null {
   return kind === 'audio' || kind === 'image' || kind === 'video' ? kind : null
-}
-
-function mediaKindForFile(
-  file: Pick<File, 'name' | 'type'>,
-): PassiveMediaKind | null {
-  const mimeKind = file.type.split('/', 1)[0]
-  if (mimeKind === 'audio' || mimeKind === 'image' || mimeKind === 'video') {
-    return mimeKind
-  }
-  const extension = file.name.toLowerCase().split('.').pop() ?? ''
-  for (const kind of ['audio', 'image', 'video'] as const) {
-    if (mediaFileExtensions[kind].has(extension)) return kind
-  }
-  return null
 }
 
 function mediaLibraryKinds(kind: PassiveMediaKind): string[] {
@@ -1538,6 +1517,12 @@ async function fileObjectHash(file: File): Promise<string> {
   return [...new Uint8Array(digest)]
     .map((value) => value.toString(16).padStart(2, '0'))
     .join('')
+}
+
+function dataTransferHasFiles(
+  dataTransfer: Pick<DataTransfer, 'types'>,
+): boolean {
+  return dataTransfer.types.includes('Files')
 }
 
 function artifactForCell(
@@ -1834,33 +1819,30 @@ function MediaSlotTile({
     onFile(cellId, selected[0]!)
   }
 
-  const acceptsOsFiles = (event: DragEvent<HTMLElement>) =>
-    event.dataTransfer.types.includes('Files')
-
   return (
     <section
       className={`cell-media-slot nodrag nowheel${dragging ? ' cell-media-slot-dragging' : ''}`}
       aria-label={`Empty ${kind} media slot`}
       onDragEnter={(event) => {
-        if (!acceptsOsFiles(event)) return
+        if (!dataTransferHasFiles(event.dataTransfer)) return
         event.preventDefault()
         event.stopPropagation()
         setDragging(true)
       }}
       onDragLeave={(event) => {
-        if (!acceptsOsFiles(event)) return
+        if (!dataTransferHasFiles(event.dataTransfer)) return
         event.preventDefault()
         event.stopPropagation()
         setDragging(false)
       }}
       onDragOver={(event) => {
-        if (!acceptsOsFiles(event)) return
+        if (!dataTransferHasFiles(event.dataTransfer)) return
         event.preventDefault()
         event.stopPropagation()
         event.dataTransfer.dropEffect = 'copy'
       }}
       onDrop={(event) => {
-        if (!acceptsOsFiles(event)) return
+        if (!dataTransferHasFiles(event.dataTransfer)) return
         event.preventDefault()
         event.stopPropagation()
         setDragging(false)
@@ -2474,6 +2456,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const momentSearchRef = useRef<MomentSearchHandle | null>(null)
   const [fullscreenCellId, setFullscreenCellId] = useState<string | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
+  const [mediaDropActive, setMediaDropActive] = useState(false)
+  const [mediaDropSlot, setMediaDropSlot] = useState<NotebookGridSlot | null>(null)
   const [notebookView, setNotebookView] = useState({ y: 0, zoom: 1 })
   const [notebookSurface, setNotebookSurface] = useState({ width: 0, height: 0 })
   const [inspectorOpen, setInspectorOpen] = useState(false)
@@ -3384,9 +3368,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => notebookEdgesWithCellFocus(edges, selectedCellId),
     [edges, selectedCellId],
   )
+  const notebookOccupiedSlots = useMemo(
+    () => nodes.map((node) => node.data.slot),
+    [nodes],
+  )
   const notebookBaseMetrics = useMemo(
     () => notebookGridMetrics(
-      nodes.map((node) => node.data.slot),
+      notebookOccupiedSlots,
       {
         viewportWidth: notebookSurface.width,
         viewportHeight: notebookSurface.height,
@@ -3394,7 +3382,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       },
     ),
     [
-      nodes,
+      notebookOccupiedSlots,
       notebookSurface.height,
       notebookSurface.width,
       notebookView.zoom,
@@ -3403,7 +3391,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const notebookMetrics = useMemo(
     () => previewSlot
       ? notebookGridMetrics(
-          nodes.map((node) => node.data.slot),
+          notebookOccupiedSlots,
           {
             preview: previewSlot,
             viewportWidth: notebookSurface.width,
@@ -3413,7 +3401,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         )
       : notebookBaseMetrics,
     [
-      nodes,
+      notebookOccupiedSlots,
       notebookBaseMetrics,
       notebookSurface.height,
       notebookSurface.width,
@@ -4314,6 +4302,43 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const resolveMediaFileArtifact = async (
+    file: File,
+    kind: PassiveMediaKind,
+  ): Promise<{ artifactRef: string; reusedExisting: boolean }> => {
+    if (!bookId) throw new Error('Choose a book before uploading media')
+    const objectHash = await fileObjectHash(file)
+    const duplicateValue = record(await call('check_duplicate_bytes', {
+      book_id: bookId,
+      object_hash: objectHash,
+    }))
+    const matches = Array.isArray(duplicateValue?.matches)
+      ? duplicateValue.matches
+      : []
+    const duplicate = matches
+      .map((value) => record(value))
+      .find((value) => {
+        const duplicateKind = value && asString(value.kind)
+        return duplicateKind !== null && isCompatibleLibraryAsset(kind, duplicateKind)
+      })
+    const existingArtifactRef = duplicate && asString(duplicate.slug)
+    if (existingArtifactRef) {
+      return { artifactRef: existingArtifactRef, reusedExisting: true }
+    }
+
+    const response = await fetch(
+      `/api/books/${encodeURIComponent(bookId)}/upload?filename=${encodeURIComponent(file.name)}`,
+      { method: 'POST', body: file },
+    )
+    const payload = record(await response.json())
+    if (!response.ok) {
+      throw new Error(asString(payload?.error) ?? `Upload failed: ${file.name}`)
+    }
+    const artifactRef = asString(payload?.assetId)
+    if (!artifactRef) throw new Error('Upload did not return an asset slug')
+    return { artifactRef, reusedExisting: false }
+  }
+
   const uploadMediaSlotFile = async (cellId: string, file: File) => {
     if (!bookId || !notebook) return
     const cell = notebook.cells.find((candidate) => candidate.id === cellId)
@@ -4334,36 +4359,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
     setMediaSlotOperation(cellId, 'upload')
     try {
-      const objectHash = await fileObjectHash(file)
-      const duplicateValue = record(await call('check_duplicate_bytes', {
-        book_id: bookId,
-        object_hash: objectHash,
-      }))
-      const matches = Array.isArray(duplicateValue?.matches)
-        ? duplicateValue.matches
-        : []
-      const duplicate = matches
-        .map((value) => record(value))
-        .find((value) => {
-          const duplicateKind = value && asString(value.kind)
-          return duplicateKind !== null && isCompatibleLibraryAsset(kind, duplicateKind)
-        })
-      let artifactRef = duplicate && asString(duplicate.slug)
-      const reusedExisting = Boolean(artifactRef)
-
-      if (!artifactRef) {
-        const response = await fetch(
-          `/api/books/${encodeURIComponent(bookId)}/upload?filename=${encodeURIComponent(file.name)}`,
-          { method: 'POST', body: file },
-        )
-        const payload = record(await response.json())
-        if (!response.ok) {
-          throw new Error(asString(payload?.error) ?? `Upload failed: ${file.name}`)
-        }
-        artifactRef = asString(payload?.assetId)
-        if (!artifactRef) throw new Error('Upload did not return an asset slug')
-      }
-
+      const { artifactRef, reusedExisting } = await resolveMediaFileArtifact(file, kind)
       await call('set_notebook_media_slot', {
         book_id: bookId,
         notebook_id: notebook.id,
@@ -4379,6 +4375,77 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const message = error instanceof Error ? error.message : String(error)
       setMediaSlotError(cellId, message)
       setNotice(message, 'error')
+    }
+  }
+
+  const createMediaCellFromFile = async (
+    slot: NotebookGridSlot,
+    file: File,
+  ) => {
+    if (!bookId || !notebook) return
+    if (busy) {
+      setNotice('Wait for the current operation to finish', 'error')
+      return
+    }
+    const kind = mediaKindForFile(file)
+    if (!kind) {
+      setNotice('Drop an image, video, or audio file on an open square', 'error')
+      return
+    }
+    if (notebook.cells.some((cell) =>
+      cell.slot.row === slot.row && cell.slot.column === slot.column)) {
+      setNotice('Choose an empty grid square for the media file', 'error')
+      return
+    }
+
+    const address = notebookGridTag(slot)
+    let createdCellId: string | null = null
+    let attached = false
+    setBusy(true)
+    try {
+      const { artifactRef, reusedExisting } = await resolveMediaFileArtifact(file, kind)
+      const created = record(await call('create_notebook_cell', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        cell: {
+          type: kind,
+          slug: nextNotebookCellSlug(kind, notebook.cells),
+          slot,
+        },
+      }))
+      createdCellId = created && asString(created.id)
+      if (!createdCellId) throw new Error('The server did not return the new media cell')
+      await call('set_notebook_media_slot', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        cell_id: createdCellId,
+        artifact_ref: artifactRef,
+      })
+      attached = true
+      await refreshBookData(bookId, notebook.id)
+      setNotice(reusedExisting
+        ? `Reused @${artifactRef} at ${address}`
+        : `Uploaded and attached @${artifactRef} at ${address}`)
+    } catch (error) {
+      let message = error instanceof Error ? error.message : String(error)
+      if (createdCellId && !attached) {
+        try {
+          await call('delete_notebook_cell', {
+            book_id: bookId,
+            notebook_id: notebook.id,
+            cell_id: createdCellId,
+          })
+        } catch (rollbackError) {
+          const detail = rollbackError instanceof Error
+            ? rollbackError.message
+            : String(rollbackError)
+          message = `${message}. The empty ${address} cell could not be removed: ${detail}`
+        }
+      }
+      await refreshBookData(bookId, notebook.id).catch(() => undefined)
+      setNotice(message, 'error')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -7134,6 +7201,129 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const setHoveredMediaDropSlot = (slot: NotebookGridSlot | null) => {
+    setMediaDropSlot((current) => (
+      current?.row === slot?.row && current?.column === slot?.column
+        ? current
+        : slot
+    ))
+  }
+
+  const openMediaDropSlotAt = (
+    clientX: number,
+    clientY: number,
+  ): NotebookGridSlot | null => {
+    if (busy) return null
+    const point = flowRef.current?.screenToFlowPosition({ x: clientX, y: clientY })
+    if (!point) return null
+    const slot = notebookGridSquareAt(point, notebookMetrics)
+    if (!slot) return null
+    return nodes.some((node) =>
+      node.data.slot.row === slot.row
+      && node.data.slot.column === slot.column)
+      ? null
+      : slot
+  }
+
+  const handleAppFileDragEnter = (event: DragEvent<HTMLElement>) => {
+    if (screen !== 'notebook' || !dataTransferHasFiles(event.dataTransfer)) return
+    setMediaDropActive(true)
+  }
+
+  const handleAppFileDragLeave = (event: DragEvent<HTMLElement>) => {
+    if (screen !== 'notebook' || !dataTransferHasFiles(event.dataTransfer)) return
+    const relatedTarget = event.relatedTarget
+    if (
+      relatedTarget instanceof Element
+      && event.currentTarget.contains(relatedTarget)
+    ) return
+    setMediaDropActive(false)
+    setHoveredMediaDropSlot(null)
+  }
+
+  const handleAppFileDragOver = (event: DragEvent<HTMLElement>) => {
+    if (!dataTransferHasFiles(event.dataTransfer)) return
+    event.preventDefault()
+  }
+
+  const handleAppFileDropCapture = (event: DragEvent<HTMLElement>) => {
+    if (!dataTransferHasFiles(event.dataTransfer)) return
+    setMediaDropActive(false)
+    setHoveredMediaDropSlot(null)
+  }
+
+  const handleAppFileDrop = (event: DragEvent<HTMLElement>) => {
+    if (!dataTransferHasFiles(event.dataTransfer) || event.defaultPrevented) return
+    event.preventDefault()
+    if (screen === 'notebook') {
+      setNotice('Drop one image, video, or audio file on an open grid square', 'error')
+    }
+  }
+
+  const handleNotebookFlowDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (!dataTransferHasFiles(event.dataTransfer)) return
+    const relatedTarget = event.relatedTarget
+    if (
+      relatedTarget instanceof Element
+      && event.currentTarget.contains(relatedTarget)
+    ) return
+    setHoveredMediaDropSlot(null)
+  }
+
+  const handleNotebookFlowDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    if (dataTransferHasFiles(event.dataTransfer)) {
+      setPreviewSlot(null)
+      setMediaDropActive(true)
+      const slot = openMediaDropSlotAt(event.clientX, event.clientY)
+      setHoveredMediaDropSlot(slot)
+      event.dataTransfer.dropEffect = slot ? 'copy' : 'none'
+      return
+    }
+    setHoveredMediaDropSlot(null)
+    const point = flowRef.current?.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    })
+    if (point) {
+      setPreviewSlot(notebookGridDropSlot(point, notebookBaseMetrics))
+    }
+  }
+
+  const handleNotebookFlowDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    if (dataTransferHasFiles(event.dataTransfer)) {
+      event.stopPropagation()
+      setPreviewSlot(null)
+      setMediaDropActive(false)
+      setHoveredMediaDropSlot(null)
+      if (busy) {
+        setNotice('Wait for the current operation to finish', 'error')
+        return
+      }
+      const files = [...event.dataTransfer.files]
+      if (files.length !== 1) {
+        setNotice('Drop one image, video, or audio file per square', 'error')
+        return
+      }
+      const slot = openMediaDropSlotAt(event.clientX, event.clientY)
+      if (!slot) {
+        setNotice('Choose an open grid square for the media file', 'error')
+        return
+      }
+      void createMediaCellFromFile(slot, files[0]!)
+      return
+    }
+    const raw = event.dataTransfer.getData('application/x-videobook-cell')
+    if (!cellPalette.some((item) => item.type === raw)) return
+    const point = flowRef.current?.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    })
+    setPreviewSlot(null)
+    void createCell(raw as NotebookCellType, point)
+  }
+
   const navigate = (next: Screen) => {
     setScreen(next)
     if (next === 'settings') void refreshSettings()
@@ -7321,7 +7511,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   return (
-    <main className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} ${selectedCell ? 'inspector-detail' : 'inspector-overview'} ${fullscreenCell && fullscreenNode?.data.asset ? 'media-fullscreen-open' : ''}`}>
+    <main
+      className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} ${selectedCell ? 'inspector-detail' : 'inspector-overview'} ${fullscreenCell && fullscreenNode?.data.asset ? 'media-fullscreen-open' : ''}`}
+      onDragEnter={handleAppFileDragEnter}
+      onDragLeave={handleAppFileDragLeave}
+      onDragOver={handleAppFileDragOver}
+      onDropCapture={handleAppFileDropCapture}
+      onDrop={handleAppFileDrop}
+    >
       <header className="topbar">
         <div className="topbar-book-controls">
           <div className="brand-project">
@@ -7554,32 +7751,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         if (movedNodes.length > 0) void persistSlots(movedNodes)
                       }}
                       onConnect={(connection) => void connectCells(connection)}
-                      onDrop={(event) => {
-                        event.preventDefault()
-                        if (event.dataTransfer.types.includes('Files')) {
-                          setPreviewSlot(null)
-                          return
-                        }
-                        const raw = event.dataTransfer.getData('application/x-videobook-cell')
-                        if (!cellPalette.some((item) => item.type === raw)) return
-                        const point = flowRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
-                        setPreviewSlot(null)
-                        void createCell(raw as NotebookCellType, point)
-                      }}
-                      onDragOver={(event) => {
-                        event.preventDefault()
-                        if (event.dataTransfer.types.includes('Files')) {
-                          setPreviewSlot(null)
-                          return
-                        }
-                        const point = flowRef.current?.screenToFlowPosition({
-                          x: event.clientX,
-                          y: event.clientY,
-                        })
-                        if (point) {
-                          setPreviewSlot(notebookGridDropSlot(point, notebookBaseMetrics))
-                        }
-                      }}
+                      onDrop={handleNotebookFlowDrop}
+                      onDragLeave={handleNotebookFlowDragLeave}
+                      onDragOver={handleNotebookFlowDragOver}
                       minZoom={notebookGrid.minimumZoom}
                       maxZoom={notebookGrid.maximumZoom}
                       defaultEdgeOptions={notebookDefaultEdgeOptions}
@@ -7601,7 +7775,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     >
                             <NotebookGridBoard
                               metrics={notebookMetrics}
+                              occupiedSlots={notebookOccupiedSlots}
                               previewSlot={previewSlot}
+                              mediaDropActive={mediaDropActive && !busy}
+                              mediaDropSlot={mediaDropSlot}
                             />
                             </ReactFlow>
                           </PrimaryCellContext.Provider>
@@ -8970,14 +9147,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               </div>
             </header>
             <div className="command-plan-details command-plan-details-open">
-              <div className="command-plan-content command-plan-content-single">
-                <div className="command-plan-context">
-                  <p>{pendingChatAction.kind === 'routed'
-                    ? pendingChatAction.plan.confirmation.reason
-                    : pendingChatAction.kind === 'notebook'
+              <div className={`command-plan-content command-plan-content-single${pendingChatAction.kind === 'routed'
+                ? ' command-plan-content-routed'
+                : ''}`}>
+                {pendingChatAction.kind !== 'routed' && (
+                  <div className="command-plan-context">
+                    <p>{pendingChatAction.kind === 'notebook'
                       ? pendingChatAction.plan.reason
                       : pendingChatAction.reason}</p>
-                </div>
+                  </div>
+                )}
                 <ol className="command-plan-stages">
                   <li>
                     <span>{pendingChatAction.kind.toUpperCase()}</span>
@@ -8999,9 +9178,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           {pendingRoutedActionReview?.settings.map((setting) => (
                             <div
                               key={setting.label}
-                              className={setting.tone === 'warning'
-                                ? 'routed-action-setting-warning'
-                                : undefined}
+                              className={setting.wide
+                                ? setting.tone === 'warning'
+                                  ? 'routed-action-setting-warning routed-action-setting-wide'
+                                  : 'routed-action-setting-wide'
+                                : setting.tone === 'warning'
+                                  ? 'routed-action-setting-warning'
+                                  : undefined}
                             >
                               <dt>{setting.label}</dt>
                               <dd>{setting.value}</dd>

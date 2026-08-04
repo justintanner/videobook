@@ -9,6 +9,7 @@ import {
   notebookGridFrameSize,
   notebookGridMetrics,
   notebookGridPosition,
+  notebookGridSquareAt,
   notebookGridSlot,
   notebookGridTag,
   notebookGridViewport,
@@ -190,6 +191,23 @@ describe('notebook grid', () => {
       y: -40,
       zoom: 1.5,
     })
+  })
+
+  it('targets only the visible square surfaces for media drops', () => {
+    const metrics = notebookGridMetrics([])
+    expect(notebookGridSquareAt({
+      x: notebookGrid.originX + notebookGrid.columnPitch + 24,
+      y: notebookGrid.originY + notebookGrid.rowPitch * 2 + 36,
+    }, metrics)).toEqual({ row: 2, column: 1 })
+    expect(notebookGridSquareAt({
+      x: notebookGrid.originX + notebookGrid.squareSize,
+      y: notebookGrid.originY + 24,
+    }, metrics)).toBeNull()
+    expect(notebookGridSquareAt({
+      x: notebookGrid.originX + 24,
+      y: notebookGrid.originY + notebookGrid.rowPitch * metrics.rowCount,
+    }, metrics)).toBeNull()
+    expect(notebookGridSquareAt({ x: 0, y: 0 }, metrics)).toBeNull()
   })
 
   it('clamps invalid and out-of-range zoom values', () => {

@@ -30,6 +30,12 @@ function controlMarkup(html: string, label: string): string {
 }
 
 describe('CommandComposer controls', () => {
+  it('shows the complete selected model identifier', () => {
+    const html = renderComposer(true)
+
+    expect(html).toContain('>gpt-5.6-sol</option>')
+  })
+
   it('keeps model selection available while command execution is busy', () => {
     const html = renderComposer(false)
 

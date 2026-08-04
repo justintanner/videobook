@@ -92,4 +92,20 @@ describe('routedActionReview', () => {
       Value: 'Hidden',
     })
   })
+
+  it('keeps routed URLs complete and marks them for full-width display', () => {
+    const url = 'https://x.com/BardiGangUpdate/status/1297030012345678901?source=videobook&include=complete'
+    const review = routedActionReview({
+      tool: 'download_video',
+      params: { url, export_videos: false, full: false },
+      input: `download ${url}`,
+    })
+
+    expect(review.settings[0]).toEqual({
+      label: 'Url',
+      value: url,
+      tone: 'default',
+      wide: true,
+    })
+  })
 })

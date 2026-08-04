@@ -253,6 +253,33 @@ export function notebookGridDropSlot(
   return notebookGridSlot(position)
 }
 
+export function notebookGridSquareAt(
+  position: XYPosition,
+  metrics: NotebookGridMetrics,
+): NotebookGridSlot | null {
+  const offsetX = position.x - notebookGrid.originX
+  const offsetY = position.y - notebookGrid.originY
+  if (offsetX < 0 || offsetY < 0) return null
+
+  const columnIndex = Math.floor(offsetX / notebookGrid.columnPitch)
+  const row = Math.floor(offsetY / notebookGrid.rowPitch)
+  if (
+    columnIndex < 0
+    || columnIndex >= metrics.columnCount
+    || row < 0
+    || row >= metrics.rowCount
+  ) return null
+
+  const column = metrics.minColumn + columnIndex
+  if (column > metrics.maxColumn) return null
+  if (
+    offsetX - columnIndex * notebookGrid.columnPitch >= notebookGrid.squareSize
+    || offsetY - row * notebookGrid.rowPitch >= notebookGrid.squareSize
+  ) return null
+
+  return { row, column }
+}
+
 export function notebookGridMetrics(
   slots: readonly NotebookGridSlot[],
   options: NotebookGridMetricsOptions = {},

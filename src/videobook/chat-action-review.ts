@@ -6,6 +6,7 @@ export interface RoutedActionSetting {
   label: string
   value: string
   tone: RoutedActionSettingTone
+  wide: boolean
 }
 
 export interface RoutedActionReview {
@@ -55,8 +56,9 @@ function setting(
   label: string,
   value: string,
   tone: RoutedActionSettingTone = 'default',
+  wide = false,
 ): RoutedActionSetting {
-  return { label, value, tone }
+  return { label, value, tone, wide }
 }
 
 function durationValue(start: unknown, end: unknown): string | null {
@@ -183,6 +185,10 @@ function genericValue(
   }
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   if (typeof value === 'number') return String(value)
+  if (
+    typeof value === 'string'
+    && (/url/iu.test(key) || /^https?:\/\//iu.test(value))
+  ) return value
   if (typeof value === 'string') return value.length > 96
     ? `${value.slice(0, 93)}…`
     : value
@@ -200,6 +206,8 @@ function genericReview(input: RoutedActionReviewInput): RoutedActionReview {
       key === 'asset_id'
         ? sourceValue(input.input, input.params)
         : genericValue(key, value, input.params),
+      'default',
+      /url/iu.test(key) && typeof value === 'string',
     ))
   return {
     title: humanize(input.tool),

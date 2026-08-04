@@ -1252,6 +1252,10 @@ textarea:focus-visible {
   border: 1px solid rgba(107, 207, 153, 0.11);
   border-radius: 3px;
   background: rgba(24, 73, 46, 0.025);
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .notebook-grid-square-label {
@@ -1264,6 +1268,42 @@ textarea:focus-visible {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: lowercase;
+}
+
+.notebook-grid-square-dropzone {
+  border-color: rgba(114, 231, 170, 0.48);
+  border-style: dashed;
+  background: rgba(55, 142, 91, 0.1);
+  box-shadow: inset 0 0 26px rgba(72, 178, 111, 0.06);
+}
+
+.notebook-grid-square-dropzone::after {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(163, 232, 191, 0.72);
+  content: 'DROP IMG · VID · AUD';
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.notebook-grid-square-drop-target {
+  z-index: 2;
+  border-color: var(--green);
+  border-style: solid;
+  background: rgba(55, 142, 91, 0.28);
+  box-shadow:
+    inset 0 0 0 1px rgba(114, 231, 170, 0.2),
+    inset 0 0 34px rgba(72, 178, 111, 0.14),
+    0 0 24px rgba(72, 178, 111, 0.14);
+}
+
+.notebook-grid-square-drop-target::after {
+  color: #c9f5db;
+  content: 'RELEASE TO ADD';
 }
 
 .notebook-grid-preview {
@@ -4914,6 +4954,10 @@ textarea:focus-visible {
   grid-template-columns: minmax(220px, 0.72fr) minmax(260px, 1.28fr);
 }
 
+.command-plan-content-routed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .command-plan-details-open {
   padding-top: 9px;
 }
@@ -5399,6 +5443,17 @@ textarea:focus-visible {
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.routed-action-setting-wide {
+  grid-column: 1 / -1;
+}
+
+.routed-action-setting-wide dd {
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .routed-action-setting-warning dd {
@@ -5903,10 +5958,10 @@ textarea:focus-visible {
 
 .command-model-selector {
   display: grid;
-  grid-template-columns: auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 5px;
-  min-width: 82px;
+  min-width: 126px;
   height: 32px;
   padding: 0 7px;
   border: 1px solid rgba(99, 199, 216, 0.24);
@@ -5926,7 +5981,8 @@ textarea:focus-visible {
 }
 
 .command-model-selector select {
-  max-width: 78px;
+  width: 100%;
+  max-width: 96px;
   padding: 0;
   border: 0;
   outline: 0;
@@ -5981,6 +6037,15 @@ textarea:focus-visible {
 .command-send:disabled {
   cursor: not-allowed;
   opacity: 0.35;
+}
+
+.command-send-working {
+  width: 13px;
+  height: 13px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(114, 231, 170, 0.24);
+  animation: command-working-pulse 900ms ease-in-out infinite;
 }
 
 .command-transmit-scan {
@@ -6209,6 +6274,15 @@ textarea:focus-visible {
   }
   to {
     transform: translateX(485%);
+  }
+}
+
+@keyframes command-working-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
@@ -6531,7 +6605,7 @@ textarea:focus-visible {
 
   .command-model-selector {
     grid-template-columns: auto auto;
-    min-width: 58px;
+    min-width: 96px;
     padding: 0 5px;
   }
 
@@ -6541,7 +6615,7 @@ textarea:focus-visible {
   }
 
   .command-model-selector select {
-    max-width: 48px;
+    max-width: 78px;
   }
 }
 
@@ -7023,6 +7097,7 @@ textarea:focus-visible {
   .command-line-shell,
   .mcp-activity,
   .mcp-activity-signal i,
+  .command-send-working,
   .command-transmit-scan::after {
     animation: none !important;
   }

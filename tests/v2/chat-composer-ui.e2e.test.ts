@@ -139,6 +139,10 @@ describe('chat composer browser flow', () => {
   let reviewGenerationCellId = ''
   const observedCalls: ToolCall[] = []
   let delayedBootstrap = false
+  let mockedChatActionPlan: {
+    prompt: string
+    value: Record<string, unknown>
+  } | null = null
 
   beforeAll(async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-chat-ui-e2e-'))
@@ -259,8 +263,44 @@ describe('chat composer browser flow', () => {
     browser = await chromium.launch({ headless: true })
     page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
     await page.route('**/mcp', async (route) => {
-      const calls = toolCalls(await requestBody(route))
+      const body = await requestBody(route)
+      const calls = toolCalls(body)
       observedCalls.push(...calls)
+      const mockedCall = mockedChatActionPlan && calls.find((call) =>
+        call.name === 'chat'
+        && call.arguments.prompt === mockedChatActionPlan?.prompt)
+      if (mockedCall && mockedChatActionPlan) {
+        const envelopes = Array.isArray(body) ? body : [body]
+        const response = envelopes.flatMap((entry) => {
+          const envelope = record(entry)
+          const params = record(envelope?.params)
+          const args = record(params?.arguments)
+          if (
+            envelope?.method !== 'tools/call'
+            || params?.name !== 'chat'
+            || args?.prompt !== mockedChatActionPlan?.prompt
+            || (typeof envelope.id !== 'number' && typeof envelope.id !== 'string')
+          ) return []
+          return [{
+            jsonrpc: '2.0',
+            id: envelope.id,
+            result: {
+              resultType: 'complete',
+              content: [{
+                type: 'text',
+                text: JSON.stringify(mockedChatActionPlan.value),
+              }],
+              isError: false,
+            },
+          }]
+        })
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(Array.isArray(body) ? response : response[0]),
+        })
+        return
+      }
       if (!delayedBootstrap && calls.some((call) => call.name === 'list_books')) {
         delayedBootstrap = true
         await wait(700)
@@ -333,6 +373,70 @@ describe('chat composer browser flow', () => {
     expect(detailInspectorBox.width).toBeLessThanOrEqual(440)
     expect(Math.abs(scrollBox.x + scrollBox.width - detailInspectorBox.x))
       .toBeLessThanOrEqual(1)
+  }, 60_000)
+
+  it('turns every open notebook square into a media file dropzone', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+    const dataTransfer = await page.evaluateHandle(() => {
+      const transfer = new DataTransfer()
+      transfer.items.add(new File([
+        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#48b26f"/></svg>',
+      ], 'grid-drop.svg', { type: 'image/svg+xml' }))
+      return transfer
+    })
+    const squares = page.locator('.notebook-grid-square')
+    const cells = page.locator('.cell-node')
+    const targetSquare = squares.filter({ hasText: /^@a2$/ })
+
+    try {
+      await page.dispatchEvent('.app-shell', 'dragenter', { dataTransfer })
+      await expect.poll(async () =>
+        await page.locator('.notebook-grid-square-dropzone').count(),
+      ).toBe(await squares.count() - await cells.count())
+      expect(await squares.filter({ hasText: /^@a1$/ }).getAttribute('class'))
+        .not.toContain('notebook-grid-square-dropzone')
+
+      const targetBox = await targetSquare.boundingBox()
+      if (!targetBox) throw new Error('Could not measure the open drop square')
+      const dropPoint = {
+        x: targetBox.x + targetBox.width / 2,
+        y: targetBox.y + targetBox.height / 2,
+      }
+      await page.dispatchEvent('.notebook-flow', 'dragover', {
+        dataTransfer,
+        clientX: dropPoint.x,
+        clientY: dropPoint.y,
+      })
+      await expect.poll(async () => await targetSquare.getAttribute('class'))
+        .toContain('notebook-grid-square-drop-target')
+
+      observedCalls.length = 0
+      await page.dispatchEvent('.notebook-flow', 'drop', {
+        dataTransfer,
+        clientX: dropPoint.x,
+        clientY: dropPoint.y,
+      })
+      const droppedCell = page.locator('.cell-node.cell-kind-image').filter({
+        hasText: '@a2',
+      })
+      await droppedCell.waitFor({ state: 'visible', timeout: 30_000 })
+      expect(await page.locator('.notebook-grid-square-dropzone').count()).toBe(0)
+      expect(observedCalls.some((call) =>
+        call.name === 'create_notebook_cell'
+        && call.arguments.cell !== null
+        && typeof call.arguments.cell === 'object'
+        && (call.arguments.cell as Record<string, unknown>).type === 'image'))
+        .toBe(true)
+      expect(observedCalls.some((call) => call.name === 'set_notebook_media_slot'))
+        .toBe(true)
+    } finally {
+      await dataTransfer.dispose()
+    }
   }, 60_000)
 
   it('keeps cell identity and prompt actions in compact inspector headers', async () => {
@@ -422,6 +526,64 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
+  it('uses the full routed review width for complete URL details', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    const prompt = 'download the annotated routed review fixture'
+    const url = 'https://x.com/BardiGangUpdate/status/1297030012345678901?source=videobook&include=complete'
+    mockedChatActionPlan = {
+      prompt,
+      value: {
+        kind: 'chat-action-plan',
+        planId: '01900000-0000-7000-8000-000000000101',
+        bookId: '01900000-0000-7000-8000-000000000102',
+        prompt,
+        routedTool: 'download_video',
+        tool: 'download_video',
+        params: {
+          url,
+          export_videos: false,
+          full: false,
+        },
+        message: 'Downloading video.',
+        summary: 'Downloading video.',
+        effect: 'mutation',
+        confirmation: {
+          required: true,
+          reason: 'This request changes the current book',
+        },
+      },
+    }
+    try {
+      await page.goto(appUrl, { waitUntil: 'commit' })
+      const input = page.getByLabel('Videobook command input')
+      await input.waitFor({ state: 'visible', timeout: 30_000 })
+      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await input.fill(prompt)
+      await page.getByLabel('Send command').click()
+
+      const review = page.getByLabel('Chat action review')
+      await review.waitFor({ state: 'visible', timeout: 30_000 })
+      expect(await review.getByText('This request changes the current book').count()).toBe(0)
+      const content = review.locator('.command-plan-content-routed')
+      expect(await content.count()).toBe(1)
+      const urlSetting = review.locator('.routed-action-setting-wide')
+      expect(await urlSetting.locator('dd').textContent()).toBe(url)
+      expect(await urlSetting.evaluate((element) =>
+        window.getComputedStyle(element).gridColumnEnd)).toBe('-1')
+      expect(await urlSetting.locator('dd').evaluate((element) => ({
+        overflowWrap: window.getComputedStyle(element).overflowWrap,
+        textOverflow: window.getComputedStyle(element).textOverflow,
+        whiteSpace: window.getComputedStyle(element).whiteSpace,
+      }))).toEqual({
+        overflowWrap: 'anywhere',
+        textOverflow: 'clip',
+        whiteSpace: 'normal',
+      })
+    } finally {
+      mockedChatActionPlan = null
+    }
+  }, 60_000)
+
   it('shows MCP motion and sends the selected model through the real UI', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await page.goto(appUrl, { waitUntil: 'commit' })
@@ -455,7 +617,10 @@ describe('chat composer browser flow', () => {
     expect(await runningCell.locator('.cell-state-shimmer > span').count()).toBe(0)
     expect(await runningCell.locator('.cell-target-connection-count').textContent()).toBe('2')
     const selector = page.getByLabel('Chat model')
-    expect(await selector.locator('option').allTextContents()).toEqual(['Sol', 'Terra'])
+    expect(await selector.locator('option').allTextContents()).toEqual([
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+    ])
     await selector.selectOption('gpt-5.6-terra')
     expect(await page.evaluate(() => window.localStorage.getItem('videobook.chat-model')))
       .toBe('gpt-5.6-terra')
@@ -471,6 +636,14 @@ describe('chat composer browser flow', () => {
     expect(await shell.getAttribute('aria-busy')).toBe('true')
     expect(await shell.evaluate((element) => window.getComputedStyle(element).animationName))
       .toContain('command-transmit-pulse')
+    const workingIndicator = page.locator('.command-send-working')
+    await workingIndicator.waitFor({ state: 'visible' })
+    await wait(220)
+    const workingBox = await workingIndicator.boundingBox()
+    expect(await workingIndicator.evaluate((element) =>
+      window.getComputedStyle(element).animationName)).toBe('command-working-pulse')
+    await wait(240)
+    expect(await workingIndicator.boundingBox()).toEqual(workingBox)
     const screenshotPath = process.env.VIDEOBOOK_E2E_SCREENSHOT
     if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: true })
 
