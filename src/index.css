@@ -1218,6 +1218,23 @@ textarea:focus-visible {
     #030907;
 }
 
+.notebook-flow .react-flow__pane.selection {
+  cursor: crosshair;
+}
+
+.notebook-flow .react-flow__selection {
+  border: 1px dashed rgba(114, 231, 170, 0.88);
+  border-radius: 3px;
+  background: rgba(79, 183, 125, 0.12);
+  box-shadow: inset 0 0 26px rgba(79, 183, 125, 0.08);
+}
+
+.notebook-flow .react-flow__nodesselection-rect {
+  border: 1px solid rgba(114, 231, 170, 0.54);
+  background: rgba(79, 183, 125, 0.025);
+  pointer-events: none;
+}
+
 .notebook-grid-board {
   position: absolute;
   top: 0;

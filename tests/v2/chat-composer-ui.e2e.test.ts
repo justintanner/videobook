@@ -537,7 +537,7 @@ describe('chat composer browser flow', () => {
     expect(runCall?.arguments.cell_id).toBe(reviewGenerationCellId)
   }, 60_000)
 
-  it('selects multiple cells and confirms before deleting the set', async () => {
+  it('marquee-selects multiple cells and confirms before deleting the set', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await page.goto(appUrl, { waitUntil: 'commit' })
     const input = page.getByLabel('Videobook command input')
@@ -548,15 +548,68 @@ describe('chat composer browser flow', () => {
     const secondCell = page.locator('.cell-node.cell-kind-generate_video')
     await firstCell.waitFor({ state: 'visible' })
     await secondCell.waitFor({ state: 'visible' })
-    await firstCell.click()
-    await secondCell.click({ modifiers: ['Shift'] })
+    const pane = page.locator('.notebook-flow .react-flow__pane')
+    const firstCellBox = await firstCell.boundingBox()
+    const secondCellBox = await secondCell.boundingBox()
+    const paneBox = await pane.boundingBox()
+    if (!firstCellBox || !secondCellBox || !paneBox) {
+      throw new Error('Could not measure notebook selection targets')
+    }
+    const selectionStart = {
+      x: Math.min(
+        paneBox.x + paneBox.width - 2,
+        Math.max(
+          firstCellBox.x + firstCellBox.width,
+          secondCellBox.x + secondCellBox.width,
+        ) + 8,
+      ),
+      y: Math.max(paneBox.y + 2, Math.min(firstCellBox.y, secondCellBox.y) - 8),
+    }
+    const selectionEnd = {
+      x: Math.max(paneBox.x + 2, Math.min(firstCellBox.x, secondCellBox.x) - 8),
+      y: Math.min(
+        paneBox.y + paneBox.height - 2,
+        Math.max(
+          firstCellBox.y + firstCellBox.height,
+          secondCellBox.y + secondCellBox.height,
+        ) + 8,
+      ),
+    }
+    const selectionStartTarget = await page.evaluate(({ x, y }) => {
+      const element = document.elementFromPoint(x, y)
+      return {
+        className: element?.getAttribute('class') ?? '',
+        tagName: element?.tagName ?? '',
+      }
+    }, selectionStart)
+    expect(selectionStartTarget.className).toContain('react-flow__pane')
+    await page.mouse.move(selectionStart.x, selectionStart.y)
+    await page.mouse.down()
+    const marquee = page.locator('.notebook-flow .react-flow__selection')
+    try {
+      await page.mouse.move(selectionEnd.x, selectionEnd.y, { steps: 8 })
+      await marquee.waitFor({ state: 'visible' })
+      expect(await marquee.evaluate((element) => {
+        const style = window.getComputedStyle(element)
+        return {
+          backgroundColor: style.backgroundColor,
+          borderStyle: style.borderStyle,
+        }
+      })).toEqual({
+        backgroundColor: 'rgba(79, 183, 125, 0.12)',
+        borderStyle: 'dashed',
+      })
+    } finally {
+      await page.mouse.up()
+    }
+    await marquee.waitFor({ state: 'hidden' })
 
     const actions = page.getByLabel('Notebook selection actions')
     await actions.waitFor({ state: 'visible' })
     await expect.poll(async () => await actions.textContent()).toContain('2 selected')
-    expect(await actions.textContent()).toContain('@b1 active')
-    expect(await firstCell.getAttribute('data-selection')).toBe('selected')
-    expect(await secondCell.getAttribute('data-selection')).toBe('primary')
+    expect(await actions.textContent()).toContain('@a1 active')
+    expect(await firstCell.getAttribute('data-selection')).toBe('primary')
+    expect(await secondCell.getAttribute('data-selection')).toBe('selected')
 
     await secondCell.click({ modifiers: ['Shift'] })
     await expect.poll(async () => await actions.textContent()).toContain('1 selected')

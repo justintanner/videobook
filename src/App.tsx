@@ -17,6 +17,7 @@ import {
   Handle,
   Position,
   ReactFlow,
+  SelectionMode,
   applyEdgeChanges,
   applyNodeChanges,
   type Connection,
@@ -2399,6 +2400,8 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
 const nodeTypes = { cell: CellNode }
 const edgeTypes = { busRiver: BusRiverEdge }
 const flowProOptions = { hideAttribution: true }
+const notebookDefaultEdgeOptions = { selectable: false }
+const notebookMultiSelectionKeys = ['Shift', 'Control', 'Meta']
 const notebookZoomActivationKeys = ['Control', 'Meta']
 const notebookPanOnDragButtons: number[] = []
 
@@ -7432,7 +7435,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       <div
                         className="canvas-selection-actions"
                         aria-label="Notebook selection actions"
-                        title="Shift, Command, or Control-click to select more cells"
+                        title="Drag across the canvas or Shift, Command, or Control-click to select more cells"
                       >
                         <span>
                           <strong>{selectedNotebookCells.length}</strong> selected
@@ -7487,6 +7490,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         flowRef.current = instance
                       }}
                       onNodesChange={(changes) => {
+                        const selectionChanges = changes.filter((change) =>
+                          change.type === 'select')
+                        if (selectionChanges.length > 0) {
+                          const nextSelection = new Set(selectedCellIdsRef.current)
+                          for (const change of selectionChanges) {
+                            if (change.selected) nextSelection.add(change.id)
+                            else nextSelection.delete(change.id)
+                          }
+                          updateSelectedCellIds(nextSelection)
+                          setSelectedCellId((current) =>
+                            current && nextSelection.has(current)
+                              ? current
+                              : [...nextSelection].at(-1) ?? null)
+                        }
                         setNodes((current) => {
                           let next = applyNodeChanges(changes, current)
                           for (const change of changes) {
@@ -7509,18 +7526,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         const removed = changes.filter((change) => change.type === 'remove').map((change) => change.id)
                         if (removed.length > 0) void removeEdges(removed)
                       }}
-                      onNodeClick={(event, node) => {
-                        if (event.metaKey || event.ctrlKey || event.shiftKey) {
-                          const nextSelection = new Set(selectedCellIdsRef.current)
-                          if (nextSelection.has(node.id)) nextSelection.delete(node.id)
-                          else nextSelection.add(node.id)
-                          updateSelectedCellIds(nextSelection)
-                          setSelectedCellId(nextSelection.has(node.id)
-                            ? node.id
-                            : [...nextSelection].at(-1) ?? null)
-                        } else {
-                          selectCanvasCell(node.id)
-                        }
+                      onNodeClick={(_event, node) => {
+                        const currentSelection = selectedCellIdsRef.current
+                        setSelectedCellId(currentSelection.has(node.id)
+                          ? node.id
+                          : [...currentSelection].at(-1) ?? null)
                         setSourceViewCellId(null)
                         setInspectorOpen(true)
                       }}
@@ -7572,9 +7582,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       }}
                       minZoom={notebookGrid.minimumZoom}
                       maxZoom={notebookGrid.maximumZoom}
-                      elementsSelectable={false}
+                      defaultEdgeOptions={notebookDefaultEdgeOptions}
+                      elementsSelectable
+                      multiSelectionKeyCode={notebookMultiSelectionKeys}
                       panOnDrag={notebookPanOnDragButtons}
                       panOnScroll={false}
+                      selectionKeyCode={null}
+                      selectionMode={SelectionMode.Partial}
+                      selectionOnDrag
+                      selectNodesOnDrag={false}
                       zoomOnScroll={false}
                       zoomOnPinch
                       zoomActivationKeyCode={notebookZoomActivationKeys}
