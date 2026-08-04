@@ -79,6 +79,12 @@ describe('notebook frame commands', () => {
       sourceReference: 'z13',
     })
     expect(parseNotebookFrameCommand(
+      'extracte the first frame of @a2',
+    )).toEqual({
+      frameMode: 'first',
+      sourceReference: 'a2',
+    })
+    expect(parseNotebookFrameCommand(
       'generate an image inspired by @vid-01',
     )).toBeNull()
   })

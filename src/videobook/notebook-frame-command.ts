@@ -84,7 +84,7 @@ export function parseNotebookFrameCommand(
   input: string,
 ): NotebookFrameCommand | null {
   const match = input.trim().match(
-    /^(?:please\s+)?(?:extract|capture|grab|get)\s+(?:the\s+)?(first|last)\s+frame\s+(?:of|from)\s+@([a-z](?:1[0-3]|[1-9])|[a-z0-9]+(?:-[a-z0-9]+)+)(?:\s+please)?[.!]?$/iu,
+    /^(?:please\s+)?(?:extracte?|capture|grab|get)\s+(?:the\s+)?(first|last)\s+frame\s+(?:of|from)\s+@([a-z](?:1[0-3]|[1-9])|[a-z0-9]+(?:-[a-z0-9]+)+)(?:\s+please)?[.!]?$/iu,
   )
   if (!match) return null
   return {
