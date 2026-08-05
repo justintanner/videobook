@@ -865,7 +865,7 @@ textarea:focus-visible {
 .canvas-toolbar {
   position: absolute;
   top: var(--notebook-toolbar-gap);
-  left: var(--notebook-edge-inset);
+  left: var(--notebook-chrome-inset);
   z-index: 20;
   display: flex;
   height: var(--notebook-toolbar-height);
@@ -1074,6 +1074,9 @@ textarea:focus-visible {
      land cell-to-boundary on the 40px inter-cell rhythm at 100 percent zoom.
      Edge inset 10 + reserved scrollbar gutter 10 + originX 20 = 40. */
   --notebook-edge-inset: 10px;
+  /* floating canvas chrome (toolbar, inspector reopen) sits on the same
+     24px line as the topbar content and the composer, not the scroll margin */
+  --notebook-chrome-inset: 24px;
   /* 18px composer offset + 56px command shell + 10px gap; the 10px
      horizontal scrollbar inside the viewport completes the rhythm
      (originY 20 + bar 10 + gap 10 = 40) */
@@ -1201,7 +1204,7 @@ textarea:focus-visible {
 .inspector-reopen {
   position: absolute;
   top: var(--notebook-toolbar-gap);
-  right: var(--notebook-edge-inset);
+  right: var(--notebook-chrome-inset);
   z-index: 20;
   display: grid;
   width: 32px;
