@@ -180,7 +180,7 @@ describe('notebook draft conversion', () => {
     }
 
     expect(notebookNodes(labeled)[0]).toMatchObject({
-      position: { x: 608, y: 2568 },
+      position: { x: 608, y: 2540 },
       data: { slot: { row: 9, column: 2 } },
     })
     expect(notebookNodes(labeled)[0]?.draggable).toBeUndefined()
@@ -283,6 +283,54 @@ describe('notebook draft conversion', () => {
       notebookNodes(fanIn).find((node) => node.id === target.id)
         ?.data.targetConnectionCount,
     ).toBe(2)
+  })
+
+  it('counts fan-in per target input rather than per cell', () => {
+    const secondSource = {
+      ...source.cells[0]!,
+      id: '018f7cf5-0d31-7d96-8c0f-800000000008',
+      slot: { row: 0, column: 1 },
+    }
+    const target = {
+      ...source.cells[0]!,
+      id: '018f7cf5-0d31-7d96-8c0f-800000000005',
+      type: 'generate_image' as const,
+      slot: { row: 2, column: 0 },
+    }
+    const distinctInputs: NotebookDocument = {
+      ...source,
+      cells: [source.cells[0]!, secondSource, target],
+      edges: [
+        {
+          id: '018f7cf5-0d31-7d96-8c0f-800000000009',
+          source: source.cells[0]!.id,
+          target: target.id,
+          targetInput: 'reference-video',
+        },
+        {
+          id: '018f7cf5-0d31-7d96-8c0f-800000000010',
+          source: secondSource.id,
+          target: target.id,
+          targetInput: 'reference-audio',
+        },
+      ],
+    }
+    const sharedInput: NotebookDocument = {
+      ...distinctInputs,
+      edges: distinctInputs.edges.map((edge) => ({
+        ...edge,
+        targetInput: 'reference-video',
+      })),
+    }
+
+    expect(
+      notebookNodes(distinctInputs).find((node) => node.id === target.id)
+        ?.data.targetInputConnectionCounts,
+    ).toEqual({ 'reference-video': 1, 'reference-audio': 1 })
+    expect(
+      notebookNodes(sharedInput).find((node) => node.id === target.id)
+        ?.data.targetInputConnectionCounts,
+    ).toEqual({ 'reference-video': 2 })
   })
 
   it('uses the bright emerald focus color for route markers', () => {

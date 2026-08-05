@@ -13,7 +13,6 @@ export type InitialWorkspacePayload = {
   jobValue: unknown
   ingestStatusValue: unknown
   actionValue: unknown
-  audioValue: unknown
 }
 
 type ToolResponse = {
@@ -99,12 +98,6 @@ async function loadInitialWorkspaceFromClient(
   const notebook = notebooks.find((entry) => entry.id === remembered)
     ?? notebooks[0]
   const notebookId = typeof notebook?.id === 'string' ? notebook.id : ''
-  const audioValue = notebookId
-    ? await callTool(client, 'get_notebook_audio_spine', {
-        book_id: bookId,
-        notebook_id: notebookId,
-      })
-    : null
   return {
     bookValue,
     commandValue,
@@ -117,7 +110,6 @@ async function loadInitialWorkspaceFromClient(
     jobValue,
     ingestStatusValue,
     actionValue,
-    audioValue,
   }
 }
 

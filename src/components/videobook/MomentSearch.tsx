@@ -35,7 +35,6 @@ export interface MomentSearchAsset {
 interface MomentSearchProps {
   bookId: string
   notebookId?: string
-  canAttachToTranscript: boolean
   activeSequenceRange: { startFrame: number; durationFrames: number } | null
   assets: MomentSearchAsset[]
   disabled: boolean
@@ -98,7 +97,6 @@ export const MomentSearch = forwardRef<MomentSearchHandle, MomentSearchProps>(
 function MomentSearch({
   bookId,
   notebookId,
-  canAttachToTranscript,
   activeSequenceRange,
   assets,
   disabled,
@@ -390,32 +388,6 @@ function MomentSearch({
       } else {
         onNotice(`Added ${(hit.artifactLabel ?? hit.artifactId)} to the primary sequence`)
       }
-    } catch (error) {
-      onNotice(error instanceof Error ? error.message : String(error))
-    } finally {
-      setWorking(false)
-    }
-  }
-
-  const attachToTranscript = async (hit: PresentedSearchHit) => {
-    if (hit.owningBookId && hit.owningBookId !== bookId) {
-      onNotice(`Switch to ${hit.owningBookName ?? 'the owning book'} before editing`)
-      return
-    }
-    if (!notebookId || !lastQuery) {
-      onNotice('Select a timed transcript range before attaching a visual')
-      return
-    }
-    setWorking(true)
-    try {
-      await call('attach_search_moment_to_notebook_selection', {
-        book_id: bookId,
-        notebook_id: notebookId,
-        query: lastQuery,
-        hit,
-      })
-      await onNotebookChanged()
-      onNotice(`Covered the selected transcript range with ${(hit.artifactLabel ?? hit.artifactId)}`)
     } catch (error) {
       onNotice(error instanceof Error ? error.message : String(error))
     } finally {
@@ -954,22 +926,6 @@ function MomentSearch({
                     onClick={() => void sendToSequence(presentedHit)}
                   >
                     <Send size={13} />Insert
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      working
-                      || !notebookId
-                      || !canAttachToTranscript
-                      || hit.artifactKind === 'audio'
-                      || (
-                        hit.owningBookId !== undefined
-                        && hit.owningBookId !== bookId
-                      )
-                    }
-                    onClick={() => void attachToTranscript(presentedHit)}
-                  >
-                    Cover selection
                   </button>
                   <button
                     type="button"

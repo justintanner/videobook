@@ -390,57 +390,6 @@ describe('semantic search MCP tools', () => {
         source: expect.objectContaining({ artifactId: artifact.value.artifactId }),
       }),
     ])
-    const selectedNotebook = engine.notebooks.read(notebook.value.id)
-    expect(selectedNotebook.ok).toBe(true)
-    if (!selectedNotebook.ok) return
-    expect((await engine.notebooks.write({
-      ...selectedNotebook.value,
-      currentSelection: {
-        transcriptId: '01900000-0000-7000-8000-000000000001',
-        sequence: {
-          range: {
-            sequenceId: engine.sequences.getPrimary().sequenceId,
-            startFrame: 30,
-            durationFrames: 45,
-          },
-        },
-      },
-    })).ok).toBe(true)
-    const attached = resultJson(
-      await tools.get('attach_search_moment_to_notebook_selection')!.handler({
-        book_id: engine.book.get().bookId,
-        notebook_id: notebook.value.id,
-        query: { text: 'red van' },
-        hit: search.hits[0],
-      }),
-    ) as {
-      attachment: {
-        artifactId: string
-        objectHash: string
-        timelineStartFrame: number
-        durationFrames: number
-        clipId: string
-      }
-      commit: { sequence: { clips: Array<{ clipId: string; trackId: string }> } }
-    }
-    expect(attached.attachment).toMatchObject({
-      artifactId: artifact.value.artifactId,
-      objectHash,
-      timelineStartFrame: 30,
-      durationFrames: 45,
-    })
-    const attachedNotebook = engine.notebooks.read(notebook.value.id)
-    expect(attachedNotebook.ok).toBe(true)
-    if (!attachedNotebook.ok) return
-    expect(attachedNotebook.value.transcriptAttachments).toEqual([
-      expect.objectContaining({
-        artifactId: artifact.value.artifactId,
-        objectHash,
-        clipId: attached.attachment.clipId,
-        timelineStartFrame: 30,
-        durationFrames: 45,
-      }),
-    ])
     const targets = resultJson(
       await tools.get('list_sequence_replace_targets')!.handler({
         book_id: engine.book.get().bookId,
@@ -448,7 +397,7 @@ describe('semantic search MCP tools', () => {
     ) as {
       targets: Array<{ clipId: string; timelineStartFrame: number }>
     }
-    expect(targets.targets).toHaveLength(2)
+    expect(targets.targets).toHaveLength(1)
     const replaceTarget = targets.targets.find((target) =>
       target.timelineStartFrame === 0)
     expect(replaceTarget).toBeTruthy()

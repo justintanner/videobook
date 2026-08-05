@@ -157,7 +157,7 @@ describe('notebook grid', () => {
       maxColumn: 12,
       centerX: 1848,
       width: 3696,
-      height: 3136,
+      height: 3080,
     })
     expect(notebookGridMetrics([], {
       viewportWidth: 2048,
@@ -170,7 +170,7 @@ describe('notebook grid', () => {
       maxColumn: 12,
       centerX: 1848,
       width: 3696,
-      height: 2016,
+      height: 1960,
     })
     expect(notebookGridMetrics([]).rowCount).toBe(3)
     expect(notebookGridMetrics([{ row: 25, column: 12 }]).rowCount).toBe(26)
@@ -184,7 +184,7 @@ describe('notebook grid', () => {
       .toEqual({ row: 25, column: 12 })
     expect(notebookGridFrameSize(notebookGridMetrics([]), 1.5)).toEqual({
       width: 5544,
-      height: 1344,
+      height: 1260,
     })
     expect(notebookGridViewport(metrics, 1.5, -40)).toEqual({
       x: 0,

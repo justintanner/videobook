@@ -346,46 +346,6 @@ type IngestStatus = {
   phases: Record<string, string>
 }
 
-type AudioTranscriptWord = {
-  wordId: string
-  startTick: number
-  durationTicks: number
-  text: string
-  confidence?: number
-  corrected: boolean
-}
-
-type AudioTranscriptSegment = {
-  segmentId: string
-  text: string
-  speaker?: string
-  kind: string
-  range: {
-    timeBase: { numerator: number; denominator: number }
-  }
-  words: AudioTranscriptWord[]
-}
-
-type AudioNotebookState = {
-  spine: {
-    artifactId: string
-    label: string | null
-    kind: string
-  } | null
-  waveform: number[] | null
-  transcript: {
-    transcriptId: string
-    language: string
-    segments: AudioTranscriptSegment[]
-  } | null
-}
-
-type TranscriptEditRecord = {
-  actionId: string
-  kind: string
-  restored: boolean
-}
-
 type PendingCommandPlan = {
   plan: CommandPlan
   previews: Record<string, EditPreview>
@@ -491,7 +451,6 @@ type InitialWorkspace = {
   notebook: NotebookDocument | null
   assets: AssetRecord[]
   ingestStatuses: IngestStatus[]
-  audioNotebook: AudioNotebookState
   sequence: Sequence | null
   jobs: JobRecord[]
   commands: ServerCommand[]
@@ -862,20 +821,6 @@ function asNotebook(value: unknown): NotebookSnapshot | null {
     ...(asString(item.analysisRevision ?? item.analysis_revision)
       ? { analysisRevision: asString(item.analysisRevision ?? item.analysis_revision)! }
       : {}),
-    ...(record(item.audioSpine ?? item.audio_spine)
-      ? {
-          audioSpine: record(
-            item.audioSpine ?? item.audio_spine,
-          )! as unknown as NotebookDocument['audioSpine'],
-        }
-      : {}),
-    ...(record(item.currentSelection ?? item.current_selection)
-      ? {
-          currentSelection: record(
-            item.currentSelection ?? item.current_selection,
-          )! as NotebookDocument['currentSelection'],
-        }
-      : {}),
     ...(record(item.fixture)
       ? { fixture: record(item.fixture)! as NotebookDocument['fixture'] }
       : {}),
@@ -894,22 +839,6 @@ function asNotebook(value: unknown): NotebookSnapshot | null {
           notebookRunPlans: (
             item.notebookRunPlans ?? item.notebook_run_plans
           ) as NonNullable<NotebookDocument['notebookRunPlans']>,
-        }
-      : {}),
-    ...(Array.isArray(item.transcriptEdits ?? item.transcript_edits)
-      ? {
-          transcriptEdits: (
-            item.transcriptEdits ?? item.transcript_edits
-          ) as NonNullable<NotebookDocument['transcriptEdits']>,
-        }
-      : {}),
-    ...(Array.isArray(
-      item.transcriptAttachments ?? item.transcript_attachments,
-    )
-      ? {
-          transcriptAttachments: (
-            item.transcriptAttachments ?? item.transcript_attachments
-          ) as NonNullable<NotebookDocument['transcriptAttachments']>,
         }
       : {}),
     cells,
@@ -1102,87 +1031,6 @@ function asIngestStatuses(value: unknown): IngestStatus[] {
       ),
     }]
   })
-}
-
-function asAudioNotebook(value: unknown): AudioNotebookState {
-  const item = record(value)
-  const spineValue = record(item?.spine)
-  const artifactId = asString(spineValue?.artifact_id ?? spineValue?.artifactId)
-  const label = asString(spineValue?.label)
-  const kind = asString(spineValue?.kind)
-  const waveformValue = record(item?.waveform)
-  const waveform = Array.isArray(waveformValue?.peaks)
-    ? waveformValue.peaks.flatMap((peak) =>
-      typeof peak === 'number' && Number.isFinite(peak) ? [peak] : [])
-    : null
-  const transcriptValue = record(item?.transcript)
-  const transcriptId = asString(transcriptValue?.transcriptId)
-  const language = asString(transcriptValue?.language)
-  const segments = Array.isArray(transcriptValue?.segments)
-    ? transcriptValue.segments.flatMap((entry) => {
-      const segment = record(entry)
-      const segmentId = asString(segment?.segmentId)
-      const text = asString(segment?.text)
-      const kindValue = asString(segment?.kind)
-      const speaker = asString(segment?.speaker)
-      const range = record(segment?.range)
-      const timeBase = record(range?.timeBase)
-      const numerator = asNumber(timeBase?.numerator)
-      const denominator = asNumber(timeBase?.denominator)
-      if (!segmentId || text === null || !kindValue || numerator === null || denominator === null) {
-        return []
-      }
-      const words = Array.isArray(segment?.words)
-        ? segment.words.flatMap((wordValue) => {
-          const word = record(wordValue)
-          const wordId = asString(word?.wordId)
-          const wordText = asString(word?.text)
-          const startTick = asNumber(word?.startTick)
-          const durationTicks = asNumber(word?.durationTicks)
-          const confidence = asNumber(word?.confidence)
-          return wordId && wordText !== null && startTick !== null && durationTicks !== null
-            ? [{
-              wordId,
-              text: wordText,
-              startTick,
-              durationTicks,
-              ...(confidence !== null ? { confidence } : {}),
-              corrected: word?.corrected === true,
-            }]
-            : []
-        })
-        : []
-      return [{
-        segmentId,
-        text,
-        kind: kindValue,
-        ...(speaker ? { speaker } : {}),
-        range: { timeBase: { numerator, denominator } },
-        words,
-      }]
-    })
-    : []
-  return {
-    spine: artifactId && kind ? { artifactId, label, kind } : null,
-    waveform,
-    transcript: transcriptId && language
-      ? { transcriptId, language, segments }
-      : null,
-  }
-}
-
-function latestTranscriptEdit(notebook: NotebookDocument | null): TranscriptEditRecord | null {
-  const edits = notebook?.transcriptEdits
-  if (!Array.isArray(edits)) return null
-  for (let index = edits.length - 1; index >= 0; index -= 1) {
-    const edit = record(edits[index])
-    const actionId = asString(edit?.actionId)
-    const kind = asString(edit?.kind)
-    if (actionId && kind && edit?.restored !== true) {
-      return { actionId, kind, restored: false }
-    }
-  }
-  return null
 }
 
 function asSequence(value: unknown): Sequence | null {
@@ -1507,7 +1355,6 @@ function asInitialWorkspace(
     notebook: notebooks.find((entry) => entry.id === payload.notebookId) ?? null,
     assets: asAssets(payload.assetValue),
     ingestStatuses: asIngestStatuses(payload.ingestStatusValue),
-    audioNotebook: asAudioNotebook(payload.audioValue),
     sequence: asSequence(payload.sequenceValue),
     jobs: asJobs(payload.jobValue),
     commands: asCommands(payload.commandValue),
@@ -2199,6 +2046,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const thumbnailUrl = data.asset?.thumbnailUrl
   const targetInputs = data.targetInputs?.length ? data.targetInputs : ['input']
   const targetConnectionCount = data.targetConnectionCount ?? 0
+  const targetInputConnectionCounts = data.targetInputConnectionCounts ?? {}
   const slotKind = passiveMediaKind(data.kind)
   const emptyMediaSlot = slotKind !== null && isEmptyPassiveMediaSlot(
     data.kind,
@@ -2276,15 +2124,21 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           style={{ left: `${((index + 1) / (targetInputs.length + 1)) * 100}%` }}
         />
       ))}
-      {targetConnectionCount > 1 && (
-        <span
-          className="cell-target-connection-count"
-          aria-label={`${targetConnectionCount} connections`}
-          data-connection-count={targetConnectionCount}
-        >
-          {targetConnectionCount}
-        </span>
-      )}
+      {targetInputs.map((input, index) => {
+        const inputConnectionCount = targetInputConnectionCounts[input] ?? 0
+        if (inputConnectionCount < 2) return null
+        return (
+          <span
+            key={`${input}-count`}
+            className="cell-target-connection-count"
+            aria-label={`${inputConnectionCount} connections into ${input}`}
+            data-connection-count={inputConnectionCount}
+            style={{ left: `${((index + 1) / (targetInputs.length + 1)) * 100}%` }}
+          >
+            {inputConnectionCount}
+          </span>
+        )
+      })}
       {cellSourceRoutePorts.map((port) => (
         <Handle
           key={port.id}
@@ -2428,9 +2282,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [ingestStatuses, setIngestStatuses] = useState<IngestStatus[]>(
     () => initialWorkspace?.ingestStatuses ?? [],
   )
-  const [audioNotebook, setAudioNotebook] = useState<AudioNotebookState>(
-    () => initialWorkspace?.audioNotebook ?? asAudioNotebook(null),
-  )
   const [sequence, setSequence] = useState<Sequence | null>(
     () => initialWorkspace?.sequence ?? null,
   )
@@ -2499,14 +2350,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [timelineZoom, setTimelineZoom] = useState(1)
   const [exportOrientation, setExportOrientation] = useState<'landscape' | 'portrait' | 'square'>('landscape')
   const [exportCaptions, setExportCaptions] = useState<'burn-in' | 'sidecar' | 'omit'>('burn-in')
-  const [audioSpineAssetId, setAudioSpineAssetId] = useState(
-    () => initialWorkspace?.audioNotebook.spine?.artifactId ?? '',
-  )
   const [importUrl, setImportUrl] = useState('')
-  const [selectedTranscriptWordId, setSelectedTranscriptWordId] = useState('')
-  const [transcriptCorrection, setTranscriptCorrection] = useState('')
-  const [selectionStartWordId, setSelectionStartWordId] = useState('')
-  const [moveDestinationWordId, setMoveDestinationWordId] = useState('')
   const [pendingCommandPlan, setPendingCommandPlan] = useState<PendingCommandPlan | null>(null)
   const [pendingChatAction, setPendingChatAction] = useState<PendingChatAction | null>(null)
   const [lastEditActionId, setLastEditActionId] = useState('')
@@ -2532,7 +2376,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recorderStreamRef = useRef<MediaStream | null>(null)
   const recorderChunksRef = useRef<Blob[]>([])
-  const audioSpinePlayerRef = useRef<HTMLAudioElement | null>(null)
   const mediaLibraryRequestRef = useRef(0)
   const mediaLibraryOpenerRef = useRef<HTMLElement | null>(null)
   const activeWatchesRef = useRef(new Map<string, string>())
@@ -2663,45 +2506,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         : []),
     [assets],
   )
-  const audioSpineAsset = audioNotebook.spine
-    ? assetById.get(audioNotebook.spine.artifactId)
-    : undefined
-  const restorableTranscriptEdit = useMemo(
-    () => latestTranscriptEdit(notebook),
-    [notebook],
-  )
   const generationPlans = useMemo(
     () => asGenerationPlans(notebook?.generationPlans),
     [notebook],
   )
-  const canAttachToTranscript = useMemo(() => {
-    const selection = record(notebook?.currentSelection)
-    return record(selection?.sequence)?.range !== undefined
-  }, [notebook])
   const activeSequenceRange = useMemo(() => {
-    const selection = record(notebook?.currentSelection)
-    const sequenceSelection = record(selection?.sequence)
-    const range = record(sequenceSelection?.range)
-    const startFrame = asNumber(range?.startFrame)
-    const durationFrames = asNumber(range?.durationFrames)
-    return startFrame !== null && durationFrames !== null
+    const startFrame = Number(timelineSelectionStart)
+    const durationFrames = Number(timelineSelectionDuration)
+    return Number.isSafeInteger(startFrame)
+      && startFrame >= 0
+      && Number.isSafeInteger(durationFrames)
+      && durationFrames > 0
       ? { startFrame, durationFrames }
       : null
-  }, [notebook])
-  const playheadTranscriptWordIds = useMemo(() => {
-    const cue = sequence?.captions.find((candidate) =>
-      timelinePlayheadFrame >= candidate.timelineStartFrame
-      && timelinePlayheadFrame
-        < candidate.timelineStartFrame + candidate.durationFrames)
-    const selection = cue?.transcriptSelection
-    if (!selection || !audioNotebook.transcript) return new Set<string>()
-    const wordIds = audioNotebook.transcript.segments.flatMap((segment) =>
-      segment.words.map((word) => word.wordId))
-    const start = wordIds.indexOf(selection.startWordId)
-    const end = wordIds.indexOf(selection.endWordId)
-    if (start < 0 || end < start) return new Set<string>()
-    return new Set(wordIds.slice(start, end + 1))
-  }, [audioNotebook.transcript, sequence, timelinePlayheadFrame])
+  }, [timelineSelectionDuration, timelineSelectionStart])
   const selectedSequenceClip = useMemo(() => {
     if (selectedSequenceClipId) {
       return sequence?.clips.find((clip) =>
@@ -3762,22 +3580,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [bookId, call, notebook])
 
   const refreshNotebook = useCallback(async (targetBookId: string, notebookId: string) => {
-    const [value, audioValue] = await Promise.all([
-      call('get_notebook', {
-        book_id: targetBookId,
-        notebook_id: notebookId,
-      }),
-      call('get_notebook_audio_spine', {
-        book_id: targetBookId,
-        notebook_id: notebookId,
-      }),
-    ])
+    const value = await call('get_notebook', {
+      book_id: targetBookId,
+      notebook_id: notebookId,
+    })
     const next = asNotebook(value)
     if (!next) throw new Error('The server returned an invalid notebook')
     applyNotebook(next, assets, jobs)
-    const nextAudio = asAudioNotebook(audioValue)
-    setAudioNotebook(nextAudio)
-    setAudioSpineAssetId(nextAudio.spine?.artifactId ?? '')
     return next
   }, [applyNotebook, assets, call, jobs])
 
@@ -3820,19 +3629,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setJobSnapshotAt(Date.now())
     if (!nextNotebook) {
       setNotebook(null)
-      setAudioNotebook(asAudioNotebook(null))
-      setAudioSpineAssetId('')
       setNodes([])
       setEdges([])
       return
     }
-    const audioValue = await call('get_notebook_audio_spine', {
-      book_id: targetBookId,
-      notebook_id: nextNotebook.id,
-    })
-    const nextAudio = asAudioNotebook(audioValue)
-    setAudioNotebook(nextAudio)
-    setAudioSpineAssetId(nextAudio.spine?.artifactId ?? '')
     saveValue(`videobook.active-notebook:${targetBookId}`, nextNotebook.id)
     applyNotebook(nextNotebook, nextAssets, nextJobs)
   }, [applyNotebook, call])
@@ -4997,244 +4797,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const setAudioSpine = async () => {
-    if (!bookId || !notebook || !audioSpineAssetId) return
-    setBusy(true)
-    try {
-      await call('set_notebook_audio_spine', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        artifact_id: audioSpineAssetId,
-      })
-      await refreshBookData(bookId, notebook.id)
-      setSelectedTranscriptWordId('')
-      setTranscriptCorrection('')
-      setSelectionStartWordId('')
-      setMoveDestinationWordId('')
-      setNotice('Audio notebook spine set')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const seekTranscriptWord = (
-    word: AudioTranscriptWord,
-    segment: AudioTranscriptSegment,
-  ) => {
-    const player = audioSpinePlayerRef.current
-    if (!player) return
-    player.currentTime = word.startTick
-      * segment.range.timeBase.numerator
-      / segment.range.timeBase.denominator
-    void player.play()
-  }
-
-  const correctTranscriptWord = async () => {
-    if (
-      !bookId
-      || !notebook
-      || !audioNotebook.transcript
-      || !selectedTranscriptWordId
-      || !transcriptCorrection.trim()
-    ) return
-    setBusy(true)
-    try {
-      await call('correct_notebook_transcript_word', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        transcript_id: audioNotebook.transcript.transcriptId,
-        word_id: selectedTranscriptWordId,
-        text: transcriptCorrection.trim(),
-      })
-      await refreshNotebook(bookId, notebook.id)
-      setSelectedTranscriptWordId('')
-      setTranscriptCorrection('')
-      setSelectionStartWordId('')
-      setMoveDestinationWordId('')
-      setNotice('Transcript correction saved without changing source timing')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const selectTranscriptRange = async () => {
-    if (
-      !bookId
-      || !notebook
-      || !audioNotebook.transcript
-      || !selectionStartWordId
-      || !selectedTranscriptWordId
-    ) return
-    setBusy(true)
-    try {
-      await call('select_notebook_transcript_words', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        transcript_id: audioNotebook.transcript.transcriptId,
-        start_word_id: selectionStartWordId,
-        end_word_id: selectedTranscriptWordId,
-      })
-      await refreshNotebook(bookId, notebook.id)
-      setSelectionStartWordId('')
-      setNotice('Exact transcript range pinned to selects')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const removeTranscriptRange = async () => {
-    if (
-      !bookId
-      || !notebook
-      || !audioNotebook.transcript
-      || !selectionStartWordId
-      || !selectedTranscriptWordId
-    ) return
-    setBusy(true)
-    try {
-      const args = {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        transcript_id: audioNotebook.transcript.transcriptId,
-        start_word_id: selectionStartWordId,
-        end_word_id: selectedTranscriptWordId,
-      }
-      const pending = record(await call('remove_notebook_transcript_words', args))
-      const preview = record(pending?.preview)
-      const diff = record(preview?.diff)
-      const commandId = asString(pending?.commandId)
-      const baseRevision = asString(pending?.baseRevision)
-      const previewHash = asString(preview?.previewHash)
-      if (!commandId || !baseRevision || !previewHash) {
-        throw new Error('The server returned an invalid transcript edit preview')
-      }
-      const beforeFrames = asNumber(diff?.beforeDurationFrames) ?? 0
-      const afterFrames = asNumber(diff?.afterDurationFrames) ?? 0
-      const confirmed = window.confirm(
-        `Remove the selected words from the sequence?\n\n`
-        + `Duration: ${beforeFrames} → ${afterFrames} frames.\n`
-        + 'Source media and transcript timing remain unchanged.',
-      )
-      if (!confirmed) {
-        setNotice('Transcript removal cancelled')
-        return
-      }
-      await call('remove_notebook_transcript_words', {
-        ...args,
-        command_id: commandId,
-        base_revision: baseRevision,
-        preview_hash: previewHash,
-      })
-      await refreshNotebook(bookId, notebook.id)
-      setSelectionStartWordId('')
-      setSelectedTranscriptWordId('')
-      setTranscriptCorrection('')
-      setNotice('Transcript range removed from the sequence; source media is unchanged')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const restoreTranscriptEdit = async () => {
-    if (!bookId || !notebook || !restorableTranscriptEdit) return
-    setBusy(true)
-    try {
-      const pending = record(await call('restore_notebook_transcript_edit', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        action_id: restorableTranscriptEdit.actionId,
-      }))
-      const targetRevision = asString(pending?.targetRevision)
-      const confirmed = window.confirm(
-        `Restore the sequence state before the last ${restorableTranscriptEdit.kind} edit?\n\n`
-        + `This creates a new forward revision${targetRevision ? ` from ${targetRevision.slice(0, 10)}` : ''}.`,
-      )
-      if (!confirmed) {
-        setNotice('Transcript restore cancelled')
-        return
-      }
-      await call('restore_notebook_transcript_edit', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        action_id: restorableTranscriptEdit.actionId,
-        confirm: true,
-      })
-      await refreshNotebook(bookId, notebook.id)
-      setNotice('Transcript sequence edit restored as a new revision')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const moveTranscriptRange = async () => {
-    if (
-      !bookId
-      || !notebook
-      || !audioNotebook.transcript
-      || !selectionStartWordId
-      || !selectedTranscriptWordId
-      || !moveDestinationWordId
-    ) return
-    setBusy(true)
-    try {
-      const args = {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        transcript_id: audioNotebook.transcript.transcriptId,
-        start_word_id: selectionStartWordId,
-        end_word_id: selectedTranscriptWordId,
-        before_word_id: moveDestinationWordId,
-      }
-      const pending = record(await call('move_notebook_transcript_words', args))
-      const preview = record(pending?.preview)
-      const commandId = asString(pending?.commandId)
-      const baseRevision = asString(pending?.baseRevision)
-      const previewHash = asString(preview?.previewHash)
-      if (!commandId || !baseRevision || !previewHash) {
-        throw new Error('The server returned an invalid transcript reorder preview')
-      }
-      const confirmed = window.confirm(
-        'Move the marked transcript range before the destination word?\n\n'
-        + 'The sequence and captions will be reordered. Source media remains unchanged.',
-      )
-      if (!confirmed) {
-        setNotice('Transcript move cancelled')
-        return
-      }
-      await call('move_notebook_transcript_words', {
-        ...args,
-        command_id: commandId,
-        base_revision: baseRevision,
-        preview_hash: previewHash,
-      })
-      await refreshNotebook(bookId, notebook.id)
-      setSelectionStartWordId('')
-      setMoveDestinationWordId('')
-      setSelectedTranscriptWordId('')
-      setTranscriptCorrection('')
-      setNotice('Transcript range moved on the sequence and caption track')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const selectTimelineRange = async (
+  const selectTimelineRange = (
     startOverride?: number,
     durationOverride?: number,
   ) => {
-    if (!bookId || !notebook) return
     const startFrame = startOverride ?? Number(timelineSelectionStart)
     const durationFrames = durationOverride ?? Number(timelineSelectionDuration)
     if (
@@ -5249,24 +4815,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       )
       return
     }
-    setBusy(true)
-    try {
-      await call('select_notebook_timeline_range', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        start_frame: startFrame,
-        duration_frames: durationFrames,
-      })
-      await refreshNotebook(bookId, notebook.id)
-      setSequence(asSequence(await call('get_primary_sequence', {
-        book_id: bookId,
-      })))
-      setNotice('Timeline range synchronized to the notebook transcript')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
-    } finally {
-      setBusy(false)
-    }
+    setTimelineSelectionStart(String(startFrame))
+    setTimelineSelectionDuration(String(durationFrames))
+    setNotice(
+      `Selected ${durationFrames} frames from frame ${startFrame}`,
+    )
   }
 
   const refreshSettings = async () => {
@@ -5608,7 +5161,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (beats.length === 0) {
       return {
         ok: false,
-        message: 'Generate transcript captions first so narration beats have exact timing.',
+        message: 'Add captions first so narration beats have exact timing.',
       }
     }
     try {
@@ -5641,32 +5194,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const prepareNotebookCleanup = async (
-    sourceSurface: 'ui' | 'slash' | 'chat',
-  ): Promise<ComposerOutcome> => {
-    if (!bookId || !notebook) {
-      return { ok: false, message: 'Open an audio notebook first.' }
-    }
-    try {
-      const value = await call('plan_notebook_cleanup', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        source_surface: sourceSurface,
-        actor: 'videobook-user',
-      })
-      const result = record(value)
-      if (result?.kind === 'no-cleanup-suggestions') {
-        return { ok: true, message: 'No filler, long silence, or weak sections found.' }
-      }
-      return await previewCommandPlan(asCommandPlan(value))
-    } catch (error) {
-      return {
-        ok: false,
-        message: error instanceof Error ? error.message : String(error),
-      }
-    }
-  }
-
   const prepareSoundEffects = async (
     sourceSurface: 'ui' | 'slash' | 'chat',
   ): Promise<ComposerOutcome> => {
@@ -5682,7 +5209,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (moments.length === 0) {
       return {
         ok: false,
-        message: 'Generate transcript captions first so sound suggestions have exact timing.',
+        message: 'Add captions first so sound suggestions have exact timing.',
       }
     }
     try {
@@ -5763,7 +5290,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const start = Number(timelineSelectionStart)
       const duration = Math.max(1, frame - start)
       setTimelineSelectionDuration(String(duration))
-      void selectTimelineRange(start, duration)
+      selectTimelineRange(start, duration)
       return
     }
     if (action === 'search') {
@@ -6801,9 +6328,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       )
       if (commandToken === '/rough-cut') {
         return await prepareRoughCut('slash')
-      }
-      if (commandToken === '/cleanup') {
-        return await prepareNotebookCleanup('slash')
       }
       if (commandToken === '/sound-effects') {
         return await prepareSoundEffects('slash')
@@ -7851,189 +7375,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   </div>
                 </header>
                 {!selectedCell ? (
-                  <div className="inspector-body audio-notebook-inspector">
-                    <span className="section-label">AUDIO NOTEBOOK</span>
-                    <h2 className="inspector-spine-title">
-                      {audioNotebook.spine
-                        ? audioNotebook.spine.label
-                          ?? audioNotebook.spine.artifactId
-                        : 'Choose an audio spine'}
-                    </h2>
-                    <label>
-                      Audio or video source
-                      <select
-                        value={audioSpineAssetId}
-                        onChange={(event) => setAudioSpineAssetId(event.target.value)}
-                      >
-                        <option value="">Select source</option>
-                        {sourceAssets
-                          .filter((asset) => asset.type === 'audio' || asset.type === 'video')
-                          .map((asset) => (
-                            <option key={asset.artifactId} value={asset.artifactId}>
-                              {asset.id} · {asset.type}
-                            </option>
-                          ))}
-                      </select>
-                    </label>
-                    <button
-                      type="button"
-                      disabled={busy || !audioSpineAssetId}
-                      onClick={() => void setAudioSpine()}
-                    >
-                      <AudioWaveform size={14} />Set notebook spine
-                    </button>
-                    {audioSpineAsset?.mediaUrl && (
-                      <audio
-                        ref={audioSpinePlayerRef}
-                        className="audio-spine-player"
-                        src={audioSpineAsset.mediaUrl}
-                        controls
-                        preload="metadata"
-                      />
-                    )}
-                    {audioNotebook.waveform && audioNotebook.waveform.length > 0 && (
-                      <div className="audio-spine-waveform" aria-label="Audio waveform">
-                        {audioNotebook.waveform
-                          .filter((_peak, index) =>
-                            index % Math.max(1, Math.ceil(audioNotebook.waveform!.length / 72)) === 0)
-                          .map((peak, index) => (
-                            <i
-                              key={index}
-                              style={{ height: `${Math.max(4, Math.min(100, Math.abs(peak) * 100))}%` }}
-                            />
-                          ))}
-                      </div>
-                    )}
-                    <div className="audio-transcript">
-                      <div className="workspace-section-heading">
-                        <span className="section-label">
-                          {audioNotebook.transcript
-                            ? `${audioNotebook.transcript.language} · TIMED TRANSCRIPT`
-                            : 'TRANSCRIPT'}
-                        </span>
-                        <h3>
-                          {audioNotebook.transcript
-                            ? `${audioNotebook.transcript.segments.length} segments`
-                            : 'Processing or not yet transcribed'}
-                        </h3>
-                      </div>
-                      {selectedTranscriptWordId && (
-                        <div className="transcript-correction">
-                          <label>
-                            Correct selected word
-                            <input
-                              value={transcriptCorrection}
-                              onChange={(event) => setTranscriptCorrection(event.target.value)}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            disabled={busy || !transcriptCorrection.trim()}
-                            onClick={() => void correctTranscriptWord()}
-                          >
-                            Save text only
-                          </button>
-                          <div className="transcript-selection-actions">
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => {
-                                setSelectionStartWordId(selectedTranscriptWordId)
-                                setNotice('Transcript selection start marked')
-                              }}
-                            >
-                              {selectionStartWordId === selectedTranscriptWordId
-                                ? 'Range starts here'
-                                : 'Mark range start'}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => {
-                                setMoveDestinationWordId(selectedTranscriptWordId)
-                                setNotice('Transcript move destination marked')
-                              }}
-                            >
-                              {moveDestinationWordId === selectedTranscriptWordId
-                                ? 'Move destination'
-                                : 'Mark move destination'}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={busy || !selectionStartWordId}
-                              onClick={() => void selectTranscriptRange()}
-                            >
-                              Pin exact range
-                            </button>
-                            <button
-                              type="button"
-                              className="danger-button"
-                              disabled={busy || !selectionStartWordId}
-                              onClick={() => void removeTranscriptRange()}
-                            >
-                              Remove from sequence
-                            </button>
-                            <button
-                              type="button"
-                              disabled={
-                                busy
-                                || !selectionStartWordId
-                                || !moveDestinationWordId
-                              }
-                              onClick={() => void moveTranscriptRange()}
-                            >
-                              Move range before destination
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      {restorableTranscriptEdit && (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void restoreTranscriptEdit()}
-                        >
-                          <Undo2 size={14} />Restore last transcript edit
-                        </button>
-                      )}
-                      {audioNotebook.transcript?.segments.map((segment) => (
-                        <section className={`transcript-segment transcript-${segment.kind}`} key={segment.segmentId}>
-                          <span>{segment.speaker ?? segment.kind}</span>
-                          <p>
-                            {segment.words.length > 0
-                              ? segment.words.map((word) => (
-                                <button
-                                  key={word.wordId}
-                                  type="button"
-                                  className={[
-                                    word.wordId === selectedTranscriptWordId ? 'selected' : '',
-                                    playheadTranscriptWordIds.has(word.wordId) ? 'playhead' : '',
-                                    word.confidence !== undefined && word.confidence < 0.7 ? 'uncertain' : '',
-                                    word.corrected ? 'corrected' : '',
-                                  ].filter(Boolean).join(' ')}
-                                  title="Click to play and select"
-                                  onClick={() => {
-                                    seekTranscriptWord(word, segment)
-                                    setSelectedTranscriptWordId(word.wordId)
-                                    setTranscriptCorrection(word.text)
-                                  }}
-                                  onDoubleClick={() => {
-                                    setSelectedTranscriptWordId(word.wordId)
-                                    setTranscriptCorrection(word.text)
-                                  }}
-                                >
-                                  {word.text}
-                                </button>
-                              ))
-                              : segment.text}
-                          </p>
-                        </section>
-                      ))}
-                    </div>
+                  <div className="inspector-body">
                     <div className="empty-inspector compact">
                       <CircleDot size={18} />
                       <strong>Select a notebook cell</strong>
-                      <p>Cell editing appears here. Audio words remain bound to exact source ticks.</p>
+                      <p>Cell editing appears here.</p>
                     </div>
                   </div>
                 ) : selectedNotebookCell ? (
@@ -8118,7 +7464,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 ref={momentSearchRef}
                 bookId={bookId}
                 notebookId={notebook?.id}
-                canAttachToTranscript={canAttachToTranscript}
                 activeSequenceRange={activeSequenceRange}
                 assets={sourceAssets}
                 disabled={busy || mcp.state !== 'ready'}
@@ -8219,7 +7564,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               )}
               <form className="project-create entity-create" onSubmit={(event) => {
                 event.preventDefault()
-                void selectTimelineRange()
+                selectTimelineRange()
               }}>
                 <label>
                   Selection start frame
@@ -8241,8 +7586,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     onChange={(event) => setTimelineSelectionDuration(event.target.value)}
                   />
                 </label>
-                <button type="submit" disabled={busy || !notebook || !sequence}>
-                  Sync to transcript
+                <button type="submit" disabled={busy || !sequence}>
+                  Set selection
                 </button>
               </form>
               <form className="timeline-track-controls" onSubmit={(event) => {
@@ -8563,41 +7908,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   </button>
                   <button
                     type="button"
-                    disabled={busy || !notebook || !audioNotebook.transcript}
-                    onClick={() => {
-                      if (!notebook) return
-                      void call('plan_notebook_captions', {
-                        book_id: bookId,
-                        notebook_id: notebook.id,
-                        source_surface: 'ui',
-                        actor: 'videobook-user',
-                        style_id: captionStyle,
-                      }).then((value) =>
-                        previewCommandPlan(asCommandPlan(value)))
-                        .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                        .catch((error: unknown) => setNotice(
-                          error instanceof Error ? error.message : String(error),
-                          'error',
-                        ))
-                    }}
-                  >
-                    Generate from transcript
-                  </button>
-                  <button
-                    type="button"
                     disabled={busy || !sequence || sequence.captions.length === 0}
                     onClick={() => void prepareRoughCut('ui')
                       .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))}
                   >
                     Suggest rough cut
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy || !audioNotebook.transcript}
-                    onClick={() => void prepareNotebookCleanup('ui')
-                      .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))}
-                  >
-                    Suggest cleanup
                   </button>
                   <button
                     type="button"

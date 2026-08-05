@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (303)
+## MCP endpoints (292)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -15,7 +15,6 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `asset_manifest` — List all files in an asset directory
 - `assign_slot` — Assign an artifact to a typed timeline slot
 - `attach_library_asset` — Copy a foreign Library asset into a book and attach it to a media slot
-- `attach_search_moment_to_notebook_selection` — Attach a visual search moment over the notebook's selected transcript range
 - `audio_boost` — Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.
 - `audio_mix` — Mix audio from a video or audio layer asset into a video or audio target asset in-place. The layer starts at 0 seconds at the requested 0-100 volume. The target duration is preserved, and video targets retain their original video stream with git versioning.
 - `build_generation_provider_payload` (historical names, not exposed: `translate_payload`) — Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.
@@ -33,7 +32,6 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `continue_notebook_generation` — Create a reviewable insertion plan for a completed generation or report a stale destination
 - `continue_queued_insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current
 - `copy_file_to_clipboard` — Copy an asset's original media file to the macOS pasteboard as a file reference
-- `correct_notebook_transcript_word` — Correct transcript text without changing the word's source timing
 - `create_book` — Create a book with a Main notebook
 - `create_character` — Create a new character artifact, optionally seeded from existing image artifacts
 - `create_character_entity` — Create a reusable character
@@ -165,7 +163,6 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `get_google_flow_character` — Retrieve normalized details for a single Google Flow character by ref.
 - `get_history_action` — Read one authored semantic revision
 - `get_notebook` — Read a notebook graph
-- `get_notebook_audio_spine` — Read the notebook audio spine, waveform, and current typed transcript
 - `get_notebook_cell_details` — Return selected-cell details including raw Dolt row, edges, and action validation
 - `get_primary_sequence` — Read the canonical primary sequence
 - `get_prompt_entity` — Read a reusable prompt
@@ -204,14 +201,11 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `mark_asset_seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.
 - `migrate_legacy_book` — Copy a confirmed schema-v4 book to v5 and archive the untouched source
 - `move_notebook_cells` — Persist notebook cell grid slots
-- `move_notebook_transcript_words` — Preview and commit reordering timed transcript words on the audio spine
 - `move_timeline_audio` — Move an audio overlay to a frame offset
 - `pad_video` — Append black video frames at the end to make a whole-second video tail. Retains original audio and makes the appended tail silent.
 - `pin_search_moment` — Pin a revision-stable search moment into a notebook media selection cell
 - `plan_chat_command` — Parse a natural-language sequence edit into a typed CommandPlan without executing tools
 - `plan_generation_insert` — Plan a paid queued generation with provider, model, cost, and a revision-pinned insertion
-- `plan_notebook_captions` — Create a reviewable caption replacement plan from the notebook audio transcript
-- `plan_notebook_cleanup` — Suggest non-destructive filler, long-silence, and weak-section removals as a selectable CommandPlan
 - `plan_notebook_generation` — Plan a notebook prompt, image, or video generation with provider, model, cost, and revision-pinned execution
 - `plan_notebook_rough_cut` — Map narration beats to non-repeating indexed visuals as a reviewable CommandPlan
 - `plan_notebook_run` — Plan every missing or stale notebook cell with aggregate provider cost and media disclosure
@@ -234,7 +228,6 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `recover_asset` — Recover a single asset stuck in the failed/error state by clearing its persisted generation error. Non-destructive: the asset and its media files are kept intact — only the error record is removed, returning the card to its normal ready state. Use this instead of clean_failed_assets when the asset must be preserved.
 - `register_search_manifest` — Register an immutable semantic-index model manifest
 - `release_search_reference` — Release a temporary reverse-search reference
-- `remove_notebook_transcript_words` — Preview and commit a source-immutable ripple removal of timed transcript words
 - `remove_sequence_track` — Remove an empty canonical track while preserving required track kinds
 - `remove_sound` — Remove a described sound (e.g. a horse neigh) from a video or audio asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.
 - `remove_timeline_audio` — Remove an audio overlay by its UUIDv7 id
@@ -252,7 +245,6 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `restore_archive_clips` — Restore selected archived video/audio clips into the current videocity project as new assets.
 - `restore_asset_version` — Restore an asset from an immutable revision as a new revision
 - `restore_edit_action` — Create a forward revision restoring a prior edit action or revision
-- `restore_notebook_transcript_edit` — Restore the sequence revision preceding a confirmed transcript edit
 - `retry_generation` — Retry a failed generation by replaying its original request payload. Reads the persisted generation-request metadata for the asset, clears its error record, and re-enqueues the same job. Use this on a failed asset card to re-run the exact inputs without re-resolving references.
 - `retry_ingest` — Retry derivation jobs without uploading source bytes again
 - `retry_job` — Re-enqueue a failed or cancelled persistent job with the same durable payload
@@ -266,12 +258,9 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `search_library_assets` — Search ready audio, image, and video assets across all books
 - `search_library_moments` — Federate a moment search across every current-schema book
 - `search_moments` — Search indexed book moments with text, media references, and filters
-- `select_notebook_timeline_range` — Map a primary-sequence range back to timed transcript words and persist it
-- `select_notebook_transcript_words` — Persist an exact timed transcript word range as a notebook selection
 - `send_search_moment_to_sequence` — Append one search moment to the primary sequence as a reversible edit
 - `set_character_metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
 - `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
-- `set_notebook_audio_spine` — Designate an audio or video artifact as the notebook's timed audio spine
 - `set_notebook_cell_input` — Atomically replace or clear one named notebook cell input
 - `set_notebook_media_slot` — Attach or clear a passive notebook media slot
 - `set_timeline` — Replace a book's typed v2 timeline using stable artifact UUIDs
