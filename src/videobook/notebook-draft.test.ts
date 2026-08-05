@@ -180,7 +180,7 @@ describe('notebook draft conversion', () => {
     }
 
     expect(notebookNodes(labeled)[0]).toMatchObject({
-      position: { x: 608, y: 2540 },
+      position: { x: 580, y: 2540 },
       data: { slot: { row: 9, column: 2 } },
     })
     expect(notebookNodes(labeled)[0]?.draggable).toBeUndefined()

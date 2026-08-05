@@ -1069,12 +1069,20 @@ textarea:focus-visible {
 }
 
 .canvas {
-  --notebook-edge-inset: 24px;
-  --notebook-composer-clearance: 86px;
+  /* originX/originY in src/videobook/notebook-grid.ts pad the flow frame by
+     20px and scale with zoom, while these CSS insets do not; together they
+     land cell-to-boundary on the 40px inter-cell rhythm at 100 percent zoom.
+     Edge inset 10 + reserved scrollbar gutter 10 + originX 20 = 40. */
+  --notebook-edge-inset: 10px;
+  /* 18px composer offset + 56px command shell + 10px gap; the 10px
+     horizontal scrollbar inside the viewport completes the rhythm
+     (originY 20 + bar 10 + gap 10 = 40) */
+  --notebook-composer-clearance: 84px;
   --notebook-toolbar-height: 32px;
   --notebook-toolbar-gap: 7px;
+  /* toolbar bottom sits 20px above the scroll viewport */
   --notebook-toolbar-clearance: calc(
-    var(--notebook-toolbar-height) + var(--notebook-toolbar-gap) * 2
+    var(--notebook-toolbar-height) + var(--notebook-toolbar-gap) + 20px
   );
   position: relative;
   grid-row: 2;
@@ -1223,6 +1231,7 @@ textarea:focus-visible {
   overscroll-behavior-x: contain;
   overscroll-behavior-y: contain;
   scrollbar-color: transparent transparent;
+  scrollbar-gutter: stable both-edges;
   scrollbar-width: thin;
 }
 
@@ -1556,11 +1565,6 @@ textarea:focus-visible {
   box-shadow:
     0 0 14px rgba(79, 183, 125, 0.28),
     0 12px 28px rgba(0, 0, 0, 0.36);
-}
-
-.cell-node-primary {
-  outline: 1px solid rgba(156, 244, 187, 0.72);
-  outline-offset: 3px;
 }
 
 .cell-node-selected::before {
@@ -6312,11 +6316,6 @@ textarea:focus-visible {
 }
 
 @media (max-width: 720px) {
-  .canvas {
-    --notebook-edge-inset: 10px;
-    --notebook-composer-clearance: 76px;
-  }
-
   .app-shell {
     grid-template: 62px minmax(0, 1fr) / minmax(0, 1fr);
   }
