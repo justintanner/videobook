@@ -36,7 +36,9 @@ describe('notebook download placement', () => {
     }, [{
       artifactId: 'artifact-01',
       error: null,
+      result: null,
       state: 'running',
+      type: 'download_video',
     }])).toEqual({ kind: 'continue' })
   })
 
@@ -47,6 +49,26 @@ describe('notebook download placement', () => {
     }, [])).toEqual({ kind: 'completed' })
   })
 
+  it('follows a successful download that was retyped to another artifact', () => {
+    expect(downloadWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'error',
+    }, [{
+      artifactId: 'artifact-01',
+      error: null,
+      result: {
+        assetId: 'artifact-02',
+        retyped: true,
+        success: true,
+      },
+      state: 'done',
+      type: 'download_video',
+    }])).toEqual({
+      kind: 'redirected',
+      artifactId: 'artifact-02',
+    })
+  })
+
   it('surfaces the durable job failure', () => {
     expect(downloadWatchStep('artifact-01', {
       artifactId: 'artifact-01',
@@ -54,7 +76,9 @@ describe('notebook download placement', () => {
     }, [{
       artifactId: 'artifact-01',
       error: { message: 'Remote host returned 403' },
+      result: null,
       state: 'failed',
+      type: 'download_video',
     }])).toEqual({
       kind: 'failed',
       message: 'Remote host returned 403',

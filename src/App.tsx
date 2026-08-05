@@ -457,6 +457,7 @@ type JobRecord = {
   maxAttempts: number
   error: { message: string; code: string | null } | null
   payload: Record<string, unknown> | null
+  result: Record<string, unknown> | null
   enqueuedAt: number
   startedAt: number | null
   finishedAt: number | null
@@ -1358,6 +1359,7 @@ function asJobs(value: unknown): JobRecord[] {
       && !Array.isArray(payloadValue)
       ? payloadValue as Record<string, unknown>
       : null
+    const result = record(item.result)
     return [{
       id,
       operationId,
@@ -1373,6 +1375,7 @@ function asJobs(value: unknown): JobRecord[] {
           }
         : null,
       payload,
+      result,
       enqueuedAt: asNumber(item.enqueuedAt ?? item.enqueued_at) ?? 0,
       startedAt: asNumber(item.startedAt ?? item.started_at),
       finishedAt: asNumber(item.finishedAt ?? item.finished_at),
@@ -1464,6 +1467,11 @@ const emptyLibraryPage: LibrarySearchPage = {
 
 function passiveMediaKind(kind: NotebookCellType): PassiveMediaKind | null {
   return kind === 'audio' || kind === 'image' || kind === 'video' ? kind : null
+}
+
+function passiveMediaKindForAsset(type: string): PassiveMediaKind | null {
+  if (type === 'final') return 'video'
+  return type === 'audio' || type === 'image' || type === 'video' ? type : null
 }
 
 function mediaLibraryKinds(kind: PassiveMediaKind): string[] {
@@ -3149,6 +3157,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }) => {
     const token = `download:${params.artifactId}`
     activeWatchesRef.current.set(params.cellId, token)
+    let watchedArtifactId = params.artifactId
     let consecutiveFailures = 0
     const deadline = Date.now() + downloadWatchTimeoutMs
     try {
@@ -3194,7 +3203,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           }
           const cell = nextNotebook.cells.find((candidate) =>
             candidate.id === params.cellId)
-          if (!cell || cell.outputArtifactId !== params.artifactId) return
+          if (!cell || cell.outputArtifactId !== watchedArtifactId) return
           const nextAssets = asAssets(assetValue)
           const nextJobs = asJobs(jobValue)
           if (fetchedAt >= watchSnapshotClockRef.current) {
@@ -3205,10 +3214,33 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             applyNotebook(nextNotebook, nextAssets, nextJobs)
           }
           const step = downloadWatchStep(
-            params.artifactId,
-            nextAssets.find((asset) => asset.artifactId === params.artifactId),
+            watchedArtifactId,
+            nextAssets.find((asset) => asset.artifactId === watchedArtifactId),
             nextJobs,
           )
+          if (step.kind === 'redirected') {
+            const replacement = nextAssets.find((asset) =>
+              asset.artifactId === step.artifactId)
+            const replacementKind = replacement
+              ? passiveMediaKindForAsset(replacement.type)
+              : null
+            if (!replacement || !replacementKind) {
+              await delay(downloadWatchIntervalMs)
+              continue
+            }
+            await callRef.current('update_notebook_cell', {
+              book_id: params.bookId,
+              notebook_id: params.notebookId,
+              cell_id: params.cellId,
+              cell: {
+                type: replacementKind,
+                output_artifact_id: replacement.artifactId,
+              },
+            }, { background: true })
+            watchedArtifactId = replacement.artifactId
+            setCellRunError(params.cellId, null)
+            continue
+          }
           if (step.kind === 'completed') {
             setCellRunError(params.cellId, null)
             setNotice(`@${params.address} downloaded`)

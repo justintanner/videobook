@@ -15,12 +15,15 @@ type DownloadWatchAsset = {
 type DownloadWatchJob = {
   artifactId: string | null
   error: { message: string } | null
+  result: Record<string, unknown> | null
   state: string
+  type: string
 }
 
 export type DownloadWatchStep =
   | { kind: 'continue' }
   | { kind: 'completed' }
+  | { kind: 'redirected'; artifactId: string }
   | { kind: 'failed'; message: string }
 
 function objectValue(value: unknown): Record<string, unknown> | null {
@@ -61,6 +64,17 @@ export function downloadWatchStep(
   asset: DownloadWatchAsset | undefined,
   jobs: readonly DownloadWatchJob[],
 ): DownloadWatchStep {
+  const completedDownload = jobs.find((job) =>
+    job.artifactId === artifactId
+    && job.type === 'download_video'
+    && job.state === 'done')
+  const completedResult = objectValue(completedDownload?.result)
+  const replacementArtifactId = completedResult?.retyped === true
+    ? stringValue(completedResult.assetId ?? completedResult.artifact_id)
+    : null
+  if (replacementArtifactId && replacementArtifactId !== artifactId) {
+    return { kind: 'redirected', artifactId: replacementArtifactId }
+  }
   if (asset?.status === 'ready') return { kind: 'completed' }
   const failed = jobs.find((job) =>
     job.artifactId === artifactId

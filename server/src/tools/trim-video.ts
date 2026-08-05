@@ -5,6 +5,7 @@ import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 import { resolveVideoAssetReference } from "./video-source-reference.js";
 import { parseVideoTimestamp, videoTimestampSchema } from "./video-time-input.js";
+import { sleepDef } from "./sleep.js";
 
 type ValidatedParams =
   | { mode: "keep"; trimStart: number | undefined; trimEnd: number | undefined }
@@ -159,6 +160,26 @@ export function trimVideoDef(fs: Engine): ToolDef {
 
       try {
         await queue.enqueueAndWait(jobId, jobPayload);
+        const readiness = await sleepDef(fs).handler({
+          asset_id: assetId,
+          book_id,
+          timeout_seconds: 300,
+        });
+        if (readiness.isError) {
+          const text = readiness.content.find((entry) => entry.type === "text")?.text;
+          let detail = text ?? "Post-trim processing failed";
+          if (text) {
+            try {
+              const parsed = JSON.parse(text) as { error?: unknown; status?: unknown };
+              detail = typeof parsed.error === "string"
+                ? parsed.error
+                : `Post-trim processing ${String(parsed.status ?? "failed")}`;
+            } catch {
+              detail = text;
+            }
+          }
+          throw new Error(detail);
+        }
       } catch (err) {
         return {
           isError: true as const,

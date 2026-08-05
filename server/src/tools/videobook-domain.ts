@@ -3193,10 +3193,25 @@ export function videobookDomainDefs(
                 if (cell.id !== args.cell_id) return cell;
                 found = true;
                 if (patch.type && patch.type !== cell.type) {
-                  throw new Error("Cell type cannot be changed after creation");
+                  const isUnconnected = !notebook.edges.some((edge) =>
+                    edge.source === cell.id || edge.target === cell.id);
+                  const replacement = typeof patch.output_artifact_id === "string"
+                    ? engine.artifacts.get(patch.output_artifact_id)
+                    : null;
+                  const isDownloadImageReplacement = cell.type === "video"
+                    && patch.type === "image"
+                    && cell.inputs?.sourceOperation === "download_video"
+                    && patch.output_artifact_id !== cell.outputArtifactId
+                    && replacement?.ok === true
+                    && replacement.value.kind === "image"
+                    && isUnconnected;
+                  if (!isDownloadImageReplacement) {
+                    throw new Error("Cell type cannot be changed after creation");
+                  }
                 }
                 const next = normalizeCellActionFields({
                   ...cell,
+                  ...(patch.type === undefined ? {} : { type: patch.type }),
                   ...(patch.label === undefined ? {} : { label: patch.label }),
                   ...(patch.slot === undefined ? {} : { slot: patch.slot }),
                   ...(patch.output_entity_id === undefined

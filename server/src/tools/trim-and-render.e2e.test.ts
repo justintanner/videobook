@@ -52,31 +52,6 @@ async function uploadVideo(
   return parse(result) as unknown as { assetId: string; path: string };
 }
 
-async function pollForDuration(
-  fs: Engine,
-  assetId: string,
-  maxDuration: number,
-  timeoutMs = 60_000,
-): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const result =
-      await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original"
-      );
-    if (
-      result.ok &&
-      typeof result.value.duration === "number" &&
-      result.value.duration <= maxDuration
-    ) {
-      return;
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(
-    `Duration for ${assetId} did not drop below ${maxDuration}s after ${timeoutMs}ms`,
-  );
-}
-
 describe("trim video in place and re-render e2e", () => {
   let client: Client;
   let tempDir: string;
@@ -133,8 +108,17 @@ describe("trim video in place and re-render e2e", () => {
     const parsed = parse(result);
     expect(parsed.status).toBe("completed");
     expect(parsed.asset_id).toBe(assetId);
-
-    await pollForDuration(fs, assetId, 2.5, 60_000);
+    const metadata =
+      await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original"
+      );
+    expect(metadata.ok).toBe(true);
+    if (metadata.ok) {
+      expect(metadata.value.duration).toBeGreaterThanOrEqual(1.5);
+      expect(metadata.value.duration).toBeLessThanOrEqual(2.5);
+    }
+    const work = await fs.jobs.artifactWork.read(assetId);
+    expect(work.ok).toBe(true);
+    if (work.ok) expect(work.value?.status).toBe("ready");
   });
 
   it("video file still exists at the same asset path", async () => {

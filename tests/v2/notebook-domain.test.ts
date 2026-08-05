@@ -229,6 +229,119 @@ describe('v2 notebook domain tools', () => {
       .toBe(true)
   })
 
+  it('retypes only unconnected URL-download placeholders to image outputs', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'download-replacement',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const def = byName.get(name)
+      if (!def) throw new Error(`Missing ${name}`)
+      return await withBookContext(
+        { bookId: created.bookId, engine: managed.value.engine },
+        () => def.handler({ book_id: created.bookId, ...args }),
+      )
+    }
+    const notebooks = resultJson(await invoke('list_notebooks', {})) as Array<{ id: string }>
+    const notebookId = notebooks[0]!.id
+    const video = await managed.value.engine.artifacts.create('video', 'download placeholder')
+    const image = await managed.value.engine.artifacts.create('image', 'download fallback')
+    expect(video.ok).toBe(true)
+    expect(image.ok).toBe(true)
+    if (!video.ok || !image.ok) return
+    const cell = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'video',
+        slot: { row: 0, column: 0 },
+        inputs: {
+          sourceOperation: 'download_video',
+          sourceUrl: 'https://example.com/post',
+        },
+        output_artifact_id: video.value.artifactId,
+      },
+    })) as { id: string }
+
+    resultJson(await invoke('update_notebook_cell', {
+      notebook_id: notebookId,
+      cell_id: cell.id,
+      cell: {
+        type: 'image',
+        output_artifact_id: image.value.artifactId,
+      },
+    }))
+    const updated = resultJson(await invoke('get_notebook', {
+      notebook_id: notebookId,
+    })) as {
+      cells: Array<{
+        id: string
+        type: string
+        inputs: Record<string, unknown>
+        output_artifact_id: string
+      }>
+    }
+    expect(updated.cells.find((candidate) => candidate.id === cell.id))
+      .toMatchObject({
+        type: 'image',
+        inputs: {
+          sourceOperation: 'download_video',
+          sourceUrl: 'https://example.com/post',
+        },
+        output_artifact_id: image.value.artifactId,
+      })
+
+    const connectedVideo = await managed.value.engine.artifacts.create(
+      'video',
+      'connected placeholder',
+    )
+    const connectedImage = await managed.value.engine.artifacts.create(
+      'image',
+      'connected fallback',
+    )
+    expect(connectedVideo.ok).toBe(true)
+    expect(connectedImage.ok).toBe(true)
+    if (!connectedVideo.ok || !connectedImage.ok) return
+    const connectedCell = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'video',
+        slot: { row: 0, column: 1 },
+        inputs: { sourceOperation: 'download_video' },
+        output_artifact_id: connectedVideo.value.artifactId,
+      },
+    })) as { id: string }
+    const extractAudio = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'extract_audio',
+        slot: { row: 1, column: 1 },
+      },
+    })) as { id: string }
+    resultJson(await invoke('connect_notebook_cells', {
+      notebook_id: notebookId,
+      source_cell_id: connectedCell.id,
+      target_cell_id: extractAudio.id,
+      target_input: 'video',
+    }))
+    const rejected = await invoke('update_notebook_cell', {
+      notebook_id: notebookId,
+      cell_id: connectedCell.id,
+      cell: {
+        type: 'image',
+        output_artifact_id: connectedImage.value.artifactId,
+      },
+    })
+    expect(rejected.isError).toBe(true)
+    expect(rejected.content[0]?.text).toContain(
+      'Cell type cannot be changed after creation',
+    )
+  })
+
   it('deletes a ready generation cell with execution and plan state', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
