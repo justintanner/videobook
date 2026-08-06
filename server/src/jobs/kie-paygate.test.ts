@@ -285,6 +285,36 @@ describe("kie paygate", () => {
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
+  it("mints a bounded OTP for MiniMax H3 off the local ceiling table", () => {
+    // @apicity/cost@0.8.6 cannot price minimax-h3/* at all, so without the
+    // local ceiling every MiniMax H3 submit fails here (docs/apicity-gaps.md
+    // §35). The OTP still hashes the documented payload verbatim — the local
+    // rate is a spend bound and never reaches the wire.
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+
+    const requests = [
+      { model: "minimax-h3/text-to-video" as const, input: { prompt: "a kitten", aspect_ratio: "9:16" as const, duration: 15, resolution: "768P" as const } },
+      { model: "minimax-h3/image-to-video" as const, input: { prompt: "a kitten", first_frame_url: "https://kie.example/first.png", duration: 6 } },
+      { model: "minimax-h3/reference-to-video" as const, input: { prompt: "a kitten", reference_image_urls: ["https://kie.example/ref.png"], duration: 15, resolution: "768P" as const } },
+    ];
+
+    for (const request of requests) {
+      const otp = mintKieOtp(request, 60);
+      expect(parseOtp(otp).payload.requestHash, request.model)
+        .toBe(canonicalHash(request));
+    }
+  });
+
+  it("still rejects a MiniMax H3 request with no duration as unbounded", () => {
+    // The local ceiling bounds a duration it can read; it must not paper over
+    // a payload that has none.
+    const request = {
+      model: "minimax-h3/text-to-video" as const,
+      input: { prompt: "a kitten", aspect_ratio: "9:16" as const, resolution: "768P" as const },
+    };
+    expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded/);
+  });
+
   it("rejects a kling-3.0/motion-control request with no duration hint as unbounded", () => {
     // kling-3.0/motion-control prices per second but its kie input
     // schema carries no duration field (output length = motion video). Without

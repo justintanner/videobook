@@ -47,6 +47,7 @@ export default defineConfig({
       'server/src/image-models.test.ts',
       'server/src/job-deadline.test.ts',
       'server/src/lazy-render.test.ts',
+      'server/src/minimax-h3-cost.test.ts',
       'server/src/jobs/**/*.test.ts',
       'server/src/keyword-placement-cache.test.ts',
       'server/src/openai-intelligence.test.ts',

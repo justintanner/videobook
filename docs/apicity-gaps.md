@@ -449,10 +449,26 @@ There is no supported way to inject pricing at runtime — `@apicity/cost` expor
 `normalizeKieCostPayload` to borrow another model's rate would knowingly
 misprice a paid call.
 
-**Workaround:** none yet for the paygate. If the tools need to land before the
-cost release, the documented interim precedent is the local `VEO31_SLUGS`
-literal map in `server/src/tools/generate-veo31-video.ts` (see §15) — that
-unblocks naming only; live generation stays blocked either way.
+**Workaround (shipped):** `server/src/minimax-h3-cost.ts` holds a local
+per-second ceiling table (768P $0.18, 2K $0.26), same shape of local-rate
+module as the Gemini API table in `google-flow-cost.ts` (§15). Two properties
+keep it honest:
+
+- **It is a ceiling, not Kie's price.** Kie bills video in credits/s and
+  publishes no MiniMax H3 credit rate readable without a console login, so the
+  table takes the highest public rate found (EmpirioLabs, retrieved
+  2026-08-06 — MiniMax list was $0.08/$0.13, Atlas Cloud $0.10/$0.14). The
+  estimate is a spend *bound*: over-stating only makes the paygate more
+  conservative, and the number never leaves the process — `mintOtp` hashes the
+  wire payload, not the estimate. Displayed estimates read high until the real
+  rate lands.
+- **Upstream reclaims priority automatically.** `mintKieOtp` consults the local
+  table only after `computeEstimate` warns, so the package wins the moment it
+  ships rates. `minimax-h3-cost.test.ts` asserts `computeEstimate` still warns
+  for all three models — that test failing is the signal to delete the module.
+
+A payload with no readable duration still fails closed; the ceiling bounds a
+duration it can read rather than papering over a missing one.
 
 **Ask Apicity:** register `minimax-h3/{text,image,reference}-to-video` slugs
 and publish per-second (or per-unit) rates for the `duration` × `resolution`
@@ -465,7 +481,7 @@ and publish per-second (or per-unit) rates for the `duration` × `resolution`
 | Status            | Sections                                              | What Videocity still carries                            |
 | ----------------- | ----------------------------------------------------- | ------------------------------------------------------- |
 | **OPEN**          | §18 character metadata                                | list/singleton reconcile                                |
-| **OPEN**          | §35 MiniMax H3 cost coverage                          | no slug map entry, no pricing; paygate refuses to mint  |
+| **PARTIAL**       | §35 MiniMax H3 cost coverage                          | local ceiling table (`minimax-h3-cost.ts`); no slug map |
 | **PARTIAL**       | §14 Flow loose schemas                                | per-model domains                                       |
 | **PARTIAL**       | §15 Flow estimate semantics                           | local Gemini API list USD (`google-flow-cost.ts`)       |
 | **PARTIAL**       | §22 xAI 10s ref duration                              | local 10s check; 7-ref max **derived**                  |
