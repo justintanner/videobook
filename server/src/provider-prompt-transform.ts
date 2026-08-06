@@ -289,6 +289,28 @@ export function transformProviderPrompt(
         videoRefs: compact([nonempty(args.video_ref)]),
       });
       break;
+    case "generate_kie_omnihuman_1_5_video":
+      transformed = replaceNaturalAssetMentions(prompt, {
+        imageRefs: compact([nonempty(args.image_ref)]),
+        audioRefs: compact([nonempty(args.audio_ref)]),
+      });
+      break;
+    case "generate_kie_minimax_h3_image_to_video":
+      transformed = stripRefMentions(
+        prompt,
+        compact([
+          nonempty(args.first_frame_ref),
+          nonempty(args.last_frame_ref),
+        ]),
+      );
+      break;
+    case "generate_kie_minimax_h3_reference_to_video":
+      transformed = replaceNaturalAssetMentions(prompt, {
+        imageRefs,
+        videoRefs: stringArray(args.video_refs),
+        audioRefs: stringArray(args.audio_refs),
+      });
+      break;
     case "generate_kie_happyhorse_1_1_image_to_video":
       transformed = stripRefMentions(
         prompt,

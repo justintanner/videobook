@@ -132,6 +132,45 @@ function argsForPayloadCase(
   };
 }
 
+// Every ref param the dispatcher reads. Swapping the URL fixtures for
+// artifact ids makes each ref traceable through the built payload, so a tool
+// that carries a ref but forgets its prompt dialect is detectable instead of
+// surfacing as an opaque ProviderMentionError at submit.
+const MENTION_REF_PARAMS = [
+  "image_refs",
+  "character_image_refs",
+  "motion_video_refs",
+  "video_refs",
+  "audio_refs",
+  "first_frame_ref",
+  "last_frame_ref",
+  "first_clip_ref",
+  "driving_audio_ref",
+  "video_ref",
+  "image_ref",
+  "audio_ref",
+] as const;
+
+function refIdForParam(index: number): string {
+  return `01890f1c-0000-7000-8000-0000000${String(index + 1).padStart(5, "0")}`;
+}
+
+function mentionArgsForPayloadCase(
+  tool: string,
+  prompt: string,
+): Record<string, unknown> {
+  const args = argsForPayloadCase(tool, prompt);
+  MENTION_REF_PARAMS.forEach((param, index) => {
+    const current = args[param];
+    if (Array.isArray(current)) {
+      args[param] = current.length > 0 ? [refIdForParam(index)] : [];
+    } else if (typeof current === "string") {
+      args[param] = refIdForParam(index);
+    }
+  });
+  return args;
+}
+
 // kie 0.8.6 CREATE_TASK_GUARDS: submitMediaJob safeParses every createTask
 // request against the per-model schema before anything leaves the process.
 // One representative valid call per kie case of the dispatcher (both modes of
@@ -448,6 +487,30 @@ describe("translateToolPayload", () => {
         ),
         entry.provider,
       ), entry.tool).toThrow(ProviderMentionError);
+    }
+  });
+
+  it("rewrites prompt mentions of every ref a tool carries into its payload", () => {
+    for (const entry of payloadCases) {
+      const baseline = translateToolPayload(
+        entry.tool,
+        mentionArgsForPayloadCase(entry.tool, "plain prompt"),
+        entry.provider,
+      );
+      expect(baseline, entry.tool).not.toBeNull();
+      if (!baseline) continue;
+      const wire = JSON.stringify(baseline.payload);
+      if (!wire.includes("plain prompt")) continue;
+      const carried = MENTION_REF_PARAMS
+        .map((_, index) => refIdForParam(index))
+        .filter((refId) => wire.includes(refId));
+      if (carried.length === 0) continue;
+      const prompt = carried.map((refId) => `@${refId}`).join(" then ");
+      expect(() => translateToolPayload(
+        entry.tool,
+        mentionArgsForPayloadCase(entry.tool, prompt),
+        entry.provider,
+      ), entry.tool).not.toThrow();
     }
   });
 

@@ -47,6 +47,25 @@ describe("provider prompt transforms", () => {
     )).toBe("paint @reference_1");
   });
 
+  it("naturalizes MiniMax H3 references and drops its frame mentions", () => {
+    expect(transformProviderPrompt(
+      "generate_kie_minimax_h3_reference_to_video",
+      {
+        prompt: `kitten @${IMG_ID}, motion from @${VID_ID}`,
+        image_refs: [IMG_ID],
+        video_refs: [VID_ID],
+        audio_refs: [AUD_ID],
+      },
+    )).toBe("kitten reference image 1, motion from the source video");
+    expect(transformProviderPrompt(
+      "generate_kie_minimax_h3_image_to_video",
+      {
+        prompt: `pan across @${IMG_ID}`,
+        first_frame_ref: IMG_ID,
+      },
+    )).toBe("pan across");
+  });
+
   it("rejects unresolved grid and artifact-id mentions", () => {
     expect(unresolvedProviderMentions(
       `@a2 @${IMG_ID} @element_1 @referenceImage_1 @Image1 @image1`,
