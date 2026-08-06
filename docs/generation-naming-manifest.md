@@ -4,8 +4,8 @@ This is the authoritative registry-derived list of canonical generation and work
 
 ## Summary
 
-- Total actions: 92
-- Provider actions: 83
+- Total actions: 95
+- Provider actions: 86
 - Workflow and support actions: 9
 
 ## Naming grammar
@@ -35,6 +35,9 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `generate_kie_happyhorse_1_1_image_to_video` | kie | `HappyHorse11ImageToVideoRequestSchema` | video | image_to_video | visible | `generate_happyhorse_i2v_video` |
 | `generate_kie_happyhorse_1_1_reference_to_video` | kie | `HappyHorse11ReferenceToVideoRequestSchema` | video | reference_to_video | hidden_fal_variant | `generate_happyhorse_ref_video` |
 | `generate_kie_happyhorse_1_1_edit_video` | kie | `HappyHorseVideoEditRequestSchema` | video | edit_video | hidden_fal_variant | `generate_happyhorse_videoedit_video` |
+| `generate_kie_minimax_h3_text_to_video` | kie | `MiniMaxH3TextToVideoRequestSchema` | video | text_to_video | visible |  |
+| `generate_kie_minimax_h3_image_to_video` | kie | `MiniMaxH3ImageToVideoRequestSchema` | video | image_to_video | visible |  |
+| `generate_kie_minimax_h3_reference_to_video` | kie | `MiniMaxH3ReferenceToVideoRequestSchema` | video | reference_to_video | visible |  |
 | `generate_kie_volcengine_video_to_video_lip_sync` | kie | `VolcengineVideoToVideoLipSyncRequestSchema` | video | video_to_video_lip_sync | hidden_fal_variant | `generate_volcengine_lipsync_video` |
 | `generate_kie_omnihuman_1_5_video` | kie | `Omnihuman15RequestSchema` | video | image_to_video | visible | `generate_omnihuman_video` |
 | `generate_kie_veo_3_0_video` | kie | `VeoGenerateRequestSchema` | video | text_to_video | visible | `generate_veo3_video` |

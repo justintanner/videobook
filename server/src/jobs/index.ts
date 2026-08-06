@@ -56,6 +56,9 @@ import { registerGenerateHappyhorseT2vVideoJob } from "./generate-happyhorse-t2v
 import { registerGenerateHappyhorseI2vVideoJob } from "./generate-happyhorse-i2v-video.js";
 import { registerGenerateHappyhorseRefVideoJob } from "./generate-happyhorse-ref-video.js";
 import { registerGenerateHappyhorseVideoeditVideoJob } from "./generate-happyhorse-videoedit-video.js";
+import { registerGenerateMiniMaxH3T2vVideoJob } from "./generate-minimax-h3-t2v-video.js";
+import { registerGenerateMiniMaxH3I2vVideoJob } from "./generate-minimax-h3-i2v-video.js";
+import { registerGenerateMiniMaxH3R2vVideoJob } from "./generate-minimax-h3-r2v-video.js";
 import { registerGenerateVolcengineLipsyncVideoJob } from "./generate-volcengine-lipsync-video.js";
 import { registerGenerateOmnihumanVideoJob } from "./generate-omnihuman-video.js";
 import { registerGenerateWan27ImageJob } from "./generate-wan27-image.js";
@@ -193,6 +196,9 @@ export function registerAllJobHandlers(
   registerGenerateHappyhorseI2vVideoJob(fs);
   registerGenerateHappyhorseRefVideoJob(fs);
   registerGenerateHappyhorseVideoeditVideoJob(fs);
+  registerGenerateMiniMaxH3T2vVideoJob(fs);
+  registerGenerateMiniMaxH3I2vVideoJob(fs);
+  registerGenerateMiniMaxH3R2vVideoJob(fs);
   registerGenerateVolcengineLipsyncVideoJob(fs);
   registerGenerateOmnihumanVideoJob(fs);
   registerGenerateWan27ImageJob(fs);

@@ -339,7 +339,7 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.duration.type).toBe("integer");
     expect(schema!.properties.duration.minimum).toBe(6);
     expect(schema!.properties.duration.maximum).toBe(30);
-    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
+    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p", "1080p"]);
     expect(schema!.properties.aspect_ratio.enum).toEqual(["2:3", "3:2", "1:1", "16:9", "9:16"]);
     expect(schema!.properties.image_refs.minItems).toBe(1);
     expect(schema!.properties.image_refs.maxItems).toBe(7);

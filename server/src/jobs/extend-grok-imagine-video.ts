@@ -1,5 +1,5 @@
 import type { Engine } from "videobook-engine";
-import type { GrokImagineResolution, GrokVideoExtendRequest, MediaGenerationRequest } from "@apicity/kie";
+import type { GrokImagineResolution, GrokVideoExtendRequest } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -40,10 +40,13 @@ export function registerExtendGrokImagineVideoJob(fs: Engine): void {
     // grok-imagine default when the source predates resolution metadata.
     const sourcePayloadResult = await fs.metadata.artifacts.read<{ input?: { resolution?: GrokImagineResolution } }>(sourceVideoId, "generation-payload"
     );
-    const resolution: GrokImagineResolution =
-      (sourcePayloadResult.ok && sourcePayloadResult.value?.input?.resolution) || "480p";
+    const sourceResolution = sourcePayloadResult.ok ? sourcePayloadResult.value?.input?.resolution : undefined;
+    if (sourceResolution !== undefined && sourceResolution !== "480p" && sourceResolution !== "720p") {
+      throw new Error(`grok-imagine/extend has no ${sourceResolution} pricing tier — only 480p/720p sources can be extended`);
+    }
+    const resolution: NonNullable<GrokVideoExtendRequest["resolution"]> = sourceResolution ?? "480p";
 
-    const request: MediaGenerationRequest & { resolution: GrokImagineResolution } = {
+    const request: GrokVideoExtendRequest = {
       model: "grok-imagine/extend",
       resolution,
       input: {

@@ -82,7 +82,7 @@ describe("estimate_cost tool", () => {
       },
     });
     const payload = parse(result);
-    expect(payload.per_call[0].estimate.breakdown.units).toBe(15);
+    expect(payload.per_call[0].estimate.breakdown.units).toBe(5);
     expect(payload.per_call[1].estimate.breakdown.units).toBe(6);
   });
 

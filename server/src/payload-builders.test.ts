@@ -1,17 +1,49 @@
 import { describe, expect, it } from "vitest";
 import { computeEstimate } from "@apicity/cost";
 import {
+  GeminiOmniVideoRequestSchema,
+  GptImage2ImageToImageRequestSchema,
+  GptImage2TextToImageRequestSchema,
+  GrokImageToImageRequestSchema,
+  GrokImageToVideoRequestSchema,
+  GrokTextToImageRequestSchema,
+  GrokTextToVideoRequestSchema,
   GrokVideoExtendRequestSchema,
+  HappyHorse11ImageToVideoRequestSchema,
+  HappyHorse11ReferenceToVideoRequestSchema,
+  HappyHorse11TextToVideoRequestSchema,
+  HappyHorseVideoEditRequestSchema,
   KlingMotionControlRequestSchema,
   KlingV3TurboImageToVideoRequestSchema,
   KlingV3TurboTextToVideoRequestSchema,
+  KlingVideoRequestSchema,
+  MiniMaxH3ImageToVideoRequestSchema,
+  MiniMaxH3ReferenceToVideoRequestSchema,
+  MiniMaxH3TextToVideoRequestSchema,
+  NanoBananaProRequestSchema,
+  Omnihuman15RequestSchema,
+  Qwen2ImageEditRequestSchema,
+  Seedance2FastRequestSchema,
   Seedance2MiniRequestSchema,
+  Seedance2RequestSchema,
+  SeedreamImageToImageRequestSchema,
+  SeedreamTextToImageRequestSchema,
   VolcengineVideoToVideoLipSyncRequestSchema,
+  Wan27ImageProRequestSchema,
   Wan27ImageRequestSchema,
+  Wan27ImageToVideoRequestSchema,
+  Wan27RefToVideoRequestSchema,
+  Wan27TextToVideoRequestSchema,
+  Wan27VideoEditRequestSchema,
 } from "@apicity/kie/zod";
 import { GoogleFlowVideosRequestSchema } from "@apicity/googleflow/zod";
 import { normalizeKieCostPayload } from "./cost-adapters.js";
-import { translateToolPayload } from "./payload-builders.js";
+import {
+  buildMiniMaxH3I2vPayload,
+  buildMiniMaxH3R2vPayload,
+  buildMiniMaxH3T2vPayload,
+  translateToolPayload,
+} from "./payload-builders.js";
 import {
   inspectProviderPayload,
   ProviderMentionError,
@@ -59,6 +91,9 @@ const payloadCases: Array<{ tool: string; provider?: string }> = [
   { tool: "generate_kie_happyhorse_1_1_image_to_video" },
   { tool: "generate_kie_happyhorse_1_1_reference_to_video" },
   { tool: "generate_kie_happyhorse_1_1_edit_video" },
+  { tool: "generate_kie_minimax_h3_text_to_video" },
+  { tool: "generate_kie_minimax_h3_image_to_video" },
+  { tool: "generate_kie_minimax_h3_reference_to_video" },
   { tool: "generate_alibaba_wan_2_7_text_to_image" },
   { tool: "generate_alibaba_wan_2_7_pro_text_to_image" },
   { tool: "generate_alibaba_wan_2_7_video" },
@@ -97,7 +132,297 @@ function argsForPayloadCase(
   };
 }
 
+// kie 0.8.6 CREATE_TASK_GUARDS: submitMediaJob safeParses every createTask
+// request against the per-model schema before anything leaves the process.
+// One representative valid call per kie case of the dispatcher (both modes of
+// dual-mode tools) so a builder drift fails here instead of at submit time.
+type KieGuardCase = {
+  tool: string;
+  schema: {
+    safeParse: (payload: unknown) =>
+      | { success: true; data: unknown }
+      | { success: false; error: { issues: Array<{ message: string }> } };
+  };
+  args: Record<string, unknown>;
+};
+
+const kieGuardCases: KieGuardCase[] = [
+  {
+    tool: "generate_kie_kling_3_0_video",
+    schema: KlingVideoRequestSchema,
+    args: {
+      prompt: "plain prompt",
+      mode: "std",
+      duration: "5",
+      multi_shots: false,
+      aspect_ratio: "16:9",
+      image_refs: ["https://example.test/image.png"],
+    },
+  },
+  {
+    tool: "generate_kie_kling_3_0_motion_control",
+    schema: KlingMotionControlRequestSchema,
+    args: {
+      character_image_refs: ["https://example.test/character.png"],
+      motion_video_refs: ["https://example.test/motion.mp4"],
+    },
+  },
+  {
+    tool: "generate_kie_kling_3_0_turbo_video",
+    schema: KlingV3TurboTextToVideoRequestSchema,
+    args: { prompt: "plain prompt" },
+  },
+  {
+    tool: "generate_kie_kling_3_0_turbo_video",
+    schema: KlingV3TurboImageToVideoRequestSchema,
+    args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
+  },
+  {
+    tool: "generate_kie_grok_imagine_image_to_video",
+    schema: GrokImageToVideoRequestSchema,
+    args: {
+      prompt: "plain prompt",
+      image_refs: ["https://example.test/image.png"],
+      mode: "fun",
+      duration: 6,
+      resolution: "720p",
+      aspect_ratio: "16:9",
+    },
+  },
+  {
+    tool: "generate_kie_grok_imagine_text_to_video",
+    schema: GrokTextToVideoRequestSchema,
+    args: { prompt: "plain prompt", duration: 6, resolution: "720p", aspect_ratio: "16:9" },
+  },
+  {
+    tool: "generate_kie_grok_imagine_image_to_image",
+    schema: GrokImageToImageRequestSchema,
+    args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
+  },
+  {
+    tool: "generate_kie_grok_imagine_text_to_image",
+    schema: GrokTextToImageRequestSchema,
+    args: { prompt: "plain prompt", aspect_ratio: "16:9" },
+  },
+  {
+    tool: "generate_kie_seedance_2_0_video",
+    schema: Seedance2RequestSchema,
+    args: {
+      prompt: "plain prompt",
+      image_refs: ["https://example.test/image.png"],
+      video_refs: ["https://example.test/video.mp4"],
+      duration: "5",
+    },
+  },
+  {
+    // Frames path: mutually exclusive with reference_* arrays upstream.
+    tool: "generate_kie_seedance_2_0_video",
+    schema: Seedance2RequestSchema,
+    args: {
+      prompt: "plain prompt",
+      first_frame_ref: "https://example.test/first.png",
+      last_frame_ref: "https://example.test/last.png",
+    },
+  },
+  {
+    tool: "generate_kie_seedance_2_0_fast_video",
+    schema: Seedance2FastRequestSchema,
+    args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
+  },
+  {
+    tool: "generate_kie_seedance_2_0_mini_video",
+    schema: Seedance2MiniRequestSchema,
+    args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
+  },
+  {
+    tool: "generate_kie_gemini_omni_video",
+    schema: GeminiOmniVideoRequestSchema,
+    args: {
+      prompt: "plain prompt",
+      duration: "8",
+      image_refs: ["https://example.test/image.png"],
+    },
+  },
+  {
+    tool: "generate_kie_gemini_omni_video",
+    schema: GeminiOmniVideoRequestSchema,
+    args: {
+      prompt: "plain prompt",
+      duration: "8",
+      video_ref: "https://example.test/source.mp4",
+      video_clip_start: 2,
+      video_clip_ends: 8,
+    },
+  },
+  {
+    tool: "generate_kie_nano_banana_pro_text_to_image",
+    schema: NanoBananaProRequestSchema,
+    args: { prompt: "plain prompt" },
+  },
+  {
+    tool: "generate_kie_nano_banana_pro_text_to_image",
+    schema: NanoBananaProRequestSchema,
+    args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
+  },
+  {
+    // quality is required by the tool contract and deliberately has no schema
+    // default upstream (kie 422s when it is omitted).
+    tool: "generate_kie_seedream_v5_lite_text_to_image",
+    schema: SeedreamTextToImageRequestSchema,
+    args: { prompt: "plain prompt", quality: "basic" },
+  },
+  {
+    tool: "generate_kie_seedream_v5_lite_image_to_image",
+    schema: SeedreamImageToImageRequestSchema,
+    args: { prompt: "plain prompt", quality: "basic", image_refs: ["https://example.test/image.png"] },
+  },
+  {
+    tool: "generate_kie_qwen_2_0_edit_image",
+    schema: Qwen2ImageEditRequestSchema,
+    args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
+  },
+  {
+    tool: "generate_kie_gpt_image_2_image_to_image",
+    schema: GptImage2ImageToImageRequestSchema,
+    args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
+  },
+  {
+    tool: "generate_kie_gpt_image_2_text_to_image",
+    schema: GptImage2TextToImageRequestSchema,
+    args: { prompt: "plain prompt" },
+  },
+  {
+    tool: "generate_kie_wan_2_7_text_to_image",
+    schema: Wan27ImageRequestSchema,
+    args: { prompt: "plain prompt" },
+  },
+  {
+    tool: "generate_kie_wan_2_7_pro_text_to_image",
+    schema: Wan27ImageProRequestSchema,
+    args: { prompt: "plain prompt" },
+  },
+  {
+    tool: "generate_kie_wan_2_7_text_to_video",
+    schema: Wan27TextToVideoRequestSchema,
+    args: { prompt: "plain prompt", duration: "5", aspect_ratio: "16:9", resolution: "1080p" },
+  },
+  {
+    tool: "generate_kie_wan_2_7_image_to_video",
+    schema: Wan27ImageToVideoRequestSchema,
+    args: {
+      prompt: "plain prompt",
+      first_frame_ref: "https://example.test/first.png",
+      last_frame_ref: "https://example.test/last.png",
+      duration: "5",
+    },
+  },
+  {
+    // first_clip is mutually exclusive with first/last frame upstream.
+    tool: "generate_kie_wan_2_7_image_to_video",
+    schema: Wan27ImageToVideoRequestSchema,
+    args: { prompt: "plain prompt", first_clip_ref: "https://example.test/clip.mp4" },
+  },
+  {
+    tool: "generate_kie_wan_2_7_edit_video",
+    schema: Wan27VideoEditRequestSchema,
+    args: { prompt: "plain prompt", video_ref: "https://example.test/source.mp4" },
+  },
+  {
+    tool: "extend_kie_grok_imagine_video",
+    schema: GrokVideoExtendRequestSchema,
+    args: { prompt: "plain prompt", extend_at: 3, extend_times: "10" },
+  },
+  {
+    tool: "generate_kie_volcengine_video_to_video_lip_sync",
+    schema: VolcengineVideoToVideoLipSyncRequestSchema,
+    args: {
+      video_ref: "https://example.test/source.mp4",
+      audio_ref: "https://example.test/source.mp3",
+      mode: "lite",
+    },
+  },
+  {
+    tool: "generate_kie_omnihuman_1_5_video",
+    schema: Omnihuman15RequestSchema,
+    args: {
+      image_ref: "https://example.test/source.png",
+      audio_ref: "https://example.test/source.mp3",
+    },
+  },
+  {
+    tool: "generate_kie_wan_2_7_reference_to_video",
+    schema: Wan27RefToVideoRequestSchema,
+    args: {
+      prompt: "plain prompt",
+      image_refs: ["https://example.test/image.png"],
+      video_refs: ["https://example.test/video.mp4"],
+    },
+  },
+  {
+    tool: "extend_kie_wan_2_7_video",
+    schema: Wan27ImageToVideoRequestSchema,
+    args: { prompt: "plain prompt", video_ref: "https://example.test/source.mp4" },
+  },
+  {
+    tool: "generate_kie_happyhorse_1_1_text_to_video",
+    schema: HappyHorse11TextToVideoRequestSchema,
+    args: { prompt: "plain prompt", duration: "5", resolution: "1080p", aspect_ratio: "16:9" },
+  },
+  {
+    tool: "generate_kie_happyhorse_1_1_image_to_video",
+    schema: HappyHorse11ImageToVideoRequestSchema,
+    args: { prompt: "plain prompt", first_frame_ref: "https://example.test/first.png" },
+  },
+  {
+    tool: "generate_kie_happyhorse_1_1_reference_to_video",
+    schema: HappyHorse11ReferenceToVideoRequestSchema,
+    args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
+  },
+  {
+    tool: "generate_kie_happyhorse_1_1_edit_video",
+    schema: HappyHorseVideoEditRequestSchema,
+    args: {
+      prompt: "plain prompt",
+      video_ref: "https://example.test/source.mp4",
+      image_refs: ["https://example.test/image.png"],
+    },
+  },
+  {
+    tool: "generate_kie_minimax_h3_text_to_video",
+    schema: MiniMaxH3TextToVideoRequestSchema,
+    args: { prompt: "plain prompt", aspect_ratio: "16:9", duration: "6", resolution: "768P" },
+  },
+  {
+    tool: "generate_kie_minimax_h3_image_to_video",
+    schema: MiniMaxH3ImageToVideoRequestSchema,
+    args: { prompt: "plain prompt", duration: "6", first_frame_ref: "https://example.test/first.png" },
+  },
+  {
+    tool: "generate_kie_minimax_h3_reference_to_video",
+    schema: MiniMaxH3ReferenceToVideoRequestSchema,
+    args: {
+      prompt: "plain prompt",
+      duration: "6",
+      image_refs: ["https://example.test/image.png"],
+      aspect_ratio: "adaptive",
+    },
+  },
+];
+
 describe("translateToolPayload", () => {
+  it("safeParses against the kie createTask guard schema for every kie model", () => {
+    for (const entry of kieGuardCases) {
+      const result = translateToolPayload(entry.tool, entry.args);
+      expect(result, entry.tool).not.toBeNull();
+      if (!result) continue;
+      const parsed = entry.schema.safeParse(result.payload);
+      if (!parsed.success) {
+        const issues = parsed.error.issues.map((issue) => issue.message).join("; ");
+        expect.unreachable(`${entry.tool} rejected by guard: ${issues}`);
+      }
+    }
+  });
+
   it("enforces the mention leak gate across every provider payload case", () => {
     for (const entry of payloadCases) {
       const clean = translateToolPayload(
@@ -425,7 +750,7 @@ describe("translateToolPayload", () => {
         prompt: "scene continuity",
         reference_video_urls: ["https://example.test/scene.mp4"],
         resolution: "720p",
-        duration: 15,
+        duration: 5,
       },
     });
     expect(Seedance2MiniRequestSchema.safeParse(result?.payload).success).toBe(true);
@@ -768,5 +1093,144 @@ describe("translateToolPayload", () => {
     expect((result?.payload as { input: { prompt: string } }).input.prompt).toBe(
       "make the source video match reference image 1",
     );
+  });
+});
+
+describe("MiniMax H3 payload builders", () => {
+  it("builds a schema-valid text-to-video payload with an int duration", () => {
+    const payload = buildMiniMaxH3T2vPayload({
+      prompt: "a crane over still water",
+      aspect_ratio: "16:9",
+      duration: "6",
+      resolution: "2K",
+    });
+
+    expect(payload).toEqual({
+      model: "minimax-h3/text-to-video",
+      input: {
+        prompt: "a crane over still water",
+        aspect_ratio: "16:9",
+        duration: 6,
+        resolution: "2K",
+      },
+    });
+    expect(MiniMaxH3TextToVideoRequestSchema.safeParse(payload).success).toBe(true);
+  });
+
+  it("builds a schema-valid image-to-video payload from a single frame", () => {
+    const payload = buildMiniMaxH3I2vPayload(
+      { prompt: "slow push in", duration: "8" },
+      { firstFrameUrl: "https://example.test/first.png" },
+    );
+
+    expect(payload).toEqual({
+      model: "minimax-h3/image-to-video",
+      input: {
+        prompt: "slow push in",
+        duration: 8,
+        first_frame_url: "https://example.test/first.png",
+      },
+    });
+    expect(MiniMaxH3ImageToVideoRequestSchema.safeParse(payload).success).toBe(true);
+  });
+
+  it("builds a schema-valid image-to-video payload with both frames and resolution", () => {
+    const payload = buildMiniMaxH3I2vPayload(
+      { prompt: "slow push in", duration: "8", resolution: "768P" },
+      {
+        firstFrameUrl: "https://example.test/first.png",
+        lastFrameUrl: "https://example.test/last.png",
+      },
+    );
+
+    expect(payload.input).toMatchObject({
+      first_frame_url: "https://example.test/first.png",
+      last_frame_url: "https://example.test/last.png",
+      duration: 8,
+      resolution: "768P",
+    });
+    expect(MiniMaxH3ImageToVideoRequestSchema.safeParse(payload).success).toBe(true);
+  });
+
+  it("builds a schema-valid reference-to-video payload with image, oss video, and audio refs", () => {
+    const payload = buildMiniMaxH3R2vPayload(
+      { prompt: "blend these", duration: "10", aspect_ratio: "adaptive" },
+      {
+        referenceImageUrls: ["https://example.test/a.png"],
+        referenceVideoUrls: ["oss://bucket/clip.mp4"],
+        referenceAudioUrls: ["https://example.test/a.mp3"],
+      },
+    );
+
+    expect(payload).toEqual({
+      model: "minimax-h3/reference-to-video",
+      input: {
+        prompt: "blend these",
+        duration: 10,
+        reference_image_urls: ["https://example.test/a.png"],
+        reference_video_urls: ["oss://bucket/clip.mp4"],
+        reference_audio_urls: ["https://example.test/a.mp3"],
+        aspect_ratio: "adaptive",
+      },
+    });
+    expect(MiniMaxH3ReferenceToVideoRequestSchema.safeParse(payload).success).toBe(true);
+  });
+
+  it("rejects image-to-video with neither a first nor a last frame URL", () => {
+    const payload = buildMiniMaxH3I2vPayload({ prompt: "slow push in", duration: "8" }, {});
+
+    const parsed = MiniMaxH3ImageToVideoRequestSchema.safeParse(payload);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.map((issue) => issue.message).join(" ")).toContain("first_frame_url");
+    }
+  });
+
+  it("rejects reference-to-video with audio-only references", () => {
+    const payload = buildMiniMaxH3R2vPayload(
+      { prompt: "blend these", duration: "6" },
+      { referenceAudioUrls: ["https://example.test/a.mp3"] },
+    );
+
+    const parsed = MiniMaxH3ReferenceToVideoRequestSchema.safeParse(payload);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.map((issue) => issue.message).join(" ")).toContain("reference_image_urls");
+    }
+  });
+
+  it("rejects reference-to-video with more than 9 reference images", () => {
+    const tenImages = Array.from({ length: 10 }, (_, i) => `https://example.test/img-${i}.png`);
+    const payload = buildMiniMaxH3R2vPayload(
+      { prompt: "blend these", duration: "6" },
+      { referenceImageUrls: tenImages },
+    );
+
+    expect(MiniMaxH3ReferenceToVideoRequestSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it("rejects durations outside the 4-15 second range", () => {
+    for (const duration of ["3", "16"]) {
+      const payload = buildMiniMaxH3T2vPayload({
+        prompt: "a crane over still water",
+        aspect_ratio: "16:9",
+        duration,
+      });
+      expect(MiniMaxH3TextToVideoRequestSchema.safeParse(payload).success).toBe(false);
+    }
+  });
+
+  it("rejects non-http/https/oss media addresses", () => {
+    const i2v = buildMiniMaxH3I2vPayload(
+      { prompt: "slow push in", duration: "8" },
+      { firstFrameUrl: "file:///tmp/x.png" },
+    );
+    expect(MiniMaxH3ImageToVideoRequestSchema.safeParse(i2v).success).toBe(false);
+
+    const r2v = buildMiniMaxH3R2vPayload(
+      { prompt: "blend these", duration: "6" },
+      { referenceVideoUrls: ["ftp://example.test/clip.mp4"] },
+    );
+    expect(MiniMaxH3ReferenceToVideoRequestSchema.safeParse(r2v).success).toBe(false);
   });
 });

@@ -39,6 +39,12 @@ import type {
   HappyHorseVideoEditRequest,
   HappyHorseResolution,
   HappyHorseAudioSetting,
+  MiniMaxH3TextToVideoRequest,
+  MiniMaxH3ImageToVideoRequest,
+  MiniMaxH3ReferenceToVideoRequest,
+  MiniMaxH3Resolution,
+  MiniMaxH3FixedAspectRatio,
+  MiniMaxH3ReferenceAspectRatio,
   Wan27ImageRequest,
   Wan27ImageProRequest,
   // Named union types for cleaner type annotations
@@ -946,7 +952,9 @@ function buildWan27ImagePayload(
       prompt: args.prompt,
       ...(inputUrls.length > 0 ? { input_urls: inputUrls } : {}),
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      // 0.8.6 requires resolution once aspect_ratio is set (and it defaults to
+      // 16:9), so the documented 2K default must be materialized here.
+      resolution: args.resolution ?? "2K",
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
     },
@@ -963,7 +971,7 @@ function buildWan27ImageProPayload(
       prompt: args.prompt,
       ...(inputUrls.length > 0 ? { input_urls: inputUrls } : {}),
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      resolution: args.resolution ?? "2K",
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
     },
@@ -1294,6 +1302,81 @@ function buildHappyHorseVideoEditPayload(
 }
 
 // ---------------------------------------------------------------------------
+// MiniMax H3 payload builders
+// ---------------------------------------------------------------------------
+
+type MiniMaxH3T2vArgs = {
+  prompt: string;
+  aspect_ratio: MiniMaxH3FixedAspectRatio;
+  duration: string;
+  resolution?: MiniMaxH3Resolution;
+};
+
+function buildMiniMaxH3T2vPayload(args: MiniMaxH3T2vArgs): MiniMaxH3TextToVideoRequest {
+  return {
+    model: "minimax-h3/text-to-video",
+    input: {
+      prompt: args.prompt,
+      aspect_ratio: args.aspect_ratio,
+      duration: parseInt(args.duration, 10),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+    },
+  };
+}
+
+type MiniMaxH3I2vArgs = {
+  prompt: string;
+  duration: string;
+  resolution?: MiniMaxH3Resolution;
+};
+
+type MiniMaxH3I2vOpts = {
+  firstFrameUrl?: string;
+  lastFrameUrl?: string;
+};
+
+function buildMiniMaxH3I2vPayload(args: MiniMaxH3I2vArgs, opts: MiniMaxH3I2vOpts): MiniMaxH3ImageToVideoRequest {
+  return {
+    model: "minimax-h3/image-to-video",
+    input: {
+      prompt: args.prompt,
+      duration: parseInt(args.duration, 10),
+      ...(opts.firstFrameUrl !== undefined ? { first_frame_url: opts.firstFrameUrl } : {}),
+      ...(opts.lastFrameUrl !== undefined ? { last_frame_url: opts.lastFrameUrl } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+    },
+  };
+}
+
+type MiniMaxH3R2vArgs = {
+  prompt: string;
+  duration: string;
+  aspect_ratio?: MiniMaxH3ReferenceAspectRatio;
+  resolution?: MiniMaxH3Resolution;
+};
+
+type MiniMaxH3R2vOpts = {
+  referenceImageUrls?: string[];
+  referenceVideoUrls?: string[];
+  referenceAudioUrls?: string[];
+};
+
+function buildMiniMaxH3R2vPayload(args: MiniMaxH3R2vArgs, opts: MiniMaxH3R2vOpts): MiniMaxH3ReferenceToVideoRequest {
+  return {
+    model: "minimax-h3/reference-to-video",
+    input: {
+      prompt: args.prompt,
+      duration: parseInt(args.duration, 10),
+      ...(opts.referenceImageUrls && opts.referenceImageUrls.length > 0 ? { reference_image_urls: opts.referenceImageUrls } : {}),
+      ...(opts.referenceVideoUrls && opts.referenceVideoUrls.length > 0 ? { reference_video_urls: opts.referenceVideoUrls } : {}),
+      ...(opts.referenceAudioUrls && opts.referenceAudioUrls.length > 0 ? { reference_audio_urls: opts.referenceAudioUrls } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // xAI payload builders
 // ---------------------------------------------------------------------------
 
@@ -1343,7 +1426,7 @@ function buildXaiGrokImagineVideoPayload(
         ? { reference_images: imageUrls.map((url) => ({ url })) }
         : {}),
     ...(numericDuration(args.duration) !== undefined ? { duration: numericDuration(args.duration) as XaiVideoGenerateRequest["duration"] } : {}),
-    ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+    ...(args.resolution !== undefined ? { resolution: args.resolution as XaiVideoGenerateRequest["resolution"] } : {}),
     ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as XaiVideoGenerateRequest["aspect_ratio"] } : {}),
   };
 }
@@ -1862,6 +1945,36 @@ function translateToolPayloadUnchecked(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_kie_minimax_h3_text_to_video": {
+      const payload = buildMiniMaxH3T2vPayload(args as MiniMaxH3T2vArgs);
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_kie_minimax_h3_image_to_video": {
+      const firstFrameUrl = (args.first_frame_ref as string | undefined) ?? undefined;
+      const lastFrameUrl = (args.last_frame_ref as string | undefined) ?? undefined;
+      const payload = buildMiniMaxH3I2vPayload(
+        args as MiniMaxH3I2vArgs,
+        {
+          ...(firstFrameUrl !== undefined && firstFrameUrl.trim() !== "" ? { firstFrameUrl } : {}),
+          ...(lastFrameUrl !== undefined && lastFrameUrl.trim() !== "" ? { lastFrameUrl } : {}),
+        },
+      );
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_kie_minimax_h3_reference_to_video": {
+      const referenceImageUrls = imageRefs.length > 0 ? imageRefs : undefined;
+      const referenceVideoUrls = (args.video_refs as string[] | undefined) ?? undefined;
+      const referenceAudioUrls = (args.audio_refs as string[] | undefined) ?? undefined;
+      const payload = buildMiniMaxH3R2vPayload(
+        args as MiniMaxH3R2vArgs,
+        {
+          ...(referenceImageUrls !== undefined ? { referenceImageUrls } : {}),
+          ...(referenceVideoUrls !== undefined && referenceVideoUrls.length > 0 ? { referenceVideoUrls } : {}),
+          ...(referenceAudioUrls !== undefined && referenceAudioUrls.length > 0 ? { referenceAudioUrls } : {}),
+        },
+      );
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
 
     case "generate_alibaba_wan_2_7_text_to_image": {
       const imageUrls = imageRefs;
@@ -1957,6 +2070,9 @@ export {
   buildHappyHorseI2vPayload,
   buildHappyHorseRefPayload,
   buildHappyHorseVideoEditPayload,
+  buildMiniMaxH3T2vPayload,
+  buildMiniMaxH3I2vPayload,
+  buildMiniMaxH3R2vPayload,
   buildAlibabaImagePayload,
   buildAlibabaQwenImagePayload,
   buildAlibabaVideoPayload,

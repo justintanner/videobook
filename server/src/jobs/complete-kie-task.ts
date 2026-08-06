@@ -12,7 +12,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_t2v_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "gpt_image_text" | "kling30_video" | "kling30_motion_control_video" | "seedance2_video" | "wan27_t2v_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "happyhorse_t2v_video" | "happyhorse_i2v_video" | "happyhorse_ref_video" | "happyhorse_videoedit_video" | "volcengine_lipsync_video" | "omnihuman_video" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "grok_imagine_upscale_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_nano_banana_2_lite" | "fal_nano_banana_2_lite_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_t2v_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "gpt_image_text" | "kling30_video" | "kling30_motion_control_video" | "seedance2_video" | "wan27_t2v_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "happyhorse_t2v_video" | "happyhorse_i2v_video" | "happyhorse_ref_video" | "happyhorse_videoedit_video" | "minimax_h3_t2v_video" | "minimax_h3_i2v_video" | "minimax_h3_r2v_video" | "volcengine_lipsync_video" | "omnihuman_video" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "grok_imagine_upscale_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_nano_banana_2_lite" | "fal_nano_banana_2_lite_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
   assetId: string;
   assetDir: string;
   bookId: string;
@@ -86,6 +86,8 @@ export function registerCompleteKieTaskJob(fs: Engine): void {
         await completeWan27Video(fs, assetId, assetDir, bookId, meta, resultUrls, taskId);
       } else if (taskType === "happyhorse_t2v_video" || taskType === "happyhorse_i2v_video" || taskType === "happyhorse_ref_video" || taskType === "happyhorse_videoedit_video") {
         await completeHappyHorseVideo(fs, assetId, assetDir, bookId, meta, resultUrls, taskType, taskId);
+      } else if (taskType === "minimax_h3_t2v_video" || taskType === "minimax_h3_i2v_video" || taskType === "minimax_h3_r2v_video") {
+        await completeMiniMaxH3Video(fs, assetId, assetDir, bookId, meta, resultUrls, taskType, taskId);
       } else if (taskType === "volcengine_lipsync_video") {
         await completeVolcengineLipSyncVideo(fs, assetId, assetDir, bookId, meta, resultUrls, taskId);
       } else if (taskType === "omnihuman_video") {
@@ -959,6 +961,54 @@ async function completeHappyHorseVideo(
     source_videos: meta.sourceVideoIds,
     source_audios: meta.sourceAudioIds,
     model: happyhorseModel,
+    download_url: videoUrl,
+    download_url_content_hash: contentHash(buffer),
+    ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
+    generated_at: new Date().toISOString(),
+  };
+
+  const videoPath = join(assetDir, "original.mp4");
+
+  if (taskId !== undefined) {
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
+  }
+
+  const jobId = `process-video-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "process_video",
+    videoPath,
+    assetId,
+    assetDir,
+    bookId,
+    provenance,
+  } as unknown as Record<string, unknown>);
+}
+
+async function completeMiniMaxH3Video(
+  fs: Engine,
+  assetId: string,
+  assetDir: string,
+  bookId: string,
+  meta: Record<string, unknown>,
+  resultUrls: string[],
+  taskType: string,
+  taskId?: string,
+): Promise<void> {
+  const videoUrl = resultUrls[0];
+  if (!videoUrl) throw new Error("No video URL in result");
+
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
+
+  // Descriptive provenance only (never fed to modelSlug/pricing).
+  const minimaxModel =
+    taskType === "minimax_h3_t2v_video" ? "minimax-h3/text-to-video"
+      : taskType === "minimax_h3_i2v_video" ? "minimax-h3/image-to-video"
+      : "minimax-h3/reference-to-video";
+  const provenance = {
+    source_images: meta.sourceImageIds,
+    source_videos: meta.sourceVideoIds,
+    source_audios: meta.sourceAudioIds,
+    model: minimaxModel,
     download_url: videoUrl,
     download_url_content_hash: contentHash(buffer),
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),

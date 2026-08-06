@@ -108,6 +108,9 @@ import { generateHappyhorseT2vVideoDef } from "./generate-happyhorse-t2v-video.j
 import { generateHappyhorseI2vVideoDef } from "./generate-happyhorse-i2v-video.js";
 import { generateHappyhorseRefVideoDef } from "./generate-happyhorse-ref-video.js";
 import { generateHappyhorseVideoeditVideoDef } from "./generate-happyhorse-videoedit-video.js";
+import { generateMiniMaxH3T2vVideoDef } from "./generate-minimax-h3-t2v-video.js";
+import { generateMiniMaxH3I2vVideoDef } from "./generate-minimax-h3-i2v-video.js";
+import { generateMiniMaxH3R2vVideoDef } from "./generate-minimax-h3-r2v-video.js";
 import { generateVolcengineLipsyncVideoDef } from "./generate-volcengine-lipsync-video.js";
 import { generateOmnihumanVideoDef } from "./generate-omnihuman-video.js";
 import { generateWan27ImageDef } from "./generate-wan27-image.js";
@@ -407,6 +410,9 @@ export function getAllToolDefs(
     generateHappyhorseI2vVideoDef(fs),
     generateHappyhorseRefVideoDef(fs),
     generateHappyhorseVideoeditVideoDef(fs),
+    generateMiniMaxH3T2vVideoDef(fs),
+    generateMiniMaxH3I2vVideoDef(fs),
+    generateMiniMaxH3R2vVideoDef(fs),
     generateVolcengineLipsyncVideoDef(fs),
     generateOmnihumanVideoDef(fs),
     generateWan27ImageDef(fs),

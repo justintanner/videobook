@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (292)
+## MCP endpoints (295)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -139,6 +139,9 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `generate_kie_kling_3_0_motion_control` (historical names, not exposed: `generate_kling30_motion_control_video`) — Apply motion from reference videos to character images using Kling 3.0 motion-control. Creates a new video artifact and enqueues a background job.
 - `generate_kie_kling_3_0_turbo_video` (historical names, not exposed: `generate_kling30_turbo_video`) — Generate a video using Kling 3.0 Turbo tier via KIE (text-to-video or image-to-video). Creates a new video artifact and enqueues a background job.
 - `generate_kie_kling_3_0_video` (historical names, not exposed: `generate_kling30_video`) — Generate a video using Kling 3.0 with optional reference images, character elements, and multi-shot mode. Creates a new video artifact and enqueues a background job.
+- `generate_kie_minimax_h3_image_to_video` — Generate a video from a first and/or last frame image using MiniMax H3 image-to-video. Creates a new video artifact and enqueues a background job.
+- `generate_kie_minimax_h3_reference_to_video` — Generate a video from reference images, videos, and/or audio using MiniMax H3 reference-to-video. Creates a new video artifact and enqueues a background job.
+- `generate_kie_minimax_h3_text_to_video` — Generate a video from a prompt using MiniMax H3 text-to-video. Creates a new video artifact and enqueues a background job.
 - `generate_kie_nano_banana_pro_text_to_image` (historical names, not exposed: `generate_nano_banana_image`) — Generate an image using the nano-banana-pro model. Creates a new image artifact and enqueues a background job. Prompt is required; reference images are optional.
 - `generate_kie_omnihuman_1_5_video` (historical names, not exposed: `generate_omnihuman_video`) — Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new video artifact and enqueues a background job.
 - `generate_kie_qwen_2_0_edit_image` (historical names, not exposed: `generate_qwen2_image_edit`) — Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new image artifact and enqueues a background job.

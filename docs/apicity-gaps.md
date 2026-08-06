@@ -423,6 +423,41 @@ descriptions without weakening the static bound.
 public-rate check. Apicity `main` records KIE's published 4-credit rate as
 $0.02/image and removes the model from the unpriced allowlist.
 
+## 35. (gap) KIE MiniMax H3 ships without cost slugs or pricing — OPEN in 0.8.6
+
+`@apicity/kie@0.8.6` adds the three MiniMax H3 video endpoints
+(`minimax-h3/text-to-video`, `minimax-h3/image-to-video`,
+`minimax-h3/reference-to-video`) to `MediaGenerationRequest`, but
+`@apicity/cost@0.8.6` knows nothing about them. Two independent failures, both
+reproduced against the installed 0.8.6 packages:
+
+1. `modelSlug("kie", "minimax-h3/text-to-video")` throws
+   `No slug registered for kie/minimax-h3/text-to-video — add it to
+   packages/provider/cost/src/slugs.ts`. Generate-tool modules evaluate
+   `modelSlug()` at module scope (`const SLUG = modelSlug(...)`), so an
+   unguarded call takes down server startup, not just the one tool.
+2. `computeEstimate({ provider: "kie", payload: { model:
+   "minimax-h3/text-to-video", input: { duration: 6, resolution: "768P" } } })`
+   returns `usd: 0` with warning
+   `model 'minimax-h3/text-to-video' not found in pricing table for provider
+   'kie'`. `mintKieOtp` (`server/src/jobs/kie-paygate.ts`) throws
+   `KIE cost estimate is not bounded` on any warning, so no MiniMax H3 task can
+   be submitted at all.
+
+There is no supported way to inject pricing at runtime — `@apicity/cost` exports
+`PRICING` and `MODEL_SLUGS` as plain consts, and rewriting the model id inside
+`normalizeKieCostPayload` to borrow another model's rate would knowingly
+misprice a paid call.
+
+**Workaround:** none yet for the paygate. If the tools need to land before the
+cost release, the documented interim precedent is the local `VEO31_SLUGS`
+literal map in `server/src/tools/generate-veo31-video.ts` (see §15) — that
+unblocks naming only; live generation stays blocked either way.
+
+**Ask Apicity:** register `minimax-h3/{text,image,reference}-to-video` slugs
+and publish per-second (or per-unit) rates for the `duration` × `resolution`
+(768P / 2K) tiers.
+
 ---
 
 ## Open / partial summary (installed 0.8.0 plus Apicity main candidate)
@@ -430,6 +465,7 @@ $0.02/image and removes the model from the unpriced allowlist.
 | Status            | Sections                                              | What Videocity still carries                            |
 | ----------------- | ----------------------------------------------------- | ------------------------------------------------------- |
 | **OPEN**          | §18 character metadata                                | list/singleton reconcile                                |
+| **OPEN**          | §35 MiniMax H3 cost coverage                          | no slug map entry, no pricing; paygate refuses to mint  |
 | **PARTIAL**       | §14 Flow loose schemas                                | per-model domains                                       |
 | **PARTIAL**       | §15 Flow estimate semantics                           | local Gemini API list USD (`google-flow-cost.ts`)       |
 | **PARTIAL**       | §22 xAI 10s ref duration                              | local 10s check; 7-ref max **derived**                  |

@@ -23,6 +23,10 @@ import {
   HappyHorse11ReferenceToVideoRequestSchema,
   HappyHorse11TextToVideoRequestSchema,
   HappyHorseVideoEditRequestSchema,
+  MiniMaxH3DurationSchema,
+  MiniMaxH3ImageToVideoRequestSchema,
+  MiniMaxH3ReferenceToVideoRequestSchema,
+  MiniMaxH3TextToVideoRequestSchema,
   VolcengineVideoToVideoLipSyncRequestSchema,
   Omnihuman15RequestSchema,
   GeminiOmniVideoRequestSchema,
@@ -416,6 +420,36 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
+  minimax_h3_t2v: {
+    label: "MiniMax H3 — Text",
+    tool_name: "generate_kie_minimax_h3_text_to_video",
+    description: "MiniMax H3 text-to-video (kie)",
+    params: ["prompt", "aspect_ratio", "duration", "resolution"],
+    defaults: {},
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
+  minimax_h3_i2v: {
+    label: "MiniMax H3 — Frames",
+    tool_name: "generate_kie_minimax_h3_image_to_video",
+    description: "MiniMax H3 image-to-video from a first and/or last frame (kie)",
+    params: ["prompt", "first_frame_ref", "last_frame_ref", "duration", "resolution"],
+    defaults: {},
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
+  minimax_h3_r2v: {
+    label: "MiniMax H3 — Reference",
+    tool_name: "generate_kie_minimax_h3_reference_to_video",
+    description: "MiniMax H3 reference-to-video with image, video, and/or audio references (kie)",
+    params: ["prompt", "image_refs", "video_refs", "audio_refs", "aspect_ratio", "duration", "resolution"],
+    defaults: {},
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
   volcengine_lipsync: {
     label: "Volcengine Lip-Sync",
     tool_name: "generate_kie_volcengine_video_to_video_lip_sync",
@@ -782,6 +816,7 @@ const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
   generate_xai_grok_imagine_video: XaiVideoGenerateRequestSchema.shape.reference_images,
   generate_kie_wan_2_7_reference_to_video: Wan27RefToVideoRequestSchema.shape.input.shape.reference_image,
   generate_kie_happyhorse_1_1_reference_to_video: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.reference_image,
+  generate_kie_minimax_h3_reference_to_video: MiniMaxH3ReferenceToVideoRequestSchema.shape.input.shape.reference_image_urls,
 };
 
 const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
@@ -963,6 +998,23 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     resolution: HappyHorseVideoEditRequestSchema.shape.input.shape.resolution,
     audio_setting: HappyHorseVideoEditRequestSchema.shape.input.shape.audio_setting,
     seed: HappyHorseVideoEditRequestSchema.shape.input.shape.seed,
+  },
+  generate_kie_minimax_h3_text_to_video: {
+    prompt: MiniMaxH3TextToVideoRequestSchema.shape.input.shape.prompt,
+    aspect_ratio: MiniMaxH3TextToVideoRequestSchema.shape.input.shape.aspect_ratio,
+    duration: MiniMaxH3DurationSchema,
+    resolution: MiniMaxH3TextToVideoRequestSchema.shape.input.shape.resolution,
+  },
+  generate_kie_minimax_h3_image_to_video: {
+    prompt: MiniMaxH3ImageToVideoRequestSchema.shape.input.shape.prompt,
+    duration: MiniMaxH3DurationSchema,
+    resolution: MiniMaxH3ImageToVideoRequestSchema.shape.input.shape.resolution,
+  },
+  generate_kie_minimax_h3_reference_to_video: {
+    prompt: MiniMaxH3ReferenceToVideoRequestSchema.shape.input.shape.prompt,
+    aspect_ratio: MiniMaxH3ReferenceToVideoRequestSchema.shape.input.shape.aspect_ratio,
+    duration: MiniMaxH3DurationSchema,
+    resolution: MiniMaxH3ReferenceToVideoRequestSchema.shape.input.shape.resolution,
   },
   generate_kie_volcengine_video_to_video_lip_sync: {
     mode: VolcengineVideoToVideoLipSyncRequestSchema.shape.input.shape.mode,
@@ -1552,6 +1604,28 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
       if (param === "image_refs") prop.description = "0-5 optional reference images for character/style guidance";
       if (param === "resolution") prop.description = "Output resolution: 720p / 1080p";
       if (param === "audio_setting") prop.description = "Audio: auto (model decides) or origin (keep original)";
+    }
+    if (toolName === "generate_kie_minimax_h3_text_to_video") {
+      if (param === "prompt") prop.description = "Video description (max 7000 chars)";
+      if (param === "aspect_ratio") prop.description = "Output aspect ratio (required): 21:9 / 16:9 / 4:3 / 1:1 / 3:4 / 9:16";
+      if (param === "duration") prop.description = "Video duration: 4-15 seconds (required)";
+      if (param === "resolution") prop.description = "Output resolution: 768P / 2K (default 768P)";
+    }
+    if (toolName === "generate_kie_minimax_h3_image_to_video") {
+      if (param === "prompt") prop.description = "Video description (max 7000 chars)";
+      if (param === "first_frame_ref") prop.description = "First frame image asset (at least one of first/last frame required, e.g., @img-start)";
+      if (param === "last_frame_ref") prop.description = "Last frame image asset (at least one of first/last frame required, e.g., @img-end)";
+      if (param === "duration") prop.description = "Video duration: 4-15 seconds (required)";
+      if (param === "resolution") prop.description = "Output resolution: 768P / 2K (default 768P)";
+    }
+    if (toolName === "generate_kie_minimax_h3_reference_to_video") {
+      if (param === "prompt") prop.description = "Video description (max 7000 chars)";
+      if (param === "image_refs") prop.description = "Reference image assets (0-9; at least one image or video required)";
+      if (param === "video_refs") prop.description = "Reference video assets (0-3; at least one image or video required)";
+      if (param === "audio_refs") prop.description = "Reference audio assets (0-3)";
+      if (param === "aspect_ratio") prop.description = "Output aspect ratio: adaptive / 21:9 / 16:9 / 4:3 / 1:1 / 3:4 / 9:16";
+      if (param === "duration") prop.description = "Video duration: 4-15 seconds (required)";
+      if (param === "resolution") prop.description = "Output resolution: 768P / 2K (default 768P)";
     }
     if (toolName === "generate_kie_volcengine_video_to_video_lip_sync") {
       if (param === "video_ref") prop.description = "Source video asset to lip-sync (e.g., @vid-scene)";
