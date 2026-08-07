@@ -37,7 +37,6 @@ import {
   Wan27VideoEditRequestSchema,
 } from "@apicity/kie/zod";
 import { GoogleFlowVideosRequestSchema } from "@apicity/googleflow/zod";
-import { normalizeKieCostPayload } from "./cost-adapters.js";
 import {
   buildMiniMaxH3I2vPayload,
   buildMiniMaxH3R2vPayload,
@@ -537,7 +536,8 @@ describe("translateToolPayload", () => {
     if (!result) throw new Error("Expected Kling motion-control payload");
     const estimate = computeEstimate({
       provider: "kie",
-      payload: normalizeKieCostPayload(result.payload, { duration: 6 }),
+      payload: result.payload,
+      costHints: { durationSeconds: 6 },
     });
     expect(estimate.warnings).toEqual([]);
   });

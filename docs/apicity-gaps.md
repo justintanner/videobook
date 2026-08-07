@@ -1,18 +1,11 @@
 # @apicity bugs, gaps, and quirks that Videocity works around
 
 This document tracks provider-package behavior that Videocity cannot consume
-directly. It was re-audited against the installed `@apicity/*@0.8.0` packages on
-2026-07-21 after Videocity finished adopting 0.8.0 (cost adapters, derived
+directly. It was re-audited against the installed `@apicity/*@0.8.8` packages on
+2026-08-07 after Videocity finished adopting 0.8.8 (cost adapters, derived
 schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
-
-## Post-0.8.0 release-candidate status
-
-This document was checked again on 2026-07-22 against Apicity `main` at
-`1a903a73`. Videocity still installs 0.8.0, so entries marked **FIXED ON APICITY
-MAIN** describe the next-release candidate, not code currently available from
-npm. Keep the 0.8.0 workarounds until Videocity adopts that release.
 
 Legend: **bug** = the published contract is wrong or internally inconsistent;
 **gap** = the published contract omits required information; **quirk** = correct
@@ -40,7 +33,7 @@ values to `normal`, omits `index` on the `image_urls` path (Kie treats `index` a
 `task_id`-only), and rewrites prompt `@img-*` mentions to `@imageN` after
 ordering `image_urls` by first prompt mention.
 
-## 3. (gap) Fal model aliases use output types — FIXED ON APICITY MAIN
+## 3. (gap) ~~Fal model aliases use output types~~ — RESOLVED in 0.8.8 (adopted)
 
 Kie, Alibaba, xAI, and the other request-oriented packages now export request
 aliases as `z.input<typeof Schema>`, matching `*RequestInput` aliases, and
@@ -50,22 +43,18 @@ assertions that had compensated for output-typed defaults in
 where Videocity intentionally accepts a different local wire shape and converts
 it to a provider enum or number.
 
-In 0.8.0, `@apicity/fal` is the exception. Its model aliases are declarations such as
-`FalNanoBanana2TextToImageParams = z.infer<typeof
-FalNanoBanana2TextToImageRequestSchema>`, so fields with defaults are required in
-the alias even though callers may omit them. The generic Fal queue submission
-also types `input` as `Record<string, unknown>` rather than associating an
-endpoint ID with its request schema.
+`@apicity/fal@0.8.8` also switched its request aliases to `z.input` and exports
+`FalEndpointInputMap` / `FalQueueSubmitRequest<Id>` for endpoint-specific queue
+input. Videocity adopted the typed map: `submitFalJob`
+(`server/src/jobs/_fal-shared.ts`) is generic over the endpoint id and every
+fal job assembles its input as `FalEndpointInputMap["<endpoint>"]`, so unknown
+or missing fields now fail at compile time — the defect class that let the
+Seedream `auto_4K` junk boolean ship (§23).
 
-Apicity `main` changes the request aliases to `z.input`, adds separate parsed
-`z.output` aliases, and exports `FalEndpointInputMap` for endpoint-specific queue
-input. This closes the upstream ask once the next package release is adopted.
-
-**Workaround:** Videocity derives every Fal-facing tool constraint from the live
-request schemas, then assembles the background queue payload as a generic record.
-
-**Release adoption:** replace the generic queue record with
-`FalEndpointInputMap` and remove any remaining default-field type compensation.
+One residual upstream nit: `FAL_ENDPOINT_REQUEST_SCHEMAS` keys Qwen edit as
+`fal-ai/qwen-image-edit`, but the real fal endpoint (and Videocity's wire id)
+is `fal-ai/qwen-image/edit`. That one job therefore stays on the untyped
+fallback branch until the upstream key is fixed.
 
 ## 4. (gap) ~~Alibaba Qwen stable model and slot schemas~~ — RESOLVED in 0.7.3
 
@@ -106,14 +95,12 @@ an offline fallback.
 | `generate_grok_imagine_video.mode`                   | `fun`/`normal`                         | includes conditionally valid `spicy`                   | Videocity exposes only the external-image path; see §2                           |
 | `generate_grok_imagine_video` with `image_urls`      | omits `index`                          | optional `index` still accepted alongside `image_urls` | Kie docs: `index` is `task_id`-only; see §2                                      |
 | `generate_wan27_videoedit_video.duration`            | exact string values `0,2..10`          | numeric schema with an opaque refine                   | the exact values are derived from `Wan27VideoEditDurationValues`                 |
-| `generate_grok_imagine_ref_video` duration with refs | max 10 seconds when references present | general video schema allows 1..15 seconds              | reference-specific ten-second cap is not in Apicity; seven-image max is; see §22 |
 
 These are the only deliberate restrictions represented by
 `APICITY_DERIVE_SKIP` or by targeted validation against an otherwise reusable
 strict provider schema. Google Flow's broader local contract is tracked in §14.
 Fal Wan reference-to-video derives from
-`FalWanV2p7ReferenceToVideoRequestSchema`. Pre-upload URL typing workarounds are
-tracked in §11; out-of-band cost duration hints are tracked in §30.
+`FalWanV2p7ReferenceToVideoRequestSchema`.
 
 ## 9. (gap) ~~HappyHorse 1.1 slugs and pricing~~ — RESOLVED in 0.6.1
 
@@ -127,37 +114,15 @@ missing-cost paygate exception.
 per-second rates. Videocity uses `modelSlug`, a normal cost adapter, and bounded
 paygate pricing.
 
-## 11. (bug) Kie media fields require public URLs before upload — FIXED ON APICITY MAIN
+## 11. (bug) ~~Kie media fields require public URLs before upload~~ — RESOLVED in 0.8.8 (verified retired)
 
-Two Kie request schemas type asset fields as `z.string().url()` even though
-Videocity (and any SDK consumer that uploads after validation) only has local
-`@img-*` / `@vid-*` / `@aud-*` slugs at tool-invoke time.
-
-**Seedance 2 Mini** — 0.8.0 keeps `.url()` deliberately (clearer error message)
-and caps images at `.max(9)`:
-
-```ts
-reference_image_urls: z.array(urlMsg).max(9).default([]);
-reference_video_urls: z.array(z.string().url()).max(3).default([]);
-reference_audio_urls: z.array(z.string().url()).max(3).default([]);
-```
-
-Regular and Fast Seedance stay on plain strings.
-
-**Qwen2 image-edit** — `image_url` is still `z.string().url()`. Pre-upload
-`safeParse` with a bare `@img-*` slug fails with `Invalid URL` (vc-zcxs).
-
-**Workaround:** Mini uses `apicityStringArrayField` + omits refs from the
-pre-check; Qwen2 uses `slugAsPlaceholderUrl` for pre-check only. Jobs upload
-real CDN URLs before calling Kie.
-
-Apicity `main` accepts plain strings for Seedance 2 Mini reference media and
-Qwen2 image-edit media at the construction boundary. Its generated KIE README
-also preserves the requirement to replace local asset identifiers with
-publicly reachable URLs before `createTask`.
-
-**Release adoption:** remove the Mini pre-check omission and Qwen2 placeholder
-URL shim after the next KIE package is installed; retain the upload step itself.
+`@apicity/kie` accepts plain strings for Seedance 2 Mini reference media and
+Qwen2 image-edit media at the construction boundary, so bare `@img-*` / `@vid-*`
+slugs validate. The videobook shims are gone: the Seedance 2 shared tool derives
+reference fields from the schema (no pre-check omission) and
+`slugAsPlaceholderUrl` no longer exists anywhere in `server/src`. Jobs still
+upload local assets to public CDN URLs before calling Kie — that step is a
+provider requirement, not a workaround.
 
 ## 12. (gap) ~~Gemini Omni slug and pricing~~ — RESOLVED in 0.7.3
 
@@ -250,80 +215,60 @@ Videocity sets `MAX_SOUND_GENERATION_PROMPT_CHARS` from
 `v2v|N` (no trailing empty resolution). Videocity removed the duration
 normalization and V2V paygate exception; T2V and V2V both mint bounded OTPs.
 
-## 22. (gap) xAI reference-video duration cap still absent — PARTIAL in 0.8.0
+## 22. (gap) ~~xAI reference-video duration cap absent~~ — RESOLVED in 0.8.8 (adopted)
 
-`reference_images` / `reference_image_file_ids` now have `.max(7)` (sourced from
-WaveSpeedAI docs). The general video schema still allows 1–15 seconds with no
-cross-field refine for a reference-specific ten-second limit. Apicity 0.8.0
-explicitly dropped that duration clause (REQ-011).
+`@apicity/xai` carries the cross-field refine "duration must be at most 10
+seconds when using reference images" on `XaiVideoGenerateRequestSchema` (plus
+the `.max(7)` on `reference_images` / `reference_image_file_ids`).
+`generate_grok_imagine_ref_video` validates the assembled request through that
+schema and surfaces the schema message, so the rule and any future changes
+derive from the package; the hand-rolled `Number(duration) > 10` check and its
+hard-coded error string are gone.
 
-**Workaround:** `generate_grok_imagine_ref_video` derives the seven-slot max from
-`XaiVideoGenerateRequestSchema.shape.reference_images` via
-`apicityStringArrayField`. Videocity still rejects durations over ten only when
-references are present (local policy in the tool handler and form validation).
+## 23. (bug) ~~Fal Seedream 5 Lite input schema incomplete~~ — RESOLVED in 0.8.8 (adopted)
 
-**Ask Apicity:** add a cross-field refinement for the ten-second reference limit
-if/when xAI documents it on the primary docs.
+`@apicity/fal` documents `auto_4K` as an `image_size` **preset** in
+`FalSeedreamV5LiteImageSizeSchema` (not a standalone boolean), carries no
+`auto_4K` field on the request schemas, and bounds `num_images` / `max_images`
+to integers in [1, 6]. Videocity's Seedream fal tools dropped the hand-declared
+`auto_4K: z.boolean()` — a junk field the untyped queue submission let through
+(§3), so a 4K request silently got the default size — and derive `image_size`
+(with the `auto_4K` preset) and the count bounds via `apicityField`.
+`return_byteplus_urls` is documented on the text-to-image surface only and is
+deliberately not exposed: Videocity ingests through its own CDN download path.
 
-## 23. (bug) Fal Seedream 5 Lite input schema still incomplete — PARTIAL in 0.8.0
+## 24. (bug) ~~Fal Nano Banana edit reference caps missing~~ — RESOLVED in 0.8.8 (decided: no cap)
 
-0.8.0 adds `auto_4K` as a **boolean** field (not an `image_size` enum value) and
-types `num_images`/`max_images` as `.int().min(1)` with no documented upper
-bound. `FalSeedreamV5LiteImageSizeSchema` still stops at `auto_3K`.
-`return_byteplus_urls` remains absent.
+Upstream investigated and concluded Fal documents no `image_urls` cap for the
+Nano Banana 2 / Pro edit endpoints, so `@apicity/fal` deliberately leaves the
+arrays unbounded. Videocity removed its local `.min(1).max(14)` append on
+`image_refs` (kept `.min(1)`) and defers to the provider contract — a
+provider-side rejection would surface naturally. The original Fal-docs
+rationale for the local cap is gone, so this stops being an upstream ask.
 
-**Workaround:** Seedream fal tools use `apicityField` for `image_size`,
-`auto_4K` (boolean), `num_images`, and `max_images` — no local `"auto_4K"` size
-enum patch.
-
-**Ask Apicity:** confirm whether Fal's `auto_4K` is boolean vs size enum, add
-`return_byteplus_urls` if still live, and document any count upper bound.
-
-## 24. (bug) Fal Nano Banana edit reference caps still missing — PARTIAL in 0.8.0
-
-`num_images` is now `.int().min(1).max(4)` and `seed` is `.int()` for Nano
-Banana 2 / Pro (and original Nano Banana seed is `.int()`). Edit `image_urls`
-arrays remain unbounded (0.8.0 dropped an uncited `.max(9)` rather than adding
-Fal's 14-reference cap).
-
-**Workaround:** Fal tools derive `num_images` and `seed` with `apicityField`.
-Nano Banana 2 / Pro **edit** tools still append a local `.max(14)` on
-`image_slugs` after `apicityStringArrayField` (the only remaining local contract
-patch for this family).
-
-**Ask Apicity:** add `.max(14)` (or the current Fal doc bound) on Nano Banana
-2/Pro edit image arrays.
-
-## 25. (gap) ~~Kie OmniHuman and Volcengine models are absent from the cost registry~~ — RESOLVED in 0.8.0 (formal hints fixed on main; §30)
+## 25. (gap) ~~Kie OmniHuman and Volcengine models are absent from the cost registry~~ — RESOLVED in 0.8.0
 
 `@apicity/cost@0.8.0` registers slugs (`oh1p5`, `vlipsync`) and per-second rates
 for both models. Schemas still omit duration (output follows driving audio /
-source video), so callers must pass a top-level duration hint — see §30.
+source video), so callers pass the typed `costHints.durationSeconds` side
+channel — see §30.
 
-**Workaround:** tools use `modelSlug("kie", …)` for asset/job names; cost
-adapters + job handlers pass `KieCostHints` from source audio/video metadata.
+Tools use `modelSlug("kie", …)` for asset/job names; cost adapters + job
+handlers pass `KieCostHints` from source audio/video metadata.
 `COST_TABLE_PENDING_MODELS` was removed; OTP minting fails closed without a
 duration hint.
 
-## 26. (gap) Fal cost coverage is image-only — FIXED ON APICITY MAIN
+## 26. (gap) ~~Fal cost coverage is image-only~~ — RESOLVED in 0.8.8 (adopted)
 
-`EstimateRequest` accepts `provider: "fal"` with endpoint-keyed rates for Nano
-Banana family, Seedream v5 Lite text-to-image, flux, and qwen-image. Videocity's
-Fal **video** tools (Kling v3, Wan, Seedance, Grok Imagine video) and several
-edit endpoints (e.g. Seedream edit, Nano Banana 2 edit) remain unpriced.
-
-**Workaround:** `FAL_ADAPTERS` in `cost-adapters.ts` cover priced image tools
-(`generate_nano_banana_*_fal`, `generate_seedream_v5_lite_fal`). Unpriced Fal
-tools still show "—".
-
-Apicity `main` adds static rates for the Fal video and remaining edit/image
-endpoints used by Videocity, with per-second models reading
-`costHints.durationSeconds` when their wire request cannot declare duration.
-`google/nano-banana-2-lite` and `google/nano-banana-lite/edit` remain explicitly
-listed as dynamic-pricing endpoints rather than receiving guessed static rates.
-
-**Release adoption:** extend `FAL_ADAPTERS` to the newly priced tools; retain
-"—" for the two declared dynamic-pricing endpoints.
+`@apicity/cost` prices every fal family Videocity ships: Kling Video v3
+pro/standard t2v+i2v (audio-tiered per second), Seedance 2.0 and Fast
+t2v/i2v/r2v (token-metered per second), Wan v2.7 t2v/i2v (resolution-tiered)
+and r2v/edit-video (flat per second), Wan/Qwen/Seedream/Nano-Banana/Grok image
+and edit endpoints, and Grok Imagine video i2v/r2v/extend. `FAL_ADAPTERS` in
+`server/src/cost-adapters.ts` now covers all of them. The "—" path remains only
+for `google/nano-banana-2-lite`(/`-lite/edit`), which upstream declares
+dynamic-pricing, and `xai/grok-imagine-video/edit-video`, which has no
+published rate.
 
 ## 27. (gap) ~~xAI media generation has no per-unit cost contract~~ — RESOLVED in 0.8.0
 
@@ -332,19 +277,13 @@ Per-second video (`grok-imagine-video*`) and per-generation image
 `duration` only. Videocity's `getCostAdapter` routes `_provider: "xai"` to
 `XAI_ADAPTERS` (docs.x.ai model keys), not Kie `grok-imagine/*` slugs.
 
-## 28. (gap) Alibaba media cost is incomplete for non-pro image — FIXED ON APICITY MAIN
+## 28. (gap) ~~Alibaba media cost is incomplete for non-pro image~~ — RESOLVED in 0.8.8 (adopted)
 
-0.8.0 prices `qwen-image-*`, `wan2.7-image-pro`, `wan2.7-i2v`, and
-`wan2.7-videoedit`. Non-pro `wan2.7-image` still has no per-image rate.
-
-**Workaround:** `ALIBABA_ADAPTERS` cover Qwen image/edit, Wan image pro, and
-Wan i2v video. `generate_alibaba_image` (non-pro) still shows "—" when unpriced.
-
-Apicity `main` registers `wan2.7-image` as `wan2p7` at the International-region
-list rate of $0.03/image. The pro rate remains $0.075/image.
-
-**Release adoption:** add the normal Alibaba cost adapter for
-`generate_alibaba_image` and remove its unpriced display path.
+`@apicity/cost` registers `wan2.7-image` (slug `wan2p7`) at the
+International-region list rate of $0.03/image; the pro rate stays $0.075.
+`ALIBABA_ADAPTERS` covers `generate_alibaba_wan_2_7_text_to_image` via the
+normal `alibabaImage("wan2.7-image")` adapter; the unpriced "—" display path
+for that tool is gone.
 
 ## 29. (gap) ~~ElevenLabs TTS text limits are model-specific but absent from the schema~~ — RESOLVED in 0.8.0
 
@@ -352,7 +291,7 @@ list rate of $0.03/image. The pro rate remains $0.075/image.
 per-model caps (with a default-model path when `model_id` is omitted) plus a
 static 40k ceiling. Videocity leaves max validation to the package.
 
-## 30. (gap) Per-second cost extractors need out-of-band duration — FIXED ON APICITY MAIN
+## 30. (gap) ~~Per-second cost extractors need out-of-band duration~~ — RESOLVED in 0.8.8 (adopted)
 
 `@apicity/cost` prices several Kie models per second while their request schemas
 have no duration field (output follows source/driving media):
@@ -364,141 +303,84 @@ have no duration field (output follows source/driving media):
 | `omnihuman-1-5`                      | driving audio   |
 | `volcengine/video-to-video-lip-sync` | source video    |
 
-Without a duration, `computeEstimate` returns an unbounded warning. 0.8.0
-documents top-level `duration` as the cost-only convention
-(`input.duration ?? p.duration`).
+Videocity maps its measured `KieCostHints.duration` to the formal
+`EstimateRequest.costHints.durationSeconds` side channel
+(`toUpstreamCostHints` in `server/src/cost-adapters.ts`); the estimate-only
+top-level `duration` payload injection (`normalizeKieCostPayload`) is deleted.
+Everything else is unchanged: job handlers measure source media, hints persist
+in `.generation-cost-hints.json` for queued re-submit, the OTP hashes the
+verbatim wire request, `estimate_cost` enriches from asset `original` duration
+metadata, and minting fails closed when no duration is readable.
 
-**Workaround:** out-of-band `KieCostHints` in `cost-adapters.ts` / `kie-paygate.ts`:
+## 31. (bug) ~~Fal area pricing guesses omitted image sizes~~ — RESOLVED in 0.8.6
 
-- job handlers measure source media and pass `costHints: { duration }`;
-- `normalizeKieCostPayload` sets top-level `duration` for the estimate only;
-- OTP hashes the verbatim wire request (no duration field);
-- hints persist in `.generation-cost-hints.json` for queued re-submit;
-- `estimate_cost` enriches from asset `original` duration metadata.
-
-Apicity `main` exports `CostHints` and accepts
-`costHints: { durationSeconds }` on `EstimateRequest`. KIE, xAI, and Fal
-per-second readers use that typed side channel while preserving the verbatim
-wire request for paygate hashing. Legacy payload duration readers remain for
-compatibility, but the warning now directs consumers to the formal field.
-
-**Release adoption:** map Videocity's measured `KieCostHints.duration` to
-`costHints.durationSeconds`, then remove the top-level estimate-only duration
-injection. Keep measurement, persistence, and fail-closed behavior.
-
-## 31. (bug) Fal area pricing guesses omitted image sizes — FIXED ON APICITY MAIN
-
-0.8.0 assumes one megapixel per image whenever `image_size` is omitted. That is
-unsafe for endpoints without a published fixed default and can underprice a
-request after Fal's per-image whole-megapixel rounding.
-
-Apicity `main` uses the documented `landscape_4_3` default for Flux dev, Flux
+`@apicity/cost` uses the documented `landscape_4_3` default for Flux dev, Flux
 schnell, and Qwen Image. Qwen Image Edit publishes no fixed default, so omission
-now produces an unbounded warning; Hunyuan instruct edit continues to warn for
-its upstream `auto` default. Explicit presets are still rounded up per image.
+produces an unbounded warning; Hunyuan instruct edit continues to warn for its
+upstream `auto` default. Explicit presets are still rounded up per image. No
+Videocity change was needed.
 
-## 32. (bug) Kling 3.0 multi-shot requests can select the wrong sound rate — FIXED ON APICITY MAIN
+## 32. (bug) ~~Kling 3.0 multi-shot requests can select the wrong sound rate~~ — RESOLVED in 0.8.6
 
-In 0.8.0, KIE Kling 3.0 selects the sound tier only for explicit
-`sound: true`. KIE promotes omitted sound to the sound-enabled behavior when
-`multi_shots: true`, so that request shape can be underpriced.
+`@apicity/cost` selects the sound tier for `multi_shots: true` plus omitted
+`sound`, matching KIE's sound-enabled behavior; explicit `sound: false`
+continues to use the base tier. No Videocity change was needed.
 
-Apicity `main` selects the sound tier for `multi_shots: true` plus omitted
-`sound`; explicit `sound: false` continues to use the base tier.
+## 33. (gap) ~~ElevenLabs MCP metadata hides the default-model text cap~~ — RESOLVED in 0.8.6 (n/a for Videocity)
 
-## 33. (gap) ElevenLabs MCP metadata hides the default-model text cap — FIXED ON APICITY MAIN
+The provider schema enforces 10,000 characters when `model_id` is omitted and a
+model-specific cap up to 40,000 when explicit, and the conditional rule is now
+in the root request-schema description. The remaining MCP-surface half concerns
+`@apicity/mcp-server`, which Videocity does not install — Videocity's own TTS
+tool leaves max validation to the package (§29), so nothing here applies.
 
-The 0.8.0 provider schema correctly enforces 10,000 characters when `model_id`
-is omitted and a model-specific cap up to 40,000 when it is explicit. Its static
-JSON Schema still presents only `maxLength: 40000`, so MCP clients cannot see
-the conditional default-model rule.
+## 34. (gap) ~~KIE Nano Banana has a slug but no price~~ — RESOLVED in 0.8.6
 
-Apicity `main` adds the conditional rule to the root request-schema description,
-and `@apicity/mcp-server` includes that guidance in all four TTS tool
-descriptions without weakening the static bound.
+`@apicity/cost` records KIE's published 4-credit rate as $0.02/image and removed
+the model from the unpriced allowlist. No Videocity change was needed.
 
-## 34. (gap) KIE Nano Banana has a slug but no price — FIXED ON APICITY MAIN
+## 35. (gap) ~~KIE MiniMax H3 ships without cost slugs or pricing~~ — RESOLVED in 0.8.8 (adopted)
 
-0.8.0 registers KIE `nano-banana` but deliberately leaves it unpriced pending a
-public-rate check. Apicity `main` records KIE's published 4-credit rate as
-$0.02/image and removes the model from the unpriced allowlist.
+`@apicity/cost@0.8.8` registers all three `minimax-h3/*` endpoints under the
+`mmh3` slug and prices them per second by resolution tier — 768P $0.1125/s, 2K
+$0.1825/s (22.5 / 36.5 credits/s, verified kie.ai/pricing 2026-08-06), with 2K
+as the documented upstream default. Videocity adopted the package contract end
+to end:
 
-## 35. (gap) KIE MiniMax H3 ships without cost slugs or pricing — OPEN in 0.8.6
+- the local ceiling table (`server/src/minimax-h3-cost.ts`) and its two call
+  sites (`mintKieOtp`, `estimateOne`) are deleted — the stands-down assertion
+  fired as designed;
+- the three generate tools use `modelSlug("kie", "minimax-h3/*")` like every
+  other kie tool (new display labels are prefixed `mmh3-`; artifact identity is
+  the grid address, so existing artifacts are unaffected);
+- `VIDEO_COST_ADAPTERS` prices all three tools via `kieResolutionVideo` with a
+  stated 6s default duration (the schema requires duration and has no default).
 
-`@apicity/kie@0.8.6` adds the three MiniMax H3 video endpoints
-(`minimax-h3/text-to-video`, `minimax-h3/image-to-video`,
-`minimax-h3/reference-to-video`) to `MediaGenerationRequest`, but
-`@apicity/cost@0.8.6` knows nothing about them. Two independent failures, both
-reproduced against the installed 0.8.6 packages:
-
-1. `modelSlug("kie", "minimax-h3/text-to-video")` throws
-   `No slug registered for kie/minimax-h3/text-to-video — add it to
-   packages/provider/cost/src/slugs.ts`. Generate-tool modules evaluate
-   `modelSlug()` at module scope (`const SLUG = modelSlug(...)`), so an
-   unguarded call takes down server startup, not just the one tool.
-2. `computeEstimate({ provider: "kie", payload: { model:
-   "minimax-h3/text-to-video", input: { duration: 6, resolution: "768P" } } })`
-   returns `usd: 0` with warning
-   `model 'minimax-h3/text-to-video' not found in pricing table for provider
-   'kie'`. `mintKieOtp` (`server/src/jobs/kie-paygate.ts`) throws
-   `KIE cost estimate is not bounded` on any warning, so no MiniMax H3 task can
-   be submitted at all.
-
-There is no supported way to inject pricing at runtime — `@apicity/cost` exports
-`PRICING` and `MODEL_SLUGS` as plain consts, and rewriting the model id inside
-`normalizeKieCostPayload` to borrow another model's rate would knowingly
-misprice a paid call.
-
-**Workaround (shipped):** `server/src/minimax-h3-cost.ts` holds a local
-per-second ceiling table (768P $0.18, 2K $0.26), same shape of local-rate
-module as the Gemini API table in `google-flow-cost.ts` (§15). Two properties
-keep it honest:
-
-- **It is a ceiling, not Kie's price.** Kie bills video in credits/s and
-  publishes no MiniMax H3 credit rate readable without a console login, so the
-  table takes the highest public rate found (EmpirioLabs, retrieved
-  2026-08-06 — MiniMax list was $0.08/$0.13, Atlas Cloud $0.10/$0.14). The
-  estimate is a spend *bound*: over-stating only makes the paygate more
-  conservative, and the number never leaves the process — `mintOtp` hashes the
-  wire payload, not the estimate. Displayed estimates read high until the real
-  rate lands.
-- **Upstream reclaims priority automatically.** `mintKieOtp` consults the local
-  table only after `computeEstimate` warns, so the package wins the moment it
-  ships rates. `minimax-h3-cost.test.ts` asserts `computeEstimate` still warns
-  for all three models — that test failing is the signal to delete the module.
-
-A payload with no readable duration still fails closed; the ceiling bounds a
-duration it can read rather than papering over a missing one.
-
-**Ask Apicity:** register `minimax-h3/{text,image,reference}-to-video` slugs
-and publish per-second (or per-unit) rates for the `duration` × `resolution`
-(768P / 2K) tiers.
+Related 0.8.8 pricing change with a paygate consequence: `grok-imagine/upscale`
+is now floor-priced at its lowest published tier ($0.05) with a permanent
+warning naming the two higher tiers no request field can select. `mintKieOtp`
+therefore fails closed only when the estimate is zero (unknown model or
+underivable units); a positive estimate with warnings is a floor the package
+stands behind and is admitted.
 
 ---
 
-## Open / partial summary (installed 0.8.0 plus Apicity main candidate)
+## Open / partial summary (installed 0.8.8, re-audited 2026-08-07)
 
-| Status            | Sections                                              | What Videocity still carries                            |
-| ----------------- | ----------------------------------------------------- | ------------------------------------------------------- |
-| **OPEN**          | §18 character metadata                                | list/singleton reconcile                                |
-| **PARTIAL**       | §35 MiniMax H3 cost coverage                          | local ceiling table (`minimax-h3-cost.ts`); no slug map |
-| **PARTIAL**       | §14 Flow loose schemas                                | per-model domains                                       |
-| **PARTIAL**       | §15 Flow estimate semantics                           | local Gemini API list USD (`google-flow-cost.ts`)       |
-| **PARTIAL**       | §22 xAI 10s ref duration                              | local 10s check; 7-ref max **derived**                  |
-| **PARTIAL**       | §23 Seedream residual                                 | `auto_4K`/counts **derived**; no `return_byteplus_urls` |
-| **PARTIAL**       | §24 NB edit max                                       | counts/seeds **derived**; local `.max(14)` only         |
-| **FIXED ON MAIN** | §3 Fal input/output types                             | adopt `FalEndpointInputMap`                             |
-| **FIXED ON MAIN** | §11 pre-upload media strings                          | remove Mini/Qwen2 pre-check shims after upgrade         |
-| **FIXED ON MAIN** | §26 Fal static coverage                               | extend adapters; keep dynamic endpoints unpriced        |
-| **FIXED ON MAIN** | §28 Alibaba non-pro image                             | add normal adapter after upgrade                        |
-| **FIXED ON MAIN** | §30 typed duration hints                              | translate `duration` to `durationSeconds`               |
-| **FIXED ON MAIN** | §31–34 estimate/MCP gaps                              | no new workaround; adopt next release                   |
-| **RESOLVED**      | §1–2, §4–7, §9–10, §12–13, §16, §19–21, §25, §27, §29 | no local shim (defensive Flow path decode only on §16)  |
+| Status       | Sections                                                            | What Videocity still carries                           |
+| ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
+| **OPEN**     | §18 character metadata                                              | list/singleton reconcile                               |
+| **PARTIAL**  | §14 Flow loose schemas                                              | per-model domains                                      |
+| **PARTIAL**  | §15 Flow estimate semantics                                         | local Gemini API list USD (`google-flow-cost.ts`)      |
+| **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
+| **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §16, §19–21, §25, §27, §29              | no local shim (defensive Flow path decode only on §16) |
+| **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |
 
 **Deliberate product quirks (not Apicity defects):** §2 Grok external-image-only
-`spicy` filter, §8 table, §17 route-specific Flow email resolution.
+`spicy` filter, §8 table, §17 route-specific Flow email resolution, §23
+`return_byteplus_urls` not exposed (Videocity ingests via its own CDN path).
 
-**Deferred upstream verification:** §18 appears service-side; §22 needs a
-primary xAI source for the ten-second rule; §23–24 need current Fal docs before
-tightening the published contract. §14–15 remain broader Google Flow product
-and schema work rather than release blockers for these Apicity fixes.
+**Deferred upstream verification:** §18 appears service-side. §14–15 remain
+broader Google Flow product and schema work. One residual upstream nit from the
+0.8.8 adoption: `FalEndpointInputMap` keys Qwen edit as `fal-ai/qwen-image-edit`
+while the real endpoint is `fal-ai/qwen-image/edit` (§3).

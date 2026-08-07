@@ -13,8 +13,9 @@ const base = FalNanoBananaProEditRequestSchema.shape;
 const schema = {
   book_id: z.string().describe("Book id"),
   prompt: apicityStringField(base.prompt, "Edit instruction", { required: true }),
-  // Apicity edit image_urls still unbounded; keep Fal's 14-ref cap locally (§24).
-  image_refs: apicityStringArrayField(base.image_urls, "1-14 image artifact ids for reference images", { required: true }).min(1).max(14),
+  // Fal documents no image_urls cap for this endpoint and @apicity/fal leaves
+  // the array unbounded, so no local max (docs/apicity-gaps.md §24).
+  image_refs: apicityStringArrayField(base.image_urls, "Image artifact ids for reference images (at least 1)", { required: true }).min(1),
   num_images: apicityField(base.num_images, "Number of images to generate (1-4)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Aspect ratio"),
   resolution: apicityField(base.resolution, "Output resolution (1K/2K/4K)"),

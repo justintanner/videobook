@@ -1,22 +1,23 @@
 import { createFal } from "@apicity/fal";
+import type { FalEndpointId, FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
 export type FalTaskType = `fal_${string}`;
 
-export type FalSubmitArgs = {
+export type FalSubmitArgs<E extends string> = {
   fs: Engine;
   bookId: string;
   assetId: string;
   assetDir: string;
-  endpointId: string;
-  input: Record<string, unknown>;
+  endpointId: E;
+  input: E extends FalEndpointId ? FalEndpointInputMap[E] : Record<string, unknown>;
   taskType: FalTaskType;
   meta: Record<string, unknown>;
   /** Local job lease to hand off to the provider lease atomically. */
   expectedOwnerId: string;
 };
 
-export async function submitFalJob(args: FalSubmitArgs): Promise<string> {
+export async function submitFalJob<E extends string>(args: FalSubmitArgs<E>): Promise<string> {
   const apiKey = requireApiKey("FAL_API_KEY");
 
   const provider = createFal({ apiKey, timeout: 60_000 });

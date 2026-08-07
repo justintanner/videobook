@@ -285,11 +285,10 @@ describe("kie paygate", () => {
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
-  it("mints a bounded OTP for MiniMax H3 off the local ceiling table", () => {
-    // @apicity/cost@0.8.6 cannot price minimax-h3/* at all, so without the
-    // local ceiling every MiniMax H3 submit fails here (docs/apicity-gaps.md
-    // §35). The OTP still hashes the documented payload verbatim — the local
-    // rate is a spend bound and never reaches the wire.
+  it("mints a bounded OTP for MiniMax H3 off the upstream rate table", () => {
+    // @apicity/cost@0.8.8 prices minimax-h3/* per second by resolution tier
+    // (docs/apicity-gaps.md §35), so the paygate bounds these payloads with no
+    // local table. The OTP still hashes the documented payload verbatim.
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
 
     const requests = [
@@ -305,9 +304,23 @@ describe("kie paygate", () => {
     }
   });
 
+  it("mints a bounded OTP for grok-imagine/upscale off the floor rate", () => {
+    // @apicity/cost@0.8.8 prices upscale at its lowest published tier ($0.05)
+    // and warns that higher tiers exist — a floor, not an unbounded estimate,
+    // so the paygate admits it.
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+
+    const request = {
+      model: "grok-imagine/upscale" as const,
+      input: { task_id: "task-123" },
+    };
+    const otp = mintKieOtp(request, 60);
+    expect(parseOtp(otp).payload.requestHash).toBe(canonicalHash(request));
+  });
+
   it("still rejects a MiniMax H3 request with no duration as unbounded", () => {
-    // The local ceiling bounds a duration it can read; it must not paper over
-    // a payload that has none.
+    // The upstream per-second rate needs a duration to derive units; a payload
+    // without one must fail closed rather than mint against a zero estimate.
     const request = {
       model: "minimax-h3/text-to-video" as const,
       input: { prompt: "a kitten", aspect_ratio: "9:16" as const, resolution: "768P" as const },

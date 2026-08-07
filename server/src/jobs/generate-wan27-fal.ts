@@ -1,7 +1,10 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
+
+type FalInput = FalEndpointInputMap["fal-ai/wan/v2.7/text-to-image"];
 
 type Payload = {
   type: "generate_wan27_fal";
@@ -10,7 +13,7 @@ type Payload = {
   bookId: string;
   prompt: string;
   negative_prompt?: string;
-  image_size?: string;
+  image_size?: FalInput["image_size"];
   max_images?: number;
   seed?: number;
 };
@@ -20,7 +23,7 @@ export function registerGenerateWan27FalJob(fs: Engine): void {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         ...(p.negative_prompt !== undefined ? { negative_prompt: p.negative_prompt } : {}),
         ...(p.image_size !== undefined ? { image_size: p.image_size } : {}),

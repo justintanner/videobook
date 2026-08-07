@@ -14,8 +14,7 @@ const schema = {
   book_id: z.string().describe("Book id"),
   prompt: apicityStringField(seedream.prompt, "Edit instruction", { required: true }),
   image_refs: apicityStringArrayField(seedream.image_urls, "1-10 image artifact ids for reference images", { required: true }),
-  image_size: apicityField(seedream.image_size, "Output size preset"),
-  auto_4K: z.boolean().optional().describe("Upscale output to 4K"),
+  image_size: apicityField(seedream.image_size, "Output size preset (auto_4K selects 4K)"),
   num_images: apicityField(seedream.num_images, "Number of images to generate"),
   max_images: apicityField(seedream.max_images, "Max images returned"),
 } satisfies ZodRawShape;
@@ -28,7 +27,7 @@ export function generateSeedreamV5LiteEditFalDef(fs: Engine): ToolDef {
     description: "Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { book_id, prompt, image_refs, image_size, auto_4K, num_images, max_images } = args as Args;
+      const { book_id, prompt, image_refs, image_size, num_images, max_images } = args as Args;
       const prefix = "img";
 
       if (!process.env.FAL_API_KEY) {
@@ -53,7 +52,6 @@ export function generateSeedreamV5LiteEditFalDef(fs: Engine): ToolDef {
         imageInputs: resolved.inputs,
         sourceImageIds: resolved.sourceImageIds,
         ...(image_size !== undefined ? { image_size } : {}),
-        ...(auto_4K !== undefined ? { auto_4K } : {}),
         ...(num_images !== undefined ? { num_images } : {}),
         ...(max_images !== undefined ? { max_images } : {}),
       } as unknown as Record<string, unknown>);

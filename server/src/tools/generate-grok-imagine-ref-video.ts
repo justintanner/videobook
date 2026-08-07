@@ -56,11 +56,21 @@ export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
 
       const refImages: RefImageInput[] = [];
       const refs = image_refs ?? [];
-      if (refs.length > 0 && duration !== undefined && Number(duration) > 10) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "xAI reference-to-video supports at most 10 seconds" }],
-        };
+      if (refs.length > 0 && duration !== undefined) {
+        // The 10s-with-references cap is a cross-field refine on the package
+        // schema (docs/apicity-gaps.md §22); validate through it so the rule
+        // and message track upstream instead of a hand-rolled copy.
+        const check = XaiVideoGenerateRequestSchema.safeParse({
+          prompt,
+          duration: Number(duration),
+          reference_images: refs.map((ref) => ref.replace(/^@/, "")),
+        });
+        if (!check.success) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: check.error.issues[0]?.message ?? "Invalid xAI video request" }],
+          };
+        }
       }
 
       for (const rawRef of refs) {

@@ -9,8 +9,7 @@ import type { JobHandlerContext } from "../queue.js";
 import { QUEUED_TASK_ID } from "videobook-engine";
 import type { PendingTask, TaskType, Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
-import { normalizeKieCostPayload, type KieCostHints } from "../cost-adapters.js";
-import { estimateMiniMaxH3WireCost } from "../minimax-h3-cost.js";
+import { toUpstreamCostHints, type KieCostHints } from "../cost-adapters.js";
 import { assertProviderPayload } from "../provider-prompt-transform.js";
 
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";
@@ -67,13 +66,17 @@ export function mintKieOtp(
   costHints: KieCostHints = {},
 ): string {
   const payload = request as unknown as Record<string, unknown>;
-  const normalized = normalizeKieCostPayload(payload, costHints);
-  const estimate = computeEstimate({ provider: "kie", payload: normalized });
-  // A local ceiling stands in only where @apicity/cost cannot price the model
-  // at all (MiniMax H3, docs/apicity-gaps.md §35). Consulting it strictly after
-  // computeEstimate keeps the package authoritative: the moment it ships those
-  // rates, this branch stops being reached.
-  if (estimate.warnings.length > 0 && estimateMiniMaxH3WireCost(normalized) === null) {
+  const estimate = computeEstimate({
+    provider: "kie",
+    payload,
+    costHints: toUpstreamCostHints(costHints),
+  });
+  // Fail closed only when the table cannot price the payload at all (usd 0
+  // with warnings: unknown model, underivable units). A positive estimate that
+  // still warns is a floor the package stands behind — e.g. grok-imagine/
+  // upscale, priced at its lowest published tier while higher tiers exist that
+  // no request field can select — so admit it.
+  if (estimate.warnings.length > 0 && estimate.usd <= 0) {
     throw new Error(`KIE cost estimate is not bounded: ${estimate.warnings.join("; ")}`);
   }
 

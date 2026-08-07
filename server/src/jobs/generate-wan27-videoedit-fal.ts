@@ -1,9 +1,12 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
+
+type FalInput = FalEndpointInputMap["fal-ai/wan/v2.7/edit-video"];
 
 type Payload = {
   type: "generate_wan27_videoedit_fal";
@@ -15,10 +18,10 @@ type Payload = {
   refImage?: ImageInput;
   sourceImageIds?: string[];
   sourceVideoIds: string[];
-  aspect_ratio?: string;
-  resolution?: string;
+  aspect_ratio?: FalInput["aspect_ratio"];
+  resolution?: FalInput["resolution"];
   duration?: number;
-  audio_setting?: string;
+  audio_setting?: FalInput["audio_setting"];
   negative_prompt?: string;
   enable_safety_checker?: boolean;
   seed?: number;
@@ -36,7 +39,7 @@ export function registerGenerateWan27VideoeditFalJob(fs: Engine): void {
           : await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename, p.bookId)
         : undefined;
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         video_url,
         ...(reference_image_url ? { reference_image_url } : {}),

@@ -1,3 +1,4 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
@@ -5,6 +6,8 @@ import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 
 type FrameInput = { assetId: string; filename: string };
+
+type FalInput = FalEndpointInputMap["fal-ai/wan/v2.7/image-to-video"];
 
 type Payload = {
   type: "generate_wan27_i2v_fal";
@@ -15,7 +18,7 @@ type Payload = {
   firstFrame: FrameInput;
   endFrame?: FrameInput;
   sourceImageIds: string[];
-  resolution?: string;
+  resolution?: FalInput["resolution"];
   duration?: number;
   negative_prompt?: string;
   enable_prompt_expansion?: boolean;
@@ -33,7 +36,7 @@ export function registerGenerateWan27I2vFalJob(fs: Engine): void {
         ? await uploadAssetToFal(fs, p.endFrame.assetId, p.endFrame.filename, p.bookId)
         : undefined;
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         image_url,
         ...(end_image_url ? { end_image_url } : {}),

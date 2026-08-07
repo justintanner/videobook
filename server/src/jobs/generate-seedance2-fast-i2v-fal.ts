@@ -1,3 +1,4 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
@@ -5,6 +6,8 @@ import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 
 type FrameInput = { assetId: string; filename: string };
+
+type FalInput = FalEndpointInputMap["bytedance/seedance-2.0/fast/image-to-video"];
 
 type Payload = {
   type: "generate_seedance2_fast_i2v_fal";
@@ -15,9 +18,9 @@ type Payload = {
   firstFrame: FrameInput;
   endFrame?: FrameInput;
   sourceImageIds: string[];
-  resolution?: string;
-  duration?: string;
-  aspect_ratio?: string;
+  resolution?: FalInput["resolution"];
+  duration?: FalInput["duration"];
+  aspect_ratio?: FalInput["aspect_ratio"];
   generate_audio?: boolean;
   seed?: number;
 };
@@ -32,7 +35,7 @@ export function registerGenerateSeedance2FastI2vFalJob(fs: Engine): void {
         ? await uploadAssetToFal(fs, p.endFrame.assetId, p.endFrame.filename, p.bookId)
         : undefined;
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         image_url,
         ...(end_image_url ? { end_image_url } : {}),

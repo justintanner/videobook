@@ -116,7 +116,6 @@ describe("estimate_cost tool", () => {
       ["generate_grok_imagine_video", { resolution: "480p", duration: 8 }],
       ["generate_grok_imagine_t2v_video", { resolution: "480p", duration: 6 }],
       ["extend_grok_imagine_video", { resolution: "720p", extend_times: "10" }],
-      ["upscale_grok_imagine_video", {}],
       // HappyHorse video (resolution-tiered)
       ["generate_happyhorse_t2v_video", { resolution: "1080p", duration: "5" }],
       ["generate_happyhorse_i2v_video", { resolution: "720p", duration: "5" }],
@@ -142,6 +141,20 @@ describe("estimate_cost tool", () => {
       expect(payload.estimate.source, `${tool_name} source`).toBe("per-unit-table");
       expect(payload.estimate.usd, `${tool_name} usd`).toBeGreaterThan(0);
     }
+  });
+
+  it("prices grok-imagine/upscale at the 360p→720p floor with the tier caveat", async () => {
+    // @apicity/cost@0.8.8 prices upscale at its lowest published tier and warns
+    // that the two higher tiers are selected by resolutions the request schema
+    // cannot express — the estimate is a floor, not a missing rate, so the
+    // picker shows it with the caveat attached.
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: { calls: [{ tool_name: "upscale_grok_imagine_video", input: {} }] },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.usd).toBeCloseTo(0.05, 6);
+    expect(payload.estimate.warnings.join(" ")).toContain("under-estimated");
   });
 
   it("prices ElevenLabs text-to-speech from the Apicity character rate", async () => {
@@ -187,7 +200,8 @@ describe("estimate_cost tool", () => {
     });
     const payload = parse(result);
     expect(payload.estimate.warnings).toEqual([]);
-    expect(payload.estimate.usd).toBeCloseTo(0.4725, 6);
+    // 0.8.8 repriced t2v: 720p and 1080p share one column (84 credits for 6s).
+    expect(payload.estimate.usd).toBeCloseTo(0.42, 6);
   });
 
   it("prices Gemini Omni video-to-video via the fixed v2v selector", async () => {
@@ -202,7 +216,9 @@ describe("estimate_cost tool", () => {
     });
     const payload = parse(result);
     expect(payload.estimate.warnings).toEqual([]);
-    expect(payload.estimate.usd).toBeCloseTo(1.26, 6);
+    // 0.8.8 restructured v2v: flat per video by resolution (duration ignored
+    // upstream); the schema-default 720p tier is 168 credits.
+    expect(payload.estimate.usd).toBeCloseTo(0.84, 6);
   });
 
   it("prices fal nano-banana-2 image generation", async () => {
@@ -402,7 +418,8 @@ describe("estimate_cost tool", () => {
     });
     const payload = parse(result);
     expect(payload.estimate.warnings).toEqual([]);
-    expect(payload.estimate.usd).toBeCloseTo(0.15, 6);
+    // 0.8.8 repriced extend: 10 extra seconds at 720p is $0.225.
+    expect(payload.estimate.usd).toBeCloseTo(0.225, 6);
   });
 
   it("sums multiple calls into one summed estimate", async () => {
@@ -480,6 +497,68 @@ describe("estimate_cost tool", () => {
       if (prev === undefined) delete process.env.GOOGLE_FLOW_PLAN_TIER;
       else process.env.GOOGLE_FLOW_PLAN_TIER = prev;
     }
+  });
+
+  it("prices every fal tool wired into cost-adapters with a >0 estimate", async () => {
+    const cases: Array<[string, Record<string, unknown>]> = [
+      // Images
+      ["generate_fal_nano_banana_text_to_image", {}],
+      ["generate_fal_nano_banana_edit_image", {}],
+      ["generate_fal_nano_banana_2_text_to_image", { resolution: "1K" }],
+      ["generate_fal_nano_banana_2_edit_image", { resolution: "1K" }],
+      ["generate_fal_nano_banana_pro_text_to_image", { resolution: "2K" }],
+      ["generate_fal_nano_banana_pro_edit_image", { resolution: "2K" }],
+      ["generate_fal_seedream_v5_lite_text_to_image", {}],
+      ["generate_fal_seedream_v5_lite_edit_image", {}],
+      ["generate_fal_wan_2_7_text_to_image", {}],
+      ["generate_fal_wan_2_7_edit_image", {}],
+      ["generate_fal_wan_2_7_pro_text_to_image", {}],
+      ["generate_fal_wan_2_7_pro_edit_image", {}],
+      ["generate_fal_grok_imagine_text_to_image", {}],
+      ["generate_fal_grok_imagine_edit_image", {}],
+      ["generate_fal_qwen_2_0_text_to_image", {}],
+      // qwen edit has no documented image_size default — pass one explicitly.
+      ["generate_fal_qwen_2_0_edit_image", { image_size: "landscape_4_3" }],
+      // Video (per second)
+      ["generate_fal_seedance_2_0_text_to_video", { duration: "5" }],
+      ["generate_fal_seedance_2_0_image_to_video", { duration: "5" }],
+      ["generate_fal_seedance_2_0_reference_to_video", { duration: "5", video_refs: ["@vid-ref"] }],
+      ["generate_fal_seedance_2_0_fast_text_to_video", { duration: "5" }],
+      ["generate_fal_seedance_2_0_fast_image_to_video", { duration: "5" }],
+      ["generate_fal_seedance_2_0_fast_reference_to_video", { duration: "5", video_refs: ["@vid-ref"] }],
+      ["generate_fal_wan_2_7_text_to_video", { duration: 5 }],
+      ["generate_fal_wan_2_7_image_to_video", { duration: 5 }],
+      ["generate_fal_wan_2_7_reference_to_video", { duration: 5 }],
+      ["generate_fal_wan_2_7_edit_video", {}],
+      ["generate_fal_grok_imagine_video_image_to_video", { duration: 6 }],
+      ["generate_fal_grok_imagine_video_reference_to_video", { duration: 8 }],
+      ["extend_fal_grok_imagine_video", { duration: 6 }],
+      ["generate_fal_kling_video_v3_pro_text_to_video", {}],
+      ["generate_fal_kling_video_v3_pro_image_to_video", {}],
+      ["generate_fal_kling_video_v3_standard_text_to_video", { duration: "10" }],
+      ["generate_fal_kling_video_v3_standard_image_to_video", { duration: "10", generate_audio: false }],
+    ];
+    for (const [tool_name, input] of cases) {
+      const result = await client.callTool({
+        name: "estimate_cost",
+        arguments: { calls: [{ tool_name, input }] },
+      });
+      const payload = parse(result);
+      expect(payload.estimate.warnings, `${tool_name} warnings`).toEqual([]);
+      expect(payload.estimate.usd, `${tool_name} usd`).toBeGreaterThan(0);
+    }
+  });
+
+  it("prices the non-pro Alibaba Wan image tool at the list rate", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{ tool_name: "generate_alibaba_wan_2_7_text_to_image", input: {} }],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.warnings).toEqual([]);
+    expect(payload.estimate.usd).toBeCloseTo(0.03, 6);
   });
 
   it("prices canonical generation names across providers", async () => {

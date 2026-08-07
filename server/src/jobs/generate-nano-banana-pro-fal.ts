@@ -1,7 +1,10 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
+
+type FalInput = FalEndpointInputMap["fal-ai/nano-banana-pro"];
 
 type Payload = {
   type: "generate_nano_banana_pro_fal";
@@ -10,9 +13,9 @@ type Payload = {
   bookId: string;
   prompt: string;
   num_images?: number;
-  aspect_ratio?: string;
-  resolution?: string;
-  output_format?: string;
+  aspect_ratio?: FalInput["aspect_ratio"];
+  resolution?: FalInput["resolution"];
+  output_format?: FalInput["output_format"];
   seed?: number;
   enable_web_search?: boolean;
 };
@@ -22,7 +25,7 @@ export function registerGenerateNanoBananaProFalJob(fs: Engine): void {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         ...(p.num_images !== undefined ? { num_images: p.num_images } : {}),
         ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),

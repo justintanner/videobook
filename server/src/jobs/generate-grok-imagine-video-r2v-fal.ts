@@ -1,3 +1,4 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
@@ -5,6 +6,8 @@ import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 
 type RefInput = { assetId: string; filename: string };
+
+type FalInput = FalEndpointInputMap["xai/grok-imagine-video/reference-to-video"];
 
 type Payload = {
   type: "generate_grok_imagine_video_r2v_fal";
@@ -15,8 +18,8 @@ type Payload = {
   imageInputs: RefInput[];
   sourceImageIds: string[];
   duration?: number;
-  aspect_ratio?: string;
-  resolution?: string;
+  aspect_ratio?: FalInput["aspect_ratio"];
+  resolution?: FalInput["resolution"];
 };
 
 export function registerGenerateGrokImagineVideoR2vFalJob(fs: Engine): void {
@@ -29,7 +32,7 @@ export function registerGenerateGrokImagineVideoR2vFalJob(fs: Engine): void {
         reference_image_urls.push(await uploadAssetToFal(fs, img.assetId, img.filename, p.bookId));
       }
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         reference_image_urls,
         ...(p.duration !== undefined ? { duration: p.duration } : {}),

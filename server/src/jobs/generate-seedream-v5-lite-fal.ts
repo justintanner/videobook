@@ -1,7 +1,10 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
+
+type FalInput = FalEndpointInputMap["fal-ai/bytedance/seedream/v5/lite/text-to-image"];
 
 type Payload = {
   type: "generate_seedream_v5_lite_fal";
@@ -9,8 +12,7 @@ type Payload = {
   imgAssetDir: string;
   bookId: string;
   prompt: string;
-  image_size?: string;
-  auto_4K?: boolean;
+  image_size?: FalInput["image_size"];
   num_images?: number;
   max_images?: number;
 };
@@ -20,10 +22,9 @@ export function registerGenerateSeedreamV5LiteFalJob(fs: Engine): void {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         ...(p.image_size !== undefined ? { image_size: p.image_size } : {}),
-        ...(p.auto_4K !== undefined ? { auto_4K: p.auto_4K } : {}),
         ...(p.num_images !== undefined ? { num_images: p.num_images } : {}),
         ...(p.max_images !== undefined ? { max_images: p.max_images } : {}),
       };

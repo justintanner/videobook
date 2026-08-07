@@ -1,3 +1,4 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
@@ -24,7 +25,7 @@ export function registerGenerateGrokImagineVideoExtendFalJob(fs: Engine): void {
   
       const video_url = await uploadAssetToFal(fs, p.sourceVideo.assetId, p.sourceVideo.filename, p.bookId);
   
-      const input: Record<string, unknown> = {
+      const input: FalEndpointInputMap["xai/grok-imagine-video/extend-video"] = {
         prompt: p.prompt,
         video_url,
         ...(p.duration !== undefined ? { duration: p.duration } : {}),

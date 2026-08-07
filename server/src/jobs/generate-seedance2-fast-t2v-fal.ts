@@ -1,7 +1,10 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
+
+type FalInput = FalEndpointInputMap["bytedance/seedance-2.0/fast/text-to-video"];
 
 type Payload = {
   type: "generate_seedance2_fast_t2v_fal";
@@ -9,9 +12,9 @@ type Payload = {
   vidAssetDir: string;
   bookId: string;
   prompt: string;
-  resolution?: string;
-  duration?: string;
-  aspect_ratio?: string;
+  resolution?: FalInput["resolution"];
+  duration?: FalInput["duration"];
+  aspect_ratio?: FalInput["aspect_ratio"];
   generate_audio?: boolean;
   seed?: number;
 };
@@ -21,7 +24,7 @@ export function registerGenerateSeedance2FastT2vFalJob(fs: Engine): void {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         ...(p.resolution !== undefined ? { resolution: p.resolution } : {}),
         ...(p.duration !== undefined ? { duration: p.duration } : {}),

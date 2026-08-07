@@ -12,8 +12,7 @@ const seedream = FalSeedreamV5LiteTextToImageRequestSchema.shape;
 const schema = {
   book_id: z.string().describe("Book id"),
   prompt: apicityStringField(seedream.prompt, "Text prompt for image generation", { required: true }),
-  image_size: apicityField(seedream.image_size, "Output size preset"),
-  auto_4K: z.boolean().optional().describe("Upscale output to 4K"),
+  image_size: apicityField(seedream.image_size, "Output size preset (auto_4K selects 4K)"),
   num_images: apicityField(seedream.num_images, "Number of images to generate"),
   max_images: apicityField(seedream.max_images, "Max images returned"),
 } satisfies ZodRawShape;
@@ -26,7 +25,7 @@ export function generateSeedreamV5LiteFalDef(fs: Engine): ToolDef {
     description: "Generate an image via fal.ai using ByteDance Seedream V5 Lite from a text prompt. Creates a new image artifact and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { book_id, prompt, image_size, auto_4K, num_images, max_images } = args as Args;
+      const { book_id, prompt, image_size, num_images, max_images } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
@@ -45,7 +44,6 @@ export function generateSeedreamV5LiteFalDef(fs: Engine): ToolDef {
         bookId: book_id,
         prompt,
         ...(image_size !== undefined ? { image_size } : {}),
-        ...(auto_4K !== undefined ? { auto_4K } : {}),
         ...(num_images !== undefined ? { num_images } : {}),
         ...(max_images !== undefined ? { max_images } : {}),
       } as unknown as Record<string, unknown>);

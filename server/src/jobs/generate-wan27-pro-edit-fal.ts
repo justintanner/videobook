@@ -1,9 +1,12 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
+
+type FalInput = FalEndpointInputMap["fal-ai/wan/v2.7/pro/edit"];
 
 type Payload = {
   type: "generate_wan27_pro_edit_fal";
@@ -14,7 +17,7 @@ type Payload = {
   imageInputs: ImageInput[];
   sourceImageIds: string[];
   negative_prompt?: string;
-  image_size?: string;
+  image_size?: FalInput["image_size"];
   num_images?: number;
   seed?: number;
 };
@@ -30,7 +33,7 @@ export function registerGenerateWan27ProEditFalJob(fs: Engine): void {
         ),
       );
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         image_urls,
         ...(p.negative_prompt !== undefined ? { negative_prompt: p.negative_prompt } : {}),

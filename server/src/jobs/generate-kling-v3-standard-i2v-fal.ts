@@ -1,3 +1,4 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
@@ -5,6 +6,8 @@ import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 
 type FrameInput = { assetId: string; filename: string };
+
+type FalInput = FalEndpointInputMap["fal-ai/kling-video/v3/standard/image-to-video"];
 
 type Payload = {
   type: "generate_kling_v3_standard_i2v_fal";
@@ -17,7 +20,7 @@ type Payload = {
   prompt?: string;
   duration?: string;
   generate_audio?: boolean;
-  shot_type?: string;
+  shot_type?: FalInput["shot_type"];
   negative_prompt?: string;
   cfg_scale?: number;
 };
@@ -32,7 +35,7 @@ export function registerGenerateKlingV3StandardI2vFalJob(fs: Engine): void {
         ? await uploadAssetToFal(fs, p.endFrame.assetId, p.endFrame.filename, p.bookId)
         : undefined;
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         start_image_url,
         ...(end_image_url ? { end_image_url } : {}),
         ...(p.prompt !== undefined ? { prompt: p.prompt } : {}),

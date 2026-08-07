@@ -1,7 +1,10 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
+
+type FalInput = FalEndpointInputMap["fal-ai/qwen-image"];
 
 type Payload = {
   type: "generate_qwen_image_fal";
@@ -9,13 +12,13 @@ type Payload = {
   imgAssetDir: string;
   bookId: string;
   prompt: string;
-  image_size?: string;
+  image_size?: FalInput["image_size"];
   num_inference_steps?: number;
   guidance_scale?: number;
   num_images?: number;
-  output_format?: string;
+  output_format?: FalInput["output_format"];
   negative_prompt?: string;
-  acceleration?: string;
+  acceleration?: FalInput["acceleration"];
   enable_safety_checker?: boolean;
   use_turbo?: boolean;
   seed?: number;
@@ -26,7 +29,7 @@ export function registerGenerateQwenImageFalJob(fs: Engine): void {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         ...(p.image_size !== undefined ? { image_size: p.image_size } : {}),
         ...(p.num_inference_steps !== undefined ? { num_inference_steps: p.num_inference_steps } : {}),

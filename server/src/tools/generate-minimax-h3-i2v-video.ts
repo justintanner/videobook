@@ -5,15 +5,14 @@ import {
   MiniMaxH3ImageToVideoRequestSchema,
   MiniMaxH3ResolutionSchema,
 } from "@apicity/kie/zod";
+import { modelSlug } from "@apicity/cost";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
 import { generationLabel } from "../artifact-label.js";
 import { resolveImageRef, type RefInput } from "./_seedance2-shared.js";
 
-// Literal label: @apicity/cost has no minimax-h3 slug or pricing yet, so
-// modelSlug() would throw at module scope (docs/apicity-gaps.md §35).
-const SLUG = "minimax-h3-i2v";
+const SLUG = modelSlug("kie", "minimax-h3/image-to-video");
 
 const generateMiniMaxH3I2vVideoSchema = {
   book_id: z.string().describe("Book id"),

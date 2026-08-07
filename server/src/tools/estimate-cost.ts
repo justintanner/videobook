@@ -6,7 +6,6 @@ import { artifactKindOf } from "./_shared.js";
 import { getCostProvider } from "../cost.js";
 import { getCostAdapter } from "../cost-adapters.js";
 import { estimateGoogleFlowCost } from "../google-flow-cost.js";
-import { estimateMiniMaxH3ToolCost } from "../minimax-h3-cost.js";
 import { getCanonicalName } from "../generation-registry.js";
 
 const callItem = z.object({
@@ -159,12 +158,6 @@ async function estimateOne(
   // (docs/apicity-gaps.md §15, product choice A).
   const flow = estimateGoogleFlowCost(toolName, input);
   if (flow) return flow;
-
-  // MiniMax H3: local ceiling table while @apicity/cost carries no
-  // minimax-h3/* rates (docs/apicity-gaps.md §35). Without this the picker
-  // shows "—" for a model the paygate does admit.
-  const miniMaxH3 = estimateMiniMaxH3ToolCost(toolName, input);
-  if (miniMaxH3) return miniMaxH3;
 
   const adapter = getCostAdapter(toolName);
   if (!adapter) return unknown(toolName);

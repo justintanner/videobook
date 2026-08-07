@@ -1,9 +1,12 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
+
+type FalInput = FalEndpointInputMap["fal-ai/nano-banana-pro/edit"];
 
 type Payload = {
   type: "generate_nano_banana_pro_edit_fal";
@@ -14,9 +17,9 @@ type Payload = {
   imageInputs: ImageInput[];
   sourceImageIds: string[];
   num_images?: number;
-  aspect_ratio?: string;
-  resolution?: string;
-  output_format?: string;
+  aspect_ratio?: FalInput["aspect_ratio"];
+  resolution?: FalInput["resolution"];
+  output_format?: FalInput["output_format"];
   seed?: number;
   enable_web_search?: boolean;
 };
@@ -32,7 +35,7 @@ export function registerGenerateNanoBananaProEditFalJob(fs: Engine): void {
         ),
       );
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         image_urls,
         ...(p.num_images !== undefined ? { num_images: p.num_images } : {}),

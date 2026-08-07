@@ -1,9 +1,12 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
+
+type FalInput = FalEndpointInputMap["xai/grok-imagine-image/edit"];
 
 type Payload = {
   type: "generate_grok_imagine_image_edit_fal";
@@ -14,8 +17,8 @@ type Payload = {
   imageInputs: ImageInput[];
   sourceImageIds: string[];
   num_images?: number;
-  resolution?: string;
-  output_format?: string;
+  resolution?: FalInput["resolution"];
+  output_format?: FalInput["output_format"];
 };
 
 export function registerGenerateGrokImagineImageEditFalJob(fs: Engine): void {
@@ -29,7 +32,7 @@ export function registerGenerateGrokImagineImageEditFalJob(fs: Engine): void {
         ),
       );
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         image_urls,
         ...(p.num_images !== undefined ? { num_images: p.num_images } : {}),

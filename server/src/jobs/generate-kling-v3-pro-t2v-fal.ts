@@ -1,7 +1,10 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
+
+type FalInput = FalEndpointInputMap["fal-ai/kling-video/v3/pro/text-to-video"];
 
 type Payload = {
   type: "generate_kling_v3_pro_t2v_fal";
@@ -10,9 +13,9 @@ type Payload = {
   bookId: string;
   prompt: string;
   duration?: string;
-  aspect_ratio?: string;
+  aspect_ratio?: FalInput["aspect_ratio"];
   generate_audio?: boolean;
-  shot_type?: string;
+  shot_type?: FalInput["shot_type"];
   negative_prompt?: string;
   cfg_scale?: number;
 };
@@ -22,7 +25,7 @@ export function registerGenerateKlingV3ProT2vFalJob(fs: Engine): void {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         ...(p.duration !== undefined ? { duration: p.duration } : {}),
         ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),

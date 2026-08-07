@@ -306,7 +306,7 @@ describe("getVideoToolSchema", () => {
     expect(schema!.required).not.toContain("last_frame_ref");
     expect(schema!.required).not.toContain("image_refs");
     expect(schema!.properties.aspect_ratio.enum).toEqual(["1:1", "4:3", "3:4", "16:9", "9:16", "21:9", "adaptive"]);
-    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p", "1080p"]);
+    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p", "1080p", "4k"]);
     expect(schema!.properties.duration.enum).toEqual(["4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]);
     expect(schema!.properties.first_frame_ref).toBeDefined();
     expect(schema!.properties.last_frame_ref).toBeDefined();

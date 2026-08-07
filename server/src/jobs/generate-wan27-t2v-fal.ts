@@ -1,7 +1,10 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
+
+type FalInput = FalEndpointInputMap["fal-ai/wan/v2.7/text-to-video"];
 
 type Payload = {
   type: "generate_wan27_t2v_fal";
@@ -9,8 +12,8 @@ type Payload = {
   vidAssetDir: string;
   bookId: string;
   prompt: string;
-  aspect_ratio?: string;
-  resolution?: string;
+  aspect_ratio?: FalInput["aspect_ratio"];
+  resolution?: FalInput["resolution"];
   duration?: number;
   negative_prompt?: string;
   enable_prompt_expansion?: boolean;
@@ -23,7 +26,7 @@ export function registerGenerateWan27T2vFalJob(fs: Engine): void {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
         ...(p.resolution !== undefined ? { resolution: p.resolution } : {}),

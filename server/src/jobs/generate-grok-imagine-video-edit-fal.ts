@@ -1,3 +1,4 @@
+import type { FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
@@ -5,6 +6,8 @@ import { uploadAssetToFal } from "./_fal-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 
 type RefInput = { assetId: string; filename: string };
+
+type FalInput = FalEndpointInputMap["xai/grok-imagine-video/edit-video"];
 
 type Payload = {
   type: "generate_grok_imagine_video_edit_fal";
@@ -14,7 +17,7 @@ type Payload = {
   prompt: string;
   sourceVideo: RefInput;
   sourceVideoIds: string[];
-  resolution?: string;
+  resolution?: FalInput["resolution"];
 };
 
 export function registerGenerateGrokImagineVideoEditFalJob(fs: Engine): void {
@@ -24,7 +27,7 @@ export function registerGenerateGrokImagineVideoEditFalJob(fs: Engine): void {
   
       const video_url = await uploadAssetToFal(fs, p.sourceVideo.assetId, p.sourceVideo.filename, p.bookId);
   
-      const input: Record<string, unknown> = {
+      const input: FalInput = {
         prompt: p.prompt,
         video_url,
         ...(p.resolution !== undefined ? { resolution: p.resolution } : {}),

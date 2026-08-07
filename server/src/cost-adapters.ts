@@ -244,34 +244,16 @@ const kieGeminiOmniVideo: CostAdapter = (input) => ({
 // even though they bill per second of source/motion/driving media:
 // happyhorse/video-edit, kling-3.0/motion-control, omnihuman-1-5,
 // volcengine/video-to-video-lip-sync. Job handlers resolve measured duration
-// and pass it here; mintKieOtp feeds it only to computeEstimate.
+// and pass it here; mintKieOtp maps it to EstimateRequest.costHints.
+// durationSeconds, @apicity/cost's formal side channel (docs/apicity-gaps.md
+// §30) — it is never serialized into the wire.
 export type KieCostHints = { duration?: number };
 
-const HINTED_PER_SECOND_MODELS = new Set<string>([
-  "happyhorse/video-edit",
-  "kling-3.0/motion-control",
-  "omnihuman-1-5",
-  "volcengine/video-to-video-lip-sync",
-]);
-
-export function normalizeKieCostPayload(
-  payload: Record<string, unknown>,
-  hints: KieCostHints = {},
-): Record<string, unknown> {
-  // For per-second models whose kie input schema carries no duration field,
-  // surface the out-of-band hint so computeEstimate can derive a per-second
-  // rate. Prefer top-level `duration` (package seconds picker reads
-  // input.duration ?? p.duration). The hint is never serialized into the wire.
-  if (
-    typeof payload.model === "string"
-    && HINTED_PER_SECOND_MODELS.has(payload.model)
-    && typeof hints.duration === "number"
-    && hints.duration > 0
-  ) {
-    return { ...payload, duration: hints.duration };
-  }
-
-  return payload;
+/** Map videobook's cost hints to @apicity/cost's EstimateRequest.costHints. */
+export function toUpstreamCostHints(hints: KieCostHints): { durationSeconds?: number } {
+  return typeof hints.duration === "number" && hints.duration > 0
+    ? { durationSeconds: hints.duration }
+    : {};
 }
 
 // Map MCP tool_name -> EstimateRequest builder. Tools not listed here return
@@ -330,6 +312,14 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
   generate_kie_happyhorse_1_1_image_to_video: kieResolutionVideo("happyhorse-1-1/image-to-video", HAPPYHORSE_I2V_RESOLUTION, HAPPYHORSE_I2V_DURATION),
   generate_kie_happyhorse_1_1_reference_to_video: kieResolutionVideo("happyhorse-1-1/reference-to-video", HAPPYHORSE_R2V_RESOLUTION, HAPPYHORSE_R2V_DURATION),
   generate_kie_happyhorse_1_1_edit_video: kieResolutionVideo("happyhorse/video-edit", "1080p"),
+
+  // --- KIE MiniMax H3 (resolution-tiered per second: 768P $0.1125, 2K
+  // $0.1825) — rates landed in @apicity/cost@0.8.8. Resolution defaults to 2K,
+  // the tier the published rate table keys off when the request omits it.
+  // Duration is schema-required with no default, so the adapter states 6s. ---
+  generate_kie_minimax_h3_text_to_video: kieResolutionVideo("minimax-h3/text-to-video", "2K", 6),
+  generate_kie_minimax_h3_image_to_video: kieResolutionVideo("minimax-h3/image-to-video", "2K", 6),
+  generate_kie_minimax_h3_reference_to_video: kieResolutionVideo("minimax-h3/reference-to-video", "2K", 6),
 
   // --- KIE GPT Image 2 (per-image, tiered by resolution) ---
   generate_kie_gpt_image_2_image_to_image: kieTieredImage("gpt-image-2-image-to-image", GPT_IMAGE_I2I_RESOLUTION),
@@ -405,17 +395,97 @@ const falImage = (endpoint: string): CostAdapter => (input) => ({
   endpoint,
   payload: {
     ...(num(input.num_images) !== undefined ? { num_images: num(input.num_images) } : {}),
+    // wan/v2.7 text-to-image counts images from max_images (no num_images field).
+    ...(num(input.max_images) !== undefined ? { max_images: num(input.max_images) } : {}),
     ...(str(input.resolution) ? { resolution: str(input.resolution) } : {}),
     ...(str(input.image_size) ? { image_size: str(input.image_size) } : {}),
   },
 });
 
+// Fal per-second video (numeric duration): wan 2.7, grok-imagine-video. The
+// table reads top-level duration/resolution.
+const falVideo = (endpoint: string): CostAdapter => (input) => ({
+  provider: "fal",
+  endpoint,
+  payload: {
+    ...(num(input.duration) !== undefined ? { duration: num(input.duration) } : {}),
+    ...(str(input.resolution) ? { resolution: str(input.resolution) } : {}),
+  },
+});
+
+// Fal Seedance 2.0 video: token-metered per second. duration may be the
+// string "auto" on reference-to-video (no billed default — the estimate warns
+// honestly); video_urls presence selects the reference rate tier.
+const falSeedanceVideo = (endpoint: string, r2v = false): CostAdapter => (input) => ({
+  provider: "fal",
+  endpoint,
+  payload: {
+    ...(input.duration !== undefined ? { duration: input.duration } : {}),
+    ...(str(input.resolution) ? { resolution: str(input.resolution) } : {}),
+    ...(r2v && Array.isArray(input.video_refs) && input.video_refs.length > 0 ? { video_urls: ["stub"] } : {}),
+  },
+});
+
+// Fal Kling v3 video: audio-tiered per second. duration is a digit string
+// upstream (default "5"); generate_audio defaults to true on both sides.
+const falKlingV3Video = (endpoint: string): CostAdapter => (input) => ({
+  provider: "fal",
+  endpoint,
+  payload: {
+    duration: str(input.duration) || "5",
+    generate_audio: input.generate_audio !== false,
+  },
+});
+
+// Fal wan 2.7 edit-video: duration 0 means "match the source", a length the
+// payload cannot express — quote the stated 5s default like the kie side.
+const falWanEditVideo: CostAdapter = (input) => ({
+  provider: "fal",
+  endpoint: "fal-ai/wan/v2.7/edit-video",
+  payload: { duration: num(input.duration) || 5 },
+});
+
 const FAL_ADAPTERS: Record<string, CostAdapter> = {
+  // --- Fal images (per image / per megapixel) ---
   generate_fal_nano_banana_text_to_image: falImage("fal-ai/nano-banana"),
   generate_fal_nano_banana_edit_image: falImage("fal-ai/nano-banana/edit"),
   generate_fal_nano_banana_2_text_to_image: falImage("fal-ai/nano-banana-2"),
+  generate_fal_nano_banana_2_edit_image: falImage("fal-ai/nano-banana-2/edit"),
   generate_fal_nano_banana_pro_text_to_image: falImage("fal-ai/nano-banana-pro"),
+  generate_fal_nano_banana_pro_edit_image: falImage("fal-ai/nano-banana-pro/edit"),
   generate_fal_seedream_v5_lite_text_to_image: falImage("fal-ai/bytedance/seedream/v5/lite/text-to-image"),
+  generate_fal_seedream_v5_lite_edit_image: falImage("fal-ai/bytedance/seedream/v5/lite/edit"),
+  generate_fal_wan_2_7_text_to_image: falImage("fal-ai/wan/v2.7/text-to-image"),
+  generate_fal_wan_2_7_edit_image: falImage("fal-ai/wan/v2.7/edit"),
+  generate_fal_wan_2_7_pro_text_to_image: falImage("fal-ai/wan/v2.7/pro/text-to-image"),
+  generate_fal_wan_2_7_pro_edit_image: falImage("fal-ai/wan/v2.7/pro/edit"),
+  generate_fal_grok_imagine_text_to_image: falImage("xai/grok-imagine-image"),
+  generate_fal_grok_imagine_edit_image: falImage("xai/grok-imagine-image/edit"),
+  // The cost table keys Qwen edit off its pricing-page slug, not the wire
+  // endpoint ("fal-ai/qwen-image/edit").
+  generate_fal_qwen_2_0_text_to_image: falImage("fal-ai/qwen-image"),
+  generate_fal_qwen_2_0_edit_image: falImage("fal-ai/qwen-image-edit"),
+  // nano-banana-2-lite stays unpriced: upstream declares it dynamic-pricing.
+
+  // --- Fal video (per second) ---
+  generate_fal_seedance_2_0_text_to_video: falSeedanceVideo("bytedance/seedance-2.0/text-to-video"),
+  generate_fal_seedance_2_0_image_to_video: falSeedanceVideo("bytedance/seedance-2.0/image-to-video"),
+  generate_fal_seedance_2_0_reference_to_video: falSeedanceVideo("bytedance/seedance-2.0/reference-to-video", true),
+  generate_fal_seedance_2_0_fast_text_to_video: falSeedanceVideo("bytedance/seedance-2.0/fast/text-to-video"),
+  generate_fal_seedance_2_0_fast_image_to_video: falSeedanceVideo("bytedance/seedance-2.0/fast/image-to-video"),
+  generate_fal_seedance_2_0_fast_reference_to_video: falSeedanceVideo("bytedance/seedance-2.0/fast/reference-to-video", true),
+  generate_fal_wan_2_7_text_to_video: falVideo("fal-ai/wan/v2.7/text-to-video"),
+  generate_fal_wan_2_7_image_to_video: falVideo("fal-ai/wan/v2.7/image-to-video"),
+  generate_fal_wan_2_7_reference_to_video: falVideo("fal-ai/wan/v2.7/reference-to-video"),
+  generate_fal_wan_2_7_edit_video: falWanEditVideo,
+  generate_fal_grok_imagine_video_image_to_video: falVideo("xai/grok-imagine-video/image-to-video"),
+  generate_fal_grok_imagine_video_reference_to_video: falVideo("xai/grok-imagine-video/reference-to-video"),
+  extend_fal_grok_imagine_video: falVideo("xai/grok-imagine-video/extend-video"),
+  generate_fal_kling_video_v3_pro_text_to_video: falKlingV3Video("fal-ai/kling-video/v3/pro/text-to-video"),
+  generate_fal_kling_video_v3_pro_image_to_video: falKlingV3Video("fal-ai/kling-video/v3/pro/image-to-video"),
+  generate_fal_kling_video_v3_standard_text_to_video: falKlingV3Video("fal-ai/kling-video/v3/standard/text-to-video"),
+  generate_fal_kling_video_v3_standard_image_to_video: falKlingV3Video("fal-ai/kling-video/v3/standard/image-to-video"),
+  // xai/grok-imagine-video/edit-video has no published rate — stays "—".
 };
 
 // Alibaba media rates landed in cost@0.8.0 for the models below.
@@ -435,6 +505,7 @@ const alibabaVideo = (model: string, defaultDuration: number): CostAdapter => (i
 const ALIBABA_ADAPTERS: Record<string, CostAdapter> = {
   generate_alibaba_qwen_2_0_text_to_image: alibabaImage("qwen-image-2.0"),
   generate_alibaba_qwen_2_0_edit_image: alibabaImage("qwen-image-edit"),
+  generate_alibaba_wan_2_7_text_to_image: alibabaImage("wan2.7-image"),
   generate_alibaba_wan_2_7_pro_text_to_image: alibabaImage("wan2.7-image-pro"),
   generate_alibaba_wan_2_7_video: alibabaVideo("wan2.7-i2v", 5),
 };
