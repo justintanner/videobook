@@ -259,8 +259,8 @@ export function toUpstreamCostHints(hints: KieCostHints): { durationSeconds?: nu
 // Map MCP tool_name -> EstimateRequest builder. Tools not listed here return
 // null from getCostAdapter() and surface in the UI as "—" (no rate available),
 // unless a local estimator handles them (see estimateGoogleFlowCost).
-// Fal image tools that appear in @apicity/cost@0.8.0 have adapters; Fal video
-// and unlisted edit endpoints remain unpriced (docs/apicity-gaps.md §26).
+// Every Fal tool @apicity/cost prices has an adapter; only upstream-declared
+// dynamic-pricing endpoints and unpublished rates stay "—" (see FAL_ADAPTERS).
 // Google Flow tools keep the local Gemini API list-rate table in
 // google-flow-cost.ts — package googleflow rates are credit×Pro, not API USD
 // (docs/apicity-gaps.md §15, product choice A).
@@ -389,7 +389,8 @@ const XAI_ADAPTERS: Record<string, CostAdapter> = {
   extend_kie_grok_imagine_video: xaiGrokImagineVideo,
 };
 
-// Fal bills by endpoint id. Only image endpoints priced in @apicity/cost@0.8.0.
+// Fal bills by endpoint id; @apicity/cost prices image endpoints per image or
+// per megapixel and video endpoints per second.
 const falImage = (endpoint: string): CostAdapter => (input) => ({
   provider: "fal",
   endpoint,
@@ -488,7 +489,8 @@ const FAL_ADAPTERS: Record<string, CostAdapter> = {
   // xai/grok-imagine-video/edit-video has no published rate — stays "—".
 };
 
-// Alibaba media rates landed in cost@0.8.0 for the models below.
+// Alibaba media rates: qwen/wan-pro landed in cost@0.8.0; non-pro
+// wan2.7-image ($0.03 list) followed in 0.8.6.
 const alibabaImage = (model: string): CostAdapter => () => ({
   provider: "alibaba",
   payload: { model, input: {} },
