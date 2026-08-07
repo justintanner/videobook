@@ -363,6 +363,33 @@ therefore fails closed only when the estimate is zero (unknown model or
 underivable units); a positive estimate with warnings is a floor the package
 stands behind and is admitted.
 
+## 36. (gap) KIE MiniMax H3 reference clip duration bounds absent from schema — OPEN in 0.8.8
+
+`MiniMaxH3ReferenceToVideoInputSchema` bounds only reference counts (max 9
+images / 3 videos / 3 audios). Kie additionally enforces a per-clip duration
+window at runtime: a live reference-to-video submit with a ~29.9s clip failed
+with
+
+```
+content[2].video_url: invalid param: video duration 29917 ms,
+expected [2000, 15000] ms (2013) (400)
+```
+
+Because the guard cannot see it, such a payload validates, mints a paygate
+OTP, and burns a task attempt before Kie rejects it. Whether an equivalent
+bound applies to reference audio is unverified — no audio rejection has been
+observed.
+
+**Workaround:** `generate_kie_minimax_h3_reference_to_video` checks each plain
+video ref's local `original` duration metadata before creating the output
+artifact and fails fast outside 2–15s. Unknown durations pass through (Kie
+stays the authority); slashed refs (`@asset/file.mp4`) are skipped because
+artifact metadata does not describe sibling files.
+
+**Ask Apicity:** document the reference clip duration window on the
+reference-to-video schema (description at minimum), and confirm whether the
+same bound applies to `reference_audio_urls`.
+
 ---
 
 ## Open / partial summary (installed 0.8.8, re-audited 2026-08-07)
@@ -370,6 +397,7 @@ stands behind and is admitted.
 | Status       | Sections                                                            | What Videocity still carries                           |
 | ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
 | **OPEN**     | §18 character metadata                                              | list/singleton reconcile                               |
+| **OPEN**     | §36 MiniMax H3 reference clip bounds                                | pre-submit 2–15s check from local `original` metadata  |
 | **PARTIAL**  | §14 Flow loose schemas                                              | per-model domains                                      |
 | **PARTIAL**  | §15 Flow estimate semantics                                         | local Gemini API list USD (`google-flow-cost.ts`)      |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |

@@ -136,4 +136,69 @@ describe("generate_minimax_h3_r2v_video tool", () => {
       sourceAudioIds: [audio.value.artifactId],
     });
   });
+
+  it("rejects a reference video outside Kie's 2-15s duration bound", async () => {
+    // Kie enforces [2000, 15000] ms per reference clip at runtime; the schema
+    // bounds only counts, so without the local metadata pre-check this payload
+    // mints an OTP and burns a task before the 400 comes back.
+    const fs = createEngineForTest(tempDir);
+    const long = await fs.artifacts.create("vid", "long-clip");
+    if (!long.ok) throw new Error("Failed to create video asset");
+    await fs.files.write(long.value.artifactId, "original.mp4", Buffer.from("fake video"));
+    const longMeta = await fs.metadata.artifacts.write(long.value.artifactId, "original", { duration: 29.917 });
+    expect(longMeta.ok).toBe(true);
+
+    const tooLong = await client.callTool({
+      name: "generate_kie_minimax_h3_reference_to_video",
+      arguments: {
+        book_id: "test-proj",
+        prompt: "cast these references",
+        duration: "6",
+        video_refs: [`@${long.value.artifactId}`],
+      },
+    });
+    expect(tooLong.isError).toBe(true);
+    expect((tooLong.content as TextContent)[0].text).toContain("is 29.9s");
+    expect((tooLong.content as TextContent)[0].text).toContain("2-15s");
+
+    const short = await fs.artifacts.create("vid", "blip");
+    if (!short.ok) throw new Error("Failed to create video asset");
+    await fs.files.write(short.value.artifactId, "original.mp4", Buffer.from("fake video"));
+    const shortMeta = await fs.metadata.artifacts.write(short.value.artifactId, "original", { duration: 1 });
+    expect(shortMeta.ok).toBe(true);
+
+    const tooShort = await client.callTool({
+      name: "generate_kie_minimax_h3_reference_to_video",
+      arguments: {
+        book_id: "test-proj",
+        prompt: "cast these references",
+        duration: "6",
+        video_refs: [`@${short.value.artifactId}`],
+      },
+    });
+    expect(tooShort.isError).toBe(true);
+    expect((tooShort.content as TextContent)[0].text).toContain("2-15s");
+  });
+
+  it("accepts a reference video at the 15s boundary", async () => {
+    const fs = createEngineForTest(tempDir);
+    const clip = await fs.artifacts.create("vid", "boundary-clip");
+    if (!clip.ok) throw new Error("Failed to create video asset");
+    await fs.files.write(clip.value.artifactId, "original.mp4", Buffer.from("fake video"));
+    const meta = await fs.metadata.artifacts.write(clip.value.artifactId, "original", { duration: 15 });
+    expect(meta.ok).toBe(true);
+
+    const result = await client.callTool({
+      name: "generate_kie_minimax_h3_reference_to_video",
+      arguments: {
+        book_id: "test-proj",
+        prompt: "cast these references",
+        duration: "6",
+        video_refs: [`@${clip.value.artifactId}`],
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("enqueued");
+  });
 });

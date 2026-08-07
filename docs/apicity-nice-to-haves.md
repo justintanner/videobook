@@ -23,14 +23,15 @@ The **0.8.6/0.8.8** releases closed every remaining ask from the 0.8.0 list:
 - KIE Nano Banana $0.02 rate (§34); landscape_4_3 area defaults (§31); Kling
   3.0 multi_shots sound tier (§32); Alibaba non-pro Wan image rate (§28).
 
-What remains is narrower: Google Flow strictness / estimate semantics, and one
-Fal key nit.
+What remains is narrower: Google Flow strictness / estimate semantics, one Fal
+key nit, and the undocumented MiniMax H3 reference clip duration bounds (§36).
 
 ## Priority table
 
 | Priority | Ask | Why it matters |
 |---|---|---|
 | **P1** | Fix the `FalEndpointInputMap` key for Qwen edit | Map carries `fal-ai/qwen-image-edit`; the real endpoint is `fal-ai/qwen-image/edit`, so that one job stays on the untyped fallback |
+| **P2** | Document MiniMax H3 reference clip duration bounds | Kie rejects reference videos outside [2000, 15000] ms at runtime; schema bounds only counts (§36) |
 | **P2** | Google Flow strict per-model request/response schemas | Veo alias hatch narrowed; responses still loose |
 | **P2** | Optional Gemini API list-rate USD for Flow (or plan-tier credits) | Package prices credit×Pro; some UIs want API list USD |
 | **P2** | Service-side: Flow singleton character reads lose metadata | Singleton returns `Untitled Character` / omits `personalityNotes`; list/create keep them |
