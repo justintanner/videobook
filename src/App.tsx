@@ -185,7 +185,7 @@ import {
   type NotebookRunWatchOutcomeKind,
 } from '@/videobook/notebook-run-watch'
 import {
-  downloadWatchStep,
+  mediaAssetWatchStep,
   downloadVideoCellInput,
 } from '@/videobook/notebook-download'
 import { routedVideoCellInputs } from '@/videobook/notebook-routed-action'
@@ -500,7 +500,8 @@ const notebookRunPollTimeoutMs = 5 * 60_000
 const notebookGenerationWatchIntervalMs = 2_000
 const notebookGenerationWatchTimeoutMs = 45 * 60_000
 const downloadWatchIntervalMs = 5_000
-const downloadWatchTimeoutMs = 45 * 60_000
+const mediaProcessWatchIntervalMs = 750
+const mediaAssetWatchTimeoutMs = 45 * 60_000
 const activeJobStates = new Set(['queued', 'running', 'completing'])
 
 function delay(ms: number): Promise<void> {
@@ -2966,18 +2967,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }, [setCellQueued, setCellRunError, setNotice, watchNotebookRun])
 
-  const watchDownloadedAsset = useCallback(async (params: {
+  const watchMediaAsset = useCallback(async (params: {
     bookId: string
     notebookId: string
     cellId: string
     address: string
     artifactId: string
+    intervalMs?: number
+    tokenPrefix?: string
+    completedNotice?: string
+    stillWorkingNotice?: string
   }) => {
-    const token = `download:${params.artifactId}`
+    const intervalMs = params.intervalMs ?? downloadWatchIntervalMs
+    const token = `${params.tokenPrefix ?? 'media'}:${params.artifactId}`
     activeWatchesRef.current.set(params.cellId, token)
     let watchedArtifactId = params.artifactId
     let consecutiveFailures = 0
-    const deadline = Date.now() + downloadWatchTimeoutMs
+    const deadline = Date.now() + mediaAssetWatchTimeoutMs
     try {
       while (Date.now() < deadline) {
         const scope = watchScopeRef.current
@@ -3031,7 +3037,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             applyJobsSnapshot(nextJobs)
             applyNotebook(nextNotebook, nextAssets, nextJobs)
           }
-          const step = downloadWatchStep(
+          const step = mediaAssetWatchStep(
             watchedArtifactId,
             nextAssets.find((asset) => asset.artifactId === watchedArtifactId),
             nextJobs,
@@ -3043,7 +3049,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               ? passiveMediaKindForAsset(replacement.type)
               : null
             if (!replacement || !replacementKind) {
-              await delay(downloadWatchIntervalMs)
+              await delay(intervalMs)
               continue
             }
             await callRef.current('update_notebook_cell', {
@@ -3061,7 +3067,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           }
           if (step.kind === 'completed') {
             setCellRunError(params.cellId, null)
-            setNotice(`@${params.address} downloaded`)
+            if (params.completedNotice) setNotice(params.completedNotice)
             return
           }
           if (step.kind === 'failed') {
@@ -3069,7 +3075,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             setNotice(step.message, 'error')
             return
           }
-          await delay(downloadWatchIntervalMs)
+          await delay(intervalMs)
         } catch (error) {
           consecutiveFailures += 1
           if (consecutiveFailures >= 10) {
@@ -3080,11 +3086,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             )
             return
           }
-          await delay(downloadWatchIntervalMs)
+          await delay(intervalMs)
         }
       }
       setNotice(
-        `@${params.address} is still downloading — check the Jobs screen`,
+        params.stillWorkingNotice
+          ?? `@${params.address} is still processing — check the Jobs screen`,
       )
     } finally {
       if (activeWatchesRef.current.get(params.cellId) === token) {
@@ -3092,6 +3099,69 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     }
   }, [applyJobsSnapshot, applyNotebook, setCellRunError, setNotice])
+
+  const watchDownloadedAsset = useCallback(async (params: {
+    bookId: string
+    notebookId: string
+    cellId: string
+    address: string
+    artifactId: string
+  }) => {
+    await watchMediaAsset({
+      ...params,
+      tokenPrefix: 'download',
+      intervalMs: downloadWatchIntervalMs,
+      completedNotice: `@${params.address} downloaded`,
+      stillWorkingNotice:
+        `@${params.address} is still downloading — check the Jobs screen`,
+    })
+  }, [watchMediaAsset])
+
+  const watchUploadedMediaAsset = useCallback(async (params: {
+    bookId: string
+    notebookId: string
+    cellId: string
+    address: string
+    artifactId: string
+  }) => {
+    await watchMediaAsset({
+      ...params,
+      tokenPrefix: 'process',
+      intervalMs: mediaProcessWatchIntervalMs,
+      stillWorkingNotice:
+        `@${params.address} is still processing — check the Jobs screen`,
+    })
+  }, [watchMediaAsset])
+
+  const resumeMediaProcessingWatches = useCallback((
+    targetBookId: string,
+    document: NotebookDocument,
+    nextAssets: AssetRecord[],
+  ) => {
+    const byArtifactId = new Map(
+      nextAssets.map((asset) => [asset.artifactId, asset]),
+    )
+    for (const cell of document.cells) {
+      if (!passiveMediaKind(cell.type) || !cell.outputArtifactId) continue
+      const asset = byArtifactId.get(cell.outputArtifactId)
+      if (!asset || asset.status === 'ready' || asset.status === 'error') continue
+      if (activeWatchesRef.current.has(cell.id)) continue
+      void watchUploadedMediaAsset({
+        bookId: targetBookId,
+        notebookId: document.id,
+        cellId: cell.id,
+        address: notebookGridAddress(cell.slot),
+        artifactId: cell.outputArtifactId,
+      })
+    }
+  }, [watchUploadedMediaAsset])
+
+  const mediaResumeSeedRef = useRef(false)
+  useEffect(() => {
+    if (mediaResumeSeedRef.current || !bookId || !notebook) return
+    mediaResumeSeedRef.current = true
+    resumeMediaProcessingWatches(bookId, notebook, assets)
+  }, [assets, bookId, notebook, resumeMediaProcessingWatches])
 
   const runCell = useCallback(async (
     cellId: string,
@@ -3635,7 +3705,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     saveValue(`videobook.active-notebook:${targetBookId}`, nextNotebook.id)
     applyNotebook(nextNotebook, nextAssets, nextJobs)
-  }, [applyNotebook, call])
+    resumeMediaProcessingWatches(targetBookId, nextNotebook, nextAssets)
+  }, [applyNotebook, call, resumeMediaProcessingWatches])
 
   const refreshBookList = useCallback(async () => {
     const value = await call('list_books', { sort: 'newest' })
@@ -4207,6 +4278,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice(reusedExisting
         ? `Reused @${artifactRef} in media slot`
         : `Uploaded and attached @${artifactRef}`)
+      void watchUploadedMediaAsset({
+        bookId,
+        notebookId: notebook.id,
+        cellId,
+        address: notebookGridAddress(cell.slot),
+        artifactId: artifactRef,
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setMediaSlotError(cellId, message)
@@ -4261,6 +4339,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice(reusedExisting
         ? `Reused @${artifactRef} at ${address}`
         : `Uploaded and attached @${artifactRef} at ${address}`)
+      void watchUploadedMediaAsset({
+        bookId,
+        notebookId: notebook.id,
+        cellId: createdCellId,
+        address: notebookGridAddress(slot),
+        artifactId: artifactRef,
+      })
     } catch (error) {
       let message = error instanceof Error ? error.message : String(error)
       if (createdCellId && !attached) {

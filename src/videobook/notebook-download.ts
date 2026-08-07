@@ -64,6 +64,15 @@ export function downloadWatchStep(
   asset: DownloadWatchAsset | undefined,
   jobs: readonly DownloadWatchJob[],
 ): DownloadWatchStep {
+  return mediaAssetWatchStep(artifactId, asset, jobs)
+}
+
+/** Watch step for board media that is still downloading or process_*'ing. */
+export function mediaAssetWatchStep(
+  artifactId: string,
+  asset: DownloadWatchAsset | undefined,
+  jobs: readonly DownloadWatchJob[],
+): DownloadWatchStep {
   const completedDownload = jobs.find((job) =>
     job.artifactId === artifactId
     && job.type === 'download_video'
@@ -78,11 +87,18 @@ export function downloadWatchStep(
   if (asset?.status === 'ready') return { kind: 'completed' }
   const failed = jobs.find((job) =>
     job.artifactId === artifactId
-    && (job.state === 'failed' || job.state === 'aborted'))
+    && (job.state === 'failed' || job.state === 'aborted')
+    && (
+      job.type === 'download_video'
+      || job.type === 'process_image'
+      || job.type === 'process_video'
+      || job.type === 'process_audio'
+      || job.type === 'process_upload'
+    ))
   if (asset?.status === 'error' || failed) {
     return {
       kind: 'failed',
-      message: failed?.error?.message ?? 'Download or media processing failed',
+      message: failed?.error?.message ?? 'Media processing failed',
     }
   }
   return { kind: 'continue' }

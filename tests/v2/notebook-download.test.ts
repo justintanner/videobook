@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   downloadWatchStep,
   downloadVideoCellInput,
+  mediaAssetWatchStep,
 } from '../../src/videobook/notebook-download'
 
 describe('notebook download placement', () => {
@@ -83,5 +84,60 @@ describe('notebook download placement', () => {
       kind: 'failed',
       message: 'Remote host returned 403',
     })
+  })
+
+  it('keeps watching while process_image is still active', () => {
+    expect(mediaAssetWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'processing',
+    }, [{
+      artifactId: 'artifact-01',
+      error: null,
+      result: null,
+      state: 'running',
+      type: 'process_image',
+    }])).toEqual({ kind: 'continue' })
+  })
+
+  it('completes when process_image finishes and the asset is ready', () => {
+    expect(mediaAssetWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'ready',
+    }, [{
+      artifactId: 'artifact-01',
+      error: null,
+      result: { success: true },
+      state: 'done',
+      type: 'process_image',
+    }])).toEqual({ kind: 'completed' })
+  })
+
+  it('surfaces process_image failures on the board', () => {
+    expect(mediaAssetWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'error',
+    }, [{
+      artifactId: 'artifact-01',
+      error: { message: 'Failed to read original' },
+      result: null,
+      state: 'failed',
+      type: 'process_image',
+    }])).toEqual({
+      kind: 'failed',
+      message: 'Failed to read original',
+    })
+  })
+
+  it('ignores unrelated failed jobs while media is still processing', () => {
+    expect(mediaAssetWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'processing',
+    }, [{
+      artifactId: 'artifact-01',
+      error: { message: 'semantic index boom' },
+      result: null,
+      state: 'failed',
+      type: 'semantic_index',
+    }])).toEqual({ kind: 'continue' })
   })
 })
