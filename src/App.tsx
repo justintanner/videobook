@@ -144,6 +144,7 @@ import {
 import {
   changedNotebookGridNodes,
   nextNotebookGridSlot,
+  nextNotebookVideoGenerationSlot,
   normalizeNotebookGridZoom,
   notebookGrid,
   notebookGridAddress,
@@ -3951,7 +3952,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook) return
     const slot = position
       ? notebookGridDropSlot(position, notebookBaseMetrics)
-      : nextNotebookGridSlot(nodes)
+      : type === 'generate_video'
+        ? nextNotebookVideoGenerationSlot(notebook.cells)
+        : nextNotebookGridSlot(nodes)
     if (
       position
       && nodes.some((node) =>
@@ -5760,7 +5763,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         cellId: uuidv7(),
         command,
         document: currentNotebook,
-        fallbackSlot: nextNotebookGridSlot(nodes),
+        fallbackSlot: command.cellType === 'generate_video'
+          ? nextNotebookVideoGenerationSlot(currentNotebook.cells)
+          : nextNotebookGridSlot(nodes),
         ...(options?.preferredTool
           ? { preferredTool: options.preferredTool }
           : {}),

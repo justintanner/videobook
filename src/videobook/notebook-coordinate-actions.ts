@@ -10,6 +10,7 @@ import type {
   NotebookGridSlot,
 } from 'videobook-engine'
 import { notebookCellAtSlot } from './notebook-addressing'
+import { nextNotebookVideoGenerationSlot } from './notebook-grid'
 
 export type NotebookCoordinateAction =
   | {
@@ -151,9 +152,12 @@ export function planNotebookCoordinateAction(
   parsed: NotebookCoordinateAction,
 ): NotebookCoordinateActionPlan {
   if (parsed.kind === 'create') {
-    const destination = parsed.destination ?? firstEmptyNotebookGridSlot(
-      document.cells.map((cell) => cell.slot),
-    )
+    const destination = parsed.destination
+      ?? (parsed.cellType === 'generate_video'
+        ? nextNotebookVideoGenerationSlot(document.cells)
+        : firstEmptyNotebookGridSlot(
+            document.cells.map((cell) => cell.slot),
+          ))
     const occupied = notebookCellAtSlot(document, destination)
     if (occupied) {
       throw new Error(`Notebook cell ${notebookGridTag(destination)} is occupied`)

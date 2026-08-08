@@ -2,7 +2,9 @@ import type { Node } from '@xyflow/react'
 import { describe, expect, it } from 'vitest'
 import {
   changedNotebookGridNodes,
+  firstEmptyNotebookGridSlotFromRow,
   nextNotebookGridSlot,
+  nextNotebookVideoGenerationSlot,
   normalizeNotebookGridZoom,
   notebookGrid,
   notebookGridDropSlot,
@@ -144,6 +146,30 @@ describe('notebook grid', () => {
     const full = Array.from({ length: 338 }, (_, index) =>
       node(String(index), Math.floor(index / 13), index % 13))
     expect(() => nextNotebookGridSlot(full)).toThrow('Notebook grid is full')
+  })
+
+  it('places video generation cells below the last image row', () => {
+    expect(nextNotebookVideoGenerationSlot([
+      { type: 'image', slot: { row: 0, column: 0 } },
+      { type: 'image', slot: { row: 0, column: 2 } },
+      { type: 'prompt', slot: { row: 1, column: 0 } },
+    ])).toEqual({ row: 1, column: 1 })
+
+    expect(nextNotebookVideoGenerationSlot([
+      { type: 'image', slot: { row: 0, column: 0 } },
+      { type: 'generate_image', slot: { row: 2, column: 3 } },
+      { type: 'generate_video', slot: { row: 3, column: 0 } },
+    ])).toEqual({ row: 3, column: 1 })
+
+    expect(nextNotebookVideoGenerationSlot([
+      { type: 'prompt', slot: { row: 0, column: 0 } },
+      { type: 'generate_video', slot: { row: 1, column: 0 } },
+    ])).toEqual({ row: 0, column: 1 })
+
+    expect(firstEmptyNotebookGridSlotFromRow([
+      { row: 2, column: 0 },
+      { row: 2, column: 1 },
+    ], 2)).toEqual({ row: 2, column: 2 })
   })
 
   it('keeps thirteen columns and grows visible rows to one trailing row', () => {

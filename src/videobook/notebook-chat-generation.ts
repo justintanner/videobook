@@ -4,6 +4,7 @@ import type {
   NotebookDocument,
   NotebookGridSlot,
 } from 'videobook-engine'
+import { nextNotebookVideoGenerationSlot } from './notebook-grid'
 import {
   compatibleGenerationModes,
   generationActionForSelection,
@@ -260,9 +261,11 @@ export function planNotebookChatGeneration(input: {
     ...(mode ? { generationMode: mode.id } : {}),
     ...(Object.keys(settings).length > 0 ? { generationSettings: settings } : {}),
   }
-  const slot = sources[0]
-    ? firstEmptyNotebookGridSlot(input.document.cells.map((cell) => cell.slot))
-    : input.fallbackSlot
+  const slot = input.command.cellType === 'generate_video'
+    ? nextNotebookVideoGenerationSlot(input.document.cells)
+    : sources[0]
+      ? firstEmptyNotebookGridSlot(input.document.cells.map((cell) => cell.slot))
+      : input.fallbackSlot
   const cell: NotebookCell = {
     id: input.cellId,
     type: input.command.cellType,

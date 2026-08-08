@@ -178,6 +178,55 @@ export function nextNotebookGridSlot<T extends NotebookGridData>(
   return firstEmptyNotebookGridSlot(nodes.map((node) => node.data.slot))
 }
 
+const imageCellTypes = new Set([
+  'image',
+  'generate_image',
+  'extract_frame',
+  'character',
+])
+
+export function isNotebookImageCellType(type: string): boolean {
+  return imageCellTypes.has(type)
+}
+
+/** First empty square at or below `startRow`, row-major within the board. */
+export function firstEmptyNotebookGridSlotFromRow(
+  occupied: Iterable<NotebookGridSlot>,
+  startRow: number,
+): NotebookGridSlot {
+  const occupiedKeys = new Set(
+    [...occupied].map((slot) => notebookGridSlotKey(slot)),
+  )
+  const rowStart = Math.min(
+    NOTEBOOK_GRID_ROW_COUNT - 1,
+    Math.max(0, Math.trunc(startRow)),
+  )
+  for (let row = rowStart; row < NOTEBOOK_GRID_ROW_COUNT; row += 1) {
+    for (let column = 0; column < NOTEBOOK_GRID_COLUMN_COUNT; column += 1) {
+      if (occupiedKeys.has(`${row}:${column}`)) continue
+      return { row, column }
+    }
+  }
+  return firstEmptyNotebookGridSlot(occupied)
+}
+
+/**
+ * Video generation cells sit on the row under the bottommost image cell,
+ * then fill left-to-right on subsequent rows. Without images, use the first
+ * empty square on the board.
+ */
+export function nextNotebookVideoGenerationSlot(
+  cells: ReadonlyArray<{ type: string; slot: NotebookGridSlot }>,
+): NotebookGridSlot {
+  const occupied = cells.map((cell) => cell.slot)
+  let lastImageRow = -1
+  for (const cell of cells) {
+    if (!isNotebookImageCellType(cell.type)) continue
+    if (cell.slot.row > lastImageRow) lastImageRow = cell.slot.row
+  }
+  return firstEmptyNotebookGridSlotFromRow(occupied, lastImageRow + 1)
+}
+
 export interface NotebookGridMetrics {
   rowCount: number
   columnCount: number
