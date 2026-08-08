@@ -1955,6 +1955,18 @@ textarea:focus-visible {
   white-space: normal;
 }
 
+.cell-generation-chips {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.cell-generation-chips .cell-aspect-ratio {
+  margin-left: 0;
+}
+
 .cell-aspect-ratio {
   display: inline-flex;
   height: 20px;
@@ -1968,6 +1980,100 @@ textarea:focus-visible {
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
   font-size: 10px;
   letter-spacing: 0.04em;
+}
+
+.cell-media-caption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  gap: 2px;
+  max-height: 42%;
+  padding: 6px 8px;
+  overflow: hidden;
+  color: #e8fff0;
+  background: linear-gradient(180deg, transparent, rgba(6, 18, 12, 0.88));
+  font-size: 10px;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.cell-media-caption-prompt {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.cell-media-caption-meta {
+  color: #9de1b8;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.inspector-generations {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.inspector-generations-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inspector-generation-attempt {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(114, 231, 170, 0.18);
+  border-radius: 8px;
+  background: rgba(12, 28, 18, 0.55);
+}
+
+.inspector-generation-attempt-head {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.inspector-generation-thumb {
+  overflow: hidden;
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.inspector-generation-thumb img,
+.inspector-generation-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.inspector-generation-facts {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.inspector-generation-facts p {
+  margin: 0;
+  color: #c7e6d2;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.inspector-generation-error {
+  color: #ffb4b4 !important;
 }
 
 .cell-status {
@@ -2008,6 +2114,7 @@ textarea:focus-visible {
 }
 
 .cell-media {
+  position: relative;
   display: grid;
   place-items: center;
   overflow: hidden;

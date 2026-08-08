@@ -7,15 +7,20 @@ const writeChains = new Map<string, Promise<unknown>>();
 export async function mutateNotebook(
   engine: Engine,
   notebookId: string,
-  _operation: string,
+  operation: string,
   mutate: (notebook: NotebookDocument) => NotebookDocument,
-  _details: Record<string, unknown> = {},
+  details: Record<string, unknown> = {},
+  options: { artifactId?: string } = {},
 ): Promise<NotebookMutationResult> {
   const current = writeChains.get(notebookId) ?? Promise.resolve();
   const next = current.then(async () => {
     const read = engine.notebooks.read(notebookId);
     if (!read.ok) return read;
-    return await engine.notebooks.write(mutate(read.value));
+    return await engine.notebooks.write(mutate(read.value), {
+      operation,
+      details,
+      ...(options.artifactId ? { artifactId: options.artifactId } : {}),
+    });
   });
   writeChains.set(notebookId, next.catch(() => {}));
   return await next;

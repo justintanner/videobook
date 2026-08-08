@@ -707,6 +707,21 @@ export function selectedCellDetails(
   const execution = normalizedDocument.execution?.[cellId] ?? null;
   const action = defaultActionForCell(cell, normalizedDocument);
   const validation = validateCellConfiguration(cell, normalizedDocument);
+  const versionIds = Array.isArray(cell.inputs?.outputVersionArtifactIds)
+    ? cell.inputs.outputVersionArtifactIds.filter(
+      (id): id is string => typeof id === "string" && id.length > 0,
+    )
+    : [];
+  const generationArtifactIds = [
+    ...versionIds,
+    ...(cell.outputArtifactId ? [cell.outputArtifactId] : []),
+    ...(typeof cell.inputs?.providerArtifactId === "string"
+      ? [cell.inputs.providerArtifactId]
+      : []),
+    ...(execution?.outputArtifactId ? [execution.outputArtifactId] : []),
+    ...(execution?.providerArtifactId ? [execution.providerArtifactId] : []),
+  ];
+  const uniqueGenerationArtifactIds = [...new Set(generationArtifactIds)];
   return {
     cell,
     rawRow: notebookCellTableRows(notebookId, cell),
@@ -723,6 +738,11 @@ export function selectedCellDetails(
     },
     output: {
       artifactId: cell.outputArtifactId ?? null,
+    },
+    generations: {
+      count: Math.max(uniqueGenerationArtifactIds.length, execution ? 1 : 0),
+      latestStatus: execution?.status ?? null,
+      artifactIds: uniqueGenerationArtifactIds,
     },
     resolvedRequest: sanitizeResolvedRequest(cell, action),
   };

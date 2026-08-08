@@ -442,6 +442,7 @@ function stableCellInputs(
   const volatile = new Set([
     "state",
     "resolvedPrompt",
+    "dispatchedPayload",
     "rawRewriteResult",
     "providerArtifactId",
     "normalizedFromArtifactId",
@@ -1032,7 +1033,7 @@ async function generationTool(
   document: NotebookDocument,
   cell: NotebookCell,
   bookId: string,
-): Promise<{ artifactId: string; tool: string }> {
+): Promise<{ artifactId: string; tool: string; resolvedPrompt: string }> {
   const prepared = await prepareNotebookGeneration(engine, document, cell, bookId);
   const { getAllToolDefs } = await import("../tools/index.js");
   const definition = getAllToolDefs(engine).find(
@@ -1051,7 +1052,13 @@ async function generationTool(
   }
   const artifact = engine.artifacts.get(reference);
   if (!artifact.ok) throw new Error(artifact.error.message);
-  return { artifactId: artifact.value.artifactId, tool: prepared.tool };
+  return {
+    artifactId: artifact.value.artifactId,
+    tool: prepared.tool,
+    resolvedPrompt: typeof prepared.input.prompt === "string"
+      ? prepared.input.prompt
+      : "",
+  };
 }
 
 async function rewritePromptCell(
@@ -1778,12 +1785,33 @@ async function executeLocalOrGeneration(
       );
     }
     const output = await generationTool(engine, document, cell, bookId);
+    const surface = cell.type === "generate_image"
+      ? "image_generate"
+      : cell.type === "generate_video"
+        ? "video_generate"
+        : null;
+    if (surface && output.resolvedPrompt) {
+      void engine.prompts.record({
+        surface,
+        prompt: output.resolvedPrompt,
+        context: {
+          notebookId: document.id,
+          cellId: cell.id,
+          tool: output.tool,
+          model: cell.model ?? cell.tool ?? output.tool,
+          artifactId: output.artifactId,
+        },
+      }).catch(() => {});
+    }
     return {
       artifactId: output.artifactId,
       tool: output.tool,
       awaitingOutput: true,
       cellInputs: {
         providerArtifactId: output.artifactId,
+        ...(output.resolvedPrompt
+          ? { resolvedPrompt: output.resolvedPrompt }
+          : {}),
         state: "awaiting-output",
       },
     };
@@ -1941,46 +1969,87 @@ export async function runNotebookCell(
           state,
           actionArtifactId,
         );
+        const resolvedPrompt =
+          typeof output.cellInputs?.resolvedPrompt === "string"
+            ? output.cellInputs.resolvedPrompt
+            : "";
         if (videoOutput) {
           withOutput = withMediaOutput(
             withOutput,
             new Set([videoOutput.outputCell.id]),
             output.artifactId,
-            { state: status },
-          );
-          withOutput = {
-            ...withOutput,
-            execution: {
-              ...executionState(withOutput),
-              [activeCell.id]: {
-                ...state,
-                outputArtifactId: output.artifactId,
-              },
-              [videoOutput.outputCell.id]: {
-                fingerprint: state.fingerprint,
-                status: status === "awaiting-output" ? "awaiting-output" : "completed",
-                outputArtifactId: output.artifactId,
-                updatedAt: state.updatedAt,
-                ...(state.completedAt ? { completedAt: state.completedAt } : {}),
-                ...(state.runId ? { runId: state.runId } : {}),
-                tool: state.tool,
-              },
+            {
+              state: status,
+              ...(resolvedPrompt ? { resolvedPrompt } : {}),
             },
-          };
+          );
         }
-        if (!output.cellInputs) return withOutput;
-        return {
+        const actionBefore = withOutput.cells.find((candidate) =>
+          candidate.id === activeCell.id);
+        const fillActionPrompt = Boolean(resolvedPrompt)
+          && !actionBefore?.prompt;
+        const withCells = {
           ...withOutput,
-          cells: withOutput.cells.map((candidate) =>
-            candidate.id === activeCell.id
+          cells: withOutput.cells.map((candidate) => {
+            if (candidate.id === activeCell.id) {
+              return {
+                ...candidate,
+                ...(fillActionPrompt ? { prompt: resolvedPrompt } : {}),
+                ...(output.cellInputs
+                  ? {
+                      inputs: {
+                        ...(candidate.inputs ?? {}),
+                        ...output.cellInputs,
+                      },
+                    }
+                  : {}),
+              };
+            }
+            if (
+              candidate.id === videoOutput?.outputCell.id
+              && resolvedPrompt
+            ) {
+              return { ...candidate, prompt: resolvedPrompt };
+            }
+            return candidate;
+          }),
+        };
+        // Filling the empty prompt column changes the cell's fingerprint, so
+        // the stored execution fingerprint must come from the updated
+        // document — otherwise the cell would immediately read as stale.
+        const finalCell = withCells.cells.find((candidate) =>
+          candidate.id === activeCell.id);
+        const fingerprint = fillActionPrompt && finalCell
+          ? notebookCellFingerprint(withCells, finalCell)
+          : state.fingerprint;
+        if (!videoOutput && !fillActionPrompt) return withCells;
+        return {
+          ...withCells,
+          execution: {
+            ...executionState(withCells),
+            [activeCell.id]: {
+              ...state,
+              fingerprint,
+              outputArtifactId: output.artifactId,
+            },
+            ...(videoOutput
               ? {
-                  ...candidate,
-                  inputs: {
-                    ...(candidate.inputs ?? {}),
-                    ...output.cellInputs,
-                  },
+                  [videoOutput.outputCell.id]: {
+                    fingerprint,
+                    status: status === "awaiting-output"
+                      ? "awaiting-output"
+                      : "completed",
+                    outputArtifactId: output.artifactId,
+                    updatedAt: state.updatedAt,
+                    ...(state.completedAt
+                      ? { completedAt: state.completedAt }
+                      : {}),
+                    ...(state.runId ? { runId: state.runId } : {}),
+                    tool: state.tool,
+                  } satisfies CellExecution,
                 }
-              : candidate),
+              : {}),
+          },
         };
       },
       {
@@ -1990,6 +2059,7 @@ export async function runNotebookCell(
         status,
         runId: options.runId,
       },
+      { artifactId: output.artifactId },
     );
     if (!write.ok) throw new Error(write.error.message);
     const read = engine.notebooks.read(notebookId);
@@ -2027,9 +2097,11 @@ export async function runNotebookCell(
       {
         cellId: activeCell.id,
         outputArtifactId,
-        error: message,
+        error: message.slice(0, 500),
         runId: options.runId,
+        tool: state.tool,
       },
+      { artifactId: outputArtifactId },
     );
     if (!write.ok) throw new Error(write.error.message);
     throw new Error(message);
@@ -2164,6 +2236,25 @@ function paidCellAuthorized(
   );
 }
 
+function dispatchedPromptFor(
+  cell: NotebookCell,
+  dispatchedPayload: Record<string, unknown> | null,
+): string {
+  if (
+    typeof cell.inputs?.resolvedPrompt === "string"
+    && cell.inputs.resolvedPrompt
+  ) {
+    return cell.inputs.resolvedPrompt;
+  }
+  const payloadInput = dispatchedPayload?.input;
+  const payloadPrompt = payloadInput
+    && typeof payloadInput === "object"
+    && !Array.isArray(payloadInput)
+    ? (payloadInput as Record<string, unknown>).prompt
+    : dispatchedPayload?.prompt;
+  return typeof payloadPrompt === "string" ? payloadPrompt : "";
+}
+
 async function finishAwaitingNotebookCell(
   engine: Engine,
   input: AwaitNotebookOutputPayload,
@@ -2184,8 +2275,15 @@ async function finishAwaitingNotebookCell(
     };
   }
   let outputArtifactId = input.providerArtifactId;
+  const payloadResult = await engine.metadata.artifacts.read<
+    Record<string, unknown>
+  >(input.providerArtifactId, "generation-payload");
+  const dispatchedPayload = payloadResult.ok ? payloadResult.value : null;
+  const resolvedPrompt = dispatchedPromptFor(cell, dispatchedPayload);
   const cellInputs: Record<string, unknown> = {
     providerArtifactId: input.providerArtifactId,
+    ...(dispatchedPayload ? { dispatchedPayload } : {}),
+    ...(resolvedPrompt ? { resolvedPrompt } : {}),
     state: "completed",
   };
   if (notebookCellMediaType(cell) === "video") {
@@ -2251,40 +2349,68 @@ async function finishAwaitingNotebookCell(
           withOutput,
           new Set([resolvedVideoOutput.outputCell.id]),
           outputArtifactId,
-          { state: "completed" },
-        );
-        withOutput = {
-          ...withOutput,
-          execution: {
-            ...executionState(withOutput),
-            [cell.id]: {
-              ...state,
-              outputArtifactId,
-            },
-            [resolvedVideoOutput.outputCell.id]: {
-              fingerprint: state.fingerprint,
-              status: "completed",
-              outputArtifactId,
-              completedAt,
-              updatedAt: completedAt,
-              ...(input.runId ? { runId: input.runId } : {}),
-              tool: state.tool,
-            },
+          {
+            state: "completed",
+            ...(resolvedPrompt ? { resolvedPrompt } : {}),
+            ...(dispatchedPayload ? { dispatchedPayload } : {}),
           },
-        };
+        );
       }
-      return {
+      const outputCellId = resolvedVideoOutput?.outputCell.id;
+      const actionBefore = withOutput.cells.find((candidate) =>
+        candidate.id === cell.id);
+      const fillActionPrompt = Boolean(resolvedPrompt)
+        && !actionBefore?.prompt;
+      const withCells = {
         ...withOutput,
-        cells: withOutput.cells.map((candidate) =>
-          candidate.id === cell.id
+        cells: withOutput.cells.map((candidate) => {
+          if (candidate.id === cell.id) {
+            return {
+              ...candidate,
+              ...(fillActionPrompt ? { prompt: resolvedPrompt } : {}),
+              inputs: {
+                ...(candidate.inputs ?? {}),
+                ...cellInputs,
+              },
+            };
+          }
+          if (candidate.id === outputCellId && resolvedPrompt) {
+            return { ...candidate, prompt: resolvedPrompt };
+          }
+          return candidate;
+        }),
+      };
+      // Filling the empty prompt column changes the cell's fingerprint, so
+      // the stored execution fingerprint must come from the updated document
+      // — otherwise the completed cell would immediately read as stale.
+      const finalCell = withCells.cells.find((candidate) =>
+        candidate.id === cell.id);
+      const fingerprint = fillActionPrompt && finalCell
+        ? notebookCellFingerprint(withCells, finalCell)
+        : state.fingerprint;
+      return {
+        ...withCells,
+        execution: {
+          ...executionState(withCells),
+          [cell.id]: {
+            ...state,
+            fingerprint,
+            outputArtifactId,
+          },
+          ...(outputCellId
             ? {
-                ...candidate,
-                inputs: {
-                  ...(candidate.inputs ?? {}),
-                  ...cellInputs,
-                },
+                [outputCellId]: {
+                  fingerprint,
+                  status: "completed",
+                  outputArtifactId,
+                  completedAt,
+                  updatedAt: completedAt,
+                  ...(input.runId ? { runId: input.runId } : {}),
+                  tool: state.tool,
+                } satisfies CellExecution,
               }
-            : candidate),
+            : {}),
+        },
       };
     },
     {
@@ -2292,7 +2418,9 @@ async function finishAwaitingNotebookCell(
       providerArtifactId: input.providerArtifactId,
       outputArtifactId,
       runId: input.runId,
+      tool: state.tool,
     },
+    { artifactId: outputArtifactId },
   );
   if (!updated.ok) throw new Error(updated.error.message);
   const refreshed = engine.notebooks.read(input.notebookId);
@@ -2331,8 +2459,9 @@ async function failAwaitingNotebookCell(
       cellId: input.cellId,
       providerArtifactId: input.providerArtifactId,
       runId: input.runId,
-      error: message,
+      error: message.slice(0, 500),
     },
+    { artifactId: input.providerArtifactId },
   );
   if (!result.ok) throw new Error(result.error.message);
   const read = engine.notebooks.read(input.notebookId);

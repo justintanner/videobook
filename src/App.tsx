@@ -35,6 +35,7 @@ import {
   Check,
   CircleDot,
   Film,
+  History,
   Image,
   Layers2,
   Library,
@@ -2117,9 +2118,24 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         : abbreviated
     })()
     : null
-  const aspectRatio = generationCell
-    ? asString(record(data.inputs?.generationSettings)?.aspect_ratio)
+  const generationSettings = generationCell
+    ? record(data.inputs?.generationSettings)
     : null
+  const aspectRatio = generationSettings
+    ? asString(generationSettings.aspect_ratio)
+    : null
+  const generationDuration = generationSettings
+    ? asString(generationSettings.duration)
+      ?? asString(generationSettings.duration_seconds)
+      ?? (typeof generationSettings.duration === 'number'
+        ? String(generationSettings.duration)
+        : null)
+    : null
+  const generationResolution = generationSettings
+    ? asString(generationSettings.resolution)
+      ?? asString(generationSettings.size)
+    : null
+  const resolvedPrompt = asString(data.inputs?.resolvedPrompt) ?? data.prompt
   const promptCell = textCell || (generationCell && Boolean(data.prompt))
   const running = notebookCellIsActiveStatus(data.status)
   const failed = data.status === 'error'
@@ -2127,9 +2143,25 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     data.inputs,
     data.outputArtifactId,
   )
+  const mediaCaption = (
+    data.kind === 'video' || data.kind === 'image'
+  ) && (mediaUrl || thumbnailUrl) && resolvedPrompt
+    ? {
+        prompt: resolvedPrompt,
+        tool: data.tool
+          ? abbreviateGenerationPhrases(
+            generationTitles.get(data.tool) ?? data.tool,
+          )
+          : null,
+        model: data.model
+          ? abbreviateGenerationPhrases(data.model)
+          : null,
+      }
+    : null
   const versionedOutput = (
     data.kind === 'audio'
     || data.kind === 'image'
+    || data.kind === 'video'
     || data.kind === 'analysis'
   ) && outputVersions.length > 1
   const activeOutputVersion = Math.max(
@@ -2195,9 +2227,24 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
       <section className="cell-node-shell">
         <header className="cell-node-header">
           <span><CellIcon kind={data.kind} />{cellTypeLabel(data.kind)}</span>
-          {generationCell && aspectRatio && (
-            <span className="cell-aspect-ratio" title="Aspect ratio">
-              {aspectRatio}
+          {generationCell && (
+            <span className="cell-generation-chips">
+              {generationDuration && (
+                <span className="cell-aspect-ratio" title="Duration">
+                  {generationDuration}
+                  {/^\d+(\.\d+)?$/.test(generationDuration) ? 's' : ''}
+                </span>
+              )}
+              {generationResolution && (
+                <span className="cell-aspect-ratio" title="Resolution">
+                  {generationResolution}
+                </span>
+              )}
+              {aspectRatio && (
+                <span className="cell-aspect-ratio" title="Aspect ratio">
+                  {aspectRatio}
+                </span>
+              )}
             </span>
           )}
           {action && !generationCell && (
@@ -2261,6 +2308,22 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
               height={data.asset?.height ?? null}
               durationSeconds={playableVideo ? data.asset?.duration ?? null : null}
             />
+            {mediaCaption && (
+              <div className="cell-media-caption" title={mediaCaption.prompt}>
+                <span className="cell-media-caption-prompt">
+                  {mediaCaption.prompt.length > 72
+                    ? `${mediaCaption.prompt.slice(0, 69)}…`
+                    : mediaCaption.prompt}
+                </span>
+                {(mediaCaption.tool || mediaCaption.model) && (
+                  <span className="cell-media-caption-meta">
+                    {[mediaCaption.tool, mediaCaption.model]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className={`cell-copy ${promptCell ? 'cell-copy-text' : ''}`}>
@@ -2381,6 +2444,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [notebookSurface, setNotebookSurface] = useState({ width: 0, height: 0 })
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [sourceViewCellId, setSourceViewCellId] = useState<string | null>(null)
+  const [generationsViewCellId, setGenerationsViewCellId] = useState<string | null>(null)
   const [bookMenuOpen, setBookMenuOpen] = useState(false)
   const [bookMenuLoading, setBookMenuLoading] = useState(false)
   const [bookMenuError, setBookMenuError] = useState<string | null>(null)
@@ -3661,6 +3725,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       || (
         selectedNotebookCell.type !== 'audio'
         && selectedNotebookCell.type !== 'image'
+        && selectedNotebookCell.type !== 'video'
         && selectedNotebookCell.type !== 'analysis'
       )
     ) {
@@ -7557,23 +7622,48 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   )}
                   <div className="inspector-header-actions">
                     {selectedCell && (
-                      <button
-                        type="button"
-                        className={sourceViewCellId === selectedCell.id
-                          ? 'inspector-source-toggle active'
-                          : 'inspector-source-toggle'}
-                        title={sourceViewCellId === selectedCell.id
-                          ? 'View cell'
-                          : 'View source'}
-                        aria-label={sourceViewCellId === selectedCell.id
-                          ? 'View cell'
-                          : 'View source'}
-                        aria-pressed={sourceViewCellId === selectedCell.id}
-                        onClick={() => setSourceViewCellId((current) =>
-                          current === selectedCell.id ? null : selectedCell.id)}
-                      >
-                        <Braces size={15} />
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className={generationsViewCellId === selectedCell.id
+                            ? 'inspector-source-toggle active'
+                            : 'inspector-source-toggle'}
+                          title={generationsViewCellId === selectedCell.id
+                            ? 'View cell'
+                            : 'View generations'}
+                          aria-label={generationsViewCellId === selectedCell.id
+                            ? 'View cell'
+                            : 'View generations'}
+                          aria-pressed={generationsViewCellId === selectedCell.id}
+                          onClick={() => {
+                            setSourceViewCellId(null)
+                            setGenerationsViewCellId((current) =>
+                              current === selectedCell.id ? null : selectedCell.id)
+                          }}
+                        >
+                          <History size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          className={sourceViewCellId === selectedCell.id
+                            ? 'inspector-source-toggle active'
+                            : 'inspector-source-toggle'}
+                          title={sourceViewCellId === selectedCell.id
+                            ? 'View cell'
+                            : 'View source'}
+                          aria-label={sourceViewCellId === selectedCell.id
+                            ? 'View cell'
+                            : 'View source'}
+                          aria-pressed={sourceViewCellId === selectedCell.id}
+                          onClick={() => {
+                            setGenerationsViewCellId(null)
+                            setSourceViewCellId((current) =>
+                              current === selectedCell.id ? null : selectedCell.id)
+                          }}
+                        >
+                          <Braces size={15} />
+                        </button>
+                      </>
                     )}
                     <button type="button" aria-label="Close inspector" onClick={() => setInspectorOpen(false)}>
                       <PanelRightClose size={16} />
@@ -7606,6 +7696,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     deleting={deletingCellIds.has(selectedNotebookCell.id)}
                     clearing={selectedMediaSlotState?.operation === 'clear'}
                     sourceVisible={sourceViewCellId === selectedNotebookCell.id}
+                    generationsVisible={
+                      generationsViewCellId === selectedNotebookCell.id
+                    }
                     onUpdate={updateCell}
                     onSetInput={setSelectedCellInput}
                     onRun={runCell}
@@ -7613,6 +7706,39 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     onClearSlot={clearSelectedCellSlot}
                     onOpenFullscreen={() => setFullscreenCellId(selectedNotebookCell.id)}
                     onPreviewPayload={previewGenerationPayload}
+                    onLoadGenerations={async () => {
+                      if (!selectedNotebookCell || !notebook || !bookId) {
+                        return { attempts: [] }
+                      }
+                      const payload = await call('list_cell_generations', {
+                        book_id: bookId,
+                        notebook_id: notebook.id,
+                        cell_id: selectedNotebookCell.id,
+                        limit: 20,
+                      }, { background: true })
+                      return payload as {
+                        attempts: Array<{
+                          attemptId: string
+                          status: string | null
+                          runId: string | null
+                          commitHash: string | null
+                          operation: string | null
+                          commitDate: string | null
+                          prompt: string | null
+                          resolvedPrompt: string | null
+                          model: string | null
+                          tool: string | null
+                          provider: string | null
+                          artifactId: string | null
+                          providerArtifactId: string | null
+                          error: string | null
+                          mediaUrl: string | null
+                          thumbnailUrl: string | null
+                          payload: unknown
+                          commandPlan: unknown
+                        }>
+                      }
+                    }}
                   />
                 ) : null}
               </aside>

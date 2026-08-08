@@ -612,7 +612,9 @@ describe("notebook runner frames and concat", () => {
       cell.id === firstOutputEdges[0]!.target);
     expect(firstImage).toMatchObject({
       label: "Extract source frame first frame",
-      slot: { row: 1, column: 1 },
+      // Continues the source video lane: below extract_frame and the occupied
+      // placeholder at (2,0) → first free vertical slot is (3,0).
+      slot: { row: 3, column: 0 },
       outputArtifactId: first.outputArtifactId,
       inputs: {
         mediaRole: "extract-frame-output",

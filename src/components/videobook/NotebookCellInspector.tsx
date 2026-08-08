@@ -1,19 +1,19 @@
 import {
-  AudioWaveform,
   Braces,
   Check,
   ChevronDown,
   CircleAlert,
   CircleX,
   Copy,
-  Film,
-  Image as ImageIcon,
+  History,
   Layers2,
   Maximize2,
   Save,
 } from 'lucide-react'
-import { Fragment, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { NotebookCell, NotebookEdge } from 'videobook-engine'
+import { ArtifactThumb } from './ArtifactThumb'
+import { MediaLibraryAssetPreview } from './MediaLibraryAssetPreview'
 import {
   notebookGridAddress,
   notebookGridTag,
@@ -363,6 +363,36 @@ export type NotebookCellInspectorAsset = {
   analysisInfo?: NotebookAnalysisInfo | null
 }
 
+type CellGenerationAttempt = {
+  attemptId: string
+  status: string | null
+  runId: string | null
+  commitHash: string | null
+  operation: string | null
+  commitDate: string | null
+  prompt: string | null
+  resolvedPrompt: string | null
+  model: string | null
+  tool: string | null
+  provider: string | null
+  artifactId: string | null
+  providerArtifactId: string | null
+  error: string | null
+  mediaUrl: string | null
+  thumbnailUrl: string | null
+  payload: unknown
+  commandPlan: unknown
+}
+
+type CellGenerationsPayload = {
+  attempts: CellGenerationAttempt[]
+  generations?: {
+    count: number
+    latestStatus: string | null
+    artifactIds: string[]
+  }
+}
+
 type NotebookCellInspectorProps = {
   notebookId: string
   cell: NotebookCell
@@ -377,6 +407,7 @@ type NotebookCellInspectorProps = {
   clearing: boolean
   deleting: boolean
   sourceVisible: boolean
+  generationsVisible?: boolean
   generationActions?: readonly NotebookGenerationAction[]
   mentionAssets?: readonly AssetMentionCandidate[]
   onUpdate: NotebookCellUpdate
@@ -389,6 +420,7 @@ type NotebookCellInspectorProps = {
     cellId: string,
     draft: GenerationPreviewDraft,
   ) => Promise<unknown>
+  onLoadGenerations?: () => Promise<CellGenerationsPayload>
 }
 
 function isPassiveOutputCell(cell: NotebookCell): boolean {
@@ -569,25 +601,9 @@ function DoltArtifactExpansion({
 }: {
   asset: NotebookCellInspectorAsset
 }) {
-  const thumbnailUrl = asset.thumbnailUrl
-    ?? (asset.type === 'image' ? asset.mediaUrl : null)
-  const videoUrl = !thumbnailUrl && (asset.type === 'video' || asset.type === 'final')
-    ? asset.mediaUrl
-    : null
-
   return (
     <div className="inspector-dolt-artifact">
-      <span className="inspector-source-thumb" aria-hidden="true">
-        {thumbnailUrl ? (
-          <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" />
-        ) : videoUrl ? (
-          <video src={videoUrl} muted playsInline preload="metadata" />
-        ) : asset.type === 'audio' ? (
-          <AudioWaveform size={16} />
-        ) : (
-          <Film size={16} />
-        )}
-      </span>
+      <ArtifactThumb asset={asset} />
       <div className="inspector-dolt-artifact-facts">
         <strong>{asset.type.replaceAll('_', ' ').toUpperCase()}</strong>
         <NotebookMediaMetadata
@@ -659,6 +675,7 @@ function DoltCellSource({
                       <RichJson
                         value={displayValue.value}
                         ariaLabel={`${row.column} JSON`}
+                        artifactAssets={artifactAssets}
                       />
                     </td>
                   </tr>
@@ -734,42 +751,7 @@ function SourceCellThumb({
   cell: NotebookCell
   asset: NotebookCellInspectorAsset | undefined
 }) {
-  const thumbnailUrl = asset?.thumbnailUrl
-    ?? (asset?.type === 'image' ? asset.mediaUrl : null)
-  const kind = asset?.type ?? cell.type
-  const audio = kind === 'audio'
-    || cell.type === 'generate_audio'
-    || cell.type === 'extract_audio'
-  const video = kind === 'video'
-    || kind === 'final'
-    || cell.type === 'generate_video'
-    || cell.type === 'split_video'
-    || cell.type === 'concat'
-    || cell.type === 'splice'
-  const image = kind === 'image'
-    || cell.type === 'generate_image'
-    || cell.type === 'extract_frame'
-  const videoUrl = !thumbnailUrl && (kind === 'video' || kind === 'final')
-    ? asset?.mediaUrl
-    : null
-
-  return (
-    <span className="inspector-source-thumb" aria-hidden="true">
-      {thumbnailUrl ? (
-        <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" />
-      ) : videoUrl ? (
-        <video src={videoUrl} muted playsInline preload="metadata" />
-      ) : audio ? (
-        <AudioWaveform size={16} />
-      ) : video ? (
-        <Film size={16} />
-      ) : image ? (
-        <ImageIcon size={16} />
-      ) : (
-        <Braces size={15} />
-      )}
-    </span>
-  )
+  return <ArtifactThumb asset={asset} kindHint={cell.type} />
 }
 
 function SourceCellPicker({
@@ -1132,7 +1114,9 @@ function MediaCellInspector({
   | 'onDelete'
   | 'onOpenFullscreen'
 >) {
-  const versionArtifactIds = cell.type === 'audio' || cell.type === 'image'
+  const versionArtifactIds = cell.type === 'audio'
+    || cell.type === 'image'
+    || cell.type === 'video'
     ? notebookOutputVersionArtifactIds(cell.inputs, cell.outputArtifactId)
     : []
   const versionKey = versionArtifactIds.join(':')
@@ -1239,6 +1223,7 @@ function AnalysisJsonDisclosure({
   value,
   loadValue,
   ariaLabel,
+  artifactAssets,
 }: {
   label: string
   summary?: string
@@ -1246,6 +1231,7 @@ function AnalysisJsonDisclosure({
   value?: unknown
   loadValue?: () => Promise<unknown>
   ariaLabel: string
+  artifactAssets?: ReadonlyMap<string, NotebookCellInspectorAsset>
 }) {
   const [open, setOpen] = useState(false)
   const [resolvedValue, setResolvedValue] = useState(value)
@@ -1320,7 +1306,11 @@ function AnalysisJsonDisclosure({
             </div>
           )}
           <div className="inspector-analysis-json-scroll" tabIndex={0}>
-            <RichJson value={resolvedValue} ariaLabel={ariaLabel} />
+            <RichJson
+              value={resolvedValue}
+              ariaLabel={ariaLabel}
+              artifactAssets={artifactAssets}
+            />
           </div>
         </>
       )}
@@ -2597,6 +2587,137 @@ function ExecutableCellInspector({
   )
 }
 
+function CellGenerationsPanel({
+  cellId,
+  loadGenerations,
+  artifactAssets,
+}: {
+  cellId: string
+  loadGenerations?: () => Promise<CellGenerationsPayload>
+  artifactAssets: ReadonlyMap<string, NotebookCellInspectorAsset>
+}) {
+  const [attempts, setAttempts] = useState<CellGenerationAttempt[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!loadGenerations) {
+      setAttempts([])
+      setError('Generation history is unavailable')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    void loadGenerations()
+      .then((payload) => {
+        if (cancelled) return
+        setAttempts(payload.attempts ?? [])
+      })
+      .catch((cause) => {
+        if (cancelled) return
+        setError(cause instanceof Error ? cause.message : String(cause))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [cellId, loadGenerations])
+
+  return (
+    <section className="inspector-generations" aria-label="Generation attempts">
+      <header className="inspector-source-meta">
+        <span>
+          <History size={14} aria-hidden="true" />
+          Generations
+        </span>
+        <code>{attempts.length} attempt{attempts.length === 1 ? '' : 's'}</code>
+      </header>
+      {loading && (
+        <p className="inspector-analysis-json-status" role="status">
+          Loading generation history…
+        </p>
+      )}
+      {error && (
+        <p className="inspector-run-error" role="alert">{error}</p>
+      )}
+      {!loading && !error && attempts.length === 0 && (
+        <p className="inspector-analysis-json-status">
+          No generation attempts recorded for this cell.
+        </p>
+      )}
+      <ol className="inspector-generations-list">
+        {attempts.map((attempt) => {
+          const previewAsset = attempt.artifactId
+            ? artifactAssets.get(attempt.artifactId)
+            : undefined
+          const mediaAsset = previewAsset ?? (
+            attempt.mediaUrl || attempt.thumbnailUrl
+              ? {
+                  type: attempt.mediaUrl && !attempt.thumbnailUrl
+                    ? 'video'
+                    : 'image',
+                  mediaUrl: attempt.mediaUrl,
+                  thumbnailUrl: attempt.thumbnailUrl,
+                  duration: null,
+                }
+              : null
+          )
+          return (
+            <li key={attempt.attemptId} className="inspector-generation-attempt">
+              <div className="inspector-generation-attempt-head">
+                {mediaAsset ? (
+                  <div className="inspector-generation-thumb">
+                    <MediaLibraryAssetPreview asset={mediaAsset} />
+                  </div>
+                ) : (
+                  <ArtifactThumb
+                    asset={previewAsset}
+                    kindHint="generate_image"
+                  />
+                )}
+                <div className="inspector-generation-facts">
+                  <strong>
+                    {attempt.status ?? 'unknown'}
+                    {attempt.tool ? ` · ${attempt.tool}` : ''}
+                  </strong>
+                  <span>
+                    {[attempt.model, attempt.commitHash?.slice(0, 8)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  {(attempt.resolvedPrompt || attempt.prompt) && (
+                    <p title={attempt.resolvedPrompt ?? attempt.prompt ?? undefined}>
+                      {(attempt.resolvedPrompt ?? attempt.prompt ?? '').slice(0, 160)}
+                    </p>
+                  )}
+                  {attempt.error && (
+                    <p className="inspector-generation-error">{attempt.error}</p>
+                  )}
+                </div>
+              </div>
+              {attempt.payload != null && (
+                <AnalysisJsonDisclosure
+                  label="Payload"
+                  summary={attempt.payload && typeof attempt.payload === 'object'
+                    && 'present' in (attempt.payload as object)
+                    ? 'present'
+                    : undefined}
+                  value={attempt.payload}
+                  ariaLabel="Generation payload"
+                  artifactAssets={artifactAssets}
+                />
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </section>
+  )
+}
+
 export function NotebookCellInspector({
   notebookId,
   cell,
@@ -2611,6 +2732,7 @@ export function NotebookCellInspector({
   clearing,
   deleting,
   sourceVisible,
+  generationsVisible = false,
   generationActions,
   onUpdate,
   onSetInput,
@@ -2619,8 +2741,15 @@ export function NotebookCellInspector({
   onDelete,
   onOpenFullscreen,
   onPreviewPayload,
+  onLoadGenerations,
   mentionAssets,
 }: NotebookCellInspectorProps) {
+  const artifactAssets = inspectorArtifactAssets(
+    asset,
+    cellAssets,
+    versionAssets,
+  )
+
   if (sourceVisible) {
     return (
       <div className="inspector-body inspector-source-body">
@@ -2628,11 +2757,20 @@ export function NotebookCellInspector({
           key={cell.id}
           notebookId={notebookId}
           cell={cell}
-          artifactAssets={inspectorArtifactAssets(
-            asset,
-            cellAssets,
-            versionAssets,
-          )}
+          artifactAssets={artifactAssets}
+        />
+      </div>
+    )
+  }
+
+  if (generationsVisible) {
+    return (
+      <div className="inspector-body inspector-source-body">
+        <CellGenerationsPanel
+          key={cell.id}
+          cellId={cell.id}
+          loadGenerations={onLoadGenerations}
+          artifactAssets={artifactAssets}
         />
       </div>
     )

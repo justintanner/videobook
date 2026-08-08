@@ -122,6 +122,7 @@ import { generateSeedreamImageDef } from "./generate-seedream-image.js";
 import { renderVideoDef } from "./render.js";
 import { syncDef } from "./sync.js";
 import { listAssetsDef } from "./list-assets.js";
+import { listCellGenerationsDef } from "./list-cell-generations.js";
 import { sleepDef } from "./sleep.js";
 import { previewVideoGenDef } from "./preview-video-gen.js";
 import { previewImageGenDef } from "./preview-image-gen.js";
@@ -423,6 +424,7 @@ export function getAllToolDefs(
     generateSeedreamImageDef(fs),
     syncDef(fs),
     listAssetsDef(fs),
+    listCellGenerationsDef(fs),
     sleepDef(fs),
     previewVideoGenDef(fs),
     previewImageGenDef(fs),

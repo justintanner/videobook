@@ -147,4 +147,77 @@ describe("list_assets tool", () => {
     expect(oldestIds[1]).toBe(secondParsed.assetId);
     expect(newestIds).toEqual([...oldestIds].reverse());
   });
+
+  it("include_referenced backfills outputVersionArtifactIds and providerArtifactId", async () => {
+    const { createEngineForTest, closeEngineForTest } = await import("../fs.js");
+    const { listAssetsDef } = await import("./list-assets.js");
+    const root = await mkdtemp(join(tmpdir(), "list-assets-ref-"));
+    const engine = createEngineForTest(root);
+    try {
+      const bookId = engine.book.get().bookId;
+      const current = (await engine.artifacts.create("image", "current")).value!;
+      const historical = (await engine.artifacts.create("image", "historical")).value!;
+      const provider = (await engine.artifacts.create("image", "provider")).value!;
+      const png = MINIMAL_PNG;
+      for (const artifact of [current, historical, provider]) {
+        const written = await engine.files.write(
+          artifact.artifactId,
+          "original.png",
+          png,
+        );
+        if (!written.ok) throw new Error(written.error.message);
+      }
+      const notebook = (await engine.notebooks.create("Refs")).value!;
+      const cell = engine.notebooks.createCell({
+        type: "image",
+        slot: { row: 0, column: 0 },
+        outputArtifactId: current.artifactId,
+        inputs: {
+          outputVersionArtifactIds: [
+            historical.artifactId,
+            current.artifactId,
+          ],
+          providerArtifactId: provider.artifactId,
+        },
+      });
+      const writtenNotebook = await engine.notebooks.write({
+        ...notebook,
+        cells: [cell],
+        edges: [],
+      });
+      if (!writtenNotebook.ok) throw new Error(writtenNotebook.error.message);
+
+      // Page only the current artifact; historical + provider must still resolve
+      // via include_referenced notebook backfill.
+      const pageOnly = await listAssetsDef(engine).handler({
+        book_id: bookId,
+        sort: "newest",
+        limit: 1,
+        offset: 0,
+        include_referenced: false,
+      });
+      const pageOnlyData = JSON.parse(
+        (pageOnly.content as Array<{ type: string; text: string }>)[0]!.text,
+      ) as { assets: Array<{ artifact_id: string }> };
+      expect(pageOnlyData.assets).toHaveLength(1);
+
+      const withRefs = await listAssetsDef(engine).handler({
+        book_id: bookId,
+        sort: "newest",
+        limit: 1,
+        offset: 0,
+        include_referenced: true,
+      });
+      const withRefsData = JSON.parse(
+        (withRefs.content as Array<{ type: string; text: string }>)[0]!.text,
+      ) as { assets: Array<{ artifact_id: string }> };
+      const ids = new Set(withRefsData.assets.map((asset) => asset.artifact_id));
+      expect(ids.has(current.artifactId)).toBe(true);
+      expect(ids.has(historical.artifactId)).toBe(true);
+      expect(ids.has(provider.artifactId)).toBe(true);
+    } finally {
+      closeEngineForTest(root, engine);
+      await rm(root, { recursive: true, force: true, maxRetries: 3 });
+    }
+  });
 });
