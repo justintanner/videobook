@@ -2,9 +2,18 @@ import type {
   Engine,
   NotebookCell,
   NotebookDocument,
+  NotebookGridSlot,
 } from "videobook-engine";
-import { firstEmptyNotebookGridSlot } from "videobook-engine";
+import {
+  findGenerateVideoOutputCell,
+  NOTEBOOK_GRID_COLUMN_COUNT,
+  NOTEBOOK_GRID_ROW_COUNT,
+  nextHorizontalSlotFrom,
+  nextVerticalSlotFrom,
+} from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
+
+export { findGenerateVideoOutputCell, resolveGeneratedVideoArtifact } from "videobook-engine";
 
 type ExtractFrameMode = "first" | "time" | "last";
 
@@ -186,12 +195,17 @@ export function ensureExtractFrameImageOutput(
       updated: true,
     };
   }
+  const occupied = document.cells.map((cell) => cell.slot);
+  const outputAnchor: NotebookGridSlot = {
+    row: extractFrame.slot.row,
+    column: extractFrame.slot.column + 1 < NOTEBOOK_GRID_COLUMN_COUNT
+      ? extractFrame.slot.column + 1
+      : extractFrame.slot.column,
+  };
   const outputCell = engine.notebooks.createCell({
     type: "image",
     label: outputFrameLabel(extractFrame, selection),
-    slot: firstEmptyNotebookGridSlot(
-      document.cells.map((cell) => cell.slot),
-    ),
+    slot: nextHorizontalSlotFrom(outputAnchor, occupied),
     inputs: extractFrameOutputInputs(
       { ...extractFrame, inputs: { state: "pending" } },
       extractFrame.id,
@@ -200,6 +214,105 @@ export function ensureExtractFrameImageOutput(
   });
   const outputEdge = engine.notebooks.createEdge({
     source: extractFrame.id,
+    target: outputCell.id,
+    targetInput: "media",
+  });
+  return {
+    document: {
+      ...document,
+      cells: [...document.cells, outputCell],
+      edges: [...document.edges, outputEdge],
+    },
+    outputCell,
+    outputEdge,
+    created: true,
+    updated: false,
+  };
+}
+
+function generateVideoOutputInputs(
+  cell: NotebookCell,
+  generateVideoCellId: string,
+): Record<string, unknown> {
+  return {
+    ...(cell.inputs ?? {}),
+    mediaRole: "generate-video-output",
+    producerCellId: generateVideoCellId,
+  };
+}
+
+function outputVideoLabel(generateVideo: NotebookCell): string {
+  const base = generateVideo.label ?? notebookGridTag(generateVideo.slot);
+  return `${base} video`;
+}
+
+function slotDirectlyBelow(slot: NotebookGridSlot): NotebookGridSlot {
+  if (slot.row + 1 < NOTEBOOK_GRID_ROW_COUNT) {
+    return { row: slot.row + 1, column: slot.column };
+  }
+  return {
+    row: slot.row,
+    column: Math.min(slot.column + 1, NOTEBOOK_GRID_COLUMN_COUNT - 1),
+  };
+}
+
+export function findGenerateVideoOutput(
+  document: NotebookDocument,
+  generateVideoCellId: string,
+) {
+  return findGenerateVideoOutputCell(document, generateVideoCellId);
+}
+
+export function ensureGenerateVideoOutput(
+  engine: Engine,
+  document: NotebookDocument,
+  generateVideoCellId: string,
+) {
+  const generateVideo = document.cells.find((cell) =>
+    cell.id === generateVideoCellId);
+  if (generateVideo?.type !== "generate_video") {
+    throw new Error(`Generate Video cell not found: ${generateVideoCellId}`);
+  }
+  const existing = findGenerateVideoOutput(document, generateVideoCellId);
+  if (existing) {
+    const inputs = generateVideoOutputInputs(
+      existing.outputCell,
+      generateVideoCellId,
+    );
+    const unchanged = existing.outputCell.inputs?.mediaRole
+        === "generate-video-output"
+      && existing.outputCell.inputs?.producerCellId === generateVideoCellId;
+    if (unchanged) {
+      return { document, ...existing, created: false, updated: false };
+    }
+    const outputCell = { ...existing.outputCell, inputs };
+    return {
+      document: {
+        ...document,
+        cells: document.cells.map((cell) =>
+          cell.id === outputCell.id ? outputCell : cell),
+      },
+      outputCell,
+      outputEdge: existing.outputEdge,
+      created: false,
+      updated: true,
+    };
+  }
+  const occupied = document.cells.map((cell) => cell.slot);
+  const outputCell = engine.notebooks.createCell({
+    type: "video",
+    label: outputVideoLabel(generateVideo),
+    slot: nextVerticalSlotFrom(
+      slotDirectlyBelow(generateVideo.slot),
+      occupied,
+    ),
+    inputs: generateVideoOutputInputs(
+      { ...generateVideo, inputs: { state: "pending" } },
+      generateVideo.id,
+    ),
+  });
+  const outputEdge = engine.notebooks.createEdge({
+    source: generateVideo.id,
     target: outputCell.id,
     targetInput: "media",
   });

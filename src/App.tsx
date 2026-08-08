@@ -144,6 +144,7 @@ import {
 import {
   changedNotebookGridNodes,
   nextNotebookGridSlot,
+  nextNotebookHorizontalGenerationSlot,
   nextNotebookVideoGenerationSlot,
   normalizeNotebookGridZoom,
   notebookGrid,
@@ -3955,7 +3956,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ? notebookGridDropSlot(position, notebookBaseMetrics)
       : type === 'generate_video'
         ? nextNotebookVideoGenerationSlot(notebook.cells)
-        : nextNotebookGridSlot(nodes)
+        : type === 'generate_image' || type === 'extract_frame'
+          ? nextNotebookHorizontalGenerationSlot(notebook.cells)
+          : nextNotebookGridSlot(nodes)
     if (
       position
       && nodes.some((node) =>
@@ -5801,7 +5804,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         document: currentNotebook,
         fallbackSlot: command.cellType === 'generate_video'
           ? nextNotebookVideoGenerationSlot(currentNotebook.cells)
-          : nextNotebookGridSlot(nodes),
+          : command.cellType === 'generate_image'
+            ? nextNotebookHorizontalGenerationSlot(currentNotebook.cells)
+            : nextNotebookGridSlot(nodes),
         ...(options?.preferredTool
           ? { preferredTool: options.preferredTool }
           : {}),

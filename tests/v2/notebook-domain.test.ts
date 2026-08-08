@@ -489,8 +489,8 @@ describe('v2 notebook domain tools', () => {
     expect(imageOutput).toMatchObject({
       type: 'image',
       label: 'extract-frame-source first frame',
-      address: '@a3',
-      slot: { row: 0, column: 2 },
+      address: '@b4',
+      slot: { row: 1, column: 3 },
       inputs: {
         mediaRole: 'extract-frame-output',
         producerCellId: extractFrame.id,

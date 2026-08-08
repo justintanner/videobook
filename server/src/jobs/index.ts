@@ -135,6 +135,7 @@ import { registerGenerateElevenlabsT2aJob } from "./generate-elevenlabs-t2a.js";
 import { registerExtendAudioJob } from "./extend-audio.js";
 import { registerRemoveSoundJob } from "./remove-sound.js";
 import { registerRunNotebookJob } from "./run-notebook.js";
+import { registerRelayoutNotebookJob } from "./relayout-notebook.js";
 import { registerSemanticIndexJob } from "./semantic-index.js";
 import { registerPrepareSearchReferenceJob } from "./prepare-search-reference.js";
 
@@ -277,6 +278,7 @@ export function registerAllJobHandlers(
   registerRemoveSoundJob(fs);
   registerPostToXJob(fs);
   registerRunNotebookJob(fs as Engine);
+  registerRelayoutNotebookJob(fs as Engine);
   registerSemanticIndexJob(fs);
   registerPrepareSearchReferenceJob(fs);
   registerCopyLibraryAssetJob(books);

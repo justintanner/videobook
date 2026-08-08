@@ -5,6 +5,7 @@ import type {
   NotebookDocument,
   NotebookGridSlot,
 } from 'videobook-engine'
+import { resolveGeneratedVideoArtifact } from 'videobook-engine'
 import {
   notebookCellTag,
   resolveNotebookCellReference,
@@ -202,7 +203,7 @@ export function resolveNotebookSplitSource(
   if (!videoSourceTypes.has(source.type)) {
     throw new Error(`${notebookCellTag(source)} is not a video-producing cell`)
   }
-  if (!source.outputArtifactId) {
+  if (!resolveGeneratedVideoArtifact(document, source)) {
     throw new Error(`${notebookCellTag(source)} does not have a video output yet`)
   }
   return source

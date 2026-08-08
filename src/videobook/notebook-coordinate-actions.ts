@@ -10,7 +10,10 @@ import type {
   NotebookGridSlot,
 } from 'videobook-engine'
 import { notebookCellAtSlot } from './notebook-addressing'
-import { nextNotebookVideoGenerationSlot } from './notebook-grid'
+import {
+  nextNotebookHorizontalGenerationSlot,
+  nextNotebookVideoGenerationSlot,
+} from './notebook-grid'
 
 export type NotebookCoordinateAction =
   | {
@@ -155,7 +158,10 @@ export function planNotebookCoordinateAction(
     const destination = parsed.destination
       ?? (parsed.cellType === 'generate_video'
         ? nextNotebookVideoGenerationSlot(document.cells)
-        : firstEmptyNotebookGridSlot(
+        : parsed.cellType === 'generate_image'
+          || parsed.cellType === 'extract_frame'
+          ? nextNotebookHorizontalGenerationSlot(document.cells)
+          : firstEmptyNotebookGridSlot(
             document.cells.map((cell) => cell.slot),
           ))
     const occupied = notebookCellAtSlot(document, destination)

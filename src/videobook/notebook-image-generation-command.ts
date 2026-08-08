@@ -1,7 +1,5 @@
-import {
-  firstEmptyNotebookGridSlot,
-  notebookGridTag,
-} from 'videobook-engine/notebook-grid'
+import { notebookGridTag } from 'videobook-engine/notebook-grid'
+import { nextNotebookHorizontalGenerationSlot } from './notebook-grid'
 import type {
   NotebookCell,
   NotebookDocument,
@@ -128,7 +126,10 @@ export async function materializeNotebookImageGenerationCommand(input: {
     throw new Error('No available image generation action accepts these references')
   }
   const slot = sources[0]
-    ? firstEmptyNotebookGridSlot(input.document.cells.map((cell) => cell.slot))
+    ? nextNotebookHorizontalGenerationSlot(
+      input.document.cells,
+      sources.map((source) => source.slot),
+    )
     : input.fallbackSlot
   let cellId: string | null = null
   try {

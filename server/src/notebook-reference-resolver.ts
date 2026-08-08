@@ -3,7 +3,10 @@ import type {
   NotebookCell,
   NotebookDocument,
 } from "videobook-engine";
-import { isUuidV7 } from "videobook-engine";
+import {
+  isUuidV7,
+  resolveNotebookCellArtifactId,
+} from "videobook-engine";
 import {
   notebookGridTag,
   parseNotebookGridAddress,
@@ -158,8 +161,12 @@ export function resolveNotebookArtifactReference(input: {
       `${mention} is not a media-producing cell`,
     );
   }
-  const outputMatches = mediaMatches.filter(({ cell }) =>
-    typeof cell.outputArtifactId === "string");
+  const outputMatches = mediaMatches.flatMap(({ document, cell }) => {
+    const artifactId = resolveNotebookCellArtifactId(document, cell);
+    return typeof artifactId === "string"
+      ? [{ document, cell, artifactId }]
+      : [];
+  });
   if (outputMatches.length === 0) {
     return issue(
       mention,
@@ -169,7 +176,7 @@ export function resolveNotebookArtifactReference(input: {
     );
   }
   const artifactIds = [...new Set(
-    outputMatches.map(({ cell }) => cell.outputArtifactId!),
+    outputMatches.map(({ artifactId }) => artifactId),
   )];
   if (artifactIds.length > 1) {
     return issue(

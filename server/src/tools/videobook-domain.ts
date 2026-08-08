@@ -17,7 +17,10 @@ import {
 import { z } from "zod";
 import { v7 as uuidv7 } from "uuid";
 import type { BookManager } from "../book-manager.js";
-import { ensureExtractFrameImageOutput } from "../notebook-cell-outputs.js";
+import {
+  ensureExtractFrameImageOutput,
+  ensureGenerateVideoOutput,
+} from "../notebook-cell-outputs.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { queue, stopBookQueue } from "../queue.js";
 import {
@@ -1418,6 +1421,19 @@ export function videobookDomainDefs(
               outputEdge = ensured.outputEdge;
               return ensured.document;
             }
+            if (cell.type === "generate_video") {
+              const ensured = ensureGenerateVideoOutput(
+                engine,
+                {
+                  ...notebook,
+                  cells: [...notebook.cells, cell],
+                },
+                cell.id,
+              );
+              outputCell = ensured.outputCell;
+              outputEdge = ensured.outputEdge;
+              return ensured.document;
+            }
             return {
               ...notebook,
               cells: [
@@ -1531,6 +1547,55 @@ export function videobookDomainDefs(
           return result.ok
             ? json({ cell_id: args.cell_id, revision: result.value.hash })
             : failure(result.error.message);
+        } catch (cause) {
+          return failure(cause instanceof Error ? cause.message : String(cause));
+        }
+      },
+    },
+    {
+      name: "relayout_notebook",
+      description:
+        "Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video inline artifacts into output cells.",
+      scope: "book",
+      recordsOwnActivity: true,
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        expected_revision: z.string().min(1).optional(),
+      },
+      handler: async (args) => {
+        try {
+          const notebookId = String(args.notebook_id);
+          if (
+            typeof args.expected_revision === "string"
+            && args.expected_revision !== engine.head
+          ) {
+            return failure(
+              `Stale notebook revision: expected ${args.expected_revision}`,
+            );
+          }
+          const before = engine.notebooks.read(notebookId);
+          if (!before.ok) return failure(before.error.message);
+          const jobId = `relayout-notebook-${notebookId}-${Date.now()}`;
+          const result = await queue.enqueueAndWait<{
+            changed: boolean;
+            notebook_id: string;
+            cell_count: number;
+            edge_count: number;
+            revision: string;
+            cells?: Array<{
+              id: string;
+              type: string;
+              address: string;
+              slot: NotebookGridSlot;
+              output_artifact_id: string | null;
+            }>;
+          }>(jobId, {
+            type: "relayout_notebook",
+            bookId: String(args.book_id),
+            notebookId,
+          });
+          return json(result);
         } catch (cause) {
           return failure(cause instanceof Error ? cause.message : String(cause));
         }

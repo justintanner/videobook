@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (295)
+## MCP endpoints (296)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -230,6 +230,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `record_prompt` — Append a user-typed prompt to the per-surface, per-project Dolt history. Surfaces: chat, image_rewrite, video_rewrite, script_rewrite, post, image_generate, video_generate.
 - `recover_asset` — Recover a single asset stuck in the failed/error state by clearing its persisted generation error. Non-destructive: the asset and its media files are kept intact — only the error record is removed, returning the card to its normal ready state. Use this instead of clean_failed_assets when the asset must be preserved.
 - `register_search_manifest` — Register an immutable semantic-index model manifest
+- `relayout_notebook` — Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video inline artifacts into output cells.
 - `release_search_reference` — Release a temporary reverse-search reference
 - `remove_sequence_track` — Remove an empty canonical track while preserving required track kinds
 - `remove_sound` — Remove a described sound (e.g. a horse neigh) from a video or audio asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.

@@ -1,11 +1,10 @@
-import {
-  firstEmptyNotebookGridSlot,
-} from 'videobook-engine/notebook-grid'
 import type { NotebookCell, NotebookDocument } from 'videobook-engine'
+import { resolveGeneratedVideoArtifact } from 'videobook-engine'
 import {
   notebookCellTag,
   resolveNotebookCellReference,
 } from './notebook-addressing'
+import { nextNotebookHorizontalGenerationSlot } from './notebook-grid'
 
 export type NotebookFrameMode = 'first' | 'last' | 'time'
 
@@ -142,7 +141,7 @@ export function resolveNotebookFrameSource(
   if (!videoSourceTypes.has(source.type)) {
     throw new Error(`${notebookCellTag(source)} is not a video-producing cell`)
   }
-  if (!source.outputArtifactId) {
+  if (!resolveGeneratedVideoArtifact(document, source)) {
     throw new Error(`${notebookCellTag(source)} does not have a video output yet`)
   }
   return source
@@ -187,8 +186,9 @@ export async function enqueueNotebookFrameCommand(input: {
       cell: {
         type: 'extract_frame',
         label: frameActionLabel(input.command),
-        slot: firstEmptyNotebookGridSlot(
-          input.document.cells.map((cell) => cell.slot),
+        slot: nextNotebookHorizontalGenerationSlot(
+          input.document.cells,
+          [source.slot],
         ),
         inputs: frameActionInputs(input.command),
       },

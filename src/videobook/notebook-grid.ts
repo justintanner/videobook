@@ -2,6 +2,9 @@ import type { Node, XYPosition } from '@xyflow/react'
 import {
   firstEmptyNotebookGridSlot,
   isNotebookGridSlot,
+  nearestOriginNotebookGridSlot,
+  nextHorizontalSlotFrom,
+  nextVerticalSlotFrom,
   NOTEBOOK_GRID_COLUMN_COUNT,
   NOTEBOOK_GRID_ROW_COUNT,
   notebookGridAddress,
@@ -189,42 +192,63 @@ export function isNotebookImageCellType(type: string): boolean {
   return imageCellTypes.has(type)
 }
 
-/** First empty square at or below `startRow`, row-major within the board. */
-export function firstEmptyNotebookGridSlotFromRow(
-  occupied: Iterable<NotebookGridSlot>,
-  startRow: number,
-): NotebookGridSlot {
-  const occupiedKeys = new Set(
-    [...occupied].map((slot) => notebookGridSlotKey(slot)),
-  )
-  const rowStart = Math.min(
-    NOTEBOOK_GRID_ROW_COUNT - 1,
-    Math.max(0, Math.trunc(startRow)),
-  )
-  for (let row = rowStart; row < NOTEBOOK_GRID_ROW_COUNT; row += 1) {
-    for (let column = 0; column < NOTEBOOK_GRID_COLUMN_COUNT; column += 1) {
-      if (occupiedKeys.has(`${row}:${column}`)) continue
-      return { row, column }
-    }
-  }
-  return firstEmptyNotebookGridSlot(occupied)
+export {
+  nearestOriginNotebookGridSlot,
+  nextHorizontalSlotFrom,
+  nextVerticalSlotFrom,
 }
 
 /**
- * Video generation cells sit on the row under the bottommost image cell,
- * then fill left-to-right on subsequent rows. Without images, use the first
- * empty square on the board.
+ * Vertical stack for generate_video tiles: scan downward preferring low
+ * columns near @a1 / optional source anchors.
  */
 export function nextNotebookVideoGenerationSlot(
   cells: ReadonlyArray<{ type: string; slot: NotebookGridSlot }>,
+  sourceSlots: readonly NotebookGridSlot[] = [],
 ): NotebookGridSlot {
   const occupied = cells.map((cell) => cell.slot)
-  let lastImageRow = -1
-  for (const cell of cells) {
-    if (!isNotebookImageCellType(cell.type)) continue
-    if (cell.slot.row > lastImageRow) lastImageRow = cell.slot.row
+  const anchorColumn = sourceSlots.length > 0
+    ? Math.min(...sourceSlots.map((slot) => slot.column))
+    : 0
+  return nextVerticalSlotFrom({ row: 0, column: anchorColumn }, occupied)
+}
+
+/**
+ * Reserve tile + output-below pair for generate_video so client optimistic
+ * placement matches server-created output cells.
+ */
+export function allocateNotebookVideoGenerationSlots(
+  cells: ReadonlyArray<{ type: string; slot: NotebookGridSlot }>,
+  sourceSlots: readonly NotebookGridSlot[] = [],
+): { tile: NotebookGridSlot; output: NotebookGridSlot } {
+  const occupied = cells.map((cell) => cell.slot)
+  const tile = nextNotebookVideoGenerationSlot(cells, sourceSlots)
+  const below = tile.row + 1 < NOTEBOOK_GRID_ROW_COUNT
+    ? { row: tile.row + 1, column: tile.column }
+    : {
+      row: tile.row,
+      column: Math.min(tile.column + 1, NOTEBOOK_GRID_COLUMN_COUNT - 1),
+    }
+  const output = nextVerticalSlotFrom(below, [...occupied, tile])
+  return { tile, output }
+}
+
+/** Horizontal placement for generate_image / extract_frame action tiles. */
+export function nextNotebookHorizontalGenerationSlot(
+  cells: ReadonlyArray<{ type: string; slot: NotebookGridSlot }>,
+  sourceSlots: readonly NotebookGridSlot[] = [],
+): NotebookGridSlot {
+  const occupied = cells.map((cell) => cell.slot)
+  if (sourceSlots.length === 0) {
+    return nextHorizontalSlotFrom({ row: 0, column: 0 }, occupied)
   }
-  return firstEmptyNotebookGridSlotFromRow(occupied, lastImageRow + 1)
+  const maxColumn = Math.max(...sourceSlots.map((slot) => slot.column))
+  const minRow = Math.min(...sourceSlots.map((slot) => slot.row))
+  const anchor = {
+    row: minRow,
+    column: Math.min(maxColumn + 1, NOTEBOOK_GRID_COLUMN_COUNT - 1),
+  }
+  return nextHorizontalSlotFrom(anchor, occupied)
 }
 
 export interface NotebookGridMetrics {

@@ -1,10 +1,13 @@
 import type { Node } from '@xyflow/react'
 import { describe, expect, it } from 'vitest'
 import {
+  allocateNotebookVideoGenerationSlots,
   changedNotebookGridNodes,
-  firstEmptyNotebookGridSlotFromRow,
+  nextHorizontalSlotFrom,
   nextNotebookGridSlot,
+  nextNotebookHorizontalGenerationSlot,
   nextNotebookVideoGenerationSlot,
+  nextVerticalSlotFrom,
   normalizeNotebookGridZoom,
   notebookGrid,
   notebookGridDropSlot,
@@ -20,6 +23,7 @@ import {
   snapNotebookGridMove,
   type NotebookGridData,
 } from './notebook-grid'
+import { NOTEBOOK_GRID_FULL_ERROR } from 'videobook-engine'
 
 interface TestData extends NotebookGridData {
   name: string
@@ -148,28 +152,61 @@ describe('notebook grid', () => {
     expect(() => nextNotebookGridSlot(full)).toThrow('Notebook grid is full')
   })
 
-  it('places video generation cells below the last image row', () => {
+  it('places video generation cells vertically near column 1 without drifting right', () => {
     expect(nextNotebookVideoGenerationSlot([
       { type: 'image', slot: { row: 0, column: 0 } },
       { type: 'image', slot: { row: 0, column: 2 } },
       { type: 'prompt', slot: { row: 1, column: 0 } },
-    ])).toEqual({ row: 1, column: 1 })
+    ])).toEqual({ row: 2, column: 0 })
 
     expect(nextNotebookVideoGenerationSlot([
       { type: 'image', slot: { row: 0, column: 0 } },
-      { type: 'generate_image', slot: { row: 2, column: 3 } },
-      { type: 'generate_video', slot: { row: 3, column: 0 } },
-    ])).toEqual({ row: 3, column: 1 })
+      { type: 'generate_video', slot: { row: 1, column: 0 } },
+      { type: 'video', slot: { row: 2, column: 0 } },
+    ])).toEqual({ row: 3, column: 0 })
 
     expect(nextNotebookVideoGenerationSlot([
       { type: 'prompt', slot: { row: 0, column: 0 } },
       { type: 'generate_video', slot: { row: 1, column: 0 } },
-    ])).toEqual({ row: 0, column: 1 })
+    ])).toEqual({ row: 2, column: 0 })
 
-    expect(firstEmptyNotebookGridSlotFromRow([
-      { row: 2, column: 0 },
-      { row: 2, column: 1 },
-    ], 2)).toEqual({ row: 2, column: 2 })
+    const first = allocateNotebookVideoGenerationSlots([])
+    expect(first).toEqual({
+      tile: { row: 0, column: 0 },
+      output: { row: 1, column: 0 },
+    })
+    const second = allocateNotebookVideoGenerationSlots([
+      { type: 'generate_video', slot: first.tile },
+      { type: 'video', slot: first.output },
+    ])
+    expect(second).toEqual({
+      tile: { row: 2, column: 0 },
+      output: { row: 3, column: 0 },
+    })
+  })
+
+  it('places image and frame work horizontally near sources', () => {
+    expect(nextNotebookHorizontalGenerationSlot(
+      [{ type: 'video', slot: { row: 2, column: 0 } }],
+      [{ row: 2, column: 0 }],
+    )).toEqual({ row: 2, column: 1 })
+
+    expect(nextHorizontalSlotFrom(
+      { row: 0, column: 3 },
+      [{ row: 0, column: 0 }, { row: 0, column: 1 }, { row: 0, column: 2 }],
+    )).toEqual({ row: 0, column: 3 })
+
+    expect(nextVerticalSlotFrom(
+      { row: 1, column: 0 },
+      [{ row: 1, column: 0 }],
+    )).toEqual({ row: 2, column: 0 })
+
+    const full = Array.from({ length: 338 }, (_, index) => ({
+      row: Math.floor(index / 13),
+      column: index % 13,
+    }))
+    expect(() => nextVerticalSlotFrom({ row: 0, column: 0 }, full))
+      .toThrow(NOTEBOOK_GRID_FULL_ERROR)
   })
 
   it('keeps thirteen columns and grows visible rows to one trailing row', () => {

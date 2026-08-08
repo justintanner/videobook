@@ -11,13 +11,18 @@ import type {
   NotebookRunPlan,
   NotebookRun,
 } from "videobook-engine";
-import { MVP_CONTRACT_VERSION } from "videobook-engine";
+import {
+  MVP_CONTRACT_VERSION,
+  resolveNotebookCellArtifactId,
+} from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { mutateNotebook } from "../notebook-mutations.js";
 import {
   ensureExtractFrameImageOutput,
+  ensureGenerateVideoOutput,
   extractFrameSelection,
   findExtractFrameImageOutput,
+  findGenerateVideoOutput,
 } from "../notebook-cell-outputs.js";
 import { queue, registerJobHandler, waitForJob } from "../queue.js";
 import type { ToolDef, ToolResult } from "../tools/tool-def.js";
@@ -426,7 +431,7 @@ function upstreamValues(
       return [{
         targetInput: edge.targetInput,
         cell: source,
-        output: source.outputArtifactId ?? source.outputEntityId,
+        output: resolveNotebookCellArtifactId(document, source),
       }];
     });
 }
@@ -1828,6 +1833,35 @@ export async function runNotebookCell(
     normalizedCell = normalizedDocument.cells.find((candidate) =>
       candidate.id === cell.id) ?? normalizedCell;
   }
+  const generateVideoOutput = normalizedCell.type === "generate_video"
+    ? ensureGenerateVideoOutput(
+        engine,
+        normalizedDocument,
+        normalizedCell.id,
+      )
+    : null;
+  if (
+    generateVideoOutput
+    && generateVideoOutput.document !== normalizedDocument
+  ) {
+    const repaired = await mutateNotebook(
+      engine,
+      notebookId,
+      "ensure_generate_video_output",
+      (current) => ensureGenerateVideoOutput(
+        engine,
+        current,
+        normalizedCell.id,
+      ).document,
+      { cellId: normalizedCell.id },
+    );
+    if (!repaired.ok) throw new Error(repaired.error.message);
+    const refreshed = engine.notebooks.read(notebookId);
+    if (!refreshed.ok) throw new Error(refreshed.error.message);
+    normalizedDocument = normalizeLegacyAnalyzeDocument(refreshed.value);
+    normalizedCell = normalizedDocument.cells.find((candidate) =>
+      candidate.id === cell.id) ?? normalizedCell;
+  }
   const nextFingerprint = notebookCellFingerprint(
     normalizedDocument,
     normalizedCell,
@@ -1895,12 +1929,45 @@ export async function runNotebookCell(
       "run_notebook_cell",
       (current) => {
         const base = output.document ?? current;
-        const withOutput = withExecution(
+        const videoOutput = activeCell.type === "generate_video"
+          ? findGenerateVideoOutput(base, activeCell.id)
+          : null;
+        // New-style generate_video: artifact lives on the output video cell.
+        // Legacy/other cells keep inline outputArtifactId on the action cell.
+        const actionArtifactId = videoOutput ? undefined : output.artifactId;
+        let withOutput = withExecution(
           base,
           activeCell.id,
           state,
-          output.artifactId,
+          actionArtifactId,
         );
+        if (videoOutput) {
+          withOutput = withMediaOutput(
+            withOutput,
+            new Set([videoOutput.outputCell.id]),
+            output.artifactId,
+            { state: status },
+          );
+          withOutput = {
+            ...withOutput,
+            execution: {
+              ...executionState(withOutput),
+              [activeCell.id]: {
+                ...state,
+                outputArtifactId: output.artifactId,
+              },
+              [videoOutput.outputCell.id]: {
+                fingerprint: state.fingerprint,
+                status: status === "awaiting-output" ? "awaiting-output" : "completed",
+                outputArtifactId: output.artifactId,
+                updatedAt: state.updatedAt,
+                ...(state.completedAt ? { completedAt: state.completedAt } : {}),
+                ...(state.runId ? { runId: state.runId } : {}),
+                tool: state.tool,
+              },
+            },
+          };
+        }
         if (!output.cellInputs) return withOutput;
         return {
           ...withOutput,
@@ -2158,12 +2225,51 @@ async function finishAwaitingNotebookCell(
     input.notebookId,
     "complete_notebook_provider_output",
     (document) => {
-      const withOutput = withExecution(
-        document,
+      let working = document;
+      let resolvedVideoOutput = cell.type === "generate_video"
+        ? findGenerateVideoOutput(working, cell.id)
+        : null;
+      if (cell.type === "generate_video" && !resolvedVideoOutput) {
+        const ensured = ensureGenerateVideoOutput(engine, working, cell.id);
+        working = ensured.document;
+        resolvedVideoOutput = {
+          outputCell: ensured.outputCell,
+          outputEdge: ensured.outputEdge,
+        };
+      }
+      let withOutput = withExecution(
+        working,
         cell.id,
         state,
-        outputArtifactId,
+        resolvedVideoOutput ? undefined : outputArtifactId,
       );
+      if (resolvedVideoOutput) {
+        withOutput = withMediaOutput(
+          withOutput,
+          new Set([resolvedVideoOutput.outputCell.id]),
+          outputArtifactId,
+          { state: "completed" },
+        );
+        withOutput = {
+          ...withOutput,
+          execution: {
+            ...executionState(withOutput),
+            [cell.id]: {
+              ...state,
+              outputArtifactId,
+            },
+            [resolvedVideoOutput.outputCell.id]: {
+              fingerprint: state.fingerprint,
+              status: "completed",
+              outputArtifactId,
+              completedAt,
+              updatedAt: completedAt,
+              ...(input.runId ? { runId: input.runId } : {}),
+              tool: state.tool,
+            },
+          },
+        };
+      }
       return {
         ...withOutput,
         cells: withOutput.cells.map((candidate) =>
