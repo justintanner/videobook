@@ -2445,6 +2445,31 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [sourceViewCellId, setSourceViewCellId] = useState<string | null>(null)
   const [generationsViewCellId, setGenerationsViewCellId] = useState<string | null>(null)
+  const [generationsState, setGenerationsState] = useState<{
+    cellId: string
+    loading: boolean
+    error: string | null
+    attempts: Array<{
+      attemptId: string
+      status: string | null
+      runId: string | null
+      commitHash: string | null
+      operation: string | null
+      commitDate: string | null
+      prompt: string | null
+      resolvedPrompt: string | null
+      model: string | null
+      tool: string | null
+      provider: string | null
+      artifactId: string | null
+      providerArtifactId: string | null
+      error: string | null
+      mediaUrl: string | null
+      thumbnailUrl: string | null
+      payload: unknown
+      commandPlan: unknown
+    }>
+  } | null>(null)
   const [bookMenuOpen, setBookMenuOpen] = useState(false)
   const [bookMenuLoading, setBookMenuLoading] = useState(false)
   const [bookMenuError, setBookMenuError] = useState<string | null>(null)
@@ -7637,8 +7662,58 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           aria-pressed={generationsViewCellId === selectedCell.id}
                           onClick={() => {
                             setSourceViewCellId(null)
-                            setGenerationsViewCellId((current) =>
-                              current === selectedCell.id ? null : selectedCell.id)
+                            if (generationsViewCellId === selectedCell.id) {
+                              setGenerationsViewCellId(null)
+                              return
+                            }
+                            const targetCellId = selectedCell.id
+                            setGenerationsViewCellId(targetCellId)
+                            if (!notebook || !bookId) {
+                              setGenerationsState({
+                                cellId: targetCellId,
+                                loading: false,
+                                error: 'Notebook is unavailable',
+                                attempts: [],
+                              })
+                              return
+                            }
+                            setGenerationsState({
+                              cellId: targetCellId,
+                              loading: true,
+                              error: null,
+                              attempts: [],
+                            })
+                            void call('list_cell_generations', {
+                              book_id: bookId,
+                              notebook_id: notebook.id,
+                              cell_id: targetCellId,
+                              limit: 20,
+                            }, { background: true })
+                              .then((payload) => {
+                                const data = payload as {
+                                  attempts?: NonNullable<
+                                    typeof generationsState
+                                  >['attempts']
+                                }
+                                setGenerationsState({
+                                  cellId: targetCellId,
+                                  loading: false,
+                                  error: null,
+                                  attempts: Array.isArray(data.attempts)
+                                    ? data.attempts
+                                    : [],
+                                })
+                              })
+                              .catch((cause) => {
+                                setGenerationsState({
+                                  cellId: targetCellId,
+                                  loading: false,
+                                  error: cause instanceof Error
+                                    ? cause.message
+                                    : String(cause),
+                                  attempts: [],
+                                })
+                              })
                           }}
                         >
                           <History size={15} />
@@ -7699,6 +7774,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     generationsVisible={
                       generationsViewCellId === selectedNotebookCell.id
                     }
+                    generations={
+                      generationsState
+                      && generationsState.cellId === selectedNotebookCell.id
+                        ? {
+                            attempts: generationsState.attempts,
+                            loading: generationsState.loading,
+                            error: generationsState.error,
+                          }
+                        : generationsViewCellId === selectedNotebookCell.id
+                          ? { attempts: [], loading: true, error: null }
+                          : undefined
+                    }
                     onUpdate={updateCell}
                     onSetInput={setSelectedCellInput}
                     onRun={runCell}
@@ -7706,39 +7793,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     onClearSlot={clearSelectedCellSlot}
                     onOpenFullscreen={() => setFullscreenCellId(selectedNotebookCell.id)}
                     onPreviewPayload={previewGenerationPayload}
-                    onLoadGenerations={async () => {
-                      if (!selectedNotebookCell || !notebook || !bookId) {
-                        return { attempts: [] }
-                      }
-                      const payload = await call('list_cell_generations', {
-                        book_id: bookId,
-                        notebook_id: notebook.id,
-                        cell_id: selectedNotebookCell.id,
-                        limit: 20,
-                      }, { background: true })
-                      return payload as {
-                        attempts: Array<{
-                          attemptId: string
-                          status: string | null
-                          runId: string | null
-                          commitHash: string | null
-                          operation: string | null
-                          commitDate: string | null
-                          prompt: string | null
-                          resolvedPrompt: string | null
-                          model: string | null
-                          tool: string | null
-                          provider: string | null
-                          artifactId: string | null
-                          providerArtifactId: string | null
-                          error: string | null
-                          mediaUrl: string | null
-                          thumbnailUrl: string | null
-                          payload: unknown
-                          commandPlan: unknown
-                        }>
-                      }
-                    }}
                   />
                 ) : null}
               </aside>

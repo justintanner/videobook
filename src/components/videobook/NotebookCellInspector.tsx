@@ -10,7 +10,7 @@ import {
   Maximize2,
   Save,
 } from 'lucide-react'
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import type { NotebookCell, NotebookEdge } from 'videobook-engine'
 import { ArtifactThumb } from './ArtifactThumb'
 import { MediaLibraryAssetPreview } from './MediaLibraryAssetPreview'
@@ -384,15 +384,6 @@ type CellGenerationAttempt = {
   commandPlan: unknown
 }
 
-type CellGenerationsPayload = {
-  attempts: CellGenerationAttempt[]
-  generations?: {
-    count: number
-    latestStatus: string | null
-    artifactIds: string[]
-  }
-}
-
 type NotebookCellInspectorProps = {
   notebookId: string
   cell: NotebookCell
@@ -420,7 +411,11 @@ type NotebookCellInspectorProps = {
     cellId: string,
     draft: GenerationPreviewDraft,
   ) => Promise<unknown>
-  onLoadGenerations?: () => Promise<CellGenerationsPayload>
+  generations?: {
+    attempts: readonly CellGenerationAttempt[]
+    loading: boolean
+    error: string | null
+  }
 }
 
 function isPassiveOutputCell(cell: NotebookCell): boolean {
@@ -2588,44 +2583,16 @@ function ExecutableCellInspector({
 }
 
 function CellGenerationsPanel({
-  cellId,
-  loadGenerations,
+  attempts,
+  loading,
+  error,
   artifactAssets,
 }: {
-  cellId: string
-  loadGenerations?: () => Promise<CellGenerationsPayload>
+  attempts: readonly CellGenerationAttempt[]
+  loading: boolean
+  error: string | null
   artifactAssets: ReadonlyMap<string, NotebookCellInspectorAsset>
 }) {
-  const [attempts, setAttempts] = useState<CellGenerationAttempt[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    if (!loadGenerations) {
-      setAttempts([])
-      setError('Generation history is unavailable')
-      return
-    }
-    setLoading(true)
-    setError(null)
-    void loadGenerations()
-      .then((payload) => {
-        if (cancelled) return
-        setAttempts(payload.attempts ?? [])
-      })
-      .catch((cause) => {
-        if (cancelled) return
-        setError(cause instanceof Error ? cause.message : String(cause))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [cellId, loadGenerations])
-
   return (
     <section className="inspector-generations" aria-label="Generation attempts">
       <header className="inspector-source-meta">
@@ -2741,7 +2708,7 @@ export function NotebookCellInspector({
   onDelete,
   onOpenFullscreen,
   onPreviewPayload,
-  onLoadGenerations,
+  generations,
   mentionAssets,
 }: NotebookCellInspectorProps) {
   const artifactAssets = inspectorArtifactAssets(
@@ -2768,8 +2735,9 @@ export function NotebookCellInspector({
       <div className="inspector-body inspector-source-body">
         <CellGenerationsPanel
           key={cell.id}
-          cellId={cell.id}
-          loadGenerations={onLoadGenerations}
+          attempts={generations?.attempts ?? []}
+          loading={generations?.loading ?? false}
+          error={generations?.error ?? null}
           artifactAssets={artifactAssets}
         />
       </div>
