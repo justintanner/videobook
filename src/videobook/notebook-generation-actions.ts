@@ -532,3 +532,12 @@ export function generationActionLabel(
 ): string {
   return `${action.title} · ${action.providerLabel}`
 }
+
+/** "Reference to Video" -> "R2V", "Text to Image" -> "T2I", etc. */
+export function abbreviateGenerationPhrases(title: string): string {
+  return title.replace(
+    /\b(image|text|reference|video|audio|frame)[\s-]+to[\s-]+(video|image|audio|text)\b/gi,
+    (_match, from: string, to: string) =>
+      `${from[0]}2${to[0]}`.toUpperCase(),
+  )
+}

@@ -1,3 +1,4 @@
+import '../server/src/load-env.js'
 import process from 'node:process'
 import { resolve } from 'node:path'
 import { BookManager } from '../server/src/book-manager.js'
@@ -15,11 +16,11 @@ const books = new BookManager({
 
 try {
   await books.ready()
-  let selected = books.getBySlug('multyculty')
+  let selected = books.getByName('multyculty')
   if (!selected.ok) {
     const created = await books.create('multyculty')
     if (!created.ok) throw new Error(created.error.message)
-    selected = books.getBySlug('multyculty')
+    selected = books.getByName('multyculty')
     if (!selected.ok) throw new Error(selected.error.message)
   }
   await bootstrapMultycultySource(selected.value.engine)
@@ -27,7 +28,7 @@ try {
     materializeLocalOutputs: true,
   })
   process.stdout.write(`${JSON.stringify({
-    book: selected.value.slug,
+    book: selected.value.name,
     notebook: seeded.name,
     cells: seeded.cells.length,
     edges: seeded.edges.length,

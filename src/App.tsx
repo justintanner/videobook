@@ -60,6 +60,7 @@ import {
 import { v7 as uuidv7 } from 'uuid'
 import type {
   EditPreview,
+  NotebookCellExecution,
   NotebookCellReference,
   NotebookCellType,
   NotebookDocument,
@@ -95,7 +96,10 @@ import {
   MomentSearch,
   type MomentSearchHandle,
 } from '@/components/videobook/MomentSearch'
-import { NotebookCellInspector } from '@/components/videobook/NotebookCellInspector'
+import {
+  NotebookCellInspector,
+  type CellGenerationAttempt,
+} from '@/components/videobook/NotebookCellInspector'
 import { MediaLibraryAssetPreview } from '@/components/videobook/MediaLibraryAssetPreview'
 import {
   GenerationChatReview,
@@ -118,6 +122,7 @@ import {
   type NotebookFlowEdge,
 } from '@/videobook/notebook-draft'
 import {
+  abbreviateGenerationPhrases,
   asNotebookGenerationActions,
   compatibleGenerationActions,
   compatibleGenerationModes,
@@ -1552,15 +1557,6 @@ function cellTypeLabel(kind: NotebookCellType): string {
   return kind.replace(/^generate_/, 'gen_').replaceAll('_', ' ').toUpperCase()
 }
 
-/** "Reference to Video" -> "R2V", "Text to Image" -> "T2I", etc. */
-function abbreviateGenerationPhrases(title: string): string {
-  return title.replace(
-    /\b(image|text|reference|video|audio|frame)[\s-]+to[\s-]+(video|image|audio|text)\b/gi,
-    (_match, from: string, to: string) =>
-      `${from[0]}2${to[0]}`.toUpperCase(),
-  )
-}
-
 function emptyCellLabel(data: CanvasCellData): string {
   if (
     data.kind === 'generate_video'
@@ -2449,26 +2445,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     cellId: string
     loading: boolean
     error: string | null
-    attempts: Array<{
-      attemptId: string
-      status: string | null
-      runId: string | null
-      commitHash: string | null
-      operation: string | null
-      commitDate: string | null
-      prompt: string | null
-      resolvedPrompt: string | null
-      model: string | null
-      tool: string | null
-      provider: string | null
-      artifactId: string | null
-      providerArtifactId: string | null
-      error: string | null
-      mediaUrl: string | null
-      thumbnailUrl: string | null
-      payload: unknown
-      commandPlan: unknown
-    }>
+    attempts: CellGenerationAttempt[]
+    currentExecution: NotebookCellExecution | null
   } | null>(null)
   const [bookMenuOpen, setBookMenuOpen] = useState(false)
   const [bookMenuLoading, setBookMenuLoading] = useState(false)
@@ -3791,6 +3769,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       draft,
     })
   }, [bookId, call, notebook])
+
+  const loadGenerationPayload = useCallback(async (assetId: string) => {
+    if (!bookId) throw new Error('Book is not ready')
+    const value = await call('inspect_generation_request', {
+      book_id: bookId,
+      asset_id: assetId,
+    }, { background: true })
+    const data = value as { payload?: unknown }
+    if (data.payload == null) {
+      throw new Error('No generation payload recorded for this attempt')
+    }
+    return data.payload
+  }, [bookId, call])
 
   const refreshNotebook = useCallback(async (targetBookId: string, notebookId: string) => {
     const value = await call('get_notebook', {
@@ -7674,6 +7665,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                                 loading: false,
                                 error: 'Notebook is unavailable',
                                 attempts: [],
+                                currentExecution: null,
                               })
                               return
                             }
@@ -7682,6 +7674,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                               loading: true,
                               error: null,
                               attempts: [],
+                              currentExecution: null,
                             })
                             void call('list_cell_generations', {
                               book_id: bookId,
@@ -7694,6 +7687,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                                   attempts?: NonNullable<
                                     typeof generationsState
                                   >['attempts']
+                                  currentExecution?: NotebookCellExecution | null
                                 }
                                 setGenerationsState({
                                   cellId: targetCellId,
@@ -7702,6 +7696,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                                   attempts: Array.isArray(data.attempts)
                                     ? data.attempts
                                     : [],
+                                  currentExecution: data.currentExecution ?? null,
                                 })
                               })
                               .catch((cause) => {
@@ -7712,6 +7707,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                                     ? cause.message
                                     : String(cause),
                                   attempts: [],
+                                  currentExecution: null,
                                 })
                               })
                           }}
@@ -7779,11 +7775,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       && generationsState.cellId === selectedNotebookCell.id
                         ? {
                             attempts: generationsState.attempts,
+                            currentExecution: generationsState.currentExecution,
                             loading: generationsState.loading,
                             error: generationsState.error,
                           }
                         : generationsViewCellId === selectedNotebookCell.id
-                          ? { attempts: [], loading: true, error: null }
+                          ? {
+                              attempts: [],
+                              currentExecution: null,
+                              loading: true,
+                              error: null,
+                            }
                           : undefined
                     }
                     onUpdate={updateCell}
@@ -7793,6 +7795,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     onClearSlot={clearSelectedCellSlot}
                     onOpenFullscreen={() => setFullscreenCellId(selectedNotebookCell.id)}
                     onPreviewPayload={previewGenerationPayload}
+                    onLoadGenerationPayload={loadGenerationPayload}
                   />
                 ) : null}
               </aside>

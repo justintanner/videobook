@@ -13,12 +13,12 @@ const books = new BookManager({
 
 try {
   const result = await ensureDancingWorkflow(books)
-  const selected = books.getBySlug('dancing')
+  const selected = books.getByName('dancing')
   if (!selected.ok) throw new Error(selected.error.message)
   const notebook = selected.value.engine.notebooks.read(result.notebookId)
   if (!notebook.ok) throw new Error(notebook.error.message)
   process.stdout.write(`${JSON.stringify({
-    book: selected.value.slug,
+    book: selected.value.name,
     notebook: notebook.value.name,
     cells: notebook.value.cells.length,
     edges: notebook.value.edges.length,

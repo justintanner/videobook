@@ -6,10 +6,12 @@ import type {
   EditOperation,
   Engine,
   ClipPlacement,
+  GenerationPatch,
   NotebookCell,
   NotebookDocument,
   NotebookRunPlan,
   NotebookRun,
+  RecordGenerationArgs,
 } from "videobook-engine";
 import {
   MVP_CONTRACT_VERSION,
@@ -25,10 +27,14 @@ import {
   findGenerateVideoOutput,
 } from "../notebook-cell-outputs.js";
 import { queue, registerJobHandler, waitForJob } from "../queue.js";
+import { translateToolPayload } from "../payload-builders.js";
 import type { ToolDef, ToolResult } from "../tools/tool-def.js";
 import { smoothSceneConcatDef } from "../tools/smooth-scene-concat.js";
 import { spliceVideoDef } from "../tools/splice-video.js";
-import { getActionSpec } from "../generation-registry.js";
+import {
+  getActionSpec,
+  type GenerationActionSpec,
+} from "../generation-registry.js";
 import {
   captureFrame,
   exportSequenceMaster,
@@ -1022,10 +1028,123 @@ export async function prepareNotebookGeneration(
   return {
     tool,
     provider: spec?.provider ?? "unknown",
-    model: spec?.apicity_identifier ?? cell.model ?? tool,
+    model: providerModelString(tool, parsed.data, spec, cell.model),
     input: parsed.data as Record<string, unknown>,
     mentions: preparedArgs.mentions,
   };
+}
+
+function payloadModelString(payload: Record<string, unknown>): string | undefined {
+  const model = payload.model ?? payload.endpoint_id;
+  return typeof model === "string" && model.trim() !== "" ? model : undefined;
+}
+
+function providerModelString(
+  tool: string,
+  input: Record<string, unknown>,
+  spec: GenerationActionSpec | undefined,
+  cellModel: string | undefined,
+): string {
+  try {
+    const translated = translateToolPayload(tool, input, spec?.provider);
+    const model = translated ? payloadModelString(translated.payload) : undefined;
+    if (model) return model;
+  } catch {
+    // Payload build is best-effort here (e.g. unresolved preview mentions);
+    // fall through to identifiers that are not zod schema names.
+  }
+  const identifier = spec?.apicity_identifier;
+  if (identifier && !identifier.endsWith("Schema")) return identifier;
+  if (cellModel && !cellModel.endsWith("Schema")) return cellModel;
+  return tool;
+}
+
+const GENERATION_ERROR_MAX_LENGTH = 500;
+
+function truncateGenerationError(message: string): string {
+  return message.length > GENERATION_ERROR_MAX_LENGTH
+    ? message.slice(0, GENERATION_ERROR_MAX_LENGTH)
+    : message;
+}
+
+async function recordGenerationDispatch(
+  engine: Engine,
+  args: RecordGenerationArgs,
+): Promise<string | null> {
+  try {
+    const result = await engine.generations.record(args);
+    if (!result.ok) {
+      console.warn(
+        `[generations] record failed for cell ${args.cellId}: ${result.error.message}`,
+      );
+      return null;
+    }
+    return result.value.generationId;
+  } catch (cause) {
+    console.warn(
+      `[generations] record failed for cell ${args.cellId}:`,
+      cause instanceof Error ? cause.message : cause,
+    );
+    return null;
+  }
+}
+
+async function patchGeneration(
+  engine: Engine,
+  generationId: string | null,
+  patch: GenerationPatch,
+): Promise<void> {
+  if (!generationId) return;
+  try {
+    const result = await engine.generations.update(generationId, patch);
+    if (!result.ok) {
+      console.warn(
+        `[generations] update failed for ${generationId}: ${result.error.message}`,
+      );
+    }
+  } catch (cause) {
+    console.warn(
+      `[generations] update failed for ${generationId}:`,
+      cause instanceof Error ? cause.message : cause,
+    );
+  }
+}
+
+function activeGenerationIdForRun(
+  engine: Engine,
+  notebookId: string,
+  cellId: string,
+  runId: string | undefined,
+  providerArtifactId: string | undefined,
+): string | null {
+  try {
+    const listed = engine.generations.listForCell(notebookId, cellId);
+    if (!listed.ok) {
+      console.warn(
+        `[generations] list failed for cell ${cellId}: ${listed.error.message}`,
+      );
+      return null;
+    }
+    const match = listed.value.find((generation) =>
+      (
+        generation.status === "dispatched"
+        || generation.status === "awaiting_provider"
+      )
+      && (
+        (runId !== undefined && generation.runId === runId)
+        || (
+          providerArtifactId !== undefined
+          && generation.providerArtifactId === providerArtifactId
+        )
+      ));
+    return match?.generationId ?? null;
+  } catch (cause) {
+    console.warn(
+      `[generations] list failed for cell ${cellId}:`,
+      cause instanceof Error ? cause.message : cause,
+    );
+    return null;
+  }
 }
 
 async function generationTool(
@@ -1033,7 +1152,14 @@ async function generationTool(
   document: NotebookDocument,
   cell: NotebookCell,
   bookId: string,
-): Promise<{ artifactId: string; tool: string; resolvedPrompt: string }> {
+  options: { runId?: string } = {},
+): Promise<{
+  artifactId: string;
+  tool: string;
+  provider: string;
+  model: string;
+  resolvedPrompt: string;
+}> {
   const prepared = await prepareNotebookGeneration(engine, document, cell, bookId);
   const { getAllToolDefs } = await import("../tools/index.js");
   const definition = getAllToolDefs(engine).find(
@@ -1042,22 +1168,57 @@ async function generationTool(
   if (!definition) {
     throw new Error(`Unknown notebook generation model: ${prepared.tool}`);
   }
-  const response = await definition.handler(prepared.input);
+  const resolvedPrompt = typeof prepared.input.prompt === "string"
+    ? prepared.input.prompt
+    : "";
+  const outputCellId = cell.type === "generate_video"
+    ? findGenerateVideoOutput(document, cell.id)?.outputCell.id
+    : undefined;
+  const generationId = await recordGenerationDispatch(engine, {
+    notebookId: document.id,
+    cellId: cell.id,
+    tool: prepared.tool,
+    status: "dispatched",
+    provider: prepared.provider,
+    model: prepared.model,
+    ...(cell.prompt ? { prompt: cell.prompt } : {}),
+    ...(resolvedPrompt ? { resolvedPrompt } : {}),
+    ...(options.runId ? { runId: options.runId } : {}),
+    ...(outputCellId ? { outputCellId } : {}),
+  });
+  const fail = async (message: string): Promise<never> => {
+    await patchGeneration(engine, generationId, {
+      status: "failed",
+      error: truncateGenerationError(message),
+    });
+    throw new Error(message);
+  };
+  let response: ToolResult;
+  try {
+    response = await definition.handler(prepared.input);
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    return fail(message);
+  }
   if (response.isError) {
-    throw new Error(response.content[0]?.text ?? `${prepared.tool} failed`);
+    return fail(response.content[0]?.text ?? `${prepared.tool} failed`);
   }
   const reference = artifactReference(textResult(response));
   if (!reference) {
-    throw new Error(`${prepared.tool} did not return an output artifact`);
+    return fail(`${prepared.tool} did not return an output artifact`);
   }
   const artifact = engine.artifacts.get(reference);
-  if (!artifact.ok) throw new Error(artifact.error.message);
+  if (!artifact.ok) return fail(artifact.error.message);
+  await patchGeneration(engine, generationId, {
+    status: "awaiting_provider",
+    providerArtifactId: artifact.value.artifactId,
+  });
   return {
     artifactId: artifact.value.artifactId,
     tool: prepared.tool,
-    resolvedPrompt: typeof prepared.input.prompt === "string"
-      ? prepared.input.prompt
-      : "",
+    provider: prepared.provider,
+    model: prepared.model,
+    resolvedPrompt,
   };
 }
 
@@ -1423,10 +1584,12 @@ async function executeLocalOrGeneration(
   bookId: string,
   document: NotebookDocument,
   cell: NotebookCell,
-  options: { confirmPaid?: boolean } = {},
+  options: { confirmPaid?: boolean; runId?: string } = {},
 ): Promise<{
   artifactId: string;
   tool: string;
+  provider?: string;
+  model?: string;
   document?: NotebookDocument;
   cellInputs?: Record<string, unknown>;
   awaitingOutput?: boolean;
@@ -1784,7 +1947,9 @@ async function executeLocalOrGeneration(
         `Paid generation for ${notebookGridTag(cell.slot)} requires confirmation before starting`,
       );
     }
-    const output = await generationTool(engine, document, cell, bookId);
+    const output = await generationTool(engine, document, cell, bookId, {
+      ...(options.runId ? { runId: options.runId } : {}),
+    });
     const surface = cell.type === "generate_image"
       ? "image_generate"
       : cell.type === "generate_video"
@@ -1798,7 +1963,7 @@ async function executeLocalOrGeneration(
           notebookId: document.id,
           cellId: cell.id,
           tool: output.tool,
-          model: cell.model ?? cell.tool ?? output.tool,
+          model: output.model,
           artifactId: output.artifactId,
         },
       }).catch(() => {});
@@ -1806,6 +1971,8 @@ async function executeLocalOrGeneration(
     return {
       artifactId: output.artifactId,
       tool: output.tool,
+      provider: output.provider,
+      model: output.model,
       awaitingOutput: true,
       cellInputs: {
         providerArtifactId: output.artifactId,
@@ -1988,6 +2155,10 @@ export async function runNotebookCell(
           candidate.id === activeCell.id);
         const fillActionPrompt = Boolean(resolvedPrompt)
           && !actionBefore?.prompt;
+        const fillActionModel = output.model !== undefined
+          && output.model !== actionBefore?.model;
+        const fillActionTool = fillActionModel && !actionBefore?.tool;
+        const actionCellChanged = fillActionPrompt || fillActionModel;
         const withCells = {
           ...withOutput,
           cells: withOutput.cells.map((candidate) => {
@@ -1995,6 +2166,8 @@ export async function runNotebookCell(
               return {
                 ...candidate,
                 ...(fillActionPrompt ? { prompt: resolvedPrompt } : {}),
+                ...(fillActionModel ? { model: output.model } : {}),
+                ...(fillActionTool ? { tool: output.tool } : {}),
                 ...(output.cellInputs
                   ? {
                       inputs: {
@@ -2005,11 +2178,15 @@ export async function runNotebookCell(
                   : {}),
               };
             }
-            if (
-              candidate.id === videoOutput?.outputCell.id
-              && resolvedPrompt
-            ) {
-              return { ...candidate, prompt: resolvedPrompt };
+            if (candidate.id === videoOutput?.outputCell.id) {
+              if (!resolvedPrompt && output.model === undefined) {
+                return candidate;
+              }
+              return {
+                ...candidate,
+                ...(resolvedPrompt ? { prompt: resolvedPrompt } : {}),
+                ...(output.model !== undefined ? { model: output.model } : {}),
+              };
             }
             return candidate;
           }),
@@ -2019,10 +2196,10 @@ export async function runNotebookCell(
         // document — otherwise the cell would immediately read as stale.
         const finalCell = withCells.cells.find((candidate) =>
           candidate.id === activeCell.id);
-        const fingerprint = fillActionPrompt && finalCell
+        const fingerprint = actionCellChanged && finalCell
           ? notebookCellFingerprint(withCells, finalCell)
           : state.fingerprint;
-        if (!videoOutput && !fillActionPrompt) return withCells;
+        if (!videoOutput && !actionCellChanged) return withCells;
         return {
           ...withCells,
           execution: {
@@ -2071,6 +2248,17 @@ export async function runNotebookCell(
     };
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
+    await patchGeneration(
+      engine,
+      activeGenerationIdForRun(
+        engine,
+        notebookId,
+        activeCell.id,
+        options.runId,
+        undefined,
+      ),
+      { status: "failed", error: truncateGenerationError(message) },
+    );
     const outputArtifactId = await failedArtifact(engine, activeCell, message);
     const state: CellExecution = {
       fingerprint: nextFingerprint,
@@ -2263,12 +2451,23 @@ async function finishAwaitingNotebookCell(
   if (!read.ok) throw new Error(read.error.message);
   const cell = read.value.cells.find((candidate) => candidate.id === input.cellId);
   if (!cell) throw new Error(`Awaiting notebook cell not found: ${input.cellId}`);
+  const generationId = activeGenerationIdForRun(
+    engine,
+    input.notebookId,
+    cell.id,
+    input.runId,
+    input.providerArtifactId,
+  );
   const current = executionState(read.value)[cell.id];
   if (
     current?.status === "completed"
     && current.outputArtifactId
     && engine.artifacts.get(current.outputArtifactId).ok
   ) {
+    await patchGeneration(engine, generationId, {
+      status: "completed",
+      outputArtifactId: current.outputArtifactId,
+    });
     return {
       outputArtifactId: current.outputArtifactId,
       document: read.value,
@@ -2423,6 +2622,10 @@ async function finishAwaitingNotebookCell(
     { artifactId: outputArtifactId },
   );
   if (!updated.ok) throw new Error(updated.error.message);
+  await patchGeneration(engine, generationId, {
+    status: "completed",
+    outputArtifactId,
+  });
   const refreshed = engine.notebooks.read(input.notebookId);
   if (!refreshed.ok) throw new Error(refreshed.error.message);
   return { outputArtifactId, document: refreshed.value };
@@ -2464,6 +2667,17 @@ async function failAwaitingNotebookCell(
     { artifactId: input.providerArtifactId },
   );
   if (!result.ok) throw new Error(result.error.message);
+  await patchGeneration(
+    engine,
+    activeGenerationIdForRun(
+      engine,
+      input.notebookId,
+      input.cellId,
+      input.runId,
+      input.providerArtifactId,
+    ),
+    { status: "failed", error: truncateGenerationError(message) },
+  );
   const read = engine.notebooks.read(input.notebookId);
   if (!read.ok) throw new Error(read.error.message);
   return read.value;

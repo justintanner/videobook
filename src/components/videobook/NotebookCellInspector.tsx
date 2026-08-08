@@ -11,7 +11,12 @@ import {
   Save,
 } from 'lucide-react'
 import { Fragment, useMemo, useRef, useState } from 'react'
-import type { NotebookCell, NotebookEdge } from 'videobook-engine'
+import type {
+  GenerationStatus,
+  NotebookCell,
+  NotebookCellExecution,
+  NotebookEdge,
+} from 'videobook-engine'
 import { ArtifactThumb } from './ArtifactThumb'
 import { MediaLibraryAssetPreview } from './MediaLibraryAssetPreview'
 import {
@@ -28,6 +33,7 @@ import {
   notebookAnalysisLlmExchanges,
   notebookCellActionPresentation,
   notebookCellInspectorActionLabel,
+  notebookCellIsActiveStatus,
   notebookOutputVersionArtifactIds,
   type NotebookAnalysisInfo,
   type NotebookAnalysisLlmExchange,
@@ -48,6 +54,7 @@ import {
   providerPayloadPreviewMentions,
 } from '@/videobook/provider-payload-preview'
 import {
+  abbreviateGenerationPhrases,
   compatibleGenerationActions,
   compatibleGenerationModes,
   effectiveGenerationControlValue,
@@ -363,25 +370,32 @@ export type NotebookCellInspectorAsset = {
   analysisInfo?: NotebookAnalysisInfo | null
 }
 
-type CellGenerationAttempt = {
+type CellGenerationTransition = {
+  status: GenerationStatus
+  commitHash: string
+  commitDate: string
+}
+
+export type CellGenerationAttempt = {
   attemptId: string
-  status: string | null
+  status: GenerationStatus
   runId: string | null
-  commitHash: string | null
-  operation: string | null
-  commitDate: string | null
+  tool: string
+  provider: string | null
+  model: string | null
   prompt: string | null
   resolvedPrompt: string | null
-  model: string | null
-  tool: string | null
-  provider: string | null
   artifactId: string | null
   providerArtifactId: string | null
   error: string | null
   mediaUrl: string | null
   thumbnailUrl: string | null
-  payload: unknown
+  payloadAvailable: boolean
+  payload?: unknown
   commandPlan: unknown
+  transitions: readonly CellGenerationTransition[]
+  createdAt: number
+  updatedAt: number
 }
 
 type NotebookCellInspectorProps = {
@@ -411,8 +425,10 @@ type NotebookCellInspectorProps = {
     cellId: string,
     draft: GenerationPreviewDraft,
   ) => Promise<unknown>
+  onLoadGenerationPayload?: (assetId: string) => Promise<unknown>
   generations?: {
     attempts: readonly CellGenerationAttempt[]
+    currentExecution: NotebookCellExecution | null
     loading: boolean
     error: string | null
   }
@@ -2582,17 +2598,61 @@ function ExecutableCellInspector({
   )
 }
 
+function relativeTimeLabel(value: number | string): string | null {
+  const ms = typeof value === 'number' ? value : Date.parse(value)
+  if (!Number.isFinite(ms)) return null
+  const seconds = Math.max(0, Math.round((Date.now() - ms) / 1000))
+  if (seconds < 5) return 'just now'
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return new Date(ms).toLocaleDateString()
+}
+
+function absoluteTimeLabel(value: number | string): string | undefined {
+  const ms = typeof value === 'number' ? value : Date.parse(value)
+  return Number.isFinite(ms) ? new Date(ms).toLocaleString() : undefined
+}
+
+function isInFlightGenerationStatus(status: GenerationStatus): boolean {
+  return status === 'dispatched' || status === 'awaiting_provider'
+}
+
+function liveGenerationAttemptId(
+  attempts: readonly CellGenerationAttempt[],
+  execution: NotebookCellExecution | null,
+): string | null {
+  if (!execution || !notebookCellIsActiveStatus(execution.status ?? '')) {
+    return null
+  }
+  if (execution.runId) {
+    const match = attempts.find((attempt) => attempt.runId === execution.runId)
+    if (match) return match.attemptId
+  }
+  return attempts.find((attempt) => isInFlightGenerationStatus(attempt.status))
+    ?.attemptId ?? null
+}
+
 function CellGenerationsPanel({
   attempts,
+  currentExecution,
   loading,
   error,
   artifactAssets,
+  onLoadPayload,
 }: {
   attempts: readonly CellGenerationAttempt[]
+  currentExecution: NotebookCellExecution | null
   loading: boolean
   error: string | null
   artifactAssets: ReadonlyMap<string, NotebookCellInspectorAsset>
+  onLoadPayload?: (assetId: string) => Promise<unknown>
 }) {
+  const liveAttemptId = liveGenerationAttemptId(attempts, currentExecution)
   return (
     <section className="inspector-generations" aria-label="Generation attempts">
       <header className="inspector-source-meta">
@@ -2616,7 +2676,8 @@ function CellGenerationsPanel({
         </p>
       )}
       <ol className="inspector-generations-list">
-        {attempts.map((attempt) => {
+        {attempts.map((attempt, index) => {
+          const attemptNumber = attempts.length - index
           const previewAsset = attempt.artifactId
             ? artifactAssets.get(attempt.artifactId)
             : undefined
@@ -2632,8 +2693,17 @@ function CellGenerationsPanel({
                 }
               : null
           )
+          const lastTransition = attempt.transitions.at(-1)
+          const live = liveAttemptId === attempt.attemptId
+          const payloadAssetId = attempt.artifactId ?? attempt.providerArtifactId
           return (
-            <li key={attempt.attemptId} className="inspector-generation-attempt">
+            <li
+              key={attempt.attemptId}
+              className={[
+                'inspector-generation-attempt',
+                live ? 'inspector-generation-attempt-live' : '',
+              ].filter(Boolean).join(' ')}
+            >
               <div className="inspector-generation-attempt-head">
                 {mediaAsset ? (
                   <div className="inspector-generation-thumb">
@@ -2646,34 +2716,83 @@ function CellGenerationsPanel({
                   />
                 )}
                 <div className="inspector-generation-facts">
-                  <strong>
-                    {attempt.status ?? 'unknown'}
-                    {attempt.tool ? ` · ${attempt.tool}` : ''}
-                  </strong>
-                  <span>
-                    {[attempt.model, attempt.commitHash?.slice(0, 8)]
-                      .filter(Boolean)
-                      .join(' · ')}
+                  <div className="inspector-generation-attempt-title">
+                    <strong>Attempt {attemptNumber}</strong>
+                    <span className={`inspector-generation-status inspector-generation-status-${attempt.status}`}>
+                      {attempt.status}
+                    </span>
+                    {live && (
+                      <span className="inspector-generation-live" role="status">
+                        {currentExecution?.status ?? 'running'}
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className="inspector-generation-meta"
+                    title={absoluteTimeLabel(attempt.createdAt)}
+                  >
+                    {[
+                      abbreviateGenerationPhrases(attempt.tool),
+                      attempt.model,
+                      relativeTimeLabel(attempt.createdAt),
+                    ].filter(Boolean).join(' · ')}
                   </span>
+                  {lastTransition && (
+                    <code
+                      className="inspector-generation-commit"
+                      title={lastTransition.commitHash}
+                    >
+                      commit {lastTransition.commitHash.slice(0, 8)}
+                    </code>
+                  )}
                   {(attempt.resolvedPrompt || attempt.prompt) && (
                     <p title={attempt.resolvedPrompt ?? attempt.prompt ?? undefined}>
                       {(attempt.resolvedPrompt ?? attempt.prompt ?? '').slice(0, 160)}
                     </p>
                   )}
+                  {attempt.transitions.length > 0 && (
+                    <ol
+                      className="inspector-generation-timeline"
+                      aria-label={`Attempt ${attemptNumber} status timeline`}
+                    >
+                      {attempt.transitions.map((transition, transitionIndex) => (
+                        <li key={`${transition.commitHash}:${transitionIndex}`}>
+                          <span
+                            className={`inspector-generation-timeline-dot inspector-generation-timeline-dot-${transition.status}`}
+                            aria-hidden="true"
+                          />
+                          <span>{transition.status}</span>
+                          <time
+                            dateTime={transition.commitDate}
+                            title={absoluteTimeLabel(transition.commitDate)}
+                          >
+                            {relativeTimeLabel(transition.commitDate)}
+                          </time>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
                   {attempt.error && (
-                    <p className="inspector-generation-error">{attempt.error}</p>
+                    <p
+                      className="inspector-generation-error"
+                      role={attempt.status === 'failed' ? 'alert' : undefined}
+                    >
+                      {attempt.error}
+                    </p>
                   )}
                 </div>
               </div>
-              {attempt.payload != null && (
+              {(attempt.payload !== undefined
+                || (attempt.payloadAvailable && onLoadPayload)) && (
                 <AnalysisJsonDisclosure
                   label="Payload"
-                  summary={attempt.payload && typeof attempt.payload === 'object'
-                    && 'present' in (attempt.payload as object)
-                    ? 'present'
-                    : undefined}
                   value={attempt.payload}
-                  ariaLabel="Generation payload"
+                  loadValue={attempt.payload === undefined
+                    && payloadAssetId
+                    && onLoadPayload
+                    ? () => onLoadPayload(payloadAssetId)
+                    : undefined}
+                  ariaLabel={`Generation payload for attempt ${attemptNumber}`}
                   artifactAssets={artifactAssets}
                 />
               )}
@@ -2708,6 +2827,7 @@ export function NotebookCellInspector({
   onDelete,
   onOpenFullscreen,
   onPreviewPayload,
+  onLoadGenerationPayload,
   generations,
   mentionAssets,
 }: NotebookCellInspectorProps) {
@@ -2736,9 +2856,11 @@ export function NotebookCellInspector({
         <CellGenerationsPanel
           key={cell.id}
           attempts={generations?.attempts ?? []}
+          currentExecution={generations?.currentExecution ?? null}
           loading={generations?.loading ?? false}
           error={generations?.error ?? null}
           artifactAssets={artifactAssets}
+          onLoadPayload={onLoadGenerationPayload}
         />
       </div>
     )

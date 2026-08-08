@@ -36,6 +36,7 @@ import {
   continueQueuedInsert,
 } from "./command-plan.js";
 import { estimateCostDef } from "./estimate-cost.js";
+import { pairForCell } from "./list-cell-generations.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import {
   listNotebookActions,
@@ -1297,10 +1298,17 @@ export function videobookDomainDefs(
         const result = engine.notebooks.read(String(args.notebook_id));
         if (!result.ok) return failure(result.error.message);
         try {
+          const document = hydrateNotebookProviderFailures(engine, result.value);
+          const { generateCell } = pairForCell(document, String(args.cell_id));
+          const generationsResult = engine.generations.listForCell(
+            String(args.notebook_id),
+            generateCell.id,
+          );
           return json(selectedCellDetails(
             String(args.notebook_id),
-            hydrateNotebookProviderFailures(engine, result.value),
+            document,
             String(args.cell_id),
+            generationsResult.ok ? generationsResult.value : [],
           ));
         } catch (cause) {
           return failure(cause instanceof Error ? cause.message : String(cause));

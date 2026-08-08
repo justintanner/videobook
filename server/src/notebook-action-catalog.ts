@@ -1,4 +1,9 @@
-import type { NotebookCell, NotebookCellType, NotebookDocument } from "videobook-engine";
+import type {
+  Generation,
+  NotebookCell,
+  NotebookCellType,
+  NotebookDocument,
+} from "videobook-engine";
 import { notebookCellTableRows } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import {
@@ -681,6 +686,7 @@ export function selectedCellDetails(
   notebookId: string,
   document: NotebookDocument,
   cellId: string,
+  generations: readonly Generation[] = [],
 ): Record<string, unknown> {
   const normalizedDocument = normalizeLegacyAnalyzeDocument(document);
   const cell = normalizedDocument.cells.find((candidate) =>
@@ -707,20 +713,10 @@ export function selectedCellDetails(
   const execution = normalizedDocument.execution?.[cellId] ?? null;
   const action = defaultActionForCell(cell, normalizedDocument);
   const validation = validateCellConfiguration(cell, normalizedDocument);
-  const versionIds = Array.isArray(cell.inputs?.outputVersionArtifactIds)
-    ? cell.inputs.outputVersionArtifactIds.filter(
-      (id): id is string => typeof id === "string" && id.length > 0,
-    )
-    : [];
-  const generationArtifactIds = [
-    ...versionIds,
-    ...(cell.outputArtifactId ? [cell.outputArtifactId] : []),
-    ...(typeof cell.inputs?.providerArtifactId === "string"
-      ? [cell.inputs.providerArtifactId]
-      : []),
-    ...(execution?.outputArtifactId ? [execution.outputArtifactId] : []),
-    ...(execution?.providerArtifactId ? [execution.providerArtifactId] : []),
-  ];
+  const generationArtifactIds = generations.flatMap((row) => [
+    ...(row.outputArtifactId ? [row.outputArtifactId] : []),
+    ...(row.providerArtifactId ? [row.providerArtifactId] : []),
+  ]);
   const uniqueGenerationArtifactIds = [...new Set(generationArtifactIds)];
   return {
     cell,
@@ -740,8 +736,8 @@ export function selectedCellDetails(
       artifactId: cell.outputArtifactId ?? null,
     },
     generations: {
-      count: Math.max(uniqueGenerationArtifactIds.length, execution ? 1 : 0),
-      latestStatus: execution?.status ?? null,
+      count: generations.length,
+      latestStatus: generations[0]?.status ?? null,
       artifactIds: uniqueGenerationArtifactIds,
     },
     resolvedRequest: sanitizeResolvedRequest(cell, action),

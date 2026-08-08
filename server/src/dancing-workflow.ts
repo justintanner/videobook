@@ -411,7 +411,7 @@ export async function seedDancingWorkflow(
     slot: { row: 3, column: 0 },
     prompt: MOTION_PROMPT,
     provider: "kie",
-    model: "KlingMotionControlRequestSchema",
+    model: "kling-3.0/motion-control",
     operation: "motion_control",
     tool: "generate_kie_kling_3_0_motion_control",
     inputs: {

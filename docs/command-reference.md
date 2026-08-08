@@ -183,7 +183,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `list_assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook-referenced assets outside the page.
 - `list_book_actions` — List authored semantic revisions for a book
 - `list_books` — List all Videobook books
-- `list_cell_generations` — List attributable generation attempts for a notebook cell from Dolt history (commits, prompts, models, artifacts, payloads).
+- `list_cell_generations` — List recorded generation attempts for a notebook cell: one attempt per dispatch, each with its per-attempt transition timeline.
 - `list_characters` — List reusable characters
 - `list_chat_history` — List recent chat input history entries.
 - `list_chat_models` — List supported chat routing models and the default selection

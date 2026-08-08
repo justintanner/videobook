@@ -618,4 +618,95 @@ describe("notebook action catalog", () => {
       tool: "kie_gemini_analysis",
     });
   });
+
+  it("summarizes cell generations from generation rows, not version guesswork", async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books);
+    const byName = new Map(defs.map((def) => [def.name, def]));
+    const created = resultJson(await byName.get("create_book")!.handler({
+      name: "generations-summary",
+    })) as { bookId: string };
+    const managed = books.get(created.bookId);
+    expect(managed.ok).toBe(true);
+    if (!managed.ok) return;
+    const engine = managed.value.engine;
+
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const def = byName.get(name);
+      if (!def) throw new Error(`Missing ${name}`);
+      return await withBookContext(
+        { bookId: created.bookId, engine },
+        () => def.handler({ book_id: created.bookId, ...args }),
+      );
+    };
+
+    const notebookId = (resultJson(await invoke("list_notebooks", {})) as Array<{ id: string }>)[0]!.id;
+    const cell = resultJson(await invoke("create_notebook_cell", {
+      notebook_id: notebookId,
+      cell: {
+        type: "generate_image",
+        label: "generate-image-01",
+        slot: { row: 0, column: 0 },
+        prompt: "a cat dances",
+      },
+    })) as { id: string };
+
+    const output = await engine.artifacts.create("image", "gen-out");
+    expect(output.ok).toBe(true);
+    if (!output.ok) return;
+
+    const first = await engine.generations.record({
+      notebookId,
+      cellId: cell.id,
+      tool: "generate_seedream_image",
+      runId: "run-1",
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await engine.generations.record({
+      notebookId,
+      cellId: cell.id,
+      tool: "generate_seedream_image",
+      runId: "run-2",
+    });
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    const completed = await engine.generations.update(second.value.generationId, {
+      status: "completed",
+      outputArtifactId: output.value.artifactId,
+    });
+    expect(completed.ok).toBe(true);
+
+    const details = resultJson(await invoke("get_notebook_cell_details", {
+      notebook_id: notebookId,
+      cell_id: cell.id,
+    })) as {
+      generations: {
+        count: number;
+        latestStatus: string | null;
+        artifactIds: string[];
+      };
+    };
+    expect(details.generations.count).toBe(2);
+    expect(details.generations.latestStatus).toBe("completed");
+    expect(details.generations.artifactIds).toEqual([output.value.artifactId]);
+
+    const prompt = resultJson(await invoke("create_notebook_cell", {
+      notebook_id: notebookId,
+      cell: {
+        type: "prompt",
+        label: "prompt-01",
+        slot: { row: 0, column: 1 },
+        prompt: "a cat dances",
+      },
+    })) as { id: string };
+    const emptyDetails = resultJson(await invoke("get_notebook_cell_details", {
+      notebook_id: notebookId,
+      cell_id: prompt.id,
+    })) as {
+      generations: { count: number; latestStatus: string | null };
+    };
+    expect(emptyDetails.generations.count).toBe(0);
+    expect(emptyDetails.generations.latestStatus).toBeNull();
+  });
 });

@@ -121,7 +121,7 @@ describe("Dancing workflow fixture", () => {
       type: "generate_video",
       operation: "motion_control",
       tool: "generate_kie_kling_3_0_motion_control",
-      model: "KlingMotionControlRequestSchema",
+      model: "kling-3.0/motion-control",
     }));
     expect(motion?.inputs).toEqual(expect.objectContaining({
       generationSettings: {

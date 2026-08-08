@@ -1052,7 +1052,7 @@ describe('v2 notebook domain tools', () => {
       stages: Array<{ model: string; input: { generation_tool: string } }>
     }
     expect(switched.stages[0]).toMatchObject({
-      model: 'Wan27ImageRequestSchema',
+      model: 'wan/2-7-image',
       input: { generation_tool: 'generate_kie_wan_2_7_text_to_image' },
     })
     resultJson(await invoke('revise_notebook_generation_plan', {
