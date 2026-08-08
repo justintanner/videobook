@@ -5,7 +5,7 @@ import type {
   NotebookDocument,
   NotebookGridSlot,
 } from 'videobook-engine'
-import { resolveGeneratedVideoArtifact } from 'videobook-engine'
+import { resolveGeneratedVideoArtifact } from 'videobook-engine/notebook-media-artifact'
 import {
   notebookCellTag,
   resolveNotebookCellReference,

@@ -3,7 +3,7 @@ import type {
   NotebookDocument,
   NotebookGridSlot,
 } from 'videobook-engine'
-import { resolveNotebookCellArtifactId } from 'videobook-engine'
+import { resolveNotebookCellArtifactId } from 'videobook-engine/notebook-media-artifact'
 import {
   nextNotebookHorizontalGenerationSlot,
   nextNotebookVideoGenerationSlot,
