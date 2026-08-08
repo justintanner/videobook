@@ -52,6 +52,23 @@ describe("normalizeChatTimestampParams", () => {
       stretch_factor: 1.5,
     });
   });
+
+  it("normalizes extract_frame timestamp strings to seconds", () => {
+    expect(normalizeChatTimestampParams("extract_frame", {
+      asset_id: "vid-frankenstein",
+      timestamp: "1:30",
+    })).toEqual({
+      asset_id: "vid-frankenstein",
+      timestamp: 90,
+    });
+    expect(normalizeChatTimestampParams("extract_frame", {
+      asset_id: "vid-frankenstein",
+      timestamp: 12,
+    })).toEqual({
+      asset_id: "vid-frankenstein",
+      timestamp: 12,
+    });
+  });
 });
 
 // Per-test createTestClient + create_project under parallel test load was

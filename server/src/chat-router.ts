@@ -70,6 +70,7 @@ const TIMESTAMP_PARAMS: Record<string, string[]> = {
   download_video: ["start_time", "end_time"],
   split_video: ["chunk_a_end", "chunk_b_start"],
   extract_video_clip: ["start_time", "end_time"],
+  extract_frame: ["timestamp"],
   timewarp_video: ["start_seconds", "end_seconds"],
 };
 
@@ -228,7 +229,7 @@ Parameter guidelines:
 - Use the current notebook ID for notebook_id. Resolve notebook addresses through the supplied notebook context and use cell UUIDs for cell ID parameters
 - When the user wants a first clip of a stated length plus the remaining/rest/remainder, use split_video with chunk_a_end set to that length and omit chunk_b_start
 - When the user asks to cut, extract, or create a new clip from a start time to an end time, use extract_video_clip; use trim_video only when the existing source should be changed in place
-- For timestamps (trim_start, trim_end, cut_start, cut_end, chunk_a_end, chunk_b_start, start_time, end_time, start_seconds, end_seconds): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
+- For timestamps (trim_start, trim_end, cut_start, cut_end, chunk_a_end, chunk_b_start, start_time, end_time, start_seconds, end_seconds, timestamp): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
 - For timewarp_video: stretch_factor is a duration multiplier; values above 1 slow and lengthen the selected picture, while values below 1 accelerate and shorten it
 - For sync_video_to_audio: anchors is an ordered array. Each anchor has video_seconds plus exactly one target: audio_seconds for an explicit audio time or audio_cue for transcript words. Convert nested timestamp values to seconds and preserve audio_cue text exactly. The original audio stays fixed; only the picture is retimed
 - Keep generation prompts short, concrete, and role-based. Prefer compact clauses such as "scene @a5, character @a1, fluffy kitten standing" and do not add a preamble such as "Create an image of"
