@@ -548,14 +548,85 @@ function NotebookCellMedia({
   )
 }
 
+function inspectorArtifactAssets(
+  asset: NotebookCellInspectorAsset | undefined,
+  cellAssets: ReadonlyMap<string, NotebookCellInspectorAsset> | undefined,
+  versionAssets: readonly NotebookCellInspectorAsset[] | undefined,
+): ReadonlyMap<string, NotebookCellInspectorAsset> {
+  const assets = new Map<string, NotebookCellInspectorAsset>()
+  for (const versionAsset of versionAssets ?? []) {
+    assets.set(versionAsset.artifactId, versionAsset)
+  }
+  for (const cellAsset of cellAssets?.values() ?? []) {
+    assets.set(cellAsset.artifactId, cellAsset)
+  }
+  if (asset) assets.set(asset.artifactId, asset)
+  return assets
+}
+
+function DoltArtifactExpansion({
+  asset,
+}: {
+  asset: NotebookCellInspectorAsset
+}) {
+  const thumbnailUrl = asset.thumbnailUrl
+    ?? (asset.type === 'image' ? asset.mediaUrl : null)
+  const videoUrl = !thumbnailUrl && (asset.type === 'video' || asset.type === 'final')
+    ? asset.mediaUrl
+    : null
+
+  return (
+    <div className="inspector-dolt-artifact">
+      <span className="inspector-source-thumb" aria-hidden="true">
+        {thumbnailUrl ? (
+          <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" />
+        ) : videoUrl ? (
+          <video src={videoUrl} muted playsInline preload="metadata" />
+        ) : asset.type === 'audio' ? (
+          <AudioWaveform size={16} />
+        ) : (
+          <Film size={16} />
+        )}
+      </span>
+      <div className="inspector-dolt-artifact-facts">
+        <strong>{asset.type.replaceAll('_', ' ').toUpperCase()}</strong>
+        <NotebookMediaMetadata
+          className="inspector-dolt-artifact-metadata"
+          width={asset.width}
+          height={asset.height}
+          durationSeconds={asset.duration}
+        />
+      </div>
+      {asset.mediaUrl && (
+        <a href={asset.mediaUrl} target="_blank" rel="noreferrer">
+          Open media
+        </a>
+      )}
+    </div>
+  )
+}
+
 function DoltCellSource({
   notebookId,
   cell,
+  artifactAssets,
 }: {
   notebookId: string
   cell: NotebookCell
+  artifactAssets: ReadonlyMap<string, NotebookCellInspectorAsset>
 }) {
   const rows = doltCellRows(notebookId, cell)
+  const [expandedColumns, setExpandedColumns] = useState<ReadonlySet<string>>(
+    new Set(),
+  )
+  const toggleColumn = (column: string) => {
+    setExpandedColumns((current) => {
+      const next = new Set(current)
+      if (next.has(column)) next.delete(column)
+      else next.add(column)
+      return next
+    })
+  }
 
   return (
     <section className="inspector-source inspector-dolt-source">
@@ -591,6 +662,45 @@ function DoltCellSource({
                       />
                     </td>
                   </tr>
+                </Fragment>
+              )
+            }
+
+            const artifactAsset = displayValue.kind === 'raw'
+              && typeof displayValue.value === 'string'
+              ? artifactAssets.get(displayValue.value)
+              : undefined
+
+            if (artifactAsset) {
+              const expanded = expandedColumns.has(row.column)
+              return (
+                <Fragment key={row.column}>
+                  <tr
+                    className={expanded
+                      ? 'inspector-dolt-artifact-meta'
+                      : undefined}
+                  >
+                    <th scope="row">{row.column}</th>
+                    <td>{row.type}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="inspector-dolt-artifact-toggle"
+                        aria-expanded={expanded}
+                        onClick={() => toggleColumn(row.column)}
+                      >
+                        <code>{artifactAsset.artifactId}</code>
+                        <ChevronDown size={12} aria-hidden="true" />
+                      </button>
+                    </td>
+                  </tr>
+                  {expanded && (
+                    <tr className="inspector-dolt-artifact-value">
+                      <td colSpan={3}>
+                        <DoltArtifactExpansion asset={artifactAsset} />
+                      </td>
+                    </tr>
+                  )}
                 </Fragment>
               )
             }
@@ -2514,7 +2624,16 @@ export function NotebookCellInspector({
   if (sourceVisible) {
     return (
       <div className="inspector-body inspector-source-body">
-        <DoltCellSource notebookId={notebookId} cell={cell} />
+        <DoltCellSource
+          key={cell.id}
+          notebookId={notebookId}
+          cell={cell}
+          artifactAssets={inspectorArtifactAssets(
+            asset,
+            cellAssets,
+            versionAssets,
+          )}
+        />
       </div>
     )
   }

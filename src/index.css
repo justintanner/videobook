@@ -3017,6 +3017,90 @@ textarea:focus-visible {
   border-bottom: 0;
 }
 
+.inspector-dolt-artifact-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inspector-dolt-artifact-toggle svg {
+  flex-shrink: 0;
+  align-self: center;
+  color: #5f9173;
+  transition: transform 0.15s ease;
+}
+
+.inspector-dolt-artifact-toggle[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.inspector-dolt-artifact-toggle:hover code,
+.inspector-dolt-artifact-toggle:focus-visible code {
+  color: #d9efe2;
+}
+
+.inspector-dolt-artifact-meta th,
+.inspector-dolt-artifact-meta td {
+  border-bottom: 0;
+}
+
+.inspector-dolt-table .inspector-dolt-artifact-value td {
+  width: auto;
+  padding: 2px 10px 14px;
+  background: rgba(25, 68, 42, 0.08);
+}
+
+.inspector-dolt-artifact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.inspector-dolt-artifact .inspector-source-thumb {
+  width: 72px;
+  height: 48px;
+}
+
+.inspector-dolt-artifact-facts {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.inspector-dolt-artifact-facts strong {
+  color: #7fd6a4;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+
+.inspector-dolt-artifact-metadata {
+  padding: 3px 5px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.inspector-dolt-artifact > a {
+  margin-left: auto;
+  color: #7eb494;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.inspector-dolt-artifact > a:hover,
+.inspector-dolt-artifact > a:focus-visible {
+  color: #d9efe2;
+}
+
 .inspector-field-pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
