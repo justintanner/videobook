@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   resolveGeneratedVideoArtifact,
@@ -66,7 +68,7 @@ describe('directional canvas placement', () => {
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
-  it('stacks video tiles vertically and image work horizontally near origin', () => {
+  it('packs generation waves under the image band and frame work beside sources', () => {
     const images = [
       { type: 'image', slot: { row: 0, column: 0 } },
       { type: 'image', slot: { row: 0, column: 1 } },
@@ -78,27 +80,32 @@ describe('directional canvas placement', () => {
       tile: { row: 1, column: 0 },
       output: { row: 2, column: 0 },
     })
+    // Sibling generation joins the wave row beside the first tile, its
+    // output directly beneath — never drifting right of the sources band.
     const second = allocateNotebookVideoGenerationSlots([
       ...images,
       { type: 'generate_video', slot: first.tile },
       { type: 'video', slot: first.output },
     ])
-    expect(second.tile.column).toBe(0)
-    expect(second.tile.row).toBeGreaterThan(first.output.row)
-    expect(second.output.column).toBe(0)
-    expect(second.tile.column).toBeLessThan(9)
+    expect(second).toEqual({
+      tile: { row: 1, column: 1 },
+      output: { row: 2, column: 1 },
+    })
 
     expect(nextNotebookHorizontalGenerationSlot(
       [{ type: 'video', slot: { row: 2, column: 0 } }],
       [{ row: 2, column: 0 }],
     )).toEqual({ row: 2, column: 1 })
 
-    expect(nextNotebookVideoGenerationSlot([
-      { type: 'generate_video', slot: { row: 0, column: 0 } },
-      { type: 'video', slot: { row: 1, column: 0 } },
-      { type: 'generate_video', slot: { row: 2, column: 0 } },
-      { type: 'video', slot: { row: 3, column: 0 } },
-    ])).toEqual({ row: 4, column: 0 })
+    // A derived image source starts a lane straight down its own column.
+    expect(nextNotebookVideoGenerationSlot(
+      [
+        { type: 'image', slot: { row: 3, column: 2 } },
+        { type: 'generate_video', slot: { row: 1, column: 0 } },
+        { type: 'video', slot: { row: 2, column: 0 } },
+      ],
+      [{ row: 3, column: 2 }],
+    )).toEqual({ row: 4, column: 2 })
   })
 
   it('creates generate_video with a video output cell directly below', async () => {
@@ -416,6 +423,66 @@ describe('directional canvas placement', () => {
     expect(second.changed).toBe(false)
     expect(second.cell_count).toBe(after.cells.length)
     expect(second.edge_count).toBe(after.edges.length)
+  })
+
+  it('matches the hand-tuned bam default layout (golden fixture)', async () => {
+    const fixture = JSON.parse(readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        'fixtures/bam-canvas-default.json',
+      ),
+      'utf8',
+    )) as {
+      cells: NotebookDocument['cells']
+      edges: NotebookDocument['edges']
+    }
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'bam-golden',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const notebook = value(engine.notebooks.read(engine.notebooks.list()[0]!.id))
+    const document = {
+      ...notebook,
+      cells: fixture.cells,
+      edges: fixture.edges,
+    }
+
+    const relaid = relayoutNotebookDocument(engine, document)
+    const slotByUserAddress = new Map(fixture.cells.map((cell) => [
+      `@${String.fromCharCode(97 + cell.slot.row)}${cell.slot.column + 1}`,
+      cell.id,
+    ]))
+    const relaidAddress = (userAddress: string): string => {
+      const cellId = slotByUserAddress.get(userAddress)!
+      const cell = relaid.cells.find((candidate) => candidate.id === cellId)!
+      return `@${String.fromCharCode(97 + cell.slot.row)}${cell.slot.column + 1}`
+    }
+
+    // 14 of 18 cells reproduce the hand layout exactly.
+    for (const stable of [
+      '@a1', '@a2', '@a3', '@a4',
+      '@b1', '@b2', '@b3',
+      '@c1', '@c2', '@c3', '@c4',
+      '@d3', '@e3', '@f3',
+    ]) {
+      expect(relaidAddress(stable), `cell placed at ${stable} by hand`)
+        .toBe(stable)
+    }
+    // The second extract chain follows the chain-1 convention (extract in
+    // the source video's row, frame image continuing the lane below it)
+    // instead of the hand layout's one-row tuck (@e4/@e5/@f5/@g5).
+    expect(relaidAddress('@e4')).toBe('@f4')
+    expect(relaidAddress('@e5')).toBe('@g3')
+    expect(relaidAddress('@f5')).toBe('@h3')
+    expect(relaidAddress('@g5')).toBe('@i3')
+
+    const again = relayoutNotebookDocument(engine, relaid)
+    expect(notebookDocumentsEqual(relaid, again)).toBe(true)
   })
 
   it('does not treat completed generate_video with output-cell artifact as stale', async () => {

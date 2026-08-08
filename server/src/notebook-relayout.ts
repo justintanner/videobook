@@ -8,6 +8,7 @@ import {
   nearestOriginNotebookGridSlot,
   nextHorizontalSlotFrom,
   nextVerticalSlotFrom,
+  nextWaveTileSlot,
   NOTEBOOK_GRID_COLUMN_COUNT,
   NOTEBOOK_GRID_ROW_COUNT,
 } from "videobook-engine";
@@ -138,46 +139,86 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
     claim(cell.id, nearestOriginNotebookGridSlot(occupied));
   }
 
-  for (const tile of cells) {
-    if (tile.type !== "generate_video") continue;
-    const tileSlot = nextVerticalSlotFrom({ row: 0, column: 0 }, occupied);
-    claim(tile.id, tileSlot);
-    const output = findGenerateVideoOutput(document, tile.id);
-    if (output) {
-      claim(
-        output.outputCell.id,
-        nextVerticalSlotFrom(slotBelow(tileSlot), occupied),
-      );
+  // Wave/lane placement, dependency-ordered so a generation lands below its
+  // sources and a frame chain continues its source video's column. Passes
+  // repeat until nothing new can be placed (unplaceable cells fall through
+  // to the catch-all).
+  function cellSources(target: NotebookCell): NotebookCell[] | null {
+    const sources: NotebookCell[] = [];
+    for (const edge of document.edges) {
+      if (edge.target !== target.id) continue;
+      const source = document.cells.find((cell) => cell.id === edge.source);
+      if (!source) continue;
+      sources.push(source);
     }
+    return sources.every((source) => newSlots.has(source.id))
+      ? sources
+      : null;
   }
 
-  for (const action of cells) {
-    if (action.type !== "extract_frame") continue;
-    const sourceEdge = document.edges.find((edge) =>
-      edge.target === action.id && edge.targetInput === "video");
-    let anchor: NotebookGridSlot = { row: 0, column: 0 };
-    if (sourceEdge) {
-      const sourceCell = document.cells.find((cell) =>
-        cell.id === sourceEdge.source);
+  const baseImageRow = Math.max(
+    -1,
+    ...cells
+      .filter((cell) => cell.type === "image" && newSlots.has(cell.id))
+      .map((cell) => newSlots.get(cell.id)!.row),
+  );
+
+  let progressed = true;
+  while (progressed) {
+    progressed = false;
+
+    for (const tile of cells) {
+      if (tile.type !== "generate_video" || newSlots.has(tile.id)) continue;
+      const sources = cellSources(tile);
+      if (!sources) continue;
+      const sourceSlots = sources.map((source) => newSlots.get(source.id)!);
+      const waveRow = sourceSlots.length > 0
+        ? Math.max(...sourceSlots.map((slot) => slot.row)) + 1
+        : baseImageRow + 1;
+      const baseRowSources = sourceSlots.length > 0
+        && sourceSlots.every((slot) => slot.row === 0);
+      const startColumn = sourceSlots.length === 0 || baseRowSources
+        ? 0
+        : sourceSlots[0].column;
+      const tileSlot = nextWaveTileSlot(waveRow, startColumn, occupied);
+      claim(tile.id, tileSlot);
+      const output = findGenerateVideoOutput(document, tile.id);
+      if (output) {
+        claim(
+          output.outputCell.id,
+          nextVerticalSlotFrom(slotBelow(tileSlot), occupied),
+        );
+      }
+      progressed = true;
+    }
+
+    for (const action of cells) {
+      if (action.type !== "extract_frame" || newSlots.has(action.id)) continue;
+      const sourceEdge = document.edges.find((edge) =>
+        edge.target === action.id && edge.targetInput === "video");
+      const sourceCell = sourceEdge
+        ? document.cells.find((cell) => cell.id === sourceEdge.source)
+        : undefined;
+      let videoSlot: NotebookGridSlot | null = null;
       if (sourceCell?.type === "generate_video") {
         const output = findGenerateVideoOutput(document, sourceCell.id);
-        if (output && newSlots.has(output.outputCell.id)) {
-          anchor = newSlots.get(output.outputCell.id)!;
-        } else if (newSlots.has(sourceCell.id)) {
-          anchor = newSlots.get(sourceCell.id)!;
-        }
-      } else if (sourceCell && newSlots.has(sourceCell.id)) {
-        anchor = newSlots.get(sourceCell.id)!;
+        const anchorCell = output?.outputCell ?? sourceCell;
+        videoSlot = newSlots.get(anchorCell.id) ?? null;
+      } else if (sourceCell) {
+        videoSlot = newSlots.get(sourceCell.id) ?? null;
       }
-    }
-    const actionSlot = nextHorizontalSlotFrom(slotRight(anchor), occupied);
-    claim(action.id, actionSlot);
-    const frameOutput = findExtractFrameImageOutput(document, action.id);
-    if (frameOutput) {
-      claim(
-        frameOutput.outputCell.id,
-        nextHorizontalSlotFrom(slotRight(actionSlot), occupied),
-      );
+      if (sourceCell && !videoSlot) continue;
+      const anchor = videoSlot ?? { row: 0, column: 0 };
+      const actionSlot = nextHorizontalSlotFrom(slotRight(anchor), occupied);
+      claim(action.id, actionSlot);
+      const frameOutput = findExtractFrameImageOutput(document, action.id);
+      if (frameOutput) {
+        claim(
+          frameOutput.outputCell.id,
+          nextVerticalSlotFrom(slotBelow(anchor), occupied),
+        );
+      }
+      progressed = true;
     }
   }
 

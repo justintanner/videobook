@@ -5,6 +5,7 @@ import {
   nearestOriginNotebookGridSlot,
   nextHorizontalSlotFrom,
   nextVerticalSlotFrom,
+  nextWaveTileSlot,
   NOTEBOOK_GRID_COLUMN_COUNT,
   NOTEBOOK_GRID_ROW_COUNT,
   notebookGridAddress,
@@ -196,21 +197,32 @@ export {
   nearestOriginNotebookGridSlot,
   nextHorizontalSlotFrom,
   nextVerticalSlotFrom,
+  nextWaveTileSlot,
 }
 
 /**
- * Vertical stack for generate_video tiles: scan downward preferring low
- * columns near @a1 / optional source anchors.
+ * Wave/lane placement for generate_video tiles. Sibling generations sourced
+ * from the base image row pack left-to-right in the row below their sources;
+ * generations fed by a derived image continue that image's column lane. Each
+ * tile keeps the slot beneath it free for its video output cell.
  */
 export function nextNotebookVideoGenerationSlot(
   cells: ReadonlyArray<{ type: string; slot: NotebookGridSlot }>,
   sourceSlots: readonly NotebookGridSlot[] = [],
 ): NotebookGridSlot {
   const occupied = cells.map((cell) => cell.slot)
-  const anchorColumn = sourceSlots.length > 0
-    ? Math.min(...sourceSlots.map((slot) => slot.column))
-    : 0
-  return nextVerticalSlotFrom({ row: 0, column: anchorColumn }, occupied)
+  if (sourceSlots.length > 0) {
+    const waveRow = Math.max(...sourceSlots.map((slot) => slot.row)) + 1
+    const baseRowSources = sourceSlots.every((slot) => slot.row === 0)
+    const startColumn = baseRowSources ? 0 : sourceSlots[0].column
+    return nextWaveTileSlot(waveRow, startColumn, occupied)
+  }
+  let lastImageRow = -1
+  for (const cell of cells) {
+    if (!isNotebookImageCellType(cell.type)) continue
+    if (cell.slot.row > lastImageRow) lastImageRow = cell.slot.row
+  }
+  return nextWaveTileSlot(lastImageRow + 1, 0, occupied)
 }
 
 /**

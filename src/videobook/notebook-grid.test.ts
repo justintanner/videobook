@@ -152,23 +152,35 @@ describe('notebook grid', () => {
     expect(() => nextNotebookGridSlot(full)).toThrow('Notebook grid is full')
   })
 
-  it('places video generation cells vertically near column 1 without drifting right', () => {
+  it('packs generation waves horizontally with room for outputs below', () => {
+    // Row below the image band, skipping occupied columns.
     expect(nextNotebookVideoGenerationSlot([
       { type: 'image', slot: { row: 0, column: 0 } },
       { type: 'image', slot: { row: 0, column: 2 } },
       { type: 'prompt', slot: { row: 1, column: 0 } },
-    ])).toEqual({ row: 2, column: 0 })
+    ])).toEqual({ row: 1, column: 1 })
 
+    // Sibling generation joins the wave row beside the first tile.
     expect(nextNotebookVideoGenerationSlot([
       { type: 'image', slot: { row: 0, column: 0 } },
       { type: 'generate_video', slot: { row: 1, column: 0 } },
       { type: 'video', slot: { row: 2, column: 0 } },
-    ])).toEqual({ row: 3, column: 0 })
+    ])).toEqual({ row: 1, column: 1 })
 
-    expect(nextNotebookVideoGenerationSlot([
-      { type: 'prompt', slot: { row: 0, column: 0 } },
-      { type: 'generate_video', slot: { row: 1, column: 0 } },
-    ])).toEqual({ row: 2, column: 0 })
+    // Base-row sources pack the wave from column 1.
+    expect(nextNotebookVideoGenerationSlot(
+      [
+        { type: 'image', slot: { row: 0, column: 2 } },
+        { type: 'image', slot: { row: 0, column: 3 } },
+      ],
+      [{ row: 0, column: 2 }, { row: 0, column: 3 }],
+    )).toEqual({ row: 1, column: 0 })
+
+    // A derived image source starts a lane in its own column.
+    expect(nextNotebookVideoGenerationSlot(
+      [{ type: 'image', slot: { row: 3, column: 2 } }],
+      [{ row: 3, column: 2 }],
+    )).toEqual({ row: 4, column: 2 })
 
     const first = allocateNotebookVideoGenerationSlots([])
     expect(first).toEqual({
@@ -180,8 +192,8 @@ describe('notebook grid', () => {
       { type: 'video', slot: first.output },
     ])
     expect(second).toEqual({
-      tile: { row: 2, column: 0 },
-      output: { row: 3, column: 0 },
+      tile: { row: 0, column: 1 },
+      output: { row: 1, column: 1 },
     })
   })
 

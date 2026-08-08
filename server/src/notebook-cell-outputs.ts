@@ -150,6 +150,23 @@ export function findExtractFrameImageOutput(
   return null;
 }
 
+function extractFrameSourceVideoSlot(
+  document: NotebookDocument,
+  extractFrame: NotebookCell,
+): NotebookGridSlot | null {
+  const sourceEdge = document.edges.find((edge) =>
+    edge.target === extractFrame.id && edge.targetInput === "video");
+  if (!sourceEdge) return null;
+  const sourceCell = document.cells.find((cell) =>
+    cell.id === sourceEdge.source);
+  if (!sourceCell) return null;
+  if (sourceCell.type === "generate_video") {
+    const output = findGenerateVideoOutputCell(document, sourceCell.id);
+    return output ? output.outputCell.slot : sourceCell.slot;
+  }
+  return sourceCell.slot;
+}
+
 export function ensureExtractFrameImageOutput(
   engine: Engine,
   document: NotebookDocument,
@@ -196,16 +213,23 @@ export function ensureExtractFrameImageOutput(
     };
   }
   const occupied = document.cells.map((cell) => cell.slot);
-  const outputAnchor: NotebookGridSlot = {
+  // The frame image continues the lane: directly below the source video cell
+  // (resolving generate_video sources through their output video cell), so the
+  // next generation it feeds stacks beneath it. Fallback: right of the action.
+  const sourceVideoSlot = extractFrameSourceVideoSlot(document, extractFrame);
+  const horizontalAnchor: NotebookGridSlot = {
     row: extractFrame.slot.row,
     column: extractFrame.slot.column + 1 < NOTEBOOK_GRID_COLUMN_COUNT
       ? extractFrame.slot.column + 1
       : extractFrame.slot.column,
   };
+  const outputSlot = sourceVideoSlot
+    ? nextVerticalSlotFrom(slotDirectlyBelow(sourceVideoSlot), occupied)
+    : nextHorizontalSlotFrom(horizontalAnchor, occupied);
   const outputCell = engine.notebooks.createCell({
     type: "image",
     label: outputFrameLabel(extractFrame, selection),
-    slot: nextHorizontalSlotFrom(outputAnchor, occupied),
+    slot: outputSlot,
     inputs: extractFrameOutputInputs(
       { ...extractFrame, inputs: { state: "pending" } },
       extractFrame.id,

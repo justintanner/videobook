@@ -1,0 +1,402 @@
+{
+  "description": "Hand-tuned bam canvas arrangement (2026-08-08) — golden reference for wave/lane placement",
+  "cells": [
+    {
+      "id": "019fdc26-e1d4-760f-8d07-45dc243d4712",
+      "type": "image",
+      "slot": {
+        "row": 0,
+        "column": 0
+      },
+      "outputArtifactId": "019fdc26-e186-7725-b6f9-f9fcdc2f394a",
+      "inputs": {
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdc39-c910-70d5-938c-568eaffe77a1",
+      "type": "image",
+      "slot": {
+        "row": 0,
+        "column": 1
+      },
+      "outputArtifactId": "019fdc39-c893-741d-83f6-4b4b25212c6c",
+      "inputs": {
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdc5c-3cd8-7308-8fd7-6a8f13a07a25",
+      "type": "image",
+      "slot": {
+        "row": 0,
+        "column": 2
+      },
+      "outputArtifactId": "019fdc5b-a732-748b-9955-d17726b23f78",
+      "inputs": {
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdef1-502b-71fe-902f-2e196a2519f2",
+      "type": "image",
+      "slot": {
+        "row": 0,
+        "column": 3
+      },
+      "outputArtifactId": "019fdef1-4fb3-70af-83a8-ef33ce05c9e5",
+      "inputs": {
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdeea-4beb-737c-a796-aaabeed067cd",
+      "type": "generate_video",
+      "slot": {
+        "row": 1,
+        "column": 0
+      },
+      "inputs": {
+        "generationMode": "r2v",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "duration": "10"
+        },
+        "providerArtifactId": "019fdeea-c334-766d-9144-a7acc0b15d8c",
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdf5f-c78e-754a-8f8c-02659e026681",
+      "type": "generate_video",
+      "slot": {
+        "row": 1,
+        "column": 1
+      },
+      "inputs": {
+        "generationMode": "r2v",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "duration": "10"
+        },
+        "providerArtifactId": "019fdf60-6946-74bd-b61e-1490c49db835",
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdef2-4347-76ea-88fb-c1fcb7bd1265",
+      "type": "generate_video",
+      "slot": {
+        "row": 1,
+        "column": 2
+      },
+      "inputs": {
+        "generationMode": "default",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "duration": "14",
+          "resolution": "2K"
+        },
+        "providerArtifactId": "019fdef5-de45-746a-afe3-6019a3531c58",
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdfa5-426a-70fc-b9a0-8ba43e2ad7a1",
+      "type": "video",
+      "slot": {
+        "row": 2,
+        "column": 0
+      },
+      "label": "@b1 video",
+      "outputArtifactId": "019fdeea-c334-766d-9144-a7acc0b15d8c",
+      "inputs": {
+        "mediaRole": "generate-video-output",
+        "producerCellId": "019fdeea-4beb-737c-a796-aaabeed067cd",
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdfa5-426a-70fc-b9a0-919c58f23095",
+      "type": "video",
+      "slot": {
+        "row": 2,
+        "column": 1
+      },
+      "label": "@b9 video",
+      "outputArtifactId": "019fdf60-6946-74bd-b61e-1490c49db835",
+      "inputs": {
+        "mediaRole": "generate-video-output",
+        "producerCellId": "019fdf5f-c78e-754a-8f8c-02659e026681",
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdfa5-426a-70fc-b9a0-9a44a7f89cbc",
+      "type": "video",
+      "slot": {
+        "row": 2,
+        "column": 2
+      },
+      "label": "@c1 video",
+      "outputArtifactId": "019fdef5-de45-746a-afe3-6019a3531c58",
+      "inputs": {
+        "mediaRole": "generate-video-output",
+        "producerCellId": "019fdef2-4347-76ea-88fb-c1fcb7bd1265",
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdf33-a1e3-73da-847f-75daa158f753",
+      "type": "extract_frame",
+      "slot": {
+        "row": 2,
+        "column": 3
+      },
+      "label": "Frame at 12s",
+      "outputArtifactId": "019fdf33-a8ae-7088-ba4f-d919e50cad06",
+      "inputs": {
+        "atSeconds": 12,
+        "frameMode": "time",
+        "state": "completed",
+        "timestampSeconds": 12
+      }
+    },
+    {
+      "id": "019fdf33-a1e5-722b-b896-be73e58655dc",
+      "type": "image",
+      "slot": {
+        "row": 3,
+        "column": 2
+      },
+      "label": "Frame at 12s frame at 12s",
+      "outputArtifactId": "019fdf33-a8ae-7088-ba4f-d919e50cad06",
+      "inputs": {
+        "atSeconds": 12,
+        "frameMode": "time",
+        "frameSelectionKey": "019fdef2-4347-76ea-88fb-c1fcb7bd1265:time:12",
+        "mediaRole": "extract-frame-output",
+        "outputVersionArtifactIds": [
+          "019fdf33-a8ae-7088-ba4f-d919e50cad06"
+        ],
+        "producerCellId": "019fdf33-a1e3-73da-847f-75daa158f753",
+        "sourceCellId": "019fdef2-4347-76ea-88fb-c1fcb7bd1265",
+        "state": "completed",
+        "timestampSeconds": 12
+      }
+    },
+    {
+      "id": "019fdf54-25f7-700e-a256-d27b4816a95d",
+      "type": "generate_video",
+      "slot": {
+        "row": 4,
+        "column": 2
+      },
+      "inputs": {
+        "generationMode": "default",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "duration": "4",
+          "resolution": "2K"
+        },
+        "providerArtifactId": "019fdf54-f0a5-7489-b5b8-4cccef49b97f",
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdf5a-c92c-724b-934d-755e3b67d325",
+      "type": "extract_frame",
+      "slot": {
+        "row": 4,
+        "column": 3
+      },
+      "label": "Last frame",
+      "outputArtifactId": "019fdf5a-cd01-7529-90fd-fd5bc170756f",
+      "inputs": {
+        "atSeconds": 4.416666333333333,
+        "frameMode": "last",
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdf5a-c92e-718b-a2d5-f943af549ad3",
+      "type": "image",
+      "slot": {
+        "row": 4,
+        "column": 4
+      },
+      "label": "Last frame last frame",
+      "outputArtifactId": "019fdf5a-cd01-7529-90fd-fd5bc170756f",
+      "inputs": {
+        "atSeconds": 4.416666333333333,
+        "frameMode": "last",
+        "frameSelectionKey": "019fdf54-25f7-700e-a256-d27b4816a95d:last:frame",
+        "mediaRole": "extract-frame-output",
+        "outputVersionArtifactIds": [
+          "019fdf5a-cd01-7529-90fd-fd5bc170756f"
+        ],
+        "producerCellId": "019fdf5a-c92c-724b-934d-755e3b67d325",
+        "sourceCellId": "019fdf54-25f7-700e-a256-d27b4816a95d",
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdfa5-426a-70fc-b9a0-a2d00068a8b2",
+      "type": "video",
+      "slot": {
+        "row": 5,
+        "column": 2
+      },
+      "label": "@c2 video",
+      "outputArtifactId": "019fdf54-f0a5-7489-b5b8-4cccef49b97f",
+      "inputs": {
+        "mediaRole": "generate-video-output",
+        "producerCellId": "019fdf54-25f7-700e-a256-d27b4816a95d",
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdf5b-6649-71aa-a353-b36437831008",
+      "type": "generate_video",
+      "slot": {
+        "row": 5,
+        "column": 4
+      },
+      "inputs": {
+        "generationMode": "default",
+        "generationSettings": {
+          "aspect_ratio": "9:16",
+          "duration": "4",
+          "resolution": "2K"
+        },
+        "providerArtifactId": "019fdf5c-2439-749f-abde-a6475cb88a49",
+        "state": "completed"
+      }
+    },
+    {
+      "id": "019fdfa5-426a-70fc-b9a0-a870f818c39d",
+      "type": "video",
+      "slot": {
+        "row": 6,
+        "column": 4
+      },
+      "label": "@d4 video",
+      "outputArtifactId": "019fdf5c-2439-749f-abde-a6475cb88a49",
+      "inputs": {
+        "mediaRole": "generate-video-output",
+        "producerCellId": "019fdf5b-6649-71aa-a353-b36437831008",
+        "state": "completed"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "019fdeea-bf1f-710b-94a8-7ce934e31d29",
+      "source": "019fdc26-e1d4-760f-8d07-45dc243d4712",
+      "target": "019fdeea-4beb-737c-a796-aaabeed067cd",
+      "targetInput": "image"
+    },
+    {
+      "id": "019fdeea-bf82-7679-9339-f799e6bc7e45",
+      "source": "019fdc39-c910-70d5-938c-568eaffe77a1",
+      "target": "019fdeea-4beb-737c-a796-aaabeed067cd",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "019fdeea-bfc3-7382-bb21-3b04514ed392",
+      "source": "019fdc5c-3cd8-7308-8fd7-6a8f13a07a25",
+      "target": "019fdeea-4beb-737c-a796-aaabeed067cd",
+      "targetInput": "image_3"
+    },
+    {
+      "id": "019fdef5-da83-701f-b647-305104c66554",
+      "source": "019fdc5c-3cd8-7308-8fd7-6a8f13a07a25",
+      "target": "019fdef2-4347-76ea-88fb-c1fcb7bd1265",
+      "targetInput": "image"
+    },
+    {
+      "id": "019fdef5-dac5-71ea-a31f-0eae37aa6c98",
+      "source": "019fdef1-502b-71fe-902f-2e196a2519f2",
+      "target": "019fdef2-4347-76ea-88fb-c1fcb7bd1265",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "019fdf33-a1e5-722b-b896-c2ec3dc5a5e0",
+      "source": "019fdf33-a1e3-73da-847f-75daa158f753",
+      "target": "019fdf33-a1e5-722b-b896-be73e58655dc",
+      "targetInput": "media"
+    },
+    {
+      "id": "019fdf33-a238-7785-90fc-6a068e1c56e3",
+      "source": "019fdef2-4347-76ea-88fb-c1fcb7bd1265",
+      "target": "019fdf33-a1e3-73da-847f-75daa158f753",
+      "targetInput": "video"
+    },
+    {
+      "id": "019fdf54-ee11-75c5-a8ba-a05fefd41ed8",
+      "source": "019fdf33-a1e5-722b-b896-be73e58655dc",
+      "target": "019fdf54-25f7-700e-a256-d27b4816a95d",
+      "targetInput": "image"
+    },
+    {
+      "id": "019fdf5a-c92e-718b-a2d5-fc3f4f5e5507",
+      "source": "019fdf5a-c92c-724b-934d-755e3b67d325",
+      "target": "019fdf5a-c92e-718b-a2d5-f943af549ad3",
+      "targetInput": "media"
+    },
+    {
+      "id": "019fdf5a-c9b7-728c-81f4-43fa25e0366f",
+      "source": "019fdf54-25f7-700e-a256-d27b4816a95d",
+      "target": "019fdf5a-c92c-724b-934d-755e3b67d325",
+      "targetInput": "video"
+    },
+    {
+      "id": "019fdf5c-2160-7379-aead-072e99337b42",
+      "source": "019fdf5a-c92e-718b-a2d5-f943af549ad3",
+      "target": "019fdf5b-6649-71aa-a353-b36437831008",
+      "targetInput": "image"
+    },
+    {
+      "id": "019fdf60-6556-7773-9448-e01247806a7a",
+      "source": "019fdc5c-3cd8-7308-8fd7-6a8f13a07a25",
+      "target": "019fdf5f-c78e-754a-8f8c-02659e026681",
+      "targetInput": "image"
+    },
+    {
+      "id": "019fdf60-659f-70fb-9ca0-0f99c64e53d4",
+      "source": "019fdef1-502b-71fe-902f-2e196a2519f2",
+      "target": "019fdf5f-c78e-754a-8f8c-02659e026681",
+      "targetInput": "image_2"
+    },
+    {
+      "id": "019fdfa5-426a-70fc-b9a0-8de15c7c5cf2",
+      "source": "019fdeea-4beb-737c-a796-aaabeed067cd",
+      "target": "019fdfa5-426a-70fc-b9a0-8ba43e2ad7a1",
+      "targetInput": "media"
+    },
+    {
+      "id": "019fdfa5-426a-70fc-b9a0-97630081e79c",
+      "source": "019fdf5f-c78e-754a-8f8c-02659e026681",
+      "target": "019fdfa5-426a-70fc-b9a0-919c58f23095",
+      "targetInput": "media"
+    },
+    {
+      "id": "019fdfa5-426a-70fc-b9a0-9cea03ac909d",
+      "source": "019fdef2-4347-76ea-88fb-c1fcb7bd1265",
+      "target": "019fdfa5-426a-70fc-b9a0-9a44a7f89cbc",
+      "targetInput": "media"
+    },
+    {
+      "id": "019fdfa5-426a-70fc-b9a0-a7216afc25a1",
+      "source": "019fdf54-25f7-700e-a256-d27b4816a95d",
+      "target": "019fdfa5-426a-70fc-b9a0-a2d00068a8b2",
+      "targetInput": "media"
+    },
+    {
+      "id": "019fdfa5-426a-70fc-b9a0-acfd8bbf0b6c",
+      "source": "019fdf5b-6649-71aa-a353-b36437831008",
+      "target": "019fdfa5-426a-70fc-b9a0-a870f818c39d",
+      "targetInput": "media"
+    }
+  ]
+}
