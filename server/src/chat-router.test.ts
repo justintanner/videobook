@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Engine } from "videobook-engine";
 import {
+  AUTO_APPLY_TOOL_NAMES,
   CHAT_TOOL_ALIASES,
   NESTED_TIMESTAMP_PARAMS,
   TIMESTAMP_PARAMS,
@@ -125,6 +126,30 @@ describe("chat routing catalog", () => {
     expect(effectForTool("download_video", "action")).toBe("mutation");
     expect(effectForTool("delete_notebook", "action")).toBe("mutation");
     expect(effectForTool("generate_image", "generation")).toBe("generation");
+  });
+
+  it("marks free frame extraction tools for auto-apply only", () => {
+    const tools = buildRoutableTools(definitions);
+    expect(AUTO_APPLY_TOOL_NAMES.has("extract_first_frame")).toBe(true);
+    expect(AUTO_APPLY_TOOL_NAMES.has("extract_last_frame")).toBe(true);
+    expect(AUTO_APPLY_TOOL_NAMES.has("extract_frame")).toBe(true);
+    expect(getRoutableTool(tools, "extract_first_frame")).toMatchObject({
+      effect: "mutation",
+      autoApply: true,
+    });
+    expect(getRoutableTool(tools, "extract_last_frame")).toMatchObject({
+      effect: "mutation",
+      autoApply: true,
+    });
+    expect(getRoutableTool(tools, "extract_frame")).toMatchObject({
+      effect: "mutation",
+      autoApply: true,
+    });
+    expect(getRoutableTool(tools, "trim_video")?.autoApply).toBe(false);
+    expect(getRoutableTool(tools, "split_video")?.autoApply).toBe(false);
+    expect(
+      getRoutableTool(tools, "generate_kie_minimax_h3_text_to_video")?.autoApply,
+    ).toBe(false);
   });
 
   it("builds a prompt from the live catalog and conversation history", () => {

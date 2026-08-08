@@ -364,7 +364,7 @@ type ChatActionPlan = {
   summary: string
   effect: 'mutation' | 'generation'
   confirmation: {
-    required: true
+    required: boolean
     reason: string
   }
 }
@@ -645,6 +645,7 @@ function asChatActionPlan(value: unknown): ChatActionPlan {
   const summary = asString(item?.summary)
   const effect = asString(item?.effect)
   const reason = asString(confirmation?.reason)
+  const required = confirmation?.required
   if (
     kind !== 'chat-action-plan'
     || !planId
@@ -655,7 +656,7 @@ function asChatActionPlan(value: unknown): ChatActionPlan {
     || !params
     || !summary
     || (effect !== 'mutation' && effect !== 'generation')
-    || confirmation?.required !== true
+    || typeof required !== 'boolean'
     || !reason
   ) throw new Error('The server returned an invalid chat action plan')
   return {
@@ -669,7 +670,7 @@ function asChatActionPlan(value: unknown): ChatActionPlan {
     message,
     summary,
     effect,
-    confirmation: { required: true, reason },
+    confirmation: { required, reason },
   }
 }
 
@@ -5645,9 +5646,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         throw new Error(`Frame extraction for ${sourceAddress} was superseded by a newer run`)
       }
       selectCanvasCell(run.outputCellId ?? actionCellId)
+      const successMessage = command.frameMode === 'time'
+        ? `Extracted the frame at ${command.timestampSeconds ?? 0}s of ${sourceAddress}`
+        : `Extracted the ${command.frameMode} frame of ${sourceAddress}`
       return {
         ok: true,
-        message: `Extracted the ${command.frameMode} frame of ${sourceAddress}`,
+        message: successMessage,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -5657,6 +5661,35 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } finally {
       if (actionCellId) setCellQueued(actionCellId, false)
       setBusy(false)
+    }
+  }
+
+  const runNotebookFrameCommandNow = async (
+    command: NotebookFrameCommand,
+  ): Promise<ComposerOutcome> => {
+    if (!bookId || !notebook) {
+      return { ok: false, message: 'Open a notebook before extracting a frame.' }
+    }
+    try {
+      const currentNotebook = asNotebook(await call('get_notebook', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+      }))
+      if (!currentNotebook) {
+        throw new Error('The server returned an invalid notebook')
+      }
+      resolveNotebookFrameSource(
+        currentNotebook,
+        command.sourceReference,
+      )
+      setPendingCommandPlan(null)
+      setPendingChatAction(null)
+      return await executeNotebookFrameCommand(command, currentNotebook)
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      }
     }
   }
 
@@ -5678,6 +5711,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         currentNotebook,
         command.sourceReference,
       )
+      const frameSummary = command.frameMode === 'time'
+        ? `Extract the frame at ${command.timestampSeconds ?? 0}s from ${notebookGridTag(source.slot)}`
+        : `Extract the ${command.frameMode} frame from ${notebookGridTag(source.slot)}`
       setPendingCommandPlan(null)
       setPendingChatAction({
         kind: 'frame',
@@ -5688,7 +5724,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }],
         notebookId: currentNotebook.id,
         reason: 'This request creates and runs an Extract Frame cell',
-        summary: `Extract the ${command.frameMode} frame from ${notebookGridTag(source.slot)}`,
+        summary: frameSummary,
       })
       return applyReadyOutcome('Frame extraction ready to apply')
     } catch (error) {
@@ -5847,10 +5883,33 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!sourceReference) {
         return { ok: false, message: 'Sol did not select a video source.' }
       }
-      return await previewNotebookFrameCommand({
+      const command: NotebookFrameCommand = {
         frameMode: plan.tool === 'extract_last_frame' ? 'last' : 'first',
         sourceReference,
-      })
+      }
+      if (plan.confirmation.required === false) {
+        return await runNotebookFrameCommandNow(command)
+      }
+      return await previewNotebookFrameCommand(command)
+    }
+    if (plan.tool === 'extract_frame') {
+      const sourceReference = routedAssetReference(plan.params.asset_id)
+      const timestampSeconds = asNumber(plan.params.timestamp)
+      if (!sourceReference || timestampSeconds === null || timestampSeconds < 0) {
+        return {
+          ok: false,
+          message: 'Sol did not select a valid video source and timestamp.',
+        }
+      }
+      const command: NotebookFrameCommand = {
+        frameMode: 'time',
+        sourceReference,
+        timestampSeconds,
+      }
+      if (plan.confirmation.required === false) {
+        return await runNotebookFrameCommandNow(command)
+      }
+      return await previewNotebookFrameCommand(command)
     }
     if (plan.tool === 'split_video') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
@@ -8563,7 +8622,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         ? `${pendingChatAction.plan.action.kind} notebook cell`
                         : pendingChatAction.kind === 'split'
                           ? 'Split video'
-                          : `Extract ${pendingChatAction.command.frameMode} frame`}</strong>
+                          : pendingChatAction.command.frameMode === 'time'
+                            ? `Extract frame at ${pendingChatAction.command.timestampSeconds ?? 0}s`
+                            : `Extract ${pendingChatAction.command.frameMode} frame`}</strong>
                     {pendingChatAction.kind === 'routed' && (
                       <>
                         <small>{pendingChatAction.plan.routedTool}</small>

@@ -62,7 +62,7 @@ type ChatActionPlan = {
   summary: string;
   effect: "mutation" | "generation";
   confirmation: {
-    required: true;
+    required: boolean;
     reason: string;
   };
 };
@@ -79,7 +79,7 @@ const chatActionPlanSchema = z.object({
   summary: z.string().min(1),
   effect: z.enum(["mutation", "generation"]),
   confirmation: z.object({
-    required: z.literal(true),
+    required: z.boolean(),
     reason: z.string().min(1),
   }),
 });
@@ -426,6 +426,9 @@ async function applyChatActionPlan(
   return result;
 }
 
+export { chatActionPlanSchema };
+export type { ChatActionPlan };
+
 export function chatDef(fs: Engine): ToolDef {
   return {
     name: "chat",
@@ -636,6 +639,7 @@ export function chatDef(fs: Engine): ToolDef {
         const effect = routableTool.effect;
         const summary = decision.message.trim()
           || `${effect === "generation" ? "Generate" : "Apply"} with ${decision.tool}`;
+        const autoApply = routableTool.autoApply;
         return json({
           kind: "chat-action-plan",
           planId: uuidv7(),
@@ -648,8 +652,10 @@ export function chatDef(fs: Engine): ToolDef {
           summary,
           effect,
           confirmation: {
-            required: true,
-            reason: effect === "generation"
+            required: !autoApply,
+            reason: autoApply
+              ? "Frame extraction is free and only adds a new image cell"
+              : effect === "generation"
               ? "This request creates generated media and may incur provider spend"
               : "This request changes the current book",
           },

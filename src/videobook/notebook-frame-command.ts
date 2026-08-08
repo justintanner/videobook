@@ -7,11 +7,12 @@ import {
   resolveNotebookCellReference,
 } from './notebook-addressing'
 
-export type NotebookFrameMode = 'first' | 'last'
+export type NotebookFrameMode = 'first' | 'last' | 'time'
 
 export type NotebookFrameCommand = {
   frameMode: NotebookFrameMode
   sourceReference: string
+  timestampSeconds?: number
 }
 
 export type NotebookFrameCommandRun = {
@@ -56,8 +57,16 @@ function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
+function normalizedTimestamp(value: unknown): number | null {
+  const timestamp = Number(value)
+  return Number.isFinite(timestamp) && timestamp >= 0
+    ? Math.round(timestamp * 1_000) / 1_000
+    : null
+}
+
 function frameMode(cell: NotebookCell): NotebookFrameMode | null {
   if (cell.inputs?.frameMode === 'last') return 'last'
+  if (cell.inputs?.frameMode === 'time') return 'time'
   if (
     cell.inputs?.frameMode === undefined
     || cell.inputs.frameMode === 'first'
@@ -76,16 +85,42 @@ function frameOutputCellId(
 function matchingAction(
   document: NotebookDocument,
   sourceCellId: string,
-  requestedMode: NotebookFrameMode,
+  command: NotebookFrameCommand,
 ): NotebookCell | null {
   const actionIds = new Set(document.edges
     .filter((edge) =>
       edge.source === sourceCellId && edge.targetInput === 'video')
     .map((edge) => edge.target))
-  return document.cells.find((cell) =>
-    cell.type === 'extract_frame'
-    && actionIds.has(cell.id)
-    && frameMode(cell) === requestedMode) ?? null
+  const requestedTimestamp = command.frameMode === 'time'
+    ? normalizedTimestamp(command.timestampSeconds)
+    : null
+  return document.cells.find((cell) => {
+    if (cell.type !== 'extract_frame' || !actionIds.has(cell.id)) return false
+    if (frameMode(cell) !== command.frameMode) return false
+    if (command.frameMode !== 'time') return true
+    return normalizedTimestamp(cell.inputs?.timestampSeconds) === requestedTimestamp
+  }) ?? null
+}
+
+function frameActionLabel(command: NotebookFrameCommand): string {
+  if (command.frameMode === 'last') return 'Last frame'
+  if (command.frameMode === 'time') {
+    const timestamp = normalizedTimestamp(command.timestampSeconds) ?? 0
+    return `Frame at ${timestamp}s`
+  }
+  return 'First frame'
+}
+
+function frameActionInputs(
+  command: NotebookFrameCommand,
+): Record<string, unknown> {
+  if (command.frameMode === 'time') {
+    return {
+      frameMode: 'time',
+      timestampSeconds: normalizedTimestamp(command.timestampSeconds) ?? 0,
+    }
+  }
+  return { frameMode: command.frameMode }
 }
 
 export function parseNotebookFrameCommand(
@@ -94,7 +129,7 @@ export function parseNotebookFrameCommand(
   const match = input.trim().match(NOTEBOOK_FRAME_COMMAND_PATTERN)
   if (!match) return null
   return {
-    frameMode: match[1]!.toLowerCase() as NotebookFrameMode,
+    frameMode: match[1]!.toLowerCase() as 'first' | 'last',
     sourceReference: match[2]!.toLowerCase(),
   }
 }
@@ -121,6 +156,12 @@ export async function enqueueNotebookFrameCommand(input: {
   document: NotebookDocument
   expectedRevision?: string
 }): Promise<NotebookFrameCommandRun> {
+  if (
+    input.command.frameMode === 'time'
+    && normalizedTimestamp(input.command.timestampSeconds) === null
+  ) {
+    throw new Error('A valid timestamp is required for time-mode frame extraction')
+  }
   const source = resolveNotebookFrameSource(
     input.document,
     input.command.sourceReference,
@@ -128,7 +169,7 @@ export async function enqueueNotebookFrameCommand(input: {
   const existing = matchingAction(
     input.document,
     source.id,
-    input.command.frameMode,
+    input.command,
   )
   let actionCellId = existing?.id ?? null
   let actionAddress = existing ? notebookCellTag(existing) : null
@@ -145,11 +186,11 @@ export async function enqueueNotebookFrameCommand(input: {
         : {}),
       cell: {
         type: 'extract_frame',
-        label: `${input.command.frameMode === 'last' ? 'Last' : 'First'} frame`,
+        label: frameActionLabel(input.command),
         slot: firstEmptyNotebookGridSlot(
           input.document.cells.map((cell) => cell.slot),
         ),
-        inputs: { frameMode: input.command.frameMode },
+        inputs: frameActionInputs(input.command),
       },
     }))
     actionCellId = stringValue(created?.id)

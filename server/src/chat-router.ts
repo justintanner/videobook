@@ -14,7 +14,14 @@ type RoutableToolInfo = {
   constraints: string[];
   category: "action" | "generation";
   effect: "read" | "mutation" | "generation";
+  autoApply: boolean;
 };
+
+const AUTO_APPLY_TOOL_NAMES = new Set([
+  "extract_first_frame",
+  "extract_last_frame",
+  "extract_frame",
+]);
 
 type ChatToolAlias = {
   name: string;
@@ -159,6 +166,8 @@ function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
       constraints: constraintsForTool(target),
       category,
       effect: effectForTool(alias.actualTool, category),
+      autoApply: AUTO_APPLY_TOOL_NAMES.has(alias.name)
+        || AUTO_APPLY_TOOL_NAMES.has(alias.actualTool),
     }];
   });
   const tools = definitions
@@ -174,6 +183,7 @@ function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
         constraints: constraintsForTool(definition),
         category,
         effect: effectForTool(definition.name, category),
+        autoApply: AUTO_APPLY_TOOL_NAMES.has(definition.name),
       };
     });
   return [...aliases, ...tools];
@@ -272,6 +282,7 @@ function getRoutableTool(
 }
 
 export {
+  AUTO_APPLY_TOOL_NAMES,
   CHAT_TOOL_ALIASES,
   TIMESTAMP_PARAMS,
   NESTED_TIMESTAMP_PARAMS,

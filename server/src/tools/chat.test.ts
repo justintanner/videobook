@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../fs.js";
+import { v7 as uuidv7 } from "uuid";
 import {
+  chatActionPlanSchema,
   loadScriptContentsForChat,
   normalizeChatTimestampParams,
   parseChatDecision,
@@ -13,6 +15,7 @@ import {
   enrichAssetContext,
 } from "./chat.js";
 import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
+import { queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -159,6 +162,126 @@ describe("chat tool", () => {
     const content = result.content as TextContent;
     expect(content[0].text).toContain("OPENAI_API_KEY");
   });
+});
+
+describe("chatActionPlanSchema and applyChatActionPlan", () => {
+  let client: Client;
+  let tempDir: string;
+  let bookId: string;
+
+  beforeAll(async () => {
+    await queue.start();
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-chat-plan-"));
+    client = await createTestClient(tempDir);
+    const created = await client.callTool({
+      name: "create_project",
+      arguments: { book_id: "chat-plan-proj" },
+    });
+    bookId = (JSON.parse(
+      (created.content as TextContent)[0].text,
+    ) as { bookId: string }).bookId;
+  });
+
+  afterAll(async () => {
+    await client?.close();
+    await queue.stop();
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it("accepts confirmation.required true and false", () => {
+    const base = {
+      kind: "chat-action-plan" as const,
+      planId: uuidv7(),
+      bookId: uuidv7(),
+      prompt: "extract the first frame of @a1",
+      routedTool: "extract_first_frame",
+      tool: "extract_first_frame",
+      params: { asset_id: uuidv7() },
+      message: "Extracting frame.",
+      summary: "Extract first frame",
+      effect: "mutation" as const,
+    };
+    expect(chatActionPlanSchema.safeParse({
+      ...base,
+      confirmation: {
+        required: false,
+        reason: "Frame extraction is free and only adds a new image cell",
+      },
+    }).success).toBe(true);
+    expect(chatActionPlanSchema.safeParse({
+      ...base,
+      confirmation: {
+        required: true,
+        reason: "This request changes the current book",
+      },
+    }).success).toBe(true);
+    expect(chatActionPlanSchema.safeParse({
+      ...base,
+      confirmation: { required: "yes", reason: "bad" },
+    }).success).toBe(false);
+  });
+
+  it("applies extract_first_frame action plans against a real engine", async () => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { createRequire } = await import("node:module");
+    const { readFile } = await import("node:fs/promises");
+    const execFileAsync = promisify(execFile);
+    const require = createRequire(import.meta.url);
+    const FFMPEG: string = require("ffmpeg-static");
+    const videoPath = join(tempDir, "plan-source.mp4");
+    await execFileAsync(FFMPEG, [
+      "-y",
+      "-f", "lavfi",
+      "-i", "color=c=red:s=64x64:r=10:d=1",
+      "-c:v", "libx264",
+      "-pix_fmt", "yuv420p",
+      videoPath,
+    ]);
+    const data = (await readFile(videoPath)).toString("base64");
+    const uploadResult = await client.callTool({
+      name: "upload_file",
+      arguments: {
+        book_id: "chat-plan-proj",
+        filename: "plan-source.mp4",
+        data,
+      },
+    });
+    const upload = JSON.parse(
+      (uploadResult.content as TextContent)[0].text,
+    ) as { assetId: string };
+    const plan = {
+      kind: "chat-action-plan",
+      planId: uuidv7(),
+      bookId,
+      prompt: "extract the first frame",
+      routedTool: "extract_first_frame",
+      tool: "extract_first_frame",
+      params: { asset_id: upload.assetId, book_id: bookId },
+      message: "Extracting frame.",
+      summary: "Extract first frame",
+      effect: "mutation",
+      confirmation: {
+        required: false,
+        reason: "Frame extraction is free and only adds a new image cell",
+      },
+    };
+    expect(chatActionPlanSchema.safeParse(plan).success).toBe(true);
+    const result = await client.callTool({
+      name: "chat",
+      arguments: {
+        book_id: "chat-plan-proj",
+        action_plan: plan,
+      },
+    });
+    expect(result.isError).not.toBe(true);
+    const payload = JSON.parse(
+      (result.content as TextContent)[0].text,
+    ) as { job_id?: string; image_asset_id?: string };
+    expect(payload.job_id).toBeTruthy();
+    if (payload.job_id) await waitForJob(payload.job_id);
+    expect(payload.image_asset_id).toBeTruthy();
+  }, 30_000);
 });
 
 describe("sanitizeGenerateImageParams", () => {
