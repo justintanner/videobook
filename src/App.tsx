@@ -491,6 +491,9 @@ const CellRunContext = createContext<(
   async () => undefined,
 )
 const PrimaryCellContext = createContext<string | null>(null)
+const GenerationTitlesContext = createContext<ReadonlyMap<string, string>>(
+  new Map(),
+)
 
 const mcpUrl = typeof window === 'undefined'
   ? 'http://localhost/mcp'
@@ -1545,7 +1548,16 @@ function CellIcon({ kind }: { kind: NotebookCellType }) {
 }
 
 function cellTypeLabel(kind: NotebookCellType): string {
-  return kind.replaceAll('_', ' ').toUpperCase()
+  return kind.replace(/^generate_/, 'gen_').replaceAll('_', ' ').toUpperCase()
+}
+
+/** "Reference to Video" -> "R2V", "Text to Image" -> "T2I", etc. */
+function abbreviateGenerationPhrases(title: string): string {
+  return title.replace(
+    /\b(image|text|reference|video|audio|frame)[\s-]+to[\s-]+(video|image|audio|text)\b/gi,
+    (_match, from: string, to: string) =>
+      `${from[0]}2${to[0]}`.toUpperCase(),
+  )
 }
 
 function emptyCellLabel(data: CanvasCellData): string {
@@ -2044,6 +2056,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const slotContext = useContext(MediaSlotContext)
   const runCell = useContext(CellRunContext)
   const primaryCellId = useContext(PrimaryCellContext)
+  const generationTitles = useContext(GenerationTitlesContext)
   const updateNodeInternals = useUpdateNodeInternals()
   const primarySelected = selected && primaryCellId === id
   const mediaUrl = data.asset?.mediaUrl
@@ -2083,6 +2096,31 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     tool: data.tool,
   }, data.status)
   const statusLabel = notebookCellStatusLabel(data.kind, data.status)
+  const generationCell = data.kind === 'generate_video'
+    || data.kind === 'generate_image'
+    || data.kind === 'generate_audio'
+  const toolTitle = generationCell && data.tool
+    ? generationTitles.get(data.tool) ?? null
+    : null
+  const generationMode = generationCell
+    ? asString(data.inputs?.generationMode)
+    : null
+  const modeAbbreviation = generationMode && /^[a-z]2[a-z]$/i.test(generationMode)
+    ? generationMode.toUpperCase()
+    : null
+  const modelLine = toolTitle
+    ? (() => {
+      const abbreviated = abbreviateGenerationPhrases(toolTitle)
+      return modeAbbreviation
+        && !abbreviated.toUpperCase().includes(modeAbbreviation)
+        ? `${abbreviated} · ${modeAbbreviation}`
+        : abbreviated
+    })()
+    : null
+  const aspectRatio = generationCell
+    ? asString(record(data.inputs?.generationSettings)?.aspect_ratio)
+    : null
+  const promptCell = textCell || (generationCell && Boolean(data.prompt))
   const running = notebookCellIsActiveStatus(data.status)
   const failed = data.status === 'error'
   const outputVersions = notebookOutputVersionArtifactIds(
@@ -2157,7 +2195,12 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
       <section className="cell-node-shell">
         <header className="cell-node-header">
           <span><CellIcon kind={data.kind} />{cellTypeLabel(data.kind)}</span>
-          {action && (
+          {generationCell && aspectRatio && (
+            <span className="cell-aspect-ratio" title="Aspect ratio">
+              {aspectRatio}
+            </span>
+          )}
+          {action && !generationCell && (
             <button
               type="button"
               className="cell-run-button nodrag"
@@ -2220,9 +2263,12 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             />
           </div>
         ) : (
-          <div className={`cell-copy ${textCell ? 'cell-copy-text' : ''}`}>
-            {textCell ? <p>{data.prompt || emptyCellLabel(data)}</p> : <Sparkles size={28} />}
-            {!textCell && <span>{emptyCellLabel(data)}</span>}
+          <div className={`cell-copy ${promptCell ? 'cell-copy-text' : ''}`}>
+            {modelLine && <span className="cell-model-line">{modelLine}</span>}
+            {promptCell ? <p>{data.prompt || emptyCellLabel(data)}</p> : <Sparkles size={28} />}
+            {!promptCell && (
+              <span>{modelLine ? 'Add a prompt' : emptyCellLabel(data)}</span>
+            )}
           </div>
         )}
         <footer className="cell-node-footer">
@@ -2304,6 +2350,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [generationActions, setGenerationActions] = useState<
     NotebookGenerationAction[]
   >(() => initialWorkspace?.generationActions ?? [])
+  const generationTitleByTool = useMemo(
+    () => new Map(generationActions.map((action) => [action.tool, action.title])),
+    [generationActions],
+  )
   const [providers, setProviders] = useState<ProviderRecord[]>([])
   const [storage, setStorage] = useState<unknown>(null)
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
@@ -7341,6 +7391,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       <MediaSlotContext.Provider value={mediaSlotContextValue}>
                         <CellRunContext.Provider value={runCell}>
                           <PrimaryCellContext.Provider value={selectedCellId}>
+                            <GenerationTitlesContext.Provider value={generationTitleByTool}>
                             <ReactFlow<CanvasNode, NotebookFlowEdge>
                           className="notebook-flow"
                       nodes={canvasPresentationNodes}
@@ -7447,6 +7498,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                               mediaDropSlot={mediaDropSlot}
                             />
                             </ReactFlow>
+                            </GenerationTitlesContext.Provider>
                           </PrimaryCellContext.Provider>
                         </CellRunContext.Provider>
                       </MediaSlotContext.Provider>

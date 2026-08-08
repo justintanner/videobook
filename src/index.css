@@ -209,12 +209,16 @@ textarea:focus-visible {
 }
 
 .cell-run-button {
+  max-width: 120px;
   padding: 4px 7px;
   border: 1px solid rgba(114, 231, 170, 0.42);
+  overflow: hidden;
   color: var(--green);
   background: rgba(35, 112, 70, 0.25);
   font-size: 9px;
   letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -1951,6 +1955,21 @@ textarea:focus-visible {
   white-space: normal;
 }
 
+.cell-aspect-ratio {
+  display: inline-flex;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  margin-left: auto;
+  padding: 0 6px;
+  border: 1px solid rgba(114, 231, 170, 0.3);
+  border-radius: 4px;
+  color: #9de1b8;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
 .cell-status {
   display: inline-grid;
   min-width: 22px;
@@ -2235,6 +2254,24 @@ textarea:focus-visible {
   padding: 16px 18px 18px;
   color: #b9dfcb;
   text-align: left;
+}
+
+.cell-model-line {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin-bottom: 8px;
+  overflow: hidden;
+  color: #72e7aa;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .cell-copy-text p {
