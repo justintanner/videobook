@@ -2052,8 +2052,11 @@ export function notebookCellIsStale(
   if (execution.fingerprint !== notebookCellFingerprint(document, cell)) return true;
   if (execution.status === "error" || execution.error) return true;
   if (execution.status === "stale" || execution.stale) return true;
-  if (!cell.outputArtifactId) return true;
-  if (!engine.artifacts.get(cell.outputArtifactId).ok) return true;
+  // generate_video may hold the artifact only on its output video cell.
+  const artifactId = resolveNotebookCellArtifactId(document, cell)
+    ?? execution.outputArtifactId;
+  if (!artifactId) return true;
+  if (!engine.artifacts.get(artifactId).ok) return true;
   return false;
 }
 
@@ -2468,7 +2471,9 @@ export function registerRunNotebookJob(engine: Engine): void {
     const waiting = new Set<string>();
     for (const cell of ordered) {
       if (!notebookCellIsRunnable(cell)) {
-        const output = cell.outputArtifactId ?? cell.outputEntityId;
+        const output = resolveNotebookCellArtifactId(document, cell)
+          ?? cell.outputArtifactId
+          ?? cell.outputEntityId;
         if (output) outputs[cell.id] = output;
         continue;
       }
@@ -2510,7 +2515,9 @@ export function registerRunNotebookJob(engine: Engine): void {
       const forceCell = input.force === true
         && (!selected || selected.has(cell.id));
       if (!forceCell && !stale) {
-        if (cell.outputArtifactId) outputs[cell.id] = cell.outputArtifactId;
+        const artifactId = resolveNotebookCellArtifactId(document, cell)
+          ?? cell.outputArtifactId;
+        if (artifactId) outputs[cell.id] = artifactId;
         continue;
       }
       const paidAuthorized = paidCellAuthorized(document, cell, input);

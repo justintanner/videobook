@@ -17,6 +17,17 @@ import {
   relayoutNotebookDocument,
 } from '../../server/src/notebook-relayout.js'
 import { executeRelayoutNotebook } from '../../server/src/jobs/relayout-notebook.js'
+import {
+  notebookCellFingerprint,
+  notebookCellIsStale,
+  registerRunNotebookJob,
+} from '../../server/src/jobs/run-notebook.js'
+import { DEFAULT_VIDEO_TOOL } from '../../server/src/notebook-action-catalog.js'
+import {
+  queue,
+  setEngineRoot,
+  stopBookQueue,
+} from '../../server/src/queue.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 import {
@@ -405,6 +416,102 @@ describe('directional canvas placement', () => {
     expect(second.changed).toBe(false)
     expect(second.cell_count).toBe(after.cells.length)
     expect(second.edge_count).toBe(after.edges.length)
+  })
+
+  it('does not treat completed generate_video with output-cell artifact as stale', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'stale-check',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const notebook = value(engine.notebooks.read(engine.notebooks.list()[0]!.id))
+    const artifact = value(await engine.artifacts.create({
+      kind: 'video',
+      label: 'completed-output',
+    }))
+    const tile = engine.notebooks.createCell({
+      type: 'generate_video',
+      slot: { row: 0, column: 0 },
+      prompt: 'a cat walks',
+      tool: DEFAULT_VIDEO_TOOL,
+      provider: 'kie',
+      model: 'GeminiOmniVideoRequestSchema',
+      operation: 'image_to_video',
+    })
+    const outputCell = engine.notebooks.createCell({
+      type: 'video',
+      slot: { row: 1, column: 0 },
+      outputArtifactId: artifact.artifactId,
+      inputs: {
+        mediaRole: 'generate-video-output',
+        producerCellId: tile.id,
+        state: 'completed',
+      },
+    })
+    const draft: NotebookDocument = {
+      ...notebook,
+      cells: [tile, outputCell],
+      edges: [
+        engine.notebooks.createEdge({
+          source: tile.id,
+          target: outputCell.id,
+          targetInput: 'media',
+        }),
+      ],
+    }
+    const fingerprint = notebookCellFingerprint(draft, tile)
+    const completed: NotebookDocument = {
+      ...draft,
+      execution: {
+        [tile.id]: {
+          fingerprint,
+          status: 'completed',
+          outputArtifactId: artifact.artifactId,
+          completedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          tool: DEFAULT_VIDEO_TOOL,
+        },
+      },
+    }
+    value(await engine.notebooks.write(completed))
+    const loaded = value(engine.notebooks.read(notebook.id))
+    const liveTile = loaded.cells.find((cell) => cell.id === tile.id)!
+    expect(liveTile.outputArtifactId).toBeUndefined()
+    expect(resolveGeneratedVideoArtifact(loaded, liveTile)).toBe(
+      artifact.artifactId,
+    )
+    expect(notebookCellIsStale(engine, loaded, liveTile)).toBe(false)
+
+    // Re-run without force must skip (not re-execute paid generation).
+    registerRunNotebookJob(engine)
+    await setEngineRoot(rootDir, engine)
+    try {
+      const result = await queue.enqueueAndWait<{
+        status: string
+        outputs: Record<string, string>
+        errors?: string[]
+      }>(`run-notebook-skip-${tile.id}`, {
+        type: 'run_notebook',
+        bookId: created.bookId,
+        notebookId: notebook.id,
+        cellIds: [tile.id],
+        force: false,
+      })
+      expect(result.status).toBe('completed')
+      expect(result.outputs[tile.id]).toBe(artifact.artifactId)
+      expect(result.errors ?? []).toEqual([])
+      // Still not stale after the skip path.
+      const after = value(engine.notebooks.read(notebook.id))
+      const afterTile = after.cells.find((cell) => cell.id === tile.id)!
+      expect(notebookCellIsStale(engine, after, afterTile)).toBe(false)
+      expect(afterTile.outputArtifactId).toBeUndefined()
+    } finally {
+      await stopBookQueue(created.bookId)
+    }
   })
 
   it('ensureGenerateVideoOutput is idempotent for existing output cells', async () => {
