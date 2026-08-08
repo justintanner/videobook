@@ -57,6 +57,11 @@ import {
   notebookRunPlanRecords,
   planNotebookRun,
 } from "../notebook-run-plan.js";
+import {
+  reconcileInitialGenerationPrompt,
+  refreshInitialGenerationPrompts,
+  seedInitialGenerationPrompt,
+} from "../notebook-initial-generation-prompt.js";
 
 const bookSchema = { book_id: z.string().uuid() };
 const cellTypeSchema = z.enum(NOTEBOOK_CELL_TYPES);
@@ -227,7 +232,7 @@ function clearNotebookCellSlot(
       status: "ready",
     },
   };
-  return {
+  const cleared = {
     ...marked,
     execution,
     cells: marked.cells.map((cell) =>
@@ -243,6 +248,7 @@ function clearNotebookCellSlot(
           }
         : cell),
   };
+  return seedInitialGenerationPrompt(cleared, cellId);
 }
 
 function firstEmptyGridSlots(
@@ -1398,8 +1404,13 @@ export function videobookDomainDefs(
                 );
               }
             cell = normalizeCellActionFields(cell, notebook);
+            const withCell = seedInitialGenerationPrompt({
+              ...notebook,
+              cells: [...notebook.cells, cell],
+            }, cell.id);
+            cell = withCell.cells.find((candidate) => candidate.id === cell.id)!;
             if (cell.type === "analyze") {
-              const cells = [...notebook.cells, cell];
+              const cells = withCell.cells;
               outputCell = engine.notebooks.createCell({
                 type: "analysis",
                 ...(cell.label === undefined ? {} : { label: cell.label }),
@@ -1419,10 +1430,7 @@ export function videobookDomainDefs(
             if (cell.type === "extract_frame") {
               const ensured = ensureExtractFrameImageOutput(
                 engine,
-                {
-                  ...notebook,
-                  cells: [...notebook.cells, cell],
-                },
+                withCell,
                 cell.id,
               );
               outputCell = ensured.outputCell;
@@ -1432,10 +1440,7 @@ export function videobookDomainDefs(
             if (cell.type === "generate_video") {
               const ensured = ensureGenerateVideoOutput(
                 engine,
-                {
-                  ...notebook,
-                  cells: [...notebook.cells, cell],
-                },
+                withCell,
                 cell.id,
               );
               outputCell = ensured.outputCell;
@@ -1443,14 +1448,13 @@ export function videobookDomainDefs(
               return ensured.document;
             }
             return {
-              ...notebook,
+              ...withCell,
               cells: [
-                ...notebook.cells,
-                cell,
+                ...withCell.cells,
                 ...(outputCell ? [outputCell] : []),
               ],
               edges: [
-                ...notebook.edges,
+                ...withCell.edges,
                 ...(outputEdge ? [outputEdge] : []),
               ],
             };
@@ -1516,7 +1520,7 @@ export function videobookDomainDefs(
                     throw new Error("Cell type cannot be changed after creation");
                   }
                 }
-                const next = normalizeCellActionFields({
+                const normalized = normalizeCellActionFields({
                   ...cell,
                   ...(patch.type === undefined ? {} : { type: patch.type }),
                   ...(patch.label === undefined ? {} : { label: patch.label }),
@@ -1538,12 +1542,16 @@ export function videobookDomainDefs(
                     ? {}
                     : { pinnedResults: patch.pinned_results.map(pinnedResultFromInput) }),
                 }, document);
+                const next = reconcileInitialGenerationPrompt(cell, normalized);
                 const validation = validateCellConfiguration(next, document);
                 if (!validation.ok) throw new Error(validation.message);
                 return next;
               });
               if (!found) throw new Error(`Cell not found: ${String(args.cell_id)}`);
-              const updated = { ...document, cells };
+              const updated = refreshInitialGenerationPrompts({
+                ...document,
+                cells,
+              });
               const updatedCell = cells.find((cell) =>
                 cell.id === args.cell_id);
               return updatedCell?.type === "extract_frame"
@@ -1659,7 +1667,7 @@ export function videobookDomainDefs(
                   cell.id !== source.id
                   && cell.slot.row === destination.row
                   && cell.slot.column === destination.column);
-                return {
+                const moved = {
                   ...notebook,
                   cells: notebook.cells.map((cell) => {
                     if (cell.id === source.id) {
@@ -1673,6 +1681,7 @@ export function videobookDomainDefs(
                       : cell;
                   }),
                 };
+                return refreshInitialGenerationPrompts(moved);
               }
               const targetKeys = new Set<string>();
               for (const slot of requested) {
@@ -1691,7 +1700,7 @@ export function videobookDomainDefs(
                   `Notebook grid square ${notebookGridTag(collision.slot)} is occupied`,
                 );
               }
-              return {
+              const moved = {
                 ...notebook,
                 cells: notebook.cells.map((cell) => {
                   const slot = slots.get(cell.id);
@@ -1700,6 +1709,7 @@ export function videobookDomainDefs(
                     : cell;
                 }),
               };
+              return refreshInitialGenerationPrompts(moved);
             },
             { cellIds: requested.map((slot) => slot.id) },
           );
@@ -1807,7 +1817,10 @@ export function videobookDomainDefs(
                 edge.targetInput,
               );
               if (error) throw new Error(error);
-              return { ...notebook, edges: [...notebook.edges, edge] };
+              return seedInitialGenerationPrompt({
+                ...notebook,
+                edges: [...notebook.edges, edge],
+              }, edge.target);
             },
             { sourceCellId: edge.source, targetCellId: edge.target, edgeId: edge.id },
           );
@@ -1828,7 +1841,16 @@ export function videobookDomainDefs(
           engine,
           String(args.notebook_id),
           "disconnect_notebook_cells",
-          (notebook) => ({ ...notebook, edges: notebook.edges.filter((edge) => edge.id !== edgeId) }),
+          (notebook) => {
+            const removed = notebook.edges.find((edge) => edge.id === edgeId);
+            const disconnected = {
+              ...notebook,
+              edges: notebook.edges.filter((edge) => edge.id !== edgeId),
+            };
+            return removed
+              ? seedInitialGenerationPrompt(disconnected, removed.target)
+              : disconnected;
+          },
           { edgeId },
         );
         return result.ok ? json({ edge_id: edgeId, revision: result.value.hash }) : failure(result.error.message);
@@ -1896,9 +1918,10 @@ export function videobookDomainDefs(
                 edges = [...retained, edge];
               }
               const updated = { ...notebook, edges };
-              return target.type === "extract_frame"
+              const marked = target.type === "extract_frame"
                 ? markCellStale(updated, targetCellId)
                 : markCellAndDescendantsStale(updated, targetCellId);
+              return seedInitialGenerationPrompt(marked, targetCellId);
             },
             {
               targetCellId,

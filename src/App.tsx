@@ -7751,7 +7751,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   </div>
                 ) : selectedNotebookCell ? (
                   <NotebookCellInspector
-                    key={selectedNotebookCell.id}
+                    key={`${selectedNotebookCell.id}:${selectedNotebookCell.prompt ?? ''}`}
                     notebookId={notebook?.id ?? ''}
                     cell={selectedNotebookCell}
                     cells={notebook?.cells ?? []}

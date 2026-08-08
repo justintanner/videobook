@@ -185,6 +185,10 @@ describe("chat routing catalog", () => {
 
   it("keeps routed generation prompts compact and preserves notebook roles", () => {
     const prompt = buildChatRoutingPrompt("my-book", buildRoutableTools(definitions));
+    expect(prompt).toContain("For every image or video generation tool");
+    expect(prompt).toContain("smart Caveman style");
+    expect(prompt).toContain("drop filler, hedging, pleasantries, articles");
+    expect(prompt).toContain("preserve the user's language plus exact names, technical terms, negation, numbers, units, and @addresses");
     expect(prompt).toContain("scene @a5, character @a1, fluffy kitten standing");
     expect(prompt).toContain("Preserve every consumed notebook @address");
     expect(prompt).toContain("same order");

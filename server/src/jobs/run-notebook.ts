@@ -68,6 +68,7 @@ import {
   resolveNotebookPromptReferences,
   type NotebookPromptResolution,
 } from "../notebook-reference-resolver.js";
+import { resolvedInitialGenerationPrompt } from "../notebook-initial-generation-prompt.js";
 
 export interface RunNotebookPayload {
   type: "run_notebook";
@@ -746,7 +747,11 @@ function promptFor(document: NotebookDocument, cell: NotebookCell): string {
           ? cell.inputs.audioContext
           : "",
       ]
-    : [cell.prompt ?? ""];
+    : [
+        cell.type === "generate_image" || cell.type === "generate_video"
+          ? resolvedInitialGenerationPrompt(document, cell)
+          : cell.prompt ?? "",
+      ];
   return [...new Set([...own, ...upstream].filter(Boolean))]
     .join("\n\n")
     .trim();
