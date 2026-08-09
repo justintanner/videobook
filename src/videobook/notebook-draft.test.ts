@@ -169,6 +169,64 @@ describe('notebook draft conversion', () => {
     })).toBe('video_2')
   })
 
+  it('allocates distinct mixed-media inputs for Generate Image', () => {
+    const video = {
+      ...source.cells[0]!,
+      id: '018f7cf5-0d31-7d96-8c0f-800000000007',
+      type: 'video' as const,
+      slot: { row: 0, column: 1 },
+    }
+    const target = {
+      ...source.cells[0]!,
+      id: '018f7cf5-0d31-7d96-8c0f-800000000008',
+      type: 'generate_image' as const,
+      slot: { row: 1, column: 1 },
+    }
+    const document: NotebookDocument = {
+      ...source,
+      cells: [source.cells[0]!, video, target],
+      edges: [],
+    }
+
+    expect(notebookConnectionTargetInput(document, {
+      source: source.cells[0]!.id,
+      target: target.id,
+      targetHandle: 'input',
+    })).toBe('image')
+
+    const imageConnected: NotebookDocument = {
+      ...document,
+      edges: [{
+        id: '018f7cf5-0d31-7d96-8c0f-800000000009',
+        source: source.cells[0]!.id,
+        target: target.id,
+        targetInput: 'image',
+      }],
+    }
+    expect(notebookConnectionTargetInput(imageConnected, {
+      source: video.id,
+      target: target.id,
+      targetHandle: 'image',
+    })).toBe('video')
+
+    expect(notebookConnectionTargetInput({
+      ...imageConnected,
+      edges: [
+        ...imageConnected.edges,
+        {
+          id: '018f7cf5-0d31-7d96-8c0f-800000000010',
+          source: video.id,
+          target: target.id,
+          targetInput: 'video',
+        },
+      ],
+    }, {
+      source: source.cells[0]!.id,
+      target: target.id,
+      targetHandle: 'video',
+    })).toBe('image_2')
+  })
+
   it('keeps manually created notes in ordinary draggable grid cells', () => {
     const labeled: NotebookDocument = {
       ...source,

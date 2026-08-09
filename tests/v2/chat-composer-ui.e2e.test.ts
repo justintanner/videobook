@@ -135,6 +135,38 @@ function notebookCellNode(page: Page, cellId: string) {
   )
 }
 
+async function dragNotebookConnection(
+  page: Page,
+  sourceCellId: string,
+  targetCellId: string,
+): Promise<void> {
+  const source = page.locator(
+    `.notebook-flow .react-flow__node[data-id="${sourceCellId}"] .cell-connect-handle`,
+  )
+  const target = page.locator(
+    `.notebook-flow .react-flow__node[data-id="${targetCellId}"] .cell-target-handle`,
+  ).first()
+  await source.scrollIntoViewIfNeeded()
+  await target.scrollIntoViewIfNeeded()
+  const sourceBox = await source.boundingBox()
+  const targetBox = await target.boundingBox()
+  if (!sourceBox || !targetBox) {
+    throw new Error('Could not measure notebook connection handles')
+  }
+  const sourcePoint = {
+    x: sourceBox.x + sourceBox.width / 2,
+    y: sourceBox.y + sourceBox.height / 2,
+  }
+  const targetPoint = {
+    x: targetBox.x + targetBox.width / 2,
+    y: targetBox.y + targetBox.height / 2,
+  }
+  await page.mouse.move(sourcePoint.x, sourcePoint.y)
+  await page.mouse.down()
+  await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 12 })
+  await page.mouse.up()
+}
+
 describe('chat composer browser flow', () => {
   let rootDir = ''
   let mcpProcess: StartedProcess | undefined
@@ -518,7 +550,7 @@ describe('chat composer browser flow', () => {
       const imageTargetCellId = await createCell({
         type: 'generate_image',
         label: 'generate-image-dynamic-target',
-        slot: { row: 1, column: 4 },
+        slot: { row: 1, column: 1 },
         prompt: 'Dynamic image target',
       })
       dynamicCellIds.push(imageTargetCellId)
@@ -529,14 +561,41 @@ describe('chat composer browser flow', () => {
       await imageTargetNode.waitFor({ state: 'visible' })
       expect(await imageTargetNode.locator('.cell-target-handle').count()).toBe(1)
 
-      const imageEdgeIds = [
-        await connect(imageCellId, imageTargetCellId, 'image'),
-        await connect(secondImageCellId, imageTargetCellId, 'image_2'),
-      ]
-      await refreshNotebook()
-      expect(await imageTargetNode.locator('.cell-target-handle').count()).toBe(2)
+      observedCalls.length = 0
+      await dragNotebookConnection(page, videoCellId, imageTargetCellId)
+      await expect.poll(() => observedCalls.some((call) =>
+        call.name === 'connect_notebook_cells'
+        && call.arguments.source_cell_id === videoCellId
+        && call.arguments.target_cell_id === imageTargetCellId
+        && call.arguments.target_input === 'video')).toBe(true)
+      await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+      observedCalls.length = 0
+      await dragNotebookConnection(page, imageCellId, imageTargetCellId)
+      await expect.poll(() => observedCalls.some((call) =>
+        call.name === 'connect_notebook_cells'
+        && call.arguments.source_cell_id === imageCellId
+        && call.arguments.target_cell_id === imageTargetCellId
+        && call.arguments.target_input === 'image')).toBe(true)
+      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await expect.poll(async () =>
+        await imageTargetNode.locator('.cell-target-handle').count()).toBe(2)
       expect(await imageTargetNode.locator('.cell-target-connection-count').count()).toBe(0)
-      for (const edgeId of imageEdgeIds) await assertEdge(edgeId)
+
+      const connectedNotebook = record(resultValue(await client.callTool({
+        name: 'get_notebook',
+        arguments: { book_id: bookId, notebook_id: notebookId },
+      })))
+      const imageTargetEdges = (Array.isArray(connectedNotebook?.edges)
+        ? connectedNotebook.edges
+        : []).map(record).filter((edge) => edge?.target === imageTargetCellId)
+      expect(imageTargetEdges).toEqual(expect.arrayContaining([
+        expect.objectContaining({ source: videoCellId, targetInput: 'video' }),
+        expect.objectContaining({ source: imageCellId, targetInput: 'image' }),
+      ]))
+      for (const edge of imageTargetEdges) {
+        if (typeof edge?.id === 'string') await assertEdge(edge.id)
+      }
 
       const videoTargetCellId = await createCell({
         type: 'generate_video',

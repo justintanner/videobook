@@ -84,6 +84,12 @@ function nextNotebookReferenceInput(
   }
 }
 
+function notebookCellAcceptsReferences(type: NotebookCellType): boolean {
+  return type === 'generate_image'
+    || type === 'generate_video'
+    || type === 'generate_audio'
+}
+
 export function notebookConnectionTargetInput(
   document: NotebookDocument,
   connection: Pick<
@@ -94,7 +100,9 @@ export function notebookConnectionTargetInput(
   const requestedInput = connection.targetHandle ?? 'input'
   const source = document.cells.find((cell) => cell.id === connection.source)
   const target = document.cells.find((cell) => cell.id === connection.target)
-  if (!source || target?.type !== 'generate_video') return requestedInput
+  if (!source || !target || !notebookCellAcceptsReferences(target.type)) {
+    return requestedInput
+  }
   const kind = notebookReferenceKind(source.type)
   if (!kind) return requestedInput
   if (
