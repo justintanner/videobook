@@ -458,13 +458,13 @@ async function ensureBookReady(
   return { bookId, engine: info.engine, runner: info.runner };
 }
 
-function enqueueOptions(jobId: string, payload: JobPayload) {
+export function enqueueOptions(jobId: string, payload: JobPayload) {
   const type = extractType(payload);
   const assetId = extractAssetId(payload);
   const classified = assetId ? jobTypeToAssetWorkKind(type, payload) : null;
   return {
     type,
-    artifactId: assetId,
+    artifactId: type === "semantic_index" ? null : assetId,
     payload,
     dedupeKey: jobId,
     maxAttempts: 1,

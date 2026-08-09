@@ -6,7 +6,9 @@ import { createEngine } from 'videobook-engine'
 import {
   commitDeepBatches,
   indexArtifact,
+  runSemanticIndex,
 } from '../../server/src/jobs/semantic-index.js'
+import type { JobHandlerContext } from '../../server/src/queue.js'
 
 describe('progressive semantic index job', () => {
   let rootDir: string | undefined
@@ -318,6 +320,55 @@ describe('progressive semantic index job', () => {
           state: 'ready',
         })],
       },
+    })
+    engine.close()
+  })
+
+  it('keeps auxiliary indexing detached from finished media state', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-index-auxiliary-'))
+    const engine = createEngine({ rootDir, initialBookName: 'index-auxiliary' })
+    await engine.ready
+    const created = await engine.artifacts.create('image', 'finished-image')
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+    const targetArtifactId = created.value.artifactId
+    expect((await engine.files.write(
+      targetArtifactId,
+      'notes.txt',
+      Buffer.from('not an indexable source'),
+    )).ok).toBe(true)
+
+    let failureHandled = false
+    const leases: unknown[] = []
+    const context: JobHandlerContext = {
+      signal: new AbortController().signal,
+      setLease: (lease) => {
+        leases.push(lease)
+      },
+      getOwnerId: () => {
+        throw new Error('No artifact owner expected')
+      },
+      markAssetFailureHandled: () => {
+        failureHandled = true
+      },
+    }
+    const indexed = await runSemanticIndex(engine, {
+      type: 'semantic_index',
+      assetId: targetArtifactId,
+      bookId: engine.book.get().bookId,
+    }, context)
+
+    expect(indexed).toMatchObject({
+      success: true,
+      semanticVisual: 'deferred',
+      semanticAudio: 'deferred',
+    })
+    expect(failureHandled).toBe(true)
+    expect(leases).toEqual([])
+    const work = engine.jobs.artifactWork.read(targetArtifactId)
+    expect(work.ok && work.value).toMatchObject({
+      status: 'ready',
+      ownerId: null,
     })
     engine.close()
   })

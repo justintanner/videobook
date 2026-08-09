@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import type {
   ArtifactStream,
   Engine,
@@ -23,7 +24,6 @@ import {
 } from "../local-search-models.js";
 import {
   DOWNSTREAM_LEASE_WAIT_MS,
-  withLocalLease,
 } from "./_lease.js";
 import { withTransientStorageRetry } from "./_storage-retry.js";
 
@@ -44,6 +44,8 @@ const MANIFEST: IndexManifest = {
 
 const GENERATION = "videobook-progressive-local-v1";
 const DEEP_BATCH_SIZE = 4;
+const ARTIFACT_IDLE_POLL_MS = 250;
+const semanticIndexTails = new Map<string, Promise<void>>();
 const PHASES: IndexPhase[] = [
   "probe",
   "segment",
@@ -97,14 +99,13 @@ export async function runSemanticIndex(
   // The generated media is fine — marking the artifact errored would flip a
   // freshly completed generation into "failed" (awaitNotebookOutput reads
   // that status). Defer instead, matching the intra-job clip/clap lanes.
+  ctx.markAssetFailureHandled();
   try {
-    return await withLocalLease(
-      fs,
-      payload.bookId,
-      payload.assetId,
-      ctx,
-      "analyze",
+    return await withSemanticIndexTurn(
+      `${payload.bookId}:${payload.assetId}`,
+      ctx.signal,
       async () => {
+        await waitForArtifactIdle(fs, payload.assetId, ctx.signal);
         try {
           return await withTransientStorageRetry(
             () => indexArtifact(fs, payload.assetId, {
@@ -118,13 +119,72 @@ export async function runSemanticIndex(
           return deferredSemanticIndex(fs, payload.assetId, error);
         }
       },
-      { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS },
     );
   } catch (error) {
     if (ctx.signal.aborted) throw error;
-    // Lease-claim failures land here; nothing holds the asset on our behalf.
-    ctx.markAssetFailureHandled();
     return deferredSemanticIndex(fs, payload.assetId, error);
+  }
+}
+
+async function waitForArtifactIdle(
+  fs: Engine,
+  assetId: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const startedAt = Date.now();
+  while (true) {
+    signal.throwIfAborted();
+    const work = fs.jobs.artifactWork.read(assetId);
+    if (!work.ok) throw new Error(work.error.message);
+    if (!work.value || work.value.status === "ready") return;
+    if (work.value.status === "error") {
+      throw new Error(work.value.meta.error?.message ?? `Artifact ${assetId} is in error state`);
+    }
+    if (Date.now() - startedAt >= DOWNSTREAM_LEASE_WAIT_MS) {
+      throw new Error(`Timed out waiting for active work on ${assetId}`);
+    }
+    await delay(ARTIFACT_IDLE_POLL_MS, undefined, { signal });
+  }
+}
+
+async function withSemanticIndexTurn<T>(
+  key: string,
+  signal: AbortSignal,
+  run: () => Promise<T>,
+): Promise<T> {
+  const previous = semanticIndexTails.get(key) ?? Promise.resolve();
+  let release = (): void => undefined;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const tail = previous.then(() => current);
+  semanticIndexTails.set(key, tail);
+  try {
+    await waitForTurn(previous, signal);
+    return await run();
+  } finally {
+    release();
+    void tail.then(() => {
+      if (semanticIndexTails.get(key) === tail) semanticIndexTails.delete(key);
+    });
+  }
+}
+
+async function waitForTurn(
+  previous: Promise<void>,
+  signal: AbortSignal,
+): Promise<void> {
+  signal.throwIfAborted();
+  let rejectAbort = (): void => undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", rejectAbort, { once: true });
+  });
+  try {
+    await Promise.race([previous, aborted]);
+    signal.throwIfAborted();
+  } finally {
+    signal.removeEventListener("abort", rejectAbort);
   }
 }
 
