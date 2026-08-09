@@ -213,4 +213,87 @@ describe('notebook initial generation prompts', () => {
     expect(editedImage?.prompt).toBe(explicitPrompt)
     expect(editedImage?.inputs?.initialGenerationPrompt).toBeUndefined()
   })
+
+  it('infers Gemini Omni reference mode for a connected default video cell', async () => {
+    const definitions = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(definitions.map((definition) => [
+      definition.name,
+      definition,
+    ]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'omni-reference-mode',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const definition = byName.get(name)
+      if (!definition) throw new Error(`Missing ${name}`)
+      return await withBookContext(
+        { bookId: created.bookId, engine: managed.value.engine },
+        () => definition.handler({ book_id: created.bookId, ...args }),
+      )
+    }
+
+    const notebooks = resultJson(await invoke('list_notebooks', {})) as Array<{
+      id: string
+    }>
+    const notebookId = notebooks[0]!.id
+    const artifact = await managed.value.engine.artifacts.create(
+      'image',
+      'Reference portrait',
+    )
+    expect(artifact.ok).toBe(true)
+    if (!artifact.ok) return
+
+    const source = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'image',
+        slot: { row: 0, column: 0 },
+        output_artifact_id: artifact.value.artifactId,
+      },
+    })) as { id: string }
+    const target = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'generate_video',
+        slot: { row: 1, column: 0 },
+        prompt: 'Animate the reference portrait',
+      },
+    })) as {
+      id: string
+      inputs?: Record<string, unknown>
+      tool?: string
+    }
+    expect(target.tool).toBe('generate_kie_gemini_omni_video')
+    expect(target.inputs?.generationMode).toBeUndefined()
+
+    resultJson(await invoke('connect_notebook_cells', {
+      notebook_id: notebookId,
+      source_cell_id: source.id,
+      target_cell_id: target.id,
+      target_input: 'image',
+    }))
+    const document = managed.value.engine.notebooks.read(notebookId)
+    expect(document.ok).toBe(true)
+    if (!document.ok) return
+    const connectedTarget = document.value.cells.find((cell) =>
+      cell.id === target.id)
+    if (!connectedTarget) throw new Error('Connected Gemini Omni cell is missing')
+    expect(connectedTarget.inputs?.generationMode).toBeUndefined()
+
+    const prepared = await prepareNotebookGeneration(
+      managed.value.engine,
+      document.value,
+      connectedTarget,
+      created.bookId,
+    )
+    expect(prepared.tool).toBe('generate_kie_gemini_omni_video')
+    expect(prepared.input.image_refs).toEqual([
+      `@${artifact.value.artifactId}`,
+    ])
+    expect(prepared.input.duration).toBe('8')
+  })
 })

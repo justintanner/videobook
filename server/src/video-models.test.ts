@@ -354,6 +354,17 @@ describe("getVideoToolSchema", () => {
     });
   });
 
+  it("grok text-to-video publishes bounded wire defaults", () => {
+    const schema = getVideoToolSchema("generate_kie_grok_imagine_text_to_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.defaults).toMatchObject({
+      duration: 6,
+      resolution: "480p",
+    });
+    expect(schema!.properties.duration.default).toBe(6);
+    expect(schema!.properties.resolution.default).toBe("480p");
+  });
+
   it("does not invent Kling 3.0 defaults when Apicity has none", () => {
     const schema = getVideoToolSchema("generate_kie_kling_3_0_video");
     expect(schema!.defaults).toEqual({});

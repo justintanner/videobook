@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { canonicalHash, parseOtp, verifyOtp } from "@apicity/cost";
 import { ensurePaygateSecret, KIE_PAYGATE_DOT_PATH, mintKieOtp } from "./kie-paygate.js";
+import { buildGrokImagineT2vVideoPayload } from "../payload-builders.js";
 
 describe("kie paygate", () => {
   let tempDir: string;
@@ -63,6 +64,19 @@ describe("kie paygate", () => {
       requestHash: canonicalHash(request),
     });
     expect(parsed.payload.exp - parsed.payload.iat).toBe(60);
+  });
+
+  it("mints a bounded OTP for a bare Grok text-to-video payload", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+    const request = buildGrokImagineT2vVideoPayload({
+      prompt: "a quiet skyline",
+    });
+
+    expect(request.input).toMatchObject({
+      duration: 6,
+      resolution: "480p",
+    });
+    expect(() => mintKieOtp(request, 60)).not.toThrow();
   });
 
   it("rejects a grok-imagine/extend request with no resolution hint as unbounded", () => {

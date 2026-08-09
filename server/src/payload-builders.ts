@@ -399,8 +399,8 @@ function buildGrokImagineT2vVideoPayload(
     input: {
       prompt: args.prompt,
       ...(args.mode !== undefined ? { mode: args.mode } : {}),
-      ...(args.duration !== undefined ? { duration: args.duration } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      duration: args.duration ?? 6,
+      resolution: args.resolution ?? "480p",
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as GrokTextToVideoRequest["input"]["aspect_ratio"] } : {}),
       nsfw_checker: nsfwChecker,
     },

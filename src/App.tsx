@@ -1557,6 +1557,13 @@ function cellTypeLabel(kind: NotebookCellType): string {
   return kind.replace(/^generate_/, 'gen_').replaceAll('_', ' ').toUpperCase()
 }
 
+function compactCellTypeLabel(kind: NotebookCellType): string {
+  if (kind === 'generate_video') return 'GEN VID'
+  if (kind === 'generate_image') return 'GEN IMG'
+  if (kind === 'generate_audio') return 'GEN AUD'
+  return cellTypeLabel(kind)
+}
+
 function emptyCellLabel(data: CanvasCellData): string {
   if (
     data.kind === 'generate_video'
@@ -2131,6 +2138,14 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     ? asString(generationSettings.resolution)
       ?? asString(generationSettings.size)
     : null
+  const typeLabel = cellTypeLabel(data.kind)
+  const denseGenerationHeader = generationCell
+    && generationDuration !== null
+    && generationResolution !== null
+    && aspectRatio !== null
+  const visibleTypeLabel = denseGenerationHeader
+    ? compactCellTypeLabel(data.kind)
+    : typeLabel
   const resolvedPrompt = asString(data.inputs?.resolvedPrompt) ?? data.prompt
   const promptCell = textCell || (generationCell && Boolean(data.prompt))
   const running = notebookCellIsActiveStatus(data.status)
@@ -2222,7 +2237,16 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
       ))}
       <section className="cell-node-shell">
         <header className="cell-node-header">
-          <span><CellIcon kind={data.kind} />{cellTypeLabel(data.kind)}</span>
+          <span
+            className="cell-node-type"
+            aria-label={typeLabel}
+            title={denseGenerationHeader ? typeLabel : undefined}
+          >
+            <CellIcon kind={data.kind} />
+            <span className="cell-node-type-label" aria-hidden="true">
+              {visibleTypeLabel}
+            </span>
+          </span>
           {generationCell && (
             <span className="cell-generation-chips">
               {generationDuration && (

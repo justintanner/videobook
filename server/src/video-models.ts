@@ -1683,6 +1683,17 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
       defaults.nsfw_checker = false;
     }
 
+    if (toolName === "generate_kie_grok_imagine_text_to_video") {
+      if (param === "duration") {
+        prop.default = 6;
+        defaults.duration = 6;
+      }
+      if (param === "resolution") {
+        prop.default = "480p";
+        defaults.resolution = "480p";
+      }
+    }
+
     properties[param] = prop;
 
     // Required fields

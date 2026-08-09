@@ -129,6 +129,12 @@ async function requestBody(route: Route): Promise<unknown> {
   }
 }
 
+function notebookCellNode(page: Page, cellId: string) {
+  return page.locator(
+    `.notebook-flow .react-flow__node[data-id="${cellId}"] .cell-node`,
+  )
+}
+
 describe('chat composer browser flow', () => {
   let rootDir = ''
   let mcpProcess: StartedProcess | undefined
@@ -141,6 +147,7 @@ describe('chat composer browser flow', () => {
   let notebookId = ''
   let videoCellId = ''
   let imageCellId = ''
+  let generationCellId = ''
   let reviewGenerationCellId = ''
   let fullscreenImageCellId = ''
   let fullscreenImageMediaUrl = ''
@@ -214,7 +221,7 @@ describe('chat composer browser flow', () => {
       label: 'img-source-two',
       slot: { row: 0, column: 2 },
     })
-    const generationCellId = await createCell({
+    generationCellId = await createCell({
       type: 'generate_video',
       label: 'generate-video-target',
       slot: { row: 1, column: 0 },
@@ -222,7 +229,14 @@ describe('chat composer browser flow', () => {
       model: 'Seedance2MiniInputSchema',
       operation: 'image_to_video',
       tool: 'generate_kie_seedance_2_0_mini_video',
-      inputs: { state: 'running' },
+      inputs: {
+        state: 'running',
+        generationSettings: {
+          duration: '10',
+          resolution: '720p',
+          aspect_ratio: '9:16',
+        },
+      },
     })
     reviewGenerationCellId = await createCell({
       type: 'generate_image',
@@ -370,20 +384,33 @@ describe('chat composer browser flow', () => {
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
 
-    const canvas = page.locator('.canvas')
+    const topbar = page.locator('.topbar')
+    const brand = page.locator('.brand-project')
+    const navigation = page.getByLabel('Workspace navigation')
     const toolbar = page.getByLabel('Notebook canvas controls')
-    const firstCell = page.locator('.cell-node').filter({ hasText: '@a1' })
+    const firstCell = notebookCellNode(page, videoCellId)
     await toolbar.waitFor({ state: 'visible' })
     await firstCell.waitFor({ state: 'visible' })
-    const canvasBox = await canvas.boundingBox()
+    const topbarBox = await topbar.boundingBox()
+    const brandBox = await brand.boundingBox()
+    const navigationBox = await navigation.boundingBox()
     const toolbarBox = await toolbar.boundingBox()
     const firstCellBox = await firstCell.boundingBox()
-    if (!canvasBox || !toolbarBox || !firstCellBox) {
+    if (
+      !topbarBox
+      || !brandBox
+      || !navigationBox
+      || !toolbarBox
+      || !firstCellBox
+    ) {
       throw new Error('Could not measure notebook layout')
     }
-    expect(toolbarBox.x).toBeLessThan(canvasBox.x + canvasBox.width / 2)
-    expect(toolbarBox.x - canvasBox.x).toBeGreaterThanOrEqual(20)
-    expect(toolbarBox.x - canvasBox.x).toBeLessThanOrEqual(28)
+    expect(toolbarBox.x).toBeGreaterThanOrEqual(brandBox.x + brandBox.width)
+    expect(toolbarBox.x + toolbarBox.width).toBeLessThanOrEqual(navigationBox.x)
+    expect(Math.abs(
+      toolbarBox.y + toolbarBox.height / 2
+      - (topbarBox.y + topbarBox.height / 2),
+    )).toBeLessThan(1)
     expect(toolbarBox.y + toolbarBox.height).toBeLessThanOrEqual(firstCellBox.y)
 
     const addCell = page.locator('.canvas-add-menu > summary')
@@ -399,9 +426,7 @@ describe('chat composer browser flow', () => {
     expect(inspectorBox?.width).toBeGreaterThanOrEqual(280)
     expect(inspectorBox?.width).toBeLessThanOrEqual(320)
 
-    const detailCell = page.locator('.cell-node.cell-kind-generate_image').filter({
-      hasText: '@b3',
-    })
+    const detailCell = notebookCellNode(page, reviewGenerationCellId)
     await detailCell.click()
     await page.locator('.inspector-cell-title').waitFor({ state: 'visible' })
     await wait(250)
@@ -510,7 +535,7 @@ describe('chat composer browser flow', () => {
       ]
       await refreshNotebook()
       expect(await imageTargetNode.locator('.cell-target-handle').count()).toBe(2)
-      expect(await imageTargetNode.locator('.cell-target-connection-count').textContent()).toBe('2')
+      expect(await imageTargetNode.locator('.cell-target-connection-count').count()).toBe(0)
       for (const edgeId of imageEdgeIds) await assertEdge(edgeId)
 
       const videoTargetCellId = await createCell({
@@ -661,8 +686,8 @@ describe('chat composer browser flow', () => {
         clientX: dropPoint.x,
         clientY: dropPoint.y,
       })
-      const droppedCell = page.locator('.cell-node.cell-kind-image').filter({
-        hasText: '@a2',
+      const droppedCell = page.locator('.cell-node').filter({
+        has: page.locator('.cell-node-footer strong').filter({ hasText: /^@a2$/ }),
       })
       await droppedCell.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await page.locator('.notebook-grid-square-dropzone').count()).toBe(0)
@@ -698,9 +723,7 @@ describe('chat composer browser flow', () => {
 
     const reopenInspector = page.getByLabel('Open inspector')
     if (await reopenInspector.isVisible()) await reopenInspector.click()
-    const generationCell = page.locator('.cell-node.cell-kind-generate_video').filter({
-      hasText: '@b1',
-    })
+    const generationCell = notebookCellNode(page, generationCellId)
     await generationCell.click()
 
     const inspector = page.locator('.inspector')
@@ -854,28 +877,29 @@ describe('chat composer browser flow', () => {
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
     const routePaths = page.locator('.notebook-flow .workflow-edge .react-flow__edge-path')
-    await expect.poll(async () => await routePaths.count()).toBe(2)
+    await expect.poll(async () => await routePaths.count()).toBe(3)
     const routeStyles = await routePaths.evaluateAll((paths) => paths.map((path) => ({
       d: path.getAttribute('d'),
       stroke: window.getComputedStyle(path).stroke,
       strokeWidth: window.getComputedStyle(path).strokeWidth,
     })))
-    expect(routeStyles).toHaveLength(2)
+    expect(routeStyles).toHaveLength(3)
     expect(routeStyles.every((style) => style.d?.startsWith('M '))).toBe(true)
     expect(routeStyles.every((style) => style.stroke === 'rgba(114, 231, 170, 0.62)'))
       .toBe(true)
     expect(routeStyles.every((style) => style.strokeWidth === '1.6px')).toBe(true)
-    const runningCell = page.locator('.cell-node-running')
+    const runningCell = notebookCellNode(page, generationCellId)
     await runningCell.waitFor({ state: 'visible' })
+    expect(await runningCell.getAttribute('class')).toContain('cell-node-running')
     expect(await runningCell.evaluate((element) =>
       window.getComputedStyle(element).animationName)).toBe('none')
     expect(await runningCell.getAttribute('aria-busy')).toBe('true')
     expect(await runningCell.locator('.cell-state-shimmer > span').count()).toBe(0)
-    expect(await runningCell.locator('.cell-target-connection-count').textContent()).toBe('2')
+    expect(await runningCell.locator('.cell-target-handle').count()).toBe(2)
+    expect(await runningCell.locator('.cell-target-connection-count').count()).toBe(0)
     const selector = page.getByLabel('Chat model')
     expect(await selector.locator('option').allTextContents()).toEqual(['gpt-5.6-sol'])
-    expect(await page.evaluate(() => window.localStorage.getItem('videobook.chat-model')))
-      .toBe('gpt-5.6-sol')
+    expect(await selector.inputValue()).toBe('gpt-5.6-sol')
 
     // @c3 is the only fixture cell with real media output, so it is the grid
     // address the server-side resolver can rewrite to an artifact id.
@@ -927,14 +951,16 @@ describe('chat composer browser flow', () => {
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
-    const reviewCell = page.locator('.cell-node.cell-kind-generate_image').filter({
-      hasText: '@b3',
-    })
-    const generate = reviewCell.getByRole('button', { name: 'Gen' })
+    const reviewCell = notebookCellNode(page, reviewGenerationCellId)
+    const reopenInspector = page.getByLabel('Open inspector')
+    if (await reopenInspector.isVisible()) await reopenInspector.click()
+    await reviewCell.click()
+    const generate = page.getByLabel('Primary cell action')
+      .getByRole('button', { name: 'Generate' })
     await expect.poll(async () => await generate.isEnabled()).toBe(true)
 
     observedCalls.length = 0
-    await generate.click()
+    await generate.click({ timeout: 10_000 })
     const review = page.getByLabel('Command plan review')
     await review.waitFor({ state: 'visible' })
     await expect.poll(() => observedCalls.some((call) =>
@@ -949,7 +975,7 @@ describe('chat composer browser flow', () => {
     expect(await input.evaluate((element) => document.activeElement === element)).toBe(true)
 
     observedCalls.length = 0
-    await generate.click()
+    await generate.click({ timeout: 10_000 })
     await review.waitFor({ state: 'visible' })
     await expect.poll(() => observedCalls.some((call) =>
       call.name === 'plan_notebook_generation')).toBe(true)
@@ -958,13 +984,65 @@ describe('chat composer browser flow', () => {
       'videobook.cloud-generation-consent',
       'accepted',
     ))
-    await review.getByRole('button', { name: 'Apply' }).click()
+    await review.getByRole('button', { name: 'Apply' }).click({ timeout: 10_000 })
     await expect.poll(() => observedCalls.some((call) =>
       call.name === 'run_notebook_cell'), {
       timeout: 20_000,
     }).toBe(true)
     const runCall = observedCalls.find((call) => call.name === 'run_notebook_cell')
     expect(runCall?.arguments.cell_id).toBe(reviewGenerationCellId)
+  }, 60_000)
+
+  it('keeps dense generation card headers compact and vertically centered', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+    const header = notebookCellNode(page, generationCellId)
+      .locator('.cell-node-header')
+    await header.waitFor({ state: 'visible' })
+    const layout = await header.evaluate((element) => {
+      const headerRect = element.getBoundingClientRect()
+      const type = element.querySelector('.cell-node-type')
+      const chips = element.querySelector('.cell-generation-chips')
+      if (!(type instanceof HTMLElement) || !(chips instanceof HTMLElement)) {
+        throw new Error('Generation header content is missing')
+      }
+      const typeRect = type.getBoundingClientRect()
+      const chipsRect = chips.getBoundingClientRect()
+      const label = type.querySelector('.cell-node-type-label')
+      if (!(label instanceof HTMLElement)) {
+        throw new Error('Generation header label is missing')
+      }
+      const headerCenter = headerRect.top + headerRect.height / 2
+      return {
+        accessibleLabel: type.getAttribute('aria-label'),
+        contentGap: chipsRect.left - typeRect.right,
+        headerHeight: Number.parseFloat(getComputedStyle(element).height),
+        labelClipped: label.scrollWidth > label.clientWidth,
+        renderedLabel: type.textContent?.trim(),
+        typeCenterOffset: Math.abs(typeRect.top + typeRect.height / 2 - headerCenter),
+        chipsCenterOffset: Math.abs(chipsRect.top + chipsRect.height / 2 - headerCenter),
+        whiteSpace: getComputedStyle(label).whiteSpace,
+      }
+    })
+
+    expect(layout).toMatchObject({
+      accessibleLabel: 'GEN VIDEO',
+      headerHeight: 38,
+      labelClipped: false,
+      renderedLabel: 'GEN VID',
+      whiteSpace: 'nowrap',
+    })
+    expect(layout.contentGap).toBeGreaterThanOrEqual(0)
+    expect(layout.typeCenterOffset).toBeLessThan(1)
+    expect(layout.chipsCenterOffset).toBeLessThan(1)
+
+    const relaxedType = notebookCellNode(page, reviewGenerationCellId)
+      .locator('.cell-node-type')
+    expect((await relaxedType.textContent())?.trim()).toBe('GEN IMAGE')
   }, 60_000)
 
   it('marquee-selects multiple cells and confirms before deleting the set', async () => {
@@ -974,8 +1052,8 @@ describe('chat composer browser flow', () => {
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
 
-    const firstCell = page.locator('.cell-node.cell-kind-video')
-    const secondCell = page.locator('.cell-node.cell-kind-generate_video')
+    const firstCell = notebookCellNode(page, videoCellId)
+    const secondCell = notebookCellNode(page, generationCellId)
     await firstCell.waitFor({ state: 'visible' })
     await secondCell.waitFor({ state: 'visible' })
     const pane = page.locator('.notebook-flow .react-flow__pane')

@@ -819,6 +819,22 @@ describe("translateToolPayload", () => {
     expect(Seedance2MiniRequestSchema.safeParse(result?.payload).success).toBe(true);
   });
 
+  it("defaults Grok text-to-video duration and resolution on the wire", () => {
+    const result = translateToolPayload("generate_kie_grok_imagine_text_to_video", {
+      prompt: "a quiet skyline",
+    });
+
+    expect(result?.payload).toMatchObject({
+      model: "grok-imagine/text-to-video",
+      input: {
+        prompt: "a quiet skyline",
+        duration: 6,
+        resolution: "480p",
+      },
+    });
+    expect(GrokTextToVideoRequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
   it("builds Veo 3.1 lite-low-priority payload with model literal", () => {
     const result = translateToolPayload("generate_google_flow_veo_3_1_lite_low_priority_video", {
       prompt: "slow clouds",

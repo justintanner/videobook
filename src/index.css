@@ -871,6 +871,7 @@ textarea:focus-visible {
   z-index: 1;
   display: flex;
   flex: 0 1 auto;
+  align-self: center;
   height: 32px;
   min-width: 0;
   align-items: center;
@@ -1907,10 +1908,27 @@ textarea:focus-visible {
   letter-spacing: 0.12em;
 }
 
-.cell-node-header span:first-child {
-  display: flex;
+.cell-node-header {
+  flex: 0 0 38px;
+  gap: 8px;
+}
+
+.cell-node-type {
+  display: inline-flex;
+  min-width: 0;
   align-items: center;
   gap: 7px;
+  line-height: 1;
+}
+
+.cell-node-type > svg {
+  flex: none;
+}
+
+.cell-node-type-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cell-version-count {
