@@ -45,6 +45,13 @@ export type GenerationConnectedInput = {
   target: string
 }
 
+export type GenerationInputAttachment = {
+  sourceCellId: string
+  targetInput: string
+  target: string
+  kind: GenerationInputKind
+}
+
 export type GenerationControlValue = string | number | boolean
 
 export type GenerationControl = {
@@ -339,7 +346,9 @@ export function generationActionForSelection(
   )
 }
 
-function cellInputKind(cell: NotebookCell): GenerationInputKind | null {
+export function generationInputKind(
+  cell: NotebookCell,
+): GenerationInputKind | null {
   if (
     cell.type === 'image'
     || cell.type === 'generate_image'
@@ -381,11 +390,80 @@ export function generationConnectedInputs(
   return edges.flatMap((edge) => {
     if (edge.target !== cellId) return []
     const source = cellsById.get(edge.source)
-    const kind = source ? cellInputKind(source) : null
+    const kind = source ? generationInputKind(source) : null
     return kind
       ? [{ kind, target: normalizedInputTarget(kind, edge.targetInput) }]
       : []
   })
+}
+
+function nextGenerationTargetInput(
+  target: string,
+  usedTargetInputs: ReadonlySet<string>,
+): string {
+  if (!usedTargetInputs.has(target)) return target
+  let index = 2
+  while (usedTargetInputs.has(`${target}_${index}`)) index += 1
+  return `${target}_${index}`
+}
+
+export function generationInputAttachments(
+  action: NotebookGenerationAction,
+  modeId: string,
+  cellId: string,
+  cells: readonly NotebookCell[],
+  edges: readonly NotebookEdge[],
+): GenerationInputAttachment[] {
+  const mode = action.inputContract.modes.find((candidate) =>
+    candidate.id === modeId)
+  if (!mode) return []
+
+  const cellsById = new Map(cells.map((cell) => [cell.id, cell]))
+  const targetEdges = edges.filter((edge) => edge.target === cellId)
+  const connected = targetEdges.flatMap((edge) => {
+    const source = cellsById.get(edge.source)
+    const kind = source ? generationInputKind(source) : null
+    return kind
+      ? [{
+          sourceCellId: edge.source,
+          targetInput: edge.targetInput,
+          target: normalizedInputTarget(kind, edge.targetInput),
+          kind,
+        }]
+      : []
+  })
+  const connectedSources = new Set(targetEdges.map((edge) => edge.source))
+  const usedTargetInputs = new Set(targetEdges.map((edge) => edge.targetInput))
+  const options: GenerationInputAttachment[] = []
+  const seen = new Set<string>()
+
+  for (const source of cells
+    .filter((candidate) => candidate.id !== cellId)
+    .sort((left, right) =>
+      left.slot.row - right.slot.row
+      || left.slot.column - right.slot.column)) {
+    if (connectedSources.has(source.id)) continue
+    const kind = generationInputKind(source)
+    if (!kind) continue
+    for (const slot of mode.slots) {
+      if (slot.kind !== kind) continue
+      const count = connected.filter((input) =>
+        input.kind === slot.kind && slot.targets.includes(input.target)).length
+      if (slot.max !== null && count >= slot.max) continue
+      for (const target of slot.targets) {
+        const key = `${source.id}:${target}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        options.push({
+          sourceCellId: source.id,
+          targetInput: nextGenerationTargetInput(target, usedTargetInputs),
+          target,
+          kind,
+        })
+      }
+    }
+  }
+  return options
 }
 
 function inputModeMatches(

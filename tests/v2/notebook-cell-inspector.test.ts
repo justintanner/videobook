@@ -117,13 +117,22 @@ const generationActions: NotebookGenerationAction[] = [
         },
         {
           id: 'v2v',
-          slots: [{
-            field: 'video_ref',
-            kind: 'video',
-            targets: ['video'],
-            min: 0,
-            max: 1,
-          }],
+          slots: [
+            {
+              field: 'image_refs',
+              kind: 'image',
+              targets: ['image'],
+              min: 0,
+              max: 7,
+            },
+            {
+              field: 'video_ref',
+              kind: 'video',
+              targets: ['video'],
+              min: 0,
+              max: 1,
+            },
+          ],
           requiredGroups: [['video_ref']],
         },
       ],
@@ -276,6 +285,66 @@ describe('NotebookCellInspector', () => {
       '{&quot;provider&quot;:&quot;Kie&quot;,&quot;model&quot;:&quot;Gemini Omni Video&quot;,&quot;type&quot;:&quot;t2v&quot;,&quot;inputs&quot;:0,&quot;settings&quot;:{&quot;duration&quot;:&quot;8&quot;}}',
     )
     expect(previewCalls).toBe(0)
+  })
+
+  it('offers compatible notebook media as an additional generation input', () => {
+    const generationCell: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000030',
+      type: 'generate_video',
+      slot: { row: 1, column: 0 },
+      prompt: 'Two kittens perform the reference dance',
+      provider: 'kie',
+      model: 'GeminiOmniVideoRequestSchema',
+      operation: 'image_to_video',
+      tool: 'generate_kie_gemini_omni_video',
+      inputs: { generationMode: 'v2v' },
+      outputArtifactId: undefined,
+    }
+    const videoSource: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000031',
+      slot: { row: 0, column: 0 },
+    }
+    const imageSource: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000032',
+      type: 'image',
+      slot: { row: 0, column: 1 },
+    }
+    const edge: NotebookEdge = {
+      id: '01900000-0000-7000-8000-000000000033',
+      source: videoSource.id,
+      target: generationCell.id,
+      targetInput: 'video',
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: generationCell,
+      cells: [generationCell, videoSource, imageSource],
+      edges: [edge],
+      asset: undefined,
+      status: 'ready',
+      error: null,
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      generationActions,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('aria-label="video input"')
+    expect(html).toContain('aria-label="Attach media input"')
+    expect(html).toContain('role="listbox" aria-label="Media input options"')
+    expect(html).toContain('<strong>@a2</strong>')
+    expect(html).toContain('image · image input')
+    expect(html).not.toContain('<strong>@a1</strong><small>image')
   })
 
   it('keeps an incompatible saved model visible and disables generation', () => {

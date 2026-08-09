@@ -867,14 +867,17 @@ textarea:focus-visible {
 }
 
 .canvas-toolbar {
-  position: absolute;
-  top: var(--notebook-toolbar-gap);
-  left: var(--notebook-chrome-inset);
-  z-index: 20;
+  position: relative;
+  z-index: 1;
   display: flex;
-  height: var(--notebook-toolbar-height);
-  align-items: flex-start;
+  flex: 0 1 auto;
+  height: 32px;
+  min-width: 0;
+  align-items: center;
   gap: 6px;
+  margin-left: 18px;
+  padding-left: 18px;
+  border-left: 1px solid rgba(114, 231, 170, 0.14);
   pointer-events: none;
 }
 
@@ -1078,26 +1081,18 @@ textarea:focus-visible {
      land cell-to-boundary on the 40px inter-cell rhythm at 100 percent zoom.
      Edge inset 10 + reserved scrollbar gutter 10 + originX 20 = 40. */
   --notebook-edge-inset: 10px;
-  /* floating canvas chrome (toolbar, inspector reopen) sits on the same
-     24px line as the topbar content and the composer, not the scroll margin */
   --notebook-chrome-inset: 24px;
+  --notebook-chrome-gap: 7px;
   /* 18px composer offset + 56px command shell + 10px gap; the 10px
      horizontal scrollbar inside the viewport completes the rhythm
      (originY 20 + bar 10 + gap 10 = 40) */
   --notebook-composer-clearance: 84px;
-  --notebook-toolbar-height: 32px;
-  --notebook-toolbar-gap: 7px;
-  /* toolbar bottom sits 20px above the scroll viewport */
-  --notebook-toolbar-clearance: calc(
-    var(--notebook-toolbar-height) + var(--notebook-toolbar-gap) + 20px
-  );
   position: relative;
   grid-row: 2;
   grid-column: 1;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding-top: var(--notebook-toolbar-clearance);
   padding-bottom: var(--notebook-composer-clearance);
   background: #030907;
 }
@@ -1207,7 +1202,7 @@ textarea:focus-visible {
 
 .inspector-reopen {
   position: absolute;
-  top: var(--notebook-toolbar-gap);
+  top: var(--notebook-chrome-gap);
   right: var(--notebook-chrome-inset);
   z-index: 20;
   display: grid;
@@ -4288,6 +4283,15 @@ textarea:focus-visible {
   opacity: 0.48;
 }
 
+.inspector-attach-source-picker summary {
+  border-style: dashed;
+  background: rgba(11, 38, 23, 0.52);
+}
+
+.inspector-attach-source-picker summary .inspector-source-picker-copy strong {
+  color: var(--green);
+}
+
 .inspector-source-thumb {
   display: grid;
   width: 38px;
@@ -6704,6 +6708,30 @@ textarea:focus-visible {
     height: 40px;
   }
 
+  .canvas-toolbar {
+    gap: 4px;
+    margin-left: 6px;
+    padding-left: 6px;
+  }
+
+  .canvas-toolbar .canvas-selection-actions > code {
+    display: none;
+  }
+
+  .canvas-toolbar .canvas-selection-actions > span {
+    padding: 0 7px;
+  }
+
+  .canvas-toolbar .canvas-delete-selection {
+    width: 32px;
+    min-width: 32px;
+    padding: 0;
+  }
+
+  .canvas-toolbar .canvas-delete-selection span {
+    display: none;
+  }
+
   .book-project-menu {
     left: 0;
   }
@@ -6808,6 +6836,24 @@ textarea:focus-visible {
     grid-row: 1;
     width: 100%;
     overflow: visible;
+  }
+
+  .canvas-toolbar {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    margin-right: 6px;
+  }
+
+  .canvas-toolbar .canvas-selection-actions > span {
+    display: none;
+  }
+
+  .canvas-toolbar .canvas-zoom-panel button {
+    width: 28px;
+  }
+
+  .canvas-toolbar .canvas-zoom-panel .canvas-zoom-level {
+    width: 38px;
   }
 
   .brand-project {

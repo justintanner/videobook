@@ -8,6 +8,7 @@ import {
   History,
   Layers2,
   Maximize2,
+  Plus,
   Save,
 } from 'lucide-react'
 import { Fragment, useMemo, useRef, useState } from 'react'
@@ -63,6 +64,7 @@ import {
   generationActionIsCompatible,
   generationActionLabel,
   generationConnectedInputs,
+  generationInputAttachments,
   generationModeIsCompatible,
   generationModeLabel,
   generationSelectionForAction,
@@ -71,6 +73,7 @@ import {
   isGenerationCellType,
   type GenerationControl,
   type GenerationControlValue,
+  type GenerationInputAttachment,
   type GenerationPreviewDraft,
   type GenerationSelection,
   type NotebookGenerationAction,
@@ -893,12 +896,117 @@ function SourceCellPicker({
   )
 }
 
+function attachmentTargetLabel(target: string): string {
+  if (target === 'first_frame') return 'first frame input'
+  if (target === 'last_frame') return 'last frame input'
+  if (target === 'replace_audio') return 'replacement audio'
+  return `${target.replaceAll('_', ' ')} input`
+}
+
+function AttachSourcePicker({
+  attachments,
+  cells,
+  cellAssets,
+  busy,
+  onAttach,
+}: {
+  attachments: readonly GenerationInputAttachment[]
+  cells: NotebookCell[]
+  cellAssets?: ReadonlyMap<string, NotebookCellInspectorAsset>
+  busy: boolean
+  onAttach: (targetInput: string, sourceCellId: string) => Promise<void>
+}) {
+  const detailsRef = useRef<HTMLDetailsElement>(null)
+  const cellsById = new Map(cells.map((cell) => [cell.id, cell]))
+  const choose = (attachment: GenerationInputAttachment) => {
+    detailsRef.current?.removeAttribute('open')
+    void onAttach(attachment.targetInput, attachment.sourceCellId)
+  }
+
+  return (
+    <details
+      ref={detailsRef}
+      className="inspector-source-picker inspector-attach-source-picker"
+      onBlur={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          return
+        }
+        event.currentTarget.removeAttribute('open')
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return
+        event.preventDefault()
+        detailsRef.current?.removeAttribute('open')
+        detailsRef.current?.querySelector<HTMLElement>('summary')?.focus()
+      }}
+    >
+      <summary
+        aria-label="Attach media input"
+        title="Attach media input"
+        aria-disabled={busy}
+        tabIndex={busy ? -1 : 0}
+        onClick={(event) => {
+          if (busy) event.preventDefault()
+        }}
+      >
+        <span
+          className="inspector-source-thumb inspector-source-thumb-empty"
+          aria-hidden="true"
+        >
+          <Plus size={15} />
+        </span>
+        <span className="inspector-source-picker-copy">
+          <strong>Attach media</strong>
+          <small>{attachments.length} available</small>
+        </span>
+        <ChevronDown
+          className="inspector-source-picker-chevron"
+          size={15}
+          aria-hidden="true"
+        />
+      </summary>
+      <div
+        className="inspector-source-picker-options"
+        role="listbox"
+        aria-label="Media input options"
+      >
+        {attachments.map((attachment) => {
+          const source = cellsById.get(attachment.sourceCellId)
+          if (!source) return null
+          return (
+            <button
+              type="button"
+              role="option"
+              aria-selected="false"
+              disabled={busy}
+              key={`${attachment.sourceCellId}:${attachment.target}`}
+              onClick={() => choose(attachment)}
+            >
+              <SourceCellThumb
+                cell={source}
+                asset={cellAssets?.get(source.id)}
+              />
+              <span className="inspector-source-picker-copy">
+                <strong>{notebookGridTag(source.slot)}</strong>
+                <small>
+                  {sourceCellTypeLabel(source)} · {attachmentTargetLabel(attachment.target)}
+                </small>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </details>
+  )
+}
+
 function InputSources({
   cell,
   cells,
   edges,
   busy,
   cellAssets,
+  attachments = [],
   onSetInput,
 }: {
   cell: NotebookCell
@@ -906,11 +1014,12 @@ function InputSources({
   edges: NotebookEdge[]
   busy: boolean
   cellAssets?: ReadonlyMap<string, NotebookCellInspectorAsset>
+  attachments?: readonly GenerationInputAttachment[]
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
 }) {
   const inputs = cellInputNames(cell, edges)
 
-  if (inputs.length === 0) return null
+  if (inputs.length === 0 && attachments.length === 0) return null
 
   return (
     <section className="inspector-input-sources">
@@ -942,6 +1051,17 @@ function InputSources({
             </div>
           )
         })}
+        {attachments.length > 0 && (
+          <div className="inspector-input-source-row">
+            <AttachSourcePicker
+              attachments={attachments}
+              cells={cells}
+              cellAssets={cellAssets}
+              busy={busy}
+              onAttach={onSetInput}
+            />
+          </div>
+        )}
       </div>
     </section>
   )
@@ -1864,6 +1984,15 @@ function ExecutableCellInspector({
   )
   const generationModeOptions = selectedGenerationAction?.inputContract.modes
     ?? []
+  const generationAttachments = selectedGenerationAction
+    ? generationInputAttachments(
+        selectedGenerationAction,
+        effectiveGenerationMode,
+        cell.id,
+        cells,
+        edges,
+      )
+    : []
   const generationControls = selectedGenerationAction?.controls ?? []
   const allGenerationControls = generationActions.flatMap((candidate) =>
     candidate.controls)
@@ -2166,6 +2295,7 @@ function ExecutableCellInspector({
         edges={edges}
         busy={busy}
         cellAssets={cellAssets}
+        attachments={generationAttachments}
         onSetInput={onSetInput}
       />
       <form

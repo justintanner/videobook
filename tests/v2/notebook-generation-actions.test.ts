@@ -9,6 +9,7 @@ import {
   generationActionIsCompatible,
   generationActionLabel,
   generationConnectedInputs,
+  generationInputAttachments,
   generationModeLabel,
   generationSelectionForAction,
   initialGenerationSelection,
@@ -323,6 +324,81 @@ describe('notebook generation actions', () => {
       [emptyImageCell, source],
       [edge],
     )).toEqual([{ kind: 'image', target: 'first_frame' }])
+  })
+
+  it('offers unconnected media through an open generation input', () => {
+    const target: NotebookCell = {
+      ...emptyImageCell,
+      type: 'generate_video',
+    }
+    const video: NotebookCell = {
+      ...emptyImageCell,
+      id: '01900000-0000-7000-8000-000000000010',
+      type: 'video',
+      slot: { row: 0, column: 0 },
+    }
+    const image: NotebookCell = {
+      ...emptyImageCell,
+      id: '01900000-0000-7000-8000-000000000011',
+      type: 'image',
+      slot: { row: 0, column: 1 },
+    }
+    const edge: NotebookEdge = {
+      id: '01900000-0000-7000-8000-000000000012',
+      source: video.id,
+      target: target.id,
+      targetInput: 'video',
+    }
+
+    expect(generationInputAttachments(
+      seedanceAction,
+      'r2v',
+      target.id,
+      [target, image, video],
+      [edge],
+    )).toEqual([{
+      sourceCellId: image.id,
+      targetInput: 'image',
+      target: 'image',
+      kind: 'image',
+    }])
+  })
+
+  it('allocates a new named input without replacing an existing reference', () => {
+    const target: NotebookCell = {
+      ...emptyImageCell,
+      type: 'generate_video',
+    }
+    const firstImage: NotebookCell = {
+      ...emptyImageCell,
+      id: '01900000-0000-7000-8000-000000000013',
+      type: 'image',
+    }
+    const nextImage: NotebookCell = {
+      ...emptyImageCell,
+      id: '01900000-0000-7000-8000-000000000014',
+      type: 'image',
+      slot: { row: 0, column: 1 },
+    }
+    const edge: NotebookEdge = {
+      id: '01900000-0000-7000-8000-000000000015',
+      source: firstImage.id,
+      target: target.id,
+      targetInput: 'image',
+    }
+
+    expect(generationInputAttachments(
+      seedanceAction,
+      'r2v',
+      target.id,
+      [target, firstImage, nextImage],
+      [edge],
+    )).toEqual([{
+      sourceCellId: nextImage.id,
+      targetInput: 'image_2',
+      target: 'image',
+      kind: 'image',
+    }])
   })
 
   it('uses extracted Image results instead of Extract Frame actions', () => {
