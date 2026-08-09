@@ -45,7 +45,7 @@ describe("Dancing workflow fixture", () => {
     }
   });
 
-  it("builds the corrected first-frame to Kling motion-control graph", async () => {
+  it("builds explicit image and video generation output pairs", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-dancing-"));
     mediaDir = await mkdtemp(join(tmpdir(), "videobook-dancing-media-"));
     const sourcePath = join(mediaDir, "source.mp4");
@@ -75,8 +75,8 @@ describe("Dancing workflow fixture", () => {
     });
     const owned = seeded.cells.filter((cell) =>
       cell.inputs?.fixtureOwner === DANCING_FIXTURE_OWNER);
-    expect(owned).toHaveLength(5);
-    expect(seeded.edges).toHaveLength(5);
+    expect(owned).toHaveLength(7);
+    expect(seeded.edges).toHaveLength(7);
     expect(seeded.fixture).toEqual(expect.objectContaining({
       version: DANCING_FIXTURE_VERSION,
       owner: DANCING_FIXTURE_OWNER,
@@ -92,8 +92,12 @@ describe("Dancing workflow fixture", () => {
       cell.inputs?.workflowRole === "first-frame-output");
     const kittens = owned.find((cell) =>
       cell.inputs?.workflowRole === "kittens-freeway");
+    const kittenOutput = owned.find((cell) =>
+      cell.inputs?.workflowRole === "kittens-freeway-output");
     const motion = owned.find((cell) =>
       cell.inputs?.workflowRole === "kling-motion-control");
+    const motionOutput = owned.find((cell) =>
+      cell.inputs?.workflowRole === "kling-motion-control-output");
     expect(source?.inputs).toEqual(expect.objectContaining({
       sourceOperation: "download_video",
       selectedRangeSeconds: [0, 10],
@@ -117,6 +121,15 @@ describe("Dancing workflow fixture", () => {
     }));
     expect(kittens?.prompt).toContain("two kittens");
     expect(kittens?.prompt).toContain("freeway");
+    expect(kittenOutput).toEqual(expect.objectContaining({
+      type: "image",
+      outputArtifactId: kittens?.outputArtifactId,
+      inputs: expect.objectContaining({
+        mediaRole: "generate-image-output",
+        producerCellId: kittens?.id,
+        state: "completed",
+      }),
+    }));
     expect(motion).toEqual(expect.objectContaining({
       type: "generate_video",
       operation: "motion_control",
@@ -132,6 +145,15 @@ describe("Dancing workflow fixture", () => {
       requiresConfirmation: true,
       state: "pending",
     }));
+    expect(motionOutput).toEqual(expect.objectContaining({
+      type: "video",
+      inputs: expect.objectContaining({
+        mediaRole: "generate-video-output",
+        producerCellId: motion?.id,
+        state: "pending",
+      }),
+    }));
+    expect(motionOutput?.outputArtifactId).toBeUndefined();
     expect(seeded.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         source: source?.id,
@@ -145,6 +167,11 @@ describe("Dancing workflow fixture", () => {
       }),
       expect.objectContaining({
         source: kittens?.id,
+        target: kittenOutput?.id,
+        targetInput: "media",
+      }),
+      expect.objectContaining({
+        source: kittenOutput?.id,
         target: motion?.id,
         targetInput: "image",
       }),
@@ -153,9 +180,16 @@ describe("Dancing workflow fixture", () => {
         target: motion?.id,
         targetInput: "video",
       }),
+      expect.objectContaining({
+        source: motion?.id,
+        target: motionOutput?.id,
+        targetInput: "media",
+      }),
     ]));
     expect(seeded.edges.some((edge) =>
       edge.source === extract?.id && edge.target === kittens?.id)).toBe(false);
+    expect(seeded.edges.some((edge) =>
+      edge.source === kittens?.id && edge.target === motion?.id)).toBe(false);
     if (!source?.outputArtifactId || !motion) {
       throw new Error("Dancing fixture source or motion cell is missing");
     }
@@ -180,7 +214,7 @@ describe("Dancing workflow fixture", () => {
       mode: "720p",
       character_orientation: "video",
       background_source: "input_image",
-      character_image_refs: [`@${kittens?.outputArtifactId}`],
+      character_image_refs: [`@${kittenOutput?.outputArtifactId}`],
       motion_video_refs: [`@${source.outputArtifactId}`],
     }));
     if (!extract || !kittens) {

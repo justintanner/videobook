@@ -22,7 +22,7 @@ export type DancingFixtureOptions = {
 };
 
 export const DANCING_FIXTURE_OWNER = "dancing-default";
-export const DANCING_FIXTURE_VERSION = 2;
+export const DANCING_FIXTURE_VERSION = 3;
 export const DANCING_SOURCE_URL = "https://www.youtube.com/watch?v=8GwZveBYRJI";
 export const DANCING_MOTION_DURATION_SECONDS = 10;
 
@@ -41,7 +41,9 @@ const FIXTURE_ROLES = [
   "extract-first-frame",
   "first-frame-output",
   "kittens-freeway",
+  "kittens-freeway-output",
   "kling-motion-control",
+  "kling-motion-control-output",
 ] as const;
 
 function roleOf(cell: NotebookCell): string | null {
@@ -71,7 +73,7 @@ function isCurrentFixture(document: NotebookDocument): boolean {
   return fixtureRecord(document)?.version === DANCING_FIXTURE_VERSION
     && cells.length === FIXTURE_ROLES.length
     && FIXTURE_ROLES.every((role) => roles.has(role))
-    && edges.length === 5
+    && edges.length === 7
     && cells.filter((cell) => cell.outputArtifactId).every((cell) =>
       document.execution?.[cell.id]?.fingerprint
         === notebookCellFingerprint(document, cell));
@@ -388,7 +390,7 @@ export async function seedDancingWorkflow(
   });
   const kittens = engine.notebooks.createCell({
     type: "generate_image",
-    label: "Kittens freeway image",
+    label: "Generate kittens freeway image",
     slot: { row: 2, column: 1 },
     prompt: IMAGE_PROMPT,
     provider: "google_flow",
@@ -405,10 +407,23 @@ export async function seedDancingWorkflow(
       state: "completed",
     },
   });
+  const kittenOutput = engine.notebooks.createCell({
+    type: "image",
+    label: "Kittens freeway image",
+    slot: { row: 2, column: 2 },
+    outputArtifactId: kittenArtifact.artifactId,
+    inputs: {
+      ...ownedInputs("kittens-freeway-output"),
+      mediaRole: "generate-image-output",
+      producerCellId: kittens.id,
+      fixtureBaseline: true,
+      state: "completed",
+    },
+  });
   const motion = engine.notebooks.createCell({
     type: "generate_video",
     label: "Kittens dancing motion",
-    slot: { row: 3, column: 0 },
+    slot: { row: 3, column: 2 },
     prompt: MOTION_PROMPT,
     provider: "kie",
     model: "kling-3.0/motion-control",
@@ -423,6 +438,17 @@ export async function seedDancingWorkflow(
         background_source: "input_image",
       },
       requiresConfirmation: true,
+      state: "pending",
+    },
+  });
+  const motionOutput = engine.notebooks.createCell({
+    type: "video",
+    label: "Kittens dancing video",
+    slot: { row: 4, column: 2 },
+    inputs: {
+      ...ownedInputs("kling-motion-control-output"),
+      mediaRole: "generate-video-output",
+      producerCellId: motion.id,
       state: "pending",
     },
   });
@@ -444,6 +470,11 @@ export async function seedDancingWorkflow(
     }),
     engine.notebooks.createEdge({
       source: kittens.id,
+      target: kittenOutput.id,
+      targetInput: "media",
+    }),
+    engine.notebooks.createEdge({
+      source: kittenOutput.id,
       target: motion.id,
       targetInput: "image",
     }),
@@ -452,6 +483,11 @@ export async function seedDancingWorkflow(
       target: motion.id,
       targetInput: "video",
     }),
+    engine.notebooks.createEdge({
+      source: motion.id,
+      target: motionOutput.id,
+      targetInput: "media",
+    }),
   ];
   const ensuredAt = new Date().toISOString();
   const document: NotebookDocument = {
@@ -459,7 +495,16 @@ export async function seedDancingWorkflow(
     name: "Dancing Kittens",
     description: "Download a dance reference, extract its first frame, replace the dancers with kittens beside a freeway, then transfer the dance with Kling 3.0 Motion Control.",
     lifecycleState: "in-progress",
-    cells: [...preservedCells, source, extract, frame, kittens, motion],
+    cells: [
+      ...preservedCells,
+      source,
+      extract,
+      frame,
+      kittens,
+      kittenOutput,
+      motion,
+      motionOutput,
+    ],
     edges: [...preservedEdges, ...fixtureEdges],
     generationPlans: [],
     notebookRunPlans: [],
