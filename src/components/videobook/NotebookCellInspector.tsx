@@ -10,6 +10,7 @@ import {
   Maximize2,
   Plus,
   Save,
+  X,
 } from 'lucide-react'
 import { Fragment, useMemo, useRef, useState } from 'react'
 import type {
@@ -1026,6 +1027,12 @@ function InputSources({
         {inputs.map((input) => {
           const edge = edges.find((candidate) =>
             candidate.target === cell.id && candidate.targetInput === input)
+          const sourceCell = edge
+            ? cells.find((candidate) => candidate.id === edge.source)
+            : undefined
+          const inputLabel = input === 'input'
+            ? 'input'
+            : `${input.replaceAll('_', ' ')} input`
           const candidates = cells
             .filter((candidate) =>
               compatibleSource(cell, input, candidate)
@@ -1035,7 +1042,9 @@ function InputSources({
               || left.slot.column - right.slot.column)
           return (
             <div
-              className="inspector-input-source-row"
+              className={edge
+                ? 'inspector-input-source-row connected'
+                : 'inspector-input-source-row'}
               key={input}
             >
               <SourceCellPicker
@@ -1046,6 +1055,20 @@ function InputSources({
                 busy={busy}
                 onSelect={(sourceCellId) => onSetInput(input, sourceCellId)}
               />
+              {edge && (
+                <button
+                  type="button"
+                  className="inspector-input-remove-button"
+                  aria-label={`Remove ${sourceCell
+                    ? notebookGridTag(sourceCell.slot)
+                    : 'source'} from ${inputLabel}`}
+                  title="Remove input"
+                  disabled={busy}
+                  onClick={() => void onSetInput(input, null)}
+                >
+                  <X size={15} aria-hidden="true" />
+                </button>
+              )}
             </div>
           )
         })}

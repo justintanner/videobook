@@ -4260,6 +4260,36 @@ textarea:focus-visible {
   min-width: 0;
 }
 
+.inspector-input-source-row.connected {
+  grid-template-columns: minmax(0, 1fr) 32px;
+  gap: 6px;
+}
+
+.inspector-input-remove-button {
+  display: grid;
+  width: 32px;
+  min-height: 40px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--line);
+  color: #789e87;
+  background: rgba(1, 9, 5, 0.84);
+  cursor: pointer;
+}
+
+.inspector-input-remove-button:hover:not(:disabled),
+.inspector-input-remove-button:focus-visible {
+  border-color: rgba(205, 111, 111, 0.68);
+  color: #e39a9a;
+  background: rgba(92, 28, 28, 0.22);
+  outline: 0;
+}
+
+.inspector-input-remove-button:disabled {
+  cursor: wait;
+  opacity: 0.48;
+}
+
 .inspector-source-picker {
   position: relative;
   min-width: 0;

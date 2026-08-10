@@ -182,6 +182,7 @@ describe('chat composer browser flow', () => {
   let generationCellId = ''
   let outputVideoCellId = ''
   let reviewGenerationCellId = ''
+  let directVideoGenerationCellId = ''
   let fullscreenImageCellId = ''
   let fullscreenImageMediaUrl = ''
   const observedCalls: ToolCall[] = []
@@ -292,6 +293,23 @@ describe('chat composer browser flow', () => {
       label: 'generate-image-review',
       slot: { row: 1, column: 2 },
       prompt: 'A moonlit garden ready for review',
+    })
+    directVideoGenerationCellId = await createCell({
+      type: 'generate_video',
+      label: 'generate-video-direct',
+      slot: { row: 3, column: 1 },
+      prompt: 'A moonlit garden moving in a light breeze',
+      provider: 'kie',
+      model: 'Seedance2MiniInputSchema',
+      operation: 'text_to_video',
+      tool: 'generate_kie_seedance_2_0_mini_video',
+      inputs: {
+        generationSettings: {
+          duration: '5',
+          resolution: '720p',
+          aspect_ratio: '16:9',
+        },
+      },
     })
     for (const connection of [
       { source_cell_id: videoCellId, target_input: 'video' },
@@ -953,13 +971,13 @@ describe('chat composer browser flow', () => {
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
     const routePaths = page.locator('.notebook-flow .workflow-edge .react-flow__edge-path')
-    await expect.poll(async () => await routePaths.count()).toBe(3)
+    await expect.poll(async () => await routePaths.count()).toBe(4)
     const routeStyles = await routePaths.evaluateAll((paths) => paths.map((path) => ({
       d: path.getAttribute('d'),
       stroke: window.getComputedStyle(path).stroke,
       strokeWidth: window.getComputedStyle(path).strokeWidth,
     })))
-    expect(routeStyles).toHaveLength(3)
+    expect(routeStyles).toHaveLength(4)
     expect(routeStyles.every((style) => style.d?.startsWith('M '))).toBe(true)
     expect(routeStyles.every((style) => style.stroke === 'rgba(114, 231, 170, 0.62)'))
       .toBe(true)
@@ -1021,52 +1039,46 @@ describe('chat composer browser flow', () => {
       .toBe('none')
   }, 60_000)
 
-  it('reviews cell-level cloud generation before starting the run', async () => {
+  it('starts cell-level image and video generation without chat review', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await page.goto(appUrl, { waitUntil: 'commit' })
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
-    const reviewCell = notebookCellNode(page, reviewGenerationCellId)
     const reopenInspector = page.getByLabel('Open inspector')
     if (await reopenInspector.isVisible()) await reopenInspector.click()
-    await reviewCell.click()
-    const generate = page.getByLabel('Primary cell action')
-      .getByRole('button', { name: 'Generate' })
-    await expect.poll(async () => await generate.isEnabled()).toBe(true)
-
-    observedCalls.length = 0
-    await generate.click({ timeout: 10_000 })
-    const review = page.getByLabel('Command plan review')
-    await review.waitFor({ state: 'visible' })
-    await expect.poll(() => observedCalls.some((call) =>
-      call.name === 'plan_notebook_generation')).toBe(true)
-    expect(observedCalls.some((call) => call.name === 'run_notebook_cell')).toBe(false)
-    await expect.poll(async () => await input.inputValue()).toBe('/apply')
-
-    await input.press('Escape')
-    await review.waitFor({ state: 'hidden' })
-    expect(observedCalls.some((call) => call.name === 'run_notebook_cell')).toBe(false)
-    await expect.poll(async () => await input.inputValue()).toBe('')
-    expect(await input.evaluate((element) => document.activeElement === element)).toBe(true)
-
-    observedCalls.length = 0
-    await generate.click({ timeout: 10_000 })
-    await review.waitFor({ state: 'visible' })
-    await expect.poll(() => observedCalls.some((call) =>
-      call.name === 'plan_notebook_generation')).toBe(true)
-    expect(observedCalls.some((call) => call.name === 'run_notebook_cell')).toBe(false)
     await page.evaluate(() => window.localStorage.setItem(
       'videobook.cloud-generation-consent',
       'accepted',
     ))
-    await review.getByRole('button', { name: 'Apply' }).click({ timeout: 10_000 })
-    await expect.poll(() => observedCalls.some((call) =>
-      call.name === 'run_notebook_cell'), {
-      timeout: 20_000,
-    }).toBe(true)
-    const runCall = observedCalls.find((call) => call.name === 'run_notebook_cell')
-    expect(runCall?.arguments.cell_id).toBe(reviewGenerationCellId)
+
+    const expectDirectStart = async (cellId: string) => {
+      await notebookCellNode(page!, cellId).click()
+      const generate = page!.getByLabel('Primary cell action')
+        .getByRole('button', { name: 'Generate' })
+      await expect.poll(async () => await generate.isEnabled()).toBe(true)
+      observedCalls.length = 0
+      await generate.click({ timeout: 10_000 })
+      await expect.poll(() => observedCalls.some((call) =>
+        call.name === 'plan_notebook_generation'
+        && call.arguments.cell_id === cellId), {
+        timeout: 20_000,
+      }).toBe(true)
+      await expect.poll(() => observedCalls.some((call) =>
+        call.name === 'run_notebook_cell'
+        && call.arguments.cell_id === cellId), {
+        timeout: 20_000,
+      }).toBe(true)
+      expect(await page!.getByLabel('Command plan review').count()).toBe(0)
+      expect(await input.inputValue()).toBe('')
+      const runCall = observedCalls.find((call) =>
+        call.name === 'run_notebook_cell'
+        && call.arguments.cell_id === cellId)
+      expect(record(runCall?.arguments.plan)?.planId).toEqual(expect.any(String))
+    }
+
+    await expectDirectStart(reviewGenerationCellId)
+    await expectDirectStart(directVideoGenerationCellId)
   }, 60_000)
 
   it('keeps dense generation card headers compact and vertically centered', async () => {

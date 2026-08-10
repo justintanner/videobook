@@ -3385,6 +3385,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     providedNotebook?: NotebookSnapshot,
   ) => {
     if (!bookId || !notebook) return
+    let generationWatchStarted = false
     setBusy(true)
     setCellRunError(cellId, null)
     try {
@@ -3411,6 +3412,71 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         )
       }
       if (cloud) {
+        if (
+          cell.operation !== 'rewrite_prompt'
+          && (cell.type === 'generate_image' || cell.type === 'generate_video')
+        ) {
+          const plan = await createGenerationPlan(cellId, 'ui')
+          const stage = plan.stages.find((candidate) =>
+            candidate.kind === 'queued'
+            && candidate.jobType === 'generation'
+            && candidate.tool === 'run_notebook_cell'
+            && candidate.input.cell_id === cellId)
+          if (stage?.kind !== 'queued') {
+            throw new Error('The generation plan is missing its notebook cell')
+          }
+          const plannedNotebookId = asString(stage.input.notebook_id)
+          if (plannedNotebookId !== currentNotebook.id) {
+            throw new Error('The generation plan belongs to another notebook')
+          }
+          const consentKey = 'videobook.cloud-generation-consent'
+          if (window.localStorage.getItem(consentKey) !== 'accepted') {
+            const accepted = window.confirm(
+              `Cloud generation disclosure\n\nProvider/model: ${stage.provider ?? 'unknown'} · ${stage.model ?? stage.tool}\n`
+              + 'Payload class: prompt text and connected media references.\n'
+              + 'Your local source files are sent only when required by the selected model.\n\n'
+              + 'Continue and remember this choice on this device?',
+            )
+            if (!accepted) {
+              throw new Error('Cloud generation cancelled before sending data')
+            }
+            window.localStorage.setItem(consentKey, 'accepted')
+          }
+          setPendingChatAction(null)
+          setPendingCommandPlan(null)
+          const accepted = await startNotebookCellRun({
+            start: () => call('run_notebook_cell', {
+              book_id: bookId,
+              notebook_id: plannedNotebookId,
+              cell_id: cellId,
+              plan,
+              actor: 'videobook-user',
+            }),
+            onStarting: () => setCellQueued(cellId, true),
+            onRejected: () => setCellQueued(cellId, false),
+          })
+          const runId = asString(record(accepted)?.run_id)
+          const jobOperationId = asString(record(accepted)?.job_id)
+          if (!runId || !jobOperationId) {
+            setCellQueued(cellId, false)
+            throw new Error('The server did not return a notebook run')
+          }
+          generationWatchStarted = true
+          const address = notebookGridAddress(cell.slot)
+          setNotice(`${notebookGridTag(cell.slot)} queued`)
+          void watchGenerationRun({
+            bookId,
+            notebookId: plannedNotebookId,
+            cellId,
+            address,
+            runId,
+            jobOperationId,
+          })
+          return {
+            ok: true,
+            message: `${notebookGridTag(cell.slot)} queued`,
+          }
+        }
         const outcome = await prepareGenerationPlan(cellId, 'ui')
         setNotice(outcome.message, outcome.ok ? 'info' : 'error')
         return outcome
@@ -3464,18 +3530,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice(message, 'error')
       return { ok: false, message }
     } finally {
-      setCellQueued(cellId, false)
+      if (!generationWatchStarted) setCellQueued(cellId, false)
       setBusy(false)
     }
   }, [
     bookId,
     call,
+    createGenerationPlan,
     notebook,
     online,
     prepareGenerationPlan,
     setCellQueued,
     setCellRunError,
     setNotice,
+    watchGenerationRun,
     watchNotebookRun,
   ])
 
