@@ -21,6 +21,7 @@ import { queue } from "./queue.js";
 import { searchReferenceStore } from "./search-reference-store.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
 import { createHttpHandler } from "./server.js";
+import { parseHttpByteRange } from "./http-byte-range.js";
 
 const require = createRequire(import.meta.url);
 const enginePackage = require("videobook-engine/package.json") as {
@@ -79,7 +80,25 @@ app.get(/^\/files\/([^/]+)\/([^/]+)\/(.+)$/, async (req, res) => {
     res.status(result.error.code === "NOT_FOUND" ? 404 : 400).json({ error: result.error.message });
     return;
   }
-  res.type(filename).send(result.value);
+  res.type(filename);
+  res.setHeader("Accept-Ranges", "bytes");
+  const rangeHeader = req.headers.range;
+  if (!rangeHeader) {
+    res.send(result.value);
+    return;
+  }
+  const range = parseHttpByteRange(rangeHeader, result.value.byteLength);
+  if (!range.ok) {
+    res.setHeader("Content-Range", `bytes */${result.value.byteLength}`);
+    res.sendStatus(416);
+    return;
+  }
+  res.status(206);
+  res.setHeader(
+    "Content-Range",
+    `bytes ${range.start}-${range.end}/${result.value.byteLength}`,
+  );
+  res.send(result.value.subarray(range.start, range.end + 1));
 });
 
 app.post("/api/books/:bookId/upload", async (req, res) => {

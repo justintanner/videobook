@@ -98,6 +98,34 @@ const LOCAL_ACTIONS: NotebookAction[] = [
     },
   },
   {
+    id: "local.split_at_points",
+    cellTypes: ["split_video"],
+    kind: "local",
+    operation: "split_at_points",
+    provider: "local",
+    model: null,
+    tool: "ffmpeg",
+    title: "Split video at points",
+    description: "Split a complete source into ordered contiguous chunks",
+    outputKind: "artifact",
+    billable: false,
+    defaults: { operation: "split_at_points", tool: "ffmpeg", provider: "local" },
+    parameters: [
+      {
+        name: "cutPointsSeconds",
+        type: "json",
+        required: true,
+        description: "Ordered cut points in source seconds",
+      },
+    ],
+    requiredInputs: ["video"],
+    capabilities: {
+      dualFrame: false,
+      localMedia: true,
+      requiresConfirmation: false,
+    },
+  },
+  {
     id: "local.split_range",
     cellTypes: ["split_video"],
     kind: "local",
@@ -469,6 +497,11 @@ export function defaultActionForCell(
 ): NotebookAction | null {
   const normalizedCell = normalizeLegacyAnalyzeCell(cell);
   const actions = actionsForCell(normalizedCell, document);
+  if (normalizedCell.type === "split_video" && normalizedCell.operation) {
+    const splitOperation = actions.find((action) =>
+      action.operation === normalizedCell.operation);
+    if (splitOperation) return splitOperation;
+  }
   const tool = normalizedCell.tool ?? normalizedCell.model;
   const configured = tool
     ? actions.find((action) =>

@@ -1,13 +1,18 @@
 import { spawn } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { chromium } from 'playwright'
 import type { Browser, ConsoleMessage, Page, Route } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { FFMPEG } from '../../server/src/ffmpeg.js'
+
+const execFileAsync = promisify(execFile)
 
 interface StartedProcess {
   child: ChildProcessWithoutNullStreams
@@ -245,10 +250,47 @@ describe('chat composer browser flow', () => {
       if (!id) throw new Error('Could not create browser fixture cell')
       return id
     }
+    const splitSourcePath = join(rootDir, 'split-source.mp4')
+    await execFileAsync(FFMPEG, [
+      '-y',
+      '-f', 'lavfi',
+      '-i', 'testsrc2=s=96x64:r=24:d=3',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      splitSourcePath,
+    ])
+    const uploadedVideo = record(resultValue(await client.callTool({
+      name: 'upload_file',
+      arguments: {
+        book_id: bookId,
+        filename: 'split-source.mp4',
+        data: (await readFile(splitSourcePath)).toString('base64'),
+      },
+    })))
+    const uploadedVideoId = typeof uploadedVideo?.assetId === 'string'
+      ? uploadedVideo.assetId
+      : ''
+    const videoAssetsValue = record(resultValue(await client.callTool({
+      name: 'list_assets',
+      arguments: { book_id: bookId, sort: 'newest' },
+    })))
+    const uploadedVideoAsset = (Array.isArray(videoAssetsValue?.assets)
+      ? videoAssetsValue.assets
+      : [])
+      .map(record)
+      .find((asset) => asset?.id === uploadedVideoId)
+    const uploadedVideoArtifactId = typeof uploadedVideoAsset?.artifact_id === 'string'
+      ? uploadedVideoAsset.artifact_id
+      : ''
+    if (!uploadedVideoArtifactId || typeof uploadedVideoAsset?.media_url !== 'string') {
+      throw new Error('Could not create split video fixture asset')
+    }
     videoCellId = await createCell({
       type: 'video',
       label: 'vid-source-one',
       slot: { row: 0, column: 0 },
+      output_artifact_id: uploadedVideoArtifactId,
+      inputs: { durationSeconds: 3 },
     })
     imageCellId = await createCell({
       type: 'image',
@@ -1140,6 +1182,67 @@ describe('chat composer browser flow', () => {
     const relaxedType = notebookCellNode(page, reviewGenerationCellId)
       .locator('.cell-node-type')
     expect((await relaxedType.textContent())?.trim()).toBe('GEN IMAGE')
+  }, 60_000)
+
+  it('reviews and applies a multi-cut split without a draggable timeline', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+    await input.fill('/split @a1')
+    await page.getByLabel('Send command').click()
+    const review = page.getByLabel('Video split review')
+    await review.waitFor({ state: 'visible', timeout: 30_000 })
+    expect(await review.locator('video').count()).toBe(2)
+    expect(await review.locator('input[type="range"]').count()).toBe(0)
+    const rangeResponse = await review.locator('video').first().evaluate(
+      async (video) => {
+        const response = await fetch(video.src, {
+          headers: { Range: 'bytes=0-15' },
+        })
+        return {
+          bytes: (await response.arrayBuffer()).byteLength,
+          contentRange: response.headers.get('content-range'),
+          status: response.status,
+        }
+      },
+    )
+    expect(rangeResponse).toMatchObject({
+      bytes: 16,
+      contentRange: expect.stringMatching(/^bytes 0-15\/\d+$/u),
+      status: 206,
+    })
+    const exactSeconds = review.getByLabel('Exact seconds')
+    await expect.poll(async () => await exactSeconds.inputValue()).toBe('1.5')
+
+    await review.getByRole('button', { name: '+0.1s' }).click()
+    await expect.poll(async () => await exactSeconds.inputValue()).toBe('1.6')
+    await review.getByRole('button', { name: /Before cut/ }).press('ArrowRight')
+    await expect.poll(async () => await exactSeconds.inputValue()).toBe('1.7')
+    await review.getByRole('button', { name: /Split chunk/ }).first().click()
+    await expect.poll(async () => await review.locator('h2').textContent())
+      .toBe('3 contiguous chunks')
+    expect(await review.getByRole('button', { name: /Cut \d/ }).count()).toBe(2)
+
+    observedCalls.length = 0
+    await review.getByRole('button', { name: 'Apply split' }).click()
+    await review.waitFor({ state: 'hidden', timeout: 30_000 })
+    await expect.poll(() => observedCalls.filter((call) =>
+      call.name === 'create_notebook_cell').length).toBe(4)
+    const createdCells = observedCalls
+      .filter((call) => call.name === 'create_notebook_cell')
+      .map((call) => record(call.arguments.cell))
+    expect(createdCells[0]).toMatchObject({
+      type: 'split_video',
+      operation: 'split_at_points',
+    })
+    expect(createdCells.slice(1).map((cell) => cell?.label))
+      .toEqual(['Chunk 01', 'Chunk 02', 'Chunk 03'])
+    await expect.poll(() => observedCalls.some((call) =>
+      call.name === 'run_notebook')).toBe(true)
+    expect(await notebookCellNode(page, videoCellId).count()).toBe(1)
   }, 60_000)
 
   it('marquee-selects multiple cells and confirms before deleting the set', async () => {

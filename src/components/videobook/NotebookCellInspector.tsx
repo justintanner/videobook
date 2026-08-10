@@ -2366,7 +2366,31 @@ function ExecutableCellInspector({
             )}
           </section>
         )}
-        {cell.type === 'split_video' && (
+        {cell.type === 'split_video' && cell.operation === 'split_at_points' && (
+          <div className="inspector-field-pair">
+            <label>
+              Cut points
+              <input
+                type="text"
+                value={Array.isArray(cell.inputs?.cutPointsSeconds)
+                  ? cell.inputs.cutPointsSeconds.join(', ')
+                  : ''}
+                readOnly
+              />
+            </label>
+            <label>
+              Chunks
+              <input
+                type="text"
+                value={Array.isArray(cell.inputs?.cutPointsSeconds)
+                  ? String(cell.inputs.cutPointsSeconds.length + 1)
+                  : ''}
+                readOnly
+              />
+            </label>
+          </div>
+        )}
+        {cell.type === 'split_video' && cell.operation !== 'split_at_points' && (
           <div className="inspector-field-pair">
             <label>
               Start seconds

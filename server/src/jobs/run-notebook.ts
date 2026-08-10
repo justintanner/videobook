@@ -41,6 +41,7 @@ import {
   extractSourceAudio,
   normalizeSceneVideo,
   splitSourceRange,
+  splitSourceRanges,
   type BurnInCaption,
 } from "../notebook-media-ops.js";
 import { analyzeNotebookSource } from "../notebook-live-analysis.js";
@@ -622,6 +623,44 @@ function requiredTwoWaySplitVideoOutputCellIds(
     );
   }
   return { first, remaining };
+}
+
+function requiredIndexedSplitVideoOutputCellIds(
+  document: NotebookDocument,
+  cell: NotebookCell,
+  chunkCount: number,
+): Set<string>[] {
+  const videoCellIds = requiredMediaOutputCellIds(document, cell, "video");
+  const outputIds = new Array<string | undefined>(chunkCount);
+  for (const candidate of document.cells) {
+    if (!videoCellIds.has(candidate.id)) continue;
+    const chunkIndex = candidate.inputs?.chunkIndex;
+    const candidateChunkCount = candidate.inputs?.chunkCount;
+    if (
+      !Number.isSafeInteger(chunkIndex)
+      || Number(candidateChunkCount) !== chunkCount
+      || Number(chunkIndex) < 0
+      || Number(chunkIndex) >= chunkCount
+      || outputIds[Number(chunkIndex)]
+    ) {
+      throw new Error(
+        `split_video cell ${cell.id} has invalid indexed video outputs`,
+      );
+    }
+    outputIds[Number(chunkIndex)] = candidate.id;
+  }
+  if (
+    videoCellIds.size !== chunkCount
+    || outputIds.filter(Boolean).length !== chunkCount
+  ) {
+    throw new Error(
+      `split_video cell ${cell.id} requires ${chunkCount} indexed video outputs`,
+    );
+  }
+  return Array.from(
+    { length: chunkCount },
+    (_, index) => new Set([outputIds[index]!]),
+  );
 }
 
 function splitFrameOutputCellIds(
@@ -1599,6 +1638,89 @@ async function executeLocalOrGeneration(
   cellInputs?: Record<string, unknown>;
   awaitingOutput?: boolean;
 }> {
+  if (cell.type === "split_video" && cell.operation === "split_at_points") {
+    const sourceId = requiredVideoInputArtifact(document, cell);
+    const rawCutPoints = cell.inputs?.cutPointsSeconds;
+    const sourceDurationSeconds = Number(
+      cell.inputs?.sourceDurationSeconds ?? cell.inputs?.endSeconds,
+    );
+    if (
+      !Array.isArray(rawCutPoints)
+      || rawCutPoints.length === 0
+      || !Number.isFinite(sourceDurationSeconds)
+    ) {
+      throw new Error(
+        `split_video cell ${cell.id} requires cut points and a source duration`,
+      );
+    }
+    const cutPoints = rawCutPoints.map((value) =>
+      typeof value === "number" ? value : Number.NaN);
+    let previous = 0;
+    for (const cutPoint of cutPoints) {
+      if (
+        !Number.isFinite(cutPoint)
+        || cutPoint - previous < 0.5
+        || sourceDurationSeconds - cutPoint < 0.5
+      ) {
+        throw new Error(
+          `split_video cell ${cell.id} requires ordered cut points at least 0.5s apart`,
+        );
+      }
+      previous = cutPoint;
+    }
+    const boundaries = [0, ...cutPoints, sourceDurationSeconds];
+    const ranges = boundaries.slice(0, -1).map((startSeconds, index) => ({
+      endSeconds: boundaries[index + 1]!,
+      startSeconds,
+    }));
+    const outputCellIds = requiredIndexedSplitVideoOutputCellIds(
+      document,
+      cell,
+      ranges.length,
+    );
+    const results = await splitSourceRanges(
+      engine,
+      sourceId,
+      ranges.map((range, index) => ({
+        range,
+        title: `${notebookGridTag(cell.slot)} chunk ${String(index + 1).padStart(2, "0")}`,
+      })),
+      2,
+    );
+    const [firstFrame, lastFrame] = await Promise.all([
+      captureFrame(engine, results[0]!.artifactId, {
+        role: "first",
+        title: `${notebookGridTag(cell.slot)} · first frame`,
+      }),
+      captureFrame(engine, results.at(-1)!.artifactId, {
+        role: "last",
+        title: `${notebookGridTag(cell.slot)} · last frame`,
+      }),
+    ]);
+    let withOutputs = document;
+    for (const [index, result] of results.entries()) {
+      withOutputs = withMediaOutput(
+        withOutputs,
+        outputCellIds[index]!,
+        result.artifactId,
+        { durationSeconds: result.durationSeconds },
+      );
+    }
+    return {
+      artifactId: results[0]!.artifactId,
+      tool: "ffmpeg",
+      document: withOutputs,
+      cellInputs: {
+        durationSeconds: results.reduce(
+          (total, result) => total + result.durationSeconds,
+          0,
+        ),
+        firstFrameArtifactId: firstFrame.artifactId,
+        lastFrameArtifactId: lastFrame.artifactId,
+      },
+    };
+  }
+
   if (
     cell.type === "split_video"
     && cell.operation === "split_range"

@@ -13,7 +13,7 @@ import {
 
 export type NotebookSplitCommand = {
   sourceReference: string
-  splitAtSeconds: number
+  cutPointsSeconds: number[]
 }
 
 // Accepts a grid address (@a3) or a cell id / id prefix; the resolver
@@ -25,36 +25,36 @@ const NOTEBOOK_SPLIT_COMMAND_PATTERN = new RegExp(
   'iu',
 )
 
-export type NotebookSplitOutputRole = 'first' | 'remaining'
-
 export type NotebookSplitOutputDraft = {
+  chunkIndex: number
+  endSeconds: number
   outputCell: NotebookCell
-  role: NotebookSplitOutputRole
+  startSeconds: number
 }
 
 export type NotebookSplitDraft = {
   actionCell: NotebookCell
   createdCellIds: string[]
+  cutPointsSeconds: number[]
   document: NotebookDocument
-  outputs: [NotebookSplitOutputDraft, NotebookSplitOutputDraft]
+  outputs: NotebookSplitOutputDraft[]
   sourceCellId: string
   sourceAddress: string
-  splitAtSeconds: number
 }
 
 export type NotebookSplitRun = {
   actionCellId: string
   actionAddress: string
   outputs: Array<{
+    chunkIndex: number
     outputCellId: string
     outputAddress: string
-    role: NotebookSplitOutputRole
   }>
+  cutPointsSeconds: number[]
   jobId: string
   runId: string
   sourceCellId: string
   sourceAddress: string
-  splitAtSeconds: number
 }
 
 type NotebookToolCall = (
@@ -62,7 +62,7 @@ type NotebookToolCall = (
   args: Record<string, unknown>,
 ) => Promise<unknown>
 
-const minimumSplitChunkSeconds = 0.5
+export const minimumSplitChunkSeconds = 0.5
 const videoSourceTypes = new Set<NotebookCell['type']>([
   'video',
   'generate_video',
@@ -114,53 +114,60 @@ function splitBoundaryPhrase(value: string): string {
     .trim()
 }
 
-function splitTimeLabel(seconds: number): string {
-  return `${seconds}s`
+function splitBoundaryValues(value: string): string[] {
+  const phrase = splitBoundaryPhrase(value)
+  if (!phrase) return []
+  return phrase
+    .split(/\s*(?:,|;|\band\b|\bthen\b)\s*/iu)
+    .map((part) => part.trim())
+    .filter(Boolean)
 }
 
 function splitSlots(
   cells: readonly NotebookCell[],
-): {
-  action: NotebookGridSlot
-  outputs: [NotebookGridSlot, NotebookGridSlot]
-} {
-  const [action, first, remaining] = firstEmptyNotebookGridSlots(
+  outputCount: number,
+): { action: NotebookGridSlot; outputs: NotebookGridSlot[] } {
+  const [action, ...outputs] = firstEmptyNotebookGridSlots(
     cells.map((cell) => cell.slot),
-    3,
+    outputCount + 1,
   )
   return {
     action: action!,
-    outputs: [first!, remaining!],
+    outputs,
   }
 }
 
 function createOutput(input: {
   actionCell: NotebookCell
+  chunkCount: number
+  chunkIndex: number
   endSeconds: number
-  role: NotebookSplitOutputRole
   slot: NotebookGridSlot
   source: NotebookCell
   startSeconds: number
-  timeLabel: string
 }): NotebookSplitOutputDraft {
   const outputCell: NotebookCell = {
     id: uuidv7(),
     type: 'video',
-    label: input.role === 'first'
-      ? `First ${input.timeLabel}`
-      : 'Remaining',
+    label: `Chunk ${String(input.chunkIndex + 1).padStart(2, '0')}`,
     slot: input.slot,
     inputs: {
+      chunkCount: input.chunkCount,
+      chunkIndex: input.chunkIndex,
       endSeconds: input.endSeconds,
       mediaRole: 'split-video-output',
       producerCellId: input.actionCell.id,
       sourceCellId: input.source.id,
-      splitRole: input.role,
       startSeconds: input.startSeconds,
       state: 'pending',
     },
   }
-  return { outputCell, role: input.role }
+  return {
+    chunkIndex: input.chunkIndex,
+    endSeconds: input.endSeconds,
+    outputCell,
+    startSeconds: input.startSeconds,
+  }
 }
 
 function cellCreateInput(cell: NotebookCell): Record<string, unknown> {
@@ -181,18 +188,66 @@ export function parseNotebookSplitCommand(
 ): NotebookSplitCommand | null {
   const match = input.trim().match(NOTEBOOK_SPLIT_COMMAND_PATTERN)
   if (!match) return null
-  const splitAtSeconds = match[2]
-    ? timestampSeconds(splitBoundaryPhrase(match[2]))
-    : null
-  if (!Number.isFinite(splitAtSeconds) || !(splitAtSeconds! > 0)) {
+  const values = match[2] ? splitBoundaryValues(match[2]) : []
+  const cutPointsSeconds = values.map(timestampSeconds)
+  if (cutPointsSeconds.some((value) => !Number.isFinite(value) || !(value! > 0))) {
     throw new Error(
-      'Name a positive split time, for example: split @a3 into 15s and the remaining',
+      'Use positive split times, for example: /split @a3 at 15s, 28.5s',
     )
   }
   return {
     sourceReference: match[1]!.toLowerCase(),
-    splitAtSeconds: splitAtSeconds!,
+    cutPointsSeconds: cutPointsSeconds
+      .map((value) => Math.round(value! * 1000) / 1000)
+      .sort((left, right) => left - right),
   }
+}
+
+export type NotebookSplitRange = {
+  endSeconds: number
+  startSeconds: number
+}
+
+export function notebookSplitCutPoints(input: {
+  cutPointsSeconds: readonly number[]
+  sourceDurationSeconds: number
+}): number[] {
+  const duration = Math.round(input.sourceDurationSeconds * 1000) / 1000
+  if (!Number.isFinite(duration) || duration < minimumSplitChunkSeconds * 2) {
+    throw new Error(
+      `Video must be at least ${minimumSplitChunkSeconds * 2}s long to split`,
+    )
+  }
+  const requested = input.cutPointsSeconds.length > 0
+    ? input.cutPointsSeconds
+    : [duration / 2]
+  const cutPoints = requested
+    .map((value) => Math.round(value * 1000) / 1000)
+    .sort((left, right) => left - right)
+  if (cutPoints.some((value) => !Number.isFinite(value))) {
+    throw new Error('Split times must be finite numbers')
+  }
+  const boundaries = [0, ...cutPoints, duration]
+  for (let index = 1; index < boundaries.length; index += 1) {
+    if (boundaries[index]! - boundaries[index - 1]! < minimumSplitChunkSeconds) {
+      throw new Error(
+        `Keep at least ${minimumSplitChunkSeconds}s between every split and the video ends`,
+      )
+    }
+  }
+  return cutPoints
+}
+
+export function notebookSplitRanges(input: {
+  cutPointsSeconds: readonly number[]
+  sourceDurationSeconds: number
+}): NotebookSplitRange[] {
+  const cutPoints = notebookSplitCutPoints(input)
+  const boundaries = [0, ...cutPoints, input.sourceDurationSeconds]
+  return boundaries.slice(0, -1).map((startSeconds, index) => ({
+    endSeconds: boundaries[index + 1]!,
+    startSeconds,
+  }))
 }
 
 export function resolveNotebookSplitSource(
@@ -226,55 +281,41 @@ export function planNotebookSplitCommand(input: {
       `${notebookCellTag(source)} does not have a usable duration yet; wait for video processing to finish`,
     )
   }
-  const firstDuration = input.command.splitAtSeconds
-  const remainingDuration = input.sourceDurationSeconds - firstDuration
-  if (
-    firstDuration < minimumSplitChunkSeconds
-    || remainingDuration < minimumSplitChunkSeconds
-  ) {
-    throw new Error(
-      `Split ${notebookCellTag(source)} between ${minimumSplitChunkSeconds}s and ${(input.sourceDurationSeconds - minimumSplitChunkSeconds).toFixed(2)}s so both clips contain usable video`,
-    )
-  }
-
-  const slots = splitSlots(input.document.cells)
-  const timeLabel = splitTimeLabel(firstDuration)
+  const cutPointsSeconds = notebookSplitCutPoints({
+    cutPointsSeconds: input.command.cutPointsSeconds,
+    sourceDurationSeconds: input.sourceDurationSeconds,
+  })
+  const ranges = notebookSplitRanges({
+    cutPointsSeconds,
+    sourceDurationSeconds: input.sourceDurationSeconds,
+  })
+  const slots = splitSlots(input.document.cells, ranges.length)
   const actionCell: NotebookCell = {
     id: uuidv7(),
     type: 'split_video',
-    label: `Split at ${timeLabel}`,
+    label: `Split into ${ranges.length} chunks`,
     slot: slots.action,
     provider: 'local',
-    operation: 'split_range',
+    operation: 'split_at_points',
     tool: 'ffmpeg',
     inputs: {
+      cutPointsSeconds,
       endSeconds: input.sourceDurationSeconds,
       sourceCellId: source.id,
       sourceDurationSeconds: input.sourceDurationSeconds,
-      splitAtSeconds: firstDuration,
       startSeconds: 0,
       state: 'ready',
     },
   }
-  const first = createOutput({
+  const outputs = ranges.map((range, chunkIndex) => createOutput({
     actionCell,
-    endSeconds: firstDuration,
-    role: 'first',
-    slot: slots.outputs[0],
+    chunkCount: ranges.length,
+    chunkIndex,
+    endSeconds: range.endSeconds,
+    slot: slots.outputs[chunkIndex]!,
     source,
-    startSeconds: 0,
-    timeLabel,
-  })
-  const remaining = createOutput({
-    actionCell,
-    endSeconds: input.sourceDurationSeconds,
-    role: 'remaining',
-    slot: slots.outputs[1],
-    source,
-    startSeconds: firstDuration,
-    timeLabel,
-  })
-  const outputs: NotebookSplitDraft['outputs'] = [first, remaining]
+    startSeconds: range.startSeconds,
+  }))
   const createdCells = [actionCell, ...outputs.map((output) => output.outputCell)]
   const createdEdges = [
     {
@@ -293,6 +334,7 @@ export function planNotebookSplitCommand(input: {
   return {
     actionCell,
     createdCellIds: createdCells.map((cell) => cell.id),
+    cutPointsSeconds,
     document: {
       ...input.document,
       cells: [...input.document.cells, ...createdCells],
@@ -301,7 +343,6 @@ export function planNotebookSplitCommand(input: {
     outputs,
     sourceCellId: source.id,
     sourceAddress: notebookCellTag(source),
-    splitAtSeconds: firstDuration,
   }
 }
 
@@ -370,15 +411,15 @@ export async function enqueueNotebookSplitCommand(input: {
       actionCellId: input.draft.actionCell.id,
       actionAddress: notebookCellTag(input.draft.actionCell),
       outputs: input.draft.outputs.map((output) => ({
+        chunkIndex: output.chunkIndex,
         outputCellId: output.outputCell.id,
         outputAddress: notebookCellTag(output.outputCell),
-        role: output.role,
       })),
+      cutPointsSeconds: input.draft.cutPointsSeconds,
       jobId,
       runId,
       sourceCellId: input.draft.sourceCellId,
       sourceAddress: input.draft.sourceAddress,
-      splitAtSeconds: input.draft.splitAtSeconds,
     }
   } catch (error) {
     if (!runRequested) {

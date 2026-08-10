@@ -18,6 +18,8 @@ import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 import {
   enqueueNotebookSplitCommand,
+  notebookSplitCutPoints,
+  notebookSplitRanges,
   parseNotebookSplitCommand,
   planNotebookSplitCommand,
   resolveNotebookSplitSource,
@@ -65,34 +67,66 @@ describe('notebook split commands', () => {
       'split @019abcde into 15s and the remaining',
     )).toEqual({
       sourceReference: '019abcde',
-      splitAtSeconds: 15,
+      cutPointsSeconds: [15],
     })
     expect(parseNotebookSplitCommand(
       '/split @019ABCDE at 1:05',
     )).toEqual({
       sourceReference: '019abcde',
-      splitAtSeconds: 65,
+      cutPointsSeconds: [65],
     })
     expect(parseNotebookSplitCommand(
       'split @A1 at 2s',
     )).toEqual({
       sourceReference: 'a1',
-      splitAtSeconds: 2,
+      cutPointsSeconds: [2],
     })
     expect(parseNotebookSplitCommand(
       'please split @019abcde into 1m 5s plus the rest please',
     )).toEqual({
       sourceReference: '019abcde',
-      splitAtSeconds: 65,
+      cutPointsSeconds: [65],
     })
     expect(parseNotebookSplitCommand(
       'split clip @01900000-0000-7000-8000-000000000001 at frame 45',
     )).toBeNull()
-    expect(() => parseNotebookSplitCommand('/split @019abcde'))
-      .toThrow('Name a positive split time')
+    expect(parseNotebookSplitCommand('/split @019abcde')).toEqual({
+      sourceReference: '019abcde',
+      cutPointsSeconds: [],
+    })
+    expect(parseNotebookSplitCommand('/split @a1 at 8s, 2.5s and 5s'))
+      .toEqual({
+        sourceReference: 'a1',
+        cutPointsSeconds: [2.5, 5, 8],
+      })
+    expect(() => parseNotebookSplitCommand('/split @019abcde at later'))
+      .toThrow('Use positive split times')
   })
 
-  it('runs one split operation into two playable video tiles', async () => {
+  it('defaults to the midpoint and enforces usable contiguous chunks', () => {
+    expect(notebookSplitCutPoints({
+      cutPointsSeconds: [],
+      sourceDurationSeconds: 9,
+    })).toEqual([4.5])
+    expect(notebookSplitRanges({
+      cutPointsSeconds: [2, 5],
+      sourceDurationSeconds: 8,
+    })).toEqual([
+      { startSeconds: 0, endSeconds: 2 },
+      { startSeconds: 2, endSeconds: 5 },
+      { startSeconds: 5, endSeconds: 8 },
+    ])
+    expect(() => notebookSplitCutPoints({
+      cutPointsSeconds: [0.25, 2],
+      sourceDurationSeconds: 3,
+    })).toThrow('Keep at least 0.5s')
+    expect(() => notebookSplitCutPoints({
+      cutPointsSeconds: [1, 1],
+      sourceDurationSeconds: 3,
+    })).toThrow('Keep at least 0.5s')
+  })
+
+  it('runs one split operation into multiple playable video tiles', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-split-command-'))
     books = new BookManager({
       libraryDir: join(rootDir, 'books'),
@@ -177,43 +211,52 @@ describe('notebook split commands', () => {
     expect(resolveNotebookSplitSource(before, 'a1').id).toBe(source.id)
 
     const command = parseNotebookSplitCommand(
-      'split @a1 into 1s and the remaining',
+      'split @a1 at 1s, 2s',
     )!
     const draft = planNotebookSplitCommand({
       command,
       document: before,
       sourceDurationSeconds: 3,
     })
-    expect(draft.createdCellIds).toHaveLength(3)
+    expect(draft.createdCellIds).toHaveLength(4)
     expect(draft.sourceAddress).toBe('@a1')
     expect(draft.actionCell).toMatchObject({
       type: 'split_video',
-      label: 'Split at 1s',
-      operation: 'split_range',
+      label: 'Split into 3 chunks',
+      operation: 'split_at_points',
       slot: { row: 0, column: 1 },
       inputs: {
         startSeconds: 0,
-        splitAtSeconds: 1,
+        cutPointsSeconds: [1, 2],
         endSeconds: 3,
       },
     })
     expect(draft.outputs).toMatchObject([
       {
-        role: 'first',
+        chunkIndex: 0,
         outputCell: {
           type: 'video',
-          label: 'First 1s',
+          label: 'Chunk 01',
           slot: { row: 0, column: 2 },
-          inputs: { state: 'pending' },
+          inputs: { chunkCount: 3, chunkIndex: 0, state: 'pending' },
         },
       },
       {
-        role: 'remaining',
+        chunkIndex: 1,
         outputCell: {
           type: 'video',
-          label: 'Remaining',
+          label: 'Chunk 02',
           slot: { row: 0, column: 3 },
-          inputs: { state: 'pending' },
+          inputs: { chunkCount: 3, chunkIndex: 1, state: 'pending' },
+        },
+      },
+      {
+        chunkIndex: 2,
+        outputCell: {
+          type: 'video',
+          label: 'Chunk 03',
+          slot: { row: 0, column: 4 },
+          inputs: { chunkCount: 3, chunkIndex: 2, state: 'pending' },
         },
       },
     ])
@@ -224,11 +267,11 @@ describe('notebook split commands', () => {
       callTool,
       draft,
     })
-    expect(run.outputs).toHaveLength(2)
+    expect(run.outputs).toHaveLength(3)
     expect(run.sourceAddress).toBe('@a1')
     expect(run.actionAddress).toBe('@a2')
     expect(run.outputs.map((output) => output.outputAddress))
-      .toEqual(['@a3', '@a4'])
+      .toEqual(['@a3', '@a4', '@a5'])
     const activeResult = engine.notebooks.read(notebookId)
     expect(activeResult.ok).toBe(true)
     if (!activeResult.ok) return
@@ -269,11 +312,11 @@ describe('notebook split commands', () => {
       outputArtifactIds.push(output!.outputArtifactId!)
       return Number(output?.inputs?.durationSeconds)
     })
-    expect(new Set(outputArtifactIds)).toHaveProperty('size', 2)
-    expect(outputDurations[0]).toBeGreaterThan(0.8)
-    expect(outputDurations[0]).toBeLessThan(1.2)
-    expect(outputDurations[1]).toBeGreaterThan(1.8)
-    expect(outputDurations[1]).toBeLessThan(2.2)
+    expect(new Set(outputArtifactIds)).toHaveProperty('size', 3)
+    for (const duration of outputDurations) {
+      expect(duration).toBeGreaterThan(0.8)
+      expect(duration).toBeLessThan(1.2)
+    }
 
     const rerun = await callTool('run_notebook_cell', {
       actor: 'split-command-test',
@@ -291,7 +334,7 @@ describe('notebook split commands', () => {
       rerunResult.value.cells.find((cell) => cell.id === outputRun.outputCellId)!)
     const rerunArtifactIds = rerunOutputs.map((output) =>
       output.outputArtifactId!)
-    expect(new Set(rerunArtifactIds)).toHaveProperty('size', 2)
+    expect(new Set(rerunArtifactIds)).toHaveProperty('size', 3)
     for (const [index, output] of rerunOutputs.entries()) {
       expect(output.outputArtifactId).not.toBe(outputArtifactIds[index])
       expect(output.inputs?.outputVersionArtifactIds).toEqual(
@@ -301,5 +344,5 @@ describe('notebook split commands', () => {
         ]),
       )
     }
-  }, 30_000)
+  }, 45_000)
 })

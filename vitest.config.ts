@@ -45,6 +45,7 @@ export default defineConfig({
       'server/src/google-flow-refs.test.ts',
       'server/src/image.test.ts',
       'server/src/image-models.test.ts',
+      'server/src/http-byte-range.test.ts',
       'server/src/job-deadline.test.ts',
       'server/src/lazy-render.test.ts',
       'server/src/jobs/**/*.test.ts',

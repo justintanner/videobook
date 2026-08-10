@@ -15,6 +15,11 @@ export interface MediaRange {
   endSeconds: number;
 }
 
+export interface MediaSplitRequest {
+  range: MediaRange;
+  title: string;
+}
+
 export interface BurnInCaption {
   text: string;
   startSeconds: number;
@@ -110,12 +115,11 @@ async function registerMediaProbe(
   if (!metadata.ok) throw new Error(metadata.error.message);
 }
 
-export async function splitSourceRange(
-  engine: Engine,
+function validateSplitRange(
   sourceArtifactId: string,
+  sourceDuration: number,
   range: MediaRange,
-  title: string,
-): Promise<{ artifactId: string; durationSeconds: number }> {
+): number {
   if (
     !Number.isFinite(range.startSeconds)
     || !Number.isFinite(range.endSeconds)
@@ -126,38 +130,32 @@ export async function splitSourceRange(
   if (!(range.endSeconds > range.startSeconds)) {
     throw new Error("Split range must have positive duration");
   }
-  const source = await materializeArtifactFile(engine, sourceArtifactId, [
-    "original.mp4",
-    "original.mov",
-  ]);
+  if (range.startSeconds >= sourceDuration) {
+    throw new Error(
+      `Cannot split artifact ${sourceArtifactId}: requested range ${range.startSeconds}-${range.endSeconds}s starts at or after the source video duration of ${sourceDuration}s`,
+    );
+  }
+  return Math.min(range.endSeconds, sourceDuration) - range.startSeconds;
+}
+
+async function splitMaterializedRange(
+  engine: Engine,
+  sourceArtifactId: string,
+  sourcePath: string,
+  sourceDuration: number,
+  range: MediaRange,
+  title: string,
+): Promise<{ artifactId: string; durationSeconds: number }> {
+  const duration = validateSplitRange(sourceArtifactId, sourceDuration, range);
   const outDir = await mkdtemp(join(tmpdir(), "vb-split-"));
   const outPath = join(outDir, "split.mp4");
   try {
-    const sourceProbe = await probeVideo(source.path);
-    if (!sourceProbe.videoStream) {
-      throw new Error(
-        `Cannot split artifact ${sourceArtifactId}: source has no video stream`,
-      );
-    }
-    const sourceDuration = sourceProbe.videoDuration || sourceProbe.duration;
-    if (!(sourceDuration > 0)) {
-      throw new Error(
-        `Cannot split artifact ${sourceArtifactId}: source video duration is unavailable`,
-      );
-    }
-    if (range.startSeconds >= sourceDuration) {
-      throw new Error(
-        `Cannot split artifact ${sourceArtifactId}: requested range ${range.startSeconds}-${range.endSeconds}s starts at or after the source video duration of ${sourceDuration}s`,
-      );
-    }
-    const duration = Math.min(range.endSeconds, sourceDuration)
-      - range.startSeconds;
     await runFfmpeg([
       "-y",
       "-ss",
       String(range.startSeconds),
       "-i",
-      source.path,
+      sourcePath,
       "-t",
       String(duration),
       "-map",
@@ -189,9 +187,94 @@ export async function splitSourceRange(
       durationSeconds: probe.duration || duration,
     };
   } finally {
-    await source.cleanup();
     await rm(outDir, { recursive: true, force: true });
   }
+}
+
+export async function splitSourceRanges(
+  engine: Engine,
+  sourceArtifactId: string,
+  requests: readonly MediaSplitRequest[],
+  concurrency = 2,
+): Promise<Array<{ artifactId: string; durationSeconds: number }>> {
+  if (requests.length === 0) throw new Error("At least one split range is required");
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1) {
+    throw new Error("Split concurrency must be a positive integer");
+  }
+  const source = await materializeArtifactFile(engine, sourceArtifactId, [
+    "original.mp4",
+    "original.mov",
+  ]);
+  try {
+    const sourceProbe = await probeVideo(source.path);
+    if (!sourceProbe.videoStream) {
+      throw new Error(
+        `Cannot split artifact ${sourceArtifactId}: source has no video stream`,
+      );
+    }
+    const sourceDuration = sourceProbe.videoDuration || sourceProbe.duration;
+    if (!(sourceDuration > 0)) {
+      throw new Error(
+        `Cannot split artifact ${sourceArtifactId}: source video duration is unavailable`,
+      );
+    }
+    for (const request of requests) {
+      validateSplitRange(sourceArtifactId, sourceDuration, request.range);
+    }
+    const results = new Array<{ artifactId: string; durationSeconds: number }>(
+      requests.length,
+    );
+    let nextIndex = 0;
+    let failed = false;
+    const worker = async (): Promise<void> => {
+      while (!failed) {
+        const index = nextIndex;
+        nextIndex += 1;
+        const request = requests[index];
+        if (!request) return;
+        try {
+          results[index] = await splitMaterializedRange(
+            engine,
+            sourceArtifactId,
+            source.path,
+            sourceDuration,
+            request.range,
+            request.title,
+          );
+        } catch (error) {
+          failed = true;
+          throw error;
+        }
+      }
+    };
+    const settled = await Promise.allSettled(
+      Array.from(
+        { length: Math.min(concurrency, requests.length) },
+        async () => await worker(),
+      ),
+    );
+    const rejected = settled.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    if (rejected) throw rejected.reason;
+    return results;
+  } finally {
+    await source.cleanup();
+  }
+}
+
+export async function splitSourceRange(
+  engine: Engine,
+  sourceArtifactId: string,
+  range: MediaRange,
+  title: string,
+): Promise<{ artifactId: string; durationSeconds: number }> {
+  return (await splitSourceRanges(
+    engine,
+    sourceArtifactId,
+    [{ range, title }],
+    1,
+  ))[0]!;
 }
 
 export async function extractSourceAudio(

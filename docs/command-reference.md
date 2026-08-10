@@ -401,7 +401,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/sort` — Set sidebar sort order (no value toggles); UI: `sidebar_sort`
 - `/speed` — Change video playback speed (0.25-4.0x) or exact duration (e.g. 8.32s); MCP: `change_video_speed`
 - `/splice` — Splice two videos with an overlap window; use 0 to concatenate both complete clips; MCP: `splice_video`
-- `/split` — Split a notebook video into a timed first clip and the remaining clip, then run both branches
+- `/split` — Open the interactive splitter for a notebook video, optionally seeded with cut times
 - `/split-chunks` (aliases: `/even-split`) — Split a video into targeted chunks plus a leftover while preserving the source; MCP: `split_video_by_durations`
 - `/split-clip` — Split a canonical-sequence clip at an exact sequence frame
 - `/storage` — Open DoltLite and content-store diagnostics; UI: `open_diagnostics`

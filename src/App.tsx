@@ -45,6 +45,7 @@ import {
   PanelRightOpen,
   Plus,
   RefreshCw,
+  Scissors,
   Search,
   Settings,
   Sparkles,
@@ -71,6 +72,7 @@ import type {
 import { SCHEMA_VERSION } from 'videobook-engine/catalog-metadata'
 import enginePackage from 'videobook-engine/package.json'
 import { normalizeNotebookReference } from 'videobook-engine/notebook-mentions'
+import { resolveGeneratedVideoArtifact } from 'videobook-engine/notebook-media-artifact'
 import {
   adaptCommandArgs,
   parseCommandArgs,
@@ -108,6 +110,7 @@ import {
 import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
 import { NotebookMediaFullscreen } from '@/components/videobook/NotebookMediaFullscreen'
 import { BookProjectSelector } from '@/components/videobook/BookProjectSelector'
+import { VideoSplitReview } from '@/components/videobook/VideoSplitReview'
 import {
   CanonicalSequencePlayer,
   type TimelineKeyboardAction,
@@ -206,11 +209,14 @@ import {
 } from '@/videobook/notebook-frame-command'
 import {
   enqueueNotebookSplitCommand,
+  notebookSplitCutPoints,
+  parseNotebookSplitCommand,
   planNotebookSplitCommand,
   resolveNotebookSplitSource,
   type NotebookSplitCommand,
   type NotebookSplitRun,
 } from '@/videobook/notebook-split-command'
+import { durationTargetsToCutPoints } from '@/videobook/video-split-review'
 import {
   generationCellTypeForRoutedTool,
   materializeNotebookChatGeneration,
@@ -3670,6 +3676,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setPendingChatAction(null)
     focusCommandComposer()
   }, [focusCommandComposer])
+  const updatePendingSplitCutPoints = useCallback((cutPointsSeconds: number[]) => {
+    setPendingChatAction((current) => {
+      if (current?.kind !== 'split') return current
+      const sourceAddress = current.expectations[0]?.address ?? 'video'
+      return {
+        ...current,
+        command: { ...current.command, cutPointsSeconds },
+        summary: `Split ${sourceAddress} into ${cutPointsSeconds.length + 1} chunks`,
+      }
+    })
+  }, [])
   const loadPendingGenerationPreview = useCallback(async (
     draft: NotebookChatGenerationDraft,
     document: NotebookDocument,
@@ -3907,6 +3924,43 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return versionAsset ? [versionAsset] : []
     })
   }, [assetById, selectedNotebookCell])
+  const selectedSplitSource = useMemo(() => {
+    if (!notebook || !selectedNotebookCell) return null
+    try {
+      const source = resolveNotebookSplitSource(notebook, selectedNotebookCell.id)
+      const artifactId = resolveGeneratedVideoArtifact(notebook, source)
+      const asset = artifactId ? assetById.get(artifactId) : undefined
+      const duration = asset?.duration ?? asNumber(source.inputs?.durationSeconds)
+      if (!asset?.mediaUrl || !duration || duration < 1) return null
+      return { source, asset, duration }
+    } catch {
+      return null
+    }
+  }, [assetById, notebook, selectedNotebookCell])
+  const pendingSplitReview = useMemo(() => {
+    if (!notebook || pendingChatAction?.kind !== 'split') return null
+    try {
+      const source = resolveNotebookSplitSource(
+        notebook,
+        pendingChatAction.command.sourceReference,
+      )
+      const artifactId = resolveGeneratedVideoArtifact(notebook, source)
+      const asset = artifactId ? assetById.get(artifactId) : undefined
+      const duration = asset?.duration ?? asNumber(source.inputs?.durationSeconds)
+      if (!asset?.mediaUrl || !duration || duration < 1) return null
+      const maximumCellCount = notebookGrid.maximumRowCount
+        * notebookGrid.columnCount
+      return {
+        cutPointsSeconds: pendingChatAction.command.cutPointsSeconds,
+        maxChunkCount: Math.max(0, maximumCellCount - notebook.cells.length - 1),
+        mediaUrl: asset.mediaUrl,
+        sourceDurationSeconds: duration,
+        sourceLabel: notebookGridTag(source.slot),
+      }
+    } catch {
+      return null
+    }
+  }, [assetById, notebook, pendingChatAction])
   const selectedMediaSlotState = selectedNotebookCell
     ? mediaSlotStates[selectedNotebookCell.id]
     : undefined
@@ -5826,8 +5880,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         command.sourceReference,
       )
       const sourceAddress = notebookGridTag(source.slot)
+      const sourceArtifactId = resolveGeneratedVideoArtifact(
+        currentNotebook,
+        source,
+      )
       const sourceDuration = currentAssets.find((asset) =>
-        asset.artifactId === source.outputArtifactId)?.duration
+        asset.artifactId === sourceArtifactId)?.duration
         ?? asNumber(source.inputs?.durationSeconds)
       const draft = planNotebookSplitCommand({
         command,
@@ -5844,7 +5902,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
       selectCanvasCell(draft.outputs[0].outputCell.id)
-      setNotice(`Splitting ${sourceAddress} at ${draft.splitAtSeconds}s`)
+      setNotice(`Splitting ${sourceAddress} into ${draft.outputs.length} chunks`)
       const run = await enqueueNotebookSplitCommand({
         actor: 'videobook-user',
         bookId,
@@ -5865,7 +5923,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       return {
         ok: true,
-        message: `Splitting ${sourceAddress} into ${outputAddresses.join(' and ')}`,
+        message: `Splitting ${sourceAddress} into ${outputAddresses.join(', ')}`,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -6036,17 +6094,40 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         currentNotebook,
         command.sourceReference,
       )
+      const sourceArtifactId = resolveGeneratedVideoArtifact(
+        currentNotebook,
+        source,
+      )
+      const asset = sourceArtifactId ? assetById.get(sourceArtifactId) : undefined
+      const sourceDurationSeconds = asset?.duration
+        ?? asNumber(source.inputs?.durationSeconds)
+      if (!asset?.mediaUrl) {
+        throw new Error(`${notebookGridTag(source.slot)} does not have playable video yet`)
+      }
+      const maximumCellCount = notebookGrid.maximumRowCount
+        * notebookGrid.columnCount
+      if (maximumCellCount - currentNotebook.cells.length < 3) {
+        throw new Error('The notebook needs three empty cells to split a video')
+      }
+      const requestedCutPoints = command.cutPointsSeconds.filter((cutPoint) =>
+        sourceDurationSeconds === null
+        || Math.abs(cutPoint - sourceDurationSeconds) > 0.001)
+      const cutPointsSeconds = notebookSplitCutPoints({
+        cutPointsSeconds: requestedCutPoints,
+        sourceDurationSeconds: sourceDurationSeconds ?? Number.NaN,
+      })
+      const preparedCommand = { ...command, cutPointsSeconds }
       setPendingCommandPlan(null)
       setPendingChatAction({
         kind: 'split',
-        command,
+        command: preparedCommand,
         expectations: [{
           address: notebookGridTag(source.slot),
           cellId: source.id,
         }],
         notebookId: currentNotebook.id,
         reason: 'This request creates and runs a Split Video workflow',
-        summary: `Split ${notebookGridTag(source.slot)} at ${command.splitAtSeconds}s`,
+        summary: `Split ${notebookGridTag(source.slot)} into ${cutPointsSeconds.length + 1} chunks`,
       })
       return applyReadyOutcome('Video split ready to apply')
     } catch (error) {
@@ -6202,7 +6283,29 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!sourceReference || !splitAtSeconds || splitAtSeconds <= 0) {
         return { ok: false, message: 'Sol did not select a valid split source and time.' }
       }
-      return await previewNotebookSplitCommand({ sourceReference, splitAtSeconds })
+      return await previewNotebookSplitCommand({
+        sourceReference,
+        cutPointsSeconds: [splitAtSeconds],
+      })
+    }
+    if (
+      plan.tool === 'split_video_by_durations'
+      && plan.params.destination === undefined
+    ) {
+      const sourceReference = routedAssetReference(plan.params.asset_id)
+      const rawTargets = Array.isArray(plan.params.target_secs)
+        ? plan.params.target_secs
+        : [7]
+      const targets = rawTargets.map(asNumber)
+      if (targets.some((target) => target === null || target <= 0)) {
+        return { ok: false, message: 'Sol did not select valid split durations.' }
+      }
+      if (sourceReference) {
+        return await previewNotebookSplitCommand({
+          sourceReference,
+          cutPointsSeconds: durationTargetsToCutPoints(targets as number[]),
+        })
+      }
     }
     if (plan.effect === 'generation') {
       const cellType = generationCellTypeForRoutedTool(
@@ -6752,6 +6855,28 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         rest,
         commandMentionAssets,
       )
+      if (commandToken === '/split') {
+        const command = parseNotebookSplitCommand(input)
+        if (!command) {
+          return { ok: false, message: 'Usage: /split @video [at 5s, 12.5s]' }
+        }
+        return await previewNotebookSplitCommand(command)
+      }
+      if (
+        (commandToken === '/split-chunks' || commandToken === '/even-split')
+        && /^@[a-z](?:[1-9]|1[0-3])$/iu.test(restParts[0] ?? '')
+      ) {
+        const [sourceValue, ...targetValues] = restParts
+        const targets = (targetValues.length > 0 ? targetValues : ['7'])
+          .map((value) => Number(value.replace(/\s*s(?:ec(?:onds?)?)?$/iu, '')))
+        if (targets.some((value) => !Number.isFinite(value) || value <= 0)) {
+          return { ok: false, message: 'Split durations must be positive seconds.' }
+        }
+        return await previewNotebookSplitCommand({
+          sourceReference: normalizeNotebookReference(sourceValue!),
+          cutPointsSeconds: durationTargetsToCutPoints(targets),
+        })
+      }
       if (commandToken === '/rough-cut') {
         return await prepareRoughCut('slash')
       }
@@ -7780,6 +7905,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   <div className="inspector-header-actions">
                     {selectedCell && (
                       <>
+                        {selectedSplitSource && (
+                          <button
+                            type="button"
+                            className="inspector-source-toggle"
+                            title="Split video"
+                            aria-label="Split video"
+                            disabled={busy}
+                            onClick={() => {
+                              void previewNotebookSplitCommand({
+                                sourceReference: selectedSplitSource.source.id,
+                                cutPointsSeconds: [],
+                              }).then((outcome) => {
+                                if (!outcome.ok) setNotice(outcome.message, 'error')
+                              })
+                            }}
+                          >
+                            <Scissors size={15} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           className={generationsViewCellId === selectedCell.id
@@ -8948,7 +9092,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             onSettingChange={updatePendingGenerationSetting}
           />
         )}
-        {pendingChatAction && pendingChatAction.kind !== 'generation' && (
+        {pendingChatAction?.kind === 'split' && pendingSplitReview && (
+          <VideoSplitReview
+            applyFormId={COMMAND_COMPOSER_FORM_ID}
+            busy={busy}
+            cutPointsSeconds={pendingSplitReview.cutPointsSeconds}
+            maxChunkCount={pendingSplitReview.maxChunkCount}
+            mediaUrl={pendingSplitReview.mediaUrl}
+            sourceDurationSeconds={pendingSplitReview.sourceDurationSeconds}
+            sourceLabel={pendingSplitReview.sourceLabel}
+            onCancel={dismissPendingCommandPlan}
+            onCutPointsChange={updatePendingSplitCutPoints}
+          />
+        )}
+        {pendingChatAction
+          && pendingChatAction.kind !== 'generation'
+          && (pendingChatAction.kind !== 'split' || !pendingSplitReview) && (
           <aside
             className="command-plan-drawer"
             aria-label="Chat action review"
