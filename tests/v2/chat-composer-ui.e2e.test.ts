@@ -180,6 +180,7 @@ describe('chat composer browser flow', () => {
   let videoCellId = ''
   let imageCellId = ''
   let generationCellId = ''
+  let outputVideoCellId = ''
   let reviewGenerationCellId = ''
   let fullscreenImageCellId = ''
   let fullscreenImageMediaUrl = ''
@@ -270,6 +271,22 @@ describe('chat composer browser flow', () => {
         },
       },
     })
+    const generatedNotebook = record(resultValue(await client.callTool({
+      name: 'get_notebook',
+      arguments: { book_id: bookId, notebook_id: notebookId },
+    })))
+    const outputVideoCell = (Array.isArray(generatedNotebook?.cells)
+      ? generatedNotebook.cells
+      : [])
+      .map(record)
+      .find((cell) =>
+        record(cell?.inputs)?.producerCellId === generationCellId)
+    outputVideoCellId = typeof outputVideoCell?.id === 'string'
+      ? outputVideoCell.id
+      : ''
+    if (!outputVideoCellId) {
+      throw new Error('Could not create browser fixture video output cell')
+    }
     reviewGenerationCellId = await createCell({
       type: 'generate_image',
       label: 'generate-image-review',
@@ -1078,6 +1095,8 @@ describe('chat composer browser flow', () => {
       const headerCenter = headerRect.top + headerRect.height / 2
       return {
         accessibleLabel: type.getAttribute('aria-label'),
+        chipLabels: [...chips.querySelectorAll('.cell-aspect-ratio')]
+          .map((chip) => chip.textContent?.trim()),
         contentGap: chipsRect.left - typeRect.right,
         headerHeight: Number.parseFloat(getComputedStyle(element).height),
         labelClipped: label.scrollWidth > label.clientWidth,
@@ -1090,6 +1109,7 @@ describe('chat composer browser flow', () => {
 
     expect(layout).toMatchObject({
       accessibleLabel: 'GEN VIDEO',
+      chipLabels: ['10s', '9:16'],
       headerHeight: 38,
       labelClipped: false,
       renderedLabel: 'GEN VID',
@@ -1098,6 +1118,12 @@ describe('chat composer browser flow', () => {
     expect(layout.contentGap).toBeGreaterThanOrEqual(0)
     expect(layout.typeCenterOffset).toBeLessThan(1)
     expect(layout.chipsCenterOffset).toBeLessThan(1)
+
+    const outputMetadata = notebookCellNode(page, outputVideoCellId)
+      .locator('.cell-media-chips')
+    await outputMetadata.waitFor({ state: 'visible' })
+    expect(await outputMetadata.locator('.cell-aspect-ratio').allTextContents())
+      .toEqual(['0:10', '9:16'])
 
     const relaxedType = notebookCellNode(page, reviewGenerationCellId)
       .locator('.cell-node-type')

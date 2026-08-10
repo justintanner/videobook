@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatMediaAspectRatio,
   formatMediaTime,
   notebookAudioPresentation,
   notebookAudioSummary,
@@ -7,6 +8,7 @@ import {
   notebookCellExecutionObservation,
   notebookCellInspectorActionLabel,
   notebookCellIsActiveStatus,
+  notebookCellMediaCaption,
   notebookCellRunObservation,
   notebookCellStatusLabel,
   notebookCellSupportsExecution,
@@ -187,6 +189,34 @@ describe('notebook cell presentation', () => {
         durationSeconds: 30,
       },
     })).toBe('Continuous source · 0:30')
+  })
+
+  it('formats video dimensions as stable display aspect ratios', () => {
+    expect(formatMediaAspectRatio(1920, 1080)).toBe('16:9')
+    expect(formatMediaAspectRatio(768, 1344)).toBe('9:16')
+    expect(formatMediaAspectRatio(1000, 700)).toBe('10:7')
+    expect(formatMediaAspectRatio(0, 1080)).toBeNull()
+  })
+
+  it('keeps prompt captions off video output cards', () => {
+    expect(notebookCellMediaCaption({
+      type: 'video',
+      hasMedia: true,
+      prompt: 'Prompt with @artifact-id',
+      tool: 'MINIMAX-H3/R2V',
+      model: 'MINIMAX-H3/R2V',
+    })).toBeNull()
+    expect(notebookCellMediaCaption({
+      type: 'image',
+      hasMedia: true,
+      prompt: 'Image prompt',
+      tool: null,
+      model: null,
+    })).toEqual({
+      prompt: 'Image prompt',
+      tool: null,
+      model: null,
+    })
   })
 
   it('presents the active output as the latest unique saved version', () => {

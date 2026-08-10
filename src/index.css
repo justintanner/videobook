@@ -1968,7 +1968,8 @@ textarea:focus-visible {
   white-space: normal;
 }
 
-.cell-generation-chips {
+.cell-generation-chips,
+.cell-media-chips {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -1976,7 +1977,8 @@ textarea:focus-visible {
   margin-left: auto;
 }
 
-.cell-generation-chips .cell-aspect-ratio {
+.cell-generation-chips .cell-aspect-ratio,
+.cell-media-chips .cell-aspect-ratio {
   margin-left: 0;
 }
 

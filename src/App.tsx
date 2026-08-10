@@ -172,11 +172,13 @@ import {
   type NotebookSourceSide,
 } from '@/videobook/notebook-routing'
 import {
+  formatMediaAspectRatio,
   formatMediaTime,
   notebookAudioPresentation,
   notebookCellActionPresentation,
   notebookCellExecutionObservation,
   notebookCellIsActiveStatus,
+  notebookCellMediaCaption,
   notebookCellRunObservation,
   notebookCellStatusLabel,
   notebookCellSupportsExecution,
@@ -477,6 +479,8 @@ interface CanvasCellData extends NotebookCellData {
   asset?: AssetRecord
   deleting?: boolean
   revealing?: boolean
+  videoAspectRatio?: string
+  videoDurationSeconds?: number
   splitFrames?: {
     first: { artifactId: string | null; asset?: AssetRecord }
     last: { artifactId: string | null; asset?: AssetRecord }
@@ -1431,6 +1435,52 @@ function cellExecutionError(
   return asString(item?.error) ?? undefined
 }
 
+function positiveMediaSetting(value: unknown): number | null {
+  const parsed = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && value.trim()
+      ? Number(value)
+      : Number.NaN
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+function videoCanvasMetadata(
+  document: NotebookDocument,
+  cellId: string,
+  asset: AssetRecord | undefined,
+): { aspectRatio: string | null; durationSeconds: number | null } {
+  const cell = document.cells.find((candidate) => candidate.id === cellId)
+  const producerCellId = asString(cell?.inputs?.producerCellId)
+    ?? document.edges.find((edge) =>
+      edge.target === cellId && edge.targetInput === 'media')?.source
+    ?? null
+  const producer = producerCellId
+    ? document.cells.find((candidate) => candidate.id === producerCellId)
+    : undefined
+  const generationSettings = producer?.type === 'generate_video'
+    ? record(producer.inputs?.generationSettings)
+    : null
+  const configuredAspectRatio = asString(
+    cell?.inputs?.aspectRatio ?? cell?.inputs?.aspect_ratio,
+  ) ?? asString(generationSettings?.aspect_ratio)
+  const aspectRatio = configuredAspectRatio
+    && configuredAspectRatio !== 'adaptive'
+    && configuredAspectRatio !== 'auto'
+    ? configuredAspectRatio
+    : formatMediaAspectRatio(asset?.width ?? null, asset?.height ?? null)
+  const actualDuration = positiveMediaSetting(asset?.duration)
+  const configuredDuration = positiveMediaSetting(
+    cell?.inputs?.durationSeconds
+      ?? cell?.inputs?.duration_seconds
+      ?? generationSettings?.duration
+      ?? generationSettings?.duration_seconds,
+  )
+  return {
+    aspectRatio,
+    durationSeconds: actualDuration ?? configuredDuration,
+  }
+}
+
 function canvasNodes(
   document: NotebookDocument,
   assets: AssetRecord[],
@@ -1440,6 +1490,9 @@ function canvasNodes(
   return notebookNodes(document).map((node) => {
     const frameIds = notebookSplitFrameIds(node.data.inputs)
     const asset = artifactForCell(byArtifactId, node.data.outputArtifactId)
+    const videoMetadata = node.data.kind === 'video'
+      ? videoCanvasMetadata(document, node.id, asset)
+      : null
     const fallbackStartedAt = cellExecutionStartedAt(document, node.id)
     const fallbackError = cellExecutionError(document, node.id)
     const work = notebookMediaWorkState(
@@ -1460,6 +1513,12 @@ function canvasNodes(
         ...(work.startedAt ? { statusStartedAt: work.startedAt } : {}),
         ...(work.error ? { statusError: work.error } : {}),
         asset,
+        ...(videoMetadata?.aspectRatio
+          ? { videoAspectRatio: videoMetadata.aspectRatio }
+          : {}),
+        ...(videoMetadata?.durationSeconds
+          ? { videoDurationSeconds: videoMetadata.durationSeconds }
+          : {}),
         ...(node.data.kind === 'split_video'
           ? {
               splitFrames: {
@@ -2134,41 +2193,40 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         ? String(generationSettings.duration)
         : null)
     : null
-  const generationResolution = generationSettings
-    ? asString(generationSettings.resolution)
-      ?? asString(generationSettings.size)
-    : null
   const typeLabel = cellTypeLabel(data.kind)
   const denseGenerationHeader = generationCell
     && generationDuration !== null
-    && generationResolution !== null
     && aspectRatio !== null
   const visibleTypeLabel = denseGenerationHeader
     ? compactCellTypeLabel(data.kind)
     : typeLabel
   const resolvedPrompt = asString(data.inputs?.resolvedPrompt) ?? data.prompt
   const promptCell = textCell || (generationCell && Boolean(data.prompt))
+  const videoDurationLabel = data.kind === 'video'
+    && data.videoDurationSeconds !== undefined
+    ? formatMediaTime(data.videoDurationSeconds)
+    : null
+  const videoHeaderMetadata = data.kind === 'video'
+    && Boolean(data.videoAspectRatio || videoDurationLabel)
   const running = notebookCellIsActiveStatus(data.status)
   const failed = data.status === 'error'
   const outputVersions = notebookOutputVersionArtifactIds(
     data.inputs,
     data.outputArtifactId,
   )
-  const mediaCaption = (
-    data.kind === 'video' || data.kind === 'image'
-  ) && (mediaUrl || thumbnailUrl) && resolvedPrompt
-    ? {
-        prompt: resolvedPrompt,
-        tool: data.tool
-          ? abbreviateGenerationPhrases(
-            generationTitles.get(data.tool) ?? data.tool,
-          )
-          : null,
-        model: data.model
-          ? abbreviateGenerationPhrases(data.model)
-          : null,
-      }
-    : null
+  const mediaCaption = notebookCellMediaCaption({
+    type: data.kind,
+    hasMedia: Boolean(mediaUrl || thumbnailUrl),
+    prompt: resolvedPrompt ?? null,
+    tool: data.tool
+      ? abbreviateGenerationPhrases(
+        generationTitles.get(data.tool) ?? data.tool,
+      )
+      : null,
+    model: data.model
+      ? abbreviateGenerationPhrases(data.model)
+      : null,
+  })
   const versionedOutput = (
     data.kind === 'audio'
     || data.kind === 'image'
@@ -2255,14 +2313,27 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
                   {/^\d+(\.\d+)?$/.test(generationDuration) ? 's' : ''}
                 </span>
               )}
-              {generationResolution && (
-                <span className="cell-aspect-ratio" title="Resolution">
-                  {generationResolution}
-                </span>
-              )}
               {aspectRatio && (
                 <span className="cell-aspect-ratio" title="Aspect ratio">
                   {aspectRatio}
+                </span>
+              )}
+            </span>
+          )}
+          {videoHeaderMetadata && (
+            <span className="cell-media-chips" aria-label="Video metadata">
+              {videoDurationLabel && (
+                <time
+                  className="cell-aspect-ratio"
+                  dateTime={`PT${data.videoDurationSeconds}S`}
+                  title="Duration"
+                >
+                  {videoDurationLabel}
+                </time>
+              )}
+              {data.videoAspectRatio && (
+                <span className="cell-aspect-ratio" title="Aspect ratio">
+                  {data.videoAspectRatio}
                 </span>
               )}
             </span>
@@ -2280,7 +2351,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
               {action.label}
             </button>
           )}
-          {!action && versionedOutput && (
+          {!action && !videoHeaderMetadata && versionedOutput && (
             <span
               className="cell-version-count"
               aria-label={`Current output version ${activeOutputVersion} of ${outputVersions.length}`}
@@ -2322,12 +2393,14 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             ) : (
               <img src={thumbnailUrl ?? mediaUrl ?? ''} alt={data.label ?? notebookGridTag(data.slot)} />
             )}
-            <NotebookMediaMetadata
-              className="cell-media-metadata"
-              width={data.asset?.width ?? null}
-              height={data.asset?.height ?? null}
-              durationSeconds={playableVideo ? data.asset?.duration ?? null : null}
-            />
+            {data.kind !== 'video' && (
+              <NotebookMediaMetadata
+                className="cell-media-metadata"
+                width={data.asset?.width ?? null}
+                height={data.asset?.height ?? null}
+                durationSeconds={playableVideo ? data.asset?.duration ?? null : null}
+              />
+            )}
             {mediaCaption && (
               <div className="cell-media-caption" title={mediaCaption.prompt}>
                 <span className="cell-media-caption-prompt">

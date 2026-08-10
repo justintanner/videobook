@@ -17,6 +17,24 @@ const generationCellTypes = new Set<NotebookCellType>([
   'generate_video',
 ])
 
+const canonicalMediaAspectRatios = [
+  ['3:1', 3],
+  ['21:9', 21 / 9],
+  ['2:1', 2],
+  ['16:9', 16 / 9],
+  ['3:2', 3 / 2],
+  ['4:3', 4 / 3],
+  ['5:4', 5 / 4],
+  ['1:1', 1],
+  ['4:5', 4 / 5],
+  ['3:4', 3 / 4],
+  ['2:3', 2 / 3],
+  ['9:16', 9 / 16],
+  ['1:2', 1 / 2],
+  ['9:21', 9 / 21],
+  ['1:3', 1 / 3],
+] as const
+
 const activeStatuses = new Set([
   'analyzing',
   'archiving',
@@ -379,6 +397,57 @@ export function formatMediaTime(seconds: number): string {
   return fraction === 0
     ? `${minutes}:${formattedSeconds}`
     : `${minutes}:${formattedSeconds}.${String(fraction).padStart(2, '0')}`
+}
+
+function greatestCommonDivisor(left: number, right: number): number {
+  let first = Math.abs(Math.round(left))
+  let second = Math.abs(Math.round(right))
+  while (second > 0) {
+    const remainder = first % second
+    first = second
+    second = remainder
+  }
+  return first
+}
+
+export function formatMediaAspectRatio(
+  width: number | null,
+  height: number | null,
+): string | null {
+  if (
+    width === null
+    || height === null
+    || !Number.isFinite(width)
+    || !Number.isFinite(height)
+    || width <= 0
+    || height <= 0
+  ) return null
+  const ratio = width / height
+  const nearest = canonicalMediaAspectRatios.reduce((best, candidate) =>
+    Math.abs(candidate[1] - ratio) < Math.abs(best[1] - ratio)
+      ? candidate
+      : best)
+  if (Math.abs(nearest[1] - ratio) / ratio <= 0.03) return nearest[0]
+  const roundedWidth = Math.round(width)
+  const roundedHeight = Math.round(height)
+  if (roundedWidth < 1 || roundedHeight < 1) return null
+  const divisor = greatestCommonDivisor(roundedWidth, roundedHeight)
+  return `${roundedWidth / divisor}:${roundedHeight / divisor}`
+}
+
+export function notebookCellMediaCaption(input: {
+  type: NotebookCellType
+  hasMedia: boolean
+  prompt: string | null
+  tool: string | null
+  model: string | null
+}): { prompt: string; tool: string | null; model: string | null } | null {
+  if (input.type !== 'image' || !input.hasMedia || !input.prompt) return null
+  return {
+    prompt: input.prompt,
+    tool: input.tool,
+    model: input.model,
+  }
 }
 
 export function notebookAudioPresentation(input: {
