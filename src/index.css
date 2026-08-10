@@ -4466,40 +4466,6 @@ textarea:focus-visible {
   font-size: 10px;
 }
 
-.inspector-clear-slot-button {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 0 10px;
-  border: 1px solid rgba(143, 154, 148, 0.32);
-  color: #87958e;
-  background: rgba(77, 86, 81, 0.12);
-  cursor: pointer;
-  transition:
-    border-color 140ms ease,
-    color 140ms ease,
-    background 140ms ease,
-    transform 100ms ease;
-}
-
-.inspector-clear-slot-button:hover:not(:disabled),
-.inspector-clear-slot-button:focus-visible:not(:disabled) {
-  border-color: var(--neutral-border-hover);
-  color: var(--neutral-fg-hover);
-  background: var(--neutral-bg-hover);
-}
-
-.inspector-clear-slot-button:active:not(:disabled) {
-  transform: translateY(1px);
-}
-
-.inspector-clear-slot-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.44;
-}
-
 .inspector-delete-cell-button {
   gap: 7px;
   border-color: rgba(177, 116, 116, 0.28);

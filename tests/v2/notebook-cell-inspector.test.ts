@@ -192,14 +192,12 @@ describe('NotebookCellInspector', () => {
       status: 'ready',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       generationActions,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -221,13 +219,8 @@ describe('NotebookCellInspector', () => {
     )
     expect(html).toContain('Generate')
     expect(html).not.toContain('Save changes')
-    expect(html).toContain('inspector-clear-slot-button')
-    expect(html).toContain('Clear slot')
     expect(html).toContain('inspector-delete-cell-button')
     expect(html).toContain('Delete cell')
-    expect(html).toMatch(
-      /inspector-clear-slot-button[\s\S]*<\/button><button[^>]*inspector-delete-cell-button/,
-    )
     expect(html).not.toContain('Choose a generation tool')
     expect(html).not.toContain('placeholder="Provider"')
   })
@@ -254,14 +247,12 @@ describe('NotebookCellInspector', () => {
       status: 'ready',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       generationActions,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
       onPreviewPayload: async () => {
@@ -327,14 +318,12 @@ describe('NotebookCellInspector', () => {
       status: 'ready',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       generationActions,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -382,14 +371,12 @@ describe('NotebookCellInspector', () => {
       status: 'ready',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       generationActions,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
       onPreviewPayload: async () => {
@@ -426,14 +413,12 @@ describe('NotebookCellInspector', () => {
         status: 'completed',
         error: null,
         busy: false,
-        clearing: false,
         deleting: false,
         sourceVisible: false,
         generationActions,
         onUpdate: async () => undefined,
         onSetInput: async () => undefined,
         onRun: async () => undefined,
-        onClearSlot: async () => undefined,
         onDelete: async () => undefined,
         onOpenFullscreen: () => undefined,
       }))
@@ -441,9 +426,7 @@ describe('NotebookCellInspector', () => {
       expect(html).toContain(
         'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell cleanup actions"',
       )
-      expect(html).toMatch(
-        /inspector-clear-slot-button[\s\S]*<\/button><button[^>]*inspector-delete-cell-button/,
-      )
+      expect(html).toContain('inspector-delete-cell-button')
     },
   )
 
@@ -467,13 +450,11 @@ describe('NotebookCellInspector', () => {
       status: 'completed',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -497,8 +478,6 @@ describe('NotebookCellInspector', () => {
       html.indexOf('<h3>Inputs</h3>'),
     )
     expect(html).not.toContain('Dolt source')
-    expect(html).toContain('inspector-clear-slot-button')
-    expect(html).toContain('Clear slot')
     expect(html).toContain('inspector-delete-cell-button')
     expect(html).toContain('Delete cell')
     expect(html).not.toContain('completed')
@@ -510,9 +489,6 @@ describe('NotebookCellInspector', () => {
       html.indexOf('class="inspector-cell-actions inspector-compact-actions"'),
     )
     expect(html).toContain('aria-label="Open @b3 fullscreen"')
-    expect(html).toMatch(
-      /inspector-clear-slot-button[\s\S]*<\/button><button[^>]*inspector-delete-cell-button/,
-    )
   })
 
   it('opens generated video output in the shared fullscreen viewer', () => {
@@ -545,14 +521,12 @@ describe('NotebookCellInspector', () => {
       status: 'completed',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       generationActions,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -597,13 +571,11 @@ describe('NotebookCellInspector', () => {
       status: 'completed',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -668,13 +640,11 @@ describe('NotebookCellInspector', () => {
       status: 'completed',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -730,13 +700,11 @@ describe('NotebookCellInspector', () => {
       status: 'completed',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -832,13 +800,11 @@ describe('NotebookCellInspector', () => {
       status: 'completed',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -870,7 +836,6 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain(
       'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell cleanup actions"',
     )
-    expect(html).toContain('Clear slot')
     expect(html).toContain('Delete cell')
   })
 
@@ -888,13 +853,11 @@ describe('NotebookCellInspector', () => {
       status: 'pending',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -903,12 +866,10 @@ describe('NotebookCellInspector', () => {
     expect(html.indexOf('Output pending')).toBeLessThan(
       html.indexOf('<h3>Inputs</h3>'),
     )
-    expect(html).toContain('inspector-clear-slot-button')
     expect(html).toContain('inspector-delete-cell-button')
-    expect(html).toContain('disabled=""')
   })
 
-  it('shows passive cell clearing progress', () => {
+  it('shows passive cell deletion progress', () => {
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell,
@@ -918,13 +879,11 @@ describe('NotebookCellInspector', () => {
       status: 'completed',
       error: null,
       busy: true,
-      clearing: false,
       deleting: true,
       sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -996,13 +955,11 @@ describe('NotebookCellInspector', () => {
       status: 'completed',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -1037,9 +994,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('End seconds')
     expect(html).toContain('value="30"')
     expect(html).toContain('Split again')
-    expect(html).toContain('Clear slot')
     expect(html).toContain('Delete cell')
-    expect(html.indexOf('Split again')).toBeLessThan(html.indexOf('Clear slot'))
     expect(html.indexOf('Split again')).toBeLessThan(html.indexOf('Delete cell'))
     expect(html).not.toContain('completed')
     expect(html).not.toContain('inspector-run-error')
@@ -1067,13 +1022,11 @@ describe('NotebookCellInspector', () => {
       status: 'error',
       error: 'ffmpeg exited with code 1\nEnd time exceeds the source duration',
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -1087,9 +1040,8 @@ describe('NotebookCellInspector', () => {
     )
     expect(html).toContain('ffmpeg exited with code 1')
     expect(html).toContain('End time exceeds the source duration')
-    // Error block sits under the primary action, above Clear/Delete cleanup.
     expect(html.indexOf('Start seconds')).toBeLessThan(html.indexOf('Run failed'))
-    expect(html.indexOf('Run failed')).toBeLessThan(html.indexOf('Clear slot'))
+    expect(html.indexOf('Run failed')).toBeLessThan(html.indexOf('Delete cell'))
   })
 
   it('keeps Analyze inputs concise and gives its prompt a copy action', () => {
@@ -1124,13 +1076,11 @@ describe('NotebookCellInspector', () => {
       status: 'pending',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -1184,13 +1134,11 @@ describe('NotebookCellInspector', () => {
       status: 'pending',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -1403,13 +1351,11 @@ describe('NotebookCellInspector', () => {
       status: 'completed',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: true,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -1424,7 +1370,6 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('class="json-key"')
     expect(html).toContain('<code class="dolt-null">NULL</code>')
     expect(html).not.toContain('inspector-delete-cell-button')
-    expect(html).not.toContain('Clear slot')
   })
 
   it('keeps non-passive editing controls out of the source view', () => {
@@ -1443,19 +1388,15 @@ describe('NotebookCellInspector', () => {
       status: 'completed',
       error: null,
       busy: false,
-      clearing: false,
       deleting: false,
       sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
-      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('inspector-clear-slot-button')
-    expect(html).toContain('Clear slot')
     expect(html).toContain('inspector-delete-cell-button')
     expect(html).toContain('Delete cell')
     expect(html).toContain('class="inspector-save-button" disabled=""')

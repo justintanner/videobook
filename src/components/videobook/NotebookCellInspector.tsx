@@ -412,7 +412,6 @@ type NotebookCellInspectorProps = {
   status: string
   error: string | null
   busy: boolean
-  clearing: boolean
   deleting: boolean
   sourceVisible: boolean
   generationsVisible?: boolean
@@ -421,7 +420,6 @@ type NotebookCellInspectorProps = {
   onUpdate: NotebookCellUpdate
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
   onRun: (cellId: string) => Promise<unknown>
-  onClearSlot: () => Promise<void>
   onDelete: () => Promise<void>
   onOpenFullscreen: () => void
   onPreviewPayload?: (
@@ -1067,37 +1065,6 @@ function InputSources({
   )
 }
 
-function InspectorClearButton({
-  className,
-  label,
-  pendingLabel,
-  busy,
-  pending,
-  disabled = false,
-  onClear,
-}: {
-  className: string
-  label: string
-  pendingLabel: string
-  busy: boolean
-  pending: boolean
-  disabled?: boolean
-  onClear: () => Promise<void>
-}) {
-  return (
-    <button
-      type="button"
-      className={className}
-      aria-busy={pending}
-      onClick={() => void onClear()}
-      disabled={busy || pending || disabled}
-    >
-      <CircleX size={13} />
-      <span>{pending ? pendingLabel : label}</span>
-    </button>
-  )
-}
-
 function DeleteCellButton({
   busy,
   deleting,
@@ -1108,52 +1075,34 @@ function DeleteCellButton({
   onDelete: () => Promise<void>
 }) {
   return (
-    <InspectorClearButton
+    <button
+      type="button"
       className="danger-button inspector-delete-cell-button"
-      label="Delete cell"
-      pendingLabel="Deleting…"
-      busy={busy}
-      pending={deleting}
-      onClear={onDelete}
-    />
+      aria-busy={deleting}
+      onClick={() => void onDelete()}
+      disabled={busy || deleting}
+    >
+      <CircleX size={13} />
+      <span>{deleting ? 'Deleting…' : 'Delete cell'}</span>
+    </button>
   )
 }
 
 function CellCleanupActions({
-  cell,
-  edges,
   busy,
-  clearing,
   deleting,
-  onClearSlot,
   onDelete,
 }: Pick<
   NotebookCellInspectorProps,
-  | 'cell'
-  | 'edges'
   | 'busy'
-  | 'clearing'
   | 'deleting'
-  | 'onClearSlot'
   | 'onDelete'
 >) {
-  const canClear = Boolean(cell.outputArtifactId || cell.outputEntityId)
-    || edges.some((edge) => edge.target === cell.id)
-
   return (
     <section
       className="inspector-cell-actions inspector-compact-actions"
       aria-label="Cell cleanup actions"
     >
-      <InspectorClearButton
-        className="inspector-clear-slot-button"
-        label="Clear slot"
-        pendingLabel="Clearing…"
-        busy={busy}
-        pending={clearing}
-        disabled={!canClear}
-        onClear={onClearSlot}
-      />
       <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
     </section>
   )
@@ -1222,10 +1171,8 @@ function MediaCellInspector({
   cellAssets,
   versionAssets,
   busy,
-  clearing,
   deleting,
   onSetInput,
-  onClearSlot,
   onDelete,
   onOpenFullscreen,
 }: Pick<
@@ -1237,11 +1184,9 @@ function MediaCellInspector({
   | 'cellAssets'
   | 'versionAssets'
   | 'busy'
-  | 'clearing'
   | 'deleting'
   | 'onUpdate'
   | 'onSetInput'
-  | 'onClearSlot'
   | 'onDelete'
   | 'onOpenFullscreen'
 >) {
@@ -1334,12 +1279,8 @@ function MediaCellInspector({
           onSetInput={onSetInput}
         />
         <CellCleanupActions
-          cell={cell}
-          edges={edges}
           busy={busy}
-          clearing={clearing}
           deleting={deleting}
-          onClearSlot={onClearSlot}
           onDelete={onDelete}
         />
       </div>
@@ -1625,10 +1566,8 @@ function AnalysisCellInspector({
   cellAssets,
   versionAssets,
   busy,
-  clearing,
   deleting,
   onSetInput,
-  onClearSlot,
   onDelete,
 }: Pick<
   NotebookCellInspectorProps,
@@ -1639,11 +1578,9 @@ function AnalysisCellInspector({
   | 'cellAssets'
   | 'versionAssets'
   | 'busy'
-  | 'clearing'
   | 'deleting'
   | 'onUpdate'
   | 'onSetInput'
-  | 'onClearSlot'
   | 'onDelete'
 >) {
   const artifactIds = notebookOutputVersionArtifactIds(
@@ -1745,12 +1682,8 @@ function AnalysisCellInspector({
           onSetInput={onSetInput}
         />
         <CellCleanupActions
-          cell={cell}
-          edges={edges}
           busy={busy}
-          clearing={clearing}
           deleting={deleting}
-          onClearSlot={onClearSlot}
           onDelete={onDelete}
         />
       </div>
@@ -1863,12 +1796,10 @@ function ExecutableCellInspector({
   status,
   error,
   busy,
-  clearing,
   deleting,
   onUpdate,
   onSetInput,
   onRun,
-  onClearSlot,
   onDelete,
   onOpenFullscreen,
   onPreviewPayload,
@@ -1884,12 +1815,10 @@ function ExecutableCellInspector({
   | 'status'
   | 'error'
   | 'busy'
-  | 'clearing'
   | 'deleting'
   | 'onUpdate'
   | 'onSetInput'
   | 'onRun'
-  | 'onClearSlot'
   | 'onDelete'
   | 'onOpenFullscreen'
   | 'onPreviewPayload'
@@ -2716,12 +2645,8 @@ function ExecutableCellInspector({
         </section>
       )}
       <CellCleanupActions
-        cell={cell}
-        edges={edges}
         busy={busy}
-        clearing={clearing}
         deleting={deleting}
-        onClearSlot={onClearSlot}
         onDelete={onDelete}
       />
     </div>
@@ -2945,7 +2870,6 @@ export function NotebookCellInspector({
   status,
   error,
   busy,
-  clearing,
   deleting,
   sourceVisible,
   generationsVisible = false,
@@ -2953,7 +2877,6 @@ export function NotebookCellInspector({
   onUpdate,
   onSetInput,
   onRun,
-  onClearSlot,
   onDelete,
   onOpenFullscreen,
   onPreviewPayload,
@@ -3006,11 +2929,9 @@ export function NotebookCellInspector({
         cellAssets={cellAssets}
         versionAssets={versionAssets}
         busy={busy}
-        clearing={clearing}
         deleting={deleting}
         onUpdate={onUpdate}
         onSetInput={onSetInput}
-        onClearSlot={onClearSlot}
         onDelete={onDelete}
       />
     )
@@ -3026,11 +2947,9 @@ export function NotebookCellInspector({
         cellAssets={cellAssets}
         versionAssets={versionAssets}
         busy={busy}
-        clearing={clearing}
         deleting={deleting}
         onUpdate={onUpdate}
         onSetInput={onSetInput}
-        onClearSlot={onClearSlot}
         onDelete={onDelete}
         onOpenFullscreen={onOpenFullscreen}
       />
@@ -3047,12 +2966,10 @@ export function NotebookCellInspector({
       status={status}
       error={error}
       busy={busy}
-      clearing={clearing}
       deleting={deleting}
       onUpdate={onUpdate}
       onSetInput={onSetInput}
       onRun={onRun}
-      onClearSlot={onClearSlot}
       onDelete={onDelete}
       onOpenFullscreen={onOpenFullscreen}
       onPreviewPayload={onPreviewPayload}

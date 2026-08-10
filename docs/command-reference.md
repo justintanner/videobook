@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (297)
+## MCP endpoints (296)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -25,7 +25,6 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `check_kimi_coding_api` — Check whether the Kimi Coding API is reachable and its configured API key is valid
 - `clean_failed_assets` (historical names, not exposed: `clear_failed_tasks`) — Clean up assets with a persisted generation error: delete unmaterialized generation husks (returned as 'cleared'), but keep assets that already hold media and only clear their error row (returned as 'error_cleared').
 - `clean_video_audio` — Clean a video artifact's audio in place with ElevenLabs Voice Isolator. Preserves dialogue as the main track, keeps a quiet denoised source bed for important sound effects, suppresses odd start/end sounds with fades, and can add subtle instrumental ElevenLabs music. The video stream is copied unchanged and process_video refreshes derived audio artifacts.
-- `clear_notebook_cell_slot` — Clear one notebook cell output and incoming connections without deleting the cell
 - `commit_edit_intent` — Commit an unchanged previewed CommandPlan edit stage atomically
 - `concat_images` — Concatenate 1-9 image artifacts into a new image artifact. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.
 - `connect_notebook_cells` — Create a UUIDv7 notebook edge

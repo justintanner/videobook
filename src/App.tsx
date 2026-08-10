@@ -289,7 +289,7 @@ type AssetRecord = {
 
 type MediaSearchMode = 'text' | ReverseSearchMode
 
-type MediaSlotOperation = 'attach' | 'clear' | 'upload'
+type MediaSlotOperation = 'attach' | 'upload'
 
 type MediaSlotState = {
   operation: MediaSlotOperation | null
@@ -4355,27 +4355,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const clearSelectedCellSlot = async () => {
-    if (!bookId || !notebook || !selectedNotebookCell) return
-    const cellId = selectedNotebookCell.id
-    setMediaSlotOperation(cellId, 'clear')
-    try {
-      await call('clear_notebook_cell_slot', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        cell_id: cellId,
-      })
-      if (fullscreenCellId === cellId) setFullscreenCellId(null)
-      await refreshNotebook(bookId, notebook.id)
-      setMediaSlotOperation(cellId, null)
-      setNotice('Cell slot cleared')
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setMediaSlotError(cellId, message)
-      setNotice(message, 'error')
-    }
-  }
-
   const resolveMediaFileArtifact = async (
     file: File,
     kind: PassiveMediaKind,
@@ -4422,7 +4401,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       cell.outputArtifactId
       || notebook.edges.some((edge) => edge.target === cellId)
     ) {
-      setMediaSlotError(cellId, 'Clear this slot before attaching different media.')
+      setMediaSlotError(cellId, 'This media slot already contains media.')
       return
     }
     const fileKind = mediaKindForFile(file)
@@ -6462,14 +6441,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             cell_id: cell.id,
             ...revisionInput,
           })
-        } else if (action.kind === 'clear') {
-          const cell = notebookCellAtSlot(currentNotebook, action.source)!
-          await call('clear_notebook_cell_slot', {
-            book_id: bookId,
-            notebook_id: currentNotebook.id,
-            cell_id: cell.id,
-            ...revisionInput,
-          })
         } else if (action.kind === 'connect') {
           const source = notebookCellAtSlot(currentNotebook, action.source)!
           const target = notebookCellAtSlot(currentNotebook, action.target)!
@@ -7794,7 +7765,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     mentionAssets={commandMentionAssets}
                     busy={busy || Boolean(selectedMediaSlotState?.operation)}
                     deleting={deletingCellIds.has(selectedNotebookCell.id)}
-                    clearing={selectedMediaSlotState?.operation === 'clear'}
                     sourceVisible={sourceViewCellId === selectedNotebookCell.id}
                     generationsVisible={
                       generationsViewCellId === selectedNotebookCell.id
@@ -7821,7 +7791,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     onSetInput={setSelectedCellInput}
                     onRun={runCell}
                     onDelete={deleteSelectedCell}
-                    onClearSlot={clearSelectedCellSlot}
                     onOpenFullscreen={() => setFullscreenCellId(selectedNotebookCell.id)}
                     onPreviewPayload={previewGenerationPayload}
                     onLoadGenerationPayload={loadGenerationPayload}

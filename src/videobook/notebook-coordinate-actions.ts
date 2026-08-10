@@ -27,7 +27,7 @@ export type NotebookCoordinateAction =
       destination: NotebookGridSlot | null
     }
   | {
-      kind: 'delete' | 'clear' | 'run'
+      kind: 'delete' | 'run'
       source: NotebookGridSlot
     }
   | {
@@ -121,7 +121,7 @@ export function parseNotebookCoordinateAction(
     }
   }
   const simple = normalized.match(new RegExp(
-    `^(?:please\\s+)?(delete|remove|clear|run|execute)(?:\\s+(?:cell|output|output of))?\\s+@${addressPattern}(?:\\s+please)?$`,
+    `^(?:please\\s+)?(delete|remove|run|execute)(?:\\s+(?:cell|output|output of))?\\s+@${addressPattern}(?:\\s+please)?$`,
     'iu',
   ))
   if (simple) {
@@ -129,9 +129,7 @@ export function parseNotebookCoordinateAction(
     return {
       kind: verb === 'delete' || verb === 'remove'
         ? 'delete'
-        : verb === 'clear'
-          ? 'clear'
-          : 'run',
+        : 'run',
       source: address(simple[2]!),
     }
   }
@@ -218,9 +216,7 @@ export function planNotebookCoordinateAction(
     expectations: [expectation(document, parsed.source)],
     reason: parsed.kind === 'run'
       ? 'This request runs a notebook cell'
-      : parsed.kind === 'clear'
-        ? 'This request clears a cell output and its incoming connections'
-        : 'This request permanently deletes a notebook cell',
+      : 'This request permanently deletes a notebook cell',
     summary: `${parsed.kind[0]!.toUpperCase()}${parsed.kind.slice(1)} ${notebookGridTag(source.slot)}`,
   }
 }
