@@ -85,6 +85,7 @@ import { extendGrokImagineVideoDef } from "./extend-grok-imagine-video.js";
 import { upscaleGrokImagineVideoDef } from "./upscale-grok-imagine-video.js";
 import { generateKling30VideoDef } from "./generate-kling30-video.js";
 import { generateKling30MotionControlVideoDef } from "./generate-kling30-motion-control-video.js";
+import { generateSeedance25VideoDef } from "./generate-seedance25-video.js";
 import { generateSeedance2VideoDef } from "./generate-seedance2-video.js";
 import { generateSeedance2FastVideoDef } from "./generate-seedance2-fast-video.js";
 import { generateSeedance2MiniVideoDef } from "./generate-seedance2-mini-video.js";
@@ -389,6 +390,7 @@ export function getAllToolDefs(
     upscaleGrokImagineVideoDef(fs),
     generateKling30VideoDef(fs),
     generateKling30MotionControlVideoDef(fs),
+    generateSeedance25VideoDef(fs),
     generateSeedance2VideoDef(fs),
     generateSeedance2FastVideoDef(fs),
     generateSeedance2MiniVideoDef(fs),

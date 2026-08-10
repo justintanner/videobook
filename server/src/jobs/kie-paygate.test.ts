@@ -188,6 +188,21 @@ describe("kie paygate", () => {
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
+  it("fails closed for Seedance 2.5 until @apicity/cost registers pricing", () => {
+    const request = {
+      model: "bytedance/seedance-2-5" as const,
+      input: {
+        prompt: "a continuous tracking shot",
+        resolution: "720p" as const,
+        duration: 30,
+      },
+    };
+
+    expect(() => mintKieOtp(request, 60)).toThrow(
+      /cost estimate is not bounded.*bytedance\/seedance-2-5/,
+    );
+  });
+
   // vc-3vn2: missing resolution + reference_video_urls → variant 'video' (unbounded).
   it("rejects Seedance 2 Mini with reference video but no resolution as unbounded", () => {
     const request = {

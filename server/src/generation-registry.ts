@@ -117,6 +117,18 @@ export const GENERATION_ACTIONS: GenerationActionSpec[] = [
     persisted_history_consumers: ["notebook", "prompt_history", "project_activity"],
   },
   {
+    canonical_name: "generate_kie_seedance_2_5_video",
+    provider: "kie",
+    apicity_identifier: "Seedance25InputSchema",
+    media_type: "video",
+    operation: "image_to_video",
+    picker_visibility: "visible",
+    legacy_names: ["generate_seedance25_video"],
+    schema_owner: "@apicity/kie/zod",
+    job_task_discriminator: "seedance25_video_gen",
+    persisted_history_consumers: ["notebook", "prompt_history", "project_activity"],
+  },
+  {
     canonical_name: "generate_kie_seedance_2_0_video",
     provider: "kie",
     apicity_identifier: "Seedance2InputSchema",

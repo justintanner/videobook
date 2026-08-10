@@ -237,6 +237,44 @@ describe("notebook action catalog", () => {
       defaultValue: "8",
       options: ["4", "6", "8", "10"],
     });
+    const seedance25Action = generationCatalog.actions.find((action) =>
+      action.tool === "generate_kie_seedance_2_5_video");
+    expect(seedance25Action).toMatchObject({
+      title: "Seedance 2.5",
+      providerLabel: "Kie",
+    });
+    expect(seedance25Action?.inputContract?.modes.map((mode) => mode.id))
+      .toEqual(["t2v", "i2v", "r2v"]);
+    expect(seedance25Action?.inputContract?.modes.find((mode) =>
+      mode.id === "r2v")?.slots.map((slot) => ({
+      field: slot.field,
+      max: slot.max,
+    }))).toEqual([
+      { field: "image_refs", max: 30 },
+      { field: "video_refs", max: 10 },
+      { field: "audio_refs", max: 10 },
+      { field: "replace_audio_with", max: 1 },
+    ]);
+    expect(seedance25Action?.controls?.map((control) => control.name)).toEqual([
+      "return_last_frame",
+      "generate_audio",
+      "resolution",
+      "aspect_ratio",
+      "duration",
+      "output_format",
+      "web_search",
+      "nsfw_checker",
+    ]);
+    expect(seedance25Action?.controls?.find((control) =>
+      control.name === "duration")).toMatchObject({
+      defaultValue: "5",
+      options: ["-1", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30"],
+    });
+    expect(seedance25Action?.controls?.find((control) =>
+      control.name === "output_format")).toMatchObject({
+      defaultValue: "mp4",
+      options: ["mp4", "mov"],
+    });
     const motionControlAction = generationCatalog.actions.find((action) =>
       action.tool === "generate_kie_kling_3_0_motion_control");
     expect(motionControlAction).toMatchObject({

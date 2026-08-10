@@ -4,8 +4,8 @@ This is the authoritative registry-derived list of canonical generation and work
 
 ## Summary
 
-- Total actions: 95
-- Provider actions: 86
+- Total actions: 96
+- Provider actions: 87
 - Workflow and support actions: 9
 
 ## Naming grammar
@@ -22,6 +22,7 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `generate_kie_kling_3_0_video` | kie | `KlingVideoRequestSchema` | video | image_to_video | visible | `generate_kling30_video` |
 | `generate_kie_kling_3_0_motion_control` | kie | `KlingMotionControlRequestSchema` | video | motion_control | visible | `generate_kling30_motion_control_video` |
 | `generate_kie_kling_3_0_turbo_video` | kie | `KlingV3TurboImageToVideoRequestSchema` | video | image_to_video | visible | `generate_kling30_turbo_video` |
+| `generate_kie_seedance_2_5_video` | kie | `Seedance25InputSchema` | video | image_to_video | visible | `generate_seedance25_video` |
 | `generate_kie_seedance_2_0_video` | kie | `Seedance2InputSchema` | video | image_to_video | visible | `generate_seedance2_video` |
 | `generate_kie_seedance_2_0_fast_video` | kie | `Seedance2FastInputSchema` | video | image_to_video | visible | `generate_seedance2_fast_video` |
 | `generate_kie_seedance_2_0_mini_video` | kie | `Seedance2MiniInputSchema` | video | image_to_video | visible | `generate_seedance2_mini_video` |

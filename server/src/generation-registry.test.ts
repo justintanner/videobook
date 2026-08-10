@@ -9,12 +9,13 @@ import {
 import { getAllToolDefs } from "./tools/index.js";
 
 describe("generation-registry", () => {
-  it("has 95 audited generation action specifications", () => {
-    expect(GENERATION_ACTIONS).toHaveLength(95);
+  it("has 96 audited generation action specifications", () => {
+    expect(GENERATION_ACTIONS).toHaveLength(96);
   });
 
   it("resolves historical names to canonical names", () => {
     expect(getCanonicalName("generate_grok_imagine_video")).toBe("generate_kie_grok_imagine_image_to_video");
+    expect(getCanonicalName("generate_seedance25_video")).toBe("generate_kie_seedance_2_5_video");
     expect(getCanonicalName("generate_grok_imagine_ref_video")).toBe("generate_xai_grok_imagine_video");
     expect(getCanonicalName("generate_xai_grok_imagine_reference_to_video")).toBe("generate_xai_grok_imagine_video");
     expect(getCanonicalName("preview_video")).toBe("prepare_video_generation");
@@ -49,7 +50,7 @@ describe("generation-registry", () => {
     const registered = new Set(names);
     const canonical = new Set(GENERATION_ACTIONS.map((action) => action.canonical_name));
 
-    expect(names).toHaveLength(296);
+    expect(names).toHaveLength(297);
     expect(registered.size).toBe(names.length);
     for (const action of GENERATION_ACTIONS) {
       expect(registered.has(action.canonical_name), action.canonical_name).toBe(true);

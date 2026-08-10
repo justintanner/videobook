@@ -12,6 +12,7 @@ import {
   Seedance2FastInputSchema,
   Seedance2InputSchema,
   Seedance2MiniInputSchema,
+  Seedance25InputSchema,
   Wan27AudioSettingSchema,
   Wan27ImageToVideoRequestSchema,
   Wan27RefToVideoRequestSchema,
@@ -123,6 +124,23 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: [
       "prompt", "character_image_refs", "motion_video_refs",
       "mode", "character_orientation", "background_source",
+    ],
+    defaults: {},
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
+  seedance25: {
+    label: "Seedance 2.5",
+    tool_name: "generate_kie_seedance_2_5_video",
+    description: "ByteDance Seedance 2.5 — text, first/last-frame, or multimodal reference-to-video with up to 30-second output and synchronized audio",
+    params: [
+      "prompt",
+      "first_frame_ref", "last_frame_ref",
+      "image_refs", "video_refs", "audio_refs",
+      "return_last_frame", "generate_audio",
+      "resolution", "aspect_ratio", "duration", "output_format",
+      "web_search", "nsfw_checker",
     ],
     defaults: {},
     providers: [
@@ -749,6 +767,48 @@ const SEEDANCE2_MINI_MODES: ModelModes = {
   ],
 };
 
+const SEEDANCE25_SHARED_PARAMS = [
+  "prompt", "return_last_frame", "generate_audio",
+  "resolution", "aspect_ratio", "duration", "output_format",
+  "web_search", "nsfw_checker",
+];
+
+const SEEDANCE25_REFS_MODE: ModeSpec = {
+  key: "refs",
+  label: "refs",
+  description: "Reference images (≤30), videos (≤10), and/or audio (≤10)",
+  params: ["image_refs", "video_refs", "audio_refs"],
+  asset_slots: [
+    { param: "image_refs", kind: "image", label: "Images", min: 0, max: 30 },
+    { param: "video_refs", kind: "video", label: "Videos", min: 0, max: 10 },
+    { param: "audio_refs", kind: "audio", label: "Audio", min: 0, max: 10 },
+  ],
+};
+
+const SEEDANCE25_MODES: ModelModes = {
+  shared_params: SEEDANCE25_SHARED_PARAMS,
+  default_mode: "text",
+  modes: [
+    {
+      key: "text",
+      label: "text",
+      description: "Prompt-only generation",
+      params: [],
+    },
+    {
+      key: "frames",
+      label: "frames",
+      description: "Animate from a first frame and optional last frame",
+      params: ["first_frame_ref", "last_frame_ref"],
+      asset_slots: [
+        { param: "first_frame_ref", kind: "image", label: "First Frame" },
+        { param: "last_frame_ref", kind: "image", label: "Last Frame" },
+      ],
+    },
+    SEEDANCE25_REFS_MODE,
+  ],
+};
+
 const VIDEO_TOOL_MODES: Record<string, ModelModes> = {
   generate_google_flow_omni_flash_video: {
     shared_params: ["prompt", "aspect_ratio", "seed", "voice_refs", "duration"],
@@ -790,6 +850,7 @@ const VIDEO_TOOL_MODES: Record<string, ModelModes> = {
       },
     ],
   },
+  generate_kie_seedance_2_5_video: SEEDANCE25_MODES,
   generate_kie_seedance_2_0_video: SEEDANCE2_FULL_MODES,
   generate_kie_seedance_2_0_fast_video: SEEDANCE2_FULL_MODES,
   generate_kie_seedance_2_0_mini_video: SEEDANCE2_MINI_MODES,
@@ -805,6 +866,7 @@ type ZodLike = { _def?: unknown; unwrap?: () => unknown };
 
 const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
   generate_kie_kling_3_0_video: KlingVideoRequestSchema.shape.input.shape.image_urls,
+  generate_kie_seedance_2_5_video: Seedance25InputSchema.shape.reference_image_urls,
   generate_kie_seedance_2_0_video: Seedance2InputSchema.shape.reference_image_urls,
   generate_kie_seedance_2_0_fast_video: Seedance2FastInputSchema.shape.reference_image_urls,
   generate_kie_seedance_2_0_mini_video: Seedance2MiniInputSchema.shape.reference_image_urls,
@@ -845,6 +907,20 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     mode: KlingMotionControlRequestSchema.shape.input.shape.mode,
     character_orientation: KlingMotionControlRequestSchema.shape.input.shape.character_orientation,
     background_source: KlingMotionControlRequestSchema.shape.input.shape.background_source,
+  },
+  generate_kie_seedance_2_5_video: {
+    prompt: Seedance25InputSchema.shape.prompt,
+    image_refs: Seedance25InputSchema.shape.reference_image_urls,
+    video_refs: Seedance25InputSchema.shape.reference_video_urls,
+    audio_refs: Seedance25InputSchema.shape.reference_audio_urls,
+    return_last_frame: Seedance25InputSchema.shape.return_last_frame,
+    generate_audio: Seedance25InputSchema.shape.generate_audio,
+    resolution: Seedance25InputSchema.shape.resolution,
+    aspect_ratio: Seedance25InputSchema.shape.aspect_ratio,
+    duration: Seedance25InputSchema.shape.duration,
+    output_format: Seedance25InputSchema.shape.output_format,
+    web_search: Seedance25InputSchema.shape.web_search,
+    nsfw_checker: Seedance25InputSchema.shape.nsfw_checker,
   },
   generate_kie_seedance_2_0_video: {
     prompt: Seedance2InputSchema.shape.prompt,
@@ -1177,6 +1253,7 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   duration: { type: "string", description: "Video duration in seconds" },
   mode: { type: "string", description: "Generation mode" },
   resolution: { type: "string", description: "Output resolution" },
+  output_format: { type: "string", description: "Output video format" },
   generate_audio: { type: "boolean", description: "Generate sound effects (Seedance)" },
   image_ref: { type: "string", description: "Reference image asset (e.g., @img-outfit)" },
   first_frame_ref: { type: "string", description: "First frame image asset (e.g., @img-sunset)" },
@@ -1381,6 +1458,18 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
       if (param === "mode") prop.description = "Output resolution: 720p / 1080p";
       if (param === "character_orientation") prop.description = "Character orientation source: video / image";
       if (param === "background_source") prop.description = "Background source: input_video / input_image";
+    }
+    if (toolName === "generate_kie_seedance_2_5_video") {
+      if (param === "prompt") prop.description = "Video description (optional, max 30000 characters)";
+      if (param === "first_frame_ref") prop.description = "First frame image asset";
+      if (param === "last_frame_ref") prop.description = "Last frame image asset (requires first frame)";
+      if (param === "image_refs") prop.description = "Reference image assets (0-30)";
+      if (param === "video_refs") prop.description = "Reference video assets (0-10, total duration up to 30s)";
+      if (param === "audio_refs") prop.description = "Reference audio assets (0-10)";
+      if (param === "return_last_frame") prop.description = "Return the final generated frame as a secondary image";
+      if (param === "generate_audio") prop.description = "Generate synchronized audio";
+      if (param === "duration") prop.description = "Video duration: -1 for automatic or 4-30 seconds";
+      if (param === "output_format") prop.description = "Output video format: mp4 / mov";
     }
     if (SEEDANCE2_TOOL_NAMES.includes(toolName)) {
       if (param === "prompt") { prop.description = "Video description (3-20000 characters)"; prop.minLength = 3; prop.maxLength = 20000; }
@@ -1705,6 +1794,8 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
       && canonical !== "generate_kie_wan_2_7_edit_video"
       && toolName !== "generate_kie_kling_3_0_motion_control"
       && canonical !== "generate_kie_kling_3_0_motion_control"
+      && toolName !== "generate_kie_seedance_2_5_video"
+      && canonical !== "generate_kie_seedance_2_5_video"
       && toolName !== "generate_kie_omnihuman_1_5_video"
       && canonical !== "generate_kie_omnihuman_1_5_video"
     ) required.add(param);
@@ -1896,6 +1987,26 @@ function validateVideoParams(rawToolName: string, params: Record<string, unknown
   }
 
   if (
+    toolName === "generate_kie_seedance_2_5_video"
+    || canonical === "generate_kie_seedance_2_5_video"
+  ) {
+    const firstFrame = params.first_frame_ref as string | undefined;
+    const lastFrame = params.last_frame_ref as string | undefined;
+    const videoRefs = (params.video_refs as string[] | undefined)?.filter(Boolean) ?? [];
+    const audioRefs = (params.audio_refs as string[] | undefined)?.filter(Boolean) ?? [];
+    const hasFrame = Boolean(firstFrame) || Boolean(lastFrame);
+    if (lastFrame && !firstFrame) {
+      warnings.push("Seedance 2.5 last_frame_ref requires first_frame_ref");
+    }
+    if (hasFrame && (totalImages > 0 || videoRefs.length > 0 || audioRefs.length > 0)) {
+      warnings.push("Seedance 2.5 reference inputs cannot be combined with first/last frame");
+    }
+    if (totalImages > 30) warnings.push(`Seedance 2.5 supports up to 30 reference images (got ${totalImages})`);
+    if (videoRefs.length > 10) warnings.push(`Seedance 2.5 supports up to 10 reference videos (got ${videoRefs.length})`);
+    if (audioRefs.length > 10) warnings.push(`Seedance 2.5 supports up to 10 reference audio files (got ${audioRefs.length})`);
+  }
+
+  if (
     toolName === "generate_kie_seedance_2_0_video" || canonical === "generate_kie_seedance_2_0_video" ||
     toolName === "generate_kie_seedance_2_0_fast_video" || canonical === "generate_kie_seedance_2_0_fast_video"
   ) {
@@ -1998,6 +2109,7 @@ Given a user query (possibly with @asset references), determine:
 
 ROUTING PREFERENCES:
 - PREFER ${VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name} as the DEFAULT for ALL video generation requests
+- Use generate_kie_seedance_2_5_video when the user explicitly asks for "Seedance 2.5". Supports prompt-only, first/last frames, or multimodal references with all KIE options
 - Use generate_kie_seedance_2_0_video when user mentions "seedance" or "bytedance" and wants 1080p, or just defaults to the higher-quality variant. Accepts any input combination: text-only, first/last frame, reference images/videos/audio
 - Use generate_kie_seedance_2_0_fast_video when user mentions "seedance fast" or 480p/720p is acceptable (faster/cheaper). Same input flexibility as the full variant
 - Use generate_kie_seedance_2_0_mini_video when user mentions "seedance mini". Text prompt plus optional reference images/videos/audio; no first/last frame; 480p/720p
@@ -2014,6 +2126,7 @@ ROUTING PREFERENCES:
 
 KEY CONSTRAINTS:
 - For generate_kie_kling_3_0_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
+- For generate_kie_seedance_2_5_video: optional prompt up to 30000 characters; duration "-1" (automatic) or "4"-"30"; resolution "480p"/"720p"; aspect_ratio "1:1"/"4:3"/"3:4"/"16:9"/"9:16"/"21:9"/"adaptive"; output_format "mp4"/"mov"; return_last_frame, generate_audio, web_search, and nsfw_checker booleans. Use either first_frame_ref with optional last_frame_ref, or image_refs (0-30), video_refs (0-10), and audio_refs (0-10), never frames and references together
 - For generate_kie_seedance_2_0_video and generate_kie_seedance_2_0_fast_video: duration "4"-"15", aspect_ratio includes "adaptive"; full variant accepts "480p"/"720p"/"1080p", fast variant accepts "480p"/"720p" only. Inputs are all optional and free to mix: first_frame_ref, last_frame_ref, image_refs (0-9), video_refs (0-3, total ≤15s), audio_refs (0-3, total ≤15s). Pure text prompt is fine too
 - For generate_kie_seedance_2_0_mini_video: duration "4"-"15" (default 15), aspect_ratio includes "adaptive", resolution "480p"/"720p". No first/last frame; mix prompt with image_refs, video_refs (0-3, total ≤15s), audio_refs (0-3, total ≤15s). Prompt is optional when references are supplied
 - For generate_kie_gemini_omni_video: REQUIRES prompt and duration "4"/"6"/"8"/"10"; aspect_ratio "16:9"/"9:16"; resolution "720p"/"1080p"/"4k" (default 720p); seed integer. Optional image_refs (0-7) and one video_ref with video_clip_start/video_clip_ends (ends > start and < start+10s)

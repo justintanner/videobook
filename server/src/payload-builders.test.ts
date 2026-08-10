@@ -26,6 +26,7 @@ import {
   Seedance2FastRequestSchema,
   Seedance2MiniRequestSchema,
   Seedance2RequestSchema,
+  Seedance25RequestSchema,
   SeedreamImageToImageRequestSchema,
   SeedreamTextToImageRequestSchema,
   VolcengineVideoToVideoLipSyncRequestSchema,
@@ -57,6 +58,7 @@ const payloadCases: Array<{ tool: string; provider?: string }> = [
   { tool: "generate_kie_grok_imagine_text_to_video" },
   { tool: "generate_kie_grok_imagine_image_to_image" },
   { tool: "generate_kie_grok_imagine_image_to_image", provider: "xai" },
+  { tool: "generate_kie_seedance_2_5_video" },
   { tool: "generate_kie_seedance_2_0_video" },
   { tool: "generate_kie_seedance_2_0_fast_video" },
   { tool: "generate_kie_seedance_2_0_mini_video" },
@@ -241,6 +243,17 @@ const kieGuardCases: KieGuardCase[] = [
     tool: "generate_kie_grok_imagine_text_to_image",
     schema: GrokTextToImageRequestSchema,
     args: { prompt: "plain prompt", aspect_ratio: "16:9" },
+  },
+  {
+    tool: "generate_kie_seedance_2_5_video",
+    schema: Seedance25RequestSchema,
+    args: {
+      prompt: "plain prompt",
+      image_refs: ["https://example.test/image.png"],
+      video_refs: ["https://example.test/video.mp4"],
+      audio_refs: ["https://example.test/audio.mp3"],
+      duration: "30",
+    },
   },
   {
     tool: "generate_kie_seedance_2_0_video",
@@ -767,6 +780,63 @@ describe("translateToolPayload", () => {
       },
     });
     expect(GrokVideoExtendRequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
+  it("builds a schema-valid Seedance 2.5 payload with every option", () => {
+    const result = translateToolPayload("generate_kie_seedance_2_5_video", {
+      prompt: "a continuous tracking shot",
+      image_refs: ["https://example.test/ref.png"],
+      video_refs: ["https://example.test/motion.mp4"],
+      audio_refs: ["https://example.test/score.mp3"],
+      return_last_frame: true,
+      generate_audio: false,
+      resolution: "480p",
+      aspect_ratio: "21:9",
+      duration: "-1",
+      output_format: "mov",
+      web_search: true,
+      nsfw_checker: true,
+    });
+
+    expect(result?.payload).toEqual({
+      model: "bytedance/seedance-2-5",
+      input: {
+        prompt: "a continuous tracking shot",
+        reference_image_urls: ["https://example.test/ref.png"],
+        reference_video_urls: ["https://example.test/motion.mp4"],
+        reference_audio_urls: ["https://example.test/score.mp3"],
+        return_last_frame: true,
+        generate_audio: false,
+        resolution: "480p",
+        aspect_ratio: "21:9",
+        duration: -1,
+        output_format: "mov",
+        web_search: true,
+        nsfw_checker: true,
+      },
+    });
+    expect(Seedance25RequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
+  it("applies every Seedance 2.5 default to translated payloads", () => {
+    const result = translateToolPayload("generate_seedance25_video", {
+      prompt: "a quiet landscape",
+    });
+
+    expect(result?.payload).toEqual({
+      model: "bytedance/seedance-2-5",
+      input: {
+        prompt: "a quiet landscape",
+        return_last_frame: false,
+        generate_audio: true,
+        resolution: "720p",
+        aspect_ratio: "adaptive",
+        duration: 5,
+        output_format: "mp4",
+        nsfw_checker: false,
+      },
+    });
+    expect(Seedance25RequestSchema.safeParse(result?.payload).success).toBe(true);
   });
 
   it("builds a schema-valid Seedance 2 Mini payload (refs, no first/last frame)", () => {

@@ -23,7 +23,7 @@ import { generationLabel } from "../artifact-label.js";
 
 type Seedance2Model = Seedance2Request["model"] | Seedance2FastRequest["model"];
 
-const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff", "gif"]);
 
 function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {

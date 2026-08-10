@@ -18,6 +18,7 @@ import type {
   Seedance2MiniRequest,
   Seedance2MiniAspectRatio,
   Seedance2MiniResolution,
+  Seedance25Request,
   NanoBananaProRequest,
   GptImage2ImageToImageRequest,
   GptImage2ImageToImageAspectRatio,
@@ -98,6 +99,7 @@ import {
   Seedance2FastInputSchema,
   Seedance2InputSchema,
   Seedance2MiniInputSchema,
+  Seedance25InputSchema,
   SeedreamImageToImageRequestSchema,
   SeedreamTextToImageRequestSchema,
   VolcengineVideoToVideoLipSyncRequestSchema,
@@ -506,6 +508,61 @@ function buildSeedance2VideoPayload(
       ...(args.resolution !== undefined && args.resolution !== "1080p"
         ? { resolution: args.resolution as Seedance2FastRequest["input"]["resolution"] }
         : {}),
+    },
+  };
+}
+
+type Seedance25VideoArgs = {
+  prompt?: string;
+  return_last_frame?: boolean;
+  generate_audio?: boolean;
+  resolution?: Seedance25Request["input"]["resolution"];
+  aspect_ratio?: Seedance25Request["input"]["aspect_ratio"];
+  duration?: string;
+  output_format?: Seedance25Request["input"]["output_format"];
+  web_search?: boolean;
+  nsfw_checker?: boolean;
+};
+
+type Seedance25VideoOpts = {
+  firstFrameUrl?: string;
+  lastFrameUrl?: string;
+  referenceImageUrls?: string[];
+  referenceVideoUrls?: string[];
+  referenceAudioUrls?: string[];
+};
+
+function buildSeedance25VideoPayload(
+  args: Seedance25VideoArgs,
+  opts: Seedance25VideoOpts,
+): Seedance25Request {
+  const inputSchema = Seedance25InputSchema.shape;
+  const returnLastFrame = valueOrZodDefault(args.return_last_frame, inputSchema.return_last_frame);
+  const generateAudio = valueOrZodDefault(args.generate_audio, inputSchema.generate_audio);
+  const resolution = valueOrZodDefault(args.resolution, inputSchema.resolution);
+  const aspectRatio = valueOrZodDefault(args.aspect_ratio, inputSchema.aspect_ratio);
+  const duration = args.duration !== undefined
+    ? parseInt(args.duration, 10)
+    : valueOrZodDefault<number>(undefined, inputSchema.duration);
+  const outputFormat = valueOrZodDefault(args.output_format, inputSchema.output_format);
+  const nsfwChecker = valueOrZodDefault(args.nsfw_checker, inputSchema.nsfw_checker);
+  return {
+    model: "bytedance/seedance-2-5",
+    input: {
+      ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
+      ...(opts.firstFrameUrl !== undefined ? { first_frame_url: opts.firstFrameUrl } : {}),
+      ...(opts.lastFrameUrl !== undefined ? { last_frame_url: opts.lastFrameUrl } : {}),
+      ...(opts.referenceImageUrls && opts.referenceImageUrls.length > 0 ? { reference_image_urls: opts.referenceImageUrls } : {}),
+      ...(opts.referenceVideoUrls && opts.referenceVideoUrls.length > 0 ? { reference_video_urls: opts.referenceVideoUrls } : {}),
+      ...(opts.referenceAudioUrls && opts.referenceAudioUrls.length > 0 ? { reference_audio_urls: opts.referenceAudioUrls } : {}),
+      ...(returnLastFrame !== undefined ? { return_last_frame: returnLastFrame } : {}),
+      ...(generateAudio !== undefined ? { generate_audio: generateAudio } : {}),
+      ...(resolution !== undefined ? { resolution } : {}),
+      ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
+      ...(duration !== undefined ? { duration } : {}),
+      ...(outputFormat !== undefined ? { output_format: outputFormat } : {}),
+      ...(args.web_search !== undefined ? { web_search: args.web_search } : {}),
+      ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
     },
   };
 }
@@ -1672,6 +1729,24 @@ function translateToolPayloadUnchecked(
       const payload = buildGrokImagineImagePayload(args as GrokImagineImageArgs, imageRefs);
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_kie_seedance_2_5_video": {
+      const firstFrameUrl = (args.first_frame_ref as string | undefined) ?? undefined;
+      const lastFrameUrl = (args.last_frame_ref as string | undefined) ?? undefined;
+      const referenceImageUrls = imageRefs.length > 0 ? imageRefs : undefined;
+      const referenceVideoUrls = (args.video_refs as string[] | undefined) ?? undefined;
+      const referenceAudioUrls = (args.audio_refs as string[] | undefined) ?? undefined;
+      const payload = buildSeedance25VideoPayload(
+        args as Seedance25VideoArgs,
+        {
+          ...(firstFrameUrl !== undefined ? { firstFrameUrl } : {}),
+          ...(lastFrameUrl !== undefined ? { lastFrameUrl } : {}),
+          ...(referenceImageUrls !== undefined ? { referenceImageUrls } : {}),
+          ...(referenceVideoUrls !== undefined && referenceVideoUrls.length > 0 ? { referenceVideoUrls } : {}),
+          ...(referenceAudioUrls !== undefined && referenceAudioUrls.length > 0 ? { referenceAudioUrls } : {}),
+        },
+      );
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_kie_seedance_2_0_video":
     case "generate_kie_seedance_2_0_fast_video": {
       const isFast = toolName === "generate_kie_seedance_2_0_fast_video";
@@ -2055,6 +2130,7 @@ export {
   buildSeedreamTextImagePayload,
   buildSeedreamImageEditPayload,
   buildSeedance2VideoPayload,
+  buildSeedance25VideoPayload,
   buildSeedance2MiniVideoPayload,
   buildGeminiOmniVideoPayload,
   buildVeo3VideoPayload,
@@ -2078,4 +2154,4 @@ export {
   buildAlibabaVideoPayload,
   translateToolPayload,
 };
-export type { TranslateResult, Seedance2VideoArgs, Seedance2VideoOpts, Seedance2MiniVideoArgs, Seedance2MiniVideoOpts, Wan27FramesVideoArgs, Wan27FramesVideoOpts, Wan27ReferenceVideoArgs, Wan27ReferenceVideoOpts, GoogleVeo31Model, Veo31VideoArgs, Veo31VideoOpts, GoogleOmniVideoArgs, GoogleOmniVideoOpts, GoogleNbpImageArgs };
+export type { TranslateResult, Seedance2VideoArgs, Seedance2VideoOpts, Seedance25VideoArgs, Seedance25VideoOpts, Seedance2MiniVideoArgs, Seedance2MiniVideoOpts, Wan27FramesVideoArgs, Wan27FramesVideoOpts, Wan27ReferenceVideoArgs, Wan27ReferenceVideoOpts, GoogleVeo31Model, Veo31VideoArgs, Veo31VideoOpts, GoogleOmniVideoArgs, GoogleOmniVideoOpts, GoogleNbpImageArgs };

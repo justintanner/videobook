@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (296)
+## MCP endpoints (297)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -147,6 +147,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `generate_kie_seedance_2_0_fast_video` (historical names, not exposed: `generate_seedance2_fast_video`) — Generate a video using ByteDance Seedance 2 Fast (KIE). Supports text-only, first/last frame, and reference images/videos/audio. Up to 720p. Creates a new video artifact and enqueues a background job.
 - `generate_kie_seedance_2_0_mini_video` (historical names, not exposed: `generate_seedance2_mini_video`) — Generate a video using ByteDance Seedance 2 Mini (KIE). Supports a text prompt and/or reference images, videos, and audio (no first/last frame; up to 720p). Creates a new video artifact and enqueues a background job.
 - `generate_kie_seedance_2_0_video` (historical names, not exposed: `generate_seedance2_video`) — Generate a video using ByteDance Seedance 2 (KIE). Supports text-only, first/last frame, and reference images/videos/audio. Up to 1080p. Creates a new video artifact and enqueues a background job.
+- `generate_kie_seedance_2_5_video` (historical names, not exposed: `generate_seedance25_video`) — Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.9.1 generation option. Creates a new video artifact and enqueues a background job.
 - `generate_kie_seedream_v5_lite_image_to_image` (historical names, not exposed: `generate_seedream_image`) — Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_kie_seedream_v5_lite_text_to_image` (historical names, not exposed: `generate_seedream_text_image`) — Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.
 - `generate_kie_veo_3_0_fast_video` (historical names, not exposed: `generate_veo3_fast_video`) — Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new video artifact and enqueues a background job.

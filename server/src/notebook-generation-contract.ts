@@ -207,7 +207,8 @@ export function notebookGenerationInputContract(
 ): NotebookGenerationInputContract {
   const slots = inputSlots(schema);
   if (
-    tool === "generate_kie_seedance_2_0_video"
+    tool === "generate_kie_seedance_2_5_video"
+    || tool === "generate_kie_seedance_2_0_video"
     || tool === "generate_kie_seedance_2_0_fast_video"
     || tool === "generate_kie_seedance_2_0_mini_video"
   ) {

@@ -321,6 +321,36 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.prompt.maxLength).toBe(20000);
   });
 
+  it("seedance 2.5 exposes every Apicity option and reference limit", () => {
+    const schema = getVideoToolSchema("generate_kie_seedance_2_5_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).not.toContain("prompt");
+    expect(schema!.properties.prompt.maxLength).toBe(30000);
+    expect(schema!.properties.image_refs.maxItems).toBe(30);
+    expect(schema!.properties.video_refs.maxItems).toBe(10);
+    expect(schema!.properties.audio_refs.maxItems).toBe(10);
+    expect(schema!.properties.duration.enum).toEqual([
+      "-1", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+      "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
+    ]);
+    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["1:1", "4:3", "3:4", "16:9", "9:16", "21:9", "adaptive"]);
+    expect(schema!.properties.output_format.enum).toEqual(["mp4", "mov"]);
+    expect(schema!.properties.return_last_frame.type).toBe("boolean");
+    expect(schema!.properties.generate_audio.type).toBe("boolean");
+    expect(schema!.properties.web_search.type).toBe("boolean");
+    expect(schema!.properties.nsfw_checker.type).toBe("boolean");
+    expect(schema!.defaults).toMatchObject({
+      return_last_frame: false,
+      generate_audio: true,
+      resolution: "720p",
+      aspect_ratio: "adaptive",
+      duration: "5",
+      output_format: "mp4",
+      nsfw_checker: false,
+    });
+  });
+
   it("seedance2 fast: same input shape but resolution capped at 720p", () => {
     const schema = getVideoToolSchema("generate_kie_seedance_2_0_fast_video");
     expect(schema).not.toBeNull();
@@ -520,6 +550,24 @@ describe("validateVideoParams", () => {
     expect(result.warnings.some((w) => w.includes("1080p"))).toBe(false);
   });
 
+  it("seedance 2.5 enforces frame scenarios and expanded reference limits", () => {
+    const invalidFrames = validateVideoParams("generate_kie_seedance_2_5_video", {
+      last_frame_ref: "@img-last",
+      image_refs: ["@img-ref"],
+    });
+    expect(invalidFrames.warnings).toContain("Seedance 2.5 last_frame_ref requires first_frame_ref");
+    expect(invalidFrames.warnings).toContain("Seedance 2.5 reference inputs cannot be combined with first/last frame");
+
+    const validRefs = validateVideoParams("generate_kie_seedance_2_5_video", {
+      image_refs: Array.from({ length: 30 }, (_, index) => `@img-${index}`),
+      video_refs: Array.from({ length: 10 }, (_, index) => `@vid-${index}`),
+      audio_refs: Array.from({ length: 10 }, (_, index) => `@aud-${index}`),
+      duration: "30",
+      output_format: "mov",
+    });
+    expect(validRefs.valid).toBe(true);
+  });
+
   it("derives image_slots from Apicity Zod", () => {
     const klingResult = validateVideoParams("generate_kie_kling_3_0_video", { prompt: "test" });
     expect(klingResult.image_slots).toEqual({ min: 0, max: null });
@@ -646,6 +694,7 @@ describe("buildVideoRoutingPrompt", () => {
 describe("IMAGE_FIELD_SCHEMAS", () => {
   it("maps tools with image-array inputs to their Apicity Zod schemas", () => {
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_kling_3_0_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_seedance_2_5_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_seedance_2_0_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_seedance_2_0_fast_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_grok_imagine_image_to_video");
@@ -785,6 +834,20 @@ describe("VIDEO_TOOL_MODES contract", () => {
       expect(refs.params).toContain("audio_refs");
       expect(refs.params).not.toContain("first_frame_ref");
     }
+  });
+
+  it("seedance 2.5 ships all modes with expanded reference slots", () => {
+    const option = buildModelOption("seedance25", VIDEO_MODELS.seedance25, {}, []);
+    expect(option.modes).not.toBeNull();
+    expect(option.modes!.modes.map((mode) => mode.key)).toEqual(["text", "frames", "refs"]);
+    const refs = option.modes!.modes.find((mode) => mode.key === "refs")!;
+    expect(refs.asset_slots).toEqual([
+      { param: "image_refs", kind: "image", label: "Images", min: 0, max: 30 },
+      { param: "video_refs", kind: "video", label: "Videos", min: 0, max: 10 },
+      { param: "audio_refs", kind: "audio", label: "Audio", min: 0, max: 10 },
+    ]);
+    expect(option.schema?.properties).toHaveProperty("return_last_frame");
+    expect(option.schema?.properties).toHaveProperty("output_format");
   });
 
   it("coerces numeric duration to string for kling30", () => {

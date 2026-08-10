@@ -200,6 +200,7 @@ export function transformProviderPrompt(
         videoRefs: stringArray(args.motion_video_refs),
       });
       break;
+    case "generate_kie_seedance_2_5_video":
     case "generate_kie_seedance_2_0_video":
     case "generate_kie_seedance_2_0_fast_video":
       transformed = stripRefMentions(

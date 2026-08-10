@@ -102,6 +102,28 @@ describe("notebook generation input contracts", () => {
     ]);
   });
 
+  it("publishes Seedance 2.5 expanded multimodal slots", () => {
+    const contract = notebookGenerationInputContract(
+      "generate_kie_seedance_2_5_video",
+      {
+        first_frame_ref: z.string().optional(),
+        last_frame_ref: z.string().optional(),
+        image_refs: z.array(z.string()).max(30).optional(),
+        video_refs: z.array(z.string()).max(10).optional(),
+        audio_refs: z.array(z.string()).max(10).optional(),
+      },
+    );
+    const references = contract.modes.find((mode) => mode.id === "r2v");
+    expect(references?.slots.map((slot) => ({
+      field: slot.field,
+      max: slot.max,
+    }))).toEqual([
+      { field: "image_refs", max: 30 },
+      { field: "video_refs", max: 10 },
+      { field: "audio_refs", max: 10 },
+    ]);
+  });
+
   it("publishes Google Omni modes with their required input roles", () => {
     const contract = notebookGenerationInputContract(
       "generate_google_flow_omni_flash_video",

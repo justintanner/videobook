@@ -419,7 +419,9 @@ async function completeSeedance2Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
+  const outputFormat = meta.output_format === "mov" ? "mov" : "mp4";
+  const originalFilename = `original.${outputFormat}`;
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, originalFilename, bookId, { kind: "video" });
 
   // Optionally save the returned last frame as a secondary image file
   if (meta.return_last_frame === true && resultUrls[1]) {
@@ -434,17 +436,18 @@ async function completeSeedance2Video(
     source_images: meta.sourceImageIds,
     source_videos: meta.sourceVideoIds,
     source_audios: meta.sourceAudioIds,
-    // seedance-2 / -fast / -mini share this handler (keyed off taskType), so the
+    // seedance-2.5 / -2 / -fast / -mini share this handler (keyed off taskType), so the
     // exact model rides in meta.apiModel; fall back for older queued payloads.
     model: typeof meta.apiModel === "string" ? meta.apiModel : "bytedance/seedance-2-fast",
     download_url: videoUrl,
     download_url_content_hash: contentHash(buffer),
     ...(meta.mode !== undefined ? { seedance_mode: meta.mode } : {}),
     ...(meta.prompt !== undefined ? { prompt: meta.prompt } : {}),
+    ...(meta.output_format !== undefined ? { output_format: meta.output_format } : {}),
     generated_at: new Date().toISOString(),
   };
 
-  const videoPath = join(assetDir, "original.mp4");
+  const videoPath = join(assetDir, originalFilename);
 
   // Persist Kie taskId for future operations
   if (taskId !== undefined) {
