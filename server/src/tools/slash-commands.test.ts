@@ -73,6 +73,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/copy");
     expect(commandNames).toContain("/folder");
     expect(commandNames).toContain("/archive");
+    expect(commandNames).toContain("/replicate-song");
     expect(commandNames).toContain("/duplicate");
     expect(commandNames).toContain("/history");
     expect(commandNames).toContain("/open");
@@ -246,6 +247,14 @@ describe("slash_commands tool", () => {
       "asset_id",
       "target_duration_seconds",
       "continuation_prompt",
+    ]);
+
+    const replicateSong = commands.find((c) => c.command === "/replicate-song")!;
+    expect(replicateSong.mcpTool?.tool).toBe("replicate_song");
+    expect(replicateSong.mcpTool?.autoInject).toContain("book_id");
+    expect(replicateSong.params).toMatchObject([
+      { name: "asset_id", type: "string", required: true },
+      { name: "direction", type: "string", required: false },
     ]);
 
     const removeSound = commands.find((c) => c.command === "/remove-sound")!;

@@ -133,6 +133,7 @@ import { registerGenerateGrokImagineVideoExtendFalJob } from "./generate-grok-im
 import { registerGenerateGrokImagineVideoEditFalJob } from "./generate-grok-imagine-video-edit-fal.js";
 import { registerPostToXJob } from "./post-to-x.js";
 import { registerGenerateElevenlabsT2aJob } from "./generate-elevenlabs-t2a.js";
+import { registerReplicateSongJob } from "./replicate-song.js";
 import { registerExtendAudioJob } from "./extend-audio.js";
 import { registerRemoveSoundJob } from "./remove-sound.js";
 import { registerRunNotebookJob } from "./run-notebook.js";
@@ -276,6 +277,7 @@ export function registerAllJobHandlers(
   registerGenerateGrokImagineVideoExtendFalJob(fs);
   registerGenerateGrokImagineVideoEditFalJob(fs);
   registerGenerateElevenlabsT2aJob(fs);
+  registerReplicateSongJob(fs);
   registerExtendAudioJob(fs);
   registerRemoveSoundJob(fs);
   registerPostToXJob(fs);

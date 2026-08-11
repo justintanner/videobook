@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (297)
+## MCP endpoints (298)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -247,6 +247,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `replace_google_flow_character` — Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.
 - `replace_sequence_clip_with_search_moment` — Preview, then confirm, replacing one explicit sequence clip with a search moment
 - `replace_video_audio` — Replace the audio track of a video asset in-place with audio from an audio asset, or a specific file inside another asset via the `<artifactId>/<filename>` form. Operates on the video asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.
+- `replicate_song` — Create a new drums-and-strings instrumental from a 10 to 30 second video soundtrack using ElevenLabs Music v2 reference conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.
 - `restore_archive_clips` — Restore selected archived video/audio clips into the current videocity project as new assets.
 - `restore_asset_version` — Restore an asset from an immutable revision as a new revision
 - `restore_edit_action` — Create a forward revision restoring a prior edit action or revision
@@ -302,7 +303,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.
 
-## Slash commands (119 static commands)
+## Slash commands (120 static commands)
 
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
@@ -384,6 +385,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/rename-all` — Bulk-rename video/image assets with an explicit dry run: GPT-5.5 proposes descriptive names from each asset's stored context, you edit them in a side-by-side preview, then confirm to apply (updates timeline slots, OSG metadata, and plan/.plan.json references).; UI: `open_rename_all`
 - `/render-video` (aliases: `/render`) — Render a video asset; MCP: `render_video`
 - `/replace-audio` — Replace the audio track of a video asset with an audio asset's audio; MCP: `replace_video_audio`
+- `/replicate-song` — Generate a rhythm-and-style-guided drums-and-strings instrumental with the video's exact duration; MCP: `replicate_song`
 - `/reverse` — Reverse video playback (play backwards); MCP: `reverse_video`
 - `/revisions` — Open forward-only project revision history; UI: `open_revisions`
 - `/rewind` — Rewind the project to a previous commit (no hash opens the activity log to pick one); UI: `rewind_activity`

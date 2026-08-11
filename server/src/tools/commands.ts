@@ -786,6 +786,21 @@ const CANONICAL_COMMANDS: Command[] = [
     mcpTool: { tool: "extract_audio", autoInject: ["book_id"] },
   },
   {
+    command: "/replicate-song",
+    description: "Generate a rhythm-and-style-guided drums-and-strings instrumental with the video's exact duration",
+    example: "/replicate-song @a1 punchier drums and sweeping strings",
+    category: "context_menu",
+    icon: "AudioLines",
+    size: "default",
+    variant: "emerald",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset whose song rhythm and duration to replicate" },
+      { name: "direction", type: "string", required: false, description: "Optional musical direction; defaults to instrumental drums and strings" },
+    ],
+    mcpTool: { tool: "replicate_song", autoInject: ["book_id"] },
+  },
+  {
     command: "/archive",
     description: "Archive a full video or audio asset to the global clip archive and transcribe it",
     example: "/archive @a1 ai interview",
