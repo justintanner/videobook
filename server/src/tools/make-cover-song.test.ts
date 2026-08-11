@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { extname, join } from "node:path";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import type { Client } from "@modelcontextprotocol/client";
 import type { ArtifactKind, Engine } from "videobook-engine";
@@ -16,7 +16,16 @@ const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 const FFMPEG: string = require("ffmpeg-static");
 const BOOK_ID = "make-cover-song-book";
-const VALID_KEY = "fake-elevenlabs-key";
+const REQUIRED_MODEL_FILES = [
+  "acestep-v15-turbo-Q4_K_M.gguf",
+  "Qwen3-Embedding-0.6B-Q8_0.gguf",
+  "vae-BF16.gguf",
+];
+const ACESTEP_ENV_VARS = [
+  "VIDEOBOOK_ACESTEP_BASE_URL",
+  "VIDEOBOOK_ACESTEP_SERVER_PATH",
+  "VIDEOBOOK_ACESTEP_MODELS_DIR",
+];
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -25,12 +34,27 @@ describe("make_cover_song tool", () => {
   let tempDir: string;
   let fs: Engine;
   let fixtureIndex: number;
-  let originalElevenLabsApiKey: string | undefined;
+  let savedEnv: Record<string, string | undefined>;
 
   async function createArtifact(kind: ArtifactKind, label: string): Promise<string> {
     const created = await fs.artifacts.create({ kind, label });
     if (!created.ok) throw new Error(created.error.message);
     return created.value.artifactId;
+  }
+
+  // The availability gate is pure filesystem checks, so a fake binary and fake
+  // model files make the tool "installed" without any HTTP or real runtime.
+  async function installFakeAcestep(): Promise<void> {
+    const runtimeDir = join(tempDir, "fake-acestep");
+    const modelsDir = join(runtimeDir, "models");
+    await mkdir(modelsDir, { recursive: true });
+    const serverPath = join(runtimeDir, "ace-server");
+    await writeFile(serverPath, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    for (const name of REQUIRED_MODEL_FILES) {
+      await writeFile(join(modelsDir, name), "fake-gguf");
+    }
+    process.env.VIDEOBOOK_ACESTEP_SERVER_PATH = serverPath;
+    process.env.VIDEOBOOK_ACESTEP_MODELS_DIR = modelsDir;
   }
 
   async function renderFixture(filename: string, args: string[]): Promise<Buffer> {
@@ -104,8 +128,8 @@ describe("make_cover_song tool", () => {
   }
 
   beforeEach(async () => {
-    originalElevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
-    delete process.env.ELEVENLABS_API_KEY;
+    savedEnv = Object.fromEntries(ACESTEP_ENV_VARS.map((name) => [name, process.env[name]]));
+    for (const name of ACESTEP_ENV_VARS) delete process.env[name];
     tempDir = await mkdtemp(join(tmpdir(), "videocity-make-cover-song-tool-"));
     fixtureIndex = 0;
     fs = createEngineForTest(tempDir);
@@ -114,12 +138,15 @@ describe("make_cover_song tool", () => {
       name: "create_project",
       arguments: { book_id: BOOK_ID },
     });
-    registerJobHandler("generate_replicated_song", async (payload) => payload);
+    await installFakeAcestep();
+    registerJobHandler("generate_acestep_cover", async (payload) => payload);
   });
 
   afterEach(async () => {
-    if (originalElevenLabsApiKey === undefined) delete process.env.ELEVENLABS_API_KEY;
-    else process.env.ELEVENLABS_API_KEY = originalElevenLabsApiKey;
+    for (const [name, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
     await client.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
@@ -132,16 +159,29 @@ describe("make_cover_song tool", () => {
     expect(names).not.toContain("replicate_song");
   });
 
-  it("requires a configured non-placeholder ElevenLabs key", async () => {
+  it("requires an installed acestep.cpp runtime", async () => {
+    process.env.VIDEOBOOK_ACESTEP_SERVER_PATH = "/nonexistent/ace-server";
+
     const result = await callMakeCoverSong("missing-media");
 
     expect(result.isError).toBe(true);
-    expect((result.content as TextContent)[0].text).toContain("ELEVENLABS_API_KEY");
+    expect((result.content as TextContent)[0].text).toContain("ace-server not found at /nonexistent/ace-server");
+    expect((result.content as TextContent)[0].text).toContain("install:acestep");
+    expect(fs.artifacts.list()).toHaveLength(0);
+  });
+
+  it("reports missing model files by name", async () => {
+    process.env.VIDEOBOOK_ACESTEP_MODELS_DIR = "/nonexistent/acestep-models";
+
+    const result = await callMakeCoverSong("missing-media");
+
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("ACE-Step models missing");
+    expect((result.content as TextContent)[0].text).toContain("acestep-v15-turbo-Q4_K_M.gguf");
     expect(fs.artifacts.list()).toHaveLength(0);
   });
 
   it("rejects artifacts that are neither video nor audio before creating output", async () => {
-    process.env.ELEVENLABS_API_KEY = VALID_KEY;
     const assetId = await createArtifact("image", "not-media");
     const before = fs.artifacts.list().length;
 
@@ -153,7 +193,6 @@ describe("make_cover_song tool", () => {
   });
 
   it("rejects a video artifact without a supported video file", async () => {
-    process.env.ELEVENLABS_API_KEY = VALID_KEY;
     const assetId = await createArtifact("video", "missing-file");
     const written = await fs.files.write(assetId, "notes.txt", "no media");
     if (!written.ok) throw new Error(written.error.message);
@@ -167,7 +206,6 @@ describe("make_cover_song tool", () => {
   });
 
   it("rejects an audio artifact without a supported audio file", async () => {
-    process.env.ELEVENLABS_API_KEY = VALID_KEY;
     const assetId = await createArtifact("audio", "missing-file");
     const written = await fs.files.write(assetId, "notes.txt", "no media");
     if (!written.ok) throw new Error(written.error.message);
@@ -181,7 +219,6 @@ describe("make_cover_song tool", () => {
   });
 
   it("rejects a canonical media file without a video stream", async () => {
-    process.env.ELEVENLABS_API_KEY = VALID_KEY;
     const bytes = await renderFixture("original.mp4", [
       "-f", "lavfi",
       "-i", "sine=frequency=440:sample_rate=48000:duration=12",
@@ -201,7 +238,6 @@ describe("make_cover_song tool", () => {
   });
 
   it("rejects a video without an audio stream", async () => {
-    process.env.ELEVENLABS_API_KEY = VALID_KEY;
     const bytes = await renderFixture("original.mp4", [
       "-f", "lavfi",
       "-i", "color=c=black:s=16x16:r=1:d=12",
@@ -222,10 +258,9 @@ describe("make_cover_song tool", () => {
     expect(fs.artifacts.list()).toHaveLength(before);
   });
 
-  it("rejects rounded video-stream durations outside the inclusive bounds", async () => {
-    process.env.ELEVENLABS_API_KEY = VALID_KEY;
+  it("rejects rounded durations outside the inclusive bounds", async () => {
     const shortId = await createVideoWithAudio(9.999, { frameRate: 1_000 });
-    const longId = await createVideoWithAudio(30.001, { frameRate: 1_000 });
+    const longId = await createAudio(240.001, { label: "too-long" });
     const before = fs.artifacts.list().length;
 
     const shortResult = await callMakeCoverSong(shortId);
@@ -233,15 +268,14 @@ describe("make_cover_song tool", () => {
 
     expect(shortResult.isError).toBe(true);
     expect(longResult.isError).toBe(true);
-    expect((shortResult.content as TextContent)[0].text).toContain("10.000s and 30.000s inclusive");
-    expect((longResult.content as TextContent)[0].text).toContain("10.000s and 30.000s inclusive");
+    expect((shortResult.content as TextContent)[0].text).toContain("10.000s and 240.000s inclusive");
+    expect((longResult.content as TextContent)[0].text).toContain("10.000s and 240.000s inclusive");
     expect(fs.artifacts.list()).toHaveLength(before);
   });
 
-  it("accepts video-stream durations at both inclusive bounds", async () => {
-    process.env.ELEVENLABS_API_KEY = VALID_KEY;
+  it("accepts durations at both inclusive bounds", async () => {
     const minimumId = await createVideoWithAudio(10);
-    const maximumId = await createVideoWithAudio(30);
+    const maximumId = await createAudio(240, { label: "max-length" });
 
     const minimumResult = await callMakeCoverSong(minimumId);
     const maximumResult = await callMakeCoverSong(maximumId);
@@ -249,11 +283,10 @@ describe("make_cover_song tool", () => {
     expect(minimumResult.isError).toBeFalsy();
     expect(maximumResult.isError).toBeFalsy();
     expect(JSON.parse((minimumResult.content as TextContent)[0].text).duration_seconds).toBe(10);
-    expect(JSON.parse((maximumResult.content as TextContent)[0].text).duration_seconds).toBe(30);
+    expect(JSON.parse((maximumResult.content as TextContent)[0].text).duration_seconds).toBe(240);
   });
 
   it("accepts an audio artifact and uses its audio-stream duration", async () => {
-    process.env.ELEVENLABS_API_KEY = VALID_KEY;
     const sourceId = await createAudio(18.25, { label: "audio-reference" });
     const before = fs.artifacts.list().length;
 
@@ -274,7 +307,7 @@ describe("make_cover_song tool", () => {
     const jobs = fs.jobs.queue.list({
       states: ["queued", "running", "completing", "done", "failed", "aborted"],
     });
-    const job = jobs.find((entry) => entry.type === "generate_replicated_song");
+    const job = jobs.find((entry) => entry.type === "generate_acestep_cover");
     expect(job?.payload).toMatchObject({
       sourceAssetId: sourceId,
       sourceFilename: "original.wav",
@@ -283,7 +316,6 @@ describe("make_cover_song tool", () => {
   });
 
   it("places the enqueued cover artifact in an audio notebook cell", async () => {
-    process.env.ELEVENLABS_API_KEY = VALID_KEY;
     const sourceId = await createAudio(18.25, { label: "grid-reference" });
     const notebookResult = await client.callTool({
       name: "create_notebook",
@@ -340,7 +372,6 @@ describe("make_cover_song tool", () => {
   });
 
   it("creates one output artifact and enqueues the normalized 22.010 second job", async () => {
-    process.env.ELEVENLABS_API_KEY = VALID_KEY;
     const sourceId = await createVideoWithAudio(22.01, {
       filename: "source.mov",
       audioDurationSeconds: 24,
@@ -370,9 +401,9 @@ describe("make_cover_song tool", () => {
     const jobs = fs.jobs.queue.list({
       states: ["queued", "running", "completing", "done", "failed", "aborted"],
     });
-    const job = jobs.find((entry) => entry.type === "generate_replicated_song");
+    const job = jobs.find((entry) => entry.type === "generate_acestep_cover");
     expect(job?.payload).toEqual({
-      type: "generate_replicated_song",
+      type: "generate_acestep_cover",
       audAssetId: parsed.audio_asset_id,
       sourceAssetId: sourceId,
       sourceFilename: "source.mov",

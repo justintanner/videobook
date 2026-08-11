@@ -1,14 +1,14 @@
 import { join } from "node:path";
 import { findAudioFile, findVideoFile, type Artifact, type Engine } from "videobook-engine";
 import { z } from "zod";
-import { getApiKey } from "../api-key.js";
+import { checkAceStepAvailability } from "../acestep/config.js";
 import { probeVideo } from "../ffmpeg.js";
 import { queue } from "../queue.js";
 import { toolError } from "./_shared.js";
 import type { ToolDef } from "./tool-def.js";
 
 const MIN_SOURCE_DURATION_MS = 10_000;
-const MAX_SOURCE_DURATION_MS = 30_000;
+const MAX_SOURCE_DURATION_MS = 240_000;
 
 function coverSongLabel(source: Artifact): string {
   return `cover-song-${source.label?.trim() || source.artifactId}`;
@@ -17,15 +17,16 @@ function coverSongLabel(source: Artifact): string {
 export function makeCoverSongDef(fs: Engine): ToolDef {
   return {
     name: "make_cover_song",
-    description: "Create a new drums-and-strings cover from 10 to 30 seconds of source audio in a video or audio asset using ElevenLabs Music v2 reference conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.",
+    description: "Create a new drums-and-strings instrumental cover from 10 to 240 seconds of source audio in a video or audio asset, generated locally by the ACE-Step (acestep.cpp) runtime with source-audio conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.",
     schema: {
       book_id: z.string().describe("Book UUID"),
       asset_id: z.string().describe("Source video or audio artifact id"),
       direction: z.string().trim().min(1).max(500).optional().describe("Optional additional musical direction"),
     },
     handler: async (args) => {
-      if (!getApiKey("ELEVENLABS_API_KEY")) {
-        return toolError("ELEVENLABS_API_KEY environment variable is not set or is a placeholder");
+      const availability = await checkAceStepAvailability();
+      if (!availability.available) {
+        return toolError(availability.reason);
       }
 
       const { asset_id, book_id, direction } = args as {
@@ -70,7 +71,7 @@ export function makeCoverSongDef(fs: Engine): ToolDef {
 
       if (targetDurationMs < MIN_SOURCE_DURATION_MS || targetDurationMs > MAX_SOURCE_DURATION_MS) {
         return toolError(
-          `make_cover_song requires a media duration between 10.000s and 30.000s inclusive; got ${(targetDurationMs / 1000).toFixed(3)}s`,
+          `make_cover_song requires a media duration between 10.000s and 240.000s inclusive; got ${(targetDurationMs / 1000).toFixed(3)}s`,
         );
       }
 
@@ -82,7 +83,7 @@ export function makeCoverSongDef(fs: Engine): ToolDef {
 
       const jobId = `make-cover-song-${created.value.artifactId}-${Date.now()}`;
       await queue.enqueue(jobId, {
-        type: "generate_replicated_song",
+        type: "generate_acestep_cover",
         audAssetId: created.value.artifactId,
         sourceAssetId,
         sourceFilename: sourceFile.name,

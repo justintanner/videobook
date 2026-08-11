@@ -5,6 +5,10 @@ const JOB_TIMEOUTS_MS = new Map<string, number>([
   ["render_timeline", 30 * 60_000],
   ["render_qr_outro", 15 * 60_000],
   ["analyze_keyword_placement", 5 * 60_000],
+  // Whole-job backstop above the 30 min /synth fetch timeout, so the client's
+  // more specific error wins when ace-server hangs; covers synth-lock wait,
+  // first-request model load, and the ffmpeg passes on a 240 s CPU-only run.
+  ["generate_acestep_cover", 45 * 60_000],
 ]);
 
 export class JobDeadlineError extends Error {

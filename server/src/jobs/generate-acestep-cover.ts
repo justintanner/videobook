@@ -1,9 +1,11 @@
-import { createElevenLabs, type ElevenLabsProvider } from "@apicity/elevenlabs";
 import type { Engine } from "videobook-engine";
+import { randomInt } from "node:crypto";
 import { extname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { requireApiKey } from "../api-key.js";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { synthCover } from "../acestep/client.js";
+import { aceStepConfig } from "../acestep/config.js";
+import { ensureAceServer, withSynthLock } from "../acestep/process.js";
 import {
   extractWaveform,
   probeVideo,
@@ -13,40 +15,24 @@ import {
 } from "../ffmpeg.js";
 import { registerJobHandler } from "../queue.js";
 
-const PROVIDER_TIMEOUT_MS = 30 * 60_000;
+const SYNTH_TIMEOUT_MS = 30 * 60_000;
 const SAMPLE_RATE_HZ = 48_000;
 const MIN_DURATION_MS = 10_000;
-const MAX_DURATION_MS = 30_000;
+const MAX_DURATION_MS = 240_000;
 const MAX_SHORTFALL_SECONDS = 0.25;
 const OUTPUT_FILENAME = "original.wav";
-const OUTPUT_FORMAT = "mp3_48000_192";
-const BASE_DIRECTION = "Create a new instrumental using only drums and a string ensemble. Follow the uploaded reference as strongly as possible for tempo, groove, rhythmic accents, and phrase timing. Start immediately at full musical activity. An optional direction may refine those qualities but must not add vocals or other instruments.";
-const POSITIVE_STYLES = [
-  "instrumental",
-  "drums and string ensemble only",
-  "preserve source tempo",
-  "preserve source groove",
-  "preserve rhythmic accents",
-  "preserve phrase timing",
-  "immediate start",
-  "strongest audio-reference following",
-];
-const NEGATIVE_STYLES = [
-  "vocals",
-  "speech",
-  "choir",
-  "piano",
-  "guitar",
-  "bass guitar",
-  "synth",
-  "brass",
-  "woodwinds",
-  "effects",
-  "ambience",
-];
+const OUTPUT_FORMAT = "wav16";
+// Tag-style caption: ACE-Step captions are genre/style conditioning through the
+// Qwen3 text encoder, not free-form instructions. Vocal suppression comes from
+// the pinned "[Instrumental]" lyrics, which acestep.cpp passes verbatim to the DiT.
+const BASE_CAPTION = "instrumental cover, drums and string ensemble only, cinematic strings, punchy drums, follows the source rhythm and phrasing, immediate start, no vocals";
+const INSTRUMENTAL_LYRICS = "[Instrumental]";
+const TASK_TYPE = "cover";
+const AUDIO_COVER_STRENGTH = 1.0;
+const INFERENCE_STEPS = 0;
 
-export type ReplicateSongPayload = {
-  type: "generate_replicated_song";
+export type AcestepCoverPayload = {
+  type: "generate_acestep_cover";
   audAssetId: string;
   sourceAssetId: string;
   sourceFilename: string;
@@ -55,11 +41,11 @@ export type ReplicateSongPayload = {
   bookId: string;
 };
 
-type ReplicateSongResult = {
+type AcestepCoverResult = {
   duration: number;
   durationTicks: number;
   generatedDuration: number;
-  songId: string;
+  seed: number;
 };
 
 function targetSamples(targetDurationMs: number): number {
@@ -68,7 +54,7 @@ function targetSamples(targetDurationMs: number): number {
     || targetDurationMs < MIN_DURATION_MS
     || targetDurationMs > MAX_DURATION_MS
   ) {
-    throw new Error(`Replicated song duration must be an integer from ${MIN_DURATION_MS} to ${MAX_DURATION_MS} milliseconds`);
+    throw new Error(`Cover song duration must be an integer from ${MIN_DURATION_MS} to ${MAX_DURATION_MS} milliseconds`);
   }
   return targetDurationMs * SAMPLE_RATE_HZ / 1_000;
 }
@@ -158,9 +144,9 @@ async function registerOutputStream(
   stream: ProbeStream,
 ): Promise<void> {
   const manifest = await fs.files.manifest(assetId);
-  if (!manifest.ok) throw new Error(`Failed to read replicated song manifest: ${manifest.error.message}`);
+  if (!manifest.ok) throw new Error(`Failed to read cover song manifest: ${manifest.error.message}`);
   const file = manifest.value.files.find((candidate) => candidate.name === OUTPUT_FILENAME);
-  if (!file) throw new Error(`Replicated song is missing ${OUTPUT_FILENAME}`);
+  if (!file) throw new Error(`Cover song is missing ${OUTPUT_FILENAME}`);
   const registered = await fs.streams.register({
     artifactId: assetId,
     sourcePath: OUTPUT_FILENAME,
@@ -172,30 +158,30 @@ async function registerOutputStream(
     codec: stream.codec,
     audio: stream.audio!,
   });
-  if (!registered.ok) throw new Error(`Failed to register replicated song stream: ${registered.error.message}`);
+  if (!registered.ok) throw new Error(`Failed to register cover song stream: ${registered.error.message}`);
 }
 
-function generationText(direction: string | undefined): string {
+function coverCaption(direction: string | undefined): string {
   const trimmed = direction?.trim();
-  return trimmed ? `${BASE_DIRECTION} ${trimmed}` : BASE_DIRECTION;
+  return trimmed ? `${BASE_CAPTION}, ${trimmed}` : BASE_CAPTION;
 }
 
-export async function replicateSongWithElevenLabs(
+export async function coverSongWithAcestep(
   fs: Engine,
-  payload: ReplicateSongPayload,
-  provider: ElevenLabsProvider,
+  payload: AcestepCoverPayload,
   signal?: AbortSignal,
-): Promise<ReplicateSongResult> {
+): Promise<AcestepCoverResult> {
   const samples = targetSamples(payload.targetDurationMs);
   const targetSeconds = payload.targetDurationMs / 1_000;
+  const config = aceStepConfig();
   const source = await fs.files.read(payload.sourceAssetId, payload.sourceFilename);
   if (!source.ok) throw new Error(`Failed to read source media: ${source.error.message}`);
 
-  const scratch = await mkdtemp(join(tmpdir(), "videobook-replicate-song-"));
+  const scratch = await mkdtemp(join(tmpdir(), "videobook-acestep-cover-"));
   const sourcePath = join(scratch, `source${extname(payload.sourceFilename) || ".media"}`);
   const referencePath = join(scratch, "reference.wav");
-  const generatedPath = join(scratch, "generated.mp3");
-  const decodedPath = join(scratch, "generated.wav");
+  const generatedPath = join(scratch, "generated.wav");
+  const decodedPath = join(scratch, "decoded.wav");
   const outputPath = join(scratch, OUTPUT_FILENAME);
 
   try {
@@ -204,70 +190,69 @@ export async function replicateSongWithElevenLabs(
     await renderExactWav(sourcePath, referencePath, samples, signal);
     requireExactPcmStream(await probeVideo(referencePath, { signal }), samples, "Extracted reference audio");
 
-    const reference = await readFile(referencePath);
-    const uploaded = await provider.v1.music.upload({
-      file: new Blob([new Uint8Array(reference)], { type: "audio/wav" }),
-    }, signal);
-    if (!uploaded.song_id?.trim()) throw new Error("ElevenLabs music upload returned no song id");
-
-    const generated = await provider.v1.music({
-      model_id: "music_v2",
-      output_format: OUTPUT_FORMAT,
-      composition_plan: {
-        chunks: [{
-          text: generationText(payload.direction),
-          duration_ms: payload.targetDurationMs,
-          positive_styles: POSITIVE_STYLES,
-          negative_styles: NEGATIVE_STYLES,
-          context_adherence: "high",
-          conditioning_ref: {
-            song_id: uploaded.song_id,
-            range: { start_ms: 0, end_ms: payload.targetDurationMs },
-          },
-          condition_strength: "xhigh",
-        }],
+    const server = await ensureAceServer({ signal });
+    const seed = randomInt(0, 2 ** 31 - 1);
+    const caption = coverCaption(payload.direction);
+    const synth = await withSynthLock(() => synthCover(
+      server.baseUrl,
+      referencePath,
+      {
+        caption,
+        lyrics: INSTRUMENTAL_LYRICS,
+        taskType: TASK_TYPE,
+        outputFormat: OUTPUT_FORMAT,
+        seed,
+        inferenceSteps: INFERENCE_STEPS,
+        audioCoverStrength: AUDIO_COVER_STRENGTH,
+        synthBatchSize: 1,
+        synthModel: config.model,
+        duration: 0,
       },
-    }, signal);
-    await writeFile(generatedPath, new Uint8Array(generated));
+      { signal, timeoutMs: SYNTH_TIMEOUT_MS },
+    ));
+    await writeFile(generatedPath, synth.audio);
 
     await decodePcmWav(generatedPath, decodedPath, signal);
     const generatedStream = requirePcmStream(
       await probeVideo(decodedPath, { signal }),
-      "Decoded ElevenLabs replicated song",
+      "Decoded ACE-Step cover song",
     );
     const generatedDuration = generatedStream.durationTicks / SAMPLE_RATE_HZ;
     if (!Number.isFinite(generatedDuration) || generatedDuration <= 0) {
-      throw new Error(`ElevenLabs replicated song has invalid duration ${generatedDuration}`);
+      throw new Error(`ACE-Step cover song has invalid duration ${generatedDuration}`);
     }
     const shortfall = targetSeconds - generatedDuration;
     if (shortfall > MAX_SHORTFALL_SECONDS) {
-      throw new Error(`ElevenLabs replicated song is ${shortfall.toFixed(3)}s short; maximum allowed shortfall is ${MAX_SHORTFALL_SECONDS.toFixed(3)}s`);
+      throw new Error(`ACE-Step cover song is ${shortfall.toFixed(3)}s short; maximum allowed shortfall is ${MAX_SHORTFALL_SECONDS.toFixed(3)}s`);
     }
 
     await renderExactWav(decodedPath, outputPath, samples, signal);
-    requireExactPcmStream(await probeVideo(outputPath, { signal }), samples, "Normalized replicated song");
+    requireExactPcmStream(await probeVideo(outputPath, { signal }), samples, "Normalized cover song");
 
     const persisted = await fs.files.writeFromPath(payload.audAssetId, OUTPUT_FILENAME, outputPath);
-    if (!persisted.ok) throw new Error(`Failed to persist replicated song: ${persisted.error.message}`);
+    if (!persisted.ok) throw new Error(`Failed to persist cover song: ${persisted.error.message}`);
     const persistedProbe = await probeVideo(persisted.value, { signal });
-    const persistedStream = requireExactPcmStream(persistedProbe, samples, "Persisted replicated song");
+    const persistedStream = requireExactPcmStream(persistedProbe, samples, "Persisted cover song");
     await registerOutputStream(fs, payload.audAssetId, persistedStream);
 
     const waveform = await extractWaveform(persisted.value);
     const waveformWrite = await fs.metadata.waveforms.write(payload.audAssetId, waveform);
-    if (!waveformWrite.ok) throw new Error(`Failed to write replicated song waveform: ${waveformWrite.error.message}`);
+    if (!waveformWrite.ok) throw new Error(`Failed to write cover song waveform: ${waveformWrite.error.message}`);
 
     const metadataWrite = await fs.metadata.artifacts.write(payload.audAssetId, "original", {
       origin: "make_cover_song",
-      provider: "elevenlabs",
-      model: "music_v2",
+      provider: "acestep.cpp",
+      model: config.model,
+      task_type: TASK_TYPE,
       output_format: OUTPUT_FORMAT,
+      audio_cover_strength: AUDIO_COVER_STRENGTH,
+      inference_steps: INFERENCE_STEPS,
+      seed,
+      caption,
+      lyrics: INSTRUMENTAL_LYRICS,
+      arrangement: "drums_and_strings",
       source_asset: payload.sourceAssetId,
       source_filename: payload.sourceFilename,
-      conditioning_song_id: uploaded.song_id,
-      conditioning_strength: "xhigh",
-      context_adherence: "high",
-      arrangement: "drums_and_strings",
       direction: payload.direction?.trim() || null,
       target_duration_ms: payload.targetDurationMs,
       generated_duration: generatedDuration,
@@ -278,28 +263,27 @@ export async function replicateSongWithElevenLabs(
       channels: 2,
       generated_at: new Date().toISOString(),
     });
-    if (!metadataWrite.ok) throw new Error(`Failed to write replicated song metadata: ${metadataWrite.error.message}`);
+    if (!metadataWrite.ok) throw new Error(`Failed to write cover song metadata: ${metadataWrite.error.message}`);
 
     return {
       duration: targetSeconds,
       durationTicks: samples,
       generatedDuration,
-      songId: uploaded.song_id,
+      seed,
     };
   } finally {
     await rm(scratch, { recursive: true, force: true, maxRetries: 3 });
   }
 }
 
-export function registerReplicateSongJob(fs: Engine): void {
-  registerJobHandler("generate_replicated_song", async (rawPayload, ctx) => {
+export function registerAcestepCoverJob(fs: Engine): void {
+  registerJobHandler("generate_acestep_cover", async (rawPayload, ctx) => {
     ctx.getOwnerId();
-    const payload = rawPayload as ReplicateSongPayload;
-    const provider = createElevenLabs({
-      apiKey: requireApiKey("ELEVENLABS_API_KEY"),
-      timeout: PROVIDER_TIMEOUT_MS,
-    });
-    const result = await replicateSongWithElevenLabs(fs, payload, provider, ctx.signal);
-    return { success: true, provider: "elevenlabs" as const, ...result };
+    const payload = rawPayload as AcestepCoverPayload;
+    // ctx.signal aborts the ffmpeg passes and the /synth fetch; ace-server has
+    // no cancellation API, so an aborted generation finishes server-side and is
+    // discarded. Acceptable for a single-user local runtime.
+    const result = await coverSongWithAcestep(fs, payload, ctx.signal);
+    return { success: true, provider: "acestep.cpp" as const, ...result };
   });
 }

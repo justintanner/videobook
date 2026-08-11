@@ -1,5 +1,6 @@
 import "./load-env.js";
 import { z } from "zod";
+import { stopAceServer } from "./acestep/process.js";
 import { fs } from "./fs.js";
 import { queue, waitForJob } from "./queue.js";
 import { getAllToolDefs } from "./tools/index.js";
@@ -81,6 +82,7 @@ async function run(): Promise<void> {
   }
 
   await queue.stop();
+  await stopAceServer();
 }
 
 run().catch((err) => {

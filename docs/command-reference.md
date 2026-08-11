@@ -202,7 +202,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `list_prompts` — List reusable prompts
 - `list_scenes` — List reusable scenes
 - `list_sequence_replace_targets` — List clips that a search moment can explicitly replace
-- `make_cover_song` — Create a new drums-and-strings cover from 10 to 30 seconds of source audio in a video or audio asset using ElevenLabs Music v2 reference conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.
+- `make_cover_song` — Create a new drums-and-strings instrumental cover from 10 to 240 seconds of source audio in a video or audio asset, generated locally by the ACE-Step (acestep.cpp) runtime with source-audio conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.
 - `mark_asset_seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.
 - `migrate_legacy_book` — Copy a confirmed schema-v4 book to v5 and archive the untouched source
 - `move_notebook_cells` — Persist notebook cell grid slots

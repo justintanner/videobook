@@ -39,7 +39,18 @@ const SECRET_ENV_VARS = [
   "X_CLIENT_SECRET",
 ];
 
-for (const name of SECRET_ENV_VARS) {
+// Not secrets, but a developer's real local ACE-Step install must not leak into
+// availability-gate tests; tests that need these set them explicitly.
+const ACESTEP_ENV_VARS = [
+  "VIDEOBOOK_ACESTEP_BASE_URL",
+  "VIDEOBOOK_ACESTEP_SERVER_PATH",
+  "VIDEOBOOK_ACESTEP_MODELS_DIR",
+  "VIDEOBOOK_ACESTEP_PORT",
+  "VIDEOBOOK_ACESTEP_MODEL",
+  "VIDEOBOOK_ACESTEP_KEEP_LOADED",
+];
+
+for (const name of [...SECRET_ENV_VARS, ...ACESTEP_ENV_VARS]) {
   delete process.env[name];
 }
 

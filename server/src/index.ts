@@ -11,6 +11,7 @@ import { pipeline } from "node:stream/promises";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import { SCHEMA_VERSION } from "videobook-engine";
 import { v7 as uuidv7 } from "uuid";
+import { stopAceServer } from "./acestep/process.js";
 import { localArchiveDir } from "./archive-store.js";
 import { bookManager, fs as scopedBookEngine } from "./fs.js";
 import { ensureDancingWorkflow } from "./dancing-workflow.js";
@@ -233,6 +234,7 @@ async function shutdown(): Promise<void> {
     stopScheduler();
     await mcpHandler.close();
     await queue.stop();
+    await stopAceServer();
     await bookManager.close();
   } catch (error) {
     console.error("[shutdown] cleanup failed:", error);
