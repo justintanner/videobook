@@ -211,7 +211,7 @@ import {
   mediaAssetWatchStep,
   downloadVideoCellInput,
 } from '@/videobook/notebook-download'
-import { routedVideoCellInputs } from '@/videobook/notebook-routed-action'
+import { routedMediaCellInputs } from '@/videobook/notebook-routed-action'
 import {
   enqueueNotebookAudioCommand,
   resolveNotebookAudioSource,
@@ -6939,7 +6939,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : { ...outcome, nextInput: '', selectInput: false }
       }
       const routedCells = notebook
-        ? routedVideoCellInputs(plan.tool, result, notebook.cells)
+        ? routedMediaCellInputs(plan.tool, result, notebook.cells)
         : []
       if (notebook && routedCells.length > 0) {
         const placements: string[] = []
@@ -7447,6 +7447,31 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const result = await call(command.mcpTool.tool, args)
       if (command.mcpTool.tool === 'download_video' && notebook) {
         return await completeVideoDownload(result, asString(args.url) ?? '')
+      }
+      const routedCells = notebook
+        ? routedMediaCellInputs(command.mcpTool.tool, result, notebook.cells)
+        : []
+      if (notebook && routedCells.length > 0) {
+        const placements: string[] = []
+        let firstCellId: string | null = null
+        for (const cell of routedCells) {
+          const created = record(await call('create_notebook_cell', {
+            book_id: bookId,
+            notebook_id: notebook.id,
+            cell,
+          }))
+          const cellId = asString(created?.id)
+          if (!cellId) {
+            throw new Error('The server did not return the new notebook cell')
+          }
+          firstCellId ??= cellId
+          placements.push(notebookGridTag(cell.slot))
+        }
+        selectCanvasCell(firstCellId)
+        await refreshBookData(bookId, notebook.id)
+        const message = `Created ${placements.join(' and ')}`
+        setNotice(message)
+        return { ok: true, message }
       }
       await refreshBookData(bookId, notebook?.id)
       if (command.mcpTool.tool === 'rename_asset') {

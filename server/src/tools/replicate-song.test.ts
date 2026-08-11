@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createEngineForTest } from "../fs.js";
 import { registerJobHandler } from "../queue.js";
 import { createTestClient } from "../test-client.js";
+import { routedMediaCellInputs } from "../../../src/videobook/notebook-routed-action.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -279,6 +280,63 @@ describe("make_cover_song tool", () => {
       sourceFilename: "original.wav",
       targetDurationMs: 18_250,
     });
+  });
+
+  it("places the enqueued cover artifact in an audio notebook cell", async () => {
+    process.env.ELEVENLABS_API_KEY = VALID_KEY;
+    const sourceId = await createAudio(18.25, { label: "grid-reference" });
+    const notebookResult = await client.callTool({
+      name: "create_notebook",
+      arguments: { book_id: BOOK_ID, name: "Main" },
+    });
+    const notebookId = JSON.parse((notebookResult.content as TextContent)[0].text).id as string;
+    await client.callTool({
+      name: "create_notebook_cell",
+      arguments: {
+        book_id: BOOK_ID,
+        notebook_id: notebookId,
+        cell: {
+          type: "audio",
+          label: "Source audio",
+          slot: { row: 0, column: 0 },
+          output_artifact_id: sourceId,
+        },
+      },
+    });
+
+    const result = await callMakeCoverSong(`@${sourceId}`);
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    const current = fs.notebooks.read(notebookId);
+    if (!current.ok) throw new Error(current.error.message);
+    const placements = routedMediaCellInputs(
+      "make_cover_song",
+      parsed,
+      current.value.cells,
+    );
+
+    expect(placements).toHaveLength(1);
+    await client.callTool({
+      name: "create_notebook_cell",
+      arguments: {
+        book_id: BOOK_ID,
+        notebook_id: notebookId,
+        cell: placements[0],
+      },
+    });
+    const updated = fs.notebooks.read(notebookId);
+    if (!updated.ok) throw new Error(updated.error.message);
+    expect(updated.value.cells).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "audio",
+        slot: { row: 0, column: 1 },
+        outputArtifactId: parsed.audio_asset_id,
+        inputs: expect.objectContaining({
+          sourceOperation: "make_cover_song",
+          source_asset_id: sourceId,
+          job_id: parsed.job_id,
+        }),
+      }),
+    ]));
   });
 
   it("creates one output artifact and enqueues the normalized 22.010 second job", async () => {
