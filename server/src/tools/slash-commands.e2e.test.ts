@@ -220,10 +220,10 @@ describe("slash commands e2e", () => {
     });
   });
 
-  describe("/replicate-song", () => {
-    it("parses a video asset without optional direction", () => {
+  describe("/make-cover-song", () => {
+    it("parses a media asset without optional direction", () => {
       expect(simulateParse(
-        "/replicate-song",
+        "/make-cover-song",
         "@a1",
       )).toEqual({
         asset_id: "a1",
@@ -232,11 +232,20 @@ describe("slash commands e2e", () => {
 
     it("preserves a multi-word musical direction", () => {
       expect(simulateParse(
-        "/replicate-song",
+        "/make-cover-song",
         "@a1 punchier drums and sweeping strings",
       )).toEqual({
         asset_id: "a1",
         direction: "punchier drums and sweeping strings",
+      });
+    });
+
+    it("accepts the legacy slash-command alias", () => {
+      expect(simulateParse(
+        "/replicate-song",
+        "@a1",
+      )).toEqual({
+        asset_id: "a1",
       });
     });
   });
@@ -1086,9 +1095,9 @@ describe("slash commands e2e", () => {
       expect(cmd.mcpTool?.autoInject).toContain("book_id");
     });
 
-    it("maps /replicate-song to replicate_song", () => {
-      const cmd = findCommand("/replicate-song");
-      expect(cmd.mcpTool?.tool).toBe("replicate_song");
+    it("maps /make-cover-song to make_cover_song", () => {
+      const cmd = findCommand("/make-cover-song");
+      expect(cmd.mcpTool?.tool).toBe("make_cover_song");
       expect(cmd.mcpTool?.autoInject).toContain("book_id");
     });
 

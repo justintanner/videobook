@@ -320,7 +320,7 @@ describe("replicate song ElevenLabs job", () => {
     expect(metadata.ok).toBe(true);
     if (metadata.ok) {
       expect(metadata.value).toMatchObject({
-        origin: "replicate_song",
+        origin: "make_cover_song",
         provider: "elevenlabs",
         model: "music_v2",
         output_format: "mp3_48000_192",

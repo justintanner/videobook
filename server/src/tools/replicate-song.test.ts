@@ -14,12 +14,12 @@ import { createTestClient } from "../test-client.js";
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 const FFMPEG: string = require("ffmpeg-static");
-const BOOK_ID = "replicate-song-book";
+const BOOK_ID = "make-cover-song-book";
 const VALID_KEY = "fake-elevenlabs-key";
 
 type TextContent = Array<{ type: string; text: string }>;
 
-describe("replicate_song tool", () => {
+describe("make_cover_song tool", () => {
   let client: Client;
   let tempDir: string;
   let fs: Engine;
@@ -71,12 +71,29 @@ describe("replicate_song tool", () => {
     return assetId;
   }
 
-  async function callReplicate(
+  async function createAudio(
+    durationSeconds: number,
+    options: { filename?: string; label?: string } = {},
+  ): Promise<string> {
+    const filename = options.filename ?? "original.wav";
+    const bytes = await renderFixture(filename, [
+      "-f", "lavfi",
+      "-i", `sine=frequency=440:sample_rate=48000:duration=${durationSeconds}`,
+      "-vn",
+      "-c:a", "pcm_s16le",
+    ]);
+    const assetId = await createArtifact("audio", options.label ?? `source-audio-${durationSeconds}`);
+    const written = await fs.files.write(assetId, filename, bytes);
+    if (!written.ok) throw new Error(written.error.message);
+    return assetId;
+  }
+
+  async function callMakeCoverSong(
     assetId: string,
     direction?: string,
   ): Promise<Awaited<ReturnType<Client["callTool"]>>> {
     return client.callTool({
-      name: "replicate_song",
+      name: "make_cover_song",
       arguments: {
         asset_id: assetId,
         book_id: BOOK_ID,
@@ -88,7 +105,7 @@ describe("replicate_song tool", () => {
   beforeEach(async () => {
     originalElevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
     delete process.env.ELEVENLABS_API_KEY;
-    tempDir = await mkdtemp(join(tmpdir(), "videocity-replicate-song-tool-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-make-cover-song-tool-"));
     fixtureIndex = 0;
     fs = createEngineForTest(tempDir);
     client = await createTestClient(tempDir);
@@ -106,23 +123,31 @@ describe("replicate_song tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
+  it("is exposed under the make_cover_song MCP name", async () => {
+    const tools = await client.listTools();
+    const names = tools.tools.map((tool) => tool.name);
+
+    expect(names).toContain("make_cover_song");
+    expect(names).not.toContain("replicate_song");
+  });
+
   it("requires a configured non-placeholder ElevenLabs key", async () => {
-    const result = await callReplicate("missing-video");
+    const result = await callMakeCoverSong("missing-media");
 
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("ELEVENLABS_API_KEY");
     expect(fs.artifacts.list()).toHaveLength(0);
   });
 
-  it("rejects artifacts that are not video before creating output", async () => {
+  it("rejects artifacts that are neither video nor audio before creating output", async () => {
     process.env.ELEVENLABS_API_KEY = VALID_KEY;
-    const assetId = await createArtifact("audio", "not-video");
+    const assetId = await createArtifact("image", "not-media");
     const before = fs.artifacts.list().length;
 
-    const result = await callReplicate(`@${assetId}`);
+    const result = await callMakeCoverSong(`@${assetId}`);
 
     expect(result.isError).toBe(true);
-    expect((result.content as TextContent)[0].text).toContain("requires video media");
+    expect((result.content as TextContent)[0].text).toContain("requires video or audio media");
     expect(fs.artifacts.list()).toHaveLength(before);
   });
 
@@ -133,10 +158,24 @@ describe("replicate_song tool", () => {
     if (!written.ok) throw new Error(written.error.message);
     const before = fs.artifacts.list().length;
 
-    const result = await callReplicate(assetId);
+    const result = await callMakeCoverSong(assetId);
 
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("No video file");
+    expect(fs.artifacts.list()).toHaveLength(before);
+  });
+
+  it("rejects an audio artifact without a supported audio file", async () => {
+    process.env.ELEVENLABS_API_KEY = VALID_KEY;
+    const assetId = await createArtifact("audio", "missing-file");
+    const written = await fs.files.write(assetId, "notes.txt", "no media");
+    if (!written.ok) throw new Error(written.error.message);
+    const before = fs.artifacts.list().length;
+
+    const result = await callMakeCoverSong(assetId);
+
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("No audio file");
     expect(fs.artifacts.list()).toHaveLength(before);
   });
 
@@ -153,7 +192,7 @@ describe("replicate_song tool", () => {
     if (!written.ok) throw new Error(written.error.message);
     const before = fs.artifacts.list().length;
 
-    const result = await callReplicate(assetId);
+    const result = await callMakeCoverSong(assetId);
 
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("no video stream");
@@ -175,7 +214,7 @@ describe("replicate_song tool", () => {
     if (!written.ok) throw new Error(written.error.message);
     const before = fs.artifacts.list().length;
 
-    const result = await callReplicate(assetId);
+    const result = await callMakeCoverSong(assetId);
 
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("no audio stream");
@@ -188,8 +227,8 @@ describe("replicate_song tool", () => {
     const longId = await createVideoWithAudio(30.001, { frameRate: 1_000 });
     const before = fs.artifacts.list().length;
 
-    const shortResult = await callReplicate(shortId);
-    const longResult = await callReplicate(longId);
+    const shortResult = await callMakeCoverSong(shortId);
+    const longResult = await callMakeCoverSong(longId);
 
     expect(shortResult.isError).toBe(true);
     expect(longResult.isError).toBe(true);
@@ -203,13 +242,43 @@ describe("replicate_song tool", () => {
     const minimumId = await createVideoWithAudio(10);
     const maximumId = await createVideoWithAudio(30);
 
-    const minimumResult = await callReplicate(minimumId);
-    const maximumResult = await callReplicate(maximumId);
+    const minimumResult = await callMakeCoverSong(minimumId);
+    const maximumResult = await callMakeCoverSong(maximumId);
 
     expect(minimumResult.isError).toBeFalsy();
     expect(maximumResult.isError).toBeFalsy();
     expect(JSON.parse((minimumResult.content as TextContent)[0].text).duration_seconds).toBe(10);
     expect(JSON.parse((maximumResult.content as TextContent)[0].text).duration_seconds).toBe(30);
+  });
+
+  it("accepts an audio artifact and uses its audio-stream duration", async () => {
+    process.env.ELEVENLABS_API_KEY = VALID_KEY;
+    const sourceId = await createAudio(18.25, { label: "audio-reference" });
+    const before = fs.artifacts.list().length;
+
+    const result = await callMakeCoverSong(`@${sourceId}`);
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed).toMatchObject({
+      source_asset_id: sourceId,
+      source_kind: "audio",
+      duration_seconds: 18.25,
+      status: "enqueued",
+    });
+    expect(fs.artifacts.list()).toHaveLength(before + 1);
+    const output = fs.artifacts.get(parsed.audio_asset_id);
+    expect(output.ok && output.value.label).toBe("cover-song-audio-reference");
+
+    const jobs = fs.jobs.queue.list({
+      states: ["queued", "running", "completing", "done", "failed", "aborted"],
+    });
+    const job = jobs.find((entry) => entry.type === "generate_replicated_song");
+    expect(job?.payload).toMatchObject({
+      sourceAssetId: sourceId,
+      sourceFilename: "original.wav",
+      targetDurationMs: 18_250,
+    });
   });
 
   it("creates one output artifact and enqueues the normalized 22.010 second job", async () => {
@@ -222,12 +291,13 @@ describe("replicate_song tool", () => {
     });
     const before = fs.artifacts.list().length;
 
-    const result = await callReplicate(`@${sourceId}`, "  stronger low strings  ");
+    const result = await callMakeCoverSong(`@${sourceId}`, "  stronger low strings  ");
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed).toMatchObject({
-      source_video: sourceId,
+      source_asset_id: sourceId,
+      source_kind: "video",
       duration_seconds: 22.01,
       status: "enqueued",
     });
@@ -237,7 +307,7 @@ describe("replicate_song tool", () => {
     expect(artifacts).toHaveLength(before + 1);
     expect(artifacts.filter((artifact) => artifact.kind === "audio")).toHaveLength(1);
     const output = fs.artifacts.get(parsed.audio_asset_id);
-    expect(output.ok && output.value.label).toBe("replicated-song-dance-reference");
+    expect(output.ok && output.value.label).toBe("cover-song-dance-reference");
 
     const jobs = fs.jobs.queue.list({
       states: ["queued", "running", "completing", "done", "failed", "aborted"],

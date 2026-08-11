@@ -202,6 +202,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `list_prompts` — List reusable prompts
 - `list_scenes` — List reusable scenes
 - `list_sequence_replace_targets` — List clips that a search moment can explicitly replace
+- `make_cover_song` — Create a new drums-and-strings cover from 10 to 30 seconds of source audio in a video or audio asset using ElevenLabs Music v2 reference conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.
 - `mark_asset_seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.
 - `migrate_legacy_book` — Copy a confirmed schema-v4 book to v5 and archive the untouched source
 - `move_notebook_cells` — Persist notebook cell grid slots
@@ -247,7 +248,6 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `replace_google_flow_character` — Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.
 - `replace_sequence_clip_with_search_moment` — Preview, then confirm, replacing one explicit sequence clip with a search moment
 - `replace_video_audio` — Replace the audio track of a video asset in-place with audio from an audio asset, or a specific file inside another asset via the `<artifactId>/<filename>` form. Operates on the video asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.
-- `replicate_song` — Create a new drums-and-strings instrumental from a 10 to 30 second video soundtrack using ElevenLabs Music v2 reference conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.
 - `restore_archive_clips` — Restore selected archived video/audio clips into the current videocity project as new assets.
 - `restore_asset_version` — Restore an asset from an immutable revision as a new revision
 - `restore_edit_action` — Create a forward revision restoring a prior edit action or revision
@@ -364,6 +364,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/keys` — Open the provider API keys / settings screen; UI: `open_provider_keys`
 - `/keywords` — Animate transcript keywords in face-safe open space, or omit words for automatic selection; MCP: `animate_keywords`
 - `/landscape` — Show landscape crop (1920x1080); UI: `viewer_set_landscape`
+- `/make-cover-song` (aliases: `/replicate-song`) — Generate a rhythm-and-style-guided drums-and-strings cover with the source media's exact duration; MCP: `make_cover_song`
 - `/notebook` — Open a project Notebook — a workflow of prompt, image, and video steps. Opens the existing notebook when present; creates 'scratch' by default.; UI: `open_notebook`
 - `/notebooks` — List first-class notebooks in the current project; MCP: `list_notebooks`
 - `/open` — Open asset in viewer; UI: `open_asset`
@@ -385,7 +386,6 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/rename-all` — Bulk-rename video/image assets with an explicit dry run: GPT-5.5 proposes descriptive names from each asset's stored context, you edit them in a side-by-side preview, then confirm to apply (updates timeline slots, OSG metadata, and plan/.plan.json references).; UI: `open_rename_all`
 - `/render-video` (aliases: `/render`) — Render a video asset; MCP: `render_video`
 - `/replace-audio` — Replace the audio track of a video asset with an audio asset's audio; MCP: `replace_video_audio`
-- `/replicate-song` — Generate a rhythm-and-style-guided drums-and-strings instrumental with the video's exact duration; MCP: `replicate_song`
 - `/reverse` — Reverse video playback (play backwards); MCP: `reverse_video`
 - `/revisions` — Open forward-only project revision history; UI: `open_revisions`
 - `/rewind` — Rewind the project to a previous commit (no hash opens the activity log to pick one); UI: `rewind_activity`

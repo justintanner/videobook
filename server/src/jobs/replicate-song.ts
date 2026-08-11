@@ -258,7 +258,7 @@ export async function replicateSongWithElevenLabs(
     if (!waveformWrite.ok) throw new Error(`Failed to write replicated song waveform: ${waveformWrite.error.message}`);
 
     const metadataWrite = await fs.metadata.artifacts.write(payload.audAssetId, "original", {
-      origin: "replicate_song",
+      origin: "make_cover_song",
       provider: "elevenlabs",
       model: "music_v2",
       output_format: OUTPUT_FORMAT,
