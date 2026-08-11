@@ -18,6 +18,7 @@ type RoutableToolInfo = {
 };
 
 const AUTO_APPLY_TOOL_NAMES = new Set([
+  "extract_audio",
   "extract_first_frame",
   "extract_last_frame",
   "extract_frame",

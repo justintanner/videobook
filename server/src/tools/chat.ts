@@ -388,6 +388,12 @@ function appendChatHistory(
     .catch(() => {});
 }
 
+function autoApplyReason(tool: string): string {
+  return tool === "extract_audio"
+    ? "Audio extraction is free, local, and only adds derived media"
+    : "Frame extraction is free and only adds a new image cell";
+}
+
 async function applyChatActionPlan(
   fs: Engine,
   bookId: string,
@@ -654,7 +660,7 @@ export function chatDef(fs: Engine): ToolDef {
           confirmation: {
             required: !autoApply,
             reason: autoApply
-              ? "Frame extraction is free and only adds a new image cell"
+              ? autoApplyReason(targetDef.name)
               : effect === "generation"
               ? "This request creates generated media and may incur provider spend"
               : "This request changes the current book",

@@ -18,6 +18,7 @@ import { z } from "zod";
 import { v7 as uuidv7 } from "uuid";
 import type { BookManager } from "../book-manager.js";
 import {
+  ensureExtractAudioOutput,
   ensureExtractFrameImageOutput,
   ensureGenerateVideoOutput,
 } from "../notebook-cell-outputs.js";
@@ -1360,6 +1361,16 @@ export function videobookDomainDefs(
               cells: [...notebook.cells, cell],
             }, cell.id);
             cell = withCell.cells.find((candidate) => candidate.id === cell.id)!;
+            if (cell.type === "extract_audio") {
+              const ensured = ensureExtractAudioOutput(
+                engine,
+                withCell,
+                cell.id,
+              );
+              outputCell = ensured.outputCell;
+              outputEdge = ensured.outputEdge;
+              return ensured.document;
+            }
             if (cell.type === "analyze") {
               const cells = withCell.cells;
               outputCell = engine.notebooks.createCell({

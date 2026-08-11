@@ -128,8 +128,9 @@ describe("chat routing catalog", () => {
     expect(effectForTool("generate_image", "generation")).toBe("generation");
   });
 
-  it("marks free frame extraction tools for auto-apply only", () => {
+  it("marks free local extraction tools for auto-apply only", () => {
     const tools = buildRoutableTools(definitions);
+    expect(AUTO_APPLY_TOOL_NAMES.has("extract_audio")).toBe(true);
     expect(AUTO_APPLY_TOOL_NAMES.has("extract_first_frame")).toBe(true);
     expect(AUTO_APPLY_TOOL_NAMES.has("extract_last_frame")).toBe(true);
     expect(AUTO_APPLY_TOOL_NAMES.has("extract_frame")).toBe(true);
@@ -142,6 +143,10 @@ describe("chat routing catalog", () => {
       autoApply: true,
     });
     expect(getRoutableTool(tools, "extract_frame")).toMatchObject({
+      effect: "mutation",
+      autoApply: true,
+    });
+    expect(getRoutableTool(tools, "extract_audio")).toMatchObject({
       effect: "mutation",
       autoApply: true,
     });

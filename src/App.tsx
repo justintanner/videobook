@@ -213,6 +213,11 @@ import {
 } from '@/videobook/notebook-download'
 import { routedVideoCellInputs } from '@/videobook/notebook-routed-action'
 import {
+  enqueueNotebookAudioCommand,
+  resolveNotebookAudioSource,
+  type NotebookAudioCommand,
+} from '@/videobook/notebook-audio-command'
+import {
   enqueueNotebookFrameCommand,
   resolveNotebookFrameSource,
   type NotebookFrameCommand,
@@ -4388,7 +4393,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ? notebookGridDropSlot(position, notebookBaseMetrics)
       : type === 'generate_video'
         ? nextNotebookVideoGenerationSlot(notebook.cells)
-        : type === 'generate_image' || type === 'extract_frame'
+        : type === 'generate_image'
+          || type === 'extract_frame'
+          || type === 'extract_audio'
           ? nextNotebookHorizontalGenerationSlot(notebook.cells)
           : nextNotebookGridSlot(nodes)
     if (
@@ -6087,6 +6094,101 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const executeNotebookAudioCommand = async (
+    command: NotebookAudioCommand,
+    currentNotebook: NotebookSnapshot,
+  ): Promise<ComposerOutcome> => {
+    if (!bookId || !notebook) {
+      return { ok: false, message: 'Open a notebook before extracting audio.' }
+    }
+    let actionCellId: string | null = null
+    setBusy(true)
+    try {
+      const source = resolveNotebookAudioSource(
+        currentNotebook,
+        command.sourceReference,
+      )
+      const sourceAddress = notebookGridTag(source.slot)
+      const run = await enqueueNotebookAudioCommand({
+        actor: 'videobook-user',
+        bookId,
+        callTool: call,
+        command,
+        document: currentNotebook,
+        ...(currentNotebook.revision
+          ? { expectedRevision: currentNotebook.revision }
+          : {}),
+      })
+      actionCellId = run.actionCellId
+      setCellRunError(actionCellId, null)
+      setCellQueued(actionCellId, true)
+      selectCanvasCell(run.outputCellId ?? actionCellId)
+      setNotice(`Audio extraction queued for ${sourceAddress}`)
+      const outcome = await watchNotebookRun({
+        bookId,
+        notebookId: currentNotebook.id,
+        cellId: actionCellId,
+        address: notebookGridAddress(source.slot),
+        runId: run.runId,
+        jobOperationId: run.jobId,
+        intervalMs: notebookRunPollIntervalMs,
+        timeoutMs: notebookRunPollTimeoutMs,
+        maxPollFailures: 1,
+      })
+      if (outcome.kind === 'failed') {
+        throw new Error(outcome.message ?? `Audio extraction for ${sourceAddress} failed`)
+      }
+      if (outcome.kind === 'timeout') {
+        throw new Error('Audio extraction did not finish within five minutes')
+      }
+      if (outcome.kind === 'superseded') {
+        throw new Error(`Audio extraction for ${sourceAddress} was superseded by a newer run`)
+      }
+      selectCanvasCell(run.outputCellId ?? actionCellId)
+      return {
+        ok: true,
+        message: `Extracted audio from ${sourceAddress}`,
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (actionCellId) setCellRunError(actionCellId, message)
+      setNotice(message, 'error')
+      return { ok: false, message }
+    } finally {
+      if (actionCellId) setCellQueued(actionCellId, false)
+      setBusy(false)
+    }
+  }
+
+  const runNotebookAudioCommandNow = async (
+    command: NotebookAudioCommand,
+  ): Promise<ComposerOutcome> => {
+    if (!bookId || !notebook) {
+      return { ok: false, message: 'Open a notebook before extracting audio.' }
+    }
+    try {
+      const currentNotebook = asNotebook(await call('get_notebook', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+      }))
+      if (!currentNotebook) {
+        throw new Error('The server returned an invalid notebook')
+      }
+      resolveNotebookAudioSource(
+        currentNotebook,
+        command.sourceReference,
+      )
+      setPendingCommandPlan(null)
+      setPendingChatAction(null)
+      return await executeNotebookAudioCommand(command, currentNotebook)
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
   const runNotebookFrameCommandNow = async (
     command: NotebookFrameCommand,
   ): Promise<ComposerOutcome> => {
@@ -6325,6 +6427,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         assetId.startsWith('@') ? assetId : `@${assetId}`,
         commandMentionAssets,
       ))[0] ?? null
+    }
+    if (plan.tool === 'extract_audio') {
+      const sourceReference = routedAssetReference(plan.params.asset_id)
+      if (!sourceReference) {
+        return { ok: false, message: 'Sol did not select a video source.' }
+      }
+      return await runNotebookAudioCommandNow({ sourceReference })
     }
     if (plan.tool === 'extract_first_frame' || plan.tool === 'extract_last_frame') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
@@ -6937,6 +7046,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         rest,
         commandMentionAssets,
       )
+      if (commandToken === '/extract-audio') {
+        if (!notebook || restParts.length !== 1) {
+          return { ok: false, message: 'Usage: /extract-audio @video' }
+        }
+        return await runNotebookAudioCommandNow({
+          sourceReference: normalizeNotebookReference(restParts[0]),
+        })
+      }
       if (commandToken === '/split') {
         const command = parseNotebookSplitCommand(input)
         if (!command) {

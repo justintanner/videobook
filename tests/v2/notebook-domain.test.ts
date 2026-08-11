@@ -435,20 +435,36 @@ describe('v2 notebook domain tools', () => {
     const sourceVideo = await createCell('video', 'vid-source', 0, 0)
     const sourceAudio = await createCell('audio', 'aud-source', 0, 1)
     const extractAudio = await createCell('extract_audio', 'extract-audio-source', 1, 0)
-    const audioOutput = await createCell('audio', 'aud-output', 2, 0)
-    const splitVideo = await createCell('split_video', 'split-video-source', 1, 1)
+    const audioOutput = extractAudio.output_cell!
+    const splitVideo = await createCell('split_video', 'split-video-source', 1, 2)
     const videoOutput = await createCell('video', 'vid-output', 2, 1)
-    const extractFrame = await createCell('extract_frame', 'extract-frame-source', 1, 2)
+    const extractFrame = await createCell('extract_frame', 'extract-frame-source', 1, 3)
     const imageOutput = extractFrame.output_cell!
     const invalidImage = await createCell('image', 'img-invalid', 3, 2)
 
     expect(extractAudio.operation).toBe('extract_audio')
+    expect(audioOutput).toMatchObject({
+      type: 'audio',
+      label: 'extract-audio-source output',
+      address: '@b2',
+      slot: { row: 1, column: 1 },
+      inputs: {
+        mediaRole: 'extract-audio-output',
+        producerCellId: extractAudio.id,
+        state: 'pending',
+      },
+    })
+    expect(extractAudio.output_edge).toMatchObject({
+      source: extractAudio.id,
+      target: audioOutput.id,
+      targetInput: 'media',
+    })
     expect(extractFrame.operation).toBe('extract_frame')
     expect(imageOutput).toMatchObject({
       type: 'image',
       label: 'extract-frame-source first frame',
-      address: '@b4',
-      slot: { row: 1, column: 3 },
+      address: '@b5',
+      slot: { row: 1, column: 4 },
       inputs: {
         mediaRole: 'extract-frame-output',
         producerCellId: extractFrame.id,
@@ -501,11 +517,6 @@ describe('v2 notebook domain tools', () => {
         source_cell_id: sourceVideo.id,
         target_cell_id: extractAudio.id,
         target_input: 'video',
-      },
-      {
-        source_cell_id: extractAudio.id,
-        target_cell_id: audioOutput.id,
-        target_input: 'media',
       },
       {
         source_cell_id: sourceVideo.id,

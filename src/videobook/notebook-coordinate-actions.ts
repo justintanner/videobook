@@ -158,6 +158,7 @@ export function planNotebookCoordinateAction(
         ? nextNotebookVideoGenerationSlot(document.cells)
         : parsed.cellType === 'generate_image'
           || parsed.cellType === 'extract_frame'
+          || parsed.cellType === 'extract_audio'
           ? nextNotebookHorizontalGenerationSlot(document.cells)
           : firstEmptyNotebookGridSlot(
             document.cells.map((cell) => cell.slot),

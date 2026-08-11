@@ -20,6 +20,7 @@ import {
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { mutateNotebook } from "../notebook-mutations.js";
 import {
+  ensureExtractAudioOutput,
   ensureExtractFrameImageOutput,
   ensureGenerateVideoOutput,
   extractFrameSelection,
@@ -2129,6 +2130,32 @@ export async function runNotebookCell(
   let normalizedDocument = normalizeLegacyAnalyzeDocument(document);
   let normalizedCell = normalizedDocument.cells.find((candidate) =>
     candidate.id === cell.id) ?? normalizeLegacyAnalyzeCell(cell);
+  const extractAudioOutput = normalizedCell.type === "extract_audio"
+    ? ensureExtractAudioOutput(
+        engine,
+        normalizedDocument,
+        normalizedCell.id,
+      )
+    : null;
+  if (extractAudioOutput && extractAudioOutput.document !== normalizedDocument) {
+    const repaired = await mutateNotebook(
+      engine,
+      notebookId,
+      "ensure_extract_audio_output",
+      (current) => ensureExtractAudioOutput(
+        engine,
+        current,
+        normalizedCell.id,
+      ).document,
+      { cellId: normalizedCell.id },
+    );
+    if (!repaired.ok) throw new Error(repaired.error.message);
+    const refreshed = engine.notebooks.read(notebookId);
+    if (!refreshed.ok) throw new Error(refreshed.error.message);
+    normalizedDocument = normalizeLegacyAnalyzeDocument(refreshed.value);
+    normalizedCell = normalizedDocument.cells.find((candidate) =>
+      candidate.id === cell.id) ?? normalizedCell;
+  }
   const extractFrameOutput = normalizedCell.type === "extract_frame"
     ? ensureExtractFrameImageOutput(
         engine,

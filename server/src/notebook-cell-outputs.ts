@@ -254,6 +254,105 @@ export function ensureExtractFrameImageOutput(
   };
 }
 
+function extractAudioOutputInputs(
+  cell: NotebookCell,
+  extractAudioCellId: string,
+): Record<string, unknown> {
+  return {
+    ...(cell.inputs ?? {}),
+    mediaRole: "extract-audio-output",
+    producerCellId: extractAudioCellId,
+  };
+}
+
+export function findExtractAudioOutput(
+  document: NotebookDocument,
+  extractAudioCellId: string,
+) {
+  for (const edge of document.edges) {
+    if (
+      edge.source !== extractAudioCellId
+      || edge.targetInput !== "media"
+    ) {
+      continue;
+    }
+    const outputCell = document.cells.find((cell) => cell.id === edge.target);
+    if (outputCell?.type === "audio") {
+      return { outputCell, outputEdge: edge };
+    }
+  }
+  return null;
+}
+
+export function ensureExtractAudioOutput(
+  engine: Engine,
+  document: NotebookDocument,
+  extractAudioCellId: string,
+) {
+  const extractAudio = document.cells.find((cell) =>
+    cell.id === extractAudioCellId);
+  if (extractAudio?.type !== "extract_audio") {
+    throw new Error(`Extract Audio cell not found: ${extractAudioCellId}`);
+  }
+  const existing = findExtractAudioOutput(document, extractAudioCellId);
+  if (existing) {
+    const inputs = extractAudioOutputInputs(
+      existing.outputCell,
+      extractAudioCellId,
+    );
+    const unchanged = existing.outputCell.inputs?.mediaRole
+        === "extract-audio-output"
+      && existing.outputCell.inputs?.producerCellId === extractAudioCellId;
+    if (unchanged) {
+      return { document, ...existing, created: false, updated: false };
+    }
+    const outputCell = { ...existing.outputCell, inputs };
+    return {
+      document: {
+        ...document,
+        cells: document.cells.map((cell) =>
+          cell.id === outputCell.id ? outputCell : cell),
+      },
+      outputCell,
+      outputEdge: existing.outputEdge,
+      created: false,
+      updated: true,
+    };
+  }
+  const occupied = document.cells.map((cell) => cell.slot);
+  const outputCell = engine.notebooks.createCell({
+    type: "audio",
+    label: `${extractAudio.label ?? notebookGridTag(extractAudio.slot)} output`,
+    slot: nextHorizontalSlotFrom({
+      row: extractAudio.slot.row,
+      column: Math.min(
+        extractAudio.slot.column + 1,
+        NOTEBOOK_GRID_COLUMN_COUNT - 1,
+      ),
+    }, occupied),
+    inputs: extractAudioOutputInputs(
+      { ...extractAudio, inputs: { state: "pending" } },
+      extractAudio.id,
+    ),
+  });
+  const outputEdge = engine.notebooks.createEdge({
+    source: extractAudio.id,
+    target: outputCell.id,
+    targetInput: "media",
+  });
+  return {
+    document: {
+      ...document,
+      cells: [...document.cells, outputCell],
+      edges: [...document.edges, outputEdge],
+    },
+    outputCell,
+    outputEdge,
+    created: true,
+    updated: false,
+  };
+}
+
 function generateVideoOutputInputs(
   cell: NotebookCell,
   generateVideoCellId: string,
