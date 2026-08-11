@@ -526,7 +526,17 @@ describe('chat composer browser flow', () => {
     expect(await addCell.getAttribute('aria-label')).toBe('Add cell')
     expect((await addCell.textContent())?.trim()).toBe('')
     await addCell.click()
-    await page.locator('.canvas-add-menu > div').waitFor({ state: 'visible' })
+    const addCellSearch = page.getByLabel('Search cell types')
+    await addCellSearch.waitFor({ state: 'visible' })
+    await expect.poll(async () =>
+      await addCellSearch.evaluate((element) => document.activeElement === element),
+    ).toBe(true)
+    await addCellSearch.fill('frame')
+    const addCellMenu = page.locator('.canvas-add-menu')
+    await addCellMenu.getByRole('button', { name: 'Extract frame' })
+      .waitFor({ state: 'visible' })
+    expect(await addCellMenu.getByRole('button', { name: 'Audio', exact: true }).count())
+      .toBe(0)
     await addCell.click()
 
     await page.getByLabel('Open inspector').click()
@@ -1489,5 +1499,26 @@ describe('chat composer browser flow', () => {
     const deleteCalls = observedCalls.filter((call) =>
       call.name === 'delete_notebook_cell')
     expect(deleteCalls).toHaveLength(2)
+  }, 60_000)
+
+  it('searches the header add menu and closes it after adding a cell', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+    const menu = page.locator('.canvas-add-menu')
+    await menu.locator('summary').click()
+    const search = page.getByLabel('Search cell types')
+    await search.fill('generate audio')
+    expect(await menu.getByRole('button').allTextContents()).toEqual(['Generate audio'])
+
+    observedCalls.length = 0
+    await menu.getByRole('button', { name: 'Generate audio' }).click()
+    await expect.poll(async () => await menu.getAttribute('open')).toBeNull()
+    await expect.poll(() => observedCalls.some((call) =>
+      call.name === 'create_notebook_cell'
+      && record(call.arguments.cell)?.type === 'generate_audio')).toBe(true)
   }, 60_000)
 })

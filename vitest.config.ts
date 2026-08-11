@@ -23,6 +23,7 @@ export default defineConfig({
       'src/videobook/notebook-routing.test.ts',
       'src/videobook/notebook-run-watch.test.ts',
       'src/videobook/notebook-cell-presentation.test.ts',
+      'src/videobook/notebook-cell-add-menu.test.ts',
       'src/videobook/notebook-coordinate-actions.test.ts',
       'src/videobook/command-plan.test.ts',
       'src/videobook/mvp-gates.test.ts',

@@ -115,6 +115,10 @@ import {
   type NotebookCellContextAction,
 } from '@/components/videobook/NotebookCellContextMenu'
 import { BookProjectSelector } from '@/components/videobook/BookProjectSelector'
+import {
+  NotebookCellAddMenu,
+} from '@/components/videobook/NotebookCellAddMenu'
+import { isNotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 import { VideoSplitReview } from '@/components/videobook/VideoSplitReview'
 import {
   CanonicalSequencePlayer,
@@ -564,35 +568,6 @@ const screenNavigation: Array<{
   { id: 'jobs', label: 'Jobs', icon: Activity },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
-
-const cellPalette: Array<{
-  type: NotebookCellType
-  label: string
-  group: 'Media' | 'Text & analysis' | 'Generation' | 'Edit'
-  icon: typeof BookOpen
-}> = [
-  { type: 'audio', label: 'Audio', group: 'Media', icon: AudioWaveform },
-  { type: 'image', label: 'Image', group: 'Media', icon: Image },
-  { type: 'video', label: 'Video', group: 'Media', icon: Video },
-  { type: 'character', label: 'Character', group: 'Media', icon: CircleDot },
-  { type: 'prompt', label: 'Prompt', group: 'Text & analysis', icon: BookOpen },
-  { type: 'analyze', label: 'Analyze', group: 'Text & analysis', icon: Activity },
-  { type: 'generate_video', label: 'Generate video', group: 'Generation', icon: Video },
-  { type: 'generate_image', label: 'Generate image', group: 'Generation', icon: Image },
-  { type: 'generate_audio', label: 'Generate audio', group: 'Generation', icon: AudioWaveform },
-  { type: 'extract_audio', label: 'Extract audio', group: 'Edit', icon: AudioWaveform },
-  { type: 'extract_frame', label: 'Extract frame', group: 'Edit', icon: Image },
-  { type: 'split_video', label: 'Split video', group: 'Edit', icon: Film },
-  { type: 'concat', label: 'Concat', group: 'Edit', icon: Film },
-  { type: 'splice', label: 'Splice', group: 'Edit', icon: Film },
-]
-
-const cellPaletteGroups = [
-  'Media',
-  'Text & analysis',
-  'Generation',
-  'Edit',
-] as const
 
 const notebookCellTypes = new Set<string>([
   'audio',
@@ -7485,13 +7460,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return
     }
     const raw = event.dataTransfer.getData('application/x-videobook-cell')
-    if (!cellPalette.some((item) => item.type === raw)) return
+    if (!isNotebookCellAddType(raw)) return
     const point = flowRef.current?.screenToFlowPosition({
       x: event.clientX,
       y: event.clientY,
     })
     setPreviewSlot(null)
-    void createCell(raw as NotebookCellType, point)
+    void createCell(raw, point)
   }
 
   const navigate = (next: Screen) => {
@@ -7944,34 +7919,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   <ZoomIn size={15} />
                 </button>
               </div>
-              <details className="canvas-add-menu">
-                <summary aria-label="Add cell" title="Add cell">
-                  <Plus size={15} />
-                </summary>
-                <div>
-                  {cellPaletteGroups.map((group) => (
-                    <section key={group} className="canvas-add-group">
-                      <span>{group}</span>
-                      {cellPalette.filter((item) => item.group === group).map((item) => {
-                        const Icon = item.icon
-                        return (
-                          <button
-                            key={item.type}
-                            type="button"
-                            draggable
-                            disabled={busy}
-                            onDragStart={(event) => event.dataTransfer.setData('application/x-videobook-cell', item.type)}
-                            onDragEnd={() => setPreviewSlot(null)}
-                            onClick={() => void createCell(item.type)}
-                          >
-                            <Icon size={15} /><span>{item.label}</span>
-                          </button>
-                        )
-                      })}
-                    </section>
-                  ))}
-                </div>
-              </details>
+              <NotebookCellAddMenu
+                disabled={busy}
+                onAdd={createCell}
+                onDragEnd={() => setPreviewSlot(null)}
+              />
               {selectedNotebookCells.length > 0 && (
                 <div
                   className="canvas-selection-actions"
