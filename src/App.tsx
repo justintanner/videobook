@@ -34,6 +34,7 @@ import {
   Braces,
   Check,
   CircleDot,
+  Ellipsis,
   Film,
   History,
   Image,
@@ -109,6 +110,10 @@ import {
 } from '@/components/videobook/GenerationChatReview'
 import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
 import { NotebookMediaFullscreen } from '@/components/videobook/NotebookMediaFullscreen'
+import {
+  NotebookCellContextMenu,
+  type NotebookCellContextAction,
+} from '@/components/videobook/NotebookCellContextMenu'
 import { BookProjectSelector } from '@/components/videobook/BookProjectSelector'
 import { VideoSplitReview } from '@/components/videobook/VideoSplitReview'
 import {
@@ -180,6 +185,7 @@ import {
   notebookAudioPresentation,
   notebookCellActionPresentation,
   notebookCellExecutionObservation,
+  notebookCellInspectorActionLabel,
   notebookCellIsActiveStatus,
   notebookCellMediaCaption,
   notebookCellRunObservation,
@@ -495,6 +501,21 @@ interface CanvasCellData extends NotebookCellData {
 
 type CanvasNode = Node<CanvasCellData>
 
+type CellContextMenuState = {
+  cellId: string
+  position: { x: number; y: number }
+  returnFocus: HTMLElement | null
+}
+
+type CellContextMenuContextValue = {
+  openCellId: string | null
+  open: (
+    cellId: string,
+    position: { x: number; y: number },
+    returnFocus: HTMLElement | null,
+  ) => void
+}
+
 const MediaSlotContext = createContext<MediaSlotContextValue>({
   states: {},
   onFile: () => undefined,
@@ -510,6 +531,10 @@ const PrimaryCellContext = createContext<string | null>(null)
 const GenerationTitlesContext = createContext<ReadonlyMap<string, string>>(
   new Map(),
 )
+const CellContextMenuContext = createContext<CellContextMenuContextValue>({
+  openCellId: null,
+  open: () => undefined,
+})
 
 const mcpUrl = typeof window === 'undefined'
   ? 'http://localhost/mcp'
@@ -1629,6 +1654,10 @@ function compactCellTypeLabel(kind: NotebookCellType): string {
   return cellTypeLabel(kind)
 }
 
+function cellContextMenuId(cellId: string): string {
+  return `cell-context-menu-${cellId}`
+}
+
 function emptyCellLabel(data: CanvasCellData): string {
   if (
     data.kind === 'generate_video'
@@ -2126,6 +2155,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const runCell = useContext(CellRunContext)
   const primaryCellId = useContext(PrimaryCellContext)
   const generationTitles = useContext(GenerationTitlesContext)
+  const contextMenu = useContext(CellContextMenuContext)
   const updateNodeInternals = useUpdateNodeInternals()
   const primarySelected = selected && primaryCellId === id
   const mediaUrl = data.asset?.mediaUrl
@@ -2243,6 +2273,14 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     1,
     outputVersions.indexOf(data.outputArtifactId ?? '') + 1,
   )
+  const contextMenuId = cellContextMenuId(id)
+  const openContextMenu = (
+    x: number,
+    y: number,
+    returnFocus: HTMLElement | null,
+  ) => {
+    contextMenu.open(id, { x, y }, returnFocus)
+  }
 
   return (
     <article
@@ -2262,6 +2300,31 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
       data-selection={primarySelected ? 'primary' : selected ? 'selected' : undefined}
       data-version-count={outputVersions.length}
       data-cell-status={data.status}
+      data-context-menu-open={contextMenu.openCellId === id ? 'true' : undefined}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        openContextMenu(
+          event.clientX,
+          event.clientY,
+          document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null,
+        )
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return
+        event.preventDefault()
+        event.stopPropagation()
+        const bounds = event.currentTarget.getBoundingClientRect()
+        openContextMenu(
+          bounds.left + Math.min(bounds.width - 12, 40),
+          bounds.top + 40,
+          document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null,
+        )
+      }}
     >
       {targetInputs.map((input, index) => (
         <Handle
@@ -2435,7 +2498,30 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         )}
         <footer className="cell-node-footer">
           <strong>{notebookGridTag(data.slot)}</strong>
-          <CellStatusBadge status={statusLabel} />
+          <span className="cell-node-footer-actions">
+            <CellStatusBadge status={statusLabel} />
+            <button
+              type="button"
+              className="cell-context-menu-trigger nodrag"
+              aria-label={`Open ${notebookGridTag(data.slot)} cell menu`}
+              aria-haspopup="menu"
+              aria-expanded={contextMenu.openCellId === id}
+              aria-controls={contextMenuId}
+              title="Cell actions"
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                const bounds = event.currentTarget.getBoundingClientRect()
+                openContextMenu(
+                  bounds.right - 4,
+                  bounds.bottom + 4,
+                  event.currentTarget,
+                )
+              }}
+            >
+              <Ellipsis size={16} aria-hidden="true" />
+            </button>
+          </span>
         </footer>
         <CellStateOverlay
           kind={data.kind}
@@ -2522,6 +2608,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [selectedCellIds, setSelectedCellIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
+  const [cellContextMenu, setCellContextMenu] = useState<CellContextMenuState | null>(null)
   const [queuedCellIds, setQueuedCellIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
@@ -2984,6 +3071,24 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     updateSelectedCellIds(cellId ? new Set([cellId]) : new Set())
   }, [updateSelectedCellIds])
 
+  const closeCellContextMenu = useCallback(() => {
+    setCellContextMenu(null)
+  }, [])
+
+  const openCellContextMenu = useCallback((
+    cellId: string,
+    position: { x: number; y: number },
+    returnFocus: HTMLElement | null,
+  ) => {
+    selectCanvasCell(cellId)
+    setCellContextMenu({ cellId, position, returnFocus })
+  }, [selectCanvasCell])
+
+  const cellContextMenuContextValue = useMemo<CellContextMenuContextValue>(() => ({
+    openCellId: cellContextMenu?.cellId ?? null,
+    open: openCellContextMenu,
+  }), [cellContextMenu?.cellId, openCellContextMenu])
+
   const applyNotebook = useCallback((
     next: NotebookDocument,
     nextAssets: AssetRecord[],
@@ -3009,6 +3114,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       [...selectedCellIdsRef.current].filter((cellId) => cellIds.has(cellId)),
     ))
     setMediaLibraryPicker((current) =>
+      current && cellIds.has(current.cellId) ? current : null)
+    setCellContextMenu((current) =>
       current && cellIds.has(current.cellId) ? current : null)
     setNodes((current) =>
       reconcileCanvasNodes(current, canvasNodes(next, nextAssets, nextJobs)))
@@ -7388,6 +7495,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const navigate = (next: Screen) => {
+    closeCellContextMenu()
     setScreen(next)
     if (next === 'settings') void refreshSettings()
     if ((next === 'library' || next === 'timeline' || next === 'jobs') && bookId) {
@@ -7573,6 +7681,203 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     )
   }
 
+  const openCellInspector = (cellId: string) => {
+    selectCanvasCell(cellId)
+    setSourceViewCellId(null)
+    setGenerationsViewCellId(null)
+    setInspectorOpen(true)
+  }
+
+  const openCellSource = (cellId: string) => {
+    selectCanvasCell(cellId)
+    setGenerationsViewCellId(null)
+    setSourceViewCellId(cellId)
+    setInspectorOpen(true)
+  }
+
+  const openCellGenerations = (cellId: string) => {
+    selectCanvasCell(cellId)
+    setSourceViewCellId(null)
+    setGenerationsViewCellId(cellId)
+    setInspectorOpen(true)
+    if (!notebook || !bookId) {
+      setGenerationsState({
+        cellId,
+        loading: false,
+        error: 'Notebook is unavailable',
+        attempts: [],
+        currentExecution: null,
+      })
+      return
+    }
+    setGenerationsState({
+      cellId,
+      loading: true,
+      error: null,
+      attempts: [],
+      currentExecution: null,
+    })
+    void call('list_cell_generations', {
+      book_id: bookId,
+      notebook_id: notebook.id,
+      cell_id: cellId,
+      limit: 20,
+    }, { background: true })
+      .then((payload) => {
+        const data = payload as {
+          attempts?: CellGenerationAttempt[]
+          currentExecution?: NotebookCellExecution | null
+        }
+        setGenerationsState((current) => current?.cellId === cellId
+          ? {
+              cellId,
+              loading: false,
+              error: null,
+              attempts: Array.isArray(data.attempts) ? data.attempts : [],
+              currentExecution: data.currentExecution ?? null,
+            }
+          : current)
+      })
+      .catch((cause: unknown) => {
+        setGenerationsState((current) => current?.cellId === cellId
+          ? {
+              cellId,
+              loading: false,
+              error: cause instanceof Error ? cause.message : String(cause),
+              attempts: [],
+              currentExecution: null,
+            }
+          : current)
+      })
+  }
+
+  const contextMenuCell = cellContextMenu
+    ? notebook?.cells.find((cell) => cell.id === cellContextMenu.cellId) ?? null
+    : null
+  const contextMenuNode = cellContextMenu
+    ? presentedNodes.find((node) => node.id === cellContextMenu.cellId) ?? null
+    : null
+  const contextMenuRunAction = contextMenuNode
+    ? notebookCellActionPresentation({
+        type: contextMenuNode.data.kind,
+        model: contextMenuNode.data.model,
+        operation: contextMenuNode.data.operation,
+        outputArtifactId: contextMenuNode.data.outputArtifactId,
+        tool: contextMenuNode.data.tool,
+      }, contextMenuNode.data.status)
+    : null
+  const contextMenuMediaKind = contextMenuCell
+    ? passiveMediaKind(contextMenuCell.type)
+    : null
+  const contextMenuEmptyMediaSlot = Boolean(
+    contextMenuCell
+    && contextMenuNode
+    && contextMenuMediaKind
+    && isEmptyPassiveMediaSlot(
+      contextMenuCell.type,
+      contextMenuCell.outputArtifactId,
+      contextMenuNode.data.targetConnectionCount ?? 0,
+    ),
+  )
+  const contextMenuVisualAsset = contextMenuNode?.data.asset
+    && contextMenuNode.data.asset.type !== 'audio'
+    && (contextMenuNode.data.asset.mediaUrl || contextMenuNode.data.asset.thumbnailUrl)
+    ? contextMenuNode.data.asset
+    : null
+  const contextMenuSplitSource = selectedCellId === cellContextMenu?.cellId
+    ? selectedSplitSource
+    : null
+  const contextMenuActions: NotebookCellContextAction[] = []
+  if (contextMenuCell && contextMenuNode) {
+    contextMenuActions.push({
+      id: 'inspect',
+      label: 'Edit cell',
+      icon: 'inspect',
+    })
+    if (contextMenuRunAction) {
+      contextMenuActions.push({
+        id: 'run',
+        label: notebookCellInspectorActionLabel(
+          contextMenuCell.type,
+          contextMenuRunAction.label,
+        ),
+        icon: 'run',
+        disabled: busy || contextMenuRunAction.disabled,
+      })
+    }
+    if (contextMenuEmptyMediaSlot) {
+      contextMenuActions.push({
+        id: 'library',
+        label: 'Choose media',
+        icon: 'library',
+        disabled: busy,
+      })
+    }
+    if (contextMenuVisualAsset) {
+      contextMenuActions.push({
+        id: 'media',
+        label: 'Open media',
+        icon: 'media',
+      })
+    }
+    if (contextMenuSplitSource) {
+      contextMenuActions.push({
+        id: 'split',
+        label: 'Split video',
+        icon: 'split',
+        disabled: busy,
+      })
+    }
+    contextMenuActions.push(
+      {
+        id: 'generations',
+        label: 'View generations',
+        icon: 'generations',
+      },
+      {
+        id: 'source',
+        label: 'View source',
+        icon: 'source',
+      },
+    )
+  }
+  const handleCellContextAction = (actionId: string) => {
+    if (!contextMenuCell) return
+    if (actionId === 'inspect') {
+      openCellInspector(contextMenuCell.id)
+      return
+    }
+    if (actionId === 'run') {
+      void runCell(contextMenuCell.id)
+      return
+    }
+    if (actionId === 'library') {
+      openMediaLibrary(contextMenuCell.id)
+      return
+    }
+    if (actionId === 'media') {
+      setFullscreenCellId(contextMenuCell.id)
+      return
+    }
+    if (actionId === 'split' && contextMenuSplitSource) {
+      void previewNotebookSplitCommand({
+        sourceReference: contextMenuSplitSource.source.id,
+        cutPointsSeconds: [],
+      }).then((outcome) => {
+        if (!outcome.ok) setNotice(outcome.message, 'error')
+      })
+      return
+    }
+    if (actionId === 'generations') {
+      openCellGenerations(contextMenuCell.id)
+      return
+    }
+    if (actionId === 'source') openCellSource(contextMenuCell.id)
+  }
+  const deleteContextMenuCell = () => {
+    if (contextMenuCell) void deleteNotebookCells([contextMenuCell])
+  }
+
   return (
     <main
       className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} ${selectedCell ? 'inspector-detail' : 'inspector-overview'} ${fullscreenCell && fullscreenNode?.data.asset ? 'media-fullscreen-open' : ''}`}
@@ -7739,7 +8044,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         <CellRunContext.Provider value={runCell}>
                           <PrimaryCellContext.Provider value={selectedCellId}>
                             <GenerationTitlesContext.Provider value={generationTitleByTool}>
-                            <ReactFlow<CanvasNode, NotebookFlowEdge>
+                              <CellContextMenuContext.Provider value={cellContextMenuContextValue}>
+                                <ReactFlow<CanvasNode, NotebookFlowEdge>
                           className="notebook-flow"
                       nodes={canvasPresentationNodes}
                       edges={focusedEdges}
@@ -7796,10 +8102,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         setInspectorOpen(true)
                       }}
                       onPaneClick={() => {
+                        closeCellContextMenu()
                         selectCanvasCell(null)
                         setSourceViewCellId(null)
                       }}
                       onNodeDrag={(_event, node) => {
+                        closeCellContextMenu()
                         setPreviewSlot(notebookGridSlot(node.position))
                       }}
                       onNodeDragStop={(_event, node, draggedNodes) => {
@@ -7844,7 +8152,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                               mediaDropActive={mediaDropActive && !busy}
                               mediaDropSlot={mediaDropSlot}
                             />
-                            </ReactFlow>
+                                </ReactFlow>
+                              </CellContextMenuContext.Provider>
                             </GenerationTitlesContext.Provider>
                           </PrimaryCellContext.Provider>
                         </CellRunContext.Provider>
@@ -7937,64 +8246,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                             : 'View generations'}
                           aria-pressed={generationsViewCellId === selectedCell.id}
                           onClick={() => {
-                            setSourceViewCellId(null)
                             if (generationsViewCellId === selectedCell.id) {
                               setGenerationsViewCellId(null)
                               return
                             }
-                            const targetCellId = selectedCell.id
-                            setGenerationsViewCellId(targetCellId)
-                            if (!notebook || !bookId) {
-                              setGenerationsState({
-                                cellId: targetCellId,
-                                loading: false,
-                                error: 'Notebook is unavailable',
-                                attempts: [],
-                                currentExecution: null,
-                              })
-                              return
-                            }
-                            setGenerationsState({
-                              cellId: targetCellId,
-                              loading: true,
-                              error: null,
-                              attempts: [],
-                              currentExecution: null,
-                            })
-                            void call('list_cell_generations', {
-                              book_id: bookId,
-                              notebook_id: notebook.id,
-                              cell_id: targetCellId,
-                              limit: 20,
-                            }, { background: true })
-                              .then((payload) => {
-                                const data = payload as {
-                                  attempts?: NonNullable<
-                                    typeof generationsState
-                                  >['attempts']
-                                  currentExecution?: NotebookCellExecution | null
-                                }
-                                setGenerationsState({
-                                  cellId: targetCellId,
-                                  loading: false,
-                                  error: null,
-                                  attempts: Array.isArray(data.attempts)
-                                    ? data.attempts
-                                    : [],
-                                  currentExecution: data.currentExecution ?? null,
-                                })
-                              })
-                              .catch((cause) => {
-                                setGenerationsState({
-                                  cellId: targetCellId,
-                                  loading: false,
-                                  error: cause instanceof Error
-                                    ? cause.message
-                                    : String(cause),
-                                  attempts: [],
-                                  currentExecution: null,
-                                })
-                              })
+                            openCellGenerations(selectedCell.id)
                           }}
                         >
                           <History size={15} />
@@ -8012,9 +8268,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                             : 'View source'}
                           aria-pressed={sourceViewCellId === selectedCell.id}
                           onClick={() => {
-                            setGenerationsViewCellId(null)
-                            setSourceViewCellId((current) =>
-                              current === selectedCell.id ? null : selectedCell.id)
+                            if (sourceViewCellId === selectedCell.id) {
+                              setSourceViewCellId(null)
+                              return
+                            }
+                            openCellSource(selectedCell.id)
                           }}
                         >
                           <Braces size={15} />
@@ -8878,6 +9136,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             </section>
           )}
       </>
+
+      {cellContextMenu && contextMenuCell && (
+        <NotebookCellContextMenu
+          actions={contextMenuActions}
+          address={notebookGridTag(contextMenuCell.slot)}
+          cellType={cellTypeLabel(contextMenuCell.type)}
+          deleteDisabled={busy || deletingCellIds.has(contextMenuCell.id)}
+          menuId={cellContextMenuId(contextMenuCell.id)}
+          position={cellContextMenu.position}
+          returnFocus={cellContextMenu.returnFocus}
+          onAction={handleCellContextAction}
+          onClose={closeCellContextMenu}
+          onDelete={deleteContextMenuCell}
+        />
+      )}
 
       {mediaLibraryPicker && mediaLibraryKind && (
         <MediaLibraryDialog

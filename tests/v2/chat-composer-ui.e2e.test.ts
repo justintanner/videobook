@@ -1245,6 +1245,139 @@ describe('chat composer browser flow', () => {
     expect(await notebookCellNode(page, videoCellId).count()).toBe(1)
   }, 60_000)
 
+  it('opens a complete context menu from every cell tile with delete last', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+    const cells = page.locator('.cell-node')
+    const triggers = page.locator('.cell-context-menu-trigger')
+    await expect.poll(async () => await triggers.count()).toBe(await cells.count())
+
+    const target = notebookCellNode(page, directVideoGenerationCellId)
+    await target.waitFor({ state: 'visible' })
+    const address = (await target.locator('.cell-node-footer strong').textContent())?.trim()
+    if (!address) throw new Error('Context menu target address is missing')
+
+    await target.click({ button: 'right' })
+    const menu = page.getByRole('menu', { name: `Cell actions for ${address}` })
+    await menu.waitFor({ state: 'visible' })
+    expect(await target.getAttribute('data-selection')).toBe('primary')
+    const itemLabels = (await menu.getByRole('menuitem').allTextContents())
+      .map((label) => label.replace('⌫', '').trim())
+    expect(itemLabels).toEqual([
+      'Edit cell',
+      'Generate',
+      'View generations',
+      'View source',
+      'Delete cell',
+    ])
+    expect(await menu.locator('.cell-context-menu-danger').evaluate((element) =>
+      getComputedStyle(element).borderTopStyle)).toBe('solid')
+    const menuBox = await menu.boundingBox()
+    if (!menuBox) throw new Error('Could not measure cell context menu')
+    expect(menuBox.x).toBeGreaterThanOrEqual(8)
+    expect(menuBox.y).toBeGreaterThanOrEqual(8)
+    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(1432)
+    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(992)
+
+    await page.keyboard.press('Escape')
+    await menu.waitFor({ state: 'hidden' })
+
+    const trigger = target.getByLabel(`Open ${address} cell menu`)
+    await trigger.focus()
+    await page.keyboard.press('Enter')
+    await menu.waitFor({ state: 'visible' })
+    await expect.poll(async () => await menu.getByRole('menuitem').first()
+      .evaluate((element) => document.activeElement === element)).toBe(true)
+    await page.keyboard.press('End')
+    expect(await menu.getByRole('menuitem').last().evaluate((element) =>
+      document.activeElement === element)).toBe(true)
+    await page.keyboard.press('Escape')
+    await menu.waitFor({ state: 'hidden' })
+    expect(await trigger.evaluate((element) => document.activeElement === element))
+      .toBe(true)
+
+    observedCalls.length = 0
+    await trigger.click()
+    await menu.waitFor({ state: 'visible' })
+    const cancelledDelete = new Promise<string>((resolve) => {
+      page!.once('dialog', async (dialog) => {
+        resolve(dialog.message())
+        await dialog.dismiss()
+      })
+    })
+    await menu.getByRole('menuitem', { name: /Delete cell/ }).click()
+    expect(await cancelledDelete).toContain(`Delete ${address}?`)
+    expect(observedCalls.some((call) => call.name === 'delete_notebook_cell'))
+      .toBe(false)
+    expect(await target.count()).toBe(1)
+
+    const videoTarget = notebookCellNode(page, videoCellId)
+    const videoAddress = (await videoTarget.locator('.cell-node-footer strong')
+      .textContent())?.trim()
+    if (!videoAddress) throw new Error('Video context menu address is missing')
+    await videoTarget.click({ button: 'right' })
+    const videoMenu = page.getByRole('menu', {
+      name: `Cell actions for ${videoAddress}`,
+    })
+    await videoMenu.waitFor({ state: 'visible' })
+    expect((await videoMenu.getByRole('menuitem').allTextContents())
+      .map((label) => label.replace('⌫', '').trim())).toEqual([
+      'Edit cell',
+      'Open media',
+      'Split video',
+      'View generations',
+      'View source',
+      'Delete cell',
+    ])
+    await videoMenu.getByRole('menuitem', { name: 'Open media' }).click()
+    const fullscreen = page.getByRole('dialog', {
+      name: `Fullscreen preview for ${videoAddress}`,
+    })
+    await fullscreen.waitFor({ state: 'visible' })
+    await page.getByLabel('Close fullscreen preview').click()
+    await fullscreen.waitFor({ state: 'hidden' })
+
+    const emptyMediaTarget = notebookCellNode(page, imageCellId)
+    const emptyMediaAddress = (await emptyMediaTarget
+      .locator('.cell-node-footer strong').textContent())?.trim()
+    if (!emptyMediaAddress) throw new Error('Empty media context menu address is missing')
+    await emptyMediaTarget.click({ button: 'right' })
+    const emptyMediaMenu = page.getByRole('menu', {
+      name: `Cell actions for ${emptyMediaAddress}`,
+    })
+    await emptyMediaMenu.waitFor({ state: 'visible' })
+    expect((await emptyMediaMenu.getByRole('menuitem').allTextContents())
+      .map((label) => label.replace('⌫', '').trim())).toEqual([
+      'Edit cell',
+      'Choose media',
+      'View generations',
+      'View source',
+      'Delete cell',
+    ])
+    await emptyMediaMenu.getByRole('menuitem', { name: 'Choose media' }).click()
+    const mediaLibrary = page.getByRole('dialog', { name: 'Choose image media' })
+    await mediaLibrary.waitFor({ state: 'visible' })
+    await page.getByLabel('Close media library').click()
+    await mediaLibrary.waitFor({ state: 'hidden' })
+
+    const runningTarget = notebookCellNode(page, generationCellId)
+    const runningAddress = (await runningTarget.locator('.cell-node-footer strong')
+      .textContent())?.trim()
+    if (!runningAddress) throw new Error('Running cell context menu address is missing')
+    await runningTarget.getByLabel(`Open ${runningAddress} cell menu`).click()
+    const runningMenu = page.getByRole('menu', {
+      name: `Cell actions for ${runningAddress}`,
+    })
+    await runningMenu.waitFor({ state: 'visible' })
+    expect(await runningMenu.locator('[data-cell-action="run"]').isDisabled())
+      .toBe(true)
+    await page.keyboard.press('Escape')
+  }, 60_000)
+
   it('marquee-selects multiple cells and confirms before deleting the set', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await page.goto(appUrl, { waitUntil: 'commit' })

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { canonicalHash, parseOtp, verifyOtp } from "@apicity/cost";
+import { canonicalHash, computeEstimate, parseOtp, verifyOtp } from "@apicity/cost";
 import { ensurePaygateSecret, KIE_PAYGATE_DOT_PATH, mintKieOtp } from "./kie-paygate.js";
 import { buildGrokImagineT2vVideoPayload } from "../payload-builders.js";
 
@@ -188,7 +188,8 @@ describe("kie paygate", () => {
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
-  it("fails closed for Seedance 2.5 until @apicity/cost registers pricing", () => {
+  it("mints a request-bound OTP when Seedance 2.5 pricing is unavailable", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
     const request = {
       model: "bytedance/seedance-2-5" as const,
       input: {
@@ -197,10 +198,18 @@ describe("kie paygate", () => {
         duration: 30,
       },
     };
+    const estimate = computeEstimate({ provider: "kie", payload: request });
 
-    expect(() => mintKieOtp(request, 60)).toThrow(
-      /cost estimate is not bounded.*bytedance\/seedance-2-5/,
-    );
+    expect(estimate).toMatchObject({
+      usd: 0,
+      warnings: [
+        "model 'bytedance/seedance-2-5' not found in pricing table for provider 'kie'",
+      ],
+    });
+    const otp = mintKieOtp(request, 60);
+    const parsed = parseOtp(otp);
+
+    expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
   // vc-3vn2: missing resolution + reference_video_urls → variant 'video' (unbounded).

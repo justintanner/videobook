@@ -1968,6 +1968,166 @@ textarea:focus-visible {
   white-space: normal;
 }
 
+.cell-node-footer-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.cell-context-menu-trigger {
+  position: relative;
+  z-index: 24;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #789d88;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.72;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease,
+    background 120ms ease,
+    opacity 120ms ease;
+}
+
+.cell-node:hover .cell-context-menu-trigger,
+.cell-context-menu-trigger:focus-visible,
+.cell-context-menu-trigger[aria-expanded='true'] {
+  border-color: rgba(114, 231, 170, 0.28);
+  color: #c7e6d2;
+  background: rgba(37, 104, 66, 0.18);
+  opacity: 1;
+  outline: 0;
+}
+
+.cell-context-menu {
+  position: fixed;
+  z-index: 180;
+  display: grid;
+  width: min(224px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  padding: 6px;
+  overflow: auto;
+  border: 1px solid rgba(114, 231, 170, 0.38);
+  border-radius: 6px;
+  color: #d9f6e6;
+  background: rgba(3, 14, 9, 0.985);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.62),
+    0 0 18px rgba(64, 179, 111, 0.1);
+  backdrop-filter: blur(10px);
+  animation: cell-context-menu-in 110ms ease-out;
+}
+
+@keyframes cell-context-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.cell-context-menu-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+  padding: 3px 8px 7px;
+  color: #789d88;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cell-context-menu-heading strong {
+  color: var(--cyan);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.cell-context-menu-heading span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-context-menu-actions,
+.cell-context-menu-danger {
+  display: grid;
+  gap: 2px;
+}
+
+.cell-context-menu button {
+  display: grid;
+  width: 100%;
+  min-height: 36px;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 4px;
+  color: #b9dac7;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cell-context-menu button:hover,
+.cell-context-menu button:focus-visible {
+  color: #effff5;
+  background: rgba(56, 139, 91, 0.24);
+  outline: 0;
+}
+
+.cell-context-menu button:disabled {
+  color: #4d6958;
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.cell-context-menu button:disabled:hover {
+  background: transparent;
+}
+
+.cell-context-menu-danger {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(232, 111, 111, 0.22);
+}
+
+.cell-context-menu-danger button {
+  color: #efaaaa;
+}
+
+.cell-context-menu-danger button:hover,
+.cell-context-menu-danger button:focus-visible {
+  color: #ffd1d1;
+  background: rgba(153, 52, 52, 0.2);
+}
+
+.cell-context-menu kbd {
+  color: #789d88;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 10px;
+}
+
 .cell-generation-chips,
 .cell-media-chips {
   display: inline-flex;

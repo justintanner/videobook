@@ -42,6 +42,12 @@ function writeKey(path: string, content: string, mode: number): void {
   }
 }
 
+function hasOnlyMissingPricingWarnings(warnings: readonly string[]): boolean {
+  return warnings.length > 0 && warnings.every((warning) =>
+    /^model '.+' not found in pricing table for provider '.+'$/.test(warning)
+  );
+}
+
 export function ensurePaygateSecret(): string {
   const configuredSecret = process.env.APICITY_PAYGATE_SECRET?.trim();
   if (configuredSecret) return configuredSecret;
@@ -71,12 +77,9 @@ export function mintKieOtp(
     payload,
     costHints: toUpstreamCostHints(costHints),
   });
-  // Fail closed only when the table cannot price the payload at all (usd 0
-  // with warnings: unknown model, underivable units). A positive estimate that
-  // still warns is a floor the package stands behind — e.g. grok-imagine/
-  // upscale, priced at its lowest published tier while higher tiers exist that
-  // no request field can select — so admit it.
-  if (estimate.warnings.length > 0 && estimate.usd <= 0) {
+  const missingPricing = estimate.usd === 0
+    && hasOnlyMissingPricingWarnings(estimate.warnings);
+  if (estimate.warnings.length > 0 && estimate.usd <= 0 && !missingPricing) {
     throw new Error(`KIE cost estimate is not bounded: ${estimate.warnings.join("; ")}`);
   }
 
