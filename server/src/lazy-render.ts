@@ -3,11 +3,10 @@ import type {
   BackgroundMode,
   FontSizePreset,
   Orientation,
-  OsgPosition,
-  OsgSize,
   SubtitlePosition,
   SubtitleStyle,
 } from "./remotion/subtitles/types.js";
+import { isOsgPosition, isOsgSize } from "./osg-assets.js";
 import { queue } from "./queue.js";
 import { readTimeline } from "./timeline-helpers.js";
 import { isLanguageSetting } from "./jobs/_translate-transcript.js";
@@ -42,20 +41,6 @@ function isSubtitlePosition(value: unknown): value is SubtitlePosition {
 }
 
 function isFontSizePreset(value: unknown): value is FontSizePreset {
-  return value === "small" || value === "medium" || value === "large";
-}
-
-const OSG_POSITIONS: readonly OsgPosition[] = [
-  "top-left", "top-center", "top-right",
-  "middle-left", "middle-center", "middle-right",
-  "bottom-left", "bottom-center", "bottom-right",
-];
-
-function isOsgPosition(value: unknown): value is OsgPosition {
-  return OSG_POSITIONS.includes(value as OsgPosition);
-}
-
-function isOsgSize(value: unknown): value is OsgSize {
   return value === "small" || value === "medium" || value === "large";
 }
 
@@ -187,6 +172,7 @@ export async function enqueueLazyTimelineRender(
     osgPosition: isOsgPosition(stored.osgPosition) ? stored.osgPosition : "top-right",
     osgSize: isOsgSize(stored.osgSize) ? stored.osgSize : "medium",
     osgScale: numberOr(stored.osgScale, 1),
+    osgOpacity: numberOr(stored.osgOpacity, 1),
     osgStartSeconds: typeof stored.osgStartSeconds === "number" ? stored.osgStartSeconds : null,
     osgEndSeconds: typeof stored.osgEndSeconds === "number" ? stored.osgEndSeconds : null,
     osgTailSeconds: typeof stored.osgTailSeconds === "number" ? stored.osgTailSeconds : null,

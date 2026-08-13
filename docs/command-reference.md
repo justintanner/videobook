@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (298)
+## MCP endpoints (299)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -10,6 +10,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `animate_keywords` — Configure transcript-timed keyword graphics for a video. Extracts exact word-time frames and waits for vision-guided placement that avoids faces, subtitles, and existing text or graphics. Pass keywords for exact transcript words, or omit them for automatic selection. Renders cinematic white serif over-the-shoulder titles. Use enabled=false to turn them off.
 - `apply_cuts` — Splice out one or more time ranges from a video asset in-place. Operates via ffmpeg concat-splice; re-runs process_video downstream so frames, transcripts, and analyses are regenerated. Pair with /suggest-cuts to source ranges, or hand-pick them.
 - `apply_sfx` — Generate sound effects via ElevenLabs text-to-sound-effects and mix them onto a video asset's audio track in-place. Each entry yields one discrete SFX cue at `duration_seconds`, mixed at the given timestamp. Re-runs process_video downstream. Pair with /suggest-sfx to source entries.
+- `apply_watermark` — Apply a faint floating QR + @handle watermark to a video: builds (or reuses) the badge image, picks the least-busy corner via frame analysis, and burns the badge into the video at 50% opacity so the clip visibly updates. Pass mode=overlay to only store render-time overlay settings instead.
 - `archive_clip` — Materialize a full URL or existing video/audio asset in the rebuildable global archive cache (B2 if configured, otherwise local), dedupe by media SHA-256, and transcribe long clips in chunks. Book-owned semantic links remain in artifact metadata.
 - `asset_history` — Get immutable Dolt revision history for an asset
 - `asset_manifest` — List all files in an asset directory
@@ -43,7 +44,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `create_qr_outro` — Build a standalone animated outro from 1-4 QR image assets with configurable duration and optional impact audio.
 - `create_qrbtf` — Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) from the qrbtf library. Renders SVG and rasterizes to image assets. Black background with bright modules by default.
 - `create_scene_entity` — Create a reusable scene
-- `create_watermark_card` — Generate a black-and-white QR + 'X: <handle>' watermark card and store it as an image artifact. Apply it via the on-screen graphic (OSG) settings during render.
+- `create_watermark_card` — Generate a compact transparent QR + 'X: <handle>' watermark badge and store it as an image artifact. Apply it as a faint floating watermark via apply_watermark, or manually via the on-screen graphic (OSG) settings.
 - `crop_image` — Crop an image asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source image (0..1). Replaces original in place with canonical dims (1920x1080 / 1080x1920 / 1080x1080) and regenerates derived crops with git versioning.
 - `crop_video` — Crop a video asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source frame (0..1). Re-renders in place to canonical dims (1920x1080 / 1080x1920 / 1080x1080) with git versioning.
 - `delete_asset` — Delete an artifact and remove its stable timeline references
@@ -60,7 +61,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `disconnect_notebook_cells` — Delete a notebook edge
 - `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from Dolt history. A bare fix:true scan never bulk-fixes; it just reports.
 - `download_video` — Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.
-- `duplicate_asset` — Duplicate an asset within the same project
+- `duplicate_asset` — Duplicate a media asset and place its notebook cell at an optional destination or directly below the source
 - `enqueue_notebook_run` — Revalidate and enqueue a persisted aggregate workbook plan
 - `enqueue_sequence_export` — Queue a confirmed canonical sequence export after revalidating its exact revision
 - `ensure_notebook_workflow_scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists
@@ -339,7 +340,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/diagnostics` — Open MCP, catalog, CAS, and publication diagnostics; UI: `open_diagnostics`
 - `/doctor` — Diagnose project health across all asset types (broken + stuck assets). Add an asset and 'fix' to restore that asset to its last usable state.; MCP: `doctor`
 - `/download` — Download video from URL; MCP: `download_video`
-- `/duplicate` — Duplicate an asset; MCP: `duplicate_asset`
+- `/duplicate` — Duplicate an asset into an optional notebook destination; MCP: `duplicate_asset`
 - `/entities` — Open the reusable entity library; UI: `open_entities`
 - `/expand` — Expand the asset/clip sidebars; UI: `sidebar_expand`
 - `/export` — Export asset to Downloads folder; MCP: `export_to_downloads`
@@ -424,5 +425,5 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/upload` — Upload a file; UI: `open_upload`
 - `/vocals` — Isolate vocals from audio; MCP: `isolate_vocals`
 - `/voices` — List available ElevenLabs voices; UI: `show_voices`
-- `/watermark` — Open the watermark dialog to add a QR + 'X: <handle>' end-card to a video (shows over the last 2 seconds at render); UI: `open_watermark`
+- `/watermark` — Open the watermark dialog to burn a faint floating QR + @handle watermark into a video (whole clip, auto-placed in the least-busy corner); UI: `open_watermark`
 - `/<project-name>` — Switch to that project; generated dynamically for each project whose name does not conflict with a command or alias.

@@ -134,6 +134,7 @@ export type OsgSummary = {
   position: string;
   size: string;
   scale: number;
+  opacity: number;
   startSeconds: number | null;
   endSeconds: number | null;
 };
@@ -318,6 +319,7 @@ export async function readOsgSummary(
       position: typeof meta.value.osgPosition === "string" ? meta.value.osgPosition : "top-right",
       size: typeof meta.value.osgSize === "string" ? meta.value.osgSize : "medium",
       scale: typeof meta.value.osgScale === "number" ? meta.value.osgScale : 1,
+      opacity: typeof meta.value.osgOpacity === "number" ? meta.value.osgOpacity : 1,
       startSeconds: typeof meta.value.osgStartSeconds === "number" ? meta.value.osgStartSeconds : null,
       endSeconds: typeof meta.value.osgEndSeconds === "number" ? meta.value.osgEndSeconds : null,
     };
@@ -484,7 +486,9 @@ const BASE_DEFAULTS: Record<string, unknown> = {
   osgImagePath: null,
   osgAssetId: null,
   osgPosition: "top-right",
+  osgSize: "medium",
   osgScale: 1,
+  osgOpacity: 1,
   osgStartSeconds: null,
   osgEndSeconds: null,
   osgTailSeconds: null,
@@ -537,7 +541,11 @@ export async function readStoredRenderDefaults(
 }
 
 const VALID_SUB_POSITIONS = new Set(["top", "middle", "bottom"]);
-const VALID_OSG_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "bottom-right"]);
+const VALID_OSG_POSITIONS = new Set([
+  "top-left", "top-center", "top-right",
+  "middle-left", "middle-center", "middle-right",
+  "bottom-left", "bottom-center", "bottom-right",
+]);
 
 async function readAnalysisRecommendations(
   fs: Engine, assetId: string, _bookId: string,

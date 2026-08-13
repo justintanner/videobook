@@ -1,7 +1,8 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
-import { RENDER_ORIENTATIONS } from "./sync.js";
+import type { Orientation, OsgPosition } from "../remotion/subtitles/types.js";
+import { writeOsgSettings } from "../osg-settings.js";
 
 const OSG_POSITIONS = [
   "top-left", "top-center", "top-right",
@@ -9,12 +10,15 @@ const OSG_POSITIONS = [
   "bottom-left", "bottom-center", "bottom-right",
 ] as const;
 
+const positionEnum = z.enum(OSG_POSITIONS);
+
 /**
  * Persist OSG (on-screen graphic) overlay settings for a video asset WITHOUT
- * triggering a render. The OSG positioning overlay (client `OsgOverlay`) applies
- * here; the render path later reads these fields from the asset's `.render`
- * metadata. We merge into every orientation's metadata so the badge + render
- * stay consistent regardless of which orientation is rendered.
+ * triggering a render. The render path later reads these fields from the
+ * asset's `.render` metadata. We merge into every orientation's metadata so
+ * the badge + render stay consistent regardless of which orientation is
+ * rendered; `osg_positions` lets frame-aware callers store a different anchor
+ * per orientation.
  */
 export function setVideoOverlayDef(fs: Engine): ToolDef {
   return {
@@ -28,7 +32,15 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
         .string()
         .nullable()
         .describe("Image asset ID (img- prefix) for the overlay, or null to clear the OSG"),
-      osg_position: z.enum(OSG_POSITIONS).describe("Anchor position (default top-right)"),
+      osg_position: positionEnum.describe("Anchor position (default top-right)"),
+      osg_positions: z
+        .object({
+          landscape: positionEnum.optional(),
+          portrait: positionEnum.optional(),
+          square: positionEnum.optional(),
+        })
+        .optional()
+        .describe("Per-orientation anchor overrides; unlisted orientations use osg_position"),
       osg_size: z.enum(["small", "medium", "large"]).describe("Size preset"),
       osg_scale: z
         .number()
@@ -36,6 +48,12 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
         .max(2)
         .optional()
         .describe("Size multiplier applied on top of osg_size (default 1)"),
+      osg_opacity: z
+        .number()
+        .min(0.05)
+        .max(1)
+        .optional()
+        .describe("Overlay opacity 0.05-1; the floating watermark uses 0.5 (default 1)"),
       osg_start_seconds: z
         .number()
         .min(0)
@@ -61,8 +79,10 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
         book_id: _book_id,
         osg_asset_id,
         osg_position,
+        osg_positions,
         osg_size,
         osg_scale,
+        osg_opacity,
         osg_start_seconds,
         osg_end_seconds,
         osg_tail_seconds,
@@ -70,9 +90,11 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
         asset_id: string;
         book_id: string;
         osg_asset_id: string | null;
-        osg_position: (typeof OSG_POSITIONS)[number];
+        osg_position: OsgPosition;
+        osg_positions?: Partial<Record<Orientation, OsgPosition>>;
         osg_size: "small" | "medium" | "large";
         osg_scale?: number;
+        osg_opacity?: number;
         osg_start_seconds?: number | null;
         osg_end_seconds?: number | null;
         osg_tail_seconds?: number | null;
@@ -80,19 +102,18 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
 
       const clearing = osg_asset_id == null;
 
-      for (const orient of RENDER_ORIENTATIONS) {
-        const existing = await fs.metadata.artifacts.read<Record<string, unknown>>(asset_id, `${orient}.render`
-        );
-        const base = existing.ok ? existing.value : {};
+      const written = await writeOsgSettings(fs, asset_id, (orientation, base) => {
         const merged: Record<string, unknown> = {
-          ...base,
           // osgAssetId is canonical; null out the legacy osgImagePath so a stale
           // path can't override a cleared/changed asset id at render time.
           osgImagePath: null,
           osgAssetId: clearing ? null : osg_asset_id,
-          osgPosition: osg_position,
+          osgPosition: osg_positions?.[orientation] ?? osg_position,
           osgSize: osg_size,
           osgScale: osg_scale ?? (typeof base.osgScale === "number" ? base.osgScale : 1),
+          osgOpacity: clearing
+            ? 1
+            : osg_opacity ?? (typeof base.osgOpacity === "number" ? base.osgOpacity : 1),
         };
         if (osg_start_seconds !== undefined) {
           merged.osgStartSeconds = clearing ? null : osg_start_seconds;
@@ -111,7 +132,13 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
         } else if (clearing || windowProvided) {
           merged.osgTailSeconds = null;
         }
-        await fs.metadata.artifacts.write(asset_id, `${orient}.render`, merged);
+        return merged;
+      });
+      if (!written.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: written.error }],
+        };
       }
 
       return {
@@ -125,8 +152,10 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
                 : {
                     assetId: osg_asset_id,
                     position: osg_position,
+                    positions: osg_positions ?? null,
                     size: osg_size,
                     scale: osg_scale ?? 1,
+                    opacity: osg_opacity ?? 1,
                   },
             }),
           },

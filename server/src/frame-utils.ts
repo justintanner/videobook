@@ -1,3 +1,9 @@
+export function sampleEvenly<T>(items: T[], max: number): T[] {
+  if (items.length <= max) return items;
+  const step = (items.length - 1) / (max - 1);
+  return Array.from({ length: max }, (_, i) => items[Math.round(i * step)]);
+}
+
 function calculateFrameCount(duration: number): number {
   const interval = duration <= 10 ? 2.0 : 5.0;
   const count = Math.floor(duration / interval);

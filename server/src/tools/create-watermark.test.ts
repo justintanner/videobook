@@ -4,9 +4,20 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import sharp from "sharp";
+import jsQR from "jsqr";
 import { createTestClient } from "../test-client.js";
 import { readWatermarkConfig } from "../watermark-config.js";
+import { BADGE_HEIGHT, BADGE_WIDTH, WATERMARK_BADGE_LAYOUT } from "../watermark-badge.js";
 import type { Client } from "@modelcontextprotocol/client";
+
+async function decodeQr(png: Buffer): Promise<string | null> {
+  const { data, info } = await sharp(png)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const decoded = jsQR(new Uint8ClampedArray(data), info.width, info.height);
+  return decoded?.data ?? null;
+}
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -74,10 +85,18 @@ describe("create_watermark tool", () => {
     if (!read.ok) return;
     const buffer = Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
     const metadata = await sharp(buffer).metadata();
-    // TILE 272 (QR 240 + 2*TILE_PAD 16) + 2*OUTER_PAD 24 = 320 wide;
-    // OUTER_PAD 24 + HEADER 40 + GAP 18 + TILE 272 + OUTER_PAD 24 = 378 tall.
-    expect(metadata.width).toBe(320);
-    expect(metadata.height).toBe(378);
+    // TILE 480 (QR 384 + 2*TILE_PAD 48) wide; TILE 480 + GAP 12 + PILL 88 tall.
+    expect(metadata.width).toBe(BADGE_WIDTH);
+    expect(metadata.height).toBe(BADGE_HEIGHT);
+    // The floating badge sits on a transparent canvas.
+    expect(metadata.hasAlpha).toBe(true);
+
+    // The ECC-H QR must decode to the handle's URL.
+    expect(await decodeQr(buffer)).toBe("https://x.com/someone");
+
+    const originalMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(parsed.asset_id, "original");
+    expect(originalMeta.ok && originalMeta.value.layout).toBe(WATERMARK_BADGE_LAYOUT);
+    expect(originalMeta.ok && originalMeta.value.origin).toBe("watermark");
   });
 
   it("defaults the handle and derives the X URL", async () => {

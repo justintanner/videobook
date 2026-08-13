@@ -110,6 +110,9 @@ import {
 } from '@/components/videobook/GenerationChatReview'
 import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
 import { NotebookMediaFullscreen } from '@/components/videobook/NotebookMediaFullscreen'
+import { WatermarkDialog } from '@/components/videobook/WatermarkDialog'
+import type { WatermarkDialogState } from '@/components/videobook/WatermarkDialog'
+import { resolveWatermarkTarget } from './videobook/watermark-target'
 import {
   NotebookCellContextMenu,
   type NotebookCellContextAction,
@@ -494,6 +497,7 @@ const supportedUiActions = new Set([
   'open_notebook',
   'open_projects',
   'open_provider_keys',
+  'open_watermark',
 ])
 
 interface CanvasCellData extends NotebookCellData {
@@ -2601,6 +2605,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [mediaSlotStates, setMediaSlotStates] = useState<Record<string, MediaSlotState>>({})
   const [cellRunErrors, setCellRunErrors] = useState<Record<string, string>>({})
   const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
+  const [watermarkDialog, setWatermarkDialog] = useState<WatermarkDialogState | null>(null)
   const momentSearchRef = useRef<MomentSearchHandle | null>(null)
   const [fullscreenCellId, setFullscreenCellId] = useState<string | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
@@ -2669,6 +2674,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const recorderChunksRef = useRef<Blob[]>([])
   const mediaLibraryRequestRef = useRef(0)
   const mediaLibraryOpenerRef = useRef<HTMLElement | null>(null)
+  const watermarkOpenerRef = useRef<HTMLElement | null>(null)
   const activeWatchesRef = useRef(new Map<string, string>())
   const activeMcpCallsRef = useRef(new Map<number, { tool: string; startedAt: number }>())
   const mcpActivitySequenceRef = useRef(0)
@@ -4985,6 +4991,88 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? { ...current, activeArtifactId: null, error: message }
           : current)
       setNotice(message, 'error')
+    }
+  }
+
+  const closeWatermarkDialog = () => {
+    setWatermarkDialog(null)
+    const opener = watermarkOpenerRef.current
+    watermarkOpenerRef.current = null
+    if (opener?.isConnected) window.setTimeout(() => opener.focus(), 0)
+  }
+
+  const openWatermarkDialog = (assetId: string, targetLabel: string) => {
+    watermarkOpenerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    setWatermarkDialog({
+      assetId,
+      targetLabel,
+      handle: '',
+      url: '',
+      saveDefault: false,
+      recent: [],
+      loadingConfig: true,
+      submitting: false,
+      error: null,
+    })
+    void (async () => {
+      try {
+        const config = record(await call('get_watermark_config', {}, { background: true }))
+        const savedHandle = asString(config?.savedHandle)
+        const authenticatedHandle = asString(config?.authenticatedHandle)
+        const recent = Array.isArray(config?.recent)
+          ? config.recent.filter((entry): entry is string => typeof entry === 'string')
+          : []
+        setWatermarkDialog((current) =>
+          current && current.assetId === assetId
+            ? {
+                ...current,
+                handle: current.handle || (savedHandle ?? authenticatedHandle ?? recent[0] ?? ''),
+                recent,
+                loadingConfig: false,
+              }
+            : current)
+      } catch {
+        setWatermarkDialog((current) =>
+          current && current.assetId === assetId
+            ? { ...current, loadingConfig: false }
+            : current)
+      }
+    })()
+  }
+
+  const submitWatermark = async () => {
+    if (!bookId || !watermarkDialog) return
+    const { assetId, handle, url, saveDefault } = watermarkDialog
+    const trimmedHandle = handle.replace(/^@/, '').trim()
+    if (!trimmedHandle) return
+    setWatermarkDialog((current) =>
+      current && current.assetId === assetId
+        ? { ...current, submitting: true, error: null }
+        : current)
+    try {
+      const result = record(await call('apply_watermark', {
+        book_id: bookId,
+        asset_id: assetId,
+        handle: trimmedHandle,
+        ...(url.trim() ? { url: url.trim() } : {}),
+        ...(saveDefault ? { save_default: true } : {}),
+      }))
+      const source = asString(result?.placement_source)
+      const corner = asString(result?.position)
+      const frameAware = source === 'vision' || source === 'cached' ? ' (frame-aware)' : ''
+      await refreshBookData(bookId, notebook?.id)
+      setNotice(corner
+        ? `Watermark @${trimmedHandle} burned in — ${corner}${frameAware}.`
+        : `Watermark @${trimmedHandle} applied${frameAware}.`)
+      closeWatermarkDialog()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setWatermarkDialog((current) =>
+        current && current.assetId === assetId
+          ? { ...current, submitting: false, error: message }
+          : current)
     }
   }
 
@@ -7454,6 +7542,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         await refreshSettings()
         return { ok: true, message: 'Settings opened' }
       }
+      if (command.uiAction === 'open_watermark') {
+        // The uiAction chain runs before the shared arg parse, so parse here.
+        const parsed = parseCommandArgs(resolvedRest, command.params)
+        const target = resolveWatermarkTarget(
+          asString(parsed.asset_ref) ?? undefined,
+          selectedNotebookCell,
+          assets,
+          new Map(commandMentionAssets.map((asset) => [asset.artifactId, asset.cellAddress])),
+        )
+        if (!target.ok) return { ok: false, message: target.message }
+        openWatermarkDialog(target.artifactId, target.label)
+        return { ok: true, message: `Watermark dialog opened for ${target.label}` }
+      }
       if (!command.mcpTool) return { ok: false, message: `${command.command} is available from its workspace.` }
       if (command.mcpTool.tool === 'download_video' && !notebook) {
         return { ok: false, message: 'Open a notebook before downloading media.' }
@@ -9337,6 +9438,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onReferenceDuration={(value) => setMediaLibraryPicker((current) =>
             current ? { ...current, referenceDurationSeconds: value } : current)}
           onSimilar={(asset) => void prepareMediaLibrarySimilar(asset)}
+        />
+      )}
+
+      {watermarkDialog && (
+        <WatermarkDialog
+          state={watermarkDialog}
+          onHandle={(value) => setWatermarkDialog((current) =>
+            current ? { ...current, handle: value, error: null } : current)}
+          onUrl={(value) => setWatermarkDialog((current) =>
+            current ? { ...current, url: value, error: null } : current)}
+          onSaveDefault={(value) => setWatermarkDialog((current) =>
+            current ? { ...current, saveDefault: value } : current)}
+          onSubmit={() => void submitWatermark()}
+          onClose={closeWatermarkDialog}
         />
       )}
 

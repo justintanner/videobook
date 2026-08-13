@@ -143,7 +143,7 @@ export function keywordLayout(
   };
 }
 
-function clampRect(rect: NormalizedRect): NormalizedRect {
+export function clampRect(rect: NormalizedRect): NormalizedRect {
   const x = Math.max(0, Math.min(1, rect.x));
   const y = Math.max(0, Math.min(1, rect.y));
   return {
@@ -154,7 +154,7 @@ function clampRect(rect: NormalizedRect): NormalizedRect {
   };
 }
 
-function expandRect(rect: NormalizedRect, margin: number): NormalizedRect {
+export function expandRect(rect: NormalizedRect, margin: number): NormalizedRect {
   return clampRect({
     x: rect.x - margin,
     y: rect.y - margin,
@@ -163,17 +163,23 @@ function expandRect(rect: NormalizedRect, margin: number): NormalizedRect {
   });
 }
 
-function intersects(a: NormalizedRect, b: NormalizedRect): boolean {
+export function intersects(a: NormalizedRect, b: NormalizedRect): boolean {
   return a.x < b.x + b.width
     && a.x + a.width > b.x
     && a.y < b.y + b.height
     && a.y + a.height > b.y;
 }
 
-function rectGap(a: NormalizedRect, b: NormalizedRect): number {
+export function rectGap(a: NormalizedRect, b: NormalizedRect): number {
   const dx = Math.max(a.x - (b.x + b.width), b.x - (a.x + a.width), 0);
   const dy = Math.max(a.y - (b.y + b.height), b.y - (a.y + a.height), 0);
   return Math.hypot(dx, dy);
+}
+
+export function intersectionArea(a: NormalizedRect, b: NormalizedRect): number {
+  const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+  const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+  return width > 0 && height > 0 ? width * height : 0;
 }
 
 export function mapSourceRectToTarget(
@@ -204,7 +210,7 @@ export function mapSourceRectToTarget(
   });
 }
 
-function subtitleBand(
+export function subtitleBand(
   orientation: Orientation,
   targetWidth: number,
   targetHeight: number,

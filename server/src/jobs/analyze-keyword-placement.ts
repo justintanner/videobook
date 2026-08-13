@@ -1,17 +1,11 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { OpenAiResponseInputContent } from "@apicity/openai";
 import type { Engine } from "videobook-engine";
 import sharp from "sharp";
-import { z } from "zod";
 import { getApiKey } from "../api-key.js";
 import { runFfmpeg, probeVideo } from "../ffmpeg.js";
-import {
-  buildIntelligenceResponses,
-  firstResponseText,
-  intelligenceRequest,
-} from "../openai-intelligence.js";
+import { detectOccupiedRegions } from "../vision-regions.js";
 import { writeKeywordPlacementAnalysis } from "../keyword-placement-cache.js";
 import { registerJobHandler } from "../queue.js";
 import {
@@ -53,60 +47,6 @@ export interface ExtractedKeywordFrame {
 export interface AnalyzeKeywordPlacementResult {
   analysis: KeywordPlacementAnalysis;
 }
-
-const VISION_JSON_SCHEMA = {
-  type: "object",
-  required: ["frames"],
-  additionalProperties: false,
-  properties: {
-    frames: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["cue_id", "occupied_regions"],
-        additionalProperties: false,
-        properties: {
-          cue_id: { type: "string" },
-          occupied_regions: {
-            type: "array",
-            items: {
-              type: "object",
-              required: ["kind", "confidence", "x", "y", "width", "height"],
-              additionalProperties: false,
-              properties: {
-                kind: { type: "string", enum: ["face", "text", "graphic"] },
-                confidence: { type: "number", minimum: 0, maximum: 1 },
-                x: { type: "number", minimum: 0, maximum: 1000 },
-                y: { type: "number", minimum: 0, maximum: 1000 },
-                width: { type: "number", minimum: 0.001, maximum: 1000 },
-                height: { type: "number", minimum: 0.001, maximum: 1000 },
-              },
-            },
-          },
-        },
-      },
-    },
-  },
-} as const;
-
-const regionSchema = z.object({
-  kind: z.enum(["face", "text", "graphic"]),
-  confidence: z.number().min(0).max(1),
-  x: z.number().min(0).max(1000),
-  y: z.number().min(0).max(1000),
-  width: z.number().positive().max(1000),
-  height: z.number().positive().max(1000),
-}).strict().refine(
-  (region) => region.x + region.width <= 1000.001 && region.y + region.height <= 1000.001,
-  { message: "occupied region extends beyond the frame" },
-);
-
-const visionOutputSchema = z.object({
-  frames: z.array(z.object({
-    cue_id: z.string().min(1),
-    occupied_regions: z.array(regionSchema),
-  }).strict()),
-}).strict();
 
 const SYSTEM_PROMPT = `You are a precise video-layout analyst. Each attached image is a frame extracted at the exact midpoint of a spoken keyword.
 
@@ -203,70 +143,27 @@ export async function extractKeywordFrames(
   }
 }
 
-function parseVisionRegions(
-  raw: string,
-  frames: ExtractedKeywordFrame[],
-): Map<string, KeywordOccupiedRegion[]> {
-  let parsed: z.infer<typeof visionOutputSchema>;
-  try {
-    parsed = visionOutputSchema.parse(JSON.parse(raw));
-  } catch (error) {
-    throw new Error(`Keyword placement vision response was invalid: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  const expected = frames.map((frame) => frame.cueId);
-  const actual = parsed.frames.map((frame) => frame.cue_id);
-  if (actual.length !== expected.length
-    || new Set(actual).size !== actual.length
-    || expected.some((cueId) => !actual.includes(cueId))) {
-    throw new Error("Keyword placement vision response did not contain exactly one result per cue");
-  }
-  return new Map(parsed.frames.map((frame) => [
-    frame.cue_id,
-    frame.occupied_regions.map((region): KeywordOccupiedRegion => ({
-      kind: region.kind,
-      confidence: region.confidence,
-      x: region.x / 1000,
-      y: region.y / 1000,
-      width: region.width / 1000,
-      height: region.height / 1000,
-    })),
-  ]));
-}
-
 async function analyzeFrames(
   frames: ExtractedKeywordFrame[],
   apiKey: string,
   signal: AbortSignal,
 ): Promise<Map<string, KeywordOccupiedRegion[]>> {
-  const content: OpenAiResponseInputContent[] = [];
-  for (const frame of frames) {
-    content.push(
-      {
-        type: "input_text",
-        text: `cue_id=${frame.cueId}; keyword=${frame.text}; timestamp=${frame.frameTime.toFixed(3)}s`,
-      },
-      {
-        type: "input_image",
-        image_url: `data:image/jpeg;base64,${frame.buffer.toString("base64")}`,
-        detail: "high",
-      },
-    );
-  }
-  const responses = buildIntelligenceResponses(apiKey, { timeout: 240_000 });
-  const response = await responses(intelligenceRequest({
-    instructions: SYSTEM_PROMPT,
-    input: [{ role: "user", content }],
-    text: {
-      format: {
-        type: "json_schema",
-        name: "keyword_placement_analysis",
-        schema: VISION_JSON_SCHEMA,
-        strict: true,
-      },
+  return detectOccupiedRegions(
+    frames.map((frame) => ({
+      id: frame.cueId,
+      label: `keyword=${frame.text}; timestamp=${frame.frameTime.toFixed(3)}s`,
+      buffer: frame.buffer,
+    })),
+    {
+      apiKey,
+      signal,
+      instructions: SYSTEM_PROMPT,
+      schemaName: "keyword_placement_analysis",
+      errorLabel: "Keyword placement",
+      timeout: 240_000,
+      maxOutputTokens: 8192,
     },
-    max_output_tokens: 8192,
-  }), signal);
-  return parseVisionRegions(firstResponseText(response), frames);
+  );
 }
 
 async function writeContactSheetIfChanged(

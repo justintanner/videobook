@@ -87,6 +87,101 @@ describe("render tool", () => {
     expect(payload.audioFadeOut).toBe(300);
   });
 
+  async function createWatermarkImageAsset(): Promise<string> {
+    const created = await fs.artifacts.create("img", "badge");
+    if (!created.ok) throw new Error(created.error.message);
+    const assetId = created.value.artifactId;
+    // Alphabetically the cover-crop preview sorts before the transparent
+    // source; the resolver must still pick original.png.
+    for (const name of ["landscape.jpg", "original.png", "portrait.jpg", "square.jpg"]) {
+      const write = await fs.files.write(assetId, name, Buffer.from(`fake-${name}`));
+      if (!write.ok) throw new Error(write.error.message);
+    }
+    return assetId;
+  }
+
+  it("resolves the OSG image to the original file, not a preview variant", async () => {
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const assetId = await createVideoAsset();
+    const osgAssetId = await createWatermarkImageAsset();
+
+    const result = await client.callTool({
+      name: "render_video",
+      arguments: {
+        asset_id: assetId,
+        book_id: bookId,
+        orientation: "landscape",
+        osg_asset_id: osgAssetId,
+        osg_opacity: 0.5,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = enqueue.mock.calls[0][1];
+    expect(String(payload.osgImagePath)).toMatch(/original\.png$/);
+    expect(payload.osgAssetId).toBe(osgAssetId);
+    expect(payload.osgOpacity).toBe(0.5);
+  });
+
+  it("falls back to stored per-orientation OSG settings when args omit them", async () => {
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const assetId = await createVideoAsset();
+    const osgAssetId = await createWatermarkImageAsset();
+
+    const overlay = await client.callTool({
+      name: "set_video_overlay",
+      arguments: {
+        asset_id: assetId,
+        book_id: bookId,
+        osg_asset_id: osgAssetId,
+        osg_position: "top-right",
+        osg_positions: { landscape: "bottom-left", portrait: "top-left" },
+        osg_size: "medium",
+        osg_scale: 0.8,
+        osg_opacity: 0.5,
+      },
+    });
+    expect(overlay.isError).toBeFalsy();
+
+    const result = await client.callTool({
+      name: "render_video",
+      arguments: { asset_id: assetId, book_id: bookId },
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(enqueue).toHaveBeenCalledTimes(3);
+    const byOrientation = new Map(enqueue.mock.calls.map((call) => [call[1].orientation, call[1]]));
+    for (const [orientation, expected] of [
+      ["landscape", "bottom-left"],
+      ["portrait", "top-left"],
+      ["square", "top-right"],
+    ] as const) {
+      const payload = byOrientation.get(orientation);
+      expect(payload.osgAssetId).toBe(osgAssetId);
+      expect(String(payload.osgImagePath)).toMatch(/original\.png$/);
+      expect(payload.osgPosition).toBe(expected);
+      expect(payload.osgScale).toBe(0.8);
+      expect(payload.osgOpacity).toBe(0.5);
+    }
+  });
+
+  it("renders without an OSG when nothing is stored", async () => {
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const assetId = await createVideoAsset();
+
+    const result = await client.callTool({
+      name: "render_video",
+      arguments: { asset_id: assetId, book_id: bookId, orientation: "landscape" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = enqueue.mock.calls[0][1];
+    expect(payload.osgAssetId).toBeNull();
+    expect(payload.osgImagePath).toBeNull();
+    expect(payload.osgPosition).toBe("top-right");
+    expect(payload.osgOpacity).toBe(1);
+  });
+
   it("clears a stale error row so a re-render can claim the asset", async () => {
     vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createVideoAsset();

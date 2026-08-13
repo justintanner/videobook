@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { OpenAiResponseInputContent } from "@apicity/openai";
 import { registerJobHandler, queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
+import { sampleEvenly } from "../frame-utils.js";
 import {
   buildIntelligenceResponses,
   firstResponseText,
@@ -139,11 +140,7 @@ const ANALYZE_VIDEO_JSON_SCHEMA = {
 } as const;
 
 function sampleFrames(frames: string[]): string[] {
-  if (frames.length <= MAX_FRAMES) return frames;
-  const step = (frames.length - 1) / (MAX_FRAMES - 1);
-  return Array.from({ length: MAX_FRAMES }, (_, i) =>
-    frames[Math.round(i * step)]
-  );
+  return sampleEvenly(frames, MAX_FRAMES);
 }
 
 export function registerAnalyzeVideoJob(fs: Engine): void {

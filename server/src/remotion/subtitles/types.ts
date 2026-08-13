@@ -79,6 +79,7 @@ export interface RenderInputProps extends Record<string, unknown> {
   osgPosition: OsgPosition;
   osgSize: OsgSize;
   osgScale: number;
+  osgOpacity: number;
   osgStartSeconds: number | null;
   osgEndSeconds: number | null;
   osgTailSeconds: number | null;

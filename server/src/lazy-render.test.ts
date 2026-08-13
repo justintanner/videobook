@@ -128,6 +128,29 @@ describe("enqueueLazyTimelineRender", () => {
     expect(payload.audioFadeOut).toBe(300);
   });
 
+  it("carries stored watermark OSG settings through to the render payload", async () => {
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const assetId = await createVideoAsset();
+    await fs.metadata.artifacts.write(assetId, "portrait.render", {
+      osgAssetId: "img-badge",
+      osgPosition: "bottom-left",
+      osgSize: "medium",
+      osgScale: 1.1429,
+      osgOpacity: 0.5,
+      osgTailSeconds: null,
+    });
+    await setTimelineSlot(fs, assetId, "portrait");
+
+    await enqueueLazyTimelineRender(fs, bookId, assetId);
+
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    const payload = enqueue.mock.calls[0][1];
+    expect(payload.osgAssetId).toBe("img-badge");
+    expect(payload.osgPosition).toBe("bottom-left");
+    expect(payload.osgScale).toBe(1.1429);
+    expect(payload.osgOpacity).toBe(0.5);
+  });
+
   it("carries a stored subtitleLanguage through to the render payload", async () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createVideoAsset();

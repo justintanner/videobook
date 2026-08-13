@@ -57,7 +57,14 @@ describe("set_osg tool", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.osg).toEqual({ assetId: "img-logo", position: "bottom-right", size: "large", scale: 1.5 });
+    expect(parsed.osg).toEqual({
+      assetId: "img-logo",
+      position: "bottom-right",
+      positions: null,
+      size: "large",
+      scale: 1.5,
+      opacity: 1,
+    });
 
     for (const orient of ORIENTATIONS) {
       const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
@@ -66,8 +73,67 @@ describe("set_osg tool", () => {
       expect(meta.value.osgPosition).toBe("bottom-right");
       expect(meta.value.osgSize).toBe("large");
       expect(meta.value.osgScale).toBe(1.5);
+      expect(meta.value.osgOpacity).toBe(1);
       // Legacy path must be nulled so it can't override the canonical asset id.
       expect(meta.value.osgImagePath).toBeNull();
+    }
+  });
+
+  it("persists per-orientation positions and opacity", async () => {
+    const assetId = await createVideoAsset();
+
+    const result = await client.callTool({
+      name: "set_video_overlay",
+      arguments: {
+        asset_id: assetId,
+        book_id: bookId,
+        osg_asset_id: "img-badge",
+        osg_position: "top-right",
+        osg_positions: { portrait: "bottom-left", square: "top-left" },
+        osg_size: "medium",
+        osg_opacity: 0.5,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const expected = { landscape: "top-right", portrait: "bottom-left", square: "top-left" } as const;
+    for (const orient of ORIENTATIONS) {
+      const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
+      if (!meta.ok) throw new Error(`missing ${orient}.render`);
+      expect(meta.value.osgPosition).toBe(expected[orient]);
+      expect(meta.value.osgOpacity).toBe(0.5);
+    }
+  });
+
+  it("resets opacity to 1 when the osg is cleared", async () => {
+    const assetId = await createVideoAsset();
+    await client.callTool({
+      name: "set_video_overlay",
+      arguments: {
+        asset_id: assetId,
+        book_id: bookId,
+        osg_asset_id: "img-logo",
+        osg_position: "top-right",
+        osg_size: "medium",
+        osg_opacity: 0.4,
+      },
+    });
+
+    await client.callTool({
+      name: "set_video_overlay",
+      arguments: {
+        asset_id: assetId,
+        book_id: bookId,
+        osg_asset_id: null,
+        osg_position: "top-right",
+        osg_size: "medium",
+      },
+    });
+
+    for (const orient of ORIENTATIONS) {
+      const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
+      if (!meta.ok) throw new Error(`missing ${orient}.render`);
+      expect(meta.value.osgOpacity).toBe(1);
     }
   });
 

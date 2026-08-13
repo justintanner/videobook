@@ -24,6 +24,7 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
   osgPosition,
   osgSize,
   osgScale,
+  osgOpacity,
   osgStartSeconds,
   osgEndSeconds,
   osgTailSeconds,
@@ -65,6 +66,7 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
           position={osgPosition}
           size={osgSize}
           scale={osgScale}
+          opacity={osgOpacity}
           startSeconds={osgStartSeconds}
           endSeconds={osgEndSeconds}
           tailSeconds={osgTailSeconds}

@@ -22,6 +22,7 @@ import type {
 } from "../remotion/subtitles/types.js";
 import { requireApiKey } from "../api-key.js";
 import { buildIntelligenceResponses } from "../openai-intelligence.js";
+import { resolveOsgImagePath } from "../osg-assets.js";
 import { claimLockedLease } from "./_lease.js";
 import { ensureElevenLabsTranscript } from "./_transcribe.js";
 import { ingestWorkspaceOutputs } from "./_persist-output.js";
@@ -85,6 +86,7 @@ type RenderProjectPayload = {
   osgPosition: OsgPosition;
   osgSize: OsgSize;
   osgScale?: number;
+  osgOpacity?: number;
   osgStartSeconds?: number | null;
   osgEndSeconds?: number | null;
   osgTailSeconds?: number | null;
@@ -165,11 +167,12 @@ export function registerRenderProjectJob(fs: Engine): void {
       audioFadeIn,
       audioFadeOut,
       audioVolume,
-      osgImagePath,
+      osgImagePath: payloadOsgImagePath,
       osgAssetId,
       osgPosition,
       osgSize,
       osgScale,
+      osgOpacity,
       osgStartSeconds,
       osgEndSeconds,
       osgTailSeconds,
@@ -194,6 +197,19 @@ export function registerRenderProjectJob(fs: Engine): void {
       : orientation === "square"
         ? "square.mp4"
         : "landscape.mp4";
+
+    // The stored-settings path (set_video_overlay → lazy render) carries only
+    // osgAssetId; resolve it to a file at run time so the overlay actually
+    // renders — and so the path survives file moves between enqueue and run.
+    let osgImagePath = payloadOsgImagePath;
+    if (!osgImagePath && osgAssetId) {
+      const resolved = await resolveOsgImagePath(fs, osgAssetId);
+      if (resolved.ok) {
+        osgImagePath = resolved.path;
+      } else {
+        console.warn(`[render] OSG asset ${osgAssetId} skipped: ${resolved.error}`);
+      }
+    }
 
     // Copy OSG image into bundle dir once if provided
     let osgCopyName: string | null = null;
@@ -345,6 +361,7 @@ export function registerRenderProjectJob(fs: Engine): void {
                 osgPosition: osgPosition ?? "top-right",
                 osgSize: osgSize ?? "medium",
                 osgScale: osgScale ?? 1,
+                osgOpacity: osgOpacity ?? 1,
                 osgStartSeconds: osgStartSeconds ?? null,
                 osgEndSeconds: osgEndSeconds ?? null,
                 osgTailSeconds: osgTailSeconds ?? null,
@@ -453,6 +470,7 @@ export function registerRenderProjectJob(fs: Engine): void {
                 osgPosition,
                 osgSize,
                 osgScale: osgScale ?? 1,
+                osgOpacity: osgOpacity ?? 1,
                 osgStartSeconds: osgStartSeconds ?? null,
                 osgEndSeconds: osgEndSeconds ?? null,
                 osgTailSeconds: osgTailSeconds ?? null,

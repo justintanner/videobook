@@ -299,6 +299,7 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "update_timeline_audio", exposure: "ui", command: "/audio-set", purpose: "Update timeline audio settings" },
   { tool: "get_render_settings", exposure: "ui", command: "/settings", purpose: "Read render settings" },
   { tool: "create_watermark_card", exposure: "composite", command: "/watermark", purpose: "Create and apply a watermark card" },
+  { tool: "apply_watermark", exposure: "composite", command: "/watermark", purpose: "Apply a faint floating frame-aware watermark" },
 ];
 
 function inferredExposure(command: Command): Exclude<CommandExposure, "internal"> {

@@ -83,6 +83,8 @@ import { registerProcessAudioJob } from "./process-audio.js";
 import { registerTranscribeVideoAudioJob } from "./transcribe-video-audio.js";
 import { registerAnalyzeVideoJob } from "./analyze-video.js";
 import { registerAnalyzeKeywordPlacementJob } from "./analyze-keyword-placement.js";
+import { registerOsgPlacementJob } from "./osg-placement.js";
+import { registerBurnWatermarkJob } from "./burn-watermark.js";
 import { registerSuggestCutsJob } from "./suggest-cuts.js";
 import { registerSuggestSfxJob } from "./suggest-sfx.js";
 import { registerAnalyzeJokesJob } from "./analyze-jokes.js";
@@ -228,6 +230,8 @@ export function registerAllJobHandlers(
   registerTranscribeVideoAudioJob(fs);
   registerAnalyzeVideoJob(fs);
   registerAnalyzeKeywordPlacementJob(fs);
+  registerOsgPlacementJob(fs);
+  registerBurnWatermarkJob(fs);
   registerSuggestCutsJob(fs);
   registerSuggestSfxJob(fs);
   registerAnalyzeJokesJob(fs);

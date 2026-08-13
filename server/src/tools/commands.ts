@@ -503,7 +503,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/watermark",
-    description: "Open the watermark dialog to add a QR + 'X: <handle>' end-card to a video (shows over the last 2 seconds at render)",
+    description: "Open the watermark dialog to burn a faint floating QR + @handle watermark into a video (whole clip, auto-placed in the least-busy corner)",
     example: "/watermark @a1",
     category: "viewer",
     icon: "QrCode",

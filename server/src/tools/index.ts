@@ -215,6 +215,7 @@ import { estimateCostDef } from "./estimate-cost.js";
 import { postDef } from "./post.js";
 import { xConnectStartDef, xConnectStatusDef } from "./connect-x.js";
 import { createWatermarkCardDef } from "./create-watermark.js";
+import { applyWatermarkDef } from "./apply-watermark.js";
 import { createQrOutroDef } from "./create-qr-outro.js";
 import { createQartDef } from "./create-qart.js";
 import { createQrbtfDef } from "./create-qrbtf.js";
@@ -275,6 +276,7 @@ export function getVideoEditingToolDefs(fs: Engine): ToolDef[] {
     updateTimelineAudioDef(fs),
     getRenderSettingsDef(fs),
     createWatermarkCardDef(fs),
+    applyWatermarkDef(fs),
   ];
 }
 
