@@ -42,6 +42,7 @@ import {
 import {
   notebookGridAddress,
 } from "videobook-engine/notebook-grid";
+import { replaceNotebookMentions } from "videobook-engine/notebook-mentions";
 import { resolveNotebookPromptReferences } from "../notebook-reference-resolver.js";
 
 type ChatDecision = {
@@ -86,6 +87,23 @@ const chatActionPlanSchema = z.object({
 
 const CHAT_ROUTING_MAX_OUTPUT_TOKENS = 2048;
 const CHAT_ROUTING_TIMEOUT_MS = 45_000;
+const NOTEBOOK_DESTINATION_SOURCE = "[a-z](?:1[0-3]|[1-9])";
+
+function duplicateDestinationReference(prompt: string): string | null {
+  if (!/\b(?:copy|duplicate)\b/iu.test(prompt)) return null;
+  const explicit = new RegExp(
+    `\\b(?:at|in|into|to)\\s+@(${NOTEBOOK_DESTINATION_SOURCE})(?![\\w-])`,
+    "iu",
+  ).exec(prompt);
+  if (explicit?.[1]) return explicit[1].toLowerCase();
+  const mentions = [...prompt.matchAll(new RegExp(
+    `@(${NOTEBOOK_DESTINATION_SOURCE})(?![\\w-])`,
+    "giu",
+  ))];
+  return mentions.length > 1
+    ? mentions.at(-1)?.[1]?.toLowerCase() ?? null
+    : null;
+}
 
 export type ChatResolvedAsset = ResolvedArtifactRef;
 
@@ -389,7 +407,9 @@ function appendChatHistory(
 }
 
 function autoApplyReason(tool: string): string {
-  return tool === "extract_audio"
+  return tool === "duplicate_asset"
+    ? "Duplication is reversible and only adds a copied asset and cell"
+    : tool === "extract_audio"
     ? "Audio extraction is free, local, and only adds derived media"
     : "Frame extraction is free and only adds a new image cell";
 }
@@ -432,7 +452,7 @@ async function applyChatActionPlan(
   return result;
 }
 
-export { chatActionPlanSchema };
+export { chatActionPlanSchema, duplicateDestinationReference };
 export type { ChatActionPlan };
 
 export function chatDef(fs: Engine): ToolDef {
@@ -480,13 +500,25 @@ export function chatDef(fs: Engine): ToolDef {
             requireMedia: false,
           })
         : null;
-      const resolutionPrompt = notebookResolution?.prompt ?? expandedPrompt;
+      const duplicateDestination = duplicateDestinationReference(expandedPrompt);
+      const resolutionPrompt = notebookResolution && duplicateDestination
+        ? replaceNotebookMentions(
+            expandedPrompt,
+            notebookResolution.resolved
+              .filter((item) => item.reference !== duplicateDestination)
+              .map((item) => ({
+                reference: item.reference,
+                replacement: `@${item.artifactId}`,
+              })),
+          )
+        : notebookResolution?.prompt ?? expandedPrompt;
+      const unresolvedNotebookReferences = notebookResolution?.unresolved
+        .filter((issue) => issue.reference !== duplicateDestination)
+        ?? [];
 
-      // A grid address naming an empty or outputless square must not reach the
-      // router as literal text — it would read as prose to the model.
-      if (notebookResolution && notebookResolution.unresolved.length > 0) {
+      if (unresolvedNotebookReferences.length > 0) {
         return error(`Asset not found: ${
-          notebookResolution.unresolved
+          unresolvedNotebookReferences
             .map((issue) => `${issue.mention} (${issue.code})`)
             .join(", ")
         }`);

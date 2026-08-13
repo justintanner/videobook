@@ -493,6 +493,8 @@ export function normalizeTranslateSubtitlesCommandArgs(
 
 export type CommandAdapterFn = (args: Readonly<Record<string, unknown>>) => CommandToolArgs;
 
+const NOTEBOOK_DESTINATION_PATTERN = /^@?[a-z](?:1[0-3]|[1-9])$/iu;
+
 export const COMMAND_ADAPTERS = {
   qr_outro: (args) => {
     const inputs = args.inputs;
@@ -520,6 +522,25 @@ export const COMMAND_ADAPTERS = {
         result.speed = parseFloat(String(val));
       }
     }
+    return result;
+  },
+  duplicate: (args) => {
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    const nameValue = typeof args.new_name === 'string'
+      ? args.new_name.trim()
+      : '';
+    const destinationValue = typeof args.destination === 'string'
+      ? args.destination.trim()
+      : '';
+    delete result.new_name;
+    delete result.destination;
+    if (NOTEBOOK_DESTINATION_PATTERN.test(nameValue)) {
+      result.destination = stripAt(nameValue).toLowerCase();
+      if (destinationValue) result.new_name = destinationValue;
+      return result;
+    }
+    const newName = [nameValue, destinationValue].filter(Boolean).join(' ');
+    if (newName) result.new_name = newName;
     return result;
   },
   timewarp: (args) => {

@@ -6416,6 +6416,82 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const executeRoutedChatActionNow = async (
+    plan: ChatActionPlan,
+  ): Promise<ComposerOutcome> => {
+    if (!bookId) return { ok: false, message: 'Load or create a book first.' }
+    setPendingCommandPlan(null)
+    setBusy(true)
+    let applied = false
+    try {
+      const result = await call('chat', {
+        book_id: bookId,
+        action_plan: plan,
+      })
+      applied = true
+      setPendingChatAction(null)
+      if (isDownloadVideoResult(result)) {
+        const outcome = await completeVideoDownload(
+          result,
+          urlFromText(plan.prompt),
+        )
+        setNotice(outcome.message, outcome.ok ? 'info' : 'error')
+        return outcome.ok
+          ? outcome
+          : { ...outcome, nextInput: '', selectInput: false }
+      }
+      const routedCells = notebook
+        ? routedMediaCellInputs(plan.tool, result, notebook.cells)
+        : []
+      if (notebook && routedCells.length > 0) {
+        const placements: string[] = []
+        let firstCellId: string | null = null
+        for (const cell of routedCells) {
+          const created = record(await call('create_notebook_cell', {
+            book_id: bookId,
+            notebook_id: notebook.id,
+            cell,
+          }))
+          const cellId = asString(created?.id)
+          if (!cellId) {
+            throw new Error('The server did not return the new notebook cell')
+          }
+          firstCellId ??= cellId
+          placements.push(notebookGridTag(cell.slot))
+        }
+        selectCanvasCell(firstCellId)
+        await refreshBookData(bookId, notebook.id)
+        const message = `Created ${placements.join(' and ')}`
+        setNotice(message)
+        return { ok: true, message }
+      }
+      const resultRecord = record(result)
+      const createdCellId = asString(resultRecord?.cell_id)
+      await refreshBookData(bookId, notebook?.id)
+      if (createdCellId) selectCanvasCell(createdCellId)
+      const message = messageFor(result, plan.message || 'Action applied')
+      setNotice(message)
+      return { ok: true, message }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      const message = applied
+        ? `Action completed, but its notebook result could not be shown: ${detail}`
+        : detail
+      if (applied) {
+        await refreshBookData(bookId, notebook?.id).catch(() => undefined)
+      }
+      setNotice(message, 'error')
+      return {
+        ok: false,
+        message,
+        nextInput: applied ? '' : '/apply',
+        selectInput: !applied,
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const previewRoutedChatAction = async (
     plan: ChatActionPlan,
     originalInput: string,
@@ -6535,6 +6611,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         routedParams: plan.params,
         summary: plan.summary,
       })
+    }
+    if (plan.confirmation.required === false) {
+      return await executeRoutedChatActionNow(plan)
     }
     setPendingCommandPlan(null)
     setPendingChatAction({ kind: 'routed', plan })
@@ -6918,73 +6997,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         setBusy(false)
       }
     }
-    setBusy(true)
-    let applied = false
-    try {
-      const plan = pendingChatAction.plan
-      const result = await call('chat', {
-        book_id: bookId,
-        action_plan: plan,
-      })
-      applied = true
-      setPendingChatAction(null)
-      if (isDownloadVideoResult(result)) {
-        const outcome = await completeVideoDownload(
-          result,
-          urlFromText(plan.prompt),
-        )
-        setNotice(outcome.message, outcome.ok ? 'info' : 'error')
-        return outcome.ok
-          ? outcome
-          : { ...outcome, nextInput: '', selectInput: false }
-      }
-      const routedCells = notebook
-        ? routedMediaCellInputs(plan.tool, result, notebook.cells)
-        : []
-      if (notebook && routedCells.length > 0) {
-        const placements: string[] = []
-        let firstCellId: string | null = null
-        for (const cell of routedCells) {
-          const created = record(await call('create_notebook_cell', {
-            book_id: bookId,
-            notebook_id: notebook.id,
-            cell,
-          }))
-          const cellId = asString(created?.id)
-          if (!cellId) {
-            throw new Error('The server did not return the new notebook cell')
-          }
-          firstCellId ??= cellId
-          placements.push(notebookGridTag(cell.slot))
-        }
-        selectCanvasCell(firstCellId)
-        await refreshBookData(bookId, notebook.id)
-        const message = `Created ${placements.join(' and ')}`
-        setNotice(message)
-        return { ok: true, message }
-      }
-      await refreshBookData(bookId, notebook?.id)
-      const message = messageFor(result, plan.message || 'Action applied')
-      setNotice(message)
-      return { ok: true, message }
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error)
-      const message = applied
-        ? `Action completed, but its notebook result could not be shown: ${detail}`
-        : detail
-      if (applied) {
-        await refreshBookData(bookId, notebook?.id).catch(() => undefined)
-      }
-      setNotice(message, 'error')
-      return {
-        ok: false,
-        message,
-        nextInput: applied ? '' : '/apply',
-        selectInput: !applied,
-      }
-    } finally {
-      setBusy(false)
-    }
+    return await executeRoutedChatActionNow(pendingChatAction.plan)
   }
 
   const executeCommand = async (input: string): Promise<ComposerOutcome> => {
@@ -7042,10 +7055,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       const [commandToken, ...restParts] = input.trim().split(/\s+/)
       const rest = restParts.join(' ')
-      const resolvedRest = resolveNotebookMentionAliases(
-        rest,
-        commandMentionAssets,
-      )
+      const resolvedRest = commandToken.toLowerCase() === '/duplicate'
+        ? [
+            resolveNotebookMentionAliases(
+              restParts[0] ?? '',
+              commandMentionAssets,
+            ),
+            ...restParts.slice(1),
+          ].filter(Boolean).join(' ')
+        : resolveNotebookMentionAliases(
+            rest,
+            commandMentionAssets,
+          )
       if (commandToken === '/extract-audio') {
         if (!notebook || restParts.length !== 1) {
           return { ok: false, message: 'Usage: /extract-audio @video' }
@@ -7444,6 +7465,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ...(command.mcpTool.injectParams ?? {}),
       }
       if (command.mcpTool.autoInject?.includes('book_id')) args.book_id = bookId
+      if (command.mcpTool.autoInject?.includes('notebook_id') && notebook) {
+        args.notebook_id = notebook.id
+      }
       const result = await call(command.mcpTool.tool, args)
       if (command.mcpTool.tool === 'download_video' && notebook) {
         return await completeVideoDownload(result, asString(args.url) ?? '')

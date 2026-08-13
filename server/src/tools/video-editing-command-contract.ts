@@ -11,6 +11,7 @@ export const COMMAND_ADAPTER_NAMES = [
   "apply_cuts",
   "apply_sfx",
   "change_speed",
+  "duplicate",
   "keywords",
   "qr_outro",
   "sync_audio",

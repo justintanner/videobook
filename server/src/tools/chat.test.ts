@@ -7,6 +7,7 @@ import { createEngineForTest } from "../fs.js";
 import { v7 as uuidv7 } from "uuid";
 import {
   chatActionPlanSchema,
+  duplicateDestinationReference,
   loadScriptContentsForChat,
   normalizeChatTimestampParams,
   parseChatDecision,
@@ -19,6 +20,20 @@ import { queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 
 type TextContent = Array<{ type: string; text: string }>;
+
+describe("duplicateDestinationReference", () => {
+  it("preserves explicit and positional duplicate destinations", () => {
+    expect(duplicateDestinationReference("duplicate @a1 to @Z13"))
+      .toBe("z13");
+    expect(duplicateDestinationReference("copy @a1 @b2"))
+      .toBe("b2");
+  });
+
+  it("does not treat a lone source as a destination", () => {
+    expect(duplicateDestinationReference("duplicate @a1")).toBeNull();
+    expect(duplicateDestinationReference("inspect @a1 and @b2")).toBeNull();
+  });
+});
 
 describe("normalizeChatTimestampParams", () => {
   it("normalizes nested sync anchors without changing cue strings", () => {
@@ -145,6 +160,50 @@ describe("chat tool", () => {
     });
 
     // Asset resolution succeeds (no "Asset not found" error) but API key check fails
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0].text).toContain("OPENAI_API_KEY");
+    expect(content[0].text).not.toContain("Asset not found");
+  });
+
+  it("preserves an empty duplicate destination for routing", async () => {
+    const data = Buffer.from("duplicate-source").toString("base64");
+    const uploaded = await client.callTool({
+      name: "upload_file",
+      arguments: { book_id: "test-proj", filename: "duplicate.png", data },
+    });
+    const assetId = (JSON.parse(
+      (uploaded.content as TextContent)[0].text,
+    ) as { assetId: string }).assetId;
+    const createdNotebook = await client.callTool({
+      name: "create_notebook",
+      arguments: { book_id: "test-proj", name: "Duplicate routing" },
+    });
+    const notebookId = (JSON.parse(
+      (createdNotebook.content as TextContent)[0].text,
+    ) as { id: string }).id;
+    await client.callTool({
+      name: "create_notebook_cell",
+      arguments: {
+        book_id: "test-proj",
+        notebook_id: notebookId,
+        cell: {
+          type: "image",
+          slot: { row: 0, column: 0 },
+          output_artifact_id: assetId,
+        },
+      },
+    });
+
+    delete process.env.OPENAI_API_KEY;
+    const result = await client.callTool({
+      name: "chat",
+      arguments: {
+        prompt: "duplicate @a1 to @b1",
+        book_id: "test-proj",
+        notebook_id: notebookId,
+      },
+    });
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("OPENAI_API_KEY");

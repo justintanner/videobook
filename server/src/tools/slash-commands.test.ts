@@ -4,7 +4,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/client";
-import { COMMAND_ADAPTERS } from "@/lib/command-registry";
+import {
+  COMMAND_ADAPTERS,
+  adaptCommandArgs,
+  parseCommandArgs,
+} from "@/lib/command-registry";
 import { BookManager } from "../book-manager.js";
 import { commandsDef } from "./commands.js";
 
@@ -14,9 +18,15 @@ interface Command {
   command: string;
   description: string;
   category: string;
-  params: Array<{ name: string; type: string; required: boolean }>;
+  params: Array<{
+    name: string;
+    type: "string" | "number" | "boolean" | "string[]";
+    required: boolean;
+    description: string;
+  }>;
   mcpTool?: {
     tool: string;
+    adapter?: string;
     autoInject?: string[];
     injectParams?: Record<string, string | number | boolean>;
   };
@@ -306,6 +316,33 @@ describe("slash_commands tool", () => {
     expect(commands.find((c) => c.command === "/render-video")?.aliases).toContain("/render");
     expect(commands.find((c) => c.command === "/activity")?.aliases).toContain("/status");
     expect(commands.find((c) => c.command === "/copy-media")?.aliases).toContain("/copy-video");
+  });
+
+  it("adapts duplicate destinations while preserving optional names", async () => {
+    await client.callTool({
+      name: "create_project",
+      arguments: { book_id: "test-proj" },
+    });
+    const result = await client.callTool({
+      name: "slash_commands",
+      arguments: {},
+    });
+    const command = (JSON.parse(
+      (result.content as TextContent)[0].text,
+    ) as Command[]).find((candidate) => candidate.command === "/duplicate");
+    expect(command).toBeDefined();
+    if (!command?.mcpTool) return;
+    const parsed = parseCommandArgs("@a1 @b1 copied scene", command.params);
+    expect(adaptCommandArgs(
+      command.mcpTool.adapter,
+      command.mcpTool.tool,
+      parsed,
+    )).toEqual({
+      asset_id: "a1",
+      destination: "b1",
+      new_name: "copied scene",
+    });
+    expect(command.mcpTool.autoInject).toEqual(["book_id", "notebook_id"]);
   });
 
   it("does not return duplicate command names", async () => {

@@ -18,6 +18,7 @@ type RoutableToolInfo = {
 };
 
 const AUTO_APPLY_TOOL_NAMES = new Set([
+  "duplicate_asset",
   "extract_audio",
   "extract_first_frame",
   "extract_last_frame",
@@ -228,6 +229,7 @@ Parameter guidelines:
 - For parameters with listed allowed values, use exactly one listed value and never borrow an option from another tool
 - For asset_id: use the resolved asset ID from the referenced @tag (e.g., @vid-foo → asset_id: "vid-foo")
 - Use the current notebook ID for notebook_id. Resolve notebook addresses through the supplied notebook context and use cell UUIDs for cell ID parameters
+- For duplicate_asset, use asset_id for the source, pass an explicit empty grid address as destination without @, and omit destination when the copy should go directly below the source
 - When the user wants a first clip of a stated length plus the remaining/rest/remainder, use split_video with chunk_a_end set to that length and omit chunk_b_start
 - When the user asks to cut, extract, or create a new clip from a start time to an end time, use extract_video_clip; use trim_video only when the existing source should be changed in place
 - For timestamps (trim_start, trim_end, cut_start, cut_end, chunk_a_end, chunk_b_start, start_time, end_time, start_seconds, end_seconds, timestamp): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)

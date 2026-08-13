@@ -657,8 +657,8 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/duplicate",
-    description: "Duplicate an asset",
-    example: "/duplicate @hero-intro hero-intro-v2",
+    description: "Duplicate an asset into an optional notebook destination",
+    example: "/duplicate @a1 @b1",
     category: "context_menu",
     icon: "Copy",
     size: "default",
@@ -667,8 +667,13 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to duplicate" },
       { name: "new_name", type: "string", required: false, description: "Optional name for the copy" },
+      { name: "destination", type: "string", required: false, description: "Optional empty destination cell from a1 through z13" },
     ],
-    mcpTool: { tool: "duplicate_asset", autoInject: ["book_id"] },
+    mcpTool: {
+      tool: "duplicate_asset",
+      adapter: "duplicate",
+      autoInject: ["book_id", "notebook_id"],
+    },
   },
   {
     command: "/history",

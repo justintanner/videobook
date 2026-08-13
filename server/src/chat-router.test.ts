@@ -130,6 +130,7 @@ describe("chat routing catalog", () => {
 
   it("marks free local extraction tools for auto-apply only", () => {
     const tools = buildRoutableTools(definitions);
+    expect(AUTO_APPLY_TOOL_NAMES.has("duplicate_asset")).toBe(true);
     expect(AUTO_APPLY_TOOL_NAMES.has("extract_audio")).toBe(true);
     expect(AUTO_APPLY_TOOL_NAMES.has("extract_first_frame")).toBe(true);
     expect(AUTO_APPLY_TOOL_NAMES.has("extract_last_frame")).toBe(true);
@@ -147,6 +148,10 @@ describe("chat routing catalog", () => {
       autoApply: true,
     });
     expect(getRoutableTool(tools, "extract_audio")).toMatchObject({
+      effect: "mutation",
+      autoApply: true,
+    });
+    expect(getRoutableTool(tools, "duplicate_asset")).toMatchObject({
       effect: "mutation",
       autoApply: true,
     });
