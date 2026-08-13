@@ -1,0 +1,97 @@
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+import { notebookGrid } from '../../src/videobook/notebook-grid'
+
+const css = readFileSync(new URL('../../src/index.css', import.meta.url), 'utf8')
+
+function braceBlock(source: string, openAt: number): string {
+  const bodyStart = source.indexOf('{', openAt)
+  if (bodyStart < 0) {
+    throw new Error('missing opening brace')
+  }
+  let depth = 0
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const character = source[index]
+    if (character === '{') depth += 1
+    else if (character === '}') {
+      depth -= 1
+      if (depth === 0) return source.slice(bodyStart + 1, index)
+    }
+  }
+  throw new Error('unclosed block')
+}
+
+function rule(source: string, selector: string): string {
+  const needle = `${selector} {`
+  const openAt = source.indexOf(needle)
+  if (openAt < 0) {
+    throw new Error(`missing rule ${selector}`)
+  }
+  return braceBlock(source, openAt)
+}
+
+function declaration(block: string, property: string): string {
+  const match = block.match(new RegExp(`(?:^|\\n)\\s*${property}:\\s*([^;]+);`))
+  if (!match?.[1]) {
+    throw new Error(`missing ${property}`)
+  }
+  return match[1].trim()
+}
+
+function pixelCount(value: string): number {
+  const match = value.match(/^(-?\d+(?:\.\d+)?)px$/)
+  if (!match?.[1]) {
+    throw new Error(`not a px value: ${value}`)
+  }
+  return Number(match[1])
+}
+
+describe('notebook chrome tokens', () => {
+  it('keeps desktop gutter at two gaps so grid origins stay load-bearing', () => {
+    const shell = rule(css, '.app-shell')
+    const gap = declaration(shell, '--app-gap')
+    const gutter = declaration(shell, '--app-gutter')
+    expect(gutter).toBe(`calc(var(--app-gap) * 2)`)
+    expect(notebookGrid.originX).toBe(pixelCount(gap) * 2)
+    expect(notebookGrid.originY).toBe(notebookGrid.originX)
+  })
+
+  it('routes header, composer, and canvas chrome through the gutter token', () => {
+    expect(declaration(rule(css, '.brand-project-home'), 'padding'))
+      .toContain('var(--app-gutter)')
+    expect(declaration(rule(css, '.header-navigation'), 'margin-right'))
+      .toBe('var(--app-gutter)')
+    const composer = rule(css, '.command-composer')
+    expect(declaration(composer, 'left')).toBe('var(--app-gutter)')
+    expect(declaration(composer, 'right')).toBe('var(--app-gutter)')
+    expect(declaration(composer, 'bottom')).toBe('var(--app-gutter)')
+    const canvas = rule(css, '.canvas')
+    expect(declaration(canvas, '--notebook-edge-inset')).toBe('var(--app-gap)')
+    expect(declaration(canvas, '--notebook-chrome-inset')).toBe('var(--app-gutter)')
+    expect(declaration(canvas, '--notebook-composer-clearance'))
+      .toBe('calc(var(--app-gutter) + 56px + var(--app-gap))')
+    expect(declaration(rule(css, '.notebook-flow-frame'), 'margin-top'))
+      .toBe('calc(var(--app-gap) * 2)')
+  })
+
+  it('drops the UA outline on the notebook canvas without a global * focus wipe', () => {
+    expect(css).not.toMatch(/\*\s*(?:,[^{]+)?\{[^}]*outline:\s*none/)
+    const focusRule = [...css.matchAll(
+      /([^{}]+?)\s*\{([^{}]*outline:\s*none[^{}]*)\}/g,
+    )].find((match) => match[1]?.includes('.notebook-horizontal-scroll:focus'))
+    expect(focusRule?.[1]).toContain('.moment-grid:focus')
+    expect(focusRule?.[1]).toContain('.analysis-cell-output-json-scroll:focus')
+    expect(focusRule?.[1]).toContain('.inspector-analysis-json-scroll:focus')
+    expect(declaration(focusRule?.[2] ?? '', 'outline')).toBe('none')
+    const controlFocus = rule(css, 'textarea:focus-visible')
+    expect(declaration(controlFocus, 'outline')).toBe('1px solid var(--green)')
+  })
+
+  it('overrides only the gutter token at the 720px breakpoint', () => {
+    const queryAt = css.indexOf('@media (max-width: 720px) {')
+    expect(queryAt).toBeGreaterThan(-1)
+    const mobile = braceBlock(css, queryAt)
+    const mobileGap = declaration(rule(css, '.app-shell'), '--app-gap')
+    expect(declaration(rule(mobile, '.app-shell'), '--app-gutter')).toBe(mobileGap)
+  })
+})
