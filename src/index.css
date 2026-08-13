@@ -116,8 +116,54 @@ textarea:focus-visible {
   outline-offset: 2px;
 }
 
+.notebook-horizontal-scroll:focus,
+.notebook-horizontal-scroll:focus-visible,
+.moment-grid:focus,
+.moment-grid:focus-visible,
+.analysis-cell-output-json-scroll:focus,
+.analysis-cell-output-json-scroll:focus-visible,
+.inspector-analysis-json-scroll:focus,
+.inspector-analysis-json-scroll:focus-visible,
+.inspector-body:focus,
+.inspector-body:focus-visible,
+.inspector-source:focus,
+.inspector-source:focus-visible,
+.inspector-media-content:focus,
+.inspector-media-content:focus-visible,
+.inspector-analysis-body:focus,
+.inspector-analysis-body:focus-visible,
+.book-project-menu-list:focus,
+.book-project-menu-list:focus-visible,
+.command-plan-drawer:focus,
+.command-plan-drawer:focus-visible,
+.workspace-screen:focus,
+.workspace-screen:focus-visible,
+.cell-context-menu:focus,
+.cell-context-menu:focus-visible,
+.inspector-source-picker-options:focus,
+.inspector-source-picker-options:focus-visible,
+.command-suggestions:focus,
+.command-suggestions:focus-visible,
+.media-library-results:focus,
+.media-library-results:focus-visible,
+.video-split-boundaries > ol:focus,
+.video-split-boundaries > ol:focus-visible,
+.generation-review-json > div:focus,
+.generation-review-json > div:focus-visible,
+.record-card pre:focus,
+.record-card pre:focus-visible {
+  outline: none;
+}
+
+.analysis-cell-output-json-scroll:focus-visible,
+.inspector-analysis-json-scroll:focus-visible {
+  border-top-color: rgba(114, 231, 170, 0.28);
+}
+
 .app-shell {
   --inspector-width: clamp(280px, 20vw, 320px);
+  --app-gap: 10px;
+  --app-gutter: calc(var(--app-gap) * 2);
   display: grid;
   grid-template: 72px minmax(0, 1fr) / minmax(0, 1fr) var(--inspector-width);
   width: 100%;
@@ -384,7 +430,7 @@ textarea:focus-visible {
 
 .brand-project-home {
   gap: 10px;
-  padding: 0 10px 0 28px;
+  padding: 0 10px 0 var(--app-gutter);
 }
 
 .brand-project-menu-toggle {
@@ -447,7 +493,7 @@ textarea:focus-visible {
 .book-project-menu {
   position: absolute;
   top: calc(100% + 8px);
-  left: 18px;
+  left: var(--app-gutter);
   z-index: 100;
   width: min(340px, calc(100vw - 36px));
   overflow: hidden;
@@ -775,7 +821,7 @@ textarea:focus-visible {
   align-items: center;
   gap: 4px;
   height: 100%;
-  margin-right: 14px;
+  margin-right: var(--app-gutter);
 }
 
 .header-navigation button {
@@ -1130,13 +1176,13 @@ textarea:focus-visible {
      20px and scale with zoom, while these CSS insets do not; together they
      land cell-to-boundary on the 40px inter-cell rhythm at 100 percent zoom.
      Edge inset 10 + reserved scrollbar gutter 10 + originX 20 = 40. */
-  --notebook-edge-inset: 10px;
-  --notebook-chrome-inset: 24px;
+  --notebook-edge-inset: var(--app-gap);
+  --notebook-chrome-inset: var(--app-gutter);
   --notebook-chrome-gap: 7px;
-  /* 18px composer offset + 56px command shell + 10px gap; the 10px
+  /* 20px composer offset + 56px command shell + 10px gap = 86; the 10px
      horizontal scrollbar inside the viewport completes the rhythm
      (originY 20 + bar 10 + gap 10 = 40) */
-  --notebook-composer-clearance: 84px;
+  --notebook-composer-clearance: calc(var(--app-gutter) + 56px + var(--app-gap));
   position: relative;
   grid-row: 2;
   grid-column: 1;
@@ -1324,6 +1370,7 @@ textarea:focus-visible {
 
 .notebook-flow-frame {
   position: relative;
+  margin-top: calc(var(--app-gap) * 2);
   margin-inline: auto;
 }
 
@@ -6476,9 +6523,9 @@ textarea:focus-visible {
 
 .command-composer {
   position: fixed;
-  right: 24px;
-  bottom: 18px;
-  left: 24px;
+  right: var(--app-gutter);
+  bottom: var(--app-gutter);
+  left: var(--app-gutter);
   z-index: 70;
   display: grid;
   gap: 0;
@@ -6491,12 +6538,12 @@ textarea:focus-visible {
 }
 
 .app-screen-notebook .command-composer {
-  right: calc(var(--inspector-width) + 24px);
-  left: 24px;
+  right: calc(var(--inspector-width) + var(--app-gutter));
+  left: var(--app-gutter);
 }
 
 .app-screen-notebook.inspector-hidden .command-composer {
-  right: 24px;
+  right: var(--app-gutter);
 }
 
 .command-result button {
@@ -7124,8 +7171,8 @@ textarea:focus-visible {
   }
 
   .app-screen-notebook .command-composer {
-    right: 24px;
-    left: 24px;
+    right: var(--app-gutter);
+    left: var(--app-gutter);
   }
 
   .app-screen-notebook.inspector-visible .command-composer {
@@ -7141,6 +7188,7 @@ textarea:focus-visible {
 
 @media (max-width: 720px) {
   .app-shell {
+    --app-gutter: 10px;
     grid-template: 62px minmax(0, 1fr) / minmax(0, 1fr);
   }
 
@@ -7151,7 +7199,7 @@ textarea:focus-visible {
 
   .brand-project-home {
     gap: 7px;
-    padding-left: 14px;
+    padding-left: var(--app-gutter);
     font-size: 13px;
   }
 
@@ -7245,9 +7293,9 @@ textarea:focus-visible {
   .command-composer,
   .app-screen-notebook .command-composer,
   .app-screen-notebook.inspector-hidden .command-composer {
-    right: 10px;
-    bottom: 10px;
-    left: 10px;
+    right: var(--app-gutter);
+    bottom: var(--app-gutter);
+    left: var(--app-gutter);
   }
 
   .command-plan-drawer {
@@ -7353,7 +7401,7 @@ textarea:focus-visible {
   }
 
   .book-project-menu {
-    left: 10px;
+    left: var(--app-gutter);
     width: min(340px, calc(100vw - 20px));
   }
 
@@ -7831,8 +7879,8 @@ textarea:focus-visible {
 .media-fullscreen-open .command-composer,
 .app-screen-notebook.media-fullscreen-open .command-composer,
 .app-screen-notebook.media-fullscreen-open.inspector-visible .command-composer {
-  right: 24px;
-  left: 24px;
+  right: var(--app-gutter);
+  left: var(--app-gutter);
   z-index: 230;
   pointer-events: auto;
   opacity: 1;
