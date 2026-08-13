@@ -230,9 +230,9 @@ describe('notebook grid', () => {
       columnCount: 13,
       minColumn: 0,
       maxColumn: 12,
-      centerX: 1820,
-      width: 3640,
-      height: 3080,
+      centerX: 1800,
+      width: 3600,
+      height: 3040,
     })
     expect(notebookGridMetrics([], {
       viewportWidth: 2048,
@@ -243,9 +243,9 @@ describe('notebook grid', () => {
       columnCount: 13,
       minColumn: 0,
       maxColumn: 12,
-      centerX: 1820,
-      width: 3640,
-      height: 1960,
+      centerX: 1800,
+      width: 3600,
+      height: 1920,
     })
     expect(notebookGridMetrics([]).rowCount).toBe(3)
     expect(notebookGridMetrics([{ row: 25, column: 12 }]).rowCount).toBe(26)
@@ -258,8 +258,8 @@ describe('notebook grid', () => {
     expect(notebookGridDropSlot({ x: 100_000, y: 100_000 }, metrics))
       .toEqual({ row: 25, column: 12 })
     expect(notebookGridFrameSize(notebookGridMetrics([]), 1.5)).toEqual({
-      width: 5460,
-      height: 1260,
+      width: 5400,
+      height: 1200,
     })
     expect(notebookGridViewport(metrics, 1.5, -40)).toEqual({
       x: 0,
@@ -282,7 +282,8 @@ describe('notebook grid', () => {
       x: notebookGrid.originX + 24,
       y: notebookGrid.originY + notebookGrid.rowPitch * metrics.rowCount,
     }, metrics)).toBeNull()
-    expect(notebookGridSquareAt({ x: 0, y: 0 }, metrics)).toBeNull()
+    expect(notebookGridSquareAt({ x: 0, y: 0 }, metrics))
+      .toEqual({ row: 0, column: 0 })
   })
 
   it('clamps invalid and out-of-range zoom values', () => {

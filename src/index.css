@@ -1172,13 +1172,15 @@ textarea:focus-visible {
 }
 
 .canvas {
-  /* originX/originY in src/videobook/notebook-grid.ts pad the flow frame by
-     20px and scale with zoom, while these CSS insets do not; together they
-     land cell-to-boundary on the 40px inter-cell rhythm at 100 percent zoom.
-     Edge inset 10 + reserved scrollbar gutter 10 + originX 20 = 40. */
-  --notebook-edge-inset: var(--app-gap);
+  /* The scroll container carries the full 20px chrome inset on its left,
+     right, and top edges, so at rest the first cell column and the
+     horizontal scrollbar track both start on the same --app-gutter line as
+     the header logo and the composer. originX/originY in
+     src/videobook/notebook-grid.ts are 0: all breathing room is chrome, and
+     both scrollbar tracks begin 20px from their window edge. */
   --notebook-chrome-inset: var(--app-gutter);
-  --notebook-chrome-gap: 7px;
+  --notebook-chrome-gap: var(--app-gap);
+  --notebook-scrollbar-size: 10px;
   /* 20px composer offset + 56px command shell + 10px gap = 86; the 10px
      horizontal scrollbar inside the viewport completes the rhythm
      (originY 20 + bar 10 + gap 10 = 40) */
@@ -1299,11 +1301,11 @@ textarea:focus-visible {
 .inspector-reopen {
   position: absolute;
   top: var(--notebook-chrome-gap);
-  right: var(--notebook-chrome-inset);
+  right: calc(var(--notebook-chrome-inset) + var(--notebook-scrollbar-size) + var(--app-gap));
   z-index: 20;
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   place-items: center;
   border: 1px solid var(--control-border);
@@ -1321,27 +1323,24 @@ textarea:focus-visible {
 
 .notebook-horizontal-scroll {
   width: auto;
-  height: 100%;
+  height: calc(100% - var(--notebook-chrome-inset));
   min-width: 0;
   min-height: 0;
-  margin-inline: var(--notebook-edge-inset);
+  margin: var(--notebook-chrome-inset) var(--notebook-chrome-inset) 0;
   overflow: auto;
   overscroll-behavior-x: contain;
   overscroll-behavior-y: contain;
-  scrollbar-color: transparent transparent;
-  scrollbar-gutter: stable both-edges;
-  scrollbar-width: thin;
-}
-
-.notebook-horizontal-scroll:hover,
-.notebook-horizontal-scroll:focus,
-.notebook-horizontal-scroll:focus-within {
-  scrollbar-color: rgba(114, 231, 170, 0.5) transparent;
+  /* auto re-enables the ::-webkit-scrollbar rules below (Chrome ignores
+     them when scrollbar-width/scrollbar-color are set), keeping both bars
+     the same 10px lane with the same inset thumb. */
+  scrollbar-color: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
 }
 
 .notebook-horizontal-scroll::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: var(--notebook-scrollbar-size);
+  height: var(--notebook-scrollbar-size);
 }
 
 .notebook-horizontal-scroll::-webkit-scrollbar-track,
@@ -1370,7 +1369,6 @@ textarea:focus-visible {
 
 .notebook-flow-frame {
   position: relative;
-  margin-top: calc(var(--app-gap) * 2);
   margin-inline: auto;
 }
 

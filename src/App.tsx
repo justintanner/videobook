@@ -8274,7 +8274,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     aria-label="Open inspector"
                     onClick={() => setInspectorOpen(true)}
                   >
-                    <PanelRightOpen size={16} />
+                    <PanelRightOpen size={18} />
                   </button>
                 )}
               </section>

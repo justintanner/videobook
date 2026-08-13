@@ -47,13 +47,13 @@ function pixelCount(value: string): number {
 }
 
 describe('notebook chrome tokens', () => {
-  it('keeps desktop gutter at two gaps so grid origins stay load-bearing', () => {
+  it('keeps grid origins at zero so the chrome inset owns the gutter', () => {
     const shell = rule(css, '.app-shell')
-    const gap = declaration(shell, '--app-gap')
     const gutter = declaration(shell, '--app-gutter')
     expect(gutter).toBe(`calc(var(--app-gap) * 2)`)
-    expect(notebookGrid.originX).toBe(pixelCount(gap) * 2)
-    expect(notebookGrid.originY).toBe(notebookGrid.originX)
+    expect(notebookGrid.originX).toBe(0)
+    expect(notebookGrid.originY).toBe(0)
+    expect(pixelCount(declaration(shell, '--app-gap'))).toBe(10)
   })
 
   it('routes header, composer, and canvas chrome through the gutter token', () => {
@@ -66,12 +66,35 @@ describe('notebook chrome tokens', () => {
     expect(declaration(composer, 'right')).toBe('var(--app-gutter)')
     expect(declaration(composer, 'bottom')).toBe('var(--app-gutter)')
     const canvas = rule(css, '.canvas')
-    expect(declaration(canvas, '--notebook-edge-inset')).toBe('var(--app-gap)')
     expect(declaration(canvas, '--notebook-chrome-inset')).toBe('var(--app-gutter)')
     expect(declaration(canvas, '--notebook-composer-clearance'))
       .toBe('calc(var(--app-gutter) + 56px + var(--app-gap))')
-    expect(declaration(rule(css, '.notebook-flow-frame'), 'margin-top'))
-      .toBe('calc(var(--app-gap) * 2)')
+    expect(rule(css, '.notebook-flow-frame')).not.toContain('margin-top')
+  })
+
+  it('aligns the scroll container and both scrollbars on the chrome inset', () => {
+    const scroll = rule(css, '.notebook-horizontal-scroll')
+    expect(declaration(scroll, 'margin'))
+      .toBe('var(--notebook-chrome-inset) var(--notebook-chrome-inset) 0')
+    expect(declaration(scroll, 'height'))
+      .toBe('calc(100% - var(--notebook-chrome-inset))')
+    expect(declaration(scroll, 'scrollbar-gutter')).toBe('stable')
+    expect(declaration(scroll, 'scrollbar-width')).toBe('auto')
+    expect(declaration(scroll, 'scrollbar-color')).toBe('auto')
+    const bar = rule(css, '.notebook-horizontal-scroll::-webkit-scrollbar')
+    expect(declaration(bar, 'width')).toBe('var(--notebook-scrollbar-size)')
+    expect(declaration(bar, 'height')).toBe('var(--notebook-scrollbar-size)')
+    expect(declaration(rule(css, '.canvas'), '--notebook-scrollbar-size'))
+      .toBe('10px')
+  })
+
+  it('keeps the inspector reopen control clear of the scrollbar lane', () => {
+    const reopen = rule(css, '.inspector-reopen')
+    expect(declaration(reopen, 'width')).toBe('40px')
+    expect(declaration(reopen, 'height')).toBe('40px')
+    expect(declaration(reopen, 'right')).toBe(
+      'calc(var(--notebook-chrome-inset) + var(--notebook-scrollbar-size) + var(--app-gap))',
+    )
   })
 
   it('drops the UA outline on the notebook canvas without a global * focus wipe', () => {
