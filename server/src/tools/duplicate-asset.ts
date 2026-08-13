@@ -68,6 +68,27 @@ function failure(message: string) {
   };
 }
 
+async function copyOriginalMetadata(
+  fs: Engine,
+  sourceAssetId: string,
+  destinationAssetId: string,
+): Promise<void> {
+  const sourceMetadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
+    sourceAssetId,
+    "original",
+  );
+  if (!sourceMetadata.ok) {
+    if (sourceMetadata.error.code === "NOT_FOUND") return;
+    throw new Error(sourceMetadata.error.message);
+  }
+  const metadataWrite = await fs.metadata.artifacts.write(
+    destinationAssetId,
+    "original",
+    sourceMetadata.value,
+  );
+  if (!metadataWrite.ok) throw new Error(metadataWrite.error.message);
+}
+
 export function duplicateAssetDef(fs: Engine): ToolDef {
   return {
     name: "duplicate_asset",
@@ -146,6 +167,13 @@ export function duplicateAssetDef(fs: Engine): ToolDef {
           await fs.artifacts.delete(newAssetId);
           return failure(writeResult.error.message);
         }
+      }
+
+      try {
+        await copyOriginalMetadata(fs, asset_id, newAssetId);
+      } catch (cause) {
+        await fs.artifacts.delete(newAssetId);
+        return failure(cause instanceof Error ? cause.message : String(cause));
       }
 
       const placement: { cell: NotebookCell | null } = { cell: null };

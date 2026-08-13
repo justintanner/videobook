@@ -88,6 +88,49 @@ describe("duplicate_asset tool", () => {
     expect(copy.ok && copy.value.label).toBe("my custom copy");
   });
 
+  it("keeps a processed video duplicate ready", async () => {
+    const source = await fs.artifacts.create("video", "ready source");
+    if (!source.ok) throw new Error(source.error.message);
+    await fs.files.write(source.value.artifactId, "original.mp4", "video-data");
+    const sourceMetadata = {
+      width: 1080,
+      height: 1920,
+      duration: 22.01,
+      hasAudio: true,
+    };
+    const metadataWrite = await fs.metadata.artifacts.write(
+      source.value.artifactId,
+      "original",
+      sourceMetadata,
+    );
+    if (!metadataWrite.ok) throw new Error(metadataWrite.error.message);
+
+    const result = await client.callTool({
+      name: "duplicate_asset",
+      arguments: {
+        asset_id: source.value.artifactId,
+        book_id: fs.book.get().bookId,
+      },
+    });
+    const parsed = JSON.parse(
+      (result.content as Array<{ type: string; text: string }>)[0].text,
+    ) as { new_asset_id: string };
+    const listResult = await client.callTool({
+      name: "list_assets",
+      arguments: { book_id: fs.book.get().bookId },
+    });
+    const listed = JSON.parse(
+      (listResult.content as Array<{ type: string; text: string }>)[0].text,
+    ) as { assets: Array<{ artifact_id: string; status: string }> };
+    expect(listed.assets.find((asset) =>
+      asset.artifact_id === parsed.new_asset_id)?.status).toBe("ready");
+    const copiedMetadata = await fs.metadata.artifacts.read(
+      parsed.new_asset_id,
+      "original",
+    );
+    expect(copiedMetadata).toMatchObject({ ok: true, value: sourceMetadata });
+  });
+
   it("places a notebook duplicate in an explicit destination cell", async () => {
     const source = await fs.artifacts.create("image", "source image");
     if (!source.ok) throw new Error(source.error.message);
