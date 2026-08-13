@@ -1338,11 +1338,14 @@ describe('chat composer browser flow', () => {
       .map((label) => label.replace('⌫', '').trim())).toEqual([
       'Edit cell',
       'Open media',
+      'Duplicate',
       'Split video',
       'View generations',
       'View source',
       'Delete cell',
     ])
+    expect(await videoMenu.getByRole('menuitem', { name: 'Duplicate' }).isDisabled())
+      .toBe(true)
     await videoMenu.getByRole('menuitem', { name: 'Open media' }).click()
     const fullscreen = page.getByRole('dialog', {
       name: `Fullscreen preview for ${videoAddress}`,
@@ -1350,6 +1353,45 @@ describe('chat composer browser flow', () => {
     await fullscreen.waitFor({ state: 'visible' })
     await page.getByLabel('Close fullscreen preview').click()
     await fullscreen.waitFor({ state: 'hidden' })
+
+    const duplicateSource = notebookCellNode(page, fullscreenImageCellId)
+    const duplicateSourceAddress = (await duplicateSource
+      .locator('.cell-node-footer strong').textContent())?.trim()
+    if (!duplicateSourceAddress) throw new Error('Duplicate source address is missing')
+    await duplicateSource.click({ button: 'right' })
+    const duplicateMenu = page.getByRole('menu', {
+      name: `Cell actions for ${duplicateSourceAddress}`,
+    })
+    await duplicateMenu.waitFor({ state: 'visible' })
+    const duplicateAction = duplicateMenu.getByRole('menuitem', { name: 'Duplicate' })
+    expect(await duplicateAction.isEnabled()).toBe(true)
+    observedCalls.length = 0
+    await duplicateAction.click()
+    await expect.poll(() => observedCalls.some((call) =>
+      call.name === 'duplicate_asset'
+      && call.arguments.book_id === bookId
+      && call.arguments.notebook_id === notebookId
+      && typeof call.arguments.asset_id === 'string')).toBe(true)
+    const duplicatedCell = page.locator('.cell-node').filter({
+      has: page.locator('.cell-node-footer strong', { hasText: /^@d3$/u }),
+    })
+    await duplicatedCell.waitFor({ state: 'visible', timeout: 30_000 })
+    expect(await duplicatedCell.getAttribute('data-selection')).toBe('primary')
+
+    await duplicatedCell.click({ button: 'right' })
+    const duplicatedCellMenu = page.getByRole('menu', {
+      name: 'Cell actions for @d3',
+    })
+    await duplicatedCellMenu.waitFor({ state: 'visible' })
+    const confirmedCleanup = new Promise<string>((resolve) => {
+      page!.once('dialog', async (dialog) => {
+        resolve(dialog.message())
+        await dialog.accept()
+      })
+    })
+    await duplicatedCellMenu.getByRole('menuitem', { name: /Delete cell/ }).click()
+    expect(await confirmedCleanup).toContain('Delete @d3?')
+    await duplicatedCell.waitFor({ state: 'hidden', timeout: 30_000 })
 
     const emptyMediaTarget = notebookCellNode(page, imageCellId)
     const emptyMediaAddress = (await emptyMediaTarget

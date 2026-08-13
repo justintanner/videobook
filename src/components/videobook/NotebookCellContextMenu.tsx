@@ -1,5 +1,6 @@
 import {
   Braces,
+  Copy,
   History,
   Library,
   Maximize2,
@@ -18,6 +19,7 @@ import {
 import { createPortal } from 'react-dom'
 
 export type NotebookCellContextActionIcon =
+  | 'duplicate'
   | 'generations'
   | 'inspect'
   | 'library'
@@ -47,6 +49,7 @@ type NotebookCellContextMenuProps = {
 }
 
 const actionIcons: Record<NotebookCellContextActionIcon, LucideIcon> = {
+  duplicate: Copy,
   generations: History,
   inspect: PanelRightOpen,
   library: Library,

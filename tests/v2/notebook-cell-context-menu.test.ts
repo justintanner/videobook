@@ -24,6 +24,11 @@ const actions: NotebookCellContextAction[] = [
     icon: 'media',
   },
   {
+    id: 'duplicate',
+    label: 'Duplicate',
+    icon: 'duplicate',
+  },
+  {
     id: 'generations',
     label: 'View generations',
     icon: 'generations',
@@ -54,6 +59,7 @@ describe('NotebookCellContextMenu', () => {
     expect(html).toContain('data-cell-action="inspect"')
     expect(html).toContain('data-cell-action="run" disabled=""')
     expect(html).toContain('data-cell-action="media"')
+    expect(html).toContain('data-cell-action="duplicate"')
     expect(html).toContain('data-cell-action="generations"')
     expect(html).toContain('data-cell-action="source"')
     expect(html).toContain('class="cell-context-menu-danger"')

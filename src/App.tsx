@@ -7925,6 +7925,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     && (contextMenuNode.data.asset.mediaUrl || contextMenuNode.data.asset.thumbnailUrl)
     ? contextMenuNode.data.asset
     : null
+  const contextMenuDuplicateAssetId = contextMenuCell?.outputArtifactId
+    && contextMenuNode?.data.asset
+    && passiveMediaKindForAsset(contextMenuNode.data.asset.type)
+    ? contextMenuCell.outputArtifactId
+    : null
+  const contextMenuDuplicateDestinationAvailable = Boolean(
+    notebook
+    && contextMenuCell
+    && contextMenuDuplicateAssetId
+    && contextMenuCell.slot.row + 1 < notebookGrid.maximumRowCount
+    && !notebook.cells.some((cell) =>
+      cell.slot.row === contextMenuCell.slot.row + 1
+      && cell.slot.column === contextMenuCell.slot.column),
+  )
   const contextMenuSplitSource = selectedCellId === cellContextMenu?.cellId
     ? selectedSplitSource
     : null
@@ -7961,6 +7975,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         icon: 'media',
       })
     }
+    if (contextMenuDuplicateAssetId) {
+      contextMenuActions.push({
+        id: 'duplicate',
+        label: 'Duplicate',
+        icon: 'duplicate',
+        disabled: busy || !contextMenuDuplicateDestinationAvailable,
+      })
+    }
     if (contextMenuSplitSource) {
       contextMenuActions.push({
         id: 'split',
@@ -7982,6 +8004,29 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       },
     )
   }
+  const duplicateContextMenuAsset = async () => {
+    if (!contextMenuDuplicateAssetId || !bookId || !notebook) return
+    setBusy(true)
+    try {
+      const result = record(await call('duplicate_asset', {
+        asset_id: contextMenuDuplicateAssetId,
+        book_id: bookId,
+        notebook_id: notebook.id,
+      }))
+      const cellId = asString(result?.cell_id)
+      const address = asString(result?.address)
+      if (!cellId || !address) {
+        throw new Error('The server did not return the duplicated notebook cell')
+      }
+      await refreshBookData(bookId, notebook.id)
+      selectCanvasCell(cellId)
+      setNotice(`Duplicated as ${address}`)
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : String(cause), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
   const handleCellContextAction = (actionId: string) => {
     if (!contextMenuCell) return
     if (actionId === 'inspect') {
@@ -7998,6 +8043,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (actionId === 'media') {
       setFullscreenCellId(contextMenuCell.id)
+      return
+    }
+    if (actionId === 'duplicate') {
+      void duplicateContextMenuAsset()
       return
     }
     if (actionId === 'split' && contextMenuSplitSource) {
