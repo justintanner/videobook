@@ -6,6 +6,7 @@ export const PROMPT_SURFACES = [
   "post",
   "image_generate",
   "video_generate",
+  "audio_generate",
 ] as const;
 
 export type PromptSurface = (typeof PROMPT_SURFACES)[number];

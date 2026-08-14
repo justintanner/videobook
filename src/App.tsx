@@ -5146,6 +5146,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } | null = null
     let runAccepted = false
     try {
+      if (!online) {
+        throw new Error(
+          'Offline: cloud generation is unavailable. '
+          + 'Local search, editing, playback, and export remain available.',
+        )
+      }
       const currentNotebook = asNotebook(await call('get_notebook', {
         book_id: bookId,
         notebook_id: notebook.id,
@@ -5153,19 +5159,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
-      materialized = await materializeNotebookSpeakCommand({
+      const created = await materializeNotebookSpeakCommand({
         bookId,
         callTool: call,
         document: currentNotebook,
         text,
         voiceId,
+        ...(currentNotebook.revision
+          ? { expectedRevision: currentNotebook.revision }
+          : {}),
       })
-      const plan = await createGenerationPlan(materialized.cellId, 'slash')
+      materialized = created
+      const plan = await createGenerationPlan(created.cellId, 'slash')
       const stage = plan.stages.find((candidate) =>
         candidate.kind === 'queued'
         && candidate.jobType === 'generation'
         && candidate.tool === 'run_notebook_cell'
-        && candidate.input.cell_id === materialized!.cellId)
+        && candidate.input.cell_id === created.cellId)
       if (stage?.kind !== 'queued') {
         throw new Error('The generation plan is missing its notebook cell')
       }
@@ -5182,32 +5192,34 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         start: () => call('run_notebook_cell', {
           book_id: bookId,
           notebook_id: plannedNotebookId,
-          cell_id: materialized.cellId,
+          cell_id: created.cellId,
           plan,
           actor: 'videobook-user',
         }),
-        onStarting: () => setCellQueued(materialized!.cellId, true),
-        onRejected: () => setCellQueued(materialized!.cellId, false),
+        onStarting: () => setCellQueued(created.cellId, true),
+        onRejected: () => setCellQueued(created.cellId, false),
       })
       const runId = asString(record(accepted)?.run_id)
       const jobOperationId = asString(record(accepted)?.job_id)
       if (!runId || !jobOperationId) {
-        setCellQueued(materialized.cellId, false)
+        setCellQueued(created.cellId, false)
         throw new Error('The server did not return a notebook run')
       }
       runAccepted = true
       window.localStorage.setItem(ELEVENLABS_VOICE_STORAGE_KEY, voiceId)
       closeSpeakDialog()
-      await refreshBookData(bookId, notebook.id)
-      setNotice(`${materialized.cellAddress} queued`)
+      setNotice(`${created.cellAddress} queued`)
+      // Start the watch before refreshing so a transient refresh failure
+      // cannot strand the cell in its queued state (mirrors the chat path).
       void watchGenerationRun({
         bookId,
         notebookId: plannedNotebookId,
-        cellId: materialized.cellId,
-        address: materialized.cellAddress.replace(/^@/, ''),
+        cellId: created.cellId,
+        address: created.cellAddress.replace(/^@/, ''),
         runId,
         jobOperationId,
       })
+      await refreshBookData(bookId, notebook.id).catch(() => undefined)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (materialized && !runAccepted) {

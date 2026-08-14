@@ -67,10 +67,9 @@ async function discoverSpeakOutputCellId(
     const cell = objectValue(entry)
     if (stringValue(cell?.type) !== 'audio') continue
     const inputs = objectValue(cell?.inputs)
-    if (
-      stringValue(inputs?.producerCellId) === producerCellId
-      || stringValue(inputs?.mediaRole) === 'generate-audio-output'
-    ) {
+    // Only ever roll back the output that names THIS producer; matching on
+    // mediaRole alone could target another speak pair's landed audio cell.
+    if (stringValue(inputs?.producerCellId) === producerCellId) {
       return cellIdFromUnknown(cell)
     }
   }

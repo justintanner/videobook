@@ -143,8 +143,9 @@ function notebookConnectionError(
     targetInput === "media"
     && target.type === "audio"
     && source.type !== "extract_audio"
+    && source.type !== "generate_audio"
   ) {
-    return "Audio media outputs require an extract audio source";
+    return "Audio media outputs require an extract audio or generate audio source";
   }
   if (
     targetInput === "media"
@@ -497,13 +498,20 @@ async function notebookGenerationPlan(
     return enriched;
   }
   const sequence = engine.sequences.getPrimary();
+  const outputTrackKind: "video" | "audio" = cell.type === "generate_audio"
+    ? "audio"
+    : "video";
   const track = destination.trackId
     ? sequence.tracks.find((candidate) =>
         candidate.trackId === destination.trackId)
     : sequence.tracks.find((candidate) =>
-        candidate.kind === "video" && candidate.enabled && !candidate.locked);
-  if (!track || track.kind !== "video") {
-    throw new Error("No editable video track is available for the generated output");
+        candidate.kind === outputTrackKind
+        && candidate.enabled
+        && !candidate.locked);
+  if (!track || track.kind !== outputTrackKind) {
+    throw new Error(
+      `No editable ${outputTrackKind} track is available for the generated output`,
+    );
   }
   const plan = buildGenerationInsertPlan(engine, {
     tool: prepared.tool,

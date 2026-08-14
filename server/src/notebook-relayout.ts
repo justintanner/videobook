@@ -299,7 +299,7 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
       const tileSlot = nextWaveTileSlot(waveRow, startColumn, occupied);
       claim(tile.id, tileSlot);
       const output = findGenerateVideoOutput(document, tile.id);
-      if (output) {
+      if (output && !newSlots.has(output.outputCell.id)) {
         claim(
           output.outputCell.id,
           nextVerticalSlotFrom(slotBelow(tileSlot), occupied),

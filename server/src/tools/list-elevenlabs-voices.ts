@@ -148,8 +148,16 @@ const LIVE_VOICE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 let liveVoiceCache: {
   expiresAt: number;
+  credentialFingerprint: string;
   payload: ElevenLabsVoiceListResponse;
 } | null = null;
+
+function voiceCredentialFingerprint(): string {
+  const customVoices = process.env.ELEVENLABS_CUSTOM_VOICE_IDS
+    ?? process.env.ELEVENLABS_CUSTOM_VOICES
+    ?? "";
+  return `${getApiKey("ELEVENLABS_API_KEY") ?? ""}\u0000${customVoices}`;
+}
 
 export function listElevenLabsVoicesDef(): ToolDef {
   return {
@@ -158,7 +166,12 @@ export function listElevenLabsVoicesDef(): ToolDef {
     schema: {},
     handler: async () => {
       const now = Date.now();
-      if (liveVoiceCache && liveVoiceCache.expiresAt > now) {
+      const credentialFingerprint = voiceCredentialFingerprint();
+      if (
+        liveVoiceCache
+        && liveVoiceCache.expiresAt > now
+        && liveVoiceCache.credentialFingerprint === credentialFingerprint
+      ) {
         return {
           content: [{
             type: "text" as const,
@@ -170,8 +183,11 @@ export function listElevenLabsVoicesDef(): ToolDef {
       if (payload.status === "live") {
         liveVoiceCache = {
           expiresAt: now + LIVE_VOICE_CACHE_TTL_MS,
+          credentialFingerprint,
           payload,
         };
+      } else {
+        liveVoiceCache = null;
       }
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],

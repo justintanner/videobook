@@ -2080,7 +2080,9 @@ async function executeLocalOrGeneration(
       ? "image_generate"
       : cell.type === "generate_video"
         ? "video_generate"
-        : null;
+        : cell.type === "generate_audio"
+          ? "audio_generate"
+          : null;
     if (surface && output.resolvedPrompt) {
       void engine.prompts.record({
         surface,
