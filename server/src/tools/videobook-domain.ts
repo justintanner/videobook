@@ -20,6 +20,7 @@ import type { BookManager } from "../book-manager.js";
 import {
   ensureExtractAudioOutput,
   ensureExtractFrameImageOutput,
+  ensureGenerateAudioOutput,
   ensureGenerateImageOutput,
   ensureGenerateVideoOutput,
 } from "../notebook-cell-outputs.js";
@@ -1412,6 +1413,16 @@ export function videobookDomainDefs(
             }
             if (cell.type === "generate_image") {
               const ensured = ensureGenerateImageOutput(
+                engine,
+                withCell,
+                cell.id,
+              );
+              outputCell = ensured.outputCell;
+              outputEdge = ensured.outputEdge;
+              return ensured.document;
+            }
+            if (cell.type === "generate_audio") {
+              const ensured = ensureGenerateAudioOutput(
                 engine,
                 withCell,
                 cell.id,

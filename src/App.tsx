@@ -112,6 +112,12 @@ import { ReverseSearchReference } from '@/components/videobook/ReverseSearchRefe
 import { NotebookMediaFullscreen } from '@/components/videobook/NotebookMediaFullscreen'
 import { WatermarkDialog } from '@/components/videobook/WatermarkDialog'
 import type { WatermarkDialogState } from '@/components/videobook/WatermarkDialog'
+import { SpeakDialog } from '@/components/videobook/SpeakDialog'
+import type {
+  SpeakDialogState,
+  SpeakVoice,
+} from '@/components/videobook/SpeakDialog'
+import { materializeNotebookSpeakCommand } from './videobook/notebook-speak-command'
 import { resolveWatermarkTarget } from './videobook/watermark-target'
 import {
   NotebookCellContextMenu,
@@ -498,7 +504,64 @@ const supportedUiActions = new Set([
   'open_projects',
   'open_provider_keys',
   'open_watermark',
+  'open_speak',
+  'show_voices',
 ])
+
+const CLOUD_GENERATION_CONSENT_KEY = 'videobook.cloud-generation-consent'
+const ELEVENLABS_VOICE_STORAGE_KEY = 'videobook.elevenlabs-voice'
+
+function acceptCloudGenerationConsent(stage: {
+  provider?: string | null
+  model?: string | null
+  tool: string
+}): boolean {
+  if (window.localStorage.getItem(CLOUD_GENERATION_CONSENT_KEY) === 'accepted') {
+    return true
+  }
+  const accepted = window.confirm(
+    `Cloud generation disclosure\n\nProvider/model: ${stage.provider ?? 'unknown'} · ${stage.model ?? stage.tool}\n`
+    + 'Payload class: prompt text and connected media references.\n'
+    + 'Your local source files are sent only when required by the selected model.\n\n'
+    + 'Continue and remember this choice on this device?',
+  )
+  if (!accepted) return false
+  window.localStorage.setItem(CLOUD_GENERATION_CONSENT_KEY, 'accepted')
+  return true
+}
+
+function parseSpeakVoiceCatalog(value: unknown): {
+  voices: SpeakVoice[]
+  status: 'live' | 'fallback'
+  warning: string | null
+} {
+  const payload = record(value)
+  const voices = Array.isArray(payload?.voices)
+    ? payload.voices.flatMap((entry): SpeakVoice[] => {
+      const item = record(entry)
+      const voiceId = asString(item?.voice_id) ?? asString(item?.voiceId)
+      const name = asString(item?.name)
+      const source = asString(item?.source)
+      if (!voiceId || !name || (source !== 'custom' && source !== 'generic')) {
+        return []
+      }
+      const category = asString(item?.category)
+      const previewUrl = asString(item?.preview_url) ?? asString(item?.previewUrl)
+      return [{
+        voiceId,
+        name,
+        source,
+        ...(category ? { category } : {}),
+        ...(previewUrl ? { previewUrl } : {}),
+      }]
+    })
+    : []
+  return {
+    voices,
+    status: payload?.status === 'live' ? 'live' : 'fallback',
+    warning: asString(payload?.warning),
+  }
+}
 
 interface CanvasCellData extends NotebookCellData {
   asset?: AssetRecord
@@ -2606,6 +2669,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [cellRunErrors, setCellRunErrors] = useState<Record<string, string>>({})
   const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
   const [watermarkDialog, setWatermarkDialog] = useState<WatermarkDialogState | null>(null)
+  const [speakDialog, setSpeakDialog] = useState<SpeakDialogState | null>(null)
   const momentSearchRef = useRef<MomentSearchHandle | null>(null)
   const [fullscreenCellId, setFullscreenCellId] = useState<string | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
@@ -2675,6 +2739,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const mediaLibraryRequestRef = useRef(0)
   const mediaLibraryOpenerRef = useRef<HTMLElement | null>(null)
   const watermarkOpenerRef = useRef<HTMLElement | null>(null)
+  const speakOpenerRef = useRef<HTMLElement | null>(null)
+  const voiceCatalogRef = useRef<{
+    voices: SpeakVoice[]
+    status: 'live' | 'fallback'
+    warning: string | null
+  } | null>(null)
+  const voicePrefetchSeedRef = useRef(false)
   const activeWatchesRef = useRef(new Map<string, string>())
   const activeMcpCallsRef = useRef(new Map<number, { tool: string; startedAt: number }>())
   const mcpActivitySequenceRef = useRef(0)
@@ -3513,7 +3584,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (cloud) {
         if (
           cell.operation !== 'rewrite_prompt'
-          && (cell.type === 'generate_image' || cell.type === 'generate_video')
+          && (cell.type === 'generate_image'
+            || cell.type === 'generate_video'
+            || cell.type === 'generate_audio')
         ) {
           const plan = await createGenerationPlan(cellId, 'ui')
           const stage = plan.stages.find((candidate) =>
@@ -3528,18 +3601,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (plannedNotebookId !== currentNotebook.id) {
             throw new Error('The generation plan belongs to another notebook')
           }
-          const consentKey = 'videobook.cloud-generation-consent'
-          if (window.localStorage.getItem(consentKey) !== 'accepted') {
-            const accepted = window.confirm(
-              `Cloud generation disclosure\n\nProvider/model: ${stage.provider ?? 'unknown'} · ${stage.model ?? stage.tool}\n`
-              + 'Payload class: prompt text and connected media references.\n'
-              + 'Your local source files are sent only when required by the selected model.\n\n'
-              + 'Continue and remember this choice on this device?',
-            )
-            if (!accepted) {
-              throw new Error('Cloud generation cancelled before sending data')
-            }
-            window.localStorage.setItem(consentKey, 'accepted')
+          if (!acceptCloudGenerationConsent(stage)) {
+            throw new Error('Cloud generation cancelled before sending data')
           }
           setPendingChatAction(null)
           setPendingCommandPlan(null)
@@ -4991,6 +5054,186 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? { ...current, activeArtifactId: null, error: message }
           : current)
       setNotice(message, 'error')
+    }
+  }
+
+  const fetchVoiceCatalog = useCallback(async () => {
+    const catalog = parseSpeakVoiceCatalog(
+      await call('list_elevenlabs_voices', {}, { background: true }),
+    )
+    voiceCatalogRef.current = catalog
+    return catalog
+  }, [call])
+
+  useEffect(() => {
+    if (voicePrefetchSeedRef.current || mcp.state !== 'ready') return
+    voicePrefetchSeedRef.current = true
+    void fetchVoiceCatalog().catch(() => {
+      voicePrefetchSeedRef.current = false
+    })
+  }, [fetchVoiceCatalog, mcp.state])
+
+  const closeSpeakDialog = () => {
+    setSpeakDialog(null)
+    const opener = speakOpenerRef.current
+    speakOpenerRef.current = null
+    if (opener?.isConnected) window.setTimeout(() => opener.focus(), 0)
+  }
+
+  const openSpeakDialog = (prefillText: string) => {
+    speakOpenerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    const cached = voiceCatalogRef.current
+    const storedVoice = window.localStorage.getItem(ELEVENLABS_VOICE_STORAGE_KEY)
+    const voiceFromList = (voices: SpeakVoice[], preferred: string | null) => {
+      if (preferred && voices.some((voice) => voice.voiceId === preferred)) {
+        return preferred
+      }
+      return voices[0]?.voiceId ?? ''
+    }
+    setSpeakDialog({
+      text: prefillText,
+      voiceId: cached ? voiceFromList(cached.voices, storedVoice) : '',
+      voices: cached?.voices ?? [],
+      status: cached?.status ?? 'fallback',
+      warning: cached?.warning ?? null,
+      loadingVoices: !cached,
+      submitting: false,
+      error: null,
+    })
+    void (async () => {
+      try {
+        const catalog = await fetchVoiceCatalog()
+        setSpeakDialog((current) => {
+          if (!current) return current
+          return {
+            ...current,
+            voices: catalog.voices,
+            status: catalog.status,
+            warning: catalog.warning,
+            voiceId: voiceFromList(
+              catalog.voices,
+              current.voiceId || storedVoice,
+            ),
+            loadingVoices: false,
+          }
+        })
+      } catch (error) {
+        setSpeakDialog((current) => current
+          ? {
+              ...current,
+              loadingVoices: false,
+              error: error instanceof Error ? error.message : String(error),
+            }
+          : current)
+      }
+    })()
+  }
+
+  const submitSpeak = async () => {
+    if (!bookId || !notebook || !speakDialog) return
+    const text = speakDialog.text.trim()
+    const voiceId = speakDialog.voiceId.trim()
+    if (!text || !voiceId) return
+    setSpeakDialog((current) => current
+      ? { ...current, submitting: true, error: null }
+      : current)
+    let materialized: {
+      cellId: string
+      cellAddress: string
+      outputCellId: string
+    } | null = null
+    let runAccepted = false
+    try {
+      const currentNotebook = asNotebook(await call('get_notebook', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+      }))
+      if (!currentNotebook) {
+        throw new Error('The server returned an invalid notebook')
+      }
+      materialized = await materializeNotebookSpeakCommand({
+        bookId,
+        callTool: call,
+        document: currentNotebook,
+        text,
+        voiceId,
+      })
+      const plan = await createGenerationPlan(materialized.cellId, 'slash')
+      const stage = plan.stages.find((candidate) =>
+        candidate.kind === 'queued'
+        && candidate.jobType === 'generation'
+        && candidate.tool === 'run_notebook_cell'
+        && candidate.input.cell_id === materialized!.cellId)
+      if (stage?.kind !== 'queued') {
+        throw new Error('The generation plan is missing its notebook cell')
+      }
+      const plannedNotebookId = asString(stage.input.notebook_id)
+      if (plannedNotebookId !== currentNotebook.id) {
+        throw new Error('The generation plan belongs to another notebook')
+      }
+      if (!acceptCloudGenerationConsent(stage)) {
+        throw new Error('Cloud generation cancelled before sending data')
+      }
+      setPendingChatAction(null)
+      setPendingCommandPlan(null)
+      const accepted = await startNotebookCellRun({
+        start: () => call('run_notebook_cell', {
+          book_id: bookId,
+          notebook_id: plannedNotebookId,
+          cell_id: materialized.cellId,
+          plan,
+          actor: 'videobook-user',
+        }),
+        onStarting: () => setCellQueued(materialized!.cellId, true),
+        onRejected: () => setCellQueued(materialized!.cellId, false),
+      })
+      const runId = asString(record(accepted)?.run_id)
+      const jobOperationId = asString(record(accepted)?.job_id)
+      if (!runId || !jobOperationId) {
+        setCellQueued(materialized.cellId, false)
+        throw new Error('The server did not return a notebook run')
+      }
+      runAccepted = true
+      window.localStorage.setItem(ELEVENLABS_VOICE_STORAGE_KEY, voiceId)
+      closeSpeakDialog()
+      await refreshBookData(bookId, notebook.id)
+      setNotice(`${materialized.cellAddress} queued`)
+      void watchGenerationRun({
+        bookId,
+        notebookId: plannedNotebookId,
+        cellId: materialized.cellId,
+        address: materialized.cellAddress.replace(/^@/, ''),
+        runId,
+        jobOperationId,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (materialized && !runAccepted) {
+        await call('delete_notebook_cell', {
+          book_id: bookId,
+          notebook_id: notebook.id,
+          cell_id: materialized.cellId,
+        }).catch(() => undefined)
+        await call('delete_notebook_cell', {
+          book_id: bookId,
+          notebook_id: notebook.id,
+          cell_id: materialized.outputCellId,
+        }).catch(() => undefined)
+        setSpeakDialog((current) => current
+          ? { ...current, submitting: false, error: message }
+          : current)
+        return
+      }
+      if (runAccepted) {
+        closeSpeakDialog()
+        setNotice(message, 'error')
+        return
+      }
+      setSpeakDialog((current) => current
+        ? { ...current, submitting: false, error: message }
+        : current)
     }
   }
 
@@ -7542,6 +7785,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         await refreshSettings()
         return { ok: true, message: 'Settings opened' }
       }
+      if (command.uiAction === 'open_speak' || command.uiAction === 'show_voices') {
+        if (!notebook) {
+          return { ok: false, message: 'Open a notebook before speaking.' }
+        }
+        const parsed = parseCommandArgs(resolvedRest, command.params)
+        openSpeakDialog(asString(parsed.text) ?? '')
+        return { ok: true, message: 'Speak dialog opened' }
+      }
       if (command.uiAction === 'open_watermark') {
         // The uiAction chain runs before the shared arg parse, so parse here.
         const parsed = parseCommandArgs(resolvedRest, command.params)
@@ -9452,6 +9703,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             current ? { ...current, saveDefault: value } : current)}
           onSubmit={() => void submitWatermark()}
           onClose={closeWatermarkDialog}
+        />
+      )}
+
+      {speakDialog && (
+        <SpeakDialog
+          state={speakDialog}
+          onText={(value) => setSpeakDialog((current) =>
+            current ? { ...current, text: value, error: null } : current)}
+          onVoice={(value) => setSpeakDialog((current) =>
+            current ? { ...current, voiceId: value, error: null } : current)}
+          onSubmit={() => void submitSpeak()}
+          onClose={closeSpeakDialog}
         />
       )}
 

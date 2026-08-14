@@ -5,6 +5,7 @@ import type {
   NotebookGridSlot,
 } from "videobook-engine";
 import {
+  findGenerateAudioOutputCell,
   findGenerateImageOutputCell,
   findGenerateVideoOutputCell,
   NOTEBOOK_GRID_COLUMN_COUNT,
@@ -15,6 +16,7 @@ import {
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 
 export {
+  findGenerateAudioOutputCell,
   findGenerateImageOutputCell,
   findGenerateVideoOutputCell,
   resolveGeneratedVideoArtifact,
@@ -368,8 +370,8 @@ function slotDirectlyBelow(slot: NotebookGridSlot): NotebookGridSlot {
   };
 }
 
-type GenerationProducerType = "generate_video" | "generate_image";
-type GenerationOutputType = "video" | "image";
+type GenerationProducerType = "generate_video" | "generate_image" | "generate_audio";
+type GenerationOutputType = "video" | "image" | "audio";
 
 type GenerationOutputSpec = {
   producerType: GenerationProducerType;
@@ -412,7 +414,9 @@ function ensureGenerationOutput(
   if (producer?.type !== spec.producerType) {
     const label = spec.producerType === "generate_image"
       ? "Generate Image"
-      : "Generate Video";
+      : spec.producerType === "generate_audio"
+        ? "Generate Audio"
+        : "Generate Video";
     throw new Error(`${label} cell not found: ${cellId}`);
   }
   const existing = spec.find(document, cellId);
@@ -483,6 +487,13 @@ export function findGenerateImageOutput(
   return findGenerateImageOutputCell(document, generateImageCellId);
 }
 
+export function findGenerateAudioOutput(
+  document: NotebookDocument,
+  generateAudioCellId: string,
+) {
+  return findGenerateAudioOutputCell(document, generateAudioCellId);
+}
+
 export function ensureGenerateVideoOutput(
   engine: Engine,
   document: NotebookDocument,
@@ -511,6 +522,20 @@ export function ensureGenerateImageOutput(
   });
 }
 
+export function ensureGenerateAudioOutput(
+  engine: Engine,
+  document: NotebookDocument,
+  generateAudioCellId: string,
+) {
+  return ensureGenerationOutput(engine, document, generateAudioCellId, {
+    producerType: "generate_audio",
+    outputType: "audio",
+    mediaRole: "generate-audio-output",
+    labelSuffix: "audio",
+    find: findGenerateAudioOutput,
+  });
+}
+
 export function findGenerationMediaOutput(
   document: NotebookDocument,
   cell: NotebookCell,
@@ -520,6 +545,9 @@ export function findGenerationMediaOutput(
   }
   if (cell.type === "generate_image") {
     return findGenerateImageOutput(document, cell.id);
+  }
+  if (cell.type === "generate_audio") {
+    return findGenerateAudioOutput(document, cell.id);
   }
   return null;
 }
@@ -534,6 +562,9 @@ export function ensureGenerationMediaOutput(
   }
   if (cell.type === "generate_image") {
     return ensureGenerateImageOutput(engine, document, cell.id);
+  }
+  if (cell.type === "generate_audio") {
+    return ensureGenerateAudioOutput(engine, document, cell.id);
   }
   throw new Error(`Generation output cell is not supported for ${cell.type}`);
 }

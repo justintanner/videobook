@@ -144,13 +144,38 @@ export async function listElevenLabsVoices(fetchFn: VoiceFetch = fetch): Promise
   }
 }
 
+const LIVE_VOICE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+let liveVoiceCache: {
+  expiresAt: number;
+  payload: ElevenLabsVoiceListResponse;
+} | null = null;
+
 export function listElevenLabsVoicesDef(): ToolDef {
   return {
     name: "list_elevenlabs_voices",
     description: "List available ElevenLabs voice IDs with custom voices first and generic voices after them",
     schema: {},
-    handler: async () => ({
-      content: [{ type: "text" as const, text: JSON.stringify(await listElevenLabsVoices()) }],
-    }),
+    handler: async () => {
+      const now = Date.now();
+      if (liveVoiceCache && liveVoiceCache.expiresAt > now) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify(liveVoiceCache.payload),
+          }],
+        };
+      }
+      const payload = await listElevenLabsVoices();
+      if (payload.status === "live") {
+        liveVoiceCache = {
+          expiresAt: now + LIVE_VOICE_CACHE_TTL_MS,
+          payload,
+        };
+      }
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+      };
+    },
   };
 }

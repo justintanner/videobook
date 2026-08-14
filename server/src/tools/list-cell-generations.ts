@@ -10,6 +10,7 @@ import type {
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import {
+  findGenerateAudioOutput,
   findGenerateImageOutput,
   findGenerateVideoOutput,
 } from "../notebook-cell-outputs.js";
@@ -85,6 +86,10 @@ export function pairForCell(
     const output = findGenerateImageOutput(document, cell.id);
     return { generateCell: cell, outputCell: output?.outputCell ?? null };
   }
+  if (cell.type === "generate_audio") {
+    const output = findGenerateAudioOutput(document, cell.id);
+    return { generateCell: cell, outputCell: output?.outputCell ?? null };
+  }
   if (cell.type === "video") {
     const producerEdge = document.edges.find((edge) =>
       edge.target === cell.id
@@ -104,6 +109,17 @@ export function pairForCell(
       ? document.cells.find((candidate) => candidate.id === producerEdge.source)
       : undefined;
     if (producer?.type === "generate_image") {
+      return { generateCell: producer, outputCell: cell };
+    }
+  }
+  if (cell.type === "audio") {
+    const producerEdge = document.edges.find((edge) =>
+      edge.target === cell.id
+      && (edge.targetInput === "media" || edge.targetInput === "output"));
+    const producer = producerEdge
+      ? document.cells.find((candidate) => candidate.id === producerEdge.source)
+      : undefined;
+    if (producer?.type === "generate_audio") {
       return { generateCell: producer, outputCell: cell };
     }
   }

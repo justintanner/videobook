@@ -13,9 +13,11 @@ import {
   NOTEBOOK_GRID_ROW_COUNT,
 } from "videobook-engine";
 import {
+  ensureGenerateAudioOutput,
   ensureGenerateImageOutput,
   ensureGenerateVideoOutput,
   findExtractFrameImageOutput,
+  findGenerateAudioOutput,
   findGenerateImageOutput,
   findGenerateVideoOutput,
 } from "./notebook-cell-outputs.js";
@@ -50,6 +52,18 @@ function isGenerateImageOutputCell(
   if (typeof producerId !== "string") return false;
   return document.cells.some((candidate) =>
     candidate.id === producerId && candidate.type === "generate_image");
+}
+
+function isGenerateAudioOutputCell(
+  document: NotebookDocument,
+  cell: NotebookCell,
+): boolean {
+  if (cell.type !== "audio") return false;
+  if (cell.inputs?.mediaRole === "generate-audio-output") return true;
+  const producerId = cell.inputs?.producerCellId;
+  if (typeof producerId !== "string") return false;
+  return document.cells.some((candidate) =>
+    candidate.id === producerId && candidate.type === "generate_audio");
 }
 
 function isExtractFrameOutputCell(cell: NotebookCell): boolean {
@@ -89,6 +103,10 @@ function migrateGenerationArtifacts(
     {
       producerType: "generate_image" as const,
       ensure: ensureGenerateImageOutput,
+    },
+    {
+      producerType: "generate_audio" as const,
+      ensure: ensureGenerateAudioOutput,
     },
   ];
   let working = document;
@@ -167,7 +185,9 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
   }
 
   for (const cell of cells) {
-    if (cell.type !== "audio") continue;
+    if (cell.type !== "audio" || isGenerateAudioOutputCell(document, cell)) {
+      continue;
+    }
     claim(cell.id, nearestOriginNotebookGridSlot(occupied));
   }
 
@@ -209,6 +229,20 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
     }
   }
 
+  function claimGenerateAudioPair(
+    tile: NotebookCell,
+    tileSlot: NotebookGridSlot,
+  ): void {
+    claim(tile.id, tileSlot);
+    const output = findGenerateAudioOutput(document, tile.id);
+    if (output && !newSlots.has(output.outputCell.id)) {
+      claim(
+        output.outputCell.id,
+        nextVerticalSlotFrom(slotBelow(tileSlot), occupied),
+      );
+    }
+  }
+
   let progressed = true;
   while (progressed) {
     progressed = false;
@@ -228,6 +262,24 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
             ),
           };
       claimGenerateImagePair(tile, nextHorizontalSlotFrom(anchor, occupied));
+      progressed = true;
+    }
+
+    for (const tile of cells) {
+      if (tile.type !== "generate_audio" || newSlots.has(tile.id)) continue;
+      const sources = cellSources(tile);
+      if (!sources) continue;
+      const sourceSlots = sources.map((source) => newSlots.get(source.id)!);
+      const anchor = sourceSlots.length === 0
+        ? { row: 0, column: 0 }
+        : {
+            row: Math.min(...sourceSlots.map((slot) => slot.row)),
+            column: Math.min(
+              Math.max(...sourceSlots.map((slot) => slot.column)) + 1,
+              NOTEBOOK_GRID_COLUMN_COUNT - 1,
+            ),
+          };
+      claimGenerateAudioPair(tile, nextHorizontalSlotFrom(anchor, occupied));
       progressed = true;
     }
 
@@ -290,6 +342,13 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
     if (newSlots.has(cell.id)) continue;
     if (cell.type === "generate_image") {
       claimGenerateImagePair(
+        cell,
+        nextHorizontalSlotFrom({ row: 0, column: 0 }, occupied),
+      );
+      continue;
+    }
+    if (cell.type === "generate_audio") {
+      claimGenerateAudioPair(
         cell,
         nextHorizontalSlotFrom({ row: 0, column: 0 }, occupied),
       );

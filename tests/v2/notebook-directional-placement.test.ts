@@ -12,8 +12,10 @@ import {
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
 import {
+  ensureGenerateAudioOutput,
   ensureGenerateImageOutput,
   ensureGenerateVideoOutput,
+  findGenerateAudioOutput,
   findGenerateImageOutput,
   findGenerateVideoOutput,
 } from '../../server/src/notebook-cell-outputs.js'
@@ -26,6 +28,7 @@ import {
   notebookCellFingerprint,
   notebookCellIsStale,
   registerRunNotebookJob,
+  runNotebookCell,
 } from '../../server/src/jobs/run-notebook.js'
 import { DEFAULT_VIDEO_TOOL } from '../../server/src/notebook-action-catalog.js'
 import {
@@ -968,5 +971,191 @@ describe('directional canvas placement', () => {
       notebookId: notebook.id,
     })
     expect(second.changed).toBe(false)
+  })
+
+  it('creates generate_audio with an audio output cell directly below', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'directional-audio',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const def = byName.get(name)
+      if (!def) throw new Error(`Missing ${name}`)
+      return await withBookContext(
+        { bookId: created.bookId, engine },
+        () => def.handler({ book_id: created.bookId, ...args }),
+      )
+    }
+
+    const notebooks = resultJson(await invoke('list_notebooks', {})) as Array<{
+      id: string
+    }>
+    const notebookId = notebooks[0]!.id
+    const generated = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'generate_audio',
+        label: 'gen-audio',
+        slot: { row: 0, column: 0 },
+        prompt: 'hello from the grid',
+      },
+    })) as {
+      id: string
+      output_cell?: {
+        id: string
+        type: string
+        slot: { row: number; column: number }
+        inputs?: Record<string, unknown>
+      }
+      output_edge?: {
+        source: string
+        target: string
+        targetInput: string
+      }
+    }
+
+    expect(generated.output_cell).toMatchObject({
+      type: 'audio',
+      slot: { row: 1, column: 0 },
+      inputs: {
+        mediaRole: 'generate-audio-output',
+        producerCellId: generated.id,
+      },
+    })
+    expect(generated.output_edge).toMatchObject({
+      source: generated.id,
+      target: generated.output_cell!.id,
+      targetInput: 'media',
+    })
+
+    const notebook = value(engine.notebooks.read(notebookId))
+    const tile = notebook.cells.find((cell) => cell.id === generated.id)!
+    const output = findGenerateAudioOutput(notebook, generated.id)!
+    expect(tile.outputArtifactId).toBeUndefined()
+    expect(output.outputCell.slot).toEqual({ row: 1, column: 0 })
+  })
+
+  it('ensureGenerateAudioOutput is idempotent for existing output cells', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'ensure-audio-idempotent',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const notebook = value(engine.notebooks.read(engine.notebooks.list()[0]!.id))
+    const tile = engine.notebooks.createCell({
+      type: 'generate_audio',
+      slot: { row: 0, column: 0 },
+      prompt: 'hello',
+    })
+    const initial: NotebookDocument = {
+      ...notebook,
+      cells: [tile],
+      edges: [],
+    }
+    value(await engine.notebooks.write(initial))
+    const first = ensureGenerateAudioOutput(engine, initial, tile.id)
+    expect(first.created).toBe(true)
+    const second = ensureGenerateAudioOutput(engine, first.document, tile.id)
+    expect(second.created).toBe(false)
+    expect(second.updated).toBe(false)
+    expect(second.outputCell.id).toBe(first.outputCell.id)
+  })
+
+  it('relayouts a legacy inline generate_audio into a pair', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'audio-relayout',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const notebook = value(engine.notebooks.read(engine.notebooks.list()[0]!.id))
+    const audioArtifact = value(await engine.artifacts.create({
+      kind: 'audio',
+      label: 'legacy-gen-audio',
+    }))
+    const genAudio = engine.notebooks.createCell({
+      type: 'generate_audio',
+      label: 'legacy-audio-tile',
+      slot: { row: 4, column: 5 },
+      prompt: 'welcome back',
+      outputArtifactId: audioArtifact.artifactId,
+    })
+    value(await engine.notebooks.write({
+      ...notebook,
+      cells: [genAudio],
+      edges: [],
+    }))
+
+    const migrated = await executeRelayoutNotebook(engine, {
+      type: 'relayout_notebook',
+      bookId: created.bookId,
+      notebookId: notebook.id,
+    })
+    expect(migrated.changed).toBe(true)
+
+    const afterMigrate = value(engine.notebooks.read(notebook.id))
+    const tile = afterMigrate.cells.find((cell) => cell.id === genAudio.id)!
+    const audioOutput = findGenerateAudioOutput(afterMigrate, genAudio.id)
+    expect(audioOutput).not.toBeNull()
+    expect(tile.outputArtifactId).toBeUndefined()
+    expect(audioOutput!.outputCell.outputArtifactId).toBe(audioArtifact.artifactId)
+    expect(audioOutput!.outputCell.inputs?.mediaRole).toBe('generate-audio-output')
+    expect(audioOutput!.outputCell.inputs?.producerCellId).toBe(genAudio.id)
+    expect(audioOutput!.outputEdge.targetInput).toBe('media')
+    expect(audioOutput!.outputCell.slot.column).toBe(tile.slot.column)
+    expect(audioOutput!.outputCell.slot.row).toBe(tile.slot.row + 1)
+  })
+
+  it('records ensure_generate_audio_output during run-notebook preflight', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'audio-preflight',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const notebook = value(engine.notebooks.read(engine.notebooks.list()[0]!.id))
+    const tile = engine.notebooks.createCell({
+      type: 'generate_audio',
+      label: 'preflight-audio',
+      slot: { row: 0, column: 0 },
+      prompt: 'hello preflight',
+    })
+    value(await engine.notebooks.write({
+      ...notebook,
+      cells: [tile],
+      edges: [],
+    }))
+    const before = value(engine.notebooks.read(notebook.id))
+    await expect(runNotebookCell(
+      engine,
+      created.bookId,
+      notebook.id,
+      before,
+      tile,
+    )).rejects.toThrow()
+    const operations = engine.history.revisions().map((revision) => revision.operation)
+    expect(operations).toContain('ensure_generate_audio_output')
+    const after = value(engine.notebooks.read(notebook.id))
+    const output = findGenerateAudioOutput(after, tile.id)
+    expect(output).not.toBeNull()
+    expect(output!.outputCell.type).toBe('audio')
+    expect(output!.outputCell.inputs?.mediaRole).toBe('generate-audio-output')
+    expect(output!.outputEdge.targetInput).toBe('media')
   })
 })

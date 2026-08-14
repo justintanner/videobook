@@ -2182,6 +2182,7 @@ export async function runNotebookCell(
   }
   const generateMediaOutput = normalizedCell.type === "generate_video"
       || normalizedCell.type === "generate_image"
+      || normalizedCell.type === "generate_audio"
     ? ensureGenerationMediaOutput(
         engine,
         normalizedDocument,
@@ -2197,7 +2198,9 @@ export async function runNotebookCell(
       notebookId,
       normalizedCell.type === "generate_image"
         ? "ensure_generate_image_output"
-        : "ensure_generate_video_output",
+        : normalizedCell.type === "generate_audio"
+          ? "ensure_generate_audio_output"
+          : "ensure_generate_video_output",
       (current) => ensureGenerationMediaOutput(
         engine,
         current,
@@ -2682,7 +2685,9 @@ async function finishAwaitingNotebookCell(
       let working = document;
       let resolvedOutput = findGenerationMediaOutput(working, cell);
       if (
-        (cell.type === "generate_video" || cell.type === "generate_image")
+        (cell.type === "generate_video"
+          || cell.type === "generate_image"
+          || cell.type === "generate_audio")
         && !resolvedOutput
       ) {
         const ensured = ensureGenerationMediaOutput(engine, working, cell);

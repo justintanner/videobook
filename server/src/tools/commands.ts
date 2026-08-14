@@ -1536,6 +1536,18 @@ const CANONICAL_COMMANDS: Command[] = [
     ],
     mcpTool: { tool: "generate_elevenlabs_text_to_audio", autoInject: ["book_id"] },
   },
+  {
+    command: "/speak",
+    description: "Open the speak dialog to generate ElevenLabs speech into the notebook",
+    example: "/speak welcome back everyone",
+    category: "action",
+    icon: "Mic",
+    size: "default",
+    variant: "pink",
+    chevron: "right",
+    params: [{ name: "text", type: "string", required: false, description: "Text to synthesize" }],
+    uiAction: "open_speak",
+  },
   // ── X connect command ──
   {
     command: "/connect-x",

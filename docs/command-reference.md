@@ -304,7 +304,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.
 
-## Slash commands (120 static commands)
+## Slash commands (121 static commands)
 
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
@@ -403,6 +403,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/settings-square` — Settings for square orientation; UI: `settings_square`
 - `/skeleton` — Extract a pose skeleton image from an image asset; UI: `extract_skeleton`
 - `/sort` — Set sidebar sort order (no value toggles); UI: `sidebar_sort`
+- `/speak` — Open the speak dialog to generate ElevenLabs speech into the notebook; UI: `open_speak`
 - `/speed` — Change video playback speed (0.25-4.0x) or exact duration (e.g. 8.32s); MCP: `change_video_speed`
 - `/splice` — Splice two videos with an overlap window; use 0 to concatenate both complete clips; MCP: `splice_video`
 - `/split` — Open the interactive splitter for a notebook video, optionally seeded with cut times
