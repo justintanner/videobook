@@ -720,6 +720,68 @@ function withMediaOutput(
   };
 }
 
+function rollbackGenerationMediaOutput(
+  document: NotebookDocument,
+  cell: NotebookCell,
+  staleArtifactId: string | undefined,
+): NotebookDocument {
+  const mediaOutput = findGenerationMediaOutput(document, cell);
+  if (!mediaOutput) return document;
+  const outputCellId = mediaOutput.outputCell.id;
+  const remainingExecution = { ...executionState(document) };
+  delete remainingExecution[outputCellId];
+  return {
+    ...document,
+    cells: document.cells.map((candidate) => {
+      if (candidate.id !== outputCellId) return candidate;
+      const versions = Array.isArray(candidate.inputs?.outputVersionArtifactIds)
+        ? candidate.inputs.outputVersionArtifactIds.filter(
+            (value): value is string =>
+              typeof value === "string"
+              && value.length > 0
+              && value !== staleArtifactId,
+          )
+        : [];
+      const restored = versions.at(-1);
+      const inputs = { ...(candidate.inputs ?? {}) };
+      delete inputs.state;
+      return {
+        ...candidate,
+        outputArtifactId: restored,
+        inputs: {
+          ...inputs,
+          outputVersionArtifactIds: versions,
+          ...(restored ? { state: "completed" } : {}),
+        },
+      };
+    }),
+    execution: remainingExecution,
+  };
+}
+
+// A crash, an abort, or a failure predating the rollback in
+// failAwaitingNotebookCell can leave the paired output cell holding an
+// awaiting-output stamp and a placeholder artifact that will never land.
+// Heal that residue when the producer starts a fresh run so the pair always
+// begins clean and a later synchronous failure cannot expose stale state.
+export function healGenerationMediaOutputResidue(
+  document: NotebookDocument,
+  cell: NotebookCell,
+): NotebookDocument {
+  const mediaOutput = findGenerationMediaOutput(document, cell);
+  if (!mediaOutput) return document;
+  const outputCell = mediaOutput.outputCell;
+  const awaitingInputs = outputCell.inputs?.state === "awaiting-output";
+  const awaitingExecution =
+    executionState(document)[outputCell.id]?.status === "awaiting-output";
+  if (!awaitingInputs && !awaitingExecution) return document;
+  return rollbackGenerationMediaOutput(
+    document,
+    cell,
+    outputCell.outputArtifactId,
+  );
+}
+
 function withSplitOutputs(
   document: NotebookDocument,
   targets: {
@@ -2240,7 +2302,10 @@ export async function runNotebookCell(
     notebookId,
     "start_notebook_cell",
     (current) => withExecution(
-      normalizeLegacyAnalyzeDocument(current),
+      healGenerationMediaOutputResidue(
+        normalizeLegacyAnalyzeDocument(current),
+        normalizedCell,
+      ),
       normalizedCell.id,
       runningState,
     ),
@@ -2248,7 +2313,7 @@ export async function runNotebookCell(
   );
   if (!started.ok) throw new Error(started.error.message);
   const activeDocument = withExecution(
-    normalizedDocument,
+    healGenerationMediaOutputResidue(normalizedDocument, normalizedCell),
     normalizedCell.id,
     runningState,
   );
@@ -2819,42 +2884,15 @@ async function failAwaitingNotebookCell(
         tool: current?.tool ?? cell.tool ?? cell.model,
         error: message,
       }, input.providerArtifactId);
-      const mediaOutput = findGenerationMediaOutput(withFailure, cell);
-      if (!mediaOutput) return withFailure;
       // Dispatch acceptance stamped the paired output cell with the provider
       // placeholder and an awaiting-output execution record. Roll both back:
       // a lingering awaiting-output record blocks run resumption and keeps
       // the client's generation clock running after the failure.
-      const outputCellId = mediaOutput.outputCell.id;
-      const remainingExecution = { ...executionState(withFailure) };
-      delete remainingExecution[outputCellId];
-      return {
-        ...withFailure,
-        cells: withFailure.cells.map((candidate) => {
-          if (candidate.id !== outputCellId) return candidate;
-          const versions = Array.isArray(candidate.inputs?.outputVersionArtifactIds)
-            ? candidate.inputs.outputVersionArtifactIds.filter(
-                (value): value is string =>
-                  typeof value === "string"
-                  && value.length > 0
-                  && value !== input.providerArtifactId,
-              )
-            : [];
-          const restored = versions.at(-1);
-          const inputs = { ...(candidate.inputs ?? {}) };
-          delete inputs.state;
-          return {
-            ...candidate,
-            outputArtifactId: restored,
-            inputs: {
-              ...inputs,
-              outputVersionArtifactIds: versions,
-              ...(restored ? { state: "completed" } : {}),
-            },
-          };
-        }),
-        execution: remainingExecution,
-      };
+      return rollbackGenerationMediaOutput(
+        withFailure,
+        cell,
+        input.providerArtifactId,
+      );
     },
     {
       cellId: input.cellId,

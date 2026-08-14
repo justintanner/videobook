@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createEngine, type Engine } from "videobook-engine";
 import {
   failNotebookProviderOutput,
+  healGenerationMediaOutputResidue,
   type AwaitNotebookOutputPayload,
 } from "../../server/src/jobs/run-notebook.js";
 import {
@@ -300,5 +301,70 @@ describe("notebook provider failures", () => {
       previous.value.artifactId,
     ]);
     expect(notebook.value.execution?.[outputCellId]).toBeUndefined();
+  });
+
+  it("heals stale awaiting residue when the producer starts a fresh run", async () => {
+    const { input, actionCellId, outputCellId } = await setupAwaitingPair();
+    const notebook = engine.notebooks.read(input.notebookId);
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) return;
+    const action = notebook.value.cells.find((cell) => cell.id === actionCellId);
+    expect(action).toBeDefined();
+    if (!action) return;
+
+    const healed = healGenerationMediaOutputResidue(notebook.value, action);
+
+    const output = healed.cells.find((cell) => cell.id === outputCellId);
+    expect(output?.outputArtifactId).toBeUndefined();
+    expect(output?.inputs?.state).toBeUndefined();
+    expect(output?.inputs?.outputVersionArtifactIds).toEqual([]);
+    expect(healed.execution?.[outputCellId]).toBeUndefined();
+    expect(healed.execution?.[actionCellId]).toMatchObject({
+      status: "awaiting-output",
+    });
+  });
+
+  it("leaves a landed pair untouched when the producer re-runs", async () => {
+    const landed = await engine.artifacts.create({
+      kind: "image",
+      label: "landed output",
+    });
+    expect(landed.ok).toBe(true);
+    if (!landed.ok) throw new Error(landed.error.message);
+    const { input, actionCellId, outputCellId } = await setupAwaitingPair();
+    const notebook = engine.notebooks.read(input.notebookId);
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) return;
+    const completedDocument = {
+      ...notebook.value,
+      cells: notebook.value.cells.map((cell) => cell.id === outputCellId
+        ? {
+            ...cell,
+            outputArtifactId: landed.value.artifactId,
+            inputs: {
+              ...(cell.inputs ?? {}),
+              state: "completed",
+              outputVersionArtifactIds: [landed.value.artifactId],
+            },
+          }
+        : cell),
+      execution: {
+        [outputCellId]: {
+          fingerprint: "provider-failure",
+          status: "completed",
+          outputArtifactId: landed.value.artifactId,
+        },
+      },
+    };
+    const action = completedDocument.cells.find((cell) => cell.id === actionCellId);
+    expect(action).toBeDefined();
+    if (!action) return;
+
+    const healed = healGenerationMediaOutputResidue(completedDocument, action);
+
+    expect(healed).toBe(completedDocument);
+    const output = healed.cells.find((cell) => cell.id === outputCellId);
+    expect(output?.outputArtifactId).toBe(landed.value.artifactId);
+    expect(output?.inputs?.state).toBe("completed");
   });
 });
