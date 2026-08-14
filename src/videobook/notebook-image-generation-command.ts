@@ -1,4 +1,5 @@
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
+import { resolveNotebookCellArtifactId } from 'videobook-engine/notebook-media-artifact'
 import { nextNotebookHorizontalGenerationSlot } from './notebook-grid'
 import type {
   NotebookCell,
@@ -97,7 +98,7 @@ export function resolveNotebookImageGenerationSources(
     if (!imageSourceTypes.has(source.type)) {
       throw new Error(`${notebookCellTag(source)} is not an image-producing cell`)
     }
-    if (!source.outputArtifactId) {
+    if (!resolveNotebookCellArtifactId(document, source)) {
       throw new Error(`${notebookCellTag(source)} does not have an image output yet`)
     }
     return source

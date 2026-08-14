@@ -9,7 +9,10 @@ import type {
 } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
-import { findGenerateVideoOutput } from "../notebook-cell-outputs.js";
+import {
+  findGenerateImageOutput,
+  findGenerateVideoOutput,
+} from "../notebook-cell-outputs.js";
 import { buildAssetList } from "./sync.js";
 
 export type CellGenerationTransition = {
@@ -78,13 +81,29 @@ export function pairForCell(
     const output = findGenerateVideoOutput(document, cell.id);
     return { generateCell: cell, outputCell: output?.outputCell ?? null };
   }
+  if (cell.type === "generate_image") {
+    const output = findGenerateImageOutput(document, cell.id);
+    return { generateCell: cell, outputCell: output?.outputCell ?? null };
+  }
   if (cell.type === "video") {
     const producerEdge = document.edges.find((edge) =>
-      edge.target === cell.id && edge.targetInput === "output");
+      edge.target === cell.id
+      && (edge.targetInput === "output" || edge.targetInput === "media"));
     const producer = producerEdge
       ? document.cells.find((candidate) => candidate.id === producerEdge.source)
       : undefined;
     if (producer?.type === "generate_video") {
+      return { generateCell: producer, outputCell: cell };
+    }
+  }
+  if (cell.type === "image") {
+    const producerEdge = document.edges.find((edge) =>
+      edge.target === cell.id
+      && (edge.targetInput === "media" || edge.targetInput === "output"));
+    const producer = producerEdge
+      ? document.cells.find((candidate) => candidate.id === producerEdge.source)
+      : undefined;
+    if (producer?.type === "generate_image") {
       return { generateCell: producer, outputCell: cell };
     }
   }

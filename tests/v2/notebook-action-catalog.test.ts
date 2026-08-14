@@ -439,7 +439,7 @@ describe("notebook action catalog", () => {
       cell: {
         type: "generate_video",
         label: "generate-video-01",
-        slot: { row: 3, column: 0 },
+        slot: { row: 4, column: 0 },
         prompt: "A moonlit garden in motion",
       },
     })) as { id: string; tool: string };
@@ -505,7 +505,7 @@ describe("notebook action catalog", () => {
       cell: {
         type: "generate_audio",
         label: "generate-audio-01",
-        slot: { row: 5, column: 0 },
+        slot: { row: 6, column: 0 },
         prompt: "Welcome to the moon garden",
       },
     })) as { id: string; provider: string; model: string; operation: string; tool: string };

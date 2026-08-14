@@ -121,14 +121,21 @@ describe("Dancing workflow fixture", () => {
     }));
     expect(kittens?.prompt).toContain("two kittens");
     expect(kittens?.prompt).toContain("freeway");
+    expect(kittens?.outputArtifactId).toBeUndefined();
+    expect(kittens?.slot).toEqual({ row: 2, column: 1 });
     expect(kittenOutput).toEqual(expect.objectContaining({
       type: "image",
-      outputArtifactId: kittens?.outputArtifactId,
+      slot: { row: 3, column: 1 },
       inputs: expect.objectContaining({
         mediaRole: "generate-image-output",
         producerCellId: kittens?.id,
         state: "completed",
       }),
+    }));
+    expect(kittenOutput?.outputArtifactId).toBeTruthy();
+    expect(seeded.execution?.[kittens!.id]).toEqual(expect.objectContaining({
+      status: "completed",
+      outputArtifactId: kittenOutput?.outputArtifactId,
     }));
     expect(motion).toEqual(expect.objectContaining({
       type: "generate_video",

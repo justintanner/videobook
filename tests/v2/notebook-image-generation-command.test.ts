@@ -133,6 +133,58 @@ describe('notebook image generation commands', () => {
       .toThrow('Notebook cell @img-other was not found')
   })
 
+  it('accepts a generate_image source whose artifact lives on the output cell', () => {
+    const outputArtifactId = '01900000-0000-7000-8000-000000000012'
+    const source = {
+      id: '01900000-0000-7000-8000-000000000013',
+      type: 'generate_image' as const,
+      label: 'gen-pair',
+      slot: { row: 0, column: 0 },
+    }
+    const output = {
+      id: '01900000-0000-7000-8000-000000000014',
+      type: 'image' as const,
+      label: 'gen-pair image',
+      slot: { row: 1, column: 0 },
+      outputArtifactId,
+      inputs: {
+        mediaRole: 'generate-image-output',
+        producerCellId: source.id,
+        state: 'completed',
+      },
+    }
+    const document = {
+      id: '01900000-0000-7000-8000-000000000015',
+      name: 'Output cell source',
+      cells: [source, output],
+      edges: [{
+        id: '01900000-0000-7000-8000-000000000016',
+        source: source.id,
+        target: output.id,
+        targetInput: 'media',
+      }],
+      createdAt: new Date(0).toISOString(),
+    } satisfies NotebookDocument
+
+    expect(resolveNotebookImageGenerationSources(document, [source.id]))
+      .toEqual([source])
+    expect(resolveNotebookImageGenerationSources(document, ['A1']))
+      .toEqual([source])
+
+    const artifactless = {
+      ...source,
+      id: '01900000-0000-7000-8000-000000000017',
+      slot: { row: 0, column: 2 },
+    }
+    const emptyDocument = {
+      ...document,
+      cells: [artifactless],
+      edges: [],
+    }
+    expect(() => resolveNotebookImageGenerationSources(emptyDocument, ['a3']))
+      .toThrow('@a3 does not have an image output yet')
+  })
+
   it('creates a configured book cell, connects its image source, and produces a canonical plan', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))

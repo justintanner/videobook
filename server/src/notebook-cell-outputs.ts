@@ -5,6 +5,7 @@ import type {
   NotebookGridSlot,
 } from "videobook-engine";
 import {
+  findGenerateImageOutputCell,
   findGenerateVideoOutputCell,
   NOTEBOOK_GRID_COLUMN_COUNT,
   NOTEBOOK_GRID_ROW_COUNT,
@@ -13,7 +14,11 @@ import {
 } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 
-export { findGenerateVideoOutputCell, resolveGeneratedVideoArtifact } from "videobook-engine";
+export {
+  findGenerateImageOutputCell,
+  findGenerateVideoOutputCell,
+  resolveGeneratedVideoArtifact,
+} from "videobook-engine";
 
 type ExtractFrameMode = "first" | "time" | "last";
 
@@ -353,22 +358,6 @@ export function ensureExtractAudioOutput(
   };
 }
 
-function generateVideoOutputInputs(
-  cell: NotebookCell,
-  generateVideoCellId: string,
-): Record<string, unknown> {
-  return {
-    ...(cell.inputs ?? {}),
-    mediaRole: "generate-video-output",
-    producerCellId: generateVideoCellId,
-  };
-}
-
-function outputVideoLabel(generateVideo: NotebookCell): string {
-  const base = generateVideo.label ?? notebookGridTag(generateVideo.slot);
-  return `${base} video`;
-}
-
 function slotDirectlyBelow(slot: NotebookGridSlot): NotebookGridSlot {
   if (slot.row + 1 < NOTEBOOK_GRID_ROW_COUNT) {
     return { row: slot.row + 1, column: slot.column };
@@ -379,32 +368,62 @@ function slotDirectlyBelow(slot: NotebookGridSlot): NotebookGridSlot {
   };
 }
 
-export function findGenerateVideoOutput(
-  document: NotebookDocument,
-  generateVideoCellId: string,
-) {
-  return findGenerateVideoOutputCell(document, generateVideoCellId);
+type GenerationProducerType = "generate_video" | "generate_image";
+type GenerationOutputType = "video" | "image";
+
+type GenerationOutputSpec = {
+  producerType: GenerationProducerType;
+  outputType: GenerationOutputType;
+  mediaRole: string;
+  labelSuffix: string;
+  find: (
+    document: NotebookDocument,
+    cellId: string,
+  ) => ReturnType<typeof findGenerateVideoOutputCell>;
+};
+
+function generationOutputInputs(
+  cell: NotebookCell,
+  producerCellId: string,
+  mediaRole: string,
+): Record<string, unknown> {
+  return {
+    ...(cell.inputs ?? {}),
+    mediaRole,
+    producerCellId,
+  };
 }
 
-export function ensureGenerateVideoOutput(
+function generationOutputLabel(
+  producer: NotebookCell,
+  labelSuffix: string,
+): string {
+  const base = producer.label ?? notebookGridTag(producer.slot);
+  return `${base} ${labelSuffix}`;
+}
+
+function ensureGenerationOutput(
   engine: Engine,
   document: NotebookDocument,
-  generateVideoCellId: string,
+  cellId: string,
+  spec: GenerationOutputSpec,
 ) {
-  const generateVideo = document.cells.find((cell) =>
-    cell.id === generateVideoCellId);
-  if (generateVideo?.type !== "generate_video") {
-    throw new Error(`Generate Video cell not found: ${generateVideoCellId}`);
+  const producer = document.cells.find((cell) => cell.id === cellId);
+  if (producer?.type !== spec.producerType) {
+    const label = spec.producerType === "generate_image"
+      ? "Generate Image"
+      : "Generate Video";
+    throw new Error(`${label} cell not found: ${cellId}`);
   }
-  const existing = findGenerateVideoOutput(document, generateVideoCellId);
+  const existing = spec.find(document, cellId);
   if (existing) {
-    const inputs = generateVideoOutputInputs(
+    const inputs = generationOutputInputs(
       existing.outputCell,
-      generateVideoCellId,
+      cellId,
+      spec.mediaRole,
     );
-    const unchanged = existing.outputCell.inputs?.mediaRole
-        === "generate-video-output"
-      && existing.outputCell.inputs?.producerCellId === generateVideoCellId;
+    const unchanged = existing.outputCell.inputs?.mediaRole === spec.mediaRole
+      && existing.outputCell.inputs?.producerCellId === cellId;
     if (unchanged) {
       return { document, ...existing, created: false, updated: false };
     }
@@ -423,19 +442,17 @@ export function ensureGenerateVideoOutput(
   }
   const occupied = document.cells.map((cell) => cell.slot);
   const outputCell = engine.notebooks.createCell({
-    type: "video",
-    label: outputVideoLabel(generateVideo),
-    slot: nextVerticalSlotFrom(
-      slotDirectlyBelow(generateVideo.slot),
-      occupied,
-    ),
-    inputs: generateVideoOutputInputs(
-      { ...generateVideo, inputs: { state: "pending" } },
-      generateVideo.id,
+    type: spec.outputType,
+    label: generationOutputLabel(producer, spec.labelSuffix),
+    slot: nextVerticalSlotFrom(slotDirectlyBelow(producer.slot), occupied),
+    inputs: generationOutputInputs(
+      { ...producer, inputs: { state: "pending" } },
+      producer.id,
+      spec.mediaRole,
     ),
   });
   const outputEdge = engine.notebooks.createEdge({
-    source: generateVideo.id,
+    source: producer.id,
     target: outputCell.id,
     targetInput: "media",
   });
@@ -450,4 +467,73 @@ export function ensureGenerateVideoOutput(
     created: true,
     updated: false,
   };
+}
+
+export function findGenerateVideoOutput(
+  document: NotebookDocument,
+  generateVideoCellId: string,
+) {
+  return findGenerateVideoOutputCell(document, generateVideoCellId);
+}
+
+export function findGenerateImageOutput(
+  document: NotebookDocument,
+  generateImageCellId: string,
+) {
+  return findGenerateImageOutputCell(document, generateImageCellId);
+}
+
+export function ensureGenerateVideoOutput(
+  engine: Engine,
+  document: NotebookDocument,
+  generateVideoCellId: string,
+) {
+  return ensureGenerationOutput(engine, document, generateVideoCellId, {
+    producerType: "generate_video",
+    outputType: "video",
+    mediaRole: "generate-video-output",
+    labelSuffix: "video",
+    find: findGenerateVideoOutput,
+  });
+}
+
+export function ensureGenerateImageOutput(
+  engine: Engine,
+  document: NotebookDocument,
+  generateImageCellId: string,
+) {
+  return ensureGenerationOutput(engine, document, generateImageCellId, {
+    producerType: "generate_image",
+    outputType: "image",
+    mediaRole: "generate-image-output",
+    labelSuffix: "image",
+    find: findGenerateImageOutput,
+  });
+}
+
+export function findGenerationMediaOutput(
+  document: NotebookDocument,
+  cell: NotebookCell,
+) {
+  if (cell.type === "generate_video") {
+    return findGenerateVideoOutput(document, cell.id);
+  }
+  if (cell.type === "generate_image") {
+    return findGenerateImageOutput(document, cell.id);
+  }
+  return null;
+}
+
+export function ensureGenerationMediaOutput(
+  engine: Engine,
+  document: NotebookDocument,
+  cell: NotebookCell,
+) {
+  if (cell.type === "generate_video") {
+    return ensureGenerateVideoOutput(engine, document, cell.id);
+  }
+  if (cell.type === "generate_image") {
+    return ensureGenerateImageOutput(engine, document, cell.id);
+  }
+  throw new Error(`Generation output cell is not supported for ${cell.type}`);
 }

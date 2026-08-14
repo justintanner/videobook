@@ -437,10 +437,10 @@ describe('notebook bus and river routing', () => {
     const points = notebookBusRiverPoints(coordinates, route!)
 
     expect(points).toEqual([
-      { x: 544.5, y: 420 },
-      { x: 580, y: 420 },
+      { x: 524.5, y: 400 },
+      { x: 560, y: 400 },
     ])
-    expect(notebookBusRiverPath(coordinates, route!)).toBe('M 544.5 420 H 580')
+    expect(notebookBusRiverPath(coordinates, route!)).toBe('M 524.5 400 H 560')
     expect(points.every((point) => point.y >= notebookGridPosition(sourceSlot).y)).toBe(true)
     expect(segmentIntersectsCard(points[0]!, points[1]!, targetSlot)).toBe(false)
   })
@@ -455,7 +455,7 @@ describe('notebook bus and river routing', () => {
     const route = notebookBusRiverRoutes(document).get('edge')
     expect(route?.targetSide).toBe('left')
     expect(notebookBusRiverPath(routeCoordinates(sourceSlot, targetSlot, route!), route!))
-      .toBe('M 264.5 140 H 860')
+      .toBe('M 244.5 120 H 840')
   })
 
   it('routes cross-row forward connections through the target-column gutter', () => {
@@ -468,7 +468,7 @@ describe('notebook bus and river routing', () => {
     const route = notebookBusRiverRoutes(document).get('edge')
     expect(route).toMatchObject({ targetSide: 'left', riverOffset: 20 })
     expect(notebookBusRiverPath(routeCoordinates(sourceSlot, targetSlot, route!), route!))
-      .toBe('M 264.5 140 H 560 V 700 H 580')
+      .toBe('M 244.5 120 H 540 V 680 H 560')
   })
 
   it('keeps backward connections on the target top edge', () => {
@@ -481,7 +481,7 @@ describe('notebook bus and river routing', () => {
     const route = notebookBusRiverRoutes(document).get('edge')
     expect(route?.targetSide).toBe('top')
     const points = notebookBusRiverPoints(routeCoordinates(sourceSlot, targetSlot, route!), route!)
-    expect(points.at(-1)).toEqual({ x: 140, y: 20 })
+    expect(points.at(-1)).toEqual({ x: 120, y: 0 })
   })
 
   it.each([

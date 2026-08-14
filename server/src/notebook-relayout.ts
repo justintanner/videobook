@@ -13,8 +13,10 @@ import {
   NOTEBOOK_GRID_ROW_COUNT,
 } from "videobook-engine";
 import {
+  ensureGenerateImageOutput,
   ensureGenerateVideoOutput,
   findExtractFrameImageOutput,
+  findGenerateImageOutput,
   findGenerateVideoOutput,
 } from "./notebook-cell-outputs.js";
 
@@ -36,6 +38,18 @@ function isGenerateVideoOutputCell(
   if (typeof producerId !== "string") return false;
   return document.cells.some((candidate) =>
     candidate.id === producerId && candidate.type === "generate_video");
+}
+
+function isGenerateImageOutputCell(
+  document: NotebookDocument,
+  cell: NotebookCell,
+): boolean {
+  if (cell.type !== "image") return false;
+  if (cell.inputs?.mediaRole === "generate-image-output") return true;
+  const producerId = cell.inputs?.producerCellId;
+  if (typeof producerId !== "string") return false;
+  return document.cells.some((candidate) =>
+    candidate.id === producerId && candidate.type === "generate_image");
 }
 
 function isExtractFrameOutputCell(cell: NotebookCell): boolean {
@@ -63,50 +77,62 @@ function slotRight(slot: NotebookGridSlot): NotebookGridSlot {
   };
 }
 
-function migrateGenerateVideoArtifacts(
+function migrateGenerationArtifacts(
   engine: Engine,
   document: NotebookDocument,
 ): NotebookDocument {
+  const specs = [
+    {
+      producerType: "generate_video" as const,
+      ensure: ensureGenerateVideoOutput,
+    },
+    {
+      producerType: "generate_image" as const,
+      ensure: ensureGenerateImageOutput,
+    },
+  ];
   let working = document;
-  const generateVideos = working.cells
-    .filter((cell) => cell.type === "generate_video")
-    .sort(bySlotThenId);
-  for (const tile of generateVideos) {
-    const ensured = ensureGenerateVideoOutput(engine, working, tile.id);
-    working = ensured.document;
-    const liveTile = working.cells.find((cell) => cell.id === tile.id);
-    const inlineArtifact = liveTile?.outputArtifactId;
-    if (!inlineArtifact) continue;
-    if (ensured.outputCell.outputArtifactId === inlineArtifact) {
+  for (const spec of specs) {
+    const tiles = working.cells
+      .filter((cell) => cell.type === spec.producerType)
+      .sort(bySlotThenId);
+    for (const tile of tiles) {
+      const ensured = spec.ensure(engine, working, tile.id);
+      working = ensured.document;
+      const liveTile = working.cells.find((cell) => cell.id === tile.id);
+      const inlineArtifact = liveTile?.outputArtifactId;
+      if (!inlineArtifact) continue;
+      if (ensured.outputCell.outputArtifactId === inlineArtifact) {
+        working = {
+          ...working,
+          cells: working.cells.map((cell) =>
+            cell.id === tile.id
+              ? { ...cell, outputArtifactId: undefined }
+              : cell),
+        };
+        continue;
+      }
+      if (ensured.outputCell.outputArtifactId) continue;
       working = {
         ...working,
-        cells: working.cells.map((cell) =>
-          cell.id === tile.id
-            ? { ...cell, outputArtifactId: undefined }
-            : cell),
+        cells: working.cells.map((cell) => {
+          if (cell.id === ensured.outputCell.id) {
+            return {
+              ...cell,
+              outputArtifactId: inlineArtifact,
+              inputs: {
+                ...(cell.inputs ?? {}),
+                state: "completed",
+              },
+            };
+          }
+          if (cell.id === tile.id) {
+            return { ...cell, outputArtifactId: undefined };
+          }
+          return cell;
+        }),
       };
-      continue;
     }
-    if (ensured.outputCell.outputArtifactId) continue;
-    working = {
-      ...working,
-      cells: working.cells.map((cell) => {
-        if (cell.id === ensured.outputCell.id) {
-          return {
-            ...cell,
-            outputArtifactId: inlineArtifact,
-            inputs: {
-              ...(cell.inputs ?? {}),
-              state: "completed",
-            },
-          };
-        }
-        if (cell.id === tile.id) {
-          return { ...cell, outputArtifactId: undefined };
-        }
-        return cell;
-      }),
-    };
   }
   return working;
 }
@@ -123,7 +149,13 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
   const cells = [...document.cells].sort(bySlotThenId);
 
   for (const cell of cells) {
-    if (cell.type !== "image" || isExtractFrameOutputCell(cell)) continue;
+    if (
+      cell.type !== "image"
+      || isExtractFrameOutputCell(cell)
+      || isGenerateImageOutputCell(document, cell)
+    ) {
+      continue;
+    }
     claim(cell.id, nextHorizontalSlotFrom({ row: 0, column: 0 }, occupied));
   }
 
@@ -163,9 +195,41 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
       .map((cell) => newSlots.get(cell.id)!.row),
   );
 
+  function claimGenerateImagePair(
+    tile: NotebookCell,
+    tileSlot: NotebookGridSlot,
+  ): void {
+    claim(tile.id, tileSlot);
+    const output = findGenerateImageOutput(document, tile.id);
+    if (output && !newSlots.has(output.outputCell.id)) {
+      claim(
+        output.outputCell.id,
+        nextVerticalSlotFrom(slotBelow(tileSlot), occupied),
+      );
+    }
+  }
+
   let progressed = true;
   while (progressed) {
     progressed = false;
+
+    for (const tile of cells) {
+      if (tile.type !== "generate_image" || newSlots.has(tile.id)) continue;
+      const sources = cellSources(tile);
+      if (!sources) continue;
+      const sourceSlots = sources.map((source) => newSlots.get(source.id)!);
+      const anchor = sourceSlots.length === 0
+        ? { row: 0, column: 0 }
+        : {
+            row: Math.min(...sourceSlots.map((slot) => slot.row)),
+            column: Math.min(
+              Math.max(...sourceSlots.map((slot) => slot.column)) + 1,
+              NOTEBOOK_GRID_COLUMN_COUNT - 1,
+            ),
+          };
+      claimGenerateImagePair(tile, nextHorizontalSlotFrom(anchor, occupied));
+      progressed = true;
+    }
 
     for (const tile of cells) {
       if (tile.type !== "generate_video" || newSlots.has(tile.id)) continue;
@@ -225,7 +289,10 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
   for (const cell of cells) {
     if (newSlots.has(cell.id)) continue;
     if (cell.type === "generate_image") {
-      claim(cell.id, nextHorizontalSlotFrom({ row: 0, column: 0 }, occupied));
+      claimGenerateImagePair(
+        cell,
+        nextHorizontalSlotFrom({ row: 0, column: 0 }, occupied),
+      );
       continue;
     }
     claim(cell.id, nearestOriginNotebookGridSlot(occupied));
@@ -244,7 +311,7 @@ export function relayoutNotebookDocument(
   engine: Engine,
   document: NotebookDocument,
 ): NotebookDocument {
-  const migrated = migrateGenerateVideoArtifacts(engine, document);
+  const migrated = migrateGenerationArtifacts(engine, document);
   return assignDirectionalSlots(migrated);
 }
 

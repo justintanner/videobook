@@ -269,6 +269,79 @@ describe("list_cell_generations tool", () => {
     expect(withPayloads.text).not.toContain("\"present\"");
   });
 
+  it("resolves a generate_image output-cell pair", async () => {
+    const { notebook, cell } = await createNotebookWithCell(engine, "generate_image");
+    const outputCell = engine.notebooks.createCell({
+      type: "image",
+      slot: { row: 1, column: 0 },
+      inputs: {
+        mediaRole: "generate-image-output",
+        producerCellId: cell.id,
+      },
+    });
+    const edge = engine.notebooks.createEdge({
+      source: cell.id,
+      target: outputCell.id,
+      targetInput: "media",
+    });
+    const written = await mutateNotebook(
+      engine,
+      notebook.id,
+      "run_notebook_cell",
+      (current) => ({
+        ...current,
+        cells: [...current.cells, outputCell],
+        edges: [...current.edges, edge],
+      }),
+      { cellId: cell.id },
+    );
+    if (!written.ok) throw new Error(written.error.message);
+
+    const providerAsset = await engine.artifacts.create("image", "provider-image");
+    const outputAsset = await engine.artifacts.create("image", "cell-image");
+    if (!providerAsset.ok) throw new Error(providerAsset.error.message);
+    if (!outputAsset.ok) throw new Error(outputAsset.error.message);
+    const payload = {
+      model: "seedream",
+      input: { prompt: "a cat dances" },
+    };
+    expect((await engine.metadata.artifacts.write(
+      outputAsset.value.artifactId,
+      "generation-payload",
+      payload,
+    )).ok).toBe(true);
+
+    const generation = await engine.generations.record({
+      notebookId: notebook.id,
+      cellId: cell.id,
+      tool: "generate_seedream_image",
+      providerArtifactId: providerAsset.value.artifactId,
+      runId: "run-image-pair",
+    });
+    if (!generation.ok) throw new Error(generation.error.message);
+    await updateGeneration(engine, generation.value.generationId, {
+      status: "completed",
+      outputArtifactId: outputAsset.value.artifactId,
+    });
+
+    const fromTile = await listGenerations(engine, {
+      notebook_id: notebook.id,
+      cell_id: cell.id,
+    });
+    expect(fromTile.data.generateCellId).toBe(cell.id);
+    expect(fromTile.data.outputCellId).toBe(outputCell.id);
+    expect(fromTile.data.attempts[0]?.artifactId).toBe(outputAsset.value.artifactId);
+
+    const fromOutput = await listGenerations(engine, {
+      notebook_id: notebook.id,
+      cell_id: outputCell.id,
+    });
+    expect(fromOutput.data.generateCellId).toBe(cell.id);
+    expect(fromOutput.data.outputCellId).toBe(outputCell.id);
+    expect(fromOutput.data.attempts).toHaveLength(1);
+    expect(fromOutput.data.attempts[0]?.status).toBe("completed");
+  });
+
   it("falls back to the recorded job failure error when the row has none", async () => {
     const { notebook, cell } = await createNotebookWithCell(engine);
     const output = await engine.artifacts.create("video", "failed-out");

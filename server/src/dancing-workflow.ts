@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { YtDlp } from "ytdlp-nodejs";
 import {
   findVideoFile,
+  resolveNotebookCellArtifactId,
   type Artifact,
   type Engine,
   type NotebookCell,
@@ -22,7 +23,7 @@ export type DancingFixtureOptions = {
 };
 
 export const DANCING_FIXTURE_OWNER = "dancing-default";
-export const DANCING_FIXTURE_VERSION = 3;
+export const DANCING_FIXTURE_VERSION = 4;
 export const DANCING_SOURCE_URL = "https://www.youtube.com/watch?v=8GwZveBYRJI";
 export const DANCING_MOTION_DURATION_SECONDS = 10;
 
@@ -285,11 +286,12 @@ function completedExecution(
   const execution = { ...preserved };
   const completedAt = new Date().toISOString();
   for (const cell of fixtureCells(document)) {
-    if (!cell.outputArtifactId) continue;
+    const artifactId = resolveNotebookCellArtifactId(document, cell);
+    if (!artifactId) continue;
     execution[cell.id] = {
       status: "completed",
       fingerprint: notebookCellFingerprint(document, cell),
-      outputArtifactId: cell.outputArtifactId,
+      outputArtifactId: artifactId,
       completedAt,
       updatedAt: completedAt,
       ...(cell.tool ? { tool: cell.tool } : {}),
@@ -397,7 +399,6 @@ export async function seedDancingWorkflow(
     model: "googleflow/image/nano-banana-pro",
     operation: "text_to_image",
     tool: "generate_google_flow_nano_banana_pro_image",
-    outputArtifactId: kittenArtifact.artifactId,
     inputs: {
       ...ownedInputs("kittens-freeway"),
       generationMode: "default",
@@ -410,7 +411,7 @@ export async function seedDancingWorkflow(
   const kittenOutput = engine.notebooks.createCell({
     type: "image",
     label: "Kittens freeway image",
-    slot: { row: 2, column: 2 },
+    slot: { row: 3, column: 1 },
     outputArtifactId: kittenArtifact.artifactId,
     inputs: {
       ...ownedInputs("kittens-freeway-output"),

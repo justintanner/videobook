@@ -22,10 +22,10 @@ import { mutateNotebook } from "../notebook-mutations.js";
 import {
   ensureExtractAudioOutput,
   ensureExtractFrameImageOutput,
-  ensureGenerateVideoOutput,
+  ensureGenerationMediaOutput,
   extractFrameSelection,
   findExtractFrameImageOutput,
-  findGenerateVideoOutput,
+  findGenerationMediaOutput,
 } from "../notebook-cell-outputs.js";
 import { queue, registerJobHandler, waitForJob } from "../queue.js";
 import { translateToolPayload } from "../payload-builders.js";
@@ -1216,9 +1216,7 @@ async function generationTool(
   const resolvedPrompt = typeof prepared.input.prompt === "string"
     ? prepared.input.prompt
     : "";
-  const outputCellId = cell.type === "generate_video"
-    ? findGenerateVideoOutput(document, cell.id)?.outputCell.id
-    : undefined;
+  const outputCellId = findGenerationMediaOutput(document, cell)?.outputCell.id;
   const generationId = await recordGenerationDispatch(engine, {
     notebookId: document.id,
     cellId: cell.id,
@@ -2182,25 +2180,28 @@ export async function runNotebookCell(
     normalizedCell = normalizedDocument.cells.find((candidate) =>
       candidate.id === cell.id) ?? normalizedCell;
   }
-  const generateVideoOutput = normalizedCell.type === "generate_video"
-    ? ensureGenerateVideoOutput(
+  const generateMediaOutput = normalizedCell.type === "generate_video"
+      || normalizedCell.type === "generate_image"
+    ? ensureGenerationMediaOutput(
         engine,
         normalizedDocument,
-        normalizedCell.id,
+        normalizedCell,
       )
     : null;
   if (
-    generateVideoOutput
-    && generateVideoOutput.document !== normalizedDocument
+    generateMediaOutput
+    && generateMediaOutput.document !== normalizedDocument
   ) {
     const repaired = await mutateNotebook(
       engine,
       notebookId,
-      "ensure_generate_video_output",
-      (current) => ensureGenerateVideoOutput(
+      normalizedCell.type === "generate_image"
+        ? "ensure_generate_image_output"
+        : "ensure_generate_video_output",
+      (current) => ensureGenerationMediaOutput(
         engine,
         current,
-        normalizedCell.id,
+        normalizedCell,
       ).document,
       { cellId: normalizedCell.id },
     );
@@ -2278,12 +2279,11 @@ export async function runNotebookCell(
       "run_notebook_cell",
       (current) => {
         const base = output.document ?? current;
-        const videoOutput = activeCell.type === "generate_video"
-          ? findGenerateVideoOutput(base, activeCell.id)
-          : null;
-        // New-style generate_video: artifact lives on the output video cell.
-        // Legacy/other cells keep inline outputArtifactId on the action cell.
-        const actionArtifactId = videoOutput ? undefined : output.artifactId;
+        const mediaOutput = findGenerationMediaOutput(base, activeCell);
+        // New-style generate_video / generate_image: artifact lives on the
+        // dedicated output cell. Legacy/other cells keep inline
+        // outputArtifactId on the action cell.
+        const actionArtifactId = mediaOutput ? undefined : output.artifactId;
         let withOutput = withExecution(
           base,
           activeCell.id,
@@ -2294,10 +2294,10 @@ export async function runNotebookCell(
           typeof output.cellInputs?.resolvedPrompt === "string"
             ? output.cellInputs.resolvedPrompt
             : "";
-        if (videoOutput) {
+        if (mediaOutput) {
           withOutput = withMediaOutput(
             withOutput,
-            new Set([videoOutput.outputCell.id]),
+            new Set([mediaOutput.outputCell.id]),
             output.artifactId,
             {
               state: status,
@@ -2332,7 +2332,7 @@ export async function runNotebookCell(
                   : {}),
               };
             }
-            if (candidate.id === videoOutput?.outputCell.id) {
+            if (candidate.id === mediaOutput?.outputCell.id) {
               if (!resolvedPrompt && output.model === undefined) {
                 return candidate;
               }
@@ -2353,7 +2353,7 @@ export async function runNotebookCell(
         const fingerprint = actionCellChanged && finalCell
           ? notebookCellFingerprint(withCells, finalCell)
           : state.fingerprint;
-        if (!videoOutput && !actionCellChanged) return withCells;
+        if (!mediaOutput && !actionCellChanged) return withCells;
         return {
           ...withCells,
           execution: {
@@ -2363,9 +2363,9 @@ export async function runNotebookCell(
               fingerprint,
               outputArtifactId: output.artifactId,
             },
-            ...(videoOutput
+            ...(mediaOutput
               ? {
-                  [videoOutput.outputCell.id]: {
+                  [mediaOutput.outputCell.id]: {
                     fingerprint,
                     status: status === "awaiting-output"
                       ? "awaiting-output"
@@ -2466,7 +2466,7 @@ export function notebookCellIsStale(
   if (execution.fingerprint !== notebookCellFingerprint(document, cell)) return true;
   if (execution.status === "error" || execution.error) return true;
   if (execution.status === "stale" || execution.stale) return true;
-  // generate_video may hold the artifact only on its output video cell.
+  // generate_video / generate_image may hold the artifact only on the output cell.
   const artifactId = resolveNotebookCellArtifactId(document, cell)
     ?? execution.outputArtifactId;
   if (!artifactId) return true;
@@ -2680,13 +2680,14 @@ async function finishAwaitingNotebookCell(
     "complete_notebook_provider_output",
     (document) => {
       let working = document;
-      let resolvedVideoOutput = cell.type === "generate_video"
-        ? findGenerateVideoOutput(working, cell.id)
-        : null;
-      if (cell.type === "generate_video" && !resolvedVideoOutput) {
-        const ensured = ensureGenerateVideoOutput(engine, working, cell.id);
+      let resolvedOutput = findGenerationMediaOutput(working, cell);
+      if (
+        (cell.type === "generate_video" || cell.type === "generate_image")
+        && !resolvedOutput
+      ) {
+        const ensured = ensureGenerationMediaOutput(engine, working, cell);
         working = ensured.document;
-        resolvedVideoOutput = {
+        resolvedOutput = {
           outputCell: ensured.outputCell,
           outputEdge: ensured.outputEdge,
         };
@@ -2695,12 +2696,12 @@ async function finishAwaitingNotebookCell(
         working,
         cell.id,
         state,
-        resolvedVideoOutput ? undefined : outputArtifactId,
+        resolvedOutput ? undefined : outputArtifactId,
       );
-      if (resolvedVideoOutput) {
+      if (resolvedOutput) {
         withOutput = withMediaOutput(
           withOutput,
-          new Set([resolvedVideoOutput.outputCell.id]),
+          new Set([resolvedOutput.outputCell.id]),
           outputArtifactId,
           {
             state: "completed",
@@ -2709,7 +2710,7 @@ async function finishAwaitingNotebookCell(
           },
         );
       }
-      const outputCellId = resolvedVideoOutput?.outputCell.id;
+      const outputCellId = resolvedOutput?.outputCell.id;
       const actionBefore = withOutput.cells.find((candidate) =>
         candidate.id === cell.id);
       const fillActionPrompt = Boolean(resolvedPrompt)

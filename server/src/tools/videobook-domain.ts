@@ -20,6 +20,7 @@ import type { BookManager } from "../book-manager.js";
 import {
   ensureExtractAudioOutput,
   ensureExtractFrameImageOutput,
+  ensureGenerateImageOutput,
   ensureGenerateVideoOutput,
 } from "../notebook-cell-outputs.js";
 import { mutateNotebook } from "../notebook-mutations.js";
@@ -1409,6 +1410,16 @@ export function videobookDomainDefs(
               outputEdge = ensured.outputEdge;
               return ensured.document;
             }
+            if (cell.type === "generate_image") {
+              const ensured = ensureGenerateImageOutput(
+                engine,
+                withCell,
+                cell.id,
+              );
+              outputCell = ensured.outputCell;
+              outputEdge = ensured.outputEdge;
+              return ensured.document;
+            }
             return {
               ...withCell,
               cells: [
@@ -1533,7 +1544,7 @@ export function videobookDomainDefs(
     {
       name: "relayout_notebook",
       description:
-        "Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video inline artifacts into output cells.",
+        "Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video / generate_image inline artifacts into output cells.",
       scope: "book",
       recordsOwnActivity: true,
       schema: {

@@ -6,12 +6,15 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   resolveGeneratedVideoArtifact,
+  resolveNotebookCellArtifactId,
   type NotebookDocument,
 } from 'videobook-engine'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
 import {
+  ensureGenerateImageOutput,
   ensureGenerateVideoOutput,
+  findGenerateImageOutput,
   findGenerateVideoOutput,
 } from '../../server/src/notebook-cell-outputs.js'
 import {
@@ -608,5 +611,362 @@ describe('directional canvas placement', () => {
     const second = ensureGenerateVideoOutput(engine, first.document, tile.id)
     expect(second.created).toBe(false)
     expect(second.outputCell.id).toBe(first.outputCell.id)
+  })
+
+  it('creates generate_image with an image output cell directly below', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'directional-image',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const def = byName.get(name)
+      if (!def) throw new Error(`Missing ${name}`)
+      return await withBookContext(
+        { bookId: created.bookId, engine },
+        () => def.handler({ book_id: created.bookId, ...args }),
+      )
+    }
+
+    const notebooks = resultJson(await invoke('list_notebooks', {})) as Array<{
+      id: string
+    }>
+    const notebookId = notebooks[0]!.id
+    const generated = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'generate_image',
+        label: 'gen-image',
+        slot: { row: 0, column: 0 },
+        prompt: 'a kitten',
+      },
+    })) as {
+      id: string
+      output_cell?: {
+        id: string
+        type: string
+        slot: { row: number; column: number }
+        inputs?: Record<string, unknown>
+      }
+      output_edge?: {
+        source: string
+        target: string
+        targetInput: string
+      }
+    }
+
+    expect(generated.output_cell).toMatchObject({
+      type: 'image',
+      slot: { row: 1, column: 0 },
+      inputs: {
+        mediaRole: 'generate-image-output',
+        producerCellId: generated.id,
+      },
+    })
+    expect(generated.output_edge).toMatchObject({
+      source: generated.id,
+      target: generated.output_cell!.id,
+      targetInput: 'media',
+    })
+
+    const notebook = value(engine.notebooks.read(notebookId))
+    const tile = notebook.cells.find((cell) => cell.id === generated.id)!
+    const output = findGenerateImageOutput(notebook, generated.id)!
+    expect(tile.outputArtifactId).toBeUndefined()
+    expect(output.outputCell.slot).toEqual({ row: 1, column: 0 })
+  })
+
+  it('resolves generated image from output cell and legacy inline artifact', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'image-resolver-book',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const notebook = value(engine.notebooks.read(engine.notebooks.list()[0]!.id))
+    const legacyArtifact = value(await engine.artifacts.create({
+      kind: 'image',
+      label: 'legacy-image',
+    }))
+    const newArtifact = value(await engine.artifacts.create({
+      kind: 'image',
+      label: 'new-image',
+    }))
+
+    const legacyTile = engine.notebooks.createCell({
+      type: 'generate_image',
+      slot: { row: 0, column: 0 },
+      prompt: 'legacy',
+      outputArtifactId: legacyArtifact.artifactId,
+    })
+    const newTile = engine.notebooks.createCell({
+      type: 'generate_image',
+      slot: { row: 2, column: 0 },
+      prompt: 'new style',
+    })
+    const outputCell = engine.notebooks.createCell({
+      type: 'image',
+      slot: { row: 3, column: 0 },
+      outputArtifactId: newArtifact.artifactId,
+      inputs: {
+        mediaRole: 'generate-image-output',
+        producerCellId: newTile.id,
+      },
+    })
+    const document: NotebookDocument = {
+      ...notebook,
+      cells: [legacyTile, newTile, outputCell],
+      edges: [
+        engine.notebooks.createEdge({
+          source: newTile.id,
+          target: outputCell.id,
+          targetInput: 'media',
+        }),
+      ],
+    }
+    value(await engine.notebooks.write(document))
+
+    const reloaded = value(engine.notebooks.read(notebook.id))
+    const legacy = reloaded.cells.find((cell) => cell.id === legacyTile.id)!
+    const modern = reloaded.cells.find((cell) => cell.id === newTile.id)!
+    expect(resolveNotebookCellArtifactId(reloaded, legacy)).toBe(
+      legacyArtifact.artifactId,
+    )
+    expect(resolveNotebookCellArtifactId(reloaded, modern)).toBe(
+      newArtifact.artifactId,
+    )
+    expect(modern.outputArtifactId).toBeUndefined()
+  })
+
+  it('does not treat completed generate_image with output-cell artifact as stale', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'image-stale-check',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const notebook = value(engine.notebooks.read(engine.notebooks.list()[0]!.id))
+    const artifact = value(await engine.artifacts.create({
+      kind: 'image',
+      label: 'completed-image-output',
+    }))
+    const tile = engine.notebooks.createCell({
+      type: 'generate_image',
+      slot: { row: 0, column: 0 },
+      prompt: 'a kitten',
+      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      provider: 'kie',
+      model: 'NanoBananaProRequestSchema',
+      operation: 'text_to_image',
+    })
+    const outputCell = engine.notebooks.createCell({
+      type: 'image',
+      slot: { row: 1, column: 0 },
+      outputArtifactId: artifact.artifactId,
+      inputs: {
+        mediaRole: 'generate-image-output',
+        producerCellId: tile.id,
+        state: 'completed',
+      },
+    })
+    const draft: NotebookDocument = {
+      ...notebook,
+      cells: [tile, outputCell],
+      edges: [
+        engine.notebooks.createEdge({
+          source: tile.id,
+          target: outputCell.id,
+          targetInput: 'media',
+        }),
+      ],
+    }
+    const fingerprint = notebookCellFingerprint(draft, tile)
+    const completed: NotebookDocument = {
+      ...draft,
+      execution: {
+        [tile.id]: {
+          fingerprint,
+          status: 'completed',
+          outputArtifactId: artifact.artifactId,
+          completedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          tool: 'generate_kie_nano_banana_pro_text_to_image',
+        },
+      },
+    }
+    value(await engine.notebooks.write(completed))
+    const loaded = value(engine.notebooks.read(notebook.id))
+    const liveTile = loaded.cells.find((cell) => cell.id === tile.id)!
+    expect(liveTile.outputArtifactId).toBeUndefined()
+    expect(resolveNotebookCellArtifactId(loaded, liveTile)).toBe(
+      artifact.artifactId,
+    )
+    expect(notebookCellIsStale(engine, loaded, liveTile)).toBe(false)
+
+    registerRunNotebookJob(engine)
+    await setEngineRoot(rootDir, engine)
+    try {
+      const result = await queue.enqueueAndWait<{
+        status: string
+        outputs: Record<string, string>
+        errors?: string[]
+      }>(`run-notebook-skip-image-${tile.id}`, {
+        type: 'run_notebook',
+        bookId: created.bookId,
+        notebookId: notebook.id,
+        cellIds: [tile.id],
+        force: false,
+      })
+      expect(result.status).toBe('completed')
+      expect(result.outputs[tile.id]).toBe(artifact.artifactId)
+      expect(result.errors ?? []).toEqual([])
+      const after = value(engine.notebooks.read(notebook.id))
+      const afterTile = after.cells.find((cell) => cell.id === tile.id)!
+      expect(notebookCellIsStale(engine, after, afterTile)).toBe(false)
+      expect(afterTile.outputArtifactId).toBeUndefined()
+    } finally {
+      await stopBookQueue(created.bookId)
+    }
+  })
+
+  it('ensureGenerateImageOutput is idempotent for existing output cells', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'ensure-image-idempotent',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const notebook = value(engine.notebooks.read(engine.notebooks.list()[0]!.id))
+    const tile = engine.notebooks.createCell({
+      type: 'generate_image',
+      slot: { row: 0, column: 0 },
+      prompt: 'kitten',
+    })
+    const initial: NotebookDocument = {
+      ...notebook,
+      cells: [tile],
+      edges: [],
+    }
+    value(await engine.notebooks.write(initial))
+    const first = ensureGenerateImageOutput(engine, initial, tile.id)
+    expect(first.created).toBe(true)
+    const second = ensureGenerateImageOutput(engine, first.document, tile.id)
+    expect(second.created).toBe(false)
+    expect(second.updated).toBe(false)
+    expect(second.outputCell.id).toBe(first.outputCell.id)
+  })
+
+  it('relayouts a legacy inline generate_image into a pair and stacks video beneath it', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'image-relayout',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const notebook = value(engine.notebooks.read(engine.notebooks.list()[0]!.id))
+    const imageArtifact = value(await engine.artifacts.create({
+      kind: 'image',
+      label: 'legacy-gen-image',
+    }))
+    const videoArtifact = value(await engine.artifacts.create({
+      kind: 'video',
+      label: 'fed-video',
+    }))
+    const genImage = engine.notebooks.createCell({
+      type: 'generate_image',
+      label: 'legacy-image-tile',
+      slot: { row: 4, column: 5 },
+      prompt: 'a kitten on a freeway',
+      outputArtifactId: imageArtifact.artifactId,
+    })
+    value(await engine.notebooks.write({
+      ...notebook,
+      cells: [genImage],
+      edges: [],
+    }))
+
+    const migrated = await executeRelayoutNotebook(engine, {
+      type: 'relayout_notebook',
+      bookId: created.bookId,
+      notebookId: notebook.id,
+    })
+    expect(migrated.changed).toBe(true)
+
+    const afterMigrate = value(engine.notebooks.read(notebook.id))
+    const tile = afterMigrate.cells.find((cell) => cell.id === genImage.id)!
+    const imageOutput = findGenerateImageOutput(afterMigrate, genImage.id)
+    expect(imageOutput).not.toBeNull()
+    expect(tile.outputArtifactId).toBeUndefined()
+    expect(imageOutput!.outputCell.outputArtifactId).toBe(imageArtifact.artifactId)
+    expect(imageOutput!.outputCell.inputs?.mediaRole).toBe('generate-image-output')
+    expect(imageOutput!.outputCell.inputs?.producerCellId).toBe(genImage.id)
+    expect(imageOutput!.outputEdge.targetInput).toBe('media')
+    expect(imageOutput!.outputCell.slot.column).toBe(tile.slot.column)
+    expect(imageOutput!.outputCell.slot.row).toBe(tile.slot.row + 1)
+
+    const genVideo = engine.notebooks.createCell({
+      type: 'generate_video',
+      label: 'motion',
+      slot: { row: 6, column: 8 },
+      prompt: 'the kitten dances',
+      outputArtifactId: videoArtifact.artifactId,
+    })
+    value(await engine.notebooks.write({
+      ...afterMigrate,
+      cells: [...afterMigrate.cells, genVideo],
+      edges: [
+        ...afterMigrate.edges,
+        engine.notebooks.createEdge({
+          source: imageOutput!.outputCell.id,
+          target: genVideo.id,
+          targetInput: 'image',
+        }),
+      ],
+    }))
+
+    const first = await executeRelayoutNotebook(engine, {
+      type: 'relayout_notebook',
+      bookId: created.bookId,
+      notebookId: notebook.id,
+    })
+    expect(first.changed).toBe(true)
+
+    const after = value(engine.notebooks.read(notebook.id))
+    const liveImageOutput = findGenerateImageOutput(after, genImage.id)!
+    const videoTile = after.cells.find((cell) => cell.id === genVideo.id)!
+    const videoOutput = findGenerateVideoOutput(after, genVideo.id)!
+    expect(videoTile.outputArtifactId).toBeUndefined()
+    expect(videoOutput.outputCell.outputArtifactId).toBe(videoArtifact.artifactId)
+    expect(videoTile.slot.column).toBe(liveImageOutput.outputCell.slot.column)
+    expect(videoTile.slot.row).toBeGreaterThan(liveImageOutput.outputCell.slot.row)
+    expect(videoOutput.outputCell.slot.column).toBe(videoTile.slot.column)
+    expect(videoOutput.outputCell.slot.row).toBe(videoTile.slot.row + 1)
+
+    const again = relayoutNotebookDocument(engine, after)
+    expect(notebookDocumentsEqual(after, again)).toBe(true)
+
+    const second = await executeRelayoutNotebook(engine, {
+      type: 'relayout_notebook',
+      bookId: created.bookId,
+      notebookId: notebook.id,
+    })
+    expect(second.changed).toBe(false)
   })
 })

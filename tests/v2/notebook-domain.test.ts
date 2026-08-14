@@ -77,6 +77,7 @@ describe('v2 notebook domain tools', () => {
       model: string
       operation: string
       tool: string
+      output_cell?: { id: string }
     }
     expect(image).toMatchObject({
       provider: 'kie',
@@ -84,6 +85,7 @@ describe('v2 notebook domain tools', () => {
       operation: 'text_to_image',
       tool: 'generate_kie_nano_banana_pro_text_to_image',
     })
+    expect(image.output_cell?.id).toBeTruthy()
 
     resultJson(await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
@@ -114,7 +116,7 @@ describe('v2 notebook domain tools', () => {
       }>
       edges: Array<{ source: string; target: string; targetInput: string }>
     }
-    expect(document.cells).toHaveLength(2)
+    expect(document.cells).toHaveLength(3)
     expect(document.cells.find((cell) => cell.id === image.id)).toMatchObject({
       label: 'generate-image-moon-garden',
       address: '@a1',
@@ -122,8 +124,24 @@ describe('v2 notebook domain tools', () => {
     })
     expect(document.cells.find((cell) => cell.id === prompt.id)?.slot)
       .toEqual({ row: 1, column: 0 })
+    expect(document.cells.find((cell) => cell.id === image.output_cell?.id))
+      .toBeTruthy()
     expect('grid' in document).toBe(false)
-    expect(document.edges).toEqual([{ source: prompt.id, target: image.id, targetInput: 'prompt', id: expect.any(String) }])
+    expect(document.edges).toEqual(expect.arrayContaining([
+      {
+        source: prompt.id,
+        target: image.id,
+        targetInput: 'prompt',
+        id: expect.any(String),
+      },
+      {
+        source: image.id,
+        target: image.output_cell!.id,
+        targetInput: 'media',
+        id: expect.any(String),
+      },
+    ]))
+    expect(document.edges).toHaveLength(2)
 
     resultJson(await invoke('move_notebook_cells', {
       notebook_id: notebookId,
@@ -337,7 +355,7 @@ describe('v2 notebook domain tools', () => {
         slot: { row: 0, column: 1 },
         prompt: 'Generated image',
       },
-    })) as { id: string }
+    })) as { id: string; output_cell?: { id: string } }
     resultJson(await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
       source_cell_id: source.id,
@@ -380,7 +398,9 @@ describe('v2 notebook domain tools', () => {
       execution?: Record<string, unknown>
       generationPlans?: Array<{ cellId: string }>
     }
-    expect(deleted.cells.map((cell) => cell.id)).toEqual([source.id])
+    expect(deleted.cells.map((cell) => cell.id).sort()).toEqual(
+      [source.id, generated.output_cell!.id].sort(),
+    )
     expect(deleted.edges).toEqual([])
     expect(deleted.execution?.[generated.id]).toBeUndefined()
     expect(deleted.generationPlans).toEqual([])
