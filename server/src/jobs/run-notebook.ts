@@ -2807,7 +2807,7 @@ async function failAwaitingNotebookCell(
       const cell = document.cells.find((candidate) => candidate.id === input.cellId);
       if (!cell) return document;
       const current = executionState(document)[cell.id];
-      return withExecution(document, cell.id, {
+      const withFailure = withExecution(document, cell.id, {
         fingerprint: current?.fingerprint
           ?? notebookCellFingerprint(document, cell),
         status: "error",
@@ -2819,6 +2819,42 @@ async function failAwaitingNotebookCell(
         tool: current?.tool ?? cell.tool ?? cell.model,
         error: message,
       }, input.providerArtifactId);
+      const mediaOutput = findGenerationMediaOutput(withFailure, cell);
+      if (!mediaOutput) return withFailure;
+      // Dispatch acceptance stamped the paired output cell with the provider
+      // placeholder and an awaiting-output execution record. Roll both back:
+      // a lingering awaiting-output record blocks run resumption and keeps
+      // the client's generation clock running after the failure.
+      const outputCellId = mediaOutput.outputCell.id;
+      const remainingExecution = { ...executionState(withFailure) };
+      delete remainingExecution[outputCellId];
+      return {
+        ...withFailure,
+        cells: withFailure.cells.map((candidate) => {
+          if (candidate.id !== outputCellId) return candidate;
+          const versions = Array.isArray(candidate.inputs?.outputVersionArtifactIds)
+            ? candidate.inputs.outputVersionArtifactIds.filter(
+                (value): value is string =>
+                  typeof value === "string"
+                  && value.length > 0
+                  && value !== input.providerArtifactId,
+              )
+            : [];
+          const restored = versions.at(-1);
+          const inputs = { ...(candidate.inputs ?? {}) };
+          delete inputs.state;
+          return {
+            ...candidate,
+            outputArtifactId: restored,
+            inputs: {
+              ...inputs,
+              outputVersionArtifactIds: versions,
+              ...(restored ? { state: "completed" } : {}),
+            },
+          };
+        }),
+        execution: remainingExecution,
+      };
     },
     {
       cellId: input.cellId,

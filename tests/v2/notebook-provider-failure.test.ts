@@ -171,4 +171,134 @@ describe("notebook provider failures", () => {
       "Kie failed: Motion video duration must be between 3 and 30 seconds (INVALID_INPUT)",
     );
   });
+
+  async function setupAwaitingPair(options?: {
+    previousArtifactId?: string;
+  }): Promise<{
+    input: AwaitNotebookOutputPayload;
+    actionCellId: string;
+    outputCellId: string;
+  }> {
+    const placeholder = await engine.artifacts.create({
+      kind: "image",
+      label: "provider placeholder",
+    });
+    expect(placeholder.ok).toBe(true);
+    if (!placeholder.ok) throw new Error(placeholder.error.message);
+    const notebook = await engine.notebooks.create("Main");
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const action = engine.notebooks.createCell({
+      type: "generate_image",
+      label: "Generate image",
+      slot: { row: 0, column: 0 },
+      provider: "kie",
+      model: "generate_kie_nano_banana_pro_image",
+      operation: "text_to_image",
+      tool: "generate_kie_nano_banana_pro_image",
+    });
+    const previous = options?.previousArtifactId;
+    const output = engine.notebooks.createCell({
+      type: "image",
+      label: "Generate image image",
+      slot: { row: 1, column: 0 },
+      outputArtifactId: placeholder.value.artifactId,
+      inputs: {
+        mediaRole: "generate-image-output",
+        producerCellId: action.id,
+        state: "awaiting-output",
+        outputVersionArtifactIds: [
+          ...(previous ? [previous] : []),
+          placeholder.value.artifactId,
+        ],
+      },
+    });
+    const edge = engine.notebooks.createEdge({
+      source: action.id,
+      target: output.id,
+      targetInput: "media",
+    });
+    const runId = "019f0000-0000-7000-8000-000000000012";
+    const written = await engine.notebooks.write({
+      ...notebook.value,
+      cells: [action, output],
+      edges: [edge],
+      execution: {
+        [action.id]: {
+          fingerprint: "provider-failure",
+          status: "awaiting-output",
+          providerArtifactId: placeholder.value.artifactId,
+          runId,
+        },
+        [output.id]: {
+          fingerprint: "provider-failure",
+          status: "awaiting-output",
+          outputArtifactId: placeholder.value.artifactId,
+          runId,
+        },
+      },
+    });
+    expect(written.ok).toBe(true);
+    return {
+      actionCellId: action.id,
+      outputCellId: output.id,
+      input: {
+        type: "await_notebook_output",
+        bookId: engine.book.get().bookId,
+        notebookId: notebook.value.id,
+        cellId: action.id,
+        providerArtifactId: placeholder.value.artifactId,
+        runId,
+      },
+    };
+  }
+
+  it("rolls a paired output cell back to idle when the provider fails", async () => {
+    const { input, actionCellId, outputCellId } = await setupAwaitingPair();
+
+    await failNotebookProviderOutput(engine, input);
+
+    const notebook = engine.notebooks.read(input.notebookId);
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) return;
+    expect(notebook.value.execution?.[actionCellId]).toMatchObject({
+      status: "error",
+      providerArtifactId: input.providerArtifactId,
+    });
+    expect(notebook.value.execution?.[outputCellId]).toBeUndefined();
+    const awaiting = Object.values(notebook.value.execution ?? {}).filter(
+      (execution) => execution?.status === "awaiting-output",
+    );
+    expect(awaiting).toHaveLength(0);
+    const output = notebook.value.cells.find((cell) => cell.id === outputCellId);
+    expect(output?.outputArtifactId).toBeUndefined();
+    expect(output?.inputs?.state).toBeUndefined();
+    expect(output?.inputs?.outputVersionArtifactIds).toEqual([]);
+    expect(output?.inputs?.mediaRole).toBe("generate-image-output");
+  });
+
+  it("restores the previous landed output when a re-run fails", async () => {
+    const previous = await engine.artifacts.create({
+      kind: "image",
+      label: "previous output",
+    });
+    expect(previous.ok).toBe(true);
+    if (!previous.ok) throw new Error(previous.error.message);
+    const { input, outputCellId } = await setupAwaitingPair({
+      previousArtifactId: previous.value.artifactId,
+    });
+
+    await failNotebookProviderOutput(engine, input);
+
+    const notebook = engine.notebooks.read(input.notebookId);
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) return;
+    const output = notebook.value.cells.find((cell) => cell.id === outputCellId);
+    expect(output?.outputArtifactId).toBe(previous.value.artifactId);
+    expect(output?.inputs?.state).toBe("completed");
+    expect(output?.inputs?.outputVersionArtifactIds).toEqual([
+      previous.value.artifactId,
+    ]);
+    expect(notebook.value.execution?.[outputCellId]).toBeUndefined();
+  });
 });
