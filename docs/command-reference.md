@@ -403,7 +403,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/settings-square` — Settings for square orientation; UI: `settings_square`
 - `/skeleton` — Extract a pose skeleton image from an image asset; UI: `extract_skeleton`
 - `/sort` — Set sidebar sort order (no value toggles); UI: `sidebar_sort`
-- `/speak` — Open the speak dialog to generate ElevenLabs speech into the notebook; UI: `open_speak`
+- `/speak` — Generate ElevenLabs speech into the notebook from the inline voice preview; UI: `speak_preview`
 - `/speed` — Change video playback speed (0.25-4.0x) or exact duration (e.g. 8.32s); MCP: `change_video_speed`
 - `/splice` — Splice two videos with an overlap window; use 0 to concatenate both complete clips; MCP: `splice_video`
 - `/split` — Open the interactive splitter for a notebook video, optionally seeded with cut times
@@ -425,6 +425,6 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/unassign` — Clear asset from timeline slot; MCP: `unassign_slot`
 - `/upload` — Upload a file; UI: `open_upload`
 - `/vocals` — Isolate vocals from audio; MCP: `isolate_vocals`
-- `/voices` — List available ElevenLabs voices; UI: `show_voices`
+- `/voices` — Browse ElevenLabs voices in the speak preview; UI: `speak_preview`
 - `/watermark` — Open the watermark dialog to burn a faint floating QR + @handle watermark into a video (whole clip, auto-placed in the least-busy corner); UI: `open_watermark`
 - `/<project-name>` — Switch to that project; generated dynamically for each project whose name does not conflict with a command or alias.

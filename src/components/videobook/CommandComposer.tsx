@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Bot,
   Check,
@@ -28,6 +28,17 @@ import {
   mcpToolLabel,
   type McpActivity,
 } from '@/videobook/mcp-activity'
+import {
+  handleSpeakPreviewKey,
+  isSpeakCommandPreview,
+  persistSpeakVoiceId,
+  readStoredSpeakVoiceId,
+  resolveSpeakVoiceId,
+  speakExecuteContext,
+} from '@/videobook/speak-preview'
+import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
+import type { ElevenLabsVoicesState } from '@/videobook/use-elevenlabs-voices'
+import { SpeakCommandPreview } from '@/components/videobook/SpeakCommandPreview'
 
 export interface ComposerOutcome {
   ok: boolean
@@ -60,9 +71,13 @@ interface CommandComposerProps {
   onEnsureCatalog: () => Promise<void>
   onDismissNotice?: () => void
   onDismissPanel?: () => void
-  onExecute: (input: string) => Promise<ComposerOutcome>
+  onExecute: (
+    input: string,
+    context?: { speakVoiceId?: string },
+  ) => Promise<ComposerOutcome>
   onModelChange: (model: string) => void
   onSuccessfulExecute: () => void
+  voiceCatalog?: ElevenLabsVoicesState
 }
 
 interface CommandSuggestion {
@@ -96,10 +111,17 @@ export function CommandComposer({
   onExecute,
   onModelChange,
   onSuccessfulExecute,
+  voiceCatalog,
 }: CommandComposerProps) {
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(pendingInput ?? '')
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const [dismissed, setDismissed] = useState(false)
+  const [dismissed, setDismissed] = useState(
+    () => pendingInput !== undefined && !isSpeakCommandPreview(pendingInput),
+  )
+  const [selectedVoiceId, setSelectedVoiceId] = useState(
+    () => readStoredSpeakVoiceId() ?? '',
+  )
+  const previewPlayer = useVoicePreviewPlayer()
   const [sending, setSending] = useState(false)
   const [outcome, setOutcome] = useState<ComposerOutcome | null>(null)
   const [renderedPendingInput, setRenderedPendingInput] = useState(pendingInput)
@@ -123,8 +145,22 @@ export function CommandComposer({
   if (pendingInput !== renderedPendingInput) {
     setRenderedPendingInput(pendingInput)
     setInput(pendingInput ?? '')
-    setDismissed(pendingInput !== undefined)
+    setDismissed(pendingInput !== undefined && !isSpeakCommandPreview(pendingInput))
   }
+
+  const speakPreviewOpen = !dismissed && isSpeakCommandPreview(input)
+  const catalogVoices = voiceCatalog?.voices ?? []
+  const activeVoiceId = resolveSpeakVoiceId(catalogVoices, selectedVoiceId)
+  const refreshVoices = voiceCatalog?.refresh
+  const stopPreview = previewPlayer.stop
+
+  useEffect(() => {
+    if (!speakPreviewOpen) {
+      stopPreview()
+      return
+    }
+    void refreshVoices?.()
+  }, [refreshVoices, speakPreviewOpen, stopPreview])
 
   const focusInput = (select = false) => {
     requestAnimationFrame(() => {
@@ -134,7 +170,7 @@ export function CommandComposer({
   }
 
   const suggestions = useMemo<Suggestion[]>(() => {
-    if (dismissed) return []
+    if (dismissed || isSpeakCommandPreview(input)) return []
     if (pendingInput && /^\/(?:apply|cancel)(?:\s|$)/iu.test(input)) return []
     const commandMatch = input.match(/^\/([\w-]*)$/)
     if (commandMatch) {
@@ -238,12 +274,14 @@ export function CommandComposer({
     setDismissed(false)
     let selectInput = false
     try {
-      const nextOutcome = await onExecute(message)
+      const voiceContext = speakExecuteContext(message, activeVoiceId)
+      if (voiceContext?.speakVoiceId) persistSpeakVoiceId(voiceContext.speakVoiceId)
+      const nextOutcome = await onExecute(message, voiceContext)
       showOutcome(nextOutcome)
       const inputDecision = composerInputAfterOutcome(nextOutcome, pendingInput)
       if (inputDecision) {
         setInput(inputDecision.value)
-        setDismissed(true)
+        setDismissed(!isSpeakCommandPreview(inputDecision.value))
         selectInput = inputDecision.select
       }
       if (nextOutcome.ok) onSuccessfulExecute()
@@ -266,13 +304,28 @@ export function CommandComposer({
   const acceptSuggestion = (suggestion: Suggestion) => {
     if (suggestion.type === 'command') {
       setInput(suggestion.value)
+      setDismissed(!isSpeakCommandPreview(suggestion.value))
     } else {
       setInput((current) =>
         `${applyNotebookMentionSuggestion(current, suggestion.value)} `)
+      setDismissed(true)
     }
-    setDismissed(true)
     historyCursorRef.current = -1
     focusInput()
+  }
+
+  const selectVoice = (voiceId: string) => {
+    setSelectedVoiceId(voiceId)
+    persistSpeakVoiceId(voiceId)
+    if (previewPlayer.playingVoiceId && previewPlayer.playingVoiceId !== voiceId) {
+      previewPlayer.stop()
+    }
+  }
+
+  const toggleSelectedPreview = () => {
+    const voice = catalogVoices.find((entry) => entry.voiceId === activeVoiceId)
+    if (!voice?.previewUrl) return
+    previewPlayer.toggle(voice.voiceId, voice.previewUrl)
   }
 
   const navigateHistory = async (direction: -1 | 1) => {
@@ -387,7 +440,20 @@ export function CommandComposer({
           void execute()
         }}
       >
-        {suggestions.length > 0 && (
+        {speakPreviewOpen && (
+          <SpeakCommandPreview
+            voices={catalogVoices}
+            selectedVoiceId={activeVoiceId}
+            playingVoiceId={previewPlayer.playingVoiceId}
+            status={voiceCatalog?.status ?? 'fallback'}
+            warning={voiceCatalog?.warning ?? null}
+            loading={voiceCatalog?.loading ?? false}
+            error={voiceCatalog?.error ?? null}
+            onSelect={selectVoice}
+            onTogglePreview={previewPlayer.toggle}
+          />
+        )}
+        {!speakPreviewOpen && suggestions.length > 0 && (
           <div className="command-suggestions">
             {suggestions.map((suggestion, index) => (
               <button
@@ -422,6 +488,23 @@ export function CommandComposer({
             historyCursorRef.current = -1
           }}
           onKeyDown={(event) => {
+            if (speakPreviewOpen) {
+              const action = handleSpeakPreviewKey(event, catalogVoices, activeVoiceId)
+              if (action.type !== 'ignore') event.preventDefault()
+              if (action.type === 'select') {
+                selectVoice(action.voiceId)
+                return
+              }
+              if (action.type === 'toggle') {
+                toggleSelectedPreview()
+                return
+              }
+              if (action.type === 'dismiss') {
+                previewPlayer.stop()
+                setDismissed(true)
+                return
+              }
+            }
             if (suggestions.length > 0) {
               if (event.key === 'ArrowDown') {
                 event.preventDefault()

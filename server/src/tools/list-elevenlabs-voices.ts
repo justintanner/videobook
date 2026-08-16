@@ -20,7 +20,7 @@ interface ElevenLabsVoiceListResponse {
 
 type VoiceFetch = typeof fetch;
 
-const GENERIC_FALLBACK_VOICES: ElevenLabsVoiceOption[] = [
+export const GENERIC_FALLBACK_VOICES: ElevenLabsVoiceOption[] = [
   { voice_id: "JBFqnCBsd6RMkjVDRZzb", name: "Generic", source: "generic" },
   { voice_id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", source: "generic" },
   { voice_id: "AZnzlk1XvdvUeBnXmlld", name: "Domi", source: "generic" },

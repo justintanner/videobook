@@ -107,9 +107,13 @@ describe("crop_image tool", () => {
     expect(parsed.ratio).toBe("9:16");
 
     const jpg = await readFile(join(uploaded.path, "original.jpg"));
+    expect(jpg.byteLength).toBeGreaterThan(0);
     const dims = await probeImage(jpg);
     expect(dims.width).toBe(1080);
     expect(dims.height).toBe(1920);
+    await readFile(join(uploaded.path, "landscape.jpg"));
+    await readFile(join(uploaded.path, "portrait.jpg"));
+    await readFile(join(uploaded.path, "square.jpg"));
   }, 60_000);
 
   it("crops to 1:1 and produces 1080x1080 original.jpg", async () => {

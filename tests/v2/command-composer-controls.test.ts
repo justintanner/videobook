@@ -8,7 +8,7 @@ import { idleMcpActivity } from '../../src/videobook/mcp-activity'
 function renderComposer(modelSelectionDisabled: boolean): string {
   return renderToStaticMarkup(createElement(CommandComposer, {
     commands: [],
-    assets: [],
+    cells: [],
     bookId: 'book-1',
     callTool: async () => ({}),
     chatModels: fallbackChatModelCatalog.models,

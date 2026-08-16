@@ -6,6 +6,8 @@ export function hasExactCommandSuggestion(
   return suggestions.some((suggestion) => suggestion.label === value)
 }
 
+export { isSpeakCommandPreview } from './speak-preview'
+
 export function commandSuggestionCandidates<T extends { command: string }>(
   commands: readonly T[],
   filter: string,

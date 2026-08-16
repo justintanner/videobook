@@ -98,7 +98,7 @@ export function registerCropImageJob(fs: Engine): void {
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
     );
 
-    await queue.enqueue(`process-image-${assetId}-${Date.now()}`, {
+    await queue.enqueueAndWait(`process-image-${assetId}-${Date.now()}`, {
       type: "process_image",
       assetId,
       bookId,

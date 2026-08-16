@@ -1510,7 +1510,7 @@ const CANONICAL_COMMANDS: Command[] = [
 
   {
     command: "/voices",
-    description: "List available ElevenLabs voices",
+    description: "Browse ElevenLabs voices in the speak preview",
     example: "/voices",
     category: "action",
     icon: "Mic",
@@ -1518,7 +1518,7 @@ const CANONICAL_COMMANDS: Command[] = [
     variant: "pink",
     chevron: "down",
     params: [],
-    uiAction: "show_voices",
+    uiAction: "speak_preview",
   },
 
   {
@@ -1538,7 +1538,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/speak",
-    description: "Open the speak dialog to generate ElevenLabs speech into the notebook",
+    description: "Generate ElevenLabs speech into the notebook from the inline voice preview",
     example: "/speak welcome back everyone",
     category: "action",
     icon: "Mic",
@@ -1546,7 +1546,7 @@ const CANONICAL_COMMANDS: Command[] = [
     variant: "pink",
     chevron: "right",
     params: [{ name: "text", type: "string", required: false, description: "Text to synthesize" }],
-    uiAction: "open_speak",
+    uiAction: "speak_preview",
   },
   // ── X connect command ──
   {

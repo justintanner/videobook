@@ -153,8 +153,11 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/say");
     expect(commandNames).toContain("/speak");
     const speak = commands.find((c) => c.command === "/speak")!;
-    expect(speak.uiAction).toBe("open_speak");
+    expect(speak.uiAction).toBe("speak_preview");
     expect(speak.category).toBe("action");
+    const voices = commands.find((c) => c.command === "/voices")!;
+    expect(voices.uiAction).toBe("speak_preview");
+    expect(voices.description).toMatch(/speak preview/i);
     const say = commands.find((c) => c.command === "/say")!;
     expect(say.mcpTool?.tool).toBe("generate_elevenlabs_text_to_audio");
     expect(commandNames).toContain("/connect-x");

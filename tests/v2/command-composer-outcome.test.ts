@@ -30,6 +30,14 @@ describe('command composer outcome input', () => {
     })).toEqual({ value: '/apply cinematic blue hour', select: false })
   })
 
+  it('keeps a /voices prefill in the composer so the speak preview can open', () => {
+    expect(composerInputAfterOutcome({
+      ok: true,
+      nextInput: '/speak ',
+      selectInput: false,
+    })).toEqual({ value: '/speak ', select: false })
+  })
+
   it('parses an optional quick prompt after apply', () => {
     expect(parsePendingApplyCommand('/apply')).toEqual({ promptOverride: null })
     expect(parsePendingApplyCommand('/apply cinematic blue hour'))

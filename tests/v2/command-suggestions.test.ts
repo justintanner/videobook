@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   commandSuggestionCandidates,
   hasExactCommandSuggestion,
+  isSpeakCommandPreview,
 } from '../../src/videobook/command-suggestions'
 
 describe('command suggestions', () => {
@@ -39,5 +40,19 @@ describe('command suggestions', () => {
       { command: '/download' },
       { command: '/download-audio' },
     ])
+  })
+
+  it('opens the speak preview for bare /speak and /speak with text', () => {
+    expect(isSpeakCommandPreview('/speak')).toBe(true)
+    expect(isSpeakCommandPreview('/speak ')).toBe(true)
+    expect(isSpeakCommandPreview('/speak welcome back')).toBe(true)
+  })
+
+  it('does not treat neighboring commands as the speak preview', () => {
+    expect(isSpeakCommandPreview('/spe')).toBe(false)
+    expect(isSpeakCommandPreview('/speaking')).toBe(false)
+    expect(isSpeakCommandPreview('/say hello')).toBe(false)
+    expect(isSpeakCommandPreview('/voices')).toBe(false)
+    expect(isSpeakCommandPreview('speak now')).toBe(false)
   })
 })
