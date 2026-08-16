@@ -9,6 +9,7 @@ import type {
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { mutateNotebook } from "./notebook-mutations.js";
 import {
+  failQueuedNotebookCells,
   notebookCellDefinitionFingerprint,
   notebookCellIsPaid,
   notebookCellIsRunnable,
@@ -279,6 +280,84 @@ export async function planNotebookRun(
   return plan;
 }
 
+interface ClaimedNotebookRunPlan {
+  record: NotebookRunPlanRecord;
+  noOp: boolean;
+  force: boolean;
+}
+
+export async function claimNotebookRunPlan(
+  engine: Engine,
+  notebookId: string,
+  planId: string,
+  runId: string,
+  options: {
+    confirmUnpriced: boolean;
+  },
+): Promise<ClaimedNotebookRunPlan> {
+  let claimed: ClaimedNotebookRunPlan | null = null;
+  const updatedAt = new Date().toISOString();
+  const result = await mutateNotebook(
+    engine,
+    notebookId,
+    "claim_notebook_run_plan",
+    (document) => {
+      const record = notebookRunPlanRecords(document).find((candidate) =>
+        candidate.planId === planId);
+      if (!record) throw new Error("Notebook run plan is not preserved");
+      if (record.status !== "planned") {
+        throw new Error(`Notebook run plan is already ${record.status}`);
+      }
+      if (record.runId) throw new Error("Notebook run plan is already claimed");
+      if (record.unknownCostCount > 0 && !options.confirmUnpriced) {
+        throw new Error(
+          `${record.unknownCostCount} provider calls have unavailable pricing and require explicit confirmation`,
+        );
+      }
+      for (const cellId of record.paidCellIds) {
+        const cell = document.cells.find((candidate) => candidate.id === cellId);
+        if (!cell) throw new Error(`Planned cell was deleted: ${cellId}`);
+        const actual = notebookCellDefinitionFingerprint(document, cell);
+        const expected = record.cellDefinitionFingerprints[cellId];
+        if (actual !== expected) {
+          throw new Error(
+            `Notebook run plan is stale for ${notebookGridTag(cell.slot)}`,
+          );
+        }
+      }
+      const notebookRun = record.plan.notebookRun;
+      const noOp = Boolean(
+        notebookRun
+        && typeof notebookRun === "object"
+        && !Array.isArray(notebookRun)
+        && (notebookRun as Record<string, unknown>).noOp === true,
+      );
+      const force = Boolean(
+        notebookRun
+        && typeof notebookRun === "object"
+        && !Array.isArray(notebookRun)
+        && (notebookRun as Record<string, unknown>).force === true,
+      );
+      const next: NotebookRunPlanRecord = {
+        ...record,
+        status: noOp ? "completed" : "queued",
+        ...(!noOp ? { runId } : {}),
+        updatedAt,
+      };
+      claimed = { record: next, noOp, force };
+      return {
+        ...document,
+        notebookRunPlans: notebookRunPlanRecords(document).map((candidate) =>
+          candidate.planId === planId ? next : candidate),
+      };
+    },
+    { notebookId, planId, runId },
+  );
+  if (!result.ok) throw new Error(result.error.message);
+  if (!claimed) throw new Error("Notebook run plan claim was not persisted");
+  return claimed;
+}
+
 export async function enqueueNotebookRunPlan(
   engine: Engine,
   notebookId: string,
@@ -293,66 +372,39 @@ export async function enqueueNotebookRunPlan(
   runId?: string;
   jobId?: string;
 }> {
-  const read = engine.notebooks.read(notebookId);
-  if (!read.ok) throw new Error(read.error.message);
-  const record = notebookRunPlanRecords(read.value).find((candidate) =>
-    candidate.planId === planId);
-  if (!record) throw new Error("Notebook run plan is not preserved");
-  if (record.status !== "planned") {
-    throw new Error(`Notebook run plan is already ${record.status}`);
-  }
-  if (record.unknownCostCount > 0 && !options.confirmUnpriced) {
-    throw new Error(
-      `${record.unknownCostCount} provider calls have unavailable pricing and require explicit confirmation`,
-    );
-  }
-  for (const cellId of record.paidCellIds) {
-    const cell = read.value.cells.find((candidate) => candidate.id === cellId);
-    if (!cell) throw new Error(`Planned cell was deleted: ${cellId}`);
-    const actual = notebookCellDefinitionFingerprint(read.value, cell);
-    const expected = record.cellDefinitionFingerprints[cellId];
-    if (actual !== expected) {
-      throw new Error(
-        `Notebook run plan is stale for ${notebookGridTag(cell.slot)}`,
-      );
-    }
-  }
-  const notebookRun = record.plan.notebookRun;
-  const noOp = notebookRun
-    && typeof notebookRun === "object"
-    && !Array.isArray(notebookRun)
-    && (notebookRun as Record<string, unknown>).noOp === true;
-  const force = notebookRun
-    && typeof notebookRun === "object"
-    && !Array.isArray(notebookRun)
-    && (notebookRun as Record<string, unknown>).force === true;
-  if (noOp) {
-    await persistNotebookRunPlan(engine, notebookId, {
-      ...record,
-      status: "completed",
-      updatedAt: new Date().toISOString(),
-    });
-    return { status: "completed", planId };
-  }
   const runId = uuidv7();
-  const jobId = `run-notebook-${notebookId}-${runId}`;
-  await persistNotebookRunPlan(engine, notebookId, {
-    ...record,
-    status: "queued",
-    runId,
-    updatedAt: new Date().toISOString(),
-  });
-  await queue.enqueue(jobId, {
-    type: "run_notebook",
-    bookId: engine.book.get().bookId,
+  const claimed = await claimNotebookRunPlan(
+    engine,
     notebookId,
+    planId,
     runId,
-    runPlanId: planId,
-    generationPlan: record.plan,
-    actor: options.actor,
-    jobId,
-    force,
-  });
+    { confirmUnpriced: options.confirmUnpriced },
+  );
+  if (claimed.noOp) return { status: "completed", planId };
+  const record = claimed.record;
+  const jobId = `run-notebook-${notebookId}-${runId}`;
+  try {
+    await queue.enqueue(jobId, {
+      type: "run_notebook",
+      bookId: engine.book.get().bookId,
+      notebookId,
+      runId,
+      runPlanId: planId,
+      generationPlan: record.plan,
+      actor: options.actor,
+      jobId,
+      force: claimed.force,
+    });
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    await failQueuedNotebookCells(engine, notebookId, {
+      cellIds: [],
+      runId,
+      runPlanId: planId,
+      error: message,
+    }).catch(() => undefined);
+    throw cause;
+  }
   return {
     status: "queued",
     planId,

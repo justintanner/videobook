@@ -26,12 +26,15 @@ import {
 import { mutateNotebook } from "../notebook-mutations.js";
 import { queue, stopBookQueue } from "../queue.js";
 import {
+  claimNotebookGenerationPlan,
+  failQueuedNotebookCells,
   notebookCellDefinitionFingerprint,
   notebookCellIsPaid,
   notebookCellIsRunnable,
   notebookCellMediaType,
   markNotebookCellQueued,
   prepareNotebookGeneration,
+  stalePaidNotebookPrerequisites,
 } from "../jobs/run-notebook.js";
 import {
   buildGenerationInsertPlan,
@@ -2041,7 +2044,6 @@ export function videobookDomainDefs(
         ) {
           return failure(`Stale notebook revision: expected ${args.expected_revision}`);
         }
-        const jobId = `run-notebook-${String(args.notebook_id)}-${String(args.cell_id)}-${Date.now()}`;
         const notebook = engine.notebooks.read(String(args.notebook_id));
         if (!notebook.ok) return failure(notebook.error.message);
         const cell = notebook.value.cells.find((candidate) =>
@@ -2052,11 +2054,15 @@ export function videobookDomainDefs(
         }
         const requestedPlan = args.plan as Record<string, unknown> | undefined;
         let generationPlan: Record<string, unknown> | undefined;
+        let generationPlanRecord: NotebookGenerationPlanRecord | undefined;
         if (requestedPlan) {
           const record = notebookGenerationPlans(notebook.value).find((candidate) =>
             candidate.planId === requestedPlan.planId
             && candidate.cellId === cell.id);
           if (!record) return failure("Generation plan is not preserved in this notebook");
+          if (record.status !== "planned") {
+            return failure(`Generation plan is already ${record.status}`);
+          }
           const expected = record.plan.cellDefinitionFingerprint
             ?? record.plan.cellFingerprint;
           const actual = notebookCellDefinitionFingerprint(
@@ -2067,37 +2073,75 @@ export function videobookDomainDefs(
             return failure("Generation plan is stale for the selected cell");
           }
           generationPlan = record.plan;
-          await persistNotebookGenerationPlan(engine, notebook.value.id, {
-            ...record,
-            status: "queued",
-            updatedAt: new Date().toISOString(),
-          });
+          generationPlanRecord = record;
         }
         if (notebookCellIsPaid(cell) && !generationPlan) {
           return failure("Paid notebook cells require a persisted generation plan");
         }
-        const runId = uuidv7();
-        await queue.enqueue(jobId, {
-          type: "run_notebook",
-          bookId: String(args.book_id),
-          notebookId: String(args.notebook_id),
-          cellIds: [String(args.cell_id)],
-          force: true,
-          runId,
-          ...(generationPlan
-            ? {
-                generationPlan,
-                actor: typeof args.actor === "string" ? args.actor : "videobook-user",
-                jobId,
-              }
-            : {}),
-        });
-        await markNotebookCellQueued(
+        const stalePaidPrerequisites = stalePaidNotebookPrerequisites(
           engine,
-          String(args.notebook_id),
-          String(args.cell_id),
-          runId,
-        ).catch(() => undefined);
+          notebook.value,
+          [cell.id],
+        );
+        if (stalePaidPrerequisites.length > 0) {
+          const prerequisites = stalePaidPrerequisites
+            .map((candidate) => notebookGridTag(candidate.slot))
+            .join(", ");
+          return failure(
+            `Cannot run ${notebookGridTag(cell.slot)} because stale paid ${
+              stalePaidPrerequisites.length === 1 ? "prerequisite" : "prerequisites"
+            } ${prerequisites} require current per-cell authorization. Regenerate ${
+              stalePaidPrerequisites.length === 1 ? "that prerequisite" : "those prerequisites"
+            } first, or use plan_notebook_run and enqueue_notebook_run to confirm an aggregate notebook run plan that includes every paid prerequisite.`,
+          );
+        }
+        const runId = uuidv7();
+        const jobId = `run-notebook-${String(args.notebook_id)}-${String(args.cell_id)}-${runId}`;
+        try {
+          if (generationPlanRecord) {
+            generationPlan = await claimNotebookGenerationPlan(
+              engine,
+              String(args.notebook_id),
+              String(args.cell_id),
+              generationPlanRecord.planId,
+              runId,
+            );
+          } else {
+            await markNotebookCellQueued(
+              engine,
+              String(args.notebook_id),
+              String(args.cell_id),
+              runId,
+            );
+          }
+          await queue.enqueue(jobId, {
+            type: "run_notebook",
+            bookId: String(args.book_id),
+            notebookId: String(args.notebook_id),
+            cellIds: [String(args.cell_id)],
+            force: true,
+            runId,
+            ...(generationPlan
+              ? {
+                  generationPlan,
+                  actor: typeof args.actor === "string" ? args.actor : "videobook-user",
+                  jobId,
+                }
+              : {}),
+          });
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause);
+          const generationPlanId = typeof generationPlan?.planId === "string"
+            ? generationPlan.planId
+            : undefined;
+          await failQueuedNotebookCells(engine, String(args.notebook_id), {
+            cellIds: [String(args.cell_id)],
+            runId,
+            error: message,
+            ...(generationPlanId ? { generationPlanId } : {}),
+          }).catch(() => undefined);
+          return failure(message);
+        }
         return json({
           job_id: jobId,
           run_id: runId,
@@ -2138,23 +2182,34 @@ export function videobookDomainDefs(
         }
         const runId = uuidv7();
         const jobId = `run-notebook-${String(args.notebook_id)}-${runId}`;
-        await queue.enqueue(jobId, {
-          type: "run_notebook",
-          bookId: String(args.book_id),
-          notebookId: String(args.notebook_id),
-          runId,
-          force: cellIds !== undefined,
-          ...(cellIds ? { cellIds } : {}),
-          ...(typeof args.actor === "string" ? { actor: args.actor } : {}),
-        });
-        if (cellIds) {
-          await Promise.all(cellIds.map((cellId) =>
-            markNotebookCellQueued(
-              engine,
-              String(args.notebook_id),
-              cellId,
-              runId,
-            ).catch(() => undefined)));
+        try {
+          if (cellIds) {
+            for (const cellId of cellIds) {
+              await markNotebookCellQueued(
+                engine,
+                String(args.notebook_id),
+                cellId,
+                runId,
+              );
+            }
+          }
+          await queue.enqueue(jobId, {
+            type: "run_notebook",
+            bookId: String(args.book_id),
+            notebookId: String(args.notebook_id),
+            runId,
+            force: cellIds !== undefined,
+            ...(cellIds ? { cellIds } : {}),
+            ...(typeof args.actor === "string" ? { actor: args.actor } : {}),
+          });
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause);
+          await failQueuedNotebookCells(engine, String(args.notebook_id), {
+            cellIds: cellIds ?? [],
+            runId,
+            error: message,
+          }).catch(() => undefined);
+          return failure(message);
         }
         return json({
           job_id: jobId,

@@ -16,7 +16,11 @@ import { localArchiveDir } from "./archive-store.js";
 import { bookManager, fs as scopedBookEngine } from "./fs.js";
 import { ensureDancingWorkflow } from "./dancing-workflow.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
-import { reconcileAwaitingNotebookOutputs } from "./jobs/run-notebook.js";
+import {
+  abortLeasedNotebookRunsOnStartup,
+  reconcileAwaitingNotebookOutputs,
+  reconcileQueuedNotebookCells,
+} from "./jobs/run-notebook.js";
 import { uploadLocalStream } from "./local-upload.js";
 import { queue } from "./queue.js";
 import { searchReferenceStore } from "./search-reference-store.js";
@@ -211,6 +215,13 @@ async function start(): Promise<void> {
   registerAllJobHandlers(scopedBookEngine);
   if (process.env.VIDEOBOOK_DEV_FIXTURES === "1") {
     await ensureDancingWorkflow(bookManager);
+  }
+  for (const book of bookManager.list()) {
+    const selected = bookManager.get(book.bookId);
+    if (!selected.ok) continue;
+    await selected.value.engine.jobs.queue.reap();
+    await abortLeasedNotebookRunsOnStartup(selected.value.engine);
+    await reconcileQueuedNotebookCells(selected.value.engine);
   }
   await queue.start();
   for (const book of bookManager.list()) {

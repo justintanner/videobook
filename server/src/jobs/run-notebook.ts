@@ -142,6 +142,7 @@ export async function updateGenerationPlanState(
   details: {
     outputArtifactId?: string;
     error?: string;
+    runId?: string;
   } = {},
 ): Promise<void> {
   const updatedAt = new Date().toISOString();
@@ -155,6 +156,10 @@ export async function updateGenerationPlanState(
         ...notebook,
         generationPlans: plans.map((record) =>
           record.planId === planId
+          && (
+            details.runId === undefined
+            || generationPlanClaimRunId(record.plan) === details.runId
+          )
               ? {
                   ...record,
                   status,
@@ -172,6 +177,7 @@ export async function updateGenerationPlanState(
       status,
       outputArtifactId: details.outputArtifactId,
       error: details.error,
+      runId: details.runId,
     },
   );
   if (!result.ok) throw new Error(result.error.message);
@@ -2501,6 +2507,247 @@ function ancestorsOf(
   return seen;
 }
 
+export function stalePaidNotebookPrerequisites(
+  engine: Engine,
+  document: NotebookDocument,
+  cellIds: readonly string[],
+): NotebookCell[] {
+  const selected = new Set(cellIds);
+  const required = new Set<string>();
+  for (const cellId of selected) {
+    for (const ancestor of ancestorsOf(document, cellId)) {
+      if (!selected.has(ancestor)) required.add(ancestor);
+    }
+  }
+  return document.cells.filter((cell) =>
+    required.has(cell.id)
+    && notebookCellIsRunnable(cell)
+    && notebookCellIsPaid(cell)
+    && notebookCellIsStale(engine, document, cell));
+}
+
+function generationPlanClaimRunId(
+  plan: Record<string, unknown>,
+): string | null {
+  const claim = plan.executionClaim;
+  return claim
+    && typeof claim === "object"
+    && !Array.isArray(claim)
+    && typeof (claim as Record<string, unknown>).runId === "string"
+    ? (claim as Record<string, unknown>).runId as string
+    : null;
+}
+
+export async function claimNotebookGenerationPlan(
+  engine: Engine,
+  notebookId: string,
+  cellId: string,
+  planId: string,
+  runId: string,
+): Promise<Record<string, unknown>> {
+  let claimedPlan: Record<string, unknown> | null = null;
+  const claimedAt = new Date().toISOString();
+  const result = await mutateNotebook(
+    engine,
+    notebookId,
+    "claim_notebook_generation_plan",
+    (document) => {
+      const record = (document.generationPlans ?? []).find((candidate) =>
+        candidate.planId === planId && candidate.cellId === cellId);
+      if (!record) throw new Error("Generation plan is not preserved in this notebook");
+      if (record.status !== "planned") {
+        throw new Error(`Generation plan is already ${record.status}`);
+      }
+      if (generationPlanClaimRunId(record.plan)) {
+        throw new Error("Generation plan is already claimed");
+      }
+      const cell = document.cells.find((candidate) => candidate.id === cellId);
+      if (!cell) throw new Error("Notebook cell not found");
+      const expected = record.plan.cellDefinitionFingerprint
+        ?? record.plan.cellFingerprint;
+      if (expected !== notebookCellDefinitionFingerprint(document, cell)) {
+        throw new Error("Generation plan is stale for the selected cell");
+      }
+      const execution = executionState(document)[cellId];
+      if (
+        execution?.status === "queued"
+        || execution?.status === "running"
+        || execution?.status === "awaiting-output"
+      ) {
+        throw new Error(
+          `Notebook cell ${notebookGridTag(cell.slot)} is already ${execution.status}`,
+        );
+      }
+      claimedPlan = {
+        ...record.plan,
+        executionClaim: { runId, claimedAt },
+      };
+      const state: CellExecution = {
+        fingerprint: notebookCellFingerprint(document, cell),
+        status: "queued",
+        ...(cell.outputArtifactId ? { outputArtifactId: cell.outputArtifactId } : {}),
+        runId,
+        startedAt: claimedAt,
+        updatedAt: claimedAt,
+        tool: cell.tool || cell.model || cell.operation,
+      };
+      const queued = withExecution(document, cellId, state);
+      return {
+        ...queued,
+        generationPlans: (queued.generationPlans ?? []).map((candidate) =>
+          candidate.planId === planId
+            ? {
+                ...candidate,
+                status: "queued",
+                plan: claimedPlan!,
+                updatedAt: claimedAt,
+              }
+            : candidate),
+      };
+    },
+    { notebookId, cellId, planId, runId },
+  );
+  if (!result.ok) throw new Error(result.error.message);
+  if (!claimedPlan) throw new Error("Generation plan claim was not persisted");
+  return claimedPlan;
+}
+
+export interface QueuedNotebookFailureOptions {
+  cellIds: readonly string[];
+  runId?: string;
+  error: string;
+  generationPlanId?: string;
+  runPlanId?: string;
+  allowLegacyUnboundGenerationPlan?: boolean;
+}
+
+export async function failQueuedNotebookCells(
+  engine: Engine,
+  notebookId: string,
+  options: QueuedNotebookFailureOptions,
+): Promise<number> {
+  const selected = new Set(options.cellIds);
+  if (
+    selected.size === 0
+    && !options.generationPlanId
+    && !options.runPlanId
+  ) return 0;
+  const snapshot = engine.notebooks.read(notebookId);
+  if (!snapshot.ok) return 0;
+  const queuedCellIds = new Set([...selected].filter((cellId) => {
+    const state = executionState(snapshot.value)[cellId];
+    return state?.status === "queued" && state.runId === options.runId;
+  }));
+  const failedCellIds = new Set([...selected].filter((cellId) => {
+    const state = executionState(snapshot.value)[cellId];
+    return state?.status === "error" && state.runId === options.runId;
+  }));
+  const terminalCellIds = new Set([...queuedCellIds, ...failedCellIds]);
+  const hasGenerationPlan = (snapshot.value.generationPlans ?? []).some((record) =>
+    record.status === "queued"
+    && terminalCellIds.has(record.cellId)
+    && record.planId === options.generationPlanId
+    && (
+      generationPlanClaimRunId(record.plan) === options.runId
+      || (
+        options.allowLegacyUnboundGenerationPlan === true
+        && generationPlanClaimRunId(record.plan) === null
+      )
+    ));
+  const hasRunPlan = Boolean(
+    options.runPlanId
+    && notebookRunPlanRecords(snapshot.value).some((record) =>
+      record.planId === options.runPlanId
+      && record.status === "queued"
+      && record.runId === options.runId
+      && (selected.size === 0 || terminalCellIds.size > 0)),
+  );
+  if (queuedCellIds.size === 0 && !hasGenerationPlan && !hasRunPlan) return 0;
+
+  const updatedAt = new Date().toISOString();
+  let terminalized = 0;
+  const result = await mutateNotebook(
+    engine,
+    notebookId,
+    "fail_queued_notebook_cells",
+    (document) => {
+      const execution = { ...executionState(document) };
+      const transitionedCellIds = new Set<string>();
+      for (const cellId of selected) {
+        const state = execution[cellId];
+        if (state?.status !== "queued" || state.runId !== options.runId) continue;
+        execution[cellId] = {
+          ...state,
+          status: "error",
+          completedAt: updatedAt,
+          updatedAt,
+          error: options.error,
+        };
+        transitionedCellIds.add(cellId);
+      }
+      const planCellIds = new Set([...transitionedCellIds]);
+      for (const cellId of selected) {
+        const state = execution[cellId];
+        if (state?.status === "error" && state.runId === options.runId) {
+          planCellIds.add(cellId);
+        }
+      }
+      terminalized = transitionedCellIds.size;
+      return {
+        ...document,
+        execution,
+        cells: document.cells.map((cell) =>
+          transitionedCellIds.has(cell.id)
+            ? {
+                ...cell,
+                inputs: { ...(cell.inputs ?? {}), state: "error" },
+              }
+            : cell),
+        generationPlans: (document.generationPlans ?? []).map((record) =>
+          record.status === "queued"
+          && planCellIds.has(record.cellId)
+          && record.planId === options.generationPlanId
+          && (
+            generationPlanClaimRunId(record.plan) === options.runId
+            || (
+              options.allowLegacyUnboundGenerationPlan === true
+              && generationPlanClaimRunId(record.plan) === null
+            )
+          )
+            ? {
+                ...record,
+                status: "failed",
+                updatedAt,
+                error: truncateGenerationError(options.error),
+              }
+            : record),
+        notebookRunPlans: notebookRunPlanRecords(document).map((record) =>
+          record.planId === options.runPlanId
+          && record.status === "queued"
+          && record.runId === options.runId
+          && (selected.size === 0 || planCellIds.size > 0)
+            ? {
+                ...record,
+                status: "failed",
+                updatedAt,
+                error: options.error,
+              }
+            : record),
+      };
+    },
+    {
+      cellIds: [...selected],
+      runId: options.runId,
+      error: options.error.slice(0, 500),
+      generationPlanId: options.generationPlanId,
+      runPlanId: options.runPlanId,
+      allowLegacyUnboundGenerationPlan: options.allowLegacyUnboundGenerationPlan,
+    },
+  );
+  if (!result.ok) throw new Error(result.error.message);
+  return terminalized;
+}
+
 export interface AwaitNotebookOutputPayload {
   type: "await_notebook_output";
   bookId: string;
@@ -2535,6 +2782,8 @@ async function updateNotebookRunPlanState(
       ...document,
       notebookRunPlans: notebookRunPlanRecords(document).map((record) =>
         record.planId === planId
+        && typeof details.runId === "string"
+        && record.runId === details.runId
           ? {
               ...record,
               status,
@@ -2562,6 +2811,7 @@ function paidCellAuthorized(
     return Boolean(
       record
       && (record.status === "queued" || record.status === "awaiting-output")
+      && record.runId === input.runId
       && fingerprints?.[cell.id] === expectedFingerprint,
     );
   }
@@ -2574,6 +2824,7 @@ function paidCellAuthorized(
   return Boolean(
     record
     && (record.status === "queued" || record.status === "awaiting-output")
+    && generationPlanClaimRunId(record.plan) === input.runId
     && plan
     && typeof plan === "object"
     && !Array.isArray(plan)
@@ -2913,7 +3164,7 @@ async function awaitNotebookOutput(
           input.notebookId,
           input.generationPlan.planId,
           "continued",
-          { outputArtifactId: completed.outputArtifactId },
+          { outputArtifactId: completed.outputArtifactId, runId: input.runId },
         );
       }
       await enqueueNotebookResume(input, completed.document);
@@ -2951,7 +3202,7 @@ export function registerRunNotebookJob(engine: Engine): void {
       throw cause;
     }
   });
-  registerJobHandler("run_notebook", async (payload) => {
+  const runNotebookHandler = async (payload: Record<string, unknown>) => {
     const input = payload as unknown as RunNotebookPayload;
     const runId = input.runId ?? uuidv7();
     const initial = engine.notebooks.read(input.notebookId);
@@ -3072,7 +3323,7 @@ export function registerRunNotebookJob(engine: Engine): void {
             result.status === "awaiting-output"
               ? "awaiting-output"
               : "continued",
-            { outputArtifactId: result.outputArtifactId },
+            { outputArtifactId: result.outputArtifactId, runId },
           );
         }
         if (result.status === "awaiting-output") {
@@ -3109,7 +3360,7 @@ export function registerRunNotebookJob(engine: Engine): void {
             input.notebookId,
             input.generationPlan.planId,
             "failed",
-            { error: message },
+            { error: message, runId },
           );
         }
         const refreshed = engine.notebooks.read(input.notebookId);
@@ -3173,6 +3424,27 @@ export function registerRunNotebookJob(engine: Engine): void {
     }
     if (errors.length > 0) throw new Error(errors.join("\n"));
     return run;
+  };
+  registerJobHandler("run_notebook", async (payload) => {
+    const input = payload as unknown as RunNotebookPayload;
+    try {
+      return await runNotebookHandler(payload);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      const generationPlanId = typeof input.generationPlan?.planId === "string"
+        ? input.generationPlan.planId
+        : undefined;
+      if (typeof input.runId === "string") {
+        await failQueuedNotebookCells(engine, input.notebookId, {
+          cellIds: input.cellIds ?? [],
+          runId: input.runId,
+          error: message,
+          ...(generationPlanId ? { generationPlanId } : {}),
+          ...(input.runPlanId ? { runPlanId: input.runPlanId } : {}),
+        }).catch(() => undefined);
+      }
+      throw cause;
+    }
   });
 }
 
@@ -3214,8 +3486,7 @@ export async function reconcileAwaitingNotebookOutputs(
           job.payload.notebookId === notebook.id
           && job.payload.cellId === cellId
           && job.payload.runId === state.runId)
-        .sort((left, right) =>
-          (right.operationId ?? "").localeCompare(left.operationId ?? ""));
+        .sort((left, right) => right.id - left.id);
       const latestFailed = matchingFailed[0];
       if (latestFailed) {
         const message = latestFailed.error?.message
@@ -3269,6 +3540,220 @@ export async function reconcileAwaitingNotebookOutputs(
     }
   }
   return enqueued;
+}
+
+async function notebookRunHasLiveWork(
+  engine: Engine,
+  document: NotebookDocument,
+  runId: string,
+  runPlanId?: string,
+): Promise<boolean> {
+  if (notebookRunPlanRecords(document).some((record) =>
+    (record.runId === runId || record.planId === runPlanId)
+    && record.status === "awaiting-output")) return true;
+  const activeJobs = engine.jobs.queue.list({
+    states: ["queued", "running", "completing"],
+  });
+  if (activeJobs.some((job) =>
+    job.payload.notebookId === document.id
+    && job.payload.runId === runId
+    && (job.type === "run_notebook" || job.type === "await_notebook_output"))) {
+    return true;
+  }
+  const pending = await engine.jobs.pending.findAll();
+  if (!pending.ok) return true;
+  const activeArtifactIds = new Set(pending.value.map((task) => task.artifactId));
+  for (const job of activeJobs) {
+    if (job.artifactId) activeArtifactIds.add(job.artifactId);
+  }
+  if (activeArtifactIds.size === 0) return false;
+  const runArtifactIds = new Set<string>();
+  for (const state of Object.values(executionState(document))) {
+    if (state.runId !== runId) continue;
+    if (state.providerArtifactId) runArtifactIds.add(state.providerArtifactId);
+    if (state.outputArtifactId) runArtifactIds.add(state.outputArtifactId);
+  }
+  for (const cell of document.cells) {
+    const generations = engine.generations.listForCell(document.id, cell.id);
+    if (!generations.ok) return true;
+    for (const generation of generations.value) {
+      if (generation.runId !== runId) continue;
+      if (generation.providerArtifactId) {
+        runArtifactIds.add(generation.providerArtifactId);
+      }
+      if (generation.outputArtifactId) {
+        runArtifactIds.add(generation.outputArtifactId);
+      }
+    }
+  }
+  return [...runArtifactIds].some((artifactId) =>
+    activeArtifactIds.has(artifactId));
+}
+
+export async function reconcileQueuedNotebookCells(
+  engine: Engine,
+): Promise<number> {
+  let terminalized = 0;
+  for (const listed of engine.notebooks.list()) {
+    for (const [cellId, listedState] of Object.entries(executionState(listed))) {
+      if (listedState.status !== "queued" || !listedState.runId) continue;
+      const read = engine.notebooks.read(listed.id);
+      if (!read.ok) continue;
+      const document = read.value;
+      const state = executionState(document)[cellId];
+      if (state?.status !== "queued" || state.runId !== listedState.runId) continue;
+      const cell = document.cells.find((candidate) => candidate.id === cellId);
+      if (!cell || !notebookCellIsRunnable(cell)) continue;
+      const terminalJobs = engine.jobs.queue.list({
+        states: ["done", "failed", "aborted"],
+        type: "run_notebook",
+      });
+      const matchingTerminal = terminalJobs
+        .filter((job) => {
+          if (
+            job.payload.notebookId !== document.id
+            || job.payload.runId !== state.runId
+          ) return false;
+          const cellIds = job.payload.cellIds;
+          return !Array.isArray(cellIds) || cellIds.includes(cellId);
+        })
+        .sort((left, right) => right.id - left.id);
+      const terminalJob = matchingTerminal[0];
+      if (terminalJob?.state === "done") continue;
+      const claimedPlans = (document.generationPlans ?? []).filter((record) =>
+        record.cellId === cellId
+        && record.status === "queued"
+        && generationPlanClaimRunId(record.plan) === state.runId);
+      if (
+        !terminalJob
+        && notebookCellIsPaid(cell)
+        && claimedPlans.length !== 1
+      ) continue;
+      const runPlanId = typeof terminalJob?.payload.runPlanId === "string"
+        ? terminalJob.payload.runPlanId
+        : undefined;
+      if (await notebookRunHasLiveWork(
+        engine,
+        document,
+        state.runId,
+        runPlanId,
+      )) continue;
+      const latest = engine.notebooks.read(document.id);
+      if (!latest.ok) continue;
+      const latestState = executionState(latest.value)[cellId];
+      if (latestState?.status !== "queued" || latestState.runId !== state.runId) {
+        continue;
+      }
+      if (await notebookRunHasLiveWork(
+        engine,
+        latest.value,
+        state.runId,
+        runPlanId,
+      )) continue;
+      const message = terminalJob?.error?.message
+        ?? (terminalJob
+          ? `Notebook run ${terminalJob.state} before queued cell ${
+              notebookGridTag(cell.slot)
+            } started`
+          : `Queued notebook run has no persisted job for ${
+              notebookGridTag(cell.slot)
+            }`);
+      const plan = terminalJob?.payload.generationPlan;
+      const terminalPlanId = plan
+        && typeof plan === "object"
+        && !Array.isArray(plan)
+        && typeof (plan as Record<string, unknown>).planId === "string"
+        ? (plan as Record<string, unknown>).planId as string
+        : undefined;
+      const generationPlanId = terminalPlanId ?? claimedPlans[0]?.planId;
+      terminalized += await failQueuedNotebookCells(engine, document.id, {
+        cellIds: [cellId],
+        runId: state.runId,
+        error: message,
+        ...(generationPlanId ? { generationPlanId } : {}),
+        ...(runPlanId ? { runPlanId } : {}),
+        ...(terminalJob ? { allowLegacyUnboundGenerationPlan: true } : {}),
+      });
+    }
+  }
+  for (const listed of engine.notebooks.list()) {
+    for (const listedPlan of notebookRunPlanRecords(listed)) {
+      if (listedPlan.status !== "queued" || !listedPlan.runId) continue;
+      const read = engine.notebooks.read(listed.id);
+      if (!read.ok) continue;
+      const document = read.value;
+      const plan = notebookRunPlanRecords(document).find((candidate) =>
+        candidate.planId === listedPlan.planId);
+      if (
+        plan?.status !== "queued"
+        || plan.runId !== listedPlan.runId
+      ) continue;
+      const terminalJobs = engine.jobs.queue.list({
+        states: ["done", "failed", "aborted"],
+        type: "run_notebook",
+      });
+      const terminalJob = terminalJobs
+        .filter((job) =>
+          job.payload.notebookId === document.id
+          && job.payload.runId === plan.runId)
+        .sort((left, right) => right.id - left.id)[0];
+      if (terminalJob?.state === "done") continue;
+      if (await notebookRunHasLiveWork(
+        engine,
+        document,
+        plan.runId,
+        plan.planId,
+      )) continue;
+      const latest = engine.notebooks.read(document.id);
+      if (!latest.ok) continue;
+      const latestPlan = notebookRunPlanRecords(latest.value).find((candidate) =>
+        candidate.planId === plan.planId);
+      if (
+        latestPlan?.status !== "queued"
+        || latestPlan.runId !== plan.runId
+      ) continue;
+      if (await notebookRunHasLiveWork(
+        engine,
+        latest.value,
+        plan.runId,
+        plan.planId,
+      )) continue;
+      const message = terminalJob?.error?.message
+        ?? (terminalJob
+          ? `Notebook run ${terminalJob.state} before aggregate plan completed`
+          : "Claimed aggregate notebook run has no persisted job");
+      await failQueuedNotebookCells(engine, document.id, {
+        cellIds: [],
+        runId: plan.runId,
+        runPlanId: plan.planId,
+        error: message,
+      });
+      const reconciled = engine.notebooks.read(document.id);
+      if (
+        reconciled.ok
+        && notebookRunPlanRecords(reconciled.value).some((candidate) =>
+          candidate.planId === plan.planId && candidate.status === "failed")
+      ) terminalized += 1;
+    }
+  }
+  return terminalized;
+}
+
+export async function abortLeasedNotebookRunsOnStartup(
+  engine: Engine,
+): Promise<number> {
+  const leased = engine.jobs.queue.list({
+    states: ["running", "completing"],
+    type: "run_notebook",
+  });
+  let aborted = 0;
+  for (const job of leased) {
+    if (await engine.jobs.queue.abort(
+      job.id,
+      "Server restarted before notebook run completed",
+    )) aborted += 1;
+  }
+  return aborted;
 }
 
 export function topologicalOrder(notebook: NotebookDocument): NotebookCell[] {
