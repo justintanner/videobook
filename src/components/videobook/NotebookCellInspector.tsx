@@ -21,6 +21,10 @@ import type {
 } from 'videobook-engine'
 import { ArtifactThumb } from './ArtifactThumb'
 import { MediaLibraryAssetPreview } from './MediaLibraryAssetPreview'
+import { VoiceOptionList } from './SpeakCommandPreview'
+import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
+import { persistSpeakVoiceId } from '@/videobook/speak-preview'
+import type { ElevenLabsVoicesState } from '@/videobook/use-elevenlabs-voices'
 import {
   notebookGridAddress,
   notebookGridTag,
@@ -418,6 +422,7 @@ type NotebookCellInspectorProps = {
   generationsVisible?: boolean
   generationActions?: readonly NotebookGenerationAction[]
   mentionAssets?: readonly AssetMentionCandidate[]
+  voiceCatalog?: ElevenLabsVoicesState
   onUpdate: NotebookCellUpdate
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
   onRun: (cellId: string) => Promise<unknown>
@@ -1827,6 +1832,7 @@ function ExecutableCellInspector({
   onPreviewPayload,
   generationActions = [],
   mentionAssets = [],
+  voiceCatalog,
 }: Pick<
   NotebookCellInspectorProps,
   | 'cell'
@@ -1846,6 +1852,7 @@ function ExecutableCellInspector({
   | 'onPreviewPayload'
   | 'generationActions'
   | 'mentionAssets'
+  | 'voiceCatalog'
 >) {
   const [draft, setDraft] = useState(() =>
     cellFormDraft(
@@ -1854,6 +1861,7 @@ function ExecutableCellInspector({
       generationConnectedInputs(cell.id, cells, edges),
     ))
   const [saving, setSaving] = useState(false)
+  const voicePreviewPlayer = useVoicePreviewPlayer()
   const [copyResult, setCopyResult] = useState<{
     error: string
     state: 'copied' | 'failed'
@@ -1951,8 +1959,14 @@ function ExecutableCellInspector({
     control.name === 'duration'
     || control.name === 'aspect_ratio'
     || control.name === 'resolution')
+  const voicePickerVoices = cell.type === 'generate_audio'
+    && generationControls.some((control) => control.name === 'voice_id')
+    ? voiceCatalog?.voices ?? []
+    : []
+  const showVoicePicker = voicePickerVoices.length > 0
   const advancedGenerationControls = generationControls.filter((control) =>
-    !primaryGenerationControls.includes(control))
+    !primaryGenerationControls.includes(control)
+    && !(showVoicePicker && control.name === 'voice_id'))
   const generationSettingsValid = generationControlsAreValid(
     generationControls,
     draft.generationSettings,
@@ -2543,6 +2557,36 @@ function ExecutableCellInspector({
                   ))}
                 </div>
               ) : null}
+            {showVoicePicker && (
+              <div className="inspector-voice-picker">
+                <span className="inspector-voice-picker-label">Voice</span>
+                <div
+                  className="generation-review-voices"
+                  role="listbox"
+                  aria-label="ElevenLabs voices"
+                  data-testid="inspector-voice-picker"
+                >
+                  <VoiceOptionList
+                    voices={voicePickerVoices}
+                    selectedVoiceId={
+                      typeof draft.generationSettings.voice_id === 'string'
+                        ? draft.generationSettings.voice_id
+                        : ''
+                    }
+                    playingVoiceId={voicePreviewPlayer.playingVoiceId}
+                    disabled={busy || saving}
+                    onSelect={(voiceId) => {
+                      persistSpeakVoiceId(voiceId)
+                      updateGenerationSetting('voice_id', voiceId)
+                    }}
+                    onTogglePreview={voicePreviewPlayer.toggle}
+                  />
+                </div>
+                {voiceCatalog?.warning && (
+                  <small>{voiceCatalog.warning}</small>
+                )}
+              </div>
+            )}
             {advancedGenerationControls.length > 0 && (
               <details className="inspector-generation-options">
                 <summary>Options</summary>
@@ -2932,6 +2976,7 @@ export function NotebookCellInspector({
   onLoadGenerationPayload,
   generations,
   mentionAssets,
+  voiceCatalog,
 }: NotebookCellInspectorProps) {
   const artifactAssets = inspectorArtifactAssets(
     asset,
@@ -3024,6 +3069,7 @@ export function NotebookCellInspector({
       onPreviewPayload={onPreviewPayload}
       generationActions={generationActions}
       mentionAssets={mentionAssets}
+      voiceCatalog={voiceCatalog}
     />
   )
 }

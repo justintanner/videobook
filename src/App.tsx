@@ -2474,7 +2474,14 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             {data.kind === 'audio'
               || (data.kind === 'extract_audio' && data.outputArtifactId)
               ? <AudioCellSummary data={data} />
-              : <span>{emptyCellLabel(data)}</span>}
+              : data.kind === 'generate_audio' && data.prompt
+                ? (
+                  <div className="cell-audio-prompt" title={data.prompt}>
+                    {modelLine && <span className="cell-model-line">{modelLine}</span>}
+                    <p>{data.prompt}</p>
+                  </div>
+                )
+                : <span>{emptyCellLabel(data)}</span>}
           </div>
         ) : visualMediaCell && (mediaUrl || thumbnailUrl) ? (
           <div className="cell-media">
@@ -8762,6 +8769,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     error={selectedCellError}
                     generationActions={generationActions}
                     mentionAssets={commandMentionAssets}
+                    voiceCatalog={elevenLabsVoices}
                     busy={busy || Boolean(selectedMediaSlotState?.operation)}
                     deleting={deletingCellIds.has(selectedNotebookCell.id)}
                     sourceVisible={sourceViewCellId === selectedNotebookCell.id}

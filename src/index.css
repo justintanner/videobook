@@ -2940,6 +2940,30 @@ textarea:focus-visible {
   letter-spacing: 0.04em;
 }
 
+.cell-audio-prompt {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 16px;
+  text-align: left;
+}
+
+.cell-audio-prompt p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #91bfc5;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  letter-spacing: 0.015em;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
 .cell-audio-summary {
   display: grid;
   width: 100%;
@@ -3729,6 +3753,25 @@ textarea:focus-visible {
   min-height: 36px;
   padding: 7px 30px 7px 10px;
   font-size: 11px;
+}
+
+.inspector-voice-picker {
+  display: grid;
+  gap: 7px;
+}
+
+.inspector-voice-picker-label {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.inspector-voice-picker small {
+  color: #d2b56b;
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .inspector-generation-options {

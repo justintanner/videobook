@@ -21,6 +21,7 @@ import type {
   GenerationInputContract,
   NotebookGenerationAction,
 } from '../../src/videobook/notebook-generation-actions'
+import type { ElevenLabsVoicesState } from '../../src/videobook/use-elevenlabs-voices'
 
 const cell: NotebookCell = {
   id: '01900000-0000-7000-8000-000000000001',
@@ -168,9 +169,145 @@ const generationActions: NotebookGenerationAction[] = [
       },
     ],
   },
+  {
+    id: 'generation.generate_elevenlabs_text_to_audio',
+    cellTypes: ['generate_audio'],
+    provider: 'elevenlabs',
+    providerLabel: 'ElevenLabs',
+    model: '@apicity/elevenlabs',
+    operation: 'text_to_audio',
+    tool: 'generate_elevenlabs_text_to_audio',
+    title: 'ElevenLabs',
+    isDefault: true,
+    defaultPriority: 0,
+    inputContract: textContract,
+    controls: [
+      {
+        name: 'voice_id',
+        label: 'Voice id',
+        kind: 'text',
+        valueType: 'string',
+        required: true,
+        options: [],
+        description: 'ElevenLabs voice ID',
+      },
+      {
+        name: 'asset_name',
+        label: 'Asset name',
+        kind: 'text',
+        valueType: 'string',
+        required: false,
+        options: [],
+        description: 'Optional output audio asset name',
+      },
+    ],
+  },
 ]
 
+const voiceCatalog: ElevenLabsVoicesState = {
+  voices: [
+    {
+      voiceId: 'voice-a',
+      name: 'Ada',
+      source: 'custom',
+      category: 'cloned',
+      previewUrl: 'https://example.test/ada.mp3',
+    },
+    {
+      voiceId: 'voice-b',
+      name: 'Bella',
+      source: 'generic',
+      category: 'premade',
+      previewUrl: 'https://example.test/bella.mp3',
+    },
+  ],
+  status: 'live',
+  warning: null,
+  loading: false,
+  error: null,
+  refresh: async () => null,
+}
+
 describe('NotebookCellInspector', () => {
+  it('renders the ElevenLabs voice picker for generate_audio cells', () => {
+    const generationCell: NotebookCell = {
+      ...cell,
+      type: 'generate_audio',
+      label: 'generate-audio-01',
+      prompt: 'welcome back everyone',
+      provider: undefined,
+      model: undefined,
+      operation: undefined,
+      tool: undefined,
+      outputArtifactId: undefined,
+      inputs: { generationSettings: { voice_id: 'voice-b' } },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: generationCell,
+      cells: [generationCell],
+      edges: [],
+      asset: undefined,
+      status: 'ready',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      generationActions,
+      voiceCatalog,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('data-testid="inspector-voice-picker"')
+    expect(html).toContain('Ada')
+    expect(html).toContain('Bella')
+    expect(html).toContain('custom · cloned')
+    expect(html).toContain('Preview')
+    expect(html).toContain('speak-preview-voice selected')
+    expect(html).toContain('data-voice-id="voice-b"')
+    expect(html).not.toContain('aria-label="Voice id"')
+    expect(html).toContain('aria-label="Asset name"')
+  })
+
+  it('falls back to the voice_id text field without a voice catalog', () => {
+    const generationCell: NotebookCell = {
+      ...cell,
+      type: 'generate_audio',
+      label: 'generate-audio-02',
+      prompt: 'welcome back everyone',
+      provider: undefined,
+      model: undefined,
+      operation: undefined,
+      tool: undefined,
+      outputArtifactId: undefined,
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: generationCell,
+      cells: [generationCell],
+      edges: [],
+      asset: undefined,
+      status: 'ready',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      generationActions,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).not.toContain('data-testid="inspector-voice-picker"')
+    expect(html).toContain('aria-label="Voice id"')
+  })
+
   it('defaults generation configuration to one catalog-backed model picker', () => {
     const generationCell: NotebookCell = {
       ...cell,
