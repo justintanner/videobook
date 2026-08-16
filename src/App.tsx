@@ -116,7 +116,9 @@ import { materializeNotebookSpeakCommand } from './videobook/notebook-speak-comm
 import { useElevenLabsVoices } from './videobook/use-elevenlabs-voices'
 import {
   persistSpeakVoiceId,
+  readStoredSpeakVoiceId,
   resolveSpeakPreviewAction,
+  resolveSpeakVoiceId,
 } from './videobook/speak-preview'
 import { resolveWatermarkTarget } from './videobook/watermark-target'
 import {
@@ -247,6 +249,7 @@ import {
   notebookChatGenerationConnectedInputs,
   notebookChatGenerationParameterReferences,
   notebookChatGenerationReferences,
+  notebookChatGenerationSettings,
   planNotebookChatGeneration,
   reviseNotebookChatGenerationAction,
   reviseNotebookChatGenerationMode,
@@ -6599,6 +6602,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           selectedSourceCells,
         ),
       )
+      if (
+        draft.cell.type === 'generate_audio'
+        && draft.action.controls.some((control) => control.name === 'voice_id')
+        && typeof notebookChatGenerationSettings(draft).voice_id !== 'string'
+      ) {
+        const seededVoiceId = resolveSpeakVoiceId(
+          elevenLabsVoices.voices,
+          readStoredSpeakVoiceId(),
+        )
+        if (seededVoiceId) {
+          draft = reviseNotebookChatGenerationSetting(
+            draft,
+            'voice_id',
+            seededVoiceId,
+          )
+        }
+      }
       validateNotebookChatGenerationPromptSources(draft, currentNotebook)
       const references = draft.sourceCellIds.length > 0
         ? ` from ${draft.sourceCellIds.flatMap((cellId) => {
@@ -6808,7 +6828,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         plan.routedTool,
         generationActions,
       )
-      const rawRoutedPrompt = asString(plan.params.prompt) ?? originalInput
+      // TTS routes carry the spoken words in text rather than prompt.
+      const rawRoutedPrompt = (plan.tool === 'generate_elevenlabs_text_to_audio'
+        ? asString(plan.params.text) ?? asString(plan.params.prompt)
+        : asString(plan.params.prompt))
+        ?? originalInput
       const routedPrompt = restoreNotebookMentionAliases(
         rawRoutedPrompt,
         commandMentionAssets,
@@ -9803,6 +9827,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             previewStale={pendingChatAction.previewStale}
             sources={pendingGenerationSources}
             summary={pendingChatAction.summary}
+            voiceCatalog={elevenLabsVoices}
             onActionChange={updatePendingGenerationAction}
             onCancel={dismissPendingCommandPlan}
             onModeChange={updatePendingGenerationMode}

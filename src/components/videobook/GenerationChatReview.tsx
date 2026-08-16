@@ -14,6 +14,10 @@ import {
   MediaLibraryAssetPreview,
   type MediaLibraryPreviewAsset,
 } from './MediaLibraryAssetPreview'
+import { VoiceOptionList } from './SpeakCommandPreview'
+import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
+import { persistSpeakVoiceId } from '@/videobook/speak-preview'
+import type { ElevenLabsVoicesState } from '@/videobook/use-elevenlabs-voices'
 
 export type GenerationReviewSource = {
   cellId: string
@@ -34,6 +38,7 @@ type GenerationChatReviewProps = {
   previewStale: boolean
   sources: readonly GenerationReviewSource[]
   summary: string
+  voiceCatalog?: ElevenLabsVoicesState
   onActionChange: (actionId: string) => void
   onCancel: () => void
   onModeChange: (modeId: string) => void
@@ -157,6 +162,7 @@ export function GenerationChatReview({
   previewStale,
   sources,
   summary,
+  voiceCatalog,
   onActionChange,
   onCancel,
   onModeChange,
@@ -166,6 +172,18 @@ export function GenerationChatReview({
   onSettingChange,
 }: GenerationChatReviewProps) {
   const settings = notebookChatGenerationSettings(draft)
+  const previewPlayer = useVoicePreviewPlayer()
+  const voiceControl = draft.cell.type === 'generate_audio'
+    ? draft.action.controls.find((control) => control.name === 'voice_id')
+    : undefined
+  const voiceOptions = voiceControl ? voiceCatalog?.voices ?? [] : []
+  const showVoicePicker = voiceOptions.length > 0
+  const selectedVoiceId = typeof settings.voice_id === 'string'
+    ? settings.voice_id
+    : ''
+  const generalControls = showVoicePicker
+    ? draft.action.controls.filter((control) => control.name !== 'voice_id')
+    : draft.action.controls
   const previewValue = valueRecord(preview)
   const estimate = valueRecord(previewValue?.estimate)
   const estimateUsd = typeof estimate?.usd === 'number' ? estimate.usd : null
@@ -322,10 +340,35 @@ export function GenerationChatReview({
           </details>
         </section>
 
+        {showVoicePicker && (
+          <section className="generation-review-section generation-review-voice-section">
+            <span className="generation-review-label">Voice</span>
+            <div
+              className="generation-review-voices"
+              role="listbox"
+              aria-label="ElevenLabs voices"
+              data-testid="generation-review-voices"
+            >
+              <VoiceOptionList
+                voices={voiceOptions}
+                selectedVoiceId={selectedVoiceId}
+                playingVoiceId={previewPlayer.playingVoiceId}
+                disabled={busy}
+                onSelect={(voiceId) => {
+                  persistSpeakVoiceId(voiceId)
+                  onSettingChange('voice_id', voiceId)
+                }}
+                onTogglePreview={previewPlayer.toggle}
+              />
+            </div>
+            {voiceCatalog?.warning && <small>{voiceCatalog.warning}</small>}
+          </section>
+        )}
+
         <section className="generation-review-section generation-review-settings-section">
           <span className="generation-review-label">Settings</span>
           <div className="generation-review-settings">
-            {draft.action.controls.length > 0 ? draft.action.controls.map((control) => (
+            {generalControls.length > 0 ? generalControls.map((control) => (
               <GenerationReviewControl
                 key={control.name}
                 busy={busy}

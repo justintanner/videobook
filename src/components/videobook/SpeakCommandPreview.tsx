@@ -1,5 +1,63 @@
 import type { SpeakVoice } from '@/videobook/use-elevenlabs-voices'
 
+export function VoiceOptionList({
+  voices,
+  selectedVoiceId,
+  playingVoiceId,
+  disabled = false,
+  onSelect,
+  onTogglePreview,
+}: {
+  voices: readonly SpeakVoice[]
+  selectedVoiceId: string
+  playingVoiceId: string | null
+  disabled?: boolean
+  onSelect: (voiceId: string) => void
+  onTogglePreview: (voiceId: string, previewUrl: string) => void
+}) {
+  return (
+    <>
+      {voices.map((voice) => {
+        const isSelected = voice.voiceId === selectedVoiceId
+        return (
+          <div
+            key={voice.voiceId}
+            className={isSelected ? 'speak-preview-voice selected' : 'speak-preview-voice'}
+            role="option"
+            aria-selected={isSelected}
+            data-voice-id={voice.voiceId}
+          >
+            <button
+              type="button"
+              className={isSelected ? 'active speak-preview-select' : 'speak-preview-select'}
+              disabled={disabled}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onSelect(voice.voiceId)}
+            >
+              <strong>{voice.name}</strong>
+              <span className="speak-preview-badge">
+                {voice.source}
+                {voice.category ? ` · ${voice.category}` : ''}
+              </span>
+            </button>
+            {voice.previewUrl && (
+              <button
+                type="button"
+                className="speak-preview-play"
+                disabled={disabled}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => onTogglePreview(voice.voiceId, voice.previewUrl!)}
+              >
+                {playingVoiceId === voice.voiceId ? 'Pause' : 'Preview'}
+              </button>
+            )}
+          </div>
+        )
+      })}
+    </>
+  )
+}
+
 export function SpeakCommandPreview({
   voices,
   selectedVoiceId,
@@ -36,41 +94,13 @@ export function SpeakCommandPreview({
       {error && (
         <p className="speak-preview-error" role="alert">{error}</p>
       )}
-      {voices.map((voice) => {
-        const isSelected = voice.voiceId === selectedVoiceId
-        return (
-          <div
-            key={voice.voiceId}
-            className={isSelected ? 'speak-preview-voice selected' : 'speak-preview-voice'}
-            role="option"
-            aria-selected={isSelected}
-            data-voice-id={voice.voiceId}
-          >
-            <button
-              type="button"
-              className={isSelected ? 'active speak-preview-select' : 'speak-preview-select'}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => onSelect(voice.voiceId)}
-            >
-              <strong>{voice.name}</strong>
-              <span className="speak-preview-badge">
-                {voice.source}
-                {voice.category ? ` · ${voice.category}` : ''}
-              </span>
-            </button>
-            {voice.previewUrl && (
-              <button
-                type="button"
-                className="speak-preview-play"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => onTogglePreview(voice.voiceId, voice.previewUrl!)}
-              >
-                {playingVoiceId === voice.voiceId ? 'Pause' : 'Preview'}
-              </button>
-            )}
-          </div>
-        )
-      })}
+      <VoiceOptionList
+        voices={voices}
+        selectedVoiceId={selectedVoiceId}
+        playingVoiceId={playingVoiceId}
+        onSelect={onSelect}
+        onTogglePreview={onTogglePreview}
+      />
       {(warning || status === 'fallback') && warning && (
         <p className="speak-preview-warning">{warning}</p>
       )}

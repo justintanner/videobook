@@ -19,6 +19,7 @@ import {
 import type { ChatRoutingNotebookContext } from "../chat-router.js";
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
+import { listElevenLabsVoices } from "./list-elevenlabs-voices.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getApiKey } from "../api-key.js";
 import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
@@ -169,6 +170,30 @@ export function sanitizeGenerateImageParams(
     const base = typeof params.prompt === "string" ? params.prompt : "";
     const note = `from source ${dropped.join(", ")}`;
     next.prompt = base ? `${base} (${note})` : note;
+  }
+  return next;
+}
+
+/**
+ * Fill speech-routing gaps for generate_elevenlabs_text_to_audio: the words to
+ * speak may arrive in prompt instead of text, and the router model cannot know
+ * ElevenLabs voice ids, so an omitted voice_id gets the catalog default
+ * (custom voices first). The client review drawer lets the user change it.
+ */
+export async function applySpeechRoutingDefaults(
+  tool: string,
+  params: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (tool !== "generate_elevenlabs_text_to_audio") return params;
+  const next: Record<string, unknown> = { ...params };
+  const text = typeof next.text === "string" ? next.text.trim() : "";
+  const prompt = typeof next.prompt === "string" ? next.prompt.trim() : "";
+  if (!text && prompt) next.text = prompt;
+  const voiceId = typeof next.voice_id === "string" ? next.voice_id.trim() : "";
+  if (!voiceId) {
+    const catalog = await listElevenLabsVoices();
+    const fallback = catalog.voices[0]?.voice_id;
+    if (fallback) next.voice_id = fallback;
   }
   return next;
 }
@@ -657,6 +682,13 @@ export function chatDef(fs: Engine): ToolDef {
       if (scriptContents.length > 0 && routableTool.category === "generation") {
         const combinedScript = scriptContents.map((s) => s.content).join("\n\n");
         params.prompt = combinedScript;
+      }
+
+      // Speech requests: fold prompt into text and default the voice, since
+      // the router model cannot know ElevenLabs voice ids. Runs after the
+      // script injection above so script content reaches the spoken text.
+      if (decision.tool === "generate_elevenlabs_text_to_audio") {
+        Object.assign(params, await applySpeechRoutingDefaults(decision.tool, params));
       }
 
       // 8. Look up handler from tool defs

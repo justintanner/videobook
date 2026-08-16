@@ -7007,6 +7007,21 @@ textarea:focus-visible {
   color: #e08a8a;
 }
 
+.generation-review-voice-section small {
+  color: #d2b56b;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.generation-review-voices {
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  overflow-y: auto;
+}
+
 .command-asset-preview {
   display: grid;
   width: 48px;

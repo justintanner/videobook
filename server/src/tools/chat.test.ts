@@ -6,6 +6,7 @@ import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../fs.js";
 import { v7 as uuidv7 } from "uuid";
 import {
+  applySpeechRoutingDefaults,
   chatActionPlanSchema,
   duplicateDestinationReference,
   loadScriptContentsForChat,
@@ -381,6 +382,51 @@ describe("sanitizeGenerateImageParams", () => {
   it("leaves params unchanged when image_refs is absent", () => {
     const input = { prompt: "qr code image" };
     expect(sanitizeGenerateImageParams(input)).toEqual(input);
+  });
+});
+
+describe("applySpeechRoutingDefaults", () => {
+  const origCustomVoices = process.env.ELEVENLABS_CUSTOM_VOICE_IDS;
+
+  afterEach(() => {
+    if (origCustomVoices !== undefined) {
+      process.env.ELEVENLABS_CUSTOM_VOICE_IDS = origCustomVoices;
+    } else {
+      delete process.env.ELEVENLABS_CUSTOM_VOICE_IDS;
+    }
+  });
+
+  it("leaves non-speech tools untouched", async () => {
+    const params = { prompt: "a red fox" };
+    expect(await applySpeechRoutingDefaults("generate_video", params))
+      .toBe(params);
+  });
+
+  it("keeps explicit text and voice as provided", async () => {
+    const result = await applySpeechRoutingDefaults(
+      "generate_elevenlabs_text_to_audio",
+      { text: "welcome back", voice_id: "voice-explicit" },
+    );
+    expect(result.text).toBe("welcome back");
+    expect(result.voice_id).toBe("voice-explicit");
+  });
+
+  it("folds prompt into text when the router omitted text", async () => {
+    process.env.ELEVENLABS_CUSTOM_VOICE_IDS = "Narrator=custom-voice-1";
+    const result = await applySpeechRoutingDefaults(
+      "generate_elevenlabs_text_to_audio",
+      { prompt: "welcome back everyone" },
+    );
+    expect(result.text).toBe("welcome back everyone");
+  });
+
+  it("defaults an omitted voice_id from the catalog, custom voices first", async () => {
+    process.env.ELEVENLABS_CUSTOM_VOICE_IDS = "Narrator=custom-voice-1";
+    const result = await applySpeechRoutingDefaults(
+      "generate_elevenlabs_text_to_audio",
+      { text: "welcome back" },
+    );
+    expect(result.voice_id).toBe("custom-voice-1");
   });
 });
 
