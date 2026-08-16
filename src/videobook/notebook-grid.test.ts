@@ -1,9 +1,11 @@
 import type { Node } from '@xyflow/react'
 import { describe, expect, it } from 'vitest'
 import {
+  allocateNotebookHorizontalGenerationSlots,
   allocateNotebookVideoGenerationSlots,
   changedNotebookGridNodes,
   nextHorizontalSlotFrom,
+  nextNotebookCreationSlot,
   nextNotebookGridSlot,
   nextNotebookHorizontalGenerationSlot,
   nextNotebookVideoGenerationSlot,
@@ -195,6 +197,145 @@ describe('notebook grid', () => {
       tile: { row: 0, column: 1 },
       output: { row: 1, column: 1 },
     })
+  })
+
+  it('anchors no-source image/audio work right of last-work and skips occupied', () => {
+    const lastWork = { row: 5, column: 3 }
+    expect(nextNotebookHorizontalGenerationSlot(
+      [{ type: 'prompt', slot: lastWork }],
+      [],
+      lastWork,
+    )).toEqual({ row: 5, column: 4 })
+
+    expect(nextNotebookHorizontalGenerationSlot(
+      [
+        { type: 'prompt', slot: lastWork },
+        { type: 'generate_image', slot: { row: 5, column: 4 } },
+        { type: 'image', slot: { row: 5, column: 5 } },
+      ],
+      [],
+      lastWork,
+    )).toEqual({ row: 5, column: 6 })
+
+    const pair = allocateNotebookHorizontalGenerationSlots(
+      [{ type: 'prompt', slot: lastWork }],
+      [],
+      lastWork,
+    )
+    expect(pair).toEqual({
+      tile: { row: 5, column: 4 },
+      output: { row: 5, column: 5 },
+    })
+    const secondPair = allocateNotebookHorizontalGenerationSlots(
+      [
+        { type: 'prompt', slot: lastWork },
+        { type: 'generate_image', slot: pair.tile },
+        { type: 'image', slot: pair.output },
+      ],
+      [],
+      lastWork,
+    )
+    expect(secondPair).toEqual({
+      tile: { row: 5, column: 6 },
+      output: { row: 5, column: 7 },
+    })
+  })
+
+  it('anchors no-source video work below last-work and skips occupied', () => {
+    const lastWork = { row: 5, column: 3 }
+    expect(nextNotebookVideoGenerationSlot(
+      [{ type: 'prompt', slot: lastWork }],
+      [],
+      lastWork,
+    )).toEqual({ row: 6, column: 3 })
+
+    const pair = allocateNotebookVideoGenerationSlots(
+      [{ type: 'prompt', slot: lastWork }],
+      [],
+      lastWork,
+    )
+    expect(pair).toEqual({
+      tile: { row: 6, column: 3 },
+      output: { row: 7, column: 3 },
+    })
+    const secondPair = allocateNotebookVideoGenerationSlots(
+      [
+        { type: 'prompt', slot: lastWork },
+        { type: 'generate_video', slot: pair.tile },
+        { type: 'video', slot: pair.output },
+      ],
+      [],
+      lastWork,
+    )
+    expect(secondPair).toEqual({
+      tile: { row: 8, column: 3 },
+      output: { row: 9, column: 3 },
+    })
+  })
+
+  it('clamps last-work scans at @*13 and @z* without leaving the board', () => {
+    const lastColumn = { row: 4, column: 12 }
+    expect(nextNotebookHorizontalGenerationSlot(
+      [{ type: 'prompt', slot: lastColumn }],
+      [],
+      lastColumn,
+    )).toEqual({ row: 5, column: 12 })
+    expect(allocateNotebookHorizontalGenerationSlots(
+      [{ type: 'prompt', slot: lastColumn }],
+      [],
+      lastColumn,
+    )).toEqual({
+      tile: { row: 5, column: 12 },
+      output: { row: 6, column: 12 },
+    })
+
+    const lastRow = { row: 25, column: 4 }
+    expect(nextNotebookVideoGenerationSlot(
+      [{ type: 'prompt', slot: lastRow }],
+      [],
+      lastRow,
+    )).toEqual({ row: 25, column: 5 })
+    expect(allocateNotebookVideoGenerationSlots(
+      [{ type: 'prompt', slot: lastRow }],
+      [],
+      lastRow,
+    )).toEqual({
+      tile: { row: 25, column: 5 },
+      output: { row: 25, column: 6 },
+    })
+
+    expect(nextNotebookHorizontalGenerationSlot(
+      [],
+      [],
+      { row: 100, column: -4 },
+    )).toEqual({ row: 25, column: 0 })
+  })
+
+  it('keeps source-fed placement even when a last-work anchor is set', () => {
+    const lastWork = { row: 8, column: 8 }
+    expect(nextNotebookHorizontalGenerationSlot(
+      [{ type: 'video', slot: { row: 2, column: 0 } }],
+      [{ row: 2, column: 0 }],
+      lastWork,
+    )).toEqual({ row: 2, column: 1 })
+    expect(nextNotebookVideoGenerationSlot(
+      [{ type: 'image', slot: { row: 3, column: 2 } }],
+      [{ row: 3, column: 2 }],
+      lastWork,
+    )).toEqual({ row: 4, column: 2 })
+  })
+
+  it('uses last-work for no-source creation by media kind', () => {
+    const lastWork = { row: 6, column: 2 }
+    const cells = [{ type: 'prompt', slot: lastWork }]
+    expect(nextNotebookCreationSlot('generate_audio', cells, lastWork))
+      .toEqual({ row: 6, column: 3 })
+    expect(nextNotebookCreationSlot('generate_video', cells, lastWork))
+      .toEqual({ row: 7, column: 2 })
+    expect(nextNotebookCreationSlot('prompt', cells, lastWork))
+      .toEqual({ row: 6, column: 3 })
+    expect(nextNotebookCreationSlot('prompt', cells, null))
+      .toEqual({ row: 0, column: 0 })
   })
 
   it('places image and frame work horizontally near sources', () => {

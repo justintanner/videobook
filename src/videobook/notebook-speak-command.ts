@@ -1,6 +1,6 @@
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { nextNotebookHorizontalGenerationSlot } from './notebook-grid'
-import type { NotebookDocument } from 'videobook-engine'
+import type { NotebookDocument, NotebookGridSlot } from 'videobook-engine'
 
 export type NotebookSpeakCommandRun = {
   cellId: string
@@ -83,12 +83,17 @@ export async function materializeNotebookSpeakCommand(input: {
   text: string
   voiceId: string
   expectedRevision?: string
+  lastWorkSlot?: NotebookGridSlot | null
 }): Promise<NotebookSpeakCommandRun> {
   const prompt = input.text.trim()
   const voiceId = input.voiceId.trim()
   if (!prompt) throw new Error('Speak text is required')
   if (!voiceId) throw new Error('Speak voice is required')
-  const slot = nextNotebookHorizontalGenerationSlot(input.document.cells)
+  const slot = nextNotebookHorizontalGenerationSlot(
+    input.document.cells,
+    [],
+    input.lastWorkSlot ?? null,
+  )
   let cellId: string | null = null
   let outputCellId: string | null = null
   try {

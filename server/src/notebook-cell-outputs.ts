@@ -3,17 +3,14 @@ import type {
   NotebookCell,
   NotebookDocument,
   NotebookEdge,
-  NotebookGridSlot,
 } from "videobook-engine";
 import {
   findGenerateAudioOutputCell,
   findGenerateImageOutputCell,
   findGenerateVideoOutputCell,
-  NOTEBOOK_GRID_COLUMN_COUNT,
-  NOTEBOOK_GRID_ROW_COUNT,
-  nextVerticalSlotFrom,
 } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
+import { nextGenerationOutputSlot } from "./notebook-placement.js";
 
 export {
   findGenerateAudioOutputCell,
@@ -210,16 +207,6 @@ export function collapseLegacyExtractPairs(
   };
 }
 
-function slotDirectlyBelow(slot: NotebookGridSlot): NotebookGridSlot {
-  if (slot.row + 1 < NOTEBOOK_GRID_ROW_COUNT) {
-    return { row: slot.row + 1, column: slot.column };
-  }
-  return {
-    row: slot.row,
-    column: Math.min(slot.column + 1, NOTEBOOK_GRID_COLUMN_COUNT - 1),
-  };
-}
-
 type GenerationProducerType = "generate_video" | "generate_image" | "generate_audio";
 type GenerationOutputType = "video" | "image" | "audio";
 
@@ -298,7 +285,7 @@ function ensureGenerationOutput(
   const outputCell = engine.notebooks.createCell({
     type: spec.outputType,
     label: generationOutputLabel(producer, spec.labelSuffix),
-    slot: nextVerticalSlotFrom(slotDirectlyBelow(producer.slot), occupied),
+    slot: nextGenerationOutputSlot(spec.producerType, producer.slot, occupied),
     inputs: generationOutputInputs(
       { ...producer, inputs: { state: "pending" } },
       producer.id,

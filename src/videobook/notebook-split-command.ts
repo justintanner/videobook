@@ -1,5 +1,5 @@
 import { v7 as uuidv7 } from 'uuid'
-import { firstEmptyNotebookGridSlots } from 'videobook-engine/notebook-grid'
+import { nextVerticalSlotFrom } from 'videobook-engine/notebook-grid'
 import type {
   NotebookCell,
   NotebookDocument,
@@ -126,15 +126,18 @@ function splitBoundaryValues(value: string): string[] {
 function splitSlots(
   cells: readonly NotebookCell[],
   outputCount: number,
+  sourceSlot: NotebookGridSlot,
 ): { action: NotebookGridSlot; outputs: NotebookGridSlot[] } {
-  const [action, ...outputs] = firstEmptyNotebookGridSlots(
-    cells.map((cell) => cell.slot),
-    outputCount + 1,
-  )
-  return {
-    action: action!,
-    outputs,
+  const occupied = cells.map((cell) => cell.slot)
+  const action = nextVerticalSlotFrom(sourceSlot, occupied)
+  const outputs: NotebookGridSlot[] = []
+  let cursor = action
+  for (let index = 0; index < outputCount; index += 1) {
+    const slot = nextVerticalSlotFrom(cursor, [...occupied, action, ...outputs])
+    outputs.push(slot)
+    cursor = slot
   }
+  return { action, outputs }
 }
 
 function createOutput(input: {
@@ -289,7 +292,7 @@ export function planNotebookSplitCommand(input: {
     cutPointsSeconds,
     sourceDurationSeconds: input.sourceDurationSeconds,
   })
-  const slots = splitSlots(input.document.cells, ranges.length)
+  const slots = splitSlots(input.document.cells, ranges.length, source.slot)
   const actionCell: NotebookCell = {
     id: uuidv7(),
     type: 'split_video',

@@ -87,6 +87,30 @@ describe('notebook coordinate chat actions', () => {
     expect(explicit.expectations).toEqual([{ address: '@z13', cellId: null }])
   })
 
+  it('places no-source generations next to last-work instead of the origin', () => {
+    const current = document([cell('one', 6, 4)])
+    const image = planNotebookCoordinateAction(
+      current,
+      parseNotebookCoordinateAction('create a generate image')!,
+      { row: 6, column: 4 },
+    )
+    expect(image.action).toMatchObject({
+      kind: 'create',
+      cellType: 'generate_image',
+      destination: { row: 6, column: 5 },
+    })
+    const video = planNotebookCoordinateAction(
+      current,
+      parseNotebookCoordinateAction('create a generate video')!,
+      { row: 6, column: 4 },
+    )
+    expect(video.action).toMatchObject({
+      kind: 'create',
+      cellType: 'generate_video',
+      destination: { row: 7, column: 4 },
+    })
+  })
+
   it('rejects empty sources, occupied creates, and a full grid', () => {
     const current = document([cell('one', 0, 0)])
     expect(() => planNotebookCoordinateAction(

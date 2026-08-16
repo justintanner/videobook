@@ -583,7 +583,7 @@ describe('directional canvas placement', () => {
     expect(second.outputCell.id).toBe(first.outputCell.id)
   })
 
-  it('creates generate_image with an image output cell directly below', async () => {
+  it('creates generate_image with an image output cell to the right', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
@@ -632,7 +632,7 @@ describe('directional canvas placement', () => {
 
     expect(generated.output_cell).toMatchObject({
       type: 'image',
-      slot: { row: 1, column: 0 },
+      slot: { row: 0, column: 1 },
       inputs: {
         mediaRole: 'generate-image-output',
         producerCellId: generated.id,
@@ -648,7 +648,7 @@ describe('directional canvas placement', () => {
     const tile = notebook.cells.find((cell) => cell.id === generated.id)!
     const output = findGenerateImageOutput(notebook, generated.id)!
     expect(tile.outputArtifactId).toBeUndefined()
-    expect(output.outputCell.slot).toEqual({ row: 1, column: 0 })
+    expect(output.outputCell.slot).toEqual({ row: 0, column: 1 })
   })
 
   it('resolves generated image from output cell and legacy inline artifact', async () => {
@@ -888,8 +888,8 @@ describe('directional canvas placement', () => {
     expect(imageOutput!.outputCell.inputs?.mediaRole).toBe('generate-image-output')
     expect(imageOutput!.outputCell.inputs?.producerCellId).toBe(genImage.id)
     expect(imageOutput!.outputEdge.targetInput).toBe('media')
-    expect(imageOutput!.outputCell.slot.column).toBe(tile.slot.column)
-    expect(imageOutput!.outputCell.slot.row).toBe(tile.slot.row + 1)
+    expect(imageOutput!.outputCell.slot.row).toBe(tile.slot.row)
+    expect(imageOutput!.outputCell.slot.column).toBe(tile.slot.column + 1)
 
     const genVideo = engine.notebooks.createCell({
       type: 'generate_video',
@@ -940,7 +940,7 @@ describe('directional canvas placement', () => {
     expect(second.changed).toBe(false)
   })
 
-  it('creates generate_audio with an audio output cell directly below', async () => {
+  it('creates generate_audio with an audio output cell to the right', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
@@ -989,7 +989,7 @@ describe('directional canvas placement', () => {
 
     expect(generated.output_cell).toMatchObject({
       type: 'audio',
-      slot: { row: 1, column: 0 },
+      slot: { row: 0, column: 1 },
       inputs: {
         mediaRole: 'generate-audio-output',
         producerCellId: generated.id,
@@ -1005,7 +1005,7 @@ describe('directional canvas placement', () => {
     const tile = notebook.cells.find((cell) => cell.id === generated.id)!
     const output = findGenerateAudioOutput(notebook, generated.id)!
     expect(tile.outputArtifactId).toBeUndefined()
-    expect(output.outputCell.slot).toEqual({ row: 1, column: 0 })
+    expect(output.outputCell.slot).toEqual({ row: 0, column: 1 })
   })
 
   it('ensureGenerateAudioOutput is idempotent for existing output cells', async () => {
@@ -1082,8 +1082,8 @@ describe('directional canvas placement', () => {
     expect(audioOutput!.outputCell.inputs?.mediaRole).toBe('generate-audio-output')
     expect(audioOutput!.outputCell.inputs?.producerCellId).toBe(genAudio.id)
     expect(audioOutput!.outputEdge.targetInput).toBe('media')
-    expect(audioOutput!.outputCell.slot.column).toBe(tile.slot.column)
-    expect(audioOutput!.outputCell.slot.row).toBe(tile.slot.row + 1)
+    expect(audioOutput!.outputCell.slot.row).toBe(tile.slot.row)
+    expect(audioOutput!.outputCell.slot.column).toBe(tile.slot.column + 1)
   })
 
   it('records ensure_generate_audio_output during run-notebook preflight', async () => {

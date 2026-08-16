@@ -1,5 +1,4 @@
 import {
-  firstEmptyNotebookGridSlot,
   notebookGridTag,
   parseNotebookGridAddress,
 } from 'videobook-engine/notebook-grid'
@@ -10,10 +9,7 @@ import type {
   NotebookGridSlot,
 } from 'videobook-engine'
 import { notebookCellAtSlot } from './notebook-addressing'
-import {
-  nextNotebookHorizontalGenerationSlot,
-  nextNotebookVideoGenerationSlot,
-} from './notebook-grid'
+import { nextNotebookCreationSlot } from './notebook-grid'
 
 export type NotebookCoordinateAction =
   | {
@@ -151,18 +147,15 @@ export function parseNotebookCoordinateAction(
 export function planNotebookCoordinateAction(
   document: NotebookDocument,
   parsed: NotebookCoordinateAction,
+  lastWorkSlot: NotebookGridSlot | null = null,
 ): NotebookCoordinateActionPlan {
   if (parsed.kind === 'create') {
     const destination = parsed.destination
-      ?? (parsed.cellType === 'generate_video'
-        ? nextNotebookVideoGenerationSlot(document.cells)
-        : parsed.cellType === 'generate_image'
-          || parsed.cellType === 'extract_frame'
-          || parsed.cellType === 'extract_audio'
-          ? nextNotebookHorizontalGenerationSlot(document.cells)
-          : firstEmptyNotebookGridSlot(
-            document.cells.map((cell) => cell.slot),
-          ))
+      ?? nextNotebookCreationSlot(
+        parsed.cellType,
+        document.cells,
+        lastWorkSlot,
+      )
     const occupied = notebookCellAtSlot(document, destination)
     if (occupied) {
       throw new Error(`Notebook cell ${notebookGridTag(destination)} is occupied`)

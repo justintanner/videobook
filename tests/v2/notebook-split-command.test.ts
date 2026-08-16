@@ -224,7 +224,7 @@ describe('notebook split commands', () => {
       type: 'split_video',
       label: 'Split into 3 chunks',
       operation: 'split_at_points',
-      slot: { row: 0, column: 1 },
+      slot: { row: 1, column: 0 },
       inputs: {
         startSeconds: 0,
         cutPointsSeconds: [1, 2],
@@ -237,7 +237,7 @@ describe('notebook split commands', () => {
         outputCell: {
           type: 'video',
           label: 'Chunk 01',
-          slot: { row: 0, column: 2 },
+          slot: { row: 2, column: 0 },
           inputs: { chunkCount: 3, chunkIndex: 0, state: 'pending' },
         },
       },
@@ -246,7 +246,7 @@ describe('notebook split commands', () => {
         outputCell: {
           type: 'video',
           label: 'Chunk 02',
-          slot: { row: 0, column: 3 },
+          slot: { row: 3, column: 0 },
           inputs: { chunkCount: 3, chunkIndex: 1, state: 'pending' },
         },
       },
@@ -255,7 +255,7 @@ describe('notebook split commands', () => {
         outputCell: {
           type: 'video',
           label: 'Chunk 03',
-          slot: { row: 0, column: 4 },
+          slot: { row: 4, column: 0 },
           inputs: { chunkCount: 3, chunkIndex: 2, state: 'pending' },
         },
       },
@@ -269,9 +269,9 @@ describe('notebook split commands', () => {
     })
     expect(run.outputs).toHaveLength(3)
     expect(run.sourceAddress).toBe('@a1')
-    expect(run.actionAddress).toBe('@a2')
+    expect(run.actionAddress).toBe('@b1')
     expect(run.outputs.map((output) => output.outputAddress))
-      .toEqual(['@a3', '@a4', '@a5'])
+      .toEqual(['@c1', '@d1', '@e1'])
     const activeResult = engine.notebooks.read(notebookId)
     expect(activeResult.ok).toBe(true)
     if (!activeResult.ok) return

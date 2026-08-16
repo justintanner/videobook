@@ -113,6 +113,7 @@ export async function materializeNotebookImageGenerationCommand(input: {
   document: NotebookDocument
   expectedRevision?: string
   fallbackSlot: NotebookGridSlot
+  lastWorkSlot?: NotebookGridSlot | null
 }): Promise<NotebookImageGenerationCommandRun> {
   const sources = resolveNotebookImageGenerationSources(
     input.document,
@@ -130,6 +131,7 @@ export async function materializeNotebookImageGenerationCommand(input: {
     ? nextNotebookHorizontalGenerationSlot(
       input.document.cells,
       sources.map((source) => source.slot),
+      input.lastWorkSlot ?? null,
     )
     : input.fallbackSlot
   let cellId: string | null = null

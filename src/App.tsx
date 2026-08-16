@@ -170,12 +170,12 @@ import {
   type CommandPlan,
   type EditCommandStage,
 } from '@/videobook/command-plan'
+import { useLastWorkSlot } from '@/videobook/last-work-slot'
 import {
   changedNotebookGridNodes,
-  nextNotebookGridSlot,
-  nextNotebookHorizontalGenerationSlot,
-  nextNotebookVideoGenerationSlot,
+  nextNotebookCreationSlot,
   normalizeNotebookGridZoom,
+  parseNotebookGridAddress,
   notebookGrid,
   notebookGridAddress,
   notebookGridDropSlot,
@@ -2632,6 +2632,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const [providers, setProviders] = useState<ProviderRecord[]>([])
   const [storage, setStorage] = useState<unknown>(null)
+  const { lastWorkSlot, rememberLastWorkSlot } = useLastWorkSlot(
+    bookId,
+    notebook?.id ?? null,
+  )
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
   const [selectedCellIds, setSelectedCellIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -3099,7 +3103,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const selectCanvasCell = useCallback((cellId: string | null) => {
     setSelectedCellId(cellId)
     updateSelectedCellIds(cellId ? new Set([cellId]) : new Set())
-  }, [updateSelectedCellIds])
+    if (!cellId) return
+    const fromNotebook = notebook?.cells.find((cell) => cell.id === cellId)
+    if (fromNotebook) {
+      rememberLastWorkSlot(fromNotebook.slot)
+      return
+    }
+    const fromNode = nodes.find((node) => node.id === cellId)
+    if (fromNode) rememberLastWorkSlot(fromNode.data.slot)
+  }, [notebook, nodes, rememberLastWorkSlot, updateSelectedCellIds])
 
   const closeCellContextMenu = useCallback(() => {
     setCellContextMenu(null)
@@ -4433,13 +4445,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook) return
     const slot = position
       ? notebookGridDropSlot(position, notebookBaseMetrics)
-      : type === 'generate_video'
-        ? nextNotebookVideoGenerationSlot(notebook.cells)
-        : type === 'generate_image'
-          || type === 'extract_frame'
-          || type === 'extract_audio'
-          ? nextNotebookHorizontalGenerationSlot(notebook.cells)
-          : nextNotebookGridSlot(nodes)
+      : nextNotebookCreationSlot(type, notebook.cells, lastWorkSlot)
     if (
       position
       && nodes.some((node) =>
@@ -4467,6 +4473,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         },
       })
       await refreshBookData(bookId, notebook.id)
+      rememberLastWorkSlot(slot)
       setNotice(`Added ${notebookGridTag(slot)} cell`)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
@@ -4486,6 +4493,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         cell: patch,
       })
       await refreshNotebook(bookId, notebook.id)
+      rememberLastWorkSlot(selectedCell.data.slot)
       setNotice('Cell saved')
       return true
     } catch (error) {
@@ -4807,6 +4815,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         artifact_ref: artifactRef,
       })
       attached = true
+      rememberLastWorkSlot(slot)
       await refreshBookData(bookId, notebook.id)
       setNotice(reusedExisting
         ? `Reused @${artifactRef} at ${address}`
@@ -5066,6 +5075,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         bookId,
         callTool: call,
         document: currentNotebook,
+        lastWorkSlot,
         text,
         voiceId,
         ...(currentNotebook.revision
@@ -5073,6 +5083,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : {}),
       })
       materialized = created
+      const spokenSlot = parseNotebookGridAddress(created.cellAddress)
+      if (spokenSlot) rememberLastWorkSlot(spokenSlot)
       const plan = await createGenerationPlan(created.cellId, 'slash')
       const stage = plan.stages.find((candidate) =>
         candidate.kind === 'queued'
@@ -6097,7 +6109,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const cell = downloadVideoCellInput(
       result,
       sourceUrl,
-      nextNotebookGridSlot(nodes),
+      nextNotebookCreationSlot('video', notebook.cells, lastWorkSlot),
     )
     let createdCellId: string
     try {
@@ -6585,11 +6597,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         cellId: uuidv7(),
         command,
         document: currentNotebook,
-        fallbackSlot: command.cellType === 'generate_video'
-          ? nextNotebookVideoGenerationSlot(currentNotebook.cells)
-          : command.cellType === 'generate_image'
-            ? nextNotebookHorizontalGenerationSlot(currentNotebook.cells)
-            : nextNotebookGridSlot(nodes),
+        fallbackSlot: nextNotebookCreationSlot(
+          command.cellType,
+          currentNotebook.cells,
+          lastWorkSlot,
+        ),
+        lastWorkSlot,
         ...(options?.preferredTool
           ? { preferredTool: options.preferredTool }
           : {}),
@@ -6696,7 +6709,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : { ...outcome, nextInput: '', selectInput: false }
       }
       const routedCells = notebook
-        ? routedMediaCellInputs(plan.tool, result, notebook.cells)
+        ? routedMediaCellInputs(plan.tool, result, notebook.cells, lastWorkSlot)
         : []
       if (notebook && routedCells.length > 0) {
         const placements: string[] = []
@@ -6993,6 +7006,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setBusy(true)
     setCellRunError(cellId, null)
     setCellQueued(cellId, true)
+    rememberLastWorkSlot(preparedAction.draft.cell.slot)
     selectCanvasCell(cellId)
     showOptimisticGeneration(preparedAction.draft, currentNotebook)
     try {
@@ -7769,7 +7783,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return await completeVideoDownload(result, asString(args.url) ?? '')
       }
       const routedCells = notebook
-        ? routedMediaCellInputs(command.mcpTool.tool, result, notebook.cells)
+        ? routedMediaCellInputs(command.mcpTool.tool, result, notebook.cells, lastWorkSlot)
         : []
       if (notebook && routedCells.length > 0) {
         const placements: string[] = []
@@ -8529,10 +8543,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                             else nextSelection.delete(change.id)
                           }
                           updateSelectedCellIds(nextSelection)
+                          const nextId = [...nextSelection].at(-1) ?? null
                           setSelectedCellId((current) =>
                             current && nextSelection.has(current)
                               ? current
-                              : [...nextSelection].at(-1) ?? null)
+                              : nextId)
+                          const rememberedCell = nextId
+                            ? notebook?.cells.find((cell) => cell.id === nextId)
+                            : undefined
+                          const rememberedNode = nextId
+                            ? nodes.find((item) => item.id === nextId)
+                            : undefined
+                          if (rememberedCell) {
+                            rememberLastWorkSlot(rememberedCell.slot)
+                          } else if (rememberedNode) {
+                            rememberLastWorkSlot(rememberedNode.data.slot)
+                          }
                         }
                         setNodes((current) => {
                           let next = applyNodeChanges(changes, current)
@@ -8558,9 +8584,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       }}
                       onNodeClick={(_event, node) => {
                         const currentSelection = selectedCellIdsRef.current
-                        setSelectedCellId(currentSelection.has(node.id)
+                        const nextId = currentSelection.has(node.id)
                           ? node.id
-                          : [...currentSelection].at(-1) ?? null)
+                          : [...currentSelection].at(-1) ?? null
+                        setSelectedCellId(nextId)
+                        if (nextId === node.id) {
+                          rememberLastWorkSlot(node.data.slot)
+                        }
                         setSourceViewCellId(null)
                         setInspectorOpen(true)
                       }}
@@ -8583,7 +8613,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         const movedNodes = changedNotebookGridNodes(nodes, nextNodes)
                         setNodes(nextNodes)
                         setPreviewSlot(null)
-                        if (movedNodes.length > 0) void persistSlots(movedNodes)
+                                        if (movedNodes.length > 0) {
+                          const moved = movedNodes.find((item) => item.id === node.id)
+                            ?? movedNodes[0]
+                          if (moved) rememberLastWorkSlot(moved.data.slot)
+                          void persistSlots(movedNodes)
+                        }
                       }}
                       onConnect={(connection) => void connectCells(connection)}
                       onDrop={handleNotebookFlowDrop}

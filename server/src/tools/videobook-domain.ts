@@ -10,10 +10,11 @@ import type {
   PinnedSearchResult,
 } from "videobook-engine";
 import {
-  firstEmptyNotebookGridSlots,
+  nextHorizontalSlotFrom,
   NOTEBOOK_CELL_TYPES,
   notebookGridTag,
 } from "videobook-engine";
+import { slotRight } from "../notebook-placement.js";
 import { z } from "zod";
 import { v7 as uuidv7 } from "uuid";
 import type { BookManager } from "../book-manager.js";
@@ -203,16 +204,6 @@ function markCellAndDescendantsStale(
   cellId: string,
 ): NotebookDocument {
   return markCellStale(markDescendantsStale(notebook, cellId), cellId);
-}
-
-function firstEmptyGridSlots(
-  cells: readonly NotebookCell[],
-  count: number,
-): NotebookGridSlot[] {
-  return firstEmptyNotebookGridSlots(
-    cells.map((cell) => cell.slot),
-    count,
-  );
 }
 
 const cellReferenceSchema = z.object({
@@ -1375,7 +1366,10 @@ export function videobookDomainDefs(
               outputCell = engine.notebooks.createCell({
                 type: "analysis",
                 ...(cell.label === undefined ? {} : { label: cell.label }),
-                slot: firstEmptyGridSlots(cells, 1)[0]!,
+                slot: nextHorizontalSlotFrom(
+                  slotRight(cell.slot),
+                  cells.map((candidate) => candidate.slot),
+                ),
                 inputs: {
                   analysisRole: "result",
                   producerCellId: cell.id,

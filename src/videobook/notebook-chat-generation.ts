@@ -231,6 +231,7 @@ export function planNotebookChatGeneration(input: {
   command: NotebookChatGenerationCommand
   document: NotebookDocument
   fallbackSlot: NotebookGridSlot
+  lastWorkSlot?: NotebookGridSlot | null
   preferredTool?: string
   routedParams?: Record<string, unknown>
 }): NotebookChatGenerationDraft {
@@ -265,12 +266,19 @@ export function planNotebookChatGeneration(input: {
     ...(Object.keys(settings).length > 0 ? { generationSettings: settings } : {}),
   }
   const sourceSlots = sources.map((source) => source.cell.slot)
+  const lastWorkSlot = input.lastWorkSlot ?? null
   const slot = input.command.cellType === 'generate_video'
-    ? nextNotebookVideoGenerationSlot(input.document.cells, sourceSlots)
+    ? nextNotebookVideoGenerationSlot(
+      input.document.cells,
+      sourceSlots,
+      lastWorkSlot,
+    )
     : input.command.cellType === 'generate_image'
+      || input.command.cellType === 'generate_audio'
       ? nextNotebookHorizontalGenerationSlot(
         input.document.cells,
         sourceSlots,
+        lastWorkSlot,
       )
       : input.fallbackSlot
   const cell: NotebookCell = {

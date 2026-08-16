@@ -5,8 +5,16 @@ import type {
   NotebookEdge,
   NotebookGridSlot,
 } from "videobook-engine";
-import { firstEmptyNotebookGridSlots } from "videobook-engine";
+import {
+  firstEmptyNotebookGridSlots,
+  nextHorizontalSlotFrom,
+  nextVerticalSlotFrom,
+} from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
+import {
+  isVerticalGenerationType,
+  lastCreatedCellSlot,
+} from "./notebook-placement.js";
 import {
   DEFAULT_ANIMATION_TOOL,
   normalizeCellActionFields,
@@ -330,20 +338,27 @@ function allocateBranchSlots(
   branch: BranchCells,
   retainedCellIds: Set<string>,
   occupiedSlots: Set<string>,
+  sourceSlot: NotebookGridSlot | null,
 ): BranchCells {
   const created = branchCellList(branch).filter((cell) =>
     !retainedCellIds.has(cell.id));
   if (created.length === 0) return branch;
-  const allocatedSlots = firstEmptyNotebookGridSlots(
-    [...occupiedSlots].map((key) => {
-      const [row, column] = key.split(":").map(Number);
-      return { row: row!, column: column! };
-    }),
-    created.length,
-  );
-  const slotsByCellId = new Map(
-    created.map((cell, index) => [cell.id, allocatedSlots[index]!] as const),
-  );
+  const occupied: NotebookGridSlot[] = [...occupiedSlots].map((key) => {
+    const [row, column] = key.split(":").map(Number);
+    return { row: row!, column: column! };
+  });
+  const slotsByCellId = new Map<string, NotebookGridSlot>();
+  let cursor = sourceSlot;
+  for (const cell of created) {
+    const slot = occupied.length === 0
+      ? firstEmptyNotebookGridSlots([], 1)[0]!
+      : isVerticalGenerationType(cell.type)
+        ? nextVerticalSlotFrom(cursor ?? { row: 0, column: 0 }, occupied)
+        : nextHorizontalSlotFrom(cursor ?? { row: 0, column: 0 }, occupied);
+    slotsByCellId.set(cell.id, slot);
+    occupied.push(slot);
+    cursor = slot;
+  }
   const allocate = (cell: NotebookCell): NotebookCell => {
     if (retainedCellIds.has(cell.id)) return cell;
     return {
@@ -898,6 +913,7 @@ export async function applyAnalysisResults(
       provisionalBranch,
       retainedCellIds,
       occupiedSlots,
+      sourceCell?.slot ?? lastCreatedCellSlot(baseCells),
     );
     branchCells.push(...branchCellList(branch));
     canonicalEdges.push(...branchEdges(
@@ -995,11 +1011,15 @@ export function buildSevenStageScaffold(
     if (role && !roleCells.has(role)) roleCells.set(role, cell);
   }
   const occupiedSlots = document.cells.map((cell) => cell.slot);
+  let lastWork = lastCreatedCellSlot(document.cells);
   const scaffoldSlot = (role: string): NotebookGridSlot => {
     const existing = roleCells.get(role);
     if (existing) return existing.slot;
-    const slot = firstEmptyNotebookGridSlots(occupiedSlots, 1)[0]!;
+    const slot = occupiedSlots.length === 0
+      ? firstEmptyNotebookGridSlots([], 1)[0]!
+      : nextHorizontalSlotFrom(lastWork ?? { row: 0, column: 0 }, occupiedSlots);
     occupiedSlots.push(slot);
+    lastWork = slot;
     return slot;
   };
   const source = baseCell(engine, roleCells.get("source"), {

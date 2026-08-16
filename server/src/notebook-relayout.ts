@@ -10,7 +10,6 @@ import {
   nextVerticalSlotFrom,
   nextWaveTileSlot,
   NOTEBOOK_GRID_COLUMN_COUNT,
-  NOTEBOOK_GRID_ROW_COUNT,
 } from "videobook-engine";
 import {
   ensureGenerateAudioOutput,
@@ -20,6 +19,7 @@ import {
   findGenerateImageOutput,
   findGenerateVideoOutput,
 } from "./notebook-cell-outputs.js";
+import { slotBelow, slotRight } from "./notebook-placement.js";
 
 function bySlotThenId(left: NotebookCell, right: NotebookCell): number {
   if (left.slot.row !== right.slot.row) return left.slot.row - right.slot.row;
@@ -68,26 +68,6 @@ function isGenerateAudioOutputCell(
 function isExtractFrameOutputCell(cell: NotebookCell): boolean {
   return cell.type === "image"
     && cell.inputs?.mediaRole === "extract-frame-output";
-}
-
-function slotBelow(slot: NotebookGridSlot): NotebookGridSlot {
-  if (slot.row + 1 < NOTEBOOK_GRID_ROW_COUNT) {
-    return { row: slot.row + 1, column: slot.column };
-  }
-  return {
-    row: slot.row,
-    column: Math.min(slot.column + 1, NOTEBOOK_GRID_COLUMN_COUNT - 1),
-  };
-}
-
-function slotRight(slot: NotebookGridSlot): NotebookGridSlot {
-  if (slot.column + 1 < NOTEBOOK_GRID_COLUMN_COUNT) {
-    return { row: slot.row, column: slot.column + 1 };
-  }
-  return {
-    row: Math.min(slot.row + 1, NOTEBOOK_GRID_ROW_COUNT - 1),
-    column: slot.column,
-  };
 }
 
 function migrateGenerationArtifacts(
@@ -207,13 +187,6 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
       : null;
   }
 
-  const baseImageRow = Math.max(
-    -1,
-    ...cells
-      .filter((cell) => cell.type === "image" && newSlots.has(cell.id))
-      .map((cell) => newSlots.get(cell.id)!.row),
-  );
-
   function claimGenerateImagePair(
     tile: NotebookCell,
     tileSlot: NotebookGridSlot,
@@ -223,7 +196,7 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
     if (output && !newSlots.has(output.outputCell.id)) {
       claim(
         output.outputCell.id,
-        nextVerticalSlotFrom(slotBelow(tileSlot), occupied),
+        nextHorizontalSlotFrom(slotRight(tileSlot), occupied),
       );
     }
   }
@@ -237,7 +210,7 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
     if (output && !newSlots.has(output.outputCell.id)) {
       claim(
         output.outputCell.id,
-        nextVerticalSlotFrom(slotBelow(tileSlot), occupied),
+        nextHorizontalSlotFrom(slotRight(tileSlot), occupied),
       );
     }
   }
@@ -252,7 +225,7 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
       if (!sources) continue;
       const sourceSlots = sources.map((source) => newSlots.get(source.id)!);
       const anchor = sourceSlots.length === 0
-        ? { row: 0, column: 0 }
+        ? tile.slot
         : {
             row: Math.min(...sourceSlots.map((slot) => slot.row)),
             column: Math.min(
@@ -270,7 +243,7 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
       if (!sources) continue;
       const sourceSlots = sources.map((source) => newSlots.get(source.id)!);
       const anchor = sourceSlots.length === 0
-        ? { row: 0, column: 0 }
+        ? tile.slot
         : {
             row: Math.min(...sourceSlots.map((slot) => slot.row)),
             column: Math.min(
@@ -289,13 +262,17 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
       const sourceSlots = sources.map((source) => newSlots.get(source.id)!);
       const waveRow = sourceSlots.length > 0
         ? Math.max(...sourceSlots.map((slot) => slot.row)) + 1
-        : baseImageRow + 1;
+        : tile.slot.row;
       const baseRowSources = sourceSlots.length > 0
         && sourceSlots.every((slot) => slot.row === 0);
-      const startColumn = sourceSlots.length === 0 || baseRowSources
-        ? 0
-        : sourceSlots[0].column;
-      const tileSlot = nextWaveTileSlot(waveRow, startColumn, occupied);
+      const startColumn = sourceSlots.length === 0
+        ? tile.slot.column
+        : baseRowSources
+          ? 0
+          : sourceSlots[0].column;
+      const tileSlot = sourceSlots.length === 0
+        ? nextVerticalSlotFrom(tile.slot, occupied)
+        : nextWaveTileSlot(waveRow, startColumn, occupied);
       claim(tile.id, tileSlot);
       const output = findGenerateVideoOutput(document, tile.id);
       if (output && !newSlots.has(output.outputCell.id)) {
@@ -335,14 +312,14 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
     if (cell.type === "generate_image") {
       claimGenerateImagePair(
         cell,
-        nextHorizontalSlotFrom({ row: 0, column: 0 }, occupied),
+        nextHorizontalSlotFrom(cell.slot, occupied),
       );
       continue;
     }
     if (cell.type === "generate_audio") {
       claimGenerateAudioPair(
         cell,
-        nextHorizontalSlotFrom({ row: 0, column: 0 }, occupied),
+        nextHorizontalSlotFrom(cell.slot, occupied),
       );
       continue;
     }

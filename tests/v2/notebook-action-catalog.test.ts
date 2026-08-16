@@ -734,7 +734,7 @@ describe("notebook action catalog", () => {
       cell: {
         type: "prompt",
         label: "prompt-01",
-        slot: { row: 0, column: 1 },
+        slot: { row: 1, column: 0 },
         prompt: "a cat dances",
       },
     })) as { id: string };

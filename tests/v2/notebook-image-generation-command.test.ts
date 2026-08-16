@@ -389,7 +389,7 @@ describe('notebook image generation commands', () => {
       cell: {
         type: 'generate_image',
         label: 'Shared generated image',
-        slot: { row: 0, column: 0 },
+        slot: { row: 1, column: 0 },
         output_artifact_id: firstArtifact.value.artifactId,
       },
     }) as { id: string }

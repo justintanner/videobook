@@ -1,6 +1,8 @@
-import type { NotebookCell } from 'videobook-engine'
-import { firstEmptyNotebookGridSlots } from 'videobook-engine/notebook-grid'
-import { nextNotebookHorizontalGenerationSlot } from './notebook-grid'
+import type { NotebookCell, NotebookGridSlot } from 'videobook-engine'
+import {
+  nextNotebookHorizontalGenerationSlot,
+  nextNotebookVideoGenerationSlot,
+} from './notebook-grid'
 
 export interface RoutedMediaCellInput {
   type: 'audio' | 'video'
@@ -126,6 +128,7 @@ function coverSongOutput(value: Record<string, unknown>): RoutedMediaOutput {
 function coverSongSlot(
   value: Record<string, unknown>,
   cells: readonly NotebookCell[],
+  lastWorkSlot: NotebookGridSlot | null,
 ): { row: number; column: number } {
   const sourceArtifactId = stringValue(value.source_asset_id)
   const source = sourceArtifactId
@@ -134,13 +137,40 @@ function coverSongSlot(
   return nextNotebookHorizontalGenerationSlot(
     cells,
     source ? [source.slot] : [],
+    lastWorkSlot,
   )
+}
+
+function videoOutputSlots(
+  value: Record<string, unknown>,
+  cells: readonly NotebookCell[],
+  count: number,
+  lastWorkSlot: NotebookGridSlot | null,
+): NotebookGridSlot[] {
+  const sourceArtifactId = stringValue(value.source_asset_id)
+  const source = sourceArtifactId
+    ? cells.find((cell) => cell.outputArtifactId === sourceArtifactId)
+    : undefined
+  const sourceSlots = source ? [source.slot] : []
+  const working: Array<{ type: string; slot: NotebookGridSlot }> = [...cells]
+  const slots: NotebookGridSlot[] = []
+  for (let index = 0; index < count; index += 1) {
+    const slot = nextNotebookVideoGenerationSlot(
+      working,
+      sourceSlots,
+      lastWorkSlot,
+    )
+    slots.push(slot)
+    working.push({ type: 'video', slot })
+  }
+  return slots
 }
 
 export function routedMediaCellInputs(
   tool: string,
   result: unknown,
   cells: readonly NotebookCell[],
+  lastWorkSlot: NotebookGridSlot | null = null,
 ): RoutedMediaCellInput[] {
   if (
     tool !== 'extract_video_clip'
@@ -158,11 +188,8 @@ export function routedMediaCellInputs(
     cell.outputArtifactId === output.artifactId))
   if (unplaced.length === 0) return []
   const slots = tool === 'make_cover_song'
-    ? [coverSongSlot(value, cells)]
-    : firstEmptyNotebookGridSlots(
-      cells.map((cell) => cell.slot),
-      unplaced.length,
-    )
+    ? [coverSongSlot(value, cells, lastWorkSlot)]
+    : videoOutputSlots(value, cells, unplaced.length, lastWorkSlot)
   return unplaced.map((output, index) => ({
     type: output.type,
     slot: slots[index]!,
