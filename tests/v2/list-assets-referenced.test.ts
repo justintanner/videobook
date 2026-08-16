@@ -15,7 +15,7 @@ describe("list_assets notebook references", () => {
   afterEach(async () => {
     engine?.close();
     if (rootDir) {
-      await rm(rootDir, { recursive: true, force: true });
+      await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
     }
   });
 

@@ -21,7 +21,7 @@ describe('canonical sequence export renderer', () => {
   afterEach(async () => {
     vi.unstubAllGlobals()
     await queue.stop()
-    if (rootDir) await rm(rootDir, { recursive: true, force: true })
+    if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
   it('renders a revision-pinned MP4 offline and records immutable provenance', async () => {

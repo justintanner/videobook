@@ -38,7 +38,7 @@ describe("notebook runner frames and concat", () => {
 
   afterEach(async () => {
     engine?.close();
-    if (rootDir) await rm(rootDir, { recursive: true, force: true });
+    if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   });
 
   it("resolves generation tool from a generate_video cell before provider model id", () => {

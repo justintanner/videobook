@@ -28,7 +28,7 @@ describe('download video tool response', () => {
   afterEach(async () => {
     await queue.stop()
     engine.close()
-    await rm(rootDir, { recursive: true, force: true })
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
   it('returns the artifact UUID needed to attach the queued asset to a cell', async () => {

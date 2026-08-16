@@ -28,7 +28,7 @@ describe('library moment search', () => {
 
   afterEach(async () => {
     await books?.close()
-    if (rootDir) await rm(rootDir, { recursive: true, force: true })
+    if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
   it('federates book-scoped results with owning-book labels and rank fusion', async () => {

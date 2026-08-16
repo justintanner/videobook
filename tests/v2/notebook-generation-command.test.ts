@@ -62,7 +62,7 @@ describe('notebook generation cell commands', () => {
       if (originalApiKey === undefined) delete process.env.OPENAI_API_KEY
       else process.env.OPENAI_API_KEY = originalApiKey
       engine.close()
-      await rm(rootDir, { recursive: true, force: true })
+      await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
     }
   })
 })

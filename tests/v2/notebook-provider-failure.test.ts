@@ -25,7 +25,7 @@ describe("notebook provider failures", () => {
 
   afterEach(async () => {
     engine.close();
-    await rm(rootDir, { recursive: true, force: true });
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   });
 
   async function setupFailure(

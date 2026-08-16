@@ -20,7 +20,7 @@ describe("Analysis output assets", () => {
 
   afterEach(async () => {
     engine.close();
-    await rm(rootDir, { recursive: true, force: true });
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   });
 
   it("projects normalized shot metadata through asset sync", async () => {

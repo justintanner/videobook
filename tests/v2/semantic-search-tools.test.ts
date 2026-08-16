@@ -47,7 +47,7 @@ describe('semantic search MCP tools', () => {
   let rootDir: string | undefined
 
   afterEach(async () => {
-    if (rootDir) await rm(rootDir, { recursive: true, force: true })
+    if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
   it('returns bounded moments, reasons, coverage, and index status', async () => {

@@ -60,3 +60,5 @@ tests/screenshots/
 
 # Beads / Dolt files (added by bd init)
 .beads/proxieddb/
+.beads/dolt-server-config.yaml
+.beads.gate.lock

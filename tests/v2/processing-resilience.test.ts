@@ -25,7 +25,7 @@ describe('processing resilience', () => {
   afterEach(async () => {
     await queue.stop()
     engine?.close()
-    if (rootDir) await rm(rootDir, { recursive: true, force: true })
+    if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
   it('retries a transient Dolt branch conflict', async () => {

@@ -53,7 +53,7 @@ describe('notebook image generation commands', () => {
 
   afterEach(async () => {
     await books.close()
-    await rm(rootDir, { recursive: true, force: true })
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
   it('parses natural image requests without consuming configured-cell commands', () => {

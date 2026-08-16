@@ -81,7 +81,7 @@ describe("notebook local media and analysis fan-out", () => {
 
   afterEach(async () => {
     engine?.close();
-    if (rootDir) await rm(rootDir, { recursive: true, force: true });
+    if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   });
 
   beforeEach(async () => {

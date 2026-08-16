@@ -28,7 +28,7 @@ describe('notebook speak commands', () => {
 
   afterEach(async () => {
     await books.close()
-    await rm(rootDir, { recursive: true, force: true })
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
   it('materializes prompt and voice_id and returns the paired output cell', async () => {

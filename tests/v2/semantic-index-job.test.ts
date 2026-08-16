@@ -14,7 +14,7 @@ describe('progressive semantic index job', () => {
   let rootDir: string | undefined
 
   afterEach(async () => {
-    if (rootDir) await rm(rootDir, { recursive: true, force: true })
+    if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
   it('indexes bounded scene text and exact frame references with real engine storage', async () => {

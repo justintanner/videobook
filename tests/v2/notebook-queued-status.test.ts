@@ -16,7 +16,7 @@ describe('notebook queued execution status', () => {
 
   afterEach(async () => {
     engine.close()
-    await rm(rootDir, { recursive: true, force: true })
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
   it('persists the accepted run before a worker reports running', async () => {

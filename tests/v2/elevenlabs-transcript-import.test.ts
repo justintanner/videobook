@@ -10,7 +10,7 @@ describe('ElevenLabs transcript import', () => {
   let rootDir: string | undefined
 
   afterEach(async () => {
-    if (rootDir) await rm(rootDir, { recursive: true, force: true })
+    if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
   it('imports exact timed speech, speakers, confidence, and audio events', async () => {
