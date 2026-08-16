@@ -5606,7 +5606,10 @@ textarea:focus-visible {
 }
 
 .generation-chat-review {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   max-height: min(68vh, 620px);
+  overflow: hidden;
   padding: 16px 18px 14px;
 }
 
@@ -5852,6 +5855,7 @@ textarea:focus-visible {
 
 .generation-review-editor {
   display: grid;
+  min-height: 0;
   grid-template-columns:
     minmax(190px, 0.82fr)
     minmax(250px, 1.18fr)
@@ -5864,6 +5868,7 @@ textarea:focus-visible {
   gap: 14px;
   align-items: stretch;
   margin-top: 14px;
+  overflow: auto;
 }
 
 .generation-review-input-section {

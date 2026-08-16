@@ -97,6 +97,16 @@ describe('notebook chrome tokens', () => {
     )
   })
 
+  it('keeps generation review actions outside the scrollable editor', () => {
+    const review = rule(css, '.generation-chat-review')
+    expect(declaration(review, 'display')).toBe('grid')
+    expect(declaration(review, 'grid-template-rows')).toBe('auto minmax(0, 1fr)')
+    expect(declaration(review, 'overflow')).toBe('hidden')
+    const editor = rule(css, '.generation-review-editor')
+    expect(declaration(editor, 'min-height')).toBe('0')
+    expect(declaration(editor, 'overflow')).toBe('auto')
+  })
+
   it('drops the UA outline on the notebook canvas without a global * focus wipe', () => {
     expect(css).not.toMatch(/\*\s*(?:,[^{]+)?\{[^}]*outline:\s*none/)
     const focusRule = [...css.matchAll(
