@@ -2,7 +2,6 @@ import type { Node, XYPosition } from '@xyflow/react'
 import {
   firstEmptyNotebookGridSlot,
   isNotebookGridSlot,
-  nearestOriginNotebookGridSlot,
   nextHorizontalSlotFrom,
   nextVerticalSlotFrom,
   nextWaveTileSlot,
@@ -192,15 +191,13 @@ const imageCellTypes = new Set([
   'character',
 ])
 
-export function isNotebookImageCellType(type: string): boolean {
+function isNotebookImageCellType(type: string): boolean {
   return imageCellTypes.has(type)
 }
 
 export {
-  nearestOriginNotebookGridSlot,
   nextHorizontalSlotFrom,
   nextVerticalSlotFrom,
-  nextWaveTileSlot,
 }
 
 function optionalLastWorkSlot(

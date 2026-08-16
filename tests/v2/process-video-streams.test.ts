@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createEngine } from 'videobook-engine'
 import { processVideoFiles } from '../../server/src/jobs/process-video.js'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
-import { buildAssetList } from '../../server/src/tools/sync.js'
+import { buildAssetList } from '../../server/src/tools/reconcile-project-work.js'
 
 const execFileAsync = promisify(execFile)
 

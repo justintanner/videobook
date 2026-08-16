@@ -17,8 +17,8 @@ import { withLockedLocalLease } from "./_lease.js";
 const LOCK_DURATION_MS = 30 * 60_000;
 const ELEVENLABS_TIMEOUT_MS = 10 * 60_000;
 const MAX_REMOVAL_COVERAGE = 0.95;
-export const SOUND_SEGMENT_PADDING_SECONDS = 0.15;
-export const SOUND_SEGMENT_FADE_SECONDS = 0.05;
+const SOUND_SEGMENT_PADDING_SECONDS = 0.15;
+const SOUND_SEGMENT_FADE_SECONDS = 0.05;
 
 const QUERY_STOPWORDS = new Set([
   "a", "an", "the", "of", "some", "any", "all", "that", "this",
@@ -225,7 +225,7 @@ function outputContainerOptions(outputPath: string): string[] {
     : [];
 }
 
-export async function renderSoundRemoval(
+async function renderSoundRemoval(
   inputPath: string,
   outputPath: string,
   assetKind: RemoveSoundAssetKind,
@@ -368,7 +368,6 @@ export function registerRemoveSoundJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      payload.bookId,
       payload.assetId,
       payload.assetDir,
       ctx,

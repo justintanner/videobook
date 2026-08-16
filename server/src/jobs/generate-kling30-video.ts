@@ -46,7 +46,7 @@ export function registerGenerateKling30VideoJob(fs: Engine): void {
     // Upload reference images
     const imageUrls: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      imageUrls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
+      imageUrls.push(await uploadAssetToKie(fs, assetId, filename));
     }
 
     // Upload element media and build KlingElement array
@@ -54,7 +54,7 @@ export function registerGenerateKling30VideoJob(fs: Engine): void {
     for (const elem of elementInputs) {
       const urls: string[] = [];
       for (const { assetId, filename } of elem.inputs) {
-        urls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
+        urls.push(await uploadAssetToKie(fs, assetId, filename));
       }
 
       const element: KlingElement = {

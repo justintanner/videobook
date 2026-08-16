@@ -59,7 +59,7 @@ describe('notebookMediaWorkState', () => {
     })
   })
 
-  it('preserves fallback state for empty media and generation cells', () => {
+  it('preserves fallback state outside runnable media work', () => {
     const fallback = {
       status: 'ready',
       startedAt: '2026-08-01T03:00:00.000Z',
@@ -67,6 +67,12 @@ describe('notebookMediaWorkState', () => {
     expect(notebookMediaWorkState('video', undefined, [], fallback)).toBe(fallback)
     expect(notebookMediaWorkState(
       'generate_video',
+      asset,
+      [activeJob],
+      fallback,
+    )).toBe(fallback)
+    expect(notebookMediaWorkState(
+      'character',
       asset,
       [activeJob],
       fallback,

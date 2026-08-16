@@ -6,8 +6,22 @@ import {
   type Engine,
 } from "videobook-engine";
 
-let clipProvider: LocalClipTemporalProvider | null = null;
-let clapProvider: LocalClapTemporalProvider | null = null;
+interface LocalModelConfiguration {
+  modelCacheDir: string;
+  allowModelDownload: boolean;
+}
+
+interface ClipProviderRegistration extends LocalModelConfiguration {
+  provider: LocalClipTemporalProvider;
+}
+
+interface ClapProviderRegistration extends LocalModelConfiguration {
+  ffmpegPath: string;
+  provider: LocalClapTemporalProvider;
+}
+
+const clipProvidersByEngine = new WeakMap<Engine, ClipProviderRegistration>();
+const clapProvidersByEngine = new WeakMap<Engine, ClapProviderRegistration>();
 
 function modelCacheDir(): string {
   return process.env.VIDEOBOOK_MODEL_CACHE_DIR?.trim()
@@ -18,34 +32,62 @@ function allowModelDownload(): boolean {
   return process.env.VIDEOBOOK_MODEL_DOWNLOAD !== "disabled";
 }
 
+function localModelConfiguration(): LocalModelConfiguration {
+  return {
+    modelCacheDir: modelCacheDir(),
+    allowModelDownload: allowModelDownload(),
+  };
+}
+
+function hasMatchingConfiguration(
+  cached: LocalModelConfiguration,
+  current: LocalModelConfiguration,
+): boolean {
+  return cached.modelCacheDir === current.modelCacheDir
+    && cached.allowModelDownload === current.allowModelDownload;
+}
+
 export function registerLocalClipSearchProvider(
   engine: Engine,
 ): LocalClipTemporalProvider {
-  if (clipProvider) {
-    engine.temporalSearch.providers.register(clipProvider);
-    return clipProvider;
+  const configuration = localModelConfiguration();
+  const cached = clipProvidersByEngine.get(engine);
+  if (cached && hasMatchingConfiguration(cached, configuration)) {
+    engine.temporalSearch.providers.register(cached.provider);
+    return cached.provider;
   }
-  clipProvider = new LocalClipTemporalProvider({
-    modelCacheDir: modelCacheDir(),
-    allowModelDownload: allowModelDownload(),
+  const provider = new LocalClipTemporalProvider(configuration);
+  clipProvidersByEngine.set(engine, {
+    ...configuration,
+    provider,
   });
-  engine.temporalSearch.providers.register(clipProvider);
-  return clipProvider;
+  engine.temporalSearch.providers.register(provider);
+  return provider;
 }
 
 export function registerLocalClapSearchProvider(
   engine: Engine,
   ffmpegPath: string,
 ): LocalClapTemporalProvider {
-  if (clapProvider) {
-    engine.temporalSearch.providers.register(clapProvider);
-    return clapProvider;
+  const configuration = localModelConfiguration();
+  const cached = clapProvidersByEngine.get(engine);
+  if (
+    cached
+    && cached.ffmpegPath === ffmpegPath
+    && hasMatchingConfiguration(cached, configuration)
+  ) {
+    engine.temporalSearch.providers.register(cached.provider);
+    return cached.provider;
   }
-  clapProvider = new LocalClapTemporalProvider({
-    modelCacheDir: modelCacheDir(),
+  const provider = new LocalClapTemporalProvider({
+    ...configuration,
     ffmpegPath,
-    allowModelDownload: allowModelDownload(),
   });
-  engine.temporalSearch.providers.register(clapProvider);
-  return clapProvider;
+  clapProvidersByEngine.set(engine, {
+    ...configuration,
+    ffmpegPath,
+    provider,
+  });
+  engine.temporalSearch.providers.register(provider);
+  return provider;
 }

@@ -40,7 +40,7 @@ export type RenderTimelineOutcome =
   | { status: "empty"; message: string }
   | { status: "error"; message: string };
 
-export async function runRenderTimeline(
+async function runRenderTimeline(
   engine: Engine,
   bookId: string,
   orientationOverride?: Orientation,

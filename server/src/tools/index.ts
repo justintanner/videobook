@@ -122,10 +122,10 @@ import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
 import { generateSeedreamTextImageDef } from "./generate-seedream-text-image.js";
 import { generateSeedreamImageDef } from "./generate-seedream-image.js";
 import { renderVideoDef } from "./render.js";
-import { syncDef } from "./sync.js";
+import { reconcileProjectWorkDef } from "./reconcile-project-work.js";
 import { listAssetsDef } from "./list-assets.js";
 import { listCellGenerationsDef } from "./list-cell-generations.js";
-import { sleepDef } from "./sleep.js";
+import { waitForAssetReadyDef } from "./wait-for-asset-ready.js";
 import { previewVideoGenDef } from "./preview-video-gen.js";
 import { previewImageGenDef } from "./preview-image-gen.js";
 import { generationPayloadDef } from "./generation-payload.js";
@@ -428,10 +428,10 @@ export function getAllToolDefs(
     generateQwen2ImageEditDef(fs),
     generateSeedreamTextImageDef(fs),
     generateSeedreamImageDef(fs),
-    syncDef(fs),
+    reconcileProjectWorkDef(fs),
     listAssetsDef(fs),
     listCellGenerationsDef(fs),
-    sleepDef(fs),
+    waitForAssetReadyDef(fs),
     previewVideoGenDef(fs),
     previewImageGenDef(fs),
     generationPayloadDef(fs),

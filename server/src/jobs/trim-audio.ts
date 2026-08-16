@@ -207,14 +207,13 @@ export function registerTrimAudioJob(fs: Engine): void {
   registerJobHandler("trim_audio", async (payload, ctx) => {
     const {
       inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd,
-      assetId, assetDir, bookId, commitParams,
+      assetId, assetDir, commitParams,
     } = payload as TrimAudioPayload;
     const inputFilename = basename(inputPath);
 
     try {
       await withLockedLocalLease(
         fs,
-        bookId,
         assetId,
         assetDir,
         ctx,
@@ -226,7 +225,6 @@ export function registerTrimAudioJob(fs: Engine): void {
           await runTrimAudio(inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd);
           await replaceArtifactFileFromPath(
             fs,
-            bookId,
             assetId,
             inputFilename,
             outputPath,

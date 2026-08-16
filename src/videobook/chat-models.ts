@@ -1,3 +1,5 @@
+import { recordValue } from './value-decoders'
+
 export interface ChatModelOption {
   id: string
   label: string
@@ -20,17 +22,11 @@ export const fallbackChatModelCatalog: ChatModelCatalog = {
   }],
 }
 
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
 export function asChatModelCatalog(value: unknown): ChatModelCatalog {
-  const source = record(value)
+  const source = recordValue(value)
   const models = Array.isArray(source?.models)
     ? source.models.flatMap((entry) => {
-        const model = record(entry)
+        const model = recordValue(entry)
         return typeof model?.id === 'string'
           && typeof model.label === 'string'
           && typeof model.description === 'string'

@@ -2,9 +2,9 @@ import type { Engine } from "videobook-engine";
 
 export type KlingMotionControlOrientation = "image" | "video";
 
-export const KLING_MOTION_CONTROL_MIN_DURATION_SECONDS = 3;
-export const KLING_MOTION_CONTROL_IMAGE_MAX_DURATION_SECONDS = 10;
-export const KLING_MOTION_CONTROL_VIDEO_MAX_DURATION_SECONDS = 30;
+const KLING_MOTION_CONTROL_MIN_DURATION_SECONDS = 3;
+const KLING_MOTION_CONTROL_IMAGE_MAX_DURATION_SECONDS = 10;
+const KLING_MOTION_CONTROL_VIDEO_MAX_DURATION_SECONDS = 30;
 
 function durationLabel(duration: number): string {
   return `${Number(duration.toFixed(3))}s`;

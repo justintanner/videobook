@@ -10,7 +10,7 @@ import type { Orientation, OsgPosition, OsgSize } from "./subtitles/types.js";
 // visible on-screen graphic (TV-style logo bug): `medium` ≈ 14% of width,
 // `small` half that, `large` 1.5×. The previous 5%/2.5%/7.5% presets rendered
 // a near-invisible corner thumbnail that users read as "OSG didn't apply".
-export const SIZE_FACTOR: Record<OsgSize, number> = {
+const SIZE_FACTOR: Record<OsgSize, number> = {
   small: 0.07,
   medium: 0.14,
   large: 0.21,
@@ -163,7 +163,7 @@ export function watermarkOsgScale(orientation: Orientation, userScale = 1): numb
  * burned-in watermarks). `aspect` is the badge's width/height (< 1: the badge
  * is taller than wide, so height binds at maxSize).
  */
-export function watermarkRectForCanvas(
+function watermarkRectForCanvas(
   width: number,
   height: number,
   corner: OsgPosition,

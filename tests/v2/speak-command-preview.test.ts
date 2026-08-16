@@ -102,6 +102,7 @@ describe('SpeakCommandPreview panel', () => {
       error: null,
       onSelect: () => undefined,
       onTogglePreview: () => undefined,
+      onRefresh: () => undefined,
     }))
 
     expect(html).toContain('data-testid="speak-command-preview"')
@@ -130,6 +131,7 @@ describe('SpeakCommandPreview panel', () => {
       error: null,
       onSelect: () => undefined,
       onTogglePreview: () => undefined,
+      onRefresh: () => undefined,
     }))
 
     expect(html).toContain('Loading voices…')
@@ -217,6 +219,11 @@ describe('CommandComposer /voices prefill', () => {
         warning: 'ELEVENLABS_API_KEY is not configured; showing configured custom IDs and generic fallback IDs.',
         loading: false,
         error: null,
+        ensureLoaded: async () => ({
+          voices,
+          status: 'fallback' as const,
+          warning: null,
+        }),
         refresh: async () => ({
           voices,
           status: 'fallback' as const,
@@ -231,6 +238,7 @@ describe('CommandComposer /voices prefill', () => {
 
     expect(html).toContain('data-testid="speak-command-preview"')
     expect(html).toContain('Ada')
+    expect(html).toContain('Refresh voices')
     expect(html).toContain('value="/speak "')
     expect(html).not.toContain('speak-backdrop')
     expect(html).not.toContain('Speak dialog')

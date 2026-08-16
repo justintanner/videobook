@@ -43,7 +43,7 @@ async function breakAsset(
   const written = await fs.jobs.pending.write({ taskId, taskType: "alibaba_image", artifactId: assetId, meta: {} }, lease.ownerId
   );
   if (!written.ok || !written.value) throw new Error(`pendingTasks.write failed for ${assetId}`);
-  await failPendingTaskAndLog(fs, bookId, assetId, taskId, { message: "lease expired" });
+  await failPendingTaskAndLog(fs, assetId, taskId, { message: "lease expired" });
 }
 
 interface DoctorReport {

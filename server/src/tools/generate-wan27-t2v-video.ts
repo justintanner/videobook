@@ -47,7 +47,7 @@ export function generateWan27T2vVideoDef(fs: Engine): ToolDef {
 
       let audioRef: RefInput | undefined;
       if (audio_ref) {
-        const r = await resolveAudioRef(fs, audio_ref, book_id);
+        const r = await resolveAudioRef(fs, audio_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         audioRef = r.value;
       }

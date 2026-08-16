@@ -22,7 +22,7 @@ type Payload = {
 export function registerGenerateSeedance2FastT2vFalJob(fs: Engine): void {
   registerJobHandler("generate_seedance2_fast_t2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
       const input: FalInput = {
         prompt: p.prompt,

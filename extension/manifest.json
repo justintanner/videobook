@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Videocity Clip Downloader",
+  "name": "Videobook Clip Downloader",
   "version": "0.1.0",
-  "description": "Queue links and pages in the local Videocity server.",
+  "description": "Queue links and pages in the local Videobook server.",
   "permissions": ["activeTab", "contextMenus", "notifications"],
   "host_permissions": [
     "http://127.0.0.1:3001/*",
@@ -13,7 +13,7 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Videocity",
+    "default_title": "Videobook",
     "default_icon": {
       "16": "icons/videocity-16.png",
       "32": "icons/videocity-32.png",

@@ -163,7 +163,7 @@ function bestAudioOverlap(
   };
 }
 
-export async function detectSharedAudioOverlap(
+async function detectSharedAudioOverlap(
   firstPath: string,
   secondPath: string,
   firstAudioDuration: number,
@@ -380,7 +380,6 @@ export function registerSmoothSceneConcatJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -408,7 +407,6 @@ export function registerSmoothSceneConcatJob(fs: Engine): void {
         };
         await ingestWorkspaceOutputs(
           fs,
-          bookId,
           assetId,
           [outputPath.split("/").pop()!],
           "smooth_scene_concat",

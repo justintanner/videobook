@@ -48,11 +48,11 @@ export function generateOmnihumanVideoDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "OmniHuman requires audio_ref" }] };
       }
 
-      const imageResult = await resolveImageRef(fs, image_ref, book_id);
+      const imageResult = await resolveImageRef(fs, image_ref);
       if (!imageResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: imageResult.error }] };
       const imageInput = imageResult.value;
 
-      const audioResult = await resolveAudioRef(fs, audio_ref, book_id);
+      const audioResult = await resolveAudioRef(fs, audio_ref);
       if (!audioResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: audioResult.error }] };
       const audioInput = audioResult.value;
 

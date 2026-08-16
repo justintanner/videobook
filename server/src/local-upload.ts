@@ -271,7 +271,7 @@ async function uploadLocal(
         // returns as soon as processing finishes. Skipping it here left MCP
         // upload_file videos permanently transcript-less, which wedged the
         // slot auto-render pipeline for audio videos (hasAudio + no
-        // .analysis.gpt4otrans.json blocks findAutoRenderActions forever).
+        // .analysis.gpt4otrans.json blocks findEligibleRenderActions forever).
         // Tests stay deterministic via process-video's NODE_ENV gate.
         const payload = {
           type: "process_video",

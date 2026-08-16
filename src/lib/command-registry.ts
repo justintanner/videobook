@@ -3,6 +3,7 @@ export interface CommandParam {
   type: 'string' | 'number' | 'boolean' | 'string[]';
   required: boolean;
   description: string;
+  consumeRest?: boolean;
 }
 
 export type CommandArgValue = string | number | boolean | string[];
@@ -54,7 +55,6 @@ export interface ServerCommand {
   params: CommandParam[];
   mcpTool?: { tool: string; adapter?: CommandAdapterName; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };
   uiAction?: string;
-  onMount?: string[];
   exposure?: 'direct' | 'ui' | 'composite';
   canonical?: string;
   aliases?: string[];
@@ -83,17 +83,6 @@ export interface KeywordCommandArgs {
   keywords?: string[];
 }
 
-export function filterCommandsByMountKeys(
-  commands: ServerCommand[],
-  activeKeys: ReadonlySet<string>,
-): ServerCommand[] {
-  return commands.filter((cmd) => {
-    if (cmd.deprecated) return false;
-    if (!cmd.onMount || cmd.onMount.length === 0) return true;
-    return cmd.onMount.every((key) => activeKeys.has(key));
-  });
-}
-
 const stripAt = (token: string): string => (token.startsWith('@') ? token.slice(1) : token);
 
 // A user-typed media reference is either a grid address (`@a1`) or a bare
@@ -102,7 +91,7 @@ const stripAt = (token: string): string => (token.startsWith('@') ? token.slice(
 // artifact up in the catalog and rejects wrong-kind references.
 const ASSET_REF_PATTERN = /^[a-z0-9][a-z0-9-]*$/i;
 
-export function normalizeKeywordCommandArgs(
+function normalizeKeywordCommandArgs(
   args: Readonly<Record<string, unknown>>,
 ): KeywordCommandArgs {
   const assetValue = args.asset_id
@@ -145,7 +134,7 @@ export function normalizeKeywordCommandArgs(
   return { asset_id: assetId, keywords: inputs }
 }
 
-export function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroCommandArgs {
+function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroCommandArgs {
   const inputs = tokens.map(stripAt);
   const qrImages: string[] = [];
   let aspectRatio: QrOutroCommandArgs['aspect_ratio'];
@@ -339,7 +328,7 @@ export function normalizeSyncAudioCommandArgs(
   return { asset_id: assetId, anchors };
 }
 
-export function normalizeTrimCommandArgs(
+function normalizeTrimCommandArgs(
   args: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> {
   const assetValue = args.asset_id;
@@ -416,7 +405,7 @@ export function normalizeTrimCommandArgs(
   };
 }
 
-export function normalizeApplyCutsCommandArgs(
+function normalizeApplyCutsCommandArgs(
   args: Readonly<Record<string, unknown>>,
 ): { asset_id: string; cuts: Array<{ cut_start: number; cut_end: number }> } {
   const assetValue = args.asset_id;
@@ -470,7 +459,7 @@ export function normalizeApplyCutsCommandArgs(
   return { asset_id: assetId, cuts };
 }
 
-export function normalizeTranslateSubtitlesCommandArgs(
+function normalizeTranslateSubtitlesCommandArgs(
   args: Readonly<Record<string, unknown>>,
 ): { asset_id: string; language: string } {
   const assetValue = args.asset_id;
@@ -534,9 +523,16 @@ export const COMMAND_ADAPTERS = {
       : '';
     delete result.new_name;
     delete result.destination;
-    if (NOTEBOOK_DESTINATION_PATTERN.test(nameValue)) {
-      result.destination = stripAt(nameValue).toLowerCase();
-      if (destinationValue) result.new_name = destinationValue;
+    if (NOTEBOOK_DESTINATION_PATTERN.test(destinationValue)) {
+      result.destination = stripAt(destinationValue).toLowerCase();
+      if (nameValue) result.new_name = nameValue;
+      return result;
+    }
+    const [destinationCandidate = '', ...nameTokens] = nameValue.split(/\s+/);
+    if (NOTEBOOK_DESTINATION_PATTERN.test(destinationCandidate)) {
+      result.destination = stripAt(destinationCandidate).toLowerCase();
+      const newName = [nameTokens.join(' '), destinationValue].filter(Boolean).join(' ');
+      if (newName) result.new_name = newName;
       return result;
     }
     const newName = [nameValue, destinationValue].filter(Boolean).join(' ');
@@ -589,7 +585,6 @@ export type CommandAdapterName = keyof typeof COMMAND_ADAPTERS;
 
 export function adaptCommandArgs(
   adapterName: string | undefined,
-  _toolName: string,
   args: Readonly<Record<string, unknown>>,
 ): CommandToolArgs {
   if (!adapterName) return args as CommandToolArgs;
@@ -641,7 +636,7 @@ export function parseCommandArgs(rest: string, params: CommandParam[]): Record<s
 
     if (isLast && param.type === 'string[]') {
       args[param.name] = tokens.slice(i, tokenLimit).map(stripAt);
-    } else if (isLast && param.type === 'string') {
+    } else if ((isLast || param.consumeRest) && param.type === 'string') {
       // Last string param gets all remaining tokens joined.
       // Strip leading "to" connector (e.g. "/rename @a3 to new-name")
       let remaining = tokens.slice(i, tokenLimit);
@@ -650,6 +645,7 @@ export function parseCommandArgs(rest: string, params: CommandParam[]): Record<s
       }
       const raw = remaining.join(' ');
       args[param.name] = stripAt(raw);
+      if (param.consumeRest) break;
     } else {
       args[param.name] = parseTokenValue(tokens[i], param);
     }

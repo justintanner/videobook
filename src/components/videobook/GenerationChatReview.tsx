@@ -18,6 +18,7 @@ import { VoiceOptionList } from './SpeakCommandPreview'
 import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
 import { persistSpeakVoiceId } from '@/videobook/speak-preview'
 import type { ElevenLabsVoicesState } from '@/videobook/use-elevenlabs-voices'
+import { recordValue } from '@/videobook/value-decoders'
 
 export type GenerationReviewSource = {
   cellId: string
@@ -59,11 +60,13 @@ function GenerationReviewControl({
   busy,
   control,
   settings,
+  onFocus,
   onChange,
 }: {
   busy: boolean
   control: GenerationControl
   settings: Record<string, GenerationControlValue>
+  onFocus?: () => void
   onChange: (value: GenerationControlValue | undefined) => void
 }) {
   const rawValue = settings[control.name]
@@ -76,6 +79,7 @@ function GenerationReviewControl({
           type="checkbox"
           checked={value === true}
           disabled={busy}
+          onFocus={onFocus}
           onChange={(event) => onChange(event.target.checked)}
         />
       </label>
@@ -90,6 +94,7 @@ function GenerationReviewControl({
           aria-label={control.label}
           value={encodedValue}
           disabled={busy}
+          onFocus={onFocus}
           onChange={(event) => {
             const selected = control.options.find((option) =>
               controlOptionValue(option) === event.target.value)
@@ -121,6 +126,7 @@ function GenerationReviewControl({
         step={control.kind === 'number' ? 'any' : undefined}
         value={value === undefined ? '' : String(value)}
         disabled={busy}
+        onFocus={onFocus}
         onChange={(event) => {
           const next = event.target.value
           if (!next) {
@@ -142,12 +148,6 @@ function generationMode(draft: NotebookChatGenerationDraft): string {
   return inputs && typeof inputs.generationMode === 'string'
     ? inputs.generationMode
     : ''
-}
-
-function valueRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
 }
 
 export function GenerationChatReview({
@@ -173,6 +173,14 @@ export function GenerationChatReview({
 }: GenerationChatReviewProps) {
   const settings = notebookChatGenerationSettings(draft)
   const previewPlayer = useVoicePreviewPlayer()
+  const ensureVoiceCatalog = () => {
+    if (!voiceCatalog) return
+    void voiceCatalog.ensureLoaded().catch(() => undefined)
+  }
+  const refreshVoiceCatalog = () => {
+    if (!voiceCatalog) return
+    void voiceCatalog.refresh().catch(() => undefined)
+  }
   const voiceControl = draft.cell.type === 'generate_audio'
     ? draft.action.controls.find((control) => control.name === 'voice_id')
     : undefined
@@ -184,8 +192,8 @@ export function GenerationChatReview({
   const generalControls = showVoicePicker
     ? draft.action.controls.filter((control) => control.name !== 'voice_id')
     : draft.action.controls
-  const previewValue = valueRecord(preview)
-  const estimate = valueRecord(previewValue?.estimate)
+  const previewValue = recordValue(preview)
+  const estimate = recordValue(previewValue?.estimate)
   const estimateUsd = typeof estimate?.usd === 'number' ? estimate.usd : null
   const estimateCurrency = typeof estimate?.currency === 'string'
     ? estimate.currency
@@ -340,27 +348,46 @@ export function GenerationChatReview({
           </details>
         </section>
 
-        {showVoicePicker && (
+        {voiceControl && voiceCatalog && (
           <section className="generation-review-section generation-review-voice-section">
             <span className="generation-review-label">Voice</span>
-            <div
-              className="generation-review-voices"
-              role="listbox"
-              aria-label="ElevenLabs voices"
-              data-testid="generation-review-voices"
+            {showVoicePicker && (
+              <div
+                className="generation-review-voices"
+                role="listbox"
+                aria-label="ElevenLabs voices"
+                data-testid="generation-review-voices"
+              >
+                <VoiceOptionList
+                  voices={voiceOptions}
+                  selectedVoiceId={selectedVoiceId}
+                  playingVoiceId={previewPlayer.playingVoiceId}
+                  disabled={busy}
+                  onSelect={(voiceId) => {
+                    persistSpeakVoiceId(voiceId)
+                    onSettingChange('voice_id', voiceId)
+                  }}
+                  onTogglePreview={previewPlayer.toggle}
+                />
+              </div>
+            )}
+            {voiceCatalog.loading && voiceOptions.length === 0 && (
+              <small>Loading voices…</small>
+            )}
+            {voiceCatalog.error && (
+              <small role="alert">{voiceCatalog.error}</small>
+            )}
+            <button
+              type="button"
+              disabled={busy || voiceCatalog.loading}
+              onClick={refreshVoiceCatalog}
             >
-              <VoiceOptionList
-                voices={voiceOptions}
-                selectedVoiceId={selectedVoiceId}
-                playingVoiceId={previewPlayer.playingVoiceId}
-                disabled={busy}
-                onSelect={(voiceId) => {
-                  persistSpeakVoiceId(voiceId)
-                  onSettingChange('voice_id', voiceId)
-                }}
-                onTogglePreview={previewPlayer.toggle}
-              />
-            </div>
+              {voiceCatalog.loading
+                ? 'Loading voices…'
+                : voiceCatalog.error
+                  ? 'Retry voices'
+                  : showVoicePicker ? 'Refresh voices' : 'Load voices'}
+            </button>
             {voiceCatalog?.warning && <small>{voiceCatalog.warning}</small>}
           </section>
         )}
@@ -374,6 +401,9 @@ export function GenerationChatReview({
                 busy={busy}
                 control={control}
                 settings={settings}
+                onFocus={control.name === 'voice_id'
+                  ? ensureVoiceCatalog
+                  : undefined}
                 onChange={(value) => onSettingChange(control.name, value)}
               />
             )) : (

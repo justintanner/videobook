@@ -67,7 +67,6 @@ async function writeBinaryIfChanged(
   assetId: string,
   filename: string,
   data: Buffer,
-  _bookId: string,
 ): Promise<void> {
   const existing = await fs.files.read(assetId, filename);
   if (existing.ok && existing.value.equals(data)) return;
@@ -242,7 +241,7 @@ async function processVideoSnapshot(
       ];
       await runFfmpeg(transcodeArgs, { signal });
       const mp4Buf = await fsReadFile(tempPath);
-      await writeBinaryIfChanged(fs, assetId, "original.mp4", mp4Buf, bookId);
+      await writeBinaryIfChanged(fs, assetId, "original.mp4", mp4Buf);
       activeVideoPath = tempPath;
     }
     const activeSourcePath = sourceExt === ".mp4" ? sourceFilename : "original.mp4";
@@ -380,7 +379,7 @@ async function processVideoSnapshot(
       await runFfmpeg(["-y", "-i", activeVideoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-f", "mp3", mp3TempPath], { signal });
       try {
         const mp3Buf = await fsReadFile(mp3TempPath);
-        await writeBinaryIfChanged(fs, assetId, "original.mp3", mp3Buf, bookId);
+        await writeBinaryIfChanged(fs, assetId, "original.mp3", mp3Buf);
       } finally {
         await rm(mp3TempPath, { force: true });
       }
@@ -422,7 +421,6 @@ async function processVideoSnapshot(
 
     await ingestWorkspaceOutputs(
       fs,
-      bookId,
       assetId,
       ["original_frames"],
       "process_video",
@@ -481,7 +479,6 @@ export function registerProcessVideoJob(fs: Engine): void {
     const processPayload = payload as ProcessVideoPayload;
     return withLocalLease(
       fs,
-      processPayload.bookId,
       processPayload.assetId,
       ctx,
       "process",

@@ -4,9 +4,27 @@ import {
   listElevenLabsVoices,
 } from '../../server/src/tools/list-elevenlabs-voices.js'
 import {
+  createElevenLabsVoiceCatalogLifecycle,
   fetchElevenLabsVoiceCatalog,
   parseSpeakVoiceCatalog,
 } from '../../src/videobook/use-elevenlabs-voices'
+import type { ElevenLabsVoiceCatalog } from '../../src/videobook/use-elevenlabs-voices'
+
+function voiceCatalog(voiceId: string): ElevenLabsVoiceCatalog {
+  return {
+    voices: [{ voiceId, name: voiceId, source: 'generic' }],
+    status: 'live',
+    warning: null,
+  }
+}
+
+function deferred<Value>() {
+  let resolve: (value: Value | PromiseLike<Value>) => void = () => undefined
+  const promise = new Promise<Value>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
 
 describe('useElevenLabsVoices catalog', () => {
   const originalApiKey = process.env.ELEVENLABS_API_KEY
@@ -59,5 +77,132 @@ describe('useElevenLabsVoices catalog', () => {
       name: GENERIC_FALLBACK_VOICES[0]!.name,
       source: 'generic',
     })
+  })
+})
+
+describe('ElevenLabs voice catalog lifecycle', () => {
+  it('retries after a failed load', async () => {
+    let calls = 0
+    const lifecycle = createElevenLabsVoiceCatalogLifecycle({
+      ready: true,
+      load: async () => {
+        calls += 1
+        if (calls === 1) throw new Error('Voice request failed')
+        return voiceCatalog('voice-after-retry')
+      },
+    })
+
+    expect(await lifecycle.ensureLoaded()).toBeNull()
+    expect(lifecycle.getSnapshot()).toMatchObject({
+      voices: [],
+      loading: false,
+      error: 'Voice request failed',
+    })
+
+    expect(await lifecycle.ensureLoaded()).toEqual(
+      voiceCatalog('voice-after-retry'),
+    )
+    expect(calls).toBe(2)
+    expect(lifecycle.getSnapshot().error).toBeNull()
+  })
+
+  it('resets on disconnect and loads again after reconnect', async () => {
+    let initialCalls = 0
+    let reconnectCalls = 0
+    const initialLoad = async () => {
+      initialCalls += 1
+      return voiceCatalog('voice-before-disconnect')
+    }
+    const lifecycle = createElevenLabsVoiceCatalogLifecycle({
+      ready: true,
+      load: initialLoad,
+    })
+
+    await lifecycle.ensureLoaded()
+    lifecycle.configure({ ready: false, load: initialLoad })
+
+    expect(lifecycle.getSnapshot()).toMatchObject({
+      voices: [],
+      loading: false,
+      error: null,
+    })
+    expect(await lifecycle.ensureLoaded()).toBeNull()
+
+    lifecycle.configure({
+      ready: true,
+      load: async () => {
+        reconnectCalls += 1
+        return voiceCatalog('voice-after-reconnect')
+      },
+    })
+
+    expect(await lifecycle.ensureLoaded()).toEqual(
+      voiceCatalog('voice-after-reconnect'),
+    )
+    expect(initialCalls).toBe(1)
+    expect(reconnectCalls).toBe(1)
+  })
+
+  it('reloads an existing catalog on manual refresh', async () => {
+    let calls = 0
+    const lifecycle = createElevenLabsVoiceCatalogLifecycle({
+      ready: true,
+      load: async () => {
+        calls += 1
+        return voiceCatalog(`voice-${calls}`)
+      },
+    })
+
+    expect(await lifecycle.ensureLoaded()).toEqual(voiceCatalog('voice-1'))
+    expect(await lifecycle.refresh()).toEqual(voiceCatalog('voice-2'))
+    expect(calls).toBe(2)
+    expect(lifecycle.getSnapshot().voices[0]?.voiceId).toBe('voice-2')
+  })
+
+  it('deduplicates concurrent ensure and refresh requests', async () => {
+    let calls = 0
+    const pending = deferred<ElevenLabsVoiceCatalog>()
+    const lifecycle = createElevenLabsVoiceCatalogLifecycle({
+      ready: true,
+      load: () => {
+        calls += 1
+        return pending.promise
+      },
+    })
+
+    const first = lifecycle.ensureLoaded()
+    const second = lifecycle.ensureLoaded()
+    const refresh = lifecycle.refresh()
+    await Promise.resolve()
+
+    expect(first).toBe(second)
+    expect(second).toBe(refresh)
+    expect(calls).toBe(1)
+
+    pending.resolve(voiceCatalog('voice-shared'))
+    await expect(first).resolves.toEqual(voiceCatalog('voice-shared'))
+  })
+
+  it('ignores a stale request after the connection changes', async () => {
+    const pending = deferred<ElevenLabsVoiceCatalog>()
+    const initialLoad = () => pending.promise
+    const lifecycle = createElevenLabsVoiceCatalogLifecycle({
+      ready: true,
+      load: initialLoad,
+    })
+    const stale = lifecycle.ensureLoaded()
+    await Promise.resolve()
+
+    lifecycle.configure({ ready: false, load: initialLoad })
+    lifecycle.configure({
+      ready: true,
+      load: async () => voiceCatalog('voice-current'),
+    })
+    await lifecycle.ensureLoaded()
+
+    pending.resolve(voiceCatalog('voice-stale'))
+
+    await expect(stale).resolves.toBeNull()
+    expect(lifecycle.getSnapshot().voices[0]?.voiceId).toBe('voice-current')
   })
 })

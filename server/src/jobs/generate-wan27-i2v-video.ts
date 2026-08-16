@@ -34,9 +34,8 @@ type GenerateWan27I2vVideoPayload = {
 async function uploadInput(
   fs: Engine,
   input: RefInput,
-  bookId: string,
 ): Promise<string> {
-  return uploadAssetToKie(fs, input.assetId, input.filename, bookId);
+  return uploadAssetToKie(fs, input.assetId, input.filename);
 }
 
 export function registerGenerateWan27I2vVideoJob(fs: Engine): void {
@@ -50,10 +49,10 @@ export function registerGenerateWan27I2vVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame, bookId) : undefined;
-    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame, bookId) : undefined;
-    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip, bookId) : undefined;
-    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, bookId) : undefined;
+    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame) : undefined;
+    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame) : undefined;
+    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip) : undefined;
+    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio) : undefined;
     const normalizedPrompt = transformProviderPrompt(
       "generate_kie_wan_2_7_image_to_video",
       {

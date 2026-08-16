@@ -2,7 +2,7 @@ import { isUuidV7 } from "videobook-engine";
 import { isNotebookGridAddress, normalizeNotebookReference } from "videobook-engine/notebook-mentions";
 
 export const PREVIEW_PLACEHOLDER_HOST = "url.resolved.later.for";
-export const PREVIEW_PLACEHOLDER_ORIGIN = `http://${PREVIEW_PLACEHOLDER_HOST}`;
+const PREVIEW_PLACEHOLDER_ORIGIN = `http://${PREVIEW_PLACEHOLDER_HOST}`;
 
 const URL_FIELD_KEYS = new Set([
   "image_urls",

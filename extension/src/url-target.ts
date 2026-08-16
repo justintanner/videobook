@@ -4,7 +4,7 @@ type UrlTargetInput = {
   tabUrl?: string;
 };
 
-export type DownloadVideoArguments = Record<string, unknown> & {
+type DownloadVideoArguments = Record<string, unknown> & {
   url: string;
   book_id: string;
   full: true;

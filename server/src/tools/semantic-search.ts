@@ -29,7 +29,7 @@ import { queue } from "../queue.js";
 import { searchReferenceStore } from "../search-reference-store.js";
 import { extname, join } from "node:path";
 import type { ToolDef, ToolResult } from "./tool-def.js";
-import { buildAssetList } from "./sync.js";
+import { buildAssetList } from "./reconcile-project-work.js";
 import {
   videoProxyMetadataMatches,
   type VideoProxyAssessment,
@@ -1278,4 +1278,3 @@ function firstEmptyNotebookSlot(notebook: {
     notebook.cells.map((cell) => cell.slot),
   );
 }
-

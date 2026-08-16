@@ -14,7 +14,6 @@ import type {
   NotebookAnalysisEvidence,
   NotebookLiveAnalysis,
 } from "./notebook-live-analysis.js";
-import type { BookManager } from "./book-manager.js";
 import { FFMPEG, runFfmpeg } from "./ffmpeg.js";
 import { formatTimestamp, generateTimestamps } from "./frame-utils.js";
 import { execFile } from "node:child_process";
@@ -298,16 +297,6 @@ function fixtureRecord(document: NotebookDocument): Record<string, unknown> | nu
 function canonicalFixtureCells(document: NotebookDocument): NotebookCell[] {
   return document.cells.filter((cell) =>
     cell.inputs?.fixtureOwner === MULTYCULTY_FIXTURE_OWNER);
-}
-
-function hasRunnableAnalysisFixture(document: NotebookDocument): boolean {
-  return document.cells.some((cell) =>
-    roleOf(cell) === "analysis"
-    && cell.inputs?.fixtureOwner === MULTYCULTY_FIXTURE_OWNER
-    && (
-      cell.inputs.fixtureAnalysis !== undefined
-      || cell.inputs.analysisFixture !== undefined
-    ));
 }
 
 function withoutRunnableAnalysisFixture(
@@ -915,74 +904,4 @@ export async function seedMultycultyWorkflow(
   return options.materializeLocalOutputs
     ? materializeLocalOutputs(engine, seeded)
     : seeded;
-}
-
-export async function ensureMultycultyWorkflow(
-  books: BookManager,
-  options: {
-    materializeLocalOutputs?: boolean;
-  } = {},
-): Promise<{
-  status: "skipped" | "unchanged" | "migrated" | "created";
-  notebookId?: string;
-  revision?: string;
-}> {
-  await books.ready();
-  let selected = books.getByName("multyculty");
-  let created = false;
-  if (!selected.ok) {
-    const createdBook = await books.create("multyculty");
-    if (!createdBook.ok) {
-      throw new Error(createdBook.error.message);
-    }
-    selected = books.getByName("multyculty");
-    if (!selected.ok) {
-      throw new Error(selected.error.message);
-    }
-    created = true;
-  }
-  await bootstrapMultycultySource(selected.value.engine);
-  const notebook = selected.value.engine.notebooks.list().find((candidate) =>
-    candidate.name.toLowerCase() === "multyculty")
-    ?? selected.value.engine.notebooks.list()[0];
-  if (!notebook) {
-    throw new Error("The Multyculty book has no notebook after bootstrap");
-  }
-  const source = selected.value.engine.artifacts.list().find((artifact) =>
-    artifact.label === SOURCE_SELECTION_LABEL);
-  if (!source) {
-    throw new Error(
-      `The Multyculty book is missing its ${SOURCE_SELECTION_LABEL} artifact`,
-    );
-  }
-  const fixture = fixtureRecord(notebook);
-  const analysisFramesReady = await fixtureAnalysisFramesReady(
-    selected.value.engine,
-    source.artifactId,
-  );
-  if (
-    !created
-    && isCurrentFixture(notebook)
-    && !hasRunnableAnalysisFixture(notebook)
-    && analysisFramesReady
-    && (
-      !options.materializeLocalOutputs
-      || typeof fixture?.materializedAt === "string"
-    )
-  ) {
-    return {
-      status: "unchanged",
-      notebookId: notebook.id,
-      revision: selected.value.engine.head,
-    };
-  }
-  const migrated = await seedMultycultyWorkflow(
-    selected.value.engine,
-    options,
-  );
-  return {
-    status: created ? "created" : "migrated",
-    notebookId: migrated.id,
-    revision: selected.value.engine.head,
-  };
 }

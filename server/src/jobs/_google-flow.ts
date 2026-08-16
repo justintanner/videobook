@@ -6,7 +6,7 @@ import { requireApiKey } from "../api-key.js";
 import { prepareAssetForUpload, prepareBytesForUpload } from "../upload.js";
 import { assertProviderPayload } from "../provider-prompt-transform.js";
 
-export const GOOGLE_FLOW_ENV_KEY = "GOOGLE_FLOW_API_KEY";
+const GOOGLE_FLOW_ENV_KEY = "GOOGLE_FLOW_API_KEY";
 
 // The synchronous google-flow endpoints (images) block until Google Flow
 // finishes rendering — useapi.net polls up to 10 minutes server-side before
@@ -308,9 +308,8 @@ export async function uploadAssetToGoogleFlow(
   fs: Engine,
   assetId: string,
   filename: string,
-  bookId: string,
 ): Promise<string> {
-  const { data, contentType } = await prepareAssetForUpload(fs, assetId, filename, bookId);
+  const { data, contentType } = await prepareAssetForUpload(fs, assetId, filename);
   return uploadBytesToGoogleFlow(provider, data, contentType, `${assetId}/${filename}`);
 }
 
@@ -344,7 +343,7 @@ type SubmitGoogleFlowVideoArgs = {
 
 /** Submit a Google Flow video generation as an async job and hand the local
  *  owner lease off to a pending task. `meta.googleFlow: true` is the
- *  discriminator sync.ts uses to route polling to the google-flow jobs
+ *  discriminator reconcile-project-work.ts uses to route polling to the google-flow jobs
  *  endpoint (the engine's TaskType union has no google literals, so these
  *  tasks ride "seedance2_video" like veo3/gemini-omni do on kie). */
 export async function submitGoogleFlowVideoTask(

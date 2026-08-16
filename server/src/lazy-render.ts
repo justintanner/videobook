@@ -10,7 +10,7 @@ import { isOsgPosition, isOsgSize } from "./osg-assets.js";
 import { queue } from "./queue.js";
 import { readTimeline } from "./timeline-helpers.js";
 import { isLanguageSetting } from "./jobs/_translate-transcript.js";
-import { findAutoRenderActions, readStoredRenderDefaults } from "./tools/sync.js";
+import { findEligibleRenderActions, readStoredRenderDefaults } from "./tools/reconcile-project-work.js";
 import {
   DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
   DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
@@ -136,11 +136,11 @@ export async function enqueueLazyTimelineRender(
 
   const asset: Artifact = knownAsset ?? resolved.value;
 
-  const renderActions = await findAutoRenderActions(fs, bookId, [asset], orientation);
+  const renderActions = await findEligibleRenderActions(fs, [asset], orientation);
   if (renderActions.length === 0) return null;
 
   const action = renderActions[0];
-  const stored = await readStoredRenderDefaults(fs, assetId, bookId, orientation);
+  const stored = await readStoredRenderDefaults(fs, assetId, orientation);
   const subtitlesEnabled = action.hasElevenlabs && stored.subtitlesEnabled === true;
   // Stable dedupe key: concurrent triggers (job-completion hooks racing a
   // sync poll) collapse onto one queued render instead of double-rendering.

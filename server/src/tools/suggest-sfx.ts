@@ -26,7 +26,7 @@ export function suggestSfxDef(fs: Engine): ToolDef {
         };
       }
 
-      const loaded = await loadAssetForAnalysis(fs, assetId, book_id);
+      const loaded = await loadAssetForAnalysis(fs, assetId);
       if (!loaded.ok) {
         return {
           isError: true as const,

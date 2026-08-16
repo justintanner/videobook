@@ -53,7 +53,6 @@ export function registerChangeVideoSpeedJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -78,7 +77,6 @@ export function registerChangeVideoSpeedJob(fs: Engine): void {
       const inputFilename = basename(inputPath);
       await replaceArtifactFileFromPath(
         fs,
-        bookId,
         assetId,
         inputFilename,
         outputPath,
@@ -96,7 +94,13 @@ export function registerChangeVideoSpeedJob(fs: Engine): void {
       assetId,
       assetDir,
       bookId,
-      provenance: { origin: "speed_change", speed, targetDuration, speed_changed_at: new Date().toISOString() },
+      provenance: {
+        origin: "speed_change",
+        source_asset_id: assetId,
+        speed,
+        targetDuration,
+        speed_changed_at: new Date().toISOString(),
+      },
       force: true,
       skipDownstreamJobs: true,
     } as unknown as Record<string, unknown>);

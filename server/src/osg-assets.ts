@@ -2,7 +2,7 @@ import { join, extname } from "node:path";
 import type { ArtifactManifestFile, Engine } from "videobook-engine";
 import type { OsgPosition, OsgSize } from "./remotion/subtitles/types.js";
 
-export const OSG_POSITIONS: readonly OsgPosition[] = [
+const OSG_POSITIONS: readonly OsgPosition[] = [
   "top-left", "top-center", "top-right",
   "middle-left", "middle-center", "middle-right",
   "bottom-left", "bottom-center", "bottom-right",

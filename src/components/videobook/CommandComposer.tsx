@@ -151,16 +151,25 @@ export function CommandComposer({
   const speakPreviewOpen = !dismissed && isSpeakCommandPreview(input)
   const catalogVoices = voiceCatalog?.voices ?? []
   const activeVoiceId = resolveSpeakVoiceId(catalogVoices, selectedVoiceId)
-  const refreshVoices = voiceCatalog?.refresh
   const stopPreview = previewPlayer.stop
 
   useEffect(() => {
-    if (!speakPreviewOpen) {
-      stopPreview()
-      return
-    }
-    void refreshVoices?.()
-  }, [refreshVoices, speakPreviewOpen, stopPreview])
+    if (!speakPreviewOpen) stopPreview()
+  }, [speakPreviewOpen, stopPreview])
+
+  const ensureVoiceCatalog = () => {
+    if (!voiceCatalog) return
+    void voiceCatalog.ensureLoaded().catch(() => undefined)
+  }
+
+  const ensureVoicesForInput = (value: string) => {
+    if (isSpeakCommandPreview(value)) ensureVoiceCatalog()
+  }
+
+  const refreshVoiceCatalog = () => {
+    if (!voiceCatalog) return
+    void voiceCatalog.refresh().catch(() => undefined)
+  }
 
   const focusInput = (select = false) => {
     requestAnimationFrame(() => {
@@ -250,6 +259,7 @@ export function CommandComposer({
   const focusAndLoad = () => {
     void onEnsureCatalog().catch(() => undefined)
     void ensureHistory()
+    if (speakPreviewOpen) ensureVoiceCatalog()
   }
 
   const recordHistory = (message: string) => {
@@ -274,7 +284,14 @@ export function CommandComposer({
     setDismissed(false)
     let selectInput = false
     try {
-      const voiceContext = speakExecuteContext(message, activeVoiceId)
+      const loadedVoiceCatalog = isSpeakCommandPreview(message)
+        ? await voiceCatalog?.ensureLoaded()
+        : null
+      const voiceId = resolveSpeakVoiceId(
+        loadedVoiceCatalog?.voices ?? catalogVoices,
+        selectedVoiceId,
+      )
+      const voiceContext = speakExecuteContext(message, voiceId)
       if (voiceContext?.speakVoiceId) persistSpeakVoiceId(voiceContext.speakVoiceId)
       const nextOutcome = await onExecute(message, voiceContext)
       showOutcome(nextOutcome)
@@ -282,6 +299,7 @@ export function CommandComposer({
       if (inputDecision) {
         setInput(inputDecision.value)
         setDismissed(!isSpeakCommandPreview(inputDecision.value))
+        ensureVoicesForInput(inputDecision.value)
         selectInput = inputDecision.select
       }
       if (nextOutcome.ok) onSuccessfulExecute()
@@ -305,6 +323,7 @@ export function CommandComposer({
     if (suggestion.type === 'command') {
       setInput(suggestion.value)
       setDismissed(!isSpeakCommandPreview(suggestion.value))
+      ensureVoicesForInput(suggestion.value)
     } else {
       setInput((current) =>
         `${applyNotebookMentionSuggestion(current, suggestion.value)} `)
@@ -342,6 +361,7 @@ export function CommandComposer({
     historyDraftRef.current = next.draft
     setInput(next.value)
     setDismissed(true)
+    ensureVoicesForInput(next.value)
   }
 
   const applyInputReadline = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -359,6 +379,7 @@ export function CommandComposer({
     if (!edit) return false
     event.preventDefault()
     setInput(edit.value)
+    ensureVoicesForInput(edit.value)
     if (edit.killedText !== undefined) killBufferRef.current = edit.killedText
     requestAnimationFrame(() => target.setSelectionRange(
       edit.selectionStart,
@@ -451,6 +472,7 @@ export function CommandComposer({
             error={voiceCatalog?.error ?? null}
             onSelect={selectVoice}
             onTogglePreview={previewPlayer.toggle}
+            onRefresh={refreshVoiceCatalog}
           />
         )}
         {!speakPreviewOpen && suggestions.length > 0 && (
@@ -482,10 +504,12 @@ export function CommandComposer({
           aria-label="Videobook command input"
           onFocus={focusAndLoad}
           onChange={(event) => {
-            setInput(event.target.value)
+            const value = event.target.value
+            setInput(value)
             setDismissed(false)
             setSelectedIndex(0)
             historyCursorRef.current = -1
+            ensureVoicesForInput(value)
           }}
           onKeyDown={(event) => {
             if (speakPreviewOpen) {

@@ -15,19 +15,20 @@ import {
   generationActionsForCell,
   generationSelectionForAction,
   initialGenerationSelection,
-  type GenerationCellType,
   type GenerationConnectedInput,
   type GenerationControlValue,
   type NotebookGenerationAction,
 } from './notebook-generation-actions'
+import type { NotebookGenerationCellType } from './notebook-cell-types'
 import {
   notebookCellTag,
   notebookReferences,
   resolveNotebookCellReference,
 } from './notebook-addressing'
+import { nonBlankStringValue, recordValue } from './value-decoders'
 
 export type NotebookChatGenerationCommand = {
-  cellType: GenerationCellType
+  cellType: NotebookGenerationCellType
   mediaKind: 'audio' | 'image' | 'video'
   prompt: string
   sourceReferences: string[]
@@ -59,16 +60,6 @@ type NotebookToolCall = (
 type GenerationSource = {
   cell: NotebookCell
   kind: GenerationConnectedInput['kind']
-}
-
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null
 }
 
 function uniqueReferences(input: string): string[] {
@@ -142,7 +133,7 @@ function connectedInputCandidates(
 
 function selectGenerationAction(input: {
   actions: readonly NotebookGenerationAction[]
-  cellType: GenerationCellType
+  cellType: NotebookGenerationCellType
   connectedInputs: readonly GenerationConnectedInput[]
   preferredTool?: string
 }): NotebookGenerationAction | null {
@@ -201,7 +192,7 @@ export function generationCellTypeForRoutedTool(
   tool: string,
   routedTool: string,
   actions: readonly NotebookGenerationAction[],
-): GenerationCellType {
+): NotebookGenerationCellType {
   const action = actions.find((candidate) => candidate.tool === tool)
   if (action?.cellTypes[0]) return action.cellTypes[0]
   const name = `${routedTool} ${tool}`.toLowerCase()
@@ -210,7 +201,7 @@ export function generationCellTypeForRoutedTool(
   return 'generate_video'
 }
 
-export function resolveNotebookChatGenerationSources(
+function resolveNotebookChatGenerationSources(
   document: NotebookDocument,
   sourceReferences: readonly string[],
 ): GenerationSource[] {
@@ -331,8 +322,8 @@ export function notebookChatGenerationConnectedInputs(
 export function notebookChatGenerationSettings(
   draft: NotebookChatGenerationDraft,
 ): Record<string, GenerationControlValue> {
-  const inputs = objectValue(draft.cell.inputs)
-  const settings = objectValue(inputs?.generationSettings)
+  const inputs = recordValue(draft.cell.inputs)
+  const settings = recordValue(inputs?.generationSettings)
   if (!settings) return {}
   return Object.fromEntries(Object.entries(settings).flatMap(([name, value]) =>
     typeof value === 'string'
@@ -358,14 +349,14 @@ export function reviseNotebookChatGenerationAction(
   connectedInputs: readonly GenerationConnectedInput[],
 ): NotebookChatGenerationDraft {
   if (
-    !action.cellTypes.includes(draft.cell.type as GenerationCellType)
+    !action.cellTypes.includes(draft.cell.type as NotebookGenerationCellType)
     || !generationActionIsCompatible(action, connectedInputs)
   ) {
     throw new Error('The selected generation model does not accept these inputs')
   }
   const compatibleModes = compatibleGenerationModes(action, connectedInputs)
-  const currentInputs = objectValue(draft.cell.inputs) ?? {}
-  const currentMode = stringValue(currentInputs.generationMode)
+  const currentInputs = recordValue(draft.cell.inputs) ?? {}
+  const currentMode = nonBlankStringValue(currentInputs.generationMode)
   const mode = compatibleModes.find((candidate) => candidate.id === currentMode)
     ?? compatibleModes[0]
   if (!mode) {
@@ -404,7 +395,7 @@ export function reviseNotebookChatGenerationMode(
     cell: {
       ...draft.cell,
       inputs: {
-        ...(objectValue(draft.cell.inputs) ?? {}),
+        ...(recordValue(draft.cell.inputs) ?? {}),
         generationMode: mode.id,
       },
     },
@@ -427,7 +418,7 @@ export function reviseNotebookChatGenerationSetting(
     cell: {
       ...draft.cell,
       inputs: {
-        ...(objectValue(draft.cell.inputs) ?? {}),
+        ...(recordValue(draft.cell.inputs) ?? {}),
         generationSettings: settings,
       },
     },
@@ -443,7 +434,7 @@ export async function materializeNotebookChatGeneration(input: {
 }): Promise<NotebookChatGenerationRun> {
   let created = false
   try {
-    const value = objectValue(await input.callTool('create_notebook_cell', {
+    const value = recordValue(await input.callTool('create_notebook_cell', {
       book_id: input.bookId,
       notebook_id: input.document.id,
       ...(input.expectedRevision
@@ -461,7 +452,7 @@ export async function materializeNotebookChatGeneration(input: {
         inputs: input.draft.cell.inputs,
       },
     }))
-    const cellId = stringValue(value?.id)
+    const cellId = nonBlankStringValue(value?.id)
     if (!cellId || cellId !== input.draft.cell.id) {
       throw new Error('The server did not preserve the planned generation cell')
     }
@@ -477,7 +468,7 @@ export async function materializeNotebookChatGeneration(input: {
     }
     return {
       cellId,
-      cellAddress: stringValue(value?.address)
+      cellAddress: nonBlankStringValue(value?.address)
         ?? notebookCellTag(input.draft.cell),
       sourceCellIds: input.draft.sourceCellIds,
       sourceAddresses: input.draft.sourceAddresses,

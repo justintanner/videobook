@@ -3,6 +3,7 @@ import {
   nextNotebookHorizontalGenerationSlot,
   nextNotebookVideoGenerationSlot,
 } from './notebook-grid'
+import { nonBlankStringValue, recordValue } from './value-decoders'
 
 export interface RoutedMediaCellInput {
   type: 'audio' | 'video'
@@ -15,16 +16,6 @@ interface RoutedMediaOutput {
   artifactId: string
   inputs: Record<string, unknown>
   type: 'audio' | 'video'
-}
-
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null
 }
 
 function selectedValues(
@@ -41,7 +32,7 @@ function requiredString(
   key: string,
   message: string,
 ): string {
-  const result = stringValue(value[key])
+  const result = nonBlankStringValue(value[key])
   if (!result) throw new Error(message)
   return result
 }
@@ -130,7 +121,7 @@ function coverSongSlot(
   cells: readonly NotebookCell[],
   lastWorkSlot: NotebookGridSlot | null,
 ): { row: number; column: number } {
-  const sourceArtifactId = stringValue(value.source_asset_id)
+  const sourceArtifactId = nonBlankStringValue(value.source_asset_id)
   const source = sourceArtifactId
     ? cells.find((cell) => cell.outputArtifactId === sourceArtifactId)
     : undefined
@@ -147,7 +138,7 @@ function videoOutputSlots(
   count: number,
   lastWorkSlot: NotebookGridSlot | null,
 ): NotebookGridSlot[] {
-  const sourceArtifactId = stringValue(value.source_asset_id)
+  const sourceArtifactId = nonBlankStringValue(value.source_asset_id)
   const source = sourceArtifactId
     ? cells.find((cell) => cell.outputArtifactId === sourceArtifactId)
     : undefined
@@ -177,7 +168,7 @@ export function routedMediaCellInputs(
     && tool !== 'split_video'
     && tool !== 'make_cover_song'
   ) return []
-  const value = record(result)
+  const value = recordValue(result)
   if (!value) throw new Error(`${tool} returned an invalid result`)
   const outputs = tool === 'extract_video_clip'
     ? [extractOutput(value)]

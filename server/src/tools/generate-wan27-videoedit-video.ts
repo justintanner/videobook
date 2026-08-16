@@ -65,7 +65,7 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const videoResult = await resolveVideoRef(fs, video_ref, book_id);
+      const videoResult = await resolveVideoRef(fs, video_ref);
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const videoInput = videoResult.value;
 
@@ -84,7 +84,7 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
 
       let imageInput: RefInput | undefined;
       if (image_ref) {
-        const r = await resolveImageRef(fs, image_ref, book_id);
+        const r = await resolveImageRef(fs, image_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInput = r.value;
       }

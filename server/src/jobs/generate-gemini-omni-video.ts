@@ -41,10 +41,10 @@ export function registerGenerateGeminiOmniVideoJob(fs: Engine): void {
 
     const imageUrls: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      imageUrls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
+      imageUrls.push(await uploadAssetToKie(fs, assetId, filename));
     }
     const videoUrl = videoInput
-      ? await uploadAssetToKie(fs, videoInput.assetId, videoInput.filename, bookId)
+      ? await uploadAssetToKie(fs, videoInput.assetId, videoInput.filename)
       : undefined;
 
     const normalizedPrompt = transformProviderPrompt(

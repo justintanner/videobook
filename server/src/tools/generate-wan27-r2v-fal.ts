@@ -13,12 +13,11 @@ import { generationLabel } from "../artifact-label.js";
 async function resolveVideoRefList(
   fs: Engine,
   rawRefs: readonly string[],
-  bookId: string,
 ): Promise<{ ok: true; inputs: RefInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
   const inputs: RefInput[] = [];
   const sourceVideoIds: string[] = [];
   for (const raw of rawRefs) {
-    const r = await resolveVideoRef(fs, raw, bookId);
+    const r = await resolveVideoRef(fs, raw);
     if (!r.ok) return { ok: false, error: r.error };
     inputs.push(r.value);
     sourceVideoIds.push(r.value.assetId);
@@ -70,10 +69,10 @@ export function generateWan27R2vFalDef(fs: Engine): ToolDef {
       const imgRefs = image_refs ?? [];
       const vidRefs = video_refs ?? [];
 
-      const resolvedImages = await resolveImageRefs(fs, imgRefs, book_id);
+      const resolvedImages = await resolveImageRefs(fs, imgRefs);
       if (!resolvedImages.ok) return toolError(resolvedImages.error);
 
-      const resolvedVideos = await resolveVideoRefList(fs, vidRefs, book_id);
+      const resolvedVideos = await resolveVideoRefList(fs, vidRefs);
       if (!resolvedVideos.ok) return toolError(resolvedVideos.error);
 
       const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "wan/2-7-r2v"), prompt));

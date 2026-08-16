@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../fs.js";
-import { sleepDef } from "./sleep.js";
+import { waitForAssetReadyDef } from "./wait-for-asset-ready.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 
-describe("sleep tool", () => {
+describe("wait_for_asset_ready tool", () => {
   let client: Client;
   let tempDir: string;
 
@@ -43,7 +43,7 @@ describe("sleep tool", () => {
 
   it("returns ready immediately for asset with no pending task and not locked", async () => {
     // Create the asset directly so no process_image job is enqueued. The job
-    // fails on synthetic bytes and writes a generation_errors row, which sync
+    // fails on synthetic bytes and writes a generation_errors row, which reconciliation
     // surfaces as a failure — same race the clear_failed_tasks test avoids.
     const fs = createEngineForTest(tempDir);
     const created = await fs.artifacts.create("img", "photo");
@@ -65,12 +65,12 @@ describe("sleep tool", () => {
   });
 });
 
-describe("sleepDef handler", () => {
+describe("waitForAssetReadyDef handler", () => {
   let fs: Engine;
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "videocity-sleep-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-wait-ready-test-"));
     fs = createEngineForTest(tempDir);
   });
 
@@ -105,7 +105,7 @@ describe("sleepDef handler", () => {
     delete process.env.KIE_API_KEY;
 
     try {
-      const def = sleepDef(fs);
+      const def = waitForAssetReadyDef(fs);
       const result = await def.handler({
         asset_id: assetId,
         book_id: "test-proj",
@@ -149,7 +149,7 @@ describe("sleepDef handler", () => {
       })[0]?.state,
     ).toBe("queued");
 
-    const result = await sleepDef(fs).handler({
+    const result = await waitForAssetReadyDef(fs).handler({
       asset_id: assetResult.value.artifactId,
       book_id: "test-proj",
       timeout_seconds: 0.01,

@@ -22,7 +22,7 @@ export type DancingFixtureOptions = {
 
 export const DANCING_FIXTURE_OWNER = "dancing-default";
 export const DANCING_FIXTURE_VERSION = 5;
-export const DANCING_SOURCE_URL = "https://www.youtube.com/watch?v=8GwZveBYRJI";
+const DANCING_SOURCE_URL = "https://www.youtube.com/watch?v=8GwZveBYRJI";
 export const DANCING_MOTION_DURATION_SECONDS = 10;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -257,7 +257,7 @@ async function ensureKittenImage(
   if (!metadata.ok) throw new Error(metadata.error.message);
 }
 
-export async function bootstrapDancingAssets(
+async function bootstrapDancingAssets(
   engine: Engine,
   options: DancingFixtureOptions = {},
 ): Promise<void> {

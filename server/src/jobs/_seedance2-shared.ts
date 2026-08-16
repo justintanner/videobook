@@ -36,11 +36,10 @@ export type Seedance2JobPayload = {
 async function uploadAll(
   fs: Engine,
   inputs: RefInput[],
-  bookId: string,
 ): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
+    urls.push(await uploadAssetToKie(fs, assetId, filename));
   }
   return urls;
 }
@@ -60,14 +59,14 @@ export function registerSeedance2Job(fs: Engine, jobType: string): void {
     requireApiKey("KIE_API_KEY");
 
     const firstFrameUrl = firstFrame
-      ? await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename, bookId)
+      ? await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename)
       : undefined;
     const lastFrameUrl = lastFrame
-      ? await uploadAssetToKie(fs, lastFrame.assetId, lastFrame.filename, bookId)
+      ? await uploadAssetToKie(fs, lastFrame.assetId, lastFrame.filename)
       : undefined;
-    const referenceImageUrls = await uploadAll(fs, imageInputs, bookId);
-    const referenceVideoUrls = await uploadAll(fs, videoInputs, bookId);
-    const referenceAudioUrls = await uploadAll(fs, audioInputs, bookId);
+    const referenceImageUrls = await uploadAll(fs, imageInputs);
+    const referenceVideoUrls = await uploadAll(fs, videoInputs);
+    const referenceAudioUrls = await uploadAll(fs, audioInputs);
 
     const normalizedPrompt = transformProviderPrompt(
       apiModel === "bytedance/seedance-2-fast"

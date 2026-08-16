@@ -4,12 +4,17 @@ import {
 } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { BookProjectSelector } from '../../src/components/videobook/BookProjectSelector'
+import { BookProjectMenu } from '../../src/components/videobook/BookProjectMenu'
 import {
   formatArtifactCount,
   formatNotebookCount,
   type BookProjectSummary,
-} from '../../src/videobook/book-project-selector'
+} from '../../src/videobook/book-project-catalog'
+import {
+  transitionBookProjectMenuMode,
+  type BookProjectMenuMode,
+  type BookProjectMenuModeAction,
+} from '../../src/videobook/book-project-menu-state'
 
 const books: BookProjectSummary[] = [
   {
@@ -30,7 +35,7 @@ const books: BookProjectSummary[] = [
 
 const successfulResult = Promise.resolve({ ok: true } as const)
 
-const baseProps: ComponentProps<typeof BookProjectSelector> = {
+const baseProps: ComponentProps<typeof BookProjectMenu> = {
   activeBook: books[0] ?? null,
   books,
   disabled: false,
@@ -45,18 +50,18 @@ const baseProps: ComponentProps<typeof BookProjectSelector> = {
   onSelect: () => successfulResult,
 }
 
-function renderSelector(
-  overrides: Partial<ComponentProps<typeof BookProjectSelector>> = {},
+function renderMenu(
+  overrides: Partial<ComponentProps<typeof BookProjectMenu>> = {},
 ): string {
-  return renderToStaticMarkup(createElement(BookProjectSelector, {
+  return renderToStaticMarkup(createElement(BookProjectMenu, {
     ...baseProps,
     ...overrides,
   }))
 }
 
-describe('BookProjectSelector', () => {
+describe('BookProjectMenu', () => {
   it('renders the active project and keeps the catalog closed by default', () => {
-    const html = renderSelector({ open: false })
+    const html = renderMenu({ open: false })
 
     expect(html).toContain('active-story')
     expect(html).toContain('title="5 artifacts"')
@@ -65,7 +70,7 @@ describe('BookProjectSelector', () => {
   })
 
   it('shows project counts, active state, and lifecycle actions', () => {
-    const html = renderSelector()
+    const html = renderMenu()
 
     expect(html).toContain('id="book-project-menu"')
     expect(html).toContain('2 total')
@@ -81,7 +86,7 @@ describe('BookProjectSelector', () => {
 
   it('protects the last project from deletion', () => {
     const onlyBook = books[0]!
-    const html = renderSelector({
+    const html = renderMenu({
       activeBook: onlyBook,
       books: [onlyBook],
     })
@@ -91,7 +96,7 @@ describe('BookProjectSelector', () => {
   })
 
   it('surfaces refresh progress, errors, and an empty catalog', () => {
-    const html = renderSelector({
+    const html = renderMenu({
       activeBook: null,
       books: [],
       error: 'Catalog unavailable',
@@ -110,4 +115,68 @@ describe('BookProjectSelector', () => {
     expect(formatNotebookCount(1)).toBe('1 notebook')
     expect(formatNotebookCount(2)).toBe('2 notebooks')
   })
+})
+
+const activeModes: BookProjectMenuMode[] = [
+  { kind: 'create' },
+  { kind: 'rename', bookId: 'book-a' },
+  { kind: 'delete', bookId: 'book-b' },
+]
+
+describe('book project menu mode transitions', () => {
+  it.each(activeModes)('unwinds $kind mode before closing on Escape', (mode) => {
+    expect(transitionBookProjectMenuMode(
+      mode,
+      { kind: 'escape' },
+      false,
+    )).toEqual({ mode: { kind: 'idle' }, closeMenu: false })
+  })
+
+  it('closes from idle mode on Escape', () => {
+    const mode = { kind: 'idle' } as const
+
+    expect(transitionBookProjectMenuMode(
+      mode,
+      { kind: 'escape' },
+      false,
+    )).toEqual({ mode, closeMenu: true })
+  })
+
+  it.each([
+    { kind: 'begin-create' },
+    { kind: 'begin-rename', bookId: 'book-a' },
+    { kind: 'begin-delete', bookId: 'book-b' },
+    { kind: 'cancel' },
+    { kind: 'close' },
+    { kind: 'escape' },
+  ] satisfies BookProjectMenuModeAction[])('locks $kind while an action is pending', (action) => {
+    const mode = { kind: 'rename', bookId: 'book-a' } as const
+
+    expect(transitionBookProjectMenuMode(mode, action, true)).toEqual({
+      mode,
+      closeMenu: false,
+    })
+  })
+
+  it.each([
+    [{ kind: 'begin-create' }, { kind: 'create' }],
+    [
+      { kind: 'begin-rename', bookId: 'book-a' },
+      { kind: 'rename', bookId: 'book-a' },
+    ],
+    [
+      { kind: 'begin-delete', bookId: 'book-b' },
+      { kind: 'delete', bookId: 'book-b' },
+    ],
+  ] satisfies Array<[BookProjectMenuModeAction, BookProjectMenuMode]>) (
+    'makes $0.kind the exclusive active mode',
+    (action, expectedMode) => {
+      for (const mode of activeModes) {
+        expect(transitionBookProjectMenuMode(mode, action, false)).toEqual({
+          mode: expectedMode,
+          closeMenu: false,
+        })
+      }
+    },
+  )
 })

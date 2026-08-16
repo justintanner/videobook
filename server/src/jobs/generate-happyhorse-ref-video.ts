@@ -34,7 +34,7 @@ export function registerGenerateHappyhorseRefVideoJob(fs: Engine): void {
 
     const referenceImages: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      referenceImages.push(await uploadAssetToKie(fs, assetId, filename, bookId));
+      referenceImages.push(await uploadAssetToKie(fs, assetId, filename));
     }
 
     const normalizedPrompt = transformProviderPrompt(

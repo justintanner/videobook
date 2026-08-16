@@ -208,7 +208,7 @@ export function archiveTags(values: string[] | undefined, source: ArchiveTagSour
   return tags;
 }
 
-export function mergeTags(groups: ArchiveTag[][]): ArchiveTag[] {
+function mergeTags(groups: ArchiveTag[][]): ArchiveTag[] {
   const merged = new Map<string, ArchiveTag>();
   for (const group of groups) {
     for (const tag of group) {

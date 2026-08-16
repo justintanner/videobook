@@ -38,7 +38,7 @@ export type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-export async function resolveImageRef(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
+export async function resolveImageRef(fs: Engine, raw: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   const artifact = fs.artifacts.get(assetId);
   if (!artifact.ok) return { ok: false, error: artifact.error.message };
@@ -59,7 +59,6 @@ export async function resolveImageRef(fs: Engine, raw: string, _bookId: string):
 async function resolveSlashedRef(
   fs: Engine,
   raw: string,
-  _bookId: string,
 ): Promise<ResolveOk | ResolveErr | null> {
   const stripped = raw.replace(/^@/, "");
   const slashIdx = stripped.indexOf("/");
@@ -74,8 +73,8 @@ async function resolveSlashedRef(
   return { ok: true, value: { assetId, filename } };
 }
 
-export async function resolveVideoRef(fs: Engine, raw: string, bookId: string): Promise<ResolveOk | ResolveErr> {
-  const slashed = await resolveSlashedRef(fs, raw, bookId);
+export async function resolveVideoRef(fs: Engine, raw: string): Promise<ResolveOk | ResolveErr> {
+  const slashed = await resolveSlashedRef(fs, raw);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
   const artifact = fs.artifacts.get(assetId);
@@ -92,7 +91,7 @@ export async function resolveVideoRef(fs: Engine, raw: string, bookId: string): 
 
 // Audio replacement always targets a first-class audio artifact. Notebook
 // cells reference artifact identities; they do not expose nested file paths.
-export async function resolveAudioRef(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
+export async function resolveAudioRef(fs: Engine, raw: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   const artifact = fs.artifacts.get(assetId);
   if (!artifact.ok) return { ok: false, error: artifact.error.message };
@@ -204,42 +203,42 @@ export function buildSeedance2ToolDef(
 
       let firstFrame: RefInput | undefined;
       if (first_frame_ref !== undefined) {
-        const r = await resolveImageRef(fs, first_frame_ref, book_id);
+        const r = await resolveImageRef(fs, first_frame_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let lastFrame: RefInput | undefined;
       if (last_frame_ref !== undefined) {
-        const r = await resolveImageRef(fs, last_frame_ref, book_id);
+        const r = await resolveImageRef(fs, last_frame_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         lastFrame = r.value;
       }
 
       const imageInputs: RefInput[] = [];
       for (const raw of imgs) {
-        const r = await resolveImageRef(fs, raw, book_id);
+        const r = await resolveImageRef(fs, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       const videoInputs: RefInput[] = [];
       for (const raw of vids) {
-        const r = await resolveVideoRef(fs, raw, book_id);
+        const r = await resolveVideoRef(fs, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInputs.push(r.value);
       }
 
       const audioInputs: RefInput[] = [];
       for (const raw of auds) {
-        const r = await resolveAudioRef(fs, raw, book_id);
+        const r = await resolveAudioRef(fs, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         audioInputs.push(r.value);
       }
 
       let replaceAudioWith: RefInput | undefined;
       if (replace_audio_with !== undefined) {
-        const r = await resolveAudioRef(fs, replace_audio_with, book_id);
+        const r = await resolveAudioRef(fs, replace_audio_with);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `replace_audio_with: ${r.error}` }] };
         replaceAudioWith = r.value;
       }

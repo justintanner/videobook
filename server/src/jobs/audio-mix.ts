@@ -163,7 +163,6 @@ async function deleteIfPresent(
   fs: Engine,
   assetId: string,
   filename: string,
-  _bookId: string,
 ): Promise<void> {
   const result = await fs.files.delete(assetId, filename);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
@@ -176,7 +175,6 @@ async function replaceMixedMedia(
   assetId: string,
   targetFilename: string,
   outputPath: string,
-  _bookId: string,
 ): Promise<void> {
   const output = await readFile(outputPath);
   const writeResult = await fs.files.write(assetId, targetFilename, output);
@@ -201,7 +199,6 @@ export function registerAudioMixJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -220,13 +217,13 @@ export function registerAudioMixJob(fs: Engine): void {
             volume,
             ctx.signal,
           );
-          await replaceMixedMedia(fs, assetId, targetFilename, outputPath, bookId);
+          await replaceMixedMedia(fs, assetId, targetFilename, outputPath);
         } finally {
           await rm(tempDir, { recursive: true, force: true });
         }
 
         for (const filename of STALE_DERIVATIVES) {
-          await deleteIfPresent(fs, assetId, filename, bookId);
+          await deleteIfPresent(fs, assetId, filename);
         }
 
         const mediaPath = join(assetDir, targetFilename);

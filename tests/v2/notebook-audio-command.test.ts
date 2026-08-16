@@ -16,10 +16,7 @@ import {
 } from '../../server/src/queue.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
-import {
-  enqueueNotebookAudioCommand,
-  resolveNotebookAudioSource,
-} from '../../src/videobook/notebook-audio-command'
+import { enqueueNotebookAudioCommand } from '../../src/videobook/notebook-audio-command'
 
 const execFileAsync = promisify(execFile)
 
@@ -143,10 +140,6 @@ describe('notebook audio commands', () => {
     expect(beforeResult.ok).toBe(true)
     if (!beforeResult.ok) return
     const before: NotebookDocument = beforeResult.value
-
-    expect(resolveNotebookAudioSource(before, 'a1').id).toBe(source.id)
-    expect(() => resolveNotebookAudioSource(before, 'a2'))
-      .toThrow('@a2 is not a video-producing cell')
 
     const firstRun = await enqueueNotebookAudioCommand({
       actor: 'audio-command-test',

@@ -66,7 +66,6 @@ export function registerApplyCutsJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -94,7 +93,6 @@ export function registerApplyCutsJob(fs: Engine): void {
       const inputFilename = basename(inputPath);
       await replaceArtifactFileFromPath(
         fs,
-        bookId,
         assetId,
         inputFilename,
         outputPath,

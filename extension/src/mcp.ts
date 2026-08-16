@@ -3,6 +3,7 @@ import { buildDownloadVideoArguments } from "./url-target.js";
 
 const LOCAL_MCP_URL = "http://127.0.0.1:3001/mcp";
 const MCP_PROTOCOL_VERSION = "2026-07-28";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type QueueDownloadResult = {
   assetId: string;
@@ -10,11 +11,24 @@ type QueueDownloadResult = {
   status: string;
 };
 
+export type McpToolRequest = {
+  name: string;
+  arguments: Record<string, unknown>;
+};
+
+export type VideobookMcpSession = {
+  connect(): Promise<void>;
+  callTool(request: McpToolRequest): Promise<unknown>;
+  close(): Promise<void>;
+};
+
+type VideobookMcpSessionFactory = () => VideobookMcpSession;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function readTextResult(result: unknown): string {
+export function readTextResult(result: unknown): string {
   if (!isRecord(result)) throw new Error("MCP returned an invalid response.");
 
   const content = result.content;
@@ -30,22 +44,37 @@ function readTextResult(result: unknown): string {
   return textContent.text;
 }
 
+function parseJson(text: string, label: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new Error(`${label} returned invalid JSON.`);
+  }
+}
+
 function parseJsonRecord(text: string, label: string): Record<string, unknown> {
-  const parsed = JSON.parse(text) as unknown;
+  const parsed = parseJson(text, label);
   if (!isRecord(parsed)) throw new Error(`${label} returned invalid JSON.`);
   return parsed;
 }
 
-function parseDefaultProjectSlug(text: string): string {
-  const parsed = parseJsonRecord(text, "get_default_project");
-  const metadata = parsed.metadata;
-  if (!isRecord(metadata) || typeof metadata.slug !== "string" || !metadata.slug) {
-    throw new Error("Default project response did not include a project slug.");
+export function parseNewestBookId(text: string): string {
+  const parsed = parseJson(text, "list_books");
+  if (!Array.isArray(parsed)) throw new Error("list_books returned an invalid book list.");
+  if (parsed.length === 0) throw new Error("No Videobook books are available.");
+
+  const newestBook = parsed[0];
+  if (
+    !isRecord(newestBook) ||
+    typeof newestBook.bookId !== "string" ||
+    !UUID_PATTERN.test(newestBook.bookId)
+  ) {
+    throw new Error("list_books did not return a UUID bookId for the newest book.");
   }
-  return metadata.slug;
+  return newestBook.bookId;
 }
 
-function parseDownloadResult(text: string): QueueDownloadResult {
+export function parseDownloadResult(text: string): QueueDownloadResult {
   const parsed = parseJsonRecord(text, "download_video");
   if (
     typeof parsed.assetId !== "string" ||
@@ -61,9 +90,9 @@ function parseDownloadResult(text: string): QueueDownloadResult {
   };
 }
 
-export async function queueVideocityDownload(url: string): Promise<QueueDownloadResult> {
+function createLocalMcpSession(): VideobookMcpSession {
   const client = new Client(
-    { name: "videocity-chrome-extension", version: "0.1.0" },
+    { name: "videobook-chrome-extension", version: "0.1.0" },
     {
       capabilities: {},
       supportedProtocolVersions: [MCP_PROTOCOL_VERSION],
@@ -72,20 +101,36 @@ export async function queueVideocityDownload(url: string): Promise<QueueDownload
   );
   const transport = new StreamableHTTPClientTransport(new URL(LOCAL_MCP_URL));
 
-  await client.connect(transport);
-  try {
-    const projectResult = await client.callTool({
-      name: "get_default_project",
-      arguments: {},
-    });
-    const bookId = parseDefaultProjectSlug(readTextResult(projectResult));
+  return {
+    connect: async () => {
+      await client.connect(transport);
+    },
+    callTool: async (request) => await client.callTool(request),
+    close: async () => {
+      await client.close();
+    },
+  };
+}
 
-    const downloadResult = await client.callTool({
+export async function queueVideobookDownload(
+  url: string,
+  createSession: VideobookMcpSessionFactory = createLocalMcpSession,
+): Promise<QueueDownloadResult> {
+  const session = createSession();
+  try {
+    await session.connect();
+    const booksResult = await session.callTool({
+      name: "list_books",
+      arguments: { sort: "newest" },
+    });
+    const bookId = parseNewestBookId(readTextResult(booksResult));
+
+    const downloadResult = await session.callTool({
       name: "download_video",
       arguments: buildDownloadVideoArguments(url, bookId),
     });
     return parseDownloadResult(readTextResult(downloadResult));
   } finally {
-    await client.close();
+    await session.close().catch(() => undefined);
   }
 }

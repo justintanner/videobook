@@ -17,8 +17,9 @@ import { FFMPEG } from "../ffmpeg.js";
 import { createTestClient } from "../test-client.js";
 import { registerJobHandler } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
-import { parseCommandArgs, filterCommandsByMountKeys, normalizeApplySfxCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs, selectCommandForInput } from "../../../src/lib/command-registry.js";
+import { parseCommandArgs, normalizeApplySfxCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs, selectCommandForInput } from "../../../src/lib/command-registry.js";
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
+import { executeUiAction } from "@/lib/ui-actions";
 import type { ArtifactKind } from "videobook-engine";
 import { isUuidV7 } from "videobook-engine";
 
@@ -1198,7 +1199,7 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 13. Viewer commands (verify onMount=['viewer'] and uiAction)
+  // 13. Viewer commands
   // -----------------------------------------------------------------------
   describe("viewer commands", () => {
     const viewerCommands = [
@@ -1211,10 +1212,9 @@ describe("slash commands e2e", () => {
     ];
 
     for (const { name, action } of viewerCommands) {
-      it(`${name} has uiAction=${action} and onMount=['viewer']`, () => {
+      it(`${name} has uiAction=${action}`, () => {
         const cmd = findCommand(name);
         expect(cmd.uiAction).toBe(action);
-        expect(cmd.onMount).toContain("viewer");
       });
     }
 
@@ -2328,29 +2328,6 @@ describe("slash commands e2e", () => {
         if (origKey) process.env.KIE_API_KEY = origKey;
         else delete process.env.KIE_API_KEY;
       }
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // 25. filterCommandsByMountKeys
-  // -----------------------------------------------------------------------
-  describe("filterCommandsByMountKeys", () => {
-    it("viewer commands hidden when viewer not active", () => {
-      const filtered = filterCommandsByMountKeys(commands, new Set<string>());
-      const viewerCmds = filtered.filter((c) => c.onMount?.includes("viewer"));
-      expect(viewerCmds).toHaveLength(0);
-    });
-
-    it("viewer commands shown when viewer is active", () => {
-      const filtered = filterCommandsByMountKeys(commands, new Set(["viewer"]));
-      const viewerCmds = filtered.filter((c) => c.onMount?.includes("viewer"));
-      expect(viewerCmds.length).toBeGreaterThan(0);
-    });
-
-    it("commands without onMount always shown", () => {
-      const filtered = filterCommandsByMountKeys(commands, new Set<string>());
-      const actionCmds = filtered.filter((c) => c.category === "action");
-      expect(actionCmds.length).toBeGreaterThan(0);
     });
   });
 
@@ -4315,10 +4292,9 @@ describe("slash commands e2e", () => {
   // Render settings commands — command definitions
   // -----------------------------------------------------------------------
   describe("render settings commands", () => {
-    it("/subs has uiAction=settings_subs, onMount=['viewer'], field+value params", () => {
+    it("/subs has uiAction=settings_subs and field+value params", () => {
       const cmd = findCommand("/subs");
       expect(cmd.uiAction).toBe("settings_subs");
-      expect(cmd.onMount).toContain("viewer");
       const names = cmd.params.map((p) => p.name);
       expect(names).toContain("field");
       expect(names).toContain("value");
@@ -4326,10 +4302,9 @@ describe("slash commands e2e", () => {
       expect(cmd.params.find((p) => p.name === "value")!.required).toBe(false);
     });
 
-    it("/audio has uiAction=settings_audio, onMount=['viewer'], field+value params", () => {
+    it("/audio has uiAction=settings_audio and field+value params", () => {
       const cmd = findCommand("/audio");
       expect(cmd.uiAction).toBe("settings_audio");
-      expect(cmd.onMount).toContain("viewer");
       const names = cmd.params.map((p) => p.name);
       expect(names).toContain("field");
       expect(names).toContain("value");
@@ -4337,10 +4312,9 @@ describe("slash commands e2e", () => {
       expect(cmd.params.find((p) => p.name === "value")!.required).toBe(false);
     });
 
-    it("/bg has uiAction=settings_bg, onMount=['viewer'], mode param", () => {
+    it("/bg has uiAction=settings_bg and mode param", () => {
       const cmd = findCommand("/bg");
       expect(cmd.uiAction).toBe("settings_bg");
-      expect(cmd.onMount).toContain("viewer");
       const names = cmd.params.map((p) => p.name);
       expect(names).toContain("mode");
       expect(cmd.params.find((p) => p.name === "mode")!.required).toBe(true);
@@ -4505,14 +4479,6 @@ describe("slash commands e2e", () => {
   // Render settings executeUiAction dispatch
   // -----------------------------------------------------------------------
   describe("render settings executeUiAction dispatch", () => {
-    // Import inline to avoid adding to the top-level imports
-    let executeUiAction: typeof import("../../../src/lib/ui-actions.js").executeUiAction;
-
-    beforeEach(async () => {
-      const mod = await import("../../../src/lib/ui-actions.js");
-      executeUiAction = mod.executeUiAction;
-    });
-
     it("settings_subs dispatches (field, value)", () => {
       let captured: [string, string] | undefined;
       const map = { settings_subs: (f: string, v: string) => { captured = [f, v]; } };

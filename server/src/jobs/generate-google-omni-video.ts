@@ -32,13 +32,13 @@ export function registerGenerateGoogleOmniVideoJob(fs: Engine): void {
 
     const referenceImageIds: string[] = [];
     for (const input of p.imageInputs) {
-      referenceImageIds.push(await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, p.bookId));
+      referenceImageIds.push(await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename));
     }
     const startImageId = p.firstFrame
-      ? await uploadAssetToGoogleFlow(provider, fs, p.firstFrame.assetId, p.firstFrame.filename, p.bookId)
+      ? await uploadAssetToGoogleFlow(provider, fs, p.firstFrame.assetId, p.firstFrame.filename)
       : undefined;
     const referenceVideoId = p.videoInput
-      ? await uploadAssetToGoogleFlow(provider, fs, p.videoInput.assetId, p.videoInput.filename, p.bookId)
+      ? await uploadAssetToGoogleFlow(provider, fs, p.videoInput.assetId, p.videoInput.filename)
       : undefined;
     const normalizedPrompt = transformProviderPrompt(
       "generate_google_flow_omni_flash_video",

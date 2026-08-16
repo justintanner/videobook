@@ -1,9 +1,7 @@
 import type { ReactNode } from 'react'
 import type { NotebookCellType } from 'videobook-engine'
-import {
-  isNotebookMediaCellType,
-  notebookCellStateFromStatus,
-} from '@/videobook/notebook-cell-presentation'
+import { isNotebookMediaPresentationCellType } from '@/videobook/notebook-cell-types'
+import { notebookCellStateFromStatus } from '@/videobook/notebook-cell-presentation'
 import { CellClockOverlay } from './CellClockOverlay'
 import { CellFailedOverlay } from './CellFailedOverlay'
 
@@ -45,7 +43,9 @@ export function CellStateOverlay({
     return (
       <CellFailedOverlay
         error={presentation.error}
-        label={isNotebookMediaCellType(kind) ? 'MEDIA FAILED' : 'GENERATION FAILED'}
+        label={isNotebookMediaPresentationCellType(kind)
+          ? 'MEDIA FAILED'
+          : 'GENERATION FAILED'}
         address={address}
         onRetry={onRetry}
       />

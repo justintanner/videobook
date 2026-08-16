@@ -84,7 +84,7 @@ describe("animate_keywords tool", () => {
     const frameCache = await fs.files.write(assetId, KEYWORD_FRAME_CACHE_FILENAME, Buffer.from("cached-frame-sheet")
     );
     if (!frameCache.ok) throw new Error(frameCache.error.message);
-    await writeKeywordPlacementAnalysis(fs, assetId, bookId, {
+    await writeKeywordPlacementAnalysis(fs, assetId, {
       version: KEYWORD_PLACEMENT_VERSION,
       fingerprint,
       sourceWidth: 1920,

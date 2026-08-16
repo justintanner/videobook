@@ -37,16 +37,6 @@ import {
   type OwnedBranch,
 } from "./notebook-shots.js";
 
-export const WORKFLOW_STAGES = [
-  "VIDEO",
-  "ANALYZE",
-  "SPLIT VIDEO",
-  "EXTRACT ASSETS",
-  "WRITE PROMPTS",
-  "GENERATE VIDEO",
-  "CONCAT",
-] as const;
-
 export const DEFAULT_ANALYSIS_PROMPT =
   "Detect shot boundaries from verified camera switches and audio continuity; cover the source exactly and label each shot from evidence.";
 
@@ -104,8 +94,6 @@ export const MULTYCULTY_FEATURES = [
     column: 5,
   },
 ] as const;
-
-export type WorkflowStage = (typeof WORKFLOW_STAGES)[number];
 
 type Feature = (typeof MULTYCULTY_FEATURES)[number];
 
@@ -430,29 +418,11 @@ function uniqueEdges(edges: NotebookEdge[]): NotebookEdge[] {
   });
 }
 
-export function workflowStageForCell(cell: NotebookCell): WorkflowStage {
-  if (cell.type === "video") return "VIDEO";
-  if (cell.type === "analyze") return "ANALYZE";
-  if (cell.type === "split_video") return "SPLIT VIDEO";
-  if (
-    cell.type === "extract_audio"
-    || cell.type === "extract_frame"
-    || cell.type === "image"
-    || cell.type === "audio"
-  ) {
-    return "EXTRACT ASSETS";
-  }
-  if (cell.type === "prompt") return "WRITE PROMPTS";
-  if (cell.type === "generate_video") return "GENERATE VIDEO";
-  if (cell.type === "concat") return "CONCAT";
-  return "VIDEO";
-}
-
-export function gridSlot(row: number, column: number): NotebookGridSlot {
+function gridSlot(row: number, column: number): NotebookGridSlot {
   return { row, column };
 }
 
-export function buildAnalysisScriptArtifact(input: {
+function buildAnalysisScriptArtifact(input: {
   request: Record<string, unknown>;
   rawOutput: unknown;
   shots: NormalizedShot[];

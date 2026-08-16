@@ -3,7 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { B2Error, createB2 } from "@apicity/b2";
 import type { ContentStore } from "videobook-engine";
 
-interface B2StoreConfig {
+export interface B2ContentStoreConfig {
   accessKeyId: string;
   secretAccessKey: string;
   region: string;
@@ -11,8 +11,8 @@ interface B2StoreConfig {
   bucket: string;
 }
 
-export function createB2ContentStore(
-  config: B2StoreConfig,
+function createB2ContentStore(
+  config: B2ContentStoreConfig,
 ): ContentStore {
   const provider = createB2({
     accessKeyId: config.accessKeyId,
@@ -64,13 +64,13 @@ export function createB2ContentStore(
   };
 }
 
-export function contentStoreFromEnvironment(): ContentStore | undefined {
+export function b2ContentStoreConfigFromEnvironment(): B2ContentStoreConfig | undefined {
   const accessKeyId = process.env.B2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.B2_SECRET_ACCESS_KEY;
   const region = process.env.B2_REGION;
   const bucket = process.env.B2_BUCKET;
   if (!accessKeyId || !secretAccessKey || !region || !bucket) return undefined;
-  return createB2ContentStore({
+  return {
     accessKeyId,
     secretAccessKey,
     region,
@@ -78,5 +78,10 @@ export function contentStoreFromEnvironment(): ContentStore | undefined {
     ...(process.env.B2_ENDPOINT
       ? { endpoint: process.env.B2_ENDPOINT }
       : {}),
-  });
+  };
+}
+
+export function contentStoreFromEnvironment(): ContentStore | undefined {
+  const config = b2ContentStoreConfigFromEnvironment();
+  return config ? createB2ContentStore(config) : undefined;
 }

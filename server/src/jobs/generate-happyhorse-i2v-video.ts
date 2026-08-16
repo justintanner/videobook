@@ -31,7 +31,7 @@ export function registerGenerateHappyhorseI2vVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const imageUrl = await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename, bookId);
+    const imageUrl = await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename);
 
     // First frame rides image_urls; strip confirmed @img-* from free-form prompt.
     const normalizedPrompt = prompt === undefined

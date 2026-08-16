@@ -36,7 +36,6 @@ describe("applyRequestedDownloadRange", () => {
 
       const applied = await applyRequestedDownloadRange(
         engine,
-        engine.book.get().bookId,
         artifact.value.artifactId,
         artifact.value.path,
         written.value,

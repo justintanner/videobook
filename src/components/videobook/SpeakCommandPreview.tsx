@@ -68,6 +68,7 @@ export function SpeakCommandPreview({
   error,
   onSelect,
   onTogglePreview,
+  onRefresh,
 }: {
   voices: readonly SpeakVoice[]
   selectedVoiceId: string
@@ -78,6 +79,7 @@ export function SpeakCommandPreview({
   error: string | null
   onSelect: (voiceId: string) => void
   onTogglePreview: (voiceId: string, previewUrl: string) => void
+  onRefresh: () => void
 }) {
   const selected = voices.find((voice) => voice.voiceId === selectedVoiceId)
 
@@ -94,6 +96,19 @@ export function SpeakCommandPreview({
       {error && (
         <p className="speak-preview-error" role="alert">{error}</p>
       )}
+      <button
+        type="button"
+        className="speak-preview-refresh"
+        disabled={loading}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onRefresh}
+      >
+        {loading
+          ? 'Loading voices…'
+          : error
+            ? 'Retry voices'
+            : voices.length === 0 ? 'Load voices' : 'Refresh voices'}
+      </button>
       <VoiceOptionList
         voices={voices}
         selectedVoiceId={selectedVoiceId}

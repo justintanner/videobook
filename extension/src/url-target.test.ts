@@ -28,9 +28,12 @@ describe("extension URL targeting", () => {
   });
 
   it("builds full-source download_video arguments", () => {
-    expect(buildDownloadVideoArguments("https://example.com/video", "project-one")).toEqual({
+    expect(buildDownloadVideoArguments(
+      "https://example.com/video",
+      "018f47b5-2f5d-7e19-8f0b-123456789abc",
+    )).toEqual({
       url: "https://example.com/video",
-      book_id: "project-one",
+      book_id: "018f47b5-2f5d-7e19-8f0b-123456789abc",
       full: true,
       export_videos: false,
     });

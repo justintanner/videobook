@@ -47,6 +47,7 @@ src/lib/*.d.ts
 test-results/
 tests/screenshots/
 .playwright-mcp/
+coverage/
 
 # Claude Code
 .claude/worktrees/

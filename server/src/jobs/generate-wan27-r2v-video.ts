@@ -35,11 +35,10 @@ type GenerateWan27R2vVideoPayload = {
 async function uploadInputs(
   fs: Engine,
   inputs: RefInput[],
-  bookId: string,
 ): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
+    urls.push(await uploadAssetToKie(fs, assetId, filename));
   }
   return urls;
 }
@@ -47,9 +46,8 @@ async function uploadInputs(
 async function uploadSingle(
   fs: Engine,
   input: RefInput,
-  bookId: string,
 ): Promise<string> {
-  return uploadAssetToKie(fs, input.assetId, input.filename, bookId);
+  return uploadAssetToKie(fs, input.assetId, input.filename);
 }
 
 export function registerGenerateWan27R2vVideoJob(fs: Engine): void {
@@ -63,10 +61,10 @@ export function registerGenerateWan27R2vVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const referenceImageUrls = await uploadInputs(fs, imageInputs, bookId);
-    const referenceVideoUrls = await uploadInputs(fs, videoInputs, bookId);
-    const firstFrameUrl = firstFrame ? await uploadSingle(fs, firstFrame, bookId) : undefined;
-    const referenceVoiceUrl = voiceRef ? await uploadSingle(fs, voiceRef, bookId) : undefined;
+    const referenceImageUrls = await uploadInputs(fs, imageInputs);
+    const referenceVideoUrls = await uploadInputs(fs, videoInputs);
+    const firstFrameUrl = firstFrame ? await uploadSingle(fs, firstFrame) : undefined;
+    const referenceVoiceUrl = voiceRef ? await uploadSingle(fs, voiceRef) : undefined;
     const normalizedPrompt = transformProviderPrompt(
       "generate_kie_wan_2_7_reference_to_video",
       {

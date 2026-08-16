@@ -25,7 +25,7 @@ export function registerGenerateNanoBanana2LiteFalJob(fs: Engine): void {
   registerJobHandler("generate_nano_banana_2_lite_fal", async (payload, ctx) => {
     requireApiKey("FAL_API_KEY");
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.imgAssetId, ctx, "generate", async (ownerId) => {
 
       const input: FalInput = {
         prompt: p.prompt,

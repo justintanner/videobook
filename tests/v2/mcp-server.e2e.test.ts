@@ -30,6 +30,10 @@ interface NotebookPayload {
 
 interface CellPayload {
   id: string
+  output_cell?: {
+    id: string
+    type: string
+  }
 }
 
 interface NotebookDocumentPayload {
@@ -292,6 +296,11 @@ describe('v2 MCP server', () => {
         model: 'generate_kie_gpt_image_2_text_to_image',
       },
     })
+    expect(image.output_cell).toMatchObject({
+      id: expect.any(String),
+      type: 'image',
+    })
+    if (!image.output_cell) throw new Error('Generate image output was not created')
     await callTool(client, 'connect_notebook_cells', {
       book_id: book.bookId,
       notebook_id: notebook.id,
@@ -316,9 +325,14 @@ describe('v2 MCP server', () => {
         address: '@a2',
       }),
     ]))
-    expect(document.edges).toEqual([
+    expect(document.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({ source: prompt.id, target: image.id, targetInput: 'prompt' }),
-    ])
+      expect.objectContaining({
+        source: image.id,
+        target: image.output_cell.id,
+        targetInput: 'media',
+      }),
+    ]))
 
     const videoPath = join(rootDir, 'timeline-source.mp4')
     await execFileAsync(FFMPEG, [
@@ -358,12 +372,16 @@ describe('v2 MCP server', () => {
     const history = await callTool<HistoryPayload>(client, 'list_book_actions', {
       book_id: book.bookId,
     })
-    const notebookWrites = history.actions
-      .filter((action) => action.operation === 'write_notebook')
-      .flatMap((action) => action.details.writeSet ?? [])
+    expect(history.actions.map((action) => action.operation)).toEqual(
+      expect.arrayContaining(['create_notebook_cell', 'connect_notebook_cells']),
+    )
+    const notebookWrites = history.actions.flatMap(
+      (action) => action.details.writeSet ?? [],
+    )
     expect(notebookWrites).toEqual(expect.arrayContaining([
       `cell:${notebook.id}:${prompt.id}`,
       `cell:${notebook.id}:${image.id}`,
+      `cell:${notebook.id}:${image.output_cell.id}`,
     ]))
     expect(server.output.join('')).not.toContain('[mcp] history record failed')
 

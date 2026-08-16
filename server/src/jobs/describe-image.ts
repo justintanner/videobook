@@ -30,14 +30,14 @@ export type DescribeImageResult = {
   pose?: string;
 };
 
-export { firstResponseText, type ResponsesFn };
+export type { ResponsesFn };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GUIDE_PATH = join(__dirname, "../guides/image_reproduction_guide.md");
 
 export const SCRIPT_FILENAME = "original.md";
 export const ANALYSIS_FILENAME = ".original.analysis.json";
-export const VISION_MODEL = INTELLIGENCE_MODEL;
+const VISION_MODEL = INTELLIGENCE_MODEL;
 export const PROMPT_CHAR_LIMIT = 1900;
 
 const DESCRIBE_IMAGE_SCHEMA = {
@@ -92,7 +92,7 @@ export function mimeForImageFilename(filename: string): "image/jpeg" | "image/pn
   return mimeForFilename(filename);
 }
 
-export function buildResponses(apiKey: string | undefined): ResponsesFn {
+function buildResponses(apiKey: string | undefined): ResponsesFn {
   return buildIntelligenceResponses(apiKey);
 }
 
@@ -144,14 +144,13 @@ export function registerDescribeImageJob(fs: Engine): void {
       sourceAssetId,
       sourceImageFilename,
       assetId: scriptAssetId,
-      bookId,
     } = payload as DescribeImagePayload;
 
     // When scriptAssetId is set, the queue wrote a pending row on it; claim
     // the lease so the wrapper finalizes it (ready/error). Analysis-only
     // mode runs on the source asset, which already exists at status='ready'.
     const targetAssetId = scriptAssetId ?? sourceAssetId;
-    return withLocalLease(fs, bookId, targetAssetId, ctx, "describe", async () => {
+    return withLocalLease(fs, targetAssetId, ctx, "describe", async () => {
       const responses = buildResponses(requireApiKey("OPENAI_API_KEY"));
 
       const readResult = await fs.files.read(sourceAssetId, sourceImageFilename);

@@ -40,14 +40,14 @@ export function generateMiniMaxH3I2vVideoDef(fs: Engine): ToolDef {
 
       let firstFrame: RefInput | undefined;
       if (first_frame_ref !== undefined && first_frame_ref.trim() !== "") {
-        const r = await resolveImageRef(fs, first_frame_ref, book_id);
+        const r = await resolveImageRef(fs, first_frame_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let lastFrame: RefInput | undefined;
       if (last_frame_ref !== undefined && last_frame_ref.trim() !== "") {
-        const r = await resolveImageRef(fs, last_frame_ref, book_id);
+        const r = await resolveImageRef(fs, last_frame_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         lastFrame = r.value;
       }

@@ -30,13 +30,13 @@ type Payload = {
 export function registerGenerateWan27VideoeditFalJob(fs: Engine): void {
   registerJobHandler("generate_wan27_videoedit_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
-      const video_url = await uploadAssetToFal(fs, p.sourceVideo.assetId, p.sourceVideo.filename, p.bookId);
+      const video_url = await uploadAssetToFal(fs, p.sourceVideo.assetId, p.sourceVideo.filename);
       const reference_image_url = p.refImage
         ? "url" in p.refImage
           ? p.refImage.url
-          : await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename, p.bookId)
+          : await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename)
         : undefined;
   
       const input: FalInput = {

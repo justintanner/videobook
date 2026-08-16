@@ -38,7 +38,7 @@ async function runQwenImageJob(
 
   const uploadedUrls: string[] = [];
   for (const { assetId: srcAssetId, filename } of imageInputs) {
-    uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, bookId, model));
+    uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, model));
   }
 
   const provider = createAlibaba({ apiKey, timeout: 120_000 });

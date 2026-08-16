@@ -6,7 +6,7 @@ import type { ToolDef } from "./tool-def.js";
 export function uploadFileDef(fs: Engine): ToolDef {
   return {
     name: "upload_file",
-    description: "Upload a media or markdown file into a videocity project as an asset",
+    description: "Upload a media or markdown file into a Videobook project as an asset",
     schema: {
       book_id: z.string().describe("Book id to upload into"),
       filename: z.string().describe("Original filename with extension"),
@@ -36,4 +36,3 @@ export function uploadFileDef(fs: Engine): ToolDef {
     },
   };
 }
-

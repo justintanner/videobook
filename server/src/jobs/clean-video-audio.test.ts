@@ -130,7 +130,6 @@ describe("clean-video-audio job media mix", () => {
     engineRoot = join(tempDir, "projects");
     engine = createEngineForTest(engineRoot);
     const fs = engine;
-    const bookId = fs.book.get().bookId;
     const asset = await fs.artifacts.create("vid", "source");
     if (!asset.ok) throw new Error(asset.error.message);
     const sourceWrite = await fs.files.write(asset.value.artifactId, "original.mp4", await readFile(sourcePath)
@@ -143,7 +142,6 @@ describe("clean-video-audio job media mix", () => {
       asset.value.artifactId,
       "original.mp4",
       outputPath,
-      bookId,
     );
 
     const stored = await fs.files.read(asset.value.artifactId, "original.mp4");

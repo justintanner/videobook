@@ -1,7 +1,4 @@
-import {
-  notebookCellRunObservation,
-  type NotebookCellRunObservation,
-} from './notebook-cell-presentation'
+import type { NotebookCellRunObservation } from './notebook-cell-presentation'
 
 export type NotebookRunJobView = {
   state: string
@@ -104,8 +101,4 @@ export function notebookRunJobViewFromRecord(job: {
     type: job.type,
     payload: job.payload ?? null,
   }
-}
-
-export {
-  notebookCellRunObservation,
 }

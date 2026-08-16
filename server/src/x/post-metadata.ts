@@ -26,7 +26,6 @@ function emptyMetadata(assetId: string): XPostMetadata {
 async function readMetadata(
   fs: Engine,
   assetId: string,
-  _bookId: string,
 ): Promise<XPostMetadata> {
   const result = await fs.files.read(assetId, POST_METADATA_FILE);
   if (!result.ok) return emptyMetadata(assetId);
@@ -53,11 +52,10 @@ async function readMetadata(
 export async function appendXPostMetadata(args: {
   fs: Engine;
   assetId: string;
-  bookId: string;
   entry: XPostEntry;
 }): Promise<void> {
-  const { fs, assetId, bookId, entry } = args;
-  const existing = await readMetadata(fs, assetId, bookId);
+  const { fs, assetId, entry } = args;
+  const existing = await readMetadata(fs, assetId);
   const next: XPostMetadata = {
     version: POST_METADATA_VERSION,
     asset_id: assetId,
@@ -76,7 +74,6 @@ export async function appendXPostMetadata(args: {
 export async function readXPostMetadata(
   fs: Engine,
   assetId: string,
-  bookId: string,
 ): Promise<XPostMetadata> {
-  return await readMetadata(fs, assetId, bookId);
+  return await readMetadata(fs, assetId);
 }

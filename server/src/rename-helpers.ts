@@ -179,7 +179,7 @@ export function applyableRows(rows: RenameRow[]): RenameRow[] {
 // --- GPT prompt construction (pure) -----------------------------------------
 
 /** Origins that describe how an image was produced, not what it shows. */
-export const PROCESS_ORIGINS = new Set([
+const PROCESS_ORIGINS = new Set([
   "first_frame",
   "last_frame",
   "custom_frame",

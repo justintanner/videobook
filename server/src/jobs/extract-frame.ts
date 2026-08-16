@@ -56,7 +56,6 @@ export function registerExtractFrameJob(fs: Engine): void {
     try {
       const origin = await withLockedLocalLease(
         fs,
-        bookId,
         imageAssetId,
         imageAssetDir,
         ctx,

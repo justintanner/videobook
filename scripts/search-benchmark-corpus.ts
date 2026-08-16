@@ -25,7 +25,7 @@ export interface SearchBenchmarkCorpus {
   cases: SearchBenchmarkCase[]
 }
 
-export interface PinnedSearchModel extends Omit<IndexManifest, 'createdAt'> {
+interface PinnedSearchModel extends Omit<IndexManifest, 'createdAt'> {
   role: 'visual' | 'audio' | 'lexical'
   distribution: 'download-on-first-use'
   bundled: false

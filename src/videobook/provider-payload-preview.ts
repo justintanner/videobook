@@ -1,3 +1,5 @@
+import { nonBlankStringValue, recordValue } from './value-decoders'
+
 export interface ProviderPromptLeak {
   token: string
   code: string
@@ -15,16 +17,6 @@ export interface ProviderPayloadPreviewMentions {
   urlPlaceholders: ProviderUrlPlaceholder[]
 }
 
-function recordValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null
-}
-
 export function providerPayloadPreviewMentions(
   value: unknown,
 ): ProviderPayloadPreviewMentions {
@@ -33,18 +25,18 @@ export function providerPayloadPreviewMentions(
   const promptLeaks = Array.isArray(mentions?.prompt_leaks)
     ? mentions.prompt_leaks.flatMap((entry) => {
         const item = recordValue(entry)
-        const token = stringValue(item?.token)
-        const code = stringValue(item?.code)
-        const message = stringValue(item?.message)
+        const token = nonBlankStringValue(item?.token)
+        const code = nonBlankStringValue(item?.code)
+        const message = nonBlankStringValue(item?.message)
         return token && code && message ? [{ token, code, message }] : []
       })
     : []
   const urlPlaceholders = Array.isArray(mentions?.url_placeholders)
     ? mentions.url_placeholders.flatMap((entry) => {
         const item = recordValue(entry)
-        const path = stringValue(item?.path)
-        const reference = stringValue(item?.reference)
-        const url = stringValue(item?.url)
+        const path = nonBlankStringValue(item?.path)
+        const reference = nonBlankStringValue(item?.reference)
+        const url = nonBlankStringValue(item?.url)
         return path && reference && url ? [{ path, reference, url }] : []
       })
     : []

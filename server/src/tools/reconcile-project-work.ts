@@ -41,7 +41,7 @@ import {
 } from "../video-proxy.js";
 
 /** Upper bound on how long a pending task may sit without reaching success/fail
- *  before sync ages it out. Guards against providers leaving jobs in an
+ *  before reconciliation ages it out. Guards against providers leaving jobs in an
  *  intermediate "waiting" state indefinitely. */
 const PENDING_TASK_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -60,7 +60,7 @@ export type AssetWorkProjection = {
   deadlineAt: number | null;
 };
 
-export type SyncAnalysisInfo = {
+export type ProjectAssetAnalysis = {
   source_duration_seconds: number;
   output_json: unknown | null;
   output_url: string | null;
@@ -83,7 +83,7 @@ export type SyncAnalysisInfo = {
   }>;
 };
 
-export type SyncAsset = {
+export type ProjectAsset = {
   id: string;
   artifact_id: string;
   /** Free-text display label, present only when the artifact has one. */
@@ -111,7 +111,7 @@ export type SyncAsset = {
     channel_layout: string;
     duration_seconds: number;
   } | null;
-  analysis_info: SyncAnalysisInfo | null;
+  analysis_info: ProjectAssetAnalysis | null;
   waveform: number[] | null;
   frame_dirs: Record<string, string[]>;
   archive_id: string | null;
@@ -141,7 +141,7 @@ export type OsgSummary = {
 
 function analysisInfoFromMetadata(
   metadata: Record<string, unknown> | null,
-): SyncAnalysisInfo | null {
+): ProjectAssetAnalysis | null {
   const value = metadata?.analysisInfo;
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
@@ -187,7 +187,7 @@ async function analysisOutputProjection(
   artifactId: string,
 ): Promise<{
   outputJson: unknown;
-  llmExchanges: SyncAnalysisInfo["llm_exchanges"];
+  llmExchanges: ProjectAssetAnalysis["llm_exchanges"];
 } | null> {
   const read = await engine.files.read(artifactId, "analysis.json");
   if (!read.ok) return null;
@@ -306,8 +306,9 @@ async function assessStoredVideoProxy(
 /** Read the OSG overlay summary from the asset's render metadata. OSG is stored
  *  identically across orientations, so the first orientation that carries an
  *  osgAssetId wins. Returns null when no overlay is configured. */
-export async function readOsgSummary(
-  fs: Engine, assetId: string, _bookId: string,
+async function readOsgSummary(
+  fs: Engine,
+  assetId: string,
 ): Promise<OsgSummary | null> {
   for (const orient of RENDER_ORIENTATIONS) {
     const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
@@ -332,12 +333,11 @@ type ArchiveMetadata = {
   archived_at?: unknown;
 };
 
-export type SyncResult = {
+export type ReconcileProjectWorkResult = {
   pending: Array<{ assetId: string; taskType: string; progress: number; state: string; prompt: string | null; startedAt: number | null }>;
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
   failed: Array<{ assetId: string; taskType: string; failMsg: string; failedAt: string; prompt: string | null }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
-  auto_render: Array<{ assetId: string; jobId: string }>;
   auto_transcribe: Array<{ assetId: string; jobId: string }>;
 };
 
@@ -388,7 +388,7 @@ function isQueuedKiePendingTask(task: PendingTask): boolean {
  *  job is still in flight — once kie stamps a `completeTime`, the task record
  *  is final and re-polling the same taskId can never flip to success. Treating
  *  a completed 500 as transient strands the asset in "working" until the 30m
- *  sync timeout (PENDING_TASK_TIMEOUT_MS) and buries the real failure message,
+ *  reconciliation timeout (PENDING_TASK_TIMEOUT_MS) and buries the real failure message,
  *  so only a 500 with no completeTime is considered retryable. */
 export function isTransientKieFailure(data: KieTaskInfoData): boolean {
   if (data.failCode !== "500") return false;
@@ -428,7 +428,7 @@ async function readWaveformOrSchedule(
     return null;
   }
   // Waveform extraction shells out to ffmpeg and can take several seconds for
-  // long videos, so it must never run inline in list_assets / sync. Hand it to
+  // long videos, so it must never run inline in list_assets / reconcile_project_work. Hand it to
   // the job queue (deduped per asset) and return no-waveform now; the UI fills
   // it in on a later poll once the background job has persisted the peaks.
   scheduleWaveformExtraction(bookId, assetId, videoFilename);
@@ -450,7 +450,7 @@ function scheduleWaveformExtraction(
     })
     .catch((err) => {
       console.error(
-        `[sync] failed to enqueue waveform extraction for ${assetId}: ${
+        `[reconcile_project_work] failed to enqueue waveform extraction for ${assetId}: ${
           err instanceof Error ? err.message : String(err)
         }`,
       );
@@ -465,7 +465,7 @@ const DURATION_PROBE_EXT_RE = /\.(mp4|mov|webm|mkv|mp3|wav|m4a|aac|ogg|flac)$/i;
 export const RENDER_ORIENTATIONS = MEDIA_RENDER_ORIENTATIONS;
 
 export async function readRenderSettings(
-  fs: Engine, assetId: string, bookId: string, orientations: string[],
+  fs: Engine, assetId: string, orientations: string[],
 ): Promise<Record<string, Record<string, unknown>>> {
   const result: Record<string, Record<string, unknown>> = {};
   await Promise.all(orientations.map(async (orient) => {
@@ -522,7 +522,9 @@ const ORIENTATION_OVERRIDES: Record<string, Record<string, unknown>> = {
 };
 
 export async function readStoredRenderDefaults(
-  fs: Engine, assetId: string, bookId: string, targetOrientation: string,
+  fs: Engine,
+  assetId: string,
+  targetOrientation: string,
 ): Promise<Record<string, unknown>> {
   const defaults = { ...BASE_DEFAULTS, ...(ORIENTATION_OVERRIDES[targetOrientation] ?? ORIENTATION_OVERRIDES.landscape) };
   // Read every orientation's render metadata in parallel, then pick the
@@ -536,7 +538,7 @@ export async function readStoredRenderDefaults(
   for (const meta of metas) {
     if (meta.ok) return { ...defaults, ...meta.value };
   }
-  const recs = await readAnalysisRecommendations(fs, assetId, bookId);
+  const recs = await readAnalysisRecommendations(fs, assetId);
   return { ...defaults, ...recs };
 }
 
@@ -548,7 +550,8 @@ const VALID_OSG_POSITIONS = new Set([
 ]);
 
 async function readAnalysisRecommendations(
-  fs: Engine, assetId: string, _bookId: string,
+  fs: Engine,
+  assetId: string,
 ): Promise<Record<string, unknown>> {
   const result = await fs.files.read(assetId, ".original.analysis.json");
   if (!result.ok) return {};
@@ -610,10 +613,10 @@ function renderedOrientationsFor(
   return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`${o}.mp4`));
 }
 
-export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest" | "oldest"): Promise<SyncAsset[]> {
+export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest" | "oldest"): Promise<ProjectAsset[]> {
   const assets = fs.artifacts.list({ ...(sort ? { sort } : {}) });
   const assetRows = await Promise.all(
-    assets.map(async (a): Promise<SyncAsset> => {
+    assets.map(async (a): Promise<ProjectAsset> => {
       const [manifestResult, lockData, pendingTask, generationError, metadata, archiveMetadata, assetWorkRow, proxyMetadata] = await Promise.all([
         fs.files.manifest(a.artifactId),
         fs.jobs.locks.get(a.path),
@@ -691,7 +694,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
       if (a.kind === "character") {
         charImage = files.find((f) => /\.(jpg|jpeg|png|webp|gif)$/i.test(f.name)) ?? null;
       }
-      
+
       const proxyCandidate = a.kind === "video"
         ? files.find((file) => file.name === "proxy.mp4")
         : null;
@@ -804,7 +807,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
       // render its badge on clip cards and timeline slots without a per-asset
       // settings fetch. Bounded to one metadata read per OSG-eligible asset.
       const osg = (a.kind === "video" || a.kind === "final")
-        ? await readOsgSummary(fs, a.artifactId, book_id)
+        ? await readOsgSummary(fs, a.artifactId)
         : null;
 
       // Read script content from its canonical artifact file.
@@ -853,7 +856,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
       };
     }),
   );
-  const notebookRows: SyncAsset[] = fs.notebooks
+  const notebookRows: ProjectAsset[] = fs.notebooks
     .list()
     .map((notebook) => ({
       id: notebook.id,
@@ -894,9 +897,9 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
 }
 
 export type ProviderPollResult = {
-  pending: SyncResult["pending"];
-  completed: SyncResult["completed"];
-  failed: SyncResult["failed"];
+  pending: ReconcileProjectWorkResult["pending"];
+  completed: ReconcileProjectWorkResult["completed"];
+  failed: ReconcileProjectWorkResult["failed"];
 };
 
 export type PollPendingProviderTasksOptions = {
@@ -938,12 +941,12 @@ export async function pollPendingProviderTasks(
     let t = originalTask;
     if (isQueuedKiePendingTask(t)) {
       try {
-        t = await submitQueuedKieTask(fs, book_id, t);
+        t = await submitQueuedKieTask(fs, t);
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Queued KIE submit failed";
         const prompt = metaPrompt(t.meta);
         result.failed.push({ assetId: t.artifactId, taskType: t.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-        await failPendingTaskAndLog(fs, book_id, t.artifactId, t.taskId, { message: failMsg, prompt });
+        await failPendingTaskAndLog(fs, t.artifactId, t.taskId, { message: failMsg, prompt });
         continue;
       }
     }
@@ -953,13 +956,13 @@ export async function pollPendingProviderTasks(
       const failMsg = `Task timed out after ${ageMinutes}m without reaching success or fail state`;
       const prompt = metaPrompt(t.meta);
       result.failed.push({ assetId: t.artifactId, taskType: t.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-      await failPendingTaskAndLog(fs, book_id, t.artifactId, t.taskId, { message: failMsg, prompt });
+      await failPendingTaskAndLog(fs, t.artifactId, t.taskId, { message: failMsg, prompt });
     } else {
       activeTasks.push(t);
     }
   }
 
-  // Completing tasks — sync already enqueued a completion job for these on a
+  // Completing tasks — reconciliation already enqueued a completion job for these on a
   // prior poll. Skip polling + re-enqueueing so duplicate completion jobs
   // don't race on the asset-directory lock. Report as pending with state
   // "success" so the inbox tile shows the DOWNLOAD/PROCESS phase.
@@ -988,7 +991,7 @@ export async function pollPendingProviderTasks(
     await Promise.all(kieTasks.map(async (task) => {
       try {
         const taskInfo = await provider.get.api.v1.jobs.recordInfo(task.taskId);
-        await processSyncedTask(fs, task, taskInfo, result, book_id);
+        await processKieTaskResult(fs, task, taskInfo, result, book_id);
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Poll failed";
         const prompt = metaPrompt(task.meta);
@@ -997,7 +1000,7 @@ export async function pollPendingProviderTasks(
           // TS narrowing on `e` is unreliable here, use an explicit assertion.
           const kieErr = e as KieError;
           if (kieErr.status >= 400 && kieErr.status < 500) {
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -1020,12 +1023,12 @@ export async function pollPendingProviderTasks(
           if (urls.length === 0) {
             const failMsg = "Veo task succeeded but returned no resultUrls";
             result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt });
             return;
           }
           const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactId);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
             return;
           }
           await fs.jobs.pending.markCompleting(task.artifactId);
@@ -1044,7 +1047,7 @@ export async function pollPendingProviderTasks(
         } else if (data?.successFlag === 2) {
           const failMsg = data.errorMessage ?? "Veo task failed";
           result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-          await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt });
+          await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt });
         } else {
           result.pending.push({
             assetId: task.artifactId,
@@ -1061,7 +1064,7 @@ export async function pollPendingProviderTasks(
         if (e instanceof KieError) {
           const kieErr = e as KieError;
           if (kieErr.status >= 400 && kieErr.status < 500) {
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -1085,12 +1088,12 @@ export async function pollPendingProviderTasks(
             const failMsg = "Google Flow job completed but returned no media URLs";
             await fs.metadata.artifacts.write(task.artifactId, "generation-error", job).catch(() => {});
             result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt });
             return;
           }
           const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactId);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
             return;
           }
           await fs.jobs.pending.markCompleting(task.artifactId);
@@ -1110,7 +1113,7 @@ export async function pollPendingProviderTasks(
           const { message: failMsg, failCode } = describeGoogleFlowJobFailure(job as Record<string, unknown>);
           await fs.metadata.artifacts.write(task.artifactId, "generation-error", job).catch(() => {});
           result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-          await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt, ...(failCode !== undefined ? { failCode } : {}) });
+          await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt, ...(failCode !== undefined ? { failCode } : {}) });
         } else {
           result.pending.push({
             assetId: task.artifactId,
@@ -1128,7 +1131,7 @@ export async function pollPendingProviderTasks(
           const googleErr = e as GoogleFlowError;
           // 4xx is permanent (bad/expired/foreign job id) except 429 rate limits.
           if (googleErr.status >= 400 && googleErr.status < 500 && googleErr.status !== 429) {
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -1147,7 +1150,7 @@ export async function pollPendingProviderTasks(
         if (videoResult.status === "done" && videoResult.video?.url) {
           const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactId);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
             return;
           }
           await fs.jobs.pending.markCompleting(task.artifactId);
@@ -1166,7 +1169,7 @@ export async function pollPendingProviderTasks(
         } else if (videoResult.status === "failed" || videoResult.status === "expired") {
           const failMsg = `xAI task ${videoResult.status}`;
           result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-          await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt });
+          await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt });
         } else {
           result.pending.push({
             assetId: task.artifactId,
@@ -1183,7 +1186,7 @@ export async function pollPendingProviderTasks(
         if (e instanceof XaiError) {
           const xaiErr = e as XaiError;
           if (xaiErr.status >= 400 && xaiErr.status < 500) {
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -1204,7 +1207,7 @@ export async function pollPendingProviderTasks(
         if (status === "SUCCEEDED") {
           const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactId);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
             return;
           }
           await fs.jobs.pending.markCompleting(task.artifactId);
@@ -1240,7 +1243,7 @@ export async function pollPendingProviderTasks(
           const failMsg = taskStatus.output.message ?? `Alibaba task ${status}`;
           const code = taskStatus.output.code;
           result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-          await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, {
+          await failPendingTaskAndLog(fs, task.artifactId, task.taskId, {
             message: failMsg,
             prompt,
             ...(code !== undefined ? { failCode: code } : {}),
@@ -1261,7 +1264,7 @@ export async function pollPendingProviderTasks(
         if (e instanceof AlibabaError) {
           const alibabaErr = e as AlibabaError;
           if (alibabaErr.status >= 400 && alibabaErr.status < 500) {
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -1286,7 +1289,7 @@ export async function pollPendingProviderTasks(
       if (!endpointId) {
         const failMsg = `FAL task missing falEndpointId in meta`;
         result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-        await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt });
+        await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt });
         return;
       }
       const statusEndpointId = falNamespace(endpointId);
@@ -1296,17 +1299,17 @@ export async function pollPendingProviderTasks(
           if (status.error) {
             const failMsg = status.error;
             result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt });
             return;
           }
           const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactId);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
             return;
           }
           const resultObject = await provider.v1.queue.result({ endpoint_id: statusEndpointId, request_id: task.taskId });
           // Mark the pending task as completing BEFORE enqueueing so any
-          // overlapping sync poll skips it instead of enqueueing a duplicate.
+          // overlapping reconciliation poll skips it instead of enqueueing a duplicate.
           await fs.jobs.pending.markCompleting(task.artifactId);
           const jobId = `complete-fal-${task.artifactId}-${Date.now()}`;
           await queue.enqueue(jobId, {
@@ -1337,7 +1340,7 @@ export async function pollPendingProviderTasks(
         if (e instanceof FalError) {
           const falErr = e as FalError;
           if (falErr.status >= 400 && falErr.status < 500) {
-            await failPendingTaskAndLog(fs, book_id, task.artifactId, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -1348,10 +1351,13 @@ export async function pollPendingProviderTasks(
   return result;
 }
 
-export async function performSync(fs: Engine, book_id: string): Promise<SyncResult> {
-  const result: SyncResult = {
+export async function reconcileProjectWork(
+  fs: Engine,
+  book_id: string,
+): Promise<ReconcileProjectWorkResult> {
+  const result: ReconcileProjectWorkResult = {
     pending: [], completed: [], failed: [],
-    external_uploads: [], auto_render: [], auto_transcribe: [],
+    external_uploads: [], auto_transcribe: [],
   };
 
   // Single listAssets call, shared by all consumers
@@ -1359,9 +1365,9 @@ export async function performSync(fs: Engine, book_id: string): Promise<SyncResu
 
   // Run discovery steps in parallel with provider polling
   const [uploads, providerResult, transcribeActions, failuresRes] = await Promise.all([
-    findUnprocessedUploads(fs, book_id, assets),
+    findUnprocessedUploads(fs, assets),
     pollPendingProviderTasks(fs, book_id),
-    findAutoTranscribeActions(fs, book_id, assets),
+    findAutoTranscribeActions(fs, assets),
     fs.jobs.failures.findAll(),
   ]);
   const persistedFailures = failuresRes.ok ? failuresRes.value : [];
@@ -1417,7 +1423,7 @@ export async function performSync(fs: Engine, book_id: string): Promise<SyncResu
   // Renders fire from explicit /render or assign_slot (lazy on slot drop).
   // Gemini analysis fires from assign_slot (lazy on slot drop) and
   // gpt-4o-mini speech-to-text fires eagerly from process_video on upload.
-  // Sync only retries the ElevenLabs transcribe step (auto_transcribe), which
+  // Reconciliation only retries the ElevenLabs transcribe step (auto_transcribe), which
   // is gated on .original.analysis.json already existing — i.e. only kicks in
   // for assets the user has actually slotted.
 
@@ -1442,7 +1448,7 @@ export async function performSync(fs: Engine, book_id: string): Promise<SyncResu
   return result;
 }
 
-export function syncDef(fs: Engine): ToolDef {
+export function reconcileProjectWorkDef(fs: Engine): ToolDef {
   return {
     name: "reconcile_project_work",
     description: "Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.",
@@ -1451,15 +1457,15 @@ export function syncDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const { book_id } = args as { book_id: string };
-      const syncResult = await performSync(fs, book_id);
+      const reconcileResult = await reconcileProjectWork(fs, book_id);
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(syncResult) }],
+        content: [{ type: "text" as const, text: JSON.stringify(reconcileResult) }],
       };
     },
   };
 }
 
-async function processSyncedTask(
+async function processKieTaskResult(
   fs: Engine,
   task: PendingTask,
   taskInfo: KieTaskInfo,
@@ -1471,7 +1477,7 @@ async function processSyncedTask(
   if (data?.state === "success") {
     const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactId);
     if (!assetDirResult.ok) {
-      await failPendingTaskAndLog(fs, bookId, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
+      await failPendingTaskAndLog(fs, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
       return;
     }
 
@@ -1483,7 +1489,7 @@ async function processSyncedTask(
     };
 
     // Mark the pending task as completing BEFORE enqueueing so any
-    // overlapping sync poll skips it instead of enqueueing a duplicate.
+    // overlapping reconciliation poll skips it instead of enqueueing a duplicate.
     await fs.jobs.pending.markCompleting(task.artifactId);
 
     await queue.enqueue(jobId, {
@@ -1503,7 +1509,7 @@ async function processSyncedTask(
     const failMsg = data.failMsg ?? "unknown error";
     // A kie 500 is only retryable while the task is still in flight; once it
     // has terminally completed, surface the failure instead of stranding the
-    // asset as "working" until the 30m sync timeout. See isTransientKieFailure.
+    // asset as "working" until the 30m reconciliation timeout. See isTransientKieFailure.
     if (isTransientKieFailure(data)) {
       result.pending.push({
         assetId: task.artifactId,
@@ -1522,7 +1528,7 @@ async function processSyncedTask(
       failedAt: new Date().toISOString(),
       prompt,
     });
-    await failPendingTaskAndLog(fs, bookId, task.artifactId, task.taskId, {
+    await failPendingTaskAndLog(fs, task.artifactId, task.taskId, {
       message: failMsg,
       prompt,
       ...(data.failCode !== undefined ? { failCode: data.failCode } : {}),
@@ -1547,9 +1553,8 @@ export type RenderAction = {
   hasElevenlabs: boolean;
 };
 
-export async function findAutoRenderActions(
+export async function findEligibleRenderActions(
   fs: Engine,
-  bookId: string,
   assets: Artifact[],
   orientation: string,
 ): Promise<RenderAction[]> {
@@ -1580,7 +1585,7 @@ export async function findAutoRenderActions(
       }
 
       // For videos with dialog, wait for ElevenLabs transcription
-      const dialogQuality = await readAndAssessDialog(fs, asset.artifactId, bookId);
+      const dialogQuality = await readAndAssessDialog(fs, asset.artifactId);
       if (dialogQuality.hasDialog && !fileNames.has("elevenlabs.json")) return null;
 
       const videoFile = findVideoFile(files);
@@ -1608,7 +1613,6 @@ type TranscribeAction = {
 
 async function findAutoTranscribeActions(
   fs: Engine,
-  bookId: string,
   assets: Artifact[],
 ): Promise<TranscribeAction[]> {
   if (!process.env.ELEVENLABS_API_KEY) return [];
@@ -1637,7 +1641,7 @@ async function findAutoTranscribeActions(
       if (locked) return null;
 
       // Must have real dialog
-      const dialogQuality = await readAndAssessDialog(fs, asset.artifactId, bookId);
+      const dialogQuality = await readAndAssessDialog(fs, asset.artifactId);
       if (!dialogQuality.hasDialog) return null;
 
       // Must have an audio file

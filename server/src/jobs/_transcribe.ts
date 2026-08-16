@@ -55,24 +55,21 @@ function inferAudioMime(filename: string): string {
  */
 export async function transcribeAssetToElevenLabsJson(
   fs: Engine,
-  bookId: string,
   assetId: string,
   audioFilename: string,
   options: TranscribeOptions,
 ): Promise<void> {
   const response = await requestElevenLabsTranscript(
     fs,
-    bookId,
     assetId,
     audioFilename,
     options,
   );
-  await writeElevenLabsTranscript(fs, bookId, assetId, response, options);
+  await writeElevenLabsTranscript(fs, assetId, response, options);
 }
 
 export async function requestElevenLabsTranscript(
   fs: Engine,
-  bookId: string,
   assetId: string,
   audioFilename: string,
   options: TranscribeOptions,
@@ -99,7 +96,6 @@ export async function requestElevenLabsTranscript(
 
 export async function writeElevenLabsTranscript(
   fs: Engine,
-  bookId: string,
   assetId: string,
   response: ElevenLabsSpeechToTextResponse,
   options: TranscribeOptions,
@@ -319,7 +315,6 @@ function wordConfidence(word: TimedTranscriptWord): number | undefined {
  */
 export async function ensureElevenLabsTranscript(
   fs: Engine,
-  bookId: string,
   assetId: string,
 ): Promise<void> {
   if ((await fs.files.read(assetId, "elevenlabs.json")).ok) return;
@@ -329,7 +324,7 @@ export async function ensureElevenLabsTranscript(
   if (!artifact.ok) throw new Error(`auto-transcribe failed: ${artifact.error.message}`);
   const audioFile = findAudioFile(manifest.value.files, artifact.value.kind);
   if (!audioFile) throw new Error(`auto-transcribe failed: no audio file found in asset ${assetId}`);
-  await transcribeAssetToElevenLabsJson(fs, bookId, assetId, audioFile.name, {
+  await transcribeAssetToElevenLabsJson(fs, assetId, audioFile.name, {
     tagAudioEvents: true,
     diarize: true,
   });

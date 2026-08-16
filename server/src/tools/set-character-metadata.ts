@@ -9,7 +9,7 @@ import { requireArtifactKind } from "./_shared.js";
  * - Valid JSON object strings parse as expected.
  * - Free-form notes (no leading `{`/`[`) are stored as `{ notes: "..." }`.
  */
-export function parseCharacterMetadata(
+function parseCharacterMetadata(
   input: unknown,
 ): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
   if (input !== null && typeof input === "object" && !Array.isArray(input)) {

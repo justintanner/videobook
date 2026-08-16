@@ -56,7 +56,7 @@ export function generateSeedreamImageDef(fs: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const resolved = await resolveImageRefs(fs, rawSlugs, book_id);
+      const resolved = await resolveImageRefs(fs, rawSlugs);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }

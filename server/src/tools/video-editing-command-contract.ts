@@ -3,6 +3,7 @@ export type CommandParam = {
   type: "string" | "number" | "boolean" | "string[]";
   required: boolean;
   description: string;
+  consumeRest?: boolean;
 };
 
 export type CommandExposure = "direct" | "ui" | "composite" | "internal";
@@ -39,7 +40,6 @@ export type Command = {
     injectParams?: Record<string, string | number | boolean>;
   };
   uiAction?: string;
-  onMount?: string[];
   exposure?: Exclude<CommandExposure, "internal">;
   canonical?: string;
   aliases?: string[];
@@ -239,7 +239,6 @@ export const VIDEO_EDITING_COMMANDS: Command[] = [
       { name: "value", type: "string", required: false, description: "Numeric value" },
     ],
     uiAction: "settings_audio",
-    onMount: ["viewer"],
     exposure: "ui",
     aliases: ["/audio"],
   },

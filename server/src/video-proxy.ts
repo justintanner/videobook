@@ -101,18 +101,12 @@ export function videoProxyAssessmentMatches(
 ): value is VideoProxyAssessment {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const metadata = value as Record<string, unknown>;
-  return (metadata.valid === true || metadata.valid === false)
-    && metadata.sourceObjectHash === sourceFile.objectHash
-    && metadata.proxyObjectHash === proxyFile.objectHash;
-}
-
-export function videoProxyMetadataMatches(
-  value: unknown,
-  sourceFile: ArtifactManifestFile,
-  proxyFile: ArtifactManifestFile,
-): value is VideoProxyMetadata {
-  if (!videoProxyAssessmentMatches(value, sourceFile, proxyFile) || !value.valid) return false;
-  const metadata = value as Record<string, unknown>;
+  if (
+    metadata.sourceObjectHash !== sourceFile.objectHash
+    || metadata.proxyObjectHash !== proxyFile.objectHash
+  ) return false;
+  if (metadata.valid === false) return typeof metadata.error === "string";
+  if (metadata.valid !== true) return false;
   return typeof metadata.duration === "number"
     && Number.isFinite(metadata.duration)
     && metadata.duration > 0
@@ -120,10 +114,20 @@ export function videoProxyMetadataMatches(
     && Number.isFinite(metadata.videoDuration)
     && metadata.videoDuration > 0
     && typeof metadata.width === "number"
+    && Number.isFinite(metadata.width)
     && metadata.width > 0
     && typeof metadata.height === "number"
+    && Number.isFinite(metadata.height)
     && metadata.height > 0
     && typeof metadata.hasAudio === "boolean";
+}
+
+export function videoProxyMetadataMatches(
+  value: unknown,
+  sourceFile: ArtifactManifestFile,
+  proxyFile: ArtifactManifestFile,
+): value is VideoProxyMetadata {
+  return videoProxyAssessmentMatches(value, sourceFile, proxyFile) && value.valid;
 }
 
 export async function probeStoredVideoFile(

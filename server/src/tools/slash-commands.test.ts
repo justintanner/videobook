@@ -31,7 +31,6 @@ interface Command {
     injectParams?: Record<string, string | number | boolean>;
   };
   uiAction?: string;
-  onMount?: string[];
   aliases?: string[];
   exposure?: string;
 }
@@ -303,11 +302,9 @@ describe("slash_commands tool", () => {
 
     const save = commands.find((c) => c.command === "/save")!;
     expect(save.uiAction).toBe("save_notebook");
-    expect(save.onMount).toEqual(["notebook"]);
 
     const run = commands.find((c) => c.command === "/run")!;
     expect(run.uiAction).toBe("run_notebook");
-    expect(run.onMount).toEqual(["notebook"]);
 
     expect(commands.find((c) => c.command === "/prompt-new")?.mcpTool?.tool)
       .toBe("create_prompt_entity");
@@ -344,7 +341,6 @@ describe("slash_commands tool", () => {
     const parsed = parseCommandArgs("@a1 @b1 copied scene", command.params);
     expect(adaptCommandArgs(
       command.mcpTool.adapter,
-      command.mcpTool.tool,
       parsed,
     )).toEqual({
       asset_id: "a1",
@@ -352,6 +348,29 @@ describe("slash_commands tool", () => {
       new_name: "copied scene",
     });
     expect(command.mcpTool.autoInject).toEqual(["book_id", "notebook_id"]);
+  });
+
+  it("keeps a duplicate's multi-word free-text name together", async () => {
+    await client.callTool({
+      name: "create_project",
+      arguments: { book_id: "test-proj" },
+    });
+    const result = await client.callTool({
+      name: "slash_commands",
+      arguments: {},
+    });
+    const command = (JSON.parse(
+      (result.content as TextContent)[0].text,
+    ) as Command[]).find((candidate) => candidate.command === "/duplicate");
+    expect(command).toBeDefined();
+    if (!command?.mcpTool) return;
+
+    const parsed = parseCommandArgs("@hero-intro my cool copy", command.params);
+    expect(parsed).toEqual({
+      asset_id: "hero-intro",
+      new_name: "my cool copy",
+    });
+    expect(adaptCommandArgs(command.mcpTool.adapter, parsed)).toEqual(parsed);
   });
 
   it("does not return duplicate command names", async () => {
@@ -504,30 +523,6 @@ describe("slash_commands tool", () => {
       (c) => !c.mcpTool && !c.uiAction && c.exposure !== "composite",
     );
     expect(chatFallbackCommands).toHaveLength(0);
-  });
-
-  it("viewer commands have onMount=['viewer']", async () => {
-    await client.callTool({
-      name: "create_project",
-      arguments: { book_id: "test-proj" },
-    });
-
-    const result = await client.callTool({
-      name: "slash_commands",
-      arguments: {},
-    });
-
-    const commands: Command[] = JSON.parse(
-      (result.content as TextContent)[0].text,
-    );
-
-    const viewerCommands = commands.filter((c) => c.category === "viewer");
-    for (const cmd of viewerCommands) {
-      expect(
-        cmd.onMount?.includes("viewer"),
-        `Viewer command ${cmd.command} should have onMount containing 'viewer'`,
-      ).toBe(true);
-    }
   });
 
   it("returns no switch-book commands when no books exist", async () => {

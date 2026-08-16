@@ -19,7 +19,6 @@ import type { ToolDef } from '../../server/src/tools/tool-def.js'
 import {
   enqueueNotebookFrameCommand,
   parseNotebookFrameCommand,
-  resolveNotebookFrameSource,
 } from '../../src/videobook/notebook-frame-command'
 
 const execFileAsync = promisify(execFile)
@@ -170,15 +169,6 @@ describe('notebook frame commands', () => {
     expect(beforeResult.ok).toBe(true)
     if (!beforeResult.ok) return
     const before: NotebookDocument = beforeResult.value
-
-    expect(resolveNotebookFrameSource(before, source.id).id).toBe(source.id)
-    expect(resolveNotebookFrameSource(before, source.id.slice(0, 30)).id)
-      .toBe(source.id)
-    expect(resolveNotebookFrameSource(before, 'A1').id).toBe(source.id)
-    expect(() => resolveNotebookFrameSource(before, 'missing-video'))
-      .toThrow('Notebook cell @missing-video was not found')
-    expect(() => resolveNotebookFrameSource(before, 'a2'))
-      .toThrow('@a2 is not a video-producing cell')
 
     const command = parseNotebookFrameCommand(
       'extract the first frame of @a1',

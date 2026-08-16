@@ -23,7 +23,7 @@ export function createWatermarkCardDef(fs: Engine): ToolDef {
         .describe("Remember this handle as the default for future watermarks"),
     },
     handler: async (args) => {
-      const { book_id, handle, url, save_default } = args as {
+      const { handle, url, save_default } = args as {
         book_id: string; handle?: string; url?: string; save_default?: boolean;
       };
 
@@ -36,7 +36,7 @@ export function createWatermarkCardDef(fs: Engine): ToolDef {
       }
       const resolvedUrl = url ?? defaultUrl(resolvedHandle);
 
-      const created = await createWatermarkAsset(fs, book_id, resolvedHandle, resolvedUrl);
+      const created = await createWatermarkAsset(fs, resolvedHandle, resolvedUrl);
       if (!created.ok) {
         return {
           isError: true as const,

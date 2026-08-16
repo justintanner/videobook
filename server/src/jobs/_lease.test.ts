@@ -17,12 +17,10 @@ describe("claimLockedLease", () => {
   let tempDir: string;
   let assetId: string;
   let assetDir: string;
-  let bookId: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-claim-lease-test-"));
     fs = createEngineForTest(tempDir);
-    bookId = fs.book.get().bookId;
     const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
     assetId = created.value.artifactId;
@@ -42,7 +40,7 @@ describe("claimLockedLease", () => {
   }
 
   it("claims lock and lease when the asset is free", async () => {
-    const claim = await claimLockedLease(fs, bookId, assetId, assetDir, "render", LOCK);
+    const claim = await claimLockedLease(fs, assetId, assetDir, "render", LOCK);
 
     expect(claim.ok).toBe(true);
     if (!claim.ok) return;
@@ -60,7 +58,7 @@ describe("claimLockedLease", () => {
     const lock = await fs.jobs.locks.acquire(assetDir, LOCK);
     if (!lock.ok) throw new Error(lock.error.message);
 
-    const claim = await claimLockedLease(fs, bookId, assetId, assetDir, "render", LOCK);
+    const claim = await claimLockedLease(fs, assetId, assetDir, "render", LOCK);
 
     expect(claim.ok).toBe(false);
     if (claim.ok) return;
@@ -77,7 +75,7 @@ describe("claimLockedLease", () => {
     })();
 
     const claim = await claimLockedLease(
-      fs, bookId, assetId, assetDir, "render", LOCK,
+      fs, assetId, assetDir, "render", LOCK,
       { waitForActiveMs: 10_000 },
     );
 
@@ -99,7 +97,7 @@ describe("claimLockedLease", () => {
     })();
 
     const claim = await claimLockedLease(
-      fs, bookId, assetId, assetDir, "render", LOCK,
+      fs, assetId, assetDir, "render", LOCK,
       { waitForActiveMs: 10_000, meta: { orientation: "portrait" } },
     );
 
@@ -113,7 +111,7 @@ describe("claimLockedLease", () => {
     let maxActive = 0;
     const worker = async (): Promise<boolean> => {
       const claim = await claimLockedLease(
-        fs, bookId, assetId, assetDir, "render", LOCK,
+        fs, assetId, assetDir, "render", LOCK,
         { waitForActiveMs: 20_000 },
       );
       if (!claim.ok) return false;

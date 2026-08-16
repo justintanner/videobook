@@ -8,8 +8,8 @@ const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 export const FFMPEG: string = require("ffmpeg-static");
 export const FFPROBE: string = require("ffprobe-static").path;
-export const DEFAULT_FFMPEG_TIMEOUT_MS = 30 * 60_000;
-export const DEFAULT_FFPROBE_TIMEOUT_MS = 2 * 60_000;
+const DEFAULT_FFMPEG_TIMEOUT_MS = 30 * 60_000;
+const DEFAULT_FFPROBE_TIMEOUT_MS = 2 * 60_000;
 
 export interface MediaProcessOptions {
   signal?: AbortSignal;

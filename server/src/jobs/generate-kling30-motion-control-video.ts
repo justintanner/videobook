@@ -25,10 +25,10 @@ type GenerateKling30MotionControlPayload = {
   background_source?: KlingMotionControlRequest["input"]["background_source"];
 };
 
-async function uploadInputs(fs: Engine, inputs: RefInput[], bookId: string): Promise<string[]> {
+async function uploadInputs(fs: Engine, inputs: RefInput[]): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
+    urls.push(await uploadAssetToKie(fs, assetId, filename));
   }
   return urls;
 }
@@ -51,8 +51,8 @@ export function registerGenerateKling30MotionControlVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const inputUrls = await uploadInputs(fs, imageInputs, bookId);
-    const videoUrls = await uploadInputs(fs, videoInputs, bookId);
+    const inputUrls = await uploadInputs(fs, imageInputs);
+    const videoUrls = await uploadInputs(fs, videoInputs);
     const normalizedPrompt = prompt === undefined
       ? undefined
       : transformProviderPrompt("generate_kie_kling_3_0_motion_control", {

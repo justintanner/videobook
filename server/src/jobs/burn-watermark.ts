@@ -23,7 +23,7 @@ type BurnWatermarkPayload = {
 };
 
 /** ffmpeg overlay x/y expressions for a corner, inset by `padding` pixels. */
-export function burnOverlayPosition(corner: OsgPosition, padding: number): { x: string; y: string } {
+function burnOverlayPosition(corner: OsgPosition, padding: number): { x: string; y: string } {
   const [vertical, horizontal] = corner.split("-");
   const x = horizontal === "left"
     ? String(padding)
@@ -52,7 +52,6 @@ export function registerBurnWatermarkJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -99,7 +98,7 @@ export function registerBurnWatermarkJob(fs: Engine): void {
         }
 
         const inputFilename = basename(videoPath);
-        await replaceArtifactFileFromPath(fs, bookId, assetId, inputFilename, outputPath);
+        await replaceArtifactFileFromPath(fs, assetId, inputFilename, outputPath);
 
         // Visual analysis now describes the un-watermarked frames; transcripts
         // stay valid (audio and timing are untouched).

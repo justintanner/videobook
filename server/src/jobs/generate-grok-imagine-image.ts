@@ -44,7 +44,7 @@ export function registerGenerateGrokImagineImageJob(fs: Engine): void {
 
       const provider = createXaiPaygatedProvider(apiKey, 120_000);
 
-      const imageUrl = await uploadAssetFile(fs, sourceImageId, imageFilename, bookId);
+      const imageUrl = await uploadAssetFile(fs, sourceImageId, imageFilename);
 
       const request = buildXaiGrokImagineImagePayload(
         { prompt: normalizedPrompt },
@@ -60,7 +60,7 @@ export function registerGenerateGrokImagineImageJob(fs: Engine): void {
       const resultImageUrl = result.data[0]?.url;
       if (!resultImageUrl) throw new Error("xAI returned no image URL");
 
-      await downloadUrlIntoAsset(fs, resultImageUrl, imgAssetId, "original.png", bookId, { kind: "result image" });
+      await downloadUrlIntoAsset(fs, resultImageUrl, imgAssetId, "original.png", { kind: "result image" });
 
       // Enqueue post-processing so metadata and derived crops are created
       const provenance = {
@@ -86,7 +86,7 @@ export function registerGenerateGrokImagineImageJob(fs: Engine): void {
     // Kie path — async task-based generation
     requireApiKey("KIE_API_KEY");
 
-    const downloadUrl = await uploadAssetToKie(fs, sourceImageId, imageFilename, bookId);
+    const downloadUrl = await uploadAssetToKie(fs, sourceImageId, imageFilename);
 
     const request = buildGrokImagineImagePayload(
       { prompt: normalizedPrompt },

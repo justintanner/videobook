@@ -238,7 +238,7 @@ export function normalizeChatTimestampParams(
 }
 
 /** Close open strings / braces / brackets so truncated Gemini JSON can parse. */
-export function closeTruncatedJson(text: string): string {
+function closeTruncatedJson(text: string): string {
   let inString = false;
   let escape = false;
   const stack: string[] = [];

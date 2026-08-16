@@ -29,11 +29,10 @@ type GenerateMiniMaxH3R2vVideoPayload = {
 async function uploadAll(
   fs: Engine,
   inputs: RefInput[],
-  bookId: string,
 ): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
+    urls.push(await uploadAssetToKie(fs, assetId, filename));
   }
   return urls;
 }
@@ -49,9 +48,9 @@ export function registerGenerateMiniMaxH3R2vVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const referenceImageUrls = await uploadAll(fs, imageInputs, bookId);
-    const referenceVideoUrls = await uploadAll(fs, videoInputs, bookId);
-    const referenceAudioUrls = await uploadAll(fs, audioInputs, bookId);
+    const referenceImageUrls = await uploadAll(fs, imageInputs);
+    const referenceVideoUrls = await uploadAll(fs, videoInputs);
+    const referenceAudioUrls = await uploadAll(fs, audioInputs);
 
     const normalizedPrompt = transformProviderPrompt("generate_kie_minimax_h3_reference_to_video", {
       prompt,

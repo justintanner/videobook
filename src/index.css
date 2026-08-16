@@ -3774,6 +3774,10 @@ textarea:focus-visible {
   line-height: 1.45;
 }
 
+.inspector-voice-picker > button {
+  justify-self: start;
+}
+
 .inspector-generation-options {
   overflow: hidden;
   border: 1px solid var(--line);
@@ -6921,7 +6925,7 @@ textarea:focus-visible {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.58);
 }
 
-.command-suggestions button:not(.speak-preview-play) {
+.command-suggestions button:not(.speak-preview-play):not(.speak-preview-refresh) {
   display: grid;
   grid-template-columns: minmax(130px, auto) minmax(0, 1fr);
   gap: 12px;
@@ -6943,8 +6947,8 @@ textarea:focus-visible {
   padding: 6px 9px;
 }
 
-.command-suggestions button:not(.speak-preview-play):hover,
-.command-suggestions button:not(.speak-preview-play):focus-visible {
+.command-suggestions button:not(.speak-preview-play):not(.speak-preview-refresh):hover,
+.command-suggestions button:not(.speak-preview-play):not(.speak-preview-refresh):focus-visible {
   color: var(--row-fg-hover);
   background: var(--row-bg-hover);
 }
@@ -7048,6 +7052,40 @@ textarea:focus-visible {
 
 .speak-preview-error {
   color: #e08a8a;
+}
+
+.speak-preview-refresh,
+.generation-review-voice-section > button,
+.inspector-voice-picker > button {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  color: #91bea4;
+  background: rgba(33, 88, 56, 0.14);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.speak-preview-refresh {
+  justify-self: start;
+  margin: 0 10px;
+}
+
+.speak-preview-refresh:disabled,
+.generation-review-voice-section > button:disabled,
+.inspector-voice-picker > button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.speak-preview-refresh:hover:not(:disabled),
+.speak-preview-refresh:focus-visible:not(:disabled),
+.generation-review-voice-section > button:hover:not(:disabled),
+.generation-review-voice-section > button:focus-visible:not(:disabled),
+.inspector-voice-picker > button:hover:not(:disabled),
+.inspector-voice-picker > button:focus-visible:not(:disabled) {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
 }
 
 .generation-review-voice-section small {

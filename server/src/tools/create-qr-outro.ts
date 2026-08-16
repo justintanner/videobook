@@ -33,7 +33,6 @@ function normalizeAssetId(raw: string): string {
 async function resolveImageRef(
   fs: Engine,
   raw: string,
-  bookId: string,
   field: string,
 ): Promise<RefResult> {
   const assetId = normalizeAssetId(raw);
@@ -52,7 +51,6 @@ async function resolveImageRef(
 async function resolveAudioRef(
   fs: Engine,
   raw: string,
-  _bookId: string,
 ): Promise<RefResult> {
   const assetId = normalizeAssetId(raw);
   const artifact = fs.artifacts.get(assetId);
@@ -127,7 +125,6 @@ export function createQrOutroDef(fs: Engine): ToolDef {
         const resolved = await resolveImageRef(
           fs,
           raw,
-          book_id,
           "qr_image_refs entry",
         );
         if (!resolved.ok) return toolError(resolved.error);
@@ -136,7 +133,7 @@ export function createQrOutroDef(fs: Engine): ToolDef {
 
       let soundEffect: QrOutroAssetRef | null = null;
       if (include_audio && sound_effect_ref) {
-        const resolved = await resolveAudioRef(fs, sound_effect_ref, book_id);
+        const resolved = await resolveAudioRef(fs, sound_effect_ref);
         if (!resolved.ok) return toolError(resolved.error);
         soundEffect = resolved.value;
       }

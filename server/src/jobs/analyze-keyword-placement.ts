@@ -169,7 +169,6 @@ async function analyzeFrames(
 async function writeContactSheetIfChanged(
   fs: Engine,
   assetId: string,
-  bookId: string,
   contactSheet: Buffer,
 ): Promise<void> {
   const existing = await fs.files.read(assetId, KEYWORD_FRAME_CACHE_FILENAME);
@@ -184,14 +183,12 @@ export function registerAnalyzeKeywordPlacementJob(fs: Engine): void {
     const {
       assetId,
       assetDir,
-      bookId,
       videoPath,
       fingerprint,
       graphics,
     } = payload as AnalyzeKeywordPlacementPayload;
     return withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -217,8 +214,8 @@ export function registerAnalyzeKeywordPlacementJob(fs: Engine): void {
             regions: regions.get(frame.cueId) ?? [],
           })),
         };
-        await writeContactSheetIfChanged(fs, assetId, bookId, extracted.contactSheet);
-        await writeKeywordPlacementAnalysis(fs, assetId, bookId, analysis);
+        await writeContactSheetIfChanged(fs, assetId, extracted.contactSheet);
+        await writeKeywordPlacementAnalysis(fs, assetId, analysis);
         return { analysis } satisfies AnalyzeKeywordPlacementResult;
       },
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },

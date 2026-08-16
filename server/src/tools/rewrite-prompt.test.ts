@@ -320,7 +320,7 @@ describe("findPreviousErrorForPrompt", () => {
     await writeError(fs, a1, { message: "old error", prompt: "a cat running" });
     await new Promise((r) => setTimeout(r, 100));
     await writeError(fs, a2, { message: "new error", prompt: "a cat running" });
-    const found = await findPreviousErrorForPrompt(fs, "err-proj", "a cat running");
+    const found = await findPreviousErrorForPrompt(fs, "a cat running");
     expect(found).not.toBeNull();
     expect(found!.message).toBe("new error");
   });
@@ -328,7 +328,7 @@ describe("findPreviousErrorForPrompt", () => {
   it("matches prompt with different whitespace (normalized)", async () => {
     const a1 = await createAsset(fs, "ws attempt");
     await writeError(fs, a1, { message: "ws error", prompt: "a  cat\nrunning" });
-    const found = await findPreviousErrorForPrompt(fs, "err-proj", "a cat running");
+    const found = await findPreviousErrorForPrompt(fs, "a cat running");
     expect(found).not.toBeNull();
     expect(found!.message).toBe("ws error");
   });
@@ -336,14 +336,14 @@ describe("findPreviousErrorForPrompt", () => {
   it("returns null when no prompt matches", async () => {
     const a1 = await createAsset(fs, "no match");
     await writeError(fs, a1, { message: "err", prompt: "a dog running" });
-    const found = await findPreviousErrorForPrompt(fs, "err-proj", "a cat running");
+    const found = await findPreviousErrorForPrompt(fs, "a cat running");
     expect(found).toBeNull();
   });
 
   it("skips error rows with null prompt", async () => {
     const a1 = await createAsset(fs, "null prompt");
     await writeError(fs, a1, { message: "no prompt here", prompt: null });
-    const found = await findPreviousErrorForPrompt(fs, "err-proj", "anything");
+    const found = await findPreviousErrorForPrompt(fs, "anything");
     expect(found).toBeNull();
   });
 
@@ -354,7 +354,7 @@ describe("findPreviousErrorForPrompt", () => {
       failCode: "PROMINENT_PEOPLE_FILTER_FAILED",
       prompt: "celebrity lookalike",
     });
-    const found = await findPreviousErrorForPrompt(fs, "err-proj", "celebrity lookalike");
+    const found = await findPreviousErrorForPrompt(fs, "celebrity lookalike");
     expect(found).not.toBeNull();
     expect(found!.failCode).toBe("PROMINENT_PEOPLE_FILTER_FAILED");
   });
@@ -365,7 +365,7 @@ describe("findPreviousErrorForPrompt", () => {
     const a1 = await createAsset(fs, "stale attempt");
     await writeError(fs, a1, { message: "stale error", prompt: "old prompt" });
     vi.setSystemTime(new Date("2026-01-23T12:00:00Z"));
-    const found = await findPreviousErrorForPrompt(fs, "err-proj", "old prompt");
+    const found = await findPreviousErrorForPrompt(fs, "old prompt");
     vi.useRealTimers();
     expect(found).toBeNull();
   });
@@ -376,7 +376,7 @@ describe("findPreviousErrorForPrompt", () => {
     const a1 = await createAsset(fs, "recent attempt");
     await writeError(fs, a1, { message: "recent error", prompt: "recent prompt" });
     vi.setSystemTime(new Date("2026-01-18T12:00:00Z"));
-    const found = await findPreviousErrorForPrompt(fs, "err-proj", "recent prompt");
+    const found = await findPreviousErrorForPrompt(fs, "recent prompt");
     vi.useRealTimers();
     expect(found).not.toBeNull();
     expect(found!.message).toBe("recent error");

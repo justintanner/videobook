@@ -3,19 +3,12 @@ import type {
   NotebookCellType,
   NotebookDocument,
 } from 'videobook-engine'
-
-const mediaCellTypes = new Set<NotebookCellType>([
-  'audio',
-  'image',
-  'video',
-  'character',
-])
-
-const generationCellTypes = new Set<NotebookCellType>([
-  'generate_audio',
-  'generate_image',
-  'generate_video',
-])
+import {
+  isNotebookExtractMediaCellType,
+  isNotebookGenerationCellType,
+  isNotebookMediaPresentationCellType,
+} from './notebook-cell-types'
+import { nonEmptyStringValue, recordValue } from './value-decoders'
 
 const canonicalMediaAspectRatios = [
   ['3:1', 3],
@@ -174,16 +167,6 @@ function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null
-}
-
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
 function hasOwnValue(
   value: Record<string, unknown>,
   key: string,
@@ -191,28 +174,16 @@ function hasOwnValue(
   return Object.prototype.hasOwnProperty.call(value, key)
 }
 
-export function isNotebookMediaCellType(type: NotebookCellType): boolean {
-  return mediaCellTypes.has(type)
-}
-
-export function isNotebookGenerationCellType(type: NotebookCellType): boolean {
-  return generationCellTypes.has(type)
-}
-
-export function isNotebookExtractCellType(type: NotebookCellType): boolean {
-  return type === 'extract_audio' || type === 'extract_frame'
-}
-
 export function notebookCellSupportsExecution(cell: ActionCell): boolean {
   return cell.type !== 'analysis'
-    && !isNotebookMediaCellType(cell.type)
+    && !isNotebookMediaPresentationCellType(cell.type)
     && Boolean(cell.operation ?? cell.tool ?? cell.model)
 }
 
 export function notebookCellPresentsMedia(cell: ActionCell): boolean {
   if (!cell.outputArtifactId) return false
-  return isNotebookMediaCellType(cell.type)
-    || isNotebookExtractCellType(cell.type)
+  return isNotebookMediaPresentationCellType(cell.type)
+    || isNotebookExtractMediaCellType(cell.type)
     || isNotebookGenerationCellType(cell.type)
 }
 
@@ -280,7 +251,7 @@ export function notebookCellStateFromStatus(
       label: null,
       startedAt: null,
       error: options?.error
-        ?? (isNotebookMediaCellType(kind)
+        ?? (isNotebookMediaPresentationCellType(kind)
           ? 'Media processing failed'
           : 'Generation failed'),
       tone: 'error',
@@ -315,14 +286,14 @@ export function notebookCellStatePresentation(
     status?: string | null
   },
 ): NotebookCellStatePresentation {
-  const execution = objectValue(document.execution)
-  const cell = execution && objectValue(execution[cellId])
+  const execution = recordValue(document.execution)
+  const cell = execution && recordValue(execution[cellId])
   const status = options?.status
-    ?? stringValue(cell?.status)
+    ?? nonEmptyStringValue(cell?.status)
     ?? 'ready'
   const error = options?.error !== undefined
     ? options.error
-    : stringValue(cell?.error)
+    : nonEmptyStringValue(cell?.error)
   const startedAt = parseTimestamp(cell?.startedAt)
     ?? parseTimestamp(cell?.updatedAt)
   return notebookCellStateFromStatus(kind, status, { error, startedAt })
@@ -332,11 +303,11 @@ export function notebookCellExecutionObservation(
   document: Pick<NotebookDocument, 'execution'>,
   cellId: string,
 ): NotebookCellExecutionObservation {
-  const execution = objectValue(document.execution)
-  const cell = execution && objectValue(execution[cellId])
+  const execution = recordValue(document.execution)
+  const cell = execution && recordValue(execution[cellId])
   return {
-    error: stringValue(cell?.error),
-    status: stringValue(cell?.status),
+    error: nonEmptyStringValue(cell?.error),
+    status: nonEmptyStringValue(cell?.status),
   }
 }
 
@@ -345,13 +316,13 @@ export function notebookCellRunObservation(
   cellId: string,
   runId: string,
 ): NotebookCellRunObservation {
-  const execution = objectValue(document.execution)
-  const cell = execution && objectValue(execution[cellId])
-  if (!cell || stringValue(cell.runId) !== runId) {
+  const execution = recordValue(document.execution)
+  const cell = execution && recordValue(execution[cellId])
+  if (!cell || nonEmptyStringValue(cell.runId) !== runId) {
     return { error: null, state: 'pending', status: null }
   }
-  const status = stringValue(cell.status)
-  const error = stringValue(cell.error)
+  const status = nonEmptyStringValue(cell.status)
+  const error = nonEmptyStringValue(cell.error)
   if (error || status === 'error') {
     return { error, state: 'error', status }
   }
@@ -395,7 +366,7 @@ export function notebookCellStatusLabel(
   type: NotebookCellType,
   status: string,
 ): string | null {
-  return isNotebookMediaCellType(type) ? null : status
+  return isNotebookMediaPresentationCellType(type) ? null : status
 }
 
 export function formatMediaTime(seconds: number): string {
@@ -518,16 +489,16 @@ export function notebookOutputVersionArtifactIds(
   ])]
 }
 
-export function notebookAnalysisResponseFormat(
+function notebookAnalysisResponseFormat(
   input: unknown,
 ): NotebookAnalysisResponseFormat | null {
-  const request = objectValue(input)
-  const text = request && objectValue(request.text)
-  const format = text && objectValue(text.format)
-  const type = stringValue(format?.type)
+  const request = recordValue(input)
+  const text = request && recordValue(request.text)
+  const format = text && recordValue(text.format)
+  const type = nonEmptyStringValue(format?.type)
   if (!type) return null
   return {
-    name: stringValue(format?.name),
+    name: nonEmptyStringValue(format?.name),
     strict: format?.strict === true,
     type,
   }
@@ -536,13 +507,13 @@ export function notebookAnalysisResponseFormat(
 export function notebookAnalysisLlmExchanges(
   outputJson: unknown,
 ): NotebookAnalysisLlmExchange[] {
-  const output = objectValue(outputJson)
+  const output = recordValue(outputJson)
   if (!output) return []
   const recorded = Array.isArray(output.llmExchanges)
     ? output.llmExchanges
     : []
   const exchanges = recorded.flatMap((value, index) => {
-    const exchange = objectValue(value)
+    const exchange = recordValue(value)
     if (
       !exchange
       || !hasOwnValue(exchange, 'input')
@@ -550,22 +521,22 @@ export function notebookAnalysisLlmExchanges(
     ) {
       return []
     }
-    const input = objectValue(exchange.input)
+    const input = recordValue(exchange.input)
     return [{
       complete: true,
       input: exchange.input,
-      model: stringValue(exchange.model)
-        ?? stringValue(input?.model)
+      model: nonEmptyStringValue(exchange.model)
+        ?? nonEmptyStringValue(input?.model)
         ?? 'Unknown',
-      provider: stringValue(exchange.provider) ?? 'Unknown',
+      provider: nonEmptyStringValue(exchange.provider) ?? 'Unknown',
       response: exchange.response,
       responseFormat: notebookAnalysisResponseFormat(exchange.input),
-      stage: stringValue(exchange.stage) ?? `call_${index + 1}`,
+      stage: nonEmptyStringValue(exchange.stage) ?? `call_${index + 1}`,
     }]
   })
   if (exchanges.length > 0) return exchanges
 
-  const request = objectValue(output.request)
+  const request = recordValue(output.request)
   if (
     !request
     || !hasOwnValue(output, 'raw')
@@ -575,8 +546,8 @@ export function notebookAnalysisLlmExchanges(
   return [{
     complete: false,
     input: request,
-    model: stringValue(request.model) ?? 'Unknown',
-    provider: stringValue(request.provider) ?? 'Unknown',
+    model: nonEmptyStringValue(request.model) ?? 'Unknown',
+    provider: nonEmptyStringValue(request.provider) ?? 'Unknown',
     response: output.raw,
     responseFormat: null,
     stage: 'legacy_analysis',
@@ -587,8 +558,8 @@ export function notebookSplitFrameIds(
   inputs: Record<string, unknown> | undefined,
 ): NotebookSplitFrameIds {
   return {
-    first: stringValue(inputs?.firstFrameArtifactId),
-    last: stringValue(inputs?.lastFrameArtifactId),
+    first: nonEmptyStringValue(inputs?.firstFrameArtifactId),
+    last: nonEmptyStringValue(inputs?.lastFrameArtifactId),
   }
 }
 

@@ -75,7 +75,6 @@ import {
   generationSelectionForAction,
   initialGenerationSelection,
   initialGenerationMode,
-  isGenerationCellType,
   type GenerationControl,
   type GenerationControlValue,
   type GenerationInputAttachment,
@@ -83,6 +82,7 @@ import {
   type GenerationSelection,
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
+import { isNotebookGenerationCellType } from '@/videobook/notebook-cell-types'
 import { NotebookMediaMetadata } from './NotebookMediaMetadata'
 import { RichJson } from './RichJson'
 import {
@@ -199,7 +199,7 @@ function cellFormDraft(
   inputs: Parameters<typeof initialGenerationSelection>[2] = [],
 ): CellFormDraft {
   const selection = initialGenerationSelection(cell, actions, inputs)
-  if (!selection || !isGenerationCellType(cell.type)) {
+  if (!selection || !isNotebookGenerationCellType(cell.type)) {
     return persistedCellFormDraft(cell)
   }
   const action = generationActionForSelection(actions, cell.type, selection)
@@ -225,7 +225,7 @@ function validTimingValue(value: string): boolean {
 }
 
 function cellFormIsValid(cell: NotebookCell, draft: CellFormDraft): boolean {
-  if (isGenerationCellType(cell.type)) {
+  if (isNotebookGenerationCellType(cell.type)) {
     return Boolean(
       draft.provider.trim()
       && draft.model.trim()
@@ -312,7 +312,7 @@ function cellFormPatch(
     if (draft.tool !== persisted.tool) patch.tool = draft.tool || undefined
   }
   if (
-    isGenerationCellType(cell.type)
+    isNotebookGenerationCellType(cell.type)
     && (
       draft.generationMode !== persisted.generationMode
       || JSON.stringify(draft.generationSettings)
@@ -1726,11 +1726,13 @@ function GenerationControlField({
   control,
   settings,
   busy,
+  onFocus,
   onChange,
 }: {
   control: GenerationControl
   settings: Record<string, GenerationControlValue>
   busy: boolean
+  onFocus?: () => void
   onChange: (value: GenerationControlValue | undefined) => void
 }) {
   const rawValue = settings[control.name]
@@ -1742,6 +1744,7 @@ function GenerationControlField({
           type="checkbox"
           checked={value === true}
           disabled={busy}
+          onFocus={onFocus}
           onChange={(event) => onChange(event.target.checked)}
         />
         <span>{control.label}</span>
@@ -1761,6 +1764,7 @@ function GenerationControlField({
           aria-label={control.label}
           value={encodedValue}
           disabled={busy}
+          onFocus={onFocus}
           onChange={(event) => {
             const selected = control.options.find((option) =>
               generationControlOptionValue(option) === event.target.value)
@@ -1798,6 +1802,7 @@ function GenerationControlField({
         step={control.kind === 'number' ? 'any' : undefined}
         value={value === undefined ? '' : String(value)}
         disabled={busy}
+        onFocus={onFocus}
         onChange={(event) => {
           const next = event.target.value
           if (!next) {
@@ -1862,6 +1867,14 @@ function ExecutableCellInspector({
     ))
   const [saving, setSaving] = useState(false)
   const voicePreviewPlayer = useVoicePreviewPlayer()
+  const ensureVoiceCatalog = () => {
+    if (!voiceCatalog) return
+    void voiceCatalog.ensureLoaded().catch(() => undefined)
+  }
+  const refreshVoiceCatalog = () => {
+    if (!voiceCatalog) return
+    void voiceCatalog.refresh().catch(() => undefined)
+  }
   const [copyResult, setCopyResult] = useState<{
     error: string
     state: 'copied' | 'failed'
@@ -1888,7 +1901,7 @@ function ExecutableCellInspector({
   const generationCell = cell.type === 'generate_video'
     || cell.type === 'generate_image'
     || cell.type === 'generate_audio'
-  const generationCellType = isGenerationCellType(cell.type)
+  const generationCellType = isNotebookGenerationCellType(cell.type)
     ? cell.type
     : null
   const generationSelection: GenerationSelection = {
@@ -1959,8 +1972,9 @@ function ExecutableCellInspector({
     control.name === 'duration'
     || control.name === 'aspect_ratio'
     || control.name === 'resolution')
-  const voicePickerVoices = cell.type === 'generate_audio'
+  const hasVoiceControl = cell.type === 'generate_audio'
     && generationControls.some((control) => control.name === 'voice_id')
+  const voicePickerVoices = hasVoiceControl
     ? voiceCatalog?.voices ?? []
     : []
   const showVoicePicker = voicePickerVoices.length > 0
@@ -2172,6 +2186,10 @@ function ExecutableCellInspector({
     const selected = generationPickerActions.find((candidate) =>
       candidate.id === actionId)
     if (!selected) return
+    if (cell.type === 'generate_audio'
+      && selected.controls.some((control) => control.name === 'voice_id')) {
+      ensureVoiceCatalog()
+    }
     setDraft((current) => ({
       ...current,
       ...generationSelectionForAction(selected),
@@ -2489,6 +2507,9 @@ function ExecutableCellInspector({
                   aria-label="Model"
                   value={selectedGenerationValue}
                   disabled={busy || compatibleActions.length === 0}
+                  onFocus={() => {
+                    if (hasVoiceControl) ensureVoiceCatalog()
+                  }}
                   onChange={(event) => updateGenerationAction(event.target.value)}
                 >
                   {!selectedGenerationAction && draft.tool && (
@@ -2557,32 +2578,51 @@ function ExecutableCellInspector({
                   ))}
                 </div>
               ) : null}
-            {showVoicePicker && (
+            {hasVoiceControl && voiceCatalog && (
               <div className="inspector-voice-picker">
                 <span className="inspector-voice-picker-label">Voice</span>
-                <div
-                  className="generation-review-voices"
-                  role="listbox"
-                  aria-label="ElevenLabs voices"
-                  data-testid="inspector-voice-picker"
+                {showVoicePicker && (
+                  <div
+                    className="generation-review-voices"
+                    role="listbox"
+                    aria-label="ElevenLabs voices"
+                    data-testid="inspector-voice-picker"
+                  >
+                    <VoiceOptionList
+                      voices={voicePickerVoices}
+                      selectedVoiceId={
+                        typeof draft.generationSettings.voice_id === 'string'
+                          ? draft.generationSettings.voice_id
+                          : ''
+                      }
+                      playingVoiceId={voicePreviewPlayer.playingVoiceId}
+                      disabled={busy || saving}
+                      onSelect={(voiceId) => {
+                        persistSpeakVoiceId(voiceId)
+                        updateGenerationSetting('voice_id', voiceId)
+                      }}
+                      onTogglePreview={voicePreviewPlayer.toggle}
+                    />
+                  </div>
+                )}
+                {voiceCatalog.loading && voicePickerVoices.length === 0 && (
+                  <small>Loading voices…</small>
+                )}
+                {voiceCatalog.error && (
+                  <small role="alert">{voiceCatalog.error}</small>
+                )}
+                <button
+                  type="button"
+                  disabled={busy || saving || voiceCatalog.loading}
+                  onClick={refreshVoiceCatalog}
                 >
-                  <VoiceOptionList
-                    voices={voicePickerVoices}
-                    selectedVoiceId={
-                      typeof draft.generationSettings.voice_id === 'string'
-                        ? draft.generationSettings.voice_id
-                        : ''
-                    }
-                    playingVoiceId={voicePreviewPlayer.playingVoiceId}
-                    disabled={busy || saving}
-                    onSelect={(voiceId) => {
-                      persistSpeakVoiceId(voiceId)
-                      updateGenerationSetting('voice_id', voiceId)
-                    }}
-                    onTogglePreview={voicePreviewPlayer.toggle}
-                  />
-                </div>
-                {voiceCatalog?.warning && (
+                  {voiceCatalog.loading
+                    ? 'Loading voices…'
+                    : voiceCatalog.error
+                      ? 'Retry voices'
+                      : showVoicePicker ? 'Refresh voices' : 'Load voices'}
+                </button>
+                {voiceCatalog.warning && (
                   <small>{voiceCatalog.warning}</small>
                 )}
               </div>
@@ -2597,6 +2637,9 @@ function ExecutableCellInspector({
                       control={control}
                       settings={draft.generationSettings}
                       busy={busy || saving}
+                      onFocus={control.name === 'voice_id'
+                        ? ensureVoiceCatalog
+                        : undefined}
                       onChange={(value) => updateGenerationSetting(
                         control.name,
                         value,

@@ -7,7 +7,7 @@ import type {
 } from 'videobook-engine'
 import { isDestructiveEditOperation } from 'videobook-engine/edit-policy'
 
-export const COMMAND_PLAN_VERSION = 1 as const
+const COMMAND_PLAN_VERSION = 1 as const
 
 export interface CommandConfirmation {
   required: boolean
@@ -221,7 +221,7 @@ export function validateCommandPlan(plan: CommandPlan): void {
   }
 }
 
-export function planConfirmation(
+function planConfirmation(
   stages: CommandPlanStage[],
 ): CommandConfirmation {
   const editStages = stages.filter(

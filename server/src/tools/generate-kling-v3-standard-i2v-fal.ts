@@ -37,7 +37,7 @@ export function generateKlingV3StandardI2vFalDef(fs: Engine): ToolDef {
       }
 
       const slugs = end_frame_ref ? [first_frame_ref, end_frame_ref] : [first_frame_ref];
-      const resolved = await resolveImageRefs(fs, slugs, book_id);
+      const resolved = await resolveImageRefs(fs, slugs);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame, endFrame] = resolved.inputs;

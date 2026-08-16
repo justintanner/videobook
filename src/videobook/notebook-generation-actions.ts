@@ -2,11 +2,11 @@ import type {
   NotebookCell,
   NotebookEdge,
 } from 'videobook-engine'
-
-export type GenerationCellType =
-  | 'generate_audio'
-  | 'generate_image'
-  | 'generate_video'
+import {
+  isNotebookGenerationCellType,
+  type NotebookGenerationCellType,
+} from './notebook-cell-types'
+import { nonBlankStringValue, recordValue } from './value-decoders'
 
 export type GenerationSelection = {
   provider: string
@@ -69,7 +69,7 @@ export type GenerationControl = {
 
 export type NotebookGenerationAction = {
   id: string
-  cellTypes: GenerationCellType[]
+  cellTypes: NotebookGenerationCellType[]
   provider: string
   providerLabel: string
   model: string
@@ -99,22 +99,6 @@ export function effectiveGenerationSettings(
   }))
 }
 
-const generationCellTypes = new Set<string>([
-  'generate_audio',
-  'generate_image',
-  'generate_video',
-])
-
-function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null
-}
-
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
@@ -140,10 +124,10 @@ function controlValue(value: unknown): GenerationControlValue | undefined {
 }
 
 function generationControl(value: unknown): GenerationControl | null {
-  const control = record(value)
-  const name = stringValue(control?.name)
-  const label = stringValue(control?.label)
-  const description = stringValue(control?.description)
+  const control = recordValue(value)
+  const name = nonBlankStringValue(control?.name)
+  const label = nonBlankStringValue(control?.label)
+  const description = nonBlankStringValue(control?.description)
   const kind = control?.kind
   const valueType = control?.valueType
   if (
@@ -182,8 +166,8 @@ function generationControl(value: unknown): GenerationControl | null {
 }
 
 function inputSlot(value: unknown): GenerationInputSlot | null {
-  const slot = record(value)
-  const field = stringValue(slot?.field)
+  const slot = recordValue(value)
+  const field = nonBlankStringValue(slot?.field)
   const kind = inputKind(slot?.kind)
   const targets = stringList(slot?.targets)
   const min = finiteNumber(slot?.min)
@@ -195,8 +179,8 @@ function inputSlot(value: unknown): GenerationInputSlot | null {
 }
 
 function inputMode(value: unknown): GenerationInputMode | null {
-  const candidate = record(value)
-  const id = stringValue(candidate?.id)
+  const candidate = recordValue(value)
+  const id = nonBlankStringValue(candidate?.id)
   if (!id || !Array.isArray(candidate?.slots)) return null
   const slots = candidate.slots
     .map(inputSlot)
@@ -208,7 +192,7 @@ function inputMode(value: unknown): GenerationInputMode | null {
 }
 
 function inputContract(value: unknown): GenerationInputContract | null {
-  const contract = record(value)
+  const contract = recordValue(value)
   if (!Array.isArray(contract?.modes)) return null
   const modes = contract.modes
     .map(inputMode)
@@ -216,26 +200,20 @@ function inputContract(value: unknown): GenerationInputContract | null {
   return modes.length > 0 ? { modes } : null
 }
 
-export function isGenerationCellType(
-  type: string,
-): type is GenerationCellType {
-  return generationCellTypes.has(type)
-}
-
 export function asNotebookGenerationActions(
   value: unknown,
 ): NotebookGenerationAction[] {
-  const catalog = record(value)
+  const catalog = recordValue(value)
   const actions = catalog?.actions
   if (!Array.isArray(actions)) return []
   return actions.flatMap((value) => {
-    const action = record(value)
+    const action = recordValue(value)
     if (!action || action.kind !== 'generation') return []
-    const provider = stringValue(action.provider)
-    const model = stringValue(action.model)
-    const operation = stringValue(action.operation)
-    const tool = stringValue(action.tool)
-    const title = stringValue(action.title)
+    const provider = nonBlankStringValue(action.provider)
+    const model = nonBlankStringValue(action.model)
+    const operation = nonBlankStringValue(action.operation)
+    const tool = nonBlankStringValue(action.tool)
+    const title = nonBlankStringValue(action.title)
     const contract = inputContract(action.inputContract)
     const controls = Array.isArray(action.controls)
       ? action.controls
@@ -243,8 +221,8 @@ export function asNotebookGenerationActions(
           .filter((control): control is GenerationControl => control !== null)
       : []
     const cellTypes = Array.isArray(action.cellTypes)
-      ? action.cellTypes.filter((type): type is GenerationCellType =>
-          typeof type === 'string' && isGenerationCellType(type))
+      ? action.cellTypes.filter((type): type is NotebookGenerationCellType =>
+          typeof type === 'string' && isNotebookGenerationCellType(type))
       : []
     if (
       !provider
@@ -258,10 +236,10 @@ export function asNotebookGenerationActions(
     }
     const priority = finiteNumber(action.defaultPriority)
     return [{
-      id: stringValue(action.id) ?? `generation.${tool}`,
+      id: nonBlankStringValue(action.id) ?? `generation.${tool}`,
       cellTypes,
       provider,
-      providerLabel: stringValue(action.providerLabel) ?? provider,
+      providerLabel: nonBlankStringValue(action.providerLabel) ?? provider,
       model,
       operation,
       tool,
@@ -276,7 +254,7 @@ export function asNotebookGenerationActions(
 
 export function generationActionsForCell(
   actions: readonly NotebookGenerationAction[],
-  type: GenerationCellType,
+  type: NotebookGenerationCellType,
 ): NotebookGenerationAction[] {
   return actions.filter((action) => action.cellTypes.includes(type))
 }
@@ -318,7 +296,7 @@ function selectionScore(
 
 export function generationActionForSelection(
   actions: readonly NotebookGenerationAction[],
-  type: GenerationCellType,
+  type: NotebookGenerationCellType,
   selection: GenerationSelection,
 ): NotebookGenerationAction | null {
   const available = generationActionsForCell(actions, type)
@@ -575,7 +553,7 @@ function compareGenerationActions(
 
 export function compatibleGenerationActions(
   actions: readonly NotebookGenerationAction[],
-  type: GenerationCellType,
+  type: NotebookGenerationCellType,
   inputs: readonly GenerationConnectedInput[],
 ): NotebookGenerationAction[] {
   return generationActionsForCell(actions, type)
@@ -591,7 +569,7 @@ export function initialGenerationSelection(
   actions: readonly NotebookGenerationAction[],
   inputs: readonly GenerationConnectedInput[] = [],
 ): GenerationSelection | null {
-  if (!isGenerationCellType(cell.type)) return null
+  if (!isNotebookGenerationCellType(cell.type)) return null
   const current = currentSelection(cell)
   const configured = generationActionForSelection(actions, cell.type, current)
   if (configured) return actionSelection(configured)

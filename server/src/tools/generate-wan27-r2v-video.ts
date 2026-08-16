@@ -67,28 +67,28 @@ export function generateWan27R2vVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const raw of imgs) {
-        const r = await resolveImageRef(fs, raw, book_id);
+        const r = await resolveImageRef(fs, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       const videoInputs: RefInput[] = [];
       for (const raw of vids) {
-        const r = await resolveVideoRef(fs, raw, book_id);
+        const r = await resolveVideoRef(fs, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInputs.push(r.value);
       }
 
       let firstFrame: RefInput | undefined;
       if (first_frame_ref) {
-        const r = await resolveImageRef(fs, first_frame_ref, book_id);
+        const r = await resolveImageRef(fs, first_frame_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let voiceRef: RefInput | undefined;
       if (audio_ref) {
-        const r = await resolveAudioRef(fs, audio_ref, book_id);
+        const r = await resolveAudioRef(fs, audio_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         voiceRef = r.value;
       }

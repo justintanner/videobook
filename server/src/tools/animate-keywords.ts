@@ -34,12 +34,11 @@ import type {
   SubtitleStyle,
 } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
-import { RENDER_ORIENTATIONS } from "./sync.js";
+import { RENDER_ORIENTATIONS } from "./reconcile-project-work.js";
 
 async function persistSettings(
   fs: Engine,
   assetId: string,
-  bookId: string,
   enabled: boolean,
   maxCount: number,
   lingerSeconds: number,
@@ -74,7 +73,6 @@ function isFontSize(value: unknown): value is FontSizePreset {
 async function placementSummary(
   fs: Engine,
   assetId: string,
-  bookId: string,
   graphics: KeywordGraphic[],
   analysis: KeywordPlacementAnalysis,
 ): Promise<Record<Orientation, Record<string, unknown>>> {
@@ -172,7 +170,7 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
 
       if (!enabled) {
         try {
-          await persistSettings(fs, asset_id, book_id, false, max_keywords, linger_seconds, null);
+          await persistSettings(fs, asset_id, false, max_keywords, linger_seconds, null);
         } catch (error) {
           return errorResult("settings_write_failed", error instanceof Error ? error.message : String(error));
         }
@@ -227,11 +225,10 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
       }
 
       const fingerprint = keywordPlacementFingerprint(videoFile, transcriptResult.value, graphics);
-      let analysis = await readKeywordPlacementAnalysis(fs, asset_id, book_id);
+      let analysis = await readKeywordPlacementAnalysis(fs, asset_id);
       let cached = await isKeywordPlacementCacheValid(
         fs,
         asset_id,
-        book_id,
         analysis,
         fingerprint,
         graphics,
@@ -274,7 +271,7 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
 
       let placements: Record<Orientation, Record<string, unknown>>;
       try {
-        placements = await placementSummary(fs, asset_id, book_id, graphics, analysis);
+        placements = await placementSummary(fs, asset_id, graphics, analysis);
       } catch (error) {
         return errorResult(
           "placement_analysis_failed",
@@ -287,7 +284,6 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
         await persistSettings(
           fs,
           asset_id,
-          book_id,
           true,
           max_keywords,
           linger_seconds,

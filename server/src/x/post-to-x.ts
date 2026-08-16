@@ -213,7 +213,6 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
   const {
     fs,
     assetId,
-    bookId,
     text,
     orientation,
     scheduleId,
@@ -285,7 +284,6 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
       await appendXPostMetadata({
         fs,
         assetId,
-        bookId,
         entry: {
           tweet_id: tweetId,
           tweet_url: tweetUrl(tweetId),

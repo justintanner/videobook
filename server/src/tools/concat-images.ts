@@ -68,14 +68,13 @@ export function concatImagesDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const {
         image_refs,
-        book_id,
         layout,
         aspect_ratio,
         name,
         background,
       } = args as Args;
 
-      const sourceResult = await readSourceImages(fs, image_refs, book_id);
+      const sourceResult = await readSourceImages(fs, image_refs);
       if (!sourceResult.ok) return error(sourceResult.error);
       if (!sourceResult.value.some((source) => source !== null)) {
         return error("At least one image asset is required");
@@ -127,7 +126,7 @@ export function concatImagesDef(fs: Engine): ToolDef {
 
       let variantsResult: Awaited<ReturnType<typeof writeImageVariants>>;
       try {
-        variantsResult = await writeImageVariants(fs, imgAssetId, output.buffer, book_id);
+        variantsResult = await writeImageVariants(fs, imgAssetId, output.buffer);
       } catch (e) {
         await fs.artifacts.delete(imgAssetId).catch(() => undefined);
         const message = e instanceof Error ? e.message : String(e);
@@ -161,7 +160,6 @@ export function concatImagesDef(fs: Engine): ToolDef {
 async function readSourceImages(
   fs: Engine,
   rawRefs: readonly (string | null)[],
-  _bookId: string,
 ): Promise<{ ok: true; value: SourceImageSlot[] } | { ok: false; error: string }> {
   const sources: SourceImageSlot[] = [];
   for (const rawRef of rawRefs) {
@@ -280,7 +278,6 @@ export async function writeImageVariants(
   fs: Engine,
   assetId: string,
   buffer: Buffer,
-  _bookId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const [landscape, portrait, square] = await Promise.all([
     cropToFill(buffer, 1920, 1080),

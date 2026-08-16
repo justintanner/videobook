@@ -80,7 +80,6 @@ export function registerProcessAudioJob(fs: Engine): void {
     const input = payload as ProcessAudioPayload;
     return withLocalLease(
       fs,
-      input.bookId,
       input.assetId,
       ctx,
       "process",

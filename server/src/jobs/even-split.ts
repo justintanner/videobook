@@ -38,7 +38,6 @@ async function buildChunk(
     start: number;
     end: number;
     assetId: string;
-    bookId: string;
     provenance: Record<string, unknown>;
     /**
      * If true, encode with `trimRangeExact` so the container duration reads
@@ -54,7 +53,7 @@ async function buildChunk(
     skipMetadata?: boolean;
   },
 ): Promise<void> {
-  const { sourcePath, outputPath, start, end, assetId, bookId, provenance, exact, skipMetadata } = args;
+  const { sourcePath, outputPath, start, end, assetId, provenance, exact, skipMetadata } = args;
   try {
     if (exact) {
       await trimRangeExact(sourcePath, outputPath, start, end - start);
@@ -69,7 +68,6 @@ async function buildChunk(
   if (!skipMetadata) {
     await ingestWorkspaceOutputs(
       fs,
-      bookId,
       assetId,
       [outputPath.split("/").pop()!],
       "even_split_chunk",
@@ -104,7 +102,6 @@ export function registerEvenSplitJob(fs: Engine): void {
         start: chunk.start,
         end: chunk.end,
         assetId: chunk.assetId,
-        bookId,
         provenance,
         exact: chunk.exact,
         skipMetadata: destinationMode,
@@ -120,7 +117,6 @@ export function registerEvenSplitJob(fs: Engine): void {
       const filenames = chunks.map((chunk) => chunk.outputPath.split("/").pop()!);
       await ingestWorkspaceOutputs(
         fs,
-        bookId,
         destination.assetId,
         filenames,
         "even_split",

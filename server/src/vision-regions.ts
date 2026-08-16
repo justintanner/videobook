@@ -14,7 +14,7 @@ import type { KeywordOccupiedRegion } from "./remotion/keyword-placement.js";
  * watermark placement (evenly sampled frames).
  */
 
-export const OCCUPIED_REGIONS_JSON_SCHEMA = {
+const OCCUPIED_REGIONS_JSON_SCHEMA = {
   type: "object",
   required: ["frames"],
   additionalProperties: false,
@@ -49,7 +49,7 @@ export const OCCUPIED_REGIONS_JSON_SCHEMA = {
   },
 } as const;
 
-const regionSchema = z.object({
+const modelOccupiedRegionSchema = z.object({
   kind: z.enum(["face", "text", "graphic"]),
   confidence: z.number().min(0).max(1),
   x: z.number().min(0).max(1000),
@@ -61,10 +61,10 @@ const regionSchema = z.object({
   { message: "occupied region extends beyond the frame" },
 );
 
-const visionOutputSchema = z.object({
+const occupiedRegionsResponseSchema = z.object({
   frames: z.array(z.object({
     cue_id: z.string().min(1),
-    occupied_regions: z.array(regionSchema),
+    occupied_regions: z.array(modelOccupiedRegionSchema),
   }).strict()),
 }).strict();
 
@@ -86,22 +86,21 @@ export interface DetectOccupiedRegionsOptions {
   maxOutputTokens?: number;
 }
 
-function parseVisionRegions(
+export function decodeOccupiedRegionsResponse(
   raw: string,
-  frames: VisionRegionFrame[],
+  expectedCueIds: readonly string[],
   errorLabel: string,
 ): Map<string, KeywordOccupiedRegion[]> {
-  let parsed: z.infer<typeof visionOutputSchema>;
+  let parsed: z.infer<typeof occupiedRegionsResponseSchema>;
   try {
-    parsed = visionOutputSchema.parse(JSON.parse(raw));
+    parsed = occupiedRegionsResponseSchema.parse(JSON.parse(raw));
   } catch (error) {
     throw new Error(`${errorLabel} vision response was invalid: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const expected = frames.map((frame) => frame.id);
   const actual = parsed.frames.map((frame) => frame.cue_id);
-  if (actual.length !== expected.length
+  if (actual.length !== expectedCueIds.length
     || new Set(actual).size !== actual.length
-    || expected.some((cueId) => !actual.includes(cueId))) {
+    || expectedCueIds.some((cueId) => !actual.includes(cueId))) {
     throw new Error(`${errorLabel} vision response did not contain exactly one result per cue`);
   }
   return new Map(parsed.frames.map((frame) => [
@@ -158,5 +157,9 @@ export async function detectOccupiedRegions(
     },
     max_output_tokens: maxOutputTokens,
   }), signal);
-  return parseVisionRegions(firstResponseText(response), frames, errorLabel);
+  return decodeOccupiedRegionsResponse(
+    firstResponseText(response),
+    frames.map((frame) => frame.id),
+    errorLabel,
+  );
 }

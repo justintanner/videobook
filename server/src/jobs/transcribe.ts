@@ -35,12 +35,11 @@ export function registerTranscribeJob(fs: Engine): void {
 
     const result = await withLocalLease(
       fs,
-      bookId,
       assetId,
       ctx,
       "transcribe",
       async () => {
-        await transcribeAssetToElevenLabsJson(fs, bookId, assetId, audioFilename, {
+        await transcribeAssetToElevenLabsJson(fs, assetId, audioFilename, {
           tagAudioEvents,
           diarize,
           ...(languageCode ? { languageCode } : {}),

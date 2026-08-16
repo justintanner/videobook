@@ -62,7 +62,7 @@ function rand(min: number, max: number): number {
   randSeed = (randSeed * 9301 + 49297) % 233280;
   return min + (randSeed / 233280.0) * (max - min);
 }
-export function resetRand(seed = 142857): void {
+function resetRand(seed = 142857): void {
   randSeed = seed;
 }
 

@@ -88,7 +88,7 @@ export async function createGoogleFlowCharacter(
   return { character_ref: ref, display_name: input.displayName, status: "created" };
 }
 
-export function reconcileGoogleFlowCharacter(
+function reconcileGoogleFlowCharacter(
   listData: GoogleFlowEntity | null,
   singletonData: GoogleFlowEntity | null,
 ): GoogleFlowEntity {
@@ -121,7 +121,7 @@ export function reconcileGoogleFlowCharacter(
 }
 
 /** Resolve one character with signed thumbnail (GET characters/ref) and reconcile with list data. */
-export async function getGoogleFlowCharacter(
+async function getGoogleFlowCharacter(
   provider: GoogleFlowProvider,
   ref: string,
 ): Promise<GoogleFlowEntity> {
@@ -160,7 +160,7 @@ export async function getGoogleFlowCharacter(
 const PREVIEW_BATCH = 8;
 
 /** Attach signed thumbnail_url via parallel retrieve when list omits media URLs. */
-export async function enrichCharactersWithPreviews(
+async function enrichCharactersWithPreviews(
   provider: GoogleFlowProvider,
   characters: GoogleFlowEntity[],
 ): Promise<GoogleFlowEntity[]> {
@@ -315,7 +315,7 @@ export function createGoogleFlowCharacterDef(fs: Engine): ToolDef {
         const imageReferences: string[] = [];
         for (const input of resolved) {
           imageReferences.push(
-            await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, a.book_id),
+            await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename),
           );
         }
         const result = await createGoogleFlowCharacter(provider, {
@@ -500,7 +500,7 @@ export async function replaceGoogleFlowCharacter(
 
     for (const input of resolved) {
       imageReferences.push(
-        await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, bookId),
+        await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename),
       );
     }
   } else {

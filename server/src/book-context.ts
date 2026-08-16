@@ -8,7 +8,7 @@ export interface BookContext {
 
 const contexts = new AsyncLocalStorage<BookContext>();
 
-export function activeBookContext(): BookContext {
+function activeBookContext(): BookContext {
   const context = contexts.getStore();
   if (!context) throw new Error("A book context is required for this operation");
   return context;

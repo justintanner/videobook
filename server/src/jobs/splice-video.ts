@@ -249,7 +249,6 @@ export function registerSpliceVideoJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -285,7 +284,6 @@ export function registerSpliceVideoJob(fs: Engine): void {
       };
       await ingestWorkspaceOutputs(
         fs,
-        bookId,
         assetId,
         [outputPath.split("/").pop()!],
         "splice_video",

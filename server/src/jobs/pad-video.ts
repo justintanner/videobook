@@ -25,7 +25,6 @@ export function registerPadVideoJob(fs: Engine): void {
     
     const result = await withLockedLocalLease(
       fs,
-      bookId,
       sourceAssetId,
       assetDir,
       ctx,
@@ -72,7 +71,6 @@ export function registerPadVideoJob(fs: Engine): void {
           const inputFilename = basename(sourcePath);
           await replaceArtifactFileFromPath(
             fs,
-            bookId,
             sourceAssetId,
             inputFilename,
             outputPath,

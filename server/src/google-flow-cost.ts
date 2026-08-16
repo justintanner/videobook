@@ -12,7 +12,7 @@ import { getCanonicalName } from "./generation-registry.js";
 
 export type GoogleFlowPlanTier = "plus" | "pro" | "ultra99" | "ultra199";
 
-export const GOOGLE_FLOW_RATE_AS_OF = "2026-07-10";
+const GOOGLE_FLOW_RATE_AS_OF = "2026-07-10";
 
 /** Official Gemini API video output rates (USD per second @ 720p). */
 const API_USD_PER_SECOND = {

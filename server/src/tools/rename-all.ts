@@ -70,7 +70,7 @@ export function renameAllDef(fs: Engine): ToolDef {
       "references never change.",
     schema,
     handler: async (args) => {
-      const { book_id, dry_run, renames } = args as {
+      const { dry_run, renames } = args as {
         book_id: string;
         dry_run: boolean;
         renames?: RenamePayload[];
@@ -81,7 +81,7 @@ export function renameAllDef(fs: Engine): ToolDef {
       if (dry_run) {
         return renames && renames.length > 0
           ? handleDryRunRevalidation(renames, renameCandidates(assets))
-          : handleDryRunSuggest(fs, assets, book_id);
+          : handleDryRunSuggest(fs, assets);
       }
 
       if (!renames || renames.length === 0) {
@@ -94,7 +94,7 @@ export function renameAllDef(fs: Engine): ToolDef {
         };
       }
 
-      return handleApply(fs, book_id, renames, renameCandidates(assets));
+      return handleApply(fs, renames, renameCandidates(assets));
     },
   };
 }
@@ -102,7 +102,6 @@ export function renameAllDef(fs: Engine): ToolDef {
 async function handleDryRunSuggest(
   fs: Engine,
   assets: Artifact[],
-  bookId: string,
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -131,7 +130,7 @@ async function handleDryRunSuggest(
 
   const contexts: AssetContext[] = [];
   for (const a of candidates) {
-    const ctx = await loadAssetContext(fs, a, bookId);
+    const ctx = await loadAssetContext(fs, a);
     contexts.push({
       ...(ctx ?? {
         asset_id: a.artifactId,
@@ -142,7 +141,7 @@ async function handleDryRunSuggest(
     });
   }
 
-  const previews = await loadPreviewStills(fs, contexts, bookId);
+  const previews = await loadPreviewStills(fs, contexts);
   const hasImages = previews.some((p) => p.parts.length > 0);
   const contentParts = buildMultimodalContent(contexts, previews, hasImages);
 
@@ -185,7 +184,6 @@ async function handleDryRunRevalidation(
 
 async function handleApply(
   fs: Engine,
-  _bookId: string,
   renames: RenamePayload[],
   candidates: RenameCandidate[],
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
@@ -248,13 +246,12 @@ async function handleApply(
 async function loadAssetContext(
   fs: Engine,
   artifact: Artifact,
-  bookId: string,
 ): Promise<AssetContext | null> {
   if (artifact.kind === "video") {
-    return loadVideoContext(fs, artifact.artifactId, bookId);
+    return loadVideoContext(fs, artifact.artifactId);
   }
   if (artifact.kind === "image") {
-    return loadImageContext(fs, artifact.artifactId, bookId);
+    return loadImageContext(fs, artifact.artifactId);
   }
   return null;
 }
@@ -267,7 +264,6 @@ function decodeJsonBuffer(value: string | Buffer): string {
 async function readAnalysisParts(
   fs: Engine,
   assetId: string,
-  _bookId: string,
 ): Promise<string[]> {
   const parts: string[] = [];
   const analysisRead = await fs.files.read(assetId, ".original.analysis.json");
@@ -294,11 +290,10 @@ async function readAnalysisParts(
 async function loadVideoContext(
   fs: Engine,
   assetId: string,
-  bookId: string,
 ): Promise<AssetContext | null> {
   const parts: string[] = [];
 
-  parts.push(...(await readAnalysisParts(fs, assetId, bookId)));
+  parts.push(...(await readAnalysisParts(fs, assetId)));
 
   // Generation prompt is often the richest description when analysis is missing.
   const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
@@ -340,10 +335,9 @@ async function loadVideoContext(
 async function loadImageContext(
   fs: Engine,
   assetId: string,
-  bookId: string,
 ): Promise<AssetContext | null> {
   const parts: string[] = [];
-  parts.push(...(await readAnalysisParts(fs, assetId, bookId)));
+  parts.push(...(await readAnalysisParts(fs, assetId)));
 
   const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
   if (meta.ok) {
@@ -357,7 +351,7 @@ async function loadImageContext(
 
     // Extracted frames: inherit the parent video's visual analysis, not "last_frame".
     if (sourceAsset && origin && /_frame$/i.test(origin)) {
-      const parent = await loadVideoContext(fs, sourceAsset, bookId);
+      const parent = await loadVideoContext(fs, sourceAsset);
       if (parent?.context_text) {
         parts.push(`still from ${sourceAsset}: ${parent.context_text.slice(0, 400)}`);
       }
@@ -367,12 +361,12 @@ async function loadImageContext(
         const srcArtifact = fs.artifacts.get(src);
         if (!srcArtifact.ok) continue;
         if (srcArtifact.value.kind === "video") {
-          const parent = await loadVideoContext(fs, src, bookId);
+          const parent = await loadVideoContext(fs, src);
           if (parent?.context_text) {
             parts.push(`source ${src}: ${parent.context_text.slice(0, 200)}`);
           }
         } else if (srcArtifact.value.kind === "image") {
-          const srcAnalysis = await readAnalysisParts(fs, src, bookId);
+          const srcAnalysis = await readAnalysisParts(fs, src);
           if (srcAnalysis.length > 0) {
             parts.push(`source ${src}: ${srcAnalysis.join(" ").slice(0, 200)}`);
           } else {
@@ -386,7 +380,7 @@ async function loadImageContext(
                   ? srcMeta.value.source_asset
                   : "";
               if (srcSource && srcOrigin && /_frame$/i.test(srcOrigin)) {
-                const parent = await loadVideoContext(fs, srcSource, bookId);
+                const parent = await loadVideoContext(fs, srcSource);
                 if (parent?.context_text) {
                   parts.push(`source ${src}: ${parent.context_text.slice(0, 200)}`);
                 }
@@ -431,13 +425,12 @@ const PREVIEW_CANDIDATES = [
 async function loadPreviewStills(
   fs: Engine,
   contexts: AssetContext[],
-  bookId: string,
 ): Promise<AssetPreview[]> {
   const out: AssetPreview[] = [];
   for (const ctx of contexts) {
     const parts = ctx.type === "video"
-      ? await loadVideoPreviewParts(fs, ctx.asset_id, bookId)
-      : await loadImagePreviewParts(fs, ctx.asset_id, bookId);
+      ? await loadVideoPreviewParts(fs, ctx.asset_id)
+      : await loadImagePreviewParts(fs, ctx.asset_id);
     out.push({ asset_id: ctx.asset_id, parts });
   }
   return out;
@@ -446,11 +439,10 @@ async function loadPreviewStills(
 async function loadVideoPreviewParts(
   fs: Engine,
   assetId: string,
-  bookId: string,
 ): Promise<OpenAiContentPart[]> {
-  const frameParts = await loadEndFrameParts(fs, assetId, bookId);
+  const frameParts = await loadEndFrameParts(fs, assetId);
   if (frameParts.length > 0) return frameParts;
-  return loadImagePreviewParts(fs, assetId, bookId);
+  return loadImagePreviewParts(fs, assetId);
 }
 
 /** Read first + last jpg from original_frames via the asset dir on disk.
@@ -458,7 +450,6 @@ async function loadVideoPreviewParts(
 async function loadEndFrameParts(
   fs: Engine,
   assetId: string,
-  _bookId: string,
 ): Promise<OpenAiContentPart[]> {
   const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return [];
@@ -495,7 +486,6 @@ async function loadEndFrameParts(
 async function loadImagePreviewParts(
   fs: Engine,
   assetId: string,
-  _bookId: string,
 ): Promise<OpenAiContentPart[]> {
   for (const filename of PREVIEW_CANDIDATES) {
     const read = await fs.files.read(assetId, filename);

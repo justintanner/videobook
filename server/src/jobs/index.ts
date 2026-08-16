@@ -75,7 +75,7 @@ import { registerGenerateGptImageTextJob } from "./generate-gpt-image-text.js";
 import { registerGenerateAlibabaImageJob, registerGenerateAlibabaImageProJob } from "./generate-alibaba-image.js";
 import { registerGenerateAlibabaQwenImageJob, registerGenerateAlibabaQwenImageEditJob } from "./generate-alibaba-qwen-image.js";
 import { registerGenerateAlibabaVideoJob } from "./generate-alibaba-video.js";
-import { registerCompleteKieTaskJob } from "./complete-kie-task.js";
+import { registerCompleteProviderTaskJob } from "./complete-provider-task.js";
 import { registerRenderProjectJob } from "./render-project.js";
 import { registerRenderQrOutroJob } from "./render-qr-outro.js";
 import { registerProcessVideoJob } from "./process-video.js";
@@ -222,7 +222,7 @@ export function registerAllJobHandlers(
   registerGenerateAlibabaQwenImageJob(fs);
   registerGenerateAlibabaQwenImageEditJob(fs);
   registerGenerateAlibabaVideoJob(fs);
-  registerCompleteKieTaskJob(fs);
+  registerCompleteProviderTaskJob(fs);
   registerRenderProjectJob(fs);
   registerRenderQrOutroJob(fs);
   registerProcessVideoJob(fs);

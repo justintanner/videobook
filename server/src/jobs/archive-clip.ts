@@ -143,7 +143,6 @@ function buildAssetSnapshot(
 async function readAnalysisTopics(
   fs: Engine,
   assetId: string,
-  _bookId: string,
 ): Promise<string[]> {
   const read = await fs.files.read(assetId, ".original.analysis.json");
   if (!read.ok) return [];
@@ -193,7 +192,7 @@ async function prepareAssetMedia(
       ...(title ? { title } : {}),
       created_at: new Date().toISOString(),
     },
-    analysisTopics: await readAnalysisTopics(fs, payload.assetId, payload.bookId),
+    analysisTopics: await readAnalysisTopics(fs, payload.assetId),
     assetSnapshot: buildAssetSnapshot(manifest.value, payload.bookId, payload.assetId),
   };
 }
@@ -579,7 +578,7 @@ export function registerArchiveClipJob(fs: Engine): void {
   registerJobHandler("archive_clip", async (payload, ctx) => {
     const p = payload as ArchiveClipPayload;
     if (p.assetId) {
-      return withLocalLease(fs, p.bookId, p.assetId, ctx, "archive", async () => {
+      return withLocalLease(fs, p.assetId, ctx, "archive", async () => {
         const result = await runArchive(fs, p);
         await writeArchiveMetadata(fs, p, result);
         return result;

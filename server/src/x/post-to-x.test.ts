@@ -121,7 +121,7 @@ describe("postToX helper", () => {
     expect(tweetBody.media.media_ids).toEqual(["MEDIA_42"]);
     expect(tweetBody.text).toBe("hi");
 
-    const meta = await readXPostMetadata(fs, assetId, bookId);
+    const meta = await readXPostMetadata(fs, assetId);
     expect(meta.version).toBe(1);
     expect(meta.asset_id).toBe(assetId);
     expect(meta.posts).toHaveLength(1);
@@ -166,7 +166,7 @@ describe("postToX helper", () => {
       scheduledFor,
     });
 
-    const meta = await readXPostMetadata(fs, assetId, bookId);
+    const meta = await readXPostMetadata(fs, assetId);
     expect(meta.posts).toHaveLength(2);
     expect(meta.posts[0].tweet_id).toBe("T1");
     expect(meta.posts[1]).toMatchObject({

@@ -128,7 +128,7 @@ export interface ProviderKeyStatusDeps {
   readElevenLabsCredits?: CreditReader;
 }
 
-const TOKEN_LOOKUP_TEXT = "Videocity token lookup";
+const TOKEN_LOOKUP_TEXT = "Videobook token lookup";
 const OPENAI_TOKEN_LOOKUP_MODEL = "gpt-5.4";
 const XAI_TOKEN_LOOKUP_MODEL = "grok-4.20-reasoning";
 

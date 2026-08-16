@@ -22,7 +22,6 @@ import {
   notebookSplitRanges,
   parseNotebookSplitCommand,
   planNotebookSplitCommand,
-  resolveNotebookSplitSource,
 } from '../../src/videobook/notebook-split-command'
 
 const execFileAsync = promisify(execFile)
@@ -205,11 +204,6 @@ describe('notebook split commands', () => {
     expect(beforeResult.ok).toBe(true)
     if (!beforeResult.ok) return
     const before: NotebookDocument = beforeResult.value
-    expect(resolveNotebookSplitSource(before, source.id).id).toBe(source.id)
-    expect(resolveNotebookSplitSource(before, source.id.slice(0, 8)).id)
-      .toBe(source.id)
-    expect(resolveNotebookSplitSource(before, 'a1').id).toBe(source.id)
-
     const command = parseNotebookSplitCommand(
       'split @a1 at 1s, 2s',
     )!

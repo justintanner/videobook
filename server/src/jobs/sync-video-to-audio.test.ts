@@ -166,7 +166,6 @@ describe("audio sync transcript preparation and rollback", () => {
     const fs = createEngineForTest(projectsDir);
     const savedApiKey = process.env.ELEVENLABS_API_KEY;
     try {
-      const bookId = fs.book.get().bookId;
       const created = await fs.artifacts.create("vid", "valid transcript");
       if (!created.ok) throw new Error(created.error.message);
       const audio = await fs.files.write(created.value.artifactId, "original.mp3", Buffer.from("audio")
@@ -183,7 +182,6 @@ describe("audio sync transcript preparation and rollback", () => {
       await expect(prepareAudioSyncTranscript(
         fs,
         created.value.artifactId,
-        bookId,
       )).resolves.toEqual({ transcript, replacement: null });
     } finally {
       if (savedApiKey === undefined) {
@@ -206,7 +204,6 @@ describe("audio sync transcript preparation and rollback", () => {
     const fs = createEngineForTest(projectsDir);
     const savedApiKey = process.env.ELEVENLABS_API_KEY;
     try {
-      const bookId = fs.book.get().bookId;
       const created = await fs.artifacts.create("vid", "replacement transcript");
       if (!created.ok) throw new Error(created.error.message);
       const audio = await fs.files.write(created.value.artifactId, sourceFilename, Buffer.from("audio")
@@ -223,7 +220,6 @@ describe("audio sync transcript preparation and rollback", () => {
       await expect(prepareAudioSyncTranscript(
         fs,
         created.value.artifactId,
-        bookId,
       )).rejects.toThrow("ELEVENLABS_API_KEY environment variable is not set");
 
       const transcriptAfter = await fs.files.read(created.value.artifactId, "elevenlabs.json"
@@ -253,7 +249,6 @@ describe("audio sync transcript preparation and rollback", () => {
     const projectsDir = await mkdtemp(join(tmpdir(), "videocity-audio-sync-restore-"));
     const fs = createEngineForTest(projectsDir);
     try {
-      const bookId = fs.book.get().bookId;
       const created = await fs.artifacts.create("vid", "restore source");
       if (!created.ok) throw new Error(created.error.message);
       for (const [filename, contents] of [
@@ -286,7 +281,6 @@ describe("audio sync transcript preparation and rollback", () => {
       await expect(restoreAudioSyncSnapshot(
         fs,
         created.value.artifactId,
-        bookId,
         restoreCommit,
       )).resolves.toMatch(/^[a-f0-9]{40}$/);
 
@@ -304,7 +298,6 @@ describe("audio sync transcript preparation and rollback", () => {
       await expect(restoreAudioSyncSnapshot(
         fs,
         created.value.artifactId,
-        bookId,
         "0000000000000000000000000000000000000000",
       )).rejects.toThrow("Revision not found");
       const work = await fs.jobs.artifactWork.read(created.value.artifactId);

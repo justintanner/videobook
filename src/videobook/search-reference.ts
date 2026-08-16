@@ -11,8 +11,45 @@ export interface SearchReferenceDescriptor {
   localPreview?: boolean
 }
 
+type SearchReferenceToolCall = (
+  tool: string,
+  args: Record<string, unknown>,
+) => Promise<unknown>
+
+type ExistingSearchReferenceInput = {
+  sourceBookId: string
+  sourceArtifactId: string
+  mode: ReverseSearchMode
+  previewUrl?: string | null
+  sourceRange?: { startSeconds: number; durationSeconds: number }
+}
+
 export function referenceKind(mode: ReverseSearchMode): SearchReferenceKind {
   return mode === 'image-reverse' ? 'image' : 'video'
+}
+
+export async function prepareExistingSearchReference(
+  call: SearchReferenceToolCall,
+  {
+    sourceBookId,
+    sourceArtifactId,
+    mode,
+    previewUrl,
+    sourceRange,
+  }: ExistingSearchReferenceInput,
+): Promise<SearchReferenceDescriptor> {
+  const value = await call('prepare_search_reference', {
+    source_book_id: sourceBookId,
+    source_artifact_id: sourceArtifactId,
+    kind: referenceKind(mode),
+    ...(sourceRange
+      ? {
+          source_start_seconds: sourceRange.startSeconds,
+          source_duration_seconds: sourceRange.durationSeconds,
+        }
+      : {}),
+  })
+  return asSearchReferenceDescriptor(value, previewUrl)
 }
 
 export function compatibleReferenceFile(

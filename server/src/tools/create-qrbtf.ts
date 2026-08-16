@@ -115,7 +115,6 @@ export async function buildQrbtfPng(
 
 async function persistQrbtfAsset(
   fs: Engine,
-  bookId: string,
   assetName: string,
   files: QrbtfFiles,
   metadata: Record<string, unknown>,
@@ -198,7 +197,6 @@ export function createQrbtfDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const {
-        book_id,
         value,
         style,
         point_type,
@@ -275,7 +273,6 @@ export function createQrbtfDef(fs: Engine): ToolDef {
 
       const resultAsset = await persistQrbtfAsset(
         fs,
-        book_id,
         derivedLabel("qrbtf", stem),
         files,
         metadata,

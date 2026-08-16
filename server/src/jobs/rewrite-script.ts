@@ -185,13 +185,12 @@ export function registerRewriteScriptJob(fs: Engine): void {
     const {
       assetId: scriptAssetId,
       sourceAssetId,
-      bookId,
       tldr,
       platform,
       customPrompt,
     } = payload as RewriteScriptPayload;
 
-    return withLocalLease(fs, bookId, scriptAssetId, ctx, "rewrite_script", async () => {
+    return withLocalLease(fs, scriptAssetId, ctx, "rewrite_script", async () => {
       const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"));
 
       const readResult = await fs.files.read(scriptAssetId, SCRIPT_FILENAME);

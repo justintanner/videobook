@@ -1,5 +1,5 @@
-export const TIMEWARP_STRETCH_MIN = 0.25;
-export const TIMEWARP_STRETCH_MAX = 4;
+const TIMEWARP_STRETCH_MIN = 0.25;
+const TIMEWARP_STRETCH_MAX = 4;
 
 export type TimewarpSegment = {
   kind: "prefix" | "selection" | "suffix";

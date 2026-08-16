@@ -13,12 +13,11 @@ import { generationLabel } from "../artifact-label.js";
 async function resolveVideoRefList(
   fs: Engine,
   rawRefs: readonly string[],
-  bookId: string,
 ): Promise<{ ok: true; inputs: RefInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
   const inputs: RefInput[] = [];
   const sourceVideoIds: string[] = [];
   for (const raw of rawRefs) {
-    const r = await resolveVideoRef(fs, raw, bookId);
+    const r = await resolveVideoRef(fs, raw);
     if (!r.ok) return { ok: false, error: r.error };
     inputs.push(r.value);
     sourceVideoIds.push(r.value.assetId);
@@ -29,12 +28,11 @@ async function resolveVideoRefList(
 async function resolveAudioRefList(
   fs: Engine,
   rawRefs: readonly string[],
-  bookId: string,
 ): Promise<{ ok: true; inputs: RefInput[]; sourceAudioIds: string[] } | { ok: false; error: string }> {
   const inputs: RefInput[] = [];
   const sourceAudioIds: string[] = [];
   for (const raw of rawRefs) {
-    const r = await resolveAudioRef(fs, raw, bookId);
+    const r = await resolveAudioRef(fs, raw);
     if (!r.ok) return { ok: false, error: r.error };
     inputs.push(r.value);
     sourceAudioIds.push(r.value.assetId);
@@ -93,13 +91,13 @@ export function generateSeedance2FastR2vFalDef(fs: Engine): ToolDef {
         return toolError("Total reference files across all modalities must not exceed 12");
       }
 
-      const resolvedImages = await resolveImageRefs(fs, imgRefs, book_id);
+      const resolvedImages = await resolveImageRefs(fs, imgRefs);
       if (!resolvedImages.ok) return toolError(resolvedImages.error);
 
-      const resolvedVideos = await resolveVideoRefList(fs, vidRefs, book_id);
+      const resolvedVideos = await resolveVideoRefList(fs, vidRefs);
       if (!resolvedVideos.ok) return toolError(resolvedVideos.error);
 
-      const resolvedAudios = await resolveAudioRefList(fs, audRefs, book_id);
+      const resolvedAudios = await resolveAudioRefList(fs, audRefs);
       if (!resolvedAudios.ok) return toolError(resolvedAudios.error);
 
       const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "bytedance/seedance-2-fast"), prompt));

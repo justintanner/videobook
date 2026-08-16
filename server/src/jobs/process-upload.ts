@@ -48,7 +48,6 @@ function uploadShapeFor(type: ArtifactKind): { mediaType: UploadMediaType; exten
 
 export async function findUnprocessedUploads(
   fs: Engine,
-  bookId: string,
   assets: Artifact[],
 ): Promise<UnprocessedUpload[]> {
   const results = await Promise.all(

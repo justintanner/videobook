@@ -103,7 +103,7 @@ export function keywordFontSize(text: string, width: number, height: number, sca
   return Math.round(base * lengthScale * scale);
 }
 
-export function keywordAnchorSide(anchor: KeywordGraphicAnchor): "left" | "right" {
+function keywordAnchorSide(anchor: KeywordGraphicAnchor): "left" | "right" {
   return anchor.endsWith("right") ? "right" : "left";
 }
 
@@ -143,7 +143,7 @@ export function keywordLayout(
   };
 }
 
-export function clampRect(rect: NormalizedRect): NormalizedRect {
+function clampRect(rect: NormalizedRect): NormalizedRect {
   const x = Math.max(0, Math.min(1, rect.x));
   const y = Math.max(0, Math.min(1, rect.y));
   return {
@@ -163,14 +163,14 @@ export function expandRect(rect: NormalizedRect, margin: number): NormalizedRect
   });
 }
 
-export function intersects(a: NormalizedRect, b: NormalizedRect): boolean {
+function intersects(a: NormalizedRect, b: NormalizedRect): boolean {
   return a.x < b.x + b.width
     && a.x + a.width > b.x
     && a.y < b.y + b.height
     && a.y + a.height > b.y;
 }
 
-export function rectGap(a: NormalizedRect, b: NormalizedRect): number {
+function rectGap(a: NormalizedRect, b: NormalizedRect): number {
   const dx = Math.max(a.x - (b.x + b.width), b.x - (a.x + a.width), 0);
   const dy = Math.max(a.y - (b.y + b.height), b.y - (a.y + a.height), 0);
   return Math.hypot(dx, dy);
@@ -212,7 +212,6 @@ export function mapSourceRectToTarget(
 
 export function subtitleBand(
   orientation: Orientation,
-  targetWidth: number,
   targetHeight: number,
   position: SubtitlePosition,
   style: SubtitleStyle,
@@ -287,7 +286,6 @@ export function resolveKeywordPlacements(
     if (settings.subtitlesEnabled) {
       occupied.push(expandRect(subtitleBand(
         orientation,
-        width,
         height,
         settings.subtitlePosition,
         settings.subtitleStyle,

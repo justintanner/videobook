@@ -70,35 +70,35 @@ export function generateAlibabaVideoDef(fs: Engine): ToolDef {
 
       let firstFrame: RefInput | undefined;
       if (first_frame_ref) {
-        const r = await resolveImageRef(fs, first_frame_ref, book_id);
+        const r = await resolveImageRef(fs, first_frame_ref);
         if (!r.ok) return toolError(r.error);
         firstFrame = r.value;
       }
 
       let lastFrame: RefInput | undefined;
       if (last_frame_ref) {
-        const r = await resolveImageRef(fs, last_frame_ref, book_id);
+        const r = await resolveImageRef(fs, last_frame_ref);
         if (!r.ok) return toolError(r.error);
         lastFrame = r.value;
       }
 
       let firstClip: RefInput | undefined;
       if (first_clip_ref) {
-        const r = await resolveVideoRef(fs, first_clip_ref, book_id);
+        const r = await resolveVideoRef(fs, first_clip_ref);
         if (!r.ok) return toolError(r.error);
         firstClip = r.value;
       }
 
       let drivingAudio: RefInput | undefined;
       if (driving_audio_ref) {
-        const r = await resolveAudioRef(fs, driving_audio_ref, book_id);
+        const r = await resolveAudioRef(fs, driving_audio_ref);
         if (!r.ok) return toolError(r.error);
         drivingAudio = r.value;
       }
 
       let videoRef: RefInput | undefined;
       if (video_ref) {
-        const r = await resolveVideoRef(fs, video_ref, book_id);
+        const r = await resolveVideoRef(fs, video_ref);
         if (!r.ok) return toolError(r.error);
         videoRef = r.value;
       }

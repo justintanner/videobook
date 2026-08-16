@@ -50,11 +50,11 @@ export function generateVolcengineLipsyncVideoDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "Volcengine lip-sync requires audio_ref" }] };
       }
 
-      const videoResult = await resolveVideoRef(fs, video_ref, book_id);
+      const videoResult = await resolveVideoRef(fs, video_ref);
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const videoInput = videoResult.value;
 
-      const audioResult = await resolveAudioRef(fs, audio_ref, book_id);
+      const audioResult = await resolveAudioRef(fs, audio_ref);
       if (!audioResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: audioResult.error }] };
       const audioInput = audioResult.value;
 

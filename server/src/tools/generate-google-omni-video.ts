@@ -49,7 +49,7 @@ const GOOGLE_OMNI_ASPECT_RATIOS = ["16:9", "9:16"] as const;
 //   - captchaToken — user-supplied reCAPTCHA tokens (provider-side
 //     captchaRetry is applied in jobs/_google-flow.ts; captchaOrder via
 //     GOOGLE_FLOW_CAPTCHA_ORDER).
-//   - replyUrl / replyRef — webhook completion; videocity polls via sync.ts.
+//   - replyUrl / replyRef — webhook completion; videocity polls via reconcile-project-work.ts.
 //   - trimStart / trimEnd — removed from the videos type in 0.7.2; omni trims
 //     via startFrameIndex_1 / endFrameIndex_1 (derived from the clip timecodes).
 const generateGoogleOmniVideoSchema = {
@@ -156,21 +156,21 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageRef(fs, slug, book_id);
+        const r = await resolveImageRef(fs, slug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       let firstFrame: RefInput | undefined;
       if (firstFrameSlug !== undefined) {
-        const r = await resolveImageRef(fs, firstFrameSlug, book_id);
+        const r = await resolveImageRef(fs, firstFrameSlug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let videoInput: RefInput | undefined;
       if (videoRef !== undefined) {
-        const r = await resolveVideoRef(fs, videoRef, book_id);
+        const r = await resolveVideoRef(fs, videoRef);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInput = r.value;
       }

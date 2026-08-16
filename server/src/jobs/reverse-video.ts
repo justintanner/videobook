@@ -37,7 +37,6 @@ export function registerReverseVideoJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -59,7 +58,6 @@ export function registerReverseVideoJob(fs: Engine): void {
       const inputFilename = basename(inputPath);
       await replaceArtifactFileFromPath(
         fs,
-        bookId,
         assetId,
         inputFilename,
         outputPath,
@@ -77,7 +75,11 @@ export function registerReverseVideoJob(fs: Engine): void {
       assetId,
       assetDir,
       bookId,
-      provenance: { origin: "reverse", reversed_at: new Date().toISOString() },
+      provenance: {
+        origin: "reverse",
+        source_asset_id: assetId,
+        reversed_at: new Date().toISOString(),
+      },
       force: true,
       skipDownstreamJobs: true,
     } as unknown as Record<string, unknown>);

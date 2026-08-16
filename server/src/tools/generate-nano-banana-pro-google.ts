@@ -68,7 +68,7 @@ export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "aspect_ratio 'auto' requires at least one reference image" }] };
       }
 
-      const resolution = await resolveImageRefs(fs, rawSlugs, book_id);
+      const resolution = await resolveImageRefs(fs, rawSlugs);
       if (!resolution.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolution.error }] };
       }

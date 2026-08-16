@@ -51,7 +51,7 @@ function redactEnvironmentSecrets(message: string): string {
   return safe;
 }
 
-export function sanitizeProviderFailureMessage(message: string): string {
+function sanitizeProviderFailureMessage(message: string): string {
   const safe = redactEnvironmentSecrets(
     message
       .replace(SENSITIVE_FIELD, "$1[redacted]")

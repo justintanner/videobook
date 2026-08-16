@@ -150,7 +150,7 @@ function fallbackPrompt(kind: GenerationKind): string {
   return "Clear subject, coherent motion.";
 }
 
-export function buildInitialGenerationPrompt(
+function buildInitialGenerationPrompt(
   document: NotebookDocument,
   cell: NotebookCell,
 ): string {

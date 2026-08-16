@@ -35,7 +35,7 @@ export function registerGenerateNanoBananaImageJob(fs: Engine): void {
       uploadedUrls.push(
         "url" in input
           ? input.url
-          : await uploadAssetToKie(fs, input.assetId, input.filename, bookId),
+          : await uploadAssetToKie(fs, input.assetId, input.filename),
       );
     }
 

@@ -61,7 +61,6 @@ interface Queue {
 const handlers = new Map<string, ServerJobHandler>();
 const runnerByBook = new Map<string, RunnerInfo>();
 const jobIdIndex = new Map<string, QueueIndexEntry>();
-const rewindingBooks = new Set<string>();
 const testEngines = new Map<string, Engine>();
 let activeTestRoot: string | null = null;
 let activeTestBookId: string | null = null;
@@ -111,7 +110,7 @@ async function tickProviderPoll(info: RunnerInfo): Promise<void> {
   info.providerPollInFlight = true;
   try {
     providerPollTickHook?.(info.bookId);
-    const { pollPendingProviderTasks } = await import("./tools/sync.js");
+    const { pollPendingProviderTasks } = await import("./tools/reconcile-project-work.js");
     await pollPendingProviderTasks(
       info.engine,
       info.bookId,
@@ -449,11 +448,9 @@ async function ensureRunner(bookId: string): Promise<RunnerInfo> {
 }
 
 async function ensureBookReady(
-  jobId: string,
   payload: JobPayload,
 ): Promise<{ bookId: string; engine: Engine; runner: QueueRunner }> {
   const bookId = extractBookId(payload);
-  if (rewindingBooks.has(bookId)) throw new Error(`Book is rewinding: ${bookId}`);
   const info = await ensureRunner(bookId);
   return { bookId, engine: info.engine, runner: info.runner };
 }
@@ -499,7 +496,7 @@ function mapState(state: JobState): "queued" | "running" | "completed" | "failed
 
 export const queue: Queue = {
   async enqueue(jobId: string, payload: JobPayload) {
-    const { bookId, engine } = await ensureBookReady(jobId, payload);
+    const { bookId, engine } = await ensureBookReady(payload);
     const result = engine.jobs.queue.enqueue(enqueueOptions(jobId, payload));
     rememberJob(jobId, { bookId, internalId: result.job.id });
     return result.job;
@@ -509,7 +506,7 @@ export const queue: Queue = {
     payload: JobPayload,
     timeoutMs = 300_000,
   ): Promise<T> {
-    const { bookId, engine, runner } = await ensureBookReady(jobId, payload);
+    const { bookId, engine, runner } = await ensureBookReady(payload);
     const result = engine.jobs.queue.enqueue(enqueueOptions(jobId, payload));
     rememberJob(jobId, { bookId, internalId: result.job.id });
     return await runner.waitFor(result.job.id, timeoutMs) as T;
@@ -542,7 +539,7 @@ export const queue: Queue = {
   },
 };
 
-export async function reconcileQueueOnStartup(): Promise<void> {
+async function reconcileQueueOnStartup(): Promise<void> {
   await bookManager.ready();
   await Promise.all(bookManager.list().map((book) => ensureRunner(book.bookId)));
 }
@@ -581,45 +578,6 @@ export async function waitForJob(
     await new Promise<void>((resolve) => setTimeout(resolve, 50));
   }
   throw new Error(`Job ${jobId} timed out after ${timeoutMs}ms`);
-}
-
-export interface RewindQueuePreparation {
-  abortedJobs: number;
-  failedPendingTasks: number;
-}
-
-export async function prepareBookForRewind(
-  bookId: string,
-): Promise<RewindQueuePreparation> {
-  if (rewindingBooks.has(bookId)) throw new Error(`Book is already rewinding: ${bookId}`);
-  rewindingBooks.add(bookId);
-  const engine = await resolveBookEngine(bookId);
-  const info = runnerByBook.get(bookId);
-  if (info) {
-    runnerByBook.delete(bookId);
-    stopProviderPollDriver(info);
-    info.reaper.stop();
-    await info.runner.stop();
-  }
-  const jobs = engine.jobs.queue.list({ states: ["queued", "running", "completing"] });
-  await Promise.all(jobs.map((job) => engine.jobs.queue.abort(job.id, "Aborted by book rewind")));
-  const pending = engine.jobs.pending.findAll();
-  let failedPendingTasks = 0;
-  if (pending.ok) {
-    for (const task of pending.value) {
-      const failed = await engine.jobs.pending.forceFail(task.artifactId, {
-        message: "Aborted by book rewind",
-        failCode: "rewind",
-      });
-      if (failed.ok) failedPendingTasks += 1;
-    }
-  }
-  return { abortedJobs: jobs.length, failedPendingTasks };
-}
-
-export async function resumeBookAfterRewind(bookId: string): Promise<void> {
-  rewindingBooks.delete(bookId);
-  await ensureRunner(bookId);
 }
 
 export async function setEngineRoot(

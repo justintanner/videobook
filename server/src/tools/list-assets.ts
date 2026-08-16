@@ -1,7 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
-import { buildAssetList } from "./sync.js";
+import { buildAssetList } from "./reconcile-project-work.js";
 
 export function listAssetsDef(fs: Engine): ToolDef {
   return {

@@ -125,7 +125,7 @@ import {
   NotebookCellContextMenu,
   type NotebookCellContextAction,
 } from '@/components/videobook/NotebookCellContextMenu'
-import { BookProjectSelector } from '@/components/videobook/BookProjectSelector'
+import { BookProjectMenu } from '@/components/videobook/BookProjectMenu'
 import {
   NotebookCellAddMenu,
 } from '@/components/videobook/NotebookCellAddMenu'
@@ -154,17 +154,25 @@ import {
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
 import {
+  notebookCellRequiresCloudGenerationConsent,
+  notebookCellSupportsGenerateCellCommand,
+} from '@/videobook/notebook-generation-policy'
+import {
   startNotebookCellRun,
 } from '@/videobook/notebook-cell-actions'
 import {
-  asSearchReferenceDescriptor,
+  prepareExistingSearchReference,
   referenceKind,
-  releaseSearchReference,
   searchReferenceRange,
   uploadSearchReference,
   type ReverseSearchMode,
   type SearchReferenceDescriptor,
 } from '@/videobook/search-reference'
+import {
+  type SearchReferenceLifecycleState,
+  type SearchReferenceMode,
+} from '@/videobook/search-reference-lifecycle'
+import { useSearchReferenceLifecycle } from '@/videobook/useSearchReferenceLifecycle'
 import {
   validateCommandPlan,
   type CommandPlan,
@@ -225,12 +233,10 @@ import {
 import { routedMediaCellInputs } from '@/videobook/notebook-routed-action'
 import {
   enqueueNotebookAudioCommand,
-  resolveNotebookAudioSource,
   type NotebookAudioCommand,
 } from '@/videobook/notebook-audio-command'
 import {
   enqueueNotebookFrameCommand,
-  resolveNotebookFrameSource,
   type NotebookFrameCommand,
 } from '@/videobook/notebook-frame-command'
 import {
@@ -238,10 +244,10 @@ import {
   notebookSplitCutPoints,
   parseNotebookSplitCommand,
   planNotebookSplitCommand,
-  resolveNotebookSplitSource,
   type NotebookSplitCommand,
   type NotebookSplitRun,
 } from '@/videobook/notebook-split-command'
+import { resolveNotebookVideoSourceCell } from '@/videobook/notebook-video-source'
 import { durationTargetsToCutPoints } from '@/videobook/video-split-review'
 import {
   generationCellTypeForRoutedTool,
@@ -260,12 +266,16 @@ import {
   type NotebookChatGenerationDraft,
 } from '@/videobook/notebook-chat-generation'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
+import { isNotebookGenerationCellType } from '@/videobook/notebook-cell-types'
 import {
   mediaFileAccept,
   mediaKindForFile,
   type PassiveMediaKind,
 } from '@/videobook/notebook-media-drop'
-import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
+import {
+  selectPreferredBook,
+  type InitialWorkspacePayload,
+} from '@/videobook/initial-workspace'
 import {
   asChatModelCatalog,
   fallbackChatModelCatalog,
@@ -273,6 +283,11 @@ import {
   type ChatModelCatalog,
 } from '@/videobook/chat-models'
 import { routedActionReview } from '@/videobook/chat-action-review'
+import {
+  handleModalDialogKeyDown,
+  scheduleModalDialogFocusRestoration,
+  shouldDismissModalDialogFromBackdrop,
+} from '@/videobook/modal-dialog-interactions'
 import {
   idleMcpActivity,
   shouldNotifyMcpActivity,
@@ -282,7 +297,7 @@ import { useMcpConnection } from '@/videobook/useMcpConnection'
 import type {
   BookProjectMutationResult,
   BookProjectSummary,
-} from '@/videobook/book-project-selector'
+} from '@/videobook/book-project-catalog'
 import {
   notebookMentionAssets,
   resolveNotebookMentionAliases,
@@ -298,6 +313,7 @@ import {
   type NotebookCoordinateActionPlan,
 } from '@/videobook/notebook-coordinate-actions'
 import { notebookCellAtSlot } from '@/videobook/notebook-addressing'
+import { recordValue } from '@/videobook/value-decoders'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
 
@@ -322,7 +338,7 @@ type AssetRecord = {
   analysisInfo: NotebookAnalysisInfo | null
 }
 
-type MediaSearchMode = 'text' | ReverseSearchMode
+type MediaSearchMode = SearchReferenceMode
 
 type MediaSlotOperation = 'attach' | 'upload'
 
@@ -351,13 +367,8 @@ type LibrarySearchResult = {
 
 type MediaLibraryPickerState = {
   cellId: string
-  mode: MediaSearchMode
   query: string
   draftQuery: string
-  reference: SearchReferenceDescriptor | null
-  referenceStartSeconds: string
-  referenceDurationSeconds: string
-  preparingReference: boolean
   assets: LibraryAssetRecord[]
   page: LibrarySearchPage
   booksWithErrors: Array<{ bookId: string; message: string }>
@@ -367,13 +378,31 @@ type MediaLibraryPickerState = {
   activeArtifactId: string | null
 }
 
-type MediaLibrarySearchCriteria = Pick<
-  MediaLibraryPickerState,
-  | 'mode'
-  | 'reference'
-  | 'referenceStartSeconds'
-  | 'referenceDurationSeconds'
->
+type MediaLibraryDialogState = MediaLibraryPickerState & {
+  mode: MediaSearchMode
+  reference: SearchReferenceDescriptor | null
+  referenceStartSeconds: string
+  referenceDurationSeconds: string
+  preparingReference: boolean
+}
+
+type MediaLibrarySearchCriteria = {
+  mode: MediaSearchMode
+  reference: SearchReferenceDescriptor | null
+  referenceStartSeconds: string
+  referenceDurationSeconds: string
+}
+
+function mediaLibrarySearchCriteria(
+  state: SearchReferenceLifecycleState,
+): MediaLibrarySearchCriteria {
+  return {
+    mode: state.mode,
+    reference: state.reference,
+    referenceStartSeconds: state.startSeconds,
+    referenceDurationSeconds: state.durationSeconds,
+  }
+}
 
 type MediaSlotContextValue = {
   states: Record<string, MediaSlotState>
@@ -627,27 +656,12 @@ const notebookCellTypes = new Set<string>([
   'splice',
 ] satisfies NotebookCellType[])
 
-function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
 function asString(value: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
 
 function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
-function isGenerationCell(
-  cell: NotebookDocument['cells'][number],
-): boolean {
-  if (cell.operation === 'rewrite_prompt') return true
-  return cell.type === 'generate_video'
-    || cell.type === 'generate_image'
-    || cell.type === 'generate_audio'
 }
 
 function isRunnableCell(
@@ -675,7 +689,7 @@ function parseResult(result: unknown): unknown {
 
 function messageFor(value: unknown, fallback: string): string {
   if (typeof value === 'string') return value
-  const item = record(value)
+  const item = recordValue(value)
   if (!item) return fallback
   for (const key of ['message', 'job_id', 'notebook_id', 'address', 'bookId']) {
     const candidate = asString(item[key])
@@ -685,16 +699,16 @@ function messageFor(value: unknown, fallback: string): string {
 }
 
 function isDownloadVideoResult(value: unknown): boolean {
-  const item = record(value)
+  const item = recordValue(value)
   return asString(item?.artifact_id) !== null
     && asString(item?.assetId) !== null
     && asString(item?.job_id)?.startsWith('download-') === true
 }
 
 function asChatActionPlan(value: unknown): ChatActionPlan {
-  const item = record(value)
-  const params = record(item?.params)
-  const confirmation = record(item?.confirmation)
+  const item = recordValue(value)
+  const params = recordValue(item?.params)
+  const confirmation = recordValue(item?.confirmation)
   const kind = asString(item?.kind)
   const planId = asString(item?.planId)
   const planBookId = asString(item?.bookId)
@@ -767,7 +781,7 @@ function urlFromText(value: string): string {
 function asBooks(value: unknown): BookProjectSummary[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((entry) => {
-    const item = record(entry)
+    const item = recordValue(entry)
     const bookId = item && asString(item.bookId)
     const name = item && asString(item.name)
     const createdAt = item && asNumber(item.createdAt)
@@ -794,11 +808,11 @@ function bookProjectFailure(error: unknown): { ok: false; error: string } {
 }
 
 function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | null {
-  const item = record(value)
+  const item = recordValue(value)
   const id = item && asString(item.id)
   const type = item && asString(item.type)
   const label = item && asString(item.label)
-  const slot = item && record(item.slot)
+  const slot = item && recordValue(item.slot)
   const row = slot && asNumber(slot.row)
   const column = slot && asNumber(slot.column)
   if (
@@ -814,7 +828,7 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
     || column > 12
   ) return null
   if (!notebookCellTypes.has(type ?? '')) return null
-  const inputs = record(item.inputs)
+  const inputs = recordValue(item.inputs)
   const references = Array.isArray(item.references)
     ? item.references as NotebookCellReference[]
     : undefined
@@ -846,7 +860,7 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
 type NotebookSnapshot = NotebookDocument & { revision?: string }
 
 function asNotebook(value: unknown): NotebookSnapshot | null {
-  const item = record(value)
+  const item = recordValue(value)
   const id = item && asString(item.id)
   const name = item && asString(item.name)
   const createdAt = item && asString(item.created_at ?? item.createdAt)
@@ -859,7 +873,7 @@ function asNotebook(value: unknown): NotebookSnapshot | null {
     : []
   const edges = Array.isArray(item.edges)
     ? item.edges.flatMap((edge) => {
-      const parsed = record(edge)
+      const parsed = recordValue(edge)
       const edgeId = parsed && asString(parsed.id)
       const source = parsed && asString(parsed.source)
       const target = parsed && asString(parsed.target)
@@ -884,11 +898,11 @@ function asNotebook(value: unknown): NotebookSnapshot | null {
     ...(asString(item.analysisRevision ?? item.analysis_revision)
       ? { analysisRevision: asString(item.analysisRevision ?? item.analysis_revision)! }
       : {}),
-    ...(record(item.fixture)
-      ? { fixture: record(item.fixture)! as NotebookDocument['fixture'] }
+    ...(recordValue(item.fixture)
+      ? { fixture: recordValue(item.fixture)! as NotebookDocument['fixture'] }
       : {}),
-    ...(record(item.execution)
-      ? { execution: record(item.execution)! as NonNullable<NotebookDocument['execution']> }
+    ...(recordValue(item.execution)
+      ? { execution: recordValue(item.execution)! as NonNullable<NotebookDocument['execution']> }
       : {}),
     ...(Array.isArray(item.generationPlans ?? item.generation_plans)
       ? {
@@ -919,12 +933,12 @@ function asNotebooks(value: unknown): NotebookDocument[] {
 }
 
 function asAsset(value: unknown): AssetRecord | null {
-  const item = record(value)
+  const item = recordValue(value)
   const id = item && asString(item.id)
   const artifactId = item && asString(item.artifact_id ?? item.artifactId)
   const type = item && asString(item.type)
   if (!item || !id || !artifactId || !type) return null
-  const audio = record(item.audio_info)
+  const audio = recordValue(item.audio_info)
   const codec = audio && asString(audio.codec)
   const sampleRateHz = audio && asNumber(audio.sample_rate_hz)
   const channels = audio && asNumber(audio.channels)
@@ -943,12 +957,12 @@ function asAsset(value: unknown): AssetRecord | null {
         durationSeconds,
       }
     : null
-  const analysis = record(item.analysis_info ?? item.analysisInfo)
+  const analysis = recordValue(item.analysis_info ?? item.analysisInfo)
   const sourceDurationSeconds = analysis
     && asNumber(analysis.source_duration_seconds ?? analysis.sourceDurationSeconds)
   const analysisShots = Array.isArray(analysis?.shots)
     ? analysis.shots.flatMap((value) => {
-        const shot = record(value)
+        const shot = recordValue(value)
         const ordinal = shot && asNumber(shot.ordinal)
         const label = shot && asString(shot.label)
         const startSeconds = shot
@@ -976,12 +990,12 @@ function asAsset(value: unknown): AssetRecord | null {
     analysis?.llm_exchanges ?? analysis?.llmExchanges
   const analysisLlmExchanges = Array.isArray(analysisLlmExchangeValues)
     ? analysisLlmExchangeValues.flatMap((value) => {
-        const exchange = record(value)
+        const exchange = recordValue(value)
         const provider = exchange && asString(exchange.provider)
         const model = exchange && asString(exchange.model)
         const stage = exchange && asString(exchange.stage)
         const responseFormatValue = exchange
-          && record(exchange.response_format ?? exchange.responseFormat)
+          && recordValue(exchange.response_format ?? exchange.responseFormat)
         const responseFormatType = responseFormatValue
           && asString(responseFormatValue.type)
         return provider && model && stage
@@ -1027,7 +1041,7 @@ function asAsset(value: unknown): AssetRecord | null {
 }
 
 function asAssets(value: unknown): AssetRecord[] {
-  const container = record(value)
+  const container = recordValue(value)
   const source = Array.isArray(value)
     ? value
     : Array.isArray(container?.assets)
@@ -1040,9 +1054,9 @@ function asAssets(value: unknown): AssetRecord[] {
 }
 
 function asLibrarySearchResult(value: unknown): LibrarySearchResult {
-  const container = record(value)
+  const container = recordValue(value)
   const source = Array.isArray(container?.assets) ? container.assets : []
-  const pageValue = record(container?.page)
+  const pageValue = recordValue(container?.page)
   const offset = asNumber(pageValue?.offset) ?? 0
   const limit = asNumber(pageValue?.limit) ?? 24
   const total = asNumber(pageValue?.total) ?? 0
@@ -1051,7 +1065,7 @@ function asLibrarySearchResult(value: unknown): LibrarySearchResult {
     : []
   return {
     assets: source.flatMap((entry) => {
-      const item = record(entry)
+      const item = recordValue(entry)
       const asset = asAsset(item)
       const owningBookId = item && asString(item.owning_book_id)
       const owningBookName = item && asString(item.owning_book_name)
@@ -1066,7 +1080,7 @@ function asLibrarySearchResult(value: unknown): LibrarySearchResult {
       hasMore: pageValue?.hasMore === true,
     },
     booksWithErrors: errors.flatMap((entry) => {
-      const item = record(entry)
+      const item = recordValue(entry)
       const errorBookId = item && asString(item.book_id)
       const message = item && asString(item.message)
       return errorBookId && message ? [{ bookId: errorBookId, message }] : []
@@ -1077,10 +1091,10 @@ function asLibrarySearchResult(value: unknown): LibrarySearchResult {
 function asIngestStatuses(value: unknown): IngestStatus[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((entry) => {
-    const item = record(entry)
+    const item = recordValue(entry)
     const artifactId = item && asString(item.artifactId)
     const state = item && asString(item.state)
-    const phases = item && record(item.phases)
+    const phases = item && recordValue(item.phases)
     if (!artifactId || !state || !phases) return []
     return [{
       artifactId,
@@ -1097,7 +1111,7 @@ function asIngestStatuses(value: unknown): IngestStatus[] {
 }
 
 function asSequence(value: unknown): Sequence | null {
-  const item = record(value)
+  const item = recordValue(value)
   return item
     && asString(item.sequenceId)
     && asString(item.revision)
@@ -1109,7 +1123,7 @@ function asSequence(value: unknown): Sequence | null {
 }
 
 function asCommandPlan(value: unknown): CommandPlan {
-  const item = record(value)
+  const item = recordValue(value)
   if (
     !item
     || item.planVersion !== 1
@@ -1258,19 +1272,19 @@ function requestFromEditStage(
 function asJobs(value: unknown): JobRecord[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((entry) => {
-    const item = record(entry)
+    const item = recordValue(entry)
     const id = item && asNumber(item.id)
     const type = item && asString(item.type)
     const state = item && asString(item.state)
     const operationId = item && asString(item.operationId ?? item.operation_id)
     if (!item || id === null || !type || !state || !operationId) return []
-    const error = record(item.error)
+    const error = recordValue(item.error)
     const payloadValue = item.payload
     const payload = payloadValue && typeof payloadValue === 'object'
       && !Array.isArray(payloadValue)
       ? payloadValue as Record<string, unknown>
       : null
-    const result = record(item.result)
+    const result = recordValue(item.result)
     return [{
       id,
       operationId,
@@ -1297,7 +1311,7 @@ function asJobs(value: unknown): JobRecord[] {
 function asGenerationPlans(value: unknown): GenerationPlanRecord[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((entry) => {
-    const item = record(entry)
+    const item = recordValue(entry)
     const planId = asString(item?.planId)
     const cellId = asString(item?.cellId)
     const status = asString(item?.status)
@@ -1324,7 +1338,7 @@ function asGenerationPlans(value: unknown): GenerationPlanRecord[] {
 function asCommands(value: unknown): ServerCommand[] {
   return Array.isArray(value)
     ? value.filter((entry): entry is ServerCommand => {
-      const item = record(entry)
+      const item = recordValue(entry)
       const uiAction = item && asString(item.uiAction)
       return item !== null
         && typeof item.command === 'string'
@@ -1335,10 +1349,10 @@ function asCommands(value: unknown): ServerCommand[] {
 }
 
 function asProviders(value: unknown): ProviderRecord[] {
-  const item = record(value)
+  const item = recordValue(value)
   if (!Array.isArray(item?.providers)) return []
   return item.providers.flatMap((entry) => {
-    const provider = record(entry)
+    const provider = recordValue(entry)
     const envKey = provider && asString(provider.envKey)
     const label = provider && asString(provider.label)
     const group = provider && asString(provider.provider)
@@ -1450,8 +1464,8 @@ function cellExecutionStatus(
   document: NotebookDocument,
   cellId: string,
 ): string {
-  const execution = record(document.execution)
-  const item = execution && record(execution[cellId])
+  const execution = recordValue(document.execution)
+  const item = execution && recordValue(execution[cellId])
   const cell = document.cells.find((candidate) => candidate.id === cellId)
   if (!item) {
     return asString(cell?.inputs?.state)
@@ -1467,8 +1481,8 @@ function cellExecutionStartedAt(
   document: NotebookDocument,
   cellId: string,
 ): string | undefined {
-  const execution = record(document.execution)
-  const item = execution && record(execution[cellId])
+  const execution = recordValue(document.execution)
+  const item = execution && recordValue(execution[cellId])
   return asString(item?.startedAt) ?? asString(item?.updatedAt) ?? undefined
 }
 
@@ -1476,8 +1490,8 @@ function cellExecutionError(
   document: NotebookDocument,
   cellId: string,
 ): string | undefined {
-  const execution = record(document.execution)
-  const item = execution && record(execution[cellId])
+  const execution = recordValue(document.execution)
+  const item = execution && recordValue(execution[cellId])
   return asString(item?.error) ?? undefined
 }
 
@@ -1504,7 +1518,7 @@ function videoCanvasMetadata(
     ? document.cells.find((candidate) => candidate.id === producerCellId)
     : undefined
   const generationSettings = producer?.type === 'generate_video'
-    ? record(producer.inputs?.generationSettings)
+    ? recordValue(producer.inputs?.generationSettings)
     : null
   const configuredAspectRatio = asString(
     cell?.inputs?.aspectRatio ?? cell?.inputs?.aspect_ratio,
@@ -1674,11 +1688,7 @@ function cellContextMenuId(cellId: string): string {
 }
 
 function emptyCellLabel(data: CanvasCellData): string {
-  if (
-    data.kind === 'generate_video'
-    || data.kind === 'generate_image'
-    || data.kind === 'generate_audio'
-  ) {
+  if (isNotebookGenerationCellType(data.kind)) {
     return data.tool ?? data.model ?? data.operation ?? 'Choose a generation action'
   }
   if (data.kind === 'video' || data.kind === 'image' || data.kind === 'audio') {
@@ -1869,12 +1879,6 @@ function MediaSlotTile({
   )
 }
 
-function focusableDialogElements(container: HTMLElement): HTMLElement[] {
-  return [...container.querySelectorAll<HTMLElement>(
-    'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-  )].filter((element) => !element.hidden)
-}
-
 function MediaLibraryDialog({
   state,
   kind,
@@ -1891,7 +1895,7 @@ function MediaLibraryDialog({
   onReferenceDuration,
   onSimilar,
 }: {
-  state: MediaLibraryPickerState
+  state: MediaLibraryDialogState
   kind: PassiveMediaKind
   targetBookId: string
   onClose: () => void
@@ -1922,7 +1926,11 @@ function MediaLibraryDialog({
     <div
       className="media-library-backdrop"
       onMouseDown={(event) => {
-        if (event.currentTarget === event.target && !busy) onClose()
+        if (shouldDismissModalDialogFromBackdrop(
+          event.currentTarget,
+          event.target,
+          busy,
+        )) onClose()
       }}
     >
       <section
@@ -1932,25 +1940,11 @@ function MediaLibraryDialog({
         aria-modal="true"
         aria-labelledby="media-library-title"
         aria-describedby="media-library-description"
-        onKeyDown={(event: KeyboardEvent<HTMLElement>) => {
-          if (event.key === 'Escape' && !busy) {
-            event.preventDefault()
-            onClose()
-            return
-          }
-          if (event.key !== 'Tab' || !dialogRef.current) return
-          const focusable = focusableDialogElements(dialogRef.current)
-          if (focusable.length === 0) return
-          const first = focusable[0]!
-          const last = focusable[focusable.length - 1]!
-          if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault()
-            last.focus()
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault()
-            first.focus()
-          }
-        }}
+        onKeyDown={(event) => handleModalDialogKeyDown(event, {
+          busy,
+          container: dialogRef.current,
+          onClose,
+        })}
       >
         <header>
           <div>
@@ -2213,9 +2207,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     tool: data.tool,
   }, data.status)
   const statusLabel = notebookCellStatusLabel(data.kind, data.status)
-  const generationCell = data.kind === 'generate_video'
-    || data.kind === 'generate_image'
-    || data.kind === 'generate_audio'
+  const generationCell = isNotebookGenerationCellType(data.kind)
   const toolTitle = generationCell && data.tool
     ? generationTitles.get(data.tool) ?? null
     : null
@@ -2235,7 +2227,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     })()
     : null
   const generationSettings = generationCell
-    ? record(data.inputs?.generationSettings)
+    ? recordValue(data.inputs?.generationSettings)
     : null
   const aspectRatio = generationSettings
     ? asString(generationSettings.aspect_ratio)
@@ -2593,7 +2585,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const mcp = useMcpConnection({
     url: mcpUrl,
     clientName: 'videobook',
-    autoReconnect: 3000,
+    reconnectDelayMs: 3000,
   })
   const [screen, setScreen] = useState<Screen>('notebook')
   const [books, setBooks] = useState<BookProjectSummary[]>(
@@ -2653,6 +2645,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [mediaSlotStates, setMediaSlotStates] = useState<Record<string, MediaSlotState>>({})
   const [cellRunErrors, setCellRunErrors] = useState<Record<string, string>>({})
   const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
+  const mediaLibraryReference = useSearchReferenceLifecycle()
   const [watermarkDialog, setWatermarkDialog] = useState<WatermarkDialogState | null>(null)
   const momentSearchRef = useRef<MomentSearchHandle | null>(null)
   const [fullscreenCellId, setFullscreenCellId] = useState<string | null>(null)
@@ -3559,20 +3552,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!cell || !isRunnableCell(cell)) {
         throw new Error('Configure this cell before running it')
       }
-      const cloud = isGenerationCell(cell)
-      if (cloud && !online) {
+      const requiresCloudConsent = notebookCellRequiresCloudGenerationConsent(cell)
+      if (requiresCloudConsent && !online) {
         throw new Error(
           'Offline: cloud generation is unavailable. '
           + 'Local search, editing, playback, and export remain available.',
         )
       }
-      if (cloud) {
-        if (
-          cell.operation !== 'rewrite_prompt'
-          && (cell.type === 'generate_image'
-            || cell.type === 'generate_video'
-            || cell.type === 'generate_audio')
-        ) {
+      if (requiresCloudConsent) {
+        if (notebookCellSupportsGenerateCellCommand(cell)) {
           const plan = await createGenerationPlan(cellId, 'ui')
           const stage = plan.stages.find((candidate) =>
             candidate.kind === 'queued'
@@ -3602,8 +3590,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             onStarting: () => setCellQueued(cellId, true),
             onRejected: () => setCellQueued(cellId, false),
           })
-          const runId = asString(record(accepted)?.run_id)
-          const jobOperationId = asString(record(accepted)?.job_id)
+          const runId = asString(recordValue(accepted)?.run_id)
+          const jobOperationId = asString(recordValue(accepted)?.job_id)
           if (!runId || !jobOperationId) {
             setCellQueued(cellId, false)
             throw new Error('The server did not return a notebook run')
@@ -3641,8 +3629,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         onStarting: () => setCellQueued(cellId, true),
         onRejected: () => setCellQueued(cellId, false),
       })
-      const runId = asString(record(accepted)?.run_id)
-      const jobOperationId = asString(record(accepted)?.job_id)
+      const runId = asString(recordValue(accepted)?.run_id)
+      const jobOperationId = asString(recordValue(accepted)?.job_id)
       if (!runId || !jobOperationId) {
         throw new Error('The server did not return a notebook run')
       }
@@ -4068,7 +4056,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const selectedSplitSource = useMemo(() => {
     if (!notebook || !selectedNotebookCell) return null
     try {
-      const source = resolveNotebookSplitSource(notebook, selectedNotebookCell.id)
+      const source = resolveNotebookVideoSourceCell(notebook, selectedNotebookCell.id)
       const artifactId = resolveGeneratedVideoArtifact(notebook, source)
       const asset = artifactId ? assetById.get(artifactId) : undefined
       const duration = asset?.duration ?? asNumber(source.inputs?.durationSeconds)
@@ -4081,7 +4069,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const pendingSplitReview = useMemo(() => {
     if (!notebook || pendingChatAction?.kind !== 'split') return null
     try {
-      const source = resolveNotebookSplitSource(
+      const source = resolveNotebookVideoSourceCell(
         notebook,
         pendingChatAction.command.sourceReference,
       )
@@ -4252,10 +4240,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         refreshBookCommands(),
         refreshChatModels(),
       ])
-      const target = nextBooks.find((book) => book.bookId === preferredBookId)
-        ?? nextBooks.find((book) => book.name.toLowerCase() === 'dancing')
-        ?? nextBooks.find((book) => book.bookId === bookId)
-        ?? nextBooks[0]
+      const target = selectPreferredBook(nextBooks, preferredBookId ?? bookId)
       if (target) {
         await refreshBookData(target.bookId)
         setNotice(`Loaded ${target.name}`)
@@ -4465,9 +4450,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           slot,
           ...(type === 'prompt'
             || type === 'analyze'
-            || type === 'generate_video'
-            || type === 'generate_image'
-            || type === 'generate_audio'
+            || isNotebookGenerationCellType(type)
             ? { prompt: '' }
             : {}),
         },
@@ -4695,7 +4678,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   ): Promise<{ artifactRef: string; reusedExisting: boolean }> => {
     if (!bookId) throw new Error('Choose a book before uploading media')
     const objectHash = await fileObjectHash(file)
-    const duplicateValue = record(await call('check_duplicate_bytes', {
+    const duplicateValue = recordValue(await call('check_duplicate_bytes', {
       book_id: bookId,
       object_hash: objectHash,
     }))
@@ -4703,7 +4686,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ? duplicateValue.matches
       : []
     const duplicate = matches
-      .map((value) => record(value))
+      .map((value) => recordValue(value))
       .find((value) => {
         const duplicateKind = value && asString(value.kind)
         return duplicateKind !== null && isCompatibleLibraryAsset(kind, duplicateKind)
@@ -4717,7 +4700,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       `/api/books/${encodeURIComponent(bookId)}/upload?filename=${encodeURIComponent(file.name)}`,
       { method: 'POST', body: file },
     )
-    const payload = record(await response.json())
+    const payload = recordValue(await response.json())
     if (!response.ok) {
       throw new Error(asString(payload?.error) ?? `Upload failed: ${file.name}`)
     }
@@ -4798,7 +4781,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setBusy(true)
     try {
       const { artifactRef, reusedExisting } = await resolveMediaFileArtifact(file, kind)
-      const created = record(await call('create_notebook_cell', {
+      const created = recordValue(await call('create_notebook_cell', {
         book_id: bookId,
         notebook_id: notebook.id,
         cell: {
@@ -4852,11 +4835,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const closeMediaLibrary = () => {
     mediaLibraryRequestRef.current += 1
-    void releaseSearchReference(mediaLibraryPicker?.reference ?? null)
+    mediaLibraryReference.lifecycle.close()
     setMediaLibraryPicker(null)
     const opener = mediaLibraryOpenerRef.current
     mediaLibraryOpenerRef.current = null
-    if (opener?.isConnected) window.setTimeout(() => opener.focus(), 0)
+    scheduleModalDialogFocusRestoration(
+      opener,
+      (callback) => window.setTimeout(callback, 0),
+    )
   }
 
   const loadMediaLibrary = async (
@@ -4871,12 +4857,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!kind) return
     const activeCriteria = criteria
       ?? (mediaLibraryPicker?.cellId === cellId
-        ? {
-            mode: mediaLibraryPicker.mode,
-            reference: mediaLibraryPicker.reference,
-            referenceStartSeconds: mediaLibraryPicker.referenceStartSeconds,
-            referenceDurationSeconds: mediaLibraryPicker.referenceDurationSeconds,
-          }
+        ? mediaLibrarySearchCriteria(mediaLibraryReference.state)
         : {
             mode: 'text' as const,
             reference: null,
@@ -4899,6 +4880,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     })
     try {
+      let referenceRange
+      try {
+        referenceRange = activeCriteria.mode === 'video-reverse'
+          && activeCriteria.reference
+          ? searchReferenceRange(
+              activeCriteria.referenceStartSeconds,
+              activeCriteria.referenceDurationSeconds,
+              activeCriteria.reference,
+            )
+          : undefined
+      } catch (error) {
+        const message = mediaLibraryReference.lifecycle.getState().reference
+          === activeCriteria.reference
+          ? mediaLibraryReference.lifecycle.resetInvalidRange(error)
+          : error instanceof Error ? error.message : String(error)
+        throw new Error(message)
+      }
       const result = asLibrarySearchResult(await call('search_library_assets', {
         ...(activeCriteria.mode === 'text' && query.trim()
           ? { query: query.trim() }
@@ -4906,14 +4904,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ...(activeCriteria.mode !== 'text' && activeCriteria.reference
           ? { reference_id: activeCriteria.reference.referenceId }
           : {}),
-        ...(activeCriteria.mode === 'video-reverse' && activeCriteria.reference
-          ? {
-              reference_range: searchReferenceRange(
-                activeCriteria.referenceStartSeconds,
-                activeCriteria.referenceDurationSeconds,
-                activeCriteria.reference,
-              ),
-            }
+        ...(referenceRange
+          ? { reference_range: referenceRange }
           : {}),
         kinds: [kind],
         limit: emptyLibraryPage.limit,
@@ -4967,16 +4959,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     mediaLibraryOpenerRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null
+    mediaLibraryReference.lifecycle.close()
     setMediaSlotOperation(cellId, null)
     setMediaLibraryPicker({
       cellId,
-      mode: 'text',
       query: '',
       draftQuery: '',
-      reference: null,
-      referenceStartSeconds: '0',
-      referenceDurationSeconds: '',
-      preparingReference: false,
       assets: [],
       page: emptyLibraryPage,
       booksWithErrors: [],
@@ -5114,8 +5102,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         onStarting: () => setCellQueued(created.cellId, true),
         onRejected: () => setCellQueued(created.cellId, false),
       })
-      const runId = asString(record(accepted)?.run_id)
-      const jobOperationId = asString(record(accepted)?.job_id)
+      const runId = asString(recordValue(accepted)?.run_id)
+      const jobOperationId = asString(recordValue(accepted)?.job_id)
       if (!runId || !jobOperationId) {
         setCellQueued(created.cellId, false)
         throw new Error('The server did not return a notebook run')
@@ -5160,7 +5148,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setWatermarkDialog(null)
     const opener = watermarkOpenerRef.current
     watermarkOpenerRef.current = null
-    if (opener?.isConnected) window.setTimeout(() => opener.focus(), 0)
+    scheduleModalDialogFocusRestoration(
+      opener,
+      (callback) => window.setTimeout(callback, 0),
+    )
   }
 
   const openWatermarkDialog = (assetId: string, targetLabel: string) => {
@@ -5180,7 +5171,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     })
     void (async () => {
       try {
-        const config = record(await call('get_watermark_config', {}, { background: true }))
+        const config = recordValue(await call('get_watermark_config', {}, { background: true }))
         const savedHandle = asString(config?.savedHandle)
         const authenticatedHandle = asString(config?.authenticatedHandle)
         const recent = Array.isArray(config?.recent)
@@ -5214,7 +5205,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? { ...current, submitting: true, error: null }
         : current)
     try {
-      const result = record(await call('apply_watermark', {
+      const result = recordValue(await call('apply_watermark', {
         book_id: bookId,
         asset_id: assetId,
         handle: trimmedHandle,
@@ -5250,7 +5241,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       let reused = 0
       for (const file of files) {
         const objectHash = await fileObjectHash(file)
-        const duplicateValue = record(await call('check_duplicate_bytes', {
+        const duplicateValue = recordValue(await call('check_duplicate_bytes', {
           book_id: bookId,
           object_hash: objectHash,
         }))
@@ -5258,7 +5249,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? duplicateValue.matches
           : []
         if (matches.length > 0) {
-          const first = record(matches[0])
+          const first = recordValue(matches[0])
           const existing = asString(first?.label)
             ?? asString(first?.artifact_id)
             ?? 'existing source'
@@ -5433,7 +5424,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setBusy(true)
     setProcessingArtifactId(artifactId)
     try {
-      const result = record(await call('retry_ingest', {
+      const result = recordValue(await call('retry_ingest', {
         book_id: bookId,
         artifact_id: artifactId,
       }))
@@ -5544,7 +5535,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         plan_id: plan.planId,
         actor: 'videobook-user',
       })
-      const result = record(value)
+      const result = recordValue(value)
       if (result?.kind === 'stale-continuation') {
         setNotice(
           asString(result.message) ?? 'The sequence changed; review a new destination',
@@ -5728,7 +5719,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (!notebookId) {
           throw new Error('The workbook plan is missing its notebook')
         }
-        const queued = record(await call('enqueue_notebook_run', {
+        const queued = recordValue(await call('enqueue_notebook_run', {
           book_id: bookId,
           notebook_id: notebookId,
           plan_id: pending.plan.planId,
@@ -5751,7 +5742,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (!preview?.valid) {
             throw new Error('The plan has conflicts and cannot be applied')
           }
-          const committed = record(await call('commit_edit_intent', {
+          const committed = recordValue(await call('commit_edit_intent', {
             book_id: bookId,
             intent: stage.intent,
             preview_hash: preview.previewHash,
@@ -5810,8 +5801,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             onStarting: () => setCellQueued(cellId, true),
             onRejected: () => setCellQueued(cellId, false),
           })
-          const runId = asString(record(accepted)?.run_id)
-          const jobOperationId = asString(record(accepted)?.job_id)
+          const runId = asString(recordValue(accepted)?.run_id)
+          const jobOperationId = asString(recordValue(accepted)?.job_id)
           if (!runId || !jobOperationId) {
             setCellQueued(cellId, false)
             throw new Error('The server did not return a notebook run')
@@ -5888,13 +5879,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!confirmed) return
     setBusy(true)
     try {
-      const action = record(await call('get_edit_action', {
+      const action = recordValue(await call('get_edit_action', {
         book_id: bookId,
         action_id: lastEditActionId,
       }))
       const targetRevision = asString(action?.baseRevision)
       if (!targetRevision) throw new Error('The edit audit has no base revision')
-      const restored = record(await call('restore_edit_action', {
+      const restored = recordValue(await call('restore_edit_action', {
         book_id: bookId,
         target_revision: targetRevision,
         base_revision: sequence?.revision ?? asString(action?.committedRevision) ?? '',
@@ -5940,7 +5931,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         max_shot_frames: 120,
         max_repeats_per_artifact: 1,
       })
-      const result = record(value)
+      const result = recordValue(value)
       if (result?.kind === 'rough-cut-uncovered') {
         const uncovered = Array.isArray(result.uncoveredBeats)
           ? result.uncoveredBeats.length
@@ -5985,7 +5976,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         moments,
         max_repeats_per_artifact: 1,
       })
-      const result = record(value)
+      const result = recordValue(value)
       if (result?.kind === 'sound-effects-uncovered') {
         return {
           ok: false,
@@ -6113,7 +6104,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     )
     let createdCellId: string
     try {
-      const created = record(await call('create_notebook_cell', {
+      const created = recordValue(await call('create_notebook_cell', {
         book_id: bookId,
         notebook_id: notebook.id,
         cell,
@@ -6214,7 +6205,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         include_referenced: true,
       })
       const currentAssets = asAssets(assetValue)
-      const source = resolveNotebookSplitSource(
+      const source = resolveNotebookVideoSourceCell(
         currentNotebook,
         command.sourceReference,
       )
@@ -6285,7 +6276,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     let actionCellId: string | null = null
     setBusy(true)
     try {
-      const source = resolveNotebookFrameSource(
+      const source = resolveNotebookVideoSourceCell(
         currentNotebook,
         command.sourceReference,
       )
@@ -6354,7 +6345,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     let actionCellId: string | null = null
     setBusy(true)
     try {
-      const source = resolveNotebookAudioSource(
+      const source = resolveNotebookVideoSourceCell(
         currentNotebook,
         command.sourceReference,
       )
@@ -6424,7 +6415,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
-      resolveNotebookAudioSource(
+      resolveNotebookVideoSourceCell(
         currentNotebook,
         command.sourceReference,
       )
@@ -6453,7 +6444,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
-      resolveNotebookFrameSource(
+      resolveNotebookVideoSourceCell(
         currentNotebook,
         command.sourceReference,
       )
@@ -6482,7 +6473,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
-      const source = resolveNotebookFrameSource(
+      const source = resolveNotebookVideoSourceCell(
         currentNotebook,
         command.sourceReference,
       )
@@ -6524,7 +6515,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
-      const source = resolveNotebookSplitSource(
+      const source = resolveNotebookVideoSourceCell(
         currentNotebook,
         command.sourceReference,
       )
@@ -6715,7 +6706,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const placements: string[] = []
         let firstCellId: string | null = null
         for (const cell of routedCells) {
-          const created = record(await call('create_notebook_cell', {
+          const created = recordValue(await call('create_notebook_cell', {
             book_id: bookId,
             notebook_id: notebook.id,
             cell,
@@ -6733,7 +6724,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         setNotice(message)
         return { ok: true, message }
       }
-      const resultRecord = record(result)
+      const resultRecord = recordValue(result)
       const createdCellId = asString(resultRecord?.cell_id)
       await refreshBookData(bookId, notebook?.id)
       if (createdCellId) selectCanvasCell(createdCellId)
@@ -7029,8 +7020,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         actor: 'videobook-user',
       })
       runAccepted = true
-      const runId = asString(record(accepted)?.run_id)
-      const jobOperationId = asString(record(accepted)?.job_id)
+      const runId = asString(recordValue(accepted)?.run_id)
+      const jobOperationId = asString(recordValue(accepted)?.job_id)
       setPendingChatAction(null)
       if (!runId || !jobOperationId) {
         setCellQueued(cellId, false)
@@ -7180,7 +7171,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : {}
         if (action.kind === 'create') {
           const destination = action.destination!
-          const created = record(await call('create_notebook_cell', {
+          const created = recordValue(await call('create_notebook_cell', {
             book_id: bookId,
             notebook_id: currentNotebook.id,
             ...revisionInput,
@@ -7189,9 +7180,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               slot: destination,
               ...(action.cellType === 'prompt'
                 || action.cellType === 'analyze'
-                || action.cellType === 'generate_video'
-                || action.cellType === 'generate_image'
-                || action.cellType === 'generate_audio'
+                || isNotebookGenerationCellType(action.cellType)
                 ? { prompt: '' }
                 : {}),
             },
@@ -7311,7 +7300,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           prompt: input,
           model: chatModel,
         })
-        const routedRecord = record(routed)
+        const routedRecord = recordValue(routed)
         if (routedRecord?.kind === 'chat-action-plan') {
           return await previewRoutedChatAction(
             asChatActionPlan(routed),
@@ -7388,7 +7377,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           candidate.id.toLowerCase().startsWith(token))
         if (
           !cell
-          || !isGenerationCell(cell)
+          || !notebookCellSupportsGenerateCellCommand(cell)
         ) {
           return { ok: false, message: 'Choose a configured generation cell' }
         }
@@ -7457,12 +7446,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           orientation,
           captions,
         })
-        const invalid = record(value)
+        const invalid = recordValue(value)
         if (invalid?.kind === 'invalid-export') {
-          const validation = record(invalid.validation)
+          const validation = recordValue(invalid.validation)
           const errors = Array.isArray(validation?.errors)
             ? validation.errors.map((entry) =>
-                asString(record(entry)?.message)).filter(Boolean)
+                asString(recordValue(entry)?.message)).filter(Boolean)
             : []
           return { ok: false, message: errors.join(' · ') || 'Export validation failed' }
         }
@@ -7769,7 +7758,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return { ok: false, message: 'Open a notebook before downloading media.' }
       }
       const parsed = parseCommandArgs(resolvedRest, command.params)
-      const adapted = adaptCommandArgs(command.mcpTool.adapter, command.mcpTool.tool, parsed)
+      const adapted = adaptCommandArgs(command.mcpTool.adapter, parsed)
       const args: CommandToolArgs = {
         ...adapted,
         ...(command.mcpTool.injectParams ?? {}),
@@ -7789,7 +7778,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const placements: string[] = []
         let firstCellId: string | null = null
         for (const cell of routedCells) {
-          const created = record(await call('create_notebook_cell', {
+          const created = recordValue(await call('create_notebook_cell', {
             book_id: bookId,
             notebook_id: notebook.id,
             cell,
@@ -7809,7 +7798,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       await refreshBookData(bookId, notebook?.id)
       if (command.mcpTool.tool === 'rename_asset') {
-        const renamed = record(result)
+        const renamed = recordValue(result)
         const newLabel = asString(renamed?.label)
         return {
           ok: true,
@@ -7968,21 +7957,27 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const mediaLibraryKind = mediaLibraryCell
     ? passiveMediaKind(mediaLibraryCell.type)
     : null
+  const mediaLibraryDialogState: MediaLibraryDialogState | null = mediaLibraryPicker
+    ? {
+        ...mediaLibraryPicker,
+        mode: mediaLibraryReference.state.mode,
+        reference: mediaLibraryReference.state.reference,
+        referenceStartSeconds: mediaLibraryReference.state.startSeconds,
+        referenceDurationSeconds: mediaLibraryReference.state.durationSeconds,
+        preparingReference: mediaLibraryReference.state.preparing,
+        error: mediaLibraryReference.state.error ?? mediaLibraryPicker.error,
+      }
+    : null
   const updateMediaLibraryDraft = (query: string) => {
     setMediaLibraryPicker((current) => current ? { ...current, draftQuery: query } : current)
   }
   const changeMediaLibraryMode = (mode: MediaSearchMode) => {
-    if (!mediaLibraryPicker || mediaLibraryPicker.mode === mode) return
+    if (!mediaLibraryPicker || mediaLibraryReference.state.mode === mode) return
     const cellId = mediaLibraryPicker.cellId
-    void releaseSearchReference(mediaLibraryPicker.reference)
+    mediaLibraryReference.lifecycle.changeMode(mode)
     setMediaLibraryPicker((current) => current && current.cellId === cellId
       ? {
           ...current,
-          mode,
-          reference: null,
-          referenceStartSeconds: '0',
-          referenceDurationSeconds: '',
-          preparingReference: false,
           page: mode === 'text'
             ? current.page
             : {
@@ -8008,44 +8003,27 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
   const prepareMediaLibraryFile = async (file: File) => {
-    if (!mediaLibraryPicker || mediaLibraryPicker.mode === 'text' || !bookId) return
+    if (!mediaLibraryPicker || mediaLibraryReference.state.mode === 'text' || !bookId) return
     const picker = mediaLibraryPicker
-    const mode = picker.mode as ReverseSearchMode
+    const mode = mediaLibraryReference.state.mode
     setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
-      ? { ...current, preparingReference: true, error: null }
+      ? { ...current, error: null }
       : current)
-    try {
-      const reference = await uploadSearchReference(
-        file,
-        bookId,
-        referenceKind(mode),
-      )
-      await releaseSearchReference(picker.reference)
-      const criteria: MediaLibrarySearchCriteria = {
-        mode,
-        reference,
-        referenceStartSeconds: '0',
-        referenceDurationSeconds: '',
-      }
-      setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
-        ? {
-            ...current,
-            ...criteria,
-            preparingReference: false,
-          }
-        : current)
-      await loadMediaLibrary(picker.cellId, '', 0, false, criteria)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
-        ? {
-            ...current,
-            preparingReference: false,
-            error: message,
-          }
-        : current)
-      setNotice(message, 'error')
+    const result = await mediaLibraryReference.lifecycle.prepare(
+      mode,
+      () => uploadSearchReference(file, bookId, referenceKind(mode)),
+    )
+    if (result.status === 'error') {
+      setNotice(result.error, 'error')
+      return
     }
+    if (result.status === 'stale') return
+    await loadMediaLibrary(picker.cellId, '', 0, false, {
+      mode: result.mode,
+      reference: result.reference,
+      referenceStartSeconds: '0',
+      referenceDurationSeconds: '',
+    })
   }
   const prepareMediaLibrarySimilar = async (asset: LibraryAssetRecord) => {
     if (!mediaLibraryPicker) return
@@ -8056,65 +8034,40 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
       ? {
           ...current,
-          mode,
-          preparingReference: true,
           error: null,
         }
       : current)
-    try {
-      const value = await call('prepare_search_reference', {
-        source_book_id: asset.owningBookId,
-        source_artifact_id: asset.artifactId,
-        kind: referenceKind(mode),
-      })
-      const reference = asSearchReferenceDescriptor(
-        value,
-        mode === 'image-reverse'
+    const result = await mediaLibraryReference.lifecycle.prepare(
+      mode,
+      () => prepareExistingSearchReference(call, {
+        sourceBookId: asset.owningBookId,
+        sourceArtifactId: asset.artifactId,
+        mode,
+        previewUrl: mode === 'image-reverse'
           ? asset.thumbnailUrl ?? asset.mediaUrl
           : asset.mediaUrl,
-      )
-      await releaseSearchReference(picker.reference)
-      const criteria: MediaLibrarySearchCriteria = {
-        mode,
-        reference,
-        referenceStartSeconds: '0',
-        referenceDurationSeconds: '',
-      }
-      setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
-        ? {
-            ...current,
-            ...criteria,
-            preparingReference: false,
-          }
-        : current)
-      await loadMediaLibrary(picker.cellId, '', 0, false, criteria)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
-        ? {
-            ...current,
-            preparingReference: false,
-            error: message,
-          }
-        : current)
-      setNotice(message, 'error')
+      }),
+    )
+    if (result.status === 'error') {
+      setNotice(result.error, 'error')
+      return
     }
+    if (result.status === 'stale') return
+    await loadMediaLibrary(picker.cellId, '', 0, false, {
+      mode: result.mode,
+      reference: result.reference,
+      referenceStartSeconds: '0',
+      referenceDurationSeconds: '',
+    })
   }
   const clearMediaLibraryReference = () => {
     if (!mediaLibraryPicker) return
-    void releaseSearchReference(mediaLibraryPicker.reference)
-    setMediaLibraryPicker((current) => current
-      ? {
-          ...current,
-          reference: null,
-          referenceStartSeconds: '0',
-          referenceDurationSeconds: '',
-          error: null,
-        }
-      : current)
+    mediaLibraryReference.lifecycle.clearReference()
+    setMediaLibraryPicker((current) => current ? { ...current, error: null } : current)
   }
   const searchMediaLibrary = () => {
     if (!mediaLibraryPicker) return
+    mediaLibraryReference.lifecycle.clearError()
     void loadMediaLibrary(
       mediaLibraryPicker.cellId,
       mediaLibraryPicker.draftQuery,
@@ -8318,7 +8271,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!contextMenuDuplicateAssetId || !bookId || !notebook) return
     setBusy(true)
     try {
-      const result = record(await call('duplicate_asset', {
+      const result = recordValue(await call('duplicate_asset', {
         asset_id: contextMenuDuplicateAssetId,
         book_id: bookId,
         notebook_id: notebook.id,
@@ -8400,7 +8353,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 <BookOpen size={18} />
                 <span>/videobook</span>
               </button>
-              <BookProjectSelector
+              <BookProjectMenu
                 activeBook={activeBook}
                 books={books}
                 disabled={busy || mcp.state !== 'ready'}
@@ -9363,12 +9316,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     orientation: exportOrientation,
                     captions: exportCaptions,
                   }).then((value) => {
-                    const result = record(value)
+                    const result = recordValue(value)
                     if (result?.kind === 'invalid-export') {
-                      const validation = record(result.validation)
+                      const validation = recordValue(result.validation)
                       const errors = Array.isArray(validation?.errors)
                         ? validation.errors.map((entry) =>
-                            asString(record(entry)?.message)).filter(Boolean)
+                            asString(recordValue(entry)?.message)).filter(Boolean)
                         : []
                       setNotice(
                         errors.join(' · ') || 'Export validation failed',
@@ -9651,9 +9604,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         />
       )}
 
-      {mediaLibraryPicker && mediaLibraryKind && (
+      {mediaLibraryDialogState && mediaLibraryKind && (
         <MediaLibraryDialog
-          state={mediaLibraryPicker}
+          state={mediaLibraryDialogState}
           kind={mediaLibraryKind}
           targetBookId={bookId}
           onClose={closeMediaLibrary}
@@ -9664,10 +9617,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onAttach={(asset) => void attachLibraryAsset(asset)}
           onReferenceFile={(file) => void prepareMediaLibraryFile(file)}
           onClearReference={clearMediaLibraryReference}
-          onReferenceStart={(value) => setMediaLibraryPicker((current) =>
-            current ? { ...current, referenceStartSeconds: value } : current)}
-          onReferenceDuration={(value) => setMediaLibraryPicker((current) =>
-            current ? { ...current, referenceDurationSeconds: value } : current)}
+          onReferenceStart={mediaLibraryReference.lifecycle.setStartSeconds}
+          onReferenceDuration={mediaLibraryReference.lifecycle.setDurationSeconds}
           onSimilar={(asset) => void prepareMediaLibrarySimilar(asset)}
         />
       )}

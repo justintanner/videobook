@@ -1,7 +1,7 @@
 import { selectXPostUrl } from "./x-post-target.js";
 
-const DOWNLOAD_URL_MESSAGE = "videocity-download-url";
-const BUTTON_ATTR = "data-videocity-download-button";
+const DOWNLOAD_URL_MESSAGE = "videobook-download-url";
+const BUTTON_ATTR = "data-videobook-download-button";
 const CYAN = "rgb(66, 223, 244)";
 const SUCCESS = "rgb(0, 186, 124)";
 const ERROR = "rgb(244, 33, 46)";
@@ -28,11 +28,11 @@ function sendDownload(url: string): Promise<DownloadResponse> {
     chrome.runtime.sendMessage({ type: DOWNLOAD_URL_MESSAGE, url }, (response: DownloadResponse | undefined) => {
       const error = chrome.runtime.lastError;
       if (error) {
-        resolve({ ok: false, error: error.message ?? "Unable to reach Videocity extension." });
+        resolve({ ok: false, error: error.message ?? "Unable to reach Videobook extension." });
         return;
       }
 
-      resolve(response ?? { ok: false, error: "Videocity extension did not respond." });
+      resolve(response ?? { ok: false, error: "Videobook extension did not respond." });
     });
   });
 }
@@ -68,27 +68,27 @@ function findPostUrl(article: Element): string | null {
 }
 
 async function handleClick(button: HTMLButtonElement, url: string): Promise<void> {
-  if (button.dataset.videocityState === "loading") return;
+  if (button.dataset.videobookState === "loading") return;
 
-  button.dataset.videocityState = "loading";
-  setButtonState(button, CYAN, "Queueing in Videocity...");
+  button.dataset.videobookState = "loading";
+  setButtonState(button, CYAN, "Queueing in Videobook...");
   button.style.opacity = "0.55";
 
   const result = await sendDownload(url);
   if (result.ok) {
-    button.dataset.videocityState = "queued";
+    button.dataset.videobookState = "queued";
     button.style.opacity = "1";
-    setButtonState(button, SUCCESS, "Queued in Videocity");
+    setButtonState(button, SUCCESS, "Queued in Videobook");
   } else {
-    button.dataset.videocityState = "error";
+    button.dataset.videobookState = "error";
     button.style.opacity = "1";
     setButtonState(button, ERROR, result.error);
   }
 
   window.setTimeout(() => {
-    button.dataset.videocityState = "idle";
+    button.dataset.videobookState = "idle";
     button.style.opacity = "1";
-    setButtonState(button, CYAN, "Download full source to Videocity");
+    setButtonState(button, CYAN, "Download full source to Videobook");
   }, 2500);
 }
 
@@ -101,7 +101,7 @@ function createButton(url: string): HTMLElement {
 
   const button = document.createElement("button");
   button.type = "button";
-  button.dataset.videocityState = "idle";
+  button.dataset.videobookState = "idle";
   button.style.appearance = "none";
   button.style.background = "transparent";
   button.style.border = "0";
@@ -114,7 +114,7 @@ function createButton(url: string): HTMLElement {
   button.style.padding = "0";
   button.style.width = "34px";
   button.style.height = "34px";
-  setButtonState(button, CYAN, "Download full source to Videocity");
+  setButtonState(button, CYAN, "Download full source to Videobook");
 
   button.addEventListener("mouseenter", () => {
     button.style.background = "rgba(66, 223, 244, 0.12)";

@@ -48,8 +48,6 @@ import { analysisFixtureForCell } from "../notebook-fixtures.js";
 import { applyAnalysisResults } from "../notebook-workflow.js";
 import {
   DEFAULT_ANIMATION_TOOL,
-  DEFAULT_IMAGE_TOOL,
-  DEFAULT_VIDEO_TOOL,
   normalizeLegacyAnalyzeCell,
   normalizeLegacyAnalyzeDocument,
 } from "../notebook-action-catalog.js";
@@ -213,15 +211,6 @@ export async function writeGenerationPlanProvenance(
   );
   if (!written.ok) throw new Error(written.error.message);
 }
-
-export const defaultNotebookGenerationModel: Record<
-  "image" | "video" | "audio",
-  string
-> = {
-  image: DEFAULT_IMAGE_TOOL,
-  video: DEFAULT_VIDEO_TOOL,
-  audio: "generate_elevenlabs_text_to_audio",
-};
 
 export function notebookCellMediaType(
   cell: NotebookCell,
@@ -879,7 +868,7 @@ function isImageLikeCell(source: NotebookCell): boolean {
   return notebookCellMediaType(source) === "image";
 }
 
-export function modelArgsWithMentions(
+function modelArgsWithMentions(
   definition: ToolDef,
   document: NotebookDocument,
   cell: NotebookCell,
@@ -2531,7 +2520,7 @@ function notebookRunPlanRecords(
   return document.notebookRunPlans ?? [];
 }
 
-export async function updateNotebookRunPlanState(
+async function updateNotebookRunPlanState(
   engine: Engine,
   notebookId: string,
   planId: string,

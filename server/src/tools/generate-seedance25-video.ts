@@ -109,42 +109,42 @@ export function generateSeedance25VideoDef(fs: Engine): ToolDef {
 
       let firstFrame: RefInput | undefined;
       if (first_frame_ref !== undefined) {
-        const result = await resolveImageRef(fs, first_frame_ref, book_id);
+        const result = await resolveImageRef(fs, first_frame_ref);
         if (!result.ok) return { isError: true as const, content: [{ type: "text" as const, text: result.error }] };
         firstFrame = result.value;
       }
 
       let lastFrame: RefInput | undefined;
       if (last_frame_ref !== undefined) {
-        const result = await resolveImageRef(fs, last_frame_ref, book_id);
+        const result = await resolveImageRef(fs, last_frame_ref);
         if (!result.ok) return { isError: true as const, content: [{ type: "text" as const, text: result.error }] };
         lastFrame = result.value;
       }
 
       const imageInputs: RefInput[] = [];
       for (const reference of imgs) {
-        const result = await resolveImageRef(fs, reference, book_id);
+        const result = await resolveImageRef(fs, reference);
         if (!result.ok) return { isError: true as const, content: [{ type: "text" as const, text: result.error }] };
         imageInputs.push(result.value);
       }
 
       const videoInputs: RefInput[] = [];
       for (const reference of vids) {
-        const result = await resolveVideoRef(fs, reference, book_id);
+        const result = await resolveVideoRef(fs, reference);
         if (!result.ok) return { isError: true as const, content: [{ type: "text" as const, text: result.error }] };
         videoInputs.push(result.value);
       }
 
       const audioInputs: RefInput[] = [];
       for (const reference of auds) {
-        const result = await resolveAudioRef(fs, reference, book_id);
+        const result = await resolveAudioRef(fs, reference);
         if (!result.ok) return { isError: true as const, content: [{ type: "text" as const, text: result.error }] };
         audioInputs.push(result.value);
       }
 
       let replaceAudioWith: RefInput | undefined;
       if (replace_audio_with !== undefined) {
-        const result = await resolveAudioRef(fs, replace_audio_with, book_id);
+        const result = await resolveAudioRef(fs, replace_audio_with);
         if (!result.ok) return { isError: true as const, content: [{ type: "text" as const, text: `replace_audio_with: ${result.error}` }] };
         replaceAudioWith = result.value;
       }

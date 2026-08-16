@@ -33,7 +33,7 @@ export function generateGrokImagineVideoR2vFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageRefs(fs, image_refs, book_id);
+      const resolved = await resolveImageRefs(fs, image_refs);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "grok-imagine/image-to-video"), prompt));

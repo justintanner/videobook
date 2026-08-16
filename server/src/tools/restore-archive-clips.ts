@@ -108,7 +108,6 @@ function archiveMetadata(index: ArchiveIndex): Record<string, unknown> {
 
 async function existingArchiveAssets(
   fs: Engine,
-  bookId: string,
   archiveIds: string[],
 ): Promise<Map<string, string>> {
   const wanted = new Set(archiveIds);
@@ -128,7 +127,7 @@ async function existingArchiveAssets(
 export function restoreArchiveClipsDef(fs: Engine): ToolDef {
   return {
     name: "restore_archive_clips",
-    description: "Restore selected archived video/audio clips into the current videocity project as new assets.",
+    description: "Restore selected archived video/audio clips into the current Videobook as new assets.",
     schema: {
       book_id: z.string().describe("Book id to restore clips into"),
       archive_ids: z.array(z.string()).min(1).max(MAX_RESTORE_IDS).describe("Archive IDs to restore"),
@@ -156,7 +155,7 @@ export function restoreArchiveClipsDef(fs: Engine): ToolDef {
       }
 
       const existing = skip_existing
-        ? await existingArchiveAssets(fs, book_id, indices.map((index) => index.archive_id))
+        ? await existingArchiveAssets(fs, indices.map((index) => index.archive_id))
         : new Map<string, string>();
       const restored: Array<{ archive_id: string; asset_id: string; job_id: string }> = [];
       const skipped: Array<{ archive_id: string; asset_id: string; reason: string }> = [];

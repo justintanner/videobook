@@ -35,9 +35,8 @@ type GenerateVolcengineLipsyncVideoPayload = {
 async function uploadSingle(
   fs: Engine,
   input: RefInput,
-  bookId: string,
 ): Promise<string> {
-  return uploadAssetToKie(fs, input.assetId, input.filename, bookId);
+  return uploadAssetToKie(fs, input.assetId, input.filename);
 }
 
 export function registerGenerateVolcengineLipsyncVideoJob(fs: Engine): void {
@@ -50,8 +49,8 @@ export function registerGenerateVolcengineLipsyncVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const videoUrl = await uploadSingle(fs, videoInput, bookId);
-    const audioUrl = await uploadSingle(fs, audioInput, bookId);
+    const videoUrl = await uploadSingle(fs, videoInput);
+    const audioUrl = await uploadSingle(fs, audioInput);
 
     const request = buildVolcengineLipSyncPayload(
       { mode, separate_vocal, open_scenedet, align_audio, align_audio_reverse, templ_start_seconds },

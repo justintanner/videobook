@@ -76,14 +76,14 @@ export function generateGeminiOmniVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageRef(fs, slug, book_id);
+        const r = await resolveImageRef(fs, slug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       let videoInput: RefInput | undefined;
       if (videoRef !== undefined) {
-        const r = await resolveVideoRef(fs, videoRef, book_id);
+        const r = await resolveVideoRef(fs, videoRef);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInput = r.value;
       }

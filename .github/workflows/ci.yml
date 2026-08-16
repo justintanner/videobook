@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   lint-and-build:
-    name: Vite lint and build
+    name: Lint, build, and unit test
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -21,8 +21,18 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Install dependencies
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      - name: Install client dependencies
         run: npm ci
-      - name: Run strict lint and Vite build
+      - name: Install server dependencies
+        run: npm ci --prefix server
+      - name: Check dead code and dependencies
+        run: npm run check:dead-code
+      - name: Run strict lint and client build
         run: npm run build
+      - name: Build server
+        run: npm run build:server
+      - name: Run maintained unit tests
+        run: npm test

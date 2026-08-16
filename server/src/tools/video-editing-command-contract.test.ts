@@ -7,7 +7,6 @@ import { z } from "zod";
 import {
   adaptCommandArgs,
   COMMAND_ADAPTERS,
-  filterCommandsByMountKeys,
   parseCommandArgs,
   type ServerCommand,
 } from "../../../src/lib/command-registry.js";
@@ -85,7 +84,7 @@ describe("video editing command contract", () => {
         if (key === "book_id") parsed[key] = "00000000-0000-0000-0000-000000000000";
       }
       Object.assign(parsed, command.mcpTool.injectParams ?? {});
-      const adapted = adaptCommandArgs(command.mcpTool.adapter, command.mcpTool.tool, parsed);
+      const adapted = adaptCommandArgs(command.mcpTool.adapter, parsed);
       const target = toolDefs.find((tool) => tool.name === command.mcpTool?.tool);
       expect(target, `${command.command} target`).toBeDefined();
       if (!target) continue;
@@ -107,8 +106,7 @@ describe("video editing command contract", () => {
       expect(canonical?.aliases).toEqual(command.aliases ?? []);
       expect(canonicalized.some((candidate) => command.aliases?.includes(candidate.command))).toBe(false);
     }
-    const pickerCommands = filterCommandsByMountKeys(commands, new Set(["viewer"]));
-    expect(pickerCommands.some((command) => command.deprecated)).toBe(false);
+    expect(commands.some((command) => command.deprecated)).toBe(false);
   });
 
   it("keeps runtime defaults synchronized with command help", () => {

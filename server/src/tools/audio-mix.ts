@@ -43,7 +43,6 @@ function findMediaFile(
 export async function resolveAudioMixAsset(
   fs: Engine,
   assetIdInput: string,
-  _bookId: string,
 ): Promise<ResolvedAudioMixAsset> {
   const assetId = normalizeAssetId(assetIdInput);
   const artifact = fs.artifacts.get(assetId);
@@ -95,8 +94,8 @@ export function audioMixDef(fs: Engine): ToolDef {
       let layer: ResolvedAudioMixAsset;
       try {
         [target, layer] = await Promise.all([
-          resolveAudioMixAsset(fs, target_asset_id, book_id),
-          resolveAudioMixAsset(fs, layer_asset_id, book_id),
+          resolveAudioMixAsset(fs, target_asset_id),
+          resolveAudioMixAsset(fs, layer_asset_id),
         ]);
       } catch (error) {
         return toolError(error instanceof Error ? error.message : String(error));

@@ -32,7 +32,7 @@ import {
 import { readWatermarkConfig, recordHandle } from "../watermark-config.js";
 import type { ToolDef } from "./tool-def.js";
 import { requireArtifactKind } from "./_shared.js";
-import { sleepDef } from "./sleep.js";
+import { waitForAssetReadyDef } from "./wait-for-asset-ready.js";
 
 const PLACEMENT_TIMEOUT_MS = 300_000;
 const BURN_TIMEOUT_MS = 600_000;
@@ -149,7 +149,7 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
         if (existing) {
           cardAssetId = existing;
         } else {
-          const created = await createWatermarkAsset(fs, book_id, resolvedHandle, resolvedUrl);
+          const created = await createWatermarkAsset(fs, resolvedHandle, resolvedUrl);
           if (!created.ok) {
             return {
               isError: true as const,
@@ -305,7 +305,7 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
           opacity,
           userScale: scale,
         }, BURN_TIMEOUT_MS);
-        const readiness = await sleepDef(fs).handler({
+        const readiness = await waitForAssetReadyDef(fs).handler({
           asset_id,
           book_id,
           timeout_seconds: 300,

@@ -35,7 +35,7 @@ export function registerGenerateSeedreamImageJob(fs: Engine): void {
       if ("url" in input) {
         uploadedUrls.push(input.url);
       } else {
-        uploadedUrls.push(await uploadAssetToKie(fs, input.assetId, input.filename, bookId));
+        uploadedUrls.push(await uploadAssetToKie(fs, input.assetId, input.filename));
       }
     }
     const normalizedPrompt = transformProviderPrompt(

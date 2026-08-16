@@ -94,7 +94,7 @@ export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
 
       let replaceAudioWith: RefInput | undefined;
       if (replace_audio_with !== undefined && replace_audio_with.trim().length > 0) {
-        const resolvedAudio = await resolveAudioRef(fs, replace_audio_with, book_id);
+        const resolvedAudio = await resolveAudioRef(fs, replace_audio_with);
         if (!resolvedAudio.ok) {
           return toolError(resolvedAudio.error);
         }

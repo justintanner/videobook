@@ -9,7 +9,7 @@ import { FFMPEG } from '../../server/src/ffmpeg.js'
 import { topologicalOrder } from '../../server/src/jobs/run-notebook.js'
 import { listNotebookActions } from '../../server/src/notebook-action-catalog.js'
 import { captureFrame, extractSourceAudio, splitSourceRange } from '../../server/src/notebook-media-ops.js'
-import { applyAnalysisResults, buildSevenStageScaffold, WORKFLOW_STAGES } from '../../server/src/notebook-workflow.js'
+import { applyAnalysisResults, buildSevenStageScaffold } from '../../server/src/notebook-workflow.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -47,16 +47,6 @@ describe('transparent runnable DAG e2e (offline)', () => {
       'generate_audio',
       'concat',
       'splice',
-    ])
-    expect(WORKFLOW_STAGES).toHaveLength(7)
-    expect(WORKFLOW_STAGES).toEqual([
-      'VIDEO',
-      'ANALYZE',
-      'SPLIT VIDEO',
-      'EXTRACT ASSETS',
-      'WRITE PROMPTS',
-      'GENERATE VIDEO',
-      'CONCAT',
     ])
     expect(listNotebookActions().some((action) => action.operation === 'analyze_source')).toBe(true)
 

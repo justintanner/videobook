@@ -74,7 +74,6 @@ export function parseKeywordPlacementAnalysis(raw: unknown): KeywordPlacementAna
 export async function readKeywordPlacementAnalysis(
   fs: Engine,
   assetId: string,
-  _bookId: string,
 ): Promise<KeywordPlacementAnalysis | null> {
   const result = await fs.metadata.artifacts.read<unknown>(assetId, KEYWORD_PLACEMENT_METADATA_KEY
   );
@@ -86,7 +85,6 @@ export async function readKeywordPlacementAnalysis(
 export async function writeKeywordPlacementAnalysis(
   fs: Engine,
   assetId: string,
-  bookId: string,
   analysis: KeywordPlacementAnalysis,
 ): Promise<void> {
   const parsed = parseKeywordPlacementAnalysis(analysis);
@@ -98,7 +96,6 @@ export async function writeKeywordPlacementAnalysis(
 export async function isKeywordPlacementCacheValid(
   fs: Engine,
   assetId: string,
-  bookId: string,
   analysis: KeywordPlacementAnalysis | null,
   fingerprint: string,
   graphics: KeywordGraphic[],

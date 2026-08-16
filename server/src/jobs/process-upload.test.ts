@@ -10,7 +10,6 @@ import type { Engine } from "videobook-engine";
 describe("findUnprocessedUploads", () => {
   let tempDir: string;
   let fs: Engine;
-  let bookId: string;
 
   beforeAll(async () => {
     await queue.start();
@@ -23,7 +22,6 @@ describe("findUnprocessedUploads", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-upload-test-"));
     fs = createEngineForTest(tempDir);
-    bookId = fs.book.get().bookId;
   });
 
   afterEach(async () => {
@@ -32,7 +30,7 @@ describe("findUnprocessedUploads", () => {
   });
 
   it("returns empty array when project has no assets", async () => {
-    const result = await findUnprocessedUploads(fs, bookId, []);
+    const result = await findUnprocessedUploads(fs, []);
     expect(result).toEqual([]);
   });
 
@@ -54,7 +52,7 @@ describe("findUnprocessedUploads", () => {
     const assets = await fs.artifacts.list();
     expect(assets.length).toBeGreaterThan(0);
 
-    const result = await findUnprocessedUploads(fs, bookId, assets);
+    const result = await findUnprocessedUploads(fs, assets);
     expect(result).toEqual([]);
   });
 
@@ -75,7 +73,7 @@ describe("findUnprocessedUploads", () => {
     const assets = await fs.artifacts.list();
     expect(assets.length).toBeGreaterThan(0);
 
-    const result = await findUnprocessedUploads(fs, bookId, assets);
+    const result = await findUnprocessedUploads(fs, assets);
     expect(result.length).toBe(1);
     expect(result[0].assetId).toBe(assetId);
     expect(result[0].mediaFilename).toBe("photo.png");
@@ -101,7 +99,7 @@ describe("findUnprocessedUploads", () => {
     await fs.files.write(assetId, "original.mp4", Buffer.from("fake-mp4-bytes"));
 
     const assets = await fs.artifacts.list();
-    const result = await findUnprocessedUploads(fs, bookId, assets);
+    const result = await findUnprocessedUploads(fs, assets);
 
     expect(result.length).toBe(1);
     expect(result[0].assetId).toBe(assetId);
@@ -131,7 +129,7 @@ describe("findUnprocessedUploads", () => {
     await fs.files.write(assetId, "square.jpg", Buffer.from("fake"));
 
     const assets = await fs.artifacts.list();
-    const result = await findUnprocessedUploads(fs, bookId, assets);
+    const result = await findUnprocessedUploads(fs, assets);
 
     // The upload that gets processed must be the canonical original.png —
     // never landscape.jpg, which would be promoted into original.jpg by
@@ -157,7 +155,7 @@ describe("findUnprocessedUploads", () => {
     await fs.files.write(assetId, "square.jpg", Buffer.from("fake"));
 
     const assets = await fs.artifacts.list();
-    const result = await findUnprocessedUploads(fs, bookId, assets);
+    const result = await findUnprocessedUploads(fs, assets);
 
     expect(result).toEqual([]);
   });
@@ -181,7 +179,7 @@ describe("findUnprocessedUploads", () => {
     await fs.jobs.artifactWork.fail(assetId, begun.ownerId, { message: "moov atom not found" });
 
     const assets = await fs.artifacts.list();
-    const result = await findUnprocessedUploads(fs, bookId, assets);
+    const result = await findUnprocessedUploads(fs, assets);
 
     expect(result).toEqual([]);
   });

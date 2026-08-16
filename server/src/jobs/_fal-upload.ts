@@ -2,7 +2,6 @@ import { createFal, uploadFile } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import {
   prepareAssetForUpload,
-  prepareBytesForUpload,
   uploadBytesToFreeHost,
 } from "../upload.js";
 import { getApiKey } from "../api-key.js";
@@ -42,23 +41,11 @@ export async function uploadAssetToFal(
   fs: Engine,
   assetId: string,
   filename: string,
-  bookId: string,
 ): Promise<string> {
   const { data, hashedFilename, contentType } = await prepareAssetForUpload(
     fs,
     assetId,
     filename,
-    bookId,
   );
-  return uploadPreparedToFal(data, hashedFilename, contentType);
-}
-
-// Upload raw bytes (not a persisted asset) to fal's CDN — used for ephemeral
-// inputs like outfit pose skeletons that never become project assets.
-export async function uploadBytesToFal(
-  bytes: Uint8Array | Buffer,
-  filename: string,
-): Promise<string> {
-  const { data, hashedFilename, contentType } = await prepareBytesForUpload(bytes, filename);
   return uploadPreparedToFal(data, hashedFilename, contentType);
 }

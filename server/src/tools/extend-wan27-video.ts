@@ -51,7 +51,7 @@ export function extendWan27VideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const videoResult = await resolveVideoRef(fs, video_ref, book_id);
+      const videoResult = await resolveVideoRef(fs, video_ref);
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const sourceVideo = videoResult.value;
 

@@ -40,7 +40,7 @@ export function generateKling30TurboVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageRef(fs, slug, book_id);
+        const r = await resolveImageRef(fs, slug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `image_refs: ${r.error}` }] };
         imageInputs.push(r.value);
       }

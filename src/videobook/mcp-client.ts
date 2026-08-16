@@ -4,7 +4,7 @@ import {
   type CallToolResult,
 } from '@modelcontextprotocol/client'
 
-export const MCP_PROTOCOL_VERSION = '2026-07-28'
+const MCP_PROTOCOL_VERSION = '2026-07-28'
 
 export async function connectMcpClient(
   url: string,

@@ -31,19 +31,19 @@ type Payload = {
 export function registerGenerateSeedance2FastR2vFalJob(fs: Engine): void {
   registerJobHandler("generate_seedance2_fast_r2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
       const image_urls: string[] = [];
       for (const img of p.imageInputs) {
-        image_urls.push(await uploadAssetToFal(fs, img.assetId, img.filename, p.bookId));
+        image_urls.push(await uploadAssetToFal(fs, img.assetId, img.filename));
       }
       const video_urls: string[] = [];
       for (const vid of p.videoInputs) {
-        video_urls.push(await uploadAssetToFal(fs, vid.assetId, vid.filename, p.bookId));
+        video_urls.push(await uploadAssetToFal(fs, vid.assetId, vid.filename));
       }
       const audio_urls: string[] = [];
       for (const aud of p.audioInputs) {
-        audio_urls.push(await uploadAssetToFal(fs, aud.assetId, aud.filename, p.bookId));
+        audio_urls.push(await uploadAssetToFal(fs, aud.assetId, aud.filename));
       }
   
       const input: FalInput = {

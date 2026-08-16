@@ -10,22 +10,11 @@ import {
 import { getCanonicalName } from "./generation-registry.js";
 import { PREVIEW_PLACEHOLDER_HOST } from "./preview-payload.js";
 
-const PROVIDER_MARKER_PATTERNS = [
-  /^@element_[a-z0-9_]+$/iu,
-  /^@reference(?:Image|Audio)?_\d+$/u,
-  /^@character_\d+$/u,
-  /^@(Image|Video|Audio)\d+$/u,
-  /^@image\d+$/u,
-];
 // An @<artifact-id> token is the internal reference currency between the
 // grid resolver and the per-tool dialect rewrite; one surviving into a
 // provider payload means the rewrite missed it.
 const ARTIFACT_ID_MENTION_PATTERN =
   /@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\w-])/giu;
-
-export function isProviderNativeMention(value: string): boolean {
-  return PROVIDER_MARKER_PATTERNS.some((pattern) => pattern.test(value));
-}
 
 export class ProviderMentionError extends Error {
   readonly tokens: string[];
@@ -42,7 +31,7 @@ export class ProviderMentionError extends Error {
   }
 }
 
-export class ProviderPlaceholderError extends Error {
+class ProviderPlaceholderError extends Error {
   readonly paths: string[];
   readonly toolName: string;
 

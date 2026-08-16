@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { readLanguageCode, iso1FromIso3 } from "../jobs/_translate-transcript.js";
-import { readRenderSettings, RENDER_ORIENTATIONS } from "./sync.js";
+import { readRenderSettings, RENDER_ORIENTATIONS } from "./reconcile-project-work.js";
 
 type TranscriptInfo = {
   sourceLanguageCode: string | null;
@@ -15,7 +15,6 @@ const TRANSLATED_SIDECAR_RE = /^elevenlabs\.([a-z]{2})\.json$/;
 async function readTranscriptInfo(
   fs: Engine,
   assetId: string,
-  _bookId: string,
 ): Promise<TranscriptInfo> {
   const info: TranscriptInfo = { sourceLanguageCode: null, sourceLanguage: null, cachedTranslations: [] };
 
@@ -50,10 +49,10 @@ export function getRenderSettingsDef(fs: Engine): ToolDef {
       book_id: z.string().describe("Book id"),
     },
     handler: async (args) => {
-      const { asset_id, book_id } = args as { asset_id: string; book_id: string };
+      const { asset_id } = args as { asset_id: string; book_id: string };
       const [settings, transcript] = await Promise.all([
-        readRenderSettings(fs, asset_id, book_id, [...RENDER_ORIENTATIONS]),
-        readTranscriptInfo(fs, asset_id, book_id),
+        readRenderSettings(fs, asset_id, [...RENDER_ORIENTATIONS]),
+        readTranscriptInfo(fs, asset_id),
       ]);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ settings, transcript }) }],

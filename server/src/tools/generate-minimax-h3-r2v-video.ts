@@ -64,7 +64,7 @@ export function generateMiniMaxH3R2vVideoDef(fs: Engine): ToolDef {
       const imageInputs: RefInput[] = [];
       for (const raw of image_refs ?? []) {
         if (raw.trim() === "") continue;
-        const r = await resolveImageRef(fs, raw, book_id);
+        const r = await resolveImageRef(fs, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
@@ -72,7 +72,7 @@ export function generateMiniMaxH3R2vVideoDef(fs: Engine): ToolDef {
       const videoInputs: RefInput[] = [];
       for (const raw of video_refs ?? []) {
         if (raw.trim() === "") continue;
-        const r = await resolveVideoRef(fs, raw, book_id);
+        const r = await resolveVideoRef(fs, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         const durationError = await referenceVideoDurationError(fs, raw, r.value.assetId);
         if (durationError) return { isError: true as const, content: [{ type: "text" as const, text: durationError }] };
@@ -82,7 +82,7 @@ export function generateMiniMaxH3R2vVideoDef(fs: Engine): ToolDef {
       const audioInputs: RefInput[] = [];
       for (const raw of audio_refs ?? []) {
         if (raw.trim() === "") continue;
-        const r = await resolveAudioRef(fs, raw, book_id);
+        const r = await resolveAudioRef(fs, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         audioInputs.push(r.value);
       }

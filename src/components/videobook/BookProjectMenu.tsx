@@ -19,7 +19,11 @@ import {
   formatNotebookCount,
   type BookProjectMutationResult,
   type BookProjectSummary,
-} from '@/videobook/book-project-selector'
+} from '@/videobook/book-project-catalog'
+import {
+  transitionBookProjectMenuMode,
+  type BookProjectMenuMode,
+} from '@/videobook/book-project-menu-state'
 
 type PendingAction =
   | { kind: 'create' }
@@ -27,7 +31,7 @@ type PendingAction =
   | { kind: 'rename'; bookId: string }
   | { kind: 'select'; bookId: string }
 
-type BookProjectSelectorProps = {
+type BookProjectMenuProps = {
   activeBook: BookProjectSummary | null
   books: BookProjectSummary[]
   disabled: boolean
@@ -48,7 +52,7 @@ type BookProjectSelectorProps = {
   onSelect: (bookId: string) => Promise<BookProjectMutationResult>
 }
 
-export function BookProjectSelector({
+export function BookProjectMenu({
   activeBook,
   books,
   disabled,
@@ -61,30 +65,34 @@ export function BookProjectSelector({
   onRefresh,
   onRename,
   onSelect,
-}: BookProjectSelectorProps) {
+}: BookProjectMenuProps) {
   const rootRef = useRef<HTMLDivElement>(null)
-  const [editingBookId, setEditingBookId] = useState<string | null>(null)
+  const [mode, setMode] = useState<BookProjectMenuMode>({ kind: 'idle' })
   const [editValue, setEditValue] = useState('')
-  const [creating, setCreating] = useState(false)
   const [createValue, setCreateValue] = useState('')
-  const [deletingBookId, setDeletingBookId] = useState<string | null>(null)
   const [pending, setPending] = useState<PendingAction | null>(null)
   const [operationError, setOperationError] = useState<string | null>(null)
+  const editingBookId = mode.kind === 'rename' ? mode.bookId : null
+  const creating = mode.kind === 'create'
+  const deletingBookId = mode.kind === 'delete' ? mode.bookId : null
 
   const resetModes = useCallback(() => {
-    setEditingBookId(null)
+    setMode({ kind: 'idle' })
     setEditValue('')
-    setCreating(false)
     setCreateValue('')
-    setDeletingBookId(null)
     setOperationError(null)
   }, [])
 
   const closeMenu = useCallback(() => {
-    if (pending) return
+    const transition = transitionBookProjectMenuMode(
+      mode,
+      { kind: 'close' },
+      pending !== null,
+    )
+    if (!transition.closeMenu) return
     resetModes()
     onOpenChange(false)
-  }, [onOpenChange, pending, resetModes])
+  }, [mode, onOpenChange, pending, resetModes])
 
   useEffect(() => {
     if (!open) return
@@ -94,25 +102,18 @@ export function BookProjectSelector({
       closeMenu()
     }
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape' || pending) return
-      if (editingBookId) {
-        setEditingBookId(null)
-        setEditValue('')
-        setOperationError(null)
+      if (event.key !== 'Escape') return
+      const transition = transitionBookProjectMenuMode(
+        mode,
+        { kind: 'escape' },
+        pending !== null,
+      )
+      if (transition.closeMenu) {
+        resetModes()
+        onOpenChange(false)
         return
       }
-      if (creating) {
-        setCreating(false)
-        setCreateValue('')
-        setOperationError(null)
-        return
-      }
-      if (deletingBookId) {
-        setDeletingBookId(null)
-        setOperationError(null)
-        return
-      }
-      closeMenu()
+      if (transition.mode !== mode) resetModes()
     }
 
     document.addEventListener('pointerdown', handlePointerDown)
@@ -123,42 +124,59 @@ export function BookProjectSelector({
     }
   }, [
     closeMenu,
-    creating,
-    deletingBookId,
-    editingBookId,
+    mode,
+    onOpenChange,
     open,
     pending,
+    resetModes,
   ])
 
   const beginCreate = () => {
-    setEditingBookId(null)
+    const transition = transitionBookProjectMenuMode(
+      mode,
+      { kind: 'begin-create' },
+      pending !== null,
+    )
+    if (transition.mode === mode) return
+    setMode(transition.mode)
     setEditValue('')
-    setDeletingBookId(null)
     setOperationError(null)
-    setCreating(true)
   }
 
   const beginRename = (book: BookProjectSummary) => {
-    setCreating(false)
+    const transition = transitionBookProjectMenuMode(
+      mode,
+      { kind: 'begin-rename', bookId: book.bookId },
+      pending !== null,
+    )
+    if (transition.mode === mode) return
+    setMode(transition.mode)
     setCreateValue('')
-    setDeletingBookId(null)
     setOperationError(null)
-    setEditingBookId(book.bookId)
     setEditValue(book.name)
   }
 
   const beginDelete = (bookId: string) => {
     if (books.length < 2) return
-    setEditingBookId(null)
+    const transition = transitionBookProjectMenuMode(
+      mode,
+      { kind: 'begin-delete', bookId },
+      pending !== null,
+    )
+    if (transition.mode === mode) return
+    setMode(transition.mode)
     setEditValue('')
-    setCreating(false)
     setCreateValue('')
     setOperationError(null)
-    setDeletingBookId(bookId)
   }
 
   const cancelMode = () => {
-    if (pending) return
+    const transition = transitionBookProjectMenuMode(
+      mode,
+      { kind: 'cancel' },
+      pending !== null,
+    )
+    if (transition.mode === mode) return
     resetModes()
   }
 

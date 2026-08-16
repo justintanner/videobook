@@ -99,12 +99,10 @@ describe("assessDialogQuality", () => {
 describe("readAndAssessDialog", () => {
   let fs: Engine;
   let tempDir: string;
-  let bookId: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-dialog-test-"));
     fs = createEngineForTest(tempDir);
-    bookId = fs.book.get().bookId;
   });
 
   afterEach(async () => {
@@ -120,7 +118,7 @@ describe("readAndAssessDialog", () => {
     const transcription = JSON.stringify({ text: "The quick brown fox jumps over the lazy dog" });
     await fs.files.write(assetId, ".analysis.gpt4otrans.json", transcription);
 
-    const result = await readAndAssessDialog(fs, assetId, bookId);
+    const result = await readAndAssessDialog(fs, assetId);
     expect(result.hasDialog).toBe(true);
     expect(result.reason).toBe("real_dialog");
     expect(result.wordCount).toBe(9);
@@ -131,7 +129,7 @@ describe("readAndAssessDialog", () => {
     if (!assetResult.ok) throw new Error(assetResult.error.message);
     const assetId = assetResult.value.artifactId;
 
-    const result = await readAndAssessDialog(fs, assetId, bookId);
+    const result = await readAndAssessDialog(fs, assetId);
     expect(result.hasDialog).toBe(false);
     expect(result.reason).toBe("no_transcription");
     expect(result.text).toBe("");
@@ -145,7 +143,7 @@ describe("readAndAssessDialog", () => {
 
     await fs.files.write(assetId, ".analysis.gpt4otrans.json", "not valid json {{{");
 
-    const result = await readAndAssessDialog(fs, assetId, bookId);
+    const result = await readAndAssessDialog(fs, assetId);
     expect(result.hasDialog).toBe(false);
     expect(result.reason).toBe("no_transcription");
     expect(result.text).toBe("");

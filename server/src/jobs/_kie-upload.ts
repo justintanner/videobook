@@ -2,7 +2,6 @@ import { createKie, uploadFile } from "@apicity/kie";
 import type { Engine } from "videobook-engine";
 import {
   prepareAssetForUpload,
-  prepareBytesForUpload,
   uploadBytesToFreeHost,
 } from "../upload.js";
 import { getApiKey } from "../api-key.js";
@@ -39,24 +38,11 @@ export async function uploadAssetToKie(
   fs: Engine,
   assetId: string,
   filename: string,
-  bookId: string,
 ): Promise<string> {
   const { data, hashedFilename, contentType } = await prepareAssetForUpload(
     fs,
     assetId,
     filename,
-    bookId,
   );
-  return uploadPreparedToKie(data, hashedFilename, contentType);
-}
-
-// Upload raw bytes (not a persisted asset) to Kie's storage — used for
-// ephemeral inputs like outfit pose skeletons that never become project
-// assets.
-export async function uploadBytesToKie(
-  bytes: Uint8Array | Buffer,
-  filename: string,
-): Promise<string> {
-  const { data, hashedFilename, contentType } = await prepareBytesForUpload(bytes, filename);
   return uploadPreparedToKie(data, hashedFilename, contentType);
 }

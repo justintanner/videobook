@@ -38,7 +38,6 @@ export function registerRestoreArchiveClipJob(fs: Engine): void {
     const p = payload as RestoreArchiveClipPayload;
     return withLockedLocalLease(
       fs,
-      p.bookId,
       p.assetId,
       p.assetDir,
       ctx,

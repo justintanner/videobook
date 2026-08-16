@@ -30,7 +30,6 @@ function isHttpUrl(s: string): boolean {
 export async function resolveImageRefs(
   fs: Engine,
   rawRefs: readonly string[],
-  _bookId: string,
 ): Promise<SlugResolution> {
   const inputs: ImageInput[] = [];
   const sourceImageIds: string[] = [];

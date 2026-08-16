@@ -56,7 +56,7 @@ export function localArchiveDir(): string {
   return join(resolve(getEngineRoot()), "archive");
 }
 
-export function isArchiveB2Configured(): boolean {
+function isArchiveB2Configured(): boolean {
   return missingArchiveConfigKeys().length === 0;
 }
 
@@ -65,7 +65,7 @@ export function getArchiveStore(): ArchiveStore {
   return createLocalArchiveStore(localArchiveDir());
 }
 
-export function createB2ArchiveStore(config: ArchiveConfig = getArchiveConfig()): ArchiveStore {
+function createB2ArchiveStore(config: ArchiveConfig = getArchiveConfig()): ArchiveStore {
   const b2: B2Provider = createArchiveB2(config);
   return {
     kind: "b2",

@@ -42,16 +42,15 @@ type GenerateAlibabaVideoPayload = {
 async function uploadInput(
   fs: Engine,
   input: RefInput,
-  bookId: string,
   model: string,
 ): Promise<string> {
-  return uploadAssetToAlibaba(fs, input.assetId, input.filename, bookId, model);
+  return uploadAssetToAlibaba(fs, input.assetId, input.filename, model);
 }
 
 export function registerGenerateAlibabaVideoJob(fs: Engine): void {
   registerJobHandler("generate_alibaba_video", async (payload, ctx) => {
     const {
-      vidAssetId, bookId, prompt, negative_prompt, model,
+      vidAssetId, prompt, negative_prompt, model,
       firstFrame, lastFrame, firstClip, drivingAudio, videoRef,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
       resolution, duration, prompt_extend, watermark, audio_setting, seed,
@@ -59,11 +58,11 @@ export function registerGenerateAlibabaVideoJob(fs: Engine): void {
 
     const apiKey = requireApiKey("DASHSCOPE_API_KEY");
 
-    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame, bookId, model) : undefined;
-    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame, bookId, model) : undefined;
-    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip, bookId, model) : undefined;
-    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, bookId, model) : undefined;
-    const videoUrl = videoRef ? await uploadInput(fs, videoRef, bookId, model) : undefined;
+    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame, model) : undefined;
+    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame, model) : undefined;
+    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip, model) : undefined;
+    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, model) : undefined;
+    const videoUrl = videoRef ? await uploadInput(fs, videoRef, model) : undefined;
 
     const provider = createAlibaba({ apiKey, timeout: 120_000 });
     const normalizedPrompt = transformProviderPrompt(

@@ -112,7 +112,6 @@ async function deleteIfPresent(
   fs: Engine,
   assetId: string,
   filename: string,
-  _bookId: string,
 ): Promise<void> {
   const result = await fs.files.delete(assetId, filename);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
@@ -141,7 +140,6 @@ export function registerTimewarpVideoJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -177,13 +175,12 @@ export function registerTimewarpVideoJob(fs: Engine): void {
           const inputFilename = basename(inputPath);
           await replaceArtifactFileFromPath(
             fs,
-            bookId,
             assetId,
             inputFilename,
             outputPath,
           );
           for (const filename of STALE_VISUAL_DERIVATIVES) {
-            await deleteIfPresent(fs, assetId, filename, bookId);
+            await deleteIfPresent(fs, assetId, filename);
           }
         } catch (error) {
           if (restoreCommit) await fs.history.restoreArtifact(assetId, restoreCommit);

@@ -39,7 +39,7 @@ export function registerExtendWan27VideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const firstClipUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename, bookId);
+    const firstClipUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename);
     const normalizedPrompt = transformProviderPrompt(
       "extend_kie_wan_2_7_video",
       { prompt, video_ref: sourceVideo.assetId },

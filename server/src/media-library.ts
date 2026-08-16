@@ -13,11 +13,11 @@ import { registerLocalClipSearchProvider } from "./local-search-models.js";
 import { markDescendantsStale } from "./notebook-action-catalog.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { searchReferenceStore } from "./search-reference-store.js";
-import { buildAssetList, type SyncAsset } from "./tools/sync.js";
+import { buildAssetList, type ProjectAsset } from "./tools/reconcile-project-work.js";
 
 type MediaCellType = "audio" | "image" | "video";
 
-export interface LibraryAsset extends SyncAsset {
+export interface LibraryAsset extends ProjectAsset {
   owning_book_id: string;
   owning_book_name: string;
   search_match?: {

@@ -225,6 +225,7 @@ const voiceCatalog: ElevenLabsVoicesState = {
   warning: null,
   loading: false,
   error: null,
+  ensureLoaded: async () => null,
   refresh: async () => null,
 }
 
@@ -271,6 +272,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('data-voice-id="voice-b"')
     expect(html).not.toContain('aria-label="Voice id"')
     expect(html).toContain('aria-label="Asset name"')
+    expect(html).toContain('Refresh voices')
   })
 
   it('falls back to the voice_id text field without a voice catalog', () => {

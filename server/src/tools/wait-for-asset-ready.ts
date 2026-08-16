@@ -1,13 +1,13 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { syncDef } from "./sync.js";
+import { reconcileProjectWorkDef } from "./reconcile-project-work.js";
 import type { ToolDef } from "./tool-def.js";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function sleepDef(fs: Engine): ToolDef {
+export function waitForAssetReadyDef(fs: Engine): ToolDef {
   return {
     name: "wait_for_asset_ready",
     description:
@@ -50,28 +50,27 @@ export function sleepDef(fs: Engine): ToolDef {
       }
 
       const assetDir = manifestResult.value.path;
-      const syncHandler = syncDef(fs).handler;
+      const reconcileHandler = reconcileProjectWorkDef(fs).handler;
       const deadline = Date.now() + timeout_seconds * 1000;
       const startTime = Date.now();
       let iterations = 0;
-      let lastSync: unknown = null;
+      let lastReconciliation: unknown = null;
 
       while (Date.now() < deadline) {
         iterations++;
 
         // Drive state machine forward
-        const syncResult = await syncHandler({ book_id });
-        const syncData = JSON.parse(syncResult.content[0].text) as {
+        const reconcileResult = await reconcileHandler({ book_id });
+        const reconcileData = JSON.parse(reconcileResult.content[0].text) as {
           pending: Array<{ assetId: string }>;
           completed: Array<{ assetId: string }>;
           failed: Array<{ assetId: string; failMsg: string }>;
           external_uploads: Array<{ assetId: string }>;
-          auto_render: Array<{ assetId: string }>;
         };
-        lastSync = syncData;
+        lastReconciliation = reconcileData;
 
         // Check for failure
-        const failure = syncData.failed.find((f) => f.assetId === asset_id);
+        const failure = reconcileData.failed.find((f) => f.assetId === asset_id);
         if (failure) {
           return {
             isError: true as const,
@@ -86,7 +85,7 @@ export function sleepDef(fs: Engine): ToolDef {
                   ),
                   iterations,
                   error: failure.failMsg,
-                  last_sync: lastSync,
+                  last_sync: lastReconciliation,
                 }),
               },
             ],
@@ -112,7 +111,7 @@ export function sleepDef(fs: Engine): ToolDef {
                   ),
                   iterations,
                   error: failedJob.error?.message ?? "Asset job failed",
-                  last_sync: lastSync,
+                  last_sync: lastReconciliation,
                 }),
               },
             ],
@@ -153,7 +152,7 @@ export function sleepDef(fs: Engine): ToolDef {
                     (Date.now() - startTime) / 1000,
                   ),
                   iterations,
-                  last_sync: lastSync,
+                  last_sync: lastReconciliation,
                 }),
               },
             ],
@@ -176,7 +175,7 @@ export function sleepDef(fs: Engine): ToolDef {
               status: "timeout",
               elapsed_seconds: Math.round((Date.now() - startTime) / 1000),
               iterations,
-              last_sync: lastSync,
+              last_sync: lastReconciliation,
             }),
           },
         ],

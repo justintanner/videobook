@@ -107,7 +107,7 @@ function extractOgImageUrl(ogImage: IOGResult["ogImage"]): string | null {
   return typeof ogImage === "object" && "url" in ogImage ? (ogImage.url as string) : null;
 }
 
-async function readOpenGraphData(fs: Engine, assetId: string, _bookId: string): Promise<IOGResult | null> {
+async function readOpenGraphData(fs: Engine, assetId: string): Promise<IOGResult | null> {
   const result = await fs.files.read(assetId, ".opengraph.json");
   if (!result.ok) return null;
   try {
@@ -121,11 +121,10 @@ async function loadOpenGraphData(
   fs: Engine,
   url: string,
   assetId: string,
-  bookId: string,
 ): Promise<IOGResult | null> {
   try {
     const response = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; VideocityBot/1.0)" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; VideobookBot/1.0)" },
       signal: AbortSignal.timeout(10_000),
       redirect: "follow",
     });
@@ -133,7 +132,7 @@ async function loadOpenGraphData(
     await fs.files.write(assetId, ".opengraph.json", Buffer.from(JSON.stringify(ogData, null, 2)));
     return ogData;
   } catch {
-    return readOpenGraphData(fs, assetId, bookId);
+    return readOpenGraphData(fs, assetId);
   }
 }
 
@@ -141,12 +140,11 @@ async function stageOpenGraphImage(
   fs: Engine,
   ogData: IOGResult,
   assetId: string,
-  bookId: string,
 ): Promise<void> {
   const imageUrl = extractOgImageUrl(ogData.ogImage);
   if (!imageUrl) return;
   try {
-    await downloadUrlIntoAsset(fs, imageUrl, assetId, OG_IMAGE_FILENAME, bookId, {
+    await downloadUrlIntoAsset(fs, imageUrl, assetId, OG_IMAGE_FILENAME, {
       kind: "OG image",
       fetchInit: { signal: AbortSignal.timeout(15_000), redirect: "follow" },
     });
@@ -187,7 +185,6 @@ const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
 export async function applyRequestedDownloadRange(
   fs: Engine,
-  bookId: string,
   assetId: string,
   assetDir: string,
   outputPath: string,
@@ -216,7 +213,6 @@ export async function applyRequestedDownloadRange(
     await assertSaneTrimOutput(outputPath, rangePath);
     await replaceArtifactFileFromPath(
       fs,
-      bookId,
       assetId,
       "original.mp4",
       rangePath,
@@ -254,7 +250,6 @@ export function registerDownloadVideoJob(fs: Engine): void {
 
     return withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -264,9 +259,9 @@ export function registerDownloadVideoJob(fs: Engine): void {
       // (a) Pre-stage OG image as a hidden file. The b2 fallback (yt-dlp
       // returns "no video") promotes this to original.jpg on a fresh image
       // asset; a successful video download promotes it after step (d).
-      const ogData = await loadOpenGraphData(fs, url, assetId, bookId);
+      const ogData = await loadOpenGraphData(fs, url, assetId);
       if (ogData) {
-        await stageOpenGraphImage(fs, ogData, assetId, bookId);
+        await stageOpenGraphImage(fs, ogData, assetId);
       }
 
       // (b) Fetch ytdlp metadata
@@ -283,7 +278,7 @@ export function registerDownloadVideoJob(fs: Engine): void {
 
           // Read OG metadata for asset naming and provenance
           let ogTitle = "image";
-          const fallbackOgData = ogData ?? await readOpenGraphData(fs, assetId, bookId);
+          const fallbackOgData = ogData ?? await readOpenGraphData(fs, assetId);
           if (fallbackOgData?.ogTitle) ogTitle = cleanOgTitle(fallbackOgData.ogTitle);
 
           const assetName = [sourcePrefix, ogTitle].join(" ");
@@ -410,7 +405,7 @@ export function registerDownloadVideoJob(fs: Engine): void {
         if (!imageUrl) throw new Error("No image URL found in content info");
 
         const ext = imageExtension(itemInfo);
-        await downloadUrlIntoAsset(fs, imageUrl, effectiveAssetId, `original${ext}`, bookId, {
+        await downloadUrlIntoAsset(fs, imageUrl, effectiveAssetId, `original${ext}`, {
           kind: "image",
           fetchInit: { signal: AbortSignal.timeout(30_000), redirect: "follow" },
         });
@@ -459,9 +454,8 @@ export function registerDownloadVideoJob(fs: Engine): void {
       await validateDownloadOutput(outputPath);
 
       const rangeApplied = requestedRange
-        ? await applyRequestedDownloadRange(
+          ? await applyRequestedDownloadRange(
             fs,
-            bookId,
             assetId,
             assetDir,
             outputPath,
@@ -517,7 +511,6 @@ export function registerDownloadVideoJob(fs: Engine): void {
 
       await ingestWorkspaceOutputs(
         fs,
-        bookId,
         assetId,
         ["original.mp4", ...exports],
         "download_video",

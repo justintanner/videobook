@@ -1,6 +1,5 @@
 import type { NotebookCell, NotebookGridSlot } from "videobook-engine";
 import {
-  firstEmptyNotebookGridSlots,
   nextHorizontalSlotFrom,
   nextVerticalSlotFrom,
   NOTEBOOK_GRID_COLUMN_COUNT,
@@ -54,18 +53,4 @@ export function nextGenerationOutputSlot(
     return nextVerticalSlotFrom(slotBelow(producerSlot), occupied);
   }
   return nextHorizontalSlotFrom(slotRight(producerSlot), occupied);
-}
-
-export function nextAnchoredEmptySlot(
-  occupied: readonly NotebookGridSlot[],
-  lastWorkSlot: NotebookGridSlot | null,
-  direction: "horizontal" | "vertical",
-): NotebookGridSlot {
-  if (occupied.length === 0) {
-    return firstEmptyNotebookGridSlots([], 1)[0]!;
-  }
-  const start = lastWorkSlot ?? { row: 0, column: 0 };
-  return direction === "vertical"
-    ? nextVerticalSlotFrom(start, occupied)
-    : nextHorizontalSlotFrom(start, occupied);
 }

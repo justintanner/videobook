@@ -27,11 +27,10 @@ async function buildChunk(
     start: number | undefined;
     end: number | undefined;
     assetId: string;
-    bookId: string;
     provenance: Record<string, unknown>;
   },
 ): Promise<void> {
-  const { sourcePath, outputPath, start, end, assetId, bookId, provenance } = args;
+  const { sourcePath, outputPath, start, end, assetId, provenance } = args;
   try {
     await trimRange(sourcePath, outputPath, start, end);
     await assertSaneTrimOutput(sourcePath, outputPath);
@@ -41,7 +40,6 @@ async function buildChunk(
   }
   await ingestWorkspaceOutputs(
     fs,
-    bookId,
     assetId,
     [outputPath.split("/").pop()!],
     "split_video",
@@ -91,13 +89,13 @@ export function registerSplitVideoJob(fs: Engine): void {
       buildChunk(fs, {
         sourcePath, outputPath: outputPathA,
         start: undefined, end: chunkAEnd,
-        assetId: assetIdA, bookId,
+        assetId: assetIdA,
         provenance: provenanceA,
       }),
       buildChunk(fs, {
         sourcePath, outputPath: outputPathB,
         start: chunkBStart, end: undefined,
-        assetId: assetIdB, bookId,
+        assetId: assetIdB,
         provenance: provenanceB,
       }),
     ]);

@@ -8,7 +8,6 @@ import type { Engine, FailureInfo } from "videobook-engine";
  */
 export async function failPendingTaskAndLog(
   fs: Engine,
-  bookId: string,
   assetId: string,
   taskId: string,
   info: FailureInfo,

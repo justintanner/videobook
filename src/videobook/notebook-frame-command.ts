@@ -1,10 +1,8 @@
 import type { NotebookCell, NotebookDocument } from 'videobook-engine'
-import { resolveGeneratedVideoArtifact } from 'videobook-engine/notebook-media-artifact'
-import {
-  notebookCellTag,
-  resolveNotebookCellReference,
-} from './notebook-addressing'
+import { notebookCellTag } from './notebook-addressing'
 import { nextNotebookHorizontalGenerationSlot } from './notebook-grid'
+import { resolveNotebookVideoSourceCell } from './notebook-video-source'
+import { nonBlankStringValue, recordValue } from './value-decoders'
 
 export type NotebookFrameMode = 'first' | 'last' | 'time'
 
@@ -30,31 +28,12 @@ type NotebookToolCall = (
   args: Record<string, unknown>,
 ) => Promise<unknown>
 
-const videoSourceTypes = new Set<NotebookCell['type']>([
-  'video',
-  'generate_video',
-  'concat',
-  'splice',
-])
-
-// Accepts a grid address (@a3) or a cell id / id prefix; the resolver
-// validates whichever form arrives.
 const NOTEBOOK_FRAME_REFERENCE_SOURCE = '[a-z0-9][a-z0-9-]*'
 
 const NOTEBOOK_FRAME_COMMAND_PATTERN = new RegExp(
   `^(?:please\\s+)?(?:extracte?|capture|grab|get)\\s+(?:the\\s+)?(first|last)\\s+frame\\s+(?:of|from)\\s+@(${NOTEBOOK_FRAME_REFERENCE_SOURCE})(?:\\s+please)?[.!]?$`,
   'iu',
 )
-
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null
-}
 
 function normalizedTimestamp(value: unknown): number | null {
   const timestamp = Number(value)
@@ -125,20 +104,6 @@ export function parseNotebookFrameCommand(
   }
 }
 
-export function resolveNotebookFrameSource(
-  document: NotebookDocument,
-  sourceReference: string,
-): NotebookCell {
-  const source = resolveNotebookCellReference(document, sourceReference)
-  if (!videoSourceTypes.has(source.type)) {
-    throw new Error(`${notebookCellTag(source)} is not a video-producing cell`)
-  }
-  if (!resolveGeneratedVideoArtifact(document, source)) {
-    throw new Error(`${notebookCellTag(source)} does not have a video output yet`)
-  }
-  return source
-}
-
 export async function enqueueNotebookFrameCommand(input: {
   actor: string
   bookId: string
@@ -153,7 +118,7 @@ export async function enqueueNotebookFrameCommand(input: {
   ) {
     throw new Error('A valid timestamp is required for time-mode frame extraction')
   }
-  const source = resolveNotebookFrameSource(
+  const source = resolveNotebookVideoSourceCell(
     input.document,
     input.command.sourceReference,
   )
@@ -166,7 +131,7 @@ export async function enqueueNotebookFrameCommand(input: {
   let actionAddress = existing ? notebookCellTag(existing) : null
 
   if (!actionCellId || !actionAddress) {
-    const created = objectValue(await input.callTool('create_notebook_cell', {
+    const created = recordValue(await input.callTool('create_notebook_cell', {
       book_id: input.bookId,
       notebook_id: input.document.id,
       ...(input.expectedRevision
@@ -182,8 +147,8 @@ export async function enqueueNotebookFrameCommand(input: {
         inputs: frameActionInputs(input.command),
       },
     }))
-    actionCellId = stringValue(created?.id)
-    actionAddress = stringValue(created?.address)
+    actionCellId = nonBlankStringValue(created?.id)
+    actionAddress = nonBlankStringValue(created?.address)
     if (!actionCellId || !actionAddress) {
       throw new Error('The server did not return the Extract Frame cell')
     }
@@ -196,7 +161,7 @@ export async function enqueueNotebookFrameCommand(input: {
     })
   }
 
-  const accepted = objectValue(await input.callTool('run_notebook_cell', {
+  const accepted = recordValue(await input.callTool('run_notebook_cell', {
     book_id: input.bookId,
     notebook_id: input.document.id,
     cell_id: actionCellId,
@@ -205,8 +170,8 @@ export async function enqueueNotebookFrameCommand(input: {
       ? { expected_revision: input.expectedRevision }
       : {}),
   }))
-  const jobId = stringValue(accepted?.job_id)
-  const runId = stringValue(accepted?.run_id)
+  const jobId = nonBlankStringValue(accepted?.job_id)
+  const runId = nonBlankStringValue(accepted?.run_id)
   if (!jobId || !runId) {
     throw new Error('The server did not return an Extract Frame run')
   }

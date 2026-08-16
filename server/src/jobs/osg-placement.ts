@@ -22,7 +22,7 @@ import type {
   SubtitlePosition,
   SubtitleStyle,
 } from "../remotion/subtitles/types.js";
-import { RENDER_ORIENTATIONS, readStoredRenderDefaults } from "../tools/sync.js";
+import { RENDER_ORIENTATIONS, readStoredRenderDefaults } from "../tools/reconcile-project-work.js";
 import { detectOccupiedRegions } from "../vision-regions.js";
 import { BADGE_ASPECT } from "../watermark-badge.js";
 import { withLockedLocalLease } from "./_lease.js";
@@ -83,10 +83,9 @@ async function readSourceDimensions(
   return { width: probed.width, height: probed.height };
 }
 
-export async function chooseWatermarkPositions(
+async function chooseWatermarkPositions(
   fs: Engine,
   assetId: string,
-  bookId: string,
   regions: KeywordOccupiedRegion[],
   sourceWidth: number,
   sourceHeight: number,
@@ -100,11 +99,10 @@ export async function chooseWatermarkPositions(
       kind: region.kind,
       confidence: region.confidence,
     }));
-    const stored = await readStoredRenderDefaults(fs, assetId, bookId, orientation);
+    const stored = await readStoredRenderDefaults(fs, assetId, orientation);
     const band = stored.subtitlesEnabled === true
       ? subtitleBand(
           orientation,
-          width,
           height,
           isSubtitlePosition(stored.position) ? stored.position : "bottom",
           isSubtitleStyle(stored.highlightStyle) ? stored.highlightStyle : "impact",
@@ -122,10 +120,9 @@ export async function chooseWatermarkPositions(
 
 export function registerOsgPlacementJob(fs: Engine): void {
   registerJobHandler("osg_placement", async (payload, ctx) => {
-    const { assetId, assetDir, bookId, fingerprint, userScale } = payload as OsgPlacementPayload;
+    const { assetId, assetDir, fingerprint, userScale } = payload as OsgPlacementPayload;
     return withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -170,7 +167,7 @@ export function registerOsgPlacementJob(fs: Engine): void {
         const regions = [...regionsByFrame.values()].flat();
 
         const positions = await chooseWatermarkPositions(
-          fs, assetId, bookId, regions, source.width, source.height, userScale,
+          fs, assetId, regions, source.width, source.height, userScale,
         );
 
         const analysis: OsgPlacementAnalysis = {

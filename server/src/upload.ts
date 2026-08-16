@@ -83,7 +83,6 @@ export async function prepareAssetForUpload(
   fs: Engine,
   assetId: string,
   filename: string,
-  _bookId: string,
 ): Promise<{ data: Uint8Array; hashedFilename: string; contentType: string }> {
   const readResult = await fs.files.read(assetId, filename);
   if (!readResult.ok) throw new Error(readResult.error.message);
@@ -98,8 +97,7 @@ export async function uploadAssetFile(
   fs: Engine,
   assetId: string,
   filename: string,
-  bookId: string,
 ): Promise<string> {
-  const { data, hashedFilename } = await prepareAssetForUpload(fs, assetId, filename, bookId);
+  const { data, hashedFilename } = await prepareAssetForUpload(fs, assetId, filename);
   return uploadBytesToFreeHost(data, hashedFilename);
 }

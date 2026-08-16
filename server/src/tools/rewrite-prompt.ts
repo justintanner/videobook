@@ -241,7 +241,6 @@ const ERROR_RECENCY_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function findPreviousErrorForPrompt(
   fs: Engine,
-  bookId: string,
   prompt: string,
 ): Promise<GenerationError | null> {
   const result = await fs.jobs.failures.findAll();
@@ -372,7 +371,6 @@ function buildSceneResult(
 async function resolveImageDataUris(
   imageRefs: string[],
   fs: Engine,
-  _bookId: string,
 ): Promise<string[]> {
   const { resolved } = await resolveArtifactRefs(fs, imageRefs);
 
@@ -441,7 +439,7 @@ export function rewritePromptDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const {
-        prompt, model, image_refs, book_id,
+        prompt, model, image_refs,
         asset_ref, scene_index, platform, custom_prompt, provider_docs, previous_error,
       } = args as {
         prompt?: string;
@@ -466,7 +464,7 @@ export function rewritePromptDef(fs: Engine): ToolDef {
 
       // Scene rewrite mode
       if (asset_ref !== undefined && scene_index !== undefined) {
-        return handleSceneRewrite(fs, apiKey, asset_ref, scene_index, prompt, book_id);
+        return handleSceneRewrite(fs, apiKey, asset_ref, scene_index, prompt);
       }
 
       // Standard rewrite mode — require prompt OR reference images
@@ -488,7 +486,7 @@ export function rewritePromptDef(fs: Engine): ToolDef {
       if (previous_error) {
         previousError = { message: previous_error };
       } else if (prompt) {
-        const found = await findPreviousErrorForPrompt(fs, book_id, prompt);
+        const found = await findPreviousErrorForPrompt(fs, prompt);
         if (found) {
           previousError = {
             message: found.message,
@@ -503,7 +501,7 @@ export function rewritePromptDef(fs: Engine): ToolDef {
         expandedPrompt = expandTimelineSlotRefs(expandedPrompt, timelineSlotArtifactIds(fs));
       }
 
-      return handleStandardRewrite(fs, apiKey, expandedPrompt, model, image_refs, book_id, platform, custom_prompt, provider_docs, previousError);
+      return handleStandardRewrite(fs, apiKey, expandedPrompt, model, image_refs, platform, custom_prompt, provider_docs, previousError);
     },
   };
 }
@@ -514,7 +512,6 @@ async function handleStandardRewrite(
   prompt: string,
   model: string,
   imageRefs: string[] | undefined,
-  bookId: string,
   platform: Platform | undefined,
   customPrompt: string | undefined,
   providerDocs: boolean | undefined,
@@ -547,7 +544,7 @@ async function handleStandardRewrite(
 
   let messages: OpenAiMessage[];
   if (imageRefs && imageRefs.length > 0) {
-    const dataUris = await resolveImageDataUris(imageRefs, fs, bookId);
+    const dataUris = await resolveImageDataUris(imageRefs, fs);
     if (dataUris.length === 0) {
       return {
         isError: true as const,
@@ -579,7 +576,6 @@ async function handleSceneRewrite(
   assetRef: string,
   sceneIndex: number,
   instruction: string | undefined,
-  _bookId: string,
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
   const assetId = assetRef.replace(/^@/, "");
 

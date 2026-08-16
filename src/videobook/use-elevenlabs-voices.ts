@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import {
+  nonBlankStringValue,
+  nonEmptyStringValue,
+  recordValue,
+} from './value-decoders'
 
-export type SpeakVoiceSource = 'custom' | 'generic'
+type SpeakVoiceSource = 'custom' | 'generic'
 
 export interface SpeakVoice {
   voiceId: string
@@ -16,7 +21,7 @@ export interface ElevenLabsVoiceCatalog {
   warning: string | null
 }
 
-export type VoiceCatalogCallTool = (
+type VoiceCatalogCallTool = (
   tool: string,
   args: Record<string, unknown>,
   options?: { background?: boolean },
@@ -25,32 +30,44 @@ export type VoiceCatalogCallTool = (
 export type ElevenLabsVoicesState = ElevenLabsVoiceCatalog & {
   loading: boolean
   error: string | null
+  ensureLoaded: () => Promise<ElevenLabsVoiceCatalog | null>
   refresh: () => Promise<ElevenLabsVoiceCatalog | null>
 }
 
-function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
+type ElevenLabsVoiceCatalogSnapshot = ElevenLabsVoiceCatalog & {
+  loading: boolean
+  error: string | null
 }
 
-function asString(value: unknown): string | null {
-  return typeof value === 'string' ? value : null
+type ElevenLabsVoiceCatalogLoader = () => Promise<ElevenLabsVoiceCatalog>
+
+interface ElevenLabsVoiceCatalogLifecycle {
+  configure: (options: {
+    ready: boolean
+    load: ElevenLabsVoiceCatalogLoader
+  }) => void
+  ensureLoaded: () => Promise<ElevenLabsVoiceCatalog | null>
+  getSnapshot: () => ElevenLabsVoiceCatalogSnapshot
+  refresh: () => Promise<ElevenLabsVoiceCatalog | null>
+  reset: () => void
+  subscribe: (listener: () => void) => () => void
 }
 
 export function parseSpeakVoiceCatalog(value: unknown): ElevenLabsVoiceCatalog {
-  const payload = record(value)
+  const payload = recordValue(value)
   const voices = Array.isArray(payload?.voices)
     ? payload.voices.flatMap((entry): SpeakVoice[] => {
-      const item = record(entry)
-      const voiceId = asString(item?.voice_id) ?? asString(item?.voiceId)
-      const name = asString(item?.name)
-      const source = asString(item?.source)
+      const item = recordValue(entry)
+      const voiceId = nonBlankStringValue(item?.voice_id)
+        ?? nonBlankStringValue(item?.voiceId)
+      const name = nonBlankStringValue(item?.name)
+      const source = nonBlankStringValue(item?.source)
       if (!voiceId || !name || (source !== 'custom' && source !== 'generic')) {
         return []
       }
-      const category = asString(item?.category)
-      const previewUrl = asString(item?.preview_url) ?? asString(item?.previewUrl)
+      const category = nonBlankStringValue(item?.category)
+      const previewUrl = nonBlankStringValue(item?.preview_url)
+        ?? nonBlankStringValue(item?.previewUrl)
       return [{
         voiceId,
         name,
@@ -63,7 +80,7 @@ export function parseSpeakVoiceCatalog(value: unknown): ElevenLabsVoiceCatalog {
   return {
     voices,
     status: payload?.status === 'live' ? 'live' : 'fallback',
-    warning: asString(payload?.warning),
+    warning: nonEmptyStringValue(payload?.warning),
   }
 }
 
@@ -75,51 +92,141 @@ export async function fetchElevenLabsVoiceCatalog(
   )
 }
 
+function emptyVoiceCatalogSnapshot(): ElevenLabsVoiceCatalogSnapshot {
+  return {
+    voices: [],
+    status: 'fallback',
+    warning: null,
+    loading: false,
+    error: null,
+  }
+}
+
+export function createElevenLabsVoiceCatalogLifecycle(options: {
+  ready: boolean
+  load: ElevenLabsVoiceCatalogLoader
+}): ElevenLabsVoiceCatalogLifecycle {
+  let ready = options.ready
+  let load = options.load
+  let generation = 0
+  let loaded = false
+  let snapshot = emptyVoiceCatalogSnapshot()
+  let inFlight: Promise<ElevenLabsVoiceCatalog | null> | null = null
+  const listeners = new Set<() => void>()
+
+  const publish = (next: ElevenLabsVoiceCatalogSnapshot) => {
+    snapshot = next
+    for (const listener of listeners) listener()
+  }
+
+  const reset = () => {
+    generation += 1
+    loaded = false
+    inFlight = null
+    publish(emptyVoiceCatalogSnapshot())
+  }
+
+  const start = (): Promise<ElevenLabsVoiceCatalog | null> => {
+    if (!ready) return Promise.resolve(null)
+    if (inFlight) return inFlight
+    const requestGeneration = generation
+    const request: Promise<ElevenLabsVoiceCatalog | null> = Promise.resolve()
+      .then(() => load())
+      .then(
+        (catalog) => {
+          if (generation !== requestGeneration || inFlight !== request) return null
+          loaded = true
+          inFlight = null
+          publish({ ...catalog, loading: false, error: null })
+          return catalog
+        },
+        (cause: unknown) => {
+          if (generation !== requestGeneration || inFlight !== request) return null
+          loaded = false
+          inFlight = null
+          publish({
+            ...snapshot,
+            loading: false,
+            error: cause instanceof Error ? cause.message : String(cause),
+          })
+          return null
+        },
+      )
+    inFlight = request
+    publish({ ...snapshot, loading: true, error: null })
+    return request
+  }
+
+  return {
+    configure(next) {
+      if (ready === next.ready && load === next.load) return
+      ready = next.ready
+      load = next.load
+      reset()
+    },
+    ensureLoaded() {
+      if (!ready) return Promise.resolve(null)
+      if (inFlight) return inFlight
+      if (loaded) {
+        return Promise.resolve({
+          voices: snapshot.voices,
+          status: snapshot.status,
+          warning: snapshot.warning,
+        })
+      }
+      return start()
+    },
+    getSnapshot() {
+      return snapshot
+    },
+    refresh: start,
+    reset,
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+  }
+}
+
 export function useElevenLabsVoices(options: {
   callTool: VoiceCatalogCallTool
   ready: boolean
 }): ElevenLabsVoicesState {
   const { callTool, ready } = options
-  const seededRef = useRef(false)
-  const [catalog, setCatalog] = useState<ElevenLabsVoiceCatalog>({
-    voices: [],
-    status: 'fallback',
-    warning: null,
-  })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const refresh = useCallback(async () => {
-    if (!ready) return null
-    setLoading(true)
-    setError(null)
-    try {
-      const next = await fetchElevenLabsVoiceCatalog(callTool)
-      setCatalog(next)
-      return next
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause)
-      setError(message)
-      return null
-    } finally {
-      setLoading(false)
-    }
-  }, [callTool, ready])
+  const load = useCallback(
+    () => fetchElevenLabsVoiceCatalog(callTool),
+    [callTool],
+  )
+  const [lifecycle] = useState(() =>
+    createElevenLabsVoiceCatalogLifecycle({ ready, load }))
 
   useEffect(() => {
-    if (!ready || seededRef.current) return
-    seededRef.current = true
-    void refresh().then((catalog) => {
-      if (!catalog) seededRef.current = false
-    })
-  }, [ready, refresh])
+    lifecycle.configure({ ready, load })
+  }, [lifecycle, load, ready])
+
+  useEffect(() => () => lifecycle.reset(), [lifecycle])
+
+  const snapshot = useSyncExternalStore(
+    lifecycle.subscribe,
+    lifecycle.getSnapshot,
+    lifecycle.getSnapshot,
+  )
+  const ensureLoaded = useCallback(
+    () => lifecycle.ensureLoaded(),
+    [lifecycle],
+  )
+  const refresh = useCallback(
+    () => lifecycle.refresh(),
+    [lifecycle],
+  )
 
   return {
-    voices: catalog.voices,
-    status: catalog.status,
-    warning: catalog.warning,
-    loading,
-    error,
+    voices: snapshot.voices,
+    status: snapshot.status,
+    warning: snapshot.warning,
+    loading: snapshot.loading,
+    error: snapshot.error,
+    ensureLoaded,
     refresh,
   }
 }

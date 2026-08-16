@@ -9,7 +9,10 @@ import {
   registerJobHandler,
   setEngineRoot,
 } from "../queue.js";
-import { registerCompleteKieTaskJob } from "./complete-kie-task.js";
+import {
+  completionFamilyForTaskType,
+  registerCompleteProviderTaskJob,
+} from "./complete-provider-task.js";
 
 // 1x1 PNG
 const TINY_PNG = Buffer.from(
@@ -17,15 +20,37 @@ const TINY_PNG = Buffer.from(
   "base64",
 );
 
-describe("complete-kie-task job handler", () => {
-  it("exports registerCompleteKieTaskJob function", async () => {
-    const mod = await import("./complete-kie-task.js");
-    expect(typeof mod.registerCompleteKieTaskJob).toBe("function");
+describe("provider completion routing", () => {
+  it.each([
+    ["nano_banana_image", "nanoBananaImage"],
+    ["fal_nano_banana_2_edit", "nanoBananaImage"],
+    ["qwen2_image_edit", "qwenImage"],
+    ["fal_qwen_image", "qwenImage"],
+    ["seedream_image", "seedreamImage"],
+    ["fal_seedream_v5_lite_edit", "seedreamV5Image"],
+    ["kling30_motion_control_video", "klingVideo"],
+    ["seedance2_video", "providerVideo"],
+    ["fal_wan27_videoedit", "providerVideo"],
+    ["fal_grok_imagine_video_extend", "providerVideo"],
+    ["grok_imagine_upscale_video", "grokVideo"],
+    ["wan27_extend_video", "wanVideo"],
+    ["happyhorse_ref_video", "happyHorseVideo"],
+    ["minimax_h3_i2v_video", "miniMaxVideo"],
+    ["volcengine_lipsync_video", "lipSyncVideo"],
+    ["omnihuman_video", "omnihumanVideo"],
+    ["fal_wan27_pro_edit", "wanImage"],
+    ["alibaba_video", "alibabaVideo"],
+    ["alibaba_image_pro", "alibabaImage"],
+    ["alibaba_qwen_image_edit", "alibabaQwenImage"],
+    ["fal_grok_imagine_image_edit", "grokImage"],
+    ["gpt_image_text", "gptImage"],
+    ["isolate_vocals", "isolateVocals"],
+  ])("routes %s to %s", (taskType, family) => {
+    expect(completionFamilyForTaskType(taskType)).toBe(family);
   });
 
-  it("registerCompleteKieTaskJob accepts a fs argument", async () => {
-    const mod = await import("./complete-kie-task.js");
-    expect(mod.registerCompleteKieTaskJob.length).toBe(1);
+  it("rejects task types without a completion family", () => {
+    expect(completionFamilyForTaskType("unknown_provider_task")).toBeUndefined();
   });
 });
 
@@ -62,14 +87,15 @@ describe("complete_kie_task fal_qwen branches", () => {
     await fsP.rm(projectsDir, { recursive: true, force: true });
   });
 
-  async function seedPendingQwenTask(
-    taskType: "fal_qwen_image" | "fal_qwen_image_edit",
+  async function seedPendingTask(
+    taskType: string,
+    assetType = "img",
   ): Promise<{ assetId: string; assetDir: string; taskId: string; bookId: string; fs: ReturnType<typeof createEngineForTest> }> {
     const cfs = createEngineForTest(projectsDir);
     testEngine = cfs;
     await setEngineRoot(projectsDir, cfs);
     const bookId = cfs.book.get().bookId;
-    const asset = await cfs.artifacts.create("img", "qwen-out");
+    const asset = await cfs.artifacts.create(assetType, "provider-output");
     expect(asset.ok).toBe(true);
     if (!asset.ok) throw new Error(asset.error.message);
 
@@ -80,7 +106,7 @@ describe("complete_kie_task fal_qwen branches", () => {
     });
     if (!lease) throw new Error("assetWork.begin failed");
 
-    const taskId = `fal-qwen-task-${taskType}`;
+    const taskId = `provider-task-${taskType}`;
     const written = await cfs.jobs.pending.write({
         artifactId: asset.value.artifactId,
         taskId,
@@ -101,8 +127,8 @@ describe("complete_kie_task fal_qwen branches", () => {
   }
 
   it("downloads fal_qwen_image_edit result instead of marking ready empty", async () => {
-    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingQwenTask("fal_qwen_image_edit");
-    registerCompleteKieTaskJob(cfs);
+    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask("fal_qwen_image_edit");
+    registerCompleteProviderTaskJob(cfs);
     // Swallow process_image follow-up so the completion path alone is under test.
     registerJobHandler("process_image", async () => ({ ok: true }));
 
@@ -139,8 +165,8 @@ describe("complete_kie_task fal_qwen branches", () => {
   });
 
   it("downloads fal_qwen_image (T2I) result", async () => {
-    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingQwenTask("fal_qwen_image");
-    registerCompleteKieTaskJob(cfs);
+    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask("fal_qwen_image");
+    registerCompleteProviderTaskJob(cfs);
     registerJobHandler("process_image", async () => ({ ok: true }));
 
     const result = await appQueue.enqueueAndWait<{ success: boolean }>(
@@ -166,8 +192,8 @@ describe("complete_kie_task fal_qwen branches", () => {
   });
 
   it("fails when fal_qwen result has no image URLs (no silent ready)", async () => {
-    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingQwenTask("fal_qwen_image_edit");
-    registerCompleteKieTaskJob(cfs);
+    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask("fal_qwen_image_edit");
+    registerCompleteProviderTaskJob(cfs);
 
     await expect(
       appQueue.enqueueAndWait(
@@ -190,5 +216,73 @@ describe("complete_kie_task fal_qwen branches", () => {
     // Regression: prior bug deleted the pending task and left the asset empty.
     const original = await cfs.files.read(assetId, "original.png");
     expect(original.ok).toBe(false);
+  });
+
+  it.each([
+    ["seedance2_video", true],
+    ["fal_seedance2_i2v", false],
+  ] as const)("records KIE metadata only for KIE-backed shared video task %s", async (taskType, expectKieMetadata) => {
+    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask(taskType, "video");
+    registerCompleteProviderTaskJob(cfs);
+    registerJobHandler("process_video", async () => ({ ok: true }));
+
+    const result = await appQueue.enqueueAndWait<{ success: boolean }>(
+      `complete-video-${assetId}`,
+      {
+        type: "complete_kie_task",
+        taskId,
+        taskType,
+        assetId,
+        assetDir,
+        bookId,
+        meta: {},
+        resultUrls: taskType === "seedance2_video" ? [imageUrl] : [],
+        ...(taskType.startsWith("fal_")
+          ? { resultObject: { video: { url: imageUrl } } }
+          : {}),
+      },
+      10_000,
+    );
+
+    expect(result.success).toBe(true);
+    const taskMetadata = await cfs.metadata.artifacts.read<{ taskId: string }>(assetId, "kie-task-id");
+    expect(taskMetadata.ok).toBe(expectKieMetadata);
+    if (taskMetadata.ok) {
+      expect(taskMetadata.value).toEqual({ taskId });
+    }
+  });
+
+  it("fails an unknown provider task instead of silently completing it", async () => {
+    const taskType = "unknown_provider_task";
+    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask(taskType);
+    registerCompleteProviderTaskJob(cfs);
+
+    await expect(
+      appQueue.enqueueAndWait(
+        `complete-unknown-${assetId}`,
+        {
+          type: "complete_kie_task",
+          taskId,
+          taskType,
+          assetId,
+          assetDir,
+          bookId,
+          meta: {},
+          resultUrls: [],
+        },
+        10_000,
+      ),
+    ).rejects.toThrow(/Unhandled provider task type: unknown_provider_task/);
+
+    const pending = await cfs.jobs.pending.read(assetId);
+    expect(pending.ok).toBe(true);
+    if (pending.ok) {
+      expect(pending.value).toBeNull();
+    }
+    const failure = await cfs.jobs.failures.read(assetId);
+    expect(failure.ok).toBe(true);
+    if (failure.ok) {
+      expect(failure.value?.message).toMatch(/Unhandled provider task type/);
+    }
   });
 });

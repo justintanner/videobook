@@ -17,7 +17,7 @@ import {
   runNotebookCell,
 } from "../../server/src/jobs/run-notebook.js";
 import { DEFAULT_ANIMATION_TOOL } from "../../server/src/notebook-action-catalog.js";
-import { buildAssetList } from "../../server/src/tools/sync.js";
+import { buildAssetList } from "../../server/src/tools/reconcile-project-work.js";
 import type { ToolDef } from "../../server/src/tools/tool-def.js";
 
 const execFileAsync = promisify(execFile);

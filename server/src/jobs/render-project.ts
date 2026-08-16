@@ -107,7 +107,6 @@ type RenderProjectPayload = {
 // a render must never fail because translation did.
 async function resolveSubtitleSegments(
   fs: Engine,
-  bookId: string,
   assetId: string,
   raw: unknown,
   subtitleLanguage: string,
@@ -154,7 +153,6 @@ export function registerRenderProjectJob(fs: Engine): void {
   registerJobHandler("render_project", async (payload, ctx) => {
     ctx.signal.throwIfAborted();
     const {
-      bookId,
       orientation,
       assets,
       subtitlesEnabled,
@@ -229,7 +227,6 @@ export function registerRenderProjectJob(fs: Engine): void {
           ctx.signal.throwIfAborted();
           const claim = await claimLockedLease(
             fs,
-            bookId,
             asset.assetId,
             asset.assetDir,
             "render",
@@ -267,12 +264,12 @@ export function registerRenderProjectJob(fs: Engine): void {
             let allSegments = null;
             let rawTranscript: unknown = null;
             if ((subtitlesEnabled || keywordGraphicsEnabled) && !(await fs.files.read(asset.assetId, "elevenlabs.json")).ok) {
-              await ensureElevenLabsTranscript(fs, bookId, asset.assetId);
+              await ensureElevenLabsTranscript(fs, asset.assetId);
             }
             const elevenlabsResult = await fs.files.read(asset.assetId, "elevenlabs.json");
             if (elevenlabsResult.ok) {
               rawTranscript = JSON.parse(elevenlabsResult.value.toString()) as unknown;
-              allSegments = await resolveSubtitleSegments(fs, bookId, asset.assetId, rawTranscript, subtitleLanguage, ctx.signal);
+              allSegments = await resolveSubtitleSegments(fs, asset.assetId, rawTranscript, subtitleLanguage, ctx.signal);
             }
 
             let chunks: Chunk[] = [];
@@ -303,11 +300,10 @@ export function registerRenderProjectJob(fs: Engine): void {
                 elevenlabsResult.value,
                 selectedKeywordGraphics,
               );
-              const analysis = await readKeywordPlacementAnalysis(fs, asset.assetId, bookId);
+              const analysis = await readKeywordPlacementAnalysis(fs, asset.assetId);
               const valid = await isKeywordPlacementCacheValid(
                 fs,
                 asset.assetId,
-                bookId,
                 analysis,
                 fingerprint,
                 selectedKeywordGraphics,
@@ -442,7 +438,6 @@ export function registerRenderProjectJob(fs: Engine): void {
               }
               await ingestWorkspaceOutputs(
                 fs,
-                bookId,
                 asset.assetId,
                 renderedPaths,
                 "render",

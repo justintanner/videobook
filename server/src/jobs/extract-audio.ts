@@ -33,11 +33,11 @@ export function registerExtractAudioJob(fs: Engine): void {
   registerJobHandler("extract_audio", async (payload, ctx) => {
     const {
       inputPath, outputPath,
-      audioAssetId, audioAssetDir, sourceVideoId, bookId, destination, range,
+      audioAssetId, audioAssetDir, sourceVideoId, destination, range,
     } = payload as ExtractAudioPayload;
     const destinationMode = destination !== undefined;
 
-    return withLocalLease(fs, bookId, audioAssetId, ctx, "extract", async () => {
+    return withLocalLease(fs, audioAssetId, ctx, "extract", async () => {
       const lockResult = await fs.jobs.locks.acquire(audioAssetDir, { durationMs: LOCK_DURATION_MS });
       if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
@@ -64,7 +64,6 @@ export function registerExtractAudioJob(fs: Engine): void {
         const outputFilename = outputPath.split("/").pop()!;
         await ingestWorkspaceOutputs(
           fs,
-          bookId,
           audioAssetId,
           [outputFilename],
           "extract_audio",

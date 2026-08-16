@@ -55,7 +55,7 @@ export function generateWan27ImageProDef(fs: Engine): ToolDef {
         };
       }
 
-      const resolved = await resolveImageRefs(fs, rawSlugs, book_id);
+      const resolved = await resolveImageRefs(fs, rawSlugs);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }

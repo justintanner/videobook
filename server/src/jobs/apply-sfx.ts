@@ -42,7 +42,6 @@ async function generateAndWriteSfx(
   entry: SfxEntry,
   index: number,
   assetId: string,
-  _bookId: string,
 ): Promise<string> {
   const text = entry.prompt ?? `${entry.type}: ${entry.description}`;
   const audio = await provider.v1.soundGeneration({
@@ -131,7 +130,6 @@ export function registerApplySfxJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -141,7 +139,7 @@ export function registerApplySfxJob(fs: Engine): void {
       const provider = createElevenLabs({ apiKey, timeout: 60_000 });
 
       const generatedFilenames = await Promise.all(
-        sfx.map((entry, i) => generateAndWriteSfx(provider, fs, entry, i, assetId, bookId)),
+        sfx.map((entry, i) => generateAndWriteSfx(provider, fs, entry, i, assetId)),
       );
 
       await mixSfxIntoVideo(
@@ -155,7 +153,6 @@ export function registerApplySfxJob(fs: Engine): void {
       const inputFilename = basename(videoPath);
       await replaceArtifactFileFromPath(
         fs,
-        bookId,
         assetId,
         inputFilename,
         outputPath,

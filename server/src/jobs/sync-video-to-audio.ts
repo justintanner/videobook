@@ -147,7 +147,6 @@ export async function validateAudioSyncOutput(
 async function readUsableTimedTranscript(
   fs: Engine,
   assetId: string,
-  _bookId: string,
 ): Promise<unknown | null> {
   const result = await fs.files.read(assetId, "elevenlabs.json");
   if (!result.ok) {
@@ -165,9 +164,8 @@ async function readUsableTimedTranscript(
 export async function prepareAudioSyncTranscript(
   fs: Engine,
   assetId: string,
-  bookId: string,
 ): Promise<PreparedAudioSyncTranscript> {
-  const existing = await readUsableTimedTranscript(fs, assetId, bookId);
+  const existing = await readUsableTimedTranscript(fs, assetId);
   if (existing !== null) return { transcript: existing, replacement: null };
 
   const manifest = await fs.files.manifest(assetId);
@@ -179,7 +177,6 @@ export async function prepareAudioSyncTranscript(
   if (!audioFile) throw new Error(`auto-transcribe failed: no audio file found in asset ${assetId}`);
   const replacement = await requestElevenLabsTranscript(
     fs,
-    bookId,
     assetId,
     audioFile.name,
     AUTO_TRANSCRIBE_OPTIONS,
@@ -194,7 +191,6 @@ async function deleteIfPresent(
   fs: Engine,
   assetId: string,
   filename: string,
-  _bookId: string,
 ): Promise<void> {
   const result = await fs.files.delete(assetId, filename);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
@@ -221,7 +217,6 @@ function preserveArtifactState(error: unknown): Error {
 export async function restoreAudioSyncSnapshot(
   fs: Engine,
   assetId: string,
-  bookId: string,
   restoreCommit: string,
 ): Promise<string> {
   const artifact = fs.artifacts.get(assetId);
@@ -251,7 +246,6 @@ function rollbackError(original: unknown, failures: readonly unknown[]): Error {
 async function clearAudioSyncFailure(
   fs: Engine,
   assetId: string,
-  _bookId: string,
 ): Promise<void> {
   const cleared = await fs.jobs.failures.clear(assetId);
   if (!cleared.ok) {
@@ -263,7 +257,6 @@ async function rollbackAudioSyncFailure(
   fs: Engine,
   assetId: string,
   outputPath: string,
-  bookId: string,
   restoreCommit: string,
   original: unknown,
   markFailureHandled: () => void,
@@ -275,12 +268,12 @@ async function rollbackAudioSyncFailure(
     failures.push(error);
   }
   try {
-    await clearAudioSyncFailure(fs, assetId, bookId);
+    await clearAudioSyncFailure(fs, assetId);
   } catch (error) {
     failures.push(error);
   }
   try {
-    await restoreAudioSyncSnapshot(fs, assetId, bookId, restoreCommit);
+    await restoreAudioSyncSnapshot(fs, assetId, restoreCommit);
   } catch (error) {
     failures.push(error);
   }
@@ -293,12 +286,10 @@ async function restoreAfterEnqueueFailure(
   fs: Engine,
   assetId: string,
   assetDir: string,
-  bookId: string,
   restoreCommit: string,
 ): Promise<void> {
   const claim = await claimLockedLease(
     fs,
-    bookId,
     assetId,
     assetDir,
     "change_speed",
@@ -317,8 +308,8 @@ async function restoreAfterEnqueueFailure(
 
   let restored = false;
   try {
-    await clearAudioSyncFailure(fs, assetId, bookId);
-    await restoreAudioSyncSnapshot(fs, assetId, bookId, restoreCommit);
+    await clearAudioSyncFailure(fs, assetId);
+    await restoreAudioSyncSnapshot(fs, assetId, restoreCommit);
     restored = true;
   } catch (error) {
     await fs.jobs.artifactWork.fail(assetId, claim.ownerId, {
@@ -357,7 +348,6 @@ export function registerSyncVideoToAudioJob(fs: Engine): void {
     try {
       result = await withLockedLocalLease(
         fs,
-        bookId,
         assetId,
         assetDir,
         ctx,
@@ -380,7 +370,7 @@ export function registerSyncVideoToAudioJob(fs: Engine): void {
           }
 
           const preparedTranscript = anchors.some((anchor) => "audioCue" in anchor)
-            ? await prepareAudioSyncTranscript(fs, assetId, bookId)
+            ? await prepareAudioSyncTranscript(fs, assetId)
             : null;
           const resolvedAnchors = resolveSyncVideoToAudioAnchors(
             anchors,
@@ -399,7 +389,6 @@ export function registerSyncVideoToAudioJob(fs: Engine): void {
           const inputFilename = basename(inputPath);
           await replaceArtifactFileFromPath(
             fs,
-            bookId,
             assetId,
             inputFilename,
             outputPath,
@@ -407,14 +396,13 @@ export function registerSyncVideoToAudioJob(fs: Engine): void {
           if (preparedTranscript?.replacement) {
             await writeElevenLabsTranscript(
               fs,
-              bookId,
               assetId,
               preparedTranscript.replacement,
               AUTO_TRANSCRIBE_OPTIONS,
             );
           }
           for (const filename of STALE_VISUAL_DERIVATIVES) {
-            await deleteIfPresent(fs, assetId, filename, bookId);
+            await deleteIfPresent(fs, assetId, filename);
           }
 
           return {
@@ -432,7 +420,7 @@ export function registerSyncVideoToAudioJob(fs: Engine): void {
       if (!rollbackState.enteredLease) throw error;
       if (rollbackState.restoreCommit === null) {
         try {
-          await clearAudioSyncFailure(fs, assetId, bookId);
+          await clearAudioSyncFailure(fs, assetId);
         } catch (clearError) {
           throw rollbackError(error, [clearError]);
         }
@@ -442,7 +430,6 @@ export function registerSyncVideoToAudioJob(fs: Engine): void {
         fs,
         assetId,
         outputPath,
-        bookId,
         rollbackState.restoreCommit,
         error,
         () => ctx.markAssetFailureHandled(),
@@ -481,7 +468,6 @@ export function registerSyncVideoToAudioJob(fs: Engine): void {
           fs,
           assetId,
           assetDir,
-          bookId,
           result.restoreCommit,
         );
       } catch (restoreError) {

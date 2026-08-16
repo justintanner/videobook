@@ -471,7 +471,7 @@ export function listNotebookActions(options: {
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
-export function actionsForCell(
+function actionsForCell(
   cell: NotebookCell,
   document: NotebookDocument,
   options: { includeHiddenGeneration?: boolean } = {},
@@ -492,7 +492,7 @@ export function actionsForCell(
   });
 }
 
-export function defaultActionForCell(
+function defaultActionForCell(
   cell: NotebookCell,
   document: NotebookDocument,
 ): NotebookAction | null {
@@ -796,10 +796,6 @@ function sanitizeResolvedRequest(
         !/(api[_-]?key|secret|token|password|authorization)/i.test(key)),
     ),
   };
-}
-
-export function generationSpecOrNull(tool: string): GenerationActionSpec | null {
-  return getActionSpec(tool) ?? null;
 }
 
 export { DEFAULT_ANIMATION_TOOL, DEFAULT_IMAGE_TOOL, DEFAULT_VIDEO_TOOL };

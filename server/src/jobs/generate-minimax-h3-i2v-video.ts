@@ -32,10 +32,10 @@ export function registerGenerateMiniMaxH3I2vVideoJob(fs: Engine): void {
     requireApiKey("KIE_API_KEY");
 
     const firstFrameUrl = firstFrame
-      ? await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename, bookId)
+      ? await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename)
       : undefined;
     const lastFrameUrl = lastFrame
-      ? await uploadAssetToKie(fs, lastFrame.assetId, lastFrame.filename, bookId)
+      ? await uploadAssetToKie(fs, lastFrame.assetId, lastFrame.filename)
       : undefined;
 
     const normalizedPrompt = transformProviderPrompt("generate_kie_minimax_h3_image_to_video", {

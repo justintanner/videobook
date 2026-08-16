@@ -6,11 +6,11 @@ import type { ToolDef, ToolResult } from "./tool-def.js";
 import { findImageFile } from "./_image-inputs.js";
 import { derivedLabel } from "../artifact-label.js";
 
-export const DEFAULT_QART_SIZE = 2520;
+const DEFAULT_QART_SIZE = 2520;
 export const QART_QUIET_MODULES = 4;
-export const QART_MIN_MODULE_PX = 3;
+const QART_MIN_MODULE_PX = 3;
 export const QART_MIN_VERSION = 20;
-export const QART_IMAGE_STRENGTH = 0.46;
+const QART_IMAGE_STRENGTH = 0.46;
 export const QART_DARK_MAX = Math.round(255 * QART_IMAGE_STRENGTH);
 export const QART_LIGHT_MIN = Math.round(255 * (1 - QART_IMAGE_STRENGTH));
 
@@ -192,7 +192,6 @@ export async function buildQartPng(
 async function readCoverImage(
   fs: Engine,
   imageRef: string,
-  _bookId: string,
 ): Promise<{ ok: true; assetId: string; buffer: Buffer } | { ok: false; error: string }> {
   const assetId = imageRef.replace(/^@/, "");
   const artifact = fs.artifacts.get(assetId);
@@ -218,7 +217,6 @@ async function readCoverImage(
 
 async function persistQartAsset(
   fs: Engine,
-  bookId: string,
   assetName: string,
   files: QartFiles,
   metadata: Record<string, unknown>,
@@ -270,7 +268,6 @@ export function createQartDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const {
-        book_id,
         image_ref,
         value,
         size,
@@ -289,7 +286,7 @@ export function createQartDef(fs: Engine): ToolDef {
       if (!resolvedValue) return error("value must be a non-empty string");
       const resolvedSize = size ?? DEFAULT_QART_SIZE;
       const stylesToBuild = style ? [style] : (["inverted", "monochrome"] as QartStyle[]);
-      const cover = await readCoverImage(fs, image_ref, book_id);
+      const cover = await readCoverImage(fs, image_ref);
       if (!cover.ok) return error(cover.error);
 
       const qr = createQr(resolvedValue);
@@ -326,7 +323,6 @@ export function createQartDef(fs: Engine): ToolDef {
 
         const resultAsset = await persistQartAsset(
           fs,
-          book_id,
           derivedLabel(`qart ${s}`, stem),
           buildFiles,
           { ...baseMeta, color_mode: s, module_pixels: buildFiles.modulePx },

@@ -24,7 +24,7 @@ async function failAsset(fs: Engine, bookId: string, assetId: string, taskId: st
   const written = await fs.jobs.pending.write({ taskId, taskType: "alibaba_image", artifactId: assetId, meta: {} }, lease.ownerId
   );
   if (!written.ok || !written.value) throw new Error(`pendingTasks.write failed for ${assetId}`);
-  await failPendingTaskAndLog(fs, bookId, assetId, taskId, { message: "lease expired" });
+  await failPendingTaskAndLog(fs, assetId, taskId, { message: "lease expired" });
 }
 
 interface RecoverResult { asset_id: string; recovered: boolean }

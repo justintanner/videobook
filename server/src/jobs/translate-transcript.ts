@@ -39,7 +39,6 @@ export async function runTranslateTranscript(
   // re-transcription of the same asset.
   const result = await withLocalLease(
     fs,
-    bookId,
     assetId,
     ctx,
     "transcribe",

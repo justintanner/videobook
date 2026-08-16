@@ -331,7 +331,6 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "save_notebook",
-    onMount: ["notebook"],
   },
   {
     command: "/run",
@@ -344,7 +343,6 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "run_notebook",
-    onMount: ["notebook"],
   },
   {
     command: "/prompt-new",
@@ -514,7 +512,6 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_ref", type: "string", required: false, description: "Video to watermark (video artifact id); defaults to the open clip" },
     ],
     uiAction: "open_watermark",
-    onMount: ["viewer"],
     exposure: "composite",
   },
   {
@@ -666,7 +663,7 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to duplicate" },
-      { name: "new_name", type: "string", required: false, description: "Optional name for the copy" },
+      { name: "new_name", type: "string", required: false, description: "Optional name for the copy", consumeRest: true },
       { name: "destination", type: "string", required: false, description: "Optional empty destination cell from a1 through z13" },
     ],
     mcpTool: {
@@ -1059,7 +1056,6 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "value", type: "string", required: false, description: "Value for the field" },
     ],
     uiAction: "settings_subs",
-    onMount: ["viewer"],
   },
   {
     command: "/bg",
@@ -1074,7 +1070,6 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "mode", type: "string", required: true, description: "blur|black" },
     ],
     uiAction: "settings_bg",
-    onMount: ["viewer"],
   },
   {
     command: "/original",
@@ -1086,7 +1081,6 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "viewer_set_original",
-    onMount: ["viewer"],
   },
   {
     command: "/landscape",
@@ -1098,7 +1092,6 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "viewer_set_landscape",
-    onMount: ["viewer"],
   },
   {
     command: "/portrait",
@@ -1110,7 +1103,6 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "viewer_set_portrait",
-    onMount: ["viewer"],
   },
   {
     command: "/info",
@@ -1122,7 +1114,6 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "viewer_toggle_info",
-    onMount: ["viewer"],
   },
   {
     command: "/settings",
@@ -1134,7 +1125,6 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "viewer_show_settings",
-    onMount: ["viewer"],
   },
   {
     command: "/settings-landscape",
@@ -1146,7 +1136,6 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "settings_landscape",
-    onMount: ["viewer"],
   },
   {
     command: "/settings-portrait",
@@ -1158,7 +1147,6 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "settings_portrait",
-    onMount: ["viewer"],
   },
   {
     command: "/settings-square",
@@ -1170,7 +1158,6 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [],
     uiAction: "settings_square",
-    onMount: ["viewer"],
   },
 
   {
@@ -1186,7 +1173,6 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "position", type: "number", required: true, description: "1-based file position" },
     ],
     uiAction: "viewer_focus_file",
-    onMount: ["viewer"],
   },
   // ── Book management commands ──
   {

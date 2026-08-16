@@ -1,6 +1,5 @@
 import {
   forwardRef,
-  useEffect,
   useImperativeHandle,
   useMemo,
   useState,
@@ -15,14 +14,13 @@ import type {
 } from 'videobook-engine'
 import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
 import {
-  asSearchReferenceDescriptor,
+  prepareExistingSearchReference,
   referenceKind,
-  releaseSearchReference,
   searchReferenceRange,
   uploadSearchReference,
   type ReverseSearchMode,
-  type SearchReferenceDescriptor,
 } from '@/videobook/search-reference'
+import { useSearchReferenceLifecycle } from '@/videobook/useSearchReferenceLifecycle'
 
 export interface MomentSearchAsset {
   artifactId: string
@@ -104,15 +102,18 @@ function MomentSearch({
   onNotice,
   onNotebookChanged,
 }: MomentSearchProps, ref) {
-  const [mode, setMode] = useState<SearchMode>('text')
+  const searchReference = useSearchReferenceLifecycle()
+  const {
+    mode,
+    reference,
+    startSeconds,
+    durationSeconds,
+    preparing: preparingReference,
+  } = searchReference.state
   const [scope, setScope] = useState<'book' | 'library'>('book')
   const [text, setText] = useState('')
   const [modality, setModality] = useState<SearchModality>('auto')
   const [assetId, setAssetId] = useState('')
-  const [startSeconds, setStartSeconds] = useState('0')
-  const [durationSeconds, setDurationSeconds] = useState('')
-  const [reference, setReference] = useState<SearchReferenceDescriptor | null>(null)
-  const [preparingReference, setPreparingReference] = useState(false)
   const [artifactKind, setArtifactKind] = useState('')
   const [minimumDuration, setMinimumDuration] = useState('')
   const [maximumDuration, setMaximumDuration] = useState('')
@@ -143,10 +144,6 @@ function MomentSearch({
     }),
     [assets, mode],
   )
-
-  useEffect(() => () => {
-    void releaseSearchReference(reference)
-  }, [reference])
 
   const executeSearch = async (
     nextReference = reference,
@@ -192,13 +189,18 @@ function MomentSearch({
       const tool = nextMode !== 'text' || scope === 'library'
         ? 'search_library_moments'
         : 'search_moments'
-      const referenceRange = nextMode === 'video-reverse' && nextReference
-        ? searchReferenceRange(
-            nextStartSeconds,
-            nextDurationSeconds,
-            nextReference,
-          )
-        : undefined
+      let referenceRange
+      try {
+        referenceRange = nextMode === 'video-reverse' && nextReference
+          ? searchReferenceRange(
+              nextStartSeconds,
+              nextDurationSeconds,
+              nextReference,
+            )
+          : undefined
+      } catch (error) {
+        throw new Error(searchReference.lifecycle.resetInvalidRange(error))
+      }
       const request: LastSearchRequest = {
         query,
         tool,
@@ -212,6 +214,10 @@ function MomentSearch({
         ...(request.referenceRange ? { reference_range: request.referenceRange } : {}),
       })
       if (!isSearchPage(value)) throw new Error('The server returned an invalid search page')
+      if (
+        nextMode !== 'text'
+        && searchReference.lifecycle.getState().reference !== nextReference
+      ) return
       setPage(value)
       setLastQuery(query)
       setLastSearchRequest(request)
@@ -232,19 +238,17 @@ function MomentSearch({
 
   const prepareFileReference = async (file: File) => {
     if (mode === 'text') return
-    setPreparingReference(true)
-    try {
-      const next = await uploadSearchReference(file, bookId, referenceKind(mode))
-      setReference(next)
-      setAssetId('')
-      setStartSeconds('0')
-      setDurationSeconds('')
-      await executeSearch(next, mode, '0', '')
-    } catch (error) {
-      onNotice(error instanceof Error ? error.message : String(error))
-    } finally {
-      setPreparingReference(false)
+    const result = await searchReference.lifecycle.prepare(
+      mode,
+      () => uploadSearchReference(file, bookId, referenceKind(mode)),
+    )
+    if (result.status === 'error') {
+      onNotice(result.error)
+      return
     }
+    if (result.status === 'stale') return
+    setAssetId('')
+    await executeSearch(result.reference, result.mode, '0', '')
   }
 
   const prepareExistingReference = async (
@@ -254,31 +258,23 @@ function MomentSearch({
     previewUrl?: string | null,
     sourceRange?: { startSeconds: number; durationSeconds: number },
   ) => {
-    setPreparingReference(true)
-    try {
-      const value = await call('prepare_search_reference', {
-        source_book_id: sourceBookId,
-        source_artifact_id: sourceArtifactId,
-        kind: referenceKind(searchMode),
-        ...(sourceRange
-          ? {
-              source_start_seconds: sourceRange.startSeconds,
-              source_duration_seconds: sourceRange.durationSeconds,
-            }
-          : {}),
-      })
-      const next = asSearchReferenceDescriptor(value, previewUrl)
-      setMode(searchMode)
-      setReference(next)
-      setAssetId(sourceArtifactId)
-      setStartSeconds('0')
-      setDurationSeconds('')
-      await executeSearch(next, searchMode, '0', '')
-    } catch (error) {
-      onNotice(error instanceof Error ? error.message : String(error))
-    } finally {
-      setPreparingReference(false)
+    const result = await searchReference.lifecycle.prepare(
+      searchMode,
+      () => prepareExistingSearchReference(call, {
+        sourceBookId,
+        sourceArtifactId,
+        mode: searchMode,
+        previewUrl,
+        sourceRange,
+      }),
+    )
+    if (result.status === 'error') {
+      onNotice(result.error)
+      return
     }
+    if (result.status === 'stale') return
+    setAssetId(sourceArtifactId)
+    await executeSearch(result.reference, result.mode, '0', '')
   }
 
   const loadMore = async () => {
@@ -500,11 +496,8 @@ function MomentSearch({
                 className={mode === item.id ? 'active' : ''}
                 disabled={disabled || working || preparingReference}
                 onClick={() => {
-                  setMode(item.id)
+                  searchReference.lifecycle.changeMode(item.id)
                   setAssetId('')
-                  setReference(null)
-                  setStartSeconds('0')
-                  setDurationSeconds('')
                 }}
               >
                 <Icon size={14} />{item.label}
@@ -558,11 +551,11 @@ function MomentSearch({
             durationSeconds={durationSeconds}
             onFile={(file) => void prepareFileReference(file)}
             onClear={() => {
-              setReference(null)
+              searchReference.lifecycle.clearReference()
               setAssetId('')
             }}
-            onStartSeconds={setStartSeconds}
-            onDurationSeconds={setDurationSeconds}
+            onStartSeconds={searchReference.lifecycle.setStartSeconds}
+            onDurationSeconds={searchReference.lifecycle.setDurationSeconds}
           >
             <div className="reverse-search-existing">
               <label>

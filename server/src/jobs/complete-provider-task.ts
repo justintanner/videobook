@@ -9,10 +9,108 @@ import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 
 const LOCK_DURATION_MS = 300_000;
 
-type CompleteKieTaskPayload = {
+const TASK_TYPES_BY_COMPLETION_FAMILY = {
+  nanoBananaImage: [
+    "nano_banana_image",
+    "fal_nano_banana_pro",
+    "fal_nano_banana_pro_edit",
+    "fal_nano_banana",
+    "fal_nano_banana_edit",
+    "fal_nano_banana_2",
+    "fal_nano_banana_2_edit",
+    "fal_nano_banana_2_lite",
+    "fal_nano_banana_2_lite_edit",
+  ],
+  qwenImage: ["qwen2_image_edit", "fal_qwen_image", "fal_qwen_image_edit"],
+  seedreamImage: ["seedream_text_image", "seedream_image"],
+  seedreamV5Image: ["fal_seedream_v5_lite", "fal_seedream_v5_lite_edit"],
+  klingVideo: ["kling30_video", "kling30_motion_control_video"],
+  providerVideo: [
+    "seedance2_video",
+    "fal_seedance2_i2v",
+    "fal_seedance2_t2v",
+    "fal_seedance2_r2v",
+    "fal_seedance2_fast_i2v",
+    "fal_seedance2_fast_t2v",
+    "fal_seedance2_fast_r2v",
+    "fal_wan27_t2v",
+    "fal_wan27_i2v",
+    "fal_wan27_r2v",
+    "fal_wan27_videoedit",
+    "fal_kling_v3_pro_i2v",
+    "fal_kling_v3_pro_t2v",
+    "fal_kling_v3_standard_i2v",
+    "fal_kling_v3_standard_t2v",
+    "fal_grok_imagine_video_i2v",
+    "fal_grok_imagine_video_r2v",
+    "fal_grok_imagine_video_extend",
+    "fal_grok_imagine_video_edit",
+  ],
+  grokVideo: [
+    "grok_imagine_video",
+    "grok_imagine_t2v_video",
+    "xai_grok_imagine_video",
+    "xai_grok_imagine_ref_video",
+    "grok_imagine_extend_video",
+    "grok_imagine_upscale_video",
+  ],
+  wanVideo: [
+    "wan27_t2v_video",
+    "wan27_i2v_video",
+    "wan27_videoedit_video",
+    "wan27_r2v_video",
+    "wan27_extend_video",
+  ],
+  happyHorseVideo: [
+    "happyhorse_t2v_video",
+    "happyhorse_i2v_video",
+    "happyhorse_ref_video",
+    "happyhorse_videoedit_video",
+  ],
+  miniMaxVideo: [
+    "minimax_h3_t2v_video",
+    "minimax_h3_i2v_video",
+    "minimax_h3_r2v_video",
+  ],
+  lipSyncVideo: ["volcengine_lipsync_video"],
+  omnihumanVideo: ["omnihuman_video"],
+  wanImage: [
+    "wan27_image",
+    "wan27_image_pro",
+    "fal_wan27",
+    "fal_wan27_edit",
+    "fal_wan27_pro",
+    "fal_wan27_pro_edit",
+  ],
+  alibabaVideo: ["alibaba_video"],
+  alibabaImage: ["alibaba_image", "alibaba_image_pro"],
+  alibabaQwenImage: ["alibaba_qwen_image", "alibaba_qwen_image_edit"],
+  grokImage: [
+    "grok_imagine_image",
+    "grok_imagine_text",
+    "fal_grok_imagine_image",
+    "fal_grok_imagine_image_edit",
+  ],
+  gptImage: ["gpt_image", "gpt_image_text"],
+  isolateVocals: ["isolate_vocals"],
+} as const;
+
+type ProviderCompletionFamily = keyof typeof TASK_TYPES_BY_COMPLETION_FAMILY;
+
+const COMPLETION_FAMILY_BY_TASK_TYPE = new Map<string, ProviderCompletionFamily>(
+  Object.entries(TASK_TYPES_BY_COMPLETION_FAMILY).flatMap(([family, taskTypes]) =>
+    taskTypes.map((taskType) => [taskType, family as ProviderCompletionFamily]),
+  ),
+);
+
+export function completionFamilyForTaskType(taskType: string): ProviderCompletionFamily | undefined {
+  return COMPLETION_FAMILY_BY_TASK_TYPE.get(taskType);
+}
+
+type CompleteProviderTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_t2v_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "gpt_image_text" | "kling30_video" | "kling30_motion_control_video" | "seedance2_video" | "wan27_t2v_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "happyhorse_t2v_video" | "happyhorse_i2v_video" | "happyhorse_ref_video" | "happyhorse_videoedit_video" | "minimax_h3_t2v_video" | "minimax_h3_i2v_video" | "minimax_h3_r2v_video" | "volcengine_lipsync_video" | "omnihuman_video" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "grok_imagine_upscale_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_nano_banana_2_lite" | "fal_nano_banana_2_lite_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
+  taskType: string;
   assetId: string;
   assetDir: string;
   bookId: string;
@@ -21,12 +119,12 @@ type CompleteKieTaskPayload = {
   resultObject?: Record<string, unknown>;
 };
 
-export function registerCompleteKieTaskJob(fs: Engine): void {
+export function registerCompleteProviderTaskJob(fs: Engine): void {
   registerJobHandler("complete_kie_task", async (payload, ctx) => {
     const {
       taskId, taskType, assetId, bookId, meta,
       resultUrls, resultObject,
-    } = payload as CompleteKieTaskPayload;
+    } = payload as CompleteProviderTaskPayload;
 
     // Pattern C: inherit the provider lease via getOwner, abort if the row
     // already terminated, and register the lease so the wrapper's catch path
@@ -38,6 +136,11 @@ export function registerCompleteKieTaskJob(fs: Engine): void {
       return { success: true, skipped: true };
     }
     ctx.setLease({ kind: "task", taskId });
+
+    const completionFamily = completionFamilyForTaskType(taskType);
+    if (!completionFamily) {
+      throw new Error(`Unhandled provider task type: ${taskType}`);
+    }
 
     // Resolve the asset directory at runtime so renames don't break completion.
     const assetDirResult = await fs.workspaces.resolveArtifact(assetId);
@@ -69,80 +172,114 @@ export function registerCompleteKieTaskJob(fs: Engine): void {
       }
     }, 20_000);
 
+    const urls = taskType.startsWith("fal_")
+      ? extractFalUrls(taskType, resultObject)
+      : resultUrls;
+
     try {
-      if (taskType === "nano_banana_image") {
-        await completeNanoBananaImage(fs, assetId, bookId, meta, resultUrls, taskType);
-      } else if (taskType === "qwen2_image_edit") {
-        await completeQwen2ImageEdit(fs, assetId, bookId, meta, resultUrls);
-      } else if (taskType === "seedream_text_image" || taskType === "seedream_image") {
-        await completeSeedreamImage(fs, assetId, bookId, meta, resultUrls, taskType);
-      } else if (taskType === "kling30_video" || taskType === "kling30_motion_control_video") {
-        await completeKling30Video(fs, assetId, assetDir, bookId, meta, resultUrls, taskType);
-      } else if (taskType === "seedance2_video") {
-        await completeSeedance2Video(fs, assetId, assetDir, bookId, meta, resultUrls, taskId);
-      } else if (taskType === "grok_imagine_video" || taskType === "grok_imagine_t2v_video" || taskType === "xai_grok_imagine_video" || taskType === "xai_grok_imagine_ref_video" || taskType === "grok_imagine_extend_video" || taskType === "grok_imagine_upscale_video") {
-        await completeGrokImagineVideo(fs, assetId, assetDir, bookId, meta, resultUrls, taskType, taskId);
-      } else if (taskType === "wan27_t2v_video" || taskType === "wan27_i2v_video" || taskType === "wan27_videoedit_video" || taskType === "wan27_r2v_video" || taskType === "wan27_extend_video") {
-        await completeWan27Video(fs, assetId, assetDir, bookId, meta, resultUrls, taskId);
-      } else if (taskType === "happyhorse_t2v_video" || taskType === "happyhorse_i2v_video" || taskType === "happyhorse_ref_video" || taskType === "happyhorse_videoedit_video") {
-        await completeHappyHorseVideo(fs, assetId, assetDir, bookId, meta, resultUrls, taskType, taskId);
-      } else if (taskType === "minimax_h3_t2v_video" || taskType === "minimax_h3_i2v_video" || taskType === "minimax_h3_r2v_video") {
-        await completeMiniMaxH3Video(fs, assetId, assetDir, bookId, meta, resultUrls, taskType, taskId);
-      } else if (taskType === "volcengine_lipsync_video") {
-        await completeVolcengineLipSyncVideo(fs, assetId, assetDir, bookId, meta, resultUrls, taskId);
-      } else if (taskType === "omnihuman_video") {
-        await completeOmnihumanVideo(fs, assetId, assetDir, bookId, meta, resultUrls, taskId);
-      } else if (taskType === "wan27_image" || taskType === "wan27_image_pro") {
-        await completeWan27Image(fs, assetId, bookId, meta, resultUrls, taskType);
-      } else if (taskType === "alibaba_video") {
-        await completeAlibabaVideo(fs, assetId, assetDir, bookId, meta, resultUrls, taskId);
-      } else if (taskType === "alibaba_image" || taskType === "alibaba_image_pro") {
-        await completeAlibabaImage(fs, assetId, bookId, meta, resultUrls, taskType);
-      } else if (taskType === "alibaba_qwen_image" || taskType === "alibaba_qwen_image_edit") {
-        await completeAlibabaQwenImage(fs, assetId, bookId, meta, resultUrls, taskType);
-      } else if (taskType === "grok_imagine_image" || taskType === "grok_imagine_text") {
-        await completeGrokImagineImage(fs, assetId, bookId, meta, resultUrls);
-      } else if (taskType === "gpt_image" || taskType === "gpt_image_text") {
-        await completeGptImage(fs, assetId, bookId, meta, resultUrls, taskType);
-      } else if (taskType === "isolate_vocals") {
-        await completeIsolateVocals(fs, assetId, bookId, meta, resultUrls);
-      } else if (taskType.startsWith("fal_")) {
-        const urls = extractFalUrls(taskType, resultObject);
-        if (
-          taskType === "fal_seedance2_i2v" || taskType === "fal_seedance2_t2v" || taskType === "fal_seedance2_r2v"
-          || taskType === "fal_seedance2_fast_i2v" || taskType === "fal_seedance2_fast_t2v" || taskType === "fal_seedance2_fast_r2v"
-          || taskType === "fal_kling_v3_pro_i2v" || taskType === "fal_kling_v3_pro_t2v"
-          || taskType === "fal_kling_v3_standard_i2v" || taskType === "fal_kling_v3_standard_t2v"
-          || taskType === "fal_wan27_t2v" || taskType === "fal_wan27_i2v"
-          || taskType === "fal_wan27_r2v" || taskType === "fal_wan27_videoedit"
-          || taskType === "fal_grok_imagine_video_i2v"
-          || taskType === "fal_grok_imagine_video_r2v"
-          || taskType === "fal_grok_imagine_video_extend"
-          || taskType === "fal_grok_imagine_video_edit"
-        ) {
-          await completeSeedance2Video(fs, assetId, assetDir, bookId, meta, urls, taskId);
-        } else if (
-          taskType === "fal_nano_banana_pro" || taskType === "fal_nano_banana_pro_edit" ||
-          taskType === "fal_nano_banana" || taskType === "fal_nano_banana_edit" ||
-          taskType === "fal_nano_banana_2" || taskType === "fal_nano_banana_2_edit" ||
-          taskType === "fal_nano_banana_2_lite" || taskType === "fal_nano_banana_2_lite_edit"
-        ) {
+      switch (completionFamily) {
+        case "nanoBananaImage":
           await completeNanoBananaImage(fs, assetId, bookId, meta, urls, taskType);
-        } else if (
-          taskType === "fal_wan27" || taskType === "fal_wan27_edit" ||
-          taskType === "fal_wan27_pro" || taskType === "fal_wan27_pro_edit"
-        ) {
-          const variant = taskType === "fal_wan27_pro" || taskType === "fal_wan27_pro_edit"
-            ? "wan27_image_pro" : "wan27_image";
-          await completeWan27Image(fs, assetId, bookId, meta, urls, variant);
-        } else if (taskType === "fal_grok_imagine_image" || taskType === "fal_grok_imagine_image_edit") {
-          await completeGrokImagineImage(fs, assetId, bookId, meta, urls);
-        } else if (taskType === "fal_seedream_v5_lite" || taskType === "fal_seedream_v5_lite_edit") {
-          await completeSeedreamV5LiteImage(fs, assetId, bookId, meta, urls, taskType);
-        } else if (taskType === "fal_qwen_image" || taskType === "fal_qwen_image_edit") {
+          break;
+        case "qwenImage":
           await completeQwen2ImageEdit(fs, assetId, bookId, meta, urls, taskType);
-        } else {
-          throw new Error(`Unhandled FAL task type in complete_kie_task: ${taskType}`);
+          break;
+        case "seedreamImage":
+          await completeSeedreamImage(
+            fs,
+            assetId,
+            bookId,
+            meta,
+            urls,
+            taskType as "seedream_text_image" | "seedream_image",
+          );
+          break;
+        case "seedreamV5Image":
+          await completeSeedreamV5LiteImage(fs, assetId, bookId, meta, urls, taskType);
+          break;
+        case "klingVideo":
+          await completeKling30Video(fs, assetId, assetDir, bookId, meta, urls, taskType);
+          break;
+        case "providerVideo":
+          await completeProviderVideo(
+            fs,
+            assetId,
+            assetDir,
+            bookId,
+            meta,
+            urls,
+            taskType === "seedance2_video" ? taskId : undefined,
+          );
+          break;
+        case "grokVideo":
+          await completeGrokImagineVideo(fs, assetId, assetDir, bookId, meta, urls, taskType, taskId);
+          break;
+        case "wanVideo":
+          await completeWan27Video(fs, assetId, assetDir, bookId, meta, urls, taskId);
+          break;
+        case "happyHorseVideo":
+          await completeHappyHorseVideo(fs, assetId, assetDir, bookId, meta, urls, taskType, taskId);
+          break;
+        case "miniMaxVideo":
+          await completeMiniMaxH3Video(fs, assetId, assetDir, bookId, meta, urls, taskType, taskId);
+          break;
+        case "lipSyncVideo":
+          await completeVolcengineLipSyncVideo(fs, assetId, assetDir, bookId, meta, urls, taskId);
+          break;
+        case "omnihumanVideo":
+          await completeOmnihumanVideo(fs, assetId, assetDir, bookId, meta, urls, taskId);
+          break;
+        case "wanImage": {
+          const variant = taskType === "wan27_image_pro"
+            || taskType === "fal_wan27_pro"
+            || taskType === "fal_wan27_pro_edit"
+            ? "wan27_image_pro"
+            : "wan27_image";
+          await completeWan27Image(fs, assetId, bookId, meta, urls, variant);
+          break;
+        }
+        case "alibabaVideo":
+          await completeAlibabaVideo(fs, assetId, assetDir, bookId, meta, urls, taskId);
+          break;
+        case "alibabaImage":
+          await completeAlibabaImage(
+            fs,
+            assetId,
+            bookId,
+            meta,
+            urls,
+            taskType as "alibaba_image" | "alibaba_image_pro",
+          );
+          break;
+        case "alibabaQwenImage":
+          await completeAlibabaQwenImage(
+            fs,
+            assetId,
+            bookId,
+            meta,
+            urls,
+            taskType as "alibaba_qwen_image" | "alibaba_qwen_image_edit",
+          );
+          break;
+        case "grokImage":
+          await completeGrokImagineImage(fs, assetId, bookId, meta, urls);
+          break;
+        case "gptImage":
+          await completeGptImage(
+            fs,
+            assetId,
+            bookId,
+            meta,
+            urls,
+            taskType as "gpt_image" | "gpt_image_text",
+          );
+          break;
+        case "isolateVocals":
+          await completeIsolateVocals(fs, assetId, meta, urls);
+          break;
+        default: {
+          const unhandledFamily: never = completionFamily;
+          throw new Error(`Unhandled provider completion family: ${unhandledFamily}`);
         }
       }
 
@@ -190,7 +327,7 @@ async function completeSeedreamImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", bookId, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -226,7 +363,7 @@ async function completeSeedreamV5LiteImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", bookId, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -260,7 +397,7 @@ async function completeNanoBananaImage(
   if (!imageUrl) throw new Error("No image URL in result");
 
   const ext = (meta.outputFormat as string) ?? "png";
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, bookId, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, { kind: "image" });
 
   let model = "nano-banana-pro";
   if (taskType.includes("banana_2_lite")) {
@@ -305,7 +442,7 @@ async function completeWan27Image(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", bookId, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -340,7 +477,7 @@ async function completeQwen2ImageEdit(
   if (!imageUrl) throw new Error("No image URL in result");
 
   const ext = (meta.outputFormat as string) ?? "png";
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, bookId, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, { kind: "image" });
 
   const model =
     taskType === "fal_qwen_image" ? "qwen2/text-to-image" : "qwen2/image-edit";
@@ -378,7 +515,7 @@ async function completeKling30Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   const provenance = {
     source_assets: meta.sourceImageIds,
@@ -407,21 +544,21 @@ async function completeKling30Video(
   } as unknown as Record<string, unknown>);
 }
 
-async function completeSeedance2Video(
+async function completeProviderVideo(
   fs: Engine,
   assetId: string,
   assetDir: string,
   bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
-  taskId?: string,
+  kieTaskId?: string,
 ): Promise<void> {
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
   const outputFormat = meta.output_format === "mov" ? "mov" : "mp4";
   const originalFilename = `original.${outputFormat}`;
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, originalFilename, bookId, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, originalFilename, { kind: "video" });
 
   // Optionally save the returned last frame as a secondary image file
   if (meta.return_last_frame === true && resultUrls[1]) {
@@ -436,8 +573,6 @@ async function completeSeedance2Video(
     source_images: meta.sourceImageIds,
     source_videos: meta.sourceVideoIds,
     source_audios: meta.sourceAudioIds,
-    // seedance-2.5 / -2 / -fast / -mini share this handler (keyed off taskType), so the
-    // exact model rides in meta.apiModel; fall back for older queued payloads.
     model: typeof meta.apiModel === "string" ? meta.apiModel : "bytedance/seedance-2-fast",
     download_url: videoUrl,
     download_url_content_hash: contentHash(buffer),
@@ -449,9 +584,8 @@ async function completeSeedance2Video(
 
   const videoPath = join(assetDir, originalFilename);
 
-  // Persist Kie taskId for future operations
-  if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
+  if (kieTaskId !== undefined) {
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId: kieTaskId });
   }
 
   // When the caller asked us to splice a specific audio over the seedance
@@ -505,7 +639,7 @@ async function completeWan27Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   const wan27Model =
     meta.mode === "reference" ? "wan/2-7-r2v"
@@ -552,7 +686,7 @@ async function completeVolcengineLipSyncVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   const provenance = {
     source_images: meta.sourceImageIds,
@@ -593,7 +727,7 @@ async function completeOmnihumanVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   const provenance = {
     source_images: meta.sourceImageIds,
@@ -636,7 +770,7 @@ async function completeGrokImagineVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   const provenance = {
     source_asset: meta.sourceVideoId ?? meta.sourceImageId,
@@ -708,7 +842,7 @@ async function completeGrokImagineImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", bookId, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", { kind: "image" });
 
   const origin = {
     source_asset: meta.sourceImageId,
@@ -739,7 +873,7 @@ async function completeGptImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", bookId, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -764,7 +898,6 @@ async function completeGptImage(
 async function completeIsolateVocals(
   fs: Engine,
   assetId: string,
-  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
 ): Promise<void> {
@@ -841,7 +974,6 @@ function extensionFromUrl(url: string, fallback: string): string {
 async function readPayloadModel(
   fs: Engine,
   assetId: string,
-  _bookId: string,
 ): Promise<string | undefined> {
   const result = await fs.metadata.artifacts.read<{ model?: string }>(assetId, "generation-payload");
   if (!result.ok) return undefined;
@@ -860,9 +992,9 @@ async function completeAlibabaVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in Alibaba result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
 
-  const modelName = (await readPayloadModel(fs, assetId, bookId)) ?? "alibaba/wan2.7-video";
+  const modelName = (await readPayloadModel(fs, assetId)) ?? "alibaba/wan2.7-video";
 
   const provenance = {
     source_images: meta.sourceImageIds,
@@ -903,12 +1035,12 @@ async function completeAlibabaQwenImage(
   if (!imageUrl) throw new Error("No image URL in Alibaba Qwen result");
 
   const ext = extensionFromUrl(imageUrl, "png");
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, bookId, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, { kind: "image" });
 
   const fallbackModel = taskType === "alibaba_qwen_image_edit"
     ? "alibaba/qwen-image-edit-plus"
     : "alibaba/qwen-image-2.0-pro";
-  const modelName = (await readPayloadModel(fs, assetId, bookId))
+  const modelName = (await readPayloadModel(fs, assetId))
     ?? (typeof meta.model === "string" ? `alibaba/${meta.model}` : fallbackModel);
 
   const origin = {
@@ -949,7 +1081,7 @@ async function completeHappyHorseVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   // t2v/i2v/ref generate against HappyHorse 1.1; video-edit has no 1.1 endpoint
   // and stays on 1.0. This string is descriptive provenance only (never fed to
@@ -1000,7 +1132,7 @@ async function completeMiniMaxH3Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   // Descriptive provenance only (never fed to modelSlug/pricing).
   const minimaxModel =
@@ -1047,9 +1179,9 @@ async function completeAlibabaImage(
   if (!imageUrl) throw new Error("No image URL in Alibaba result");
 
   const ext = extensionFromUrl(imageUrl, "png");
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, bookId, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, { kind: "image" });
 
-  const modelName = (await readPayloadModel(fs, assetId, bookId))
+  const modelName = (await readPayloadModel(fs, assetId))
     ?? (taskType === "alibaba_image_pro" ? "alibaba/wan2.7-image-pro" : "alibaba/wan2.7-image");
 
   const origin = {

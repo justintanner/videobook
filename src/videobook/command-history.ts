@@ -1,3 +1,5 @@
+import { recordValue } from './value-decoders'
+
 export interface CommandHistoryPage {
   values: string[]
   offset: number
@@ -10,16 +12,10 @@ export interface CommandHistoryNavigation {
   value: string
 }
 
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
 function resultText(result: unknown): string | null {
-  const value = record(result)
+  const value = recordValue(result)
   const content = Array.isArray(value?.content) ? value.content : []
-  const item = content.map(record).find((candidate) => candidate?.type === 'text')
+  const item = content.map(recordValue).find((candidate) => candidate?.type === 'text')
   return typeof item?.text === 'string' ? item.text : null
 }
 
@@ -33,12 +29,12 @@ export function commandHistoryPage(value: unknown): CommandHistoryPage {
       return { values: [], offset: 0, hasMore: false }
     }
   }
-  const container = record(parsed)
+  const container = recordValue(parsed)
   const entries = Array.isArray(container?.entries) ? container.entries : []
-  const page = record(container?.page)
+  const page = recordValue(container?.page)
   return {
     values: entries.flatMap((entry) => {
-      const item = record(entry)
+      const item = recordValue(entry)
       return typeof item?.prompt === 'string' ? [item.prompt] : []
     }),
     offset: typeof page?.offset === 'number' ? page.offset : 0,

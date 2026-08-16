@@ -1,4 +1,5 @@
 import type { NotebookGridSlot } from 'videobook-engine'
+import { nonBlankStringValue, recordValue } from './value-decoders'
 
 type DownloadVideoCellInput = {
   type: 'video'
@@ -26,27 +27,17 @@ export type DownloadWatchStep =
   | { kind: 'redirected'; artifactId: string }
   | { kind: 'failed'; message: string }
 
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null
-}
-
 export function downloadVideoCellInput(
   result: unknown,
   url: string,
   slot: NotebookGridSlot,
 ): DownloadVideoCellInput {
-  const value = objectValue(result)
-  const artifactId = stringValue(value?.artifact_id)
+  const value = recordValue(result)
+  const artifactId = nonBlankStringValue(value?.artifact_id)
   if (!artifactId) {
     throw new Error('The download did not return an artifact for the board')
   }
-  const jobId = stringValue(value?.job_id)
+  const jobId = nonBlankStringValue(value?.job_id)
   return {
     type: 'video',
     slot,
@@ -77,9 +68,9 @@ export function mediaAssetWatchStep(
     job.artifactId === artifactId
     && job.type === 'download_video'
     && job.state === 'done')
-  const completedResult = objectValue(completedDownload?.result)
+  const completedResult = recordValue(completedDownload?.result)
   const replacementArtifactId = completedResult?.retyped === true
-    ? stringValue(completedResult.assetId ?? completedResult.artifact_id)
+    ? nonBlankStringValue(completedResult.assetId ?? completedResult.artifact_id)
     : null
   if (replacementArtifactId && replacementArtifactId !== artifactId) {
     return { kind: 'redirected', artifactId: replacementArtifactId }

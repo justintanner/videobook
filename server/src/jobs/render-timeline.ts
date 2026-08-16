@@ -323,7 +323,6 @@ export function registerRenderTimelineJob(fs: Engine): void {
 
     return withLockedLocalLease(
       fs,
-      bookId,
       finalId,
       finalDir,
       ctx,
@@ -399,7 +398,6 @@ export function registerRenderTimelineJob(fs: Engine): void {
 
       await ingestWorkspaceOutputs(
         fs,
-        bookId,
         finalId,
         [outputFilename, "original.jpg"],
         "render_timeline",

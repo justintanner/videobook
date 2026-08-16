@@ -17,8 +17,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function beginLocalLease(
-  fs: Engine,
-  bookId: string,
+  engine: Engine,
   assetId: string,
   kind: ArtifactWorkKind,
   options: LeaseOptions,
@@ -28,7 +27,7 @@ async function beginLocalLease(
   const waitForActiveMs = options.waitForActiveMs ?? 0;
   while (true) {
     signal?.throwIfAborted();
-    const lease = await fs.jobs.artifactWork.begin(assetId, {
+    const lease = await engine.jobs.artifactWork.begin(assetId, {
       kind,
       ownerKind: "job",
       durationMs: options.durationMs ?? DEFAULT_LEASE_MS,
@@ -52,8 +51,7 @@ async function beginLocalLease(
  * provider returned.
  */
 export async function withProviderHandoff<T>(
-  fs: Engine,
-  bookId: string,
+  engine: Engine,
   assetId: string,
   ctx: JobHandlerContext,
   kind: ArtifactWorkKind,
@@ -70,8 +68,7 @@ export async function withProviderHandoff<T>(
 
   if (!ownerId) {
     const lease = await beginLocalLease(
-      fs,
-      bookId,
+      engine,
       assetId,
       kind,
       options,
@@ -91,7 +88,10 @@ export async function withProviderHandoff<T>(
   const heartbeat = ownsLease
     ? setInterval(() => {
         try {
-          fs.jobs.artifactWork.renew(assetId, activeOwnerId, HEARTBEAT_EXTEND_MS
+          engine.jobs.artifactWork.renew(
+            assetId,
+            activeOwnerId,
+            HEARTBEAT_EXTEND_MS,
           );
         } catch (error) {
           console.warn(`[heartbeat] renew failed for ${assetId}:`, error);
@@ -113,8 +113,7 @@ export async function withProviderHandoff<T>(
  * handler doesn't need to touch pending_tasks at all.
  */
 export async function withLocalLease<T>(
-  fs: Engine,
-  bookId: string,
+  engine: Engine,
   assetId: string,
   ctx: JobHandlerContext,
   kind: ArtifactWorkKind,
@@ -122,8 +121,7 @@ export async function withLocalLease<T>(
   options: LeaseOptions = {},
 ): Promise<T> {
   const lease = await beginLocalLease(
-    fs,
-    bookId,
+    engine,
     assetId,
     kind,
     options,
@@ -137,7 +135,10 @@ export async function withLocalLease<T>(
   ctx.setLease({ kind: "owner", ownerId: lease.ownerId });
   const heartbeat = setInterval(() => {
     try {
-      fs.jobs.artifactWork.renew(assetId, lease.ownerId, HEARTBEAT_EXTEND_MS
+      engine.jobs.artifactWork.renew(
+        assetId,
+        lease.ownerId,
+        HEARTBEAT_EXTEND_MS,
       );
     } catch (error) {
       console.warn(`[heartbeat] renew failed for ${assetId}:`, error);
@@ -145,10 +146,10 @@ export async function withLocalLease<T>(
   }, HEARTBEAT_INTERVAL_MS);
   try {
     const result = await fn(lease.ownerId);
-    await fs.jobs.artifactWork.complete(assetId, lease.ownerId);
+    await engine.jobs.artifactWork.complete(assetId, lease.ownerId);
     return result;
   } catch (err) {
-    await fs.jobs.artifactWork.fail(assetId, lease.ownerId, {
+    await engine.jobs.artifactWork.fail(assetId, lease.ownerId, {
       message: err instanceof Error ? err.message : String(err),
     });
     throw err;
@@ -174,8 +175,7 @@ export type LockedLeaseClaim =
  * and release the lock.
  */
 export async function claimLockedLease(
-  fs: Engine,
-  bookId: string,
+  engine: Engine,
   assetId: string,
   assetDir: string,
   kind: ArtifactWorkKind,
@@ -186,16 +186,16 @@ export async function claimLockedLease(
   const waitForActiveMs = options.waitForActiveMs ?? 0;
   let reason = "could not claim asset";
   while (true) {
-    const lockResult = await fs.jobs.locks.acquire(assetDir, lock);
+    const lockResult = await engine.jobs.locks.acquire(assetDir, lock);
     if (lockResult.ok) {
-      const lease = await fs.jobs.artifactWork.begin(assetId, {
+      const lease = await engine.jobs.artifactWork.begin(assetId, {
         kind,
         ownerKind: "job",
         durationMs: options.durationMs ?? DEFAULT_LEASE_MS,
         ...(options.meta ? { meta: options.meta } : {}),
       });
       if (lease) return { ok: true, ownerId: lease.ownerId };
-      fs.jobs.locks.release(assetDir);
+      engine.jobs.locks.release(assetDir);
       reason = "active owner already holds asset lease";
     } else {
       reason = `Asset is locked: ${lockResult.error.message}`;
@@ -206,8 +206,7 @@ export async function claimLockedLease(
 }
 
 export async function withLockedLocalLease<T>(
-  fs: Engine,
-  bookId: string,
+  engine: Engine,
   assetId: string,
   assetDir: string,
   ctx: JobHandlerContext,
@@ -216,14 +215,13 @@ export async function withLockedLocalLease<T>(
   fn: (ownerId: string) => Promise<T>,
   options: LeaseOptions = {},
 ): Promise<T> {
-  const lockResult = await fs.jobs.locks.acquire(assetDir, lock);
+  const lockResult = await engine.jobs.locks.acquire(assetDir, lock);
   if (!lockResult.ok) {
     throw new Error(`Asset is locked: ${lockResult.error.message}`);
   }
   try {
     return await withLocalLease(
-      fs,
-      bookId,
+      engine,
       assetId,
       ctx,
       kind,
@@ -231,6 +229,6 @@ export async function withLockedLocalLease<T>(
       options,
     );
   } finally {
-    fs.jobs.locks.release(assetDir);
+    engine.jobs.locks.release(assetDir);
   }
 }

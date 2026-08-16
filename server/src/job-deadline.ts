@@ -1,4 +1,4 @@
-export const JOB_CANCELLATION_GRACE_MS = 10_000;
+const JOB_CANCELLATION_GRACE_MS = 10_000;
 
 const JOB_TIMEOUTS_MS = new Map<string, number>([
   ["render_project", 30 * 60_000],
@@ -29,7 +29,7 @@ type Settled<T> =
   | { state: "resolved"; value: T }
   | { state: "rejected"; error: unknown };
 
-export function getJobTimeoutMs(jobType: string): number | null {
+function getJobTimeoutMs(jobType: string): number | null {
   return JOB_TIMEOUTS_MS.get(jobType) ?? null;
 }
 

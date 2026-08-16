@@ -43,7 +43,7 @@ export function notebookRunPlanRecords(
   return (document.notebookRunPlans ?? []) as NotebookRunPlanRecord[];
 }
 
-export async function persistNotebookRunPlan(
+async function persistNotebookRunPlan(
   engine: Engine,
   notebookId: string,
   record: NotebookRunPlanRecord,

@@ -149,7 +149,7 @@ export function registerAnalyzeVideoJob(fs: Engine): void {
       assetId, assetDir, bookId, hasTranscription,
     } = payload as AnalyzeVideoPayload;
 
-    const result = await withLocalLease(fs, bookId, assetId, ctx, "analyze", async () => {
+    const result = await withLocalLease(fs, assetId, ctx, "analyze", async () => {
     {
 
     const metaResult = await fs.metadata.artifacts.read<{ width: number; height: number; duration: number }>(assetId, "original"
@@ -280,7 +280,7 @@ async function maybeEnqueueAutoTranscribe(
   const errorRow = await fs.jobs.failures.read(assetId);
   if (errorRow.ok && errorRow.value !== null) return;
 
-  const dialog = await readAndAssessDialog(fs, assetId, bookId);
+  const dialog = await readAndAssessDialog(fs, assetId);
   if (!dialog.hasDialog) return;
 
   const artifact = fs.artifacts.get(assetId);

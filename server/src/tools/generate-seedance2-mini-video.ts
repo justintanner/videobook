@@ -86,28 +86,28 @@ export function generateSeedance2MiniVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageRef(fs, slug, book_id);
+        const r = await resolveImageRef(fs, slug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       const videoInputs: RefInput[] = [];
       for (const slug of vids) {
-        const r = await resolveVideoRef(fs, slug, book_id);
+        const r = await resolveVideoRef(fs, slug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInputs.push(r.value);
       }
 
       const audioInputs: RefInput[] = [];
       for (const slug of auds) {
-        const r = await resolveAudioRef(fs, slug, book_id);
+        const r = await resolveAudioRef(fs, slug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         audioInputs.push(r.value);
       }
 
       let replaceAudioWith: RefInput | undefined;
       if (replace_audio_with !== undefined) {
-        const r = await resolveAudioRef(fs, replace_audio_with, book_id);
+        const r = await resolveAudioRef(fs, replace_audio_with);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `replace_audio_with: ${r.error}` }] };
         replaceAudioWith = r.value;
       }

@@ -71,7 +71,6 @@ describe('processing resilience', () => {
     registerJobHandler('lease_order_child', async (payload, context) =>
       withLocalLease(
         engine!,
-        String(payload.bookId),
         String(payload.assetId),
         context,
         'analyze',
@@ -84,7 +83,6 @@ describe('processing resilience', () => {
     registerJobHandler('lease_order_parent', async (payload, context) =>
       withLocalLease(
         engine!,
-        String(payload.bookId),
         String(payload.assetId),
         context,
         'process',

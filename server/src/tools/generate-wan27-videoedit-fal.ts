@@ -59,7 +59,7 @@ export function generateWan27VideoeditFalDef(fs: Engine): ToolDef {
       let refImage: ImageInput | undefined;
       let refImageAssetId: string | undefined;
       if (image_ref) {
-        const resolved = await resolveImageRefs(fs, [image_ref], book_id);
+        const resolved = await resolveImageRefs(fs, [image_ref]);
         if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
         refImage = resolved.inputs[0];
         refImageAssetId = resolved.sourceImageIds[0];

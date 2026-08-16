@@ -14,9 +14,9 @@ type DetectScenesPayload = {
 
 export function registerDetectScenesJob(fs: Engine): void {
   registerJobHandler("detect_scenes", async (payload, ctx) => {
-    const { assetId, bookId } = payload as DetectScenesPayload;
+    const { assetId } = payload as DetectScenesPayload;
 
-    return withLocalLease(fs, bookId, assetId, ctx, "analyze", async () => {
+    return withLocalLease(fs, assetId, ctx, "analyze", async () => {
       const manifestResult = await fs.files.manifest(assetId);
       if (!manifestResult.ok) throw new Error(manifestResult.error.message);
 

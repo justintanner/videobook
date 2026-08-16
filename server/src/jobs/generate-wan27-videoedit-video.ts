@@ -34,9 +34,8 @@ type GenerateWan27VideoeditVideoPayload = {
 async function uploadSingle(
   fs: Engine,
   input: RefInput,
-  bookId: string,
 ): Promise<string> {
-  return uploadAssetToKie(fs, input.assetId, input.filename, bookId);
+  return uploadAssetToKie(fs, input.assetId, input.filename);
 }
 
 export function registerGenerateWan27VideoeditVideoJob(fs: Engine): void {
@@ -50,8 +49,8 @@ export function registerGenerateWan27VideoeditVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const videoUrl = await uploadSingle(fs, videoInput, bookId);
-    const referenceImageUrl = imageInput ? await uploadSingle(fs, imageInput, bookId) : undefined;
+    const videoUrl = await uploadSingle(fs, videoInput);
+    const referenceImageUrl = imageInput ? await uploadSingle(fs, imageInput) : undefined;
 
     // Free-form edit prompt — rewrite confirmed @vid-*/@img-* to natural refs.
     const normalizedPrompt = prompt === undefined

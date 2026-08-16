@@ -5,7 +5,7 @@ import type { KeywordOccupiedRegion } from "./remotion/keyword-placement.js";
 import type { Orientation, OsgPosition } from "./remotion/subtitles/types.js";
 
 export const OSG_PLACEMENT_VERSION = 1;
-export const OSG_PLACEMENT_METADATA_KEY = "osg.placement";
+const OSG_PLACEMENT_METADATA_KEY = "osg.placement";
 
 export interface OsgPlacementAnalysis {
   version: number;

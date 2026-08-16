@@ -73,7 +73,6 @@ describe("server queue (Dolt-native)", () => {
     registerJobHandler("generate_provider_handoff_probe", async (_payload, ctx) =>
       withProviderHandoff(
         cfs,
-        bookId,
         asset.value.artifactId,
         ctx,
         "generate",

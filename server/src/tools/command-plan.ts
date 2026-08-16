@@ -563,7 +563,7 @@ async function operationsForRequest(
   }];
 }
 
-export async function buildSequenceEditPlan(
+async function buildSequenceEditPlan(
   engine: Engine,
   input: EditRequest | EditRequest[],
   sourceSurface: SourceSurface,
@@ -899,7 +899,7 @@ async function parseChatEditClause(
   return UNSUPPORTED_CHAT_EDIT_MESSAGE;
 }
 
-export async function parseChatEditRequest(
+async function parseChatEditRequest(
   engine: Engine,
   prompt: string,
   mediaContext?: { artifactId: string },

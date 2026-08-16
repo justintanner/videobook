@@ -31,15 +31,15 @@ type Payload = {
 export function registerGenerateWan27R2vFalJob(fs: Engine): void {
   registerJobHandler("generate_wan27_r2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
       const reference_image_urls: string[] = [];
       for (const img of p.imageInputs) {
-        reference_image_urls.push(await uploadAssetToFal(fs, img.assetId, img.filename, p.bookId));
+        reference_image_urls.push(await uploadAssetToFal(fs, img.assetId, img.filename));
       }
       const reference_video_urls: string[] = [];
       for (const vid of p.videoInputs) {
-        reference_video_urls.push(await uploadAssetToFal(fs, vid.assetId, vid.filename, p.bookId));
+        reference_video_urls.push(await uploadAssetToFal(fs, vid.assetId, vid.filename));
       }
   
       const input: FalInput = {

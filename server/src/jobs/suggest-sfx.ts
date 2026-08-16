@@ -70,13 +70,13 @@ const ModelOutputSchema = z.object({
 
 export function registerSuggestSfxJob(fs: Engine): void {
   registerJobHandler("suggest_sfx", async (payload, ctx) => {
-    const { assetId, bookId } = payload as SuggestSfxPayload;
+    const { assetId } = payload as SuggestSfxPayload;
 
-    return withLocalLease(fs, bookId, assetId, ctx, "analyze", async () => {
+    return withLocalLease(fs, assetId, ctx, "analyze", async () => {
       const apiKey = getApiKey("OPENAI_API_KEY");
       if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
 
-      const loaded = await loadAssetForAnalysis(fs, assetId, bookId);
+      const loaded = await loadAssetForAnalysis(fs, assetId);
       if (!loaded.ok) throw new Error(loaded.error.message);
       const { frameNames, transcript, meta, prior } = loaded.value;
 

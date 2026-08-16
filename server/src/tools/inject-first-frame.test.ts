@@ -176,7 +176,6 @@ async function assetHash(
   fs: Engine,
   assetId: string,
   filename: string,
-  _bookId: string,
 ): Promise<string> {
   const result = await fs.files.read(assetId, filename);
   if (!result.ok) throw new Error(result.error.message);
@@ -310,7 +309,6 @@ describe("inject_first_frame tool", () => {
       fs,
       finalArtifact.artifactId,
       "timeline_landscape.mp4",
-      bookId,
     );
 
     const result = await client.callTool({
@@ -335,7 +333,7 @@ describe("inject_first_frame tool", () => {
     expect(afterProbe.videoDuration).toBeCloseTo(beforeProbe.videoDuration, 2);
     expect(afterProbe.audioDuration).toBeCloseTo(beforeProbe.audioDuration!, 2);
     expect(
-      await assetHash(fs, finalArtifact.artifactId, "timeline_landscape.mp4", bookId),
+      await assetHash(fs, finalArtifact.artifactId, "timeline_landscape.mp4"),
     ).toBe(landscapeHash);
 
     const first = await frameColor(portraitPath, 0, tempDir, "final-first");

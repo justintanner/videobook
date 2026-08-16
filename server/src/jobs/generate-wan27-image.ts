@@ -32,7 +32,7 @@ export function registerGenerateWan27ImageJob(fs: Engine): void {
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetToKie(fs, srcAssetId, filename, bookId));
+      uploadedUrls.push(await uploadAssetToKie(fs, srcAssetId, filename));
     }
     const normalizedPrompt = transformProviderPrompt(
       "generate_kie_wan_2_7_text_to_image",

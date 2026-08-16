@@ -215,13 +215,6 @@ export function planNotebookCoordinateAction(
   }
 }
 
-export function notebookCoordinatePlanIsStale(
-  document: NotebookDocument,
-  plan: NotebookCoordinateActionPlan,
-): boolean {
-  return notebookAddressExpectationsAreStale(document, plan.expectations)
-}
-
 export function notebookAddressExpectationsAreStale(
   document: NotebookDocument,
   expectations: readonly NotebookAddressExpectation[],

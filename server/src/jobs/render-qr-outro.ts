@@ -44,7 +44,6 @@ type RenderQrOutroPayload = {
 
 async function stageAssetFile(
   fs: Engine,
-  bookId: string,
   ref: QrOutroAssetRef,
   bundleDir: string,
   stem: string,
@@ -93,7 +92,6 @@ export function registerRenderQrOutroJob(fs: Engine): void {
     try {
       await withLockedLocalLease(
         fs,
-        bookId,
         assetId,
         outputManifest.value.path,
         ctx,
@@ -110,7 +108,6 @@ export function registerRenderQrOutroJob(fs: Engine): void {
             ctx.signal.throwIfAborted();
             const qr = await stageAssetFile(
               fs,
-              bookId,
               qrImages[index],
               bundleDir,
               `qr-outro-code-${nonce}-${index}`,
@@ -123,7 +120,6 @@ export function registerRenderQrOutroJob(fs: Engine): void {
           if (includeAudio && soundEffect) {
             const audio = await stageAssetFile(
               fs,
-              bookId,
               soundEffect,
               bundleDir,
               `qr-outro-audio-${nonce}`,

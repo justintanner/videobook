@@ -26,7 +26,6 @@ describe("job deadlines", () => {
 
   it("fails the job and releases its asset lease and file lock", async () => {
     fs = createEngineForTest(projectsDir);
-    const bookId = fs.book.get().bookId;
     const asset = await fs.artifacts.create("vid", "deadline");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
@@ -51,7 +50,6 @@ describe("job deadlines", () => {
             };
             return withLockedLocalLease(
               fs,
-              bookId,
               asset.value.artifactId,
               asset.value.path,
               ctx,

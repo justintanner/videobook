@@ -61,7 +61,7 @@ export const SfxSchema = z.object({
 export type Trim = z.infer<typeof TrimSchema>;
 export type Sfx = z.infer<typeof SfxSchema>;
 
-export function decodeBuffer(buf: Buffer | string | Uint8Array): string {
+function decodeBuffer(buf: Buffer | string | Uint8Array): string {
   if (typeof buf === "string") return buf;
   return new TextDecoder().decode(buf);
 }
@@ -142,7 +142,6 @@ function condenseElevenLabsWords(words: ElevenLabsWord[]): string {
 async function loadTranscript(
   fs: Engine,
   assetId: string,
-  _bookId: string,
 ): Promise<TranscriptResult | null> {
   const elevenRead = await fs.files.read(assetId, "elevenlabs.json");
   if (elevenRead.ok) {
@@ -172,7 +171,6 @@ async function loadTranscript(
 async function loadPriorAnalysis(
   fs: Engine,
   assetId: string,
-  _bookId: string,
 ): Promise<PriorAnalysis | null> {
   const read = await fs.files.read(assetId, ".original.analysis.json");
   if (!read.ok) return null;
@@ -323,7 +321,6 @@ export type AssetForAnalysisError =
 export async function loadAssetForAnalysis(
   fs: Engine,
   assetId: string,
-  bookId: string,
 ): Promise<{ ok: true; value: AssetForAnalysis } | { ok: false; error: AssetForAnalysisError }> {
   const manifestResult = await fs.files.manifest(assetId);
   if (!manifestResult.ok) {
@@ -346,7 +343,7 @@ export async function loadAssetForAnalysis(
     };
   }
 
-  const transcript = await loadTranscript(fs, assetId, bookId);
+  const transcript = await loadTranscript(fs, assetId);
   if (!transcript) {
     return {
       ok: false,
@@ -356,7 +353,7 @@ export async function loadAssetForAnalysis(
 
   const metaResult = await fs.metadata.artifacts.read<OriginalMeta>(assetId, "original");
   const meta = metaResult.ok ? metaResult.value : null;
-  const prior = await loadPriorAnalysis(fs, assetId, bookId);
+  const prior = await loadPriorAnalysis(fs, assetId);
 
   return {
     ok: true,

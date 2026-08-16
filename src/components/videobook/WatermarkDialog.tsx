@@ -1,6 +1,9 @@
 import { useRef } from 'react'
-import type { KeyboardEvent } from 'react'
 import { X } from 'lucide-react'
+import {
+  handleModalDialogKeyDown,
+  shouldDismissModalDialogFromBackdrop,
+} from '@/videobook/modal-dialog-interactions'
 
 export interface WatermarkDialogState {
   assetId: string
@@ -12,12 +15,6 @@ export interface WatermarkDialogState {
   loadingConfig: boolean
   submitting: boolean
   error: string | null
-}
-
-function focusableDialogElements(container: HTMLElement): HTMLElement[] {
-  return [...container.querySelectorAll<HTMLElement>(
-    'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-  )].filter((element) => !element.hidden)
 }
 
 export function WatermarkDialog({
@@ -44,7 +41,11 @@ export function WatermarkDialog({
     <div
       className="watermark-backdrop"
       onMouseDown={(event) => {
-        if (event.currentTarget === event.target && !busy) onClose()
+        if (shouldDismissModalDialogFromBackdrop(
+          event.currentTarget,
+          event.target,
+          busy,
+        )) onClose()
       }}
     >
       <section
@@ -54,25 +55,11 @@ export function WatermarkDialog({
         aria-modal="true"
         aria-labelledby="watermark-title"
         aria-describedby="watermark-description"
-        onKeyDown={(event: KeyboardEvent<HTMLElement>) => {
-          if (event.key === 'Escape' && !busy) {
-            event.preventDefault()
-            onClose()
-            return
-          }
-          if (event.key !== 'Tab' || !dialogRef.current) return
-          const focusable = focusableDialogElements(dialogRef.current)
-          if (focusable.length === 0) return
-          const first = focusable[0]!
-          const last = focusable[focusable.length - 1]!
-          if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault()
-            last.focus()
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault()
-            first.focus()
-          }
-        }}
+        onKeyDown={(event) => handleModalDialogKeyDown(event, {
+          busy,
+          container: dialogRef.current,
+          onClose,
+        })}
       >
         <header>
           <div>

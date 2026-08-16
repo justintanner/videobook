@@ -66,7 +66,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
       referenceIds.push(
         "url" in input
           ? await uploadUrlToGoogleFlow(provider, input.url)
-          : await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, p.bookId),
+          : await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename),
       );
     }
     const normalizedPrompt = transformProviderPrompt(

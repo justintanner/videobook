@@ -40,8 +40,8 @@ export function registerGenerateOmnihumanVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const imageUrl = await uploadAssetToKie(fs, imageInput.assetId, imageInput.filename, bookId);
-    const audioUrl = await uploadAssetToKie(fs, audioInput.assetId, audioInput.filename, bookId);
+    const imageUrl = await uploadAssetToKie(fs, imageInput.assetId, imageInput.filename);
+    const audioUrl = await uploadAssetToKie(fs, audioInput.assetId, audioInput.filename);
 
     const request = buildOmnihumanPayload(
       { prompt, output_resolution, pe_fast_mode, seed },

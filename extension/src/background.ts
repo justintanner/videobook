@@ -1,8 +1,8 @@
-import { queueVideocityDownload } from "./mcp.js";
+import { queueVideobookDownload } from "./mcp.js";
 import { isHttpUrl, selectDownloadUrl } from "./url-target.js";
 
-const CONTEXT_MENU_ID = "videocity-download";
-const DOWNLOAD_URL_MESSAGE = "videocity-download-url";
+const CONTEXT_MENU_ID = "videobook-download";
+const DOWNLOAD_URL_MESSAGE = "videobook-download-url";
 
 type DownloadUrlMessage = {
   type: typeof DOWNLOAD_URL_MESSAGE;
@@ -42,7 +42,7 @@ function installContextMenu(): void {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: CONTEXT_MENU_ID,
-      title: "Download full source to Videocity",
+      title: "Download full source to Videobook",
       contexts: ["link", "page"],
     });
   });
@@ -54,12 +54,12 @@ async function queueUrl(url: string): Promise<DownloadUrlResponse> {
   }
 
   try {
-    const result = await queueVideocityDownload(url);
-    notify("Videocity download queued", `${result.assetId} (${result.jobId})`);
+    const result = await queueVideobookDownload(url);
+    notify("Videobook download queued", `${result.assetId} (${result.jobId})`);
     return { ok: true, assetId: result.assetId, jobId: result.jobId };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    notify("Videocity download failed", message);
+    notify("Videobook download failed", message);
     return { ok: false, error: message };
   }
 }
@@ -72,7 +72,7 @@ async function handleContextClick(info: chrome.contextMenus.OnClickData, tab?: c
   });
 
   if (!url || !isHttpUrl(url)) {
-    notify("Videocity", "This URL cannot be downloaded.");
+    notify("Videobook", "This URL cannot be downloaded.");
     return;
   }
 

@@ -21,7 +21,7 @@ type Payload = {
 export function registerGenerateWan27FalJob(fs: Engine): void {
   registerJobHandler("generate_wan27_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
       const input: FalInput = {
         prompt: p.prompt,

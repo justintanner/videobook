@@ -26,10 +26,10 @@ type Payload = {
 export function registerGenerateWan27EditFalJob(fs: Engine): void {
   registerJobHandler("generate_wan27_edit_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
       const image_urls = await Promise.all(
-        p.imageInputs.map((i) => uploadAssetToFal(fs, i.assetId, i.filename, p.bookId)),
+        p.imageInputs.map((i) => uploadAssetToFal(fs, i.assetId, i.filename)),
       );
   
       const input: FalInput = {

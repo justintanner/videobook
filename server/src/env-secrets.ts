@@ -54,7 +54,7 @@ const NON_SECRET_ENV_KEYS: ReadonlySet<ManagedEnvKey> = new Set<ManagedEnvKey>([
   "B2_ARCHIVE_PREFIX",
 ]);
 
-export function isManagedEnvKey(key: string): key is ManagedEnvKey {
+function isManagedEnvKey(key: string): key is ManagedEnvKey {
   return (MANAGED_ENV_KEYS as readonly string[]).includes(key);
 }
 

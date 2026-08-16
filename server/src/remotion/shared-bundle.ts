@@ -42,8 +42,3 @@ export async function getSharedBundleLocation(): Promise<string> {
 
   return bundlePromise;
 }
-
-export function _resetBundleCache(): void {
-  bundleLocation = null;
-  bundlePromise = null;
-}

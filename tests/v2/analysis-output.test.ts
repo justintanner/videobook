@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createEngine, type Engine } from "videobook-engine";
-import { buildAssetList } from "../../server/src/tools/sync.js";
+import { buildAssetList } from "../../server/src/tools/reconcile-project-work.js";
 
 describe("Analysis output assets", () => {
   let rootDir: string;

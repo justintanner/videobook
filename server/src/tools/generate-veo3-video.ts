@@ -23,7 +23,6 @@ type Veo3VideoArgs = SchemaArgs<typeof veo3VideoSchema>;
 function makeVeo3VideoTool(
   toolName: string,
   model: VeoModel,
-  label: string,
   description: string,
 ): (fs: Engine) => ToolDef {
   return (fs: Engine) => ({
@@ -44,7 +43,7 @@ function makeVeo3VideoTool(
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageRef(fs, slug, book_id);
+        const r = await resolveImageRef(fs, slug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `image_refs: ${r.error}` }] };
         imageInputs.push(r.value);
       }
@@ -90,13 +89,11 @@ function makeVeo3VideoTool(
 export const generateVeo3VideoDef = makeVeo3VideoTool(
   "generate_kie_veo_3_0_video",
   "veo3",
-  "Veo 3",
   "Generate a video using Google Veo 3 (KIE). Text-to-video or image-to-video from reference images. Creates a new video artifact and enqueues a background job.",
 );
 
 export const generateVeo3FastVideoDef = makeVeo3VideoTool(
   "generate_kie_veo_3_0_fast_video",
   "veo3_fast",
-  "Veo 3 Fast",
   "Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new video artifact and enqueues a background job.",
 );

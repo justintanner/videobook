@@ -40,7 +40,7 @@ export function aceStepConfig(): AceStepConfig {
   };
 }
 
-export function requiredModelFiles(config: AceStepConfig = aceStepConfig()): string[] {
+function requiredModelFiles(config: AceStepConfig = aceStepConfig()): string[] {
   return [config.model, TEXT_ENCODER_MODEL, VAE_MODEL];
 }
 

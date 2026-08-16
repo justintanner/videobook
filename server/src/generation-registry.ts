@@ -1168,7 +1168,7 @@ export const GENERATION_ACTIONS: GenerationActionSpec[] = [
     operation: "reconcile_work",
     picker_visibility: "workflow_tool",
     legacy_names: ["sync"],
-    schema_owner: "server/src/tools/sync.ts",
+    schema_owner: "server/src/tools/reconcile-project-work.ts",
     job_task_discriminator: "sync",
     persisted_history_consumers: ["project_activity", "pending_jobs"],
   },

@@ -1,6 +1,6 @@
 import type { SpeakVoice } from './use-elevenlabs-voices'
 
-export const ELEVENLABS_VOICE_STORAGE_KEY = 'videobook.elevenlabs-voice'
+const ELEVENLABS_VOICE_STORAGE_KEY = 'videobook.elevenlabs-voice'
 export const SPEAK_PREVIEW_PREFILL = '/speak '
 
 export type SpeakExecuteContext = {

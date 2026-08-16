@@ -13,7 +13,7 @@ import { toUpstreamCostHints, type KieCostHints } from "../cost-adapters.js";
 import { assertProviderPayload } from "../provider-prompt-transform.js";
 
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";
-export const VEO_PAYGATE_DOT_PATH = "api.v1.veo.generate";
+const VEO_PAYGATE_DOT_PATH = "api.v1.veo.generate";
 
 type SubmitKieTaskArgs = {
   request: MediaGenerationRequest;
@@ -135,7 +135,6 @@ export async function submitKieTask(
 
 export async function submitQueuedKieTask(
   fs: Engine,
-  bookId: string,
   task: PendingTask,
 ): Promise<PendingTask> {
   if (task.taskId !== QUEUED_TASK_ID) throw new Error(`KIE task ${task.artifactId} is not locally queued`);

@@ -38,7 +38,7 @@ type SceneDetectOptions = {
 // Score is the absolute mean frame difference (Y-plane), time is seconds.
 // The very first line always has score=0 (no previous frame) — we keep it
 // in the timeline; deriveCandidates ignores it via the threshold.
-export function parseScdetOutput(stderr: string): SceneSample[] {
+function parseScdetOutput(stderr: string): SceneSample[] {
   const re = /lavfi\.scd\.score:\s*([0-9.]+),\s*lavfi\.scd\.time:\s*([0-9.]+)/g;
   const out: Array<{ t: number; score: number }> = [];
   let m: RegExpExecArray | null;
@@ -90,7 +90,7 @@ export function deriveCameraCandidates(
 //
 // Settle scoring is (above-mean − below-mean), so deeper drops rank higher.
 // Empty / quiet shots produce no settle candidates.
-export function deriveCandidates(samples: Array<{ t: number; score: number }>): Candidate[] {
+function deriveCandidates(samples: Array<{ t: number; score: number }>): Candidate[] {
   if (samples.length === 0) return [];
   const out: Candidate[] = [];
 

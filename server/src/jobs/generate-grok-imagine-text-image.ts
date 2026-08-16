@@ -50,7 +50,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: Engine): void {
       const imageUrl = result.data[0]?.url;
       if (!imageUrl) throw new Error("xAI returned no image URL");
 
-      await downloadUrlIntoAsset(fs, imageUrl, imgAssetId, "original.png", bookId, { kind: "result image" });
+      await downloadUrlIntoAsset(fs, imageUrl, imgAssetId, "original.png", { kind: "result image" });
 
       // Enqueue post-processing so metadata and derived crops are created
       const provenance = {

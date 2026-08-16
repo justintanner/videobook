@@ -1,5 +1,6 @@
 import type { Client } from '@modelcontextprotocol/client'
 import { connectMcpClient } from './mcp-client'
+import { recordValue } from './value-decoders'
 
 export type InitialWorkspacePayload = {
   bookValue: unknown
@@ -20,16 +21,20 @@ type ToolResponse = {
   isError?: boolean
 }
 
-const mcpUrl = new URL('/mcp', window.location.origin).toString()
-
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
+export function selectPreferredBook<T extends { bookId?: unknown }>(
+  books: readonly T[],
+  preferredBookId: string | null | undefined,
+): T | null {
+  if (preferredBookId) {
+    const preferred = books.find((book) => book.bookId === preferredBookId)
+    if (preferred) return preferred
+  }
+  return books.find((book) => typeof book.bookId === 'string' && book.bookId.length > 0)
+    ?? null
 }
 
 function resultValue(value: unknown): unknown {
-  const result = record(value) as ToolResponse | null
+  const result = recordValue(value) as ToolResponse | null
   if (!result || result.isError) throw new Error('Bootstrap tool failed')
   const text = result.content?.find((entry) => entry.type === 'text')?.text
   if (!text) return null
@@ -65,10 +70,10 @@ async function loadInitialWorkspaceFromClient(
     callTool(client, 'list_chat_models', {}),
   ])
   const books = Array.isArray(bookValue) ? bookValue : []
-  const selected = books
-    .map(record)
-    .find((book) => book?.name === 'dancing')
-    ?? books.map(record).find(Boolean)
+  const selected = selectPreferredBook(
+    books.map(recordValue).filter((book) => book !== null),
+    savedValue('videobook.active-book'),
+  )
   const bookId = typeof selected?.bookId === 'string' ? selected.bookId : ''
   if (!bookId) return null
   const [
@@ -92,7 +97,7 @@ async function loadInitialWorkspaceFromClient(
     callTool(client, 'list_notebook_actions', { book_id: bookId }),
   ])
   const notebooks = Array.isArray(notebookValue)
-    ? notebookValue.map(record).filter((entry) => entry !== null)
+    ? notebookValue.map(recordValue).filter((entry) => entry !== null)
     : []
   const remembered = savedValue(`videobook.active-notebook:${bookId}`)
   const notebook = notebooks.find((entry) => entry.id === remembered)
@@ -114,6 +119,7 @@ async function loadInitialWorkspaceFromClient(
 }
 
 export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | null> {
+  const mcpUrl = new URL('/mcp', window.location.origin).toString()
   const client = await connectMcpClient(mcpUrl, 'videobook-bootstrap')
   try {
     return await loadInitialWorkspaceFromClient(client)

@@ -81,19 +81,19 @@ function makeVeo31VideoTool(
 
       let firstFrame: RefInput | undefined;
       if (firstFrameSlug !== undefined) {
-        const r = await resolveImageRef(fs, firstFrameSlug, book_id);
+        const r = await resolveImageRef(fs, firstFrameSlug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `first_frame_ref: ${r.error}` }] };
         firstFrame = r.value;
       }
       let lastFrame: RefInput | undefined;
       if (lastFrameSlug !== undefined) {
-        const r = await resolveImageRef(fs, lastFrameSlug, book_id);
+        const r = await resolveImageRef(fs, lastFrameSlug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `last_frame_ref: ${r.error}` }] };
         lastFrame = r.value;
       }
       const imageInputs: RefInput[] = [];
       for (const ref of imgs) {
-        const r = await resolveImageRef(fs, ref, book_id);
+        const r = await resolveImageRef(fs, ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `image_refs: ${r.error}` }] };
         imageInputs.push(r.value);
       }

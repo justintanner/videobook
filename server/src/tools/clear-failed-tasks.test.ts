@@ -66,8 +66,8 @@ describe("clear_failed_tasks tool", () => {
     const fakeTaskTwo = "task-fail-two";
     await writeSyntheticPendingTask(fs, "test-proj", failedOne, fakeTaskOne);
     await writeSyntheticPendingTask(fs, "test-proj", failedTwo, fakeTaskTwo);
-    await failPendingTaskAndLog(fs, "test-proj", failedOne, fakeTaskOne, { message: "boom" });
-    await failPendingTaskAndLog(fs, "test-proj", failedTwo, fakeTaskTwo, { message: "kaboom" });
+    await failPendingTaskAndLog(fs, failedOne, fakeTaskOne, { message: "boom" });
+    await failPendingTaskAndLog(fs, failedTwo, fakeTaskTwo, { message: "kaboom" });
 
     const res = await client.callTool({
       name: "clean_failed_assets",
@@ -110,7 +110,7 @@ describe("clear_failed_tasks tool", () => {
 
     const husk = await createImageAsset(fs, "test-proj", "dead gen");
     await writeSyntheticPendingTask(fs, "test-proj", husk, "task-husk");
-    await failPendingTaskAndLog(fs, "test-proj", husk, "task-husk", { message: "boom" });
+    await failPendingTaskAndLog(fs, husk, "task-husk", { message: "boom" });
 
     const res = await client.callTool({
       name: "clean_failed_assets",

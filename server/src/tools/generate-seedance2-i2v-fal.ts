@@ -39,7 +39,7 @@ export function generateSeedance2I2vFalDef(fs: Engine): ToolDef {
 
       const endSlug = end_frame_ref ?? last_frame_ref;
       const slugs = endSlug ? [first_frame_ref, endSlug] : [first_frame_ref];
-      const resolved = await resolveImageRefs(fs, slugs, book_id);
+      const resolved = await resolveImageRefs(fs, slugs);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame, endFrame] = resolved.inputs;

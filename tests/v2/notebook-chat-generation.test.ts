@@ -1,7 +1,6 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { NotebookDocument } from 'videobook-engine'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
@@ -15,13 +14,8 @@ import {
   type AssetMentionRecord,
 } from '../../src/videobook/mention-suggestions'
 import {
-  parseNotebookImageGenerationCommand,
-  resolveNotebookImageGenerationSources,
-} from '../../src/videobook/notebook-image-generation-command'
-import {
   materializeNotebookChatGeneration,
   notebookChatGenerationConnectedInputs,
-  notebookChatGenerationParameterReferences,
   notebookChatGenerationReferences,
   notebookChatGenerationSettings,
   planNotebookChatGeneration,
@@ -38,12 +32,12 @@ function resultJson(result: Awaited<ReturnType<ToolDef['handler']>>): unknown {
   return JSON.parse(result.content[0]!.text) as unknown
 }
 
-describe('notebook image generation commands', () => {
+describe('notebook chat generation', () => {
   let rootDir: string
   let books: BookManager
 
   beforeEach(async () => {
-    rootDir = await mkdtemp(join(tmpdir(), 'videobook-image-command-'))
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-chat-generation-'))
     books = new BookManager({
       libraryDir: join(rootDir, 'books'),
       objectPrefix: 'test-objects',
@@ -54,135 +48,6 @@ describe('notebook image generation commands', () => {
   afterEach(async () => {
     await books.close()
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
-  })
-
-  it('parses natural image requests without consuming configured-cell commands', () => {
-    expect(parseNotebookImageGenerationCommand(
-      'generate an image with @a1',
-    )).toEqual({
-      prompt: 'Create a new image based on the connected reference image.',
-      sourceReferences: ['a1'],
-    })
-    expect(parseNotebookImageGenerationCommand(
-      'Please make a picture of a moonlit garden using @a1 and @a2.',
-    )).toEqual({
-      prompt: 'a moonlit garden',
-      sourceReferences: ['a1', 'a2'],
-    })
-    expect(parseNotebookImageGenerationCommand(
-      'generate an image using @A1',
-    )).toEqual({
-      prompt: 'Create a new image based on the connected reference image.',
-      sourceReferences: ['a1'],
-    })
-    expect(parseNotebookImageGenerationCommand(
-      'create an image of a sunset',
-    )).toEqual({
-      prompt: 'a sunset',
-      sourceReferences: [],
-    })
-    expect(parseNotebookImageGenerationCommand(
-      'generate cell @a1',
-    )).toBeNull()
-    expect(notebookChatGenerationParameterReferences({
-      book_id: 'ignored',
-      prompt: 'scene @a5, character @a1, fluffy kitten standing',
-      image_refs: ['@b1', 'b2'],
-      first_frame_ref: '@b3',
-    })).toEqual(['b1', 'b2', 'b3'])
-  })
-
-  it('rejects non-image and unfinished sources before materialization', () => {
-    const image = {
-      id: '01900000-0000-7000-8000-000000000001',
-      type: 'image' as const,
-      label: 'img-ready',
-      slot: { row: 0, column: 0 },
-      outputArtifactId: '01900000-0000-7000-8000-000000000002',
-    }
-    const video = {
-      id: '01900000-0000-7000-8000-000000000003',
-      type: 'video' as const,
-      label: 'vid-source',
-      slot: { row: 0, column: 1 },
-      outputArtifactId: '01900000-0000-7000-8000-000000000004',
-    }
-    const pending = {
-      id: '01900000-0000-7000-8000-000000000005',
-      type: 'image' as const,
-      label: 'img-pending',
-      slot: { row: 0, column: 2 },
-    }
-    const document = {
-      id: '01900000-0000-7000-8000-000000000006',
-      name: 'Sources',
-      cells: [image, video, pending],
-      edges: [],
-      createdAt: new Date(0).toISOString(),
-    } satisfies NotebookDocument
-
-    expect(resolveNotebookImageGenerationSources(document, [image.id]))
-      .toEqual([image])
-    expect(resolveNotebookImageGenerationSources(document, ['A1']))
-      .toEqual([image])
-    expect(() => resolveNotebookImageGenerationSources(document, ['a2']))
-      .toThrow('@a2 is not an image-producing cell')
-    expect(() => resolveNotebookImageGenerationSources(document, ['a3']))
-      .toThrow('@a3 does not have an image output yet')
-    expect(() => resolveNotebookImageGenerationSources(document, ['img-other']))
-      .toThrow('Notebook cell @img-other was not found')
-  })
-
-  it('accepts a generate_image source whose artifact lives on the output cell', () => {
-    const outputArtifactId = '01900000-0000-7000-8000-000000000012'
-    const source = {
-      id: '01900000-0000-7000-8000-000000000013',
-      type: 'generate_image' as const,
-      label: 'gen-pair',
-      slot: { row: 0, column: 0 },
-    }
-    const output = {
-      id: '01900000-0000-7000-8000-000000000014',
-      type: 'image' as const,
-      label: 'gen-pair image',
-      slot: { row: 1, column: 0 },
-      outputArtifactId,
-      inputs: {
-        mediaRole: 'generate-image-output',
-        producerCellId: source.id,
-        state: 'completed',
-      },
-    }
-    const document = {
-      id: '01900000-0000-7000-8000-000000000015',
-      name: 'Output cell source',
-      cells: [source, output],
-      edges: [{
-        id: '01900000-0000-7000-8000-000000000016',
-        source: source.id,
-        target: output.id,
-        targetInput: 'media',
-      }],
-      createdAt: new Date(0).toISOString(),
-    } satisfies NotebookDocument
-
-    expect(resolveNotebookImageGenerationSources(document, [source.id]))
-      .toEqual([source])
-    expect(resolveNotebookImageGenerationSources(document, ['A1']))
-      .toEqual([source])
-
-    const artifactless = {
-      ...source,
-      id: '01900000-0000-7000-8000-000000000017',
-      slot: { row: 0, column: 2 },
-    }
-    const emptyDocument = {
-      ...document,
-      cells: [artifactless],
-      edges: [],
-    }
-    expect(() => resolveNotebookImageGenerationSources(emptyDocument, ['a3']))
-      .toThrow('@a3 does not have an image output yet')
   })
 
   it('creates a configured book cell, connects its image source, and produces a canonical plan', async () => {

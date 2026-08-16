@@ -5,19 +5,15 @@ import type {
   NotebookDocument,
   NotebookGridSlot,
 } from 'videobook-engine'
-import { resolveGeneratedVideoArtifact } from 'videobook-engine/notebook-media-artifact'
-import {
-  notebookCellTag,
-  resolveNotebookCellReference,
-} from './notebook-addressing'
+import { notebookCellTag } from './notebook-addressing'
+import { resolveNotebookVideoSourceCell } from './notebook-video-source'
+import { nonBlankStringValue, recordValue } from './value-decoders'
 
 export type NotebookSplitCommand = {
   sourceReference: string
   cutPointsSeconds: number[]
 }
 
-// Accepts a grid address (@a3) or a cell id / id prefix; the resolver
-// validates whichever form arrives.
 const NOTEBOOK_SPLIT_REFERENCE_SOURCE = '[a-z0-9][a-z0-9-]*'
 
 const NOTEBOOK_SPLIT_COMMAND_PATTERN = new RegExp(
@@ -63,22 +59,6 @@ type NotebookToolCall = (
 ) => Promise<unknown>
 
 export const minimumSplitChunkSeconds = 0.5
-const videoSourceTypes = new Set<NotebookCell['type']>([
-  'video',
-  'generate_video',
-  'concat',
-  'splice',
-])
-
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null
-}
 
 function timestampSeconds(value: string): number | null {
   const normalized = value.trim().toLowerCase()
@@ -253,26 +233,12 @@ export function notebookSplitRanges(input: {
   }))
 }
 
-export function resolveNotebookSplitSource(
-  document: NotebookDocument,
-  sourceReference: string,
-): NotebookCell {
-  const source = resolveNotebookCellReference(document, sourceReference)
-  if (!videoSourceTypes.has(source.type)) {
-    throw new Error(`${notebookCellTag(source)} is not a video-producing cell`)
-  }
-  if (!resolveGeneratedVideoArtifact(document, source)) {
-    throw new Error(`${notebookCellTag(source)} does not have a video output yet`)
-  }
-  return source
-}
-
 export function planNotebookSplitCommand(input: {
   command: NotebookSplitCommand
   document: NotebookDocument
   sourceDurationSeconds: number
 }): NotebookSplitDraft {
-  const source = resolveNotebookSplitSource(
+  const source = resolveNotebookVideoSourceCell(
     input.document,
     input.command.sourceReference,
   )
@@ -373,8 +339,8 @@ export async function enqueueNotebookSplitCommand(input: {
           : {}),
         cell: cellCreateInput(cell),
       })
-      const created = objectValue(createdValue)
-      const createdId = stringValue(created?.id)
+      const created = recordValue(createdValue)
+      const createdId = nonBlankStringValue(created?.id)
       if (createdId !== cell.id) {
         throw new Error('The server did not preserve the planned split cell')
       }
@@ -404,9 +370,9 @@ export async function enqueueNotebookSplitCommand(input: {
       notebook_id: input.draft.document.id,
       cell_ids: [input.draft.actionCell.id],
     })
-    const accepted = objectValue(acceptedValue)
-    const jobId = stringValue(accepted?.job_id)
-    const runId = stringValue(accepted?.run_id)
+    const accepted = recordValue(acceptedValue)
+    const jobId = nonBlankStringValue(accepted?.job_id)
+    const runId = nonBlankStringValue(accepted?.run_id)
     if (!jobId || !runId) {
       throw new Error('The server did not return a notebook split run')
     }

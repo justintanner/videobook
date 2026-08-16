@@ -295,7 +295,7 @@ function audioFilter(
   return { filters, output: "aout" };
 }
 
-export function buildSequenceFfmpegArgs(
+function buildSequenceFfmpegArgs(
   sequence: Sequence,
   resolved: ResolvedClip[],
   width: number,
@@ -370,7 +370,6 @@ export function registerExportSequenceJob(engine: Engine): void {
       if (!final.ok) throw new Error(final.error.message);
       await replaceArtifactFileFromPath(
         engine,
-        request.bookId,
         final.value.artifactId,
         outputFilename,
         outputPath,
@@ -378,7 +377,6 @@ export function registerExportSequenceJob(engine: Engine): void {
       if (request.captions === "sidecar") {
         await replaceArtifactFileFromPath(
           engine,
-          request.bookId,
           final.value.artifactId,
           "captions.vtt",
           captionPath,

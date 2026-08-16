@@ -36,7 +36,7 @@ describe("notebook action catalog", () => {
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   });
 
-  it("exposes deterministic analysis and Videocity generation defaults", () => {
+  it("exposes deterministic analysis and Videobook generation defaults", () => {
     const actions = listNotebookActions();
     const ids = actions.map((action) => action.id);
     expect(ids).toEqual([...ids].sort((left, right) => left.localeCompare(right)));

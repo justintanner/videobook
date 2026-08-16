@@ -15,7 +15,7 @@ type NotebookCellAddItemShape = {
   group: NotebookCellAddGroup
 }
 
-export const notebookCellAddItems = [
+const notebookCellAddItems = [
   { type: 'audio', label: 'Audio', group: 'Media' },
   { type: 'image', label: 'Image', group: 'Media' },
   { type: 'video', label: 'Video', group: 'Media' },

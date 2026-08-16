@@ -175,7 +175,6 @@ async function deleteIfPresent(
   fs: Engine,
   assetId: string,
   filename: string,
-  _bookId: string,
 ): Promise<void> {
   const result = await fs.files.delete(assetId, filename);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
@@ -188,7 +187,6 @@ export async function replaceVideoAssetInPlace(
   assetId: string,
   videoFilename: string,
   renderedPath: string,
-  _bookId: string,
 ): Promise<void> {
   const outputBytes = await readFile(renderedPath);
   const written = await fs.files.write(assetId, videoFilename, outputBytes);
@@ -212,7 +210,6 @@ export function registerCleanVideoAudioJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -280,13 +277,13 @@ export function registerCleanVideoAudioJob(fs: Engine): void {
             ctx.signal,
           );
 
-          await replaceVideoAssetInPlace(fs, assetId, videoFilename, outputPath, bookId);
+          await replaceVideoAssetInPlace(fs, assetId, videoFilename, outputPath);
         } finally {
           await rm(tempDir, { recursive: true, force: true });
         }
 
         for (const filename of STALE_DERIVATIVES) {
-          await deleteIfPresent(fs, assetId, filename, bookId);
+          await deleteIfPresent(fs, assetId, filename);
         }
 
         return { videoPath: inputPath };

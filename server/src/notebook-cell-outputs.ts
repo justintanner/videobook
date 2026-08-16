@@ -12,13 +12,6 @@ import {
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { nextGenerationOutputSlot } from "./notebook-placement.js";
 
-export {
-  findGenerateAudioOutputCell,
-  findGenerateImageOutputCell,
-  findGenerateVideoOutputCell,
-  resolveGeneratedVideoArtifact,
-} from "videobook-engine";
-
 type ExtractFrameMode = "first" | "time" | "last";
 
 type ExtractFrameSelection = {
@@ -39,7 +32,7 @@ function normalizedTimestamp(value: unknown): number | null {
     : null;
 }
 
-export function extractFrameSelectionKey(
+function extractFrameSelectionKey(
   sourceCellId: string | null,
   frameMode: ExtractFrameMode,
   timestampSeconds: number | null = null,

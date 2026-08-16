@@ -23,7 +23,7 @@ type Payload = {
 export function registerGenerateKlingV3ProT2vFalJob(fs: Engine): void {
   registerJobHandler("generate_kling_v3_pro_t2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
       const input: FalInput = {
         prompt: p.prompt,

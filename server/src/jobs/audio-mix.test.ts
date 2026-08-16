@@ -43,7 +43,6 @@ describe("audio mix", () => {
   let tempDir: string;
   let engineRoot: string;
   let fs: Engine;
-  let bookId: string;
   let videoTargetId: string;
   let videoLayerId: string;
   let audioTargetId: string;
@@ -53,7 +52,6 @@ describe("audio mix", () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-audio-mix-"));
     engineRoot = join(tempDir, "projects");
     fs = createEngineForTest(engineRoot);
-    bookId = fs.book.get().bookId;
     videoTargetId = await createAssetWithFile(fs, "vid", "video target", "original.mp4");
     videoLayerId = await createAssetWithFile(fs, "vid", "video layer", "original.mkv");
     audioTargetId = await createAssetWithFile(fs, "aud", "audio target", "original.wav");
@@ -74,8 +72,8 @@ describe("audio mix", () => {
     const targetId = targetKind === "video" ? videoTargetId : audioTargetId;
     const layerId = layerKind === "video" ? videoLayerId : audioLayerId;
     const [target, layer] = await Promise.all([
-      resolveAudioMixAsset(fs, targetId, bookId),
-      resolveAudioMixAsset(fs, layerId, bookId),
+      resolveAudioMixAsset(fs, targetId),
+      resolveAudioMixAsset(fs, layerId),
     ]);
     expect(target.kind).toBe(targetKind);
     expect(layer.kind).toBe(layerKind);

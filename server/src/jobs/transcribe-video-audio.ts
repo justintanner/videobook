@@ -72,7 +72,7 @@ export async function runTranscribeVideoAudio(
   const apiKey = getApiKey("OPENAI_API_KEY");
   if (!apiKey) return { success: false, reason: "OPENAI_API_KEY not set" };
 
-  const result = await withLocalLease(fs, bookId, assetId, ctx, "transcribe", async (): Promise<TranscribeVideoAudioResult> => {
+  const result = await withLocalLease(fs, assetId, ctx, "transcribe", async (): Promise<TranscribeVideoAudioResult> => {
     try {
       const provider = createOpenAi({ apiKey, timeout: 120_000 });
       const probe = await probeVideo(videoPath);

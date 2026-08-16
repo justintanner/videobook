@@ -14,7 +14,7 @@ import { FFMPEG } from '../server/src/ffmpeg.js'
 import {
   validateSearchBenchmarkCorpus,
   type SearchBenchmarkCorpus,
-} from '../src/videobook/search-benchmark-corpus.js'
+} from './search-benchmark-corpus.js'
 
 type BenchmarkEnvelope = {
   recordedAt: string

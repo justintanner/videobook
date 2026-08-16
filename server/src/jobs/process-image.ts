@@ -20,7 +20,7 @@ export function registerProcessImageJob(fs: Engine): void {
       assetId, bookId, extension, provenance,
     } = payload as ProcessImagePayload;
 
-    return withLocalLease(fs, bookId, assetId, ctx, "process", async () =>
+    return withLocalLease(fs, assetId, ctx, "process", async () =>
       withTransientStorageRetry(async () => {
         const readResult = await fs.files.read(assetId, `original${extension}`);
         if (!readResult.ok) throw new Error(`Failed to read original: ${readResult.error.message}`);

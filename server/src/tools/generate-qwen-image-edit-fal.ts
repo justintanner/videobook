@@ -72,7 +72,7 @@ export function generateQwenImageEditFalDef(fs: Engine): ToolDef {
       }
 
       const [firstSlug] = image_refs;
-      const resolved = await resolveImageRefs(fs, [firstSlug], book_id);
+      const resolved = await resolveImageRefs(fs, [firstSlug]);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [refImage] = resolved.inputs;

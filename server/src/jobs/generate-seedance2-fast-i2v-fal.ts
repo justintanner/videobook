@@ -28,11 +28,11 @@ type Payload = {
 export function registerGenerateSeedance2FastI2vFalJob(fs: Engine): void {
   registerJobHandler("generate_seedance2_fast_i2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
-      const image_url = await uploadAssetToFal(fs, p.firstFrame.assetId, p.firstFrame.filename, p.bookId);
+      const image_url = await uploadAssetToFal(fs, p.firstFrame.assetId, p.firstFrame.filename);
       const end_image_url = p.endFrame
-        ? await uploadAssetToFal(fs, p.endFrame.assetId, p.endFrame.filename, p.bookId)
+        ? await uploadAssetToFal(fs, p.endFrame.assetId, p.endFrame.filename)
         : undefined;
   
       const input: FalInput = {

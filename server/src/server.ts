@@ -10,7 +10,7 @@ import { bookManager, fs as defaultFs } from "./fs.js";
 
 export const MCP_PROTOCOL_VERSION = "2026-07-28";
 
-export function createServer(
+function createServer(
   fs: Engine = defaultFs,
   books: BookManager = bookManager,
 ): McpServer {

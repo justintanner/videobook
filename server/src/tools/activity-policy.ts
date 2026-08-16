@@ -78,7 +78,7 @@ export function isLoggedToolActivity(
   return isBookToolActivity(toolName, args) && !result.isError;
 }
 
-export function isBookToolActivity(
+function isBookToolActivity(
   toolName: string,
   args: Record<string, unknown>,
 ): boolean {

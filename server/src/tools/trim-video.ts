@@ -5,7 +5,7 @@ import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 import { resolveVideoAssetReference } from "./video-source-reference.js";
 import { parseVideoTimestamp, videoTimestampSchema } from "./video-time-input.js";
-import { sleepDef } from "./sleep.js";
+import { waitForAssetReadyDef } from "./wait-for-asset-ready.js";
 
 type ValidatedParams =
   | { mode: "keep"; trimStart: number | undefined; trimEnd: number | undefined }
@@ -160,7 +160,7 @@ export function trimVideoDef(fs: Engine): ToolDef {
 
       try {
         await queue.enqueueAndWait(jobId, jobPayload);
-        const readiness = await sleepDef(fs).handler({
+        const readiness = await waitForAssetReadyDef(fs).handler({
           asset_id: assetId,
           book_id,
           timeout_seconds: 300,

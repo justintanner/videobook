@@ -35,7 +35,7 @@ export function registerGenerateQwen2ImageEditJob(fs: Engine): void {
     const imageUrl =
       "url" in input
         ? input.url
-        : await uploadAssetToKie(fs, input.assetId, input.filename, bookId);
+        : await uploadAssetToKie(fs, input.assetId, input.filename);
     const normalizedPrompt = transformProviderPrompt(
       "generate_kie_qwen_2_0_edit_image",
       {

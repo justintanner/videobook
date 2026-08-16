@@ -81,7 +81,6 @@ export type WatermarkAssetResult =
 /** Build the badge and persist it as an image artifact with preview variants. */
 export async function createWatermarkAsset(
   fs: Engine,
-  bookId: string,
   handle: string,
   url: string,
 ): Promise<WatermarkAssetResult> {
@@ -119,7 +118,7 @@ export async function createWatermarkAsset(
     return { ok: false, error: metadataResult.error.message };
   }
 
-  const variantsResult = await writeImageVariants(fs, assetId, buffer, bookId);
+  const variantsResult = await writeImageVariants(fs, assetId, buffer);
   if (!variantsResult.ok) {
     await fs.artifacts.delete(assetId).catch(() => undefined);
     return { ok: false, error: variantsResult.error };

@@ -39,10 +39,10 @@ export function registerGenerateHappyhorseVideoeditVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const videoUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename, bookId);
+    const videoUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename);
     const referenceImages: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      referenceImages.push(await uploadAssetToKie(fs, assetId, filename, bookId));
+      referenceImages.push(await uploadAssetToKie(fs, assetId, filename));
     }
 
     // happyhorse/video-edit has no `duration` field in its kie input schema —

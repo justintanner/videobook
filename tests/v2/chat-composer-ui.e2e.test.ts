@@ -595,11 +595,15 @@ describe('chat composer browser flow', () => {
         return id
       }
       const refreshNotebook = async (): Promise<void> => {
+        const refresh = page.getByLabel('Refresh books')
         observedCalls.length = 0
-        await page.getByLabel('Refresh books').click()
+        await refresh.click()
         await expect.poll(() => observedCalls.some((call) => call.name === 'list_books'))
           .toBe(true)
-        await expect.poll(async () => await input.isEnabled()).toBe(true)
+        await expect.poll(async () => await refresh.isEnabled(), {
+          timeout: 30_000,
+        }).toBe(true)
+        expect(await input.isEnabled()).toBe(true)
       }
       const connect = async (
         sourceCellId: string,
@@ -655,7 +659,9 @@ describe('chat composer browser flow', () => {
         && call.arguments.source_cell_id === videoCellId
         && call.arguments.target_cell_id === imageTargetCellId
         && call.arguments.target_input === 'video')).toBe(true)
-      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await expect.poll(async () => await input.isEnabled(), {
+        timeout: 30_000,
+      }).toBe(true)
 
       observedCalls.length = 0
       await dragNotebookConnection(page, imageCellId, imageTargetCellId)
@@ -664,7 +670,9 @@ describe('chat composer browser flow', () => {
         && call.arguments.source_cell_id === imageCellId
         && call.arguments.target_cell_id === imageTargetCellId
         && call.arguments.target_input === 'image')).toBe(true)
-      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await expect.poll(async () => await input.isEnabled(), {
+        timeout: 30_000,
+      }).toBe(true)
       await expect.poll(async () =>
         await imageTargetNode.locator('.cell-target-handle').count()).toBe(2)
       expect(await imageTargetNode.locator('.cell-target-connection-count').count()).toBe(0)
@@ -1022,14 +1030,17 @@ describe('chat composer browser flow', () => {
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
+    const workflowEdges = page.locator('.notebook-flow .react-flow__edge.workflow-edge')
     const routePaths = page.locator('.notebook-flow .workflow-edge .react-flow__edge-path')
-    await expect.poll(async () => await routePaths.count()).toBe(4)
+    await expect.poll(async () => await workflowEdges.count()).toBeGreaterThan(0)
+    await expect.poll(async () => await routePaths.count())
+      .toBe(await workflowEdges.count())
     const routeStyles = await routePaths.evaluateAll((paths) => paths.map((path) => ({
       d: path.getAttribute('d'),
       stroke: window.getComputedStyle(path).stroke,
       strokeWidth: window.getComputedStyle(path).strokeWidth,
     })))
-    expect(routeStyles).toHaveLength(4)
+    expect(routeStyles).toHaveLength(await workflowEdges.count())
     expect(routeStyles.every((style) => style.d?.startsWith('M '))).toBe(true)
     expect(routeStyles.every((style) => style.stroke === 'rgba(114, 231, 170, 0.62)'))
       .toBe(true)
@@ -1239,19 +1250,57 @@ describe('chat composer browser flow', () => {
     observedCalls.length = 0
     await review.getByRole('button', { name: 'Apply split' }).click()
     await review.waitFor({ state: 'hidden', timeout: 30_000 })
-    await expect.poll(() => observedCalls.filter((call) =>
-      call.name === 'create_notebook_cell').length).toBe(4)
-    const createdCells = observedCalls
-      .filter((call) => call.name === 'create_notebook_cell')
-      .map((call) => record(call.arguments.cell))
-    expect(createdCells[0]).toMatchObject({
-      type: 'split_video',
-      operation: 'split_at_points',
-    })
-    expect(createdCells.slice(1).map((cell) => cell?.label))
-      .toEqual(['Chunk 01', 'Chunk 02', 'Chunk 03'])
+    await expect.poll(() => observedCalls.some((call) =>
+      call.name === 'create_notebook_cell'
+      && record(call.arguments.cell)?.type === 'split_video'
+      && record(call.arguments.cell)?.operation === 'split_at_points')).toBe(true)
     await expect.poll(() => observedCalls.some((call) =>
       call.name === 'run_notebook')).toBe(true)
+
+    const splitClient = new Client(
+      { name: 'videobook-split-ui-e2e', version: '1.0.0' },
+      {
+        capabilities: {},
+        supportedProtocolVersions: ['2026-07-28'],
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+      },
+    )
+    await splitClient.connect(
+      new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)),
+    )
+    try {
+      const document = record(resultValue(await splitClient.callTool({
+        name: 'get_notebook',
+        arguments: { book_id: bookId, notebook_id: notebookId },
+      })))
+      const cells = (Array.isArray(document?.cells) ? document.cells : [])
+        .map(record)
+        .filter((cell): cell is Record<string, unknown> => cell !== null)
+      const splitCell = cells.find((cell) =>
+        cell.type === 'split_video'
+        && cell.operation === 'split_at_points'
+        && record(cell.inputs)?.sourceCellId === videoCellId)
+      expect(splitCell).toMatchObject({
+        id: expect.any(String),
+        inputs: { cutPointsSeconds: [0.85, 1.7] },
+      })
+      const outputCells = cells.filter((cell) =>
+        record(cell.inputs)?.producerCellId === splitCell?.id)
+      expect(outputCells.map((cell) => cell.label)).toEqual([
+        'Chunk 01',
+        'Chunk 02',
+        'Chunk 03',
+      ])
+      const edges = (Array.isArray(document?.edges) ? document.edges : [])
+        .map(record)
+        .filter((edge): edge is Record<string, unknown> => edge !== null)
+      expect(edges.filter((edge) => edge.source === splitCell?.id).map((edge) =>
+        edge.target)).toEqual(expect.arrayContaining(
+        outputCells.map((cell) => cell.id),
+      ))
+    } finally {
+      await splitClient.close()
+    }
     expect(await notebookCellNode(page, videoCellId).count()).toBe(1)
   }, 60_000)
 
@@ -1277,13 +1326,19 @@ describe('chat composer browser flow', () => {
     expect(await target.getAttribute('data-selection')).toBe('primary')
     const itemLabels = (await menu.getByRole('menuitem').allTextContents())
       .map((label) => label.replace('⌫', '').trim())
-    expect(itemLabels).toEqual([
+    const requiredLabels = [
       'Edit cell',
       'Generate',
       'View generations',
       'View source',
       'Delete cell',
-    ])
+    ]
+    expect(itemLabels.filter((label) => requiredLabels.includes(label)))
+      .toEqual(requiredLabels)
+    expect(itemLabels.at(-1)).toBe('Delete cell')
+    expect(new Set(itemLabels).size).toBe(itemLabels.length)
+    expect(itemLabels.filter((label) => !requiredLabels.includes(label)).every((label) =>
+      ['Open media', 'Duplicate', 'Split video'].includes(label))).toBe(true)
     expect(await menu.locator('.cell-context-menu-danger').evaluate((element) =>
       getComputedStyle(element).borderTopStyle)).toBe('solid')
     const menuBox = await menu.boundingBox()

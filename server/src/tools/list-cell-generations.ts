@@ -14,7 +14,7 @@ import {
   findGenerateImageOutput,
   findGenerateVideoOutput,
 } from "../notebook-cell-outputs.js";
-import { buildAssetList } from "./sync.js";
+import { buildAssetList } from "./reconcile-project-work.js";
 
 export type CellGenerationTransition = {
   status: GenerationStatus;
@@ -61,7 +61,7 @@ export type ListCellGenerationsResponse = {
   generations: CellGenerationsSummary;
 };
 
-export function generationArtifactIds(
+function generationArtifactIds(
   generations: readonly Generation[],
 ): string[] {
   return [...new Set(

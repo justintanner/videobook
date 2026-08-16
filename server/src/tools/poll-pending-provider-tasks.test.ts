@@ -13,7 +13,7 @@ import {
   setProviderPollTickHookForTests,
   stopBookQueue,
 } from "../queue.js";
-import { pollPendingProviderTasks } from "./sync.js";
+import { pollPendingProviderTasks } from "./reconcile-project-work.js";
 
 async function seedPendingTask(
   fs: Engine,

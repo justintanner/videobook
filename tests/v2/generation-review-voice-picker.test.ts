@@ -84,6 +84,7 @@ const voiceCatalog: ElevenLabsVoicesState = {
   warning: 'ELEVENLABS_API_KEY is not configured; showing fallback voices.',
   loading: false,
   error: null,
+  ensureLoaded: async () => null,
   refresh: async () => null,
 }
 
@@ -127,6 +128,7 @@ describe('GenerationChatReview voice picker', () => {
     expect(html).toContain('speak-preview-voice selected')
     expect(html).toContain('data-voice-id="voice-b"')
     expect(html).toContain('ELEVENLABS_API_KEY is not configured')
+    expect(html).toContain('Refresh voices')
   })
 
   it('hides the raw voice_id text control when the picker is shown', () => {
@@ -141,5 +143,18 @@ describe('GenerationChatReview voice picker', () => {
 
     expect(html).not.toContain('data-testid="generation-review-voices"')
     expect(html).toContain('aria-label="Voice id"')
+  })
+
+  it('offers event-driven loading when the catalog is empty', () => {
+    const html = renderReview(speechDraft(), {
+      ...voiceCatalog,
+      voices: [],
+      error: 'Voice request failed',
+    })
+
+    expect(html).not.toContain('data-testid="generation-review-voices"')
+    expect(html).toContain('aria-label="Voice id"')
+    expect(html).toContain('Voice request failed')
+    expect(html).toContain('Retry voices')
   })
 })

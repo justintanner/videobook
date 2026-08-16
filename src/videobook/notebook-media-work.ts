@@ -1,4 +1,5 @@
 import type { NotebookCellType } from 'videobook-engine'
+import { isNotebookMediaWorkCellType } from './notebook-cell-types'
 
 type MediaWorkAsset = {
   artifactId: string
@@ -20,12 +21,6 @@ type CellWorkState = {
   status: string
 }
 
-const mediaCellTypes = new Set<NotebookCellType>([
-  'audio',
-  'image',
-  'video',
-])
-
 function jobStartedAt(job: MediaWorkJob | undefined): string | undefined {
   const value = job?.startedAt ?? job?.enqueuedAt
   return typeof value === 'number' && Number.isFinite(value) && value > 0
@@ -39,7 +34,7 @@ export function notebookMediaWorkState(
   jobs: readonly MediaWorkJob[],
   fallback: CellWorkState,
 ): CellWorkState {
-  if (!mediaCellTypes.has(kind) || !asset) return fallback
+  if (!isNotebookMediaWorkCellType(kind) || !asset) return fallback
   if (asset.status === 'ready') return { status: 'completed' }
   const artifactJobs = jobs.filter((job) => job.artifactId === asset.artifactId)
   const activeJob = artifactJobs.find((job) =>

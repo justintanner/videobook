@@ -56,7 +56,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
 
       const imageUrls: string[] = [];
       for (let i = 0; i < sourceImageIds.length; i++) {
-        imageUrls.push(await uploadAssetFile(fs, sourceImageIds[i], imageFilenames[i], bookId));
+        imageUrls.push(await uploadAssetFile(fs, sourceImageIds[i], imageFilenames[i]));
       }
 
       const provider = createXaiPaygatedProvider(apiKey, 120_000);
@@ -97,7 +97,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
 
     const downloadUrls: string[] = [];
     for (let i = 0; i < sourceImageIds.length; i++) {
-      downloadUrls.push(await uploadAssetToKie(fs, sourceImageIds[i], imageFilenames[i], bookId));
+      downloadUrls.push(await uploadAssetToKie(fs, sourceImageIds[i], imageFilenames[i]));
     }
 
     const request = buildGrokImagineVideoPayload(

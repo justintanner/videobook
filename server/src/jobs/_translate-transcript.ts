@@ -8,7 +8,7 @@ import {
   type ResponsesFn,
 } from "../openai-intelligence.js";
 
-export const TRANSLATION_MODEL = INTELLIGENCE_MODEL;
+const TRANSLATION_MODEL = INTELLIGENCE_MODEL;
 
 export type SidecarWord = {
   text: string;
@@ -51,7 +51,7 @@ export function translatedTranscriptFilename(language: string): string {
 
 // ElevenLabs scribe reports language_code in ISO 639-3; the UI setting uses
 // ISO 639-1. Covers the curated language list plus common detection results.
-export const ISO3_TO_ISO1: Record<string, string> = {
+const ISO3_TO_ISO1: Record<string, string> = {
   eng: "en",
   zho: "zh",
   cmn: "zh",

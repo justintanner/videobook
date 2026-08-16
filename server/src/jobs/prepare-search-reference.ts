@@ -31,7 +31,7 @@ export interface PrepareSearchReferencePayload {
   sourceDurationMs?: number;
 }
 
-export async function runPrepareSearchReference(
+async function runPrepareSearchReference(
   engine: Engine,
   payload: PrepareSearchReferencePayload,
   context: JobHandlerContext,
@@ -62,7 +62,7 @@ export async function runPrepareSearchReference(
   }
 }
 
-export async function prepareSearchReferenceFile(
+async function prepareSearchReferenceFile(
   engine: Engine,
   sourcePath: string,
   mediaKind: SearchReferenceKind,

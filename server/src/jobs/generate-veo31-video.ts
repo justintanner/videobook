@@ -22,8 +22,8 @@ type GenerateVeo31VideoPayload = {
   seed?: number;
 };
 
-async function uploadRef(provider: GoogleFlowProvider, fs: Engine, input: RefInput, bookId: string): Promise<string> {
-  return uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, bookId);
+async function uploadRef(provider: GoogleFlowProvider, fs: Engine, input: RefInput): Promise<string> {
+  return uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename);
 }
 
 export function registerGenerateVeo31VideoJob(fs: Engine): void {
@@ -31,11 +31,11 @@ export function registerGenerateVeo31VideoJob(fs: Engine): void {
     const p = payload as GenerateVeo31VideoPayload;
     const provider = createGoogleFlowProvider();
 
-    const startImageId = p.firstFrame ? await uploadRef(provider, fs, p.firstFrame, p.bookId) : undefined;
-    const endImageId = p.lastFrame ? await uploadRef(provider, fs, p.lastFrame, p.bookId) : undefined;
+    const startImageId = p.firstFrame ? await uploadRef(provider, fs, p.firstFrame) : undefined;
+    const endImageId = p.lastFrame ? await uploadRef(provider, fs, p.lastFrame) : undefined;
     const referenceImageIds: string[] = [];
     for (const input of p.imageInputs) {
-      referenceImageIds.push(await uploadRef(provider, fs, input, p.bookId));
+      referenceImageIds.push(await uploadRef(provider, fs, input));
     }
     const toolName = p.veoModel === "veo-3.1-quality"
       ? "generate_google_flow_veo_3_1_quality_video"

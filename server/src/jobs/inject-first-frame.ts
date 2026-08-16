@@ -34,11 +34,11 @@ function outputContainer(path: string): "mov" | "mp4" {
   return extname(path).toLowerCase() === ".mov" ? "mov" : "mp4";
 }
 
-export function buildInjectFirstFrameFilter(width: number, height: number): string {
+function buildInjectFirstFrameFilter(width: number, height: number): string {
   return `[1:v:0]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},setsar=1[still];[0:v:0][still]overlay=0:0:eof_action=repeat:repeatlast=1:enable='eq(n\\,0)'[video]`;
 }
 
-export async function renderInjectedFirstFrame(
+async function renderInjectedFirstFrame(
   inputPath: string,
   imagePath: string,
   outputPath: string,
@@ -65,7 +65,7 @@ export async function renderInjectedFirstFrame(
   ], { signal });
 }
 
-export async function validateInjectedFirstFrame(
+async function validateInjectedFirstFrame(
   inputPath: string,
   outputPath: string,
   signal?: AbortSignal,
@@ -107,7 +107,6 @@ async function deleteIfPresent(
   fs: Engine,
   assetId: string,
   filename: string,
-  _bookId: string,
 ): Promise<void> {
   const result = await fs.files.delete(assetId, filename);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
@@ -126,11 +125,9 @@ async function replaceAssetFile(
   assetId: string,
   targetFilename: string,
   outputPath: string,
-  bookId: string,
 ): Promise<void> {
   await replaceArtifactFileFromPath(
     fs,
-    bookId,
     assetId,
     targetFilename,
     outputPath,
@@ -142,7 +139,6 @@ async function refreshFinalThumbnail(
   assetId: string,
   assetDir: string,
   targetFilename: string,
-  bookId: string,
   signal: AbortSignal,
 ): Promise<void> {
   const tempDir = await mkdtemp(join(tmpdir(), "videocity-inject-first-frame-"));
@@ -186,7 +182,6 @@ export function registerInjectFirstFrameJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      bookId,
       assetId,
       assetDir,
       ctx,
@@ -209,7 +204,7 @@ export function registerInjectFirstFrameJob(fs: Engine): void {
             ctx.signal,
           );
           await validateInjectedFirstFrame(inputPath, outputPath, ctx.signal);
-          await replaceAssetFile(fs, assetId, targetFilename, outputPath, bookId);
+          await replaceAssetFile(fs, assetId, targetFilename, outputPath);
 
           if (isFinalAsset) {
             await refreshFinalThumbnail(
@@ -217,12 +212,11 @@ export function registerInjectFirstFrameJob(fs: Engine): void {
               assetId,
               assetDir,
               targetFilename,
-              bookId,
               ctx.signal,
             );
           } else {
             for (const filename of STALE_VISUAL_DERIVATIVES) {
-              await deleteIfPresent(fs, assetId, filename, bookId);
+              await deleteIfPresent(fs, assetId, filename);
             }
           }
           await fs.history.recordOperation("inject_first_frame", assetId, {

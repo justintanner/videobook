@@ -1,6 +1,7 @@
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { nextNotebookHorizontalGenerationSlot } from './notebook-grid'
 import type { NotebookDocument, NotebookGridSlot } from 'videobook-engine'
+import { nonBlankStringValue, recordValue } from './value-decoders'
 
 export type NotebookSpeakCommandRun = {
   cellId: string
@@ -12,16 +13,6 @@ type NotebookToolCall = (
   tool: string,
   args: Record<string, unknown>,
 ) => Promise<unknown>
-
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null
-}
 
 async function deleteNotebookCell(
   callTool: NotebookToolCall,
@@ -37,8 +28,8 @@ async function deleteNotebookCell(
 }
 
 function cellIdFromUnknown(value: unknown): string | null {
-  const cell = objectValue(value)
-  return stringValue(cell?.id)
+  const cell = recordValue(value)
+  return nonBlankStringValue(cell?.id)
 }
 
 async function discoverSpeakOutputCellId(
@@ -47,7 +38,7 @@ async function discoverSpeakOutputCellId(
   notebookId: string,
   producerCellId: string,
 ): Promise<string | null> {
-  const notebook = objectValue(await callTool('get_notebook', {
+  const notebook = recordValue(await callTool('get_notebook', {
     book_id: bookId,
     notebook_id: notebookId,
   }).catch(() => null))
@@ -55,21 +46,21 @@ async function discoverSpeakOutputCellId(
   const cells = Array.isArray(notebook.cells) ? notebook.cells : []
   const edges = Array.isArray(notebook.edges) ? notebook.edges : []
   for (const entry of edges) {
-    const edge = objectValue(entry)
-    const source = stringValue(edge?.source)
-    const target = stringValue(edge?.target)
-    const targetInput = stringValue(edge?.targetInput ?? edge?.target_input)
+    const edge = recordValue(entry)
+    const source = nonBlankStringValue(edge?.source)
+    const target = nonBlankStringValue(edge?.target)
+    const targetInput = nonBlankStringValue(edge?.targetInput ?? edge?.target_input)
     if (source === producerCellId && targetInput === 'media' && target) {
       return target
     }
   }
   for (const entry of cells) {
-    const cell = objectValue(entry)
-    if (stringValue(cell?.type) !== 'audio') continue
-    const inputs = objectValue(cell?.inputs)
+    const cell = recordValue(entry)
+    if (nonBlankStringValue(cell?.type) !== 'audio') continue
+    const inputs = recordValue(cell?.inputs)
     // Only ever roll back the output that names THIS producer; matching on
     // mediaRole alone could target another speak pair's landed audio cell.
-    if (stringValue(inputs?.producerCellId) === producerCellId) {
+    if (nonBlankStringValue(inputs?.producerCellId) === producerCellId) {
       return cellIdFromUnknown(cell)
     }
   }
@@ -97,7 +88,7 @@ export async function materializeNotebookSpeakCommand(input: {
   let cellId: string | null = null
   let outputCellId: string | null = null
   try {
-    const created = objectValue(await input.callTool('create_notebook_cell', {
+    const created = recordValue(await input.callTool('create_notebook_cell', {
       book_id: input.bookId,
       notebook_id: input.document.id,
       ...(input.expectedRevision
@@ -113,9 +104,9 @@ export async function materializeNotebookSpeakCommand(input: {
         },
       },
     }))
-    cellId = stringValue(created?.id)
-    outputCellId = stringValue(objectValue(created?.output_cell)?.id)
-    const cellAddress = stringValue(created?.address) ?? notebookGridTag(slot)
+    cellId = nonBlankStringValue(created?.id)
+    outputCellId = nonBlankStringValue(recordValue(created?.output_cell)?.id)
+    const cellAddress = nonBlankStringValue(created?.address) ?? notebookGridTag(slot)
     if (!cellId) {
       throw new Error('The server did not return the Speak cell')
     }

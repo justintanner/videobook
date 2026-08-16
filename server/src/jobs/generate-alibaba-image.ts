@@ -29,14 +29,14 @@ export function registerGenerateAlibabaImageJob(fs: Engine): void {
   registerJobHandler("generate_alibaba_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId,
-      sourceImageIds, bookId, model, size, n, watermark, thinkingMode, seed,
+      sourceImageIds, model, size, n, watermark, thinkingMode, seed,
     } = payload as GenerateAlibabaImagePayload;
 
     const apiKey = requireApiKey("DASHSCOPE_API_KEY");
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, bookId, model));
+      uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, model));
     }
 
     const provider = createAlibaba({ apiKey, timeout: 120_000 });
@@ -87,14 +87,14 @@ export function registerGenerateAlibabaImageProJob(fs: Engine): void {
   registerJobHandler("generate_alibaba_image_pro", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId,
-      sourceImageIds, bookId, size, n, watermark, thinkingMode, seed,
+      sourceImageIds, size, n, watermark, thinkingMode, seed,
     } = payload as GenerateAlibabaImagePayload;
 
     const apiKey = requireApiKey("DASHSCOPE_API_KEY");
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, bookId, "wan2.7-image-pro"));
+      uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, "wan2.7-image-pro"));
     }
 
     const provider = createAlibaba({ apiKey, timeout: 120_000 });

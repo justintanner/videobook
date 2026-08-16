@@ -4,11 +4,10 @@ import type { Engine } from "videobook-engine";
 // the buffer for callers that need it (e.g. for content-hash provenance).
 // `options.kind` only changes the error-message wording.
 export async function downloadUrlIntoAsset(
-  fs: Engine,
+  engine: Engine,
   url: string,
   assetId: string,
   filename: string,
-  bookId: string,
   options: { kind?: string; fetchInit?: RequestInit } = {},
 ): Promise<Buffer> {
   const response = await fetch(url, options.fetchInit);
@@ -18,8 +17,7 @@ export async function downloadUrlIntoAsset(
     );
   }
   const buffer = Buffer.from(await response.arrayBuffer());
-  const written = await fs.files.write(assetId, filename, buffer
-  );
+  const written = await engine.files.write(assetId, filename, buffer);
   if (!written.ok) {
     throw new Error(
       `Failed to persist ${options.kind ?? "file"}: ${written.error.message}`,

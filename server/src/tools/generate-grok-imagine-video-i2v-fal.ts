@@ -33,7 +33,7 @@ export function generateGrokImagineVideoI2vFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageRefs(fs, [first_frame_ref], book_id);
+      const resolved = await resolveImageRefs(fs, [first_frame_ref]);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame] = resolved.inputs;
