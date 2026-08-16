@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 export interface PreviewAudio {
   play: () => Promise<void>
   pause: () => void
-  onended: (() => void) | null
+  onended: ((ev: Event) => unknown) | null
 }
 
 export type CreatePreviewAudio = (url: string) => PreviewAudio
