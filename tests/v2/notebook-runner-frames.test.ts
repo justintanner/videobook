@@ -151,7 +151,7 @@ describe("notebook runner frames and concat", () => {
     });
   });
 
-  it("ignores Extract Frame actions as generation image sources", () => {
+  it("accepts Extract Frame cells as generation image sources", () => {
     const extractFrame = {
       id: "019f0000-0000-7000-8000-000000000030",
       type: "extract_frame" as const,
@@ -202,7 +202,10 @@ describe("notebook runner frames and concat", () => {
     } as unknown as ToolDef;
 
     expect(modelArgs(definition, document, generate, "book-id").image_refs)
-      .toEqual([`@${image.outputArtifactId}`]);
+      .toEqual([
+        `@${extractFrame.outputArtifactId}`,
+        `@${image.outputArtifactId}`,
+      ]);
   });
 
   it("maps first_frame and last_frame image cells into Seedance payload fields", async () => {
@@ -377,14 +380,9 @@ describe("notebook runner frames and concat", () => {
       operation: "extract_audio",
       tool: "ffmpeg",
     });
-    const audio = engine.notebooks.createCell({
-      type: "audio",
-      label: "Scene audio",
-      slot: { row: 4, column: 2 },
-    });
     const document: NotebookDocument = {
       ...notebook.value,
-      cells: [source, split, video, firstFrame, lastFrame, extractAudio, audio],
+      cells: [source, split, video, firstFrame, lastFrame, extractAudio],
       edges: [
         engine.notebooks.createEdge({
           source: source.id,
@@ -410,11 +408,6 @@ describe("notebook runner frames and concat", () => {
           source: video.id,
           target: extractAudio.id,
           targetInput: "video",
-        }),
-        engine.notebooks.createEdge({
-          source: extractAudio.id,
-          target: audio.id,
-          targetInput: "media",
         }),
       ],
     };
@@ -459,7 +452,9 @@ describe("notebook runner frames and concat", () => {
       pendingExtractAudio,
     );
     const completedAudio = completedExtractAudio.document.cells.find((cell) =>
-      cell.id === audio.id);
+      cell.id === extractAudio.id);
+    expect(completedExtractAudio.document.cells.some((cell) =>
+      cell.type === "audio")).toBe(false);
     expect(completedAudio?.outputArtifactId).toBe(
       completedExtractAudio.outputArtifactId,
     );
@@ -501,7 +496,7 @@ describe("notebook runner frames and concat", () => {
       extractAudioRerun,
     );
     const rerunAudio = rerun.document.cells.find((cell) =>
-      cell.id === audio.id);
+      cell.id === extractAudio.id);
     expect(rerun.outputArtifactId).not.toBe(
       completedExtractAudio.outputArtifactId,
     );
@@ -512,7 +507,7 @@ describe("notebook runner frames and concat", () => {
     ]);
   }, 90_000);
 
-  it("stacks matching frame extractions and separates different selections", async () => {
+  it("lands extract_frame artifacts on the extract cell itself", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-extract-frame-"));
     engine = createEngine({ rootDir, initialBookName: "runner-extract-frame" });
     await engine.ready;
@@ -605,39 +600,28 @@ describe("notebook runner frames and concat", () => {
     };
 
     const first = await runConfigured("first");
-    const firstOutputEdges = first.document.edges.filter((edge) =>
-      edge.source === extractFrame.id && edge.targetInput === "media");
-    expect(firstOutputEdges).toHaveLength(1);
-    const firstImage = first.document.cells.find((cell) =>
-      cell.id === firstOutputEdges[0]!.target);
-    expect(firstImage).toMatchObject({
-      label: "Extract source frame first frame",
-      // Continues the source video lane: below extract_frame and the occupied
-      // placeholder at (2,0) → first free vertical slot is (3,0).
-      slot: { row: 3, column: 0 },
+    const firstExtract = first.document.cells.find((cell) =>
+      cell.id === extractFrame.id);
+    expect(firstExtract).toMatchObject({
+      type: "extract_frame",
       outputArtifactId: first.outputArtifactId,
       inputs: {
-        mediaRole: "extract-frame-output",
-        producerCellId: extractFrame.id,
-        sourceCellId: source.id,
-        frameSelectionKey: `${source.id}:first:frame`,
         frameMode: "first",
         atSeconds: 0,
         outputVersionArtifactIds: [first.outputArtifactId],
         state: "completed",
       },
     });
-    const imageId = firstImage!.id;
-    expect(firstOutputEdges).toEqual([
-      expect.objectContaining({
-        target: imageId,
-      }),
-    ]);
+    expect(first.document.edges.filter((edge) =>
+      edge.source === extractFrame.id && edge.targetInput === "media"))
+      .toHaveLength(0);
+    expect(first.document.cells.filter((cell) => cell.type === "image"))
+      .toHaveLength(1);
 
     const repeatedFirst = await runConfigured("first");
-    const repeatedFirstImage = repeatedFirst.document.cells.find((cell) =>
-      cell.id === imageId);
-    expect(repeatedFirstImage).toMatchObject({
+    const repeatedFirstExtract = repeatedFirst.document.cells.find((cell) =>
+      cell.id === extractFrame.id);
+    expect(repeatedFirstExtract).toMatchObject({
       outputArtifactId: repeatedFirst.outputArtifactId,
       inputs: {
         frameMode: "first",
@@ -649,55 +633,39 @@ describe("notebook runner frames and concat", () => {
     });
 
     const timed = await runConfigured("time", 1.25);
-    const timedImage = timed.document.cells.find((cell) =>
-      cell.type === "image"
-      && cell.inputs?.producerCellId === extractFrame.id
-      && cell.inputs?.frameMode === "time");
-    expect(timedImage).toMatchObject({
+    const timedExtract = timed.document.cells.find((cell) =>
+      cell.id === extractFrame.id);
+    expect(timedExtract).toMatchObject({
       outputArtifactId: timed.outputArtifactId,
       inputs: {
         frameMode: "time",
         timestampSeconds: 1.25,
-        frameSelectionKey: `${source.id}:time:1.25`,
         atSeconds: 1.25,
-        outputVersionArtifactIds: [timed.outputArtifactId],
+        outputVersionArtifactIds: [
+          first.outputArtifactId,
+          repeatedFirst.outputArtifactId,
+          timed.outputArtifactId,
+        ],
       },
     });
-    expect(timedImage?.id).not.toBe(imageId);
-
-    const repeatedTimed = await runConfigured("time", 1.25);
-    const repeatedTimedImage = repeatedTimed.document.cells.find((cell) =>
-      cell.id === timedImage?.id);
-    expect(repeatedTimedImage?.inputs?.outputVersionArtifactIds).toEqual([
-      timed.outputArtifactId,
-      repeatedTimed.outputArtifactId,
-    ]);
 
     const last = await runConfigured("last");
-    const lastImage = last.document.cells.find((cell) =>
-      cell.type === "image"
-      && cell.inputs?.producerCellId === extractFrame.id
-      && cell.inputs?.frameMode === "last");
-    expect(lastImage?.outputArtifactId).toBe(last.outputArtifactId);
-    expect(Number(lastImage?.inputs?.atSeconds)).toBeGreaterThan(2.9);
-    expect(lastImage?.inputs?.frameSelectionKey)
-      .toBe(`${source.id}:last:frame`);
-    expect(lastImage?.inputs?.outputVersionArtifactIds).toEqual([
-      last.outputArtifactId,
-    ]);
-    expect(lastImage?.id).not.toBe(imageId);
-    expect(lastImage?.id).not.toBe(timedImage?.id);
-    const preservedFirstImage = last.document.cells.find((cell) =>
-      cell.id === imageId);
-    expect(preservedFirstImage?.inputs?.outputVersionArtifactIds).toEqual([
+    const lastExtract = last.document.cells.find((cell) =>
+      cell.id === extractFrame.id);
+    expect(lastExtract?.outputArtifactId).toBe(last.outputArtifactId);
+    expect(Number(lastExtract?.inputs?.atSeconds)).toBeGreaterThan(2.9);
+    expect(lastExtract?.inputs?.frameMode).toBe("last");
+    expect(lastExtract?.inputs?.outputVersionArtifactIds).toEqual([
       first.outputArtifactId,
       repeatedFirst.outputArtifactId,
+      timed.outputArtifactId,
+      last.outputArtifactId,
     ]);
     expect(last.document.cells.filter((cell) => cell.type === "image"))
-      .toHaveLength(4);
+      .toHaveLength(1);
     expect(last.document.edges.filter((edge) =>
       edge.source === extractFrame.id && edge.targetInput === "media"))
-      .toHaveLength(3);
+      .toHaveLength(0);
     expect(last.document.cells.some((cell) => cell.type === "audio")).toBe(false);
 
     const manifest = await engine.files.manifest(last.outputArtifactId);
@@ -757,24 +725,14 @@ describe("notebook runner frames and concat", () => {
       operation: "extract_audio",
       tool: "ffmpeg",
     });
-    const output = engine.notebooks.createCell({
-      type: "audio",
-      label: "Extracted audio",
-      slot: { row: 2, column: 0 },
-    });
     const document: NotebookDocument = {
       ...notebook.value,
-      cells: [source, extractAudio, output],
+      cells: [source, extractAudio],
       edges: [
         engine.notebooks.createEdge({
           source: source.id,
           target: extractAudio.id,
           targetInput: "video",
-        }),
-        engine.notebooks.createEdge({
-          source: extractAudio.id,
-          target: output.id,
-          targetInput: "media",
         }),
       ],
     };
@@ -790,8 +748,9 @@ describe("notebook runner frames and concat", () => {
     const read = engine.notebooks.read(document.id);
     expect(read.ok).toBe(true);
     if (!read.ok) return;
-    expect(read.value.cells.find((cell) => cell.id === output.id)
-      ?.outputArtifactId).toBeUndefined();
+    expect(read.value.execution?.[extractAudio.id]?.status).toBe("error");
+    expect(read.value.cells.some((cell) => cell.type === "audio" && cell.id !== source.id))
+      .toBe(false);
   });
 
   it("concats ordered video cells into a playable H264 and AAC output", async () => {

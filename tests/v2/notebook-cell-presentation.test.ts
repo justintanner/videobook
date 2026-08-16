@@ -9,6 +9,7 @@ import {
   notebookCellInspectorActionLabel,
   notebookCellIsActiveStatus,
   notebookCellMediaCaption,
+  notebookCellPresentsMedia,
   notebookCellRunObservation,
   notebookCellStatusLabel,
   notebookCellSupportsExecution,
@@ -46,6 +47,29 @@ describe('notebook cell presentation', () => {
       tool: 'ffmpeg',
       outputArtifactId: 'audio-artifact',
     }, 'completed')).toEqual({ disabled: false, label: 'Re-run' })
+    expect(notebookCellSupportsExecution({
+      type: 'extract_frame',
+      operation: 'extract_frame',
+      tool: 'ffmpeg',
+      outputArtifactId: 'frame-artifact',
+    })).toBe(true)
+    expect(notebookCellPresentsMedia({
+      type: 'extract_audio',
+      operation: 'extract_audio',
+      tool: 'ffmpeg',
+    })).toBe(false)
+    expect(notebookCellPresentsMedia({
+      type: 'extract_audio',
+      operation: 'extract_audio',
+      tool: 'ffmpeg',
+      outputArtifactId: 'audio-artifact',
+    })).toBe(true)
+    expect(notebookCellPresentsMedia({
+      type: 'extract_frame',
+      operation: 'extract_frame',
+      tool: 'ffmpeg',
+      outputArtifactId: 'frame-artifact',
+    })).toBe(true)
     expect(notebookCellActionPresentation({
       type: 'split_video',
       operation: 'split_range',

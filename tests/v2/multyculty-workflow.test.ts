@@ -153,7 +153,6 @@ describe("Multyculty workflow fixture", () => {
       "analyze",
       "analysis",
       "extract_audio",
-      "audio",
       "split_video",
       "image",
       "prompt",
@@ -167,16 +166,14 @@ describe("Multyculty workflow fixture", () => {
       cell.inputs?.workflowRole === "analysis-output");
     const sourceExtractAudio = first.cells.find((cell) =>
       cell.inputs?.workflowRole === "source-extract-audio");
-    const audio = first.cells.find((cell) => cell.inputs?.workflowRole === "source-audio");
     const assembly = first.cells.find((cell) => cell.inputs?.workflowRole === "assembly");
     expect(source).toBeTruthy();
     expect(analysis).toBeTruthy();
     expect(analysisOutput).toBeTruthy();
     expect(sourceExtractAudio).toBeTruthy();
-    expect(audio).toBeTruthy();
     expect(assembly).toBeTruthy();
-    expect(first.cells).toHaveLength(22);
-    expect(first.edges).toHaveLength(37);
+    expect(first.cells).toHaveLength(19);
+    expect(first.edges).toHaveLength(34);
     expect(first.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
     expect(first.cells.filter((cell) => cell.operation === "extract_audio")).toHaveLength(3);
     expect(first.cells.filter((cell) =>
@@ -187,7 +184,7 @@ describe("Multyculty workflow fixture", () => {
       cell.inputs?.workflowRole?.toString().startsWith("frame-")).every((cell) =>
       cell.operation === undefined && cell.tool === undefined)).toBe(true);
     expect(first.cells.filter((cell) =>
-      cell.inputs?.workflowRole?.toString().startsWith("scene-audio-"))).toHaveLength(2);
+      cell.inputs?.workflowRole?.toString().startsWith("scene-audio-"))).toHaveLength(0);
     expect(first.cells.filter((cell) => cell.operation === "rewrite_prompt")).toHaveLength(2);
     expect(first.cells.filter((cell) => cell.operation === "image_to_video")).toHaveLength(2);
     expect(first.cells.filter((cell) => cell.operation === "concat_video")).toHaveLength(1);
@@ -270,7 +267,7 @@ describe("Multyculty workflow fixture", () => {
       expect.objectContaining({ kind: "camera_cut", timestampSeconds: 15 }),
       expect.objectContaining({ kind: "source_end", timestampSeconds: 30 }),
     ]);
-    expect(audio?.slot).toEqual({ row: 2, column: 4 });
+    expect(sourceExtractAudio?.slot).toEqual({ row: 1, column: 4 });
     const featureColumns = [1, 5];
     for (let ordinal = 1; ordinal <= 2; ordinal += 1) {
       const column = featureColumns[ordinal - 1];
@@ -289,9 +286,6 @@ describe("Multyculty workflow fixture", () => {
       expect(first.cells.find((cell) =>
         cell.inputs?.workflowRole === `scene-extract-audio-${ordinal}`)?.slot)
         .toEqual({ row: 5, column: column + 1 });
-      expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `scene-audio-${ordinal}`)?.slot)
-        .toEqual({ row: 6, column: column + 1 });
       expect(first.cells.find((cell) =>
         cell.inputs?.workflowRole === `prompt-${ordinal}`)?.slot)
         .toEqual({ row: 6, column });
@@ -318,8 +312,8 @@ describe("Multyculty workflow fixture", () => {
     }));
     expect(first.edges).toContainEqual(expect.objectContaining({
       source: sourceExtractAudio?.id,
-      target: audio?.id,
-      targetInput: "media",
+      target: assembly?.id,
+      targetInput: "audio",
     }));
     for (let ordinal = 1; ordinal <= 2; ordinal += 1) {
       const split = first.cells.find((cell) =>
@@ -328,8 +322,6 @@ describe("Multyculty workflow fixture", () => {
         cell.inputs?.workflowRole === `scene-video-${ordinal}`);
       const extractAudio = first.cells.find((cell) =>
         cell.inputs?.workflowRole === `scene-extract-audio-${ordinal}`);
-      const sceneAudio = first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `scene-audio-${ordinal}`);
       expect(first.edges).toContainEqual(expect.objectContaining({
         source: source?.id,
         target: split?.id,
@@ -364,13 +356,8 @@ describe("Multyculty workflow fixture", () => {
         target: extractAudio?.id,
         targetInput: "video",
       }));
-      expect(first.edges).toContainEqual(expect.objectContaining({
-        source: extractAudio?.id,
-        target: sceneAudio?.id,
-        targetInput: "media",
-      }));
-      expect(sceneAudio?.type).toBe("audio");
-      expect(sceneAudio?.outputArtifactId).toBe(extractAudio?.outputArtifactId);
+      expect(extractAudio?.type).toBe("extract_audio");
+      expect(extractAudio?.outputArtifactId).toBeTruthy();
       const prompt = first.cells.find((cell) =>
         cell.inputs?.workflowRole === `prompt-${ordinal}`);
       const animation = first.cells.find((cell) =>
@@ -387,7 +374,7 @@ describe("Multyculty workflow fixture", () => {
       }));
     }
     expect(first.edges).toContainEqual(expect.objectContaining({
-      source: audio?.id,
+      source: sourceExtractAudio?.id,
       target: assembly?.id,
       targetInput: "audio",
     }));
@@ -441,10 +428,10 @@ describe("Multyculty workflow fixture", () => {
     const rerunLayout = rerun.cells
       .map((cell) => ({ id: cell.id, slot: cell.slot }))
       .sort((left, right) => left.id.localeCompare(right.id));
-    expect(rerun.cells).toHaveLength(22);
+    expect(rerun.cells).toHaveLength(19);
     expect(rerunLayout).toEqual(firstLayout);
     expect(new Set(rerun.cells.map((cell) =>
-      `${cell.slot.row}:${cell.slot.column}`)).size).toBe(22);
+      `${cell.slot.row}:${cell.slot.column}`)).size).toBe(19);
     const rerunWritten = await engine.notebooks.write(rerun);
     expect(rerunWritten.ok).toBe(true);
     const downgraded = await engine.notebooks.write({
@@ -453,8 +440,8 @@ describe("Multyculty workflow fixture", () => {
     });
     expect(downgraded.ok).toBe(true);
     const second = await seedMultycultyWorkflow(engine);
-    expect(second.cells).toHaveLength(22);
-    expect(second.edges).toHaveLength(37);
+    expect(second.cells).toHaveLength(19);
+    expect(second.edges).toHaveLength(34);
     expect(second.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
     expect(second.cells.find((cell) => cell.inputs?.workflowRole === "source")?.id)
       .not.toBe(source?.id);

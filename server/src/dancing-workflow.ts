@@ -15,15 +15,13 @@ import type { BookManager } from "./book-manager.js";
 import { probeImage } from "./image.js";
 import { notebookCellFingerprint } from "./jobs/run-notebook.js";
 import { probeVideo, runFfmpeg } from "./ffmpeg.js";
-import { extractFrameSelectionKey } from "./notebook-cell-outputs.js";
-
 export type DancingFixtureOptions = {
   sourceVideoPath?: string;
   kittenImagePath?: string;
 };
 
 export const DANCING_FIXTURE_OWNER = "dancing-default";
-export const DANCING_FIXTURE_VERSION = 4;
+export const DANCING_FIXTURE_VERSION = 5;
 export const DANCING_SOURCE_URL = "https://www.youtube.com/watch?v=8GwZveBYRJI";
 export const DANCING_MOTION_DURATION_SECONDS = 10;
 
@@ -40,7 +38,6 @@ const MOTION_PROMPT = "Two kittens perform the same synchronized dance as the re
 const FIXTURE_ROLES = [
   "download-video",
   "extract-first-frame",
-  "first-frame-output",
   "kittens-freeway",
   "kittens-freeway-output",
   "kling-motion-control",
@@ -74,7 +71,7 @@ function isCurrentFixture(document: NotebookDocument): boolean {
   return fixtureRecord(document)?.version === DANCING_FIXTURE_VERSION
     && cells.length === FIXTURE_ROLES.length
     && FIXTURE_ROLES.every((role) => roles.has(role))
-    && edges.length === 7
+    && edges.length === 6
     && cells.filter((cell) => cell.outputArtifactId).every((cell) =>
       document.execution?.[cell.id]?.fingerprint
         === notebookCellFingerprint(document, cell));
@@ -374,22 +371,6 @@ export async function seedDancingWorkflow(
       state: "completed",
     },
   });
-  const frame = engine.notebooks.createCell({
-    type: "image",
-    label: "Dancing first frame",
-    slot: { row: 2, column: 0 },
-    outputArtifactId: frameArtifact.artifactId,
-    inputs: {
-      ...ownedInputs("first-frame-output"),
-      atSeconds: 0.1,
-      frameMode: "first",
-      mediaRole: "extract-frame-output",
-      producerCellId: extract.id,
-      sourceCellId: source.id,
-      frameSelectionKey: extractFrameSelectionKey(source.id, "first"),
-      state: "completed",
-    },
-  });
   const kittens = engine.notebooks.createCell({
     type: "generate_image",
     label: "Generate kittens freeway image",
@@ -461,11 +442,6 @@ export async function seedDancingWorkflow(
     }),
     engine.notebooks.createEdge({
       source: extract.id,
-      target: frame.id,
-      targetInput: "media",
-    }),
-    engine.notebooks.createEdge({
-      source: frame.id,
       target: kittens.id,
       targetInput: "input",
     }),
@@ -500,7 +476,6 @@ export async function seedDancingWorkflow(
       ...preservedCells,
       source,
       extract,
-      frame,
       kittens,
       kittenOutput,
       motion,

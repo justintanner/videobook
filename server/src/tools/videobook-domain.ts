@@ -18,8 +18,6 @@ import { z } from "zod";
 import { v7 as uuidv7 } from "uuid";
 import type { BookManager } from "../book-manager.js";
 import {
-  ensureExtractAudioOutput,
-  ensureExtractFrameImageOutput,
   ensureGenerateAudioOutput,
   ensureGenerateImageOutput,
   ensureGenerateVideoOutput,
@@ -84,10 +82,11 @@ function notebookConnectionError(
   if (!source) return `Source cell not found: ${sourceId}`;
   if (!target) return `Target cell not found: ${targetId}`;
   if (
-    source.type === "extract_frame"
-    && (target.type !== "image" || targetInput !== "media")
+    target.type === "image"
+    && targetInput !== "media"
+    && targetInput !== "segment"
   ) {
-    return "Extract frame actions can connect only to their Image result cell";
+    return "Image cells accept media or segment inputs";
   }
   if (target.type === "analysis") {
     if (targetInput !== "result") {
@@ -1371,16 +1370,6 @@ export function videobookDomainDefs(
               cells: [...notebook.cells, cell],
             }, cell.id);
             cell = withCell.cells.find((candidate) => candidate.id === cell.id)!;
-            if (cell.type === "extract_audio") {
-              const ensured = ensureExtractAudioOutput(
-                engine,
-                withCell,
-                cell.id,
-              );
-              outputCell = ensured.outputCell;
-              outputEdge = ensured.outputEdge;
-              return ensured.document;
-            }
             if (cell.type === "analyze") {
               const cells = withCell.cells;
               outputCell = engine.notebooks.createCell({
@@ -1398,16 +1387,6 @@ export function videobookDomainDefs(
                 target: outputCell.id,
                 targetInput: "result",
               });
-            }
-            if (cell.type === "extract_frame") {
-              const ensured = ensureExtractFrameImageOutput(
-                engine,
-                withCell,
-                cell.id,
-              );
-              outputCell = ensured.outputCell;
-              outputEdge = ensured.outputEdge;
-              return ensured.document;
             }
             if (cell.type === "generate_video") {
               const ensured = ensureGenerateVideoOutput(

@@ -160,7 +160,7 @@ describe('notebook audio commands', () => {
       sourceCellId: source.id,
       sourceAddress: '@a1',
       actionAddress: '@a3',
-      outputCellId: expect.any(String),
+      outputCellId: firstRun.actionCellId,
     })
     await waitForJob(firstRun.jobId)
 
@@ -170,37 +170,28 @@ describe('notebook audio commands', () => {
     const completed = completedResult.value
     const action = completed.cells.find((cell) =>
       cell.id === firstRun.actionCellId)
-    const output = completed.cells.find((cell) =>
-      cell.id === firstRun.outputCellId)
     expect(action).toMatchObject({
       type: 'extract_audio',
       label: 'Extract audio',
       slot: { row: 0, column: 2 },
       operation: 'extract_audio',
-    })
-    expect(output).toMatchObject({
-      type: 'audio',
-      slot: { row: 0, column: 3 },
       outputArtifactId: expect.any(String),
-      inputs: {
-        mediaRole: 'extract-audio-output',
-        producerCellId: firstRun.actionCellId,
+      inputs: expect.objectContaining({
         state: 'completed',
-      },
+      }),
     })
+    expect(completed.cells.some((cell) => cell.type === 'audio')).toBe(false)
     expect(completed.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         source: source.id,
         target: firstRun.actionCellId,
         targetInput: 'video',
       }),
-      expect.objectContaining({
-        source: firstRun.actionCellId,
-        target: firstRun.outputCellId,
-        targetInput: 'media',
-      }),
     ]))
-    const manifest = await engine.files.manifest(output!.outputArtifactId!)
+    expect(completed.edges.some((edge) =>
+      edge.source === firstRun.actionCellId && edge.targetInput === 'media'))
+      .toBe(false)
+    const manifest = await engine.files.manifest(action!.outputArtifactId!)
     expect(manifest.ok).toBe(true)
     expect(manifest.ok && manifest.value.files.some((file) =>
       file.name === 'original.m4a')).toBe(true)
@@ -214,7 +205,7 @@ describe('notebook audio commands', () => {
     })
     expect(secondRun).toMatchObject({
       actionCellId: firstRun.actionCellId,
-      outputCellId: firstRun.outputCellId,
+      outputCellId: firstRun.actionCellId,
       reusedAction: true,
     })
     await waitForJob(secondRun.jobId)

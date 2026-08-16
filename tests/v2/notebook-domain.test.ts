@@ -455,47 +455,33 @@ describe('v2 notebook domain tools', () => {
     const sourceVideo = await createCell('video', 'vid-source', 0, 0)
     const sourceAudio = await createCell('audio', 'aud-source', 0, 1)
     const extractAudio = await createCell('extract_audio', 'extract-audio-source', 1, 0)
-    const audioOutput = extractAudio.output_cell!
     const splitVideo = await createCell('split_video', 'split-video-source', 1, 2)
     const videoOutput = await createCell('video', 'vid-output', 2, 1)
     const extractFrame = await createCell('extract_frame', 'extract-frame-source', 1, 3)
-    const imageOutput = extractFrame.output_cell!
     const invalidImage = await createCell('image', 'img-invalid', 3, 2)
 
     expect(extractAudio.operation).toBe('extract_audio')
-    expect(audioOutput).toMatchObject({
-      type: 'audio',
-      label: 'extract-audio-source output',
-      address: '@b2',
-      slot: { row: 1, column: 1 },
-      inputs: {
-        mediaRole: 'extract-audio-output',
-        producerCellId: extractAudio.id,
-        state: 'pending',
-      },
-    })
-    expect(extractAudio.output_edge).toMatchObject({
-      source: extractAudio.id,
-      target: audioOutput.id,
-      targetInput: 'media',
-    })
+    expect(extractAudio.output_cell).toBeUndefined()
+    expect(extractAudio.output_edge).toBeUndefined()
     expect(extractFrame.operation).toBe('extract_frame')
-    expect(imageOutput).toMatchObject({
-      type: 'image',
-      label: 'extract-frame-source first frame',
-      address: '@b5',
-      slot: { row: 1, column: 4 },
-      inputs: {
-        mediaRole: 'extract-frame-output',
-        producerCellId: extractFrame.id,
-        state: 'pending',
-      },
-    })
-    expect(extractFrame.output_edge).toMatchObject({
-      source: extractFrame.id,
-      target: imageOutput.id,
-      targetInput: 'media',
-    })
+    expect(extractFrame.output_cell).toBeUndefined()
+    expect(extractFrame.output_edge).toBeUndefined()
+    const createdNotebook = resultJson(await invoke('get_notebook', {
+      notebook_id: notebookId,
+    })) as {
+      cells: Array<{ id: string; type: string }>
+      edges: Array<{ source: string; target: string; targetInput: string }>
+    }
+    expect(createdNotebook.cells.filter((cell) =>
+      cell.id === extractAudio.id)).toEqual([
+      expect.objectContaining({ id: extractAudio.id, type: 'extract_audio' }),
+    ])
+    expect(createdNotebook.cells.filter((cell) => cell.type === 'audio')).toHaveLength(1)
+    expect(createdNotebook.cells.some((cell) =>
+      cell.type === 'image' && cell.id !== invalidImage.id)).toBe(false)
+    expect(createdNotebook.edges.some((edge) =>
+      (edge.source === extractAudio.id || edge.source === extractFrame.id)
+      && edge.targetInput === 'media')).toBe(false)
     expect(splitVideo.operation).toBe('split_range')
     const retypedAction = await invoke('update_notebook_cell', {
       notebook_id: notebookId,
@@ -568,20 +554,9 @@ describe('v2 notebook domain tools', () => {
     })
     expect(invalidExtractActionSource.isError).toBe(true)
     expect(invalidExtractActionSource.content[0]?.text).toContain(
-      'Image result cell',
+      'Image cells accept media or segment inputs',
     )
 
-    const beforeFrameModeChange = managed.value.engine.notebooks.read(notebookId)
-    expect(beforeFrameModeChange.ok).toBe(true)
-    if (!beforeFrameModeChange.ok) return
-    const preparedFrameModeChange = await managed.value.engine.notebooks.write({
-      ...beforeFrameModeChange.value,
-      execution: {
-        ...(beforeFrameModeChange.value.execution ?? {}),
-        [imageOutput.id]: { status: 'completed' },
-      },
-    })
-    expect(preparedFrameModeChange.ok).toBe(true)
     resultJson(await invoke('update_notebook_cell', {
       notebook_id: notebookId,
       cell_id: extractFrame.id,
@@ -593,7 +568,6 @@ describe('v2 notebook domain tools', () => {
       execution?: Record<string, { stale?: boolean }>
     }
     expect(changedFrameMode.execution?.[extractFrame.id]?.stale).toBe(true)
-    expect(changedFrameMode.execution?.[imageOutput.id]?.stale).not.toBe(true)
 
     const invalidOutput = await invoke('connect_notebook_cells', {
       notebook_id: notebookId,

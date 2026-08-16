@@ -352,6 +352,7 @@ export function generationInputKind(
   if (
     cell.type === 'image'
     || cell.type === 'generate_image'
+    || cell.type === 'extract_frame'
   ) return 'image'
   if (
     cell.type === 'video'

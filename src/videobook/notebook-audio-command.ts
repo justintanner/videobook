@@ -43,16 +43,6 @@ function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
-function audioOutputCellId(
-  document: NotebookDocument,
-  actionCellId: string,
-): string | null {
-  const outputId = document.edges.find((edge) =>
-    edge.source === actionCellId && edge.targetInput === 'media')?.target
-  return document.cells.find((cell) =>
-    cell.id === outputId && cell.type === 'audio')?.id ?? null
-}
-
 function matchingAction(
   document: NotebookDocument,
   sourceCellId: string,
@@ -94,9 +84,6 @@ export async function enqueueNotebookAudioCommand(input: {
   const existing = matchingAction(input.document, source.id)
   let actionCellId = existing?.id ?? null
   let actionAddress = existing ? notebookCellTag(existing) : null
-  let outputCellId = existing
-    ? audioOutputCellId(input.document, existing.id)
-    : null
 
   if (!actionCellId || !actionAddress) {
     const created = objectValue(await input.callTool('create_notebook_cell', {
@@ -116,7 +103,6 @@ export async function enqueueNotebookAudioCommand(input: {
     }))
     actionCellId = stringValue(created?.id)
     actionAddress = stringValue(created?.address)
-    outputCellId = stringValue(objectValue(created?.output_cell)?.id)
     if (!actionCellId || !actionAddress) {
       throw new Error('The server did not return the Extract Audio cell')
     }
@@ -146,7 +132,7 @@ export async function enqueueNotebookAudioCommand(input: {
   return {
     actionCellId,
     actionAddress,
-    outputCellId,
+    outputCellId: actionCellId,
     jobId,
     runId,
     reusedAction: existing !== null,

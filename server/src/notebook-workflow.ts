@@ -107,7 +107,6 @@ interface BranchCells {
   first: NotebookCell;
   last: NotebookCell;
   extractAudio: NotebookCell;
-  audio: NotebookCell;
   prompt: NotebookCell;
   animate: NotebookCell;
 }
@@ -117,7 +116,6 @@ type BranchChildKind =
   | "first"
   | "last"
   | "extract-audio"
-  | "audio"
   | "prompt"
   | "animate";
 
@@ -126,7 +124,6 @@ interface ExistingBranchCells {
   first?: NotebookCell;
   last?: NotebookCell;
   extractAudio?: NotebookCell;
-  audio?: NotebookCell;
   prompt?: NotebookCell;
   animate?: NotebookCell;
 }
@@ -210,7 +207,6 @@ function branchRole(
     | "first"
     | "last"
     | "extract-audio"
-    | "audio"
     | "prompt"
     | "animate",
   ordinal: number,
@@ -220,7 +216,6 @@ function branchRole(
   if (kind === "first") return `frame-first-${ordinal}`;
   if (kind === "last") return `frame-last-${ordinal}`;
   if (kind === "extract-audio") return `scene-extract-audio-${ordinal}`;
-  if (kind === "audio") return `scene-audio-${ordinal}`;
   return `${kind}-${ordinal}`;
 }
 
@@ -240,7 +235,6 @@ function matchesBranchChild(
     return cell.type === "image" && cell.inputs?.frameRole === "last";
   }
   if (kind === "extract-audio") return cell.type === "extract_audio";
-  if (kind === "audio") return cell.type === "audio";
   if (kind === "prompt") return cell.type === "prompt";
   return cell.type === "generate_video";
 }
@@ -299,13 +293,6 @@ function existingBranchCells(
       "extract-audio",
       ordinal,
     ),
-    audio: existingBranchCell(
-      document,
-      analysisCellId,
-      splitVideoCellId,
-      "audio",
-      ordinal,
-    ),
     prompt: existingBranchCell(
       document,
       analysisCellId,
@@ -330,7 +317,6 @@ function branchCellList(branch: BranchCells): NotebookCell[] {
     branch.first,
     branch.last,
     branch.extractAudio,
-    branch.audio,
     branch.prompt,
     branch.animate,
   ];
@@ -371,7 +357,6 @@ function allocateBranchSlots(
     first: allocate(branch.first),
     last: allocate(branch.last),
     extractAudio: allocate(branch.extractAudio),
-    audio: allocate(branch.audio),
     prompt: allocate(branch.prompt),
     animate: allocate(branch.animate),
   };
@@ -408,15 +393,14 @@ function branchEdges(
   add(branch.video, branch.first, "segment");
   add(branch.video, branch.last, "segment");
   add(branch.video, branch.extractAudio, "video");
-  add(branch.extractAudio, branch.audio, "media");
   add(analysis, branch.prompt, "analysis");
   add(branch.first, branch.prompt, "first_frame");
   add(branch.last, branch.prompt, "last_frame");
-  add(branch.audio, branch.prompt, "scene_audio");
+  add(branch.extractAudio, branch.prompt, "scene_audio");
   add(branch.prompt, branch.animate, "prompt");
   add(branch.first, branch.animate, "first_frame");
   add(branch.last, branch.animate, "last_frame");
-  add(branch.audio, branch.animate, "replace_audio");
+  add(branch.extractAudio, branch.animate, "replace_audio");
   add(branch.animate, assembly, `clip:${ordinal - 1}`);
   return edges;
 }
@@ -536,7 +520,6 @@ function createBranchCells(
   const column = featureColumn(shot);
   const videoRow = 3 + (shot.ordinal - 1) * 3;
   const extractionRow = videoRow + 1;
-  const audioRow = videoRow + 2;
   const promptRow = 3 + shotCount * 3;
   const commonInputs = {
     analysisCellId,
@@ -640,29 +623,6 @@ function createBranchCells(
       state: stateForDerivedCell(extractAudioExisting),
     },
   };
-  const audioExisting = existing.audio;
-  const audioBase = audioExisting ?? engine.notebooks.createCell({
-    type: "audio",
-    label: sceneLabel(shot.ordinal, "audio"),
-    slot: gridSlot(audioRow, column + 1),
-  });
-  const audio: NotebookCell = {
-    ...audioBase,
-    type: "audio",
-    label: audioBase.label,
-    slot: audioBase.slot,
-    provider: undefined,
-    model: undefined,
-    operation: undefined,
-    tool: undefined,
-    inputs: {
-      ...(audioBase.inputs ?? {}),
-      ...commonInputs,
-      workflowRole: branchRole("audio", shot.ordinal),
-      audioRole: "scene",
-      state: stateForDerivedCell(audioExisting),
-    },
-  };
   const promptExisting = existing.prompt;
   const promptBase = promptExisting ?? engine.notebooks.createCell({
     type: "prompt",
@@ -734,7 +694,6 @@ function createBranchCells(
     first,
     last,
     extractAudio,
-    audio,
     prompt,
     animate,
   };
@@ -1103,20 +1062,6 @@ export function buildSevenStageScaffold(
       },
     },
   );
-  const audio = baseCell(engine, roleCells.get("source-audio"), {
-    type: "audio",
-    label: "Source audio",
-    slot: scaffoldSlot("source-audio"),
-    provider: undefined,
-    model: undefined,
-    operation: undefined,
-    tool: undefined,
-    inputs: {
-      workflowRole: "source-audio",
-      audioRole: "continuous-source",
-      state: "pending",
-    },
-  });
   const assembly = baseCell(engine, roleCells.get("assembly"), {
     type: "concat",
     label: "Feature edit concat",
@@ -1135,12 +1080,12 @@ export function buildSevenStageScaffold(
     "analysis",
     "analysis-output",
     "source-extract-audio",
-    "source-audio",
     "assembly",
   ]);
-  const retiredRoles = new Set(
-    MULTYCULTY_FEATURES.map((feature) => `label-${feature.ordinal}`),
-  );
+  const retiredRoles = new Set([
+    "source-audio",
+    ...MULTYCULTY_FEATURES.map((feature) => `label-${feature.ordinal}`),
+  ]);
   const otherCells = document.cells.filter((cell) => {
     const role = roleOf(cell);
     return !role || (!baseRoles.has(role) && !retiredRoles.has(role));
@@ -1150,7 +1095,6 @@ export function buildSevenStageScaffold(
     analysis,
     analysisOutput,
     extractAudio,
-    audio,
     assembly,
     ...otherCells,
   ];
@@ -1159,7 +1103,6 @@ export function buildSevenStageScaffold(
     analysis.id,
     analysisOutput.id,
     extractAudio.id,
-    audio.id,
     assembly.id,
   ]);
   const retainedEdges = document.edges.filter((edge) => {
@@ -1174,7 +1117,6 @@ export function buildSevenStageScaffold(
     if (edge.target === extractAudio.id && edge.targetInput === "video") {
       return false;
     }
-    if (edge.target === audio.id && edge.targetInput === "media") return false;
     if (edge.target === assembly.id && edge.targetInput === "audio") return false;
     return true;
   });
@@ -1197,11 +1139,6 @@ export function buildSevenStageScaffold(
     }),
     engine.notebooks.createEdge({
       source: extractAudio.id,
-      target: audio.id,
-      targetInput: "media",
-    }),
-    engine.notebooks.createEdge({
-      source: audio.id,
       target: assembly.id,
       targetInput: "audio",
     }),

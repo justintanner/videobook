@@ -75,8 +75,8 @@ describe("Dancing workflow fixture", () => {
     });
     const owned = seeded.cells.filter((cell) =>
       cell.inputs?.fixtureOwner === DANCING_FIXTURE_OWNER);
-    expect(owned).toHaveLength(7);
-    expect(seeded.edges).toHaveLength(7);
+    expect(owned).toHaveLength(6);
+    expect(seeded.edges).toHaveLength(6);
     expect(seeded.fixture).toEqual(expect.objectContaining({
       version: DANCING_FIXTURE_VERSION,
       owner: DANCING_FIXTURE_OWNER,
@@ -88,8 +88,6 @@ describe("Dancing workflow fixture", () => {
       cell.inputs?.workflowRole === "download-video");
     const extract = owned.find((cell) =>
       cell.inputs?.workflowRole === "extract-first-frame");
-    const frame = owned.find((cell) =>
-      cell.inputs?.workflowRole === "first-frame-output");
     const kittens = owned.find((cell) =>
       cell.inputs?.workflowRole === "kittens-freeway");
     const kittenOutput = owned.find((cell) =>
@@ -107,7 +105,7 @@ describe("Dancing workflow fixture", () => {
       type: "extract_frame",
       operation: "extract_frame",
       tool: "ffmpeg",
-      outputArtifactId: frame?.outputArtifactId,
+      outputArtifactId: expect.any(String),
     }));
     expect(extract?.inputs).toEqual(expect.objectContaining({
       atSeconds: 0.1,
@@ -168,7 +166,7 @@ describe("Dancing workflow fixture", () => {
         targetInput: "video",
       }),
       expect.objectContaining({
-        source: frame?.id,
+        source: extract?.id,
         target: kittens?.id,
         targetInput: "input",
       }),
@@ -194,7 +192,9 @@ describe("Dancing workflow fixture", () => {
       }),
     ]));
     expect(seeded.edges.some((edge) =>
-      edge.source === extract?.id && edge.target === kittens?.id)).toBe(false);
+      edge.source === extract?.id
+      && edge.target === kittens?.id
+      && edge.targetInput === "media")).toBe(false);
     expect(seeded.edges.some((edge) =>
       edge.source === kittens?.id && edge.target === motion?.id)).toBe(false);
     if (!source?.outputArtifactId || !motion) {

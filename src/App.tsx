@@ -2218,11 +2218,14 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   )
   const playableVideo = data.asset?.type === 'video' || data.asset?.type === 'final'
   const playableAudio = data.asset?.type === 'audio'
-  const audioCell = data.kind === 'audio' || data.kind === 'generate_audio'
+  const audioCell = data.kind === 'audio'
+    || data.kind === 'generate_audio'
+    || data.kind === 'extract_audio'
   const visualMediaCell = data.kind === 'video'
     || data.kind === 'image'
     || data.kind === 'generate_video'
     || data.kind === 'generate_image'
+    || data.kind === 'extract_frame'
   const textCell = data.kind === 'prompt' || data.kind === 'analyze'
   const isTopRow = data.slot.row === 0
   const handleLayoutSignature = [
@@ -2315,6 +2318,8 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     || data.kind === 'image'
     || data.kind === 'video'
     || data.kind === 'analysis'
+    || data.kind === 'extract_audio'
+    || data.kind === 'extract_frame'
   ) && outputVersions.length > 1
   const activeOutputVersion = Math.max(
     1,
@@ -2499,6 +2504,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <div className="cell-copy cell-copy-audio">
             {playableAudio && mediaUrl ? <audio src={mediaUrl} controls preload="metadata" /> : null}
             {data.kind === 'audio'
+              || (data.kind === 'extract_audio' && data.outputArtifactId)
               ? <AudioCellSummary data={data} />
               : <span>{emptyCellLabel(data)}</span>}
           </div>

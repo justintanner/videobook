@@ -73,14 +73,6 @@ function frameMode(cell: NotebookCell): NotebookFrameMode | null {
   return null
 }
 
-function frameOutputCellId(
-  document: NotebookDocument,
-  actionCellId: string,
-): string | null {
-  return document.edges.find((edge) =>
-    edge.source === actionCellId && edge.targetInput === 'media')?.target ?? null
-}
-
 function matchingAction(
   document: NotebookDocument,
   sourceCellId: string,
@@ -172,9 +164,6 @@ export async function enqueueNotebookFrameCommand(input: {
   )
   let actionCellId = existing?.id ?? null
   let actionAddress = existing ? notebookCellTag(existing) : null
-  let outputCellId = existing
-    ? frameOutputCellId(input.document, existing.id)
-    : null
 
   if (!actionCellId || !actionAddress) {
     const created = objectValue(await input.callTool('create_notebook_cell', {
@@ -195,7 +184,6 @@ export async function enqueueNotebookFrameCommand(input: {
     }))
     actionCellId = stringValue(created?.id)
     actionAddress = stringValue(created?.address)
-    outputCellId = stringValue(objectValue(created?.output_cell)?.id)
     if (!actionCellId || !actionAddress) {
       throw new Error('The server did not return the Extract Frame cell')
     }
@@ -225,7 +213,7 @@ export async function enqueueNotebookFrameCommand(input: {
   return {
     actionCellId,
     actionAddress,
-    outputCellId,
+    outputCellId: actionCellId,
     jobId,
     runId,
     reusedAction: existing !== null,

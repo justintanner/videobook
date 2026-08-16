@@ -491,15 +491,14 @@ function compatibleSource(
     return source.type === 'analysis'
   }
   if (target.type === 'audio' && targetInput === 'media') {
-    return source.type === 'extract_audio'
+    return source.type === 'extract_audio' || source.type === 'generate_audio'
   }
   if (target.type === 'video' && targetInput === 'media') {
     return source.type === 'split_video'
   }
   if (target.type === 'image' && targetInput === 'media') {
-    return source.type === 'extract_frame'
+    return source.type === 'extract_frame' || source.type === 'generate_image'
   }
-  if (source.type === 'extract_frame') return false
   if (target.type === 'image' && targetInput === 'segment') {
     return source.type === 'video'
   }
@@ -2028,7 +2027,10 @@ function ExecutableCellInspector({
       : cell,
     status,
   )
-  const previewCell = cell.type === 'character' || generationCell
+  const previewCell = cell.type === 'character'
+    || generationCell
+    || cell.type === 'extract_audio'
+    || cell.type === 'extract_frame'
   const actionCell = isActionCellType(cell.type)
   const dirty = cellFormIsDirty(cell, draft, generationControls)
   const valid = cellFormIsValid(cell, draft)

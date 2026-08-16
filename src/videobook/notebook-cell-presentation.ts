@@ -199,10 +199,21 @@ export function isNotebookGenerationCellType(type: NotebookCellType): boolean {
   return generationCellTypes.has(type)
 }
 
+export function isNotebookExtractCellType(type: NotebookCellType): boolean {
+  return type === 'extract_audio' || type === 'extract_frame'
+}
+
 export function notebookCellSupportsExecution(cell: ActionCell): boolean {
   return cell.type !== 'analysis'
     && !isNotebookMediaCellType(cell.type)
     && Boolean(cell.operation ?? cell.tool ?? cell.model)
+}
+
+export function notebookCellPresentsMedia(cell: ActionCell): boolean {
+  if (!cell.outputArtifactId) return false
+  return isNotebookMediaCellType(cell.type)
+    || isNotebookExtractCellType(cell.type)
+    || isNotebookGenerationCellType(cell.type)
 }
 
 export function notebookCellIsActiveStatus(status: string): boolean {

@@ -204,36 +204,29 @@ describe('notebook frame commands', () => {
     const completed: NotebookDocument = completedResult.value
     const action = completed.cells.find((cell) =>
       cell.id === firstRun.actionCellId)
-    const output = completed.cells.find((cell) =>
-      cell.id === firstRun.outputCellId)
+    expect(firstRun.outputCellId).toBe(firstRun.actionCellId)
     expect(action).toMatchObject({
       type: 'extract_frame',
       label: 'First frame',
       operation: 'extract_frame',
-      inputs: { frameMode: 'first' },
+      outputArtifactId: expect.any(String),
+      inputs: expect.objectContaining({
+        frameMode: 'first',
+        state: 'completed',
+      }),
     })
+    expect(completed.cells.filter((cell) => cell.type === 'image')).toHaveLength(1)
     expect(completed.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         source: source.id,
         target: firstRun.actionCellId,
         targetInput: 'video',
       }),
-      expect.objectContaining({
-        source: firstRun.actionCellId,
-        target: firstRun.outputCellId,
-        targetInput: 'media',
-      }),
     ]))
-    expect(output).toMatchObject({
-      type: 'image',
-      outputArtifactId: expect.any(String),
-      inputs: {
-        frameMode: 'first',
-        sourceCellId: source.id,
-        state: 'completed',
-      },
-    })
-    const manifest = await engine.files.manifest(output!.outputArtifactId!)
+    expect(completed.edges.some((edge) =>
+      edge.source === firstRun.actionCellId && edge.targetInput === 'media'))
+      .toBe(false)
+    const manifest = await engine.files.manifest(action!.outputArtifactId!)
     expect(manifest.ok).toBe(true)
     expect(manifest.ok && manifest.value.files.some((file) =>
       file.name === 'original.jpg')).toBe(true)
@@ -247,7 +240,7 @@ describe('notebook frame commands', () => {
     })
     expect(secondRun).toMatchObject({
       actionCellId: firstRun.actionCellId,
-      outputCellId: firstRun.outputCellId,
+      outputCellId: firstRun.actionCellId,
       reusedAction: true,
     })
     await waitForJob(secondRun.jobId)
@@ -362,9 +355,9 @@ describe('notebook frame commands', () => {
         targetInput: 'video',
       }),
     ]))
-    const output = completed.cells.find((cell) =>
-      cell.id === firstRun.outputCellId)
-    expect(output?.outputArtifactId).toEqual(expect.any(String))
+    expect(firstRun.outputCellId).toBe(firstRun.actionCellId)
+    expect(action?.outputArtifactId).toEqual(expect.any(String))
+    expect(completed.cells.some((cell) => cell.type === 'image')).toBe(false)
 
     const otherTimestamp = await enqueueNotebookFrameCommand({
       actor: 'frame-time-test',

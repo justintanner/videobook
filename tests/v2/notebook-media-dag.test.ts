@@ -341,8 +341,6 @@ describe("notebook local media and analysis fan-out", () => {
         cell.inputs?.workflowRole === `scene-video-${ordinal}`);
       const extractAudio = first.cells.find((cell) =>
         cell.inputs?.workflowRole === `scene-extract-audio-${ordinal}`);
-      const audio = first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `scene-audio-${ordinal}`);
       expect(first.edges).toContainEqual(expect.objectContaining({
         source: analysisOutput.id,
         target: split?.id,
@@ -360,11 +358,12 @@ describe("notebook local media and analysis fan-out", () => {
       }));
       expect(first.edges).toContainEqual(expect.objectContaining({
         source: extractAudio?.id,
-        target: audio?.id,
-        targetInput: "media",
+        target: first.cells.find((cell) =>
+          cell.inputs?.workflowRole === `prompt-${ordinal}`)?.id,
+        targetInput: "scene_audio",
       }));
       expect(video?.operation).toBeUndefined();
-      expect(audio?.operation).toBeUndefined();
+      expect(extractAudio?.operation).toBe("extract_audio");
     }
     const order = topologicalOrder(first);
     expect(order.map((cell) => cell.id)).toContain(analysis.id);
@@ -449,7 +448,7 @@ describe("notebook local media and analysis fan-out", () => {
     const retainedBranch = staged.cells.filter((cell) =>
       cell.id === retainedSplit.id
       || cell.inputs?.splitVideoCellId === retainedSplit.id);
-    expect(retainedBranch).toHaveLength(8);
+    expect(retainedBranch).toHaveLength(7);
 
     const changed = await applyAnalysisResults(engine, staged, analysis.id, {
       rawOutput: {
@@ -481,7 +480,7 @@ describe("notebook local media and analysis fan-out", () => {
     const newBranch = changed.cells.filter((cell) =>
       cell.id === newSplit.id
       || cell.inputs?.splitVideoCellId === newSplit.id);
-    expect(newBranch).toHaveLength(8);
+    expect(newBranch).toHaveLength(7);
     const stagedIds = new Set(staged.cells.map((cell) => cell.id));
     expect(newBranch.every((cell) => !stagedIds.has(cell.id))).toBe(true);
     expect(newBranch.every((cell) =>

@@ -9,6 +9,7 @@ import {
   generationActionIsCompatible,
   generationActionLabel,
   generationConnectedInputs,
+  generationInputKind,
   generationInputAttachments,
   generationModeLabel,
   generationSelectionForAction,
@@ -401,7 +402,7 @@ describe('notebook generation actions', () => {
     }])
   })
 
-  it('uses extracted Image results instead of Extract Frame actions', () => {
+  it('treats extract_frame cells as image sources', () => {
     const extractFrame: NotebookCell = {
       ...emptyImageCell,
       id: '01900000-0000-7000-8000-000000000004',
@@ -415,11 +416,15 @@ describe('notebook generation actions', () => {
       target: emptyImageCell.id,
       targetInput: 'image',
     }
+    expect(generationInputKind(extractFrame)).toBe('image')
     expect(generationConnectedInputs(
       emptyImageCell.id,
       [emptyImageCell, extractFrame],
       [edge],
-    )).toEqual([])
+    )).toEqual([{
+      kind: 'image',
+      target: 'image',
+    }])
   })
 
   it('adds providers to every model label', () => {

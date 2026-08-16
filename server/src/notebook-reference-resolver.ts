@@ -57,7 +57,11 @@ interface CellMatch {
 }
 
 function mediaType(cell: NotebookCell): "image" | "video" | "audio" | null {
-  if (cell.type === "image" || cell.type === "generate_image") return "image";
+  if (
+    cell.type === "image"
+    || cell.type === "generate_image"
+    || cell.type === "extract_frame"
+  ) return "image";
   if (
     cell.type === "audio"
     || cell.type === "extract_audio"

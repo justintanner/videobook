@@ -2,6 +2,7 @@ import type {
   Engine,
   NotebookCell,
   NotebookDocument,
+  NotebookEdge,
   NotebookGridSlot,
 } from "videobook-engine";
 import {
@@ -10,7 +11,6 @@ import {
   findGenerateVideoOutputCell,
   NOTEBOOK_GRID_COLUMN_COUNT,
   NOTEBOOK_GRID_ROW_COUNT,
-  nextHorizontalSlotFrom,
   nextVerticalSlotFrom,
 } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
@@ -82,281 +82,131 @@ export function extractFrameSelection(
   };
 }
 
-function extractFrameOutputInputs(
-  cell: NotebookCell,
-  extractFrameCellId: string,
-  selection: ExtractFrameSelection,
-): Record<string, unknown> {
-  const inputs: Record<string, unknown> = {
-    ...(cell.inputs ?? {}),
-    mediaRole: "extract-frame-output",
-    producerCellId: extractFrameCellId,
-    frameMode: selection.frameMode,
-    frameSelectionKey: selection.key,
-  };
-  delete inputs.sourceCellId;
-  delete inputs.timestampSeconds;
-  if (selection.sourceCellId) inputs.sourceCellId = selection.sourceCellId;
-  if (selection.frameMode === "time" && selection.timestampSeconds !== null) {
-    inputs.timestampSeconds = selection.timestampSeconds;
-  }
-  return inputs;
-}
-
-function frameSelectionMatches(
-  cell: NotebookCell,
-  selection: ExtractFrameSelection,
-): boolean {
-  if (cell.inputs?.frameSelectionKey === selection.key) return true;
-  const frameMode = normalizedFrameMode(cell.inputs?.frameMode);
-  if (frameMode !== selection.frameMode) return false;
-  if (
-    frameMode === "time"
-    && normalizedTimestamp(cell.inputs?.timestampSeconds)
-      !== selection.timestampSeconds
-  ) {
-    return false;
-  }
-  const sourceCellId = typeof cell.inputs?.sourceCellId === "string"
-    ? cell.inputs.sourceCellId
-    : null;
-  return sourceCellId === null || sourceCellId === selection.sourceCellId;
-}
-
-function outputFrameLabel(
-  extractFrame: NotebookCell,
-  selection: ExtractFrameSelection,
-): string {
-  const base = extractFrame.label ?? notebookGridTag(extractFrame.slot);
-  if (selection.frameMode === "last") return `${base} last frame`;
-  if (selection.frameMode !== "time") return `${base} first frame`;
-  return `${base} frame at ${selection.timestampSeconds ?? 0}s`;
-}
-
-export function findExtractFrameImageOutput(
-  document: NotebookDocument,
-  extractFrameCellId: string,
-) {
-  const selection = extractFrameSelection(document, extractFrameCellId);
-  for (const edge of document.edges) {
-    if (
-      edge.source !== extractFrameCellId
-      || edge.targetInput !== "media"
-    ) {
-      continue;
-    }
-    const outputCell = document.cells.find((cell) =>
-      cell.id === edge.target);
-    if (
-      outputCell?.type === "image"
-      && frameSelectionMatches(outputCell, selection)
-    ) {
-      return { outputCell, outputEdge: edge };
-    }
-  }
+function extractPairOutputType(
+  extract: NotebookCell,
+): "audio" | "image" | null {
+  if (extract.type === "extract_audio") return "audio";
+  if (extract.type === "extract_frame") return "image";
   return null;
 }
 
-function extractFrameSourceVideoSlot(
+function findLegacyExtractPair(
   document: NotebookDocument,
-  extractFrame: NotebookCell,
-): NotebookGridSlot | null {
-  const sourceEdge = document.edges.find((edge) =>
-    edge.target === extractFrame.id && edge.targetInput === "video");
-  if (!sourceEdge) return null;
-  const sourceCell = document.cells.find((cell) =>
-    cell.id === sourceEdge.source);
-  if (!sourceCell) return null;
-  if (sourceCell.type === "generate_video") {
-    const output = findGenerateVideoOutputCell(document, sourceCell.id);
-    return output ? output.outputCell.slot : sourceCell.slot;
-  }
-  return sourceCell.slot;
-}
-
-export function ensureExtractFrameImageOutput(
-  engine: Engine,
-  document: NotebookDocument,
-  extractFrameCellId: string,
-) {
-  const extractFrame = document.cells.find((cell) =>
-    cell.id === extractFrameCellId);
-  if (extractFrame?.type !== "extract_frame") {
-    throw new Error(`Extract Frame cell not found: ${extractFrameCellId}`);
-  }
-  const selection = extractFrameSelection(document, extractFrameCellId);
-  const existing = findExtractFrameImageOutput(
-    document,
-    extractFrameCellId,
-  );
-  if (existing) {
-    const inputs = extractFrameOutputInputs(
-      existing.outputCell,
-      extractFrameCellId,
-      selection,
-    );
-    const unchanged = existing.outputCell.inputs?.frameSelectionKey
-        === selection.key
-      && existing.outputCell.inputs?.frameMode === selection.frameMode
-      && (existing.outputCell.inputs?.sourceCellId ?? null)
-        === selection.sourceCellId
-      && (selection.frameMode !== "time"
-        || existing.outputCell.inputs?.timestampSeconds
-          === selection.timestampSeconds);
-    if (unchanged) {
-      return { document, ...existing, created: false, updated: false };
-    }
-    const outputCell = { ...existing.outputCell, inputs };
-    return {
-      document: {
-        ...document,
-        cells: document.cells.map((cell) =>
-          cell.id === outputCell.id ? outputCell : cell),
-      },
-      outputCell,
-      outputEdge: existing.outputEdge,
-      created: false,
-      updated: true,
-    };
-  }
-  const occupied = document.cells.map((cell) => cell.slot);
-  // The frame image continues the lane: directly below the source video cell
-  // (resolving generate_video sources through their output video cell), so the
-  // next generation it feeds stacks beneath it. Fallback: right of the action.
-  const sourceVideoSlot = extractFrameSourceVideoSlot(document, extractFrame);
-  const horizontalAnchor: NotebookGridSlot = {
-    row: extractFrame.slot.row,
-    column: extractFrame.slot.column + 1 < NOTEBOOK_GRID_COLUMN_COUNT
-      ? extractFrame.slot.column + 1
-      : extractFrame.slot.column,
-  };
-  const outputSlot = sourceVideoSlot
-    ? nextVerticalSlotFrom(slotDirectlyBelow(sourceVideoSlot), occupied)
-    : nextHorizontalSlotFrom(horizontalAnchor, occupied);
-  const outputCell = engine.notebooks.createCell({
-    type: "image",
-    label: outputFrameLabel(extractFrame, selection),
-    slot: outputSlot,
-    inputs: extractFrameOutputInputs(
-      { ...extractFrame, inputs: { state: "pending" } },
-      extractFrame.id,
-      selection,
-    ),
-  });
-  const outputEdge = engine.notebooks.createEdge({
-    source: extractFrame.id,
-    target: outputCell.id,
-    targetInput: "media",
-  });
-  return {
-    document: {
-      ...document,
-      cells: [...document.cells, outputCell],
-      edges: [...document.edges, outputEdge],
-    },
-    outputCell,
-    outputEdge,
-    created: true,
-    updated: false,
-  };
-}
-
-function extractAudioOutputInputs(
-  cell: NotebookCell,
-  extractAudioCellId: string,
-): Record<string, unknown> {
-  return {
-    ...(cell.inputs ?? {}),
-    mediaRole: "extract-audio-output",
-    producerCellId: extractAudioCellId,
-  };
-}
-
-export function findExtractAudioOutput(
-  document: NotebookDocument,
-  extractAudioCellId: string,
-) {
+  extract: NotebookCell,
+): { outputCell: NotebookCell; outputEdge: NotebookEdge } | null {
+  const expectedType = extractPairOutputType(extract);
+  if (!expectedType) return null;
   for (const edge of document.edges) {
-    if (
-      edge.source !== extractAudioCellId
-      || edge.targetInput !== "media"
-    ) {
-      continue;
-    }
+    if (edge.source !== extract.id || edge.targetInput !== "media") continue;
     const outputCell = document.cells.find((cell) => cell.id === edge.target);
-    if (outputCell?.type === "audio") {
+    if (outputCell?.type === expectedType) {
       return { outputCell, outputEdge: edge };
     }
   }
   return null;
 }
 
-export function ensureExtractAudioOutput(
-  engine: Engine,
-  document: NotebookDocument,
-  extractAudioCellId: string,
-) {
-  const extractAudio = document.cells.find((cell) =>
-    cell.id === extractAudioCellId);
-  if (extractAudio?.type !== "extract_audio") {
-    throw new Error(`Extract Audio cell not found: ${extractAudioCellId}`);
-  }
-  const existing = findExtractAudioOutput(document, extractAudioCellId);
-  if (existing) {
-    const inputs = extractAudioOutputInputs(
-      existing.outputCell,
-      extractAudioCellId,
-    );
-    const unchanged = existing.outputCell.inputs?.mediaRole
-        === "extract-audio-output"
-      && existing.outputCell.inputs?.producerCellId === extractAudioCellId;
-    if (unchanged) {
-      return { document, ...existing, created: false, updated: false };
+function versionArtifactIds(
+  cell: NotebookCell,
+): string[] {
+  const persisted = Array.isArray(cell.inputs?.outputVersionArtifactIds)
+    ? cell.inputs.outputVersionArtifactIds.filter(
+        (value): value is string =>
+          typeof value === "string" && value.length > 0,
+      )
+    : [];
+  return [...new Set([
+    ...persisted,
+    ...(cell.outputArtifactId ? [cell.outputArtifactId] : []),
+  ])];
+}
+
+function adoptExtractFromPair(
+  extract: NotebookCell,
+  outputCell: NotebookCell,
+): NotebookCell {
+  const adoptedArtifact = outputCell.outputArtifactId ?? extract.outputArtifactId;
+  const pairInputs = outputCell.inputs ?? {};
+  const extractInputs = extract.inputs ?? {};
+  const inputs: Record<string, unknown> = { ...extractInputs };
+  for (const key of [
+    "durationSeconds",
+    "frameMode",
+    "timestampSeconds",
+    "atSeconds",
+  ] as const) {
+    if (inputs[key] === undefined && pairInputs[key] !== undefined) {
+      inputs[key] = pairInputs[key];
     }
-    const outputCell = { ...existing.outputCell, inputs };
-    return {
-      document: {
-        ...document,
-        cells: document.cells.map((cell) =>
-          cell.id === outputCell.id ? outputCell : cell),
-      },
-      outputCell,
-      outputEdge: existing.outputEdge,
-      created: false,
-      updated: true,
-    };
   }
-  const occupied = document.cells.map((cell) => cell.slot);
-  const outputCell = engine.notebooks.createCell({
-    type: "audio",
-    label: `${extractAudio.label ?? notebookGridTag(extractAudio.slot)} output`,
-    slot: nextHorizontalSlotFrom({
-      row: extractAudio.slot.row,
-      column: Math.min(
-        extractAudio.slot.column + 1,
-        NOTEBOOK_GRID_COLUMN_COUNT - 1,
-      ),
-    }, occupied),
-    inputs: extractAudioOutputInputs(
-      { ...extractAudio, inputs: { state: "pending" } },
-      extractAudio.id,
-    ),
-  });
-  const outputEdge = engine.notebooks.createEdge({
-    source: extractAudio.id,
-    target: outputCell.id,
-    targetInput: "media",
-  });
+  const outputVersionArtifactIds = [...new Set([
+    ...versionArtifactIds(extract),
+    ...versionArtifactIds(outputCell),
+  ])];
+  if (outputVersionArtifactIds.length > 0) {
+    inputs.outputVersionArtifactIds = outputVersionArtifactIds;
+  }
+  if (adoptedArtifact) inputs.state = "completed";
+  else if (inputs.state === "awaiting-output") delete inputs.state;
   return {
-    document: {
-      ...document,
-      cells: [...document.cells, outputCell],
-      edges: [...document.edges, outputEdge],
-    },
-    outputCell,
-    outputEdge,
-    created: true,
-    updated: false,
+    ...extract,
+    ...(adoptedArtifact ? { outputArtifactId: adoptedArtifact } : {}),
+    inputs,
+  };
+}
+
+export function collapseLegacyExtractPairs(
+  document: NotebookDocument,
+): NotebookDocument {
+  const pairs = document.cells.flatMap((extract) => {
+    const pair = findLegacyExtractPair(document, extract);
+    return pair ? [{ extract, ...pair }] : [];
+  });
+  if (pairs.length === 0) return document;
+
+  const deletedCellIds = new Set(pairs.map((pair) => pair.outputCell.id));
+  const deletedEdgeIds = new Set(pairs.map((pair) => pair.outputEdge.id));
+  const adoptByExtractId = new Map(
+    pairs.map((pair) => [pair.extract.id, pair.outputCell] as const),
+  );
+  const rewireFrom = new Map(
+    pairs.map((pair) => [pair.outputCell.id, pair.extract.id] as const),
+  );
+
+  const cells = document.cells
+    .filter((cell) => !deletedCellIds.has(cell.id))
+    .map((cell) => {
+      const outputCell = adoptByExtractId.get(cell.id);
+      return outputCell ? adoptExtractFromPair(cell, outputCell) : cell;
+    });
+
+  const seenEdges = new Set<string>();
+  const edges: NotebookEdge[] = [];
+  for (const edge of document.edges) {
+    if (deletedEdgeIds.has(edge.id) || deletedCellIds.has(edge.target)) {
+      continue;
+    }
+    const source = rewireFrom.get(edge.source) ?? edge.source;
+    const next = source === edge.source ? edge : { ...edge, source };
+    const key = `${next.source}:${next.target}:${next.targetInput}`;
+    if (seenEdges.has(key)) continue;
+    seenEdges.add(key);
+    edges.push(next);
+  }
+
+  const execution = { ...(document.execution ?? {}) };
+  for (const pair of pairs) {
+    delete execution[pair.outputCell.id];
+    if (execution[pair.extract.id]?.status === "awaiting-output") {
+      delete execution[pair.extract.id];
+    }
+  }
+
+  return {
+    ...document,
+    cells,
+    edges,
+    execution,
   };
 }
 

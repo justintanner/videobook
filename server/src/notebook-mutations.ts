@@ -1,4 +1,5 @@
 import type { Engine, NotebookDocument } from "videobook-engine";
+import { collapseLegacyExtractPairs } from "./notebook-cell-outputs.js";
 
 type NotebookMutationResult = Awaited<ReturnType<Engine["notebooks"]["write"]>>;
 
@@ -16,7 +17,9 @@ export async function mutateNotebook(
   const next = current.then(async () => {
     const read = engine.notebooks.read(notebookId);
     if (!read.ok) return read;
-    return await engine.notebooks.write(mutate(read.value), {
+    return await engine.notebooks.write(
+      mutate(collapseLegacyExtractPairs(read.value)),
+      {
       operation,
       details,
       ...(options.artifactId ? { artifactId: options.artifactId } : {}),

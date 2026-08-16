@@ -20,11 +20,9 @@ import {
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { mutateNotebook } from "../notebook-mutations.js";
 import {
-  ensureExtractAudioOutput,
-  ensureExtractFrameImageOutput,
+  collapseLegacyExtractPairs,
   ensureGenerationMediaOutput,
   extractFrameSelection,
-  findExtractFrameImageOutput,
   findGenerationMediaOutput,
 } from "../notebook-cell-outputs.js";
 import { queue, registerJobHandler, waitForJob } from "../queue.js";
@@ -231,6 +229,7 @@ export function notebookCellMediaType(
   if (
     cell.type === "image"
     || cell.type === "generate_image"
+    || cell.type === "extract_frame"
   ) return "image";
   if (
     cell.type === "audio"
@@ -683,6 +682,23 @@ function splitFrameOutputCellIds(
     if (candidate.inputs?.frameRole === "last") last.add(candidate.id);
   }
   return { first, last };
+}
+
+function withOutputVersionIds(
+  cell: NotebookCell,
+  artifactId: string,
+): string[] {
+  const persisted = Array.isArray(cell.inputs?.outputVersionArtifactIds)
+    ? cell.inputs.outputVersionArtifactIds.filter(
+        (value): value is string =>
+          typeof value === "string" && value.length > 0,
+      )
+    : [];
+  return [...new Set([
+    ...persisted,
+    ...(cell.outputArtifactId ? [cell.outputArtifactId] : []),
+    artifactId,
+  ])];
 }
 
 function withMediaOutput(
@@ -1909,35 +1925,21 @@ async function executeLocalOrGeneration(
 
   if (cell.type === "extract_audio" && cell.operation === "extract_audio") {
     const sourceId = requiredVideoInputArtifact(document, cell);
-    const outputCellIds = requiredMediaOutputCellIds(
-      document,
-      cell,
-      "audio",
-    );
     const result = await extractSourceAudio(engine, sourceId, notebookGridTag(cell.slot));
     return {
       artifactId: result.artifactId,
       tool: "ffmpeg",
-      document: withMediaOutput(
-        document,
-        outputCellIds,
-        result.artifactId,
-        { durationSeconds: result.durationSeconds },
-      ),
-      cellInputs: { durationSeconds: result.durationSeconds },
+      cellInputs: {
+        durationSeconds: result.durationSeconds,
+        outputVersionArtifactIds: withOutputVersionIds(cell, result.artifactId),
+        state: "completed",
+      },
     };
   }
 
   if (cell.type === "extract_frame" && cell.operation === "extract_frame") {
     const sourceId = requiredVideoInputArtifact(document, cell);
     const selection = extractFrameSelection(document, cell.id);
-    const output = findExtractFrameImageOutput(document, cell.id);
-    if (!output) {
-      throw new Error(
-        `extract_frame cell ${cell.id} requires a matching downstream image media cell`,
-      );
-    }
-    const outputCellIds = new Set([output.outputCell.id]);
     const frameMode = selection.frameMode;
     const timestampSeconds = selection.timestampSeconds;
     const timestampInput: { timestampSeconds?: number } = {};
@@ -1954,21 +1956,16 @@ async function executeLocalOrGeneration(
       ...timestampInput,
       title: `${notebookGridTag(cell.slot)} · ${frameMode} frame`,
     });
-    const outputInputs = {
-      frameMode,
-      ...timestampInput,
-      atSeconds: result.atSeconds,
-    };
     return {
       artifactId: result.artifactId,
       tool: "ffmpeg",
-      document: withMediaOutput(
-        document,
-        outputCellIds,
-        result.artifactId,
-        outputInputs,
-      ),
-      cellInputs: outputInputs,
+      cellInputs: {
+        frameMode,
+        ...timestampInput,
+        atSeconds: result.atSeconds,
+        outputVersionArtifactIds: withOutputVersionIds(cell, result.artifactId),
+        state: "completed",
+      },
     };
   }
 
@@ -2189,61 +2186,11 @@ export async function runNotebookCell(
   outputArtifactId: string;
   status: "completed" | "awaiting-output";
 }> {
-  let normalizedDocument = normalizeLegacyAnalyzeDocument(document);
+  let normalizedDocument = collapseLegacyExtractPairs(
+    normalizeLegacyAnalyzeDocument(document),
+  );
   let normalizedCell = normalizedDocument.cells.find((candidate) =>
     candidate.id === cell.id) ?? normalizeLegacyAnalyzeCell(cell);
-  const extractAudioOutput = normalizedCell.type === "extract_audio"
-    ? ensureExtractAudioOutput(
-        engine,
-        normalizedDocument,
-        normalizedCell.id,
-      )
-    : null;
-  if (extractAudioOutput && extractAudioOutput.document !== normalizedDocument) {
-    const repaired = await mutateNotebook(
-      engine,
-      notebookId,
-      "ensure_extract_audio_output",
-      (current) => ensureExtractAudioOutput(
-        engine,
-        current,
-        normalizedCell.id,
-      ).document,
-      { cellId: normalizedCell.id },
-    );
-    if (!repaired.ok) throw new Error(repaired.error.message);
-    const refreshed = engine.notebooks.read(notebookId);
-    if (!refreshed.ok) throw new Error(refreshed.error.message);
-    normalizedDocument = normalizeLegacyAnalyzeDocument(refreshed.value);
-    normalizedCell = normalizedDocument.cells.find((candidate) =>
-      candidate.id === cell.id) ?? normalizedCell;
-  }
-  const extractFrameOutput = normalizedCell.type === "extract_frame"
-    ? ensureExtractFrameImageOutput(
-        engine,
-        normalizedDocument,
-        normalizedCell.id,
-      )
-    : null;
-  if (extractFrameOutput && extractFrameOutput.document !== normalizedDocument) {
-    const repaired = await mutateNotebook(
-      engine,
-      notebookId,
-      "ensure_extract_frame_image_output",
-      (current) => ensureExtractFrameImageOutput(
-        engine,
-        current,
-        normalizedCell.id,
-      ).document,
-      { cellId: normalizedCell.id },
-    );
-    if (!repaired.ok) throw new Error(repaired.error.message);
-    const refreshed = engine.notebooks.read(notebookId);
-    if (!refreshed.ok) throw new Error(refreshed.error.message);
-    normalizedDocument = normalizeLegacyAnalyzeDocument(refreshed.value);
-    normalizedCell = normalizedDocument.cells.find((candidate) =>
-      candidate.id === cell.id) ?? normalizedCell;
-  }
   const generateMediaOutput = normalizedCell.type === "generate_video"
       || normalizedCell.type === "generate_image"
       || normalizedCell.type === "generate_audio"

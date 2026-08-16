@@ -16,7 +16,6 @@ import {
   ensureGenerateAudioOutput,
   ensureGenerateImageOutput,
   ensureGenerateVideoOutput,
-  findExtractFrameImageOutput,
   findGenerateAudioOutput,
   findGenerateImageOutput,
   findGenerateVideoOutput,
@@ -327,13 +326,6 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
       const anchor = videoSlot ?? { row: 0, column: 0 };
       const actionSlot = nextHorizontalSlotFrom(slotRight(anchor), occupied);
       claim(action.id, actionSlot);
-      const frameOutput = findExtractFrameImageOutput(document, action.id);
-      if (frameOutput) {
-        claim(
-          frameOutput.outputCell.id,
-          nextVerticalSlotFrom(slotBelow(anchor), occupied),
-        );
-      }
       progressed = true;
     }
   }

@@ -40,7 +40,7 @@ import {
   INTELLIGENCE_MODEL,
 } from "./openai-intelligence.js";
 
-export const MULTYCULTY_FIXTURE_VERSION = 26;
+export const MULTYCULTY_FIXTURE_VERSION = 27;
 
 const MULTYCULTY_FIXTURE_ANALYSIS: NotebookLiveAnalysis["rawOutput"] = {
   shots: [
@@ -168,7 +168,6 @@ const COMPACT_FIXTURE_SLOTS = new Map<string, NotebookCell["slot"]>([
   ["analysis", { row: 1, column: 2 }],
   ["source-extract-audio", { row: 1, column: 4 }],
   ["analysis-output", { row: 2, column: 2 }],
-  ["source-audio", { row: 2, column: 4 }],
   ["split-video-1", { row: 3, column: 1 }],
   ["split-video-2", { row: 3, column: 5 }],
   ["scene-video-1", { row: 4, column: 1 }],
@@ -179,8 +178,6 @@ const COMPACT_FIXTURE_SLOTS = new Map<string, NotebookCell["slot"]>([
   ["frame-first-2", { row: 5, column: 4 }],
   ["frame-last-2", { row: 5, column: 5 }],
   ["scene-extract-audio-2", { row: 5, column: 6 }],
-  ["scene-audio-1", { row: 6, column: 2 }],
-  ["scene-audio-2", { row: 6, column: 6 }],
   ["prompt-1", { row: 6, column: 1 }],
   ["prompt-2", { row: 6, column: 5 }],
   ["animate-1", { row: 7, column: 1 }],
@@ -281,7 +278,6 @@ function isCanonicalRole(role: string | null): boolean {
     || role === "analysis"
     || role === "analysis-output"
     || role === "source-extract-audio"
-    || role === "source-audio"
     || role === "assembly"
     || /^split-video-\d+$/.test(role ?? "")
     || /^scene-video-\d+$/.test(role ?? "")
@@ -346,14 +342,13 @@ function isCurrentFixture(document: NotebookDocument): boolean {
   const edges = document.edges.filter((edge) =>
     cellIds.has(edge.source) && cellIds.has(edge.target));
   return fixture?.version === MULTYCULTY_FIXTURE_VERSION
-    && cells.length === 22
-    && roles.size === 22
-    && edges.length === 37
+    && cells.length === 19
+    && roles.size === 19
+    && edges.length === 34
     && roles.has("source")
     && roles.has("analysis")
     && roles.has("analysis-output")
     && roles.has("source-extract-audio")
-    && roles.has("source-audio")
     && roles.has("assembly")
     && [1, 2].every((ordinal) =>
       roles.has(`split-video-${ordinal}`)
@@ -361,7 +356,6 @@ function isCurrentFixture(document: NotebookDocument): boolean {
       && roles.has(`frame-first-${ordinal}`)
       && roles.has(`frame-last-${ordinal}`)
       && roles.has(`scene-extract-audio-${ordinal}`)
-      && roles.has(`scene-audio-${ordinal}`)
       && roles.has(`prompt-${ordinal}`)
       && roles.has(`animate-${ordinal}`));
 }
@@ -572,7 +566,7 @@ async function materializeLocalOutputs(
     const animation = current.cells.find((cell) =>
       roleOf(cell) === `animate-${feature.ordinal}`);
     const audio = current.cells.find((cell) =>
-      roleOf(cell) === `scene-audio-${feature.ordinal}`);
+      roleOf(cell) === `scene-extract-audio-${feature.ordinal}`);
     if (!animation?.outputArtifactId || !audio?.outputArtifactId) {
       throw new Error(`Multyculty feature ${feature.ordinal} is missing baseline media`);
     }
@@ -839,7 +833,7 @@ export async function seedMultycultyWorkflow(
           },
         };
       }
-      if (roleOf(cell) === "source-audio") {
+      if (roleOf(cell) === "source-extract-audio") {
         return {
           ...cell,
           outputArtifactId: undefined,
