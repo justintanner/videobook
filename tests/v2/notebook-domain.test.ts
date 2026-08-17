@@ -6,9 +6,11 @@ import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
 import {
   notebookCellDefinitionFingerprint,
+  notebookCellFingerprint,
   updateGenerationPlanState,
   writeGenerationPlanProvenance,
 } from '../../server/src/jobs/run-notebook.js'
+import { setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 
@@ -966,6 +968,130 @@ describe('v2 notebook domain tools', () => {
         status: 'planned',
       }),
     ])
+  })
+
+  it('does not traverse through a current materialized image to stale paid history', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'materialized-image-boundary',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const notebook = engine.notebooks.list()[0]!
+    const historicalOutput = await engine.artifacts.create('image', 'Historical image')
+    const currentOutput = await engine.artifacts.create('image', 'Current image')
+    expect(historicalOutput.ok).toBe(true)
+    expect(currentOutput.ok).toBe(true)
+    if (!historicalOutput.ok || !currentOutput.ok) return
+    const historical = engine.notebooks.createCell({
+      type: 'generate_image',
+      label: 'Historical paid image',
+      slot: { row: 0, column: 0 },
+      prompt: 'An earlier image',
+      provider: 'kie',
+      model: 'NanoBananaProRequestSchema',
+      operation: 'text_to_image',
+      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      outputArtifactId: historicalOutput.value.artifactId,
+    })
+    const source = engine.notebooks.createCell({
+      type: 'generate_image',
+      label: 'Current materialized image',
+      slot: { row: 1, column: 0 },
+      prompt: 'The image selected by the user',
+      provider: 'kie',
+      model: 'NanoBananaProRequestSchema',
+      operation: 'text_to_image',
+      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      outputArtifactId: currentOutput.value.artifactId,
+    })
+    const target = engine.notebooks.createCell({
+      type: 'generate_image',
+      label: 'Combined image',
+      slot: { row: 2, column: 0 },
+      prompt: 'Combine the selected images',
+      provider: 'kie',
+      model: 'NanoBananaProRequestSchema',
+      operation: 'text_to_image',
+      tool: 'generate_kie_nano_banana_pro_text_to_image',
+    })
+    const document = {
+      ...notebook,
+      cells: [historical, source, target],
+      edges: [
+        engine.notebooks.createEdge({
+          source: historical.id,
+          target: source.id,
+          targetInput: 'image',
+        }),
+        engine.notebooks.createEdge({
+          source: source.id,
+          target: target.id,
+          targetInput: 'image',
+        }),
+      ],
+    }
+    const plan = {
+      planId: 'materialized-image-target-plan',
+      cellDefinitionFingerprint: notebookCellDefinitionFingerprint(document, target),
+      stages: [{ kind: 'queued', input: { cell_id: target.id } }],
+    }
+    const now = new Date(0).toISOString()
+    const written = await engine.notebooks.write({
+      ...document,
+      execution: {
+        [historical.id]: {
+          fingerprint: 'stale-historical-fingerprint',
+          status: 'completed',
+          outputArtifactId: historicalOutput.value.artifactId,
+        },
+        [source.id]: {
+          fingerprint: notebookCellFingerprint(document, source),
+          status: 'completed',
+          outputArtifactId: currentOutput.value.artifactId,
+        },
+      },
+      generationPlans: [{
+        planId: plan.planId,
+        cellId: target.id,
+        status: 'planned',
+        plan,
+        createdAt: now,
+        updatedAt: now,
+      }],
+    })
+    expect(written.ok).toBe(true)
+    if (!written.ok) return
+
+    await setEngineRoot(rootDir, engine)
+    try {
+      const result = await withBookContext(
+        { bookId: created.bookId, engine },
+        () => byName.get('run_notebook_cell')!.handler({
+          book_id: created.bookId,
+          notebook_id: notebook.id,
+          cell_id: target.id,
+          plan,
+        }),
+      )
+
+      const queued = resultJson(result) as { job_id: string; plan_id: string }
+      expect(queued.plan_id).toBe(plan.planId)
+      expect(engine.jobs.queue.list({ type: 'run_notebook' })).toEqual([
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            cellIds: [target.id],
+            force: true,
+            jobId: queued.job_id,
+          }),
+        }),
+      ])
+    } finally {
+      await stopBookQueue(created.bookId)
+    }
   })
 
   it('atomically claims one target plan and rolls it back when enqueue fails', async () => {

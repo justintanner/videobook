@@ -2486,25 +2486,56 @@ export function notebookCellIsStale(
   return false;
 }
 
-function ancestorsOf(
+function notebookCellNeedsExecution(
+  engine: Engine,
   document: NotebookDocument,
-  cellId: string,
+  cell: NotebookCell,
+): boolean {
+  if (notebookCellIsRunnable(cell)) {
+    return notebookCellIsStale(engine, document, cell);
+  }
+  const artifactId = resolveNotebookCellArtifactId(document, cell)
+    ?? cell.outputArtifactId
+    ?? cell.outputEntityId;
+  return !artifactId || !engine.artifacts.get(artifactId).ok;
+}
+
+function requiredNotebookCellIds(
+  engine: Engine,
+  document: NotebookDocument,
+  cellIds: readonly string[],
+  forceSelected: boolean,
 ): Set<string> {
+  const cells = new Map(document.cells.map((cell) => [cell.id, cell]));
   const parents = new Map<string, string[]>();
   for (const edge of document.edges) {
     const list = parents.get(edge.target) ?? [];
     list.push(edge.source);
     parents.set(edge.target, list);
   }
-  const seen = new Set<string>();
-  const stack = [...(parents.get(cellId) ?? [])];
+  const required = new Set(cellIds);
+  const expanded = new Set<string>();
+  const stack = cellIds.filter((cellId) => {
+    const cell = cells.get(cellId);
+    return forceSelected || !cell || notebookCellNeedsExecution(
+      engine,
+      document,
+      cell,
+    );
+  });
   while (stack.length > 0) {
     const id = stack.pop();
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    stack.push(...(parents.get(id) ?? []));
+    if (!id || expanded.has(id)) continue;
+    expanded.add(id);
+    for (const parentId of parents.get(id) ?? []) {
+      required.add(parentId);
+      const parent = cells.get(parentId);
+      if (!parent) continue;
+      if (!notebookCellNeedsExecution(engine, document, parent)) continue;
+      stack.push(parentId);
+    }
   }
-  return seen;
+  return required;
 }
 
 export function stalePaidNotebookPrerequisites(
@@ -2513,14 +2544,10 @@ export function stalePaidNotebookPrerequisites(
   cellIds: readonly string[],
 ): NotebookCell[] {
   const selected = new Set(cellIds);
-  const required = new Set<string>();
-  for (const cellId of selected) {
-    for (const ancestor of ancestorsOf(document, cellId)) {
-      if (!selected.has(ancestor)) required.add(ancestor);
-    }
-  }
+  const required = requiredNotebookCellIds(engine, document, cellIds, true);
   return document.cells.filter((cell) =>
-    required.has(cell.id)
+    !selected.has(cell.id)
+    && required.has(cell.id)
     && notebookCellIsRunnable(cell)
     && notebookCellIsPaid(cell)
     && notebookCellIsStale(engine, document, cell));
@@ -3221,15 +3248,14 @@ export function registerRunNotebookJob(engine: Engine): void {
       document = refreshed.value;
     }
     const selected = input.cellIds ? new Set(input.cellIds) : null;
-    const required = new Set<string>();
-    if (selected) {
-      for (const cellId of selected) {
-        required.add(cellId);
-        for (const ancestor of ancestorsOf(document, cellId)) {
-          required.add(ancestor);
-        }
-      }
-    }
+    const required = selected
+      ? requiredNotebookCellIds(
+          engine,
+          document,
+          [...selected],
+          input.force === true,
+        )
+      : new Set<string>();
     const ordered = topologicalOrder(document);
     const outputs: Record<string, string> = {};
     const errors: string[] = [];
