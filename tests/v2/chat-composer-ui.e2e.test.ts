@@ -751,18 +751,49 @@ describe('chat composer browser flow', () => {
     const fullscreenNode = page.locator(
       `.notebook-flow .react-flow__node[data-id="${fullscreenImageCellId}"]`,
     )
+    const cardMedia = fullscreenNode.locator('.cell-media')
+    const cardMetadata = fullscreenNode.locator('.cell-image-metadata')
+    await cardMetadata.waitFor({ state: 'visible' })
+    expect(await fullscreenNode.locator('.cell-media-caption').count()).toBe(0)
+    expect(await cardMedia.getAttribute('title')).toBe('A fullscreen image fixture')
+    const cardMediaBox = await cardMedia.boundingBox()
+    const cardMetadataBox = await cardMetadata.boundingBox()
+    if (!cardMediaBox || !cardMetadataBox) {
+      throw new Error('Could not measure image card metadata')
+    }
+    const metadataTopInset = cardMetadataBox.y - cardMediaBox.y
+    const metadataRightInset =
+      cardMediaBox.x + cardMediaBox.width
+        - cardMetadataBox.x - cardMetadataBox.width
+    expect(metadataTopInset).toBeGreaterThanOrEqual(-1)
+    expect(metadataTopInset).toBeLessThanOrEqual(16)
+    expect(metadataRightInset).toBeGreaterThanOrEqual(-1)
+    expect(metadataRightInset).toBeLessThanOrEqual(16)
     await fullscreenNode.click()
     const trigger = page.getByLabel('Open @c3 fullscreen')
+    const editTrigger = page.getByLabel('Edit @c3 image')
     await trigger.waitFor({ state: 'visible' })
+    await editTrigger.waitFor({ state: 'visible' })
     await wait(250)
+    const inspectorHeaderBox = await page.locator('.inspector > header').boundingBox()
+    const inspectorPreviewBox = await page.locator('.inspector-cell-preview').boundingBox()
+    if (!inspectorHeaderBox || !inspectorPreviewBox) {
+      throw new Error('Could not measure inspector preview spacing')
+    }
+    expect(
+      inspectorPreviewBox.y - inspectorHeaderBox.y - inspectorHeaderBox.height,
+    ).toBeLessThanOrEqual(56)
     const triggerBox = await trigger.boundingBox()
     if (!triggerBox) throw new Error('Could not measure fullscreen trigger')
-    const previewBox = await trigger.locator('..').boundingBox()
-    if (!previewBox) throw new Error('Could not measure fullscreen preview')
-    expect(Math.abs(triggerBox.width - previewBox.width)).toBeLessThanOrEqual(2)
+    const editTriggerBox = await editTrigger.boundingBox()
+    if (!editTriggerBox) throw new Error('Could not measure edit trigger')
+    const actionBox = await trigger.locator('..').boundingBox()
+    if (!actionBox) throw new Error('Could not measure image actions')
+    expect(Math.abs(triggerBox.width - editTriggerBox.width)).toBeLessThanOrEqual(2)
+    expect(triggerBox.width).toBeGreaterThan(actionBox.width * 0.35)
     expect(triggerBox.height).toBeGreaterThanOrEqual(44)
     const triggerPoint = {
-      x: previewBox.x + previewBox.width - 10,
+      x: actionBox.x + actionBox.width - 10,
       y: triggerBox.y + triggerBox.height / 2,
     }
     expect(await page.evaluate(({ x, y }) =>
@@ -800,11 +831,13 @@ describe('chat composer browser flow', () => {
       inert: element instanceof HTMLElement ? element.inert : false,
     }))).toEqual({ ariaHidden: null, inert: false })
 
-    await trigger.click()
+    await editTrigger.click()
     await dialog.waitFor({ state: 'visible' })
+    expect(await dialog.getByLabel('Edit instruction').isVisible()).toBe(true)
+    expect(await page.locator('.command-composer').isVisible()).toBe(false)
     await close.click()
     await dialog.waitFor({ state: 'hidden' })
-    expect(await trigger.evaluate((element) => document.activeElement === element)).toBe(true)
+    expect(await editTrigger.evaluate((element) => document.activeElement === element)).toBe(true)
   }, 60_000)
 
   it('turns every open notebook square into a media file dropzone', async () => {

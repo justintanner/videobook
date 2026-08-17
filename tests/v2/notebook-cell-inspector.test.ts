@@ -629,6 +629,56 @@ describe('NotebookCellInspector', () => {
       html.indexOf('class="inspector-cell-actions inspector-compact-actions"'),
     )
     expect(html).toContain('aria-label="Open @b3 fullscreen"')
+    expect(html).not.toContain('aria-label="Edit @b3 image"')
+  })
+
+  it('renders compact image edit and fullscreen actions for the same viewer', () => {
+    const imageCell: NotebookCell = {
+      ...cell,
+      type: 'image',
+      label: 'image-output',
+      slot: { row: 6, column: 4 },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: imageCell,
+      cells: [imageCell],
+      edges: [],
+      asset: {
+        artifactId: imageCell.outputArtifactId!,
+        id: 'image-output',
+        type: 'image',
+        mediaUrl: '/files/image-output/original.png',
+        thumbnailUrl: null,
+        width: 1536,
+        height: 1024,
+        duration: null,
+        audioInfo: null,
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain(
+      'class="inspector-media-content inspector-image-media-content"',
+    )
+    expect(html).toContain(
+      'class="inspector-media-actions inspector-media-actions-image"',
+    )
+    expect(html).toContain('aria-label="Image preview actions"')
+    expect(html).toContain('aria-label="Edit @g5 image"')
+    expect(html).toContain('aria-label="Open @g5 fullscreen"')
+    expect(html.indexOf('aria-label="Edit @g5 image"')).toBeLessThan(
+      html.indexOf('aria-label="Open @g5 fullscreen"'),
+    )
   })
 
   it('opens generated video output in the shared fullscreen viewer', () => {
@@ -727,6 +777,8 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('<dt>Duration</dt><dd>1:00.01</dd>')
     expect(html).toContain('<dt>Format</dt><dd>AAC · 48 kHz · stereo</dd>')
     expect(html).not.toContain('aria-label="Audio version"')
+    expect(html).not.toContain('aria-label="Open @b3 fullscreen"')
+    expect(html).not.toContain('aria-label="Edit @b3 image"')
   })
 
   it('labels and selects the current saved audio version', () => {

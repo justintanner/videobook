@@ -214,7 +214,6 @@ import {
   notebookCellExecutionObservation,
   notebookCellInspectorActionLabel,
   notebookCellIsActiveStatus,
-  notebookCellMediaCaption,
   notebookCellRunObservation,
   notebookCellStatusLabel,
   notebookCellSupportsExecution,
@@ -1778,6 +1777,73 @@ function emptyCellLabel(data: CanvasCellData): string {
   return data.prompt || notebookGridTag(data.slot)
 }
 
+type ImageCardMetadataBadgesProps = {
+  width: number | null
+  height: number | null
+  tool: string | null
+  model: string | null
+  prompt: string | null
+}
+
+export function ImageCardMetadataBadges({
+  width,
+  height,
+  tool,
+  model,
+  prompt,
+}: ImageCardMetadataBadgesProps) {
+  const dimensions = width !== null
+    && height !== null
+    && Number.isFinite(width)
+    && Number.isFinite(height)
+    && width > 0
+    && height > 0
+    ? `${width}×${height}`
+    : null
+  const aspectRatio = formatMediaAspectRatio(width, height)
+  const generator = tool ?? model
+  const generatorLabel = generator
+    ? abbreviateGenerationPhrases(generator)
+    : null
+
+  if (!dimensions && !aspectRatio && !generatorLabel) return null
+
+  const ariaLabel = [
+    'Image metadata',
+    dimensions ? `Dimensions ${dimensions}` : null,
+    aspectRatio ? `Aspect ratio ${aspectRatio}` : null,
+    generatorLabel ? `Generator ${generatorLabel}` : null,
+    prompt ? `Prompt: ${prompt}` : null,
+  ].filter(Boolean).join('. ')
+
+  return (
+    <div
+      className="cell-image-metadata"
+      role="group"
+      aria-label={ariaLabel}
+    >
+      {dimensions && (
+        <span className="cell-image-metadata-badge" title="Dimensions">
+          {dimensions}
+        </span>
+      )}
+      {aspectRatio && (
+        <span className="cell-image-metadata-badge" title="Aspect ratio">
+          {aspectRatio}
+        </span>
+      )}
+      {generatorLabel && (
+        <span
+          className="cell-image-metadata-badge cell-image-metadata-generator"
+          title={generatorLabel}
+        >
+          {generatorLabel}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function assetPreviewUrl(asset: AssetRecord | undefined): string | null {
   return asset?.thumbnailUrl ?? asset?.mediaUrl ?? null
 }
@@ -2254,6 +2320,11 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     || data.kind === 'generate_video'
     || data.kind === 'generate_image'
     || data.kind === 'extract_frame'
+  const imageMediaCell = !playableVideo && (
+    data.kind === 'image'
+    || data.kind === 'generate_image'
+    || data.kind === 'extract_frame'
+  )
   const textCell = data.kind === 'prompt' || data.kind === 'analyze'
   const isTopRow = data.slot.row === 0
   const handleLayoutSignature = [
@@ -2313,6 +2384,12 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     ? compactCellTypeLabel(data.kind)
     : typeLabel
   const resolvedPrompt = asString(data.inputs?.resolvedPrompt) ?? data.prompt
+  const imagePrompt = imageMediaCell
+    ? resolvedPrompt ?? data.asset?.prompt ?? null
+    : null
+  const imageToolTitle = imageMediaCell && data.tool
+    ? generationTitles.get(data.tool) ?? null
+    : null
   const promptCell = textCell || (generationCell && Boolean(data.prompt))
   const videoDurationLabel = data.kind === 'video'
     && data.videoDurationSeconds !== undefined
@@ -2326,19 +2403,6 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     data.inputs,
     data.outputArtifactId,
   )
-  const mediaCaption = notebookCellMediaCaption({
-    type: data.kind,
-    hasMedia: Boolean(mediaUrl || thumbnailUrl),
-    prompt: resolvedPrompt ?? null,
-    tool: data.tool
-      ? abbreviateGenerationPhrases(
-        generationTitles.get(data.tool) ?? data.tool,
-      )
-      : null,
-    model: data.model
-      ? abbreviateGenerationPhrases(data.model)
-      : null,
-  })
   const versionedOutput = (
     data.kind === 'audio'
     || data.kind === 'image'
@@ -2542,35 +2606,27 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 : <span>{emptyCellLabel(data)}</span>}
           </div>
         ) : visualMediaCell && (mediaUrl || thumbnailUrl) ? (
-          <div className="cell-media">
+          <div className="cell-media" title={imagePrompt ?? undefined}>
             {playableVideo && mediaUrl ? (
               <video src={mediaUrl} poster={thumbnailUrl ?? undefined} muted playsInline preload="metadata" />
             ) : (
               <img src={thumbnailUrl ?? mediaUrl ?? ''} alt={data.label ?? notebookGridTag(data.slot)} />
             )}
-            {data.kind !== 'video' && (
+            {imageMediaCell ? (
+              <ImageCardMetadataBadges
+                width={data.asset?.width ?? null}
+                height={data.asset?.height ?? null}
+                tool={imageToolTitle}
+                model={data.model ?? data.tool ?? null}
+                prompt={imagePrompt}
+              />
+            ) : data.kind !== 'video' && (
               <NotebookMediaMetadata
                 className="cell-media-metadata"
                 width={data.asset?.width ?? null}
                 height={data.asset?.height ?? null}
                 durationSeconds={playableVideo ? data.asset?.duration ?? null : null}
               />
-            )}
-            {mediaCaption && (
-              <div className="cell-media-caption" title={mediaCaption.prompt}>
-                <span className="cell-media-caption-prompt">
-                  {mediaCaption.prompt.length > 72
-                    ? `${mediaCaption.prompt.slice(0, 69)}…`
-                    : mediaCaption.prompt}
-                </span>
-                {(mediaCaption.tool || mediaCaption.model) && (
-                  <span className="cell-media-caption-meta">
-                    {[mediaCaption.tool, mediaCaption.model]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
-                )}
-              </div>
             )}
           </div>
         ) : (

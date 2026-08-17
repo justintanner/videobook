@@ -8,6 +8,7 @@ import {
   History,
   Layers2,
   Maximize2,
+  Pencil,
   Plus,
   Save,
   X,
@@ -526,6 +527,8 @@ function NotebookCellMedia({
   const previewUrl = asset.thumbnailUrl ?? mediaUrl
   const isVideo = asset.type === 'video' || asset.type === 'final'
   const isAudio = asset.type === 'audio'
+  const isImage = asset.type === 'image'
+  const canOpenFullscreen = allowFullscreen && (isImage || isVideo)
   const audioPresentation = notebookAudioPresentation({
     audioInfo: asset.audioInfo,
     durationSeconds: asset.duration,
@@ -584,15 +587,35 @@ function NotebookCellMedia({
           </dl>
         </div>
       )}
-      {allowFullscreen && !isAudio && (
-        <button
-          type="button"
-          className="inspector-fullscreen-button"
-          aria-label={`Open @${address} fullscreen`}
-          onClick={() => onOpenFullscreen(asset)}
+      {canOpenFullscreen && (
+        <div
+          className={`inspector-media-actions${isImage ? ' inspector-media-actions-image' : ''}`}
+          role="group"
+          aria-label={`${isImage ? 'Image' : 'Video'} preview actions`}
         >
-          <Maximize2 size={14} />Fullscreen
-        </button>
+          {isImage && (
+            <span className="inspector-media-action-slot">
+              <button
+                type="button"
+                className="inspector-edit-button"
+                aria-label={`Edit @${address} image`}
+                onClick={() => onOpenFullscreen(asset)}
+              >
+                <Pencil size={14} />Edit
+              </button>
+            </span>
+          )}
+          <span className="inspector-media-action-slot">
+            <button
+              type="button"
+              className="inspector-fullscreen-button"
+              aria-label={`Open @${address} fullscreen`}
+              onClick={() => onOpenFullscreen(asset)}
+            >
+              <Maximize2 size={14} />Fullscreen
+            </button>
+          </span>
+        </div>
       )}
     </section>
   )
@@ -1271,7 +1294,9 @@ function MediaCellInspector({
 
   return (
     <div className="inspector-body inspector-media-body">
-      <div className="inspector-media-content">
+      <div
+        className={`inspector-media-content${cell.type === 'image' ? ' inspector-image-media-content' : ''}`}
+      >
         <span className="inspector-media-field-label">
           {cell.type.replaceAll('_', ' ').toUpperCase()}
         </span>
@@ -1290,7 +1315,7 @@ function MediaCellInspector({
             asset={previewAsset}
             address={notebookGridAddress(cell.slot)}
             allowFullscreen={cell.type === 'image' || cell.type === 'video'}
-            onOpenFullscreen={() => onOpenFullscreen(previewAsset)}
+            onOpenFullscreen={onOpenFullscreen}
           />
         ) : (
           <div className="inspector-media-empty">
@@ -2273,7 +2298,7 @@ function ExecutableCellInspector({
           allowFullscreen={asset.type === 'image'
             || asset.type === 'video'
             || asset.type === 'final'}
-          onOpenFullscreen={() => onOpenFullscreen(asset)}
+          onOpenFullscreen={onOpenFullscreen}
         />
       )}
       <InputSources
