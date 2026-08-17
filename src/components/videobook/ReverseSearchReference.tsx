@@ -1,5 +1,6 @@
-import { Film, Image, LoaderCircle, Upload, X } from 'lucide-react'
+import { Film, Image, Upload, X } from 'lucide-react'
 import type { ClipboardEvent, DragEvent, ReactNode } from 'react'
+import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import {
   compatibleReferenceFile,
   referenceKind,
@@ -74,7 +75,7 @@ export function ReverseSearchReference({
     >
       <div className="reverse-search-dropzone" tabIndex={0} autoFocus>
         {preparing ? (
-          <LoaderCircle size={24} className="spin" />
+          <BusyIndicator size={24} />
         ) : reference?.previewUrl ? (
           kind === 'image' ? (
             <img src={reference.previewUrl} alt="" />

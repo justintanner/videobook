@@ -8,12 +8,12 @@ import {
 import {
   Check,
   ChevronDown,
-  LoaderCircle,
   Pencil,
   Plus,
   Trash2,
   X,
 } from 'lucide-react'
+import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import {
   formatArtifactCount,
   formatNotebookCount,
@@ -297,7 +297,7 @@ export function BookProjectMenu({
           <header className="book-project-menu-header">
             <div>
               <span>Projects</span>
-              {loading && <LoaderCircle className="spin" size={13} />}
+              {loading && <BusyIndicator size={13} />}
             </div>
             <small>{books.length} total</small>
           </header>
@@ -317,7 +317,7 @@ export function BookProjectMenu({
           <div className="book-project-menu-list">
             {loading && books.length === 0 && (
               <div className="book-project-menu-empty">
-                <LoaderCircle className="spin" size={15} />
+                <BusyIndicator size={15} />
                 <span>Loading projects</span>
               </div>
             )}
@@ -357,7 +357,7 @@ export function BookProjectMenu({
                         aria-label="Save project name"
                       >
                         {pending?.kind === 'rename'
-                          ? <LoaderCircle className="spin" size={14} />
+                          ? <BusyIndicator size={14} />
                           : <Check size={14} />}
                       </button>
                       <button
@@ -404,7 +404,7 @@ export function BookProjectMenu({
                         onClick={() => void confirmDelete(book)}
                       >
                         {pending?.kind === 'delete'
-                          ? <LoaderCircle className="spin" size={14} />
+                          ? <BusyIndicator size={14} />
                           : <Check size={14} />}
                       </button>
                       <button
@@ -452,7 +452,7 @@ export function BookProjectMenu({
                       title={formatArtifactCount(book.artifactCount)}
                     >
                       {rowPending
-                        ? <LoaderCircle className="spin" size={12} />
+                        ? <BusyIndicator size={12} />
                         : book.artifactCount}
                     </span>
                   </button>
@@ -501,7 +501,7 @@ export function BookProjectMenu({
                     aria-label="Create project"
                   >
                     {pending?.kind === 'create'
-                      ? <LoaderCircle className="spin" size={14} />
+                      ? <BusyIndicator size={14} />
                       : <Check size={14} />}
                   </button>
                   <button

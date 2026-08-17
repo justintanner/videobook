@@ -3,13 +3,12 @@ import {
   Eye,
   EyeOff,
   Layers2,
-  LoaderCircle,
   RotateCw,
-  WandSparkles,
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import type { ImageSubject, ImageSubjectMap } from '@/videobook/image-subject-map'
 import type { NotebookCellInspectorAsset } from './NotebookCellInspector'
 
@@ -25,9 +24,13 @@ type NotebookMediaFullscreenProps = {
   subjectMap?: ImageSubjectMap | null
   subjectMapLoading?: boolean
   analysisUnavailableReason?: string | null
+  composerEditing?: boolean
+  composerPortalRef?: (element: HTMLDivElement | null) => void
   returnFocus?: HTMLElement | null
   onAnalyzeSubjects?: (force?: boolean) => Promise<void>
+  onEditingChange?: (editing: boolean) => void
   onEditSubjects?: (input: ImageSubjectEditInput) => Promise<boolean>
+  onSelectedSubjectIdsChange?: (subjectIds: readonly string[]) => void
   onClose: () => void
 }
 
@@ -221,14 +224,19 @@ export function NotebookMediaFullscreen({
   subjectMap = null,
   subjectMapLoading = false,
   analysisUnavailableReason = null,
+  composerEditing = false,
+  composerPortalRef,
   returnFocus = null,
   onAnalyzeSubjects,
+  onEditingChange,
   onEditSubjects,
+  onSelectedSubjectIdsChange,
   onClose,
 }: NotebookMediaFullscreenProps) {
   const dialogRef = useRef<HTMLElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
+  const mountedRef = useRef(false)
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
@@ -238,9 +246,8 @@ export function NotebookMediaFullscreen({
   const [overlaysHidden, setOverlaysHidden] = useState(false)
   const [removalPreview, setRemovalPreview] = useState(false)
   const [overlayOpacity, setOverlayOpacity] = useState(0.42)
-  const [prompt, setPrompt] = useState('')
   const [pendingAction, setPendingAction] = useState<
-    'analyze' | 'remove' | 'edit' | null
+    'analyze' | 'remove' | null
   >(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
@@ -251,6 +258,17 @@ export function NotebookMediaFullscreen({
     () => subjectMap?.subjects.filter((subject) => selectedIds.has(subject.id)) ?? [],
     [selectedIds, subjectMap],
   )
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    onSelectedSubjectIdsChange?.(selectedSubjects.map((subject) => subject.id))
+  }, [onSelectedSubjectIdsChange, selectedSubjects])
 
   useEffect(() => {
     if (!hasMedia) return
@@ -323,6 +341,7 @@ export function NotebookMediaFullscreen({
     })
   }
   const analyzeSubjects = async (force = false) => {
+    if (composerEditing) return
     if (subjectMap?.status === 'ready' && !force) {
       setRemovalPreview(false)
       setOverlaysHidden((current) => !current)
@@ -340,27 +359,32 @@ export function NotebookMediaFullscreen({
       setPendingAction(null)
     }
   }
-  const editSubjects = async (operation: 'remove' | 'edit') => {
-    if (!onEditSubjects || selectedSubjects.length === 0 || pendingAction) return
-    setPendingAction(operation)
+  const removeSubjects = async () => {
+    if (
+      !onEditSubjects
+      || selectedSubjects.length === 0
+      || pendingAction
+      || composerEditing
+    ) return
+    setPendingAction('remove')
+    onEditingChange?.(true)
     setActionError(null)
     setActionMessage(null)
     try {
       const queued = await onEditSubjects({
-        operation,
+        operation: 'remove',
         subjectIds: selectedSubjects.map((subject) => subject.id),
-        ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
       })
-      if (!queued) return
-      setActionMessage(
-        operation === 'remove'
-          ? 'Removal queued as a new image.'
-          : 'Edit queued as a new image.',
-      )
+      if (!queued || !mountedRef.current) return
+      setActionMessage('Removal queued as a new image.')
     } catch (error) {
+      if (!mountedRef.current) return
       setActionError(error instanceof Error ? error.message : String(error))
     } finally {
-      setPendingAction(null)
+      if (mountedRef.current) {
+        setPendingAction(null)
+        onEditingChange?.(false)
+      }
     }
   }
   const ready = subjectMap?.status === 'ready'
@@ -372,6 +396,7 @@ export function NotebookMediaFullscreen({
   const analyzeDisabled = Boolean(
     analysisUnavailableReason
     || !onAnalyzeSubjects
+    || composerEditing
     || (pendingAction && pendingAction !== 'analyze')
     || checkingCache
     || analyzing,
@@ -454,7 +479,7 @@ export function NotebookMediaFullscreen({
                 onClick={() => void analyzeSubjects()}
               >
                 {checkingCache || analyzing
-                  ? <LoaderCircle className="spin" size={14} />
+                  ? <BusyIndicator size={14} />
                   : ready && !overlaysHidden
                     ? <EyeOff size={14} />
                     : <Layers2 size={14} />}
@@ -471,7 +496,11 @@ export function NotebookMediaFullscreen({
                   type="button"
                   className={removalPreview ? 'active' : ''}
                   aria-pressed={removalPreview}
-                  disabled={selectedSubjects.length === 0 || pendingAction !== null}
+                  disabled={
+                    selectedSubjects.length === 0
+                    || pendingAction !== null
+                    || composerEditing
+                  }
                   onClick={() => {
                     setRemovalPreview((current) => !current)
                     setOverlaysHidden(false)
@@ -504,13 +533,13 @@ export function NotebookMediaFullscreen({
                 </div>
               ) : checkingCache ? (
                 <div className="notebook-subject-state loading">
-                  <LoaderCircle className="spin" size={22} />
+                  <BusyIndicator size={22} />
                   <strong>Loading cached subjects</strong>
                   <p>This does not start a new cloud analysis.</p>
                 </div>
               ) : analyzing ? (
                 <div className="notebook-subject-state loading">
-                  <LoaderCircle className="spin" size={22} />
+                  <BusyIndicator size={22} />
                   <strong>Finding people and objects</strong>
                   <p>You can close this view. Analysis continues in the background.</p>
                 </div>
@@ -598,16 +627,11 @@ export function NotebookMediaFullscreen({
               )}
             </div>
             <div className="notebook-subject-actions">
-              <label>
-                <span>Edit instruction</span>
-                <textarea
-                  value={prompt}
-                  rows={3}
-                  placeholder="Change the selected subject…"
-                  disabled={!ready || pendingAction !== null}
-                  onChange={(event) => setPrompt(event.target.value)}
-                />
-              </label>
+              <p className="notebook-subject-composer-guidance">
+                {ready && selectedSubjects.length > 0
+                  ? `Describe the change for ${selectedSubjects.length} selected ${selectedSubjects.length === 1 ? 'subject' : 'subjects'} in the image edit bar.`
+                  : 'Select people or objects, then describe the change in the image edit bar.'}
+              </p>
               {(actionError || actionMessage) && (
                 <p className={actionError ? 'error' : 'success'} role="status">
                   {actionError ?? actionMessage}
@@ -617,32 +641,26 @@ export function NotebookMediaFullscreen({
                 <button
                   type="button"
                   className="remove"
-                  disabled={selectedSubjects.length === 0 || pendingAction !== null}
-                  onClick={() => void editSubjects('remove')}
-                >
-                  {pendingAction === 'remove'
-                    ? <LoaderCircle className="spin" size={14} />
-                    : <Eraser size={14} />}
-                  Remove
-                </button>
-                <button
-                  type="button"
-                  className="edit"
                   disabled={
                     selectedSubjects.length === 0
-                    || !prompt.trim()
                     || pendingAction !== null
+                    || composerEditing
                   }
-                  onClick={() => void editSubjects('edit')}
+                  onClick={() => void removeSubjects()}
                 >
-                  {pendingAction === 'edit'
-                    ? <LoaderCircle className="spin" size={14} />
-                    : <WandSparkles size={14} />}
-                  Edit selected
+                  {pendingAction === 'remove'
+                    ? <BusyIndicator size={14} />
+                    : <Eraser size={14} />}
+                  Remove
                 </button>
               </div>
             </div>
           </aside>
+          <div
+            ref={composerPortalRef}
+            className="notebook-media-composer-host"
+            aria-label={`Image edit bar for @${address}`}
+          />
         </>
       )}
     </section>

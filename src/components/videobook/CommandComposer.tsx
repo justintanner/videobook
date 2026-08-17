@@ -1,11 +1,20 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import {
   Bot,
   Check,
   ChevronDown,
   Send,
+  WandSparkles,
   X,
 } from 'lucide-react'
+import { createPortal } from 'react-dom'
 import type { ServerCommand } from '@/lib/command-registry'
 import {
   applyNotebookMentionSuggestion,
@@ -38,6 +47,7 @@ import {
 } from '@/videobook/speak-preview'
 import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
 import type { ElevenLabsVoicesState } from '@/videobook/use-elevenlabs-voices'
+import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import { SpeakCommandPreview } from '@/components/videobook/SpeakCommandPreview'
 
 export interface ComposerOutcome {
@@ -66,6 +76,13 @@ interface CommandComposerProps {
   connectionLabel: string
   mcpActivity: McpActivity
   selectedModel: string
+  context?: {
+    description: string
+    label: string
+  } | null
+  inputSession?: string | null
+  placeholder?: string
+  portalTarget?: Element | null
   pendingInput?: string
   notice?: ComposerNotice | null
   onEnsureCatalog: () => Promise<void>
@@ -76,6 +93,7 @@ interface CommandComposerProps {
     context?: { speakVoiceId?: string },
   ) => Promise<ComposerOutcome>
   onModelChange: (model: string) => void
+  onSendingChange?: (sending: boolean) => void
   onSuccessfulExecute: () => void
   voiceCatalog?: ElevenLabsVoicesState
 }
@@ -103,6 +121,10 @@ export function CommandComposer({
   connectionLabel,
   mcpActivity,
   selectedModel,
+  context = null,
+  inputSession = null,
+  placeholder,
+  portalTarget = null,
   pendingInput,
   notice,
   onEnsureCatalog,
@@ -110,6 +132,7 @@ export function CommandComposer({
   onDismissPanel,
   onExecute,
   onModelChange,
+  onSendingChange,
   onSuccessfulExecute,
   voiceCatalog,
 }: CommandComposerProps) {
@@ -125,7 +148,12 @@ export function CommandComposer({
   const [sending, setSending] = useState(false)
   const [outcome, setOutcome] = useState<ComposerOutcome | null>(null)
   const [renderedPendingInput, setRenderedPendingInput] = useState(pendingInput)
+  const [renderedInputSession, setRenderedInputSession] = useState(inputSession)
+  const [inputDrafts, setInputDrafts] = useState<ReadonlyMap<string | null, string>>(
+    () => new Map(),
+  )
   const inputRef = useRef<HTMLInputElement>(null)
+  const inputSessionRef = useRef(inputSession)
   const killBufferRef = useRef('')
   const historyRef = useRef<string[]>([])
   const historyCursorRef = useRef(-1)
@@ -142,13 +170,30 @@ export function CommandComposer({
   const selectedModelOption = chatModels.find((model) => model.id === selectedModel)
     ?? chatModels[0]
 
-  if (pendingInput !== renderedPendingInput) {
+  useLayoutEffect(() => {
+    inputSessionRef.current = inputSession
+  }, [inputSession])
+
+  useEffect(() => {
+    window.clearTimeout(successTimerRef.current)
+  }, [inputSession])
+
+  if (inputSession !== renderedInputSession) {
+    const nextDrafts = new Map(inputDrafts)
+    nextDrafts.set(renderedInputSession, input)
+    setInputDrafts(nextDrafts)
+    setRenderedInputSession(inputSession)
+    setRenderedPendingInput(pendingInput)
+    setInput(pendingInput ?? nextDrafts.get(inputSession) ?? '')
+    setOutcome(null)
+    setDismissed(pendingInput !== undefined && !isSpeakCommandPreview(pendingInput))
+  } else if (pendingInput !== renderedPendingInput) {
     setRenderedPendingInput(pendingInput)
     setInput(pendingInput ?? '')
     setDismissed(pendingInput !== undefined && !isSpeakCommandPreview(pendingInput))
   }
 
-  const speakPreviewOpen = !dismissed && isSpeakCommandPreview(input)
+  const speakPreviewOpen = !context && !dismissed && isSpeakCommandPreview(input)
   const catalogVoices = voiceCatalog?.voices ?? []
   const activeVoiceId = resolveSpeakVoiceId(catalogVoices, selectedVoiceId)
   const stopPreview = previewPlayer.stop
@@ -163,7 +208,7 @@ export function CommandComposer({
   }
 
   const ensureVoicesForInput = (value: string) => {
-    if (isSpeakCommandPreview(value)) ensureVoiceCatalog()
+    if (!context && isSpeakCommandPreview(value)) ensureVoiceCatalog()
   }
 
   const refreshVoiceCatalog = () => {
@@ -179,6 +224,7 @@ export function CommandComposer({
   }
 
   const suggestions = useMemo<Suggestion[]>(() => {
+    if (context) return []
     if (dismissed || isSpeakCommandPreview(input)) return []
     if (pendingInput && /^\/(?:apply|cancel)(?:\s|$)/iu.test(input)) return []
     const commandMatch = input.match(/^\/([\w-]*)$/)
@@ -193,7 +239,7 @@ export function CommandComposer({
         }))
     }
     return notebookAddressSuggestions(cells, input)
-  }, [cells, commands, dismissed, input, pendingInput])
+  }, [cells, commands, context, dismissed, input, pendingInput])
 
   const showOutcome = (next: ComposerOutcome) => {
     window.clearTimeout(successTimerRef.current)
@@ -257,8 +303,10 @@ export function CommandComposer({
   }
 
   const focusAndLoad = () => {
-    void onEnsureCatalog().catch(() => undefined)
-    void ensureHistory()
+    if (!context) {
+      void onEnsureCatalog().catch(() => undefined)
+      void ensureHistory()
+    }
     if (speakPreviewOpen) ensureVoiceCatalog()
   }
 
@@ -277,16 +325,23 @@ export function CommandComposer({
   const execute = async () => {
     const message = input.trim()
     if (!message || sending || disabled) return
+    const executionSession = inputSession
     setSending(true)
-    await ensureHistory()
-    recordHistory(message)
-    setInput('')
-    setDismissed(false)
+    onSendingChange?.(true)
     let selectInput = false
     try {
-      const loadedVoiceCatalog = isSpeakCommandPreview(message)
+      if (!context) {
+        await ensureHistory()
+        if (inputSessionRef.current !== executionSession) return
+        recordHistory(message)
+      }
+      if (inputSessionRef.current !== executionSession) return
+      setInput('')
+      setDismissed(false)
+      const loadedVoiceCatalog = !context && isSpeakCommandPreview(message)
         ? await voiceCatalog?.ensureLoaded()
         : null
+      if (inputSessionRef.current !== executionSession) return
       const voiceId = resolveSpeakVoiceId(
         loadedVoiceCatalog?.voices ?? catalogVoices,
         selectedVoiceId,
@@ -294,6 +349,7 @@ export function CommandComposer({
       const voiceContext = speakExecuteContext(message, voiceId)
       if (voiceContext?.speakVoiceId) persistSpeakVoiceId(voiceContext.speakVoiceId)
       const nextOutcome = await onExecute(message, voiceContext)
+      if (inputSessionRef.current !== executionSession) return
       showOutcome(nextOutcome)
       const inputDecision = composerInputAfterOutcome(nextOutcome, pendingInput)
       if (inputDecision) {
@@ -304,6 +360,7 @@ export function CommandComposer({
       }
       if (nextOutcome.ok) onSuccessfulExecute()
     } catch (error) {
+      if (inputSessionRef.current !== executionSession) return
       showOutcome({
         ok: false,
         message: error instanceof Error ? error.message : String(error),
@@ -315,7 +372,8 @@ export function CommandComposer({
       }
     } finally {
       setSending(false)
-      focusInput(selectInput)
+      onSendingChange?.(false)
+      if (inputSessionRef.current === executionSession) focusInput(selectInput)
     }
   }
 
@@ -388,7 +446,7 @@ export function CommandComposer({
     return true
   }
 
-  return (
+  const composer = (
     <section className="command-composer">
       {notice && (
         <div
@@ -422,7 +480,7 @@ export function CommandComposer({
         </div>
       )}
 
-      {children}
+      {!context && children}
 
       {mcpActivity.phase !== 'idle' && (
         <div
@@ -500,7 +558,9 @@ export function CommandComposer({
           autoCorrect="off"
           autoCapitalize="none"
           spellCheck={false}
-          placeholder={disabled ? connectionLabel : 'Type a message or /command…'}
+          placeholder={disabled
+            ? connectionLabel
+            : placeholder ?? 'Type a message or /command…'}
           aria-label="Videobook command input"
           onFocus={focusAndLoad}
           onChange={(event) => {
@@ -566,22 +626,22 @@ export function CommandComposer({
               onDismissPanel()
               return
             }
-            if (event.ctrlKey && event.key.toLowerCase() === 'p') {
+            if (!context && event.ctrlKey && event.key.toLowerCase() === 'p') {
               event.preventDefault()
               void navigateHistory(-1)
               return
             }
-            if (event.ctrlKey && event.key.toLowerCase() === 'n') {
+            if (!context && event.ctrlKey && event.key.toLowerCase() === 'n') {
               event.preventDefault()
               void navigateHistory(1)
               return
             }
-            if (event.key === 'ArrowUp') {
+            if (!context && event.key === 'ArrowUp') {
               event.preventDefault()
               void navigateHistory(-1)
               return
             }
-            if (event.key === 'ArrowDown') {
+            if (!context && event.key === 'ArrowDown') {
               event.preventDefault()
               void navigateHistory(1)
               return
@@ -593,36 +653,43 @@ export function CommandComposer({
             }
           }}
         />
-        <label
-          className="command-model-selector"
-          title={selectedModelOption?.description}
-        >
-          <Bot size={13} aria-hidden="true" />
-          <select
-            value={selectedModel}
-            disabled={modelSelectionDisabled || sending}
-            aria-label="Chat model"
-            data-testid="chat-model-selector"
-            onChange={(event) => onModelChange(event.target.value)}
+        {context ? (
+          <span className="command-context" title={context.description}>
+            <WandSparkles size={13} aria-hidden="true" />
+            <strong>{context.label}</strong>
+          </span>
+        ) : (
+          <label
+            className="command-model-selector"
+            title={selectedModelOption?.description}
           >
-            {chatModels.map((model) => (
-              <option key={model.id} value={model.id}>{model.id}</option>
-            ))}
-          </select>
-          <ChevronDown size={12} aria-hidden="true" />
-        </label>
+            <Bot size={13} aria-hidden="true" />
+            <select
+              value={selectedModel}
+              disabled={modelSelectionDisabled || sending}
+              aria-label="Chat model"
+              data-testid="chat-model-selector"
+              onChange={(event) => onModelChange(event.target.value)}
+            >
+              {chatModels.map((model) => (
+                <option key={model.id} value={model.id}>{model.id}</option>
+              ))}
+            </select>
+            <ChevronDown size={12} aria-hidden="true" />
+          </label>
+        )}
         <button
           type="submit"
           className="command-send"
           disabled={disabled || sending || !input.trim()}
           aria-label="Send command"
         >
-          {sending
-            ? <span className="command-send-working" aria-hidden="true" />
-            : <Send size={16} />}
+          {sending ? <BusyIndicator size={16} /> : <Send size={16} />}
         </button>
         {transmitting && <span className="command-transmit-scan" aria-hidden="true" />}
       </form>
     </section>
   )
+
+  return portalTarget ? createPortal(composer, portalTarget) : composer
 }

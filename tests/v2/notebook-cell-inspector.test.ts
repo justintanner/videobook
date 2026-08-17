@@ -1516,7 +1516,10 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Person in the foreground')
     expect(html).toContain('Preview removal')
     expect(html).toContain('Remove')
-    expect(html).toContain('Edit selected')
+    expect(html).toContain('Select people or objects, then describe the change in the image edit bar.')
+    expect(html).toContain('aria-label="Image edit bar for @c3"')
+    expect(html).not.toContain('Edit instruction')
+    expect(html).not.toContain('Edit selected')
     expect(html).not.toContain('autoPlay')
   })
 

@@ -106,6 +106,9 @@ describe('BookProjectMenu', () => {
     expect(html).toContain('Catalog unavailable')
     expect(html).toContain('Retry')
     expect(html).toContain('Loading projects')
+    expect(html).toContain('class="busy-indicator"')
+    expect(html).toContain('lucide-activity')
+    expect(html).not.toContain('lucide-loader-circle')
     expect(html).toContain('select-project')
   })
 

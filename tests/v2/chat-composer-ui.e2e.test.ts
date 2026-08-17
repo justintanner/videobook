@@ -9,7 +9,7 @@ import { promisify } from 'node:util'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { chromium } from 'playwright'
 import type { Browser, ConsoleMessage, Page, Route } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
 
 const execFileAsync = promisify(execFile)
@@ -189,6 +189,8 @@ describe('chat composer browser flow', () => {
   let reviewGenerationCellId = ''
   let directVideoGenerationCellId = ''
   let fullscreenImageCellId = ''
+  let fullscreenImageArtifactId = ''
+  let fullscreenImageObjectHash = ''
   let fullscreenImageMediaUrl = ''
   const observedCalls: ToolCall[] = []
   let delayedBootstrap = false
@@ -196,6 +198,21 @@ describe('chat composer browser flow', () => {
     prompt: string
     value: Record<string, unknown>
   } | null = null
+  let mockedFullscreenSubjectEditor = false
+  let mockedSubjectEditCompletions = 0
+  let mockedSubjectEditDelays: number[] = []
+
+  beforeEach(() => {
+    mockedFullscreenSubjectEditor = false
+    mockedSubjectEditCompletions = 0
+    mockedSubjectEditDelays = []
+  })
+
+  afterEach(async () => {
+    mockedFullscreenSubjectEditor = false
+    mockedSubjectEditDelays = []
+    await page?.setViewportSize({ width: 1440, height: 1000 })
+  })
 
   beforeAll(async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-chat-ui-e2e-'))
@@ -399,13 +416,16 @@ describe('chat composer browser flow', () => {
     const uploadedImageAsset = (Array.isArray(assetsValue?.assets) ? assetsValue.assets : [])
       .map(record)
       .find((asset) => asset?.id === uploadedImageId)
-    const uploadedImageArtifactId = typeof uploadedImageAsset?.artifact_id === 'string'
+    fullscreenImageArtifactId = typeof uploadedImageAsset?.artifact_id === 'string'
       ? uploadedImageAsset.artifact_id
+      : ''
+    fullscreenImageObjectHash = typeof uploadedImageAsset?.object_hash === 'string'
+      ? uploadedImageAsset.object_hash
       : ''
     fullscreenImageMediaUrl = typeof uploadedImageAsset?.media_url === 'string'
       ? uploadedImageAsset.media_url
       : ''
-    if (!uploadedImageArtifactId || !fullscreenImageMediaUrl) {
+    if (!fullscreenImageArtifactId || !fullscreenImageObjectHash || !fullscreenImageMediaUrl) {
       throw new Error('Could not create fullscreen image fixture asset')
     }
     fullscreenImageCellId = await createCell({
@@ -413,7 +433,7 @@ describe('chat composer browser flow', () => {
       label: 'generate-image-fullscreen',
       slot: { row: 2, column: 2 },
       prompt: 'A fullscreen image fixture',
-      output_artifact_id: uploadedImageArtifactId,
+      output_artifact_id: fullscreenImageArtifactId,
     })
     await client.close()
     viteProcess = startProcess(
@@ -430,6 +450,58 @@ describe('chat composer browser flow', () => {
       const body = await requestBody(route)
       const calls = toolCalls(body)
       observedCalls.push(...calls)
+      const mockedSubjectCall = mockedFullscreenSubjectEditor && calls.length === 1
+        ? calls[0]
+        : null
+      if (
+        mockedSubjectCall?.name === 'get_image_subject_map'
+        || mockedSubjectCall?.name === 'edit_image_subjects'
+      ) {
+        const envelopes = Array.isArray(body) ? body : [body]
+        const envelope = record(envelopes[0])
+        if (typeof envelope?.id !== 'number' && typeof envelope?.id !== 'string') {
+          throw new Error('Mocked subject editor call is missing an MCP request id')
+        }
+        const value = mockedSubjectCall.name === 'get_image_subject_map'
+          ? {
+              status: 'ready',
+              artifact_id: fullscreenImageArtifactId,
+              object_hash: fullscreenImageObjectHash,
+              width: 1,
+              height: 1,
+              base_url: fullscreenImageMediaUrl,
+              subjects: [{
+                id: 'person-foreground',
+                label: 'Foreground person',
+                description: 'Person nearest the camera',
+                normalized_box: { x: 0.05, y: 0.05, width: 0.9, height: 0.9 },
+                layer_url: fullscreenImageMediaUrl,
+                thumbnail_url: fullscreenImageMediaUrl,
+                z_index: 1,
+                capabilities: { remove: true, exact_edit: false },
+              }],
+            }
+          : { status: 'queued', job_id: 'image-edit-job' }
+        if (mockedSubjectCall.name === 'edit_image_subjects') {
+          await wait(mockedSubjectEditDelays.shift() ?? 400)
+          mockedSubjectEditCompletions += 1
+        }
+        const response = {
+          jsonrpc: '2.0',
+          id: envelope.id,
+          result: {
+            resultType: 'complete',
+            content: [{ type: 'text', text: JSON.stringify(value) }],
+            isError: false,
+          },
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(Array.isArray(body) ? [response] : response),
+        })
+        return
+      }
       const mockedCall = mockedChatActionPlan && calls.find((call) =>
         call.name === 'chat'
         && call.arguments.prompt === mockedChatActionPlan?.prompt)
@@ -802,16 +874,26 @@ describe('chat composer browser flow', () => {
       y: triggerPoint.y,
     })).toBe('Open @c3 fullscreen')
 
+    const ordinaryDraft = 'Keep this ordinary chat draft'
+    await input.fill(ordinaryDraft)
     await page.mouse.click(triggerPoint.x, triggerPoint.y)
     const dialog = page.getByRole('dialog', { name: 'Fullscreen preview for @c3' })
     await dialog.waitFor({ state: 'visible' })
+    const modalInput = dialog.getByLabel('Videobook command input')
+    await modalInput.waitFor({ state: 'visible' })
+    expect(await modalInput.inputValue()).toBe('')
+    expect(await dialog.getByText('@C3 IMAGE EDIT').isVisible()).toBe(true)
+    expect(await dialog.getByLabel('Chat model').count()).toBe(0)
+    expect(await dialog.locator('.command-suggestions').count()).toBe(0)
+    expect(await dialog.locator('.command-composer').count()).toBe(1)
     const image = dialog.locator('img')
     expect(await image.getAttribute('src')).toContain(fullscreenImageMediaUrl)
     const subjects = dialog.getByRole('button', { name: 'Subjects' })
     await subjects.waitFor({ state: 'visible' })
     expect(await subjects.isVisible()).toBe(true)
     expect(await dialog.getByRole('button', { name: 'Remove' }).isDisabled()).toBe(true)
-    expect(await dialog.getByRole('button', { name: 'Edit selected' }).isDisabled()).toBe(true)
+    expect(await dialog.getByRole('button', { name: 'Edit selected' }).count()).toBe(0)
+    expect(await dialog.getByLabel('Edit instruction').count()).toBe(0)
     expect(await page.locator('.app-shell').evaluate((element) => ({
       ariaHidden: element.getAttribute('aria-hidden'),
       inert: element instanceof HTMLElement ? element.inert : false,
@@ -825,19 +907,108 @@ describe('chat composer browser flow', () => {
 
     await page.keyboard.press('Escape')
     await dialog.waitFor({ state: 'hidden' })
+    expect(await input.inputValue()).toBe(ordinaryDraft)
     expect(await trigger.evaluate((element) => document.activeElement === element)).toBe(true)
     expect(await page.locator('.app-shell').evaluate((element) => ({
       ariaHidden: element.getAttribute('aria-hidden'),
       inert: element instanceof HTMLElement ? element.inert : false,
     }))).toEqual({ ariaHidden: null, inert: false })
 
+    mockedFullscreenSubjectEditor = true
     await editTrigger.click()
     await dialog.waitFor({ state: 'visible' })
-    expect(await dialog.getByLabel('Edit instruction').isVisible()).toBe(true)
-    expect(await page.locator('.command-composer').isVisible()).toBe(false)
+    await dialog.locator('.notebook-subject-row strong', {
+      hasText: 'Foreground person',
+    }).waitFor({ state: 'visible' })
+    expect(await modalInput.inputValue()).toBe('')
+    const subjectCheckbox = dialog.locator('.notebook-subject-row input[type="checkbox"]')
+    await subjectCheckbox.check()
+    await expect.poll(async () => await modalInput.getAttribute('placeholder'))
+      .toContain('Foreground person')
+    await page.evaluate(() => window.localStorage.setItem(
+      'videobook.cloud-generation-consent',
+      'accepted',
+    ))
+    observedCalls.length = 0
+    const editPrompt = 'Replace the suit with a bright yellow raincoat'
+    await modalInput.fill(editPrompt)
+    await dialog.getByLabel('Send command').click()
+    await expect.poll(() => observedCalls.find((call) =>
+      call.name === 'edit_image_subjects')).toBeTruthy()
+    expect(await dialog.getByRole('button', { name: 'Remove' }).isDisabled()).toBe(true)
+    expect(await dialog.getByRole('button', { name: 'Hide subjects' }).isDisabled()).toBe(true)
+    const editCall = observedCalls.find((call) => call.name === 'edit_image_subjects')
+    expect(editCall?.arguments).toMatchObject({
+      book_id: bookId,
+      notebook_id: notebookId,
+      source_cell_id: fullscreenImageCellId,
+      artifact_id: fullscreenImageArtifactId,
+      object_hash: fullscreenImageObjectHash,
+      subject_ids: ['person-foreground'],
+      operation: 'edit',
+      prompt: editPrompt,
+    })
+    expect(observedCalls.some((call) => call.name === 'chat')).toBe(false)
+    expect(observedCalls.some((call) => call.name === 'record_prompt')).toBe(false)
+    expect(observedCalls.some((call) => call.name === 'list_prompt_history')).toBe(false)
+    await dialog.locator('.command-result-ok').waitFor({ state: 'visible' })
+    observedCalls.length = 0
+    const remove = dialog.getByRole('button', { name: 'Remove' })
+    await remove.click()
+    await expect.poll(() => observedCalls.find((call) =>
+      call.name === 'edit_image_subjects'
+      && call.arguments.operation === 'remove')).toBeTruthy()
+    expect(await modalInput.isDisabled()).toBe(true)
+    await expect.poll(async () => await modalInput.isEnabled(), {
+      timeout: 5_000,
+    }).toBe(true)
+    const completionBaseline = mockedSubjectEditCompletions
+    mockedSubjectEditDelays = [1_000, 1_800]
+    observedCalls.length = 0
+    await remove.click()
+    await expect.poll(() => observedCalls.filter((call) =>
+      call.name === 'edit_image_subjects'
+      && call.arguments.operation === 'remove').length).toBe(1)
     await close.click()
     await dialog.waitFor({ state: 'hidden' })
+    await editTrigger.click()
+    await dialog.waitFor({ state: 'visible' })
+    await dialog.locator('.notebook-subject-row strong', {
+      hasText: 'Foreground person',
+    }).waitFor({ state: 'visible' })
+    await subjectCheckbox.check()
+    await remove.click()
+    await expect.poll(() => observedCalls.filter((call) =>
+      call.name === 'edit_image_subjects'
+      && call.arguments.operation === 'remove').length).toBe(2)
+    await expect.poll(() => mockedSubjectEditCompletions, {
+      timeout: 5_000,
+    }).toBe(completionBaseline + 1)
+    expect(await modalInput.isDisabled()).toBe(true)
+    await expect.poll(() => mockedSubjectEditCompletions, {
+      timeout: 5_000,
+    }).toBe(completionBaseline + 2)
+    await expect.poll(async () => await modalInput.isEnabled(), {
+      timeout: 5_000,
+    }).toBe(true)
+    await page.setViewportSize({ width: 420, height: 800 })
+    const composerBox = await dialog.locator('.command-composer').boundingBox()
+    const subjectPanelBox = await dialog.locator('.notebook-subject-panel').boundingBox()
+    if (!composerBox || !subjectPanelBox) {
+      throw new Error('Could not measure the mobile image editor layout')
+    }
+    expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(subjectPanelBox.y)
+    await modalInput.fill('Unsent image edit draft')
+    const send = dialog.getByLabel('Send command')
+    await send.focus()
+    await page.keyboard.press('Tab')
+    expect(await close.evaluate((element) => document.activeElement === element)).toBe(true)
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await close.click()
+    await dialog.waitFor({ state: 'hidden' })
+    expect(await input.inputValue()).toBe(ordinaryDraft)
     expect(await editTrigger.evaluate((element) => document.activeElement === element)).toBe(true)
+    mockedFullscreenSubjectEditor = false
   }, 60_000)
 
   it('turns every open notebook square into a media file dropzone', async () => {
@@ -1118,12 +1289,13 @@ describe('chat composer browser flow', () => {
     expect(await shell.getAttribute('aria-busy')).toBe('true')
     expect(await shell.evaluate((element) => window.getComputedStyle(element).animationName))
       .toContain('command-transmit-pulse')
-    const workingIndicator = page.locator('.command-send-working')
+    const workingIndicator = page.locator('.command-send .busy-indicator')
     await workingIndicator.waitFor({ state: 'visible' })
     await wait(220)
     const workingBox = await workingIndicator.boundingBox()
     expect(await workingIndicator.evaluate((element) =>
-      window.getComputedStyle(element).animationName)).toBe('command-working-pulse')
+      window.getComputedStyle(element.querySelector('svg')!).animationName))
+      .toBe('busy-signal-beat')
     await wait(240)
     expect(await workingIndicator.boundingBox()).toEqual(workingBox)
     const screenshotPath = process.env.VIDEOBOOK_E2E_SCREENSHOT

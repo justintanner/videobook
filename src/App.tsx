@@ -40,7 +40,6 @@ import {
   Image,
   Layers2,
   Library,
-  LoaderCircle,
   Mic,
   PanelRightClose,
   PanelRightOpen,
@@ -86,6 +85,7 @@ import {
   CommandComposer,
   type ComposerOutcome,
 } from '@/components/videobook/CommandComposer'
+import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import {
   BusRiverEdge,
 } from '@/components/videobook/BusRiverEdge'
@@ -1983,7 +1983,7 @@ function MediaSlotTile({
           inputRef.current?.click()
         }}
       >
-        {busy ? <LoaderCircle size={24} className="spin" /> : <Upload size={24} />}
+        {busy ? <BusyIndicator size={24} /> : <Upload size={24} />}
         <strong>{busy ? 'Attaching media…' : `Add ${kind}`}</strong>
         <span>Drop one file or choose from this device</span>
       </button>
@@ -2181,7 +2181,7 @@ function MediaLibraryDialog({
           )}
           {state.loading && state.assets.length === 0 ? (
             <div className="media-library-loading">
-              <LoaderCircle size={24} className="spin" />Loading recent media…
+              <BusyIndicator size={24} />Loading recent media…
             </div>
           ) : state.assets.length === 0 ? (
             <div className="media-library-empty">
@@ -2208,7 +2208,7 @@ function MediaLibraryDialog({
                     </span>
                     {active && (
                       <span className="media-library-asset-busy">
-                        <LoaderCircle size={16} className="spin" />Attaching…
+                        <BusyIndicator size={16} />Attaching…
                       </span>
                     )}
                     <span className="media-library-asset-actions">
@@ -2248,7 +2248,7 @@ function MediaLibraryDialog({
               disabled={busy || state.loadingMore}
               onClick={onLoadMore}
             >
-              {state.loadingMore ? <LoaderCircle size={14} className="spin" /> : <Plus size={14} />}
+              {state.loadingMore ? <BusyIndicator size={14} /> : <Plus size={14} />}
               {state.loadingMore ? 'Loading…' : 'Load more'}
             </button>
           )}
@@ -2774,6 +2774,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [watermarkDialog, setWatermarkDialog] = useState<WatermarkDialogState | null>(null)
   const momentSearchRef = useRef<MomentSearchHandle | null>(null)
   const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
+  const [mediaFullscreenComposerTarget, setMediaFullscreenComposerTarget] =
+    useState<HTMLDivElement | null>(null)
+  const [mediaFullscreenSelectedSubjectIds, setMediaFullscreenSelectedSubjectIds] =
+    useState<readonly string[]>([])
+  const [mediaFullscreenComposerSending, setMediaFullscreenComposerSending] =
+    useState(false)
+  const [mediaFullscreenSidebarEditing, setMediaFullscreenSidebarEditing] =
+    useState(false)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
   const [mediaDropActive, setMediaDropActive] = useState(false)
   const [mediaDropSlot, setMediaDropSlot] = useState<NotebookGridSlot | null>(null)
@@ -4382,6 +4390,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     const requestId = imageSubjectMapRequestRef.current + 1
     imageSubjectMapRequestRef.current = requestId
+    setMediaFullscreenComposerTarget(null)
+    setMediaFullscreenSelectedSubjectIds([])
+    setMediaFullscreenComposerSending(false)
+    setMediaFullscreenSidebarEditing(false)
     setMediaFullscreen(session)
     if (asset.type !== 'image' || !asset.objectHash) return
     void call('get_image_subject_map', {
@@ -4408,7 +4420,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const closeMediaFullscreen = useCallback(() => {
     imageSubjectMapRequestRef.current += 1
+    setMediaFullscreenComposerTarget(null)
+    setMediaFullscreenSelectedSubjectIds([])
+    setMediaFullscreenComposerSending(false)
+    setMediaFullscreenSidebarEditing(false)
     setMediaFullscreen(null)
+  }, [])
+
+  const updateMediaFullscreenSelectedSubjectIds = useCallback((
+    subjectIds: readonly string[],
+  ) => {
+    setMediaFullscreenSelectedSubjectIds((current) => (
+      current.length === subjectIds.length
+      && current.every((subjectId, index) => subjectId === subjectIds[index])
+        ? current
+        : [...subjectIds]
+    ))
   }, [])
 
   const analyzeFullscreenSubjects = useCallback(async (
@@ -8135,6 +8162,61 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const executeComposerCommand = async (
+    input: string,
+    context?: { speakVoiceId?: string },
+  ): Promise<ComposerOutcome> => {
+    const session = mediaFullscreen?.asset.type === 'image'
+      ? mediaFullscreen
+      : null
+    if (!session) return await executeCommand(input, context)
+    if (input.startsWith('/')) {
+      return {
+        ok: false,
+        message: 'Close the image editor to run notebook commands.',
+        nextInput: input,
+        selectInput: false,
+      }
+    }
+    if (session.subjectMap?.status !== 'ready') {
+      return {
+        ok: false,
+        message: session.subjectMap?.status === 'analyzing'
+          ? 'Wait for people and object analysis to finish before editing.'
+          : 'Analyze the image before describing an edit.',
+        nextInput: input,
+        selectInput: false,
+      }
+    }
+    const selectedSubjects = session.subjectMap.subjects.filter((subject) =>
+      mediaFullscreenSelectedSubjectIds.includes(subject.id))
+    if (selectedSubjects.length === 0) {
+      return {
+        ok: false,
+        message: 'Select at least one person or object to edit.',
+        nextInput: input,
+        selectInput: false,
+      }
+    }
+    const queued = await editFullscreenSubjects(session, {
+      operation: 'edit',
+      subjectIds: selectedSubjects.map((subject) => subject.id),
+      prompt: input,
+    })
+    if (!queued) {
+      return {
+        ok: false,
+        message: 'The image edit was not queued.',
+        nextInput: input,
+        selectInput: false,
+      }
+    }
+    return {
+      ok: true,
+      message: `Image edit queued for ${selectedSubjects.length} ${selectedSubjects.length === 1 ? 'subject' : 'subjects'}.`,
+    }
+  }
+
   const setHoveredMediaDropSlot = (slot: NotebookGridSlot | null) => {
     setMediaDropSlot((current) => (
       current?.row === slot?.row && current?.column === slot?.column
@@ -8660,6 +8742,33 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const deleteContextMenuCell = () => {
     if (contextMenuCell) void deleteNotebookCells([contextMenuCell])
   }
+  const fullscreenImageEditor = mediaFullscreen?.asset.type === 'image'
+    ? mediaFullscreen
+    : null
+  const fullscreenSelectedSubjects = fullscreenImageEditor?.subjectMap?.subjects.filter(
+    (subject) => mediaFullscreenSelectedSubjectIds.includes(subject.id),
+  ) ?? []
+  const fullscreenComposerContext = fullscreenImageEditor
+    ? {
+        label: `@${fullscreenImageEditor.address.toUpperCase()} IMAGE EDIT`,
+        description: fullscreenSelectedSubjects.length > 0
+          ? `${fullscreenSelectedSubjects.length} selected ${fullscreenSelectedSubjects.length === 1 ? 'subject' : 'subjects'}`
+          : 'Select people or objects to edit',
+      }
+    : null
+  const fullscreenComposerPlaceholder = !fullscreenImageEditor
+    ? undefined
+    : fullscreenImageEditor.subjectMap?.status !== 'ready'
+      ? 'Analyze the image to find editable people and objects…'
+      : fullscreenSelectedSubjects.length === 0
+        ? 'Select people or objects to edit…'
+        : `Describe how to edit ${fullscreenSelectedSubjects
+            .slice(0, 2)
+            .map((subject) => subject.label)
+            .join(' and ')}…`
+  const revealSuccessfulComposerResult = () => {
+    if (!fullscreenImageEditor) revealLatestNotebookResult()
+  }
 
   return (
     <main
@@ -8762,7 +8871,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         </div>
         <nav className="header-navigation" aria-label="Workspace navigation">
           <button type="button" title="Refresh books" aria-label="Refresh books" disabled={busy || mcp.state !== 'ready'} onClick={() => void loadBooks(bookId)}>
-            {busy ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
+            {busy ? <BusyIndicator size={17} /> : <RefreshCw size={17} />}
           </button>
           {screenNavigation.map((item) => {
             const Icon = item.icon
@@ -9971,8 +10080,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
       {mediaFullscreen && (
         <NotebookMediaFullscreen
+          key={mediaFullscreen.key}
           asset={mediaFullscreen.asset}
           address={mediaFullscreen.address}
+          composerEditing={mediaFullscreenComposerSending}
+          composerPortalRef={setMediaFullscreenComposerTarget}
           subjectMap={mediaFullscreen.subjectMap}
           subjectMapLoading={mediaFullscreen.subjectMapLoading}
           returnFocus={mediaFullscreen.returnFocus}
@@ -9984,8 +10096,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           }
           onAnalyzeSubjects={(force) =>
             analyzeFullscreenSubjects(mediaFullscreen, force)}
+          onEditingChange={setMediaFullscreenSidebarEditing}
           onEditSubjects={(input) =>
             editFullscreenSubjects(mediaFullscreen, input)}
+          onSelectedSubjectIdsChange={updateMediaFullscreenSelectedSubjectIds}
           onClose={closeMediaFullscreen}
         />
       )}
@@ -9996,28 +10110,50 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         bookId={bookId}
         callTool={call}
         chatModels={chatModelCatalog.models}
-        disabled={busy || !bookId || mcp.state !== 'ready'}
+        disabled={
+          busy
+          || mediaFullscreenSidebarEditing
+          || !bookId
+          || mcp.state !== 'ready'
+        }
         modelSelectionDisabled={!bookId || mcp.state !== 'ready'}
-        connectionLabel={mcp.state === 'ready' ? 'Load a book to begin' : 'Connecting to MCP…'}
+        connectionLabel={mediaFullscreenSidebarEditing
+          ? 'Removing selected subjects…'
+          : mcp.state === 'ready'
+            ? 'Load a book to begin'
+            : 'Connecting to MCP…'}
         mcpActivity={mcpActivity}
         selectedModel={chatModel}
-        pendingInput={pendingChatAction?.kind === 'generation'
-          ? '/apply '
-          : pendingCommandPlan || pendingChatAction
-            ? '/apply'
-            : undefined}
+        context={fullscreenComposerContext}
+        inputSession={fullscreenImageEditor
+          ? `image-edit:${fullscreenImageEditor.key}`
+          : 'chat'}
+        placeholder={fullscreenComposerPlaceholder}
+        portalTarget={fullscreenImageEditor
+          ? mediaFullscreenComposerTarget
+          : null}
+        pendingInput={fullscreenImageEditor
+          ? undefined
+          : pendingChatAction?.kind === 'generation'
+            ? '/apply '
+            : pendingCommandPlan || pendingChatAction
+              ? '/apply'
+              : undefined}
         notice={notice
           ? { message: notice.text, tone: notice.tone }
           : null}
         onEnsureCatalog={refreshComposerCatalog}
         onDismissNotice={() => setNoticeState(null)}
-        onDismissPanel={pendingCommandPlan || pendingChatAction
+        onDismissPanel={!fullscreenImageEditor && (pendingCommandPlan || pendingChatAction)
           ? dismissPendingCommandPlan
           : undefined}
-        onExecute={executeCommand}
+        onExecute={executeComposerCommand}
         voiceCatalog={elevenLabsVoices}
         onModelChange={changeChatModel}
-        onSuccessfulExecute={revealLatestNotebookResult}
+        onSendingChange={fullscreenImageEditor
+          ? setMediaFullscreenComposerSending
+          : undefined}
+        onSuccessfulExecute={revealSuccessfulComposerResult}
       >
         {pendingCommandPlan && (
           <aside

@@ -5,7 +5,10 @@ import { CommandComposer } from '../../src/components/videobook/CommandComposer'
 import { fallbackChatModelCatalog } from '../../src/videobook/chat-models'
 import { idleMcpActivity } from '../../src/videobook/mcp-activity'
 
-function renderComposer(modelSelectionDisabled: boolean): string {
+function renderComposer(
+  modelSelectionDisabled: boolean,
+  context: { description: string; label: string } | null = null,
+): string {
   return renderToStaticMarkup(createElement(CommandComposer, {
     commands: [],
     cells: [],
@@ -16,8 +19,9 @@ function renderComposer(modelSelectionDisabled: boolean): string {
     modelSelectionDisabled,
     connectionLabel: 'Working',
     mcpActivity: idleMcpActivity,
-    promptSession: null,
+    inputSession: 'chat',
     selectedModel: fallbackChatModelCatalog.defaultModel,
+    context,
     onEnsureCatalog: async () => undefined,
     onExecute: async () => ({ ok: true, message: 'Done' }),
     onModelChange: () => undefined,
@@ -45,5 +49,15 @@ describe('CommandComposer controls', () => {
 
   it('disables model selection when its own availability guard is active', () => {
     expect(controlMarkup(renderComposer(true), 'Chat model')).toContain('disabled')
+  })
+
+  it('shows image edit context instead of the chat model selector', () => {
+    const html = renderComposer(false, {
+      description: 'Two selected subjects',
+      label: '@C3 IMAGE EDIT',
+    })
+
+    expect(html).toContain('@C3 IMAGE EDIT')
+    expect(html).not.toContain('aria-label="Chat model"')
   })
 })
