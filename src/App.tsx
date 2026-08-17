@@ -102,6 +102,7 @@ import {
 import {
   NotebookCellInspector,
   type CellGenerationAttempt,
+  type NotebookCellInspectorAsset,
 } from '@/components/videobook/NotebookCellInspector'
 import { MediaLibraryAssetPreview } from '@/components/videobook/MediaLibraryAssetPreview'
 import {
@@ -109,7 +110,10 @@ import {
   type GenerationReviewSource,
 } from '@/components/videobook/GenerationChatReview'
 import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
-import { NotebookMediaFullscreen } from '@/components/videobook/NotebookMediaFullscreen'
+import {
+  NotebookMediaFullscreen,
+  type ImageSubjectEditInput,
+} from '@/components/videobook/NotebookMediaFullscreen'
 import { WatermarkDialog } from '@/components/videobook/WatermarkDialog'
 import type { WatermarkDialogState } from '@/components/videobook/WatermarkDialog'
 import { materializeNotebookSpeakCommand } from './videobook/notebook-speak-command'
@@ -314,6 +318,11 @@ import {
 } from '@/videobook/notebook-coordinate-actions'
 import { notebookCellAtSlot } from '@/videobook/notebook-addressing'
 import { recordValue } from '@/videobook/value-decoders'
+import {
+  asImageSubjectMap,
+  type ImageSubjectMap,
+} from '@/videobook/image-subject-map'
+import { guardedAsyncResult } from '@/videobook/async-request-guard'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
 
@@ -325,6 +334,7 @@ type ToolResponse = {
 type AssetRecord = {
   id: string
   artifactId: string
+  objectHash: string | null
   type: string
   createdAt: string
   mediaUrl: string | null
@@ -336,6 +346,18 @@ type AssetRecord = {
   duration: number | null
   audioInfo: NotebookAudioInfo | null
   analysisInfo: NotebookAnalysisInfo | null
+}
+
+type MediaFullscreenSession = {
+  key: string
+  bookId: string
+  notebookId: string
+  cellId: string
+  address: string
+  asset: NotebookCellInspectorAsset
+  returnFocus: HTMLElement | null
+  subjectMap: ImageSubjectMap | null
+  subjectMapLoading: boolean
 }
 
 type MediaSearchMode = SearchReferenceMode
@@ -1026,6 +1048,7 @@ function asAsset(value: unknown): AssetRecord | null {
   return {
     id,
     artifactId,
+    objectHash: asString(item.object_hash ?? item.objectHash),
     type,
     createdAt: asString(item.created_at ?? item.createdAt) ?? '',
     mediaUrl: asString(item.media_url ?? item.mediaUrl),
@@ -1051,6 +1074,49 @@ function asAssets(value: unknown): AssetRecord[] {
     const asset = asAsset(entry)
     return asset ? [asset] : []
   })
+}
+
+function imageSubjectMapForSession(
+  session: MediaFullscreenSession,
+  value: unknown,
+): ImageSubjectMap {
+  const subjectMap = asImageSubjectMap(value)
+  if (
+    subjectMap.artifactId
+    && subjectMap.artifactId !== session.asset.artifactId
+  ) {
+    throw new Error('The subject map belongs to another image artifact')
+  }
+  if (
+    subjectMap.objectHash
+    && subjectMap.objectHash !== session.asset.objectHash
+  ) {
+    throw new Error('The image changed before subject analysis finished')
+  }
+  return {
+    ...subjectMap,
+    artifactId: subjectMap.artifactId ?? session.asset.artifactId,
+    objectHash: subjectMap.objectHash ?? session.asset.objectHash ?? null,
+    width: subjectMap.width ?? session.asset.width,
+    height: subjectMap.height ?? session.asset.height,
+  }
+}
+
+function failedImageSubjectMap(
+  session: MediaFullscreenSession,
+  error: unknown,
+): ImageSubjectMap {
+  return {
+    status: 'failed',
+    artifactId: session.asset.artifactId,
+    objectHash: session.asset.objectHash ?? null,
+    width: session.asset.width,
+    height: session.asset.height,
+    baseUrl: null,
+    jobId: null,
+    error: error instanceof Error ? error.message : String(error),
+    subjects: [],
+  }
 }
 
 function asLibrarySearchResult(value: unknown): LibrarySearchResult {
@@ -2648,7 +2714,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const mediaLibraryReference = useSearchReferenceLifecycle()
   const [watermarkDialog, setWatermarkDialog] = useState<WatermarkDialogState | null>(null)
   const momentSearchRef = useRef<MomentSearchHandle | null>(null)
-  const [fullscreenCellId, setFullscreenCellId] = useState<string | null>(null)
+  const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
   const [mediaDropActive, setMediaDropActive] = useState(false)
   const [mediaDropSlot, setMediaDropSlot] = useState<NotebookGridSlot | null>(null)
@@ -2714,6 +2780,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const recorderStreamRef = useRef<MediaStream | null>(null)
   const recorderChunksRef = useRef<Blob[]>([])
   const mediaLibraryRequestRef = useRef(0)
+  const imageSubjectMapRequestRef = useRef(0)
+  const bookDataRequestRef = useRef(0)
   const mediaLibraryOpenerRef = useRef<HTMLElement | null>(null)
   const watermarkOpenerRef = useRef<HTMLElement | null>(null)
   const activeWatchesRef = useRef(new Map<string, string>())
@@ -4093,18 +4161,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const selectedMediaSlotState = selectedNotebookCell
     ? mediaSlotStates[selectedNotebookCell.id]
     : undefined
-  const fullscreenCell = useMemo(
-    () => notebook?.cells.find((cell) => cell.id === fullscreenCellId) ?? null,
-    [fullscreenCellId, notebook],
-  )
-  const fullscreenNode = useMemo(
-    () => nodes.find((node) => node.id === fullscreenCellId) ?? null,
-    [fullscreenCellId, nodes],
-  )
-  const closeMediaFullscreen = useCallback(() => {
-    setFullscreenCellId(null)
-  }, [])
-
   const previewGenerationPayload = useCallback(async (
     cellId: string,
     draft: GenerationPreviewDraft,
@@ -4143,6 +4199,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [applyNotebook, assets, call, jobs])
 
   const refreshBookData = useCallback(async (targetBookId: string, preferredNotebookId?: string) => {
+    const requestId = bookDataRequestRef.current + 1
+    bookDataRequestRef.current = requestId
+    const response = await guardedAsyncResult(
+      async () => await Promise.all([
+        call('list_notebooks', { book_id: targetBookId }),
+        call('list_assets', {
+          book_id: targetBookId,
+          sort: 'newest',
+          limit: 200,
+          include_referenced: true,
+        }),
+        call('get_primary_sequence', { book_id: targetBookId }),
+        call('list_jobs', { book_id: targetBookId, limit: 200 }),
+        call('list_ingest_status', { book_id: targetBookId, limit: 200 }),
+        call('list_notebook_actions', { book_id: targetBookId }),
+      ]),
+      () => bookDataRequestRef.current === requestId,
+    )
+    if (response.kind === 'stale') return
+    if (response.kind === 'error') throw response.error
     const [
       notebookValue,
       assetValue,
@@ -4150,19 +4226,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       jobValue,
       ingestStatusValue,
       actionValue,
-    ] = await Promise.all([
-      call('list_notebooks', { book_id: targetBookId }),
-      call('list_assets', {
-        book_id: targetBookId,
-        sort: 'newest',
-        limit: 200,
-        include_referenced: true,
-      }),
-      call('get_primary_sequence', { book_id: targetBookId }),
-      call('list_jobs', { book_id: targetBookId, limit: 200 }),
-      call('list_ingest_status', { book_id: targetBookId, limit: 200 }),
-      call('list_notebook_actions', { book_id: targetBookId }),
-    ])
+    ] = response.value
     const nextNotebooks = asNotebooks(notebookValue)
     const nextAssets = asAssets(assetValue)
     const nextJobs = asJobs(jobValue)
@@ -4189,6 +4253,204 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     applyNotebook(nextNotebook, nextAssets, nextJobs)
     resumeMediaProcessingWatches(targetBookId, nextNotebook, nextAssets)
   }, [applyNotebook, call, resumeMediaProcessingWatches])
+
+  const updateFullscreenSubjectMap = useCallback((
+    key: string,
+    subjectMap: ImageSubjectMap,
+    subjectMapLoading = false,
+  ) => {
+    setMediaFullscreen((current) => current?.key === key
+      ? { ...current, subjectMap, subjectMapLoading }
+      : current)
+  }, [])
+
+  const watchImageSubjectMap = useCallback(async (
+    session: MediaFullscreenSession,
+    requestId: number,
+  ) => {
+    const deadline = Date.now() + 31 * 60_000
+    while (
+      Date.now() < deadline
+      && imageSubjectMapRequestRef.current === requestId
+    ) {
+      await delay(3_000)
+      if (imageSubjectMapRequestRef.current !== requestId) return
+      const response = await guardedAsyncResult(
+        async () => imageSubjectMapForSession(
+          session,
+          await call('get_image_subject_map', {
+            book_id: session.bookId,
+            artifact_id: session.asset.artifactId,
+            object_hash: session.asset.objectHash,
+          }, { background: true }),
+        ),
+        () => imageSubjectMapRequestRef.current === requestId,
+      )
+      if (response.kind === 'stale') return
+      if (response.kind === 'error') {
+        updateFullscreenSubjectMap(
+          session.key,
+          failedImageSubjectMap(session, response.error),
+        )
+        return
+      }
+      updateFullscreenSubjectMap(session.key, response.value)
+      if (response.value.status !== 'analyzing') return
+    }
+  }, [call, updateFullscreenSubjectMap])
+
+  const openMediaFullscreen = useCallback((
+    cell: NotebookDocument['cells'][number],
+    asset: NotebookCellInspectorAsset,
+    returnFocus?: HTMLElement | null,
+  ) => {
+    if (!bookId || !notebook) return
+    const session: MediaFullscreenSession = {
+      key: [bookId, notebook.id, cell.id, asset.artifactId, asset.objectHash].join(':'),
+      bookId,
+      notebookId: notebook.id,
+      cellId: cell.id,
+      address: notebookGridAddress(cell.slot),
+      asset,
+      returnFocus: returnFocus
+        ?? (document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null),
+      subjectMap: null,
+      subjectMapLoading: asset.type === 'image' && Boolean(asset.objectHash),
+    }
+    const requestId = imageSubjectMapRequestRef.current + 1
+    imageSubjectMapRequestRef.current = requestId
+    setMediaFullscreen(session)
+    if (asset.type !== 'image' || !asset.objectHash) return
+    void call('get_image_subject_map', {
+      book_id: bookId,
+      artifact_id: asset.artifactId,
+      object_hash: asset.objectHash,
+    }, { background: true })
+      .then((value) => {
+        if (imageSubjectMapRequestRef.current !== requestId) return
+        const subjectMap = imageSubjectMapForSession(session, value)
+        updateFullscreenSubjectMap(session.key, subjectMap)
+        if (subjectMap.status === 'analyzing') {
+          void watchImageSubjectMap(session, requestId)
+        }
+      })
+      .catch((error: unknown) => {
+        if (imageSubjectMapRequestRef.current !== requestId) return
+        updateFullscreenSubjectMap(
+          session.key,
+          failedImageSubjectMap(session, error),
+        )
+      })
+  }, [bookId, call, notebook, updateFullscreenSubjectMap, watchImageSubjectMap])
+
+  const closeMediaFullscreen = useCallback(() => {
+    imageSubjectMapRequestRef.current += 1
+    setMediaFullscreen(null)
+  }, [])
+
+  const analyzeFullscreenSubjects = useCallback(async (
+    session: MediaFullscreenSession,
+    force = false,
+  ) => {
+    if (!session.asset.objectHash) {
+      throw new Error('This image does not expose an immutable object hash')
+    }
+    if (!acceptCloudGenerationConsent({
+      provider: 'kie',
+      model: 'seedream/5-pro-layer-decomposition',
+      tool: 'analyze_image_subjects',
+    })) return
+    const requestId = imageSubjectMapRequestRef.current + 1
+    imageSubjectMapRequestRef.current = requestId
+    updateFullscreenSubjectMap(session.key, {
+      status: 'analyzing',
+      artifactId: session.asset.artifactId,
+      objectHash: session.asset.objectHash,
+      width: session.asset.width,
+      height: session.asset.height,
+      baseUrl: session.subjectMap?.baseUrl ?? null,
+      jobId: null,
+      error: null,
+      subjects: session.subjectMap?.subjects ?? [],
+    }, true)
+    try {
+      const value = await call('analyze_image_subjects', {
+        book_id: session.bookId,
+        artifact_id: session.asset.artifactId,
+        object_hash: session.asset.objectHash,
+        ...(force ? { force: true } : {}),
+      })
+      if (imageSubjectMapRequestRef.current !== requestId) return
+      const subjectMap = imageSubjectMapForSession(session, value)
+      updateFullscreenSubjectMap(session.key, subjectMap)
+      if (subjectMap.status === 'analyzing') {
+        void watchImageSubjectMap(session, requestId)
+      }
+    } catch (error) {
+      if (imageSubjectMapRequestRef.current === requestId) {
+        updateFullscreenSubjectMap(
+          session.key,
+          failedImageSubjectMap(session, error),
+        )
+      }
+      throw error
+    }
+  }, [call, updateFullscreenSubjectMap, watchImageSubjectMap])
+
+  const editFullscreenSubjects = useCallback(async (
+    session: MediaFullscreenSession,
+    input: ImageSubjectEditInput,
+  ) => {
+    if (!session.asset.objectHash) {
+      throw new Error('This image does not expose an immutable object hash')
+    }
+    if (bookId !== session.bookId) {
+      throw new Error('The active book changed while the image editor was open')
+    }
+    if (watchScopeRef.current.notebookId !== session.notebookId) {
+      throw new Error('The active notebook changed while the image editor was open')
+    }
+    if (
+      input.operation === 'edit'
+      && !acceptCloudGenerationConsent({
+        provider: 'kie',
+        model: 'seedream/5-pro-image-to-image',
+        tool: 'edit_image_subjects',
+      })
+    ) return false
+    const requestId = imageSubjectMapRequestRef.current
+    const response = await guardedAsyncResult(
+      async () => await call('edit_image_subjects', {
+        book_id: session.bookId,
+        notebook_id: session.notebookId,
+        source_cell_id: session.cellId,
+        artifact_id: session.asset.artifactId,
+        object_hash: session.asset.objectHash,
+        subject_ids: input.subjectIds,
+        operation: input.operation,
+        ...(input.prompt ? { prompt: input.prompt } : {}),
+      }),
+      () => {
+        const scope = watchScopeRef.current
+        return imageSubjectMapRequestRef.current === requestId
+          && scope.bookId === session.bookId
+          && scope.notebookId === session.notebookId
+      },
+    )
+    if (response.kind === 'stale') return false
+    if (response.kind === 'error') throw response.error
+    const result = response.value
+    const status = asString(recordValue(result)?.status) ?? 'queued'
+    setNotice(
+      input.operation === 'remove'
+        ? `Subject removal ${status}`
+        : `Subject edit ${status}`,
+    )
+    await refreshBookData(session.bookId, session.notebookId).catch(() => undefined)
+    return true
+  }, [bookId, call, refreshBookData, setNotice])
 
   const refreshBookList = useCallback(async () => {
     const value = await call('list_books', { sort: 'newest' })
@@ -4564,15 +4826,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         })
         deletedIds.add(cell.id)
       }
-      if (fullscreenCellId && deletedIds.has(fullscreenCellId)) {
-        setFullscreenCellId(null)
+      if (mediaFullscreen && deletedIds.has(mediaFullscreen.cellId)) {
+        closeMediaFullscreen()
       }
       await refreshBookData(bookId, notebook.id)
       reconcileDeletedSelection()
       setNotice(count === 1 ? `${addresses[0]} deleted` : `${count} cells deleted`)
     } catch (error) {
-      if (fullscreenCellId && deletedIds.has(fullscreenCellId)) {
-        setFullscreenCellId(null)
+      if (mediaFullscreen && deletedIds.has(mediaFullscreen.cellId)) {
+        closeMediaFullscreen()
       }
       await refreshBookData(bookId, notebook.id).catch(() => undefined)
       reconcileDeletedSelection()
@@ -8305,7 +8567,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return
     }
     if (actionId === 'media') {
-      setFullscreenCellId(contextMenuCell.id)
+      if (contextMenuVisualAsset) {
+        openMediaFullscreen(
+          contextMenuCell,
+          contextMenuVisualAsset,
+          cellContextMenu?.returnFocus ?? null,
+        )
+      }
       return
     }
     if (actionId === 'duplicate') {
@@ -8333,7 +8601,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   return (
     <main
-      className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} ${selectedCell ? 'inspector-detail' : 'inspector-overview'} ${fullscreenCell && fullscreenNode?.data.asset ? 'media-fullscreen-open' : ''}`}
+      className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} ${selectedCell ? 'inspector-detail' : 'inspector-overview'} ${mediaFullscreen ? 'media-fullscreen-open' : ''}`}
       onDragEnter={handleAppFileDragEnter}
       onDragLeave={handleAppFileDragLeave}
       onDragOver={handleAppFileDragOver}
@@ -8786,7 +9054,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     onSetInput={setSelectedCellInput}
                     onRun={runCell}
                     onDelete={deleteSelectedCell}
-                    onOpenFullscreen={() => setFullscreenCellId(selectedNotebookCell.id)}
+                    onOpenFullscreen={(asset) => {
+                      openMediaFullscreen(selectedNotebookCell, asset)
+                    }}
                     onPreviewPayload={previewGenerationPayload}
                     onLoadGenerationPayload={loadGenerationPayload}
                   />
@@ -9637,10 +9907,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         />
       )}
 
-      {fullscreenCell && fullscreenNode?.data.asset && (
+      {mediaFullscreen && (
         <NotebookMediaFullscreen
-          asset={fullscreenNode.data.asset}
-          address={notebookGridAddress(fullscreenCell.slot)}
+          asset={mediaFullscreen.asset}
+          address={mediaFullscreen.address}
+          subjectMap={mediaFullscreen.subjectMap}
+          subjectMapLoading={mediaFullscreen.subjectMapLoading}
+          returnFocus={mediaFullscreen.returnFocus}
+          analysisUnavailableReason={
+            mediaFullscreen.asset.type === 'image'
+            && !mediaFullscreen.asset.objectHash
+              ? 'This version is missing its immutable object hash. Refresh the book data and reopen it.'
+              : null
+          }
+          onAnalyzeSubjects={(force) =>
+            analyzeFullscreenSubjects(mediaFullscreen, force)}
+          onEditSubjects={(input) =>
+            editFullscreenSubjects(mediaFullscreen, input)}
           onClose={closeMediaFullscreen}
         />
       )}

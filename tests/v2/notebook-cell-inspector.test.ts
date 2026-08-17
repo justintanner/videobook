@@ -22,6 +22,7 @@ import type {
   NotebookGenerationAction,
 } from '../../src/videobook/notebook-generation-actions'
 import type { ElevenLabsVoicesState } from '../../src/videobook/use-elevenlabs-voices'
+import { asImageSubjectMap } from '../../src/videobook/image-subject-map'
 
 const cell: NotebookCell = {
   id: '01900000-0000-7000-8000-000000000001',
@@ -1407,6 +1408,64 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('Media cell inspector')
     expect(html).not.toContain('Dolt source')
     expect(html).not.toContain('Delete')
+    expect(html).not.toContain('People &amp; objects')
+    expect(html).not.toContain('Edit selected')
+  })
+
+  it('renders an accessible subject workspace with deterministic overlays', () => {
+    const subjectMap = asImageSubjectMap({
+      status: 'ready',
+      artifact_id: 'image-artifact',
+      object_hash: 'sha256:image',
+      width: 1200,
+      height: 800,
+      base_url: '/files/book/image-artifact/base.png',
+      subjects: [{
+        id: 'person-1',
+        label: 'Person',
+        description: 'Person in the foreground',
+        normalized_box: { x: 0.2, y: 0.1, width: 0.35, height: 0.8 },
+        layer_url: '/files/book/image-artifact/person.png',
+        thumbnail_url: '/files/book/image-artifact/person-thumb.png',
+        z_index: 1,
+        capabilities: { remove: true, exact_edit: false },
+      }],
+    })
+    const html = renderToStaticMarkup(createElement(NotebookMediaFullscreen, {
+      asset: {
+        artifactId: 'image-artifact',
+        id: 'image-source',
+        objectHash: 'sha256:image',
+        type: 'image',
+        mediaUrl: '/files/book/image-artifact/original.png',
+        thumbnailUrl: null,
+        width: 1200,
+        height: 800,
+        duration: null,
+        audioInfo: null,
+      },
+      address: 'c3',
+      subjectMap,
+      onAnalyzeSubjects: async () => undefined,
+      onEditSubjects: async () => true,
+      onClose: () => undefined,
+    }))
+
+    expect(subjectMap.subjects[0]?.box).toEqual({
+      x: 0.2,
+      y: 0.1,
+      width: 0.35,
+      height: 0.8,
+    })
+    expect(subjectMap.subjects[0]?.color).toMatch(/^#[0-9a-f]{6}$/i)
+    expect(html).toContain('aria-label="Subject editor"')
+    expect(html).toContain('Image with detected subject overlays')
+    expect(html).toContain('/files/book/image-artifact/person.png')
+    expect(html).toContain('Person in the foreground')
+    expect(html).toContain('Preview removal')
+    expect(html).toContain('Remove')
+    expect(html).toContain('Edit selected')
+    expect(html).not.toContain('autoPlay')
   })
 
   it('projects every persisted cells-table column with raw null and JSON values', () => {

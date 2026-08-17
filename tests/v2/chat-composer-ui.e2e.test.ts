@@ -776,6 +776,15 @@ describe('chat composer browser flow', () => {
     await dialog.waitFor({ state: 'visible' })
     const image = dialog.locator('img')
     expect(await image.getAttribute('src')).toContain(fullscreenImageMediaUrl)
+    const subjects = dialog.getByRole('button', { name: 'Subjects' })
+    await subjects.waitFor({ state: 'visible' })
+    expect(await subjects.isVisible()).toBe(true)
+    expect(await dialog.getByRole('button', { name: 'Remove' }).isDisabled()).toBe(true)
+    expect(await dialog.getByRole('button', { name: 'Edit selected' }).isDisabled()).toBe(true)
+    expect(await page.locator('.app-shell').evaluate((element) => ({
+      ariaHidden: element.getAttribute('aria-hidden'),
+      inert: element instanceof HTMLElement ? element.inert : false,
+    }))).toEqual({ ariaHidden: 'true', inert: true })
     await expect.poll(async () => await image.evaluate((element) => ({
       complete: element.complete,
       naturalWidth: element.naturalWidth,
@@ -786,6 +795,10 @@ describe('chat composer browser flow', () => {
     await page.keyboard.press('Escape')
     await dialog.waitFor({ state: 'hidden' })
     expect(await trigger.evaluate((element) => document.activeElement === element)).toBe(true)
+    expect(await page.locator('.app-shell').evaluate((element) => ({
+      ariaHidden: element.getAttribute('aria-hidden'),
+      inert: element instanceof HTMLElement ? element.inert : false,
+    }))).toEqual({ ariaHidden: null, inert: false })
 
     await trigger.click()
     await dialog.waitFor({ state: 'visible' })

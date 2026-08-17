@@ -105,10 +105,14 @@ export function isProviderPollDriverActive(bookId: string): boolean {
 
 async function tickProviderPoll(info: RunnerInfo): Promise<void> {
   if (info.providerPollInFlight) return;
-  const pending = info.engine.jobs.pending.findAll();
-  if (!pending.ok || pending.value.length === 0) return;
   info.providerPollInFlight = true;
   try {
+    const { reconcileImageSubjectJobFailures } = await import(
+      "./jobs/image-subjects.js"
+    );
+    await reconcileImageSubjectJobFailures(info.engine, info.bookId);
+    const pending = info.engine.jobs.pending.findAll();
+    if (!pending.ok || pending.value.length === 0) return;
     providerPollTickHook?.(info.bookId);
     const { pollPendingProviderTasks } = await import("./tools/reconcile-project-work.js");
     await pollPendingProviderTasks(
@@ -345,6 +349,9 @@ function makeWrappedResolver(
         try {
           const providerKind = providerHandoffKindFor(type);
           if (providerKind && assetId) {
+            if (type === "generate_image_subject_edit" && job.attempts > 1) {
+              await recoverInterruptedSubjectEditArtifact(engine, assetId);
+            }
             const claimed = engine.jobs.artifactWork.begin(assetId, {
               kind: providerKind,
               ownerKind: "job",
@@ -398,6 +405,28 @@ function makeWrappedResolver(
       }),
     );
   };
+}
+
+export async function recoverInterruptedSubjectEditArtifact(
+  engine: Engine,
+  artifactId: string,
+): Promise<void> {
+  const view = engine.jobs.artifactWork.read(artifactId);
+  if (!view.ok) throw new Error(view.error.message);
+  if (view.value?.status === "working" && view.value.ownerId) {
+    const failed = await engine.jobs.artifactWork.fail(
+      artifactId,
+      view.value.ownerId,
+      { message: "Recovering interrupted image subject edit" },
+    );
+    if (!failed) throw new Error(`Could not release interrupted work for ${artifactId}`);
+  }
+  const refreshed = engine.jobs.artifactWork.read(artifactId);
+  if (!refreshed.ok) throw new Error(refreshed.error.message);
+  if (refreshed.value?.status !== "error") return;
+  const cleared = await engine.jobs.failures.clear(artifactId);
+  if (!cleared.ok) throw new Error(cleared.error.message);
+  if (!cleared.value) throw new Error(`Could not clear interrupted work for ${artifactId}`);
 }
 
 async function dispatchFailure(
@@ -459,12 +488,16 @@ export function enqueueOptions(jobId: string, payload: JobPayload) {
   const type = extractType(payload);
   const assetId = extractAssetId(payload);
   const classified = assetId ? jobTypeToAssetWorkKind(type, payload) : null;
+  const maxAttempts = type === "analyze_image_subjects"
+    || type === "generate_image_subject_edit"
+    ? 2
+    : 1;
   return {
     type,
     artifactId: type === "semantic_index" ? null : assetId,
     payload,
     dedupeKey: jobId,
-    maxAttempts: 1,
+    maxAttempts,
     artifactWorkKind: classified?.kind ?? null,
     artifactWorkOrientation: classified?.orientation ?? null,
   };

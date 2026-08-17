@@ -93,6 +93,7 @@ export type ProjectAsset = {
   path: string;
   media_url: string | null;
   thumbnail_url: string | null;
+  object_hash: string | null;
   status: string;
   /** New (cutover step 7): durable status from the assets table. UI should
    *  prefer assetWork.status + assetWork.meta when present; the legacy
@@ -836,6 +837,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
         path: a.path,
         media_url,
         thumbnail_url,
+        object_hash: mediaFile?.objectHash ?? null,
         status,
         assetWork,
         width: (meta?.width as number) ?? null,
@@ -867,6 +869,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
       path: `notebook:${notebook.id}`,
       media_url: null,
       thumbnail_url: null,
+      object_hash: null,
       status: "ready",
       assetWork: null,
       width: null,

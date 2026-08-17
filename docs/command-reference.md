@@ -2,10 +2,11 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (299)
+## MCP endpoints (302)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
+- `analyze_image_subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro
 - `analyze_jokes` — Analyze a clip's ElevenLabs transcript and identify the jokes in the bit, classified by type (pun, self-deprecating, observational, etc.). Each joke includes the verbatim text, start/end timestamps, and a one-line note on why it works. Runs in the background and persists to .analyze-jokes.json. Requires an ElevenLabs transcript — run /transcribe first if missing.
 - `animate_keywords` — Configure transcript-timed keyword graphics for a video. Extracts exact word-time frames and waits for vision-guided placement that avoids faces, subtitles, and existing text or graphics. Pass keywords for exact transcript words, or omit them for automatic selection. Renders cinematic white serif over-the-shoulder titles. Use enabled=false to turn them off.
 - `apply_cuts` — Splice out one or more time ranges from a video asset in-place. Operates via ffmpeg concat-splice; re-runs process_video downstream so frames, transcripts, and analyses are regenerated. Pair with /suggest-cuts to source ranges, or hand-pick them.
@@ -62,6 +63,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from Dolt history. A bare fix:true scan never bulk-fixes; it just reports.
 - `download_video` — Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.
 - `duplicate_asset` — Duplicate a media asset and place its notebook cell at an optional destination or directly below the source
+- `edit_image_subjects` — Remove or semantically edit selected cached image subjects into a new connected notebook image
 - `enqueue_notebook_run` — Revalidate and enqueue a persisted aggregate workbook plan
 - `enqueue_sequence_export` — Queue a confirmed canonical sequence export after revalidating its exact revision
 - `ensure_notebook_workflow_scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists
@@ -166,6 +168,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `get_edit_action` — Read the immutable audit record for a committed CommandPlan edit stage
 - `get_google_flow_character` — Retrieve normalized details for a single Google Flow character by ref.
 - `get_history_action` — Read one authored semantic revision
+- `get_image_subject_map` — Read cached automatic image subjects without starting provider work
 - `get_notebook` — Read a notebook graph
 - `get_notebook_cell_details` — Return selected-cell details including raw Dolt row, edges, and action validation
 - `get_primary_sequence` — Read the canonical primary sequence

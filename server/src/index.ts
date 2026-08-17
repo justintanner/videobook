@@ -16,6 +16,7 @@ import { localArchiveDir } from "./archive-store.js";
 import { bookManager, fs as scopedBookEngine } from "./fs.js";
 import { ensureDancingWorkflow } from "./dancing-workflow.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
+import { reconcileImageSubjectJobFailures } from "./jobs/image-subjects.js";
 import {
   abortLeasedNotebookRunsOnStartup,
   reconcileAwaitingNotebookOutputs,
@@ -220,6 +221,10 @@ async function start(): Promise<void> {
     const selected = bookManager.get(book.bookId);
     if (!selected.ok) continue;
     await selected.value.engine.jobs.queue.reap();
+    await reconcileImageSubjectJobFailures(
+      selected.value.engine,
+      selected.value.bookId,
+    );
     await abortLeasedNotebookRunsOnStartup(selected.value.engine);
     await reconcileQueuedNotebookCells(selected.value.engine);
   }

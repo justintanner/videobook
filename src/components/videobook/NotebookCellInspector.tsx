@@ -368,6 +368,7 @@ function cellFormPatch(
 export type NotebookCellInspectorAsset = {
   artifactId: string
   id: string
+  objectHash?: string | null
   type: string
   mediaUrl: string | null
   thumbnailUrl: string | null
@@ -427,7 +428,7 @@ type NotebookCellInspectorProps = {
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
   onRun: (cellId: string) => Promise<unknown>
   onDelete: () => Promise<void>
-  onOpenFullscreen: () => void
+  onOpenFullscreen: (asset: NotebookCellInspectorAsset) => void
   onPreviewPayload?: (
     cellId: string,
     draft: GenerationPreviewDraft,
@@ -519,7 +520,7 @@ function NotebookCellMedia({
   asset: NotebookCellInspectorAsset
   address: string
   allowFullscreen: boolean
-  onOpenFullscreen: () => void
+  onOpenFullscreen: (asset: NotebookCellInspectorAsset) => void
 }) {
   const mediaUrl = asset.mediaUrl
   const previewUrl = asset.thumbnailUrl ?? mediaUrl
@@ -588,7 +589,7 @@ function NotebookCellMedia({
           type="button"
           className="inspector-fullscreen-button"
           aria-label={`Open @${address} fullscreen`}
-          onClick={onOpenFullscreen}
+          onClick={() => onOpenFullscreen(asset)}
         >
           <Maximize2 size={14} />Fullscreen
         </button>
@@ -1289,7 +1290,7 @@ function MediaCellInspector({
             asset={previewAsset}
             address={notebookGridAddress(cell.slot)}
             allowFullscreen={cell.type === 'image' || cell.type === 'video'}
-            onOpenFullscreen={onOpenFullscreen}
+            onOpenFullscreen={() => onOpenFullscreen(previewAsset)}
           />
         ) : (
           <div className="inspector-media-empty">
@@ -2272,7 +2273,7 @@ function ExecutableCellInspector({
           allowFullscreen={asset.type === 'image'
             || asset.type === 'video'
             || asset.type === 'final'}
-          onOpenFullscreen={onOpenFullscreen}
+          onOpenFullscreen={() => onOpenFullscreen(asset)}
         />
       )}
       <InputSources

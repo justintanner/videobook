@@ -202,6 +202,7 @@ import { generateGrokImagineVideoR2vFalDef } from "./generate-grok-imagine-video
 import { generateGrokImagineVideoExtendFalDef } from "./generate-grok-imagine-video-extend-fal.js";
 import { generateGrokImagineVideoEditFalDef } from "./generate-grok-imagine-video-edit-fal.js";
 import { genImagesAllDef } from "./gen-images-all.js";
+import { imageSubjectDefs } from "./image-subjects.js";
 
 import { detectScenesDef } from "./detect-scenes.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
@@ -496,6 +497,7 @@ export function getAllToolDefs(
     generateGrokImagineVideoExtendFalDef(fs),
     generateGrokImagineVideoEditFalDef(fs),
     genImagesAllDef(fs),
+    ...imageSubjectDefs(fs),
 
     generateElevenlabsT2aDef(fs),
     postDef(),

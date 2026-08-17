@@ -73,7 +73,12 @@ describe("list_assets tool", () => {
     expect(data.assets).toHaveLength(2);
     // Ids are UUIDv7 artifact ids now — media kind lives on `type`, never in a
     // prefix.
-    const rows = data.assets as Array<{ id: string; artifact_id: string; type: string }>;
+    const rows = data.assets as Array<{
+      id: string;
+      artifact_id: string;
+      type: string;
+      object_hash: string | null;
+    }>;
     for (const row of rows) {
       expect(isUuidV7(row.id)).toBe(true);
       expect(row.artifact_id).toBe(row.id);
@@ -81,6 +86,7 @@ describe("list_assets tool", () => {
     const types = rows.map((row) => row.type);
     expect(types).toContain("image");
     expect(types).toContain("script");
+    expect(rows.find((row) => row.type === "image")?.object_hash).toMatch(/^[a-f0-9]+$/);
     const pageResult = await client.callTool({
       name: "list_assets",
       arguments: { book_id: slug, sort: "newest", limit: 1, offset: 1 },

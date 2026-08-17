@@ -6,6 +6,8 @@ const JOB_TIMEOUTS_MS = new Map<string, number>([
   ["render_qr_outro", 15 * 60_000],
   ["analyze_keyword_placement", 5 * 60_000],
   ["osg_placement", 5 * 60_000],
+  ["analyze_image_subjects", 30 * 60_000],
+  ["generate_image_subject_edit", 30 * 60_000],
   ["burn_watermark", 15 * 60_000],
   // Whole-job backstop above the 30 min /synth fetch timeout, so the client's
   // more specific error wins when ace-server hangs; covers synth-lock wait,
