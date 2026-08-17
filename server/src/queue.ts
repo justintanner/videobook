@@ -488,8 +488,7 @@ export function enqueueOptions(jobId: string, payload: JobPayload) {
   const type = extractType(payload);
   const assetId = extractAssetId(payload);
   const classified = assetId ? jobTypeToAssetWorkKind(type, payload) : null;
-  const maxAttempts = type === "analyze_image_subjects"
-    || type === "generate_image_subject_edit"
+  const maxAttempts = type === "generate_image_subject_edit"
     ? 2
     : 1;
   return {

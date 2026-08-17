@@ -11,7 +11,7 @@ import {
 } from "@apicity/kie/zod";
 import { setTimeout as delay } from "node:timers/promises";
 import sharp from "sharp";
-import type { Engine } from "videobook-engine";
+import type { Engine, Job } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
 import {
   IMAGE_SUBJECT_MAP_VERSION,
@@ -19,7 +19,8 @@ import {
   persistSeedreamSubjectLayers,
   readImageSubjectMapRecord,
   resolveImageSubjectSource,
-  writeImageSubjectMapRecord,
+  subjectAnalysisProviderFailureMessage,
+  writeCurrentImageSubjectAnalysisRecord,
   type ImageSubjectMapReadyV1,
   type ImageSubjectNormalizedBox,
   type SeedreamLayerInput,
@@ -193,6 +194,19 @@ export function parseSeedreamLayerResult(resultJson: string): KieLayerResult {
   return { baseUrl: base.url, layers };
 }
 
+export function seedreamLayerDecompositionRequest(
+  imageUrl: string,
+): SeedreamProLayerDecompositionRequest {
+  return SeedreamProLayerDecompositionRequestSchema.parse({
+    model: "seedream/5-pro-layer-decomposition",
+    input: {
+      image_url: imageUrl,
+      size: "auto",
+      output_format: "jpeg",
+    },
+  });
+}
+
 function parseResultUrls(resultJson: string): string[] {
   let parsed: unknown;
   try {
@@ -260,14 +274,92 @@ function kieProvider(): KieProvider {
   });
 }
 
+const KIE_RESULT_TIMEOUT_MS = 25 * 60_000;
+
+function abortReason(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  const error = new Error(
+    typeof signal.reason === "string" ? signal.reason : "Operation aborted",
+  );
+  error.name = "AbortError";
+  return error;
+}
+
+function waitForOperation<T>(
+  operation: Promise<T>,
+  signal: AbortSignal,
+  deadlineAt: number,
+  timeoutError: Error,
+): Promise<T> {
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+  const remaining = deadlineAt - Date.now();
+  if (remaining <= 0) return Promise.reject(timeoutError);
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+    };
+    const resolveOnce = (value: T) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+    const rejectOnce = (cause: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(cause);
+    };
+    const onAbort = () => rejectOnce(abortReason(signal));
+    const timer = setTimeout(() => rejectOnce(timeoutError), remaining);
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+    void operation.then(resolveOnce, rejectOnce);
+  });
+}
+
+export function imageSubjectAnalysisDeadline(
+  startedAt: string,
+  fallbackNow = Date.now(),
+): number {
+  const parsed = Date.parse(startedAt);
+  return (Number.isFinite(parsed) ? parsed : fallbackNow) + KIE_RESULT_TIMEOUT_MS;
+}
+
+type KieResultContext = "subject-analysis" | "subject-edit";
+
+function kieResultFailureMessage(
+  context: KieResultContext,
+  message: string | null,
+  code: string | null,
+): string {
+  if (context === "subject-analysis") {
+    return subjectAnalysisProviderFailureMessage(message, code);
+  }
+  const detail = message || code || "Unknown provider error";
+  const codeDetail = code && code !== detail ? ` (${code})` : "";
+  return `Image subject edit provider failed: ${detail}${codeDetail}`;
+}
+
 async function waitForKieResult(
   provider: KieProvider,
   taskId: string,
   signal: AbortSignal,
+  deadlineAt: number,
+  context: KieResultContext,
 ): Promise<string> {
-  const deadline = Date.now() + 25 * 60_000;
-  while (Date.now() < deadline) {
-    const result = await provider.get.api.v1.jobs.recordInfo(taskId);
+  const timeoutError = context === "subject-analysis"
+    ? new Error("Subject analysis did not finish within 25 minutes. Retry the analysis.")
+    : new Error(`Kie task ${taskId} did not finish within 25 minutes`);
+  while (Date.now() < deadlineAt) {
+    const result = await waitForOperation(
+      provider.get.api.v1.jobs.recordInfo(taskId),
+      signal,
+      deadlineAt,
+      timeoutError,
+    );
     const state = result.data?.state?.toLowerCase();
     if (state === "success") {
       if (!result.data?.resultJson) {
@@ -276,11 +368,17 @@ async function waitForKieResult(
       return result.data.resultJson;
     }
     if (state === "fail" || state === "failed") {
-      throw new Error(result.data?.failMsg || result.data?.failCode || "Kie task failed");
+      throw new Error(kieResultFailureMessage(
+        context,
+        stringValue(result.data?.failMsg),
+        stringValue(result.data?.failCode),
+      ));
     }
-    await delay(3_000, undefined, { signal });
+    await delay(Math.min(3_000, Math.max(1, deadlineAt - Date.now())), undefined, {
+      signal,
+    });
   }
-  throw new Error(`Kie task ${taskId} did not finish within 25 minutes`);
+  throw timeoutError;
 }
 
 async function writeAnalysisFailure(
@@ -289,8 +387,8 @@ async function writeAnalysisFailure(
   dimensions: { width: number; height: number },
   error: string,
   taskId?: string,
-): Promise<void> {
-  await writeImageSubjectMapRecord(engine, {
+): Promise<boolean> {
+  return await writeCurrentImageSubjectAnalysisRecord(engine, {
     version: IMAGE_SUBJECT_MAP_VERSION,
     status: "failed",
     artifactId: payload.sourceArtifactId,
@@ -577,7 +675,13 @@ async function generateSemanticSubjectEdit(
     if (!generation.ok) throw new Error(generation.error.message);
   }
   await updateNotebookEditProgress(engine, payload, "awaiting_provider");
-  const resultJson = await waitForKieResult(provider, taskId, signal);
+  const resultJson = await waitForKieResult(
+    provider,
+    taskId,
+    signal,
+    Date.now() + KIE_RESULT_TIMEOUT_MS,
+    "subject-edit",
+  );
   const [resultUrl] = parseResultUrls(resultJson);
   if (!resultUrl) throw new Error("Seedream image edit returned no image");
   const response = await fetch(resultUrl, { signal });
@@ -674,15 +778,31 @@ function imageSubjectEditNeedsTerminalization(
     state.status !== "completed" && state.status !== "error");
 }
 
+function imageSubjectAnalysisTerminalError(job: Job): string {
+  if (job.error?.message) return job.error.message;
+  if (job.result && typeof job.result === "object" && !Array.isArray(job.result)) {
+    const result = job.result as Record<string, unknown>;
+    if (typeof result.error === "string" && result.error.trim()) {
+      return result.error.trim();
+    }
+    if (result.success === false && typeof result.message === "string" && result.message.trim()) {
+      return result.message.trim();
+    }
+  }
+  return job.state === "done"
+    ? "Subject analysis completed without publishing subjects. Retry the analysis."
+    : `Subject analysis job ${job.state}`;
+}
+
 export async function reconcileImageSubjectJobFailures(
   engine: Engine,
   bookId: string,
 ): Promise<{ analysesFailed: number; editsFailed: number }> {
   let analysesFailed = 0;
   let editsFailed = 0;
-  const terminalStates = ["failed", "aborted"] as const;
+  const analysisTerminalStates = ["failed", "aborted", "done"] as const;
   const analysisJobs = engine.jobs.queue.list({
-    states: [...terminalStates],
+    states: [...analysisTerminalStates],
     type: "analyze_image_subjects",
   });
   for (const job of analysisJobs) {
@@ -700,20 +820,21 @@ export async function reconcileImageSubjectJobFailures(
       ) {
         continue;
       }
-      await writeAnalysisFailure(
+      const written = await writeAnalysisFailure(
         engine,
         payload,
         { width: subjectMap.width, height: subjectMap.height },
-        job.error?.message ?? `Subject analysis job ${job.state}`,
+        imageSubjectAnalysisTerminalError(job),
         subjectMap.taskId,
       );
-      analysesFailed += 1;
+      if (written) analysesFailed += 1;
     } catch {
       continue;
     }
   }
+  const editTerminalStates = ["failed", "aborted"] as const;
   const editJobs = engine.jobs.queue.list({
-    states: [...terminalStates],
+    states: [...editTerminalStates],
     type: "generate_image_subject_edit",
   });
   for (const job of editJobs) {
@@ -756,40 +877,31 @@ export function registerImageSubjectJobs(engine: Engine): void {
         throw new Error("The source image changed before subject analysis started");
       }
       const existing = await readImageSubjectMapRecord(engine, source.artifactId);
-      taskId = existing?.objectHash === source.objectHash
-        && existing.jobId === payload.jobId
-        ? existing.taskId
-        : payload.resumeTaskId;
-      await writeImageSubjectMapRecord(engine, {
-        version: IMAGE_SUBJECT_MAP_VERSION,
-        status: "analyzing",
-        artifactId: source.artifactId,
-        objectHash: source.objectHash,
-        width: source.width,
-        height: source.height,
-        jobId: payload.jobId,
-        startedAt: existing?.jobId === payload.jobId && existing.status === "analyzing"
-          ? existing.startedAt
-          : new Date().toISOString(),
-        ...(taskId ? { taskId } : {}),
-      });
+      if (
+        existing?.status !== "analyzing"
+        || existing.objectHash !== source.objectHash
+        || existing.jobId !== payload.jobId
+      ) {
+        throw new Error("Subject analysis was superseded by a newer request");
+      }
+      const startedAt = existing.startedAt;
+      taskId = existing.taskId;
+      const deadlineAt = imageSubjectAnalysisDeadline(startedAt);
+      if (Date.now() >= deadlineAt) {
+        throw new Error("Subject analysis did not finish within 25 minutes. Retry the analysis.");
+      }
       const provider = kieProvider();
       if (!taskId) {
         const { uploadAssetToKie } = await import("./_kie-upload.js");
         const imageUrl = await uploadAssetToKie(engine, source.artifactId, source.file.name);
-        const request: SeedreamProLayerDecompositionRequest =
-          SeedreamProLayerDecompositionRequestSchema.parse({
-            model: "seedream/5-pro-layer-decomposition",
-            input: {
-              image_url: imageUrl,
-              size: "auto",
-              output_format: "png",
-            },
-          });
+        if (Date.now() >= deadlineAt) {
+          throw new Error("Subject analysis did not finish within 25 minutes. Retry the analysis.");
+        }
+        const request = seedreamLayerDecompositionRequest(imageUrl);
         taskId = await submitMediaJob(provider, request, {
           otp: mintKieOtp(request),
         });
-        await writeImageSubjectMapRecord(engine, {
+        const recorded = await writeCurrentImageSubjectAnalysisRecord(engine, {
           version: IMAGE_SUBJECT_MAP_VERSION,
           status: "analyzing",
           artifactId: source.artifactId,
@@ -797,11 +909,20 @@ export function registerImageSubjectJobs(engine: Engine): void {
           width: source.width,
           height: source.height,
           jobId: payload.jobId,
-          startedAt: new Date().toISOString(),
+          startedAt,
           taskId,
         });
+        if (!recorded) {
+          throw new Error("Subject analysis was superseded by a newer request");
+        }
       }
-      const resultJson = await waitForKieResult(provider, taskId, context.signal);
+      const resultJson = await waitForKieResult(
+        provider,
+        taskId,
+        context.signal,
+        deadlineAt,
+        "subject-analysis",
+      );
       const layerResult = parseSeedreamLayerResult(resultJson);
       const ready = await persistSeedreamSubjectLayers(engine, source, {
         jobId: payload.jobId,
@@ -809,7 +930,15 @@ export function registerImageSubjectJobs(engine: Engine): void {
         ...layerResult,
         signal: context.signal,
       });
-      await writeImageSubjectMapRecord(engine, ready);
+      const published = await writeCurrentImageSubjectAnalysisRecord(engine, ready);
+      if (!published) {
+        return {
+          success: false,
+          superseded: true,
+          artifactId: source.artifactId,
+          objectHash: source.objectHash,
+        };
+      }
       return {
         success: true,
         artifactId: source.artifactId,

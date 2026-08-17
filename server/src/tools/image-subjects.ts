@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import type { Engine, NotebookCell } from "videobook-engine";
+import type { Engine, Job, NotebookCell } from "videobook-engine";
 import { nextHorizontalSlotFrom } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import {
@@ -8,7 +8,10 @@ import {
   imageSubjectMapResponse,
   readImageSubjectMapRecord,
   resolveImageSubjectSource,
+  subjectAnalysisProviderFailureMessage,
+  writeCurrentImageSubjectAnalysisRecord,
   writeImageSubjectMapRecord,
+  type ImageSubjectMapRecordV1,
 } from "../image-subject-map.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { slotRight } from "../notebook-placement.js";
@@ -49,6 +52,121 @@ export function reuseImageSubjectAnalysis(
       (record.status === "analyzing" && active)
       || (record.status === "ready" && !force)
     );
+}
+
+const ACTIVE_IMAGE_SUBJECT_ANALYSIS_STATES = new Set([
+  "queued",
+  "running",
+  "completing",
+]);
+
+function matchingImageSubjectAnalysisJobs(
+  engine: Engine,
+  record: ImageSubjectMapRecordV1,
+): Job[] {
+  return engine.jobs.queue.list({
+    states: ["queued", "running", "completing", "done", "failed", "aborted"],
+    type: "analyze_image_subjects",
+  }).filter((job) =>
+    job.payload.jobId === record.jobId
+    && job.payload.sourceArtifactId === record.artifactId
+    && job.payload.sourceObjectHash === record.objectHash);
+}
+
+function terminalJobError(job: Job): string | null {
+  if (job.error?.message) return job.error.message;
+  if (!job.result || typeof job.result !== "object" || Array.isArray(job.result)) {
+    return null;
+  }
+  const result = job.result as Record<string, unknown>;
+  if (typeof result.error === "string" && result.error.trim()) {
+    return result.error.trim();
+  }
+  if (
+    result.error
+    && typeof result.error === "object"
+    && !Array.isArray(result.error)
+    && typeof (result.error as Record<string, unknown>).message === "string"
+  ) {
+    return ((result.error as Record<string, unknown>).message as string).trim() || null;
+  }
+  return result.success === false && typeof result.message === "string"
+    ? result.message.trim() || null
+    : null;
+}
+
+function projectedSubjectAnalysisError(detail: string, state: Job["state"]): string {
+  const normalized = detail.trim();
+  if (/^internal error[.!]?$/iu.test(normalized)) {
+    return subjectAnalysisProviderFailureMessage(normalized);
+  }
+  if (normalized.startsWith("Subject analysis provider failed:")) {
+    return normalized;
+  }
+  const withoutPeriod = normalized.replace(/[.\s]+$/u, "");
+  const lower = withoutPeriod.toLowerCase();
+  if (
+    lower.includes("did not finish within")
+    || lower.includes("deadline")
+    || lower.includes("lease expired")
+  ) {
+    if (lower.includes("retry")) return normalized;
+    return `${withoutPeriod}. Retry the analysis.`;
+  }
+  return `Subject analysis job ${state}: ${withoutPeriod}. Retry the analysis.`;
+}
+
+export function projectImageSubjectAnalysisRecord(
+  engine: Engine,
+  record: ImageSubjectMapRecordV1 | null,
+): ImageSubjectMapRecordV1 | null {
+  if (record?.status === "failed" && /^internal error[.!]?$/iu.test(record.error.trim())) {
+    return {
+      ...record,
+      error: subjectAnalysisProviderFailureMessage(record.error),
+    };
+  }
+  if (record?.status !== "analyzing") return record;
+  const jobs = matchingImageSubjectAnalysisJobs(engine, record);
+  if (jobs.some((job) => ACTIVE_IMAGE_SUBJECT_ANALYSIS_STATES.has(job.state))) {
+    return record;
+  }
+  const terminal = jobs.find((job) =>
+    job.state === "failed" || job.state === "aborted" || job.state === "done");
+  const detail = terminal ? terminalJobError(terminal) : null;
+  const error = detail
+    ? projectedSubjectAnalysisError(detail, terminal!.state)
+    : terminal?.state === "done"
+      ? "Subject analysis completed without publishing subjects. Retry the analysis."
+      : terminal
+        ? `Subject analysis job ${terminal.state}. Retry the analysis.`
+        : "Subject analysis is no longer active. Retry the analysis.";
+  return {
+    version: IMAGE_SUBJECT_MAP_VERSION,
+    status: "failed",
+    artifactId: record.artifactId,
+    objectHash: record.objectHash,
+    width: record.width,
+    height: record.height,
+    jobId: record.jobId,
+    error,
+    failedAt: terminal?.finishedAt
+      ? new Date(terminal.finishedAt).toISOString()
+      : new Date().toISOString(),
+    ...(record.taskId ? { taskId: record.taskId } : {}),
+  };
+}
+
+export function imageSubjectAnalysisResumeTaskId(
+  record: ImageSubjectMapRecordV1 | null,
+  objectHash: string,
+  active: boolean,
+): string | undefined {
+  return record?.status === "analyzing"
+    && record.objectHash === objectHash
+    && active
+    ? record.taskId
+    : undefined;
 }
 
 export function imageSubjectAnalysisJobIsActive(
@@ -132,7 +250,8 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             return failure("The requested image version is stale; refresh the asset before editing");
           }
           const record = await readImageSubjectMapRecord(engine, artifact_id);
-          return json(imageSubjectMapResponse(book_id, source, record));
+          const projected = projectImageSubjectAnalysisRecord(engine, record);
+          return json(imageSubjectMapResponse(book_id, source, projected));
         } catch (cause) {
           return failure(cause instanceof Error ? cause.message : String(cause));
         }
@@ -180,6 +299,11 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             existing?.jobId ?? null,
             force === true,
           );
+          const resumeTaskId = imageSubjectAnalysisResumeTaskId(
+            existing,
+            object_hash,
+            active,
+          );
           const analyzing = {
             version: 1 as const,
             status: "analyzing" as const,
@@ -189,10 +313,11 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             height: source.height,
             jobId,
             startedAt: new Date().toISOString(),
-            ...(existing?.status === "analyzing" && existing.taskId
-              ? { taskId: existing.taskId }
+            ...(resumeTaskId
+              ? { taskId: resumeTaskId }
               : {}),
           };
+          await writeImageSubjectMapRecord(engine, analyzing);
           try {
             await queue.enqueue(jobId, {
               type: "analyze_image_subjects",
@@ -204,7 +329,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             });
           } catch (cause) {
             const message = cause instanceof Error ? cause.message : String(cause);
-            await writeImageSubjectMapRecord(engine, {
+            await writeCurrentImageSubjectAnalysisRecord(engine, {
               version: 1,
               status: "failed",
               artifactId: artifact_id,
@@ -218,11 +343,8 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             throw cause;
           }
           const afterEnqueue = await readImageSubjectMapRecord(engine, artifact_id);
-          if (afterEnqueue?.jobId === jobId) {
-            return json(imageSubjectMapResponse(book_id, source, afterEnqueue));
-          }
-          await writeImageSubjectMapRecord(engine, analyzing);
-          return json(imageSubjectMapResponse(book_id, source, analyzing));
+          const projected = projectImageSubjectAnalysisRecord(engine, afterEnqueue);
+          return json(imageSubjectMapResponse(book_id, source, projected));
         } catch (cause) {
           return failure(cause instanceof Error ? cause.message : String(cause));
         }

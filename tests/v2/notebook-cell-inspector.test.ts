@@ -1520,6 +1520,40 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('autoPlay')
   })
 
+  it('renders a failed subject analysis with its error and retry action', () => {
+    const html = renderToStaticMarkup(createElement(NotebookMediaFullscreen, {
+      asset: {
+        artifactId: 'image-artifact',
+        id: 'image-source',
+        objectHash: 'sha256:image',
+        type: 'image',
+        mediaUrl: '/files/book/image-artifact/original.png',
+        thumbnailUrl: null,
+        width: 1200,
+        height: 800,
+        duration: null,
+        audioInfo: null,
+      },
+      address: 'c3',
+      subjectMap: asImageSubjectMap({
+        status: 'failed',
+        artifact_id: 'image-artifact',
+        object_hash: 'sha256:image',
+        error: 'Seedream decomposition timed out before returning layers.',
+      }),
+      onAnalyzeSubjects: async () => undefined,
+      onEditSubjects: async () => true,
+      onClose: () => undefined,
+    }))
+
+    expect(html).toContain('Analysis did not finish')
+    expect(html).toContain('Seedream decomposition timed out before returning layers.')
+    expect(html).toContain('>Retry</button>')
+    expect(html).not.toContain('Finding people and objects')
+    expect(html).not.toContain('Analyzing…')
+    expect(html).not.toContain('lucide-loader-circle')
+  })
+
   it('projects every persisted cells-table column with raw null and JSON values', () => {
     const rows = doltCellRows(
       '01900000-0000-7000-8000-000000000003',

@@ -9,14 +9,19 @@ import {
   IMAGE_SUBJECT_MAP_VERSION,
   imageSubjectMapRecordSchema,
   persistSeedreamSubjectLayers,
+  readImageSubjectMapRecord,
   resolveImageSubjectSource,
+  subjectAnalysisProviderFailureMessage,
+  writeCurrentImageSubjectAnalysisRecord,
   writeImageSubjectMapRecord,
   type ImageSubjectMapReadyV1,
 } from "../image-subject-map.js";
 import {
+  imageSubjectAnalysisDeadline,
   parseSeedreamLayerResult,
   readStoredImageSubjectEditTask,
   reconcileImageSubjectJobFailures,
+  seedreamLayerDecompositionRequest,
 } from "../jobs/image-subjects.js";
 import { createEngineForTest } from "../fs.js";
 import {
@@ -29,6 +34,7 @@ import { createTestClient } from "../test-client.js";
 import {
   imageSubjectAnalysisJobIsActive,
   imageSubjectAnalysisJobId,
+  imageSubjectAnalysisResumeTaskId,
   reuseImageSubjectAnalysis,
 } from "./image-subjects.js";
 
@@ -272,6 +278,19 @@ describe("image subject tools", () => {
     }))).toThrow("no identifiable base layer");
   });
 
+  it("uses the JPEG layer request and a persisted absolute analysis deadline", () => {
+    const startedAt = "2026-08-17T07:00:00.000Z";
+    expect(seedreamLayerDecompositionRequest(
+      "https://example.test/source.jpg",
+    ).input.output_format).toBe("jpeg");
+    expect(imageSubjectAnalysisDeadline(startedAt)).toBe(
+      Date.parse(startedAt) + 25 * 60_000,
+    );
+    expect(subjectAnalysisProviderFailureMessage("Internal Error")).toBe(
+      "Subject analysis provider failed: Internal Error. Retry in a moment.",
+    );
+  });
+
   it("rejects cropped layers that have no valid placement box", async () => {
     const artifact = await engine.artifacts.create({ kind: "image", label: "Malformed" });
     if (!artifact.ok) throw new Error(artifact.error.message);
@@ -362,6 +381,7 @@ describe("image subject tools", () => {
       height: 100,
       jobId: "running-job",
       startedAt: new Date().toISOString(),
+      taskId: "running-provider-task",
     };
     expect(reuseImageSubjectAnalysis(
       analyzing,
@@ -369,6 +389,23 @@ describe("image subject tools", () => {
       true,
       false,
     )).toBe(false);
+    expect(imageSubjectAnalysisResumeTaskId(
+      analyzing,
+      source.objectHash,
+      false,
+    )).toBeUndefined();
+    expect(imageSubjectAnalysisResumeTaskId(
+      analyzing,
+      "changed-object-hash",
+      true,
+    )).toBeUndefined();
+    expect(imageSubjectAnalysisResumeTaskId(
+      analyzing,
+      source.objectHash,
+      true,
+    )).toBe(
+      "running-provider-task",
+    );
     engine.jobs.queue.enqueue({
       type: "analyze_image_subjects",
       initialState: "running",
@@ -426,6 +463,200 @@ describe("image subject tools", () => {
     )).toBe(retry);
   });
 
+  it("exposes the persisted start time while the matching analysis job is active", async () => {
+    const source = await createSource();
+    const jobId = "active-subject-analysis";
+    const startedAt = "2026-08-17T07:10:00.000Z";
+    await writeImageSubjectMapRecord(engine, {
+      version: IMAGE_SUBJECT_MAP_VERSION,
+      status: "analyzing",
+      artifactId: source.artifactId,
+      objectHash: source.objectHash,
+      width: 100,
+      height: 100,
+      jobId,
+      startedAt,
+    });
+    engine.jobs.queue.enqueue({
+      type: "analyze_image_subjects",
+      initialState: "running",
+      dedupeKey: jobId,
+      payload: {
+        type: "analyze_image_subjects",
+        sourceArtifactId: source.artifactId,
+        sourceObjectHash: source.objectHash,
+        bookId,
+        jobId,
+      },
+    });
+
+    const result = await client.callTool({
+      name: "get_image_subject_map",
+      arguments: {
+        book_id: bookId,
+        artifact_id: source.artifactId,
+        object_hash: source.objectHash,
+      },
+    });
+    expect(resultJson(result)).toMatchObject({
+      status: "analyzing",
+      job_id: jobId,
+      started_at: startedAt,
+    });
+  });
+
+  it("projects orphaned and terminal analysis records without mutating metadata", async () => {
+    const source = await createSource();
+    const getMap = async () => resultJson(await client.callTool({
+      name: "get_image_subject_map",
+      arguments: {
+        book_id: bookId,
+        artifact_id: source.artifactId,
+        object_hash: source.objectHash,
+      },
+    }));
+    const marker = (jobId: string) => ({
+      version: IMAGE_SUBJECT_MAP_VERSION,
+      status: "analyzing" as const,
+      artifactId: source.artifactId,
+      objectHash: source.objectHash,
+      width: 100,
+      height: 100,
+      jobId,
+      startedAt: "2026-08-17T07:20:00.000Z",
+    });
+
+    await writeImageSubjectMapRecord(engine, marker("orphan-analysis"));
+    expect(await getMap()).toMatchObject({
+      status: "failed",
+      error: "Subject analysis is no longer active. Retry the analysis.",
+    });
+    expect(await readImageSubjectMapRecord(engine, source.artifactId)).toMatchObject({
+      status: "analyzing",
+      jobId: "orphan-analysis",
+    });
+
+    const doneJobId = "done-without-map-analysis";
+    await writeImageSubjectMapRecord(engine, marker(doneJobId));
+    const done = engine.jobs.queue.enqueue({
+      type: "analyze_image_subjects",
+      initialState: "running",
+      dedupeKey: doneJobId,
+      payload: {
+        type: "analyze_image_subjects",
+        sourceArtifactId: source.artifactId,
+        sourceObjectHash: source.objectHash,
+        bookId,
+        jobId: doneJobId,
+      },
+    });
+    await engine.jobs.queue.complete(done.job.id, { result: { success: true } });
+    expect(await getMap()).toMatchObject({
+      status: "failed",
+      error: "Subject analysis completed without publishing subjects. Retry the analysis.",
+    });
+    expect(await reconcileImageSubjectJobFailures(engine, bookId)).toEqual({
+      analysesFailed: 1,
+      editsFailed: 0,
+    });
+    expect(await readImageSubjectMapRecord(engine, source.artifactId)).toMatchObject({
+      status: "failed",
+      jobId: doneJobId,
+      error: "Subject analysis completed without publishing subjects. Retry the analysis.",
+    });
+
+    const failedJobId = "failed-provider-analysis";
+    await writeImageSubjectMapRecord(engine, marker(failedJobId));
+    const failed = engine.jobs.queue.enqueue({
+      type: "analyze_image_subjects",
+      initialState: "running",
+      dedupeKey: failedJobId,
+      maxAttempts: 1,
+      payload: {
+        type: "analyze_image_subjects",
+        sourceArtifactId: source.artifactId,
+        sourceObjectHash: source.objectHash,
+        bookId,
+        jobId: failedJobId,
+      },
+    });
+    await engine.jobs.queue.fail(failed.job.id, {
+      error: { message: "Internal Error" },
+      allowRetry: false,
+    });
+    expect(await getMap()).toMatchObject({
+      status: "failed",
+      error: "Subject analysis provider failed: Internal Error. Retry in a moment.",
+    });
+
+    await writeImageSubjectMapRecord(engine, {
+      version: IMAGE_SUBJECT_MAP_VERSION,
+      status: "failed",
+      artifactId: source.artifactId,
+      objectHash: source.objectHash,
+      width: 100,
+      height: 100,
+      jobId: "cached-provider-failure",
+      error: "Internal Error",
+      failedAt: new Date().toISOString(),
+    });
+    expect(await getMap()).toMatchObject({
+      status: "failed",
+      error: "Subject analysis provider failed: Internal Error. Retry in a moment.",
+    });
+    expect(await readImageSubjectMapRecord(engine, source.artifactId)).toMatchObject({
+      status: "failed",
+      error: "Internal Error",
+    });
+  });
+
+  it("prevents stale analysis handlers from publishing over a newer marker", async () => {
+    const source = await createSource();
+    const staleJobId = "stale-analysis";
+    const currentJobId = "current-analysis";
+    await writeImageSubjectMapRecord(engine, {
+      version: IMAGE_SUBJECT_MAP_VERSION,
+      status: "analyzing",
+      artifactId: source.artifactId,
+      objectHash: source.objectHash,
+      width: 100,
+      height: 100,
+      jobId: staleJobId,
+      startedAt: new Date().toISOString(),
+    });
+    const staleReady = writeCurrentImageSubjectAnalysisRecord(engine, {
+      ...source.map,
+      jobId: staleJobId,
+    });
+    const newerMarker = writeImageSubjectMapRecord(engine, {
+      version: IMAGE_SUBJECT_MAP_VERSION,
+      status: "analyzing",
+      artifactId: source.artifactId,
+      objectHash: source.objectHash,
+      width: 100,
+      height: 100,
+      jobId: currentJobId,
+      startedAt: new Date().toISOString(),
+    });
+    await expect(staleReady).resolves.toBe(true);
+    await newerMarker;
+    expect(await writeCurrentImageSubjectAnalysisRecord(engine, {
+      version: IMAGE_SUBJECT_MAP_VERSION,
+      status: "failed",
+      artifactId: source.artifactId,
+      objectHash: source.objectHash,
+      width: 100,
+      height: 100,
+      jobId: staleJobId,
+      error: "stale failure",
+      failedAt: new Date().toISOString(),
+    })).toBe(false);
+    expect(await readImageSubjectMapRecord(engine, source.artifactId)).toMatchObject({
+      status: "analyzing",
+      jobId: currentJobId,
+    });
+  });
+
   it("marks lease-expired analysis records failed so a deterministic retry can start", async () => {
     const source = await createSource();
     const jobId = "expired-subject-analysis";
@@ -457,6 +688,19 @@ describe("image subject tools", () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     await engine.jobs.queue.reap();
 
+    const projected = resultJson(await client.callTool({
+      name: "get_image_subject_map",
+      arguments: {
+        book_id: bookId,
+        artifact_id: source.artifactId,
+        object_hash: source.objectHash,
+      },
+    }));
+    expect(projected).toMatchObject({
+      status: "failed",
+      error: "Job lease expired. Retry the analysis.",
+    });
+
     const reconciled = await reconcileImageSubjectJobFailures(engine, bookId);
     expect(reconciled).toEqual({ analysesFailed: 1, editsFailed: 0 });
     const failed = await engine.metadata.artifacts.read<Record<string, unknown>>(
@@ -486,7 +730,7 @@ describe("image subject tools", () => {
     ));
   });
 
-  it("persists semantic edit tasks for queue replay and grants subject jobs a retry", async () => {
+  it("persists semantic edit tasks while analysis jobs do not replay", async () => {
     const output = await engine.artifacts.create({ kind: "image", label: "Replay" });
     if (!output.ok) throw new Error(output.error.message);
     const request = {
@@ -520,7 +764,7 @@ describe("image subject tools", () => {
     expect(enqueueOptions("analysis-replay", {
       type: "analyze_image_subjects",
       bookId,
-    }).maxAttempts).toBe(2);
+    }).maxAttempts).toBe(1);
     expect(enqueueOptions("edit-replay", {
       type: "generate_image_subject_edit",
       bookId,

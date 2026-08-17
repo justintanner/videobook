@@ -519,7 +519,7 @@ export function NotebookMediaFullscreen({
                   <RotateCw size={22} />
                   <strong>Analysis did not finish</strong>
                   <p>{subjectMap.error ?? 'The image could not be decomposed.'}</p>
-                  <button type="button" onClick={() => void analyzeSubjects(true)}>
+                  <button type="button" onClick={() => void analyzeSubjects()}>
                     <RotateCw size={13} />Retry
                   </button>
                 </div>

@@ -7,6 +7,8 @@ import { z } from "zod";
 export const IMAGE_SUBJECT_MAP_VERSION = 1;
 export const IMAGE_SUBJECT_MAP_METADATA_KEY = "image-subject-map.v1";
 
+const imageSubjectMapWriteChains = new Map<string, Promise<void>>();
+
 const normalizedBoxSchema = z.object({
   x: z.number().min(0).max(1),
   y: z.number().min(0).max(1),
@@ -196,7 +198,22 @@ export async function readImageSubjectMapRecord(
   return parsed.success ? parsed.data : null;
 }
 
-export async function writeImageSubjectMapRecord(
+async function serializeImageSubjectMapWrite<T>(
+  artifactId: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const previous = imageSubjectMapWriteChains.get(artifactId) ?? Promise.resolve();
+  const result = previous.catch(() => undefined).then(operation);
+  const tail = result.then(() => undefined, () => undefined);
+  imageSubjectMapWriteChains.set(artifactId, tail);
+  return await result.finally(() => {
+    if (imageSubjectMapWriteChains.get(artifactId) === tail) {
+      imageSubjectMapWriteChains.delete(artifactId);
+    }
+  });
+}
+
+async function writeImageSubjectMapRecordUnlocked(
   engine: Engine,
   record: ImageSubjectMapRecordV1,
 ): Promise<void> {
@@ -207,6 +224,51 @@ export async function writeImageSubjectMapRecord(
     parsed,
   );
   if (!result.ok) throw new Error(result.error.message);
+}
+
+export async function writeImageSubjectMapRecord(
+  engine: Engine,
+  record: ImageSubjectMapRecordV1,
+): Promise<void> {
+  await serializeImageSubjectMapWrite(record.artifactId, async () => {
+    await writeImageSubjectMapRecordUnlocked(engine, record);
+  });
+}
+
+export async function writeCurrentImageSubjectAnalysisRecord(
+  engine: Engine,
+  record: ImageSubjectMapRecordV1,
+): Promise<boolean> {
+  return await serializeImageSubjectMapWrite(record.artifactId, async () => {
+    const current = await readImageSubjectMapRecord(engine, record.artifactId);
+    if (
+      current?.status !== "analyzing"
+      || current.objectHash !== record.objectHash
+      || current.jobId !== record.jobId
+    ) {
+      return false;
+    }
+    await writeImageSubjectMapRecordUnlocked(engine, record);
+    return true;
+  });
+}
+
+export function subjectAnalysisProviderFailureMessage(
+  message: string | null | undefined,
+  code?: string | null,
+): string {
+  const detail = message?.trim() || code?.trim() || "Unknown provider error";
+  const codeDetail = code?.trim() && code.trim() !== detail
+    ? ` (${code.trim()})`
+    : "";
+  const normalized = `${detail}${codeDetail}`.replace(/[.\s]+$/u, "");
+  if (
+    normalized.startsWith("Subject analysis provider failed:")
+    && normalized.includes("Retry in a moment")
+  ) {
+    return `${normalized}.`;
+  }
+  return `Subject analysis provider failed: ${normalized}. Retry in a moment.`;
 }
 
 export function imageSubjectMapResponse(
@@ -237,6 +299,9 @@ export function imageSubjectMapResponse(
       base_url: null,
       error: record.status === "failed" ? record.error : null,
       job_id: record.jobId,
+      ...(record.status === "analyzing"
+        ? { started_at: record.startedAt }
+        : {}),
       subjects: [],
     };
   }

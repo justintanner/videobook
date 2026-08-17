@@ -30,6 +30,7 @@ export type ImageSubjectMap = {
   height: number | null
   baseUrl: string | null
   jobId: string | null
+  startedAt: string | null
   error: string | null
   subjects: ImageSubject[]
 }
@@ -160,11 +161,12 @@ function mapStatus(value: unknown, fallback: ImageSubjectMapStatus): ImageSubjec
 
 export function asImageSubjectMap(value: unknown): ImageSubjectMap {
   const envelope = recordValue(value)
-  const payload = recordValue(
+  const nestedPayload = recordValue(
     envelope?.subject_map
     ?? envelope?.subjectMap
     ?? envelope?.map,
-  ) ?? envelope
+  )
+  const payload = nestedPayload ?? envelope
   const subjectValues = Array.isArray(payload?.subjects)
     ? payload.subjects
     : Array.isArray(payload?.regions)
@@ -176,11 +178,14 @@ export function asImageSubjectMap(value: unknown): ImageSubjectMap {
     const parsed = asSubject(subject, index)
     return parsed ? [parsed] : []
   }).sort((left, right) => left.zIndex - right.zIndex)
-  const fallbackStatus: ImageSubjectMapStatus = subjects.length > 0
-    ? 'ready'
-    : 'idle'
+  const error = stringValue(payload?.error ?? envelope?.error)
+  const fallbackStatus: ImageSubjectMapStatus = error
+    ? 'failed'
+    : subjects.length > 0
+      ? 'ready'
+      : 'idle'
   return {
-    status: mapStatus(envelope?.status ?? payload?.status, fallbackStatus),
+    status: mapStatus(payload?.status ?? envelope?.status, fallbackStatus),
     artifactId: stringValue(
       payload?.artifact_id
       ?? payload?.artifactId
@@ -201,8 +206,14 @@ export function asImageSubjectMap(value: unknown): ImageSubjectMap {
       ?? envelope?.base_url
       ?? envelope?.baseUrl,
     ),
-    jobId: stringValue(envelope?.job_id ?? envelope?.jobId ?? payload?.job_id),
-    error: stringValue(envelope?.error ?? payload?.error),
+    jobId: stringValue(payload?.job_id ?? payload?.jobId ?? envelope?.job_id ?? envelope?.jobId),
+    startedAt: stringValue(
+      payload?.started_at
+      ?? payload?.startedAt
+      ?? envelope?.started_at
+      ?? envelope?.startedAt,
+    ),
+    error,
     subjects,
   }
 }

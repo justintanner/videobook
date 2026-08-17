@@ -321,6 +321,7 @@ import {
   asImageSubjectMap,
   type ImageSubjectMap,
 } from '@/videobook/image-subject-map'
+import { pollImageSubjectMap } from '@/videobook/image-subject-map-poll'
 import { guardedAsyncResult } from '@/videobook/async-request-guard'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
@@ -1104,6 +1105,7 @@ function imageSubjectMapForSession(
 function failedImageSubjectMap(
   session: MediaFullscreenSession,
   error: unknown,
+  subjectMap: ImageSubjectMap | null = session.subjectMap,
 ): ImageSubjectMap {
   return {
     status: 'failed',
@@ -1111,10 +1113,11 @@ function failedImageSubjectMap(
     objectHash: session.asset.objectHash ?? null,
     width: session.asset.width,
     height: session.asset.height,
-    baseUrl: null,
-    jobId: null,
+    baseUrl: subjectMap?.baseUrl ?? null,
+    jobId: subjectMap?.jobId ?? null,
+    startedAt: subjectMap?.startedAt ?? null,
     error: error instanceof Error ? error.message : String(error),
-    subjects: [],
+    subjects: subjectMap?.subjects ?? [],
   }
 }
 
@@ -4323,36 +4326,38 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const watchImageSubjectMap = useCallback(async (
     session: MediaFullscreenSession,
     requestId: number,
+    initialMap: ImageSubjectMap,
   ) => {
-    const deadline = Date.now() + 31 * 60_000
-    while (
-      Date.now() < deadline
-      && imageSubjectMapRequestRef.current === requestId
-    ) {
-      await delay(3_000)
-      if (imageSubjectMapRequestRef.current !== requestId) return
-      const response = await guardedAsyncResult(
-        async () => imageSubjectMapForSession(
-          session,
-          await call('get_image_subject_map', {
-            book_id: session.bookId,
-            artifact_id: session.asset.artifactId,
-            object_hash: session.asset.objectHash,
-          }, { background: true }),
-        ),
-        () => imageSubjectMapRequestRef.current === requestId,
-      )
-      if (response.kind === 'stale') return
-      if (response.kind === 'error') {
-        updateFullscreenSubjectMap(
-          session.key,
-          failedImageSubjectMap(session, response.error),
-        )
-        return
-      }
-      updateFullscreenSubjectMap(session.key, response.value)
-      if (response.value.status !== 'analyzing') return
-    }
+    const result = await pollImageSubjectMap({
+      initialMap,
+      read: async () => imageSubjectMapForSession(
+        session,
+        await call('get_image_subject_map', {
+          book_id: session.bookId,
+          artifact_id: session.asset.artifactId,
+          object_hash: session.asset.objectHash,
+        }, { background: true }),
+      ),
+      publish: (subjectMap) => updateFullscreenSubjectMap(session.key, subjectMap),
+      isCurrent: () => imageSubjectMapRequestRef.current === requestId,
+    })
+    if (
+      result.kind === 'stale'
+      || result.kind === 'terminal'
+      || imageSubjectMapRequestRef.current !== requestId
+    ) return
+    updateFullscreenSubjectMap(
+      session.key,
+      failedImageSubjectMap(
+        session,
+        result.kind === 'timeout'
+          ? new Error(
+              'Subject analysis did not finish within 27 minutes. Retry to check or restart it.',
+            )
+          : result.error,
+        result.map,
+      ),
+    )
   }, [call, updateFullscreenSubjectMap])
 
   const openMediaFullscreen = useCallback((
@@ -4389,7 +4394,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const subjectMap = imageSubjectMapForSession(session, value)
         updateFullscreenSubjectMap(session.key, subjectMap)
         if (subjectMap.status === 'analyzing') {
-          void watchImageSubjectMap(session, requestId)
+          void watchImageSubjectMap(session, requestId, subjectMap)
         }
       })
       .catch((error: unknown) => {
@@ -4428,6 +4433,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       height: session.asset.height,
       baseUrl: session.subjectMap?.baseUrl ?? null,
       jobId: null,
+      startedAt: new Date().toISOString(),
       error: null,
       subjects: session.subjectMap?.subjects ?? [],
     }, true)
@@ -4442,7 +4448,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const subjectMap = imageSubjectMapForSession(session, value)
       updateFullscreenSubjectMap(session.key, subjectMap)
       if (subjectMap.status === 'analyzing') {
-        void watchImageSubjectMap(session, requestId)
+        void watchImageSubjectMap(session, requestId, subjectMap)
       }
     } catch (error) {
       if (imageSubjectMapRequestRef.current === requestId) {
