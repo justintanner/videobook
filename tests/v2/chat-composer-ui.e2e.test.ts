@@ -1870,7 +1870,7 @@ describe('chat composer browser flow', () => {
       && record(call.arguments.cell)?.type === 'generate_audio')).toBe(true)
   }, 60_000)
 
-  it('auto-arranges the notebook as a centered causal graph', async () => {
+  it('auto-arranges the notebook as an inverted video tree', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await page.goto(appUrl, { waitUntil: 'commit' })
     const input = page.getByLabel('Videobook command input')
@@ -1884,9 +1884,9 @@ describe('chat composer browser flow', () => {
     const zoomLevel = page.getByLabel('Reset zoom')
     await expect.poll(async () => await zoomLevel.textContent()).toContain('75%')
 
-    const autoArrange = page.getByLabel('Auto-arrange causal graph')
+    const autoArrange = page.getByLabel('Auto-arrange video tree')
     await autoArrange.waitFor({ state: 'visible' })
-    expect(await autoArrange.getAttribute('title')).toBe('Auto-arrange causal graph')
+    expect(await autoArrange.getAttribute('title')).toBe('Auto-arrange video tree')
     observedCalls.length = 0
     await autoArrange.click()
     await expect.poll(() => observedCalls.filter((call) =>
@@ -1896,12 +1896,19 @@ describe('chat composer browser flow', () => {
       ? moveCall.arguments.slots.map(record).filter((slot) => slot !== null)
       : []
     const slotKeys = new Set(slots.map((slot) => `${slot!.row}:${slot!.column}`))
+    const slotsById = new Map(slots.flatMap((slot) =>
+      typeof slot?.id === 'string' ? [[slot.id, slot] as const] : []))
+    const generationSlot = slotsById.get(generationCellId)
+    const outputVideoSlot = slotsById.get(outputVideoCellId)
 
     expect(moveCall?.arguments.book_id).toBe(bookId)
     expect(moveCall?.arguments.notebook_id).toBe(notebookId)
     expect(typeof moveCall?.arguments.expected_revision).toBe('string')
     expect(slots.length).toBeGreaterThan(0)
     expect(slotKeys.size).toBe(slots.length)
+    expect(typeof generationSlot?.row).toBe('number')
+    expect(typeof outputVideoSlot?.row).toBe('number')
+    expect(Number(generationSlot?.row)).toBeGreaterThan(Number(outputVideoSlot?.row))
     await page.getByText(/^Auto-arranged \d+ tiles?$/u).waitFor({
       state: 'visible',
       timeout: 30_000,
@@ -1912,9 +1919,8 @@ describe('chat composer browser flow', () => {
         left: element.scrollLeft,
         top: element.scrollTop,
       }))).toMatchObject({ top: 0 })
-    const scrollLeft = await page.locator('.notebook-horizontal-scroll')
-      .evaluate((element) => element.scrollLeft)
-    expect(scrollLeft).toBeGreaterThan(0)
+    await expect.poll(async () => await page.locator('.notebook-horizontal-scroll')
+      .evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
     expect(await zoomLevel.textContent()).toContain('75%')
     expect(await selected.getAttribute('data-selection')).toBe('primary')
 

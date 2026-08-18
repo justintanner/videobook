@@ -203,8 +203,8 @@ import {
   type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
 import {
-  planNotebookCausalPyramid,
-  revealNotebookCausalPyramid,
+  planNotebookVideoTree,
+  revealNotebookVideoTree,
 } from '@/videobook/notebook-auto-arrange'
 import {
   notebookSourcePortId,
@@ -4987,7 +4987,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const autoArrangeNotebook = async () => {
     if (!bookId || !notebook || notebook.cells.length === 0) return
-    const planned = planNotebookCausalPyramid(notebook)
+    const planned = planNotebookVideoTree(notebook)
     if (!planned.ok) {
       setNotice(planned.message, 'error')
       return
@@ -4997,7 +4997,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const current = currentSlots.get(slot.id)
       return current?.row !== slot.row || current?.column !== slot.column
     })
-    const reveal = () => revealNotebookCausalPyramid(
+    const reveal = () => revealNotebookVideoTree(
       () => notebookScrollRef.current,
       notebookMetrics.centerX,
       notebookView.zoom,
@@ -8944,8 +8944,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               <button
                 type="button"
                 className="canvas-auto-arrange"
-                title="Auto-arrange causal graph"
-                aria-label="Auto-arrange causal graph"
+                title="Auto-arrange video tree"
+                aria-label="Auto-arrange video tree"
                 disabled={busy || mcp.state !== 'ready' || notebook.cells.length === 0}
                 onClick={() => void autoArrangeNotebook()}
               >

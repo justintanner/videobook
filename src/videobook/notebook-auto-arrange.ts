@@ -81,30 +81,30 @@ function centeredColumns(count: number): number[] {
   ]
 }
 
-function averageParentColumn(
+function averageChildColumn(
   id: string,
-  parents: ReadonlyMap<string, ReadonlySet<string>>,
+  children: ReadonlyMap<string, ReadonlySet<string>>,
   assignedColumns: ReadonlyMap<string, number>,
 ): number | null {
-  const parentIds = parents.get(id)
-  if (!parentIds || parentIds.size === 0) return null
-  const columns = [...parentIds].flatMap((parentId) => {
-    const column = assignedColumns.get(parentId)
+  const childIds = children.get(id)
+  if (!childIds || childIds.size === 0) return null
+  const columns = [...childIds].flatMap((childId) => {
+    const column = assignedColumns.get(childId)
     return column === undefined ? [] : [column]
   })
   if (columns.length === 0) return null
   return columns.reduce((total, column) => total + column, 0) / columns.length
 }
 
-function orderCausalLayer(
+function orderTreeLayer(
   ids: readonly string[],
   cellsById: ReadonlyMap<string, NotebookCell>,
-  parents: ReadonlyMap<string, ReadonlySet<string>>,
+  children: ReadonlyMap<string, ReadonlySet<string>>,
   assignedColumns: ReadonlyMap<string, number>,
 ): string[] {
   return [...ids].sort((leftId, rightId) => {
-    const leftColumn = averageParentColumn(leftId, parents, assignedColumns)
-    const rightColumn = averageParentColumn(rightId, parents, assignedColumns)
+    const leftColumn = averageChildColumn(leftId, children, assignedColumns)
+    const rightColumn = averageChildColumn(rightId, children, assignedColumns)
     if (leftColumn !== null && rightColumn !== null && leftColumn !== rightColumn) {
       return leftColumn - rightColumn
     }
@@ -145,7 +145,7 @@ function failure(
   return { ok: false, code, message }
 }
 
-export function planNotebookCausalPyramid(
+export function planNotebookVideoTree(
   document: NotebookDocument,
 ): NotebookAutoArrangeResult {
   const cellsById = new Map(document.cells.map((cell) => [cell.id, cell]))
@@ -180,13 +180,13 @@ export function planNotebookCausalPyramid(
     children.get(edge.source)?.add(edge.target)
   }
 
-  const incoming = new Map(
-    [...connectedIds].map((id) => [id, parents.get(id)?.size ?? 0]),
+  const outgoing = new Map(
+    [...connectedIds].map((id) => [id, children.get(id)?.size ?? 0]),
   )
   const ranks = new Map([...connectedIds].map((id) => [id, 0]))
   const orderedIds: string[] = []
   const ready = sortCellIds(
-    [...connectedIds].filter((id) => incoming.get(id) === 0),
+    [...connectedIds].filter((id) => outgoing.get(id) === 0),
     cellsById,
   )
 
@@ -194,14 +194,14 @@ export function planNotebookCausalPyramid(
     const id = ready.shift()
     if (!id) continue
     orderedIds.push(id)
-    const sourceRank = ranks.get(id) ?? 0
-    const targets = sortCellIds(children.get(id) ?? [], cellsById)
-    for (const targetId of targets) {
-      ranks.set(targetId, Math.max(ranks.get(targetId) ?? 0, sourceRank + 1))
-      const count = (incoming.get(targetId) ?? 0) - 1
-      incoming.set(targetId, count)
+    const childRank = ranks.get(id) ?? 0
+    const sources = sortCellIds(parents.get(id) ?? [], cellsById)
+    for (const sourceId of sources) {
+      ranks.set(sourceId, Math.max(ranks.get(sourceId) ?? 0, childRank + 1))
+      const count = (outgoing.get(sourceId) ?? 0) - 1
+      outgoing.set(sourceId, count)
       if (count === 0) {
-        ready.push(targetId)
+        ready.push(sourceId)
         ready.sort((leftId, rightId) => {
           const left = cellsById.get(leftId)
           const right = cellsById.get(rightId)
@@ -244,7 +244,7 @@ export function planNotebookCausalPyramid(
   if (requiredRows > NOTEBOOK_GRID_ROW_COUNT) {
     return failure(
       'capacity',
-      `Cannot auto-arrange because the causal layout needs ${requiredRows} rows, but the grid supports ${NOTEBOOK_GRID_ROW_COUNT}.`,
+      `Cannot auto-arrange because the video tree needs ${requiredRows} rows, but the grid supports ${NOTEBOOK_GRID_ROW_COUNT}.`,
     )
   }
   const spacerRows = connectedIds.size > 0
@@ -257,10 +257,10 @@ export function planNotebookCausalPyramid(
   const assignedColumns = new Map<string, number>()
   let nextRow = 0
   for (const [, ids] of rankedLayers) {
-    const orderedLayer = orderCausalLayer(
+    const orderedLayer = orderTreeLayer(
       ids,
       cellsById,
-      parents,
+      children,
       assignedColumns,
     )
     nextRow = placeCenteredRows(
@@ -292,7 +292,7 @@ export function planNotebookCausalPyramid(
   return { ok: true, rowCount: nextRow, slots: assignments }
 }
 
-export function revealNotebookCausalPyramid(
+export function revealNotebookVideoTree(
   resolveTarget: () => NotebookAutoArrangeScrollTarget | null,
   centerX: number,
   zoom: number,

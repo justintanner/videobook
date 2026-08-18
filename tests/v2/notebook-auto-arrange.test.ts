@@ -15,8 +15,8 @@ import {
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 import {
-  planNotebookCausalPyramid,
-  revealNotebookCausalPyramid,
+  planNotebookVideoTree,
+  revealNotebookVideoTree,
 } from '../../src/videobook/notebook-auto-arrange.js'
 
 function cell(
@@ -51,7 +51,7 @@ function document(
 }
 
 function assignmentMap(
-  value: ReturnType<typeof planNotebookCausalPyramid>,
+  value: ReturnType<typeof planNotebookVideoTree>,
 ): Map<string, { row: number; column: number }> {
   expect(value.ok, value.ok ? undefined : value.message).toBe(true)
   if (!value.ok) return new Map()
@@ -86,14 +86,14 @@ function value<T>(
   return result.value
 }
 
-describe('notebook causal pyramid auto-arrange', () => {
-  it('centers deterministic causal layers and keeps every edge moving downward', () => {
+describe('notebook inverted causal-tree auto-arrange', () => {
+  it('centers deterministic causal layers with a video leaf above its ancestors', () => {
     const source = document(
       [
         cell('root', 8, 1),
         cell('left', 4, 10),
         cell('right', 2, 3),
-        cell('sink', 1, 11),
+        cell('sink', 1, 11, 'video'),
       ],
       [
         edge('root', 'left'),
@@ -102,26 +102,48 @@ describe('notebook causal pyramid auto-arrange', () => {
         edge('right', 'sink'),
       ],
     )
-    const first = planNotebookCausalPyramid(source)
+    const first = planNotebookVideoTree(source)
     const slots = assignmentMap(first)
 
-    expect(slots.get('root')).toEqual({ row: 0, column: 6 })
+    expect(slots.get('sink')).toEqual({ row: 0, column: 6 })
     expect(slots.get('right')).toEqual({ row: 1, column: 5 })
     expect(slots.get('left')).toEqual({ row: 1, column: 7 })
-    expect(slots.get('sink')).toEqual({ row: 2, column: 6 })
+    expect(slots.get('root')).toEqual({ row: 2, column: 6 })
     for (const connection of source.edges) {
       expect(slots.get(connection.source)!.row)
-        .toBeLessThan(slots.get(connection.target)!.row)
+        .toBeGreaterThan(slots.get(connection.target)!.row)
     }
 
     const arranged = applyAssignments(source, slots)
-    expect(planNotebookCausalPyramid(arranged)).toEqual(first)
+    expect(planNotebookVideoTree(arranged)).toEqual(first)
+  })
+
+  it('aligns video leaves from branches of different depths on the top row', () => {
+    const source = document(
+      [
+        cell('root', 7, 8),
+        cell('middle', 3, 2),
+        cell('short-video', 9, 10, 'video'),
+        cell('long-video', 5, 4, 'video'),
+      ],
+      [
+        edge('root', 'short-video'),
+        edge('root', 'middle'),
+        edge('middle', 'long-video'),
+      ],
+    )
+    const slots = assignmentMap(planNotebookVideoTree(source))
+
+    expect(slots.get('long-video')).toEqual({ row: 0, column: 5 })
+    expect(slots.get('short-video')).toEqual({ row: 0, column: 7 })
+    expect(slots.get('middle')).toEqual({ row: 1, column: 6 })
+    expect(slots.get('root')).toEqual({ row: 2, column: 6 })
   })
 
   it('balances causal layers wider than the grid across centered rows', () => {
     const children = Array.from({ length: 14 }, (_, index) =>
       cell(`child-${String(index).padStart(2, '0')}`, 12 - index % 10, index % 13))
-    const sink = cell('sink', 20, 12)
+    const sink = cell('sink', 20, 12, 'video')
     const source = document(
       [cell('root', 15, 0), ...children, sink],
       [
@@ -129,7 +151,7 @@ describe('notebook causal pyramid auto-arrange', () => {
         ...children.map((item, index) => edge(item.id, sink.id, index)),
       ],
     )
-    const planned = planNotebookCausalPyramid(source)
+    const planned = planNotebookVideoTree(source)
     const slots = assignmentMap(planned)
     const childRows = new Map<number, NotebookCell[]>()
     for (const item of children) {
@@ -149,27 +171,27 @@ describe('notebook causal pyramid auto-arrange', () => {
         .sort((left, right) => left - right))
         .toEqual([3, 4, 5, 6, 7, 8, 9])
     }
-    expect(slots.get('root')).toEqual({ row: 0, column: 6 })
-    expect(slots.get('sink')).toEqual({ row: 3, column: 6 })
+    expect(slots.get('sink')).toEqual({ row: 0, column: 6 })
+    expect(slots.get('root')).toEqual({ row: 3, column: 6 })
   })
 
   it('places unconnected tiles in a centered bottom band', () => {
     const source = document(
       [
         cell('root', 8, 8),
-        cell('child', 4, 4),
+        cell('child', 4, 4, 'video'),
         cell('loose-a', 9, 9),
         cell('loose-b', 3, 1),
         cell('loose-c', 6, 5),
       ],
       [edge('root', 'child')],
     )
-    const planned = planNotebookCausalPyramid(source)
+    const planned = planNotebookVideoTree(source)
     const slots = assignmentMap(planned)
 
     expect(planned.ok && planned.rowCount).toBe(4)
-    expect(slots.get('root')).toEqual({ row: 0, column: 6 })
-    expect(slots.get('child')).toEqual({ row: 1, column: 6 })
+    expect(slots.get('child')).toEqual({ row: 0, column: 6 })
+    expect(slots.get('root')).toEqual({ row: 1, column: 6 })
     expect([
       slots.get('loose-b'),
       slots.get('loose-c'),
@@ -184,7 +206,7 @@ describe('notebook causal pyramid auto-arrange', () => {
   it('fits a full disconnected grid without an unnecessary spacer', () => {
     const cells = Array.from({ length: 338 }, (_, index) =>
       cell(`cell-${String(index).padStart(3, '0')}`, 25 - Math.floor(index / 13), 12 - index % 13))
-    const planned = planNotebookCausalPyramid(document(cells))
+    const planned = planNotebookVideoTree(document(cells))
     const slots = assignmentMap(planned)
     const keys = new Set([...slots.values()].map((slot) => `${slot.row}:${slot.column}`))
 
@@ -197,13 +219,13 @@ describe('notebook causal pyramid auto-arrange', () => {
   })
 
   it('rejects cycles, missing cells, and layouts that exceed 26 rows', () => {
-    const cyclic = planNotebookCausalPyramid(document(
+    const cyclic = planNotebookVideoTree(document(
       [cell('a', 0, 0), cell('b', 0, 1)],
       [edge('a', 'b'), edge('b', 'a')],
     ))
     expect(cyclic).toMatchObject({ ok: false, code: 'cycle' })
 
-    const missing = planNotebookCausalPyramid(document(
+    const missing = planNotebookVideoTree(document(
       [cell('a', 0, 0)],
       [edge('a', 'missing')],
     ))
@@ -211,14 +233,14 @@ describe('notebook causal pyramid auto-arrange', () => {
 
     const chain = Array.from({ length: 27 }, (_, index) =>
       cell(`chain-${String(index).padStart(2, '0')}`, index % 26, index % 13))
-    const overflow = planNotebookCausalPyramid(document(
+    const overflow = planNotebookVideoTree(document(
       chain,
       chain.slice(1).map((item, index) => edge(chain[index]!.id, item.id)),
     ))
     expect(overflow).toMatchObject({ ok: false, code: 'capacity' })
   })
 
-  it('waits for refreshed layout before revealing the centered apex', () => {
+  it('waits for refreshed layout before revealing the centered leaves', () => {
     const frames: FrameRequestCallback[] = []
     const scrolls: ScrollToOptions[] = []
     const target = {
@@ -226,7 +248,7 @@ describe('notebook causal pyramid auto-arrange', () => {
       scrollTo: (options: ScrollToOptions) => scrolls.push(options),
     }
 
-    revealNotebookCausalPyramid(
+    revealNotebookVideoTree(
       () => target,
       1800,
       0.5,
@@ -301,7 +323,7 @@ describe('notebook causal pyramid auto-arrange', () => {
         edges,
       }))
       const before = value(engine.notebooks.read(initial.id))
-      const planned = planNotebookCausalPyramid(before)
+      const planned = planNotebookVideoTree(before)
       expect(planned.ok).toBe(true)
       if (!planned.ok) return
 
