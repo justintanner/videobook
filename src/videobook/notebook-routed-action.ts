@@ -116,6 +116,38 @@ function coverSongOutput(value: Record<string, unknown>): RoutedMediaOutput {
   }
 }
 
+function spliceOutput(
+  tool: 'smooth_scene_concat' | 'splice_video',
+  value: Record<string, unknown>,
+): RoutedMediaOutput {
+  const firstArtifactId = nonBlankStringValue(value.first_asset_id)
+    ?? nonBlankStringValue(value.first)
+  const secondArtifactId = nonBlankStringValue(value.second_asset_id)
+    ?? nonBlankStringValue(value.second)
+  if (!firstArtifactId || !secondArtifactId) {
+    throw new Error(`${tool} did not return both source artifacts for the notebook`)
+  }
+  return {
+    type: 'video',
+    artifactId: requiredString(
+      value,
+      'asset_id',
+      `${tool} did not return an artifact for the notebook`,
+    ),
+    inputs: {
+      sourceOperation: tool,
+      first_asset_id: firstArtifactId,
+      second_asset_id: secondArtifactId,
+      ...selectedValues(value, [
+        'overlap',
+        'transition_seconds',
+        'alignment_mode',
+        'job_id',
+      ]),
+    },
+  }
+}
+
 function coverSongSlot(
   value: Record<string, unknown>,
   cells: readonly NotebookCell[],
@@ -138,11 +170,17 @@ function videoOutputSlots(
   count: number,
   lastWorkSlot: NotebookGridSlot | null,
 ): NotebookGridSlot[] {
-  const sourceArtifactId = nonBlankStringValue(value.source_asset_id)
-  const source = sourceArtifactId
-    ? cells.find((cell) => cell.outputArtifactId === sourceArtifactId)
-    : undefined
-  const sourceSlots = source ? [source.slot] : []
+  const sourceArtifactIds = new Set([
+    nonBlankStringValue(value.source_asset_id),
+    nonBlankStringValue(value.first_asset_id)
+      ?? nonBlankStringValue(value.first),
+    nonBlankStringValue(value.second_asset_id)
+      ?? nonBlankStringValue(value.second),
+  ].filter((artifactId): artifactId is string => artifactId !== null))
+  const sourceSlots = cells
+    .filter((cell) => cell.outputArtifactId
+      && sourceArtifactIds.has(cell.outputArtifactId))
+    .map((cell) => cell.slot)
   const working: Array<{ type: string; slot: NotebookGridSlot }> = [...cells]
   const slots: NotebookGridSlot[] = []
   for (let index = 0; index < count; index += 1) {
@@ -167,6 +205,8 @@ export function routedMediaCellInputs(
     tool !== 'extract_video_clip'
     && tool !== 'split_video'
     && tool !== 'make_cover_song'
+    && tool !== 'splice_video'
+    && tool !== 'smooth_scene_concat'
   ) return []
   const value = recordValue(result)
   if (!value) throw new Error(`${tool} returned an invalid result`)
@@ -174,7 +214,9 @@ export function routedMediaCellInputs(
     ? [extractOutput(value)]
     : tool === 'split_video'
       ? splitOutputs(value)
-      : [coverSongOutput(value)]
+      : tool === 'make_cover_song'
+        ? [coverSongOutput(value)]
+        : [spliceOutput(tool, value)]
   const unplaced = outputs.filter((output) => !cells.some((cell) =>
     cell.outputArtifactId === output.artifactId))
   if (unplaced.length === 0) return []

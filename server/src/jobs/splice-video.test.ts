@@ -55,6 +55,7 @@ describe("splice video files", () => {
       height: first.height,
       fps: first.fps,
       firstDuration: first.videoDuration,
+      secondDuration: second.videoDuration,
       withAudio: false,
       overlap: 0,
     });
@@ -81,6 +82,7 @@ describe("splice video files", () => {
       height: first.height,
       fps: first.fps,
       firstDuration: first.videoDuration,
+      secondDuration: second.videoDuration,
       withAudio: false,
       overlap: 1,
     });
@@ -93,8 +95,26 @@ describe("splice video files", () => {
     expect(output.videoDuration).toBeCloseTo(result.timestamp + second.videoDuration, 1);
   }, 30_000);
 
+  it("rejects a completed file whose duration is shorter than both clips", async () => {
+    const first = await probeVideo(firstPath);
+    const second = await probeVideo(secondPath);
+    await expect(spliceVideoFiles({
+      firstPath,
+      secondPath,
+      outputPath: join(tempDir, "truncated.mp4"),
+      width: first.width,
+      height: first.height,
+      fps: first.fps,
+      firstDuration: first.videoDuration,
+      secondDuration: second.videoDuration + 2,
+      withAudio: false,
+      overlap: 0,
+    })).rejects.toThrow("does not match expected");
+  }, 30_000);
+
   it("rejects negative overlap", async () => {
     const first = await probeVideo(firstPath);
+    const second = await probeVideo(secondPath);
     await expect(spliceVideoFiles({
       firstPath,
       secondPath,
@@ -103,6 +123,7 @@ describe("splice video files", () => {
       height: first.height,
       fps: first.fps,
       firstDuration: first.videoDuration,
+      secondDuration: second.videoDuration,
       withAudio: false,
       overlap: -1,
     })).rejects.toThrow("non-negative");

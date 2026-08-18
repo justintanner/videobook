@@ -7,6 +7,8 @@ const CLIP_ARTIFACT_ID = '019fabcd-1234-7000-8000-000000000102'
 const CHUNK_A_ARTIFACT_ID = '019fabcd-1234-7000-8000-000000000103'
 const CHUNK_B_ARTIFACT_ID = '019fabcd-1234-7000-8000-000000000104'
 const COVER_ARTIFACT_ID = '019fabcd-1234-7000-8000-000000000105'
+const SECOND_VIDEO_ARTIFACT_ID = '019fabcd-1234-7000-8000-000000000106'
+const SPLICE_ARTIFACT_ID = '019fabcd-1234-7000-8000-000000000107'
 
 const existingCells = [
   {
@@ -111,5 +113,78 @@ describe('routedMediaCellInputs', () => {
       ...existingCells[0]!,
       outputArtifactId: COVER_ARTIFACT_ID,
     }])).toEqual([])
+  })
+
+  it('places a completed splice below both source videos with provenance', () => {
+    expect(routedMediaCellInputs('splice_video', {
+      asset_id: SPLICE_ARTIFACT_ID,
+      first: SOURCE_ARTIFACT_ID,
+      second: SECOND_VIDEO_ARTIFACT_ID,
+      overlap: 0,
+      job_id: 'splice-1',
+      status: 'enqueued',
+    }, [
+      {
+        ...existingCells[0]!,
+        outputArtifactId: SOURCE_ARTIFACT_ID,
+      },
+      {
+        id: '019fabcd-1234-7000-8000-000000000002',
+        type: 'video',
+        slot: { row: 0, column: 1 },
+        outputArtifactId: SECOND_VIDEO_ARTIFACT_ID,
+      } as NotebookCell,
+    ])).toEqual([{
+      type: 'video',
+      slot: { row: 1, column: 0 },
+      inputs: {
+        sourceOperation: 'splice_video',
+        first_asset_id: SOURCE_ARTIFACT_ID,
+        second_asset_id: SECOND_VIDEO_ARTIFACT_ID,
+        overlap: 0,
+        job_id: 'splice-1',
+      },
+      output_artifact_id: SPLICE_ARTIFACT_ID,
+    }])
+  })
+
+  it('rejects a completed splice without both source artifacts', () => {
+    expect(() => routedMediaCellInputs('splice_video', {
+      asset_id: SPLICE_ARTIFACT_ID,
+      first: SOURCE_ARTIFACT_ID,
+    }, existingCells)).toThrow('did not return both source artifacts')
+  })
+
+  it('places a smooth scene concat using its explicit source fields', () => {
+    const [cell] = routedMediaCellInputs('smooth_scene_concat', {
+      asset_id: SPLICE_ARTIFACT_ID,
+      first_asset_id: SOURCE_ARTIFACT_ID,
+      second_asset_id: SECOND_VIDEO_ARTIFACT_ID,
+      transition_seconds: 0.35,
+      alignment_mode: 'fixed',
+      job_id: 'scene-concat-1',
+    }, [
+      {
+        ...existingCells[0]!,
+        outputArtifactId: SOURCE_ARTIFACT_ID,
+      },
+      {
+        id: '019fabcd-1234-7000-8000-000000000002',
+        type: 'video',
+        slot: { row: 0, column: 1 },
+        outputArtifactId: SECOND_VIDEO_ARTIFACT_ID,
+      } as NotebookCell,
+    ])
+    expect(cell).toMatchObject({
+      slot: { row: 1, column: 0 },
+      inputs: {
+        sourceOperation: 'smooth_scene_concat',
+        first_asset_id: SOURCE_ARTIFACT_ID,
+        second_asset_id: SECOND_VIDEO_ARTIFACT_ID,
+        transition_seconds: 0.35,
+        alignment_mode: 'fixed',
+      },
+      output_artifact_id: SPLICE_ARTIFACT_ID,
+    })
   })
 })

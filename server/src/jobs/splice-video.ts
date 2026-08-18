@@ -1,5 +1,8 @@
 import type { Engine } from "videobook-engine";
 import { execFile, spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, extname, join } from "node:path";
 import { promisify } from "node:util";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, FFMPEG, H264_MEDIUM, AUDIO_OPTS, probeVideo } from "../ffmpeg.js";
@@ -22,6 +25,8 @@ type SpliceVideoPayload = {
   type: "splice_video";
   firstPath: string;
   secondPath: string;
+  firstFilename?: string;
+  secondFilename?: string;
   outputPath: string;
   firstAssetId: string;
   secondAssetId: string;
@@ -32,6 +37,7 @@ type SpliceVideoPayload = {
   targetHeight: number;
   firstFps: number;
   firstDuration?: number;
+  secondDuration?: number;
   firstHasAudio: boolean;
   secondHasAudio: boolean;
   overlap?: number;
@@ -178,9 +184,37 @@ export type SpliceFilesOptions = {
   height: number;
   fps: number;
   firstDuration: number;
+  secondDuration: number;
   withAudio: boolean;
   overlap: number;
 };
+
+async function verifySpliceDuration(
+  outputPath: string,
+  expectedDuration: number,
+  fps: number,
+): Promise<void> {
+  const output = await probeVideo(outputPath);
+  const tolerance = Math.max(0.25, 2 / fps);
+  if (Math.abs(output.videoDuration - expectedDuration) <= tolerance) return;
+  throw new Error(
+    `Splice output duration ${output.videoDuration.toFixed(3)}s does not match expected ${expectedDuration.toFixed(3)}s`,
+  );
+}
+
+async function readArtifactFile(
+  fs: Engine,
+  artifactId: string,
+  filename: string,
+): Promise<Buffer> {
+  const result = await fs.files.read(artifactId, filename);
+  if (!result.ok) {
+    throw new Error(
+      `Failed to snapshot ${artifactId}/${filename}: ${result.error.message}`,
+    );
+  }
+  return result.value;
+}
 
 export async function spliceVideoFiles(options: SpliceFilesOptions): Promise<SpliceFilesResult> {
   const {
@@ -191,6 +225,7 @@ export async function spliceVideoFiles(options: SpliceFilesOptions): Promise<Spl
     height,
     fps,
     firstDuration,
+    secondDuration,
     withAudio,
     overlap,
   } = options;
@@ -199,6 +234,9 @@ export async function spliceVideoFiles(options: SpliceFilesOptions): Promise<Spl
   }
   if (!Number.isFinite(fps) || fps <= 0) {
     throw new Error(`Invalid first video frame rate: ${fps}`);
+  }
+  if (!Number.isFinite(secondDuration) || secondDuration <= 0) {
+    throw new Error(`Invalid second video duration: ${secondDuration}`);
   }
   if (!Number.isFinite(overlap) || overlap < 0) {
     throw new Error(`Overlap must be a non-negative number, got: ${overlap}`);
@@ -214,6 +252,11 @@ export async function spliceVideoFiles(options: SpliceFilesOptions): Promise<Spl
       height,
       fps,
       withAudio,
+    );
+    await verifySpliceDuration(
+      outputPath,
+      firstDuration + secondDuration,
+      fps,
     );
     return { timestamp: firstDuration, frameIndex: null, score: null };
   }
@@ -233,6 +276,11 @@ export async function spliceVideoFiles(options: SpliceFilesOptions): Promise<Spl
     fps,
     withAudio,
   );
+  await verifySpliceDuration(
+    outputPath,
+    match.timestamp + secondDuration,
+    fps,
+  );
   return match;
 }
 
@@ -240,9 +288,10 @@ export function registerSpliceVideoJob(fs: Engine): void {
   registerJobHandler("splice_video", async (payload, ctx) => {
     const {
       firstPath, secondPath, outputPath,
+      firstFilename, secondFilename,
       firstAssetId, secondAssetId,
       assetId, assetDir, bookId,
-      targetWidth, targetHeight, firstFps, firstDuration,
+      targetWidth, targetHeight, firstFps, firstDuration, secondDuration,
       firstHasAudio, secondHasAudio,
       overlap,
     } = payload as SpliceVideoPayload;
@@ -255,43 +304,64 @@ export function registerSpliceVideoJob(fs: Engine): void {
       "splice",
       { durationMs: LOCK_DURATION_MS, data: { state: "splicing" } },
       async () => {
-      const resolvedFirstDuration = typeof firstDuration === "number"
-        ? firstDuration
-        : (await probeVideo(firstPath)).videoDuration;
-      const resolvedOverlap = typeof overlap === "number" ? overlap : resolvedFirstDuration;
-      const withAudio = firstHasAudio && secondHasAudio;
-      const splice = await spliceVideoFiles({
-        firstPath,
-        secondPath,
-        outputPath,
-        width: targetWidth,
-        height: targetHeight,
-        fps: firstFps,
-        firstDuration: resolvedFirstDuration,
-        withAudio,
-        overlap: resolvedOverlap,
-      });
+        const sourceDir = await mkdtemp(join(tmpdir(), "videobook-splice-source-"));
+        try {
+          const resolvedFirstFilename = firstFilename ?? basename(firstPath);
+          const resolvedSecondFilename = secondFilename ?? basename(secondPath);
+          const snapshotFirstPath = join(sourceDir, `first${extname(resolvedFirstFilename)}`);
+          const snapshotSecondPath = join(sourceDir, `second${extname(resolvedSecondFilename)}`);
+          const [firstBytes, secondBytes] = await Promise.all([
+            readArtifactFile(fs, firstAssetId, resolvedFirstFilename),
+            readArtifactFile(fs, secondAssetId, resolvedSecondFilename),
+          ]);
+          await Promise.all([
+            writeFile(snapshotFirstPath, firstBytes),
+            writeFile(snapshotSecondPath, secondBytes),
+          ]);
+          const resolvedFirstDuration = typeof firstDuration === "number"
+            ? firstDuration
+            : (await probeVideo(snapshotFirstPath)).videoDuration;
+          const resolvedSecondDuration = typeof secondDuration === "number"
+            ? secondDuration
+            : (await probeVideo(snapshotSecondPath)).videoDuration;
+          const resolvedOverlap = typeof overlap === "number" ? overlap : resolvedFirstDuration;
+          const withAudio = firstHasAudio && secondHasAudio;
+          const splice = await spliceVideoFiles({
+            firstPath: snapshotFirstPath,
+            secondPath: snapshotSecondPath,
+            outputPath,
+            width: targetWidth,
+            height: targetHeight,
+            fps: firstFps,
+            firstDuration: resolvedFirstDuration,
+            secondDuration: resolvedSecondDuration,
+            withAudio,
+            overlap: resolvedOverlap,
+          });
 
-      const provenance = {
-        origin: "splice",
-        first_asset: firstAssetId,
-        second_asset: secondAssetId,
-        overlap_seconds: resolvedOverlap,
-        splice_timestamp: splice.timestamp,
-        match_frame_index: splice.frameIndex,
-        match_score: splice.score,
-        spliced_at: new Date().toISOString(),
-      };
-      await ingestWorkspaceOutputs(
-        fs,
-        assetId,
-        [outputPath.split("/").pop()!],
-        "splice_video",
-        provenance,
-      );
-      await fs.metadata.artifacts.write(assetId, "original", provenance);
+          const provenance = {
+            origin: "splice",
+            first_asset: firstAssetId,
+            second_asset: secondAssetId,
+            overlap_seconds: resolvedOverlap,
+            splice_timestamp: splice.timestamp,
+            match_frame_index: splice.frameIndex,
+            match_score: splice.score,
+            spliced_at: new Date().toISOString(),
+          };
+          await ingestWorkspaceOutputs(
+            fs,
+            assetId,
+            [basename(outputPath)],
+            "splice_video",
+            provenance,
+          );
+          await fs.metadata.artifacts.write(assetId, "original", provenance);
 
-      return { provenance, timestamp: splice.timestamp, score: splice.score };
+          return { provenance, timestamp: splice.timestamp, score: splice.score };
+        } finally {
+          await rm(sourceDir, { recursive: true, force: true });
+        }
       },
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
     );
