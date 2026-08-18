@@ -1644,6 +1644,7 @@ describe('chat composer browser flow', () => {
       .map((label) => label.replace('⌫', '').trim())).toEqual([
       'Edit cell',
       'Open media',
+      'Generate video',
       'Duplicate',
       'Split video',
       'View generations',
@@ -1669,6 +1670,68 @@ describe('chat composer browser flow', () => {
       name: `Cell actions for ${duplicateSourceAddress}`,
     })
     await duplicateMenu.waitFor({ state: 'visible' })
+    expect((await duplicateMenu.getByRole('menuitem').allTextContents())
+      .map((label) => label.replace('⌫', '').trim())).toEqual([
+      'Edit cell',
+      'Open media',
+      'Generate video',
+      'Generate image',
+      'Duplicate',
+      'View generations',
+      'View source',
+      'Delete cell',
+    ])
+    for (const generation of [
+      { label: 'Generate video', cellType: 'generate_video' },
+      { label: 'Generate image', cellType: 'generate_image' },
+    ] as const) {
+      observedCalls.length = 0
+      await duplicateMenu.getByRole('menuitem', { name: generation.label }).click()
+      await expect.poll(() => observedCalls.find((call) =>
+        call.name === 'create_notebook_cell'
+        && record(call.arguments.cell)?.type === generation.cellType)).toBeTruthy()
+      const createGenerationCall = observedCalls.find((call) =>
+        call.name === 'create_notebook_cell'
+        && record(call.arguments.cell)?.type === generation.cellType)
+      const createdGenerationCell = record(createGenerationCall?.arguments.cell)
+      const createdGenerationCellId = typeof createdGenerationCell?.id === 'string'
+        ? createdGenerationCell.id
+        : ''
+      if (!createdGenerationCellId) {
+        throw new Error('Context-menu generation did not preserve its planned cell id')
+      }
+      expect(createdGenerationCell).toMatchObject({
+        provider: expect.any(String),
+        tool: expect.any(String),
+      })
+      await expect.poll(() => observedCalls.some((call) =>
+        call.name === 'connect_notebook_cells'
+        && call.arguments.source_cell_id === fullscreenImageCellId
+        && call.arguments.target_cell_id === createdGenerationCellId
+        && call.arguments.target_input === 'image')).toBe(true)
+      const createdGenerationNode = notebookCellNode(page, createdGenerationCellId)
+      await createdGenerationNode.waitFor({ state: 'visible', timeout: 30_000 })
+      expect(await createdGenerationNode.getAttribute('data-selection')).toBe('primary')
+
+      await createdGenerationNode.click({ button: 'right' })
+      const createdGenerationMenu = page.getByRole('menu', {
+        name: /Cell actions for/,
+      })
+      await createdGenerationMenu.waitFor({ state: 'visible' })
+      const confirmedGenerationCleanup = new Promise<string>((resolve) => {
+        page!.once('dialog', async (dialog) => {
+          resolve(dialog.message())
+          await dialog.accept()
+        })
+      })
+      await createdGenerationMenu.getByRole('menuitem', { name: /Delete cell/ }).click()
+      expect(await confirmedGenerationCleanup).toContain('Delete @')
+      await createdGenerationNode.waitFor({ state: 'hidden', timeout: 30_000 })
+      await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+      await duplicateSource.click({ button: 'right' })
+      await duplicateMenu.waitFor({ state: 'visible' })
+    }
     const duplicateAction = duplicateMenu.getByRole('menuitem', { name: 'Duplicate' })
     expect(await duplicateAction.isEnabled()).toBe(true)
     observedCalls.length = 0

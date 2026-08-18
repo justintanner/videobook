@@ -24,6 +24,16 @@ const actions: NotebookCellContextAction[] = [
     icon: 'media',
   },
   {
+    id: 'generate_video',
+    label: 'Generate video',
+    icon: 'generate-video',
+  },
+  {
+    id: 'generate_image',
+    label: 'Generate image',
+    icon: 'generate-image',
+  },
+  {
     id: 'duplicate',
     label: 'Duplicate',
     icon: 'duplicate',
@@ -59,6 +69,8 @@ describe('NotebookCellContextMenu', () => {
     expect(html).toContain('data-cell-action="inspect"')
     expect(html).toContain('data-cell-action="run" disabled=""')
     expect(html).toContain('data-cell-action="media"')
+    expect(html).toContain('data-cell-action="generate_video"')
+    expect(html).toContain('data-cell-action="generate_image"')
     expect(html).toContain('data-cell-action="duplicate"')
     expect(html).toContain('data-cell-action="generations"')
     expect(html).toContain('data-cell-action="source"')

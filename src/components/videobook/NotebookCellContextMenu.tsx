@@ -2,12 +2,14 @@ import {
   Braces,
   Copy,
   History,
+  Image,
   Library,
   Maximize2,
   PanelRightOpen,
   Play,
   Scissors,
   Trash2,
+  Video,
   type LucideIcon,
 } from 'lucide-react'
 import {
@@ -20,6 +22,8 @@ import { createPortal } from 'react-dom'
 
 export type NotebookCellContextActionIcon =
   | 'duplicate'
+  | 'generate-image'
+  | 'generate-video'
   | 'generations'
   | 'inspect'
   | 'library'
@@ -50,6 +54,8 @@ type NotebookCellContextMenuProps = {
 
 const actionIcons: Record<NotebookCellContextActionIcon, LucideIcon> = {
   duplicate: Copy,
+  'generate-image': Image,
+  'generate-video': Video,
   generations: History,
   inspect: PanelRightOpen,
   library: Library,

@@ -786,6 +786,41 @@ function generationMediaKind(
   return 'video'
 }
 
+type ContextMenuGenerationCellType = Extract<
+  NotebookChatGenerationCommand['cellType'],
+  'generate_image' | 'generate_video'
+>
+
+function planContextMenuGeneration(input: {
+  actions: readonly NotebookGenerationAction[]
+  cellId: string
+  cellType: ContextMenuGenerationCellType
+  document: NotebookDocument
+  lastWorkSlot: NotebookGridSlot | null
+  sourceCellId: string
+}): NotebookChatGenerationDraft {
+  const source = input.document.cells.find((cell) =>
+    cell.id === input.sourceCellId)
+  if (!source) throw new Error('The source asset cell is no longer available')
+  return planNotebookChatGeneration({
+    actions: input.actions,
+    cellId: input.cellId,
+    command: {
+      cellType: input.cellType,
+      mediaKind: generationMediaKind(input.cellType),
+      prompt: '',
+      sourceReferences: [notebookGridTag(source.slot)],
+    },
+    document: input.document,
+    fallbackSlot: nextNotebookCreationSlot(
+      input.cellType,
+      input.document.cells,
+      input.lastWorkSlot,
+    ),
+    lastWorkSlot: input.lastWorkSlot,
+  })
+}
+
 function applyReadyOutcome(message: string): ComposerOutcome {
   return {
     ok: true,
@@ -8709,6 +8744,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const contextMenuSplitSource = selectedCellId === cellContextMenu?.cellId
     ? selectedSplitSource
     : null
+  const contextMenuGenerationTypes = contextMenuCell && notebook
+    ? (['generate_video', 'generate_image'] as const).filter((cellType) => {
+        try {
+          planContextMenuGeneration({
+            actions: generationActions,
+            cellId: `context-menu-${cellType}`,
+            cellType,
+            document: notebook,
+            lastWorkSlot,
+            sourceCellId: contextMenuCell.id,
+          })
+          return true
+        } catch {
+          return false
+        }
+      })
+    : []
   const contextMenuActions: NotebookCellContextAction[] = []
   if (contextMenuCell && contextMenuNode) {
     contextMenuActions.push({
@@ -8740,6 +8792,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         id: 'media',
         label: 'Open media',
         icon: 'media',
+      })
+    }
+    for (const cellType of contextMenuGenerationTypes) {
+      const video = cellType === 'generate_video'
+      contextMenuActions.push({
+        id: cellType,
+        label: video ? 'Generate video' : 'Generate image',
+        icon: video ? 'generate-video' : 'generate-image',
+        disabled: busy,
       })
     }
     if (contextMenuDuplicateAssetId) {
@@ -8794,6 +8855,50 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setBusy(false)
     }
   }
+  const createContextMenuGeneration = async (
+    cellType: ContextMenuGenerationCellType,
+  ) => {
+    if (!bookId || !notebook || !contextMenuCell) return
+    const notebookId = notebook.id
+    const sourceCellId = contextMenuCell.id
+    setBusy(true)
+    try {
+      const currentNotebook = asNotebook(await call('get_notebook', {
+        book_id: bookId,
+        notebook_id: notebookId,
+      }))
+      if (!currentNotebook) {
+        throw new Error('The server returned an invalid notebook')
+      }
+      const draft = planContextMenuGeneration({
+        actions: generationActions,
+        cellId: uuidv7(),
+        cellType,
+        document: currentNotebook,
+        lastWorkSlot,
+        sourceCellId,
+      })
+      const materialized = await materializeNotebookChatGeneration({
+        bookId,
+        callTool: call,
+        document: currentNotebook,
+        draft,
+        ...(currentNotebook.revision
+          ? { expectedRevision: currentNotebook.revision }
+          : {}),
+      })
+      rememberLastWorkSlot(draft.cell.slot)
+      await refreshBookData(bookId, notebookId)
+      openCellInspector(materialized.cellId)
+      setNotice(
+        `Added ${materialized.cellAddress} ${cellType === 'generate_video' ? 'video' : 'image'} generation from ${materialized.sourceAddresses[0]}`,
+      )
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
   const handleCellContextAction = (actionId: string) => {
     if (!contextMenuCell) return
     if (actionId === 'inspect') {
@@ -8820,6 +8925,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (actionId === 'duplicate') {
       void duplicateContextMenuAsset()
+      return
+    }
+    if (actionId === 'generate_video' || actionId === 'generate_image') {
+      void createContextMenuGeneration(actionId)
       return
     }
     if (actionId === 'split' && contextMenuSplitSource) {
