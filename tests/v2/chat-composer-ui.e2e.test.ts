@@ -188,6 +188,7 @@ describe('chat composer browser flow', () => {
   let outputVideoCellId = ''
   let reviewGenerationCellId = ''
   let directVideoGenerationCellId = ''
+  let fullscreenImageGenerationCellId = ''
   let fullscreenImageCellId = ''
   let fullscreenImageArtifactId = ''
   let fullscreenImageObjectHash = ''
@@ -428,13 +429,36 @@ describe('chat composer browser flow', () => {
     if (!fullscreenImageArtifactId || !fullscreenImageObjectHash || !fullscreenImageMediaUrl) {
       throw new Error('Could not create fullscreen image fixture asset')
     }
-    fullscreenImageCellId = await createCell({
-      type: 'generate_image',
-      label: 'generate-image-fullscreen',
-      slot: { row: 2, column: 2 },
-      prompt: 'A fullscreen image fixture',
-      output_artifact_id: fullscreenImageArtifactId,
-    })
+    const fullscreenGeneration = record(resultValue(await client.callTool({
+      name: 'create_notebook_cell',
+      arguments: {
+        book_id: bookId,
+        notebook_id: notebookId,
+        cell: {
+          type: 'generate_image',
+          label: 'generate-image-fullscreen',
+          slot: { row: 2, column: 1 },
+          prompt: 'A fullscreen image fixture',
+          provider: 'google-flow',
+          model: 'nano-banana-pro',
+          operation: 'text_to_image',
+          tool: 'generate_google_flow_nano_banana_pro_image',
+          output_artifact_id: fullscreenImageArtifactId,
+        },
+      },
+    })))
+    const fullscreenOutputCell = record(fullscreenGeneration?.output_cell)
+    fullscreenImageGenerationCellId = typeof fullscreenGeneration?.id === 'string'
+      ? fullscreenGeneration.id
+      : ''
+    fullscreenImageCellId = typeof fullscreenOutputCell?.id === 'string'
+      ? fullscreenOutputCell.id
+      : ''
+    if (!fullscreenImageGenerationCellId || !fullscreenImageCellId) {
+      throw new Error('Could not create browser fixture image output pair')
+    }
+    expect(fullscreenGeneration?.output_artifact_id).toBeUndefined()
+    expect(fullscreenOutputCell?.output_artifact_id).toBe(fullscreenImageArtifactId)
     await client.close()
     viteProcess = startProcess(
       [join(process.cwd(), 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(vitePort)],
@@ -820,6 +844,15 @@ describe('chat composer browser flow', () => {
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
     await page.getByLabel('Open inspector').click()
+    const generationNode = page.locator(
+      `.notebook-flow .react-flow__node[data-id="${fullscreenImageGenerationCellId}"]`,
+    )
+    await generationNode.waitFor({ state: 'visible' })
+    expect(await generationNode.locator('.cell-media').count()).toBe(0)
+    expect((await generationNode.locator('.cell-model-line').textContent())?.trim())
+      .toBe('Nano Banana Pro')
+    expect((await generationNode.locator('.cell-copy-text p').textContent())?.trim())
+      .toBe('A fullscreen image fixture')
     const fullscreenNode = page.locator(
       `.notebook-flow .react-flow__node[data-id="${fullscreenImageCellId}"]`,
     )

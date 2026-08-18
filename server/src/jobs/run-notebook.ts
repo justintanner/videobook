@@ -21,6 +21,7 @@ import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { mutateNotebook } from "../notebook-mutations.js";
 import {
   collapseLegacyExtractPairs,
+  ensureGenerationMediaOutputs,
   ensureGenerationMediaOutput,
   extractFrameSelection,
   findGenerationMediaOutput,
@@ -3588,6 +3589,25 @@ export async function reconcileAwaitingNotebookOutputs(
     }
   }
   return enqueued;
+}
+
+export async function reconcileGenerationMediaOutputs(
+  engine: Engine,
+): Promise<number> {
+  let repaired = 0;
+  for (const notebook of engine.notebooks.list()) {
+    const normalized = ensureGenerationMediaOutputs(engine, notebook);
+    if (normalized === notebook) continue;
+    const result = await mutateNotebook(
+      engine,
+      notebook.id,
+      "reconcile_generation_media_outputs",
+      (current) => ensureGenerationMediaOutputs(engine, current),
+    );
+    if (!result.ok) throw new Error(result.error.message);
+    repaired += 1;
+  }
+  return repaired;
 }
 
 async function notebookRunHasLiveWork(

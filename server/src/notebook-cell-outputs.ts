@@ -234,6 +234,53 @@ function generationOutputLabel(
   return `${base} ${labelSuffix}`;
 }
 
+function generationOutputCell(
+  producer: NotebookCell,
+  outputCell: NotebookCell,
+  producerCellId: string,
+  mediaRole: string,
+): NotebookCell {
+  const inheritedOutput = {
+    ...outputCell,
+    ...(outputCell.prompt === undefined && producer.prompt !== undefined
+      ? { prompt: producer.prompt }
+      : {}),
+    ...(outputCell.provider === undefined && producer.provider !== undefined
+      ? { provider: producer.provider }
+      : {}),
+    ...(outputCell.model === undefined && producer.model !== undefined
+      ? { model: producer.model }
+      : {}),
+    ...(outputCell.tool === undefined && producer.tool !== undefined
+      ? { tool: producer.tool }
+      : {}),
+  };
+  let inputs = generationOutputInputs(
+    inheritedOutput,
+    producerCellId,
+    mediaRole,
+  );
+  const inlineArtifactId = producer.outputArtifactId;
+  if (!inlineArtifactId) return { ...inheritedOutput, inputs };
+  if (!inheritedOutput.outputArtifactId) {
+    return {
+      ...inheritedOutput,
+      outputArtifactId: inlineArtifactId,
+      inputs: { ...inputs, state: "completed" },
+    };
+  }
+  if (inheritedOutput.outputArtifactId !== inlineArtifactId) {
+    inputs = {
+      ...inputs,
+      outputVersionArtifactIds: [...new Set([
+        inlineArtifactId,
+        ...versionArtifactIds(inheritedOutput),
+      ])],
+    };
+  }
+  return { ...inheritedOutput, inputs };
+}
+
 function ensureGenerationOutput(
   engine: Engine,
   document: NotebookDocument,
@@ -251,22 +298,32 @@ function ensureGenerationOutput(
   }
   const existing = spec.find(document, cellId);
   if (existing) {
-    const inputs = generationOutputInputs(
+    const outputCell = generationOutputCell(
+      producer,
       existing.outputCell,
       cellId,
       spec.mediaRole,
     );
     const unchanged = existing.outputCell.inputs?.mediaRole === spec.mediaRole
-      && existing.outputCell.inputs?.producerCellId === cellId;
+      && existing.outputCell.inputs?.producerCellId === cellId
+      && existing.outputCell.prompt === outputCell.prompt
+      && existing.outputCell.provider === outputCell.provider
+      && existing.outputCell.model === outputCell.model
+      && existing.outputCell.tool === outputCell.tool
+      && !producer.outputArtifactId;
     if (unchanged) {
       return { document, ...existing, created: false, updated: false };
     }
-    const outputCell = { ...existing.outputCell, inputs };
     return {
       document: {
         ...document,
-        cells: document.cells.map((cell) =>
-          cell.id === outputCell.id ? outputCell : cell),
+        cells: document.cells.map((cell) => {
+          if (cell.id === outputCell.id) return outputCell;
+          if (cell.id === producer.id && producer.outputArtifactId) {
+            return { ...cell, outputArtifactId: undefined };
+          }
+          return cell;
+        }),
       },
       outputCell,
       outputEdge: existing.outputEdge,
@@ -275,16 +332,21 @@ function ensureGenerationOutput(
     };
   }
   const occupied = document.cells.map((cell) => cell.slot);
-  const outputCell = engine.notebooks.createCell({
-    type: spec.outputType,
-    label: generationOutputLabel(producer, spec.labelSuffix),
-    slot: nextGenerationOutputSlot(spec.producerType, producer.slot, occupied),
-    inputs: generationOutputInputs(
-      { ...producer, inputs: { state: "pending" } },
-      producer.id,
-      spec.mediaRole,
-    ),
-  });
+  const outputCell = generationOutputCell(
+    producer,
+    engine.notebooks.createCell({
+      type: spec.outputType,
+      label: generationOutputLabel(producer, spec.labelSuffix),
+      slot: nextGenerationOutputSlot(
+        spec.producerType,
+        producer.slot,
+        occupied,
+      ),
+      inputs: { state: "pending" },
+    }),
+    producer.id,
+    spec.mediaRole,
+  );
   const outputEdge = engine.notebooks.createEdge({
     source: producer.id,
     target: outputCell.id,
@@ -293,7 +355,13 @@ function ensureGenerationOutput(
   return {
     document: {
       ...document,
-      cells: [...document.cells, outputCell],
+      cells: [
+        ...document.cells.map((cell) =>
+          cell.id === producer.id && producer.outputArtifactId
+            ? { ...cell, outputArtifactId: undefined }
+            : cell),
+        outputCell,
+      ],
       edges: [...document.edges, outputEdge],
     },
     outputCell,
@@ -397,4 +465,23 @@ export function ensureGenerationMediaOutput(
     return ensureGenerateAudioOutput(engine, document, cell.id);
   }
   throw new Error(`Generation output cell is not supported for ${cell.type}`);
+}
+
+export function ensureGenerationMediaOutputs(
+  engine: Engine,
+  document: NotebookDocument,
+): NotebookDocument {
+  let working = document;
+  const cellIds = document.cells
+    .filter((cell) =>
+      cell.type === "generate_video"
+      || cell.type === "generate_image"
+      || cell.type === "generate_audio")
+    .map((cell) => cell.id);
+  for (const cellId of cellIds) {
+    const cell = working.cells.find((candidate) => candidate.id === cellId);
+    if (!cell) continue;
+    working = ensureGenerationMediaOutput(engine, working, cell).document;
+  }
+  return working;
 }

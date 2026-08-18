@@ -184,7 +184,6 @@ export function notebookCellPresentsMedia(cell: ActionCell): boolean {
   if (!cell.outputArtifactId) return false
   return isNotebookMediaPresentationCellType(cell.type)
     || isNotebookExtractMediaCellType(cell.type)
-    || isNotebookGenerationCellType(cell.type)
 }
 
 export function notebookCellIsActiveStatus(status: string): boolean {

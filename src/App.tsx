@@ -2319,16 +2319,12 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const playableVideo = data.asset?.type === 'video' || data.asset?.type === 'final'
   const playableAudio = data.asset?.type === 'audio'
   const audioCell = data.kind === 'audio'
-    || data.kind === 'generate_audio'
     || data.kind === 'extract_audio'
   const visualMediaCell = data.kind === 'video'
     || data.kind === 'image'
-    || data.kind === 'generate_video'
-    || data.kind === 'generate_image'
     || data.kind === 'extract_frame'
   const imageMediaCell = !playableVideo && (
     data.kind === 'image'
-    || data.kind === 'generate_image'
     || data.kind === 'extract_frame'
   )
   const textCell = data.kind === 'prompt' || data.kind === 'analyze'
@@ -2354,15 +2350,18 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const toolTitle = generationCell && data.tool
     ? generationTitles.get(data.tool) ?? null
     : null
+  const generationModelTitle = generationCell
+    ? toolTitle ?? data.model ?? data.tool ?? null
+    : null
   const generationMode = generationCell
     ? asString(data.inputs?.generationMode)
     : null
   const modeAbbreviation = generationMode && /^[a-z]2[a-z]$/i.test(generationMode)
     ? generationMode.toUpperCase()
     : null
-  const modelLine = toolTitle
+  const modelLine = generationModelTitle
     ? (() => {
-      const abbreviated = abbreviateGenerationPhrases(toolTitle)
+      const abbreviated = abbreviateGenerationPhrases(generationModelTitle)
       return modeAbbreviation
         && !abbreviated.toUpperCase().includes(modeAbbreviation)
         ? `${abbreviated} · ${modeAbbreviation}`
@@ -2602,14 +2601,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             {data.kind === 'audio'
               || (data.kind === 'extract_audio' && data.outputArtifactId)
               ? <AudioCellSummary data={data} />
-              : data.kind === 'generate_audio' && data.prompt
-                ? (
-                  <div className="cell-audio-prompt" title={data.prompt}>
-                    {modelLine && <span className="cell-model-line">{modelLine}</span>}
-                    <p>{data.prompt}</p>
-                  </div>
-                )
-                : <span>{emptyCellLabel(data)}</span>}
+              : <span>{emptyCellLabel(data)}</span>}
           </div>
         ) : visualMediaCell && (mediaUrl || thumbnailUrl) ? (
           <div className="cell-media" title={imagePrompt ?? undefined}>

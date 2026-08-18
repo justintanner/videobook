@@ -12,9 +12,7 @@ import {
   NOTEBOOK_GRID_COLUMN_COUNT,
 } from "videobook-engine";
 import {
-  ensureGenerateAudioOutput,
-  ensureGenerateImageOutput,
-  ensureGenerateVideoOutput,
+  ensureGenerationMediaOutputs,
   findGenerateAudioOutput,
   findGenerateImageOutput,
   findGenerateVideoOutput,
@@ -74,64 +72,7 @@ function migrateGenerationArtifacts(
   engine: Engine,
   document: NotebookDocument,
 ): NotebookDocument {
-  const specs = [
-    {
-      producerType: "generate_video" as const,
-      ensure: ensureGenerateVideoOutput,
-    },
-    {
-      producerType: "generate_image" as const,
-      ensure: ensureGenerateImageOutput,
-    },
-    {
-      producerType: "generate_audio" as const,
-      ensure: ensureGenerateAudioOutput,
-    },
-  ];
-  let working = document;
-  for (const spec of specs) {
-    const tiles = working.cells
-      .filter((cell) => cell.type === spec.producerType)
-      .sort(bySlotThenId);
-    for (const tile of tiles) {
-      const ensured = spec.ensure(engine, working, tile.id);
-      working = ensured.document;
-      const liveTile = working.cells.find((cell) => cell.id === tile.id);
-      const inlineArtifact = liveTile?.outputArtifactId;
-      if (!inlineArtifact) continue;
-      if (ensured.outputCell.outputArtifactId === inlineArtifact) {
-        working = {
-          ...working,
-          cells: working.cells.map((cell) =>
-            cell.id === tile.id
-              ? { ...cell, outputArtifactId: undefined }
-              : cell),
-        };
-        continue;
-      }
-      if (ensured.outputCell.outputArtifactId) continue;
-      working = {
-        ...working,
-        cells: working.cells.map((cell) => {
-          if (cell.id === ensured.outputCell.id) {
-            return {
-              ...cell,
-              outputArtifactId: inlineArtifact,
-              inputs: {
-                ...(cell.inputs ?? {}),
-                state: "completed",
-              },
-            };
-          }
-          if (cell.id === tile.id) {
-            return { ...cell, outputArtifactId: undefined };
-          }
-          return cell;
-        }),
-      };
-    }
-  }
-  return working;
+  return ensureGenerationMediaOutputs(engine, document);
 }
 
 function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {

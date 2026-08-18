@@ -28,6 +28,7 @@ import { executeRelayoutNotebook } from '../../server/src/jobs/relayout-notebook
 import {
   notebookCellFingerprint,
   notebookCellIsStale,
+  reconcileGenerationMediaOutputs,
   registerRunNotebookJob,
   runNotebookCell,
 } from '../../server/src/jobs/run-notebook.js'
@@ -838,6 +839,69 @@ describe('directional canvas placement', () => {
     expect(second.created).toBe(false)
     expect(second.updated).toBe(false)
     expect(second.outputCell.id).toBe(first.outputCell.id)
+  })
+
+  it('moves inline generated images into their output cell without replacing a newer output', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'ensure-image-inline-output',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const notebook = value(engine.notebooks.read(engine.notebooks.list()[0]!.id))
+    const inlineArtifact = value(await engine.artifacts.create({
+      kind: 'image',
+      label: 'inline-image',
+    }))
+    const newerArtifact = value(await engine.artifacts.create({
+      kind: 'image',
+      label: 'newer-image',
+    }))
+    const tile = engine.notebooks.createCell({
+      type: 'generate_image',
+      slot: { row: 0, column: 0 },
+      prompt: 'kitten',
+      outputArtifactId: inlineArtifact.artifactId,
+    })
+    const initial: NotebookDocument = {
+      ...notebook,
+      cells: [tile],
+      edges: [],
+    }
+    const first = ensureGenerateImageOutput(engine, initial, tile.id)
+    expect(first.document.cells.find((cell) => cell.id === tile.id)?.outputArtifactId)
+      .toBeUndefined()
+    expect(first.outputCell.outputArtifactId).toBe(inlineArtifact.artifactId)
+    expect(first.outputCell.inputs?.state).toBe('completed')
+
+    const withNewerOutput: NotebookDocument = {
+      ...first.document,
+      cells: first.document.cells.map((cell) => {
+        if (cell.id === tile.id) {
+          return { ...cell, outputArtifactId: inlineArtifact.artifactId }
+        }
+        if (cell.id === first.outputCell.id) {
+          return { ...cell, outputArtifactId: newerArtifact.artifactId }
+        }
+        return cell
+      }),
+    }
+    value(await engine.notebooks.write(withNewerOutput))
+    expect(await reconcileGenerationMediaOutputs(engine)).toBe(1)
+    const repaired = value(engine.notebooks.read(notebook.id))
+    const repairedTile = repaired.cells.find((cell) => cell.id === tile.id)
+    const repairedOutput = findGenerateImageOutput(repaired, tile.id)?.outputCell
+    expect(repairedTile?.outputArtifactId)
+      .toBeUndefined()
+    expect(repairedOutput?.outputArtifactId).toBe(newerArtifact.artifactId)
+    expect(repairedOutput?.inputs?.outputVersionArtifactIds).toEqual([
+      inlineArtifact.artifactId,
+      newerArtifact.artifactId,
+    ])
+    expect(await reconcileGenerationMediaOutputs(engine)).toBe(0)
   })
 
   it('relayouts a legacy inline generate_image into a pair and stacks video beneath it', async () => {

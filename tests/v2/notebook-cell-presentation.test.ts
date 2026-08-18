@@ -70,6 +70,11 @@ describe('notebook cell presentation', () => {
       tool: 'ffmpeg',
       outputArtifactId: 'frame-artifact',
     })).toBe(true)
+    expect(notebookCellPresentsMedia({
+      type: 'generate_image',
+      model: 'nano-banana-pro',
+      outputArtifactId: 'legacy-inline-image',
+    })).toBe(false)
     expect(notebookCellActionPresentation({
       type: 'split_video',
       operation: 'split_range',

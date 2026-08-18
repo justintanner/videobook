@@ -20,6 +20,7 @@ import { reconcileImageSubjectJobFailures } from "./jobs/image-subjects.js";
 import {
   abortLeasedNotebookRunsOnStartup,
   reconcileAwaitingNotebookOutputs,
+  reconcileGenerationMediaOutputs,
   reconcileQueuedNotebookCells,
 } from "./jobs/run-notebook.js";
 import { uploadLocalStream } from "./local-upload.js";
@@ -226,6 +227,7 @@ async function start(): Promise<void> {
       selected.value.bookId,
     );
     await abortLeasedNotebookRunsOnStartup(selected.value.engine);
+    await reconcileGenerationMediaOutputs(selected.value.engine);
     await reconcileQueuedNotebookCells(selected.value.engine);
   }
   await queue.start();

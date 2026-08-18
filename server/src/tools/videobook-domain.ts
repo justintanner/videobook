@@ -1390,6 +1390,8 @@ export function videobookDomainDefs(
                 withCell,
                 cell.id,
               );
+              cell = ensured.document.cells.find((candidate) =>
+                candidate.id === cell.id) ?? cell;
               outputCell = ensured.outputCell;
               outputEdge = ensured.outputEdge;
               return ensured.document;
@@ -1400,6 +1402,8 @@ export function videobookDomainDefs(
                 withCell,
                 cell.id,
               );
+              cell = ensured.document.cells.find((candidate) =>
+                candidate.id === cell.id) ?? cell;
               outputCell = ensured.outputCell;
               outputEdge = ensured.outputEdge;
               return ensured.document;
@@ -1410,6 +1414,8 @@ export function videobookDomainDefs(
                 withCell,
                 cell.id,
               );
+              cell = ensured.document.cells.find((candidate) =>
+                candidate.id === cell.id) ?? cell;
               outputCell = ensured.outputCell;
               outputEdge = ensured.outputEdge;
               return ensured.document;
