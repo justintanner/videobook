@@ -1,7 +1,6 @@
 import type {
   NotebookCell,
   NotebookDocument,
-  NotebookGridSlot,
 } from 'videobook-engine'
 import {
   NOTEBOOK_GRID_COLUMN_COUNT,
@@ -32,110 +31,17 @@ export type NotebookAutoArrangeResult =
     }
 
 interface NotebookAutoArrangeScrollTarget {
-  readonly clientWidth: number
   scrollTo: (options: ScrollToOptions) => void
 }
 
 type FrameScheduler = (callback: FrameRequestCallback) => number
 
-function compareCells(left: NotebookCell, right: NotebookCell): number {
-  if (left.slot.row !== right.slot.row) return left.slot.row - right.slot.row
-  if (left.slot.column !== right.slot.column) {
-    return left.slot.column - right.slot.column
-  }
-  return left.id.localeCompare(right.id)
+function compareCellIds(leftId: string, rightId: string): number {
+  return leftId.localeCompare(rightId)
 }
 
-function sortCellIds(
-  ids: Iterable<string>,
-  cellsById: ReadonlyMap<string, NotebookCell>,
-): string[] {
-  return [...ids].sort((leftId, rightId) => {
-    const left = cellsById.get(leftId)
-    const right = cellsById.get(rightId)
-    if (!left || !right) return leftId.localeCompare(rightId)
-    return compareCells(left, right)
-  })
-}
-
-function balancedRowSizes(count: number): number[] {
-  if (count <= 0) return []
-  const rowCount = Math.ceil(count / NOTEBOOK_GRID_COLUMN_COUNT)
-  const baseSize = Math.floor(count / rowCount)
-  const largerRows = count % rowCount
-  return Array.from(
-    { length: rowCount },
-    (_, index) => baseSize + (index < largerRows ? 1 : 0),
-  )
-}
-
-function centeredColumns(count: number): number[] {
-  const center = Math.floor(NOTEBOOK_GRID_COLUMN_COUNT / 2)
-  const half = Math.floor(count / 2)
-  if (count % 2 === 1) {
-    return Array.from({ length: count }, (_, index) => center - half + index)
-  }
-  return [
-    ...Array.from({ length: half }, (_, index) => center - half + index),
-    ...Array.from({ length: half }, (_, index) => center + 1 + index),
-  ]
-}
-
-function averageChildColumn(
-  id: string,
-  children: ReadonlyMap<string, ReadonlySet<string>>,
-  assignedColumns: ReadonlyMap<string, number>,
-): number | null {
-  const childIds = children.get(id)
-  if (!childIds || childIds.size === 0) return null
-  const columns = [...childIds].flatMap((childId) => {
-    const column = assignedColumns.get(childId)
-    return column === undefined ? [] : [column]
-  })
-  if (columns.length === 0) return null
-  return columns.reduce((total, column) => total + column, 0) / columns.length
-}
-
-function orderTreeLayer(
-  ids: readonly string[],
-  cellsById: ReadonlyMap<string, NotebookCell>,
-  children: ReadonlyMap<string, ReadonlySet<string>>,
-  assignedColumns: ReadonlyMap<string, number>,
-): string[] {
-  return [...ids].sort((leftId, rightId) => {
-    const leftColumn = averageChildColumn(leftId, children, assignedColumns)
-    const rightColumn = averageChildColumn(rightId, children, assignedColumns)
-    if (leftColumn !== null && rightColumn !== null && leftColumn !== rightColumn) {
-      return leftColumn - rightColumn
-    }
-    if (leftColumn !== null && rightColumn === null) return -1
-    if (leftColumn === null && rightColumn !== null) return 1
-    const left = cellsById.get(leftId)
-    const right = cellsById.get(rightId)
-    if (!left || !right) return leftId.localeCompare(rightId)
-    return compareCells(left, right)
-  })
-}
-
-function placeCenteredRows(
-  ids: readonly string[],
-  startRow: number,
-  slots: Map<string, NotebookGridSlot>,
-  assignedColumns: Map<string, number>,
-): number {
-  let offset = 0
-  const rowSizes = balancedRowSizes(ids.length)
-  for (const [rowOffset, rowSize] of rowSizes.entries()) {
-    const columns = centeredColumns(rowSize)
-    const rowIds = ids.slice(offset, offset + rowSize)
-    for (const [index, id] of rowIds.entries()) {
-      const slot = { row: startRow + rowOffset, column: columns[index]! }
-      slots.set(id, slot)
-      assignedColumns.set(id, slot.column)
-    }
-    offset += rowSize
-  }
-  return startRow + rowSizes.length
+function sortCellIds(ids: Iterable<string>): string[] {
+  return [...ids].sort(compareCellIds)
 }
 
 function failure(
@@ -145,18 +51,27 @@ function failure(
   return { ok: false, code, message }
 }
 
-export function planNotebookVideoTree(
-  document: NotebookDocument,
-): NotebookAutoArrangeResult {
-  const cellsById = new Map(document.cells.map((cell) => [cell.id, cell]))
-  if (cellsById.size !== document.cells.length) {
-    return failure(
-      'invalid-edge',
-      'Cannot auto-arrange a notebook with duplicate cell IDs.',
-    )
-  }
+function groupRowCount(count: number): number {
+  return Math.ceil(count / NOTEBOOK_GRID_COLUMN_COUNT)
+}
 
+function placeGroup(
+  ids: readonly string[],
+  startRow: number,
+): NotebookAutoArrangeAssignment[] {
+  return ids.map((id, index) => ({
+    id,
+    row: startRow + Math.floor(index / NOTEBOOK_GRID_COLUMN_COUNT),
+    column: index % NOTEBOOK_GRID_COLUMN_COUNT,
+  }))
+}
+
+function orderedCellIds(
+  document: NotebookDocument,
+  cellsById: ReadonlyMap<string, NotebookCell>,
+): string[] | NotebookAutoArrangeResult {
   const connectedIds = new Set<string>()
+
   for (const edge of document.edges) {
     if (!cellsById.has(edge.source) || !cellsById.has(edge.target)) {
       const missingId = cellsById.has(edge.source) ? edge.target : edge.source
@@ -169,45 +84,35 @@ export function planNotebookVideoTree(
     connectedIds.add(edge.target)
   }
 
-  const parents = new Map<string, Set<string>>()
-  const children = new Map<string, Set<string>>()
-  for (const id of connectedIds) {
-    parents.set(id, new Set())
-    children.set(id, new Set())
-  }
+  const parents = new Map(
+    [...connectedIds].map((id) => [id, new Set<string>()]),
+  )
+  const children = new Map(
+    [...connectedIds].map((id) => [id, new Set<string>()]),
+  )
   for (const edge of document.edges) {
     parents.get(edge.target)?.add(edge.source)
     children.get(edge.source)?.add(edge.target)
   }
 
-  const outgoing = new Map(
-    [...connectedIds].map((id) => [id, children.get(id)?.size ?? 0]),
+  const incoming = new Map(
+    [...parents].map(([id, sources]) => [id, sources.size]),
   )
-  const ranks = new Map([...connectedIds].map((id) => [id, 0]))
-  const orderedIds: string[] = []
   const ready = sortCellIds(
-    [...connectedIds].filter((id) => outgoing.get(id) === 0),
-    cellsById,
+    [...connectedIds].filter((id) => incoming.get(id) === 0),
   )
+  const orderedIds: string[] = []
 
   while (ready.length > 0) {
     const id = ready.shift()
     if (!id) continue
     orderedIds.push(id)
-    const childRank = ranks.get(id) ?? 0
-    const sources = sortCellIds(parents.get(id) ?? [], cellsById)
-    for (const sourceId of sources) {
-      ranks.set(sourceId, Math.max(ranks.get(sourceId) ?? 0, childRank + 1))
-      const count = (outgoing.get(sourceId) ?? 0) - 1
-      outgoing.set(sourceId, count)
+    for (const childId of sortCellIds(children.get(id) ?? [])) {
+      const count = (incoming.get(childId) ?? 0) - 1
+      incoming.set(childId, count)
       if (count === 0) {
-        ready.push(sourceId)
-        ready.sort((leftId, rightId) => {
-          const left = cellsById.get(leftId)
-          const right = cellsById.get(rightId)
-          if (!left || !right) return leftId.localeCompare(rightId)
-          return compareCells(left, right)
-        })
+        ready.push(childId)
+        ready.sort(compareCellIds)
       }
     }
   }
@@ -218,95 +123,60 @@ export function planNotebookVideoTree(
       'Cannot auto-arrange because the notebook graph contains a cycle.',
     )
   }
+  return [
+    ...orderedIds,
+    ...sortCellIds(
+      document.cells
+        .filter((cell) => !connectedIds.has(cell.id))
+        .map((cell) => cell.id),
+    ),
+  ]
+}
 
-  const layers = new Map<number, string[]>()
-  for (const id of orderedIds) {
-    const rank = ranks.get(id) ?? 0
-    const layer = layers.get(rank) ?? []
-    layer.push(id)
-    layers.set(rank, layer)
+export function planNotebookArrangement(
+  document: NotebookDocument,
+): NotebookAutoArrangeResult {
+  const cellsById = new Map(document.cells.map((cell) => [cell.id, cell]))
+  if (cellsById.size !== document.cells.length) {
+    return failure(
+      'invalid-edge',
+      'Cannot auto-arrange a notebook with duplicate cell IDs.',
+    )
   }
-  const rankedLayers = [...layers.entries()].sort(
-    ([leftRank], [rightRank]) => leftRank - rightRank,
-  )
-  const isolatedIds = sortCellIds(
-    document.cells
-      .filter((cell) => !connectedIds.has(cell.id))
-      .map((cell) => cell.id),
-    cellsById,
-  )
-  const connectedRowCount = rankedLayers.reduce(
-    (total, [, ids]) => total + balancedRowSizes(ids.length).length,
-    0,
-  )
-  const isolatedRowCount = balancedRowSizes(isolatedIds.length).length
-  const requiredRows = connectedRowCount + isolatedRowCount
+
+  const orderedIds = orderedCellIds(document, cellsById)
+  if (!Array.isArray(orderedIds)) return orderedIds
+
+  const contentIds = orderedIds.filter((id) => cellsById.get(id)?.type !== 'video')
+  const videoIds = orderedIds.filter((id) => cellsById.get(id)?.type === 'video')
+  const contentRowCount = groupRowCount(contentIds.length)
+  const videoRowCount = groupRowCount(videoIds.length)
+  const requiredRows = contentRowCount + videoRowCount
   if (requiredRows > NOTEBOOK_GRID_ROW_COUNT) {
     return failure(
       'capacity',
-      `Cannot auto-arrange because the video tree needs ${requiredRows} rows, but the grid supports ${NOTEBOOK_GRID_ROW_COUNT}.`,
+      `Cannot auto-arrange because the layout needs ${requiredRows} rows, but the grid supports ${NOTEBOOK_GRID_ROW_COUNT}.`,
     )
   }
-  const spacerRows = connectedIds.size > 0
-    && isolatedIds.length > 0
-    && requiredRows < NOTEBOOK_GRID_ROW_COUNT
-    ? 1
-    : 0
 
-  const slots = new Map<string, NotebookGridSlot>()
-  const assignedColumns = new Map<string, number>()
-  let nextRow = 0
-  for (const [, ids] of rankedLayers) {
-    const orderedLayer = orderTreeLayer(
-      ids,
-      cellsById,
-      children,
-      assignedColumns,
-    )
-    nextRow = placeCenteredRows(
-      orderedLayer,
-      nextRow,
-      slots,
-      assignedColumns,
-    )
+  return {
+    ok: true,
+    rowCount: requiredRows,
+    slots: [
+      ...placeGroup(contentIds, 0),
+      ...placeGroup(videoIds, contentRowCount),
+    ],
   }
-  nextRow += spacerRows
-  nextRow = placeCenteredRows(
-    isolatedIds,
-    nextRow,
-    slots,
-    assignedColumns,
-  )
-
-  const assignments: NotebookAutoArrangeAssignment[] = []
-  for (const cell of document.cells) {
-    const slot = slots.get(cell.id)
-    if (!slot) {
-      return failure(
-        'invalid-edge',
-        `Cannot auto-arrange because cell ${cell.id} could not be placed.`,
-      )
-    }
-    assignments.push({ id: cell.id, row: slot.row, column: slot.column })
-  }
-  return { ok: true, rowCount: nextRow, slots: assignments }
 }
 
-export function revealNotebookVideoTree(
+export function revealNotebookArrangement(
   resolveTarget: () => NotebookAutoArrangeScrollTarget | null,
-  centerX: number,
-  zoom: number,
   scheduleFrame: FrameScheduler = (callback) => window.requestAnimationFrame(callback),
 ): void {
   scheduleFrame(() => {
     scheduleFrame(() => {
-      const target = resolveTarget()
-      if (!target) return
-      const normalizedCenter = Number.isFinite(centerX) ? centerX : 0
-      const normalizedZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1
-      const width = Number.isFinite(target.clientWidth) ? target.clientWidth : 0
-      target.scrollTo({
-        left: Math.max(0, normalizedCenter * normalizedZoom - width / 2),
+      resolveTarget()?.scrollTo({
+        left: 0,
         top: 0,
         behavior: 'smooth',
       })

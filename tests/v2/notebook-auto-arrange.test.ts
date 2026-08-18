@@ -15,8 +15,8 @@ import {
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 import {
-  planNotebookVideoTree,
-  revealNotebookVideoTree,
+  planNotebookArrangement,
+  revealNotebookArrangement,
 } from '../../src/videobook/notebook-auto-arrange.js'
 
 function cell(
@@ -51,7 +51,7 @@ function document(
 }
 
 function assignmentMap(
-  value: ReturnType<typeof planNotebookVideoTree>,
+  value: ReturnType<typeof planNotebookArrangement>,
 ): Map<string, { row: number; column: number }> {
   expect(value.ok, value.ok ? undefined : value.message).toBe(true)
   if (!value.ok) return new Map()
@@ -86,8 +86,8 @@ function value<T>(
   return result.value
 }
 
-describe('notebook inverted causal-tree auto-arrange', () => {
-  it('centers deterministic causal layers with a video leaf above its ancestors', () => {
+describe('notebook readable auto-arrange', () => {
+  it('packs dependencies from the upper-left and carries video assets below them', () => {
     const source = document(
       [
         cell('root', 8, 1),
@@ -102,23 +102,27 @@ describe('notebook inverted causal-tree auto-arrange', () => {
         edge('right', 'sink'),
       ],
     )
-    const first = planNotebookVideoTree(source)
+    const first = planNotebookArrangement(source)
     const slots = assignmentMap(first)
 
-    expect(slots.get('sink')).toEqual({ row: 0, column: 6 })
-    expect(slots.get('right')).toEqual({ row: 1, column: 5 })
-    expect(slots.get('left')).toEqual({ row: 1, column: 7 })
-    expect(slots.get('root')).toEqual({ row: 2, column: 6 })
+    expect(first.ok && first.rowCount).toBe(2)
+    expect(slots.get('root')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('left')).toEqual({ row: 0, column: 1 })
+    expect(slots.get('right')).toEqual({ row: 0, column: 2 })
+    expect(slots.get('sink')).toEqual({ row: 1, column: 0 })
     for (const connection of source.edges) {
-      expect(slots.get(connection.source)!.row)
-        .toBeGreaterThan(slots.get(connection.target)!.row)
+      const sourceSlot = slots.get(connection.source)!
+      const targetSlot = slots.get(connection.target)!
+      const sourceIndex = sourceSlot.row * 13 + sourceSlot.column
+      const targetIndex = targetSlot.row * 13 + targetSlot.column
+      expect(sourceIndex).toBeLessThan(targetIndex)
     }
 
     const arranged = applyAssignments(source, slots)
-    expect(planNotebookVideoTree(arranged)).toEqual(first)
+    expect(planNotebookArrangement(arranged)).toEqual(first)
   })
 
-  it('aligns video leaves from branches of different depths on the top row', () => {
+  it('puts video leaves from branches of different depths together at the bottom', () => {
     const source = document(
       [
         cell('root', 7, 8),
@@ -132,15 +136,15 @@ describe('notebook inverted causal-tree auto-arrange', () => {
         edge('middle', 'long-video'),
       ],
     )
-    const slots = assignmentMap(planNotebookVideoTree(source))
+    const slots = assignmentMap(planNotebookArrangement(source))
 
-    expect(slots.get('long-video')).toEqual({ row: 0, column: 5 })
-    expect(slots.get('short-video')).toEqual({ row: 0, column: 7 })
-    expect(slots.get('middle')).toEqual({ row: 1, column: 6 })
-    expect(slots.get('root')).toEqual({ row: 2, column: 6 })
+    expect(slots.get('root')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('middle')).toEqual({ row: 0, column: 1 })
+    expect(slots.get('long-video')).toEqual({ row: 1, column: 0 })
+    expect(slots.get('short-video')).toEqual({ row: 1, column: 1 })
   })
 
-  it('balances causal layers wider than the grid across centered rows', () => {
+  it('packs wide dependency graphs into left-aligned rows', () => {
     const children = Array.from({ length: 14 }, (_, index) =>
       cell(`child-${String(index).padStart(2, '0')}`, 12 - index % 10, index % 13))
     const sink = cell('sink', 20, 12, 'video')
@@ -151,7 +155,7 @@ describe('notebook inverted causal-tree auto-arrange', () => {
         ...children.map((item, index) => edge(item.id, sink.id, index)),
       ],
     )
-    const planned = planNotebookVideoTree(source)
+    const planned = planNotebookArrangement(source)
     const slots = assignmentMap(planned)
     const childRows = new Map<number, NotebookCell[]>()
     for (const item of children) {
@@ -160,22 +164,18 @@ describe('notebook inverted causal-tree auto-arrange', () => {
     }
     const rows = [...childRows.keys()].sort((left, right) => left - right)
 
-    expect(planned.ok && planned.rowCount).toBe(4)
-    expect(rows).toEqual([1, 2])
-    expect(rows.map((row) => childRows.get(row)!.length)).toEqual([7, 7])
-    for (const row of rows) {
-      expect(children
-        .map((item) => slots.get(item.id)!)
-        .filter((slot) => slot.row === row)
-        .map((slot) => slot.column)
-        .sort((left, right) => left - right))
-        .toEqual([3, 4, 5, 6, 7, 8, 9])
-    }
-    expect(slots.get('sink')).toEqual({ row: 0, column: 6 })
-    expect(slots.get('root')).toEqual({ row: 3, column: 6 })
+    expect(planned.ok && planned.rowCount).toBe(3)
+    expect(rows).toEqual([0, 1])
+    expect(rows.map((row) => childRows.get(row)!.length)).toEqual([12, 2])
+    expect(slots.get('root')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('child-00')).toEqual({ row: 0, column: 1 })
+    expect(slots.get('child-11')).toEqual({ row: 0, column: 12 })
+    expect(slots.get('child-12')).toEqual({ row: 1, column: 0 })
+    expect(slots.get('child-13')).toEqual({ row: 1, column: 1 })
+    expect(slots.get('sink')).toEqual({ row: 2, column: 0 })
   })
 
-  it('places unconnected tiles in a centered bottom band', () => {
+  it('keeps disconnected content left aligned before the video section', () => {
     const source = document(
       [
         cell('root', 8, 8),
@@ -186,27 +186,21 @@ describe('notebook inverted causal-tree auto-arrange', () => {
       ],
       [edge('root', 'child')],
     )
-    const planned = planNotebookVideoTree(source)
+    const planned = planNotebookArrangement(source)
     const slots = assignmentMap(planned)
 
-    expect(planned.ok && planned.rowCount).toBe(4)
-    expect(slots.get('child')).toEqual({ row: 0, column: 6 })
-    expect(slots.get('root')).toEqual({ row: 1, column: 6 })
-    expect([
-      slots.get('loose-b'),
-      slots.get('loose-c'),
-      slots.get('loose-a'),
-    ]).toEqual([
-      { row: 3, column: 5 },
-      { row: 3, column: 6 },
-      { row: 3, column: 7 },
-    ])
+    expect(planned.ok && planned.rowCount).toBe(2)
+    expect(slots.get('root')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('loose-a')).toEqual({ row: 0, column: 1 })
+    expect(slots.get('loose-b')).toEqual({ row: 0, column: 2 })
+    expect(slots.get('loose-c')).toEqual({ row: 0, column: 3 })
+    expect(slots.get('child')).toEqual({ row: 1, column: 0 })
   })
 
   it('fits a full disconnected grid without an unnecessary spacer', () => {
     const cells = Array.from({ length: 338 }, (_, index) =>
       cell(`cell-${String(index).padStart(3, '0')}`, 25 - Math.floor(index / 13), 12 - index % 13))
-    const planned = planNotebookVideoTree(document(cells))
+    const planned = planNotebookArrangement(document(cells))
     const slots = assignmentMap(planned)
     const keys = new Set([...slots.values()].map((slot) => `${slot.row}:${slot.column}`))
 
@@ -219,39 +213,43 @@ describe('notebook inverted causal-tree auto-arrange', () => {
   })
 
   it('rejects cycles, missing cells, and layouts that exceed 26 rows', () => {
-    const cyclic = planNotebookVideoTree(document(
+    const cyclic = planNotebookArrangement(document(
       [cell('a', 0, 0), cell('b', 0, 1)],
       [edge('a', 'b'), edge('b', 'a')],
     ))
     expect(cyclic).toMatchObject({ ok: false, code: 'cycle' })
 
-    const missing = planNotebookVideoTree(document(
+    const missing = planNotebookArrangement(document(
       [cell('a', 0, 0)],
       [edge('a', 'missing')],
     ))
     expect(missing).toMatchObject({ ok: false, code: 'invalid-edge' })
 
-    const chain = Array.from({ length: 27 }, (_, index) =>
+    const compactChain = Array.from({ length: 27 }, (_, index) =>
       cell(`chain-${String(index).padStart(2, '0')}`, index % 26, index % 13))
-    const overflow = planNotebookVideoTree(document(
-      chain,
-      chain.slice(1).map((item, index) => edge(chain[index]!.id, item.id)),
+    const compact = planNotebookArrangement(document(
+      compactChain,
+      compactChain.slice(1).map((item, index) =>
+        edge(compactChain[index]!.id, item.id)),
+    ))
+    expect(compact).toMatchObject({ ok: true, rowCount: 3 })
+
+    const overflow = planNotebookArrangement(document(
+      Array.from({ length: 339 }, (_, index) =>
+        cell(`overflow-${String(index).padStart(3, '0')}`, index % 26, index % 13)),
     ))
     expect(overflow).toMatchObject({ ok: false, code: 'capacity' })
   })
 
-  it('waits for refreshed layout before revealing the centered leaves', () => {
+  it('waits for refreshed layout before revealing the upper-left', () => {
     const frames: FrameRequestCallback[] = []
     const scrolls: ScrollToOptions[] = []
     const target = {
-      clientWidth: 1000,
       scrollTo: (options: ScrollToOptions) => scrolls.push(options),
     }
 
-    revealNotebookVideoTree(
+    revealNotebookArrangement(
       () => target,
-      1800,
-      0.5,
       (callback) => {
         frames.push(callback)
         return frames.length
@@ -263,7 +261,7 @@ describe('notebook inverted causal-tree auto-arrange', () => {
     expect(scrolls).toEqual([])
     frames.shift()?.(16)
     expect(scrolls).toEqual([{
-      left: 400,
+      left: 0,
       top: 0,
       behavior: 'smooth',
     }])
@@ -323,7 +321,7 @@ describe('notebook inverted causal-tree auto-arrange', () => {
         edges,
       }))
       const before = value(engine.notebooks.read(initial.id))
-      const planned = planNotebookVideoTree(before)
+      const planned = planNotebookArrangement(before)
       expect(planned.ok).toBe(true)
       if (!planned.ok) return
 

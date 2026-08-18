@@ -1870,7 +1870,7 @@ describe('chat composer browser flow', () => {
       && record(call.arguments.cell)?.type === 'generate_audio')).toBe(true)
   }, 60_000)
 
-  it('auto-arranges the notebook as an inverted video tree', async () => {
+  it('auto-arranges the notebook from the upper-left with video assets below', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await page.goto(appUrl, { waitUntil: 'commit' })
     const input = page.getByLabel('Videobook command input')
@@ -1884,9 +1884,9 @@ describe('chat composer browser flow', () => {
     const zoomLevel = page.getByLabel('Reset zoom')
     await expect.poll(async () => await zoomLevel.textContent()).toContain('75%')
 
-    const autoArrange = page.getByLabel('Auto-arrange video tree')
+    const autoArrange = page.getByLabel('Auto-arrange notebook')
     await autoArrange.waitFor({ state: 'visible' })
-    expect(await autoArrange.getAttribute('title')).toBe('Auto-arrange video tree')
+    expect(await autoArrange.getAttribute('title')).toBe('Auto-arrange notebook')
     observedCalls.length = 0
     await autoArrange.click()
     await expect.poll(() => observedCalls.filter((call) =>
@@ -1908,7 +1908,7 @@ describe('chat composer browser flow', () => {
     expect(slotKeys.size).toBe(slots.length)
     expect(typeof generationSlot?.row).toBe('number')
     expect(typeof outputVideoSlot?.row).toBe('number')
-    expect(Number(generationSlot?.row)).toBeGreaterThan(Number(outputVideoSlot?.row))
+    expect(Number(generationSlot?.row)).toBeLessThan(Number(outputVideoSlot?.row))
     await page.getByText(/^Auto-arranged \d+ tiles?$/u).waitFor({
       state: 'visible',
       timeout: 30_000,
@@ -1920,7 +1920,7 @@ describe('chat composer browser flow', () => {
         top: element.scrollTop,
       }))).toMatchObject({ top: 0 })
     await expect.poll(async () => await page.locator('.notebook-horizontal-scroll')
-      .evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+      .evaluate((element) => element.scrollLeft)).toBe(0)
     expect(await zoomLevel.textContent()).toContain('75%')
     expect(await selected.getAttribute('data-selection')).toBe('primary')
 

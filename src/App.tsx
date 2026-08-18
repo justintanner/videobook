@@ -203,8 +203,8 @@ import {
   type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
 import {
-  planNotebookVideoTree,
-  revealNotebookVideoTree,
+  planNotebookArrangement,
+  revealNotebookArrangement,
 } from '@/videobook/notebook-auto-arrange'
 import {
   notebookSourcePortId,
@@ -4987,7 +4987,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const autoArrangeNotebook = async () => {
     if (!bookId || !notebook || notebook.cells.length === 0) return
-    const planned = planNotebookVideoTree(notebook)
+    const planned = planNotebookArrangement(notebook)
     if (!planned.ok) {
       setNotice(planned.message, 'error')
       return
@@ -4997,10 +4997,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const current = currentSlots.get(slot.id)
       return current?.row !== slot.row || current?.column !== slot.column
     })
-    const reveal = () => revealNotebookVideoTree(
+    const reveal = () => revealNotebookArrangement(
       () => notebookScrollRef.current,
-      notebookMetrics.centerX,
-      notebookView.zoom,
     )
     if (!changed) {
       setNotice('Notebook is already auto-arranged')
@@ -8944,8 +8942,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               <button
                 type="button"
                 className="canvas-auto-arrange"
-                title="Auto-arrange video tree"
-                aria-label="Auto-arrange video tree"
+                title="Auto-arrange notebook"
+                aria-label="Auto-arrange notebook"
                 disabled={busy || mcp.state !== 'ready' || notebook.cells.length === 0}
                 onClick={() => void autoArrangeNotebook()}
               >
