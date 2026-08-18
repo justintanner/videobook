@@ -34,7 +34,6 @@ import {
   notebookCellMediaType,
   markNotebookCellQueued,
   prepareNotebookGeneration,
-  stalePaidNotebookPrerequisites,
 } from "../jobs/run-notebook.js";
 import {
   buildGenerationInsertPlan,
@@ -2027,7 +2026,7 @@ export function videobookDomainDefs(
     },
     {
       name: "run_notebook_cell",
-      description: "Run one selected notebook cell and any stale prerequisites",
+      description: "Run one selected notebook cell using saved upstream media",
       scope: "book",
       schema: {
         ...bookSchema,
@@ -2077,23 +2076,6 @@ export function videobookDomainDefs(
         }
         if (notebookCellIsPaid(cell) && !generationPlan) {
           return failure("Paid notebook cells require a persisted generation plan");
-        }
-        const stalePaidPrerequisites = stalePaidNotebookPrerequisites(
-          engine,
-          notebook.value,
-          [cell.id],
-        );
-        if (stalePaidPrerequisites.length > 0) {
-          const prerequisites = stalePaidPrerequisites
-            .map((candidate) => notebookGridTag(candidate.slot))
-            .join(", ");
-          return failure(
-            `Cannot run ${notebookGridTag(cell.slot)} because stale paid ${
-              stalePaidPrerequisites.length === 1 ? "prerequisite" : "prerequisites"
-            } ${prerequisites} require current per-cell authorization. Regenerate ${
-              stalePaidPrerequisites.length === 1 ? "that prerequisite" : "those prerequisites"
-            } first, or use plan_notebook_run and enqueue_notebook_run to confirm an aggregate notebook run plan that includes every paid prerequisite.`,
-          );
         }
         const runId = uuidv7();
         const jobId = `run-notebook-${String(args.notebook_id)}-${String(args.cell_id)}-${runId}`;

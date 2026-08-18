@@ -2500,6 +2500,37 @@ function notebookCellNeedsExecution(
   return !artifactId || !engine.artifacts.get(artifactId).ok;
 }
 
+function notebookCellHasReusableMediaOutput(
+  engine: Engine,
+  document: NotebookDocument,
+  cell: NotebookCell,
+): boolean {
+  const mediaType = notebookCellMediaType(cell);
+  if (!mediaType) return false;
+  const artifactId = resolveNotebookCellArtifactId(document, cell)
+    ?? cell.outputArtifactId
+    ?? cell.outputEntityId;
+  if (!artifactId) return false;
+  const artifact = engine.artifacts.get(artifactId);
+  const artifactMediaType = artifact.ok && artifact.value.kind === "final"
+    ? "video"
+    : artifact.ok ? artifact.value.kind : null;
+  if (!artifact.ok || artifactMediaType !== mediaType) return false;
+  if (!notebookCellIsRunnable(cell)) return true;
+  const mediaOutput = findGenerationMediaOutput(document, cell);
+  if (mediaOutput) {
+    const outputExecution = executionState(document)[mediaOutput.outputCell.id];
+    if (
+      mediaOutput.outputCell.inputs?.state === "completed"
+      || outputExecution?.status === "completed"
+    ) {
+      return true;
+    }
+  }
+  const execution = executionState(document)[cell.id];
+  return execution?.status === "completed" && !execution.error;
+}
+
 function requiredNotebookCellIds(
   engine: Engine,
   document: NotebookDocument,
@@ -2528,29 +2559,20 @@ function requiredNotebookCellIds(
     if (!id || expanded.has(id)) continue;
     expanded.add(id);
     for (const parentId of parents.get(id) ?? []) {
-      required.add(parentId);
       const parent = cells.get(parentId);
+      if (
+        parent
+        && notebookCellHasReusableMediaOutput(engine, document, parent)
+      ) {
+        continue;
+      }
+      required.add(parentId);
       if (!parent) continue;
       if (!notebookCellNeedsExecution(engine, document, parent)) continue;
       stack.push(parentId);
     }
   }
   return required;
-}
-
-export function stalePaidNotebookPrerequisites(
-  engine: Engine,
-  document: NotebookDocument,
-  cellIds: readonly string[],
-): NotebookCell[] {
-  const selected = new Set(cellIds);
-  const required = requiredNotebookCellIds(engine, document, cellIds, true);
-  return document.cells.filter((cell) =>
-    !selected.has(cell.id)
-    && required.has(cell.id)
-    && notebookCellIsRunnable(cell)
-    && notebookCellIsPaid(cell)
-    && notebookCellIsStale(engine, document, cell));
 }
 
 function generationPlanClaimRunId(

@@ -1,4 +1,4 @@
-import { Check, X } from 'lucide-react'
+import { Check, CircleAlert, X } from 'lucide-react'
 import type {
   GenerationControl,
   GenerationControlValue,
@@ -19,6 +19,7 @@ import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
 import { persistSpeakVoiceId } from '@/videobook/speak-preview'
 import type { ElevenLabsVoicesState } from '@/videobook/use-elevenlabs-voices'
 import { recordValue } from '@/videobook/value-decoders'
+import { providerPayloadPreviewMentions } from '@/videobook/provider-payload-preview'
 
 export type GenerationReviewSource = {
   cellId: string
@@ -204,6 +205,10 @@ export function GenerationChatReview({
     : []
   const estimateUnknown = estimateWarnings.some((warning) =>
     /not found|unavailable|no cost adapter|unknown/iu.test(warning))
+  const previewMentions = providerPayloadPreviewMentions(preview)
+  const promptLeaks = previewStale ? [] : previewMentions.promptLeaks
+  const previewBlocksApply = !previewStale
+    && (previewLoading || previewError !== null || promptLeaks.length > 0)
   const previewJson = previewValue ?? {
     status: 'unresolved_draft',
     message: 'The server preview has not resolved this draft yet.',
@@ -232,7 +237,7 @@ export function GenerationChatReview({
             type="submit"
             form={applyFormId}
             className="command-plan-apply"
-            disabled={busy || !draft.cell.prompt?.trim()}
+            disabled={busy || !draft.cell.prompt?.trim() || previewBlocksApply}
           >
             <Check size={14} />Apply
           </button>
@@ -292,6 +297,17 @@ export function GenerationChatReview({
               onChange={(event) => onPromptChange(event.target.value)}
             />
           </label>
+          {promptLeaks.length > 0 && (
+            <div className="generation-review-reference-errors" role="alert">
+              {promptLeaks.map((leak) => (
+                <span key={`${leak.token}:${leak.code}`} title={leak.message}>
+                  <CircleAlert size={12} aria-hidden="true" />
+                  <code>{leak.token}</code>
+                  {leak.message}
+                </span>
+              ))}
+            </div>
+          )}
           <small>Or type <kbd>/apply your quick prompt</kbd> below.</small>
         </section>
 

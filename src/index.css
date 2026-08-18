@@ -6081,6 +6081,30 @@ textarea:focus-visible {
   font: inherit;
 }
 
+.generation-review-reference-errors {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(210, 111, 111, 0.34);
+  color: #d7a1a1;
+  background: rgba(112, 39, 39, 0.12);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.generation-review-reference-errors > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.generation-review-reference-errors code {
+  color: #f1b6b6;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
 .generation-review-settings {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

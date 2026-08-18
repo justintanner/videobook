@@ -91,6 +91,8 @@ const voiceCatalog: ElevenLabsVoicesState = {
 function renderReview(
   draft: NotebookChatGenerationDraft,
   catalog?: ElevenLabsVoicesState,
+  preview: unknown = null,
+  previewStale = false,
 ): string {
   return renderToStaticMarkup(createElement(GenerationChatReview, {
     actions: [ttsAction],
@@ -98,10 +100,10 @@ function renderReview(
     busy: false,
     draft,
     modes: ttsAction.inputContract.modes,
-    preview: null,
+    preview,
     previewError: null,
     previewLoading: false,
-    previewStale: false,
+    previewStale,
     sources: [],
     summary: 'Generate audio as @a1',
     ...(catalog ? { voiceCatalog: catalog } : {}),
@@ -156,5 +158,37 @@ describe('GenerationChatReview voice picker', () => {
     expect(html).toContain('aria-label="Voice id"')
     expect(html).toContain('Voice request failed')
     expect(html).toContain('Retry voices')
+  })
+
+  it('shows broken references and disables Apply for a current preview', () => {
+    const html = renderReview(speechDraft(), undefined, {
+      mentions: {
+        prompt_leaks: [{
+          token: '@e2',
+          code: 'no_output',
+          message: '@e2 does not have media output yet',
+        }],
+      },
+    })
+
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('<code>@e2</code>')
+    expect(html).toContain('@e2 does not have media output yet')
+    expect(html).toContain('class="command-plan-apply" disabled=""')
+  })
+
+  it('allows a stale preview to be revalidated on Apply', () => {
+    const html = renderReview(speechDraft(), undefined, {
+      mentions: {
+        prompt_leaks: [{
+          token: '@e2',
+          code: 'no_output',
+          message: '@e2 does not have media output yet',
+        }],
+      },
+    }, true)
+
+    expect(html).not.toContain('role="alert"')
+    expect(html).not.toContain('class="command-plan-apply" disabled=""')
   })
 })

@@ -881,7 +881,7 @@ describe('v2 notebook domain tools', () => {
     expect(stored.value.cells[0]?.pinnedResults?.[0]?.artifactId).toBe(artifact.value.artifactId)
   })
 
-  it('rejects a target plan before queueing when a stale paid prerequisite needs authorization', async () => {
+  it('accepts a target plan when a stale paid prerequisite has saved media', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
@@ -892,6 +892,9 @@ describe('v2 notebook domain tools', () => {
     if (!managed.ok) return
     const engine = managed.value.engine
     const notebook = engine.notebooks.list()[0]!
+    const upstreamOutput = await engine.artifacts.create('image', 'Saved prerequisite')
+    expect(upstreamOutput.ok).toBe(true)
+    if (!upstreamOutput.ok) return
     const upstream = engine.notebooks.createCell({
       type: 'generate_image',
       label: 'Paid prerequisite',
@@ -901,6 +904,7 @@ describe('v2 notebook domain tools', () => {
       model: 'NanoBananaProRequestSchema',
       operation: 'text_to_image',
       tool: 'generate_kie_nano_banana_pro_text_to_image',
+      outputArtifactId: upstreamOutput.value.artifactId,
     })
     const target = engine.notebooks.createCell({
       type: 'generate_image',
@@ -929,6 +933,13 @@ describe('v2 notebook domain tools', () => {
     const now = new Date(0).toISOString()
     const written = await engine.notebooks.write({
       ...document,
+      execution: {
+        [upstream.id]: {
+          fingerprint: 'stale-upstream-fingerprint',
+          status: 'completed',
+          outputArtifactId: upstreamOutput.value.artifactId,
+        },
+      },
       generationPlans: [{
         planId: plan.planId,
         cellId: target.id,
@@ -942,32 +953,49 @@ describe('v2 notebook domain tools', () => {
     if (!written.ok) return
     const run = byName.get('run_notebook_cell')!
 
-    const result = await withBookContext(
-      { bookId: created.bookId, engine },
-      () => run.handler({
-        book_id: created.bookId,
-        notebook_id: notebook.id,
-        cell_id: target.id,
-        plan,
-      }),
-    )
+    await setEngineRoot(rootDir, engine)
+    try {
+      const result = await withBookContext(
+        { bookId: created.bookId, engine },
+        () => run.handler({
+          book_id: created.bookId,
+          notebook_id: notebook.id,
+          cell_id: target.id,
+          plan,
+        }),
+      )
 
-    expect(result.isError).toBe(true)
-    expect(result.content[0]?.text).toContain('stale paid prerequisite')
-    expect(result.content[0]?.text).toContain('Regenerate that prerequisite')
-    expect(result.content[0]?.text).toContain('aggregate notebook run plan')
-    expect(engine.jobs.queue.list({ type: 'run_notebook' })).toEqual([])
-    const persisted = engine.notebooks.read(notebook.id)
-    expect(persisted.ok).toBe(true)
-    if (!persisted.ok) return
-    expect(persisted.value.execution?.[target.id]).toBeUndefined()
-    expect(persisted.value.generationPlans).toEqual([
-      expect.objectContaining({
-        planId: plan.planId,
-        cellId: target.id,
-        status: 'planned',
-      }),
-    ])
+      const queued = resultJson(result) as { job_id: string; plan_id: string }
+      expect(queued.plan_id).toBe(plan.planId)
+      expect(engine.jobs.queue.list({ type: 'run_notebook' })).toEqual([
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            cellIds: [target.id],
+            force: true,
+            jobId: queued.job_id,
+          }),
+        }),
+      ])
+      const persisted = engine.notebooks.read(notebook.id)
+      expect(persisted.ok).toBe(true)
+      if (!persisted.ok) return
+      expect(persisted.value.execution?.[upstream.id]).toMatchObject({
+        fingerprint: 'stale-upstream-fingerprint',
+        status: 'completed',
+      })
+      expect(persisted.value.execution?.[target.id]).toMatchObject({
+        status: 'queued',
+      })
+      expect(persisted.value.generationPlans).toEqual([
+        expect.objectContaining({
+          planId: plan.planId,
+          cellId: target.id,
+          status: 'queued',
+        }),
+      ])
+    } finally {
+      await stopBookQueue(created.bookId)
+    }
   })
 
   it('does not traverse through a current materialized image to stale paid history', async () => {

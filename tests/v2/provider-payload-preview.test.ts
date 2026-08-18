@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { providerPayloadPreviewMentions } from '../../src/videobook/provider-payload-preview'
+import {
+  providerPayloadPreviewMentions,
+  providerPayloadPreviewReferenceError,
+} from '../../src/videobook/provider-payload-preview'
 
 describe('provider payload preview mentions', () => {
   it('reads server-classified prompt leaks and dispatch placeholders', () => {
@@ -41,5 +44,20 @@ describe('provider payload preview mentions', () => {
         url_placeholders: ['img-source'],
       },
     })).toEqual({ promptLeaks: [], urlPlaceholders: [] })
+  })
+
+  it('returns a blocking generation error for server-classified prompt leaks', () => {
+    expect(providerPayloadPreviewReferenceError({
+      mentions: {
+        prompt_leaks: [{
+          token: '@e2',
+          code: 'no_output',
+          message: '@e2 does not have media output yet',
+        }],
+      },
+    })).toBe(
+      'Fix prompt references before generating: @e2 does not have media output yet',
+    )
+    expect(providerPayloadPreviewReferenceError({ mentions: {} })).toBeNull()
   })
 })

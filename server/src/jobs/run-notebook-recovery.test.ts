@@ -1061,4 +1061,88 @@ describe("awaiting notebook output startup recovery", () => {
     if (pending.ok) expect(pending.value).toEqual([]);
     expect(engine.artifacts.list()).toEqual([]);
   });
+
+  it("uses completed stale media as a boundary for a selected run", async () => {
+    const saved = await engine.artifacts.create({
+      kind: "image",
+      label: "saved stale source",
+    });
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    const created = await engine.notebooks.create("Frozen media boundary");
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const upstream = engine.notebooks.createCell({
+      type: "generate_image",
+      label: "Stale paid source",
+      slot: { row: 0, column: 0 },
+      prompt: "Original source",
+      provider: "kie",
+      model: "NanoBananaProRequestSchema",
+      operation: "text_to_image",
+      tool: "generate_kie_nano_banana_pro_text_to_image",
+      outputArtifactId: saved.value.artifactId,
+    });
+    const target = engine.notebooks.createCell({
+      type: "generate_image",
+      label: "Selected target",
+      slot: { row: 0, column: 1 },
+      operation: "unsupported_generation",
+    });
+    const runId = "019f0000-0000-7000-8000-000000000099";
+    const written = await engine.notebooks.write({
+      ...created.value,
+      cells: [upstream, target],
+      edges: [engine.notebooks.createEdge({
+        source: upstream.id,
+        target: target.id,
+        targetInput: "image",
+      })],
+      execution: {
+        [upstream.id]: {
+          fingerprint: "stale-completed-fingerprint",
+          status: "completed",
+          outputArtifactId: saved.value.artifactId,
+        },
+      },
+    });
+    expect(written.ok).toBe(true);
+    if (!written.ok) return;
+    await markNotebookCellQueued(engine, created.value.id, target.id, runId);
+    registerRunNotebookJob(engine);
+    await setEngineRoot(rootDir, engine);
+
+    await expect(appQueue.enqueueAndWait(
+      "frozen-media-boundary-run",
+      ({
+        type: "run_notebook",
+        bookId: engine.book.get().bookId,
+        notebookId: created.value.id,
+        cellIds: [target.id],
+        force: true,
+        runId,
+      } satisfies RunNotebookPayload) as unknown as Record<string, unknown>,
+      5_000,
+    )).rejects.toThrow("Cell operation unsupported_generation is not runnable");
+
+    const notebook = engine.notebooks.read(created.value.id);
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) return;
+    expect(notebook.value.execution?.[upstream.id]).toMatchObject({
+      fingerprint: "stale-completed-fingerprint",
+      status: "completed",
+      outputArtifactId: saved.value.artifactId,
+    });
+    expect(notebook.value.execution?.[target.id]).toMatchObject({
+      status: "error",
+      runId,
+      error: "Cell operation unsupported_generation is not runnable",
+    });
+    const upstreamGenerations = engine.generations.listForCell(
+      created.value.id,
+      upstream.id,
+    );
+    expect(upstreamGenerations.ok).toBe(true);
+    if (upstreamGenerations.ok) expect(upstreamGenerations.value).toEqual([]);
+  });
 });

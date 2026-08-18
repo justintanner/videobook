@@ -268,6 +268,9 @@ import {
   type NotebookChatGenerationCommand,
   type NotebookChatGenerationDraft,
 } from '@/videobook/notebook-chat-generation'
+import {
+  providerPayloadPreviewReferenceError,
+} from '@/videobook/provider-payload-preview'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
 import { isNotebookGenerationCellType } from '@/videobook/notebook-cell-types'
 import {
@@ -7314,14 +7317,60 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         selectInput: false,
       }
     }
-    if (promptOverride) {
-      setPendingChatAction((current) => current === action
+    setPendingChatAction((current) => current?.kind === 'generation'
+      && current.draft.cell.id === preparedAction.draft.cell.id
+      ? {
+          ...current,
+          draft: preparedAction.draft,
+          previewError: null,
+          previewLoading: true,
+          previewStale: false,
+        }
+      : current)
+    let validatedPreview: unknown
+    try {
+      validatedPreview = await loadPendingGenerationPreview(
+        preparedAction.draft,
+        currentNotebook,
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setPendingChatAction((current) => current?.kind === 'generation'
+        && current.draft.cell.id === preparedAction.draft.cell.id
         ? {
-            ...preparedAction,
+            ...current,
+            draft: preparedAction.draft,
+            previewError: message,
             previewLoading: false,
-            previewStale: true,
+            previewStale: false,
           }
         : current)
+      return {
+        ok: false,
+        message,
+        nextInput: retryInput,
+        selectInput: false,
+      }
+    }
+    setPendingChatAction((current) => current?.kind === 'generation'
+      && current.draft.cell.id === preparedAction.draft.cell.id
+      ? {
+          ...current,
+          draft: preparedAction.draft,
+          preview: validatedPreview,
+          previewError: null,
+          previewLoading: false,
+          previewStale: false,
+        }
+      : current)
+    const referenceError = providerPayloadPreviewReferenceError(validatedPreview)
+    if (referenceError) {
+      return {
+        ok: false,
+        message: referenceError,
+        nextInput: retryInput,
+        selectInput: false,
+      }
     }
     const consentKey = 'videobook.cloud-generation-consent'
     if (window.localStorage.getItem(consentKey) !== 'accepted') {

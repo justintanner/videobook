@@ -2268,9 +2268,25 @@ function ExecutableCellInspector({
     }
   }
   const saveAndRun = async () => {
-    if (!saveOnRun || busy || action?.disabled || !valid) return
+    if (
+      !saveOnRun
+      || busy
+      || action?.disabled
+      || !valid
+      || (generationCell && promptMentionPreview.loading)
+    ) return
     setSaving(true)
     try {
+      if (generationCell) {
+        try {
+          const preview = await loadGenerationPreview()
+          if (providerPayloadPreviewMentions(preview).promptLeaks.length > 0) {
+            return
+          }
+        } catch {
+          return
+        }
+      }
       await persistAndRunNotebookCell({
         cellId: cell.id,
         dirty,
@@ -2774,6 +2790,7 @@ function ExecutableCellInspector({
               || saving
               || action?.disabled
               || !valid
+              || (generationCell && promptMentionPreview.loading)
               || (!saveOnRun && dirty)
             }
           >

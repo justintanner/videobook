@@ -263,7 +263,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `rewrite_prompt` — Rewrite a generation prompt using model-specific best practices. Supports standard mode (rewrite any prompt) and scene mode (rewrite a specific scene in a Kling 3.0 multi-shot asset).
 - `rewrite_script` — Rewrite a generated script asset in-place as a text-to-text transformation of its existing markdown (the source image is NOT re-read). Variants: "full" (full reproduction prompt + breakdown) or "tldr" (1–2 sentence summary). Optional platform preset ("ig" | "tiktok" | "youtube") tunes authentic-capture cues for that feed. Optional custom_prompt applies a transformation instruction (e.g. "replace the pig with a man in a blue suit"). Previous versions are preserved as immutable Dolt revisions. Returns immediately; reconcile_project_work reports status="generating" until the new markdown is written.
 - `run_notebook` — Run missing, stale, or explicitly selected notebook cells topologically
-- `run_notebook_cell` — Run one selected notebook cell and any stale prerequisites
+- `run_notebook_cell` — Run one selected notebook cell using saved upstream media
 - `search_archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.
 - `search_library_assets` — Search ready audio, image, and video assets across all books
 - `search_library_moments` — Federate a moment search across every current-schema book

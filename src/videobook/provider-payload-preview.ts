@@ -42,3 +42,12 @@ export function providerPayloadPreviewMentions(
     : []
   return { promptLeaks, urlPlaceholders }
 }
+
+export function providerPayloadPreviewReferenceError(
+  value: unknown,
+): string | null {
+  const leaks = providerPayloadPreviewMentions(value).promptLeaks
+  if (leaks.length === 0) return null
+  const details = leaks.map((leak) => leak.message).join('; ')
+  return `Fix prompt references before generating: ${details}`
+}
