@@ -1869,4 +1869,61 @@ describe('chat composer browser flow', () => {
       call.name === 'create_notebook_cell'
       && record(call.arguments.cell)?.type === 'generate_audio')).toBe(true)
   }, 60_000)
+
+  it('auto-arranges the notebook as a centered causal graph', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+    const selected = notebookCellNode(page, fullscreenImageCellId)
+    await selected.click()
+    expect(await selected.getAttribute('data-selection')).toBe('primary')
+    await page.getByLabel('Zoom out').click()
+    const zoomLevel = page.getByLabel('Reset zoom')
+    await expect.poll(async () => await zoomLevel.textContent()).toContain('75%')
+
+    const autoArrange = page.getByLabel('Auto-arrange causal graph')
+    await autoArrange.waitFor({ state: 'visible' })
+    expect(await autoArrange.getAttribute('title')).toBe('Auto-arrange causal graph')
+    observedCalls.length = 0
+    await autoArrange.click()
+    await expect.poll(() => observedCalls.filter((call) =>
+      call.name === 'move_notebook_cells')).toHaveLength(1)
+    const moveCall = observedCalls.find((call) => call.name === 'move_notebook_cells')
+    const slots = Array.isArray(moveCall?.arguments.slots)
+      ? moveCall.arguments.slots.map(record).filter((slot) => slot !== null)
+      : []
+    const slotKeys = new Set(slots.map((slot) => `${slot!.row}:${slot!.column}`))
+
+    expect(moveCall?.arguments.book_id).toBe(bookId)
+    expect(moveCall?.arguments.notebook_id).toBe(notebookId)
+    expect(typeof moveCall?.arguments.expected_revision).toBe('string')
+    expect(slots.length).toBeGreaterThan(0)
+    expect(slotKeys.size).toBe(slots.length)
+    await page.getByText(/^Auto-arranged \d+ tiles?$/u).waitFor({
+      state: 'visible',
+      timeout: 30_000,
+    })
+    await expect.poll(async () => await autoArrange.isEnabled()).toBe(true)
+    await expect.poll(async () => await page.locator('.notebook-horizontal-scroll')
+      .evaluate((element) => ({
+        left: element.scrollLeft,
+        top: element.scrollTop,
+      }))).toMatchObject({ top: 0 })
+    const scrollLeft = await page.locator('.notebook-horizontal-scroll')
+      .evaluate((element) => element.scrollLeft)
+    expect(scrollLeft).toBeGreaterThan(0)
+    expect(await zoomLevel.textContent()).toContain('75%')
+    expect(await selected.getAttribute('data-selection')).toBe('primary')
+
+    observedCalls.length = 0
+    await autoArrange.click()
+    await page.getByText('Notebook is already auto-arranged').waitFor({
+      state: 'visible',
+    })
+    expect(observedCalls.some((call) => call.name === 'move_notebook_cells'))
+      .toBe(false)
+  }, 60_000)
 })

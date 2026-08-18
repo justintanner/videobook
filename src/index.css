@@ -980,6 +980,32 @@ textarea:focus-visible {
   pointer-events: auto;
 }
 
+.canvas-auto-arrange {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--control-border);
+  color: var(--control-fg);
+  background: var(--control-bg);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.canvas-auto-arrange:hover:not(:disabled),
+.canvas-auto-arrange:focus-visible:not(:disabled) {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
+  background: var(--control-bg-hover);
+}
+
+.canvas-auto-arrange:disabled {
+  color: rgba(139, 177, 155, 0.35);
+  cursor: default;
+  background: rgba(4, 19, 12, 0.78);
+}
+
 .canvas-add-menu button {
   display: flex;
   align-items: center;
@@ -7623,6 +7649,10 @@ textarea:focus-visible {
 
   .canvas-toolbar .canvas-zoom-panel .canvas-zoom-level {
     width: 38px;
+  }
+
+  .canvas-toolbar .canvas-auto-arrange {
+    width: 28px;
   }
 
   .brand-project {

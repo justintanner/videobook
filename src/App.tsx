@@ -41,6 +41,7 @@ import {
   Layers2,
   Library,
   Mic,
+  Network,
   PanelRightClose,
   PanelRightOpen,
   Plus,
@@ -201,6 +202,10 @@ import {
   snapNotebookGridMove,
   type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
+import {
+  planNotebookCausalPyramid,
+  revealNotebookCausalPyramid,
+} from '@/videobook/notebook-auto-arrange'
 import {
   notebookSourcePortId,
   notebookSourcePortOffsets,
@@ -4980,6 +4985,60 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const autoArrangeNotebook = async () => {
+    if (!bookId || !notebook || notebook.cells.length === 0) return
+    const planned = planNotebookCausalPyramid(notebook)
+    if (!planned.ok) {
+      setNotice(planned.message, 'error')
+      return
+    }
+    const currentSlots = new Map(notebook.cells.map((cell) => [cell.id, cell.slot]))
+    const changed = planned.slots.some((slot) => {
+      const current = currentSlots.get(slot.id)
+      return current?.row !== slot.row || current?.column !== slot.column
+    })
+    const reveal = () => revealNotebookCausalPyramid(
+      () => notebookScrollRef.current,
+      notebookMetrics.centerX,
+      notebookView.zoom,
+    )
+    if (!changed) {
+      setNotice('Notebook is already auto-arranged')
+      reveal()
+      return
+    }
+
+    const revision = asString(recordValue(notebook)?.revision)
+    setBusy(true)
+    try {
+      await call('move_notebook_cells', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        ...(revision ? { expected_revision: revision } : {}),
+        slots: planned.slots,
+      })
+      await refreshNotebook(bookId, notebook.id)
+      const selectedSlot = selectedCellId
+        ? planned.slots.find((slot) => slot.id === selectedCellId)
+        : undefined
+      if (selectedSlot) {
+        rememberLastWorkSlot({
+          row: selectedSlot.row,
+          column: selectedSlot.column,
+        })
+      }
+      setNotice(
+        `Auto-arranged ${planned.slots.length} ${planned.slots.length === 1 ? 'tile' : 'tiles'}`,
+      )
+      reveal()
+    } catch (error) {
+      await refreshNotebook(bookId, notebook.id).catch(() => undefined)
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const connectCells = async (connection: Connection) => {
     if (!bookId || !notebook || !connection.source || !connection.target) return
     setBusy(true)
@@ -8882,6 +8941,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 onAdd={createCell}
                 onDragEnd={() => setPreviewSlot(null)}
               />
+              <button
+                type="button"
+                className="canvas-auto-arrange"
+                title="Auto-arrange causal graph"
+                aria-label="Auto-arrange causal graph"
+                disabled={busy || mcp.state !== 'ready' || notebook.cells.length === 0}
+                onClick={() => void autoArrangeNotebook()}
+              >
+                <Network size={15} />
+              </button>
               {selectedNotebookCells.length > 0 && (
                 <div
                   className="canvas-selection-actions"
