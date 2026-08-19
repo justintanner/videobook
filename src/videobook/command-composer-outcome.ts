@@ -1,15 +1,15 @@
-export type ComposerInputOutcome = {
+type ComposerInputOutcome = {
   ok: boolean
   nextInput?: string
   selectInput?: boolean
 }
 
-export type ComposerInputDecision = {
+type ComposerInputDecision = {
   value: string
   select: boolean
 }
 
-export type PendingApplyCommand = {
+type PendingApplyCommand = {
   promptOverride: string | null
 }
 

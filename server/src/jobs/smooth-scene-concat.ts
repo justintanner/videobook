@@ -36,12 +36,12 @@ type SmoothSceneConcatPayload = {
   transitionSeconds?: number;
 };
 
-export type AudioOverlapMatch = {
+type AudioOverlapMatch = {
   overlapSeconds: number;
   score: number;
 };
 
-export type SmoothSceneConcatResult = {
+type SmoothSceneConcatResult = {
   mode: "audio_match" | "fixed";
   transitionSeconds: number;
   secondStartSeconds: number;
@@ -50,7 +50,7 @@ export type SmoothSceneConcatResult = {
   outputDuration: number;
 };
 
-export type SmoothSceneConcatOptions = {
+type SmoothSceneConcatOptions = {
   firstPath: string;
   secondPath: string;
   outputPath: string;

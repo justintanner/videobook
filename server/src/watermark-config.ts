@@ -15,7 +15,7 @@ import { getActiveEngine } from "./queue.js";
 
 const RECENT_LIMIT = 8;
 
-export interface WatermarkConfig {
+interface WatermarkConfig {
   savedHandle: string | null;
   recent: string[];
   authenticatedHandle: string | null;

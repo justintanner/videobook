@@ -17,7 +17,7 @@ import {
   type V4MigrationResult,
 } from "videobook-engine";
 
-export interface BookSummary {
+interface BookSummary {
   bookId: string;
   name: string;
   createdAt: number;
@@ -30,17 +30,17 @@ export interface ManagedBook extends BookSummary {
   engine: Engine;
 }
 
-export interface LegacyBookSummary extends V4MigrationDryRun {
+interface LegacyBookSummary extends V4MigrationDryRun {
   slug: string;
 }
 
-export interface MigratedBook {
+interface MigratedBook {
   book: BookSummary;
   migration: V4MigrationResult;
   legacyArchiveRoot: string;
 }
 
-export interface BookManagerOptions {
+interface BookManagerOptions {
   libraryDir: string;
   remoteObjects?: ContentStore;
   objectPrefix?: string;
@@ -48,7 +48,7 @@ export interface BookManagerOptions {
   catalogBackupName?: string;
 }
 
-export interface DeleteBookOptions {
+interface DeleteBookOptions {
   confirmName: string;
   beforeDelete?: (book: ManagedBook) => Promise<void>;
 }

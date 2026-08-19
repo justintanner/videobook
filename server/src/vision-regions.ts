@@ -68,14 +68,14 @@ const occupiedRegionsResponseSchema = z.object({
   }).strict()),
 }).strict();
 
-export interface VisionRegionFrame {
+interface VisionRegionFrame {
   id: string;
   /** Extra context appended after `cue_id=<id>; ` in the frame's text part. */
   label: string;
   buffer: Buffer;
 }
 
-export interface DetectOccupiedRegionsOptions {
+interface DetectOccupiedRegionsOptions {
   apiKey: string;
   signal: AbortSignal;
   instructions: string;

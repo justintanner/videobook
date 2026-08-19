@@ -1,4 +1,4 @@
-export type CommandParam = {
+type CommandParam = {
   name: string;
   type: "string" | "number" | "boolean" | "string[]";
   required: boolean;
@@ -6,7 +6,7 @@ export type CommandParam = {
   consumeRest?: boolean;
 };
 
-export type CommandExposure = "direct" | "ui" | "composite" | "internal";
+type CommandExposure = "direct" | "ui" | "composite" | "internal";
 
 export const COMMAND_ADAPTER_NAMES = [
   "apply_cuts",
@@ -21,7 +21,7 @@ export const COMMAND_ADAPTER_NAMES = [
   "trim",
 ] as const;
 
-export type CommandAdapterName = typeof COMMAND_ADAPTER_NAMES[number];
+type CommandAdapterName = typeof COMMAND_ADAPTER_NAMES[number];
 
 export type Command = {
   command: string;
@@ -46,7 +46,7 @@ export type Command = {
   deprecated?: boolean;
 };
 
-export type VideoEditingToolContract = {
+type VideoEditingToolContract = {
   tool: string;
   exposure: CommandExposure;
   purpose: string;

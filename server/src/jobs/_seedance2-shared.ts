@@ -10,7 +10,7 @@ import { transformProviderPrompt } from "../provider-prompt-transform.js";
 type Seedance2Model = Seedance2Request["model"] | Seedance2FastRequest["model"];
 type RefInput = { assetId: string; filename: string };
 
-export type Seedance2JobPayload = {
+type Seedance2JobPayload = {
   vidAssetId: string;
   vidAssetDir: string;
   bookId: string;

@@ -86,7 +86,7 @@ export function assertNoUnresolvedMentions(
   if (tokens.length > 0) throw new ProviderMentionError(options.toolName, tokens);
 }
 
-export interface ProviderPromptLeak {
+interface ProviderPromptLeak {
   path: string;
   token: string;
 }

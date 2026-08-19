@@ -1,12 +1,12 @@
 import { recordValue } from './value-decoders'
 
-export interface CommandHistoryPage {
+interface CommandHistoryPage {
   values: string[]
   offset: number
   hasMore: boolean
 }
 
-export interface CommandHistoryNavigation {
+interface CommandHistoryNavigation {
   cursor: number
   draft: string
   value: string

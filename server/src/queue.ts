@@ -24,7 +24,7 @@ export interface JobHandlerContext {
   markAssetFailureHandled(): void;
 }
 
-export type ServerJobHandler = (
+type ServerJobHandler = (
   payload: Record<string, unknown>,
   context: JobHandlerContext,
 ) => Promise<unknown>;

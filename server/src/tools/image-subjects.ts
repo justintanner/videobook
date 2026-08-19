@@ -116,7 +116,7 @@ function projectedSubjectAnalysisError(detail: string, state: Job["state"]): str
   return `Subject analysis job ${state}: ${withoutPeriod}. Retry the analysis.`;
 }
 
-export function projectImageSubjectAnalysisRecord(
+function projectImageSubjectAnalysisRecord(
   engine: Engine,
   record: ImageSubjectMapRecordV1 | null,
 ): ImageSubjectMapRecordV1 | null {

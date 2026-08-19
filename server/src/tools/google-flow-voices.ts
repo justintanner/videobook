@@ -26,7 +26,7 @@ import {
 // (docs/apicity-gaps.md §16).
 // ---------------------------------------------------------------------------
 
-export type CreateGoogleFlowVoiceInput = {
+type CreateGoogleFlowVoiceInput = {
   voice: string;
   displayName: string;
   dialog: string;
@@ -34,7 +34,7 @@ export type CreateGoogleFlowVoiceInput = {
   email?: string;
 };
 
-export type CreatedGoogleFlowVoice = {
+type CreatedGoogleFlowVoice = {
   voice_ref: string;
   display_name: string;
   voice: string;

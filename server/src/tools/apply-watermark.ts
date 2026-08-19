@@ -41,7 +41,7 @@ const MAX_PLACEMENT_FRAMES = 8;
 const ANALYSIS_OSG_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "bottom-right"]);
 const DEFAULT_POSITION: OsgPosition = "bottom-right";
 
-export type WatermarkPlacementSource = "cached" | "vision" | "analysis" | "default";
+type WatermarkPlacementSource = "cached" | "vision" | "analysis" | "default";
 
 function uniformPositions(position: OsgPosition): Record<Orientation, OsgPosition> {
   return { landscape: position, portrait: position, square: position };

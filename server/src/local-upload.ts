@@ -28,7 +28,7 @@ const extensionToKind: Record<string, string> = {
   ".md": "script",
 };
 
-export interface LocalUploadResult {
+interface LocalUploadResult {
   artifactId: string;
   assetId: string;
   path: string;
@@ -38,7 +38,7 @@ export interface LocalUploadResult {
   processingError?: string;
 }
 
-export type LocalUploadOutcome =
+type LocalUploadOutcome =
   | { ok: true; value: LocalUploadResult }
   | { ok: false; statusCode: number; message: string };
 

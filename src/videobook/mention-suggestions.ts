@@ -36,7 +36,7 @@ interface NotebookMentionCell {
   outputArtifactId?: string
 }
 
-export interface AssetMentionSuggestion {
+interface AssetMentionSuggestion {
   value: string
   label: string
   asset: AssetMentionCandidate

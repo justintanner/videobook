@@ -57,13 +57,13 @@ const PHASES: IndexPhase[] = [
   "activate",
 ];
 
-export type SemanticIndexPayload = {
+type SemanticIndexPayload = {
   type: "semantic_index";
   assetId: string;
   bookId: string;
 };
 
-export type SemanticIndexResult = {
+type SemanticIndexResult = {
   success: true;
   artifactId: string;
   observationCount: number;
@@ -549,7 +549,7 @@ async function clipVideoObservationBatch(
   return observations;
 }
 
-export type DeepBatchOptions = {
+type DeepBatchOptions = {
   artifactId: string;
   objectHash: string;
   manifestId: string;

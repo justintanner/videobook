@@ -30,7 +30,7 @@ import {
   videoProxyValidationError,
 } from "../video-proxy.js";
 
-export type ProcessVideoPayload = {
+type ProcessVideoPayload = {
   type: "process_video";
   videoPath: string;
   assetId: string;
@@ -43,7 +43,7 @@ export type ProcessVideoPayload = {
   reviveVisualAnalysis?: boolean;
 };
 
-export type ProcessVideoResult = {
+type ProcessVideoResult = {
   success: true;
   width: number;
   height: number;

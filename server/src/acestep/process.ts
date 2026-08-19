@@ -5,7 +5,7 @@ import { isHealthy } from "./client.js";
 import { aceStepConfig, checkLocalAvailability, type AceStepConfig } from "./config.js";
 import { AceStepError } from "./errors.js";
 
-export interface AceServerHandle {
+interface AceServerHandle {
   baseUrl: string;
   owned: boolean;
 }

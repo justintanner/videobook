@@ -1,13 +1,13 @@
-export interface WatermarkTargetAsset {
+interface WatermarkTargetAsset {
   artifactId: string
   type: string
 }
 
-export interface WatermarkTargetCell {
+interface WatermarkTargetCell {
   outputArtifactId?: string
 }
 
-export type WatermarkTargetResult =
+type WatermarkTargetResult =
   | { ok: true; artifactId: string; label: string }
   | { ok: false; message: string }
 

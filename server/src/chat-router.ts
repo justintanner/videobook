@@ -299,5 +299,4 @@ export {
   effectForTool,
   getRoutableTool,
 };
-export type { RoutableToolInfo };
 export type { ChatRoutingNotebookContext };

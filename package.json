@@ -22,7 +22,7 @@
     "use": "op run --env-file=.env.tpl -- tsx server/src/cli.ts",
     "check:op": "op run --env-file=.env.tpl -- tsx scripts/check-op.ts",
     "check:client-bundle": "tsx scripts/check-client-bundle-size.ts",
-    "check:dead-code": "knip --include files,exports,dependencies,devDependencies,optionalPeerDependencies,unlisted,unresolved,binaries",
+    "check:dead-code": "knip --include files,exports,types,dependencies,devDependencies,optionalPeerDependencies,unlisted,unresolved,binaries",
     "docs:commands": "tsx scripts/generate-command-docs.ts",
     "seed:dancing": "tsx scripts/seed-dancing.ts",
     "seed:multyculty": "tsx scripts/seed-multyculty.ts",

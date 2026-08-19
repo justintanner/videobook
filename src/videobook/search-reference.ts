@@ -1,5 +1,5 @@
 export type ReverseSearchMode = 'image-reverse' | 'video-reverse'
-export type SearchReferenceKind = 'image' | 'video'
+type SearchReferenceKind = 'image' | 'video'
 
 export interface SearchReferenceDescriptor {
   referenceId: string

@@ -3,7 +3,7 @@ import type { Orientation } from "./remotion/subtitles/types.js";
 
 const ORIENTATIONS: readonly Orientation[] = ["landscape", "portrait", "square"];
 
-export type OsgSettingsResult = { ok: true } | { ok: false; error: string };
+type OsgSettingsResult = { ok: true } | { ok: false; error: string };
 
 /**
  * Merge OSG fields into every orientation's `.render` metadata without

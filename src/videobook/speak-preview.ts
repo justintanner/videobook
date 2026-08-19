@@ -3,11 +3,11 @@ import type { SpeakVoice } from './use-elevenlabs-voices'
 const ELEVENLABS_VOICE_STORAGE_KEY = 'videobook.elevenlabs-voice'
 export const SPEAK_PREVIEW_PREFILL = '/speak '
 
-export type SpeakExecuteContext = {
+type SpeakExecuteContext = {
   speakVoiceId?: string
 }
 
-export type SpeakPreviewAction =
+type SpeakPreviewAction =
   | { kind: 'prefill'; nextInput: string; message: string }
   | { kind: 'generate'; text: string; voiceId: string }
   | { kind: 'error'; message: string }
@@ -53,7 +53,7 @@ export function persistSpeakVoiceId(voiceId: string): void {
   window.localStorage.setItem(ELEVENLABS_VOICE_STORAGE_KEY, voiceId)
 }
 
-export type SpeakPreviewKeyAction =
+type SpeakPreviewKeyAction =
   | { type: 'select'; voiceId: string }
   | { type: 'toggle' }
   | { type: 'dismiss' }

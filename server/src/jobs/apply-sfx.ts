@@ -18,7 +18,7 @@ const STALE_DERIVATIVES = [
   ".suggest-sfx.json",
 ];
 
-export type SfxEntry = {
+type SfxEntry = {
   timestamp: number;
   type: string;
   description: string;

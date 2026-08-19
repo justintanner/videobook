@@ -15,7 +15,7 @@ import type { BookManager } from "./book-manager.js";
 import { probeImage } from "./image.js";
 import { notebookCellFingerprint } from "./jobs/run-notebook.js";
 import { probeVideo, runFfmpeg } from "./ffmpeg.js";
-export type DancingFixtureOptions = {
+type DancingFixtureOptions = {
   sourceVideoPath?: string;
   kittenImagePath?: string;
 };

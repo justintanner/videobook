@@ -1,8 +1,8 @@
 import { guardedAsyncResult } from './async-request-guard'
 import type { ImageSubjectMap } from './image-subject-map'
 
-export const IMAGE_SUBJECT_MAP_POLL_INTERVAL_MS = 3_000
-export const IMAGE_SUBJECT_MAP_POLL_TIMEOUT_MS = 27 * 60_000
+const IMAGE_SUBJECT_MAP_POLL_INTERVAL_MS = 3_000
+const IMAGE_SUBJECT_MAP_POLL_TIMEOUT_MS = 27 * 60_000
 
 export type ImageSubjectMapPollResult =
   | { kind: 'terminal'; map: ImageSubjectMap }

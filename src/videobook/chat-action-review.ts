@@ -1,16 +1,16 @@
 import { formatMediaTime } from './notebook-cell-presentation'
 import { scanNotebookMentions } from 'videobook-engine/notebook-mentions'
 
-export type RoutedActionSettingTone = 'default' | 'warning'
+type RoutedActionSettingTone = 'default' | 'warning'
 
-export interface RoutedActionSetting {
+interface RoutedActionSetting {
   label: string
   value: string
   tone: RoutedActionSettingTone
   wide: boolean
 }
 
-export interface RoutedActionReview {
+interface RoutedActionReview {
   title: string
   settings: RoutedActionSetting[]
 }

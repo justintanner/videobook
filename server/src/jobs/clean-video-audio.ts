@@ -23,7 +23,7 @@ const STALE_DERIVATIVES = [
   ".suggest-sfx.json",
 ];
 
-export type CleanAudioMixOptions = {
+type CleanAudioMixOptions = {
   durationSeconds: number;
   sourceMix: number;
   edgeFadeMs: number;

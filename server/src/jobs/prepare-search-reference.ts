@@ -19,7 +19,7 @@ import {
 } from "../search-reference-store.js";
 import { registerJobHandler, type JobHandlerContext } from "../queue.js";
 
-export interface PrepareSearchReferencePayload {
+interface PrepareSearchReferencePayload {
   type: "prepare_search_reference";
   bookId: string;
   mediaKind: SearchReferenceKind;

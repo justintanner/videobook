@@ -7,18 +7,18 @@ import {
   NOTEBOOK_GRID_ROW_COUNT,
 } from 'videobook-engine/notebook-grid'
 
-export interface NotebookAutoArrangeAssignment {
+interface NotebookAutoArrangeAssignment {
   id: string
   row: number
   column: number
 }
 
-export type NotebookAutoArrangeFailureCode =
+type NotebookAutoArrangeFailureCode =
   | 'capacity'
   | 'cycle'
   | 'invalid-edge'
 
-export type NotebookAutoArrangeResult =
+type NotebookAutoArrangeResult =
   | {
       ok: true
       rowCount: number

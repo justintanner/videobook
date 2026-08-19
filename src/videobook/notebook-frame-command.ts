@@ -3,7 +3,7 @@ import { notebookCellTag } from './notebook-addressing'
 import { resolveNotebookVideoSourceCell } from './notebook-video-source'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
-export type NotebookFrameMode = 'first' | 'last' | 'time'
+type NotebookFrameMode = 'first' | 'last' | 'time'
 
 export type NotebookFrameCommand = {
   frameMode: NotebookFrameMode
@@ -11,7 +11,7 @@ export type NotebookFrameCommand = {
   timestampSeconds?: number
 }
 
-export type NotebookFrameCommandRun = {
+type NotebookFrameCommandRun = {
   actionCellId: string
   actionAddress: string
   outputCellId: string | null

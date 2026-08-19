@@ -2,14 +2,11 @@ import type { NotebookCell } from 'videobook-engine'
 import {
   notebookCellTableRows,
   type CellTableRow,
-  type CellTableValue,
 } from 'videobook-engine/catalog-metadata'
 
-export type DoltCellValue = CellTableValue
+type DoltCellRow = CellTableRow
 
-export type DoltCellRow = CellTableRow
-
-export type DoltCellDisplayValue =
+type DoltCellDisplayValue =
   | { kind: 'json', value: unknown }
   | { kind: 'null' }
   | { kind: 'raw', value: number | string }

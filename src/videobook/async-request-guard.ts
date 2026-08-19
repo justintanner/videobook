@@ -1,4 +1,4 @@
-export type GuardedAsyncResult<T> =
+type GuardedAsyncResult<T> =
   | { kind: 'current'; value: T }
   | { kind: 'error'; error: unknown }
   | { kind: 'stale' }

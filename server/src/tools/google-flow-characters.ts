@@ -39,14 +39,14 @@ import {
 // -path hook in createGoogleFlowProvider (docs/apicity-gaps.md §16).
 // ---------------------------------------------------------------------------
 
-export type CreateGoogleFlowCharacterInput = {
+type CreateGoogleFlowCharacterInput = {
   displayName: string;
   imageReferences: string[];
   personalityNotes?: string;
   voice?: string;
 };
 
-export type CreatedGoogleFlowCharacter = {
+type CreatedGoogleFlowCharacter = {
   character_ref: string;
   display_name: string;
   status: "created" | "partial-success";
@@ -446,7 +446,7 @@ function readCharacterVoiceRef(raw: Record<string, unknown>): string | null {
   return null;
 }
 
-export type ReplacedGoogleFlowCharacter = {
+type ReplacedGoogleFlowCharacter = {
   character_ref: string;
   old_ref: string;
   display_name: string;

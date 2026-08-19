@@ -37,7 +37,7 @@ type AnalyzeKeywordPlacementPayload = {
   graphics: KeywordGraphic[];
 };
 
-export interface ExtractedKeywordFrame {
+interface ExtractedKeywordFrame {
   cueId: string;
   text: string;
   frameTime: number;

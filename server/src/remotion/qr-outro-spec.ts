@@ -1,14 +1,14 @@
 export type AspectRatio = "16:9" | "9:16" | "1:1";
 export type QrOutroOrientation = "landscape" | "portrait" | "square";
 
-export type QrLayout = {
+type QrLayout = {
   width: number;
   height: number;
   contentRect: { x: number; y: number; w: number; h: number };
   entryEdge: "right" | "bottom";
 };
 
-export type CardPlacement = {
+type CardPlacement = {
   x: number;
   y: number;
   w: number;
@@ -16,17 +16,17 @@ export type CardPlacement = {
   index: number;
 };
 
-export type CardEntryOffset = {
+type CardEntryOffset = {
   x: number;
   y: number;
 };
 
-export type ImpactTiming = {
+type ImpactTiming = {
   frame: number;
   cardIndex: number;
 };
 
-export type OutroSpec = {
+type OutroSpec = {
   layout: QrLayout;
   cards: CardPlacement[];
   impacts: ImpactTiming[];
@@ -35,7 +35,7 @@ export type OutroSpec = {
   fps: number;
 };
 
-export type CueWindow = {
+type CueWindow = {
   startFrame: number;
   endFrame: number;
   impactIndex: number;

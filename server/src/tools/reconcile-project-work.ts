@@ -45,7 +45,7 @@ import {
  *  intermediate "waiting" state indefinitely. */
 const PENDING_TASK_TIMEOUT_MS = 30 * 60 * 1000;
 
-export type AssetWorkProjection = {
+type AssetWorkProjection = {
   /** New 4-status enum from the assets materialized table. */
   status: "pending" | "working" | "ready" | "error";
   meta: {
@@ -60,7 +60,7 @@ export type AssetWorkProjection = {
   deadlineAt: number | null;
 };
 
-export type ProjectAssetAnalysis = {
+type ProjectAssetAnalysis = {
   source_duration_seconds: number;
   output_json: unknown | null;
   output_url: string | null;
@@ -130,7 +130,7 @@ export type ProjectAsset = {
   osg: OsgSummary | null;
 };
 
-export type OsgSummary = {
+type OsgSummary = {
   assetId: string;
   position: string;
   size: string;
@@ -334,7 +334,7 @@ type ArchiveMetadata = {
   archived_at?: unknown;
 };
 
-export type ReconcileProjectWorkResult = {
+type ReconcileProjectWorkResult = {
   pending: Array<{ assetId: string; taskType: string; progress: number; state: string; prompt: string | null; startedAt: number | null }>;
   completed: Array<{ assetId: string; taskType: string; jobId: string }>;
   failed: Array<{ assetId: string; taskType: string; failMsg: string; failedAt: string; prompt: string | null }>;
@@ -899,13 +899,13 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
   );
 }
 
-export type ProviderPollResult = {
+type ProviderPollResult = {
   pending: ReconcileProjectWorkResult["pending"];
   completed: ReconcileProjectWorkResult["completed"];
   failed: ReconcileProjectWorkResult["failed"];
 };
 
-export type PollPendingProviderTasksOptions = {
+type PollPendingProviderTasksOptions = {
   /** Override age-out timeout (default PENDING_TASK_TIMEOUT_MS). Injectable for tests. */
   timeoutMs?: number;
   /** Override "now" for deterministic age-out in tests. */
@@ -1553,7 +1553,7 @@ async function processKieTaskResult(
   }
 }
 
-export type RenderAction = {
+type RenderAction = {
   assetId: string;
   assetDir: string;
   videoPath: string;

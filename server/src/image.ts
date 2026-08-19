@@ -1,6 +1,6 @@
 import sharp from "sharp";
 
-export interface ImageProbeResult {
+interface ImageProbeResult {
   width: number;
   height: number;
 }
@@ -23,7 +23,7 @@ export async function cropToFill(
     .toBuffer();
 }
 
-export interface CropRect {
+interface CropRect {
   x: number;
   y: number;
   w: number;

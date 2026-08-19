@@ -9,7 +9,7 @@ export const PROMPT_SURFACES = [
   "audio_generate",
 ] as const;
 
-export type PromptSurface = (typeof PROMPT_SURFACES)[number];
+type PromptSurface = (typeof PROMPT_SURFACES)[number];
 
 export function isPromptSurface(value: unknown): value is PromptSurface {
   return (

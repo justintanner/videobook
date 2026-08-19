@@ -19,7 +19,7 @@ export type ImageInput =
   | { assetId: string; filename: string }
   | { url: string };
 
-export type SlugResolution =
+type SlugResolution =
   | { ok: true; inputs: ImageInput[]; sourceImageIds: string[] }
   | { ok: false; error: string };
 

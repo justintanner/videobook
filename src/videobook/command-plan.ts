@@ -9,13 +9,13 @@ import { isDestructiveEditOperation } from 'videobook-engine/edit-policy'
 
 const COMMAND_PLAN_VERSION = 1 as const
 
-export interface CommandConfirmation {
+interface CommandConfirmation {
   required: boolean
   policy: ConfirmationPolicy
   reason: string
 }
 
-export interface CommandReference {
+interface CommandReference {
   kind: 'artifact' | 'stream' | 'source-range' | 'sequence' | 'notebook'
   targetId: string
   objectHash?: string
@@ -23,7 +23,7 @@ export interface CommandReference {
   range?: Record<string, unknown>
 }
 
-export interface CommandSuggestion {
+interface CommandSuggestion {
   suggestionId: string
   label: string
   detail?: string
@@ -41,12 +41,12 @@ export interface EditCommandStage extends CommandStageBase {
   intent: EditIntent
 }
 
-export interface SearchCommandStage extends CommandStageBase {
+interface SearchCommandStage extends CommandStageBase {
   kind: 'search'
   query: SearchQuery
 }
 
-export interface NotebookCommandStage extends CommandStageBase {
+interface NotebookCommandStage extends CommandStageBase {
   kind: 'notebook'
   notebookId: string
   action:
@@ -58,7 +58,7 @@ export interface NotebookCommandStage extends CommandStageBase {
     | 'send-to-sequence'
 }
 
-export interface ExportCommandStage extends CommandStageBase {
+interface ExportCommandStage extends CommandStageBase {
   kind: 'export'
   sequenceId: string
   revision: string
@@ -66,7 +66,7 @@ export interface ExportCommandStage extends CommandStageBase {
   captions: 'burn-in' | 'sidecar' | 'omit'
 }
 
-export interface QueuedCommandStage extends CommandStageBase {
+interface QueuedCommandStage extends CommandStageBase {
   kind: 'queued'
   jobType: 'search' | 'generation' | 'indexing' | 'export'
   tool: string
@@ -83,7 +83,7 @@ export interface QueuedCommandStage extends CommandStageBase {
   }
 }
 
-export type CommandPlanStage =
+type CommandPlanStage =
   | EditCommandStage
   | SearchCommandStage
   | NotebookCommandStage

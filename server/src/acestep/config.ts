@@ -12,7 +12,7 @@ export interface AceStepConfig {
   keepLoaded: boolean;
 }
 
-export type AceStepAvailability =
+type AceStepAvailability =
   | { available: true }
   | { available: false; kind: "binary_missing" | "models_missing" | "unreachable"; reason: string };
 

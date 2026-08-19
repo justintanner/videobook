@@ -106,7 +106,7 @@ function duplicateDestinationReference(prompt: string): string | null {
     : null;
 }
 
-export type ChatResolvedAsset = ResolvedArtifactRef;
+type ChatResolvedAsset = ResolvedArtifactRef;
 
 function buildChatNotebookContext(
   engine: Engine,
@@ -478,7 +478,7 @@ async function applyChatActionPlan(
 }
 
 export { chatActionPlanSchema, duplicateDestinationReference };
-export type { ChatActionPlan };
+
 
 export function chatDef(engine: Engine): ToolDef {
   return {

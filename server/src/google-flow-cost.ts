@@ -10,7 +10,7 @@ import { getCanonicalName } from "./generation-registry.js";
 // Flow credits: https://support.google.com/flow/answer/16526234
 // useapi comparison: https://useapi.net/docs/api-google-flow-v1
 
-export type GoogleFlowPlanTier = "plus" | "pro" | "ultra99" | "ultra199";
+type GoogleFlowPlanTier = "plus" | "pro" | "ultra99" | "ultra199";
 
 const GOOGLE_FLOW_RATE_AS_OF = "2026-07-10";
 
@@ -205,7 +205,7 @@ export type GoogleFlowCostBreakdown = CostEstimate["breakdown"] & {
   planTier: GoogleFlowPlanTier;
 };
 
-export interface GoogleFlowCostOptions {
+interface GoogleFlowCostOptions {
   tier?: GoogleFlowPlanTier;
 }
 

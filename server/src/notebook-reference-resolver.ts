@@ -17,13 +17,13 @@ import {
   scanNotebookMentions,
 } from "videobook-engine/notebook-mentions";
 
-export type NotebookReferenceIssueCode =
+type NotebookReferenceIssueCode =
   | "not_found"
   | "ambiguous"
   | "not_media"
   | "no_output";
 
-export interface ResolvedNotebookReference {
+interface ResolvedNotebookReference {
   mention: string;
   reference: string;
   artifactId: string;
@@ -32,14 +32,14 @@ export interface ResolvedNotebookReference {
   cellAddress?: string;
 }
 
-export interface NotebookReferenceIssue {
+interface NotebookReferenceIssue {
   mention: string;
   reference: string;
   code: NotebookReferenceIssueCode;
   message: string;
 }
 
-export interface UnconnectedNotebookReference
+interface UnconnectedNotebookReference
   extends ResolvedNotebookReference {
   message: string;
 }

@@ -47,7 +47,7 @@ function expiresWithin(state: XTokenState, ms: number): boolean {
   return Number.isNaN(expiresAt) || expiresAt - Date.now() < ms;
 }
 
-export interface GetTokenOptions {
+interface GetTokenOptions {
   fetchImpl?: typeof fetch;
   store?: XTokenStore;
 }

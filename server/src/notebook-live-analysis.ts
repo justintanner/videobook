@@ -41,7 +41,7 @@ const AUDIO_TARGET_WINDOW_SECONDS = 3;
 const AUDIO_BOUNDARY_MIN_SPACING_SECONDS = 4;
 const CAMERA_FRAME_OFFSETS = [-0.5, -0.1, 0.1, 0.5] as const;
 
-export type AnalysisBoundaryKind =
+type AnalysisBoundaryKind =
   | "source_start"
   | "camera_cut"
   | "audio_transition"
@@ -56,14 +56,14 @@ export type AnalysisBoundary = {
   evidenceIds: string[];
 };
 
-export type VisualCandidateRecord = {
+type VisualCandidateRecord = {
   id: string;
   timestampSeconds: number;
   score: number;
   frameTimestamps: number[];
 };
 
-export type VisualDecisionRecord = {
+type VisualDecisionRecord = {
   candidateId: string;
   accepted: boolean;
   cameraSwitch: boolean;
@@ -72,7 +72,7 @@ export type VisualDecisionRecord = {
   rechecked: boolean;
 };
 
-export type AudioCandidateKind =
+type AudioCandidateKind =
   | "pause"
   | "speaker_change"
   | "silence"
@@ -81,7 +81,7 @@ export type AudioCandidateKind =
   | "waveform_minimum"
   | "level_change";
 
-export type AudioCandidateRecord = {
+type AudioCandidateRecord = {
   id: string;
   timestampSeconds: number;
   kind: AudioCandidateKind;
@@ -133,7 +133,7 @@ type CandidateFrame = {
   dataUrl: string;
 };
 
-export type AnalysisVisualEvidenceInput = {
+type AnalysisVisualEvidenceInput = {
   id?: string;
   timestampSeconds: number;
   score: number;

@@ -6,7 +6,7 @@ export interface PreviewAudio {
   onended: ((ev: Event) => unknown) | null
 }
 
-export type CreatePreviewAudio = (url: string) => PreviewAudio
+type CreatePreviewAudio = (url: string) => PreviewAudio
 
 const defaultCreateAudio: CreatePreviewAudio = (url) => new Audio(url)
 
@@ -67,8 +67,6 @@ export function createVoicePreviewPlayer(
     },
   }
 }
-
-export type VoicePreviewPlayer = ReturnType<typeof createVoicePreviewPlayer>
 
 export function useVoicePreviewPlayer(
   createAudio: CreatePreviewAudio = defaultCreateAudio,

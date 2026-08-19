@@ -8,7 +8,7 @@ export type AudioSyncAnchor = {
   audioSeconds: number;
 };
 
-export type AudioSyncSegment = {
+type AudioSyncSegment = {
   videoStartSeconds: number;
   videoEndSeconds: number;
   audioStartSeconds: number;

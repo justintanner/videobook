@@ -1,6 +1,6 @@
 import type { Engine } from "videobook-engine";
 
-export type DialogQuality = {
+type DialogQuality = {
   hasDialog: boolean;
   reason: "real_dialog" | "no_transcription" | "empty" | "too_short" | "noise_only" | "nonsensical";
   text: string;

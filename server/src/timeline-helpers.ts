@@ -24,7 +24,7 @@ import type { ToolResult } from "./tools/tool-def.js";
 
 export type TimelineRender = "landscape" | "portrait" | "square";
 
-export interface TimelineSlot {
+interface TimelineSlot {
   id: string;
   artifactId: string;
   volume?: number;
@@ -32,7 +32,7 @@ export interface TimelineSlot {
   audioFadeOut?: number;
 }
 
-export interface TimelineAudio {
+interface TimelineAudio {
   id: string;
   artifactId: string;
   startFrame: number;
@@ -42,7 +42,7 @@ export interface TimelineAudio {
   fadeOut?: number;
 }
 
-export interface Timeline {
+interface Timeline {
   bookId: string;
   render: TimelineRender;
   slots: TimelineSlot[];
@@ -53,7 +53,7 @@ export interface TimelineSlotInput extends Omit<TimelineSlot, "id"> {
   id?: string;
 }
 
-export interface TimelineAudioInput extends Omit<TimelineAudio, "id"> {
+interface TimelineAudioInput extends Omit<TimelineAudio, "id"> {
   id?: string;
 }
 
@@ -63,7 +63,7 @@ export interface TimelineInput {
   audio?: TimelineAudioInput[];
 }
 
-export type TimelineWriteResult =
+type TimelineWriteResult =
   | { ok: true; value: Timeline }
   | { ok: false; error: { message: string } };
 

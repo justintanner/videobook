@@ -7,7 +7,7 @@ export type NotebookAudioCommand = {
   sourceReference: string
 }
 
-export type NotebookAudioCommandRun = {
+type NotebookAudioCommandRun = {
   actionCellId: string
   actionAddress: string
   outputCellId: string | null

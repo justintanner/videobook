@@ -2,9 +2,9 @@ import { createFal } from "@apicity/fal";
 import type { FalEndpointId, FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
-export type FalTaskType = `fal_${string}`;
+type FalTaskType = `fal_${string}`;
 
-export type FalSubmitArgs<E extends string> = {
+type FalSubmitArgs<E extends string> = {
   engine: Engine;
   bookId: string;
   assetId: string;

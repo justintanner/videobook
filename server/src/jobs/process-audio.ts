@@ -6,7 +6,7 @@ import { withLocalLease } from "./_lease.js";
 import { registerMediaStreams } from "./process-video.js";
 import { withTransientStorageRetry } from "./_storage-retry.js";
 
-export type ProcessAudioPayload = {
+type ProcessAudioPayload = {
   type: "process_audio";
   audioPath: string;
   sourceFilename: string;

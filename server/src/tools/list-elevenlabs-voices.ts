@@ -2,9 +2,9 @@ import { createElevenLabs, type ElevenLabsListVoicesResponse, type ElevenLabsVoi
 import type { ToolDef } from "./tool-def.js";
 import { getApiKey } from "../api-key.js";
 
-export type ElevenLabsVoiceSource = "custom" | "generic";
+type ElevenLabsVoiceSource = "custom" | "generic";
 
-export interface ElevenLabsVoiceOption {
+interface ElevenLabsVoiceOption {
   voice_id: string;
   name: string;
   source: ElevenLabsVoiceSource;

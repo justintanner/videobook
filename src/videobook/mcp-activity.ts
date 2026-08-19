@@ -1,4 +1,4 @@
-export type McpActivityPhase = 'idle' | 'active' | 'success' | 'error'
+type McpActivityPhase = 'idle' | 'active' | 'success' | 'error'
 
 export interface McpActivity {
   phase: McpActivityPhase

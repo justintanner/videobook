@@ -21,8 +21,8 @@ const SCDET_FPS = 4;
 // settle, but a real "the man finished standing up" landing does.
 const SETTLE_HOLD_S = 0.5;
 
-export type Candidate = { t: number; score: number; kind: "shot" | "settle" };
-export type SceneSample = { t: number; score: number };
+type Candidate = { t: number; score: number; kind: "shot" | "settle" };
+type SceneSample = { t: number; score: number };
 export type CameraCandidate = { t: number; score: number };
 
 type SceneDetectOptions = {

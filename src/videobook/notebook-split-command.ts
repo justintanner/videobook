@@ -21,14 +21,14 @@ const NOTEBOOK_SPLIT_COMMAND_PATTERN = new RegExp(
   'iu',
 )
 
-export type NotebookSplitOutputDraft = {
+type NotebookSplitOutputDraft = {
   chunkIndex: number
   endSeconds: number
   outputCell: NotebookCell
   startSeconds: number
 }
 
-export type NotebookSplitDraft = {
+type NotebookSplitDraft = {
   actionCell: NotebookCell
   createdCellIds: string[]
   cutPointsSeconds: number[]
@@ -186,7 +186,7 @@ export function parseNotebookSplitCommand(
   }
 }
 
-export type NotebookSplitRange = {
+type NotebookSplitRange = {
   endSeconds: number
   startSeconds: number
 }

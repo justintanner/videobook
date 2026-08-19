@@ -1,4 +1,4 @@
-export interface CommandParam {
+interface CommandParam {
   name: string;
   type: 'string' | 'number' | 'boolean' | 'string[]';
   required: boolean;
@@ -6,36 +6,36 @@ export interface CommandParam {
   consumeRest?: boolean;
 }
 
-export type CommandArgValue = string | number | boolean | string[];
+type CommandArgValue = string | number | boolean | string[];
 
-export interface SyncAudioAnchor {
+interface SyncAudioAnchor {
   video_seconds: number;
   audio_cue?: string;
   audio_seconds?: number;
 }
 
-export interface SyncAudioCommandArgs {
+interface SyncAudioCommandArgs {
   asset_id: string;
   anchors: SyncAudioAnchor[];
 }
 
-export interface ApplySfxCommandEntry {
+interface ApplySfxCommandEntry {
   timestamp: number;
   type: string;
   description: string;
 }
 
-export interface ApplySfxCommandArgs {
+interface ApplySfxCommandArgs {
   asset_id: string;
   sfx: ApplySfxCommandEntry[];
 }
 
-export interface ApplyCutEntry {
+interface ApplyCutEntry {
   cut_start: number;
   cut_end: number;
 }
 
-export type CommandToolArgValue =
+type CommandToolArgValue =
   | CommandArgValue
   | SyncAudioAnchor[]
   | ApplySfxCommandEntry[]
@@ -61,21 +61,19 @@ export interface ServerCommand {
   deprecated?: boolean;
 }
 
-export type CommandDescriptor = ServerCommand;
-
-export interface QrOutroCommandArgs {
+interface QrOutroCommandArgs {
   qr_image_refs: string[];
   aspect_ratio?: '16:9' | '9:16' | '1:1';
 }
 
-export interface TimewarpCommandArgs {
+interface TimewarpCommandArgs {
   asset_id: string;
   start_seconds: number;
   end_seconds: number;
   stretch_factor: number;
 }
 
-export interface KeywordCommandArgs {
+interface KeywordCommandArgs {
   asset_id: string;
   enabled?: boolean;
   max_keywords?: number;
@@ -480,7 +478,7 @@ function normalizeTranslateSubtitlesCommandArgs(
   return { asset_id: assetId, language };
 }
 
-export type CommandAdapterFn = (args: Readonly<Record<string, unknown>>) => CommandToolArgs;
+type CommandAdapterFn = (args: Readonly<Record<string, unknown>>) => CommandToolArgs;
 
 const NOTEBOOK_DESTINATION_PATTERN = /^@?[a-z](?:1[0-3]|[1-9])$/iu;
 
@@ -581,7 +579,7 @@ export const COMMAND_ADAPTERS = {
   },
 } satisfies Record<string, CommandAdapterFn>;
 
-export type CommandAdapterName = keyof typeof COMMAND_ADAPTERS;
+type CommandAdapterName = keyof typeof COMMAND_ADAPTERS;
 
 export function adaptCommandArgs(
   adapterName: string | undefined,

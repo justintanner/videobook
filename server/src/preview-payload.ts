@@ -27,7 +27,7 @@ const URL_FIELD_KEYS = new Set([
   "end_image",
 ]);
 
-export interface PreviewUrlPlaceholder {
+interface PreviewUrlPlaceholder {
   path: string;
   reference: string;
   url: string;

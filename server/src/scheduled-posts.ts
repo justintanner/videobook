@@ -6,7 +6,7 @@ import {
   resolveBookEngine,
 } from "./queue.js";
 
-export interface ScheduledPostPayload {
+interface ScheduledPostPayload {
   asset_id: string;
   book_id: string;
   platform: "x";
@@ -14,13 +14,13 @@ export interface ScheduledPostPayload {
   orientation?: "portrait" | "landscape";
 }
 
-export type ScheduledPostStatus =
+type ScheduledPostStatus =
   | "pending"
   | "posted"
   | "failed"
   | "cancelled";
 
-export interface ScheduledPostEntry {
+interface ScheduledPostEntry {
   schedule_id: string;
   payload: ScheduledPostPayload;
   scheduled_for: string;
@@ -123,7 +123,7 @@ async function firePost(bookId: string, scheduleId: string): Promise<void> {
   }
 }
 
-export interface SchedulePostResult {
+interface SchedulePostResult {
   schedule_id: string;
   scheduled_for: string;
 }

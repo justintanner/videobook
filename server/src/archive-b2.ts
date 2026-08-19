@@ -6,9 +6,9 @@ import { open, readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 import { getApiKey, requireApiKey } from "./api-key.js";
 
-export type ArchiveTagSource = "manual" | "auto";
+type ArchiveTagSource = "manual" | "auto";
 
-export interface ArchiveTag {
+interface ArchiveTag {
   key: string;
   label: string;
   source: ArchiveTagSource;

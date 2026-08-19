@@ -170,13 +170,13 @@ async function spliceConcat(
   await runFfmpeg(args);
 }
 
-export type SpliceFilesResult = {
+type SpliceFilesResult = {
   timestamp: number;
   frameIndex: number | null;
   score: number | null;
 };
 
-export type SpliceFilesOptions = {
+type SpliceFilesOptions = {
   firstPath: string;
   secondPath: string;
   outputPath: string;

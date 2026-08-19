@@ -70,7 +70,7 @@ export function maskEnvValue(value: string): string {
 /** Raised on rejected writes. Messages never include the secret value. */
 export class SecretWriteError extends Error {}
 
-export interface SecretStoreOptions {
+interface SecretStoreOptions {
   envPath?: string;
   processEnv?: NodeJS.ProcessEnv;
 }

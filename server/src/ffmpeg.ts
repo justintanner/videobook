@@ -11,7 +11,7 @@ export const FFPROBE: string = require("ffprobe-static").path;
 const DEFAULT_FFMPEG_TIMEOUT_MS = 30 * 60_000;
 const DEFAULT_FFPROBE_TIMEOUT_MS = 2 * 60_000;
 
-export interface MediaProcessOptions {
+interface MediaProcessOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
 }
@@ -333,7 +333,7 @@ interface FFmpeggyInstance {
   run(): Promise<unknown>;
   done(): Promise<unknown>;
 }
-export interface FFmpeggyClass {
+interface FFmpeggyClass {
   new (opts: FFmpeggyConstructorOpts): FFmpeggyInstance;
   DefaultConfig: { ffmpegBin: string; ffprobeBin: string };
   probe(filePath: string): Promise<FFmpeggyProbeResult>;

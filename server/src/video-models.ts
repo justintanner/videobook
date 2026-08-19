@@ -2464,14 +2464,5 @@ export {
   extractLastUsedModel,
 };
 export type {
-  VideoModelInfo,
-  ToolSchema,
-  ValidationResult,
-  ModelOption,
-  ModelModes,
-  ModeSpec,
-  ModeAssetSlot,
-  ModeAssetSlotKind,
   ActionLogEntry,
-  ProviderRoute,
 };

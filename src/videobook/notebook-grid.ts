@@ -349,7 +349,7 @@ export interface NotebookGridMetrics {
   height: number
 }
 
-export interface NotebookGridMetricsOptions {
+interface NotebookGridMetricsOptions {
   preview?: NotebookGridSlot | null
   viewportWidth?: number
   viewportHeight?: number

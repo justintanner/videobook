@@ -10,21 +10,21 @@ import {
 
 const TRANSLATION_MODEL = INTELLIGENCE_MODEL;
 
-export type SidecarWord = {
+type SidecarWord = {
   text: string;
   start: number;
   end: number;
   type: "word";
 };
 
-export type SidecarSegment = {
+type SidecarSegment = {
   start: number;
   end: number;
   text: string;
   words: SidecarWord[];
 };
 
-export type TranslatedSidecar = {
+type TranslatedSidecar = {
   sourceLanguageCode: string | null;
   targetLanguage: string;
   model: string;
@@ -33,7 +33,7 @@ export type TranslatedSidecar = {
   segments: SidecarSegment[];
 };
 
-export type SourceSentence = {
+type SourceSentence = {
   start: number;
   end: number;
   text: string;

@@ -135,7 +135,7 @@ export function rewriteImageRefMentionsToBrackets(
   );
 }
 
-export type SeedanceMentionRefs = {
+type SeedanceMentionRefs = {
   imageRefs?: readonly string[];
   videoRefs?: readonly string[];
   audioRefs?: readonly string[];

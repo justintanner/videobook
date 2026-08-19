@@ -34,7 +34,7 @@ type ResolvedAudioOverlay = {
   fadeOutMs: number;
 };
 
-export type RenderTimelineOutcome =
+type RenderTimelineOutcome =
   | { status: "enqueued"; jobId: string; slotCount: number; orientation: Orientation }
   | { status: "missing_renders"; orientation: Orientation; missingArtifactIds: string[]; message: string }
   | { status: "empty"; message: string }

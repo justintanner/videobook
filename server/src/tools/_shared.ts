@@ -45,7 +45,7 @@ export function toolError(text: string): ToolErrorResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
 
-export type NamedInput = { name: string; value: unknown };
+type NamedInput = { name: string; value: unknown };
 
 // "provided" = a non-blank string, or an array with at least one non-blank entry.
 function isProvided(value: unknown): boolean {

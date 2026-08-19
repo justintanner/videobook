@@ -19,7 +19,7 @@ export type ResponsesFn = (
   signal?: AbortSignal,
 ) => Promise<OpenAiResponseResponse>;
 
-export type IntelligenceRequest = Omit<
+type IntelligenceRequest = Omit<
   OpenAiResponseRequest,
   "model" | "reasoning" | "store" | "temperature" | "top_p"
 >;

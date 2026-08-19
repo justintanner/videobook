@@ -8,9 +8,9 @@ import { FFMPEG } from "./ffmpeg.js";
 
 const execFileAsync = promisify(execFile);
 
-export type CachedVideoSource = "testsrc" | "color";
+type CachedVideoSource = "testsrc" | "color";
 
-export interface CachedVideoSpec {
+interface CachedVideoSpec {
   width: number;
   height: number;
   durationSec: number;
@@ -18,9 +18,10 @@ export interface CachedVideoSpec {
   source: CachedVideoSource;
   color?: string;
   audio: false | { frequency: number };
+  keyframeInterval?: number;
 }
 
-export function mediaFixtureCacheDir(): string {
+function mediaFixtureCacheDir(): string {
   const root = process.env.VIDEOBOOK_TEST_ROOT ?? tmpdir();
   return join(root, "media-fixtures");
 }
@@ -35,6 +36,7 @@ export function videoFixtureKey(spec: CachedVideoSpec): string {
       source: spec.source,
       color: spec.color ?? null,
       audio: spec.audio,
+      keyframeInterval: spec.keyframeInterval ?? null,
     }))
     .digest("hex")
     .slice(0, 24);
@@ -60,6 +62,13 @@ function videoArgs(spec: CachedVideoSpec, outputPath: string): string[] {
     "-preset", "ultrafast",
     "-pix_fmt", "yuv420p",
   );
+  if (spec.keyframeInterval) {
+    args.push(
+      "-g", String(spec.keyframeInterval),
+      "-keyint_min", String(spec.keyframeInterval),
+      "-sc_threshold", "0",
+    );
+  }
   if (spec.audio) {
     args.push("-c:a", "aac", "-shortest");
   } else {
@@ -136,9 +145,11 @@ export const COMMON_VIDEO_FIXTURES = {
     width: 160,
     height: 120,
     durationSec,
-    fps: 8,
-    source: "testsrc",
-    audio: { frequency: 440 },
+    fps: 24,
+    source: "color",
+    color: "0x224466",
+    audio: false,
+    keyframeInterval: 24,
   }),
   cropHd: {
     width: 1920,

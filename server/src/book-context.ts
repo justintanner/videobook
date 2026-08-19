@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Engine } from "videobook-engine";
 
-export interface BookContext {
+interface BookContext {
   bookId: string;
   engine: Engine;
 }

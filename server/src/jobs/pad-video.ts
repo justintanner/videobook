@@ -8,7 +8,7 @@ import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 300_000;
 
-export type PadVideoPayload = {
+type PadVideoPayload = {
   type: "pad_video";
   sourcePath: string;
   assetDir: string;

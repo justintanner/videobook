@@ -35,7 +35,7 @@ const STALE_VISUAL_DERIVATIVES = [
   ".analyze-jokes.json",
 ];
 
-export type SyncVideoToAudioAudioMode = "copy" | "aac";
+type SyncVideoToAudioAudioMode = "copy" | "aac";
 
 type SyncVideoToAudioPayload = {
   type: "sync_video_to_audio";
@@ -56,7 +56,7 @@ type InstalledAudioSync = {
   restoreCommit: string;
 };
 
-export type PreparedAudioSyncTranscript = {
+type PreparedAudioSyncTranscript = {
   transcript: unknown;
   replacement: ElevenLabsSpeechToTextResponse | null;
 };

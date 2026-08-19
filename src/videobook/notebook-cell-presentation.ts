@@ -76,7 +76,7 @@ type ActionCell = Pick<
   'model' | 'operation' | 'outputArtifactId' | 'tool' | 'type'
 >
 
-export type NotebookCellActionPresentation = {
+type NotebookCellActionPresentation = {
   disabled: boolean
   label: 'Gen' | 'Re-run' | 'Run'
 }
@@ -89,7 +89,7 @@ export type NotebookAudioInfo = {
   sampleRateHz: number
 }
 
-export type NotebookAnalysisShot = {
+type NotebookAnalysisShot = {
   ordinal: number
   label: string
   startSeconds: number
@@ -105,7 +105,7 @@ export type NotebookAnalysisInfo = {
   shots: NotebookAnalysisShot[]
 }
 
-export type NotebookAnalysisLlmExchangeSummary = {
+type NotebookAnalysisLlmExchangeSummary = {
   model: string
   provider: string
   responseFormat?: NotebookAnalysisResponseFormat | null
@@ -128,13 +128,13 @@ export type NotebookAnalysisLlmExchange = {
   stage: string
 }
 
-export type NotebookAudioPresentation = {
+type NotebookAudioPresentation = {
   details: string[]
   duration: string | null
   role: string
 }
 
-export type NotebookSplitFrameIds = {
+type NotebookSplitFrameIds = {
   first: string | null
   last: string | null
 }
@@ -145,16 +145,16 @@ export type NotebookCellRunObservation = {
   status: string | null
 }
 
-export type NotebookCellExecutionObservation = Pick<
+type NotebookCellExecutionObservation = Pick<
   NotebookCellRunObservation,
   'error' | 'status'
 >
 
-export type NotebookCellStateOverlay = 'clock' | 'failed' | null
+type NotebookCellStateOverlay = 'clock' | 'failed' | null
 
-export type NotebookCellStateTone = 'active' | 'queued' | 'error' | null
+type NotebookCellStateTone = 'active' | 'queued' | 'error' | null
 
-export type NotebookCellStatePresentation = {
+type NotebookCellStatePresentation = {
   error: string | null
   label: string | null
   overlay: NotebookCellStateOverlay

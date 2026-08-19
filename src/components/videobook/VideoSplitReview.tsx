@@ -100,7 +100,7 @@ function SplitLoopPreview({
   )
 }
 
-export type VideoSplitReviewProps = {
+type VideoSplitReviewProps = {
   applyFormId: string
   busy: boolean
   cutPointsSeconds: number[]

@@ -24,7 +24,7 @@ const IMAGE_VARIANT_FILENAMES = new Set(["landscape.jpg", "portrait.jpg", "squar
 
 type UploadMediaType = "video" | "image" | "audio" | "script";
 
-export type UnprocessedUpload = {
+type UnprocessedUpload = {
   assetId: string;
   assetDir: string;
   mediaFilename: string;

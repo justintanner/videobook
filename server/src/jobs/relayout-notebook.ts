@@ -7,7 +7,7 @@ import {
 import { mutateNotebook } from "../notebook-mutations.js";
 import { registerJobHandler, resolveBookEngine } from "../queue.js";
 
-export interface RelayoutNotebookPayload {
+interface RelayoutNotebookPayload {
   type: "relayout_notebook";
   bookId: string;
   notebookId: string;

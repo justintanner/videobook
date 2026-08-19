@@ -6,7 +6,7 @@ const CHAT_MODEL_IDS = ["gpt-5.6-sol"] as const;
 
 export type ChatModelId = typeof CHAT_MODEL_IDS[number];
 
-export type ChatModelOption = {
+type ChatModelOption = {
   id: ChatModelId;
   label: string;
   description: string;

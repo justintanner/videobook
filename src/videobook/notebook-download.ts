@@ -21,7 +21,7 @@ type DownloadWatchJob = {
   type: string
 }
 
-export type DownloadWatchStep =
+type DownloadWatchStep =
   | { kind: 'continue' }
   | { kind: 'completed' }
   | { kind: 'redirected'; artifactId: string }

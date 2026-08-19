@@ -10,7 +10,7 @@ import type { AspectRatio } from "../remotion/qr-outro-spec.js";
 import { findImageFile } from "./_image-inputs.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
-export type QrOutroAssetRef = {
+type QrOutroAssetRef = {
   assetId: string;
   filename: string;
 };

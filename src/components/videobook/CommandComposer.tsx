@@ -57,7 +57,7 @@ export interface ComposerOutcome {
   selectInput?: boolean
 }
 
-export interface ComposerNotice {
+interface ComposerNotice {
   message: string
   tone: 'error' | 'info'
 }

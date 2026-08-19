@@ -2,7 +2,7 @@ import { recordValue } from './value-decoders'
 
 export type ImageSubjectMapStatus = 'idle' | 'analyzing' | 'ready' | 'failed'
 
-export type ImageSubjectBox = {
+type ImageSubjectBox = {
   x: number
   y: number
   width: number
@@ -105,7 +105,7 @@ function normalizedBox(value: unknown): ImageSubjectBox | null {
   }
 }
 
-export function imageSubjectColor(id: string, index: number): string {
+function imageSubjectColor(id: string, index: number): string {
   let hash = index
   for (const character of id) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0
   return subjectColors[Math.abs(hash) % subjectColors.length]

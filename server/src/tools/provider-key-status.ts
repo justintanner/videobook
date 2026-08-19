@@ -120,7 +120,7 @@ interface TokenLookupResult {
   model: string;
 }
 
-export interface ProviderKeyStatusDeps {
+interface ProviderKeyStatusDeps {
   store?: SecretStore;
   readKieCredits?: CreditReader;
   readOpenAiTokens?: TokenReader;

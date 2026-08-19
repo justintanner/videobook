@@ -12,7 +12,7 @@ const DEFAULT_TARGET_SEC = 7;
 // ffmpeg can't reliably produce a usable mp4 below this. Mirrors split-video.ts.
 const MIN_CHUNK_SEC = 0.5;
 
-export interface EvenSplitChunk {
+interface EvenSplitChunk {
   start: number;
   end: number;
   duration: number;
@@ -20,7 +20,7 @@ export interface EvenSplitChunk {
   exact: boolean;
 }
 
-export type PlanResult =
+type PlanResult =
   | { ok: true; chunks: EvenSplitChunk[]; usedTargets: number[]; hasLeftover: boolean }
   | { ok: false; error: string };
 

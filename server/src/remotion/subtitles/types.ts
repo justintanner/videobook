@@ -44,18 +44,7 @@ export interface KeywordGraphic {
   scale?: number;
 }
 
-export interface RenderSettings {
-  subtitlesEnabled: boolean;
-  highlightStyle: SubtitleStyle;
-  position: SubtitlePosition;
-  fontSize: FontSizePreset;
-  textColor: string;
-  highlightColor: string;
-  audioFadeIn: number;
-  audioFadeOut: number;
-  audioVolume: number;
-  backgroundMode: BackgroundMode;
-}
+
 
 export interface RenderInputProps extends Record<string, unknown> {
   videoSrc: string;

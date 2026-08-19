@@ -7,7 +7,7 @@ export const notebookCellAddGroups = [
   'Edit',
 ] as const
 
-export type NotebookCellAddGroup = (typeof notebookCellAddGroups)[number]
+type NotebookCellAddGroup = (typeof notebookCellAddGroups)[number]
 
 type NotebookCellAddItemShape = {
   type: NotebookCellType
@@ -31,7 +31,7 @@ const notebookCellAddItems = [
   { type: 'splice', label: 'Splice', group: 'Edit' },
 ] as const satisfies readonly NotebookCellAddItemShape[]
 
-export type NotebookCellAddItem = (typeof notebookCellAddItems)[number]
+type NotebookCellAddItem = (typeof notebookCellAddItems)[number]
 export type NotebookCellAddType = (typeof notebookCellAddItems)[number]['type']
 
 const notebookCellAddTypes = new Set<string>(

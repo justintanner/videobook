@@ -3,7 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { B2Error, createB2 } from "@apicity/b2";
 import type { ContentStore } from "videobook-engine";
 
-export interface B2ContentStoreConfig {
+interface B2ContentStoreConfig {
   accessKeyId: string;
   secretAccessKey: string;
   region: string;

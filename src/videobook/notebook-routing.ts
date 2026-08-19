@@ -4,9 +4,9 @@ import { notebookGrid } from './notebook-grid'
 export const notebookGutterLaneOffsets = [10, 20, 30] as const
 export const notebookSourcePortOffsets = [0.25, 0.5, 0.75] as const
 
-export type NotebookRiverSide = 'left' | 'right'
+type NotebookRiverSide = 'left' | 'right'
 export type NotebookSourceSide = NotebookRiverSide | 'bottom'
-export type NotebookTargetSide = 'top' | 'left'
+type NotebookTargetSide = 'top' | 'left'
 
 export interface NotebookBusRiverRoute extends Record<string, unknown> {
   sourceSide: NotebookSourceSide
@@ -21,7 +21,7 @@ export interface NotebookBusRiverRoute extends Record<string, unknown> {
   targetPrimary: boolean
 }
 
-export interface NotebookBusRiverCoordinates {
+interface NotebookBusRiverCoordinates {
   sourceX: number
   sourceY: number
   targetX: number

@@ -21,29 +21,29 @@ export type ElevenLabs = {
   words: ElevenLabsWord[];
 };
 
-export type Gpt4oTrans = {
+type Gpt4oTrans = {
   text: string;
   language?: string;
 };
 
-export type OriginalMeta = {
+type OriginalMeta = {
   width?: number;
   height?: number;
   duration?: number;
   hasAudio?: boolean;
 };
 
-export type PriorAnalysis = {
+type PriorAnalysis = {
   summary?: string;
   mood?: string;
   scenes?: Array<{ timestamp?: number; description?: string }>;
 };
 
-export type TranscriptResult =
+type TranscriptResult =
   | { source: "elevenlabs"; words: ElevenLabsWord[]; text: string }
   | { source: "gpt4otrans"; text: string };
 
-export type SilenceCandidate = { start: number; end: number; duration: number };
+type SilenceCandidate = { start: number; end: number; duration: number };
 
 export const TrimSchema = z.object({
   cut_start: z.number().min(0),
@@ -304,7 +304,7 @@ export function buildSfxContext(
   return parts.join("\n\n");
 }
 
-export type AssetForAnalysis = {
+type AssetForAnalysis = {
   manifest: { path: string; files: Array<{ name: string }>; directories?: Record<string, string[]> };
   frameNames: string[];
   transcript: TranscriptResult;
@@ -312,7 +312,7 @@ export type AssetForAnalysis = {
   prior: PriorAnalysis | null;
 };
 
-export type AssetForAnalysisError =
+type AssetForAnalysisError =
   | { kind: "manifest"; message: string }
   | { kind: "no-video"; message: string }
   | { kind: "no-frames"; message: string }

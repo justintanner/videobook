@@ -20,13 +20,13 @@ import {
 import type { NotebookGenerationInputContract } from "./notebook-generation-contract.js";
 import type { NotebookGenerationControl } from "./notebook-generation-controls.js";
 
-export type NotebookActionKind =
+type NotebookActionKind =
   | "local"
   | "analysis"
   | "generation"
   | "assembly";
 
-export interface NotebookActionParameter {
+interface NotebookActionParameter {
   name: string;
   type: "string" | "number" | "boolean" | "enum" | "json";
   required: boolean;
@@ -35,7 +35,7 @@ export interface NotebookActionParameter {
   description: string;
 }
 
-export interface NotebookAction {
+interface NotebookAction {
   id: string;
   cellTypes: NotebookCellType[];
   kind: NotebookActionKind;

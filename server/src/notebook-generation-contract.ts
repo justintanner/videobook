@@ -1,9 +1,9 @@
 import type { NotebookCell, NotebookDocument } from "videobook-engine";
 import { readSlotConstraints } from "./zod-slots.js";
 
-export type NotebookGenerationInputKind = "image" | "video" | "audio";
+type NotebookGenerationInputKind = "image" | "video" | "audio";
 
-export interface NotebookGenerationInputSlot {
+interface NotebookGenerationInputSlot {
   field: string;
   kind: NotebookGenerationInputKind;
   targets: string[];
@@ -11,7 +11,7 @@ export interface NotebookGenerationInputSlot {
   max: number | null;
 }
 
-export interface NotebookGenerationInputMode {
+interface NotebookGenerationInputMode {
   id: string;
   slots: NotebookGenerationInputSlot[];
   requiredGroups: string[][];

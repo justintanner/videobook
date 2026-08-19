@@ -1,18 +1,18 @@
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
-export interface ProviderPromptLeak {
+interface ProviderPromptLeak {
   token: string
   code: string
   message: string
 }
 
-export interface ProviderUrlPlaceholder {
+interface ProviderUrlPlaceholder {
   path: string
   reference: string
   url: string
 }
 
-export interface ProviderPayloadPreviewMentions {
+interface ProviderPayloadPreviewMentions {
   promptLeaks: ProviderPromptLeak[]
   urlPlaceholders: ProviderUrlPlaceholder[]
 }

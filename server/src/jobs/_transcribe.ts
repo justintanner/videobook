@@ -17,7 +17,7 @@ import { requireApiKey } from "../api-key.js";
 
 const ELEVENLABS_TIMEOUT_MS = 5 * 60_000;
 
-export type TranscribeOptions = {
+type TranscribeOptions = {
   tagAudioEvents: boolean;
   diarize: boolean;
   languageCode?: string;

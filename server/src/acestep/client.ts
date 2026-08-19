@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { AceStepError } from "./errors.js";
 
-export interface SynthCoverRequest {
+interface SynthCoverRequest {
   caption: string;
   lyrics: string;
   taskType: "cover" | "cover-nofsq";
@@ -14,18 +14,18 @@ export interface SynthCoverRequest {
   duration: number;
 }
 
-export interface SynthCoverResult {
+interface SynthCoverResult {
   audio: Buffer;
   audioContentType: string;
   latents: Buffer | null;
 }
 
-export interface MultipartPart {
+interface MultipartPart {
   headers: Record<string, string>;
   data: Buffer;
 }
 
-export interface SynthCoverOptions {
+interface SynthCoverOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
   pollIntervalMs?: number;

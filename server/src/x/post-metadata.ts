@@ -3,7 +3,7 @@ import type { Engine } from "videobook-engine";
 export const POST_METADATA_FILE = ".post.x.json";
 const POST_METADATA_VERSION = 1;
 
-export interface XPostEntry {
+interface XPostEntry {
   tweet_id: string;
   tweet_url: string;
   posted_at: string;
@@ -13,7 +13,7 @@ export interface XPostEntry {
   schedule_id: string | null;
 }
 
-export interface XPostMetadata {
+interface XPostMetadata {
   version: number;
   asset_id: string;
   posts: XPostEntry[];

@@ -22,7 +22,7 @@ export const KEYWORD_PLACEMENT_VERSION = 1;
 export const KEYWORD_FRAME_CACHE_FILENAME = ".keyword-frames.jpg";
 export const KEYWORD_PLACEMENT_METADATA_KEY = "keyword-graphics.placement";
 
-export type KeywordOccupiedRegionKind = "face" | "text" | "graphic";
+type KeywordOccupiedRegionKind = "face" | "text" | "graphic";
 
 export interface NormalizedRect {
   x: number;
@@ -53,7 +53,7 @@ export interface KeywordPlacementAnalysis {
   cues: KeywordPlacementCueAnalysis[];
 }
 
-export interface KeywordLayout {
+interface KeywordLayout {
   top: number;
   sideInset: number;
   containerWidth: number;
@@ -69,7 +69,7 @@ export interface KeywordPlacementSettings {
   subtitleFontSize: FontSizePreset;
 }
 
-export interface KeywordPlacementResult {
+interface KeywordPlacementResult {
   graphics: KeywordGraphic[];
   skipped: string[];
 }

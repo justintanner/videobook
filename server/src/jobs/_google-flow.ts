@@ -85,7 +85,7 @@ export function isCaptchaQualityGoogleFlowError(error: unknown): boolean {
   return false;
 }
 
-export type GoogleFlowFailureDetail = { code: string; reasons: string[] };
+type GoogleFlowFailureDetail = { code: string; reasons: string[] };
 
 /** Collect structured failure details from a Google Flow job body.
  *

@@ -3,7 +3,7 @@ import { nextNotebookHorizontalGenerationSlot } from './notebook-grid'
 import type { NotebookDocument, NotebookGridSlot } from 'videobook-engine'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
-export type NotebookSpeakCommandRun = {
+type NotebookSpeakCommandRun = {
   cellId: string
   cellAddress: string
   outputCellId: string

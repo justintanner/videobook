@@ -5,7 +5,7 @@ import { findPrimaryMediaFile } from "videobook-engine";
 import { z } from "zod";
 
 export const IMAGE_SUBJECT_MAP_VERSION = 1 as const;
-export const IMAGE_SUBJECT_MAP_METADATA_KEY = "image-subject-map.v1";
+const IMAGE_SUBJECT_MAP_METADATA_KEY = "image-subject-map.v1";
 
 const imageSubjectMapWriteChains = new Map<string, Promise<void>>();
 
@@ -94,11 +94,11 @@ export const imageSubjectMapRecordSchema = z.discriminatedUnion("status", [
 ]);
 
 export type ImageSubjectNormalizedBox = z.infer<typeof normalizedBoxSchema>;
-export type ImageSubject = z.infer<typeof subjectSchema>;
+type ImageSubject = z.infer<typeof subjectSchema>;
 export type ImageSubjectMapRecordV1 = z.infer<typeof imageSubjectMapRecordSchema>;
 export type ImageSubjectMapReadyV1 = z.infer<typeof readyRecordSchema>;
 
-export type ImageSubjectSource = {
+type ImageSubjectSource = {
   artifactId: string;
   file: ArtifactManifestFile;
   objectHash: string;
@@ -380,7 +380,7 @@ async function fullCanvasLayer(
   );
 }
 
-export async function alphaBoundingBox(
+async function alphaBoundingBox(
   input: Buffer,
 ): Promise<ImageSubjectNormalizedBox> {
   const { data, info } = await sharp(input)

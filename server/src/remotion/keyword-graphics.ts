@@ -24,7 +24,7 @@ interface KeywordGraphicsOptions {
   lingerSeconds?: number;
 }
 
-export interface RequestedKeywordGraphicsResult {
+interface RequestedKeywordGraphicsResult {
   graphics: KeywordGraphic[];
   missing: string[];
 }

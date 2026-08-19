@@ -5,7 +5,7 @@ import {
 } from './notebook-grid.js'
 import { nonBlankStringValue, recordValue } from './value-decoders.js'
 
-export interface RoutedMediaCellInput {
+interface RoutedMediaCellInput {
   type: 'audio' | 'video'
   slot: { row: number; column: number }
   inputs: Record<string, unknown>

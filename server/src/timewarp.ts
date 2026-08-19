@@ -1,7 +1,7 @@
 const TIMEWARP_STRETCH_MIN = 0.25;
 const TIMEWARP_STRETCH_MAX = 4;
 
-export type TimewarpSegment = {
+type TimewarpSegment = {
   kind: "prefix" | "selection" | "suffix";
   startSeconds: number;
   endSeconds: number;
@@ -23,7 +23,7 @@ export type TimewarpPlan = {
   segments: TimewarpSegment[];
 };
 
-export type TimewarpPlanInput = {
+type TimewarpPlanInput = {
   sourceDuration: number;
   sourceFps: number;
   startSeconds: number;

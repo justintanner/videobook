@@ -30,7 +30,7 @@ function findOsgImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile |
   return images.find((file) => file.name.startsWith("original")) ?? images[0] ?? null;
 }
 
-export type OsgImagePathResult =
+type OsgImagePathResult =
   | { ok: true; path: string }
   | { ok: false; error: string };
 

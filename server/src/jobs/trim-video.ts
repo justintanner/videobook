@@ -208,12 +208,40 @@ async function runTrimRange(
  * "exactly 10s" / "exactly 9s" — a hard requirement for some video-gen UIs
  * that match on the duration field. No safety margin: precision is the goal.
  */
+const EXACT_COPY_TOLERANCE_SECS = 0.05;
+
 export async function trimRangeExact(
   inputPath: string,
   outputPath: string,
   startSec: number,
   durationSec: number,
 ): Promise<void> {
+  try {
+    await runTrimRange(
+      inputPath,
+      outputPath,
+      startSec > 0 ? startSec : undefined,
+      startSec + durationSec,
+      "copy",
+    );
+    const copied = await probeStreamDurations(outputPath);
+    if (
+      Number.isFinite(copied.format)
+      && copied.format > 0
+      && copied.format <= durationSec
+      && copied.format >= durationSec - EXACT_COPY_TOLERANCE_SECS
+    ) {
+      await assertSaneTrimOutput(inputPath, outputPath);
+      return;
+    }
+    throw new Error(
+      `Copy trim ${copied.format.toFixed(3)}s is not exact for ${durationSec}s`,
+    );
+  } catch {
+    await rm(outputPath, { force: true });
+    await rm(`${outputPath}.tmp`, { force: true });
+  }
+
   const args = ["-y"];
   if (startSec > 0) args.push("-ss", String(startSec));
   args.push("-i", inputPath);

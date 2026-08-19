@@ -188,7 +188,7 @@ async function runTrimAudio(
   }
 }
 
-export type TrimAudioPayload = {
+type TrimAudioPayload = {
   type: "trim_audio";
   inputPath: string;
   outputPath: string;

@@ -936,4 +936,4 @@ export {
   extractLastImageSettingsPerModel,
   extractLastUsedImageModel,
 };
-export type { ImageModelInfo, ImageModelConfig, ToolSchema, ValidationResult, ModelOption, ActionLogEntry, ProviderRoute };
+export type { ModelOption, ActionLogEntry };

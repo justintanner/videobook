@@ -14,7 +14,7 @@ export type SearchReferenceLifecycleState = {
   error: string | null
 }
 
-export type SearchReferencePreparationResult =
+type SearchReferencePreparationResult =
   | {
       status: 'ready'
       mode: ReverseSearchMode

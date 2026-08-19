@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -212,42 +212,50 @@ describe("even_split tool (integration)", () => {
   let client: Client;
   let tempDir: string;
   let fixtureDir: string;
+  let source2s: { assetId: string; path: string };
+  let source14s: { assetId: string; path: string };
+  let source20s: { assetId: string; path: string };
+  let source21s: { assetId: string; path: string };
+  let source30s: { assetId: string; path: string };
+  let dest3s: { assetId: string; path: string };
 
   beforeAll(async () => {
     await queue.start();
     fixtureDir = await mkdtemp(join(tmpdir(), "videocity-even-split-fixture-"));
-  }, 60_000);
-
-  afterAll(async () => {
-    await queue.stop();
-    await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
-  }, 30_000);
-
-  beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-even-split-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
       arguments: { book_id: "even-split-proj" },
     });
+    const materialize = async (name: string, seconds: number) => {
+      const videoPath = join(fixtureDir, name);
+      await generateTestVideo(videoPath, seconds);
+      return uploadVideo(client, "even-split-proj", videoPath);
+    };
+    [source2s, source14s, source20s, source21s, source30s, dest3s] = await Promise.all([
+      materialize("short-2s.mp4", 2),
+      materialize("fourteen-14s.mp4", 14),
+      materialize("twenty-20s-string.mp4", 20),
+      materialize("twenty-one-21s.mp4", 21),
+      materialize("thirty-30s-multi.mp4", 30),
+      materialize("dest-empty-3s.mp4", 3),
+    ]);
   }, 120_000);
 
-  afterEach(async () => {
+  afterAll(async () => {
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  }, 120_000);
+    await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
+  }, 30_000);
 
   it("rejects sources too short for any split", async () => {
-    const videoPath = join(fixtureDir, "short-2s.mp4");
     // Default target is 7s; a 2s source can't be split with the [7] backup
     // (last - 1 = 6 still > 2). Sub-default-and-sub-backup → error path.
-    await generateTestVideo(videoPath, 2);
-    const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
-
     const result = await client.callTool({
       name: "split_video_by_durations",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: source2s.assetId,
         book_id: "even-split-proj",
       },
     });
@@ -258,14 +266,10 @@ describe("even_split tool (integration)", () => {
   }, 60_000);
 
   it("splits a 14s source into [7, 7] with default target", async () => {
-    const videoPath = join(fixtureDir, "fourteen-14s.mp4");
-    await generateTestVideo(videoPath, 14);
-    const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
-
     const result = await client.callTool({
       name: "split_video_by_durations",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: source14s.assetId,
         book_id: "even-split-proj",
       },
     });
@@ -296,20 +300,16 @@ describe("even_split tool (integration)", () => {
     // Source asset preserved.
     const sourceManifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: uploaded.assetId, book_id: "even-split-proj" },
+      arguments: { asset_id: source14s.assetId, book_id: "even-split-proj" },
     });
     expect(sourceManifest.isError).toBeFalsy();
   }, 120_000);
 
   it("splits a 21s source into [7, 7, 7] with explicit per-scene targets", async () => {
-    const videoPath = join(fixtureDir, "twenty-one-21s.mp4");
-    await generateTestVideo(videoPath, 21);
-    const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
-
     const result = await client.callTool({
       name: "split_video_by_durations",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: source21s.assetId,
         book_id: "even-split-proj",
         target_secs: [7, 7, 7],
       },
@@ -336,14 +336,10 @@ describe("even_split tool (integration)", () => {
   }, 180_000);
 
   it("accepts target_secs as strings with 's' suffix (chat-style)", async () => {
-    const videoPath = join(fixtureDir, "twenty-20s-string.mp4");
-    await generateTestVideo(videoPath, 20);
-    const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
-
     const result = await client.callTool({
       name: "split_video_by_durations",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: source20s.assetId,
         book_id: "even-split-proj",
         target_secs: ["10s"],
       },
@@ -352,17 +348,14 @@ describe("even_split tool (integration)", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.used_target_secs).toEqual([10]);
+    await waitForJob(parsed.job_id);
   }, 120_000);
 
   it("splits a 30s source with two targets [10, 15] into 3 chunks", async () => {
-    const videoPath = join(fixtureDir, "thirty-30s-multi.mp4");
-    await generateTestVideo(videoPath, 30);
-    const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
-
     const result = await client.callTool({
       name: "split_video_by_durations",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: source30s.assetId,
         book_id: "even-split-proj",
         target_secs: ["10", "15"],
       },
@@ -431,19 +424,15 @@ describe("even_split tool (integration)", () => {
 
   describe("destination mode", () => {
     it("writes chunks as sibling files inside an existing asset", async () => {
-      const videoPath = join(fixtureDir, "dest-21s.mp4");
-      await generateTestVideo(videoPath, 21);
-      const source = await uploadVideo(client, "even-split-proj", videoPath);
-      // Use a second uploaded asset as destination — `original.mp4` won't
-      // collide with `s1.mp4` / `s2.mp4` / `s3.mp4`.
-      const destVideoPath = join(fixtureDir, "dest-empty-3s.mp4");
+      // Fresh dest so sibling writes do not leak into later destination checks.
+      const destVideoPath = join(fixtureDir, "dest-write-3s.mp4");
       await generateTestVideo(destVideoPath, 3);
       const dest = await uploadVideo(client, "even-split-proj", destVideoPath);
 
       const result = await client.callTool({
         name: "split_video_by_durations",
         arguments: {
-          asset_id: source.assetId,
+          asset_id: source21s.assetId,
           book_id: "even-split-proj",
           target_secs: [7, 7, 7],
           destination: { asset_id: dest.assetId, filenames: ["s1.mp4", "s2.mp4", "s3.mp4"] },
@@ -477,20 +466,13 @@ describe("even_split tool (integration)", () => {
     }, 180_000);
 
     it("rejects filenames length mismatch with target_secs", async () => {
-      const videoPath = join(fixtureDir, "dest-mismatch-21s.mp4");
-      await generateTestVideo(videoPath, 21);
-      const source = await uploadVideo(client, "even-split-proj", videoPath);
-      const destVideoPath = join(fixtureDir, "dest-mismatch-empty-3s.mp4");
-      await generateTestVideo(destVideoPath, 3);
-      const dest = await uploadVideo(client, "even-split-proj", destVideoPath);
-
       const result = await client.callTool({
         name: "split_video_by_durations",
         arguments: {
-          asset_id: source.assetId,
+          asset_id: source21s.assetId,
           book_id: "even-split-proj",
           target_secs: [7, 7, 7],
-          destination: { asset_id: dest.assetId, filenames: ["s1.mp4", "s2.mp4"] },
+          destination: { asset_id: dest3s.assetId, filenames: ["s1.mp4", "s2.mp4"] },
         },
       });
 
@@ -499,21 +481,14 @@ describe("even_split tool (integration)", () => {
     }, 60_000);
 
     it("rejects when a destination filename already exists", async () => {
-      const videoPath = join(fixtureDir, "dest-collide-14s.mp4");
-      await generateTestVideo(videoPath, 14);
-      const source = await uploadVideo(client, "even-split-proj", videoPath);
-      const destVideoPath = join(fixtureDir, "dest-collide-empty-3s.mp4");
-      await generateTestVideo(destVideoPath, 3);
-      const dest = await uploadVideo(client, "even-split-proj", destVideoPath);
-
       // dest already has `original.mp4`; pick that as a collision filename.
       const result = await client.callTool({
         name: "split_video_by_durations",
         arguments: {
-          asset_id: source.assetId,
+          asset_id: source14s.assetId,
           book_id: "even-split-proj",
           target_secs: [7, 7],
-          destination: { asset_id: dest.assetId, filenames: ["s1.mp4", "original.mp4"] },
+          destination: { asset_id: dest3s.assetId, filenames: ["s1.mp4", "original.mp4"] },
         },
       });
 
@@ -522,14 +497,10 @@ describe("even_split tool (integration)", () => {
     }, 60_000);
 
     it("rejects when destination asset does not exist", async () => {
-      const videoPath = join(fixtureDir, "dest-missing-14s.mp4");
-      await generateTestVideo(videoPath, 14);
-      const source = await uploadVideo(client, "even-split-proj", videoPath);
-
       const result = await client.callTool({
         name: "split_video_by_durations",
         arguments: {
-          asset_id: source.assetId,
+          asset_id: source14s.assetId,
           book_id: "even-split-proj",
           target_secs: [7, 7],
           destination: { asset_id: "vid-does-not-exist", filenames: ["s1.mp4", "s2.mp4"] },

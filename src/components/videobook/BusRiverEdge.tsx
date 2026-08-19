@@ -12,7 +12,7 @@ import {
 } from '@/videobook/notebook-routing'
 import { notebookGrid } from '@/videobook/notebook-grid'
 
-export type BusRiverEdgeType = Edge<NotebookBusRiverRoute, 'busRiver'>
+type BusRiverEdgeType = Edge<NotebookBusRiverRoute, 'busRiver'>
 
 interface BusRiverNodeBounds {
   sourceLeftX: number

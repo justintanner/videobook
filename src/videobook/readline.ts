@@ -1,11 +1,11 @@
-export interface ReadlineEdit {
+interface ReadlineEdit {
   value: string
   selectionStart: number
   selectionEnd: number
   killedText?: string
 }
 
-export interface ReadlineInput {
+interface ReadlineInput {
   value: string
   selectionStart: number
   selectionEnd: number

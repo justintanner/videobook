@@ -11,7 +11,7 @@ import type {
 import { notebookCellAtSlot } from './notebook-addressing'
 import { nextNotebookCreationSlot } from './notebook-grid'
 
-export type NotebookCoordinateAction =
+type NotebookCoordinateAction =
   | {
       kind: 'move'
       source: NotebookGridSlot

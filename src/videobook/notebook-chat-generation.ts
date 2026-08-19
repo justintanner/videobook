@@ -45,7 +45,7 @@ export type NotebookChatGenerationDraft = {
   sourceAddresses: string[]
 }
 
-export type NotebookChatGenerationRun = {
+type NotebookChatGenerationRun = {
   cellId: string
   cellAddress: string
   sourceCellIds: string[]

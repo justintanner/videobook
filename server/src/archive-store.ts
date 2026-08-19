@@ -20,7 +20,7 @@ import {
 } from "./archive-b2.js";
 import type { ArchiveConfig, ArchiveIngest, ObjectSummary } from "./archive-b2.js";
 
-export interface PresignedMedia {
+interface PresignedMedia {
   url: string;
   expiresAt: string | null;
 }

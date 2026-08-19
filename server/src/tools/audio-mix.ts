@@ -12,7 +12,7 @@ import type { ToolDef, ToolResult } from "./tool-def.js";
 
 export type AudioMixAssetKind = "video" | "audio";
 
-export type ResolvedAudioMixAsset = {
+type ResolvedAudioMixAsset = {
   assetId: string;
   kind: AudioMixAssetKind;
   assetDir: string;

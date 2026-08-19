@@ -77,7 +77,7 @@ export type TimelineVideoProbe = {
   videoCodec: string | null;
 };
 
-export type TimelineVideoPlan =
+type TimelineVideoPlan =
   | { mode: "copy" }
   | { mode: "reencode"; targetFps: number; width: number; height: number; reasons: string[] };
 

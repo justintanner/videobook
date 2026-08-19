@@ -16,7 +16,7 @@ import {
   Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
 
-export type CostAdapter = (input: Record<string, unknown>) => EstimateRequest | null;
+type CostAdapter = (input: Record<string, unknown>) => EstimateRequest | null;
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const num = (v: unknown): number | undefined => {

@@ -20,7 +20,7 @@ export interface CanonicalPlaybackAsset {
   mediaUrl: string
 }
 
-export interface CanonicalSequenceCompositionProps {
+interface CanonicalSequenceCompositionProps {
   sequence: Sequence
   assets: CanonicalPlaybackAsset[]
 }

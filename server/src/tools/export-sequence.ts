@@ -14,7 +14,7 @@ interface ExportIssue {
   cueId?: string;
 }
 
-export interface SequenceExportValidation {
+interface SequenceExportValidation {
   valid: boolean;
   sequenceId: string;
   revision: string;

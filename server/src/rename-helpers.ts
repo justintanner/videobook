@@ -1,8 +1,8 @@
 /** Asset kinds eligible for rename-all (matches the preview scope). */
 export const RENAME_KINDS = ["video", "image"] as const;
-export type RenameKind = (typeof RENAME_KINDS)[number];
+type RenameKind = (typeof RENAME_KINDS)[number];
 
-export type RenameStatus = "renamable" | "skipped" | "unchanged" | "conflict";
+type RenameStatus = "renamable" | "skipped" | "unchanged" | "conflict";
 
 export interface RenameRow {
   asset_id: string;

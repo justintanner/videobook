@@ -11,7 +11,6 @@ import {
   validateEditedRenames,
   applyableRows,
   isProcessOrigin,
-  type RenameRow,
   type AssetContext,
   type EditedRename,
   type RenameCandidate,
@@ -552,4 +551,4 @@ function responseContentFromChat(
       });
 }
 
-export type { RenameRow };
+

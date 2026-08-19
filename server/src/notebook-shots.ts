@@ -1,4 +1,4 @@
-export interface AnalysisShotInput {
+interface AnalysisShotInput {
   startSeconds: number;
   endSeconds: number;
   label?: string;
@@ -14,7 +14,7 @@ export interface NormalizedShot {
   prompt?: string;
 }
 
-export interface ShotRange {
+interface ShotRange {
   startSeconds: number;
   endSeconds: number;
 }
@@ -133,7 +133,7 @@ export interface OwnedBranch {
   config: Record<string, unknown>;
 }
 
-export interface BranchReconcileResult {
+interface BranchReconcileResult {
   keep: Array<{ existing: OwnedBranch; shot: NormalizedShot }>;
   create: NormalizedShot[];
   remove: OwnedBranch[];

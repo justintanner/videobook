@@ -20,9 +20,9 @@ export type GenerationPreviewDraft = GenerationSelection & {
   inputs: Record<string, unknown>
 }
 
-export type GenerationInputKind = 'image' | 'video' | 'audio'
+type GenerationInputKind = 'image' | 'video' | 'audio'
 
-export type GenerationInputSlot = {
+type GenerationInputSlot = {
   field: string
   kind: GenerationInputKind
   targets: string[]

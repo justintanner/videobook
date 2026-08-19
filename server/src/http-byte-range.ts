@@ -1,4 +1,4 @@
-export type HttpByteRangeResult =
+type HttpByteRangeResult =
   | { ok: true; end: number; start: number }
   | { ok: false }
 

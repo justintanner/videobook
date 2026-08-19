@@ -120,7 +120,7 @@ export function readSlotConstraints(
 /**
  * A non-empty list of enum string values, shaped for `z.enum(...)`.
  */
-export type EnumValues = [string, ...string[]];
+type EnumValues = [string, ...string[]];
 
 /**
  * Strip Optional/Nullable/Default/Effects/Pipe wrappers down to the inner schema.
@@ -235,7 +235,7 @@ export function zodIsRequired(schema: ZodLike | null | undefined): boolean {
 // layout (`_def.checks[]._zod.def.check`).
 // ---------------------------------------------------------------------------
 
-export type NumberRange = { min?: number; max?: number; int: boolean };
+type NumberRange = { min?: number; max?: number; int: boolean };
 
 function readNumberChecks(def: ZodDef): NumberRange {
   let min: number | undefined;

@@ -19,7 +19,7 @@ const SIZE_FACTOR: Record<OsgSize, number> = {
 // The OSG always eases in/out over this window so it never pops abruptly.
 export const FADE_SECONDS = 0.4;
 
-export interface OsgWindow {
+interface OsgWindow {
   startFrame: number;
   endFrame: number;
   hasExplicitEnd: boolean;
@@ -92,7 +92,7 @@ export function osgPadding(width: number): number {
   return Math.round(width * 0.02);
 }
 
-export interface OsgAnchorPlacement {
+interface OsgAnchorPlacement {
   top?: number | string;
   bottom?: number | string;
   left?: number | string;
@@ -203,7 +203,7 @@ export function watermarkRectForCorner(
   return watermarkRectForCanvas(width, height, corner, aspect, userScale);
 }
 
-export interface WatermarkCornerChoice {
+interface WatermarkCornerChoice {
   position: OsgPosition;
   scores: Partial<Record<OsgPosition, number>>;
 }

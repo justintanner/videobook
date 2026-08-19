@@ -160,7 +160,7 @@ export async function withLocalLease<T>(
 
 export const CLAIM_RETRY_INTERVAL_MS = 1_000;
 
-export type LeaseSleepFn = (ms: number) => Promise<void>;
+type LeaseSleepFn = (ms: number) => Promise<void>;
 
 let leaseSleep: LeaseSleepFn = defaultSleep;
 
@@ -170,7 +170,7 @@ export function configureLeaseClockForTests(options: {
   leaseSleep = options?.sleep ?? defaultSleep;
 }
 
-export type LockedLeaseClaim =
+type LockedLeaseClaim =
   | { ok: true; ownerId: string }
   | { ok: false; reason: string };
 

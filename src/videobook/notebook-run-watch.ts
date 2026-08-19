@@ -8,7 +8,7 @@ export type NotebookRunJobView = {
   payload?: Record<string, unknown> | null
 }
 
-export type NotebookRunWatchStep =
+type NotebookRunWatchStep =
   | { kind: 'continue'; sawRun: boolean }
   | { kind: 'completed' }
   | { kind: 'failed'; message: string }

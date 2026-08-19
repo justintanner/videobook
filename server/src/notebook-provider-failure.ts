@@ -1,7 +1,7 @@
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { getActionSpec } from "./generation-registry.js";
 
-export interface NotebookProviderFailureReference {
+interface NotebookProviderFailureReference {
   notebookId: string;
   cellId: string;
   providerArtifactId: string;

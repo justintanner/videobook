@@ -14,7 +14,7 @@ const APPEND_CHUNK_BYTES = 4 * 1024 * 1024;
 const STATUS_POLL_TIMEOUT_MS = 5 * 60_000;
 export const STATUS_POLL_MIN_INTERVAL_MS = 2_000;
 
-export type StatusPollSleepFn = (ms: number, signal?: AbortSignal) => Promise<void>;
+type StatusPollSleepFn = (ms: number, signal?: AbortSignal) => Promise<void>;
 
 async function defaultStatusPollSleep(ms: number, signal?: AbortSignal): Promise<void> {
   await new Promise<void>((resolve, reject) => {
@@ -68,9 +68,9 @@ function inferMediaType(filename: string): MediaTypeInfo | null {
   }
 }
 
-export type PostOrientation = "portrait" | "landscape";
+type PostOrientation = "portrait" | "landscape";
 
-export interface PostToXArgs {
+interface PostToXArgs {
   engine: Engine;
   assetId: string;
   bookId: string;

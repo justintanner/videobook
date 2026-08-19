@@ -13,14 +13,14 @@ import {
   translateTranscript,
 } from "./_translate-transcript.js";
 
-export type TranslateTranscriptPayload = {
+type TranslateTranscriptPayload = {
   type: "translate_transcript";
   assetId: string;
   bookId: string;
   targetLanguage: string;
 };
 
-export type TranslateTranscriptResult = {
+type TranslateTranscriptResult = {
   success: true;
   targetLanguage: string;
   skipped?: "matches-source";

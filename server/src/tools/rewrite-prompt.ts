@@ -65,7 +65,7 @@ export interface PreviousError {
   failCode?: string;
 }
 
-export interface BuildRewriteExtras {
+interface BuildRewriteExtras {
   maxChars?: number;
   platform?: Platform;
   customPrompt?: string;

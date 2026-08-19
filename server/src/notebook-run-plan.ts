@@ -21,14 +21,14 @@ import {
 import { queue } from "./queue.js";
 import { estimateCostDef } from "./tools/estimate-cost.js";
 
-export type NotebookRunPlanStatus =
+type NotebookRunPlanStatus =
   | "planned"
   | "queued"
   | "awaiting-output"
   | "completed"
   | "failed";
 
-export interface NotebookRunPlanRecord extends NotebookRunPlan {
+interface NotebookRunPlanRecord extends NotebookRunPlan {
   status: NotebookRunPlanStatus;
 }
 

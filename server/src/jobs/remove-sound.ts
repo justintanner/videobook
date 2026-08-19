@@ -40,7 +40,7 @@ export type SoundEvent = {
   end: number;
 };
 
-export type SoundSegment = {
+type SoundSegment = {
   start: number;
   end: number;
 };

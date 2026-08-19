@@ -185,4 +185,4 @@ function AutocompleteDropdown({
 }
 
 export { AutocompleteDropdown };
-export type { AutocompleteItem, AutocompleteDropdownProps, ColorScheme };
+export type { AutocompleteItem };

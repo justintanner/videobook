@@ -1,4 +1,4 @@
-export type TimedSpeechWord = {
+type TimedSpeechWord = {
   text: string;
   start: number;
 };

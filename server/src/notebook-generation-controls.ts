@@ -1,4 +1,4 @@
-export type NotebookGenerationControlValue = string | number | boolean;
+type NotebookGenerationControlValue = string | number | boolean;
 
 export interface NotebookGenerationControl {
   name: string;

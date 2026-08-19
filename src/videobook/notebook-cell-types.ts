@@ -5,15 +5,15 @@ export type NotebookGenerationCellType =
   | 'generate_image'
   | 'generate_video'
 
-export type NotebookExtractMediaCellType = 'extract_audio'
+type NotebookExtractMediaCellType = 'extract_audio'
 
-export type NotebookMediaPresentationCellType =
+type NotebookMediaPresentationCellType =
   | 'audio'
   | 'character'
   | 'image'
   | 'video'
 
-export type NotebookMediaWorkCellType =
+type NotebookMediaWorkCellType =
   | 'audio'
   | 'image'
   | 'video'

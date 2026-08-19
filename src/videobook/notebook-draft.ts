@@ -46,7 +46,7 @@ export interface NotebookCellData extends Record<string, unknown> {
   frameProvenance?: NotebookFrameProvenance
 }
 
-export type NotebookFrameProvenance = {
+type NotebookFrameProvenance = {
   sourceAddress: string | null
   atSeconds: number | null
 }

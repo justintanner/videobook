@@ -74,7 +74,7 @@ export async function buildWatermarkBadgePng(url: string, handle: string): Promi
     .toBuffer();
 }
 
-export type WatermarkAssetResult =
+type WatermarkAssetResult =
   | { ok: true; assetId: string }
   | { ok: false; error: string };
 

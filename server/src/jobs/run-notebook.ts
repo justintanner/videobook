@@ -82,7 +82,7 @@ export interface RunNotebookPayload {
   jobId?: string;
 }
 
-export type NotebookCellExecutionStatus =
+type NotebookCellExecutionStatus =
   | "queued"
   | "running"
   | "awaiting-output"
@@ -90,7 +90,7 @@ export type NotebookCellExecutionStatus =
   | "stale"
   | "error";
 
-export interface CellExecution {
+interface CellExecution {
   fingerprint: string;
   status: NotebookCellExecutionStatus;
   outputArtifactId?: string;
@@ -2633,7 +2633,7 @@ export async function claimNotebookGenerationPlan(
   return claimedPlan;
 }
 
-export interface QueuedNotebookFailureOptions {
+interface QueuedNotebookFailureOptions {
   cellIds: readonly string[];
   runId?: string;
   error: string;

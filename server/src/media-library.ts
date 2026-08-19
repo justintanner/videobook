@@ -17,7 +17,7 @@ import { buildAssetList, type ProjectAsset } from "./tools/reconcile-project-wor
 
 type MediaCellType = "audio" | "image" | "video";
 
-export interface LibraryAsset extends ProjectAsset {
+interface LibraryAsset extends ProjectAsset {
   owning_book_id: string;
   owning_book_name: string;
   search_match?: {
@@ -26,7 +26,7 @@ export interface LibraryAsset extends ProjectAsset {
   };
 }
 
-export interface LibraryAssetSearchResult {
+interface LibraryAssetSearchResult {
   assets: LibraryAsset[];
   page: {
     offset: number;
@@ -40,27 +40,27 @@ export interface LibraryAssetSearchResult {
   }>;
 }
 
-export interface CopiedLibraryAsset {
+interface CopiedLibraryAsset {
   sourceBookId: string;
   sourceArtifactId: string;
   targetBookId: string;
   targetArtifactId: string;
 }
 
-export interface AttachedLibraryAsset extends CopiedLibraryAsset {
+interface AttachedLibraryAsset extends CopiedLibraryAsset {
   notebookId: string;
   cellId: string;
   revision: string;
 }
 
-export interface CopyLibraryAssetInput {
+interface CopyLibraryAssetInput {
   sourceBookId: string;
   sourceArtifactId: string;
   targetBookId: string;
   newName?: string;
 }
 
-export interface AttachLibraryAssetInput extends CopyLibraryAssetInput {
+interface AttachLibraryAssetInput extends CopyLibraryAssetInput {
   notebookId: string;
   cellId: string;
   expectedOutputArtifactId: string | null;

@@ -27,4 +27,4 @@ type ToolDef = {
 
 type SchemaArgs<TSchema extends ZodRawShape> = zInfer<ZodObject<TSchema>>;
 
-export type { ToolDef, ToolResult, ToolHandler, ToolAnnotations, SchemaArgs };
+export type { ToolDef, ToolResult, SchemaArgs };

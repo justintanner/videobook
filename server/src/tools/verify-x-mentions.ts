@@ -15,14 +15,14 @@ const XAI_TIMEOUT_MS = 60_000;
 const MAX_MENTIONS = 10;
 const MAX_TEXT_CHARS = 1_000;
 
-export type XMentionVerdict = {
+type XMentionVerdict = {
   handle: string;
   exists: boolean | null;
   display_name: string | null;
   summary: string | null;
 };
 
-export type XMentionVerification = {
+type XMentionVerification = {
   mentions: XMentionVerdict[];
   citations: string[];
   model: string;

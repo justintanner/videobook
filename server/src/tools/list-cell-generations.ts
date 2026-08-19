@@ -16,13 +16,13 @@ import {
 } from "../notebook-cell-outputs.js";
 import { buildAssetList } from "./reconcile-project-work.js";
 
-export type CellGenerationTransition = {
+type CellGenerationTransition = {
   status: GenerationStatus;
   commitHash: string;
   commitDate: string;
 };
 
-export type CellGenerationAttempt = {
+type CellGenerationAttempt = {
   attemptId: string;
   status: GenerationStatus;
   runId: string | null;
@@ -44,7 +44,7 @@ export type CellGenerationAttempt = {
   updatedAt: number;
 };
 
-export type CellGenerationsSummary = {
+type CellGenerationsSummary = {
   count: number;
   latestStatus: GenerationStatus | null;
   artifactIds: string[];

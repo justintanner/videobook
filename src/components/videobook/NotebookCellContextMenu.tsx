@@ -21,7 +21,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 
-export type NotebookCellContextActionIcon =
+type NotebookCellContextActionIcon =
   | 'duplicate'
   | 'extract-frame'
   | 'generate-image'

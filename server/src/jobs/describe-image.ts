@@ -30,7 +30,7 @@ export type DescribeImageResult = {
   pose?: string;
 };
 
-export type { ResponsesFn };
+
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GUIDE_PATH = join(__dirname, "../guides/image_reproduction_guide.md");

@@ -1,4 +1,4 @@
-export type AceStepErrorKind =
+type AceStepErrorKind =
   | "binary_missing"
   | "models_missing"
   | "spawn_failed"

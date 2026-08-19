@@ -198,7 +198,7 @@ export async function startOAuthFlow(
   return { authorize_url: flow.authorizeUrl };
 }
 
-export interface OAuthFlowStatus {
+interface OAuthFlowStatus {
   connected: boolean;
   pending: boolean;
   has_credentials: boolean;

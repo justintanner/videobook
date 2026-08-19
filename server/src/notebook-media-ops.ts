@@ -10,12 +10,12 @@ import {
   type ProbeResult,
 } from "./ffmpeg.js";
 
-export interface MediaRange {
+interface MediaRange {
   startSeconds: number;
   endSeconds: number;
 }
 
-export interface MediaSplitRequest {
+interface MediaSplitRequest {
   range: MediaRange;
   title: string;
 }

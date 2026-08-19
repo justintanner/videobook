@@ -22,7 +22,7 @@ import {
 } from '@/videobook/search-reference'
 import { useSearchReferenceLifecycle } from '@/videobook/useSearchReferenceLifecycle'
 
-export interface MomentSearchAsset {
+interface MomentSearchAsset {
   artifactId: string
   id: string
   type: string

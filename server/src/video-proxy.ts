@@ -10,7 +10,7 @@ export type VideoProxySourceProfile = Pick<
   "videoDuration" | "avgFps" | "hasAudio"
 >;
 
-export type VideoProxyMetadata = {
+type VideoProxyMetadata = {
   valid: true;
   sourceObjectHash: string;
   proxyObjectHash: string;
@@ -21,7 +21,7 @@ export type VideoProxyMetadata = {
   hasAudio: boolean;
 };
 
-export type InvalidVideoProxyMetadata = {
+type InvalidVideoProxyMetadata = {
   valid: false;
   sourceObjectHash: string;
   proxyObjectHash: string;

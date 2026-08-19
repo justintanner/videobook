@@ -7,7 +7,7 @@ interface DoctorFixPayload {
   assetId: string;
 }
 
-export type DoctorFixResult =
+type DoctorFixResult =
   | { status: "already_healthy"; asset_id: string; asset_status: string }
   | { status: "recovered_in_place"; asset_id: string; asset_status: string }
   | {

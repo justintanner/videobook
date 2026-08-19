@@ -21,7 +21,7 @@ const STALE_VISUAL_DERIVATIVES = [
   ".analyze-jokes.json",
 ];
 
-export type TimewarpAudioMode = "copy" | "aac" | "none";
+type TimewarpAudioMode = "copy" | "aac" | "none";
 
 type TimewarpVideoPayload = {
   type: "timewarp_video";
