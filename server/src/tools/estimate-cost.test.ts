@@ -111,6 +111,7 @@ describe("estimate_cost tool", () => {
       ["extend_wan27_video", { duration: "5" }],
       // Seedance 2 Mini (resolution-tiered per-second; priced by @apicity/cost@0.6.1)
       ["generate_seedance2_mini_video", { resolution: "720p", duration: "5" }],
+      ["generate_seedance25_video", { resolution: "720p", duration: "5" }],
       ["generate_gemini_omni_video", { resolution: "720p", duration: "6" }],
       // Grok-imagine video (resolution-tiered)
       ["generate_grok_imagine_video", { resolution: "480p", duration: 8 }],
@@ -141,6 +142,31 @@ describe("estimate_cost tool", () => {
       expect(payload.estimate.source, `${tool_name} source`).toBe("per-unit-table");
       expect(payload.estimate.usd, `${tool_name} usd`).toBeGreaterThan(0);
     }
+  });
+
+  it("prices Seedance 2.5 1080p audio and treats automatic duration as 5s", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [
+          {
+            tool_name: "generate_kie_seedance_2_5_video",
+            input: { resolution: "1080p", duration: "5", generate_audio: true },
+          },
+          {
+            tool_name: "generate_kie_seedance_2_5_video",
+            input: { resolution: "1080p", duration: "-1" },
+          },
+        ],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.per_call[0].estimate.source).toBe("per-unit-table");
+    expect(payload.per_call[0].estimate.warnings).toEqual([]);
+    expect(payload.per_call[0].estimate.usd).toBeCloseTo(1.7125);
+    expect(payload.per_call[1].estimate.warnings).toEqual([]);
+    expect(payload.per_call[1].estimate.usd).toBeCloseTo(1.7125);
+    expect(payload.per_call[1].estimate.breakdown.units).toBe(5);
   });
 
   it("fails closed for grok-imagine/upscale when source/target resolutions are absent", async () => {

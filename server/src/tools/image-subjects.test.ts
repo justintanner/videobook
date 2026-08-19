@@ -293,15 +293,16 @@ describe("image subject tools", () => {
     }))).toThrow("no identifiable base layer");
   });
 
-  it("keeps Grok segment index 0 unchanged and gates exact edit on indexes >= 1", () => {
-    expect(grokMaskIndex(0)).toBeUndefined();
+  it("preserves zero-based Grok segment indexes for exact edit", () => {
+    expect(grokMaskIndex(0)).toBe(0);
     expect(grokMaskIndex(1)).toBe(1);
+    expect(grokMaskIndex(-1)).toBeUndefined();
     const segments = parseGrokSegmentMapResult(JSON.stringify({
       resultObject: {
         segments: [
-          { index: 0, name: "background" },
-          { index: 1, name: "Person", normalizedBox: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 } },
-          { index: 2, name: "Green object", normalizedBox: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 } },
+          { index: 0, name: "Person", normalizedBox: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 } },
+          { index: 1, name: "Green object", normalizedBox: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 } },
+          { index: 2, name: "Hat", normalizedBox: { x: 0.2, y: 0.05, width: 0.1, height: 0.1 } },
         ],
       },
     }));
@@ -331,19 +332,28 @@ describe("image subject tools", () => {
       },
     ], segments);
     expect(subjects).toEqual([
-      expect.objectContaining({ id: "person", exactEdit: true, maskIndex: 1 }),
-      expect.objectContaining({ id: "object", exactEdit: true, maskIndex: 2 }),
+      expect.objectContaining({ id: "person", exactEdit: true, maskIndex: 0 }),
+      expect.objectContaining({ id: "object", exactEdit: true, maskIndex: 1 }),
     ]);
-    expect(subjects.some((subject) => subject.maskIndex === 0)).toBe(false);
-    expect(exactEditMaskIndexes(subjects, ["person", "object"])).toEqual([1, 2]);
+    expect(exactEditMaskIndexes(subjects, ["person", "object"])).toEqual([0, 1]);
+    expect(exactEditMaskIndexes(
+      subjects.map((subject) => ({ ...subject, exactEdit: true, maskIndex: undefined })),
+      ["person"],
+    )).toBeNull();
     expect(grokImagineImage2EditRequest("src-task", "Give the cat a bow", [0, 1, 2]).input)
       .toEqual({
         prompt: "Give the cat a bow",
         task_id: "src-task",
-        mask_indexs: [1, 2],
+        mask_indexs: [0, 1, 2],
       });
-    expect(() => grokImagineImage2EditRequest("src-task", "no masks", [0]))
-      .toThrow("mask indexes of 1 or greater");
+    expect(grokImagineImage2EditRequest("src-task", "no masks", [0]).input)
+      .toEqual({
+        prompt: "no masks",
+        task_id: "src-task",
+        mask_indexs: [0],
+      });
+    expect(() => grokImagineImage2EditRequest("src-task", "no masks", [-1]))
+      .toThrow("nonnegative mask indexes");
   });
 
   it("routes selected exact_edit subjects to Grok image-edit and otherwise Seedream", async () => {

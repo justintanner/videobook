@@ -32,7 +32,7 @@ export function buildSeedance25Schema() {
     audio_refs: apicityStringArrayField(seedance25Input.reference_audio_urls, "Reference audio artifact ids (0-10)"),
     return_last_frame: apicityField(seedance25Input.return_last_frame, "Return the final generated frame as an image (default false)"),
     generate_audio: apicityField(seedance25Input.generate_audio, "Generate accompanying audio (default true)"),
-    resolution: apicityField(seedance25Input.resolution, "Output resolution: 480p / 720p (default 720p)"),
+    resolution: apicityField(seedance25Input.resolution, "Output resolution: 480p / 720p / 1080p (default 720p)"),
     aspect_ratio: apicityField(seedance25Input.aspect_ratio, "Output aspect ratio (default adaptive)"),
     duration: apicityStringNumberField(seedance25Input.duration, "Video duration: -1 for automatic or 4-30 seconds (default 5)"),
     output_format: apicityField(seedance25Input.output_format, "Output video format: mp4 / mov (default mp4)"),
@@ -61,7 +61,7 @@ function nonBlank(values: string[] | undefined): string[] {
 export function generateSeedance25VideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_seedance_2_5_video",
-    description: "Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.9.1 generation option. Creates a new video artifact and enqueues a background job.",
+    description: "Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.10.1 generation option including 1080p. Creates a new video artifact and enqueues a background job.",
     schema: generateSeedance25VideoSchema,
     handler: async (args) => {
       const raw = args as Args;

@@ -233,6 +233,27 @@ describe("kie paygate", () => {
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
+  it("prices Seedance 2.5 1080p from the Apicity 0.10.1 rate table", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+    const request = {
+      model: "bytedance/seedance-2-5" as const,
+      input: {
+        prompt: "a continuous tracking shot",
+        resolution: "1080p" as const,
+        duration: 5,
+        generate_audio: true,
+      },
+    };
+    const estimate = computeEstimate({ provider: "kie", payload: request });
+
+    expect(estimate.usd).toBeCloseTo(1.7125);
+    expect(estimate.warnings).toEqual([]);
+    const otp = mintKieOtp(request, 60);
+    const parsed = parseOtp(otp);
+
+    expect(parsed.payload.requestHash).toBe(canonicalHash(request));
+  });
+
   it("mints a bounded OTP for Seedance 2 Mini with reference video and no resolution", () => {
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
     const request = {

@@ -12,6 +12,7 @@ import {
   Seedance2FastInputSchema,
   Seedance2InputSchema,
   Seedance2MiniInputSchema,
+  Seedance25InputSchema,
   Wan27ImageProRequestSchema,
   Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
@@ -44,6 +45,9 @@ const SEEDANCE2_DURATION = apicityDefault<number>(Seedance2InputSchema.shape.dur
 const SEEDANCE2_FAST_DURATION = apicityDefault<number>(Seedance2FastInputSchema.shape.duration, "Seedance 2 Fast duration");
 const SEEDANCE2_MINI_DURATION = apicityDefault<number>(Seedance2MiniInputSchema.shape.duration, "Seedance 2 Mini duration");
 const SEEDANCE2_MINI_RESOLUTION = apicityDefault<string>(Seedance2MiniInputSchema.shape.resolution, "Seedance 2 Mini resolution");
+const SEEDANCE25_DURATION = apicityDefault<number>(Seedance25InputSchema.shape.duration, "Seedance 2.5 duration");
+const SEEDANCE25_RESOLUTION = apicityDefault<string>(Seedance25InputSchema.shape.resolution, "Seedance 2.5 resolution");
+const SEEDANCE25_GENERATE_AUDIO = apicityDefault<boolean>(Seedance25InputSchema.shape.generate_audio, "Seedance 2.5 generate_audio");
 const GROK_I2V_DURATION = apicityDefault<number>(GrokImageToVideoRequestSchema.shape.input.shape.duration, "Grok image-to-video duration");
 const GROK_I2V_RESOLUTION = apicityDefault<string>(GrokImageToVideoRequestSchema.shape.input.shape.resolution, "Grok image-to-video resolution");
 const KLING_TURBO_DURATION = apicityDefault<string>(KlingV3TurboTextToVideoRequestSchema.shape.input.shape.duration, "Kling Turbo duration");
@@ -102,6 +106,25 @@ const kieSeedance = (
     },
   };
 };
+
+function seedance25Duration(input: Record<string, unknown>): number {
+  const value = num(input.duration) ?? num(input.seconds);
+  return value !== undefined && value > 0 ? value : SEEDANCE25_DURATION;
+}
+
+const kieSeedance25: CostAdapter = (input) => ({
+  provider: "kie",
+  payload: {
+    model: "bytedance/seedance-2-5",
+    input: {
+      resolution: str(input.resolution) || SEEDANCE25_RESOLUTION,
+      duration: seedance25Duration(input),
+      generate_audio: typeof input.generate_audio === "boolean"
+        ? input.generate_audio
+        : SEEDANCE25_GENERATE_AUDIO,
+    },
+  },
+});
 
 // kling-3.0/video keys by mode + sound (sound===true selects "|sound").
 const kieKling30Video: CostAdapter = (input) => ({
@@ -273,6 +296,7 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
   // shape. @apicity/cost@0.6.1 added this rate (was "—" under 0.6.0). See
   // docs/apicity-gaps.md §10.
   generate_kie_seedance_2_0_mini_video: kieResolutionVideo("bytedance/seedance-2-mini", SEEDANCE2_MINI_RESOLUTION, SEEDANCE2_MINI_DURATION),
+  generate_kie_seedance_2_5_video: kieSeedance25,
   generate_kie_gemini_omni_video: kieGeminiOmniVideo,
   generate_kie_kling_3_0_video: kieKling30Video,
   generate_kie_kling_3_0_motion_control: kieKling30MotionControl,

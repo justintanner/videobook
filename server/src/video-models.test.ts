@@ -333,7 +333,7 @@ describe("getVideoToolSchema", () => {
       "-1", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
       "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
     ]);
-    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
+    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p", "1080p"]);
     expect(schema!.properties.aspect_ratio.enum).toEqual(["1:1", "4:3", "3:4", "16:9", "9:16", "21:9", "adaptive"]);
     expect(schema!.properties.output_format.enum).toEqual(["mp4", "mov"]);
     expect(schema!.properties.return_last_frame.type).toBe("boolean");

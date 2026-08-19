@@ -250,6 +250,11 @@ describe("notebook action catalog", () => {
       defaultValue: "mp4",
       options: ["mp4", "mov"],
     });
+    expect(seedance25Action?.controls?.find((control) =>
+      control.name === "resolution")).toMatchObject({
+      defaultValue: "720p",
+      options: ["480p", "720p", "1080p"],
+    });
     const motionControlAction = generationCatalog.actions.find((action) =>
       action.tool === "generate_kie_kling_3_0_motion_control");
     expect(motionControlAction).toMatchObject({

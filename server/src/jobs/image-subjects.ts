@@ -805,7 +805,7 @@ export function grokImagineImage2EditRequest(
 ): GrokImagineImage2ImageEditRequest {
   const mask_indexs = maskIndexes.filter((index) => grokMaskIndex(index) !== undefined);
   if (mask_indexs.length === 0) {
-    throw new Error("Exact Grok mask edit requires mask indexes of 1 or greater");
+    throw new Error("Exact Grok mask edit requires nonnegative mask indexes");
   }
   return GrokImagineImage2ImageEditRequestSchema.parse({
     model: "grok-imagine-image-2-0/image-edit",

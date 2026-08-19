@@ -29,7 +29,7 @@ const subjectSchema = z.object({
   thumbnailFile: z.string().min(1),
   zIndex: z.number().int(),
   exactEdit: z.boolean(),
-  maskIndex: z.number().int().min(1).optional(),
+  maskIndex: z.number().int().min(0).optional(),
 }).strict();
 
 const subjectsSchema = z.array(subjectSchema).superRefine((subjects, context) => {
@@ -108,7 +108,7 @@ type GrokSegment = {
 };
 
 export function grokMaskIndex(index: number): number | undefined {
-  return Number.isInteger(index) && index >= 1 ? index : undefined;
+  return Number.isInteger(index) && index >= 0 ? index : undefined;
 }
 
 export const SUBJECT_BOX_IOU_THRESHOLD = 0.25;
@@ -204,8 +204,8 @@ export function exactEditMaskIndexes(
   if (selected.length === 0) return null;
   const indexes: number[] = [];
   for (const subject of selected) {
-    if (!subject.exactEdit) return null;
-    const index = grokMaskIndex(subject.maskIndex ?? 0);
+    if (!subject.exactEdit || subject.maskIndex === undefined) return null;
+    const index = grokMaskIndex(subject.maskIndex);
     if (index === undefined) return null;
     indexes.push(index);
   }

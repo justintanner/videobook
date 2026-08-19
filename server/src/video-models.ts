@@ -1468,6 +1468,7 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
       if (param === "audio_refs") prop.description = "Reference audio assets (0-10)";
       if (param === "return_last_frame") prop.description = "Return the final generated frame as a secondary image";
       if (param === "generate_audio") prop.description = "Generate synchronized audio";
+      if (param === "resolution") prop.description = "Output resolution: 480p / 720p / 1080p";
       if (param === "duration") prop.description = "Video duration: -1 for automatic or 4-30 seconds";
       if (param === "output_format") prop.description = "Output video format: mp4 / mov";
     }
@@ -2126,7 +2127,7 @@ ROUTING PREFERENCES:
 
 KEY CONSTRAINTS:
 - For generate_kie_kling_3_0_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
-- For generate_kie_seedance_2_5_video: optional prompt up to 30000 characters; duration "-1" (automatic) or "4"-"30"; resolution "480p"/"720p"; aspect_ratio "1:1"/"4:3"/"3:4"/"16:9"/"9:16"/"21:9"/"adaptive"; output_format "mp4"/"mov"; return_last_frame, generate_audio, web_search, and nsfw_checker booleans. Use either first_frame_ref with optional last_frame_ref, or image_refs (0-30), video_refs (0-10), and audio_refs (0-10), never frames and references together
+- For generate_kie_seedance_2_5_video: optional prompt up to 30000 characters; duration "-1" (automatic) or "4"-"30"; resolution "480p"/"720p"/"1080p"; aspect_ratio "1:1"/"4:3"/"3:4"/"16:9"/"9:16"/"21:9"/"adaptive"; output_format "mp4"/"mov"; return_last_frame, generate_audio, web_search, and nsfw_checker booleans. Use either first_frame_ref with optional last_frame_ref, or image_refs (0-30), video_refs (0-10), and audio_refs (0-10), never frames and references together
 - For generate_kie_seedance_2_0_video and generate_kie_seedance_2_0_fast_video: duration "4"-"15", aspect_ratio includes "adaptive"; full variant accepts "480p"/"720p"/"1080p", fast variant accepts "480p"/"720p" only. Inputs are all optional and free to mix: first_frame_ref, last_frame_ref, image_refs (0-9), video_refs (0-3, total ≤15s), audio_refs (0-3, total ≤15s). Pure text prompt is fine too
 - For generate_kie_seedance_2_0_mini_video: duration "4"-"15" (default 15), aspect_ratio includes "adaptive", resolution "480p"/"720p". No first/last frame; mix prompt with image_refs, video_refs (0-3, total ≤15s), audio_refs (0-3, total ≤15s). Prompt is optional when references are supplied
 - For generate_kie_gemini_omni_video: REQUIRES prompt and duration "4"/"6"/"8"/"10"; aspect_ratio "16:9"/"9:16"; resolution "720p"/"1080p"/"4k" (default 720p); seed integer. Optional image_refs (0-7) and one video_ref with video_clip_start/video_clip_ends (ends > start and < start+10s)

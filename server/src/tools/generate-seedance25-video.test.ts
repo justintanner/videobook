@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildSeedance25Schema } from "./generate-seedance25-video.js";
 
 describe("buildSeedance25Schema", () => {
-  it("exposes every Apicity 0.9.1 Seedance 2.5 option", () => {
+  it("exposes every Apicity 0.10.1 Seedance 2.5 option", () => {
     const schema = buildSeedance25Schema();
 
     expect(Object.keys(schema)).toEqual([
@@ -39,7 +39,8 @@ describe("buildSeedance25Schema", () => {
     expect(schema.duration.safeParse("31").success).toBe(false);
     expect(schema.resolution.safeParse("480p").success).toBe(true);
     expect(schema.resolution.safeParse("720p").success).toBe(true);
-    expect(schema.resolution.safeParse("1080p").success).toBe(false);
+    expect(schema.resolution.safeParse("1080p").success).toBe(true);
+    expect(schema.resolution.safeParse("4k").success).toBe(false);
     expect(schema.aspect_ratio.safeParse("adaptive").success).toBe(true);
     expect(schema.output_format.safeParse("mp4").success).toBe(true);
     expect(schema.output_format.safeParse("mov").success).toBe(true);
