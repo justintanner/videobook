@@ -9,6 +9,7 @@ import {
   writeFile as fsWriteFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { logger } from "../logger.js";
 import { registerJobHandler, queue } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { enqueueLazyAnalysisIfSlotted } from "../lazy-render.js";
@@ -393,7 +394,7 @@ async function processVideoSnapshot(
       if (waveform.length > 0) {
         const wavResult = await engine.metadata.waveforms.write(assetId, waveform);
         if (!wavResult.ok) {
-          console.warn(
+          logger.warn(
             `[process_video] writeAudioWaveform soft-failed for ${assetId}: ${wavResult.error.message}`,
           );
         }

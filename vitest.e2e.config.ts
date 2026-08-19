@@ -1,6 +1,10 @@
 import { defineConfig } from 'vitest/config';
 import path from 'node:path';
 
+const BENIGN_TEST_CONSOLE_PREFIXES = [
+  '[mcp] ',
+] as const;
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -18,6 +22,11 @@ export default defineConfig({
       'server/src/**/*.e2e.test.ts',
     ],
     setupFiles: ['./vitest.setup.ts'],
+    // Same silencing policy as the root suite (vb-2ky4.5).
+    silent: 'passed-only',
+    onConsoleLog(log) {
+      return !BENIGN_TEST_CONSOLE_PREFIXES.some((prefix) => log.startsWith(prefix));
+    },
     testTimeout: 600_000,
     hookTimeout: 30_000,
   },

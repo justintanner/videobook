@@ -10,6 +10,7 @@ import { createAlibaba, AlibabaError } from "@apicity/alibaba";
 import { createFal, FalError } from "@apicity/fal";
 import { createGoogleFlow, GoogleFlowError } from "@apicity/googleflow";
 import { describeGoogleFlowJobFailure, googleFlowFetch } from "../jobs/_google-flow.js";
+import { logger } from "../logger.js";
 import { queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import {
@@ -450,7 +451,7 @@ function scheduleWaveformExtraction(
       videoFilename,
     })
     .catch((err) => {
-      console.error(
+      logger.error(
         `[reconcile_project_work] failed to enqueue waveform extraction for ${assetId}: ${
           err instanceof Error ? err.message : String(err)
         }`,

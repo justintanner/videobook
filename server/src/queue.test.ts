@@ -10,6 +10,9 @@ import {
   registerJobHandler,
   setEngineRoot,
   extractAssetId,
+  drainBookQueuesForTests,
+  listActiveBookJobsForTests,
+  waitForBookQueuesIdleForTests,
 } from "./queue.js";
 import { withProviderHandoff } from "./jobs/_lease.js";
 
@@ -255,5 +258,52 @@ describe("extractAssetId", () => {
 
   it("returns null when no known asset id key is present", () => {
     expect(extractAssetId({ type: "unknown_type", bookId: "p" })).toBeNull();
+  });
+});
+
+describe("waitForBookQueuesIdleForTests", () => {
+  let projectsDir: string;
+  let testEngine: ReturnType<typeof createEngineForTest> | undefined;
+
+  beforeEach(async () => {
+    projectsDir = await fsP.mkdtemp(path.join(os.tmpdir(), "cfs-srv-drain-"));
+  });
+
+  afterEach(async () => {
+    await appQueue.stop();
+    if (testEngine) {
+      closeEngineForTest(projectsDir, testEngine);
+      testEngine = undefined;
+    }
+    await fsP.rm(projectsDir, { recursive: true, force: true });
+  });
+
+  it("names the leftover job type when a leaked job exceeds the drain budget", async () => {
+    const cfs = createEngineForTest(projectsDir);
+    testEngine = cfs;
+    await setEngineRoot(projectsDir, cfs);
+    const bookId = cfs.book.get().bookId;
+    registerJobHandler("leak_probe", async (_payload, ctx) => {
+      await new Promise<void>((resolve) => {
+        if (ctx.signal.aborted) {
+          resolve();
+          return;
+        }
+        ctx.signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+    });
+    await appQueue.enqueue("leak-probe-1", { type: "leak_probe", bookId });
+    await new Promise<void>((resolve) => setTimeout(resolve, 40));
+    expect(listActiveBookJobsForTests().some((job) => job.type === "leak_probe")).toBe(true);
+    await expect(
+      waitForBookQueuesIdleForTests({
+        budgetMs: 80,
+        fileLabel: "queue.test.ts :: leaked job",
+      }),
+    ).rejects.toThrow(/\[test drain] queue\.test\.ts :: leaked job still running after 80ms: leak_probe/);
+    await drainBookQueuesForTests({ budgetMs: 50, fileLabel: "queue.test.ts :: cleanup" }).catch(
+      () => undefined,
+    );
+    expect(listActiveBookJobsForTests()).toEqual([]);
   });
 });

@@ -2,6 +2,7 @@ import type { Engine } from "videobook-engine";
 import { join } from "node:path";
 import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { logger } from "../logger.js";
 import { registerJobHandler } from "../queue.js";
 import { runFfmpeg, probeVideo, AUDIO_OPTS, H264_MEDIUM } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
@@ -366,7 +367,7 @@ export function registerRenderTimelineJob(engine: Engine): void {
       const plan = planTimelineVideo(videoProbes);
 
       if (plan.mode === "reencode") {
-        console.warn(
+        logger.warn(
           `[render-timeline] ${bookId}: re-encoding video to ${plan.targetFps}fps CFR (${plan.reasons.join(", ")})`,
         );
         await runFfmpeg(

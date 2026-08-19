@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createEngine } from "videobook-engine";
 import { z } from "zod";
 
+import { configureLoggerForTests, resetLoggerForTests } from "../logger.js";
 import { withLogging } from "./log-wrapper.js";
 
 describe("MCP tool logging", () => {
@@ -49,10 +50,17 @@ describe("MCP tool logging", () => {
       initialBookName: "log-error",
     });
     const lines: string[] = [];
-    const original = console.log;
-    console.log = (...args: unknown[]) => {
-      lines.push(args.map(String).join(" "));
-    };
+    configureLoggerForTests({
+      level: "info",
+      sink: {
+        error: () => undefined,
+        warn: () => undefined,
+        info: (...args) => {
+          lines.push(args.map(String).join(" "));
+        },
+        debug: () => undefined,
+      },
+    });
     try {
       const wrapped = withLogging({
         name: "failing_tool",
@@ -65,7 +73,7 @@ describe("MCP tool logging", () => {
       }, engine);
       await wrapped.handler({ book_id: engine.book.get().bookId });
     } finally {
-      console.log = original;
+      resetLoggerForTests();
       engine.close();
     }
     expect(lines.some((line) =>

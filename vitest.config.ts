@@ -1,6 +1,12 @@
 import { defineConfig, configDefaults } from 'vitest/config';
 import path from 'node:path';
 
+// Benign prefixes stripped even from failing-test console output.
+// Keep this list tiny so real diagnostics stay visible.
+const BENIGN_TEST_CONSOLE_PREFIXES = [
+  '[mcp] ',
+] as const;
+
 export default defineConfig({
   // Mirror vite.config.ts's `@` → src alias so tests can import src modules
   // (and modules that themselves import via `@/`). vitest.config.ts is a
@@ -77,6 +83,7 @@ export default defineConfig({
       'server/src/http-byte-range.test.ts',
       'server/src/job-deadline.test.ts',
       'server/src/lazy-render.test.ts',
+      'server/src/logger.test.ts',
       'server/src/local-search-models.test.ts',
       'server/src/jobs/**/*.test.ts',
       'server/src/keyword-placement-cache.test.ts',
@@ -104,6 +111,7 @@ export default defineConfig({
       'server/src/queue-shutdown.test.ts',
       'server/src/video-models.test.ts',
       'server/src/video-proxy.test.ts',
+      'server/src/vitest-quiet-policy.test.ts',
       'server/src/vision-regions.test.ts',
       'server/src/watermark-badge.test.ts',
       'server/src/watermark-config.test.ts',
@@ -114,11 +122,15 @@ export default defineConfig({
     ],
     exclude: ['**/*.e2e.test.ts', '**/*.spec.ts', 'server/dist/**', ...configDefaults.exclude],
     setupFiles: ['./vitest.setup.ts'],
+    // Hide console output from passing tests. Failing tests still print
+    // logs; onConsoleLog only strips a tiny allowlist of known-benign lines.
+    silent: 'passed-only',
+    onConsoleLog(log) {
+      return !BENIGN_TEST_CONSOLE_PREFIXES.some((prefix) => log.startsWith(prefix));
+    },
     testTimeout: 30_000,
-    // Generous hookTimeout so beforeEach can absorb the prior test's runner
-    // drain (process_video + analyze_video can stay in-flight after a test
-    // ends because upload_file is fire-and-forget); 15s wasn't enough on a
-    // loaded CI machine, 30s tipped over once apply_cuts / apply_sfx joined.
-    hookTimeout: 60_000,
+    // Per-test afterEach now waits for leaked jobs (vb-2ky4.4) instead of
+    // letting the next beforeEach absorb a 30–60s runner drain.
+    hookTimeout: 15_000,
   },
 });

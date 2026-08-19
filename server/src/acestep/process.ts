@@ -3,6 +3,7 @@ import { createInterface } from "node:readline";
 import type { Readable } from "node:stream";
 import { isHealthy } from "./client.js";
 import { aceStepConfig, checkLocalAvailability, type AceStepConfig } from "./config.js";
+import { logger } from "../logger.js";
 import { AceStepError } from "./errors.js";
 
 interface AceServerHandle {
@@ -39,7 +40,7 @@ async function delay(ms: number): Promise<void> {
 function pipeLogs(stream: Readable | null): void {
   if (stream === null) return;
   createInterface({ input: stream }).on("line", (line) => {
-    console.log(`[ace-step] ${line}`);
+    logger.info(`[ace-step] ${line}`);
   });
 }
 
@@ -98,7 +99,7 @@ async function startServer(config: AceStepConfig, signal?: AbortSignal): Promise
     );
   });
   child.on("exit", (code, exitSignal) => {
-    console.error(`[ace-step] ace-server exited (code ${code ?? "null"}, signal ${exitSignal ?? "null"})`);
+    logger.error(`[ace-step] ace-server exited (code ${code ?? "null"}, signal ${exitSignal ?? "null"})`);
     if (state.child === child) {
       state.child = null;
       state.handle = null;

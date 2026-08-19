@@ -1,6 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { OpenAiResponseInputContent } from "@apicity/openai";
+import { logger } from "../logger.js";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import {
@@ -143,7 +144,7 @@ export function registerSuggestSfxJob(engine: Engine): void {
       }
 
       if (droppedSfx.length > 0) {
-        console.warn(
+        logger.warn(
           `[suggest_sfx] ${assetId}: dropped ${droppedSfx.length} entries:\n`
             + droppedSfx.map((d) => `  - ${d.reason}: ${JSON.stringify(d.sfx)}`).join("\n"),
         );

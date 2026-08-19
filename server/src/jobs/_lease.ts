@@ -1,4 +1,5 @@
 import type { ArtifactRuntimeMeta, Engine, ArtifactWorkKind } from "videobook-engine";
+import { logger } from "../logger.js";
 import type { JobHandlerContext } from "../queue.js";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
@@ -94,7 +95,7 @@ export async function withProviderHandoff<T>(
             HEARTBEAT_EXTEND_MS,
           );
         } catch (error) {
-          console.warn(`[heartbeat] renew failed for ${assetId}:`, error);
+          logger.warn(`[heartbeat] renew failed for ${assetId}:`, error);
         }
       }, HEARTBEAT_INTERVAL_MS)
     : null;
@@ -141,7 +142,7 @@ export async function withLocalLease<T>(
         HEARTBEAT_EXTEND_MS,
       );
     } catch (error) {
-      console.warn(`[heartbeat] renew failed for ${assetId}:`, error);
+      logger.warn(`[heartbeat] renew failed for ${assetId}:`, error);
     }
   }, HEARTBEAT_INTERVAL_MS);
   try {

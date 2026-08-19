@@ -2,6 +2,7 @@ import { findVideoFile, type Engine } from "videobook-engine";
 import { copyFile, mkdir, stat, unlink } from "node:fs/promises";
 import { join, resolve, basename } from "node:path";
 import { renderMedia, selectComposition } from "@remotion/renderer";
+import { logger } from "../logger.js";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { withRemotionCancellation } from "../remotion-cancellation.js";
@@ -137,11 +138,11 @@ async function resolveSubtitleSegments(
     const writeResult = await engine.files.write(assetId, sidecarFilename, JSON.stringify(sidecar, null, 2)
     );
     if (!writeResult.ok) {
-      console.warn(`[render] failed to cache ${sidecarFilename} for ${assetId}: ${writeResult.error.message}`);
+      logger.warn(`[render] failed to cache ${sidecarFilename} for ${assetId}: ${writeResult.error.message}`);
     }
     return parseSegments(sidecar as unknown as Parameters<typeof parseSegments>[0]);
   } catch (err) {
-    console.warn(
+    logger.warn(
       `[render] subtitle translation to ${subtitleLanguage} failed for ${assetId}, falling back to original:`,
       err instanceof Error ? err.message : err,
     );
@@ -205,7 +206,7 @@ export function registerRenderProjectJob(engine: Engine): void {
       if (resolved.ok) {
         osgImagePath = resolved.path;
       } else {
-        console.warn(`[render] OSG asset ${osgAssetId} skipped: ${resolved.error}`);
+        logger.warn(`[render] OSG asset ${osgAssetId} skipped: ${resolved.error}`);
       }
     }
 
@@ -243,7 +244,7 @@ export function registerRenderProjectJob(engine: Engine): void {
               engine.jobs.artifactWork.renew(asset.assetId, lease.ownerId, 60_000
               );
             } catch (error) {
-              console.warn(
+              logger.warn(
                 `[heartbeat] renew failed for ${asset.assetId}:`,
                 error,
               );

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 import { promisify } from "node:util";
 import { registerJobHandler, queue } from "../queue.js";
-import { runFfmpeg, FFMPEG, H264_MEDIUM, AUDIO_OPTS, probeVideo } from "../ffmpeg.js";
+import { runFfmpeg, FFMPEG, H264_MEDIUM, AUDIO_OPTS, probeVideo, withQuietFfmpegArgs } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { ingestWorkspaceOutputs } from "./_persist-output.js";
 
@@ -44,7 +44,7 @@ type SpliceVideoPayload = {
 };
 
 async function extractTargetFrame(videoPath: string): Promise<Buffer> {
-  const { stdout } = await execFileAsync(FFMPEG, [
+  const { stdout } = await execFileAsync(FFMPEG, withQuietFfmpegArgs([
     "-y",
     "-i", videoPath,
     "-vf", `scale=${MATCH_W}:${MATCH_H},format=gray`,
@@ -53,7 +53,7 @@ async function extractTargetFrame(videoPath: string): Promise<Buffer> {
     "-f", "rawvideo",
     "-pix_fmt", "gray",
     "pipe:1",
-  ], { encoding: "buffer", maxBuffer: 1024 * 1024 });
+  ]), { encoding: "buffer", maxBuffer: 1024 * 1024 });
   const buf = stdout as unknown as Buffer;
   if (buf.length < MATCH_FRAME_BYTES) {
     throw new Error(
@@ -76,7 +76,7 @@ async function findBestMatch(
   startFrame: number,
 ): Promise<MatchResult> {
   const startTime = startFrame / fps;
-  const proc = spawn(FFMPEG, [
+  const proc = spawn(FFMPEG, withQuietFfmpegArgs([
     ...(startFrame > 0 ? ["-ss", String(startTime)] : []),
     "-i", videoPath,
     "-vf", `fps=${fps},scale=${MATCH_W}:${MATCH_H},format=gray`,
@@ -84,7 +84,7 @@ async function findBestMatch(
     "-f", "rawvideo",
     "-pix_fmt", "gray",
     "pipe:1",
-  ], { stdio: ["ignore", "pipe", "ignore"] });
+  ]), { stdio: ["ignore", "pipe", "ignore"] });
 
   let buffer: Buffer = Buffer.alloc(0);
   let frameIndex = 0;

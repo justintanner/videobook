@@ -18,6 +18,7 @@ import {
   resolveNotebookCellArtifactId,
 } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
+import { logger } from "../logger.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import {
   ensureGenerationMediaOutputs,
@@ -1193,14 +1194,14 @@ async function recordGenerationDispatch(
   try {
     const result = await engine.generations.record(args);
     if (!result.ok) {
-      console.warn(
+      logger.warn(
         `[generations] record failed for cell ${args.cellId}: ${result.error.message}`,
       );
       return null;
     }
     return result.value.generationId;
   } catch (cause) {
-    console.warn(
+    logger.warn(
       `[generations] record failed for cell ${args.cellId}:`,
       cause instanceof Error ? cause.message : cause,
     );
@@ -1217,12 +1218,12 @@ async function patchGeneration(
   try {
     const result = await engine.generations.update(generationId, patch);
     if (!result.ok) {
-      console.warn(
+      logger.warn(
         `[generations] update failed for ${generationId}: ${result.error.message}`,
       );
     }
   } catch (cause) {
-    console.warn(
+    logger.warn(
       `[generations] update failed for ${generationId}:`,
       cause instanceof Error ? cause.message : cause,
     );
@@ -1239,7 +1240,7 @@ function activeGenerationIdForRun(
   try {
     const listed = engine.generations.listForCell(notebookId, cellId);
     if (!listed.ok) {
-      console.warn(
+      logger.warn(
         `[generations] list failed for cell ${cellId}: ${listed.error.message}`,
       );
       return null;
@@ -1258,7 +1259,7 @@ function activeGenerationIdForRun(
       ));
     return match?.generationId ?? null;
   } catch (cause) {
-    console.warn(
+    logger.warn(
       `[generations] list failed for cell ${cellId}:`,
       cause instanceof Error ? cause.message : cause,
     );

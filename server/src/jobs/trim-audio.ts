@@ -4,7 +4,7 @@ import { rm } from "node:fs/promises";
 import { promisify } from "node:util";
 import { basename, extname } from "node:path";
 import { registerJobHandler } from "../queue.js";
-import { FFMPEG, FFPROBE } from "../ffmpeg.js";
+import { FFPROBE, runFfmpeg } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
@@ -14,6 +14,7 @@ const DURATION_EPSILON_SECONDS = 0.05;
 
 async function probeAudioDuration(filePath: string): Promise<number> {
   const { stdout } = await execFileAsync(FFPROBE, [
+    "-hide_banner",
     "-v", "error",
     "-print_format", "json",
     "-show_format",
@@ -177,7 +178,7 @@ async function runTrimAudio(
     cutStart,
     cutEnd,
   );
-  await execFileAsync(FFMPEG, args);
+  await runFfmpeg(args);
 
   const outputDuration = await probeAudioDuration(outputPath);
   const tolerance = Math.max(0.35, expectedDuration * 0.05);

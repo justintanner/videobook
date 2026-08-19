@@ -2,6 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import * as fsp from "node:fs/promises";
+import { logger } from "./logger.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -208,6 +209,7 @@ export async function probeVideo(
   const timeoutMs = options.timeoutMs ?? DEFAULT_FFPROBE_TIMEOUT_MS;
   try {
     const result = await execFileAsync(FFPROBE, [
+      "-hide_banner",
       "-v", "error",
       "-print_format", "json",
       "-show_streams",
@@ -287,8 +289,17 @@ export function summarizeFfmpegStderr(stderr: string, maxChars = 600): string {
     if (/^(frame|size)=/.test(l)) return false;
     return true;
   });
-  const tail = meaningful.slice(-8).join("\n");
+  const tail = meaningful.slice(-15).join("\n");
   return tail.length > maxChars ? tail.slice(-maxChars) : tail;
+}
+
+export function withQuietFfmpegArgs(args: string[]): string[] {
+  const hasLoglevel = args.includes("-loglevel") || args.includes("-v");
+  const hasHideBanner = args.includes("-hide_banner");
+  const prefix: string[] = [];
+  if (!hasHideBanner) prefix.push("-hide_banner");
+  if (!hasLoglevel) prefix.push("-loglevel", "error");
+  return prefix.length === 0 ? args : [...prefix, ...args];
 }
 
 export async function runFfmpeg(
@@ -297,7 +308,7 @@ export async function runFfmpeg(
 ): Promise<void> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS;
   try {
-    await execFileAsync(FFMPEG, args, {
+    await execFileAsync(FFMPEG, withQuietFfmpegArgs(args), {
       encoding: "utf8",
       killSignal: "SIGKILL",
       signal: options.signal,
@@ -398,7 +409,9 @@ export async function extractWaveform(videoPath: string, barCount?: number): Pro
     await new Promise<void>((resolve, reject) => {
       const child = spawn(
         FFMPEG,
-        ["-i", videoPath, "-vn", "-ac", "1", "-ar", String(SAMPLE_RATE), "-f", "s16le", "pipe:1"],
+        withQuietFfmpegArgs([
+          "-i", videoPath, "-vn", "-ac", "1", "-ar", String(SAMPLE_RATE), "-f", "s16le", "pipe:1",
+        ]),
         { stdio: ["ignore", "pipe", "pipe"] },
       );
 
@@ -423,7 +436,7 @@ export async function extractWaveform(videoPath: string, barCount?: number): Pro
         // error). Surface it once, but return empty rather than rejecting so a
         // genuinely silent clip caches as "no waveform" instead of churning.
         if (totalSamples === 0 && code !== 0) {
-          console.warn(
+          logger.warn(
             `[ffmpeg] no waveform for ${videoPath} (ffmpeg exit ${code}): ${
               summarizeFfmpegStderr(stderr) || "no audio stream"
             }`,
@@ -463,7 +476,7 @@ export async function extractWaveform(videoPath: string, barCount?: number): Pro
   } catch (err) {
     // Only reached if ffmpeg fails to spawn (e.g. binary missing). The stream
     // never buffers, so the old maxBuffer failure mode can't recur here.
-    console.error(
+    logger.error(
       `[ffmpeg] waveform extraction failed for ${videoPath}: ${
         err instanceof Error ? err.message : String(err)
       }`,
@@ -474,13 +487,13 @@ export async function extractWaveform(videoPath: string, barCount?: number): Pro
 
 export async function isThumbnailBlank(imagePath: string): Promise<boolean> {
   try {
-    const { stdout } = await execFileAsync(FFMPEG, [
+    const { stdout } = await execFileAsync(FFMPEG, withQuietFfmpegArgs([
       "-i", imagePath,
       "-vf", "format=gray",
       "-f", "rawvideo",
       "-pix_fmt", "gray",
       "pipe:1",
-    ], { encoding: "buffer", maxBuffer: 10 * 1024 * 1024 });
+    ]), { encoding: "buffer", maxBuffer: 10 * 1024 * 1024 });
     const buf = stdout as unknown as Buffer;
     if (buf.length === 0) return true;
 

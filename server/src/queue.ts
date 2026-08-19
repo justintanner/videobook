@@ -10,6 +10,7 @@ import {
 import { activeBookEngine, withBookContext } from "./book-context.js";
 import { bookManager } from "./engine.js";
 import { runWithJobDeadline } from "./job-deadline.js";
+import { logger } from "./logger.js";
 
 type JobPayload = Record<string, unknown>;
 
@@ -140,7 +141,7 @@ async function tickProviderPoll(info: RunnerInfo): Promise<void> {
     );
   } catch (error) {
     if (info.pollAbort.signal.aborted) return;
-    console.warn(
+    logger.warn(
       `[provider-poll] book ${info.bookId} tick failed:`,
       error instanceof Error ? error.message : error,
     );
@@ -597,6 +598,7 @@ export const queue: Queue = {
       stopProviderPollDriver(info);
       info.reaper.stop();
     }
+    await Promise.all(infos.map((info) => abortActiveJobs(info, "Queue stopped")));
     await Promise.all([
       ...infos.map((info) => info.runner.stop()),
       ...infos.map((info) => awaitProviderPollIdle(info)),
@@ -609,15 +611,98 @@ async function reconcileQueueOnStartup(): Promise<void> {
   await Promise.all(bookManager.list().map((book) => ensureRunner(book.bookId)));
 }
 
+type ActiveBookJob = {
+  bookId: string;
+  type: string;
+  state: string;
+};
+
+function isClosedDatabaseError(error: unknown): boolean {
+  return error instanceof Error && /database is closed/i.test(error.message);
+}
+
+export function listActiveBookJobsForTests(): ActiveBookJob[] {
+  const jobs: ActiveBookJob[] = [];
+  for (const info of runnerByBook.values()) {
+    try {
+      const active = info.engine.jobs.queue.list({
+        states: ["queued", "running", "completing"],
+      });
+      for (const job of active) {
+        jobs.push({
+          bookId: info.bookId,
+          type: job.type,
+          state: job.state,
+        });
+      }
+    } catch (error) {
+      if (isClosedDatabaseError(error)) continue;
+      throw error;
+    }
+  }
+  return jobs;
+}
+
+export async function waitForBookQueuesIdleForTests(options: {
+  budgetMs?: number;
+  fileLabel?: string;
+} = {}): Promise<void> {
+  const budgetMs = options.budgetMs ?? 12_000;
+  const deadline = Date.now() + budgetMs;
+  while (Date.now() < deadline) {
+    if (listActiveBookJobsForTests().length === 0) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+  }
+  const leftover = listActiveBookJobsForTests();
+  if (leftover.length === 0) return;
+  const types = leftover.map((job) => job.type).join(", ");
+  throw new Error(
+    `[test drain] ${options.fileLabel ?? "unknown-file"} still running after ${budgetMs}ms: ${types}`,
+  );
+}
+
+export async function drainBookQueuesForTests(options: {
+  budgetMs?: number;
+  fileLabel?: string;
+} = {}): Promise<void> {
+  try {
+    await waitForBookQueuesIdleForTests(options);
+  } finally {
+    const bookIds = [...new Set([...runnerByBook.keys(), ...testEngines.keys()])];
+    await Promise.all(bookIds.map((bookId) => stopBookQueue(bookId)));
+    testEngines.clear();
+    activeTestBookId = null;
+    activeTestRoot = null;
+  }
+}
+
+async function abortActiveJobs(info: RunnerInfo, reason: string): Promise<void> {
+  let active: ReturnType<Engine["jobs"]["queue"]["list"]>;
+  try {
+    active = info.engine.jobs.queue.list({
+      states: ["queued", "running", "completing"],
+    });
+  } catch (error) {
+    if (isClosedDatabaseError(error)) return;
+    throw error;
+  }
+  await Promise.all(active.map(async (job) => {
+    try {
+      await info.engine.jobs.queue.abort(job.id, reason);
+    } catch (error) {
+      if (!isClosedDatabaseError(error)) throw error;
+    }
+  }));
+}
+
 export async function stopBookQueue(bookId: string): Promise<void> {
   const info = runnerByBook.get(bookId);
   if (!info) return;
   runnerByBook.delete(bookId);
   stopProviderPollDriver(info);
   info.reaper.stop();
+  await abortActiveJobs(info, "Book deleted");
   await Promise.all([info.runner.stop(), awaitProviderPollIdle(info)]);
-  const active = info.engine.jobs.queue.list({ states: ["queued", "running", "completing"] });
-  await Promise.all(active.map((job) => info.engine.jobs.queue.abort(job.id, "Book deleted")));
   const pending = info.engine.jobs.pending.findAll();
   if (pending.ok) {
     await Promise.all(pending.value.map((task) => (

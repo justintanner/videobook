@@ -13,6 +13,7 @@ import {
 } from "../osg-placement-cache.js";
 import type { OsgPlacementAnalysis } from "../osg-placement-cache.js";
 import { writeOsgSettings } from "../osg-settings.js";
+import { logger } from "../logger.js";
 import { queue } from "../queue.js";
 import {
   scoreWatermarkCornersForCanvas,
@@ -213,7 +214,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           analysis = result.analysis;
           placementSource = "vision";
         } catch (err) {
-          console.warn(`[apply_watermark] placement job failed for ${asset_id}, falling back:`, err instanceof Error ? err.message : err);
+          logger.warn(`[apply_watermark] placement job failed for ${asset_id}, falling back:`, err instanceof Error ? err.message : err);
         }
       }
       const recommended = analysis ? null : await readRecommendedOsgPosition(engine, asset_id);
@@ -287,7 +288,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
             userScale: scale,
           }).position;
         } catch (err) {
-          console.warn(`[apply_watermark] probe failed for ${asset_id}, using ${corner}:`, err instanceof Error ? err.message : err);
+          logger.warn(`[apply_watermark] probe failed for ${asset_id}, using ${corner}:`, err instanceof Error ? err.message : err);
         }
       }
 

@@ -1,6 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { join } from "node:path";
 import type { OpenAiResponseInputContent } from "@apicity/openai";
+import { logger } from "../logger.js";
 import { registerJobHandler, queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { sampleEvenly } from "../frame-utils.js";
@@ -232,7 +233,7 @@ export function registerAnalyzeVideoJob(engine: Engine): void {
         }), ctx.signal);
         analysis = JSON.parse(firstResponseText(response)) as Record<string, unknown>;
       } catch (e) {
-        console.error(`[analyze_video] API failed for ${assetId}:`, e instanceof Error ? e.message : e);
+        logger.error(`[analyze_video] API failed for ${assetId}:`, e instanceof Error ? e.message : e);
       }
     }
 

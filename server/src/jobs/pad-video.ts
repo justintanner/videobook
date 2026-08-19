@@ -1,5 +1,6 @@
 import type { Engine } from "videobook-engine";
 import { rm } from "node:fs/promises";
+import { logger } from "../logger.js";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { join, basename } from "node:path";
@@ -20,7 +21,7 @@ type PadVideoPayload = {
 
 export function registerPadVideoJob(engine: Engine): void {
   registerJobHandler("pad_video", async (payload, ctx) => {
-    console.log("pad_video payload:", payload);
+    logger.debug("pad_video payload:", payload);
     const { sourcePath, assetDir, sourceAssetId, bookId, targetSecs, hasAudio } = payload as PadVideoPayload;
     
     const result = await withLockedLocalLease(

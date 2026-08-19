@@ -1,4 +1,5 @@
 import type { Engine } from "videobook-engine";
+import { logger } from "../logger.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
 function firstErrorText(result: ToolResult): string | null {
@@ -22,7 +23,7 @@ export function withLogging(def: ToolDef, _engine: Engine): ToolDef {
       const elapsed = Math.round(performance.now() - startedAt);
       const status = result.isError ? "error" : "ok";
       const detail = firstErrorText(result);
-      console.log(
+      logger.info(
         detail
           ? `[mcp] ${def.name} ${status} ${elapsed}ms ${detail}`
           : `[mcp] ${def.name} ${status} ${elapsed}ms`,

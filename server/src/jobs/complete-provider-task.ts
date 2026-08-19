@@ -2,6 +2,7 @@ import type { Engine } from "videobook-engine";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { writeFile, unlink, readFile as readFsFile } from "node:fs/promises";
+import { logger } from "../logger.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { contentHash } from "../upload.js";
 import { runFfmpeg } from "../ffmpeg.js";
@@ -168,7 +169,7 @@ export function registerCompleteProviderTaskJob(engine: Engine): void {
       try {
         engine.jobs.artifactWork.renew(assetId, ownerId, 60_000);
       } catch (error) {
-        console.warn(`[heartbeat] renew failed for ${assetId}:`, error);
+        logger.warn(`[heartbeat] renew failed for ${assetId}:`, error);
       }
     }, 20_000);
 

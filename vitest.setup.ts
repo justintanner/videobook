@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { afterEach } from "vitest";
+import { afterAll, afterEach, expect } from "vitest";
+import {
+  currentTestLabel,
+  formatBlockedFetchError,
+  type BlockedFetchAttempt,
+} from "./server/src/test-fetch-guard.js";
 
 const testRoot = process.env.VIDEOBOOK_TEST_ROOT;
 if (testRoot) {
@@ -81,21 +86,39 @@ function extractFetchHost(input: RequestInfo | URL): string {
 }
 
 const realFetch = globalThis.fetch;
-let blockedFetchAttempts: string[] = [];
+let blockedFetchAttempts: BlockedFetchAttempt[] = [];
+let lastCompletedTest: string | null = null;
+
+function testLabelNow(): string {
+  return currentTestLabel(expect.getState(), lastCompletedTest);
+}
 
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const host = extractFetchHost(input);
   if (isLocalHost(host)) return realFetch(input, init);
-  blockedFetchAttempts.push(host || String(input));
+  blockedFetchAttempts.push({
+    host: host || String(input),
+    testLabel: testLabelNow(),
+  });
   throw new Error(
     `[test guard] fetch to "${host}" blocked: tests must not make outbound API calls. ` +
       `Use PollyJS for recorded provider responses.`,
   );
 }) as typeof fetch;
 
-afterEach(() => {
-  if (blockedFetchAttempts.length === 0) return;
-  const hosts = [...new Set(blockedFetchAttempts)].join(", ");
-  blockedFetchAttempts = [];
-  throw new Error(`[test guard] outbound API fetch attempted during test: ${hosts}`);
+afterEach(async () => {
+  const state = expect.getState();
+  if (state.currentTestName) lastCompletedTest = state.currentTestName;
+  if (blockedFetchAttempts.length > 0) {
+    const attempts = blockedFetchAttempts;
+    blockedFetchAttempts = [];
+    throw new Error(formatBlockedFetchError(attempts));
+  }
+  const { waitForBookQueuesIdleForTests } = await import("./server/src/queue.js");
+  await waitForBookQueuesIdleForTests({ fileLabel: testLabelNow() });
+});
+
+afterAll(async () => {
+  const { drainBookQueuesForTests } = await import("./server/src/queue.js");
+  await drainBookQueuesForTests({ fileLabel: testLabelNow() });
 });

@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { createOpenAi } from "@apicity/openai";
+import { logger } from "../logger.js";
 import { queue, registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { probeVideo } from "../ffmpeg.js";
@@ -110,7 +111,7 @@ export async function runTranscribeVideoAudio(
       // Returning (instead of throwing) lets withLocalLease complete the
       // lease, so the asset stays claimable for a later retry.
       const reason = err instanceof Error ? err.message : String(err);
-      console.warn(`[transcribe_video_audio] soft-failed for ${assetId}: ${reason}`);
+      logger.warn(`[transcribe_video_audio] soft-failed for ${assetId}: ${reason}`);
       await engine.logs.append("transcribe-soft-fail", { assetId, error: reason }).catch(() => undefined);
       return { success: false, reason };
     }

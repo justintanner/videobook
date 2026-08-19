@@ -5,6 +5,7 @@ import {
   uploadBytesToFreeHost,
 } from "../upload.js";
 import { getApiKey } from "../api-key.js";
+import { logger } from "../logger.js";
 
 // Upload prepared bytes to Kie's native storage via POST /api/file-stream-upload.
 // Kie workers run in China — using their first-party CDN avoids the
@@ -24,10 +25,10 @@ async function uploadPreparedToKie(
       return await uploadFile(provider, blob, hashedFilename);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[kie-upload] native failed, falling back to free host: ${msg}`);
+      logger.warn(`[kie-upload] native failed, falling back to free host: ${msg}`);
     }
   } else {
-    console.warn("[kie-upload] KIE_API_KEY not set, using free host");
+    logger.warn("[kie-upload] KIE_API_KEY not set, using free host");
   }
 
   return uploadBytesToFreeHost(data, hashedFilename);

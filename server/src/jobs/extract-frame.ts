@@ -1,28 +1,12 @@
 import type { Engine } from "videobook-engine";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { queue, registerJobHandler } from "../queue.js";
+import { runFfmpeg } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 
-const execFileAsync = promisify(execFile);
-
-const require = createRequire(import.meta.url);
-const FFMPEG: string = require("ffmpeg-static");
-
 const LOCK_DURATION_MS = 60_000;
-
-async function runFfmpeg(args: string[]): Promise<void> {
-  try {
-    await execFileAsync(FFMPEG, args);
-  } catch (error) {
-    const msg = error instanceof Error ? (error as Error & { stderr?: string }).stderr ?? error.message : String(error);
-    throw new Error(`ffmpeg failed: ${msg}`);
-  }
-}
 
 type ExtractFramePayload = {
   type: "extract_frame";

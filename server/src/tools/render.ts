@@ -1,6 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
+import { logger } from "../logger.js";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
 import { isValidHex } from "../remotion/util.js";
@@ -327,7 +328,7 @@ export function renderVideoDef(engine: Engine): ToolDef {
       // new jobs can claim the asset.
       const clearResult = await engine.jobs.failures.clear(asset_id);
       if (!clearResult.ok) {
-        console.warn(`[render] clearing stale generation error for ${asset_id} failed: ${clearResult.error.message}`);
+        logger.warn(`[render] clearing stale generation error for ${asset_id} failed: ${clearResult.error.message}`);
       }
 
       const assetDir = manifest.path;
@@ -369,7 +370,7 @@ export function renderVideoDef(engine: Engine): ToolDef {
           if (!storedOsgPathCache.has(storedOsgAssetId)) {
             const resolved = await resolveOsgImagePath(engine, storedOsgAssetId);
             if (!resolved.ok) {
-              console.warn(`[render] stored OSG asset ${storedOsgAssetId} skipped: ${resolved.error}`);
+              logger.warn(`[render] stored OSG asset ${storedOsgAssetId} skipped: ${resolved.error}`);
             }
             storedOsgPathCache.set(storedOsgAssetId, resolved.ok ? resolved.path : null);
           }
@@ -453,7 +454,7 @@ export function renderVideoDef(engine: Engine): ToolDef {
           if (!updated.ok) throw new Error(updated.error.message);
           savedOrientation = explicitOrientation;
         } catch (err) {
-          console.warn("Persisting timeline orientation failed (non-fatal):", err);
+          logger.warn("Persisting timeline orientation failed (non-fatal):", err);
         }
       }
 

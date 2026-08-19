@@ -1,6 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { OpenAiResponseInputContent } from "@apicity/openai";
+import { logger } from "../logger.js";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import {
@@ -152,7 +153,7 @@ export function registerSuggestCutsJob(engine: Engine): void {
 
       const { kept, dropped } = filterValidTrims(parsed.trims, candidates, trimBudgetS);
       if (dropped.length > 0) {
-        console.warn(
+        logger.warn(
           `[suggest_cuts] ${assetId}: dropped ${dropped.length} trims:\n`
             + dropped.map((d) => `  - ${d.reason}: ${JSON.stringify(d.trim)}`).join("\n"),
         );

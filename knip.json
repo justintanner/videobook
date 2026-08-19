@@ -18,7 +18,8 @@
         "src/test-client.ts",
         "src/**/*.test.ts",
         "scripts/**/*.ts",
-        "src/remotion/index.tsx"
+        "src/remotion/index.tsx",
+        "src/quiet-probes/**"
       ]
     }
   }

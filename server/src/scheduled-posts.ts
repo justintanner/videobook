@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Engine } from "videobook-engine";
+import { logger } from "./logger.js";
 import {
   listBookEngines,
   queue,
@@ -86,7 +87,7 @@ function armTimer(bookId: string, entry: ScheduledPostEntry): void {
   const t = setTimeout(() => {
     armed.delete(key);
     void firePost(bookId, entry.schedule_id).catch((e) =>
-      console.error(`[scheduled-posts] firePost ${entry.schedule_id} failed:`, e),
+      logger.error(`[scheduled-posts] firePost ${entry.schedule_id} failed:`, e),
     );
   }, safeDelay);
   armed.set(key, t);
@@ -197,7 +198,7 @@ export async function loadAndArmAll(): Promise<void> {
       const due = new Date(entry.scheduled_for).getTime();
       if (due <= now) {
         void firePost(bookId, entry.schedule_id).catch((e) =>
-          console.error(`[scheduled-posts] firePost ${entry.schedule_id} failed:`, e),
+          logger.error(`[scheduled-posts] firePost ${entry.schedule_id} failed:`, e),
         );
       } else {
         armTimer(bookId, entry);
@@ -207,7 +208,7 @@ export async function loadAndArmAll(): Promise<void> {
   if (!rearmInterval) {
     rearmInterval = setInterval(() => {
       void rearmPending().catch((e) =>
-        console.error(`[scheduled-posts] rearmPending failed:`, e),
+        logger.error(`[scheduled-posts] rearmPending failed:`, e),
       );
     }, REARM_INTERVAL_MS);
     rearmInterval.unref?.();

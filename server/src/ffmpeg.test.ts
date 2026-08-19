@@ -13,6 +13,7 @@ import {
   runFfmpeg,
   getFFmpeggy,
   summarizeFfmpegStderr,
+  withQuietFfmpegArgs,
 } from "./ffmpeg.js";
 
 const execFileAsync = promisify(execFile);
@@ -193,10 +194,32 @@ describe("runFfmpeg", () => {
       caught = err as Error;
     }
     expect(caught).not.toBeNull();
+    expect(caught!.message).toMatch(/^ffmpeg failed:/);
+    expect(caught!.message).not.toContain("ffmpeg version");
     expect(caught!.message).not.toContain("Copyright (c)");
+    expect(caught!.message).not.toContain("built with");
     expect(caught!.message).not.toContain("configuration:");
     expect(caught!.message).not.toMatch(/lib\w+\s+\d+\./);
     expect(caught!.message.length).toBeLessThan(800);
+    expect(caught!.message.toLowerCase()).toMatch(/no such file|does not exist|error opening|no such file or directory|invalid/);
+  });
+});
+
+describe("withQuietFfmpegArgs", () => {
+  it("prepends hide_banner and loglevel error once", () => {
+    expect(withQuietFfmpegArgs(["-i", "in.mp4", "out.mp4"])).toEqual([
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      "in.mp4",
+      "out.mp4",
+    ]);
+  });
+
+  it("leaves explicit loglevel/hide_banner callers unchanged", () => {
+    const args = ["-hide_banner", "-nostats", "-loglevel", "info", "-i", "in.mp4"];
+    expect(withQuietFfmpegArgs(args)).toEqual(args);
   });
 });
 

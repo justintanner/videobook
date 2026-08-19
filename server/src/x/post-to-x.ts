@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { getValidAccessToken } from "./x-tokens.js";
 import { appendXPostMetadata } from "./post-metadata.js";
 import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { logger } from "../logger.js";
 
 const APPEND_CHUNK_BYTES = 4 * 1024 * 1024;
 const STATUS_POLL_TIMEOUT_MS = 5 * 60_000;
@@ -308,7 +309,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
         },
       });
     } catch (err) {
-      console.error(
+      logger.error(
         `[post_to_x] tweet ${tweetId} succeeded but writing .post.x.json failed:`,
         err instanceof Error ? err.message : err,
       );

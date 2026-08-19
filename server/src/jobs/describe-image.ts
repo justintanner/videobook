@@ -2,6 +2,7 @@ import type { Engine } from "videobook-engine";
 import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
+import { logger } from "../logger.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -132,7 +133,7 @@ export async function describeImageBytes(
     throw new Error(`Vision model returned no prompt field. Got keys: ${Object.keys(parsed).join(",")}`);
   }
   if (parsed.prompt.length > PROMPT_CHAR_LIMIT) {
-    console.warn(`[describe_image] prompt ${parsed.prompt.length} > ${PROMPT_CHAR_LIMIT} chars, truncating`);
+    logger.warn(`[describe_image] prompt ${parsed.prompt.length} > ${PROMPT_CHAR_LIMIT} chars, truncating`);
     parsed.prompt = parsed.prompt.slice(0, PROMPT_CHAR_LIMIT).trimEnd();
   }
   return parsed;
@@ -168,7 +169,7 @@ export function registerDescribeImageJob(engine: Engine): void {
         if (cacheResult.error.code === "NOT_FOUND") {
           return { success: false, sourceAssetId, scriptAssetId, reason: "source_deleted" };
         }
-        console.warn(
+        logger.warn(
           `[describe_image] Failed to cache analysis on source ${sourceAssetId}: ${cacheResult.error.message}`,
         );
       }

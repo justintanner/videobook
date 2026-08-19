@@ -2,11 +2,7 @@ import { createHash } from "node:crypto";
 import { copyFile, mkdir, open, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { FFMPEG } from "./ffmpeg.js";
-
-const execFileAsync = promisify(execFile);
+import { runFfmpeg } from "./ffmpeg.js";
 
 type CachedVideoSource = "testsrc" | "color";
 
@@ -80,7 +76,7 @@ function videoArgs(spec: CachedVideoSpec, outputPath: string): string[] {
 
 async function generateOnce(spec: CachedVideoSpec, dest: string): Promise<void> {
   const tmp = `${dest}.${process.pid}.tmp.mp4`;
-  await execFileAsync(FFMPEG, videoArgs(spec, tmp));
+  await runFfmpeg(videoArgs(spec, tmp));
   try {
     await copyFile(tmp, dest);
   } finally {

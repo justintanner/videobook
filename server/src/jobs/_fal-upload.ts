@@ -5,6 +5,7 @@ import {
   uploadBytesToFreeHost,
 } from "../upload.js";
 import { getApiKey } from "../api-key.js";
+import { logger } from "../logger.js";
 
 // Upload prepared bytes to fal's native CDN via @apicity/fal's uploadFile
 // helper. Returns a stable https://v3.fal.media/... URL. Falls back to the
@@ -25,10 +26,10 @@ async function uploadPreparedToFal(
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[fal-upload] native failed, falling back to free host: ${msg}`);
+      logger.warn(`[fal-upload] native failed, falling back to free host: ${msg}`);
     }
   } else {
-    console.warn("[fal-upload] FAL_API_KEY not set, using free host");
+    logger.warn("[fal-upload] FAL_API_KEY not set, using free host");
   }
 
   return uploadBytesToFreeHost(data, hashedFilename);
