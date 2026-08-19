@@ -188,7 +188,7 @@ describe("kie paygate", () => {
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
-  it("mints a request-bound OTP when Seedance 2.5 pricing is unavailable", () => {
+  it("mints a request-bound OTP for priced Seedance 2.5", () => {
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
     const request = {
       model: "bytedance/seedance-2-5" as const,
@@ -201,10 +201,8 @@ describe("kie paygate", () => {
     const estimate = computeEstimate({ provider: "kie", payload: request });
 
     expect(estimate).toMatchObject({
-      usd: 0,
-      warnings: [
-        "model 'bytedance/seedance-2-5' not found in pricing table for provider 'kie'",
-      ],
+      usd: 5.7,
+      warnings: [],
     });
     const otp = mintKieOtp(request, 60);
     const parsed = parseOtp(otp);
@@ -212,8 +210,8 @@ describe("kie paygate", () => {
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
-  // vc-3vn2: missing resolution + reference_video_urls → variant 'video' (unbounded).
-  it("rejects Seedance 2 Mini with reference video but no resolution as unbounded", () => {
+  it("mints a bounded OTP for Seedance 2 Mini with reference video and no resolution", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
     const request = {
       model: "bytedance/seedance-2-mini" as const,
       input: {
@@ -222,7 +220,11 @@ describe("kie paygate", () => {
         duration: 15,
       },
     };
-    expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded.*variant 'video'/);
+    const estimate = computeEstimate({ provider: "kie", payload: request });
+    expect(estimate.usd).toBeGreaterThan(0);
+    expect(estimate.warnings).toEqual([]);
+    const otp = mintKieOtp(request, 60);
+    expect(parseOtp(otp).payload.requestHash).toBe(canonicalHash(request));
   });
 
   it("mints a bounded OTP for Seedance 2 Mini with video refs when resolution is set", () => {
@@ -342,18 +344,14 @@ describe("kie paygate", () => {
     }
   });
 
-  it("mints a bounded OTP for grok-imagine/upscale off the floor rate", () => {
-    // @apicity/cost@0.8.8 prices upscale at its lowest published tier ($0.05)
-    // and warns that higher tiers exist — a floor, not an unbounded estimate,
-    // so the paygate admits it.
-    process.env.APICITY_PAYGATE_SECRET = "test-secret";
-
+  it("rejects grok-imagine/upscale without source/target resolutions as unbounded", () => {
     const request = {
       model: "grok-imagine/upscale" as const,
       input: { task_id: "task-123" },
     };
-    const otp = mintKieOtp(request, 60);
-    expect(parseOtp(otp).payload.requestHash).toBe(canonicalHash(request));
+    expect(() => mintKieOtp(request, 60)).toThrow(
+      /source\/target resolutions are not present/,
+    );
   });
 
   it("still rejects a MiniMax H3 request with no duration as unbounded", () => {

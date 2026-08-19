@@ -29,6 +29,7 @@ const subjectSchema = z.object({
   thumbnailFile: z.string().min(1),
   zIndex: z.number().int(),
   exactEdit: z.boolean(),
+  maskIndex: z.number().int().min(1).optional(),
 }).strict();
 
 const subjectsSchema = z.array(subjectSchema).superRefine((subjects, context) => {
@@ -83,6 +84,7 @@ const readyRecordSchema = recordBaseSchema.extend({
   analysisId: z.string().min(1),
   analyzedAt: z.string().min(1),
   taskId: z.string().min(1),
+  grokSourceTaskId: z.string().min(1).optional(),
   baseFile: z.string().min(1),
   subjects: subjectsSchema,
 });
@@ -97,6 +99,116 @@ export type ImageSubjectNormalizedBox = z.infer<typeof normalizedBoxSchema>;
 type ImageSubject = z.infer<typeof subjectSchema>;
 export type ImageSubjectMapRecordV1 = z.infer<typeof imageSubjectMapRecordSchema>;
 export type ImageSubjectMapReadyV1 = z.infer<typeof readyRecordSchema>;
+
+type GrokSegment = {
+  index: number;
+  name?: string;
+  maskUrl?: string;
+  normalizedBox?: ImageSubjectNormalizedBox;
+};
+
+export function grokMaskIndex(index: number): number | undefined {
+  return Number.isInteger(index) && index >= 1 ? index : undefined;
+}
+
+function boxIou(
+  left: ImageSubjectNormalizedBox,
+  right: ImageSubjectNormalizedBox,
+): number {
+  const x1 = Math.max(left.x, right.x);
+  const y1 = Math.max(left.y, right.y);
+  const x2 = Math.min(left.x + left.width, right.x + right.width);
+  const y2 = Math.min(left.y + left.height, right.y + right.height);
+  const overlap = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  const union = left.width * left.height + right.width * right.height - overlap;
+  return union > 0 ? overlap / union : 0;
+}
+
+export function parseGrokSegmentMapResult(resultJson: string): GrokSegment[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(resultJson);
+  } catch {
+    throw new Error("Grok segment map returned invalid result JSON");
+  }
+  const root = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : null;
+  const nested = root && root.resultObject !== null && typeof root.resultObject === "object"
+    && !Array.isArray(root.resultObject)
+    ? root.resultObject as Record<string, unknown>
+    : null;
+  const raw = [root?.segments, nested?.segments, root?.result, nested?.result]
+    .find((value) => Array.isArray(value));
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry): GrokSegment[] => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const item = entry as Record<string, unknown>;
+    const index = Number(item.index);
+    if (!Number.isInteger(index)) return [];
+    const name = typeof item.name === "string" && item.name.trim() ? item.name.trim() : undefined;
+    const maskUrl = typeof item.maskUrl === "string" && item.maskUrl
+      ? item.maskUrl
+      : typeof item.mask_url === "string" && item.mask_url
+        ? item.mask_url
+        : undefined;
+    const boxSource = item.normalizedBox ?? item.normalized_box ?? item.box;
+    const box = normalizedBoxSchema.safeParse(boxSource);
+    return [{
+      index,
+      ...(name ? { name } : {}),
+      ...(maskUrl ? { maskUrl } : {}),
+      ...(box.success ? { normalizedBox: box.data } : {}),
+    }];
+  });
+}
+
+export function applyGrokSegmentsToSubjects(
+  subjects: ImageSubject[],
+  segments: GrokSegment[],
+): ImageSubject[] {
+  const usable = segments.filter((segment) => grokMaskIndex(segment.index) !== undefined);
+  const claimed = new Set<number>();
+  return subjects.map((subject) => {
+    const byName = usable.find((segment) =>
+      !claimed.has(segment.index)
+      && segment.name
+      && segment.name.toLowerCase() === subject.label.toLowerCase());
+    const boxMatches = usable.flatMap((segment) => {
+      if (claimed.has(segment.index) || !segment.normalizedBox) return [];
+      const iou = boxIou(subject.normalizedBox, segment.normalizedBox);
+      return iou >= 0.25 ? [{ segment, iou }] : [];
+    }).sort((left, right) => right.iou - left.iou);
+    const match = byName ?? boxMatches[0]?.segment;
+    if (!match) {
+      const { maskIndex: _dropped, ...rest } = subject;
+      return { ...rest, exactEdit: false };
+    }
+    claimed.add(match.index);
+    const maskIndex = grokMaskIndex(match.index);
+    if (maskIndex === undefined) {
+      const { maskIndex: _dropped, ...rest } = subject;
+      return { ...rest, exactEdit: false };
+    }
+    return { ...subject, exactEdit: true, maskIndex };
+  });
+}
+
+export function exactEditMaskIndexes(
+  subjects: ImageSubject[],
+  subjectIds: readonly string[],
+): number[] | null {
+  const selected = subjects.filter((subject) => subjectIds.includes(subject.id));
+  if (selected.length === 0) return null;
+  const indexes: number[] = [];
+  for (const subject of selected) {
+    if (!subject.exactEdit) return null;
+    const index = grokMaskIndex(subject.maskIndex ?? 0);
+    if (index === undefined) return null;
+    indexes.push(index);
+  }
+  return [...new Set(indexes)].sort((left, right) => left - right);
+}
 
 type ImageSubjectSource = {
   artifactId: string;

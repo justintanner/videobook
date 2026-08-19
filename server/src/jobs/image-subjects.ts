@@ -1,11 +1,14 @@
 import {
   createKie,
   submitMediaJob,
+  type GrokImagineImage2ImageEditRequest,
   type KieProvider,
   type SeedreamProImageToImageRequest,
   type SeedreamProLayerDecompositionRequest,
 } from "@apicity/kie";
 import {
+  GrokImagineImage2ImageEditRequestSchema,
+  GrokImagineImage2SegmentMapRequestSchema,
   SeedreamProImageToImageRequestSchema,
   SeedreamProLayerDecompositionRequestSchema,
 } from "@apicity/kie/zod";
@@ -15,7 +18,11 @@ import type { Engine, Job } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
 import {
   IMAGE_SUBJECT_MAP_VERSION,
+  applyGrokSegmentsToSubjects,
   composeImageSubjectRemoval,
+  exactEditMaskIndexes,
+  grokMaskIndex,
+  parseGrokSegmentMapResult,
   persistSeedreamSubjectLayers,
   readImageSubjectMapRecord,
   resolveImageSubjectSource,
@@ -61,7 +68,7 @@ type KieLayerResult = {
 };
 
 type StoredImageSubjectEditTask = {
-  request: SeedreamProImageToImageRequest;
+  request: SeedreamProImageToImageRequest | GrokImagineImage2ImageEditRequest;
   taskId: string;
 };
 
@@ -607,18 +614,78 @@ export async function readStoredImageSubjectEditTask(
   const parsedRequest = storedRequest.ok
     ? SeedreamProImageToImageRequestSchema.safeParse(storedRequest.value)
     : null;
+  const parsedExact = storedRequest.ok && !parsedRequest?.success
+    ? GrokImagineImage2ImageEditRequestSchema.safeParse(storedRequest.value)
+    : null;
   const storedTask = await engine.metadata.artifacts.read<unknown>(
     imageAssetId,
     "kie-task-id",
   );
   const taskRecord = storedTask.ok ? record(storedTask.value) : null;
   const taskId = stringValue(taskRecord?.taskId);
-  if (taskId && !parsedRequest?.success) {
+  const request = parsedRequest?.success
+    ? parsedRequest.data
+    : parsedExact?.success
+      ? parsedExact.data
+      : null;
+  if (taskId && !request) {
     throw new Error("Stored Kie subject edit task has no valid generation payload");
   }
-  return taskId && parsedRequest?.success
-    ? { request: parsedRequest.data, taskId }
+  return taskId && request
+    ? { request, taskId }
     : null;
+}
+
+const GROK_IMAGE_2_SOURCE_MODELS = new Set([
+  "grok-imagine-image-2-0/text-to-image",
+  "grok-imagine-image-2-0/image-edit",
+]);
+
+export async function readGrokImagineImage2SourceTaskId(
+  engine: Engine,
+  artifactId: string,
+): Promise<string | null> {
+  const payload = await engine.metadata.artifacts.read<unknown>(
+    artifactId,
+    "generation-payload",
+  );
+  const model = payload.ok ? record(payload.value)?.model : undefined;
+  if (typeof model !== "string" || !GROK_IMAGE_2_SOURCE_MODELS.has(model)) {
+    return null;
+  }
+  const stored = await engine.metadata.artifacts.read<unknown>(
+    artifactId,
+    "kie-task-id",
+  );
+  const taskId = stored.ok ? stringValue(record(stored.value)?.taskId) : null;
+  return taskId;
+}
+
+export function imageSubjectEditRoute(
+  map: ImageSubjectMapReadyV1,
+  subjectIds: readonly string[],
+): "exact" | "semantic" {
+  if (!map.grokSourceTaskId) return "semantic";
+  return exactEditMaskIndexes(map.subjects, subjectIds) ? "exact" : "semantic";
+}
+
+export function grokImagineImage2EditRequest(
+  sourceTaskId: string,
+  prompt: string,
+  maskIndexes: readonly number[],
+): GrokImagineImage2ImageEditRequest {
+  const mask_indexs = maskIndexes.filter((index) => grokMaskIndex(index) !== undefined);
+  if (mask_indexs.length === 0) {
+    throw new Error("Exact Grok mask edit requires mask indexes of 1 or greater");
+  }
+  return GrokImagineImage2ImageEditRequestSchema.parse({
+    model: "grok-imagine-image-2-0/image-edit",
+    input: {
+      prompt,
+      task_id: sourceTaskId,
+      mask_indexs,
+    },
+  });
 }
 
 async function generateSemanticSubjectEdit(
@@ -629,8 +696,11 @@ async function generateSemanticSubjectEdit(
   signal: AbortSignal,
 ): Promise<{ output: Buffer; taskId: string; request: SeedreamProImageToImageRequest }> {
   const stored = await readStoredImageSubjectEditTask(engine, payload.imageAssetId);
-  let request = stored?.request ?? null;
-  let taskId = stored?.taskId ?? null;
+  const storedSemantic = stored?.request.model === "seedream/5-pro-image-to-image"
+    ? stored
+    : null;
+  let request = storedSemantic?.request as SeedreamProImageToImageRequest | null ?? null;
+  let taskId = storedSemantic?.taskId ?? null;
   const provider = kieProvider();
   if (!request || !taskId) {
     const { uploadAssetToKie } = await import("./_kie-upload.js");
@@ -693,6 +763,149 @@ async function generateSemanticSubjectEdit(
     taskId,
     request,
   };
+}
+
+async function downloadResultImages(
+  urls: readonly string[],
+  signal: AbortSignal,
+  label: string,
+): Promise<Buffer[]> {
+  const images: Buffer[] = [];
+  for (const [index, url] of urls.entries()) {
+    const response = await fetch(url, { signal });
+    if (!response.ok) {
+      throw new Error(
+        `Failed to download ${label} ${index + 1}: ${response.status} ${response.statusText}`,
+      );
+    }
+    images.push(await sharp(Buffer.from(await response.arrayBuffer())).png().toBuffer());
+  }
+  return images;
+}
+
+export async function persistExtraResultImages(
+  engine: Engine,
+  artifactId: string,
+  extras: readonly Buffer[],
+): Promise<void> {
+  for (const [index, extra] of extras.entries()) {
+    const written = await engine.files.write(
+      artifactId,
+      `result-${index + 2}.png`,
+      extra,
+    );
+    if (!written.ok) throw new Error(written.error.message);
+  }
+}
+
+async function generateExactSubjectEdit(
+  engine: Engine,
+  payload: GenerateImageSubjectEditPayload,
+  map: ImageSubjectMapReadyV1,
+  signal: AbortSignal,
+): Promise<{
+  output: Buffer;
+  extras: Buffer[];
+  taskId: string;
+  request: GrokImagineImage2ImageEditRequest;
+}> {
+  if (!map.grokSourceTaskId) {
+    throw new Error("Exact Grok mask edit requires a Grok Imagine Image 2.0 source task");
+  }
+  const maskIndexes = exactEditMaskIndexes(map.subjects, payload.subjectIds);
+  if (!maskIndexes) {
+    throw new Error("Selected subjects are not capability-gated for exact mask edit");
+  }
+  const stored = await readStoredImageSubjectEditTask(engine, payload.imageAssetId);
+  const storedExact = stored?.request.model === "grok-imagine-image-2-0/image-edit"
+    ? stored
+    : null;
+  let request = storedExact?.request as GrokImagineImage2ImageEditRequest | null ?? null;
+  let taskId = storedExact?.taskId ?? null;
+  const provider = kieProvider();
+  if (!request || !taskId) {
+    request = grokImagineImage2EditRequest(
+      map.grokSourceTaskId,
+      payload.prompt ?? "",
+      maskIndexes,
+    );
+    const metadata = await engine.metadata.artifacts.write(
+      payload.imageAssetId,
+      "generation-payload",
+      request,
+    );
+    if (!metadata.ok) throw new Error(metadata.error.message);
+    taskId = await submitMediaJob(provider, request, {
+      otp: mintKieOtp(request),
+    });
+    const taskMetadata = await engine.metadata.artifacts.write(
+      payload.imageAssetId,
+      "kie-task-id",
+      { taskId },
+    );
+    if (!taskMetadata.ok) throw new Error(taskMetadata.error.message);
+  }
+  if (payload.generationId) {
+    const generation = await engine.generations.update(payload.generationId, {
+      status: "awaiting_provider",
+      error: null,
+    });
+    if (!generation.ok) throw new Error(generation.error.message);
+  }
+  await updateNotebookEditProgress(engine, payload, "awaiting_provider");
+  const resultJson = await waitForKieResult(
+    provider,
+    taskId,
+    signal,
+    Date.now() + KIE_RESULT_TIMEOUT_MS,
+    "subject-edit",
+  );
+  const urls = parseResultUrls(resultJson);
+  const images = await downloadResultImages(urls, signal, "Grok exact edit");
+  const [output, ...extras] = images;
+  if (!output) throw new Error("Grok image edit returned no image");
+  return { output, extras, taskId, request };
+}
+
+async function augmentMapWithGrokSegments(
+  engine: Engine,
+  sourceArtifactId: string,
+  map: ImageSubjectMapReadyV1,
+  provider: KieProvider,
+  signal: AbortSignal,
+  deadlineAt: number,
+): Promise<ImageSubjectMapReadyV1> {
+  const grokSourceTaskId = await readGrokImagineImage2SourceTaskId(
+    engine,
+    sourceArtifactId,
+  );
+  if (!grokSourceTaskId) return map;
+  try {
+    const request = GrokImagineImage2SegmentMapRequestSchema.parse({
+      model: "grok-imagine-image-2-0/segment-map",
+      input: { task_id: grokSourceTaskId },
+    });
+    const segmentTaskId = await submitMediaJob(provider, request, {
+      otp: mintKieOtp(request),
+    });
+    const resultJson = await waitForKieResult(
+      provider,
+      segmentTaskId,
+      signal,
+      deadlineAt,
+      "subject-analysis",
+    );
+    return {
+      ...map,
+      grokSourceTaskId,
+      subjects: applyGrokSegmentsToSubjects(
+        map.subjects,
+        parseGrokSegmentMapResult(resultJson),
+      ),
+    };
+  } catch {
+    return { ...map, grokSourceTaskId };
+  }
 }
 
 function analyzeImageSubjectsPayload(
@@ -924,12 +1137,20 @@ export function registerImageSubjectJobs(engine: Engine): void {
         "subject-analysis",
       );
       const layerResult = parseSeedreamLayerResult(resultJson);
-      const ready = await persistSeedreamSubjectLayers(engine, source, {
+      const seedreamReady = await persistSeedreamSubjectLayers(engine, source, {
         jobId: payload.jobId,
         taskId,
         ...layerResult,
         signal: context.signal,
       });
+      const ready = await augmentMapWithGrokSegments(
+        engine,
+        source.artifactId,
+        seedreamReady,
+        provider,
+        context.signal,
+        deadlineAt,
+      );
       const published = await writeCurrentImageSubjectAnalysisRecord(engine, ready);
       if (!published) {
         return {
@@ -977,6 +1198,25 @@ export function registerImageSubjectJobs(engine: Engine): void {
         await persistProcessedImage(engine, payload, record, output, {
           model: "local/sharp-layer-composite",
         });
+      } else if (imageSubjectEditRoute(record, payload.subjectIds) === "exact") {
+        const generated = await generateExactSubjectEdit(
+          engine,
+          payload,
+          record,
+          context.signal,
+        );
+        await persistProcessedImage(engine, payload, record, generated.output, {
+          origin: "image_subject_edit",
+          model: generated.request.model,
+          kie_task_id: generated.taskId,
+          targeting: "exact-mask",
+          mask_indexs: generated.request.input.mask_indexs,
+        });
+        await persistExtraResultImages(
+          engine,
+          payload.imageAssetId,
+          generated.extras,
+        );
       } else {
         const generated = await generateSemanticSubjectEdit(
           engine,

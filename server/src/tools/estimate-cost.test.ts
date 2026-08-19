@@ -143,18 +143,16 @@ describe("estimate_cost tool", () => {
     }
   });
 
-  it("prices grok-imagine/upscale at the 360p→720p floor with the tier caveat", async () => {
-    // @apicity/cost@0.8.8 prices upscale at its lowest published tier and warns
-    // that the two higher tiers are selected by resolutions the request schema
-    // cannot express — the estimate is a floor, not a missing rate, so the
-    // picker shows it with the caveat attached.
+  it("fails closed for grok-imagine/upscale when source/target resolutions are absent", async () => {
     const result = await client.callTool({
       name: "estimate_cost",
       arguments: { calls: [{ tool_name: "upscale_grok_imagine_video", input: {} }] },
     });
     const payload = parse(result);
-    expect(payload.estimate.usd).toBeCloseTo(0.05, 6);
-    expect(payload.estimate.warnings.join(" ")).toContain("under-estimated");
+    expect(payload.estimate.usd).toBe(0);
+    expect(payload.estimate.warnings.join(" ")).toContain(
+      "source/target resolutions are not present",
+    );
   });
 
   it("prices ElevenLabs text-to-speech from the Apicity character rate", async () => {

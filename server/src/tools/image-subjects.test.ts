@@ -7,7 +7,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Engine } from "videobook-engine";
 import {
   IMAGE_SUBJECT_MAP_VERSION,
+  applyGrokSegmentsToSubjects,
+  exactEditMaskIndexes,
+  grokMaskIndex,
   imageSubjectMapRecordSchema,
+  parseGrokSegmentMapResult,
   persistSeedreamSubjectLayers,
   readImageSubjectMapRecord,
   resolveImageSubjectSource,
@@ -17,8 +21,12 @@ import {
   type ImageSubjectMapReadyV1,
 } from "../image-subject-map.js";
 import {
+  grokImagineImage2EditRequest,
+  persistExtraResultImages,
   imageSubjectAnalysisDeadline,
+  imageSubjectEditRoute,
   parseSeedreamLayerResult,
+  readGrokImagineImage2SourceTaskId,
   readStoredImageSubjectEditTask,
   reconcileImageSubjectJobFailures,
   seedreamLayerDecompositionRequest,
@@ -276,6 +284,126 @@ describe("image subject tools", () => {
         }],
       },
     }))).toThrow("no identifiable base layer");
+  });
+
+  it("keeps Grok segment index 0 unchanged and gates exact edit on indexes >= 1", () => {
+    expect(grokMaskIndex(0)).toBeUndefined();
+    expect(grokMaskIndex(1)).toBe(1);
+    const segments = parseGrokSegmentMapResult(JSON.stringify({
+      resultObject: {
+        segments: [
+          { index: 0, name: "background" },
+          { index: 1, name: "Person", normalizedBox: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 } },
+          { index: 2, name: "Green object", normalizedBox: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 } },
+        ],
+      },
+    }));
+    expect(segments.map((segment) => segment.index)).toEqual([0, 1, 2]);
+    const subjects = applyGrokSegmentsToSubjects([
+      {
+        id: "person",
+        label: "Person",
+        description: "Standing person",
+        color: "#ef4444",
+        normalizedBox: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 },
+        layerFile: "person.png",
+        thumbnailFile: "person.png",
+        zIndex: 1,
+        exactEdit: false,
+      },
+      {
+        id: "object",
+        label: "Green object",
+        description: "Object on the right",
+        color: "#3b82f6",
+        normalizedBox: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 },
+        layerFile: "object.png",
+        thumbnailFile: "object.png",
+        zIndex: 2,
+        exactEdit: false,
+      },
+    ], segments);
+    expect(subjects).toEqual([
+      expect.objectContaining({ id: "person", exactEdit: true, maskIndex: 1 }),
+      expect.objectContaining({ id: "object", exactEdit: true, maskIndex: 2 }),
+    ]);
+    expect(subjects.some((subject) => subject.maskIndex === 0)).toBe(false);
+    expect(exactEditMaskIndexes(subjects, ["person", "object"])).toEqual([1, 2]);
+    expect(grokImagineImage2EditRequest("src-task", "Give the cat a bow", [0, 1, 2]).input)
+      .toEqual({
+        prompt: "Give the cat a bow",
+        task_id: "src-task",
+        mask_indexs: [1, 2],
+      });
+    expect(() => grokImagineImage2EditRequest("src-task", "no masks", [0]))
+      .toThrow("mask indexes of 1 or greater");
+  });
+
+  it("routes selected exact_edit subjects to Grok image-edit and otherwise Seedream", async () => {
+    const source = await createSource();
+    expect(imageSubjectEditRoute(source.map, ["person"])).toBe("semantic");
+    const exactMap: ImageSubjectMapReadyV1 = {
+      ...source.map,
+      grokSourceTaskId: "grok-source-task",
+      subjects: applyGrokSegmentsToSubjects(source.map.subjects, [
+        { index: 0, name: "background" },
+        { index: 1, name: "Person" },
+      ]),
+    };
+    await writeImageSubjectMapRecord(engine, exactMap);
+    const stored = await readImageSubjectMapRecord(engine, source.artifactId);
+    expect(stored?.status).toBe("ready");
+    if (stored?.status !== "ready") return;
+    expect(imageSubjectEditRoute(stored, ["person"])).toBe("exact");
+    expect(imageSubjectEditRoute(stored, ["object"])).toBe("semantic");
+    const presented = await client.callTool({
+      name: "get_image_subject_map",
+      arguments: {
+        book_id: bookId,
+        artifact_id: source.artifactId,
+        object_hash: source.objectHash,
+      },
+    });
+    expect(presented.isError).not.toBe(true);
+    const parsed = resultJson(presented) as {
+      subjects: Array<{ id: string; capabilities: { exact_edit: boolean } }>;
+    };
+    expect(parsed.subjects).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "person",
+        capabilities: { remove: true, exact_edit: true },
+      }),
+      expect.objectContaining({
+        id: "object",
+        capabilities: { remove: true, exact_edit: false },
+      }),
+    ]));
+    await engine.metadata.artifacts.write(source.artifactId, "generation-payload", {
+      model: "grok-imagine-image-2-0/text-to-image",
+      input: { prompt: "A cat", aspect_ratio: "1:1" },
+    });
+    await engine.metadata.artifacts.write(source.artifactId, "kie-task-id", {
+      taskId: "grok-source-task",
+    });
+    await expect(readGrokImagineImage2SourceTaskId(engine, source.artifactId))
+      .resolves.toBe("grok-source-task");
+    await engine.metadata.artifacts.write(source.artifactId, "generation-payload", {
+      model: "seedream/5-pro-image-to-image",
+      input: { prompt: "not grok" },
+    });
+    await expect(readGrokImagineImage2SourceTaskId(engine, source.artifactId))
+      .resolves.toBeNull();
+    const extraA = await solidPng(8, 8, { r: 1, g: 2, b: 3 });
+    const extraB = await solidPng(8, 8, { r: 4, g: 5, b: 6 });
+    await persistExtraResultImages(engine, source.artifactId, [extraA, extraB]);
+    const second = await engine.files.read(source.artifactId, "result-2.png");
+    const third = await engine.files.read(source.artifactId, "result-3.png");
+    expect(second.ok).toBe(true);
+    expect(third.ok).toBe(true);
+    if (second.ok && third.ok) {
+      expect(Buffer.from(second.value).equals(extraA)).toBe(true);
+      expect(Buffer.from(third.value).equals(extraB)).toBe(true);
+    }
   });
 
   it("uses the JPEG layer request and a persisted absolute analysis deadline", () => {
