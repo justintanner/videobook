@@ -32,6 +32,8 @@ import {
   regionReplacementPrompt,
   seedreamLayerDecompositionRequest,
   seedreamLayerDecompositionSize,
+  SEEDREAM_LAYER_FALLBACK_PROMPT,
+  SEEDREAM_TOO_COMPLEX_PATTERN,
   seedreamProImageUrlCapacityError,
   seedreamRegionReplacementRequest,
   SEEDREAM_PRO_I2I_MAX_IMAGE_URLS,
@@ -425,6 +427,36 @@ describe("image subject tools", () => {
     expect(subjectAnalysisProviderFailureMessage("Internal Error")).toBe(
       "Subject analysis provider failed: Internal Error. Retry in a moment.",
     );
+  });
+
+  it("retries with an element-selection prompt on Seedream too-complex rejections", () => {
+    // Exact failMsg observed from Seedream (surfaced via
+    // subjectAnalysisProviderFailureMessage) for busy scenes under automatic
+    // element detection.
+    const providerMessage = subjectAnalysisProviderFailureMessage(
+      "The parameter `image` specified in the request are not valid: "
+        + "the image content is too complex to decompose into layers.",
+      "400",
+    );
+    expect(SEEDREAM_TOO_COMPLEX_PATTERN.test(providerMessage)).toBe(true);
+    expect(SEEDREAM_TOO_COMPLEX_PATTERN.test(
+      subjectAnalysisProviderFailureMessage("Internal Error"),
+    )).toBe(false);
+
+    const automatic = seedreamLayerDecompositionRequest(
+      "https://example.test/source.jpg",
+      1920,
+      1080,
+    );
+    expect(automatic.input.prompt).toBeUndefined();
+    const constrained = seedreamLayerDecompositionRequest(
+      "https://example.test/source.jpg",
+      1920,
+      1080,
+      SEEDREAM_LAYER_FALLBACK_PROMPT,
+    );
+    expect(constrained.input.prompt).toBe(SEEDREAM_LAYER_FALLBACK_PROMPT);
+    expect(constrained.input.size).toBe("2K");
   });
 
   it("selects an explicit paygate-priced size tier from source dimensions", () => {

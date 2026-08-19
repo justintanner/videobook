@@ -30,6 +30,7 @@ import {
   writeCurrentImageSubjectAnalysisRecord,
   type ImageSubjectMapReadyV1,
   type ImageSubjectNormalizedBox,
+  type ImageSubjectSource,
   type SeedreamLayerInput,
 } from "../image-subject-map.js";
 import { cropToFill } from "../image.js";
@@ -228,15 +229,33 @@ export function seedreamLayerDecompositionSize(
   return "2K";
 }
 
+// Seedream rejects busy scenes with a 400 "the image content is too complex
+// to decompose into layers" when elements are detected automatically (no
+// prompt). An element-selection prompt sidesteps that rejection, so we retry
+// once with this constrained selection before failing the analysis.
+export const SEEDREAM_TOO_COMPLEX_PATTERN = /too complex to decompose/i;
+
+export const SEEDREAM_LAYER_FALLBACK_PROMPT =
+  "Extract only the most prominent subjects as separate layers: each distinct "
+  + "person in the foreground or midground, plus at most three large, clearly "
+  + "separable foreground objects. Merge all remaining detail into the base layer.";
+
+export const SEEDREAM_TOO_COMPLEX_GUIDANCE =
+  "Seedream could not decompose this image into layers, even with a "
+  + "constrained subject selection. Use Draw region to target the area you "
+  + "want to edit instead.";
+
 export function seedreamLayerDecompositionRequest(
   imageUrl: string,
   width: number,
   height: number,
+  prompt?: string,
 ): SeedreamProLayerDecompositionRequest {
   return SeedreamProLayerDecompositionRequestSchema.parse({
     model: "seedream/5-pro-layer-decomposition",
     input: {
       image_url: imageUrl,
+      ...(prompt ? { prompt } : {}),
       size: seedreamLayerDecompositionSize(width, height),
       output_format: "jpeg",
     },
@@ -1278,6 +1297,46 @@ export async function reconcileImageSubjectJobFailures(
   return { analysesFailed, editsFailed };
 }
 
+async function submitLayerDecompositionTask(
+  engine: Engine,
+  provider: KieProvider,
+  source: ImageSubjectSource,
+  jobId: string,
+  startedAt: string,
+  deadlineAt: number,
+  prompt?: string,
+): Promise<string> {
+  const { uploadAssetToKie } = await import("./_kie-upload.js");
+  const imageUrl = await uploadAssetToKie(engine, source.artifactId, source.file.name);
+  if (Date.now() >= deadlineAt) {
+    throw new Error("Subject analysis did not finish within 25 minutes. Retry the analysis.");
+  }
+  const request = seedreamLayerDecompositionRequest(
+    imageUrl,
+    source.width,
+    source.height,
+    prompt,
+  );
+  const taskId = await submitMediaJob(provider, request, {
+    otp: mintKieOtp(request),
+  });
+  const recorded = await writeCurrentImageSubjectAnalysisRecord(engine, {
+    version: IMAGE_SUBJECT_MAP_VERSION,
+    status: "analyzing",
+    artifactId: source.artifactId,
+    objectHash: source.objectHash,
+    width: source.width,
+    height: source.height,
+    jobId,
+    startedAt,
+    taskId,
+  });
+  if (!recorded) {
+    throw new Error("Subject analysis was superseded by a newer request");
+  }
+  return taskId;
+}
+
 export function registerImageSubjectJobs(engine: Engine): void {
   registerJobHandler("analyze_image_subjects", async (rawPayload, context) => {
     const payload = rawPayload as AnalyzeImageSubjectsPayload;
@@ -1305,41 +1364,54 @@ export function registerImageSubjectJobs(engine: Engine): void {
       }
       const provider = kieProvider();
       if (!taskId) {
-        const { uploadAssetToKie } = await import("./_kie-upload.js");
-        const imageUrl = await uploadAssetToKie(engine, source.artifactId, source.file.name);
-        if (Date.now() >= deadlineAt) {
-          throw new Error("Subject analysis did not finish within 25 minutes. Retry the analysis.");
-        }
-        const request = seedreamLayerDecompositionRequest(
-          imageUrl,
-          source.width,
-          source.height,
-        );
-        taskId = await submitMediaJob(provider, request, {
-          otp: mintKieOtp(request),
-        });
-        const recorded = await writeCurrentImageSubjectAnalysisRecord(engine, {
-          version: IMAGE_SUBJECT_MAP_VERSION,
-          status: "analyzing",
-          artifactId: source.artifactId,
-          objectHash: source.objectHash,
-          width: source.width,
-          height: source.height,
-          jobId: payload.jobId,
+        taskId = await submitLayerDecompositionTask(
+          engine,
+          provider,
+          source,
+          payload.jobId,
           startedAt,
+          deadlineAt,
+        );
+      }
+      let resultJson: string;
+      try {
+        resultJson = await waitForKieResult(
+          provider,
           taskId,
-        });
-        if (!recorded) {
-          throw new Error("Subject analysis was superseded by a newer request");
+          context.signal,
+          deadlineAt,
+          "subject-analysis",
+        );
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        if (!SEEDREAM_TOO_COMPLEX_PATTERN.test(message)) throw cause;
+        taskId = await submitLayerDecompositionTask(
+          engine,
+          provider,
+          source,
+          payload.jobId,
+          startedAt,
+          deadlineAt,
+          SEEDREAM_LAYER_FALLBACK_PROMPT,
+        );
+        try {
+          resultJson = await waitForKieResult(
+            provider,
+            taskId,
+            context.signal,
+            deadlineAt,
+            "subject-analysis",
+          );
+        } catch (fallbackCause) {
+          const fallbackMessage = fallbackCause instanceof Error
+            ? fallbackCause.message
+            : String(fallbackCause);
+          if (SEEDREAM_TOO_COMPLEX_PATTERN.test(fallbackMessage)) {
+            throw new Error(SEEDREAM_TOO_COMPLEX_GUIDANCE);
+          }
+          throw fallbackCause;
         }
       }
-      const resultJson = await waitForKieResult(
-        provider,
-        taskId,
-        context.signal,
-        deadlineAt,
-        "subject-analysis",
-      );
       const layerResult = parseSeedreamLayerResult(resultJson);
       const seedreamReady = await persistSeedreamSubjectLayers(engine, source, {
         jobId: payload.jobId,

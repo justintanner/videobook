@@ -212,7 +212,7 @@ export function exactEditMaskIndexes(
   return [...new Set(indexes)].sort((left, right) => left - right);
 }
 
-type ImageSubjectSource = {
+export type ImageSubjectSource = {
   artifactId: string;
   file: ArtifactManifestFile;
   objectHash: string;
