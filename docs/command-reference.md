@@ -63,7 +63,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from Dolt history. A bare fix:true scan never bulk-fixes; it just reports.
 - `download_video` — Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.
 - `duplicate_asset` — Duplicate a media asset and place its notebook cell at an optional destination or directly below the source
-- `edit_image_subjects` — Remove or semantically edit selected cached image subjects into a new connected notebook image
+- `edit_image_subjects` — Remove, semantically edit, or replace selected cached image subjects and user-drawn regions into a new connected notebook image
 - `enqueue_notebook_run` — Revalidate and enqueue a persisted aggregate workbook plan
 - `enqueue_sequence_export` — Queue a confirmed canonical sequence export after revalidating its exact revision
 - `ensure_notebook_workflow_scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists

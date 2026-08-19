@@ -1566,9 +1566,69 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Remove')
     expect(html).toContain('Select people or objects, then describe the change in the image edit bar.')
     expect(html).toContain('aria-label="Image edit bar for @c3"')
+    expect(html).toContain('Draw region')
     expect(html).not.toContain('Edit instruction')
     expect(html).not.toContain('Edit selected')
     expect(html).not.toContain('autoPlay')
+  })
+
+  it('renders drawn regions beside detected subjects and disables replace until each has a still', () => {
+    const subjectMap = asImageSubjectMap({
+      status: 'ready',
+      artifact_id: 'image-artifact',
+      object_hash: 'sha256:image',
+      width: 1200,
+      height: 800,
+      base_url: '/files/book/image-artifact/base.png',
+      subjects: [{
+        id: 'person-1',
+        label: 'Person',
+        description: 'Person in the foreground',
+        normalized_box: { x: 0.2, y: 0.1, width: 0.35, height: 0.8 },
+        layer_url: '/files/book/image-artifact/person.png',
+        thumbnail_url: '/files/book/image-artifact/person-thumb.png',
+        z_index: 1,
+        capabilities: { remove: true, exact_edit: false },
+      }],
+    })
+    const html = renderToStaticMarkup(createElement(NotebookMediaFullscreen, {
+      asset: {
+        artifactId: 'image-artifact',
+        id: 'image-source',
+        objectHash: 'sha256:image',
+        type: 'image',
+        mediaUrl: '/files/book/image-artifact/original.png',
+        thumbnailUrl: null,
+        width: 1200,
+        height: 800,
+        duration: null,
+        audioInfo: null,
+      },
+      address: 'e2',
+      subjectMap,
+      initialRegions: [{
+        id: 'region-1',
+        box: { x: 0.2, y: 0.1, width: 0.35, height: 0.8 },
+        matchedSubjectId: 'person-1',
+      }],
+      replacementCandidates: [{
+        artifactId: 'actor-d1',
+        address: 'd1',
+        label: 'd1',
+        thumbnailUrl: '/files/book/actor-d1/original.png',
+      }],
+      onAnalyzeSubjects: async () => undefined,
+      onEditSubjects: async () => true,
+      onClose: () => undefined,
+    }))
+
+    expect(html).toContain('Draw region')
+    expect(html).toContain('Region · Person')
+    expect(html).toContain('aria-label="Select region 1"')
+    expect(html).toContain('Replacement images')
+    expect(html).toContain('@d1')
+    expect(html).toContain('Replace')
+    expect(html).toMatch(/class="replace"[^>]*disabled/)
   })
 
   it('renders a failed subject analysis with its error and retry action', () => {

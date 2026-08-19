@@ -113,6 +113,7 @@ import {
 import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
 import {
   NotebookMediaFullscreen,
+  type ImageReplacementCandidate,
   type ImageSubjectEditInput,
 } from '@/components/videobook/NotebookMediaFullscreen'
 import { WatermarkDialog } from '@/components/videobook/WatermarkDialog'
@@ -4582,7 +4583,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       throw new Error('The active notebook changed while the image editor was open')
     }
     if (
-      input.operation === 'edit'
+      (input.operation === 'edit' || input.operation === 'replace')
       && !acceptCloudGenerationConsent({
         provider: 'kie',
         model: 'seedream/5-pro-image-to-image',
@@ -4597,9 +4598,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         source_cell_id: session.cellId,
         artifact_id: session.asset.artifactId,
         object_hash: session.asset.objectHash,
-        subject_ids: input.subjectIds,
+        ...(input.subjectIds.length > 0 ? { subject_ids: input.subjectIds } : {}),
         operation: input.operation,
         ...(input.prompt ? { prompt: input.prompt } : {}),
+        ...(input.regions && input.regions.length > 0
+          ? {
+              regions: input.regions.map((region) => ({
+                replacement_artifact_id: region.replacementArtifactId,
+                ...(region.box ? { box: region.box } : {}),
+                ...(region.subjectId ? { subject_id: region.subjectId } : {}),
+                ...(region.note ? { note: region.note } : {}),
+              })),
+            }
+          : {}),
       }),
       () => {
         const scope = watchScopeRef.current
@@ -4615,7 +4626,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setNotice(
       input.operation === 'remove'
         ? `Subject removal ${status}`
-        : `Subject edit ${status}`,
+        : input.operation === 'replace'
+          ? `Region replacement ${status}`
+          : `Subject edit ${status}`,
     )
     await refreshBookData(session.bookId, session.notebookId).catch(() => undefined)
     return true
@@ -9009,6 +9022,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const fullscreenImageEditor = mediaFullscreen?.asset.type === 'image'
     ? mediaFullscreen
     : null
+  const imageReplacementCandidates = useMemo((): ImageReplacementCandidate[] => {
+    if (!fullscreenImageEditor) return []
+    return commandMentionAssets.flatMap((asset) => {
+      if (asset.type !== 'image') return []
+      if (asset.artifactId === fullscreenImageEditor.asset.artifactId) return []
+      return [{
+        artifactId: asset.artifactId,
+        address: asset.cellAddress,
+        label: asset.cellAddress,
+        thumbnailUrl: asset.thumbnailUrl ?? asset.mediaUrl,
+      }]
+    })
+  }, [commandMentionAssets, fullscreenImageEditor])
   const fullscreenSelectedSubjects = fullscreenImageEditor?.subjectMap?.subjects.filter(
     (subject) => mediaFullscreenSelectedSubjectIds.includes(subject.id),
   ) ?? []
@@ -10378,6 +10404,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               : undefined
           }
           onEditingChange={setMediaFullscreenSidebarEditing}
+          replacementCandidates={imageReplacementCandidates}
           onEditSubjects={(input) =>
             editFullscreenSubjects(mediaFullscreen, input)}
           onSelectedSubjectIdsChange={updateMediaFullscreenSelectedSubjectIds}

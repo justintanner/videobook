@@ -5,18 +5,42 @@ import {
   EyeOff,
   Layers2,
   RotateCw,
+  SquareDashed,
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import type { ImageSubject, ImageSubjectMap } from '@/videobook/image-subject-map'
+import {
+  bestSubjectSnap,
+  canSubmitRegionReplacements,
+  imageEditSelectionPayload,
+  imageReplacementTargets,
+  nextRegionId,
+  pointerToNormalizedPoint,
+  regionBoxFromDrag,
+  regionReplacementPayload,
+  snapRegionToSubject,
+  type ImageEditRegion,
+  type ImageEditSelection,
+  type ImageRegionReplacement,
+} from '@/videobook/image-edit-regions'
 import type { NotebookCellInspectorAsset } from './NotebookCellInspector'
 
 export type ImageSubjectEditInput = {
-  operation: 'remove' | 'edit'
+  operation: 'remove' | 'edit' | 'replace'
   subjectIds: string[]
   prompt?: string
+  regions?: ImageRegionReplacement[]
+}
+
+export type ImageReplacementCandidate = {
+  artifactId: string
+  address: string
+  label: string
+  thumbnailUrl: string | null
 }
 
 type NotebookMediaFullscreenProps = {
@@ -28,13 +52,18 @@ type NotebookMediaFullscreenProps = {
   composerEditing?: boolean
   composerPortalRef?: (element: HTMLDivElement | null) => void
   returnFocus?: HTMLElement | null
+  initialRegions?: readonly ImageEditRegion[]
+  replacementCandidates?: readonly ImageReplacementCandidate[]
   onAnalyzeSubjects?: (force?: boolean) => Promise<void>
   onCaptureFrame?: (timestampSeconds: number) => Promise<string>
   onEditingChange?: (editing: boolean) => void
   onEditSubjects?: (input: ImageSubjectEditInput) => Promise<boolean>
   onSelectedSubjectIdsChange?: (subjectIds: readonly string[]) => void
+  onSelectionChange?: (selection: ImageEditSelection) => void
   onClose: () => void
 }
+
+const REGION_COLOR = '#f5d76e'
 
 function focusableElements(dialog: HTMLElement): HTMLElement[] {
   return [...dialog.querySelectorAll<HTMLElement>(
@@ -52,33 +81,92 @@ function subjectBox(subject: ImageSubject, width: number, height: number) {
   }
 }
 
+function regionPixelBox(region: ImageEditRegion, width: number, height: number) {
+  return {
+    x: region.box.x * width,
+    y: region.box.y * height,
+    width: region.box.width * width,
+    height: region.box.height * height,
+  }
+}
+
+function viewBoxPoint(
+  event: ReactPointerEvent<SVGSVGElement>,
+  width: number,
+  height: number,
+) {
+  const svg = event.currentTarget
+  const ctm = svg.getScreenCTM()
+  if (ctm && 'createSVGPoint' in svg) {
+    const point = svg.createSVGPoint()
+    point.x = event.clientX
+    point.y = event.clientY
+    const local = point.matrixTransform(ctm.inverse())
+    return {
+      x: Math.min(1, Math.max(0, width > 0 ? local.x / width : 0)),
+      y: Math.min(1, Math.max(0, height > 0 ? local.y / height : 0)),
+    }
+  }
+  return pointerToNormalizedPoint(
+    event.clientX,
+    event.clientY,
+    svg.getBoundingClientRect(),
+  )
+}
+
 function ImageSubjectOverlay({
   mediaUrl,
+  width,
+  height,
   subjectMap,
   selectedIds,
   hiddenIds,
+  regions,
+  selectedRegionIds,
+  drawMode,
+  draftBox,
+  snapRegionId,
   opacity,
   onToggle,
+  onToggleRegion,
+  onHoverRegion,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
 }: {
   mediaUrl: string
-  subjectMap: ImageSubjectMap
+  width: number
+  height: number
+  subjectMap: ImageSubjectMap | null
   selectedIds: ReadonlySet<string>
   hiddenIds: ReadonlySet<string>
+  regions: readonly ImageEditRegion[]
+  selectedRegionIds: ReadonlySet<string>
+  drawMode: boolean
+  draftBox: ImageEditRegion['box'] | null
+  snapRegionId: string | null
   opacity: number
   onToggle: (subjectId: string) => void
+  onToggleRegion: (regionId: string) => void
+  onHoverRegion: (regionId: string | null) => void
+  onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void
+  onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void
+  onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void
 }) {
-  const width = subjectMap.width ?? 0
-  const height = subjectMap.height ?? 0
+  const subjects = subjectMap?.subjects ?? []
   if (width <= 0 || height <= 0) {
     return <img src={mediaUrl} alt="" />
   }
   return (
     <svg
-      className="notebook-subject-stage-svg"
+      className={`notebook-subject-stage-svg${drawMode ? ' drawing' : ''}`}
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="xMidYMid meet"
       role="group"
       aria-label="Image with detected subject overlays"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
     >
       <title>Detected people and objects</title>
       <image
@@ -87,8 +175,16 @@ function ImageSubjectOverlay({
         height={height}
         preserveAspectRatio="xMidYMid meet"
       />
+      {drawMode && (
+        <rect
+          className="notebook-region-draw-layer"
+          width={width}
+          height={height}
+          fill="transparent"
+        />
+      )}
       <defs>
-        {subjectMap.subjects.map((subject, index) => {
+        {subjects.map((subject, index) => {
           if (!subject.layerUrl) return null
           return (
             <mask
@@ -111,7 +207,7 @@ function ImageSubjectOverlay({
           )
         })}
       </defs>
-      {subjectMap.subjects.map((subject, index) => {
+      {subjects.map((subject, index) => {
         if (hiddenIds.has(subject.id)) return null
         const box = subjectBox(subject, width, height)
         const selected = selectedIds.has(subject.id)
@@ -119,14 +215,19 @@ function ImageSubjectOverlay({
           <g
             key={subject.id}
             className={`notebook-subject-overlay${selected ? ' selected' : ''}`}
-            onClick={() => onToggle(subject.id)}
+            onClick={(event) => {
+              if (drawMode) return
+              event.stopPropagation()
+              onToggle(subject.id)
+            }}
             onKeyDown={(event) => {
+              if (drawMode) return
               if (event.key !== 'Enter' && event.key !== ' ') return
               event.preventDefault()
               onToggle(subject.id)
             }}
             role="button"
-            tabIndex={0}
+            tabIndex={drawMode ? -1 : 0}
             aria-label={`${selected ? 'Deselect' : 'Select'} ${subject.label}`}
             aria-pressed={selected}
           >
@@ -164,12 +265,78 @@ function ImageSubjectOverlay({
                 {...box}
                 className="notebook-subject-hit"
                 fill="transparent"
-                pointerEvents="all"
+                pointerEvents={drawMode ? 'none' : 'all'}
               />
             )}
           </g>
         )
       })}
+      {regions.map((region, index) => {
+        const box = regionPixelBox(region, width, height)
+        const selected = selectedRegionIds.has(region.id)
+        return (
+          <g
+            key={region.id}
+            className={`notebook-subject-overlay notebook-region-overlay${selected ? ' selected' : ''}`}
+            onClick={(event) => {
+              if (drawMode) return
+              event.stopPropagation()
+              onToggleRegion(region.id)
+            }}
+            onPointerEnter={() => onHoverRegion(region.id)}
+            onPointerLeave={() => onHoverRegion(null)}
+            role="button"
+            tabIndex={drawMode ? -1 : 0}
+            aria-label={`${selected ? 'Deselect' : 'Select'} region ${index + 1}`}
+            aria-pressed={selected}
+          >
+            <title>
+              {region.matchedSubjectId
+                ? `Region ${index + 1} snapped to subject`
+                : `Drawn region ${index + 1}`}
+            </title>
+            <rect
+              {...box}
+              fill={REGION_COLOR}
+              fillOpacity={selected ? 0.28 : 0.16}
+              pointerEvents="none"
+            />
+            <rect
+              {...box}
+              className="notebook-subject-outline"
+              fill="none"
+              stroke={selected ? '#ffffff' : REGION_COLOR}
+              strokeWidth={Math.max(2, width / 480)}
+              strokeDasharray={`${width / 90} ${width / 160}`}
+              vectorEffect="non-scaling-stroke"
+            />
+            <rect
+              {...box}
+              className="notebook-subject-hit"
+              fill="transparent"
+              pointerEvents={drawMode ? 'none' : 'all'}
+            />
+            {snapRegionId === region.id && (
+              <title>Snap to nearby subject available</title>
+            )}
+          </g>
+        )
+      })}
+      {draftBox && (
+        <rect
+          x={draftBox.x * width}
+          y={draftBox.y * height}
+          width={draftBox.width * width}
+          height={draftBox.height * height}
+          className="notebook-region-draft"
+          fill={REGION_COLOR}
+          fillOpacity={0.18}
+          stroke={REGION_COLOR}
+          strokeWidth={Math.max(2, width / 480)}
+          strokeDasharray={`${width / 80} ${width / 140}`}
+          pointerEvents="none"
+        />
+      )}
     </svg>
   )
 }
@@ -229,11 +396,14 @@ export function NotebookMediaFullscreen({
   composerEditing = false,
   composerPortalRef,
   returnFocus = null,
+  initialRegions,
+  replacementCandidates = [],
   onAnalyzeSubjects,
   onCaptureFrame,
   onEditingChange,
   onEditSubjects,
   onSelectedSubjectIdsChange,
+  onSelectionChange,
   onClose,
 }: NotebookMediaFullscreenProps) {
   const dialogRef = useRef<HTMLElement>(null)
@@ -241,17 +411,28 @@ export function NotebookMediaFullscreen({
   const closeRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
   const mountedRef = useRef(false)
+  const drawStartRef = useRef<{ x: number; y: number } | null>(null)
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
+  const [regions, setRegions] = useState<ImageEditRegion[]>(
+    () => [...(initialRegions ?? [])],
+  )
+  const [selectedRegionIds, setSelectedRegionIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
+  const [drawMode, setDrawMode] = useState(false)
+  const [draftBox, setDraftBox] = useState<ImageEditRegion['box'] | null>(null)
+  const [hoveredRegionId, setHoveredRegionId] = useState<string | null>(null)
+  const [replacements, setReplacements] = useState<Record<string, string>>({})
   const [overlaysHidden, setOverlaysHidden] = useState(false)
   const [removalPreview, setRemovalPreview] = useState(false)
   const [overlayOpacity, setOverlayOpacity] = useState(0.42)
   const [pendingAction, setPendingAction] = useState<
-    'analyze' | 'remove' | null
+    'analyze' | 'remove' | 'replace' | null
   >(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
@@ -263,10 +444,21 @@ export function NotebookMediaFullscreen({
   const posterUrl = asset.thumbnailUrl
   const mediaUrl = playbackUrl ?? posterUrl
   const hasMedia = isVideo || Boolean(mediaUrl)
+  const stageWidth = subjectMap?.width ?? asset.width ?? 1000
+  const stageHeight = subjectMap?.height ?? asset.height ?? 1000
   const selectedSubjects = useMemo(
     () => subjectMap?.subjects.filter((subject) => selectedIds.has(subject.id)) ?? [],
     [selectedIds, subjectMap],
   )
+  const replacementTargets = useMemo(
+    () => imageReplacementTargets(regions, selectedSubjects),
+    [regions, selectedSubjects],
+  )
+  const canReplace = canSubmitRegionReplacements(replacementTargets, replacements)
+  const hoveredRegion = regions.find((region) => region.id === hoveredRegionId) ?? null
+  const snapOffer = hoveredRegion
+    ? bestSubjectSnap(hoveredRegion.box, subjectMap?.subjects ?? [])
+    : null
 
   useEffect(() => {
     mountedRef.current = true
@@ -277,7 +469,11 @@ export function NotebookMediaFullscreen({
 
   useEffect(() => {
     onSelectedSubjectIdsChange?.(selectedSubjects.map((subject) => subject.id))
-  }, [onSelectedSubjectIdsChange, selectedSubjects])
+    onSelectionChange?.(imageEditSelectionPayload(
+      selectedSubjects.map((subject) => subject.id),
+      regions,
+    ))
+  }, [onSelectedSubjectIdsChange, onSelectionChange, regions, selectedSubjects])
 
   useEffect(() => {
     if (!hasMedia) return
@@ -341,6 +537,34 @@ export function NotebookMediaFullscreen({
       return next
     })
   }
+  const toggleRegion = (regionId: string) => {
+    setSelectedRegionIds((current) => {
+      const next = new Set(current)
+      if (next.has(regionId)) next.delete(regionId)
+      else next.add(regionId)
+      return next
+    })
+  }
+  const removeRegion = (regionId: string) => {
+    setRegions((current) => current.filter((region) => region.id !== regionId))
+    setSelectedRegionIds((current) => {
+      const next = new Set(current)
+      next.delete(regionId)
+      return next
+    })
+    setReplacements((current) => {
+      const next = { ...current }
+      delete next[regionId]
+      return next
+    })
+  }
+  const snapHoveredRegion = () => {
+    if (!hoveredRegion) return
+    setRegions((current) => current.map((region) =>
+      region.id === hoveredRegion.id
+        ? snapRegionToSubject(region, subjectMap?.subjects ?? [])
+        : region))
+  }
   const toggleSubjectVisibility = (subjectId: string) => {
     setHiddenIds((current) => {
       const next = new Set(current)
@@ -348,6 +572,37 @@ export function NotebookMediaFullscreen({
       else next.add(subjectId)
       return next
     })
+  }
+  const beginDraw = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (!drawMode || event.button !== 0) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    const point = viewBoxPoint(event, stageWidth, stageHeight)
+    drawStartRef.current = point
+    setDraftBox(null)
+  }
+  const moveDraw = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (!drawMode || !drawStartRef.current) return
+    setDraftBox(regionBoxFromDrag(
+      drawStartRef.current,
+      viewBoxPoint(event, stageWidth, stageHeight),
+    ))
+  }
+  const endDraw = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (!drawMode || !drawStartRef.current) return
+    const box = regionBoxFromDrag(
+      drawStartRef.current,
+      viewBoxPoint(event, stageWidth, stageHeight),
+    )
+    drawStartRef.current = null
+    setDraftBox(null)
+    if (!box) return
+    setRegions((current) => {
+      const region: ImageEditRegion = { id: nextRegionId(current), box }
+      return [...current, region]
+    })
+    setOverlaysHidden(false)
+    setRemovalPreview(false)
   }
   const analyzeSubjects = async (force = false) => {
     if (composerEditing) return
@@ -396,6 +651,30 @@ export function NotebookMediaFullscreen({
       }
     }
   }
+  const replaceRegions = async () => {
+    if (!onEditSubjects || !canReplace || pendingAction || composerEditing) return
+    setPendingAction('replace')
+    onEditingChange?.(true)
+    setActionError(null)
+    setActionMessage(null)
+    try {
+      const queued = await onEditSubjects({
+        operation: 'replace',
+        subjectIds: selectedSubjects.map((subject) => subject.id),
+        regions: regionReplacementPayload(replacementTargets, replacements),
+      })
+      if (!queued || !mountedRef.current) return
+      setActionMessage('Replacement queued as a new image.')
+    } catch (error) {
+      if (!mountedRef.current) return
+      setActionError(error instanceof Error ? error.message : String(error))
+    } finally {
+      if (mountedRef.current) {
+        setPendingAction(null)
+        onEditingChange?.(false)
+      }
+    }
+  }
   const captureCurrentFrame = async () => {
     const video = videoRef.current
     if (!video || !onCaptureFrame || capturePending) return
@@ -434,6 +713,7 @@ export function NotebookMediaFullscreen({
     || checkingCache
     || analyzing,
   )
+  const showSubjectStage = !removalPreview
 
   const dialog = (
     <section
@@ -510,14 +790,26 @@ export function NotebookMediaFullscreen({
                 subjectMap={subjectMap}
                 selectedIds={selectedIds}
               />
-            ) : ready && subjectMap && !overlaysHidden ? (
+            ) : showSubjectStage ? (
               <ImageSubjectOverlay
                 mediaUrl={mediaUrl ?? ''}
-                subjectMap={subjectMap}
+                width={stageWidth}
+                height={stageHeight}
+                subjectMap={overlaysHidden ? null : subjectMap}
                 selectedIds={selectedIds}
                 hiddenIds={hiddenIds}
+                regions={overlaysHidden ? [] : regions}
+                selectedRegionIds={selectedRegionIds}
+                drawMode={drawMode}
+                draftBox={draftBox}
+                snapRegionId={snapOffer ? hoveredRegionId : null}
                 opacity={overlayOpacity}
                 onToggle={toggleSubject}
+                onToggleRegion={toggleRegion}
+                onHoverRegion={setHoveredRegionId}
+                onPointerDown={beginDraw}
+                onPointerMove={moveDraw}
+                onPointerUp={endDraw}
               />
             ) : (
               <img src={mediaUrl ?? ''} alt={`@${address}`} />
@@ -527,15 +819,29 @@ export function NotebookMediaFullscreen({
               <strong>
                 {removalPreview
                   ? 'Removal preview'
-                  : ready ? `${subjectMap.subjects.length} subjects` : 'Image editor'}
+                  : drawMode
+                    ? 'Draw region'
+                    : ready
+                      ? `${subjectMap.subjects.length} subjects`
+                      : 'Image editor'}
               </strong>
             </div>
+            {snapOffer && hoveredRegion && !drawMode && (
+              <button
+                type="button"
+                className="notebook-region-snap"
+                onClick={snapHoveredRegion}
+              >
+                Snap to {subjectMap?.subjects.find((subject) =>
+                  subject.id === snapOffer.subjectId)?.label ?? 'subject'}
+              </button>
+            )}
           </div>
           <aside className="notebook-subject-panel" aria-label="Subject editor">
             <header>
               <span>SUBJECT WORKSPACE</span>
               <h2>People &amp; objects</h2>
-              <p>Select anything you want to remove or transform.</p>
+              <p>Select anything you want to remove or transform, or draw a region.</p>
             </header>
             <div className="notebook-subject-toolbar">
               <button
@@ -558,6 +864,20 @@ export function NotebookMediaFullscreen({
                     ? overlaysHidden ? 'Show subjects' : 'Hide subjects'
                     : 'Subjects'}
               </button>
+              <button
+                type="button"
+                className={drawMode ? 'active' : ''}
+                aria-pressed={drawMode}
+                disabled={pendingAction !== null || composerEditing}
+                onClick={() => {
+                  setDrawMode((current) => !current)
+                  setRemovalPreview(false)
+                  setOverlaysHidden(false)
+                }}
+              >
+                <SquareDashed size={14} />
+                Draw region
+              </button>
               {ready && subjectMap.baseUrl && (
                 <button
                   type="button"
@@ -571,6 +891,7 @@ export function NotebookMediaFullscreen({
                   onClick={() => {
                     setRemovalPreview((current) => !current)
                     setOverlaysHidden(false)
+                    setDrawMode(false)
                   }}
                 >
                   <Eraser size={14} />
@@ -619,33 +940,77 @@ export function NotebookMediaFullscreen({
                     <RotateCw size={13} />Retry
                   </button>
                 </div>
-              ) : ready && subjectMap.subjects.length === 0 ? (
+              ) : ready && subjectMap.subjects.length === 0 && regions.length === 0 ? (
                 <div className="notebook-subject-state empty">
                   <Layers2 size={22} />
                   <strong>No editable subjects found</strong>
-                  <p>Try analysis again if the image changed.</p>
+                  <p>Draw a region or try analysis again if the image changed.</p>
                   <button type="button" onClick={() => void analyzeSubjects(true)}>
                     <RotateCw size={13} />Analyze again
                   </button>
                 </div>
-              ) : ready ? (
+              ) : ready || regions.length > 0 ? (
                 <div className="notebook-subject-list">
                   <div className="notebook-subject-list-actions">
-                    <span>{selectedSubjects.length} selected</span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedIds(new Set(
-                        selectedSubjects.length === subjectMap.subjects.length
-                          ? []
-                          : subjectMap.subjects.map((subject) => subject.id),
-                      ))}
-                    >
-                      {selectedSubjects.length === subjectMap.subjects.length
-                        ? 'Clear'
-                        : 'Select all'}
-                    </button>
+                    <span>
+                      {selectedSubjects.length + selectedRegionIds.size} selected
+                    </span>
+                    {ready && subjectMap && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedIds(new Set(
+                          selectedSubjects.length === subjectMap.subjects.length
+                            ? []
+                            : subjectMap.subjects.map((subject) => subject.id),
+                        ))}
+                      >
+                        {selectedSubjects.length === subjectMap.subjects.length
+                          ? 'Clear'
+                          : 'Select all'}
+                      </button>
+                    )}
                   </div>
-                  {subjectMap.subjects.map((subject) => {
+                  {regions.map((region, index) => {
+                    const selected = selectedRegionIds.has(region.id)
+                    const matched = subjectMap?.subjects.find((subject) =>
+                      subject.id === region.matchedSubjectId)
+                    return (
+                      <div
+                        key={region.id}
+                        className={`notebook-subject-row${selected ? ' selected' : ''}`}
+                      >
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleRegion(region.id)}
+                          />
+                          <span
+                            className="notebook-subject-swatch"
+                            style={{ backgroundColor: REGION_COLOR }}
+                            aria-hidden="true"
+                          />
+                          <span className="notebook-subject-copy">
+                            <strong>
+                              {matched ? `Region · ${matched.label}` : `Region ${index + 1}`}
+                            </strong>
+                            <small>
+                              {region.box.width.toFixed(2)} × {region.box.height.toFixed(2)}
+                            </small>
+                          </span>
+                        </label>
+                        <button
+                          type="button"
+                          className="notebook-subject-visibility"
+                          aria-label={`Remove region ${index + 1}`}
+                          onClick={() => removeRegion(region.id)}
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                  {ready && subjectMap.subjects.map((subject) => {
                     const selected = selectedIds.has(subject.id)
                     const hidden = hiddenIds.has(subject.id)
                     return (
@@ -684,18 +1049,56 @@ export function NotebookMediaFullscreen({
                       </div>
                     )
                   })}
+                  {replacementTargets.length > 0 && replacementCandidates.length > 0 && (
+                    <div className="notebook-replacement-list">
+                      <span>Replacement images</span>
+                      {replacementTargets.map((target) => (
+                        <div key={target.key} className="notebook-replacement-row">
+                          <strong>{target.label}</strong>
+                          <div className="notebook-replacement-picker" role="listbox" aria-label={`Replacement for ${target.label}`}>
+                            {replacementCandidates.map((candidate) => {
+                              const selected = replacements[target.key] === candidate.artifactId
+                              return (
+                                <button
+                                  key={candidate.artifactId}
+                                  type="button"
+                                  role="option"
+                                  aria-selected={selected}
+                                  className={`notebook-replacement-option${selected ? ' selected' : ''}`}
+                                  onClick={() => setReplacements((current) => ({
+                                    ...current,
+                                    [target.key]: candidate.artifactId,
+                                  }))}
+                                >
+                                  {candidate.thumbnailUrl ? (
+                                    <img
+                                      src={candidate.thumbnailUrl}
+                                      alt=""
+                                    />
+                                  ) : null}
+                                  @{candidate.address}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="notebook-subject-state idle">
                   <Layers2 size={22} />
                   <strong>Make the image editable</strong>
-                  <p>Subjects identifies people and objects, then colors each layer.</p>
+                  <p>Subjects identifies people and objects, then colors each layer. You can also draw regions immediately.</p>
                 </div>
               )}
             </div>
             <div className="notebook-subject-actions">
               <p className="notebook-subject-composer-guidance">
-                {ready && selectedSubjects.length > 0
+                {replacementTargets.length > 0
+                  ? 'Assign a replacement image to each region, then replace, or describe a change in the image edit bar.'
+                  : ready && selectedSubjects.length > 0
                   ? `Describe the change for ${selectedSubjects.length} selected ${selectedSubjects.length === 1 ? 'subject' : 'subjects'} in the image edit bar.`
                   : 'Select people or objects, then describe the change in the image edit bar.'}
               </p>
@@ -719,6 +1122,22 @@ export function NotebookMediaFullscreen({
                     ? <BusyIndicator size={14} />
                     : <Eraser size={14} />}
                   Remove
+                </button>
+                <button
+                  type="button"
+                  className="replace"
+                  disabled={
+                    !canReplace
+                    || pendingAction !== null
+                    || composerEditing
+                    || !onEditSubjects
+                  }
+                  onClick={() => void replaceRegions()}
+                >
+                  {pendingAction === 'replace'
+                    ? <BusyIndicator size={14} />
+                    : <SquareDashed size={14} />}
+                  Replace
                 </button>
               </div>
             </div>

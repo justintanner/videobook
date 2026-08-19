@@ -105,6 +105,15 @@ export async function resolveAudioRef(engine: Engine, raw: string): Promise<Reso
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
+export function seedanceActorReplacementPrompt(actorCount: number): string {
+  const count = Math.max(1, Math.floor(actorCount));
+  const lines = Array.from({ length: count }, (_, index) => {
+    const image = `@Image${index + 1}`;
+    return `Replace the on-screen person matching ${image} with ${image} as character reference`;
+  });
+  return `${lines.join(". ")}. Keep camera movement, pacing, and framing of @Video1.`;
+}
+
 export function buildSeedance2Schema(apiModel: Seedance2Model) {
   const inputSchema = apiModel === "bytedance/seedance-2"
     ? Seedance2InputSchema.shape

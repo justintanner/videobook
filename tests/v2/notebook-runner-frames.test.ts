@@ -93,6 +93,65 @@ describe("notebook runner frames and concat", () => {
       .toEqual([`@${video.outputArtifactId}`]);
   });
 
+  it("maps a source clip plus three identity stills into Seedance 2 r2v refs", () => {
+    const video = {
+      id: "019f0000-0000-7000-8000-000000000110",
+      type: "video" as const,
+      label: "Source clip",
+      slot: { row: 0, column: 0 },
+      outputArtifactId: "019f0000-0000-7000-8000-000000000111",
+    };
+    const stills = [0, 1, 2].map((index) => ({
+      id: `019f0000-0000-7000-8000-00000000012${index}`,
+      type: "image" as const,
+      label: `Actor ${index + 1}`,
+      slot: { row: 0, column: index + 1 },
+      outputArtifactId: `019f0000-0000-7000-8000-00000000013${index}`,
+    }));
+    const generate = {
+      id: "019f0000-0000-7000-8000-000000000140",
+      type: "generate_video" as const,
+      label: "Replace actors",
+      slot: { row: 1, column: 0 },
+      prompt: "Replace the three actors",
+      tool: DEFAULT_ANIMATION_TOOL,
+    };
+    const document: NotebookDocument = {
+      id: "019f0000-0000-7000-8000-000000000141",
+      name: "Actor replacement",
+      cells: [video, ...stills, generate],
+      edges: [
+        {
+          id: "019f0000-0000-7000-8000-000000000150",
+          source: video.id,
+          target: generate.id,
+          targetInput: "video",
+        },
+        ...stills.map((still, index) => ({
+          id: `019f0000-0000-7000-8000-00000000015${index + 1}`,
+          source: still.id,
+          target: generate.id,
+          targetInput: "image",
+        })),
+      ],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    const definition = {
+      name: DEFAULT_ANIMATION_TOOL,
+      schema: {
+        book_id: {},
+        prompt: {},
+        image_refs: {},
+        video_refs: {},
+      },
+    } as unknown as ToolDef;
+
+    expect(modelArgs(definition, document, generate, "book-id")).toMatchObject({
+      video_refs: [`@${video.outputArtifactId}`],
+      image_refs: stills.map((still) => `@${still.outputArtifactId}`),
+    });
+  });
+
   it("maps Kling motion control image and video inputs", () => {
     const image = {
       id: "019f0000-0000-7000-8000-000000000020",

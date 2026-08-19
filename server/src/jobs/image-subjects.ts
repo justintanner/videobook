@@ -46,14 +46,28 @@ type AnalyzeImageSubjectsPayload = {
   resumeTaskId?: string;
 };
 
+export const SEEDREAM_PRO_I2I_MAX_IMAGE_URLS = 10;
+
+export type ImageSubjectReplacementRegion = {
+  box?: ImageSubjectNormalizedBox;
+  subjectId?: string;
+  replacementArtifactId: string;
+  note?: string;
+};
+
+type ReplacementRefInput = { assetId: string; filename: string };
+
 type GenerateImageSubjectEditPayload = {
   type: "generate_image_subject_edit";
   imageAssetId: string;
   sourceArtifactId: string;
   sourceObjectHash: string;
   subjectIds: string[];
-  operation: "remove" | "edit";
+  operation: "remove" | "edit" | "replace";
   prompt?: string;
+  regions?: ImageSubjectReplacementRegion[];
+  replacementRefs?: ReplacementRefInput[];
+  orderedImageRefs?: Array<{ role: "base" | "replacement"; artifactId: string }>;
   bookId: string;
   notebookId: string;
   producerCellId: string;
@@ -256,6 +270,87 @@ function closestAspectRatio(
     Math.abs(candidate[1] - target) < Math.abs(best[1] - target)
       ? candidate
       : best)[0];
+}
+
+export function boxPositionWording(box: ImageSubjectNormalizedBox): string {
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  const horizontal = cx < 1 / 3 ? "left" : cx > 2 / 3 ? "right" : "center";
+  const vertical = cy < 1 / 3 ? "upper" : cy > 2 / 3 ? "lower" : "middle";
+  if (horizontal === "center" && vertical === "middle") return "center";
+  if (horizontal === "center") return vertical;
+  if (vertical === "middle") return horizontal;
+  return `${vertical}-${horizontal}`;
+}
+
+export function describeReplacementRegion(
+  region: ImageSubjectReplacementRegion,
+  map: ImageSubjectMapReadyV1 | null,
+): string {
+  const subject = region.subjectId && map
+    ? map.subjects.find((entry) => entry.id === region.subjectId)
+    : undefined;
+  const box = region.box ?? subject?.normalizedBox;
+  const label = subject?.label
+    ?? (box ? `the ${boxPositionWording(box)} region` : "the selected region");
+  const boxText = box
+    ? `normalized box ${box.x.toFixed(4)},${box.y.toFixed(4)},${box.width.toFixed(4)},${box.height.toFixed(4)}`
+    : "unknown box";
+  const note = region.note?.trim() ? ` (${region.note.trim()})` : "";
+  return `${label} at ${boxText}${note}`;
+}
+
+export function regionReplacementPrompt(
+  map: ImageSubjectMapReadyV1 | null,
+  regions: readonly ImageSubjectReplacementRegion[],
+  orderedImageRefs: readonly { role: "base" | "replacement"; artifactId: string }[],
+  prompt: string,
+): string {
+  const replacementIndexByArtifact = new Map<string, number>();
+  let nextIndex = 2;
+  for (const ref of orderedImageRefs) {
+    if (ref.role !== "replacement") continue;
+    if (!replacementIndexByArtifact.has(ref.artifactId)) {
+      replacementIndexByArtifact.set(ref.artifactId, nextIndex);
+      nextIndex += 1;
+    }
+  }
+  const lines = regions.map((region, index) => {
+    const imageIndex = replacementIndexByArtifact.get(region.replacementArtifactId)
+      ?? index + 2;
+    return `${index + 1}. ${describeReplacementRegion(region, map)}: replace with reference image ${imageIndex}.`;
+  });
+  const user = prompt.trim();
+  const composed = [
+    "The first image is the base scene. Following images are identity references for the listed regions.",
+    "Replace only those regions and preserve every unreplaced person, object, background element, composition, and camera framing.",
+    ...lines,
+  ].join(" ");
+  return user ? `${user}\n${composed}` : composed;
+}
+
+export function seedreamRegionReplacementRequest(input: {
+  imageUrls: readonly string[];
+  prompt: string;
+  width: number;
+  height: number;
+}): SeedreamProImageToImageRequest {
+  return SeedreamProImageToImageRequestSchema.parse({
+    model: "seedream/5-pro-image-to-image",
+    input: {
+      image_urls: [...input.imageUrls],
+      prompt: input.prompt,
+      aspect_ratio: closestAspectRatio(input.width, input.height),
+      quality: "basic",
+      output_format: "png",
+      nsfw_checker: false,
+    },
+  });
+}
+
+export function seedreamProImageUrlCapacityError(replacementCount: number): string {
+  const maxReplacements = SEEDREAM_PRO_I2I_MAX_IMAGE_URLS - 1;
+  return `Seedream 5 Pro image-to-image accepts at most ${SEEDREAM_PRO_I2I_MAX_IMAGE_URLS} image_urls (1 base + ${maxReplacements} replacements). This request needs 1 base + ${replacementCount} replacements.`;
 }
 
 function semanticEditPrompt(
@@ -562,7 +657,7 @@ async function updateNotebookEditProgress(
 async function persistProcessedImage(
   engine: Engine,
   payload: GenerateImageSubjectEditPayload,
-  map: ImageSubjectMapReadyV1,
+  map: ImageSubjectMapReadyV1 | null,
   output: Buffer,
   provenance: Record<string, unknown>,
 ): Promise<void> {
@@ -591,7 +686,7 @@ async function persistProcessedImage(
       source_asset: payload.sourceArtifactId,
       source_object_hash: payload.sourceObjectHash,
       subject_map_version: IMAGE_SUBJECT_MAP_VERSION,
-      subject_analysis_id: map.analysisId,
+      ...(map ? { subject_analysis_id: map.analysisId } : {}),
       selected_subject_ids: payload.subjectIds,
       ...(payload.prompt ? { prompt: payload.prompt } : {}),
       ...provenance,
@@ -720,6 +815,96 @@ async function generateSemanticSubjectEdit(
         output_format: "png",
         nsfw_checker: false,
       },
+    });
+    const metadata = await engine.metadata.artifacts.write(
+      payload.imageAssetId,
+      "generation-payload",
+      request,
+    );
+    if (!metadata.ok) throw new Error(metadata.error.message);
+    taskId = await submitMediaJob(provider, request, {
+      otp: mintKieOtp(request),
+    });
+    const taskMetadata = await engine.metadata.artifacts.write(
+      payload.imageAssetId,
+      "kie-task-id",
+      { taskId },
+    );
+    if (!taskMetadata.ok) throw new Error(taskMetadata.error.message);
+  }
+  if (payload.generationId) {
+    const generation = await engine.generations.update(payload.generationId, {
+      status: "awaiting_provider",
+      error: null,
+    });
+    if (!generation.ok) throw new Error(generation.error.message);
+  }
+  await updateNotebookEditProgress(engine, payload, "awaiting_provider");
+  const resultJson = await waitForKieResult(
+    provider,
+    taskId,
+    signal,
+    Date.now() + KIE_RESULT_TIMEOUT_MS,
+    "subject-edit",
+  );
+  const [resultUrl] = parseResultUrls(resultJson);
+  if (!resultUrl) throw new Error("Seedream image edit returned no image");
+  const response = await fetch(resultUrl, { signal });
+  if (!response.ok) {
+    throw new Error(`Failed to download Seedream edit: ${response.status} ${response.statusText}`);
+  }
+  return {
+    output: await sharp(Buffer.from(await response.arrayBuffer())).png().toBuffer(),
+    taskId,
+    request,
+  };
+}
+
+async function generateRegionReplacementEdit(
+  engine: Engine,
+  payload: GenerateImageSubjectEditPayload,
+  map: ImageSubjectMapReadyV1 | null,
+  sourceFilename: string,
+  width: number,
+  height: number,
+  signal: AbortSignal,
+): Promise<{ output: Buffer; taskId: string; request: SeedreamProImageToImageRequest }> {
+  const stored = await readStoredImageSubjectEditTask(engine, payload.imageAssetId);
+  const storedReplace = stored?.request.model === "seedream/5-pro-image-to-image"
+    ? stored
+    : null;
+  let request = storedReplace?.request as SeedreamProImageToImageRequest | null ?? null;
+  let taskId = storedReplace?.taskId ?? null;
+  const provider = kieProvider();
+  if (!request || !taskId) {
+    const { uploadAssetToKie } = await import("./_kie-upload.js");
+    const baseUrl = await uploadAssetToKie(
+      engine,
+      payload.sourceArtifactId,
+      sourceFilename,
+    );
+    const replacementUrls: string[] = [];
+    for (const ref of payload.replacementRefs ?? []) {
+      replacementUrls.push(await uploadAssetToKie(engine, ref.assetId, ref.filename));
+    }
+    const imageUrls = [baseUrl, ...replacementUrls];
+    const prompt = regionReplacementPrompt(
+      map,
+      payload.regions ?? [],
+      payload.orderedImageRefs ?? [
+        { role: "base", artifactId: payload.sourceArtifactId },
+        ...(payload.replacementRefs ?? []).map((ref) => ({
+          role: "replacement" as const,
+          artifactId: ref.assetId,
+        })),
+      ],
+      payload.prompt ?? "",
+    );
+    request = seedreamRegionReplacementRequest({
+      imageUrls,
+      prompt,
+      width,
+      height,
     });
     const metadata = await engine.metadata.artifacts.write(
       payload.imageAssetId,
@@ -1181,31 +1366,64 @@ export function registerImageSubjectJobs(engine: Engine): void {
         throw new Error("The source image changed before subject editing started");
       }
       const record = await readImageSubjectMapRecord(engine, payload.sourceArtifactId);
-      if (!record || record.status !== "ready" || record.objectHash !== source.objectHash) {
+      const readyMap = record?.status === "ready" && record.objectHash === source.objectHash
+        ? record
+        : null;
+      if (payload.operation !== "replace" && !readyMap) {
         throw new Error("A current subject map is required before editing subjects");
+      }
+      if (payload.operation === "replace") {
+        const missingSubjects = (payload.regions ?? []).filter((region) =>
+          region.subjectId && !region.box && !readyMap);
+        if (missingSubjects.length > 0) {
+          throw new Error("Analyze image subjects before replacing by subject id");
+        }
       }
       await updateNotebookEditProgress(engine, payload, "running");
       if (payload.operation === "edit" && !payload.prompt?.trim()) {
         throw new Error("A prompt is required to edit selected subjects");
       }
-      if (payload.operation === "remove") {
+      if (payload.operation === "replace") {
+        const regions = payload.regions ?? [];
+        if (regions.length === 0) {
+          throw new Error("Replacement edits require at least one region");
+        }
+        const generated = await generateRegionReplacementEdit(
+          engine,
+          payload,
+          readyMap,
+          source.file.name,
+          source.width,
+          source.height,
+          context.signal,
+        );
+        await persistProcessedImage(engine, payload, readyMap, generated.output, {
+          origin: "image_subject_replace",
+          model: generated.request.model,
+          kie_task_id: generated.taskId,
+          targeting: "region-replacement",
+          image_urls: generated.request.input.image_urls,
+          replacement_artifact_ids: (payload.replacementRefs ?? [])
+            .map((ref) => ref.assetId),
+        });
+      } else if (payload.operation === "remove") {
         const output = await composeImageSubjectRemoval(
           engine,
           payload.sourceArtifactId,
-          record,
+          readyMap!,
           payload.subjectIds,
         );
-        await persistProcessedImage(engine, payload, record, output, {
+        await persistProcessedImage(engine, payload, readyMap, output, {
           model: "local/sharp-layer-composite",
         });
-      } else if (imageSubjectEditRoute(record, payload.subjectIds) === "exact") {
+      } else if (imageSubjectEditRoute(readyMap!, payload.subjectIds) === "exact") {
         const generated = await generateExactSubjectEdit(
           engine,
           payload,
-          record,
+          readyMap!,
           context.signal,
         );
-        await persistProcessedImage(engine, payload, record, generated.output, {
+        await persistProcessedImage(engine, payload, readyMap, generated.output, {
           origin: "image_subject_edit",
           model: generated.request.model,
           kie_task_id: generated.taskId,
@@ -1221,11 +1439,11 @@ export function registerImageSubjectJobs(engine: Engine): void {
         const generated = await generateSemanticSubjectEdit(
           engine,
           payload,
-          record,
+          readyMap!,
           source.file.name,
           context.signal,
         );
-        await persistProcessedImage(engine, payload, record, generated.output, {
+        await persistProcessedImage(engine, payload, readyMap, generated.output, {
           origin: "image_subject_edit",
           model: generated.request.model,
           kie_task_id: generated.taskId,

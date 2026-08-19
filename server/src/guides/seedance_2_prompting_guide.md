@@ -77,6 +77,16 @@ traveling into distance.
 
 This prompt works because every @-tag has an explicit role (`replace … with`, `as the first frame`, `Refer to … of`, `arrive at … of`), the perspective shift is named (third-person → subjective), and the destination scene is anchored visually (`deep blue universe … spaceships`).
 
+### Actor replacement (video source + still identity refs)
+
+Use Seedance 2.0 reference-to-video when replacing people in a clip. Pass the source clip as `video_refs` (`@Video1`) and one still per actor as `image_refs` (`@Image1`…), then map each still onto an on-screen person:
+
+```
+Replace the on-screen person matching @Image1 with @Image1 as character reference. Replace the on-screen person matching @Image2 with @Image2 as character reference. Replace the on-screen person matching @Image3 with @Image3 as character reference. Keep camera movement, pacing, and framing of @Video1.
+```
+
+Notebook wiring: connect the source video plus the identity stills to a Seedance 2 generation cell (`generate_kie_seedance_2_0_video`). The runner fills `video_refs` from connected video cells and `image_refs` from connected image cells. The result is a normal generated video artifact (`original.mp4` / `proxy.mp4`), not an orientation render.
+
 ## Camera Movement Vocabulary
 
 Explicit camera direction is the single highest-leverage prompt component.

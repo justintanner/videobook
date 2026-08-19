@@ -111,7 +111,9 @@ export function grokMaskIndex(index: number): number | undefined {
   return Number.isInteger(index) && index >= 1 ? index : undefined;
 }
 
-function boxIou(
+export const SUBJECT_BOX_IOU_THRESHOLD = 0.25;
+
+export function boxIou(
   left: ImageSubjectNormalizedBox,
   right: ImageSubjectNormalizedBox,
 ): number {
@@ -177,7 +179,7 @@ export function applyGrokSegmentsToSubjects(
     const boxMatches = usable.flatMap((segment) => {
       if (claimed.has(segment.index) || !segment.normalizedBox) return [];
       const iou = boxIou(subject.normalizedBox, segment.normalizedBox);
-      return iou >= 0.25 ? [{ segment, iou }] : [];
+      return iou >= SUBJECT_BOX_IOU_THRESHOLD ? [{ segment, iou }] : [];
     }).sort((left, right) => right.iou - left.iou);
     const match = byName ?? boxMatches[0]?.segment;
     if (!match) {

@@ -192,6 +192,207 @@ function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
   return [...aliases, ...tools];
 }
 
+const SEEDREAM_IMAGE_I2I_TOOL = "generate_kie_seedream_v5_lite_image_to_image";
+const SEEDANCE_VIDEO_TOOL = "generate_kie_seedance_2_0_video";
+const SEEDANCE_SUBSTITUTION_NOTE =
+  "Using Seedream for this image edit (Seedance is video).";
+
+const MENTION_PATTERN = /@([a-z]{1,2}\d{1,2}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})/gi;
+
+type ChatAssetMediaType = "image" | "video" | "audio" | "script";
+
+type BytedanceRouteInput = {
+  query: string;
+  tool: string;
+  params: Record<string, unknown>;
+  message: string;
+  assetContext: Array<Record<string, unknown>>;
+};
+
+type BytedanceRouteResult = {
+  tool: string;
+  params: Record<string, unknown>;
+  message: string;
+  substituted: boolean;
+};
+
+function mentionsBytedanceFamily(query: string): boolean {
+  return /seedance|seedream|bytedance/i.test(query);
+}
+
+function mentionsSeedanceFiveAlias(query: string): boolean {
+  return /seedance\s*5(?:\.0)?(?:\s*edit)?/i.test(query)
+    || /seedream\s*5/i.test(query);
+}
+
+function normalizeMention(value: string): string {
+  return value.trim().replace(/^@/, "").toLowerCase();
+}
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => typeof entry === "string" && entry.trim()
+    ? [entry.trim()]
+    : []);
+}
+
+function queryMentions(query: string): string[] {
+  return [...query.matchAll(MENTION_PATTERN)].map((match) => `@${match[1]}`);
+}
+
+function assetMediaType(
+  asset: Record<string, unknown>,
+): ChatAssetMediaType | null {
+  const type = typeof asset.type === "string"
+    ? asset.type
+    : typeof asset.artifact_type === "string"
+      ? asset.artifact_type
+      : null;
+  return type === "image" || type === "video" || type === "audio" || type === "script"
+    ? type
+    : null;
+}
+
+function assetMentionKeys(asset: Record<string, unknown>): string[] {
+  const keys = [
+    typeof asset.tag === "string" ? asset.tag : "",
+    typeof asset.asset_id === "string" ? asset.asset_id : "",
+  ];
+  if (Array.isArray(asset.notebook_references)) {
+    for (const reference of asset.notebook_references) {
+      if (typeof reference === "string") keys.push(reference);
+    }
+  }
+  return keys.filter(Boolean).map(normalizeMention);
+}
+
+function mediaTypeForMention(
+  mention: string,
+  assetContext: Array<Record<string, unknown>>,
+): ChatAssetMediaType | null {
+  const needle = normalizeMention(mention);
+  const match = assetContext.find((asset) => assetMentionKeys(asset).includes(needle));
+  return match ? assetMediaType(match) : null;
+}
+
+function mentionWithAt(mention: string): string {
+  return mention.startsWith("@") ? mention : `@${mention}`;
+}
+
+function sceneTargetMention(query: string): string | null {
+  const match = query.match(
+    /\b(?:in|on|across|from|of)\s+(@[a-z]{1,2}\d{1,2}|@[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\b/i,
+  );
+  return match?.[1] ? mentionWithAt(match[1]) : null;
+}
+
+function withClauseMentions(query: string): string[] {
+  const match = query.match(
+    /\bwith\s+((?:@[a-z]{1,2}\d{1,2}|@[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})(?:\s+(?:and|,)?\s*(?:@[a-z]{1,2}\d{1,2}|@[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}))*)/i,
+  );
+  return match?.[1] ? queryMentions(match[1]) : [];
+}
+
+function uniqueMentions(values: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const value of values) {
+    const key = normalizeMention(value);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(mentionWithAt(value));
+  }
+  return unique;
+}
+
+function applyBytedanceNamedModelRoute(input: BytedanceRouteInput): BytedanceRouteResult {
+  if (!mentionsBytedanceFamily(input.query)) {
+    return {
+      tool: input.tool,
+      params: input.params,
+      message: input.message,
+      substituted: false,
+    };
+  }
+  const mentions = queryMentions(input.query);
+  const target = sceneTargetMention(input.query) ?? mentions[0] ?? null;
+  const targetType = target ? mediaTypeForMention(target, input.assetContext) : null;
+  const mentionedTypes = mentions.map((mention) => mediaTypeForMention(mention, input.assetContext));
+  const hasImage = mentionedTypes.includes("image") || targetType === "image";
+  const hasVideo = mentionedTypes.includes("video") || targetType === "video";
+  const imageTarget = targetType === "image"
+    || (hasImage && targetType !== "video" && !hasVideo)
+    || (mentionsSeedanceFiveAlias(input.query) && hasImage && targetType !== "video");
+  const replacements = uniqueMentions(withClauseMentions(input.query))
+    .filter((mention) => mentionWithAt(mention).toLowerCase() !== target?.toLowerCase());
+  const imageMentions = uniqueMentions(mentions.filter((mention) =>
+    mediaTypeForMention(mention, input.assetContext) === "image"));
+  const videoMentions = uniqueMentions(mentions.filter((mention) =>
+    mediaTypeForMention(mention, input.assetContext) === "video"));
+  const prompt = typeof input.params.prompt === "string" && input.params.prompt.trim()
+    ? input.params.prompt
+    : input.query;
+
+  if (imageTarget && (target || imageMentions.length > 0)) {
+    const editTarget = target && targetType === "image" ? target : imageMentions[0]!;
+    const rest = uniqueMentions([
+      ...replacements.filter((mention) =>
+        mediaTypeForMention(mention, input.assetContext) !== "video"),
+      ...imageMentions,
+    ]).filter((mention) => normalizeMention(mention) !== normalizeMention(editTarget));
+    const imageRefs = uniqueMentions([editTarget, ...rest]);
+    const saidSeedance = /seedance|bytedance/i.test(input.query);
+    const message = saidSeedance
+      ? (input.message.trim()
+        ? `${input.message.trim().replace(/[.!]?$/, "")}. ${SEEDANCE_SUBSTITUTION_NOTE}`
+        : SEEDANCE_SUBSTITUTION_NOTE)
+      : input.message;
+    const { video_refs: _droppedVideoRefs, ...imageParams } = input.params;
+    return {
+      tool: SEEDREAM_IMAGE_I2I_TOOL,
+      params: {
+        ...imageParams,
+        prompt,
+        image_refs: imageRefs,
+      },
+      message,
+      substituted: saidSeedance,
+    };
+  }
+
+  if (hasVideo || targetType === "video") {
+    const videoRefs = uniqueMentions([
+      ...(target && targetType === "video" ? [target] : []),
+      ...videoMentions,
+      ...stringList(input.params.video_refs),
+    ]).filter((mention) => mediaTypeForMention(mention, input.assetContext) !== "image");
+    const imageRefs = uniqueMentions([
+      ...replacements.filter((mention) =>
+        mediaTypeForMention(mention, input.assetContext) === "image"),
+      ...imageMentions,
+      ...stringList(input.params.image_refs),
+    ]).filter((mention) => mediaTypeForMention(mention, input.assetContext) !== "video");
+    return {
+      tool: SEEDANCE_VIDEO_TOOL,
+      params: {
+        ...input.params,
+        prompt,
+        ...(videoRefs.length > 0 ? { video_refs: videoRefs } : {}),
+        ...(imageRefs.length > 0 ? { image_refs: imageRefs } : {}),
+      },
+      message: input.message,
+      substituted: false,
+    };
+  }
+
+  return {
+    tool: input.tool,
+    params: input.params,
+    message: input.message,
+    substituted: false,
+  };
+}
+
 function buildChatRoutingPrompt(
   bookName: string,
   tools: RoutableToolInfo[],
@@ -241,6 +442,8 @@ Parameter guidelines:
 - Preserve every consumed notebook @address in the generation prompt at the semantic position where it belongs. Do not strip, rename, or expand notebook references into prose
 - For generate_video: put the compact generation description in "prompt" and preserve every consumed @ reference
 - For generate_image: put the compact image description in "prompt" and preserve every consumed image @address there; use image_refs ONLY for the corresponding resolved asset tags whose asset context type is "image", in the same order (include @ prefix). Never put a video or audio asset tag in image_refs — if the user wants an image inspired by a video, describe that source without connecting it as an image
+- ByteDance naming: Seedance is video, Seedream is image. Users often say Seedance for both. When the query names seedance, bytedance, or seedream: if the edit/replace target is an image, use generate_kie_seedream_v5_lite_image_to_image and put the edit-target image first in image_refs, followed by replacement image refs. If the target is a video, use generate_kie_seedance_2_0_video with that clip in video_refs and replacement stills in image_refs. Never route an image-target Seedance ask to a Seedance video tool or to Nano Banana Pro
+- Treat "Seedance 5.0 edit", "Seedance 5", and "Seedream 5" as Seedream 5. Generic chat uses Seedream 5 Lite image-to-image; Seedream 5 Pro edit lives in the subject/region pipeline. When Seedream is used for an image ask that said Seedance, the status message must note that substitution
 - For create_watermark_card (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
 - For create_qart (artistic / picture QR): use when turning an image asset into scan-safe color and monochrome QR mosaics; pass image_ref and value (URL/text). Prefer over create_watermark_card when the user wants a photo integrated into the QR modules
 - For create_qrbtf (parametric / styled QR): use when the user wants a stylized QR code (normal, line, dsj, bubble, or func styles) from the qrbtf library; pass value (URL/text) and optional style. No source image needed — the QR is generated parametrically with a black background by default
@@ -293,6 +496,7 @@ export {
   CHAT_TOOL_ALIASES,
   TIMESTAMP_PARAMS,
   NESTED_TIMESTAMP_PARAMS,
+  applyBytedanceNamedModelRoute,
   buildRoutableTools,
   buildChatRoutingPrompt,
   buildChatRoutingUserMessage,

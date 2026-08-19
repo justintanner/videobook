@@ -29,7 +29,11 @@ import {
   readGrokImagineImage2SourceTaskId,
   readStoredImageSubjectEditTask,
   reconcileImageSubjectJobFailures,
+  regionReplacementPrompt,
   seedreamLayerDecompositionRequest,
+  seedreamProImageUrlCapacityError,
+  seedreamRegionReplacementRequest,
+  SEEDREAM_PRO_I2I_MAX_IMAGE_URLS,
 } from "../jobs/image-subjects.js";
 import { createEngineForTest } from "../engine.js";
 import {
@@ -1174,5 +1178,164 @@ describe("image subject tools", () => {
         targetInput: "media",
       }),
     ]));
+  });
+
+  it("builds a Seedream 5 Pro replacement request with the base image first", () => {
+    const request = seedreamRegionReplacementRequest({
+      imageUrls: [
+        "https://example.test/base.png",
+        "https://example.test/actor-a.png",
+        "https://example.test/actor-b.png",
+      ],
+      prompt: regionReplacementPrompt(
+        null,
+        [
+          {
+            box: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 },
+            replacementArtifactId: "actor-a",
+          },
+          {
+            box: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 },
+            replacementArtifactId: "actor-b",
+          },
+        ],
+        [
+          { role: "base", artifactId: "base" },
+          { role: "replacement", artifactId: "actor-a" },
+          { role: "replacement", artifactId: "actor-b" },
+        ],
+        "Replace the two actors",
+      ),
+      width: 1920,
+      height: 1080,
+    });
+    expect(request.model).toBe("seedream/5-pro-image-to-image");
+    expect(request.input.image_urls).toEqual([
+      "https://example.test/base.png",
+      "https://example.test/actor-a.png",
+      "https://example.test/actor-b.png",
+    ]);
+    expect(request.input.prompt).toContain("Replace the two actors");
+    expect(request.input.prompt).toContain("reference image 2");
+    expect(request.input.prompt).toContain("reference image 3");
+    expect(request.input.aspect_ratio).toBe("16:9");
+  });
+
+  it("replaces two regions with two reference artifacts via Seedream 5 Pro", async () => {
+    const originalKey = process.env.KIE_API_KEY;
+    process.env.KIE_API_KEY = "test-key";
+    try {
+      const source = await createSource();
+      const left = await engine.artifacts.create({ kind: "image", label: "Actor A" });
+      const right = await engine.artifacts.create({ kind: "image", label: "Actor B" });
+      if (!left.ok || !right.ok) throw new Error("Failed to create replacement artifacts");
+      const leftPng = await solidPng(32, 32, { r: 12, g: 34, b: 56 });
+      const rightPng = await solidPng(32, 32, { r: 210, g: 20, b: 40 });
+      const leftWrite = await engine.files.write(left.value.artifactId, "original.png", leftPng);
+      const rightWrite = await engine.files.write(right.value.artifactId, "original.png", rightPng);
+      if (!leftWrite.ok || !rightWrite.ok) throw new Error("Failed to write replacement images");
+
+      const result = await client.callTool({
+        name: "edit_image_subjects",
+        arguments: {
+          book_id: bookId,
+          notebook_id: source.notebookId,
+          source_cell_id: source.sourceCellId,
+          artifact_id: source.artifactId,
+          object_hash: source.objectHash,
+          operation: "replace",
+          regions: [
+            {
+              box: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 },
+              subject_id: "person",
+              replacement_artifact_id: left.value.artifactId,
+            },
+            {
+              box: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 },
+              replacement_artifact_id: right.value.artifactId,
+            },
+          ],
+        },
+      });
+      expect(result.isError).not.toBe(true);
+      const parsed = resultJson(result) as {
+        job_id: string;
+        output_artifact_id: string;
+        producer_cell_id: string;
+        output_cell_id: string;
+      };
+      const output = engine.artifacts.get(parsed.output_artifact_id);
+      expect(output.ok).toBe(true);
+      if (output.ok) expect(output.value.kind).toBe("image");
+      const provenance = await engine.metadata.artifacts.read<Record<string, unknown>>(
+        parsed.output_artifact_id,
+        "original",
+      );
+      expect(provenance.ok).toBe(true);
+      if (provenance.ok) {
+        expect(provenance.value.origin).toBe("image_subject_replace");
+        expect(provenance.value.replacement_artifact_ids).toEqual([
+          left.value.artifactId,
+          right.value.artifactId,
+        ]);
+        expect(provenance.value.model).toBe("seedream/5-pro-image-to-image");
+      }
+      const jobs = engine.jobs.queue.list({
+        type: "generate_image_subject_edit",
+      });
+      const job = jobs.find((entry) => entry.payload.jobId === parsed.job_id)
+        ?? jobs.find((entry) => entry.payload.imageAssetId === parsed.output_artifact_id);
+      expect(job).toBeTruthy();
+      expect(job?.payload).toMatchObject({
+        operation: "replace",
+        sourceArtifactId: source.artifactId,
+        orderedImageRefs: [
+          { role: "base", artifactId: source.artifactId },
+          { role: "replacement", artifactId: left.value.artifactId },
+          { role: "replacement", artifactId: right.value.artifactId },
+        ],
+      });
+      expect(job?.payload.orderedImageRefs[0]).toEqual({
+        role: "base",
+        artifactId: source.artifactId,
+      });
+    } finally {
+      if (originalKey) process.env.KIE_API_KEY = originalKey;
+      else delete process.env.KIE_API_KEY;
+    }
+  });
+
+  it("rejects a replacement that exceeds Seedream 5 Pro image_urls capacity", async () => {
+    const originalKey = process.env.KIE_API_KEY;
+    process.env.KIE_API_KEY = "test-key";
+    try {
+      const source = await createSource();
+      const tooMany = Array.from(
+        { length: SEEDREAM_PRO_I2I_MAX_IMAGE_URLS },
+        (_, index) => ({
+          box: { x: 0.01, y: 0.01, width: 0.1, height: 0.1 },
+          replacement_artifact_id: `replacement-${index + 1}`,
+        }),
+      );
+      const result = await client.callTool({
+        name: "edit_image_subjects",
+        arguments: {
+          book_id: bookId,
+          notebook_id: source.notebookId,
+          source_cell_id: source.sourceCellId,
+          artifact_id: source.artifactId,
+          object_hash: source.objectHash,
+          operation: "replace",
+          regions: tooMany,
+        },
+      });
+      expect(result.isError).toBe(true);
+      const text = (result.content as TextContent)[0]!.text;
+      expect(text).toBe(seedreamProImageUrlCapacityError(SEEDREAM_PRO_I2I_MAX_IMAGE_URLS));
+      expect(text).toContain(String(SEEDREAM_PRO_I2I_MAX_IMAGE_URLS));
+    } finally {
+      if (originalKey) process.env.KIE_API_KEY = originalKey;
+      else delete process.env.KIE_API_KEY;
+    }
   });
 });

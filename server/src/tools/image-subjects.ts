@@ -13,10 +13,16 @@ import {
   writeImageSubjectMapRecord,
   type ImageSubjectMapRecordV1,
 } from "../image-subject-map.js";
+import {
+  SEEDREAM_PRO_I2I_MAX_IMAGE_URLS,
+  seedreamProImageUrlCapacityError,
+  type ImageSubjectReplacementRegion,
+} from "../jobs/image-subjects.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { slotRight } from "../notebook-placement.js";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
+import { resolveImageRef } from "./_seedance2-shared.js";
 
 function failure(message: string) {
   return {
@@ -39,6 +45,42 @@ function sourceCellAcceptsArtifact(cell: NotebookCell, artifactId: string): bool
 
 function uniqueSubjectIds(value: readonly string[]): string[] {
   return [...new Set(value)];
+}
+
+const replacementBoxSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  width: z.number().positive().max(1),
+  height: z.number().positive().max(1),
+}).strict();
+
+const replacementRegionSchema = z.object({
+  box: replacementBoxSchema.optional(),
+  subject_id: z.string().min(1).optional(),
+  replacement_artifact_id: z.string().min(1),
+  note: z.string().max(400).optional(),
+}).strict().refine(
+  (region) => Boolean(region.box || region.subject_id),
+  { message: "Each replacement region needs a box or subject_id" },
+);
+
+type ReplacementRegionInput = z.infer<typeof replacementRegionSchema>;
+
+function parsedReplacementRegions(
+  value: unknown,
+): ImageSubjectReplacementRegion[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const parsed = replacementRegionSchema.safeParse(entry);
+    if (!parsed.success) return [];
+    const region = parsed.data;
+    return [{
+      replacementArtifactId: region.replacement_artifact_id,
+      ...(region.box ? { box: region.box } : {}),
+      ...(region.subject_id ? { subjectId: region.subject_id } : {}),
+      ...(region.note ? { note: region.note } : {}),
+    }];
+  });
 }
 
 export function reuseImageSubjectAnalysis(
@@ -352,7 +394,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
     },
     {
       name: "edit_image_subjects",
-      description: "Remove or semantically edit selected cached image subjects into a new connected notebook image",
+      description: "Remove, semantically edit, or replace selected cached image subjects and user-drawn regions into a new connected notebook image",
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -365,9 +407,10 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
         source_cell_id: z.string().uuid(),
         artifact_id: z.string().min(1),
         object_hash: z.string().min(1),
-        subject_ids: z.array(z.string().min(1)).min(1),
-        operation: z.enum(["remove", "edit"]),
+        subject_ids: z.array(z.string().min(1)).optional(),
+        operation: z.enum(["remove", "edit", "replace"]),
         prompt: z.string().max(2400).optional(),
+        regions: z.array(replacementRegionSchema).optional(),
       },
       handler: async (args) => {
         const {
@@ -379,20 +422,22 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
           subject_ids,
           operation,
           prompt,
+          regions,
         } = args as {
           book_id: string;
           notebook_id: string;
           source_cell_id: string;
           artifact_id: string;
           object_hash: string;
-          subject_ids: string[];
-          operation: "remove" | "edit";
+          subject_ids?: string[];
+          operation: "remove" | "edit" | "replace";
           prompt?: string;
+          regions?: ReplacementRegionInput[];
         };
         if (operation === "edit" && !prompt?.trim()) {
           return failure("A prompt is required to edit selected subjects");
         }
-        if (operation === "edit" && !process.env.KIE_API_KEY) {
+        if ((operation === "edit" || operation === "replace") && !process.env.KIE_API_KEY) {
           return failure("KIE_API_KEY environment variable is not set");
         }
         try {
@@ -401,14 +446,49 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             return failure("The requested image version is stale; refresh the asset before editing");
           }
           const map = await readImageSubjectMapRecord(engine, artifact_id);
-          if (!map || map.status !== "ready" || map.objectHash !== object_hash) {
+          const readyMap = map?.status === "ready" && map.objectHash === object_hash
+            ? map
+            : null;
+          const replacementRegions = operation === "replace"
+            ? parsedReplacementRegions(regions)
+            : [];
+          if (operation === "replace") {
+            if (!regions || regions.length === 0) {
+              return failure("Replacement edits require at least one region");
+            }
+            if (replacementRegions.length !== regions.length) {
+              return failure("Each replacement region needs a box or subject_id");
+            }
+            const uniqueReplacements = uniqueSubjectIds(
+              replacementRegions.map((region) => region.replacementArtifactId),
+            );
+            if (1 + uniqueReplacements.length > SEEDREAM_PRO_I2I_MAX_IMAGE_URLS) {
+              return failure(seedreamProImageUrlCapacityError(uniqueReplacements.length));
+            }
+          } else if (!readyMap) {
             return failure("Analyze image subjects before editing them");
           }
-          const selectedIds = uniqueSubjectIds(subject_ids);
-          const subjects = new Map(map.subjects.map((subject) => [subject.id, subject]));
+          const selectedIds = uniqueSubjectIds([
+            ...(subject_ids ?? []),
+            ...replacementRegions.flatMap((region) => region.subjectId ? [region.subjectId] : []),
+          ]);
+          if (operation !== "replace" && selectedIds.length === 0) {
+            return failure("Select at least one subject to edit");
+          }
+          const subjects = new Map((readyMap?.subjects ?? []).map((subject) => [subject.id, subject]));
           const unknown = selectedIds.filter((id) => !subjects.has(id));
           if (unknown.length > 0) {
             return failure(`Unknown subject ids: ${unknown.join(", ")}`);
+          }
+          const resolvedRegions = replacementRegions.map((region) => {
+            const subject = region.subjectId ? subjects.get(region.subjectId) : undefined;
+            return {
+              ...region,
+              box: region.box ?? subject?.normalizedBox,
+            };
+          });
+          if (operation === "replace" && resolvedRegions.some((region) => !region.box)) {
+            return failure("Analyze image subjects before replacing by subject id");
           }
           const notebook = engine.notebooks.read(notebook_id);
           if (!notebook.ok) return failure(notebook.error.message);
@@ -416,15 +496,32 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
           if (!sourceCell || !sourceCellAcceptsArtifact(sourceCell, artifact_id)) {
             return failure("The pinned source cell does not contain the requested image version");
           }
+          const replacementRefs: Array<{ assetId: string; filename: string }> = [];
+          const seenReplacements = new Set<string>();
+          if (operation === "replace") {
+            for (const region of resolvedRegions) {
+              if (seenReplacements.has(region.replacementArtifactId)) continue;
+              const resolved = await resolveImageRef(engine, region.replacementArtifactId);
+              if (!resolved.ok) return failure(resolved.error);
+              seenReplacements.add(region.replacementArtifactId);
+              replacementRefs.push(resolved.value);
+            }
+          }
           const labels = selectedIds.map((id) => subjects.get(id)!.label);
           const generatedPrompt = prompt?.trim()
-            || `Remove ${labels.join(", ")}`;
+            || (operation === "replace"
+              ? `Replace ${resolvedRegions.length} selected ${resolvedRegions.length === 1 ? "region" : "regions"}`
+              : `Remove ${labels.join(", ")}`);
           const actionLabel = operation === "remove"
             ? `Remove ${labels.join(", ")}`
-            : `Edit ${labels.join(", ")}`;
+            : operation === "replace"
+              ? `Replace ${resolvedRegions.length} ${resolvedRegions.length === 1 ? "region" : "regions"}`
+              : `Edit ${labels.join(", ")}`;
           const outputLabel = operation === "remove"
             ? `Image without ${labels.join(", ")}`
-            : `Edited ${labels.join(", ")}`;
+            : operation === "replace"
+              ? `Replaced ${resolvedRegions.length} ${resolvedRegions.length === 1 ? "region" : "regions"}`
+              : `Edited ${labels.join(", ")}`;
           const provider = operation === "remove" ? "local" : "kie";
           const model = operation === "remove"
             ? "sharp/layer-composite"
@@ -467,11 +564,19 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
                   inputs: {
                     generationMode: operation === "remove"
                       ? "subject-remove"
-                      : "subject-edit",
+                      : operation === "replace"
+                        ? "region-replace"
+                        : "subject-edit",
                     sourceArtifactId: artifact_id,
                     sourceObjectHash: object_hash,
                     subjectIds: selectedIds,
                     subjectMapVersion: IMAGE_SUBJECT_MAP_VERSION,
+                    ...(operation === "replace"
+                      ? {
+                          regions: resolvedRegions,
+                          replacementArtifactIds: replacementRefs.map((ref) => ref.assetId),
+                        }
+                      : {}),
                     state: "queued",
                   },
                 });
@@ -555,6 +660,23 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             });
             if (!generation.ok) throw new Error(generation.error.message);
             generationId = generation.value.generationId;
+            if (operation === "replace") {
+              const provenance = await engine.metadata.artifacts.write(
+                imageAssetId,
+                "original",
+                {
+                  origin: "image_subject_replace",
+                  source_asset: artifact_id,
+                  source_object_hash: object_hash,
+                  replacement_artifact_ids: replacementRefs.map((ref) => ref.assetId),
+                  model: "seedream/5-pro-image-to-image",
+                  width: source.width,
+                  height: source.height,
+                  status: "queued",
+                },
+              );
+              if (!provenance.ok) throw new Error(provenance.error.message);
+            }
             await queue.enqueue(jobId, {
               type: "generate_image_subject_edit",
               imageAssetId,
@@ -563,6 +685,19 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
               subjectIds: selectedIds,
               operation,
               prompt: generatedPrompt,
+              ...(operation === "replace"
+                ? {
+                    regions: resolvedRegions,
+                    replacementRefs,
+                    orderedImageRefs: [
+                      { role: "base", artifactId: artifact_id },
+                      ...replacementRefs.map((ref) => ({
+                        role: "replacement" as const,
+                        artifactId: ref.assetId,
+                      })),
+                    ],
+                  }
+                : {}),
               bookId: book_id,
               notebookId: notebook_id,
               producerCellId: producer.id,

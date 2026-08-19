@@ -8,6 +8,7 @@ import {
   CHAT_TOOL_ALIASES,
   NESTED_TIMESTAMP_PARAMS,
   TIMESTAMP_PARAMS,
+  applyBytedanceNamedModelRoute,
   buildChatRoutingPrompt,
   buildChatRoutingUserMessage,
   buildRoutableTools,
@@ -208,6 +209,68 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("scene @a5, character @a1, fluffy kitten standing");
     expect(prompt).toContain("Preserve every consumed notebook @address");
     expect(prompt).toContain("same order");
+    expect(prompt).toContain("Seedance is video, Seedream is image");
+    expect(prompt).toContain("generate_kie_seedream_v5_lite_image_to_image");
+    expect(prompt).toContain("edit-target image first");
+    expect(prompt).toContain("generate_kie_seedance_2_0_video");
+  });
+});
+
+describe("ByteDance named-model routing", () => {
+  const actorAssets = [
+    { tag: "@e2", type: "image", asset_id: "img-e2", notebook_references: ["e2"] },
+    { tag: "@e1", type: "video", asset_id: "vid-e1", notebook_references: ["e1"] },
+    { tag: "@d1", type: "image", asset_id: "img-d1", notebook_references: ["d1"] },
+    { tag: "@d2", type: "image", asset_id: "img-d2", notebook_references: ["d2"] },
+    { tag: "@d3", type: "image", asset_id: "img-d3", notebook_references: ["d3"] },
+  ];
+
+  it("routes a seedance-named image actor replacement to Seedream i2i with the edit target first", () => {
+    const routed = applyBytedanceNamedModelRoute({
+      query: "replace the three actors in @e2 with @d1 @d2 @d3 using seedance",
+      tool: "generate_kie_seedance_2_0_video",
+      params: {
+        prompt: "replace the three actors",
+        video_refs: ["@e2"],
+        image_refs: ["@d1", "@d2", "@d3"],
+      },
+      message: "Generating video.",
+      assetContext: actorAssets,
+    });
+    expect(routed.tool).toBe("generate_kie_seedream_v5_lite_image_to_image");
+    expect(routed.params.image_refs).toEqual(["@e2", "@d1", "@d2", "@d3"]);
+    expect(routed.substituted).toBe(true);
+    expect(routed.message).toContain("Seedream");
+    expect(routed.message).toContain("Seedance is video");
+  });
+
+  it("routes a video-target seedance replacement to Seedance 2.0 r2v", () => {
+    const routed = applyBytedanceNamedModelRoute({
+      query: "replace the three actors in @e1 with @d1 @d2 @d3 using seedance",
+      tool: "generate_image",
+      params: {
+        prompt: "replace the three actors",
+        image_refs: ["@e1", "@d1", "@d2", "@d3"],
+      },
+      message: "Generating image.",
+      assetContext: actorAssets,
+    });
+    expect(routed.tool).toBe("generate_kie_seedance_2_0_video");
+    expect(routed.params.video_refs).toEqual(["@e1"]);
+    expect(routed.params.image_refs).toEqual(["@d1", "@d2", "@d3"]);
+    expect(routed.substituted).toBe(false);
+  });
+
+  it("maps Seedance 5.0 edit on an image target to Seedream", () => {
+    const routed = applyBytedanceNamedModelRoute({
+      query: "edit @e2 with Seedance 5.0 edit using @d1",
+      tool: "generate_image",
+      params: { prompt: "edit the actors" },
+      message: "Generating image.",
+      assetContext: actorAssets,
+    });
+    expect(routed.tool).toBe("generate_kie_seedream_v5_lite_image_to_image");
+    expect(routed.params.image_refs).toEqual(["@e2", "@d1"]);
   });
 });
 

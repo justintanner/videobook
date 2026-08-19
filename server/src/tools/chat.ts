@@ -9,6 +9,7 @@ import type {
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import {
+  applyBytedanceNamedModelRoute,
   buildChatRoutingPrompt,
   buildChatRoutingUserMessage,
   buildRoutableTools,
@@ -644,6 +645,19 @@ export function chatDef(engine: Engine): ToolDef {
       if (!decision.tool) {
         return error("Could not determine which tool to use. Please rephrase.");
       }
+
+      const bytedanceRoute = applyBytedanceNamedModelRoute({
+        query: expandedPrompt,
+        tool: decision.tool,
+        params: decision.params ?? {},
+        message: decision.message,
+        assetContext,
+      });
+      decision = {
+        tool: bytedanceRoute.tool,
+        params: bytedanceRoute.params,
+        message: bytedanceRoute.message,
+      };
 
       // 6. Validate tool exists in routable registry
       const routableTool = getRoutableTool(routableTools, decision.tool);
