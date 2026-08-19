@@ -27,10 +27,11 @@ function createServer(
 }
 
 export function createHttpHandler(
-  engine: Engine = defaultFs,
+  engine: Engine | (() => Engine) = defaultFs,
   books: BookManager = bookManager,
 ): McpHttpHandler {
-  return createMcpHandler(() => createServer(engine, books), {
+  const resolveEngine = typeof engine === "function" ? engine : () => engine;
+  return createMcpHandler(() => createServer(resolveEngine(), books), {
     legacy: "reject",
   });
 }

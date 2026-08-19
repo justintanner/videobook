@@ -7,11 +7,12 @@ import { createEngineForTest } from "../engine.js";
  *
  * Tests each command with different inputs (happy path, error cases, edge cases).
  */
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterAll, beforeAll, beforeEach } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createTestClient } from "../test-client.js";
+import { createReusableTestClient } from "../test-client.js";
+import type { ReusableTestClient } from "../test-client.js";
 import { registerJobHandler } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import { parseCommandArgs, selectCommandForInput } from "../../../src/lib/command-registry.js";
@@ -36,9 +37,11 @@ function parseResult(result: { content?: unknown; toolResult?: unknown }): Recor
 
 describe("slash commands e2e", () => {
 
+  let harness: ReusableTestClient;
   let client: Client;
   let tempDir: string;
   let commands: ServerCommand[];
+  let parentDir: string;
 
   /** Media kind now comes from the catalog row, never from an id prefix. */
   function expectKind(artifactId: string, kind: ArtifactKind): void {
@@ -48,21 +51,27 @@ describe("slash commands e2e", () => {
     expect(artifact.ok && artifact.value.kind).toBe(kind);
   }
 
+  beforeAll(async () => {
+    parentDir = await mkdtemp(join(tmpdir(), "videocity-slash-e2e-"));
+    harness = await createReusableTestClient(parentDir);
+    client = harness.client;
+    commands = getCanonicalCommands() as ServerCommand[];
+  });
+
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "videocity-slash-e2e-"));
-    client = await createTestClient(tempDir);
+    await harness.reset();
+    tempDir = harness.root;
     registerJobHandler("download_video", async () => ({ stubbed: true }));
     registerJobHandler("render_project", async () => ({ stubbed: true }));
     await client.callTool({
       name: "create_project",
       arguments: { book_id: "test-proj" },
     });
-    commands = getCanonicalCommands() as ServerCommand[];
   });
 
-  afterEach(async () => {
-    await client?.close();
-    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  afterAll(async () => {
+    await harness?.close();
+    if (parentDir) await rm(parentDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   // -----------------------------------------------------------------------
@@ -722,25 +731,14 @@ describe("slash commands e2e", () => {
   describe("/doctor", () => {
 
     it("reports a healthy project (no broken or stuck assets)", async () => {
-      const isolatedDir = await mkdtemp(join(tmpdir(), "videocity-slash-doctor-"));
-      const isolated = await createTestClient(isolatedDir);
-      try {
-        await isolated.callTool({
-          name: "create_project",
-          arguments: { book_id: "healthy-proj" },
-        });
-        const result = await isolated.callTool({
-          name: "doctor",
-          arguments: { book_id: "healthy-proj" },
-        });
-        expect(result.isError).toBeFalsy();
-        const parsed = parseResult(result);
-        expect(parsed.broken).toEqual([]);
-        expect(parsed.stuck).toEqual([]);
-      } finally {
-        await isolated.close();
-        await rm(isolatedDir, { recursive: true, force: true, maxRetries: 3 });
-      }
+      const result = await client.callTool({
+        name: "doctor",
+        arguments: { book_id: "test-proj" },
+      });
+      expect(result.isError).toBeFalsy();
+      const parsed = parseResult(result);
+      expect(parsed.broken).toEqual([]);
+      expect(parsed.stuck).toEqual([]);
     });
 
     it("errors when fix is requested without an asset_id", async () => {
