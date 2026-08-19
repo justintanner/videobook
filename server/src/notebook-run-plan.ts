@@ -582,6 +582,19 @@ export async function claimNotebookRunPlan(
   return claimed;
 }
 
+function notebookRunSubgraphCellIds(
+  plan: Record<string, unknown>,
+): string[] | undefined {
+  const notebookRun = plan.notebookRun;
+  if (!notebookRun || typeof notebookRun !== "object" || Array.isArray(notebookRun)) {
+    return undefined;
+  }
+  const raw = (notebookRun as Record<string, unknown>).subgraphCellIds;
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const cellIds = raw.filter((id): id is string => typeof id === "string" && id.length > 0);
+  return cellIds.length === raw.length ? cellIds : undefined;
+}
+
 export async function enqueueNotebookRunPlan(
   engine: Engine,
   notebookId: string,
@@ -607,6 +620,7 @@ export async function enqueueNotebookRunPlan(
   if (claimed.noOp) return { status: "completed", planId };
   const record = claimed.record;
   const jobId = `run-notebook-${notebookId}-${runId}`;
+  const cellIds = notebookRunSubgraphCellIds(record.plan);
   try {
     await queue.enqueue(jobId, {
       type: "run_notebook",
@@ -618,11 +632,12 @@ export async function enqueueNotebookRunPlan(
       actor: options.actor,
       jobId,
       force: claimed.force,
+      ...(cellIds ? { cellIds } : {}),
     });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     await failQueuedNotebookCells(engine, notebookId, {
-      cellIds: [],
+      cellIds: cellIds ?? [],
       runId,
       runPlanId: planId,
       error: message,

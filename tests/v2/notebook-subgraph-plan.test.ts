@@ -3,17 +3,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createEngine, type Engine, type NotebookDocument } from "videobook-engine";
-import { notebookCellFingerprint } from "../../server/src/jobs/run-notebook.js";
+import {
+  notebookCellFingerprint,
+  registerRunNotebookJob,
+} from "../../server/src/jobs/run-notebook.js";
 import {
   claimNotebookRunPlan,
+  enqueueNotebookRunPlan,
   planSelectedNotebookSubgraph,
 } from "../../server/src/notebook-run-plan.js";
+import { setEngineRoot, stopBookQueue, waitForJob } from "../../server/src/queue.js";
 
 describe("selected notebook subgraph planning", () => {
   let rootDir: string | undefined;
   let engine: Engine | undefined;
 
   afterEach(async () => {
+    if (engine) await stopBookQueue(engine.book.get().bookId);
     engine?.close();
     if (rootDir) {
       await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
@@ -240,5 +246,74 @@ describe("selected notebook subgraph planning", () => {
     expect(stages.filter((stage) => stage.kind === "queued").every((stage) =>
       stage.input && typeof stage.input === "object"
       && (stage.input as Record<string, unknown>).subgraph_run === true)).toBe(true);
+  });
+
+  it("runs only the claimed subgraph and leaves out-of-subgraph stale cells untouched", async () => {
+    const engine = await setup();
+    const graph = await writeGraph(engine);
+    const outsideUnpaid = engine.notebooks.createCell({
+      type: "split_video",
+      label: "Outside unpaid",
+      slot: { row: 0, column: 5 },
+      operation: "split_range",
+      tool: "ffmpeg",
+      provider: "local",
+    });
+    const seeded = engine.notebooks.read(graph.document.id);
+    expect(seeded.ok).toBe(true);
+    if (!seeded.ok) throw new Error(seeded.error.message);
+    const withOutside = await engine.notebooks.write({
+      ...seeded.value,
+      cells: [...seeded.value.cells, outsideUnpaid],
+    });
+    expect(withOutside.ok).toBe(true);
+    const document = engine.notebooks.read(graph.document.id);
+    expect(document.ok).toBe(true);
+    if (!document.ok) throw new Error(document.error.message);
+
+    const plan = await planSelectedNotebookSubgraph(
+      engine,
+      document.value,
+      graph.target.id,
+      "ui",
+      "tester",
+    );
+    const subgraphCellIds = (plan.notebookRun as Record<string, unknown>)
+      .subgraphCellIds as string[];
+    expect(subgraphCellIds).not.toContain(graph.unrelated.id);
+    expect(subgraphCellIds).not.toContain(outsideUnpaid.id);
+
+    registerRunNotebookJob(engine);
+    await setEngineRoot(rootDir!, engine);
+    const queued = await enqueueNotebookRunPlan(
+      engine,
+      document.value.id,
+      String(plan.planId),
+      { confirmUnpriced: true, actor: "tester" },
+    );
+    expect(queued.status).toBe("queued");
+    expect(queued.jobId).toBeTruthy();
+    const jobs = engine.jobs.queue.list({ type: "run_notebook" });
+    expect(jobs).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          cellIds: subgraphCellIds,
+          runPlanId: plan.planId,
+        }),
+      }),
+    ]);
+
+    await waitForJob(queued.jobId!, 30_000).catch(() => undefined);
+    const after = engine.notebooks.read(document.value.id);
+    expect(after.ok).toBe(true);
+    if (!after.ok) throw new Error(after.error.message);
+    expect(after.value.execution?.[graph.unrelated.id]).toBeUndefined();
+    expect(after.value.execution?.[outsideUnpaid.id]).toBeUndefined();
+    const runError = after.value.notebookRunPlans?.find((record) =>
+      record.planId === plan.planId)?.error;
+    if (typeof runError === "string") {
+      expect(runError).not.toContain("Unrelated paid");
+      expect(runError).not.toContain("Outside unpaid");
+    }
   });
 });
