@@ -13,6 +13,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test` — Run vitest (integration tests with real dependencies)
 - `npm run preview` — Preview the production build locally
 
+## Git Workflow
+
+This repository explicitly opts into the Beads **team-maintainer** profile (`agent.profile: "team-maintainer"` in `.beads/config.yaml`): agents commit their own completed work.
+
+- **Work directly on `main`.** No feature branch is needed by default. Creating a branch is allowed whenever the work benefits from isolation (large refactor, risky experiment, parallel agents touching the same files) — no permission required; merge it back into `main` when done.
+- **Done means lint + test + commit.** Every completed piece of work ends with `npm run lint` and `npm run test` passing, followed by a `git commit` with a descriptive message. Never leave finished work uncommitted at handoff.
+- **Never commit red.** If lint or tests fail, fix them before committing; if genuinely blocked, file a bead describing the failure and hand off without committing the broken state.
+- **Pushing is not part of done.** Run `git push` / `bd dolt push` only when explicitly asked.
+
 ## Architecture
 
 React 19 + TypeScript + Vite 7 SPA using MCP (Model Context Protocol) as the API layer.

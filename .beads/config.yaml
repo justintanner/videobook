@@ -57,3 +57,5 @@
 # sync.remote disabled — use the local embedded Dolt store (avoids the
 # remote-backed write block from the v49->v53 schema migration conflict).
 sync.remote: "git+https://github.com/justintanner/videobook.git"
+# Agent git/commit authority profile for bd prime (conservative | minimal | team-maintainer)
+agent.profile: "team-maintainer"
