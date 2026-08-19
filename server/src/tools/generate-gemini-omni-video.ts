@@ -29,7 +29,7 @@ const generateGeminiOmniVideoSchema = {
 
 type Args = SchemaArgs<typeof generateGeminiOmniVideoSchema>;
 
-export function generateGeminiOmniVideoDef(fs: Engine): ToolDef {
+export function generateGeminiOmniVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_gemini_omni_video",
     description: "Generate a video using Google Gemini Omni (KIE). Multimodal: a text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes. Creates a new video artifact and enqueues a background job.",
@@ -76,20 +76,20 @@ export function generateGeminiOmniVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageRef(fs, slug);
+        const r = await resolveImageRef(engine, slug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       let videoInput: RefInput | undefined;
       if (videoRef !== undefined) {
-        const r = await resolveVideoRef(fs, videoRef);
+        const r = await resolveVideoRef(engine, videoRef);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInput = r.value;
       }
 
       const videoName = generationLabel(SLUG, prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }

@@ -17,7 +17,7 @@ function errorResult(message: string): {
   };
 }
 
-export function timewarpVideoDef(fs: Engine): ToolDef {
+export function timewarpVideoDef(engine: Engine): ToolDef {
   return {
     name: "timewarp_video",
     description: "Retime one video range and compensate the remaining picture to preserve the original duration and audio.",
@@ -43,7 +43,7 @@ export function timewarpVideoDef(fs: Engine): ToolDef {
         stretch_factor: number;
       };
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) return errorResult(manifestResult.error.message);
       const videoFile = findVideoFile(manifestResult.value.files);
       if (!videoFile) return errorResult(`No video file found in asset ${asset_id}`);

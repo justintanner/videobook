@@ -44,14 +44,14 @@ function burnOverlayPosition(corner: OsgPosition, padding: number): { x: string;
  * `corner` with the standard edge padding. Mirrors the trim/crop shape:
  * replace the canonical file in place, drop stale visual analysis, reprocess.
  */
-export function registerBurnWatermarkJob(fs: Engine): void {
+export function registerBurnWatermarkJob(engine: Engine): void {
   registerJobHandler("burn_watermark", async (payload, ctx) => {
     const {
       assetId, assetDir, bookId, videoPath, badgePath, corner, opacity, userScale,
     } = payload as BurnWatermarkPayload;
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -98,11 +98,11 @@ export function registerBurnWatermarkJob(fs: Engine): void {
         }
 
         const inputFilename = basename(videoPath);
-        await replaceArtifactFileFromPath(fs, assetId, inputFilename, outputPath);
+        await replaceArtifactFileFromPath(engine, assetId, inputFilename, outputPath);
 
         // Visual analysis now describes the un-watermarked frames; transcripts
         // stay valid (audio and timing are untouched).
-        await fs.files.delete(assetId, ".original.analysis.json");
+        await engine.files.delete(assetId, ".original.analysis.json");
 
         return { videoPath: join(assetDir, inputFilename) };
       },

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Engine } from "videobook-engine";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import {
   configureProviderPollDriverForTests,
   isProviderPollDriverActive,

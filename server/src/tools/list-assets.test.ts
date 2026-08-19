@@ -155,7 +155,7 @@ describe("list_assets tool", () => {
   });
 
   it("include_referenced backfills outputVersionArtifactIds and providerArtifactId", async () => {
-    const { createEngineForTest, closeEngineForTest } = await import("../fs.js");
+    const { createEngineForTest, closeEngineForTest } = await import("../engine.js");
     const { listAssetsDef } = await import("./list-assets.js");
     const root = await mkdtemp(join(tmpdir(), "list-assets-ref-"));
     const engine = createEngineForTest(root);

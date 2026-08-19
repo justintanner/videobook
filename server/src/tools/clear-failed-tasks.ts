@@ -20,7 +20,7 @@ function hasMediaFile(files: ArtifactManifestFile[], kind: ArtifactKind): boolea
   });
 }
 
-export function clearFailedTasksDef(fs: Engine): ToolDef {
+export function clearFailedTasksDef(engine: Engine): ToolDef {
   return {
     name: "clean_failed_assets",
     description:
@@ -31,7 +31,7 @@ export function clearFailedTasksDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const { book_id: _book_id } = args as { book_id: string };
 
-      const failuresRes = await fs.jobs.failures.findAll();
+      const failuresRes = await engine.jobs.failures.findAll();
       const failures = failuresRes.ok ? failuresRes.value : [];
 
       const cleared: string[] = [];
@@ -39,15 +39,15 @@ export function clearFailedTasksDef(fs: Engine): ToolDef {
       const errors: Array<{ assetId: string; message: string }> = [];
 
       for (const failure of failures) {
-        const artifact = fs.artifacts.get(failure.artifactId);
-        const manifest = await fs.files.manifest(failure.artifactId);
+        const artifact = engine.artifacts.get(failure.artifactId);
+        const manifest = await engine.files.manifest(failure.artifactId);
         const materialized =
           artifact.ok
           && manifest.ok
           && hasMediaFile(manifest.value.files, artifact.value.kind);
 
         if (materialized) {
-          const clearResult = await fs.jobs.failures.clear(failure.artifactId);
+          const clearResult = await engine.jobs.failures.clear(failure.artifactId);
           if (clearResult.ok) {
             errorCleared.push(failure.artifactId);
           } else {
@@ -56,7 +56,7 @@ export function clearFailedTasksDef(fs: Engine): ToolDef {
           continue;
         }
 
-        const result = await fs.artifacts.delete(failure.artifactId);
+        const result = await engine.artifacts.delete(failure.artifactId);
         if (result.ok) {
           cleared.push(failure.artifactId);
         } else {

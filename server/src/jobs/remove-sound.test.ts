@@ -1,4 +1,4 @@
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { execFile } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";

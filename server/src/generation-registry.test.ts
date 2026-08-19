@@ -1,4 +1,4 @@
-import { fs } from "./fs.js";
+import { scopedEngine } from "./engine.js";
 import { describe, expect, it } from "vitest";
 import {
   GENERATION_ACTIONS,
@@ -46,11 +46,11 @@ describe("generation-registry", () => {
   });
 
   it("exposes each canonical tool exactly once and no historical aliases", () => {
-    const names = getAllToolDefs(fs).map((tool) => tool.name);
+    const names = getAllToolDefs(scopedEngine).map((tool) => tool.name);
     const registered = new Set(names);
     const canonical = new Set(GENERATION_ACTIONS.map((action) => action.canonical_name));
 
-    expect(names).toHaveLength(303);
+    expect(names).toHaveLength(305);
     expect(registered.size).toBe(names.length);
     for (const action of GENERATION_ACTIONS) {
       expect(registered.has(action.canonical_name), action.canonical_name).toBe(true);

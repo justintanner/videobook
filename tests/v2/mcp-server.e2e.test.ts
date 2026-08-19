@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -13,7 +13,7 @@ import { FFMPEG } from '../../server/src/ffmpeg.js'
 const execFileAsync = promisify(execFile)
 
 interface StartedServer {
-  child: ChildProcessWithoutNullStreams
+  child: ChildProcess
   output: string[]
   url: string
 }

@@ -3,7 +3,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function showFolderDef(fs: Engine): ToolDef {
+export function showFolderDef(engine: Engine): ToolDef {
   return {
     name: "show_folder",
     description: "Reveal an asset's folder in Finder",
@@ -13,7 +13,7 @@ export function showFolderDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };
-      const result = await fs.workspaces.resolveArtifact(asset_id);
+      const result = await engine.workspaces.resolveArtifact(asset_id);
       if (!result.ok) {
         return {
           isError: true as const,

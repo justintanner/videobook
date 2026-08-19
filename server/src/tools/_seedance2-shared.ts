@@ -38,14 +38,14 @@ export type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-export async function resolveImageRef(fs: Engine, raw: string): Promise<ResolveOk | ResolveErr> {
+export async function resolveImageRef(engine: Engine, raw: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
-  const artifact = fs.artifacts.get(assetId);
+  const artifact = engine.artifacts.get(assetId);
   if (!artifact.ok) return { ok: false, error: artifact.error.message };
   if (artifact.value.kind !== "image") {
     return { ok: false, error: `image ref must be an image artifact, got ${artifact.value.kind}: ${assetId}` };
   }
-  const manifest = await fs.files.manifest(assetId);
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
@@ -57,7 +57,7 @@ export async function resolveImageRef(fs: Engine, raw: string): Promise<ResolveO
 // artifact-kind gate since the destination asset may hold multiple media
 // files of mixed kinds.
 async function resolveSlashedRef(
-  fs: Engine,
+  engine: Engine,
   raw: string,
 ): Promise<ResolveOk | ResolveErr | null> {
   const stripped = raw.replace(/^@/, "");
@@ -66,23 +66,23 @@ async function resolveSlashedRef(
   const assetId = stripped.slice(0, slashIdx);
   const filename = stripped.slice(slashIdx + 1);
   if (!assetId || !filename) return { ok: false, error: `Invalid slashed ref: ${raw}` };
-  const manifest = await fs.files.manifest(assetId);
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = manifest.value.files.find((f) => f.name === filename);
   if (!file) return { ok: false, error: `File ${filename} not found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename } };
 }
 
-export async function resolveVideoRef(fs: Engine, raw: string): Promise<ResolveOk | ResolveErr> {
-  const slashed = await resolveSlashedRef(fs, raw);
+export async function resolveVideoRef(engine: Engine, raw: string): Promise<ResolveOk | ResolveErr> {
+  const slashed = await resolveSlashedRef(engine, raw);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
-  const artifact = fs.artifacts.get(assetId);
+  const artifact = engine.artifacts.get(assetId);
   if (!artifact.ok) return { ok: false, error: artifact.error.message };
   if (artifact.value.kind !== "video") {
     return { ok: false, error: `video ref must be a video artifact, got ${artifact.value.kind}: ${assetId}` };
   }
-  const manifest = await fs.files.manifest(assetId);
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
   if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
@@ -91,14 +91,14 @@ export async function resolveVideoRef(fs: Engine, raw: string): Promise<ResolveO
 
 // Audio replacement always targets a first-class audio artifact. Notebook
 // cells reference artifact identities; they do not expose nested file paths.
-export async function resolveAudioRef(fs: Engine, raw: string): Promise<ResolveOk | ResolveErr> {
+export async function resolveAudioRef(engine: Engine, raw: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
-  const artifact = fs.artifacts.get(assetId);
+  const artifact = engine.artifacts.get(assetId);
   if (!artifact.ok) return { ok: false, error: artifact.error.message };
   if (artifact.value.kind !== "audio") {
     return { ok: false, error: `audio ref must be an audio artifact, got ${artifact.value.kind}: ${assetId}` };
   }
-  const manifest = await fs.files.manifest(assetId);
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, "audio");
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -136,7 +136,7 @@ type Seedance2ToolFactoryOpts = {
 };
 
 export function buildSeedance2ToolDef(
-  fs: Engine,
+  engine: Engine,
   opts: Seedance2ToolFactoryOpts,
 ): ToolDef {
   const schema = buildSeedance2Schema(opts.apiModel);
@@ -203,48 +203,48 @@ export function buildSeedance2ToolDef(
 
       let firstFrame: RefInput | undefined;
       if (first_frame_ref !== undefined) {
-        const r = await resolveImageRef(fs, first_frame_ref);
+        const r = await resolveImageRef(engine, first_frame_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let lastFrame: RefInput | undefined;
       if (last_frame_ref !== undefined) {
-        const r = await resolveImageRef(fs, last_frame_ref);
+        const r = await resolveImageRef(engine, last_frame_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         lastFrame = r.value;
       }
 
       const imageInputs: RefInput[] = [];
       for (const raw of imgs) {
-        const r = await resolveImageRef(fs, raw);
+        const r = await resolveImageRef(engine, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       const videoInputs: RefInput[] = [];
       for (const raw of vids) {
-        const r = await resolveVideoRef(fs, raw);
+        const r = await resolveVideoRef(engine, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInputs.push(r.value);
       }
 
       const audioInputs: RefInput[] = [];
       for (const raw of auds) {
-        const r = await resolveAudioRef(fs, raw);
+        const r = await resolveAudioRef(engine, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         audioInputs.push(r.value);
       }
 
       let replaceAudioWith: RefInput | undefined;
       if (replace_audio_with !== undefined) {
-        const r = await resolveAudioRef(fs, replace_audio_with);
+        const r = await resolveAudioRef(engine, replace_audio_with);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `replace_audio_with: ${r.error}` }] };
         replaceAudioWith = r.value;
       }
 
       const videoName = generationLabel(modelSlug("kie", opts.apiModel), prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

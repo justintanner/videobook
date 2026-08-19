@@ -33,11 +33,11 @@ function provenance(payload: RestoreArchiveClipPayload): Record<string, unknown>
   };
 }
 
-export function registerRestoreArchiveClipJob(fs: Engine): void {
+export function registerRestoreArchiveClipJob(engine: Engine): void {
   registerJobHandler("restore_archive_clip", async (payload, ctx) => {
     const p = payload as RestoreArchiveClipPayload;
     return withLockedLocalLease(
-      fs,
+      engine,
       p.assetId,
       p.assetDir,
       ctx,
@@ -47,7 +47,7 @@ export function registerRestoreArchiveClipJob(fs: Engine): void {
         const store = getArchiveStore();
         const body = await store.getBytes(p.mediaKey);
         if (!body) throw new Error(`Archive media not found: ${p.mediaKey}`);
-        const write = await fs.files.write(p.assetId, p.filename, Buffer.from(body));
+        const write = await engine.files.write(p.assetId, p.filename, Buffer.from(body));
         if (!write.ok) throw new Error(write.error.message);
 
         const meta = provenance(p);
@@ -64,7 +64,7 @@ export function registerRestoreArchiveClipJob(fs: Engine): void {
           return { success: true, archive_id: p.archiveId, asset_id: p.assetId, job_id: processJobId };
         }
 
-        const writeMeta = await fs.metadata.artifacts.write(p.assetId, "original", {
+        const writeMeta = await engine.metadata.artifacts.write(p.assetId, "original", {
           ...meta,
           content_type: p.contentType,
           duration: typeof p.duration === "number" ? p.duration : null,

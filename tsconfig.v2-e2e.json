@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.v2-test.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["tests/v2/**/*.e2e.test.ts"],
+  "exclude": []
+}

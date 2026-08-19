@@ -266,6 +266,7 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "extract_last_frame", exposure: "direct", command: "/extract-last-frame", purpose: "Extract the last video frame" },
   { tool: "extract_frame", exposure: "direct", command: "/extract-frame", purpose: "Extract a frame at a timestamp" },
   { tool: "extract_notebook_frame", exposure: "internal", purpose: "Extract a frame from a video cell into a new image cell" },
+  { tool: "extract_notebook_audio", exposure: "internal", purpose: "Extract audio from a video cell into a new audio cell" },
   { tool: "extract_video_clip", exposure: "internal", purpose: "Extract a notebook video clip" },
   { tool: "extract_audio", exposure: "direct", command: "/extract-audio", purpose: "Extract a video soundtrack" },
   { tool: "make_cover_song", exposure: "direct", command: "/make-cover-song", purpose: "Make an exact-duration instrumental cover from video or audio" },

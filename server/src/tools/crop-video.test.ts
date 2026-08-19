@@ -4,28 +4,19 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import { FFPROBE } from "../ffmpeg.js";
+import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import type { Client } from "@modelcontextprotocol/client";
 
 const execFileAsync = promisify(execFile);
-const require = createRequire(import.meta.url);
-const FFMPEG: string = require("ffmpeg-static");
 
 type TextContent = Array<{ type: string; text: string }>;
 
 async function generateTestVideo(outputPath: string): Promise<void> {
   // 1920x1080 source so a centred 9:16 crop (608x1080) and a 1:1 crop (1080x1080) both fit.
-  await execFileAsync(FFMPEG, [
-    "-y",
-    "-f", "lavfi", "-i", "testsrc=duration=2:size=1920x1080:rate=10",
-    "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
-    "-c:v", "libx264", "-pix_fmt", "yuv420p",
-    "-c:a", "aac", "-shortest",
-    outputPath,
-  ]);
+  await copyVideoFixture(COMMON_VIDEO_FIXTURES.cropHd, outputPath);
 }
 
 async function uploadVideo(

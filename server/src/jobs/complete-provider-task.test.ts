@@ -1,4 +1,4 @@
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fsP from "node:fs/promises";
 import * as path from "node:path";

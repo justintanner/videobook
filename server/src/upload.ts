@@ -80,11 +80,11 @@ export async function prepareBytesForUpload(
 // a collision-free remote filename. Shared preamble for every provider-native
 // upload wrapper.
 export async function prepareAssetForUpload(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   filename: string,
 ): Promise<{ data: Uint8Array; hashedFilename: string; contentType: string }> {
-  const readResult = await fs.files.read(assetId, filename);
+  const readResult = await engine.files.read(assetId, filename);
   if (!readResult.ok) throw new Error(readResult.error.message);
   return prepareBytesForUpload(new Uint8Array(readResult.value), filename);
 }
@@ -94,10 +94,10 @@ export async function prepareAssetForUpload(
 // specific AI provider. Provider-specific jobs should call the matching
 // `uploadAssetTo{Fal,Kie,Alibaba}` wrapper instead.
 export async function uploadAssetFile(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   filename: string,
 ): Promise<string> {
-  const { data, hashedFilename } = await prepareAssetForUpload(fs, assetId, filename);
+  const { data, hashedFilename } = await prepareAssetForUpload(engine, assetId, filename);
   return uploadBytesToFreeHost(data, hashedFilename);
 }

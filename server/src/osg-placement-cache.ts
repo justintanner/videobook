@@ -80,21 +80,21 @@ export function parseOsgPlacementAnalysis(raw: unknown): OsgPlacementAnalysis {
 }
 
 export async function readOsgPlacementAnalysis(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<OsgPlacementAnalysis | null> {
-  const result = await fs.metadata.artifacts.read<unknown>(assetId, OSG_PLACEMENT_METADATA_KEY);
+  const result = await engine.metadata.artifacts.read<unknown>(assetId, OSG_PLACEMENT_METADATA_KEY);
   if (!result.ok) return null;
   const parsed = analysisSchema.safeParse(result.value);
   return parsed.success ? parsed.data as OsgPlacementAnalysis : null;
 }
 
 export async function writeOsgPlacementAnalysis(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   analysis: OsgPlacementAnalysis,
 ): Promise<void> {
   const parsed = parseOsgPlacementAnalysis(analysis);
-  const result = await fs.metadata.artifacts.write(assetId, OSG_PLACEMENT_METADATA_KEY, parsed);
+  const result = await engine.metadata.artifacts.write(assetId, OSG_PLACEMENT_METADATA_KEY, parsed);
   if (!result.ok) throw new Error(`Failed to persist OSG placement analysis: ${result.error.message}`);
 }

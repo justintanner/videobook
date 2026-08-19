@@ -22,7 +22,7 @@ type OriginalMetadata = {
 };
 
 async function enrichCommitsWithRewrite(
-  fs: Engine,
+  engine: Engine,
   commits: Revision[],
   artifact: Artifact,
 ): Promise<EnrichedCommit[]> {
@@ -30,7 +30,7 @@ async function enrichCommitsWithRewrite(
   return Promise.all(
     commits.map(async (commit): Promise<EnrichedCommit> => {
       const result =
-        await fs.metadata.artifacts.readAtRevision<OriginalMetadata>(artifact.artifactId, "original", commit.hash
+        await engine.metadata.artifacts.readAtRevision<OriginalMetadata>(artifact.artifactId, "original", commit.hash
         );
       if (!result.ok || result.value.origin !== "describe_image") {
         return commit;
@@ -54,7 +54,7 @@ async function enrichCommitsWithRewrite(
   );
 }
 
-export function assetHistoryDef(fs: Engine): ToolDef {
+export function assetHistoryDef(engine: Engine): ToolDef {
   return {
     name: "asset_history",
     description: "Get immutable Dolt revision history for an asset",
@@ -70,14 +70,14 @@ export function assetHistoryDef(fs: Engine): ToolDef {
         limit?: number;
       };
       try {
-        const artifact = fs.artifacts.get(asset_id);
+        const artifact = engine.artifacts.get(asset_id);
         if (!artifact.ok) throw new Error(artifact.error.message);
-        const commits = fs.history.artifact(artifact.value.artifactId, limit);
+        const commits = engine.history.artifact(artifact.value.artifactId, limit);
         return {
           content: [{
             type: "text" as const,
             text: JSON.stringify(
-              await enrichCommitsWithRewrite(fs, commits, artifact.value),
+              await enrichCommitsWithRewrite(engine, commits, artifact.value),
             ),
           }],
         };

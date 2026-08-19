@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import type { Client } from "@modelcontextprotocol/client";
 import type { CostEstimate } from "@apicity/cost";
 import { createTestClient } from "../test-client.js";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { queue } from "../queue.js";
 
 type TextContent = Array<{ type: string; text: string }>;

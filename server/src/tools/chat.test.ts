@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { v7 as uuidv7 } from "uuid";
 import {
   applySpeechRoutingDefaults,

@@ -20,10 +20,10 @@ type Payload = {
   cfg_scale?: number;
 };
 
-export function registerGenerateKlingV3ProT2vFalJob(fs: Engine): void {
+export function registerGenerateKlingV3ProT2vFalJob(engine: Engine): void {
   registerJobHandler("generate_kling_v3_pro_t2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(engine, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
       const input: FalInput = {
         prompt: p.prompt,
@@ -36,7 +36,7 @@ export function registerGenerateKlingV3ProT2vFalJob(fs: Engine): void {
       };
   
       const taskId = await submitFalJob({
-        fs,
+        engine,
         bookId: p.bookId,
         assetId: p.vidAssetId,
         assetDir: p.vidAssetDir,

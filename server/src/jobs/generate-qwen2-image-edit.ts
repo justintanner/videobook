@@ -21,7 +21,7 @@ type GenerateQwen2ImageEditPayload = {
   seed?: number;
 };
 
-export function registerGenerateQwen2ImageEditJob(fs: Engine): void {
+export function registerGenerateQwen2ImageEditJob(engine: Engine): void {
   registerJobHandler("generate_qwen2_image_edit", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
@@ -35,7 +35,7 @@ export function registerGenerateQwen2ImageEditJob(fs: Engine): void {
     const imageUrl =
       "url" in input
         ? input.url
-        : await uploadAssetToKie(fs, input.assetId, input.filename);
+        : await uploadAssetToKie(engine, input.assetId, input.filename);
     const normalizedPrompt = transformProviderPrompt(
       "generate_kie_qwen_2_0_edit_image",
       {
@@ -48,7 +48,7 @@ export function registerGenerateQwen2ImageEditJob(fs: Engine): void {
       { prompt: normalizedPrompt, image_size: imageSize, output_format: outputFormat, seed },
       imageUrl,
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "qwen2_image_edit",
       assetId: imgAssetId,

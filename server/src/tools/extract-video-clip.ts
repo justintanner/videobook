@@ -15,7 +15,7 @@ function derivedClipName(
   return `${base}-${startTime}s-${endTime}s`;
 }
 
-export function extractVideoClipDef(fs: Engine): ToolDef {
+export function extractVideoClipDef(engine: Engine): ToolDef {
   return {
     name: "extract_video_clip",
     description: "Cut or extract a new video clip from a source time range while preserving the original. Use when the user says 'create a new clip from @a1 from 15s to 44s'. start_time and end_time accept seconds or timestamps such as 15s, 1:30, or 2m20s.",
@@ -48,7 +48,7 @@ export function extractVideoClipDef(fs: Engine): ToolDef {
       let startTime: number;
       let endTime: number;
       try {
-        assetId = resolveVideoAssetReference(fs, asset_id, notebook_id);
+        assetId = resolveVideoAssetReference(engine, asset_id, notebook_id);
         startTime = parseVideoTimestamp(start_time, "start_time") ?? 0;
         endTime = parseVideoTimestamp(end_time, "end_time")!;
       } catch (err) {
@@ -70,7 +70,7 @@ export function extractVideoClipDef(fs: Engine): ToolDef {
         };
       }
 
-      const sourceArtifact = fs.artifacts.get(assetId);
+      const sourceArtifact = engine.artifacts.get(assetId);
       if (!sourceArtifact.ok) {
         return {
           isError: true as const,

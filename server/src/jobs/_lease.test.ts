@@ -3,13 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Engine } from "videobook-engine";
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
-import { claimLockedLease } from "./_lease.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
+import { claimLockedLease, configureLeaseClockForTests } from "./_lease.js";
 
 const LOCK = { durationMs: 60_000 };
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function yieldTurn(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 describe("claimLockedLease", () => {
@@ -19,6 +19,11 @@ describe("claimLockedLease", () => {
   let assetDir: string;
 
   beforeEach(async () => {
+    configureLeaseClockForTests({
+      sleep: async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      },
+    });
     tempDir = await mkdtemp(join(tmpdir(), "videocity-claim-lease-test-"));
     fs = createEngineForTest(tempDir);
     const created = await fs.artifacts.create("vid", "clip");
@@ -30,6 +35,7 @@ describe("claimLockedLease", () => {
   });
 
   afterEach(async () => {
+    configureLeaseClockForTests(null);
     closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
@@ -70,7 +76,7 @@ describe("claimLockedLease", () => {
     const lock = await fs.jobs.locks.acquire(assetDir, LOCK);
     if (!lock.ok) throw new Error(lock.error.message);
     const releaseLater = (async () => {
-      await sleep(300);
+      await yieldTurn();
       await fs.jobs.locks.release(assetDir);
     })();
 
@@ -92,7 +98,7 @@ describe("claimLockedLease", () => {
     });
     if (!lease) throw new Error("test setup: could not begin lease");
     const completeLater = (async () => {
-      await sleep(300);
+      await yieldTurn();
       await fs.jobs.artifactWork.complete(assetId, lease.ownerId);
     })();
 
@@ -117,7 +123,7 @@ describe("claimLockedLease", () => {
       if (!claim.ok) return false;
       active += 1;
       maxActive = Math.max(maxActive, active);
-      await sleep(100);
+      await yieldTurn();
       active -= 1;
       await releaseClaim(claim.ownerId);
       return true;

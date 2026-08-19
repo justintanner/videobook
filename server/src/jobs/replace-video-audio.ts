@@ -28,7 +28,7 @@ type ReplaceVideoAudioPayload = {
   extraProvenance?: Record<string, unknown>;
 };
 
-export function registerReplaceVideoAudioJob(fs: Engine): void {
+export function registerReplaceVideoAudioJob(engine: Engine): void {
   registerJobHandler("replace_video_audio", async (payload, ctx) => {
     const {
       inputPath, audioPath, outputPath,
@@ -37,7 +37,7 @@ export function registerReplaceVideoAudioJob(fs: Engine): void {
     } = payload as ReplaceVideoAudioPayload;
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -59,14 +59,14 @@ export function registerReplaceVideoAudioJob(fs: Engine): void {
 
       const inputFilename = basename(inputPath);
       await replaceArtifactFileFromPath(
-        fs,
+        engine,
         assetId,
         inputFilename,
         outputPath,
       );
 
       for (const stale of STALE_ANALYSIS_FILES) {
-        await fs.files.delete(assetId, stale);
+        await engine.files.delete(assetId, stale);
       }
 
       const videoPath = join(assetDir, inputFilename);

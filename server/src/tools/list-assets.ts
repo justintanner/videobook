@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { buildAssetList } from "./reconcile-project-work.js";
 
-export function listAssetsDef(fs: Engine): ToolDef {
+export function listAssetsDef(engine: Engine): ToolDef {
   return {
     name: "list_assets",
     description:
@@ -23,7 +23,7 @@ export function listAssetsDef(fs: Engine): ToolDef {
         offset?: number;
         include_referenced?: boolean;
       };
-      const allAssets = await buildAssetList(fs, book_id, sort);
+      const allAssets = await buildAssetList(engine, book_id, sort);
       const pageOffset = offset ?? 0;
       const pageLimit = limit ?? 200;
       const pageAssets = allAssets.slice(pageOffset, pageOffset + pageLimit);
@@ -32,7 +32,7 @@ export function listAssetsDef(fs: Engine): ToolDef {
       );
       const referencedArtifactIds = include_referenced
         ? new Set(
-            fs.notebooks
+            engine.notebooks
               .list()
               .flatMap((notebook) =>
                 notebook.cells.flatMap((cell) => {

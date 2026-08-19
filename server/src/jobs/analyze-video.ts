@@ -143,20 +143,20 @@ function sampleFrames(frames: string[]): string[] {
   return sampleEvenly(frames, MAX_FRAMES);
 }
 
-export function registerAnalyzeVideoJob(fs: Engine): void {
+export function registerAnalyzeVideoJob(engine: Engine): void {
   registerJobHandler("analyze_video", async (payload, ctx) => {
     const {
       assetId, assetDir, bookId, hasTranscription,
     } = payload as AnalyzeVideoPayload;
 
-    const result = await withLocalLease(fs, assetId, ctx, "analyze", async () => {
+    const result = await withLocalLease(engine, assetId, ctx, "analyze", async () => {
     {
 
-    const metaResult = await fs.metadata.artifacts.read<{ width: number; height: number; duration: number }>(assetId, "original"
+    const metaResult = await engine.metadata.artifacts.read<{ width: number; height: number; duration: number }>(assetId, "original"
     );
     const metadata = metaResult.ok ? metaResult.value : null;
 
-    const listResult = await fs.files.listSubdir(assetId, "original_frames");
+    const listResult = await engine.files.listSubdir(assetId, "original_frames");
     const frameFiles = listResult.ok
       ? listResult.value
           .filter((f) => f.endsWith(".jpg"))
@@ -166,7 +166,7 @@ export function registerAnalyzeVideoJob(fs: Engine): void {
     const sampled = sampleFrames(frameFiles);
     const frameParts: OpenAiResponseInputContent[] = [];
     for (const file of sampled) {
-      const frameRead = await fs.files.read(assetId, `original_frames/${file}`);
+      const frameRead = await engine.files.read(assetId, `original_frames/${file}`);
       if (!frameRead.ok) throw new Error(frameRead.error.message);
       frameParts.push(
         { type: "input_text", text: `Frame timestamp: ${parseFloat(file).toFixed(3)}s` },
@@ -180,7 +180,7 @@ export function registerAnalyzeVideoJob(fs: Engine): void {
 
     let transcriptionText = "";
     if (hasTranscription) {
-      const transResult = await fs.files.read(assetId, ".analysis.gpt4otrans.json");
+      const transResult = await engine.files.read(assetId, ".analysis.gpt4otrans.json");
       if (transResult.ok) {
         try {
           const parsed = JSON.parse(
@@ -237,7 +237,7 @@ export function registerAnalyzeVideoJob(fs: Engine): void {
     }
 
     const jsonString = JSON.stringify(analysis, null, 2);
-    await fs.files.write(assetId, ".original.analysis.json", jsonString);
+    await engine.files.write(assetId, ".original.analysis.json", jsonString);
     await queue.enqueue(`semantic-index-${assetId}-analysis-${Date.now()}`, {
       type: "semantic_index",
       assetId,
@@ -247,14 +247,14 @@ export function registerAnalyzeVideoJob(fs: Engine): void {
     // Auto-transcribe trigger (replaces the whitelist-tool gate). Run only if
     // the analysis says there's real dialog, ElevenLabs/Kie is configured, no
     // prior failure or in-progress task, and we haven't already transcribed.
-    await maybeEnqueueAutoTranscribe(fs, assetId, assetDir, bookId);
+    await maybeEnqueueAutoTranscribe(engine, assetId, assetDir, bookId);
 
     return { success: true, fallback: analysis === FALLBACK_ANALYSIS, analysis };
 
     }
     }, { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS });
     try {
-      await enqueueLazyTimelineRender(fs, bookId, assetId);
+      await enqueueLazyTimelineRender(engine, bookId, assetId);
     } catch (err) {
       void err;
     }
@@ -263,27 +263,27 @@ export function registerAnalyzeVideoJob(fs: Engine): void {
 }
 
 async function maybeEnqueueAutoTranscribe(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   assetDir: string,
   bookId: string,
 ): Promise<void> {
   if (!getApiKey("ELEVENLABS_API_KEY")) return;
 
-  const manifestResult = await fs.files.manifest(assetId);
+  const manifestResult = await engine.files.manifest(assetId);
   if (!manifestResult.ok) return;
   const manifest = manifestResult.value;
   const fileNames = new Set(manifest.files.map((f) => f.name));
 
   if (fileNames.has("elevenlabs.json")) return;
 
-  const errorRow = await fs.jobs.failures.read(assetId);
+  const errorRow = await engine.jobs.failures.read(assetId);
   if (errorRow.ok && errorRow.value !== null) return;
 
-  const dialog = await readAndAssessDialog(fs, assetId);
+  const dialog = await readAndAssessDialog(engine, assetId);
   if (!dialog.hasDialog) return;
 
-  const artifact = fs.artifacts.get(assetId);
+  const artifact = engine.artifacts.get(assetId);
   if (!artifact.ok) return;
 
   const audioFile = findAudioFile(manifest.files, artifact.value.kind);

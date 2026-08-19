@@ -18,12 +18,12 @@ type Payload = {
   duration?: number;
 };
 
-export function registerGenerateGrokImagineVideoExtendFalJob(fs: Engine): void {
+export function registerGenerateGrokImagineVideoExtendFalJob(engine: Engine): void {
   registerJobHandler("generate_grok_imagine_video_extend_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(engine, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
-      const video_url = await uploadAssetToFal(fs, p.sourceVideo.assetId, p.sourceVideo.filename);
+      const video_url = await uploadAssetToFal(engine, p.sourceVideo.assetId, p.sourceVideo.filename);
   
       const input: FalEndpointInputMap["xai/grok-imagine-video/extend-video"] = {
         prompt: p.prompt,
@@ -32,7 +32,7 @@ export function registerGenerateGrokImagineVideoExtendFalJob(fs: Engine): void {
       };
   
       const taskId = await submitFalJob({
-        fs,
+        engine,
         bookId: p.bookId,
         assetId: p.vidAssetId,
         assetDir: p.vidAssetDir,

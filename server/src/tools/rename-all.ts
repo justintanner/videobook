@@ -60,7 +60,7 @@ function renameCandidates(assets: Artifact[]): RenameCandidate[] {
   }));
 }
 
-export function renameAllDef(fs: Engine): ToolDef {
+export function renameAllDef(engine: Engine): ToolDef {
   return {
     name: "rename_all",
     description:
@@ -76,12 +76,12 @@ export function renameAllDef(fs: Engine): ToolDef {
         renames?: RenamePayload[];
       };
 
-      const assets = await fs.artifacts.list();
+      const assets = await engine.artifacts.list();
 
       if (dry_run) {
         return renames && renames.length > 0
           ? handleDryRunRevalidation(renames, renameCandidates(assets))
-          : handleDryRunSuggest(fs, assets);
+          : handleDryRunSuggest(engine, assets);
       }
 
       if (!renames || renames.length === 0) {
@@ -94,13 +94,13 @@ export function renameAllDef(fs: Engine): ToolDef {
         };
       }
 
-      return handleApply(fs, renames, renameCandidates(assets));
+      return handleApply(engine, renames, renameCandidates(assets));
     },
   };
 }
 
 async function handleDryRunSuggest(
-  fs: Engine,
+  engine: Engine,
   assets: Artifact[],
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -130,7 +130,7 @@ async function handleDryRunSuggest(
 
   const contexts: AssetContext[] = [];
   for (const a of candidates) {
-    const ctx = await loadAssetContext(fs, a);
+    const ctx = await loadAssetContext(engine, a);
     contexts.push({
       ...(ctx ?? {
         asset_id: a.artifactId,
@@ -141,7 +141,7 @@ async function handleDryRunSuggest(
     });
   }
 
-  const previews = await loadPreviewStills(fs, contexts);
+  const previews = await loadPreviewStills(engine, contexts);
   const hasImages = previews.some((p) => p.parts.length > 0);
   const contentParts = buildMultimodalContent(contexts, previews, hasImages);
 
@@ -183,7 +183,7 @@ async function handleDryRunRevalidation(
 }
 
 async function handleApply(
-  fs: Engine,
+  engine: Engine,
   renames: RenamePayload[],
   candidates: RenameCandidate[],
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
@@ -214,7 +214,7 @@ async function handleApply(
   // Relabeling is display-only: artifact ids are the sole reference currency,
   // so no prompts, timeline slots, or notebook cells need rewriting.
   for (const row of toApply) {
-    const result = await fs.artifacts.rename(row.asset_id, row.suggested_name);
+    const result = await engine.artifacts.rename(row.asset_id, row.suggested_name);
     if (!result.ok) {
       applied.push({
         asset_id: row.asset_id,
@@ -244,14 +244,14 @@ async function handleApply(
  *  Images: analysis, generation prompt, and parent-video context for
  *  extracted frames. Returns null when no useful text is available. */
 async function loadAssetContext(
-  fs: Engine,
+  engine: Engine,
   artifact: Artifact,
 ): Promise<AssetContext | null> {
   if (artifact.kind === "video") {
-    return loadVideoContext(fs, artifact.artifactId);
+    return loadVideoContext(engine, artifact.artifactId);
   }
   if (artifact.kind === "image") {
-    return loadImageContext(fs, artifact.artifactId);
+    return loadImageContext(engine, artifact.artifactId);
   }
   return null;
 }
@@ -262,11 +262,11 @@ function decodeJsonBuffer(value: string | Buffer): string {
 
 /** Pull summary / subjects / setting / tags from `.original.analysis.json`. */
 async function readAnalysisParts(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<string[]> {
   const parts: string[] = [];
-  const analysisRead = await fs.files.read(assetId, ".original.analysis.json");
+  const analysisRead = await engine.files.read(assetId, ".original.analysis.json");
   if (!analysisRead.ok) return parts;
   try {
     const analysis = JSON.parse(decodeJsonBuffer(analysisRead.value)) as Record<string, unknown>;
@@ -288,15 +288,15 @@ async function readAnalysisParts(
 }
 
 async function loadVideoContext(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<AssetContext | null> {
   const parts: string[] = [];
 
-  parts.push(...(await readAnalysisParts(fs, assetId)));
+  parts.push(...(await readAnalysisParts(engine, assetId)));
 
   // Generation prompt is often the richest description when analysis is missing.
-  const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
+  const meta = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
   if (meta.ok) {
     const prompt = typeof meta.value.prompt === "string" ? meta.value.prompt.trim() : "";
     if (prompt) {
@@ -314,7 +314,7 @@ async function loadVideoContext(
 
   // Transcript is secondary — cap length so it doesn't drown out visuals.
   for (const transFile of [".analysis.gpt4otrans.json", "elevenlabs.json"]) {
-    const transRead = await fs.files.read(assetId, transFile);
+    const transRead = await engine.files.read(assetId, transFile);
     if (!transRead.ok) continue;
     try {
       const parsed = JSON.parse(decodeJsonBuffer(transRead.value)) as { text?: string };
@@ -333,13 +333,13 @@ async function loadVideoContext(
 }
 
 async function loadImageContext(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<AssetContext | null> {
   const parts: string[] = [];
-  parts.push(...(await readAnalysisParts(fs, assetId)));
+  parts.push(...(await readAnalysisParts(engine, assetId)));
 
-  const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
+  const meta = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
   if (meta.ok) {
     const origin = typeof meta.value.origin === "string" ? meta.value.origin : "";
     const prompt = typeof meta.value.prompt === "string" ? meta.value.prompt.trim() : "";
@@ -351,26 +351,26 @@ async function loadImageContext(
 
     // Extracted frames: inherit the parent video's visual analysis, not "last_frame".
     if (sourceAsset && origin && /_frame$/i.test(origin)) {
-      const parent = await loadVideoContext(fs, sourceAsset);
+      const parent = await loadVideoContext(engine, sourceAsset);
       if (parent?.context_text) {
         parts.push(`still from ${sourceAsset}: ${parent.context_text.slice(0, 400)}`);
       }
     } else if (sourceAssets.length > 0) {
       // Composite / edit images: briefly describe source materials, then edit intent.
       for (const src of sourceAssets.slice(0, 3)) {
-        const srcArtifact = fs.artifacts.get(src);
+        const srcArtifact = engine.artifacts.get(src);
         if (!srcArtifact.ok) continue;
         if (srcArtifact.value.kind === "video") {
-          const parent = await loadVideoContext(fs, src);
+          const parent = await loadVideoContext(engine, src);
           if (parent?.context_text) {
             parts.push(`source ${src}: ${parent.context_text.slice(0, 200)}`);
           }
         } else if (srcArtifact.value.kind === "image") {
-          const srcAnalysis = await readAnalysisParts(fs, src);
+          const srcAnalysis = await readAnalysisParts(engine, src);
           if (srcAnalysis.length > 0) {
             parts.push(`source ${src}: ${srcAnalysis.join(" ").slice(0, 200)}`);
           } else {
-            const srcMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(src, "original"
+            const srcMeta = await engine.metadata.artifacts.read<Record<string, unknown>>(src, "original"
             );
             if (srcMeta.ok) {
               const srcOrigin =
@@ -380,7 +380,7 @@ async function loadImageContext(
                   ? srcMeta.value.source_asset
                   : "";
               if (srcSource && srcOrigin && /_frame$/i.test(srcOrigin)) {
-                const parent = await loadVideoContext(fs, srcSource);
+                const parent = await loadVideoContext(engine, srcSource);
                 if (parent?.context_text) {
                   parts.push(`source ${src}: ${parent.context_text.slice(0, 200)}`);
                 }
@@ -423,35 +423,35 @@ const PREVIEW_CANDIDATES = [
 
 /** Prefer first/last original_frames for videos; fall back to poster jpg. */
 async function loadPreviewStills(
-  fs: Engine,
+  engine: Engine,
   contexts: AssetContext[],
 ): Promise<AssetPreview[]> {
   const out: AssetPreview[] = [];
   for (const ctx of contexts) {
     const parts = ctx.type === "video"
-      ? await loadVideoPreviewParts(fs, ctx.asset_id)
-      : await loadImagePreviewParts(fs, ctx.asset_id);
+      ? await loadVideoPreviewParts(engine, ctx.asset_id)
+      : await loadImagePreviewParts(engine, ctx.asset_id);
     out.push({ asset_id: ctx.asset_id, parts });
   }
   return out;
 }
 
 async function loadVideoPreviewParts(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<OpenAiContentPart[]> {
-  const frameParts = await loadEndFrameParts(fs, assetId);
+  const frameParts = await loadEndFrameParts(engine, assetId);
   if (frameParts.length > 0) return frameParts;
-  return loadImagePreviewParts(fs, assetId);
+  return loadImagePreviewParts(engine, assetId);
 }
 
 /** Read first + last jpg from original_frames via the asset dir on disk.
- *  Nested frame paths are not readable through fs.files.read(filename safety). */
+ *  Nested frame paths are not readable through engine.files.read(filename safety). */
 async function loadEndFrameParts(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<OpenAiContentPart[]> {
-  const manifest = await fs.files.manifest(assetId);
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) return [];
   const frames = manifest.value.directories?.original_frames
     ?? manifest.value.directories?.landscape_frames
@@ -484,11 +484,11 @@ async function loadEndFrameParts(
 }
 
 async function loadImagePreviewParts(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<OpenAiContentPart[]> {
   for (const filename of PREVIEW_CANDIDATES) {
-    const read = await fs.files.read(assetId, filename);
+    const read = await engine.files.read(assetId, filename);
     if (!read.ok) continue;
     const buf = Buffer.isBuffer(read.value)
       ? read.value

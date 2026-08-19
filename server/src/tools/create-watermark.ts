@@ -8,7 +8,7 @@ import {
   defaultUrl,
 } from "../watermark-badge.js";
 
-export function createWatermarkCardDef(fs: Engine): ToolDef {
+export function createWatermarkCardDef(engine: Engine): ToolDef {
   return {
     name: "create_watermark_card",
     description:
@@ -36,7 +36,7 @@ export function createWatermarkCardDef(fs: Engine): ToolDef {
       }
       const resolvedUrl = url ?? defaultUrl(resolvedHandle);
 
-      const created = await createWatermarkAsset(fs, resolvedHandle, resolvedUrl);
+      const created = await createWatermarkAsset(engine, resolvedHandle, resolvedUrl);
       if (!created.ok) {
         return {
           isError: true as const,
@@ -45,7 +45,7 @@ export function createWatermarkCardDef(fs: Engine): ToolDef {
       }
 
       // Remember the handle so the next watermark dialog defaults to it.
-      await recordHandle(resolvedHandle, { saveDefault: save_default }, fs).catch(() => undefined);
+      await recordHandle(resolvedHandle, { saveDefault: save_default }, engine).catch(() => undefined);
 
       return {
         content: [{

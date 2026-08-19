@@ -36,10 +36,10 @@ export function assessDialogQuality(data: { text?: string }): DialogQuality {
 }
 
 export async function readAndAssessDialog(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<DialogQuality> {
-  const result = await fs.files.read(assetId, ".analysis.gpt4otrans.json");
+  const result = await engine.files.read(assetId, ".analysis.gpt4otrans.json");
   if (!result.ok) {
     return { hasDialog: false, reason: "no_transcription", text: "", wordCount: 0 };
   }

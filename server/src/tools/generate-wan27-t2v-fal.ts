@@ -23,7 +23,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateWan27T2vFalDef(fs: Engine): ToolDef {
+export function generateWan27T2vFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_wan_2_7_text_to_video",
     description: "Generate a video via fal.ai using Alibaba Wan v2.7 from a text prompt only. Creates a new video artifact and enqueues a background job.",
@@ -35,7 +35,7 @@ export function generateWan27T2vFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "wan/2-7-text-to-video"), prompt));
+      const assetResult = await engine.artifacts.create("vid", generationLabel(modelSlug("kie", "wan/2-7-text-to-video"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

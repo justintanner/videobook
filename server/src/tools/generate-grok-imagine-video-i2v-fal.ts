@@ -21,7 +21,7 @@ const generateGrokImagineVideoI2vFalSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineVideoI2vFalSchema>;
 
-export function generateGrokImagineVideoI2vFalDef(fs: Engine): ToolDef {
+export function generateGrokImagineVideoI2vFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_grok_imagine_video_image_to_video",
     description: "Generate a video via fal.ai using xAI Grok Imagine Video image-to-video. Requires a first-frame image. Creates a new video artifact and enqueues a background job.",
@@ -33,11 +33,11 @@ export function generateGrokImagineVideoI2vFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageRefs(fs, [first_frame_ref]);
+      const resolved = await resolveImageRefs(engine, [first_frame_ref]);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame] = resolved.inputs;
-      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "grok-imagine/image-to-video"), prompt));
+      const assetResult = await engine.artifacts.create("vid", generationLabel(modelSlug("kie", "grok-imagine/image-to-video"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

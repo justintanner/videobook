@@ -1,11 +1,12 @@
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { findVideoFile } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
-import { probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { probeVideo } from "../ffmpeg.js";
+import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import { readWatermarkConfig } from "../watermark-config.js";
 import { watermarkOsgScale } from "../remotion/osg-spec.js";
 import type { Engine } from "videobook-engine";
@@ -68,13 +69,7 @@ describe("apply_watermark tool", () => {
     const created = await fs.artifacts.create("vid", "real-clip");
     if (!created.ok) throw new Error(created.error.message);
     const tmpPath = join(tempDir, `src-${Date.now()}.mp4`);
-    await runFfmpeg([
-      "-y",
-      "-f", "lavfi",
-      "-i", "testsrc=duration=1:size=320x240:rate=12",
-      "-pix_fmt", "yuv420p",
-      tmpPath,
-    ]);
+    await copyVideoFixture(COMMON_VIDEO_FIXTURES.watermark, tmpPath);
     const write = await fs.files.writeFromPath(created.value.artifactId, "original.mp4", tmpPath);
     if (!write.ok) throw new Error(write.error.message);
     return created.value.artifactId;

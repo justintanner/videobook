@@ -36,10 +36,10 @@ export type OsgImagePathResult =
 
 /** Resolve an OSG image asset id to the on-disk path of its source image. */
 export async function resolveOsgImagePath(
-  fs: Engine,
+  engine: Engine,
   osgAssetId: string,
 ): Promise<OsgImagePathResult> {
-  const manifest = await fs.files.manifest(osgAssetId);
+  const manifest = await engine.files.manifest(osgAssetId);
   if (!manifest.ok) {
     return { ok: false, error: `OSG asset error: ${manifest.error.message}` };
   }

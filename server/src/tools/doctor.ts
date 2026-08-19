@@ -44,18 +44,18 @@ interface DoctorReport {
  * for each, so all seven asset types are covered without special-casing.
  */
 async function diagnose(
-  fs: Engine,
+  engine: Engine,
   bookId: string,
   onlyAssetId?: string,
 ): Promise<DoctorReport> {
-  const all = await fs.artifacts.list();
+  const all = await engine.artifacts.list();
   const assets = onlyAssetId ? all.filter((a) => a.artifactId === onlyAssetId) : all;
 
-  const errorsRes = await fs.jobs.failures.findAll();
+  const errorsRes = await engine.jobs.failures.findAll();
   const errorByAsset = new Map<string, GenerationError>();
   if (errorsRes.ok) for (const e of errorsRes.value) errorByAsset.set(e.artifactId, e);
 
-  const workRes = await fs.jobs.artifactWork.list();
+  const workRes = await engine.jobs.artifactWork.list();
   const workByAsset = new Map<string, ArtifactView>();
   if (workRes.ok) for (const w of workRes.value) workByAsset.set(w.artifactId, w);
 
@@ -66,7 +66,7 @@ async function diagnose(
 
   await Promise.all(
     assets.map(async (a) => {
-      const statusRes = await fs.status.get(a.artifactId);
+      const statusRes = await engine.status.get(a.artifactId);
       const status = statusRes.ok ? statusRes.value : "error";
       const work = workByAsset.get(a.artifactId);
 
@@ -112,7 +112,7 @@ async function diagnose(
   return report;
 }
 
-export function doctorDef(fs: Engine): ToolDef {
+export function doctorDef(engine: Engine): ToolDef {
   return {
     name: "doctor",
     description:
@@ -164,7 +164,7 @@ export function doctorDef(fs: Engine): ToolDef {
         }
       }
 
-      return ok(await diagnose(fs, book_id, assetId));
+      return ok(await diagnose(engine, book_id, assetId));
     },
   };
 }

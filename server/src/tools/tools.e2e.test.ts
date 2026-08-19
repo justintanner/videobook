@@ -10,7 +10,7 @@ import { queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { ArtifactKind, Engine } from "videobook-engine";
 import { isUuidV7 } from "videobook-engine";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);

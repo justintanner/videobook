@@ -68,17 +68,17 @@ function statusCodeForFsError(error: EngineError): number {
 }
 
 export async function uploadLocalBytes(
-  fs: Engine,
+  engine: Engine,
   args: UploadLocalBytesArgs,
 ): Promise<LocalUploadOutcome> {
-  return uploadLocal(fs, {
+  return uploadLocal(engine, {
     bookId: args.bookId,
     filename: args.filename,
     origin: args.origin,
     waitForProcessing: args.waitForProcessing,
     targetAssetId: args.targetAssetId,
     write: async (assetId, writtenFilename) => {
-      const writeResult = await fs.files.write(assetId, writtenFilename, args.data
+      const writeResult = await engine.files.write(assetId, writtenFilename, args.data
       );
       if (!writeResult.ok) {
         return {
@@ -93,10 +93,10 @@ export async function uploadLocalBytes(
 }
 
 export async function uploadLocalStream(
-  fs: Engine,
+  engine: Engine,
   args: UploadLocalStreamArgs,
 ): Promise<LocalUploadOutcome> {
-  return uploadLocal(fs, {
+  return uploadLocal(engine, {
     bookId: args.bookId,
     filename: args.filename,
     origin: args.origin,
@@ -106,7 +106,7 @@ export async function uploadLocalStream(
       const filePath = path.join(assetPath, writtenFilename);
       try {
         await pipeline(args.stream, createWriteStream(filePath, { flags: "wx" }));
-        const ingested = await fs.files.ingestWorkspace(
+        const ingested = await engine.files.ingestWorkspace(
           assetId,
           [writtenFilename],
           "upload_stream",
@@ -163,7 +163,7 @@ async function runProcessingJob(
 }
 
 async function uploadLocal(
-  fs: Engine,
+  engine: Engine,
   args: UploadLocalArgs,
 ): Promise<LocalUploadOutcome> {
   const ext = path.extname(args.filename).toLowerCase();
@@ -183,7 +183,7 @@ async function uploadLocal(
   let isNewAsset = false;
 
   if (args.targetAssetId) {
-    const artifact = fs.artifacts.get(args.targetAssetId);
+    const artifact = engine.artifacts.get(args.targetAssetId);
     if (!artifact.ok) {
       return {
         ok: false,
@@ -194,7 +194,7 @@ async function uploadLocal(
     if (artifact.value.kind !== "character") {
       return { ok: false, statusCode: 400, message: "Target asset must be a character folder" };
     }
-    const resolveResult = await fs.workspaces.resolveArtifact(args.targetAssetId);
+    const resolveResult = await engine.workspaces.resolveArtifact(args.targetAssetId);
     if (!resolveResult.ok) {
       return { ok: false, statusCode: statusCodeForFsError(resolveResult.error), message: resolveResult.error.message };
     }
@@ -204,7 +204,7 @@ async function uploadLocal(
     assetKind = artifact.value.kind;
   } else {
     const assetName = path.basename(args.filename, ext);
-    const assetResult = await fs.artifacts.create(kind!, assetName);
+    const assetResult = await engine.artifacts.create(kind!, assetName);
     if (!assetResult.ok) {
       return {
         ok: false,
@@ -224,7 +224,7 @@ async function uploadLocal(
     const baseName = path.basename(args.filename, ext);
     let counter = 1;
     while (true) {
-      const checkResult = await fs.files.manifest(assetId);
+      const checkResult = await engine.files.manifest(assetId);
       if (!checkResult.ok) break;
       const exists = checkResult.value.files.some((f) => f.name === writtenFilename);
       if (!exists) break;
@@ -238,12 +238,12 @@ async function uploadLocal(
   // streaming write — sees `original.{ext}` with no metadata and no lock —
   // and queues a duplicate process_video that re-extracts every frame after
   // the real job finishes.
-  const lockResult = await fs.jobs.locks.acquire(assetPath, {
+  const lockResult = await engine.jobs.locks.acquire(assetPath, {
     durationMs: UPLOAD_LOCK_MS,
     data: { state: "uploading" },
   });
   if (!lockResult.ok) {
-    await fs.artifacts.delete(assetId).catch(() => {});
+    await engine.artifacts.delete(assetId).catch(() => {});
     return {
       ok: false,
       statusCode: statusCodeForFsError(lockResult.error),
@@ -306,7 +306,7 @@ async function uploadLocal(
         } as unknown as Record<string, unknown>;
         processingError = await runProcessingJob(jobId, payload, args.waitForProcessing);
       } else {
-        await fs.metadata.artifacts.write(assetId, "original", provenance);
+        await engine.metadata.artifacts.write(assetId, "original", provenance);
       }
       outcome = {
         ok: true,
@@ -322,11 +322,11 @@ async function uploadLocal(
   } finally {
     // deleteAsset refuses while the lock is held, so always release before
     // any cleanup branch below runs.
-    fs.jobs.locks.release(assetPath);
+    engine.jobs.locks.release(assetPath);
   }
 
   if (!outcome.ok && isNewAsset) {
-    await fs.artifacts.delete(assetId).catch(() => {});
+    await engine.artifacts.delete(assetId).catch(() => {});
   }
   return outcome;
 }

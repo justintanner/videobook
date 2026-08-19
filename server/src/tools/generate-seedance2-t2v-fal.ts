@@ -21,7 +21,7 @@ const generateSeedance2T2vFalSchema = {
 
 type Args = SchemaArgs<typeof generateSeedance2T2vFalSchema>;
 
-export function generateSeedance2T2vFalDef(fs: Engine): ToolDef {
+export function generateSeedance2T2vFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_seedance_2_0_text_to_video",
     description: "Generate a video via fal.ai using ByteDance Seedance 2.0 from a text prompt only. Creates a new video artifact and enqueues a background job.",
@@ -33,7 +33,7 @@ export function generateSeedance2T2vFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "bytedance/seedance-2"), prompt));
+      const assetResult = await engine.artifacts.create("vid", generationLabel(modelSlug("kie", "bytedance/seedance-2"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

@@ -47,7 +47,7 @@ function parseCharacterMetadata(
   }
 }
 
-export function setCharacterMetadataDef(fs: Engine): ToolDef {
+export function setCharacterMetadataDef(engine: Engine): ToolDef {
   return {
     name: "set_character_metadata",
     description:
@@ -79,10 +79,10 @@ export function setCharacterMetadataDef(fs: Engine): ToolDef {
       }
 
       const id = char_asset_id.replace(/^@/, "").trim();
-      const kindGate = await requireArtifactKind(fs, id, ["character"], "set_character_metadata");
+      const kindGate = await requireArtifactKind(engine, id, ["character"], "set_character_metadata");
       if (kindGate) return kindGate;
 
-      const writeResult = await fs.metadata.artifacts.write(id, "character", parsed.value);
+      const writeResult = await engine.metadata.artifacts.write(id, "character", parsed.value);
       if (!writeResult.ok) {
         return {
           isError: true as const,

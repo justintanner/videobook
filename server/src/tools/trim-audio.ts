@@ -51,7 +51,7 @@ function validateTrimParams(
   return { mode: "keep", trimStart, trimEnd };
 }
 
-export function trimAudioDef(fs: Engine): ToolDef {
+export function trimAudioDef(engine: Engine): ToolDef {
   return {
     name: "trim_audio",
     description: "Trim an audio asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for video assets so picture and sound remain synchronized. Operates in-place with git versioning.",
@@ -77,7 +77,7 @@ export function trimAudioDef(fs: Engine): ToolDef {
       }
 
       const assetId = asset_id.replace(/^@/, "");
-      const artifact = fs.artifacts.get(assetId);
+      const artifact = engine.artifacts.get(assetId);
       if (!artifact.ok) {
         return {
           isError: true as const,
@@ -91,7 +91,7 @@ export function trimAudioDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(assetId);
+      const manifestResult = await engine.files.manifest(assetId);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

@@ -37,7 +37,7 @@ function unknown(toolName: string): CostEstimate {
 }
 
 async function enrichMotionControlInput(
-  fs: Engine,
+  engine: Engine,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   if (typeof input.duration === "number") return input;
@@ -49,7 +49,7 @@ async function enrichMotionControlInput(
   if (!bookId || motionSlugs.length === 0) return input;
 
   const motionSlug = motionSlugs[0].replace(/^@/, "");
-  const meta = await fs.metadata.artifacts.read(motionSlug, "original");
+  const meta = await engine.metadata.artifacts.read(motionSlug, "original");
   if (!meta.ok) return input;
   const duration = (meta.value as { duration?: unknown }).duration;
   if (typeof duration !== "number" || duration <= 0) return input;
@@ -58,7 +58,7 @@ async function enrichMotionControlInput(
 }
 
 async function enrichGrokExtendInput(
-  fs: Engine,
+  engine: Engine,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   if (typeof input.resolution === "string" && input.resolution) return input;
@@ -71,7 +71,7 @@ async function enrichGrokExtendInput(
   if (!bookId || !source) return input;
 
   const assetId = source.replace(/^@/, "");
-  const meta = await fs.metadata.artifacts.read<{ resolution?: unknown; input?: { resolution?: unknown } }>(assetId, "generation-payload"
+  const meta = await engine.metadata.artifacts.read<{ resolution?: unknown; input?: { resolution?: unknown } }>(assetId, "generation-payload"
   );
   if (!meta.ok) return input;
   const resolution = meta.value.input?.resolution ?? meta.value.resolution;
@@ -85,7 +85,7 @@ async function enrichGrokExtendInput(
 // metadata so the displayed cost matches what the paygate will bound against
 // (the job handler resolves the same value and passes it as a cost hint).
 async function enrichHappyHorseVideoEditInput(
-  fs: Engine,
+  engine: Engine,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   if (typeof input.duration === "number") return input;
@@ -95,9 +95,9 @@ async function enrichHappyHorseVideoEditInput(
   if (!bookId || !videoRef) return input;
 
   const assetId = videoRef.replace(/^@/, "");
-  if (artifactKindOf(fs, assetId) !== "video") return input;
+  if (artifactKindOf(engine, assetId) !== "video") return input;
 
-  const meta = await fs.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original");
+  const meta = await engine.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original");
   if (!meta.ok) return input;
   const duration = meta.value.duration;
   if (typeof duration !== "number" || duration <= 0) return input;
@@ -106,7 +106,7 @@ async function enrichHappyHorseVideoEditInput(
 }
 
 async function enrichSourceDuration(
-  fs: Engine,
+  engine: Engine,
   input: Record<string, unknown>,
   refField: string,
   expectedKind: ArtifactKind,
@@ -116,8 +116,8 @@ async function enrichSourceDuration(
   const raw = typeof input[refField] === "string" ? input[refField] as string : null;
   if (!bookId || !raw) return input;
   const assetId = raw.replace(/^@/, "");
-  if (artifactKindOf(fs, assetId) !== expectedKind) return input;
-  const meta = await fs.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original");
+  if (artifactKindOf(engine, assetId) !== expectedKind) return input;
+  const meta = await engine.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original");
   if (!meta.ok) return input;
   const duration = meta.value.duration;
   if (typeof duration !== "number" || duration <= 0) return input;
@@ -125,31 +125,31 @@ async function enrichSourceDuration(
 }
 
 async function enrichInput(
-  fs: Engine,
+  engine: Engine,
   rawToolName: string,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const toolName = getCanonicalName(rawToolName);
   if (toolName === "generate_kie_kling_3_0_motion_control") {
-    return enrichMotionControlInput(fs, input);
+    return enrichMotionControlInput(engine, input);
   }
   if (toolName === "extend_kie_grok_imagine_video") {
-    return enrichGrokExtendInput(fs, input);
+    return enrichGrokExtendInput(engine, input);
   }
   if (toolName === "generate_kie_happyhorse_1_1_edit_video") {
-    return enrichHappyHorseVideoEditInput(fs, input);
+    return enrichHappyHorseVideoEditInput(engine, input);
   }
   if (toolName === "generate_kie_omnihuman_1_5_video") {
-    return enrichSourceDuration(fs, input, "audio_ref", "audio");
+    return enrichSourceDuration(engine, input, "audio_ref", "audio");
   }
   if (toolName === "generate_kie_volcengine_video_to_video_lip_sync") {
-    return enrichSourceDuration(fs, input, "video_ref", "video");
+    return enrichSourceDuration(engine, input, "video_ref", "video");
   }
   return input;
 }
 
 async function estimateOne(
-  fs: Engine,
+  engine: Engine,
   toolName: string,
   input: Record<string, unknown>,
 ): Promise<CostEstimate> {
@@ -161,7 +161,7 @@ async function estimateOne(
 
   const adapter = getCostAdapter(toolName);
   if (!adapter) return unknown(toolName);
-  const enriched = await enrichInput(fs, toolName, input);
+  const enriched = await enrichInput(engine, toolName, input);
   const req = adapter(enriched);
   if (!req) return unknown(toolName);
   return getCostProvider().estimate(req);
@@ -184,7 +184,7 @@ function sumEstimates(estimates: CostEstimate[]): CostEstimate {
   };
 }
 
-export function estimateCostDef(fs: Engine): ToolDef {
+export function estimateCostDef(engine: Engine): ToolDef {
   return {
     name: "estimate_cost",
     description:
@@ -195,7 +195,7 @@ export function estimateCostDef(fs: Engine): ToolDef {
     schema,
     handler: async (args): Promise<ToolResult> => {
       const calls = args.calls as Array<{ tool_name: string; input: Record<string, unknown> }>;
-      const estimates = await Promise.all(calls.map((c) => estimateOne(fs, c.tool_name, c.input)));
+      const estimates = await Promise.all(calls.map((c) => estimateOne(engine, c.tool_name, c.input)));
       const total = sumEstimates(estimates);
       return {
         content: [{

@@ -21,7 +21,7 @@ type GenerateNanoBananaImagePayload = {
   outputFormat?: NanoBananaProRequest["input"]["output_format"];
 };
 
-export function registerGenerateNanoBananaImageJob(fs: Engine): void {
+export function registerGenerateNanoBananaImageJob(engine: Engine): void {
   registerJobHandler("generate_nano_banana_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
@@ -35,7 +35,7 @@ export function registerGenerateNanoBananaImageJob(fs: Engine): void {
       uploadedUrls.push(
         "url" in input
           ? input.url
-          : await uploadAssetToKie(fs, input.assetId, input.filename),
+          : await uploadAssetToKie(engine, input.assetId, input.filename),
       );
     }
 
@@ -52,7 +52,7 @@ export function registerGenerateNanoBananaImageJob(fs: Engine): void {
       { prompt: normalizedPrompt, aspect_ratio: aspectRatio, resolution, output_format: outputFormat },
       uploadedUrls,
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "nano_banana_image",
       assetId: imgAssetId,

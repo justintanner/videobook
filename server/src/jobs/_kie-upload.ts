@@ -35,12 +35,12 @@ async function uploadPreparedToKie(
 
 // Upload an asset to Kie's native storage.
 export async function uploadAssetToKie(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   filename: string,
 ): Promise<string> {
   const { data, hashedFilename, contentType } = await prepareAssetForUpload(
-    fs,
+    engine,
     assetId,
     filename,
   );

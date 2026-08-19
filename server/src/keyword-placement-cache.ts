@@ -72,10 +72,10 @@ export function parseKeywordPlacementAnalysis(raw: unknown): KeywordPlacementAna
 }
 
 export async function readKeywordPlacementAnalysis(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<KeywordPlacementAnalysis | null> {
-  const result = await fs.metadata.artifacts.read<unknown>(assetId, KEYWORD_PLACEMENT_METADATA_KEY
+  const result = await engine.metadata.artifacts.read<unknown>(assetId, KEYWORD_PLACEMENT_METADATA_KEY
   );
   if (!result.ok) return null;
   const parsed = analysisSchema.safeParse(result.value);
@@ -83,18 +83,18 @@ export async function readKeywordPlacementAnalysis(
 }
 
 export async function writeKeywordPlacementAnalysis(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   analysis: KeywordPlacementAnalysis,
 ): Promise<void> {
   const parsed = parseKeywordPlacementAnalysis(analysis);
-  const result = await fs.metadata.artifacts.write(assetId, KEYWORD_PLACEMENT_METADATA_KEY, parsed
+  const result = await engine.metadata.artifacts.write(assetId, KEYWORD_PLACEMENT_METADATA_KEY, parsed
   );
   if (!result.ok) throw new Error(`Failed to persist keyword placement analysis: ${result.error.message}`);
 }
 
 export async function isKeywordPlacementCacheValid(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   analysis: KeywordPlacementAnalysis | null,
   fingerprint: string,
@@ -105,6 +105,6 @@ export async function isKeywordPlacementCacheValid(
   const cachedCueIds = analysis.cues.map((cue: KeywordPlacementCueAnalysis) => cue.cueId);
   if (expectedCueIds.length !== cachedCueIds.length) return false;
   if (expectedCueIds.some((cueId, index) => cueId !== cachedCueIds[index])) return false;
-  const frameCache = await fs.files.read(assetId, KEYWORD_FRAME_CACHE_FILENAME);
+  const frameCache = await engine.files.read(assetId, KEYWORD_FRAME_CACHE_FILENAME);
   return frameCache.ok;
 }

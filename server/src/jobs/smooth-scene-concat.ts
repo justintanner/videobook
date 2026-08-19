@@ -364,7 +364,7 @@ export async function smoothSceneConcatFiles(
   return { ...timing, outputDuration };
 }
 
-export function registerSmoothSceneConcatJob(fs: Engine): void {
+export function registerSmoothSceneConcatJob(engine: Engine): void {
   registerJobHandler("smooth_scene_concat", async (payload, ctx) => {
     const {
       firstPath,
@@ -379,7 +379,7 @@ export function registerSmoothSceneConcatJob(fs: Engine): void {
     } = payload as SmoothSceneConcatPayload;
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -406,13 +406,13 @@ export function registerSmoothSceneConcatJob(fs: Engine): void {
           concatenated_at: new Date().toISOString(),
         };
         await ingestWorkspaceOutputs(
-          fs,
+          engine,
           assetId,
           [outputPath.split("/").pop()!],
           "smooth_scene_concat",
           provenance,
         );
-        await fs.metadata.artifacts.write(assetId, "original", provenance);
+        await engine.metadata.artifacts.write(assetId, "original", provenance);
         return { concat, provenance };
       },
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },

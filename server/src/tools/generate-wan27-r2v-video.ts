@@ -35,7 +35,7 @@ const generateWan27R2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateWan27R2vVideoSchema>;
 
-export function generateWan27R2vVideoDef(fs: Engine): ToolDef {
+export function generateWan27R2vVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_wan_2_7_reference_to_video",
     description: "Generate a video using Wan 2.7 Reference guided by reference images (0-5), videos (0-5), voice timbre, and optional first frame. Creates a new video artifact and enqueues a background job.",
@@ -67,34 +67,34 @@ export function generateWan27R2vVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const raw of imgs) {
-        const r = await resolveImageRef(fs, raw);
+        const r = await resolveImageRef(engine, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       const videoInputs: RefInput[] = [];
       for (const raw of vids) {
-        const r = await resolveVideoRef(fs, raw);
+        const r = await resolveVideoRef(engine, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInputs.push(r.value);
       }
 
       let firstFrame: RefInput | undefined;
       if (first_frame_ref) {
-        const r = await resolveImageRef(fs, first_frame_ref);
+        const r = await resolveImageRef(engine, first_frame_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let voiceRef: RefInput | undefined;
       if (audio_ref) {
-        const r = await resolveAudioRef(fs, audio_ref);
+        const r = await resolveAudioRef(engine, audio_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         voiceRef = r.value;
       }
 
       const videoName = generationLabel(modelSlug("kie", "wan/2-7-r2v"), prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

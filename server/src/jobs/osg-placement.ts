@@ -64,11 +64,11 @@ function isFontSizePreset(value: unknown): value is FontSizePreset {
 }
 
 async function readSourceDimensions(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   firstFrame: Buffer,
 ): Promise<{ width: number; height: number }> {
-  const meta = await fs.metadata.artifacts.read<{ width?: unknown; height?: unknown }>(assetId, "original");
+  const meta = await engine.metadata.artifacts.read<{ width?: unknown; height?: unknown }>(assetId, "original");
   if (meta.ok
     && typeof meta.value.width === "number" && meta.value.width > 0
     && typeof meta.value.height === "number" && meta.value.height > 0) {
@@ -84,7 +84,7 @@ async function readSourceDimensions(
 }
 
 async function chooseWatermarkPositions(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   regions: KeywordOccupiedRegion[],
   sourceWidth: number,
@@ -99,7 +99,7 @@ async function chooseWatermarkPositions(
       kind: region.kind,
       confidence: region.confidence,
     }));
-    const stored = await readStoredRenderDefaults(fs, assetId, orientation);
+    const stored = await readStoredRenderDefaults(engine, assetId, orientation);
     const band = stored.subtitlesEnabled === true
       ? subtitleBand(
           orientation,
@@ -118,11 +118,11 @@ async function chooseWatermarkPositions(
   return positions as Record<Orientation, OsgPosition>;
 }
 
-export function registerOsgPlacementJob(fs: Engine): void {
+export function registerOsgPlacementJob(engine: Engine): void {
   registerJobHandler("osg_placement", async (payload, ctx) => {
     const { assetId, assetDir, fingerprint, userScale } = payload as OsgPlacementPayload;
     return withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -132,7 +132,7 @@ export function registerOsgPlacementJob(fs: Engine): void {
         const apiKey = getApiKey("OPENAI_API_KEY");
         if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
 
-        const listResult = await fs.files.listSubdir(assetId, "original_frames");
+        const listResult = await engine.files.listSubdir(assetId, "original_frames");
         const frameFiles = listResult.ok
           ? listResult.value
               .filter((f) => f.endsWith(".jpg"))
@@ -146,7 +146,7 @@ export function registerOsgPlacementJob(fs: Engine): void {
         const frames: Array<{ id: string; label: string; buffer: Buffer }> = [];
         for (const file of sampled) {
           ctx.signal.throwIfAborted();
-          const read = await fs.files.read(assetId, `original_frames/${file}`);
+          const read = await engine.files.read(assetId, `original_frames/${file}`);
           if (!read.ok) throw new Error(read.error.message);
           frames.push({
             id: file,
@@ -155,7 +155,7 @@ export function registerOsgPlacementJob(fs: Engine): void {
           });
         }
 
-        const source = await readSourceDimensions(fs, assetId, frames[0].buffer);
+        const source = await readSourceDimensions(engine, assetId, frames[0].buffer);
         const regionsByFrame = await detectOccupiedRegions(frames, {
           apiKey,
           signal: ctx.signal,
@@ -167,7 +167,7 @@ export function registerOsgPlacementJob(fs: Engine): void {
         const regions = [...regionsByFrame.values()].flat();
 
         const positions = await chooseWatermarkPositions(
-          fs, assetId, regions, source.width, source.height, userScale,
+          engine, assetId, regions, source.width, source.height, userScale,
         );
 
         const analysis: OsgPlacementAnalysis = {
@@ -180,7 +180,7 @@ export function registerOsgPlacementJob(fs: Engine): void {
           positions,
           analyzedAt: new Date().toISOString(),
         };
-        await writeOsgPlacementAnalysis(fs, assetId, analysis);
+        await writeOsgPlacementAnalysis(engine, assetId, analysis);
         return { analysis } satisfies OsgPlacementResult;
       },
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },

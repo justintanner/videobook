@@ -9,7 +9,7 @@ function normalizeUrl(url: string): string {
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
 
-export function archiveClipDef(fs: Engine): ToolDef {
+export function archiveClipDef(engine: Engine): ToolDef {
   return {
     name: "archive_clip",
     description: "Materialize a full URL or existing video/audio asset in the rebuildable global archive cache (B2 if configured, otherwise local), dedupe by media SHA-256, and transcribe long clips in chunks. Book-owned semantic links remain in artifact metadata.",
@@ -62,7 +62,7 @@ export function archiveClipDef(fs: Engine): ToolDef {
       }
 
       if (asset_id) {
-        const manifest = await fs.files.manifest(asset_id);
+        const manifest = await engine.files.manifest(asset_id);
         if (!manifest.ok) {
           return {
             isError: true as const,

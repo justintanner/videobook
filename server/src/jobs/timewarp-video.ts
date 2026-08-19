@@ -109,11 +109,11 @@ export async function validateTimewarpOutput(
 }
 
 async function deleteIfPresent(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   filename: string,
 ): Promise<void> {
-  const result = await fs.files.delete(assetId, filename);
+  const result = await engine.files.delete(assetId, filename);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
     throw new Error(`Failed to delete ${filename}: ${result.error.message}`);
   }
@@ -125,7 +125,7 @@ async function discardTemp(
   await rm(outputPath, { force: true });
 }
 
-export function registerTimewarpVideoJob(fs: Engine): void {
+export function registerTimewarpVideoJob(engine: Engine): void {
   registerJobHandler("timewarp_video", async (payload, ctx) => {
     const {
       inputPath,
@@ -139,7 +139,7 @@ export function registerTimewarpVideoJob(fs: Engine): void {
     } = payload as TimewarpVideoPayload;
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -169,21 +169,21 @@ export function registerTimewarpVideoJob(fs: Engine): void {
           throw error;
         }
 
-        const history = fs.history.artifact(assetId);
+        const history = engine.history.artifact(assetId);
         const restoreCommit = history[0]?.hash;
         try {
           const inputFilename = basename(inputPath);
           await replaceArtifactFileFromPath(
-            fs,
+            engine,
             assetId,
             inputFilename,
             outputPath,
           );
           for (const filename of STALE_VISUAL_DERIVATIVES) {
-            await deleteIfPresent(fs, assetId, filename);
+            await deleteIfPresent(engine, assetId, filename);
           }
         } catch (error) {
-          if (restoreCommit) await fs.history.restoreArtifact(assetId, restoreCommit);
+          if (restoreCommit) await engine.history.restoreArtifact(assetId, restoreCommit);
           throw error;
         }
 

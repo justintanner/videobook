@@ -21,10 +21,10 @@ export type DoctorFixResult =
   | { status: "busy"; asset_id: string; reason: string };
 
 async function statusOf(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<string> {
-  const res = await fs.status.get(assetId);
+  const res = await engine.status.get(assetId);
   return res.ok ? res.value : "error";
 }
 
@@ -46,11 +46,11 @@ async function statusOf(
  * asset.
  */
 async function fixAsset(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<DoctorFixResult> {
   // Refuse to touch an asset a job is actively working (live, unexpired lease).
-  const work = await fs.jobs.artifactWork.read(assetId);
+  const work = await engine.jobs.artifactWork.read(assetId);
   if (
     work.ok &&
     work.value &&
@@ -61,20 +61,20 @@ async function fixAsset(
     return { status: "busy", asset_id: assetId, reason: "asset has an active job lease" };
   }
 
-  const before = await statusOf(fs, assetId);
+  const before = await statusOf(engine, assetId);
 
   // Tier 1 — clear durable failure signals, then re-derive from disk.
-  await fs.jobs.failures.clear(assetId);
-  const pending = await fs.jobs.pending.read(assetId);
+  await engine.jobs.failures.clear(assetId);
+  const pending = await engine.jobs.pending.read(assetId);
   if (pending.ok && pending.value) {
     // delete (not forceFail) so we don't write a fresh generation error.
-    await fs.jobs.pending.delete(assetId);
+    await engine.jobs.pending.delete(assetId);
   }
-  const dirRes = await fs.workspaces.resolveArtifact(assetId);
-  if (dirRes.ok) await fs.jobs.locks.cleanStale(dirRes.value);
-  await fs.jobs.recoverArtifact(assetId);
+  const dirRes = await engine.workspaces.resolveArtifact(assetId);
+  if (dirRes.ok) await engine.jobs.locks.cleanStale(dirRes.value);
+  await engine.jobs.recoverArtifact(assetId);
 
-  const afterTier1 = await statusOf(fs, assetId);
+  const afterTier1 = await statusOf(engine, assetId);
   if (afterTier1 === "ready") {
     return {
       status: before === "ready" ? "already_healthy" : "recovered_in_place",
@@ -84,7 +84,7 @@ async function fixAsset(
   }
 
   // Tier 2 — restore from immutable Dolt history using stable identity.
-  const artifact = fs.artifacts.get(assetId);
+  const artifact = engine.artifacts.get(assetId);
   if (!artifact.ok) {
     return {
       status: "unfixable",
@@ -93,16 +93,16 @@ async function fixAsset(
       asset_status: afterTier1,
     };
   }
-  const history = fs.history.artifact(artifact.value.artifactId);
+  const history = engine.history.artifact(artifact.value.artifactId);
   for (const commit of history) {
-    const restored = await fs.history.restoreArtifact(
+    const restored = await engine.history.restoreArtifact(
       artifact.value.artifactId,
       commit.hash,
     );
     if (!restored.ok) continue;
     // restoreAsset re-derives the row; clear any error it carried forward.
-    await fs.jobs.failures.clear(assetId);
-    const status = await statusOf(fs, assetId);
+    await engine.jobs.failures.clear(assetId);
+    const status = await statusOf(engine, assetId);
     if (status === "ready") {
       return {
         status: "restored",
@@ -118,13 +118,13 @@ async function fixAsset(
     status: "unfixable",
     asset_id: assetId,
     scanned: history.length,
-    asset_status: await statusOf(fs, assetId),
+    asset_status: await statusOf(engine, assetId),
   };
 }
 
-export function registerDoctorFixJob(fs: Engine): void {
+export function registerDoctorFixJob(engine: Engine): void {
   registerJobHandler("doctor_fix", async (payload) => {
     const { assetId } = payload as unknown as DoctorFixPayload;
-    return fixAsset(fs, assetId);
+    return fixAsset(engine, assetId);
   });
 }

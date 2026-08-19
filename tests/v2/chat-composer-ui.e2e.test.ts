@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { execFile } from 'node:child_process'
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -15,7 +15,7 @@ import { FFMPEG } from '../../server/src/ffmpeg.js'
 const execFileAsync = promisify(execFile)
 
 interface StartedProcess {
-  child: ChildProcessWithoutNullStreams
+  child: ChildProcess
   output: string[]
 }
 
@@ -195,6 +195,9 @@ describe('chat composer browser flow', () => {
   let fullscreenImageMediaUrl = ''
   const observedCalls: ToolCall[] = []
   let delayedBootstrap = false
+  let delayChatResponses = false
+  let appReady = false
+  let notebookDirty = false
   let mockedChatActionPlan: {
     prompt: string
     value: Record<string, unknown>
@@ -207,6 +210,7 @@ describe('chat composer browser flow', () => {
     mockedFullscreenSubjectEditor = false
     mockedSubjectEditCompletions = 0
     mockedSubjectEditDelays = []
+    delayChatResponses = false
   })
 
   afterEach(async () => {
@@ -529,7 +533,8 @@ describe('chat composer browser flow', () => {
       const mockedCall = mockedChatActionPlan && calls.find((call) =>
         call.name === 'chat'
         && call.arguments.prompt === mockedChatActionPlan?.prompt)
-      if (mockedCall && mockedChatActionPlan) {
+      const chatPlan = mockedChatActionPlan
+      if (mockedCall && chatPlan) {
         const envelopes = Array.isArray(body) ? body : [body]
         const response = envelopes.flatMap((entry) => {
           const envelope = record(entry)
@@ -538,7 +543,7 @@ describe('chat composer browser flow', () => {
           if (
             envelope?.method !== 'tools/call'
             || params?.name !== 'chat'
-            || args?.prompt !== mockedChatActionPlan?.prompt
+            || args?.prompt !== chatPlan.prompt
             || (typeof envelope.id !== 'number' && typeof envelope.id !== 'string')
           ) return []
           return [{
@@ -548,7 +553,7 @@ describe('chat composer browser flow', () => {
               resultType: 'complete',
               content: [{
                 type: 'text',
-                text: JSON.stringify(mockedChatActionPlan.value),
+                text: JSON.stringify(chatPlan.value),
               }],
               isError: false,
             },
@@ -565,7 +570,7 @@ describe('chat composer browser flow', () => {
         delayedBootstrap = true
         await wait(700)
       }
-      if (calls.some((call) => call.name === 'chat')) {
+      if (delayChatResponses && calls.some((call) => call.name === 'chat')) {
         await wait(850)
       }
       await route.continue()
@@ -582,12 +587,30 @@ describe('chat composer browser flow', () => {
     }
   })
 
-  it('keeps canvas controls clear and adapts the inspector without a seam', async () => {
+  async function openApp(options: { cold?: boolean } = {}): Promise<Page> {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    const remount = options.cold || !appReady || notebookDirty
+    if (remount) {
+      delayedBootstrap = appReady && !options.cold
+      await page.goto(appUrl, { waitUntil: 'commit' })
+      appReady = true
+      notebookDirty = false
+    } else {
+      await page.keyboard.press('Escape').catch(() => undefined)
+      await page.keyboard.press('Escape').catch(() => undefined)
+      const closer = page.getByLabel('Close fullscreen preview')
+      if (await closer.count()) await closer.click().catch(() => undefined)
+      const input = page.getByLabel('Videobook command input')
+      if (await input.count()) await input.fill('').catch(() => undefined)
+    }
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
+    return page
+  }
+
+  it('cold-starts the MCP-backed app and keeps canvas controls clear', async () => {
+    const page = await openApp({ cold: true })
 
     const topbar = page.locator('.topbar')
     const brand = page.locator('.brand-project')
@@ -658,7 +681,7 @@ describe('chat composer browser flow', () => {
 
   it('renders edges whose target handles are added after mount', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -691,6 +714,7 @@ describe('chat composer browser flow', () => {
         return id
       }
       const refreshNotebook = async (): Promise<void> => {
+        if (!page) throw new Error('Browser page was not initialized')
         const refresh = page.getByLabel('Refresh books')
         observedCalls.length = 0
         await refresh.click()
@@ -721,6 +745,7 @@ describe('chat composer browser flow', () => {
         return id
       }
       const assertEdge = async (edgeId: string): Promise<void> => {
+        if (!page) throw new Error('Browser page was not initialized')
         const path = page.locator(
           `.notebook-flow .react-flow__edge[data-id="${edgeId}"] .react-flow__edge-path`,
         )
@@ -834,12 +859,13 @@ describe('chat composer browser flow', () => {
         }))
       }
       await client.close()
+      notebookDirty = true
     }
   }, 60_000)
 
   it('opens generation output fullscreen and restores the trigger focus', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -931,10 +957,13 @@ describe('chat composer browser flow', () => {
       ariaHidden: element.getAttribute('aria-hidden'),
       inert: element instanceof HTMLElement ? element.inert : false,
     }))).toEqual({ ariaHidden: 'true', inert: true })
-    await expect.poll(async () => await image.evaluate((element) => ({
-      complete: element.complete,
-      naturalWidth: element.naturalWidth,
-    }))).toEqual({ complete: true, naturalWidth: 1 })
+    await expect.poll(async () => await image.evaluate((element) => {
+      const imageElement = element as HTMLImageElement
+      return {
+        complete: imageElement.complete,
+        naturalWidth: imageElement.naturalWidth,
+      }
+    })).toEqual({ complete: true, naturalWidth: 1 })
     const close = page.getByLabel('Close fullscreen preview')
     expect(await close.evaluate((element) => document.activeElement === element)).toBe(true)
 
@@ -1046,7 +1075,7 @@ describe('chat composer browser flow', () => {
 
   it('turns every open notebook square into a media file dropzone', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -1065,7 +1094,7 @@ describe('chat composer browser flow', () => {
     try {
       await page.dispatchEvent('.app-shell', 'dragenter', { dataTransfer })
       await expect.poll(async () =>
-        await page.locator('.notebook-grid-square-dropzone').count(),
+        await page!.locator('.notebook-grid-square-dropzone').count(),
       ).toBe(await squares.count() - await cells.count())
       expect(await squares.filter({ hasText: /^@a1$/ }).getAttribute('class'))
         .not.toContain('notebook-grid-square-dropzone')
@@ -1120,7 +1149,7 @@ describe('chat composer browser flow', () => {
         },
       })
     })
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -1177,7 +1206,7 @@ describe('chat composer browser flow', () => {
 
   it('recalls failed commands backwards and restores the unsent draft', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -1237,7 +1266,7 @@ describe('chat composer browser flow', () => {
       },
     }
     try {
-      await page.goto(appUrl, { waitUntil: 'commit' })
+      await openApp()
       const input = page.getByLabel('Videobook command input')
       await input.waitFor({ state: 'visible', timeout: 30_000 })
       await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -1269,7 +1298,8 @@ describe('chat composer browser flow', () => {
 
   it('shows MCP motion and sends the selected model through the real UI', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    delayChatResponses = true
+    await openApp({ cold: true })
     const startup = page.locator('#startup-shell')
     await startup.waitFor({ state: 'visible' })
     await expect.poll(async () => await startup.textContent()).toContain('Loading workspace via MCP')
@@ -1355,7 +1385,7 @@ describe('chat composer browser flow', () => {
 
   it('starts cell-level image and video generation without chat review', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -1393,11 +1423,12 @@ describe('chat composer browser flow', () => {
 
     await expectDirectStart(reviewGenerationCellId)
     await expectDirectStart(directVideoGenerationCellId)
+    notebookDirty = true
   }, 60_000)
 
   it('keeps dense generation card headers compact and vertically centered', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -1458,7 +1489,7 @@ describe('chat composer browser flow', () => {
 
   it('reviews and applies a multi-cut split without a draggable timeline', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -1471,7 +1502,7 @@ describe('chat composer browser flow', () => {
     expect(await review.locator('input[type="range"]').count()).toBe(0)
     const rangeResponse = await review.locator('video').first().evaluate(
       async (video) => {
-        const response = await fetch(video.src, {
+        const response = await fetch((video as HTMLVideoElement).src, {
           headers: { Range: 'bytes=0-15' },
         })
         return {
@@ -1553,11 +1584,12 @@ describe('chat composer browser flow', () => {
       await splitClient.close()
     }
     expect(await notebookCellNode(page, videoCellId).count()).toBe(1)
+    notebookDirty = true
   }, 60_000)
 
   it('opens a complete context menu from every cell tile with delete last', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -1809,7 +1841,7 @@ describe('chat composer browser flow', () => {
 
   it('marquee-selects multiple cells and confirms before deleting the set', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -1918,11 +1950,12 @@ describe('chat composer browser flow', () => {
     const deleteCalls = observedCalls.filter((call) =>
       call.name === 'delete_notebook_cell')
     expect(deleteCalls).toHaveLength(2)
+    notebookDirty = true
   }, 60_000)
 
   it('searches the header add menu and closes it after adding a cell', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -1939,11 +1972,12 @@ describe('chat composer browser flow', () => {
     await expect.poll(() => observedCalls.some((call) =>
       call.name === 'create_notebook_cell'
       && record(call.arguments.cell)?.type === 'generate_audio')).toBe(true)
+    notebookDirty = true
   }, 60_000)
 
   it('auto-arranges the notebook into left-aligned workflow bands', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    await page.goto(appUrl, { waitUntil: 'commit' })
+    await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
@@ -1998,12 +2032,12 @@ describe('chat composer browser flow', () => {
       timeout: 30_000,
     })
     await expect.poll(async () => await autoArrange.isEnabled()).toBe(true)
-    await expect.poll(async () => await page.locator('.notebook-horizontal-scroll')
+    await expect.poll(async () => await page!.locator('.notebook-horizontal-scroll')
       .evaluate((element) => ({
         left: element.scrollLeft,
         top: element.scrollTop,
       }))).toMatchObject({ top: 0 })
-    await expect.poll(async () => await page.locator('.notebook-horizontal-scroll')
+    await expect.poll(async () => await page!.locator('.notebook-horizontal-scroll')
       .evaluate((element) => element.scrollLeft)).toBe(0)
     expect(await zoomLevel.textContent()).toContain('75%')
     expect(await selected.getAttribute('data-selection')).toBe('primary')
@@ -2015,5 +2049,6 @@ describe('chat composer browser flow', () => {
     })
     expect(observedCalls.some((call) => call.name === 'move_notebook_cells'))
       .toBe(false)
+    notebookDirty = true
   }, 60_000)
 })

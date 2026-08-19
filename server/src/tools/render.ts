@@ -18,7 +18,7 @@ import {
   DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
 } from "../remotion/keyword-graphics.js";
 
-export function renderVideoDef(fs: Engine): ToolDef {
+export function renderVideoDef(engine: Engine): ToolDef {
   return {
     name: "render_video",
     description:
@@ -225,7 +225,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
         shadow_opacity?: number;
       };
 
-      const kindGate = await requireArtifactKind(fs, asset_id, ["video"], "render_video");
+      const kindGate = await requireArtifactKind(engine, asset_id, ["video"], "render_video");
       if (kindGate) return kindGate;
 
       if (text_color && !isValidHex(text_color)) {
@@ -283,7 +283,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
         ? [explicitOrientation]
         : ALL_ORIENTATIONS;
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -308,9 +308,9 @@ export function renderVideoDef(fs: Engine): ToolDef {
       // rather than failing the render).
       let osgImagePath: string | null = null;
       if (osg_asset_id) {
-        const osgGate = await requireArtifactKind(fs, osg_asset_id, ["image"], "osg_asset_id");
+        const osgGate = await requireArtifactKind(engine, osg_asset_id, ["image"], "osg_asset_id");
         if (osgGate) return osgGate;
-        const resolved = await resolveOsgImagePath(fs, osg_asset_id);
+        const resolved = await resolveOsgImagePath(engine, osg_asset_id);
         if (!resolved.ok) {
           return {
             isError: true as const,
@@ -325,7 +325,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
       // which beginAssetWork refuses to lease — and enqueue never resets it.
       // An explicit render is a retry: clear the stale failure first so the
       // new jobs can claim the asset.
-      const clearResult = await fs.jobs.failures.clear(asset_id);
+      const clearResult = await engine.jobs.failures.clear(asset_id);
       if (!clearResult.ok) {
         console.warn(`[render] clearing stale generation error for ${asset_id} failed: ${clearResult.error.message}`);
       }
@@ -335,7 +335,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
       const jobs: Array<{ job_id: string; orientation: Orientation }> = [];
 
       for (const orientation of orientations) {
-        const storedResult = await fs.metadata.artifacts.read<Record<string, unknown>>(asset_id, `${orientation}.render`
+        const storedResult = await engine.metadata.artifacts.read<Record<string, unknown>>(asset_id, `${orientation}.render`
         );
         const stored = storedResult.ok ? storedResult.value : {};
         const storedMaxCount = stored.keywordGraphicsMaxCount;
@@ -367,7 +367,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
         let orientOsgImagePath = osgImagePath;
         if (!osg_asset_id && storedOsgAssetId) {
           if (!storedOsgPathCache.has(storedOsgAssetId)) {
-            const resolved = await resolveOsgImagePath(fs, storedOsgAssetId);
+            const resolved = await resolveOsgImagePath(engine, storedOsgAssetId);
             if (!resolved.ok) {
               console.warn(`[render] stored OSG asset ${storedOsgAssetId} skipped: ${resolved.error}`);
             }
@@ -445,8 +445,8 @@ export function renderVideoDef(fs: Engine): ToolDef {
       let savedOrientation: Orientation | undefined;
       if (explicitOrientation) {
         try {
-          const timeline = readTimeline(fs);
-          const updated = await writeTimeline(fs, {
+          const timeline = readTimeline(engine);
+          const updated = await writeTimeline(engine, {
             ...timelineInput(timeline),
             render: explicitOrientation,
           });

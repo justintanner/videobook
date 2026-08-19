@@ -531,6 +531,7 @@ async function materializeLocalOutputs(
       || (
         ordered.operation !== "split_range"
         && ordered.operation !== "extract_audio"
+        && ordered.inputs?.mediaRole !== "extract-audio-output"
       )
     ) {
       continue;

@@ -41,7 +41,7 @@ function validateCuts(
   return { ok: true, sorted };
 }
 
-export function applyCutsDef(fs: Engine): ToolDef {
+export function applyCutsDef(engine: Engine): ToolDef {
   return {
     name: "apply_cuts",
     description:
@@ -69,7 +69,7 @@ export function applyCutsDef(fs: Engine): ToolDef {
       };
       const assetId = asset_id.replace(/^@/, "");
 
-      const manifestResult = await fs.files.manifest(assetId);
+      const manifestResult = await engine.files.manifest(assetId);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -85,7 +85,7 @@ export function applyCutsDef(fs: Engine): ToolDef {
         };
       }
 
-      const metaResult = await fs.metadata.artifacts.read<{ duration?: number; hasAudio?: boolean }>(assetId, "original"
+      const metaResult = await engine.metadata.artifacts.read<{ duration?: number; hasAudio?: boolean }>(assetId, "original"
       );
       const duration = metaResult.ok && typeof metaResult.value.duration === "number"
         ? metaResult.value.duration

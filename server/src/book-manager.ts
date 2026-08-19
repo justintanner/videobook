@@ -43,9 +43,9 @@ export interface MigratedBook {
 export interface BookManagerOptions {
   libraryDir: string;
   remoteObjects?: ContentStore;
-  objectPrefix: string;
+  objectPrefix?: string;
   catalogBackupUrlTemplate?: string;
-  catalogBackupName: string;
+  catalogBackupName?: string;
 }
 
 export interface DeleteBookOptions {
@@ -337,7 +337,7 @@ export class BookManager {
       ...(this.options.remoteObjects
         ? { remoteObjects: this.options.remoteObjects }
         : {}),
-      objectPrefix: this.options.objectPrefix,
+      objectPrefix: this.options.objectPrefix ?? "videobook/sha256",
       ...(this.catalogBackup(rootDir) ? { catalogBackup: this.catalogBackup(rootDir)! } : {}),
     });
     return engine;
@@ -349,7 +349,7 @@ export class BookManager {
     const bookId = rootDir.split(sep).at(-1);
     if (!bookId) return undefined;
     return {
-      name: this.options.catalogBackupName,
+      name: this.options.catalogBackupName ?? "backup",
       url: template.replaceAll("{bookId}", encodeURIComponent(bookId)),
     };
   }

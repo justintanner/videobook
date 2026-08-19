@@ -28,7 +28,7 @@ type ExtendWan27VideoPayload = {
   seed?: number;
 };
 
-export function registerExtendWan27VideoJob(fs: Engine): void {
+export function registerExtendWan27VideoJob(engine: Engine): void {
   registerJobHandler("extend_wan27_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId, prompt, negative_prompt,
@@ -39,7 +39,7 @@ export function registerExtendWan27VideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const firstClipUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename);
+    const firstClipUrl = await uploadAssetToKie(engine, sourceVideo.assetId, sourceVideo.filename);
     const normalizedPrompt = transformProviderPrompt(
       "extend_kie_wan_2_7_video",
       { prompt, video_ref: sourceVideo.assetId },
@@ -49,7 +49,7 @@ export function registerExtendWan27VideoJob(fs: Engine): void {
       { prompt: normalizedPrompt, negative_prompt, resolution, duration, prompt_extend, watermark, nsfw_checker, seed },
       { firstClipUrl },
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "wan27_extend_video",
       assetId: vidAssetId,

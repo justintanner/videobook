@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
+import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import {
   buildAudioFilter,
   buildReencodeArgs,
@@ -112,13 +113,7 @@ describe("timeline re-encode with real ffmpeg", () => {
   let clip30: string;
 
   async function makeClip(path: string, rate: number): Promise<void> {
-    await execFileAsync(FFMPEG, [
-      "-f", "lavfi", "-i", `testsrc=duration=1:size=320x240:rate=${rate}`,
-      "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
-      "-c:v", "libx264", "-pix_fmt", "yuv420p",
-      "-c:a", "aac", "-shortest",
-      "-y", path,
-    ]);
+    await copyVideoFixture(COMMON_VIDEO_FIXTURES.timeline(rate), path);
   }
 
   beforeAll(async () => {

@@ -16,16 +16,16 @@ type ExtractWaveformPayload = {
   videoFilename: string;
 };
 
-export function registerExtractWaveformJob(fs: Engine): void {
+export function registerExtractWaveformJob(engine: Engine): void {
   registerJobHandler("extract_waveform", async (payload) => {
     const { bookId: _bookId, waveformAssetId, videoFilename } =
       payload as ExtractWaveformPayload;
 
     // Idempotent: a concurrent poll may have already cached this waveform.
-    const existing = await fs.metadata.waveforms.read(waveformAssetId);
+    const existing = await engine.metadata.waveforms.read(waveformAssetId);
     if (existing.ok) return { cached: true };
 
-    const dir = await fs.workspaces.resolveArtifact(waveformAssetId);
+    const dir = await engine.workspaces.resolveArtifact(waveformAssetId);
     if (!dir.ok) {
       throw new Error(
         `extract_waveform: resolveAssetDir failed for ${waveformAssetId}: ${dir.error.message}`,
@@ -36,7 +36,7 @@ export function registerExtractWaveformJob(fs: Engine): void {
     // Persist even when empty. A silent track — or one ffmpeg can't decode —
     // caches as "no waveform" so we don't re-decode the same file on every
     // sync. extractWaveform already logs the underlying ffmpeg failure.
-    const write = await fs.metadata.waveforms.write(waveformAssetId, peaks
+    const write = await engine.metadata.waveforms.write(waveformAssetId, peaks
     );
     if (!write.ok) {
       throw new Error(

@@ -11,7 +11,7 @@ type ExtractVideoClipPayload = {
   bookId: string;
 };
 
-export function registerExtractVideoClipJob(fs: Engine): void {
+export function registerExtractVideoClipJob(engine: Engine): void {
   registerJobHandler("extract_video_clip", async (payload) => {
     const {
       sourceAssetId,
@@ -20,7 +20,7 @@ export function registerExtractVideoClipJob(fs: Engine): void {
       title,
     } = payload as ExtractVideoClipPayload;
     return await splitSourceRange(
-      fs,
+      engine,
       sourceAssetId,
       { startSeconds: startTime, endSeconds: endTime },
       title,

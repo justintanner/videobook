@@ -17,10 +17,10 @@ type Payload = {
   max_images?: number;
 };
 
-export function registerGenerateSeedreamV5LiteFalJob(fs: Engine): void {
+export function registerGenerateSeedreamV5LiteFalJob(engine: Engine): void {
   registerJobHandler("generate_seedream_v5_lite_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(engine, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
       const input: FalInput = {
         prompt: p.prompt,
@@ -30,7 +30,7 @@ export function registerGenerateSeedreamV5LiteFalJob(fs: Engine): void {
       };
   
       const taskId = await submitFalJob({
-        fs,
+        engine,
         bookId: p.bookId,
         assetId: p.imgAssetId,
         assetDir: p.imgAssetDir,

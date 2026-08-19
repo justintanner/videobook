@@ -1,4 +1,4 @@
-import { fs } from "../fs.js";
+import { scopedEngine } from "../engine.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -19,11 +19,11 @@ describe("generated command documentation", () => {
   });
 
   it("lists every exposed MCP endpoint and canonical slash command once", () => {
-    const tools = getAllToolDefs(fs);
+    const tools = getAllToolDefs(scopedEngine);
     const commands = getCanonicalCommands();
     const actual = readFileSync(resolve(root, "docs/command-reference.md"), "utf8");
 
-    expect(tools).toHaveLength(303);
+    expect(tools).toHaveLength(305);
     expect(new Set(tools.map((tool) => tool.name)).size).toBe(tools.length);
     expect(actual).toBe(renderCommandReference(tools, commands, GENERATION_ACTIONS));
   });

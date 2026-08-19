@@ -129,13 +129,13 @@ export function pairForCell(
 const TRANSITION_SCAN_LIMIT = 500;
 
 function generationTransitions(
-  fs: Engine,
+  engine: Engine,
   generations: readonly Generation[],
 ): Map<string, CellGenerationTransition[]> {
   const wanted = new Set(generations.map((row) => row.generationId));
   const transitions = new Map<string, CellGenerationTransition[]>();
   if (wanted.size === 0) return transitions;
-  for (const revision of fs.history.revisions(TRANSITION_SCAN_LIMIT)) {
+  for (const revision of engine.history.revisions(TRANSITION_SCAN_LIMIT)) {
     const details = revision.details ?? {};
     const generationId = typeof details.generationId === "string"
       ? details.generationId
@@ -155,7 +155,7 @@ function generationTransitions(
   return transitions;
 }
 
-export function listCellGenerationsDef(fs: Engine): ToolDef {
+export function listCellGenerationsDef(engine: Engine): ToolDef {
   return {
     name: "list_cell_generations",
     description:
@@ -184,7 +184,7 @@ export function listCellGenerationsDef(fs: Engine): ToolDef {
           include_payloads?: boolean;
           limit?: number;
         };
-        const read = fs.notebooks.read(notebook_id);
+        const read = engine.notebooks.read(notebook_id);
         if (!read.ok) {
           return {
             isError: true,
@@ -193,7 +193,7 @@ export function listCellGenerationsDef(fs: Engine): ToolDef {
         }
         const document = read.value;
         const { generateCell, outputCell } = pairForCell(document, cell_id);
-        const generationsResult = fs.generations.listForCell(
+        const generationsResult = engine.generations.listForCell(
           notebook_id,
           generateCell.id,
           { limit },
@@ -208,8 +208,8 @@ export function listCellGenerationsDef(fs: Engine): ToolDef {
           };
         }
         const rows = generationsResult.value;
-        const transitions = generationTransitions(fs, rows);
-        const assets = await buildAssetList(fs, book_id);
+        const transitions = generationTransitions(engine, rows);
+        const assets = await buildAssetList(engine, book_id);
         const assetById = new Map(
           assets.map((asset) => [asset.artifact_id, asset]),
         );
@@ -226,7 +226,7 @@ export function listCellGenerationsDef(fs: Engine): ToolDef {
           let payload: unknown = null;
           let commandPlan: unknown = null;
           if (joinArtifactId) {
-            const payloadRes = await fs.metadata.artifacts.read<unknown>(
+            const payloadRes = await engine.metadata.artifacts.read<unknown>(
               joinArtifactId,
               "generation-payload",
             );
@@ -234,7 +234,7 @@ export function listCellGenerationsDef(fs: Engine): ToolDef {
               payloadAvailable = true;
               payload = payloadRes.value;
             }
-            const planRes = await fs.metadata.artifacts.read<unknown>(
+            const planRes = await engine.metadata.artifacts.read<unknown>(
               joinArtifactId,
               "command-plan",
             );
@@ -242,7 +242,7 @@ export function listCellGenerationsDef(fs: Engine): ToolDef {
           }
           let error = row.error ?? null;
           if (!error && joinArtifactId) {
-            const failRes = await fs.jobs.failures.read(joinArtifactId);
+            const failRes = await engine.jobs.failures.read(joinArtifactId);
             if (failRes.ok && failRes.value) error = failRes.value.message;
           }
           attempts.push({

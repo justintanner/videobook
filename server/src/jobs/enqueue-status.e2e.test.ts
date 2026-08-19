@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
 import type { Engine } from "videobook-engine";
 

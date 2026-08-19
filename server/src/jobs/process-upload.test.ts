@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { findUnprocessedUploads } from "./process-upload.js";
 import { queue } from "../queue.js";
 import type { Engine } from "videobook-engine";

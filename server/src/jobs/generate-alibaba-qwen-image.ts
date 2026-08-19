@@ -24,7 +24,7 @@ type GenerateAlibabaQwenImagePayload = {
 };
 
 async function runQwenImageJob(
-  fs: Engine,
+  engine: Engine,
   payload: GenerateAlibabaQwenImagePayload,
   taskType: "alibaba_qwen_image" | "alibaba_qwen_image_edit",
   ctx: import("../queue.js").JobHandlerContext,
@@ -38,7 +38,7 @@ async function runQwenImageJob(
 
   const uploadedUrls: string[] = [];
   for (const { assetId: srcAssetId, filename } of imageInputs) {
-    uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, model));
+    uploadedUrls.push(await uploadAssetToAlibaba(engine, srcAssetId, filename, model));
   }
 
   const provider = createAlibaba({ apiKey, timeout: 120_000 });
@@ -52,7 +52,7 @@ async function runQwenImageJob(
     },
     uploadedUrls,
   );
-  await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request);
+  await engine.metadata.artifacts.write(imgAssetId, "generation-payload", request);
 
   const response = await provider.post.api.v1.services.aigc.multimodalGeneration.generation(request);
 
@@ -67,7 +67,7 @@ async function runQwenImageJob(
   // Hand off to the downstream completion job: write a pending_tasks row so
   // complete_kie_task can claim the lease via getOwner+setLease, then mark
   // completing so a duplicate dispatch is skipped.
-  const ptResult = await fs.jobs.pending.write({
+  const ptResult = await engine.jobs.pending.write({
     taskId: response.request_id,
     taskType,
     artifactId: imgAssetId,
@@ -80,7 +80,7 @@ async function runQwenImageJob(
     throw new Error("Lost local lease while writing pending-task");
   }
   ctx.setLease({ kind: "task", taskId: response.request_id });
-  await fs.jobs.pending.markCompleting(imgAssetId);
+  await engine.jobs.pending.markCompleting(imgAssetId);
 
   const jobId = `complete-alibaba-qwen-${imgAssetId}-${Date.now()}`;
   await queue.enqueue(jobId, {
@@ -107,14 +107,14 @@ async function runQwenImageJob(
   return { success: true, requestId: response.request_id };
 }
 
-export function registerGenerateAlibabaQwenImageJob(fs: Engine): void {
+export function registerGenerateAlibabaQwenImageJob(engine: Engine): void {
   registerJobHandler("generate_alibaba_qwen_image", async (payload, ctx) => {
-    return runQwenImageJob(fs, payload as GenerateAlibabaQwenImagePayload, "alibaba_qwen_image", ctx);
+    return runQwenImageJob(engine, payload as GenerateAlibabaQwenImagePayload, "alibaba_qwen_image", ctx);
   });
 }
 
-export function registerGenerateAlibabaQwenImageEditJob(fs: Engine): void {
+export function registerGenerateAlibabaQwenImageEditJob(engine: Engine): void {
   registerJobHandler("generate_alibaba_qwen_image_edit", async (payload, ctx) => {
-    return runQwenImageJob(fs, payload as GenerateAlibabaQwenImagePayload, "alibaba_qwen_image_edit", ctx);
+    return runQwenImageJob(engine, payload as GenerateAlibabaQwenImagePayload, "alibaba_qwen_image_edit", ctx);
   });
 }

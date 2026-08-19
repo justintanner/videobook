@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function markAssetSeenDef(fs: Engine): ToolDef {
+export function markAssetSeenDef(engine: Engine): ToolDef {
   return {
     name: "mark_asset_seen",
     description:
@@ -16,7 +16,7 @@ export function markAssetSeenDef(fs: Engine): ToolDef {
         asset_id: string;
         book_id: string;
       };
-      const updated = await fs.jobs.artifactWork.markSeen(book_id);
+      const updated = await engine.jobs.artifactWork.markSeen(book_id);
       return {
         content: [
           {

@@ -18,13 +18,13 @@ export type PadVideoPayload = {
   hasAudio: boolean;
 };
 
-export function registerPadVideoJob(fs: Engine): void {
+export function registerPadVideoJob(engine: Engine): void {
   registerJobHandler("pad_video", async (payload, ctx) => {
     console.log("pad_video payload:", payload);
     const { sourcePath, assetDir, sourceAssetId, bookId, targetSecs, hasAudio } = payload as PadVideoPayload;
     
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       sourceAssetId,
       assetDir,
       ctx,
@@ -70,7 +70,7 @@ export function registerPadVideoJob(fs: Engine): void {
 
           const inputFilename = basename(sourcePath);
           await replaceArtifactFileFromPath(
-            fs,
+            engine,
             sourceAssetId,
             inputFilename,
             outputPath,
@@ -81,10 +81,10 @@ export function registerPadVideoJob(fs: Engine): void {
             ".analysis.gpt4otrans.json",
             "elevenlabs.json",
           ]) {
-            await fs.files.delete(sourceAssetId, stale);
+            await engine.files.delete(sourceAssetId, stale);
           }
 
-          await fs.metadata.artifacts.write(sourceAssetId, "original", provenance);
+          await engine.metadata.artifacts.write(sourceAssetId, "original", provenance);
 
           const videoPath = join(assetDir, inputFilename);
           return { videoPath, provenance };

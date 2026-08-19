@@ -141,10 +141,10 @@ function buildAssetSnapshot(
 }
 
 async function readAnalysisTopics(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<string[]> {
-  const read = await fs.files.read(assetId, ".original.analysis.json");
+  const read = await engine.files.read(assetId, ".original.analysis.json");
   if (!read.ok) return [];
   try {
     const parsed = JSON.parse(new TextDecoder().decode(read.value)) as Record<string, unknown>;
@@ -165,15 +165,15 @@ async function readAnalysisTopics(
 }
 
 async function prepareAssetMedia(
-  fs: Engine,
+  engine: Engine,
   payload: ArchiveClipPayload,
 ): Promise<PreparedMedia> {
   if (!payload.assetId) {
     throw new Error("asset archive requires assetId");
   }
-  const manifest = await fs.files.manifest(payload.assetId);
+  const manifest = await engine.files.manifest(payload.assetId);
   if (!manifest.ok) throw new Error(manifest.error.message);
-  const artifact = fs.artifacts.get(payload.assetId);
+  const artifact = engine.artifacts.get(payload.assetId);
   if (!artifact.ok) throw new Error(artifact.error.message);
   const media = pickMediaFile(manifest.value.files, artifact.value.kind);
   if (!media) throw new Error(`No media file found in asset ${payload.assetId}`);
@@ -192,7 +192,7 @@ async function prepareAssetMedia(
       ...(title ? { title } : {}),
       created_at: new Date().toISOString(),
     },
-    analysisTopics: await readAnalysisTopics(fs, payload.assetId),
+    analysisTopics: await readAnalysisTopics(engine, payload.assetId),
     assetSnapshot: buildAssetSnapshot(manifest.value, payload.bookId, payload.assetId),
   };
 }
@@ -464,8 +464,8 @@ async function uploadAssetSnapshot(args: {
   return { prefix, fileCount };
 }
 
-async function runArchive(fs: Engine, payload: ArchiveClipPayload): Promise<Record<string, unknown>> {
-  const prepared = payload.url ? await prepareUrlMedia(payload) : await prepareAssetMedia(fs, payload);
+async function runArchive(engine: Engine, payload: ArchiveClipPayload): Promise<Record<string, unknown>> {
+  const prepared = payload.url ? await prepareUrlMedia(payload) : await prepareAssetMedia(engine, payload);
   try {
     const store = getArchiveStore();
     const sha256 = await hashFile(prepared.mediaPath);
@@ -552,11 +552,11 @@ async function runArchive(fs: Engine, payload: ArchiveClipPayload): Promise<Reco
   }
 }
 
-async function writeArchiveMetadata(fs: Engine, payload: ArchiveClipPayload, result: Record<string, unknown>): Promise<void> {
+async function writeArchiveMetadata(engine: Engine, payload: ArchiveClipPayload, result: Record<string, unknown>): Promise<void> {
   if (!payload.assetId) return;
   const archiveId = result.archive_id;
   if (typeof archiveId !== "string") return;
-  const write = await fs.metadata.artifacts.write(payload.assetId, "archive", {
+  const write = await engine.metadata.artifacts.write(payload.assetId, "archive", {
     archive_id: archiveId,
     ingest_id: result.ingest_id,
     duplicate: result.duplicate,
@@ -574,17 +574,17 @@ async function writeArchiveMetadata(fs: Engine, payload: ArchiveClipPayload, res
   if (!write.ok) throw new Error(write.error.message);
 }
 
-export function registerArchiveClipJob(fs: Engine): void {
+export function registerArchiveClipJob(engine: Engine): void {
   registerJobHandler("archive_clip", async (payload, ctx) => {
     const p = payload as ArchiveClipPayload;
     if (p.assetId) {
-      return withLocalLease(fs, p.assetId, ctx, "archive", async () => {
-        const result = await runArchive(fs, p);
-        await writeArchiveMetadata(fs, p, result);
+      return withLocalLease(engine, p.assetId, ctx, "archive", async () => {
+        const result = await runArchive(engine, p);
+        await writeArchiveMetadata(engine, p, result);
         return result;
       });
     }
-    return runArchive(fs, { ...p, ingestId: p.ingestId || randomUUID() });
+    return runArchive(engine, { ...p, ingestId: p.ingestId || randomUUID() });
   });
 }
 

@@ -12,12 +12,12 @@ interface PostToXJobPayload {
   scheduledFor?: string;
 }
 
-export function registerPostToXJob(fs: Engine): void {
+export function registerPostToXJob(engine: Engine): void {
   registerJobHandler("post_to_x", async (payload): Promise<PostToXResult> => {
     const { assetId, bookId, text, orientation, scheduleId, scheduledFor } =
       payload as unknown as PostToXJobPayload;
     return await postToX({
-      fs,
+      engine,
       assetId,
       bookId,
       text,

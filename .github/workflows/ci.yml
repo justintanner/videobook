@@ -30,6 +30,8 @@ jobs:
         run: npm ci --prefix server
       - name: Check dead code and dependencies
         run: npm run check:dead-code
+      - name: Typecheck test projects
+        run: npm run typecheck:test
       - name: Run strict lint and client build
         run: npm run build
       - name: Build server

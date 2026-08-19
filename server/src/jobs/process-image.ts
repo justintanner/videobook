@@ -14,21 +14,21 @@ type ProcessImagePayload = {
   provenance: Record<string, unknown>;
 };
 
-export function registerProcessImageJob(fs: Engine): void {
+export function registerProcessImageJob(engine: Engine): void {
   registerJobHandler("process_image", async (payload, ctx) => {
     const {
       assetId, bookId, extension, provenance,
     } = payload as ProcessImagePayload;
 
-    return withLocalLease(fs, assetId, ctx, "process", async () =>
+    return withLocalLease(engine, assetId, ctx, "process", async () =>
       withTransientStorageRetry(async () => {
-        const readResult = await fs.files.read(assetId, `original${extension}`);
+        const readResult = await engine.files.read(assetId, `original${extension}`);
         if (!readResult.ok) throw new Error(`Failed to read original: ${readResult.error.message}`);
 
         const buffer = Buffer.isBuffer(readResult.value) ? readResult.value : Buffer.from(readResult.value);
         const { width, height } = await probeImage(buffer);
 
-        const metadata = await fs.metadata.artifacts.write(
+        const metadata = await engine.metadata.artifacts.write(
           assetId,
           "original",
           { ...provenance, width, height },
@@ -42,19 +42,19 @@ export function registerProcessImageJob(fs: Engine): void {
             cropToFill(buffer, 1080, 1080),
           ]);
 
-          const landscapeWrite = await fs.files.write(
+          const landscapeWrite = await engine.files.write(
             assetId,
             "landscape.jpg",
             landscape,
           );
           if (!landscapeWrite.ok) throw new Error(landscapeWrite.error.message);
-          const portraitWrite = await fs.files.write(
+          const portraitWrite = await engine.files.write(
             assetId,
             "portrait.jpg",
             portrait,
           );
           if (!portraitWrite.ok) throw new Error(portraitWrite.error.message);
-          const squareWrite = await fs.files.write(
+          const squareWrite = await engine.files.write(
             assetId,
             "square.jpg",
             square,

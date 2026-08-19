@@ -80,7 +80,7 @@ export type WatermarkAssetResult =
 
 /** Build the badge and persist it as an image artifact with preview variants. */
 export async function createWatermarkAsset(
-  fs: Engine,
+  engine: Engine,
   handle: string,
   url: string,
 ): Promise<WatermarkAssetResult> {
@@ -92,19 +92,19 @@ export async function createWatermarkAsset(
   }
 
   const assetName = `watermark-${handle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36)}`;
-  const created = await fs.artifacts.create("img", assetName);
+  const created = await engine.artifacts.create("img", assetName);
   if (!created.ok) {
     return { ok: false, error: `Failed to create image asset: ${created.error.message}` };
   }
   const assetId = created.value.artifactId;
 
-  const writeResult = await fs.files.write(assetId, "original.png", buffer);
+  const writeResult = await engine.files.write(assetId, "original.png", buffer);
   if (!writeResult.ok) {
-    await fs.artifacts.delete(assetId).catch(() => undefined);
+    await engine.artifacts.delete(assetId).catch(() => undefined);
     return { ok: false, error: writeResult.error.message };
   }
 
-  const metadataResult = await fs.metadata.artifacts.write(assetId, "original", {
+  const metadataResult = await engine.metadata.artifacts.write(assetId, "original", {
     origin: "watermark",
     layout: WATERMARK_BADGE_LAYOUT,
     created_at: new Date().toISOString(),
@@ -114,13 +114,13 @@ export async function createWatermarkAsset(
     height: BADGE_HEIGHT,
   });
   if (!metadataResult.ok) {
-    await fs.artifacts.delete(assetId).catch(() => undefined);
+    await engine.artifacts.delete(assetId).catch(() => undefined);
     return { ok: false, error: metadataResult.error.message };
   }
 
-  const variantsResult = await writeImageVariants(fs, assetId, buffer);
+  const variantsResult = await writeImageVariants(engine, assetId, buffer);
   if (!variantsResult.ok) {
-    await fs.artifacts.delete(assetId).catch(() => undefined);
+    await engine.artifacts.delete(assetId).catch(() => undefined);
     return { ok: false, error: variantsResult.error };
   }
 
@@ -130,13 +130,13 @@ export async function createWatermarkAsset(
 /** Find an existing badge artifact for this handle + url (same layout), so
  *  repeated applies share one card instead of minting duplicates. */
 export async function findWatermarkAsset(
-  fs: Engine,
+  engine: Engine,
   handle: string,
   url: string,
 ): Promise<string | null> {
-  for (const artifact of fs.artifacts.list()) {
+  for (const artifact of engine.artifacts.list()) {
     if (artifact.kind !== "image") continue;
-    const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(artifact.artifactId, "original");
+    const meta = await engine.metadata.artifacts.read<Record<string, unknown>>(artifact.artifactId, "original");
     if (!meta.ok) continue;
     if (
       meta.value.origin === "watermark"

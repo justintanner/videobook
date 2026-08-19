@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import type { Client } from "@modelcontextprotocol/client";
 import type { ArtifactKind, Engine } from "videobook-engine";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { registerJobHandler } from "../queue.js";
 import { createTestClient } from "../test-client.js";
 import { routedMediaCellInputs } from "../../../src/videobook/notebook-routed-action.js";

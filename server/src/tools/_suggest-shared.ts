@@ -140,10 +140,10 @@ function condenseElevenLabsWords(words: ElevenLabsWord[]): string {
 }
 
 async function loadTranscript(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<TranscriptResult | null> {
-  const elevenRead = await fs.files.read(assetId, "elevenlabs.json");
+  const elevenRead = await engine.files.read(assetId, "elevenlabs.json");
   if (elevenRead.ok) {
     try {
       const parsed = JSON.parse(decodeBuffer(elevenRead.value)) as ElevenLabs;
@@ -154,7 +154,7 @@ async function loadTranscript(
       // fall through to gpt4otrans
     }
   }
-  const gptRead = await fs.files.read(assetId, ".analysis.gpt4otrans.json");
+  const gptRead = await engine.files.read(assetId, ".analysis.gpt4otrans.json");
   if (gptRead.ok) {
     try {
       const parsed = JSON.parse(decodeBuffer(gptRead.value)) as Gpt4oTrans;
@@ -169,10 +169,10 @@ async function loadTranscript(
 }
 
 async function loadPriorAnalysis(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<PriorAnalysis | null> {
-  const read = await fs.files.read(assetId, ".original.analysis.json");
+  const read = await engine.files.read(assetId, ".original.analysis.json");
   if (!read.ok) return null;
   try {
     return JSON.parse(decodeBuffer(read.value)) as PriorAnalysis;
@@ -319,10 +319,10 @@ export type AssetForAnalysisError =
   | { kind: "no-transcript"; message: string };
 
 export async function loadAssetForAnalysis(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<{ ok: true; value: AssetForAnalysis } | { ok: false; error: AssetForAnalysisError }> {
-  const manifestResult = await fs.files.manifest(assetId);
+  const manifestResult = await engine.files.manifest(assetId);
   if (!manifestResult.ok) {
     return { ok: false, error: { kind: "manifest", message: manifestResult.error.message } };
   }
@@ -343,7 +343,7 @@ export async function loadAssetForAnalysis(
     };
   }
 
-  const transcript = await loadTranscript(fs, assetId);
+  const transcript = await loadTranscript(engine, assetId);
   if (!transcript) {
     return {
       ok: false,
@@ -351,9 +351,9 @@ export async function loadAssetForAnalysis(
     };
   }
 
-  const metaResult = await fs.metadata.artifacts.read<OriginalMeta>(assetId, "original");
+  const metaResult = await engine.metadata.artifacts.read<OriginalMeta>(assetId, "original");
   const meta = metaResult.ok ? metaResult.value : null;
-  const prior = await loadPriorAnalysis(fs, assetId);
+  const prior = await loadPriorAnalysis(engine, assetId);
 
   return {
     ok: true,

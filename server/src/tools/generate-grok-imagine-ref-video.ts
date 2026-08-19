@@ -38,7 +38,7 @@ const generateGrokImagineRefVideoSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineRefVideoSchema>;
 
-export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
+export function generateGrokImagineRefVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_xai_grok_imagine_video",
     description:
@@ -75,7 +75,7 @@ export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
 
       for (const rawRef of refs) {
         const assetId = rawRef.replace(/^@/, "");
-        const artifact = fs.artifacts.get(assetId);
+        const artifact = engine.artifacts.get(assetId);
         if (!artifact.ok) {
           return {
             isError: true as const,
@@ -89,7 +89,7 @@ export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
           };
         }
 
-        const manifestResult = await fs.files.manifest(assetId);
+        const manifestResult = await engine.files.manifest(assetId);
         if (!manifestResult.ok) {
           return {
             isError: true as const,
@@ -109,7 +109,7 @@ export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
       }
 
       const assetName = generationLabel(modelSlug("xai", "grok-imagine-video"), prompt);
-      const assetResult = await fs.artifacts.create("vid", assetName);
+      const assetResult = await engine.artifacts.create("vid", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

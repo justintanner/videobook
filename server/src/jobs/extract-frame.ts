@@ -37,7 +37,7 @@ type ExtractFramePayload = {
   mode: "first" | "last" | "custom";
 };
 
-export function registerExtractFrameJob(fs: Engine): void {
+export function registerExtractFrameJob(engine: Engine): void {
   registerJobHandler("extract_frame", async (payload, ctx) => {
     const {
       inputPath, timestamp,
@@ -55,7 +55,7 @@ export function registerExtractFrameJob(fs: Engine): void {
 
     try {
       const origin = await withLockedLocalLease(
-        fs,
+        engine,
         imageAssetId,
         imageAssetDir,
         ctx,
@@ -79,7 +79,7 @@ export function registerExtractFrameJob(fs: Engine): void {
         }
 
         const buffer = await readFile(tempPath);
-        const writeResult = await fs.files.write(imageAssetId, "original.jpg", buffer);
+        const writeResult = await engine.files.write(imageAssetId, "original.jpg", buffer);
         if (!writeResult.ok) {
           throw new Error(
             `failed to write original.jpg for ${imageAssetId}: ${writeResult.error.message}`,
@@ -93,7 +93,7 @@ export function registerExtractFrameJob(fs: Engine): void {
           width,
           height,
         };
-        await fs.metadata.artifacts.write(imageAssetId, "original", origin);
+        await engine.metadata.artifacts.write(imageAssetId, "original", origin);
         return origin;
         },
         { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },

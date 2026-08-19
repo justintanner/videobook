@@ -23,7 +23,7 @@ const generateGptImageSchema = {
 
 type Args = SchemaArgs<typeof generateGptImageSchema>;
 
-export function generateGptImageDef(fs: Engine): ToolDef {
+export function generateGptImageDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_gpt_image_2_image_to_image",
     description: "Generate an image using GPT Image 2.0 editing with 1-16 reference images. Creates a new image artifact and enqueues a background job.",
@@ -54,14 +54,14 @@ export function generateGptImageDef(fs: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const resolved = await resolveImageRefs(fs, rawSlugs);
+      const resolved = await resolveImageRefs(engine, rawSlugs);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = generationLabel("gpt-image", prompt);
-      const assetResult = await fs.artifacts.create(prefix, assetName);
+      const assetResult = await engine.artifacts.create(prefix, assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

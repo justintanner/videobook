@@ -28,7 +28,7 @@ function isHttpUrl(s: string): boolean {
 }
 
 export async function resolveImageRefs(
-  fs: Engine,
+  engine: Engine,
   rawRefs: readonly string[],
 ): Promise<SlugResolution> {
   const inputs: ImageInput[] = [];
@@ -39,12 +39,12 @@ export async function resolveImageRefs(
       continue;
     }
     const assetId = raw.replace(/^@/, "");
-    const artifact = fs.artifacts.get(assetId);
+    const artifact = engine.artifacts.get(assetId);
     if (!artifact.ok) return { ok: false, error: artifact.error.message };
     if (artifact.value.kind !== "image") {
       return { ok: false, error: `image ref must be an image artifact, got ${artifact.value.kind}: ${assetId}` };
     }
-    const manifestResult = await fs.files.manifest(assetId);
+    const manifestResult = await engine.files.manifest(assetId);
     if (!manifestResult.ok) return { ok: false, error: manifestResult.error.message };
     const imageFile = findImageFile(manifestResult.value.files);
     if (!imageFile) return { ok: false, error: `No image file found in asset ${assetId}` };

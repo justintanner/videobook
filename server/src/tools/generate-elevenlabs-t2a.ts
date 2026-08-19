@@ -11,7 +11,7 @@ const DEFAULT_MODEL_ID = "eleven_multilingual_v2";
 const DEFAULT_OUTPUT_FORMAT = "mp3_44100_128";
 const elevenLabsTts = ElevenLabsTextToSpeechRequestSchema.shape;
 
-export function generateElevenlabsT2aDef(fs: Engine): ToolDef {
+export function generateElevenlabsT2aDef(engine: Engine): ToolDef {
   return {
     name: "generate_elevenlabs_text_to_audio",
     description: "Generate an aud-* text-to-audio asset using an ElevenLabs voice.",
@@ -50,7 +50,7 @@ export function generateElevenlabsT2aDef(fs: Engine): ToolDef {
       const voiceId = voice_id.trim();
 
       const name = asset_name?.trim() || generationLabel("elevenlabs", text);
-      const assetResult = await fs.artifacts.create("aud", name);
+      const assetResult = await engine.artifacts.create("aud", name);
       if (!assetResult.ok) {
         return {
           isError: true as const,

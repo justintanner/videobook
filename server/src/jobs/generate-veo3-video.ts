@@ -21,15 +21,15 @@ type GenerateVeo3VideoPayload = {
   seed?: number;
 };
 
-async function uploadAll(fs: Engine, inputs: RefInput[]): Promise<string[]> {
+async function uploadAll(engine: Engine, inputs: RefInput[]): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename));
+    urls.push(await uploadAssetToKie(engine, assetId, filename));
   }
   return urls;
 }
 
-export function registerGenerateVeo3VideoJob(fs: Engine): void {
+export function registerGenerateVeo3VideoJob(engine: Engine): void {
   registerJobHandler("generate_veo3_video", async (payload, ctx) => {
     const {
       veoModel,
@@ -40,7 +40,7 @@ export function registerGenerateVeo3VideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const imageUrls = await uploadAll(fs, imageInputs);
+    const imageUrls = await uploadAll(engine, imageInputs);
 
     const request = buildVeo3VideoPayload(
       veoModel,
@@ -50,7 +50,7 @@ export function registerGenerateVeo3VideoJob(fs: Engine): void {
 
     // Reuse the shared seedance2_video TaskType + completion handler — they
     // download resultUrls[0] as the video and key provenance off meta.apiModel.
-    await submitVeoTask(fs, ctx, {
+    await submitVeoTask(engine, ctx, {
       request,
       taskType: "seedance2_video",
       assetId: vidAssetId,

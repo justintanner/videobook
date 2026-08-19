@@ -321,7 +321,8 @@ describe("notebook local media and analysis fan-out", () => {
         shots: [{ ordinal: 1 }, { ordinal: 2 }],
       });
     }
-    expect(first.cells.filter((cell) => cell.operation === "extract_audio")).toHaveLength(2);
+    expect(first.cells.filter((cell) =>
+      cell.inputs?.mediaRole === "extract-audio-output")).toHaveLength(2);
     const firstVideos = first.cells.filter((cell) =>
       cell.inputs?.workflowRole?.toString().startsWith("scene-video-"));
     expect(firstVideos).toHaveLength(2);
@@ -354,7 +355,7 @@ describe("notebook local media and analysis fan-out", () => {
       expect(first.edges).toContainEqual(expect.objectContaining({
         source: video?.id,
         target: extractAudio?.id,
-        targetInput: "video",
+        targetInput: "segment",
       }));
       expect(first.edges).toContainEqual(expect.objectContaining({
         source: extractAudio?.id,
@@ -363,7 +364,9 @@ describe("notebook local media and analysis fan-out", () => {
         targetInput: "scene_audio",
       }));
       expect(video?.operation).toBeUndefined();
-      expect(extractAudio?.operation).toBe("extract_audio");
+      expect(extractAudio?.type).toBe("audio");
+      expect(extractAudio?.operation).toBeUndefined();
+      expect(extractAudio?.inputs?.mediaRole).toBe("extract-audio-output");
     }
     const order = topologicalOrder(first);
     expect(order.map((cell) => cell.id)).toContain(analysis.id);

@@ -33,13 +33,13 @@ type GenerateVolcengineLipsyncVideoPayload = {
 };
 
 async function uploadSingle(
-  fs: Engine,
+  engine: Engine,
   input: RefInput,
 ): Promise<string> {
-  return uploadAssetToKie(fs, input.assetId, input.filename);
+  return uploadAssetToKie(engine, input.assetId, input.filename);
 }
 
-export function registerGenerateVolcengineLipsyncVideoJob(fs: Engine): void {
+export function registerGenerateVolcengineLipsyncVideoJob(engine: Engine): void {
   registerJobHandler("generate_volcengine_lipsync_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId,
@@ -49,8 +49,8 @@ export function registerGenerateVolcengineLipsyncVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const videoUrl = await uploadSingle(fs, videoInput);
-    const audioUrl = await uploadSingle(fs, audioInput);
+    const videoUrl = await uploadSingle(engine, videoInput);
+    const audioUrl = await uploadSingle(engine, audioInput);
 
     const request = buildVolcengineLipSyncPayload(
       { mode, separate_vocal, open_scenedet, align_audio, align_audio_reverse, templ_start_seconds },
@@ -58,14 +58,14 @@ export function registerGenerateVolcengineLipsyncVideoJob(fs: Engine): void {
     );
 
     // volcengine lip-sync bills per second of source video; schema has no duration.
-    const videoMeta = await fs.metadata.artifacts.read<{ duration?: number }>(videoInput.assetId, "original"
+    const videoMeta = await engine.metadata.artifacts.read<{ duration?: number }>(videoInput.assetId, "original"
     );
     const durationHint =
       videoMeta.ok && typeof videoMeta.value?.duration === "number" && videoMeta.value.duration > 0
         ? videoMeta.value.duration
         : 5;
 
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: VOLCENGINE_LIPSYNC_TASK_TYPE,
       assetId: vidAssetId,

@@ -305,11 +305,11 @@ async function uploadBytesToGoogleFlow(
 // google-flow requests reference prior uploads by id.
 export async function uploadAssetToGoogleFlow(
   provider: GoogleFlowProvider,
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   filename: string,
 ): Promise<string> {
-  const { data, contentType } = await prepareAssetForUpload(fs, assetId, filename);
+  const { data, contentType } = await prepareAssetForUpload(engine, assetId, filename);
   return uploadBytesToGoogleFlow(provider, data, contentType, `${assetId}/${filename}`);
 }
 
@@ -347,7 +347,7 @@ type SubmitGoogleFlowVideoArgs = {
  *  endpoint (the engine's TaskType union has no google literals, so these
  *  tasks ride "seedance2_video" like veo3/gemini-omni do on kie). */
 export async function submitGoogleFlowVideoTask(
-  fs: Engine,
+  engine: Engine,
   ctx: JobHandlerContext,
   args: SubmitGoogleFlowVideoArgs,
 ): Promise<string> {
@@ -357,7 +357,7 @@ export async function submitGoogleFlowVideoTask(
     toolName: "google_flow_video",
     wire: true,
   });
-  await fs.metadata.artifacts.write(args.assetId, "generation-payload", request);
+  await engine.metadata.artifacts.write(args.assetId, "generation-payload", request);
 
   let res: Record<string, unknown>;
   try {
@@ -388,7 +388,7 @@ export async function submitGoogleFlowVideoTask(
   const taskId = readJobId(res);
   if (!taskId) throw new Error("Google Flow video submit returned no job id");
 
-  const pendingResult = await fs.jobs.pending.write({
+  const pendingResult = await engine.jobs.pending.write({
     taskId,
     taskType: args.taskType,
     artifactId: args.assetId,

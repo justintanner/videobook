@@ -1,4 +1,4 @@
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";

@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import type { Engine, Job } from "videobook-engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
 import { registerChangeVideoSpeedJob } from "./change-video-speed.js";
 import { registerProcessVideoJob } from "./process-video.js";

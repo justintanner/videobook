@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Engine } from "videobook-engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
 import { registerGenerateGptImageJob } from "./generate-gpt-image.js";
 import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-image.js";

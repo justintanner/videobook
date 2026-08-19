@@ -25,7 +25,7 @@ const generateMiniMaxH3T2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateMiniMaxH3T2vVideoSchema>;
 
-export function generateMiniMaxH3T2vVideoDef(fs: Engine): ToolDef {
+export function generateMiniMaxH3T2vVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_minimax_h3_text_to_video",
     description: "Generate a video from a prompt using MiniMax H3 text-to-video. Creates a new video artifact and enqueues a background job.",
@@ -38,7 +38,7 @@ export function generateMiniMaxH3T2vVideoDef(fs: Engine): ToolDef {
       }
 
       const videoName = generationLabel(SLUG, prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }

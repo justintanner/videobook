@@ -1,4 +1,4 @@
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -97,8 +97,8 @@ describe("apply_sfx tool", () => {
 
   it("prefers the canonical video over a stale partial SFX output", () => {
     const file = findApplySfxSourceFile([
-      { name: "original_sfx.mp4", size_bytes: 10, extension: ".mp4", mtimeMs: 2 },
-      { name: "original.mp4", size_bytes: 10, extension: ".mp4", mtimeMs: 1 },
+      { name: "original_sfx.mp4", sizeBytes: 10, extension: ".mp4", mtimeMs: 2 },
+      { name: "original.mp4", sizeBytes: 10, extension: ".mp4", mtimeMs: 1 },
     ]);
     expect(file?.name).toBe("original.mp4");
   });

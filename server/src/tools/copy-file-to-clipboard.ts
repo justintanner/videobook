@@ -5,7 +5,7 @@ import { z } from "zod";
 import { findPrimaryMediaFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 
-export function copyFileToClipboardDef(fs: Engine): ToolDef {
+export function copyFileToClipboardDef(engine: Engine): ToolDef {
   return {
     name: "copy_file_to_clipboard",
     description: "Copy an asset's original media file to the macOS pasteboard as a file reference",
@@ -16,14 +16,14 @@ export function copyFileToClipboardDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };
 
-      const artifactResult = fs.artifacts.get(asset_id);
+      const artifactResult = engine.artifacts.get(asset_id);
       if (!artifactResult.ok) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: artifactResult.error.message }],
         };
       }
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

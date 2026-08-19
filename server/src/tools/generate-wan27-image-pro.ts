@@ -30,7 +30,7 @@ const generateWan27ImageProSchema = {
 
 type Args = SchemaArgs<typeof generateWan27ImageProSchema>;
 
-export function generateWan27ImageProDef(fs: Engine): ToolDef {
+export function generateWan27ImageProDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_wan_2_7_pro_text_to_image",
     description: "Generate an image using Wan 2.7 Image Pro. Creates a new image artifact and enqueues a background job. Prompt is required; reference images are optional (0-9).",
@@ -55,14 +55,14 @@ export function generateWan27ImageProDef(fs: Engine): ToolDef {
         };
       }
 
-      const resolved = await resolveImageRefs(fs, rawSlugs);
+      const resolved = await resolveImageRefs(engine, rawSlugs);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = generationLabel(modelSlug("kie", "wan/2-7-image-pro"), prompt);
-      const assetResult = await fs.artifacts.create(prefix, assetName);
+      const assetResult = await engine.artifacts.create(prefix, assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

@@ -1,4 +1,4 @@
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";

@@ -22,7 +22,7 @@ type GenerateMiniMaxH3I2vVideoPayload = {
   resolution?: MiniMaxH3Resolution;
 };
 
-export function registerGenerateMiniMaxH3I2vVideoJob(fs: Engine): void {
+export function registerGenerateMiniMaxH3I2vVideoJob(engine: Engine): void {
   registerJobHandler("generate_minimax_h3_i2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId, prompt, duration,
@@ -32,10 +32,10 @@ export function registerGenerateMiniMaxH3I2vVideoJob(fs: Engine): void {
     requireApiKey("KIE_API_KEY");
 
     const firstFrameUrl = firstFrame
-      ? await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename)
+      ? await uploadAssetToKie(engine, firstFrame.assetId, firstFrame.filename)
       : undefined;
     const lastFrameUrl = lastFrame
-      ? await uploadAssetToKie(fs, lastFrame.assetId, lastFrame.filename)
+      ? await uploadAssetToKie(engine, lastFrame.assetId, lastFrame.filename)
       : undefined;
 
     const normalizedPrompt = transformProviderPrompt("generate_kie_minimax_h3_image_to_video", {
@@ -50,7 +50,7 @@ export function registerGenerateMiniMaxH3I2vVideoJob(fs: Engine): void {
         ...(lastFrameUrl !== undefined ? { lastFrameUrl } : {}),
       },
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "minimax_h3_i2v_video",
       assetId: vidAssetId,

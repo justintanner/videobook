@@ -70,7 +70,7 @@ const generateGoogleOmniVideoSchema = {
 
 type Args = SchemaArgs<typeof generateGoogleOmniVideoSchema>;
 
-export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
+export function generateGoogleOmniVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_google_flow_omni_flash_video",
     description: "Generate a video using Google Gemini Omni via Google Flow. Multimodal: a text prompt plus optional first frame, reference images (0-7), or one reference video clip with in/out timecodes. Creates a new video artifact and enqueues a background job.",
@@ -156,21 +156,21 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageRef(fs, slug);
+        const r = await resolveImageRef(engine, slug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       let firstFrame: RefInput | undefined;
       if (firstFrameSlug !== undefined) {
-        const r = await resolveImageRef(fs, firstFrameSlug);
+        const r = await resolveImageRef(engine, firstFrameSlug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let videoInput: RefInput | undefined;
       if (videoRef !== undefined) {
-        const r = await resolveVideoRef(fs, videoRef);
+        const r = await resolveVideoRef(engine, videoRef);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInput = r.value;
       }
@@ -189,7 +189,7 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
       );
 
       const videoName = generationLabel(SLUG, prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
@@ -222,7 +222,7 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
 
       // Persist the exact enqueued payload so retry_generation can replay it
       // after a failure without re-resolving inputs.
-      await fs.metadata.artifacts.write(vidAssetId, "generation-request", jobPayload);
+      await engine.metadata.artifacts.write(vidAssetId, "generation-request", jobPayload);
 
       await queue.enqueue(jobId, jobPayload);
 

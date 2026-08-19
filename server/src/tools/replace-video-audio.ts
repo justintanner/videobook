@@ -5,7 +5,7 @@ import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 
-export function replaceVideoAudioDef(fs: Engine): ToolDef {
+export function replaceVideoAudioDef(engine: Engine): ToolDef {
   return {
     name: "replace_video_audio",
     description: "Replace the audio track of a video asset in-place with audio from an audio asset, or a specific file inside another asset via the `<artifactId>/<filename>` form. Operates on the video asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.",
@@ -21,7 +21,7 @@ export function replaceVideoAudioDef(fs: Engine): ToolDef {
         book_id: string;
       };
 
-      const videoArtifact = fs.artifacts.get(asset_id);
+      const videoArtifact = engine.artifacts.get(asset_id);
       if (!videoArtifact.ok) {
         return {
           isError: true as const,
@@ -41,7 +41,7 @@ export function replaceVideoAudioDef(fs: Engine): ToolDef {
       const slashIdx = audio_asset_id.indexOf("/");
       const audioAssetIdResolved = slashIdx >= 0 ? audio_asset_id.slice(0, slashIdx) : audio_asset_id;
       const audioFilenameOverride = slashIdx >= 0 ? audio_asset_id.slice(slashIdx + 1) : null;
-      const audioArtifact = fs.artifacts.get(audioAssetIdResolved);
+      const audioArtifact = engine.artifacts.get(audioAssetIdResolved);
       if (!audioArtifact.ok) {
         return {
           isError: true as const,
@@ -55,7 +55,7 @@ export function replaceVideoAudioDef(fs: Engine): ToolDef {
         };
       }
 
-      const videoManifest = await fs.files.manifest(asset_id);
+      const videoManifest = await engine.files.manifest(asset_id);
       if (!videoManifest.ok) {
         return {
           isError: true as const,
@@ -70,7 +70,7 @@ export function replaceVideoAudioDef(fs: Engine): ToolDef {
         };
       }
 
-      const audioManifest = await fs.files.manifest(audioAssetIdResolved);
+      const audioManifest = await engine.files.manifest(audioAssetIdResolved);
       if (!audioManifest.ok) {
         return {
           isError: true as const,

@@ -25,7 +25,7 @@ const generateSeedance2I2vFalSchema = {
 
 type Args = SchemaArgs<typeof generateSeedance2I2vFalSchema>;
 
-export function generateSeedance2I2vFalDef(fs: Engine): ToolDef {
+export function generateSeedance2I2vFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_seedance_2_0_image_to_video",
     description: "Generate a video via fal.ai using ByteDance Seedance 2.0 from a first-frame image (optional end frame). Creates a new video artifact and enqueues a background job.",
@@ -39,11 +39,11 @@ export function generateSeedance2I2vFalDef(fs: Engine): ToolDef {
 
       const endSlug = end_frame_ref ?? last_frame_ref;
       const slugs = endSlug ? [first_frame_ref, endSlug] : [first_frame_ref];
-      const resolved = await resolveImageRefs(fs, slugs);
+      const resolved = await resolveImageRefs(engine, slugs);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame, endFrame] = resolved.inputs;
-      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "bytedance/seedance-2"), prompt));
+      const assetResult = await engine.artifacts.create("vid", generationLabel(modelSlug("kie", "bytedance/seedance-2"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

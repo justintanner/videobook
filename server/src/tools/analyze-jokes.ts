@@ -12,7 +12,7 @@ function hasSpokenWords(eleven: ElevenLabs): boolean {
   return Array.isArray(eleven.words) && eleven.words.some((w) => w.type === "word");
 }
 
-export function analyzeJokesDef(fs: Engine): ToolDef {
+export function analyzeJokesDef(engine: Engine): ToolDef {
   return {
     name: "analyze_jokes",
     description:
@@ -32,12 +32,12 @@ export function analyzeJokesDef(fs: Engine): ToolDef {
         return error("OPENAI_API_KEY environment variable is not set");
       }
 
-      const manifestResult = await fs.files.manifest(assetId);
+      const manifestResult = await engine.files.manifest(assetId);
       if (!manifestResult.ok) {
         return error(manifestResult.error.message);
       }
 
-      const read = await fs.files.read(assetId, "elevenlabs.json");
+      const read = await engine.files.read(assetId, "elevenlabs.json");
       if (!read.ok) {
         return error(`No ElevenLabs transcript found for ${assetId} — run /transcribe @${assetId} first.`);
       }

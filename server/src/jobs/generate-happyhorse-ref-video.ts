@@ -22,7 +22,7 @@ type GenerateHappyhorseRefVideoPayload = {
   duration?: string;
 };
 
-export function registerGenerateHappyhorseRefVideoJob(fs: Engine): void {
+export function registerGenerateHappyhorseRefVideoJob(engine: Engine): void {
   registerJobHandler("generate_happyhorse_ref_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId, prompt,
@@ -34,7 +34,7 @@ export function registerGenerateHappyhorseRefVideoJob(fs: Engine): void {
 
     const referenceImages: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      referenceImages.push(await uploadAssetToKie(fs, assetId, filename));
+      referenceImages.push(await uploadAssetToKie(engine, assetId, filename));
     }
 
     const normalizedPrompt = transformProviderPrompt(
@@ -48,7 +48,7 @@ export function registerGenerateHappyhorseRefVideoJob(fs: Engine): void {
       { prompt: normalizedPrompt, resolution, aspect_ratio, duration },
       referenceImages,
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "happyhorse_ref_video",
       assetId: vidAssetId,

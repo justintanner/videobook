@@ -172,28 +172,28 @@ export async function renderCleanVideoAudio(
 }
 
 async function deleteIfPresent(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   filename: string,
 ): Promise<void> {
-  const result = await fs.files.delete(assetId, filename);
+  const result = await engine.files.delete(assetId, filename);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
     throw new Error(`Failed to delete stale ${filename}: ${result.error.message}`);
   }
 }
 
 export async function replaceVideoAssetInPlace(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   videoFilename: string,
   renderedPath: string,
 ): Promise<void> {
   const outputBytes = await readFile(renderedPath);
-  const written = await fs.files.write(assetId, videoFilename, outputBytes);
+  const written = await engine.files.write(assetId, videoFilename, outputBytes);
   if (!written.ok) throw new Error(`Failed to replace ${videoFilename}: ${written.error.message}`);
 }
 
-export function registerCleanVideoAudioJob(fs: Engine): void {
+export function registerCleanVideoAudioJob(engine: Engine): void {
   registerJobHandler("clean_video_audio", async (payload, ctx) => {
     const {
       assetId,
@@ -209,7 +209,7 @@ export function registerCleanVideoAudioJob(fs: Engine): void {
     const apiKey = requireApiKey("ELEVENLABS_API_KEY");
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -223,7 +223,7 @@ export function registerCleanVideoAudioJob(fs: Engine): void {
           throw new Error(`ElevenLabs Voice Isolator requires a video between 0 and ${MAX_ISOLATION_DURATION_SECONDS} seconds; got ${probe.duration}`);
         }
 
-        const sourceResult = await fs.files.read(assetId, videoFilename);
+        const sourceResult = await engine.files.read(assetId, videoFilename);
         if (!sourceResult.ok) throw new Error(sourceResult.error.message);
         if (sourceResult.value.byteLength > MAX_ISOLATION_BYTES) {
           throw new Error(`ElevenLabs Voice Isolator supports files up to ${MAX_ISOLATION_BYTES} bytes`);
@@ -277,13 +277,13 @@ export function registerCleanVideoAudioJob(fs: Engine): void {
             ctx.signal,
           );
 
-          await replaceVideoAssetInPlace(fs, assetId, videoFilename, outputPath);
+          await replaceVideoAssetInPlace(engine, assetId, videoFilename, outputPath);
         } finally {
           await rm(tempDir, { recursive: true, force: true });
         }
 
         for (const filename of STALE_DERIVATIVES) {
-          await deleteIfPresent(fs, assetId, filename);
+          await deleteIfPresent(engine, assetId, filename);
         }
 
         return { videoPath: inputPath };

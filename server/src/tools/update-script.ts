@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function updateScriptDef(fs: Engine): ToolDef {
+export function updateScriptDef(engine: Engine): ToolDef {
   return {
     name: "update_script",
     description: "Update a script asset's markdown content (original.md).",
@@ -18,7 +18,7 @@ export function updateScriptDef(fs: Engine): ToolDef {
         book_id: string;
       };
 
-      const result = await fs.files.write(asset_id, "original.md", content);
+      const result = await engine.files.write(asset_id, "original.md", content);
       if (!result.ok) {
         return {
           isError: true as const,

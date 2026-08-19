@@ -91,7 +91,7 @@ interface AnalysisDocument {
 }
 
 export async function runSemanticIndex(
-  fs: Engine,
+  engine: Engine,
   payload: SemanticIndexPayload,
   ctx: JobHandlerContext,
 ): Promise<SemanticIndexResult> {
@@ -105,10 +105,10 @@ export async function runSemanticIndex(
       `${payload.bookId}:${payload.assetId}`,
       ctx.signal,
       async () => {
-        await waitForArtifactIdle(fs, payload.assetId, ctx.signal);
+        await waitForArtifactIdle(engine, payload.assetId, ctx.signal);
         try {
           return await withTransientStorageRetry(
-            () => indexArtifact(fs, payload.assetId, {
+            () => indexArtifact(engine, payload.assetId, {
               semanticVisual: true,
               signal: ctx.signal,
             }),
@@ -116,25 +116,25 @@ export async function runSemanticIndex(
           );
         } catch (error) {
           if (ctx.signal.aborted) throw error;
-          return deferredSemanticIndex(fs, payload.assetId, error);
+          return deferredSemanticIndex(engine, payload.assetId, error);
         }
       },
     );
   } catch (error) {
     if (ctx.signal.aborted) throw error;
-    return deferredSemanticIndex(fs, payload.assetId, error);
+    return deferredSemanticIndex(engine, payload.assetId, error);
   }
 }
 
 async function waitForArtifactIdle(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   signal: AbortSignal,
 ): Promise<void> {
   const startedAt = Date.now();
   while (true) {
     signal.throwIfAborted();
-    const work = fs.jobs.artifactWork.read(assetId);
+    const work = engine.jobs.artifactWork.read(assetId);
     if (!work.ok) throw new Error(work.error.message);
     if (!work.value || work.value.status === "ready") return;
     if (work.value.status === "error") {
@@ -189,11 +189,11 @@ async function waitForTurn(
 }
 
 async function deferredSemanticIndex(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   error: unknown,
 ): Promise<SemanticIndexResult> {
-  await fs.logs.append("semantic-index-deferred", {
+  await engine.logs.append("semantic-index-deferred", {
     artifactId: assetId,
     manifestId: MANIFEST.manifestId,
     error: error instanceof Error ? error.message : String(error),
@@ -210,27 +210,27 @@ async function deferredSemanticIndex(
 }
 
 export async function indexArtifact(
-  fs: Engine,
+  engine: Engine,
   artifactReference: string,
   options: { semanticVisual?: boolean; signal?: AbortSignal } = {},
 ): Promise<SemanticIndexResult> {
   // Enqueue sites pass whatever reference they hold (often the slug), but
   // temporalSearch.commitBatch rejects anything except the canonical UUID.
-  const artifactResult = fs.artifacts.get(artifactReference);
+  const artifactResult = engine.artifacts.get(artifactReference);
   if (!artifactResult.ok) throw new Error(artifactResult.error.message);
   const artifactId = artifactResult.value.artifactId;
-  const manifestResult = fs.temporalSearch.manifests.register(MANIFEST);
+  const manifestResult = engine.temporalSearch.manifests.register(MANIFEST);
   if (!manifestResult.ok) throw new Error(manifestResult.error.message);
-  const filesResult = await fs.files.manifest(artifactId);
+  const filesResult = await engine.files.manifest(artifactId);
   if (!filesResult.ok) throw new Error(filesResult.error.message);
-  const streamsResult = fs.streams.list(artifactId);
+  const streamsResult = engine.streams.list(artifactId);
   if (!streamsResult.ok) throw new Error(streamsResult.error.message);
   const files = filesResult.value.files;
   const streams = streamsResult.value;
   const source = primarySource(files, streams);
   if (!source) throw new Error(`No indexable source found for ${artifactId}`);
   const observations = await buildObservations(
-    fs,
+    engine,
     artifactId,
     source.name,
     source.objectHash,
@@ -241,7 +241,7 @@ export async function indexArtifact(
     const phaseObservations = phase === "visual" || phase === "audio" || phase === "lexical"
       ? observations.filter((item) => observationPhase(item) === phase)
       : [];
-    const committed = fs.temporalSearch.commitBatch({
+    const committed = engine.temporalSearch.commitBatch({
       artifactId,
       objectHash: source.objectHash,
       manifestId: MANIFEST.manifestId,
@@ -255,7 +255,7 @@ export async function indexArtifact(
     });
     if (!committed.ok) throw new Error(committed.error.message);
   }
-  const activated = fs.temporalSearch.activate(MANIFEST.manifestId, GENERATION);
+  const activated = engine.temporalSearch.activate(MANIFEST.manifestId, GENERATION);
   if (!activated.ok) throw new Error(activated.error.message);
   let semanticVisual: SemanticIndexResult["semanticVisual"] = "deferred";
   let semanticAudio: SemanticIndexResult["semanticAudio"] = streams.some(
@@ -264,7 +264,7 @@ export async function indexArtifact(
   if (options.semanticVisual) {
     try {
       await indexClipArtifact(
-        fs,
+        engine,
         artifactId,
         filesResult.value.path,
         source.name,
@@ -274,7 +274,7 @@ export async function indexArtifact(
       );
       semanticVisual = "ready";
     } catch (error) {
-      await fs.logs.append("semantic-index-deferred", {
+      await engine.logs.append("semantic-index-deferred", {
         artifactId,
         manifestId: LOCAL_CLIP_MANIFEST.manifestId,
         error: error instanceof Error ? error.message : String(error),
@@ -283,7 +283,7 @@ export async function indexArtifact(
     if (semanticAudio !== "not-applicable") {
       try {
         await indexClapArtifact(
-          fs,
+          engine,
           artifactId,
           filesResult.value.path,
           source.name,
@@ -293,7 +293,7 @@ export async function indexArtifact(
         );
         semanticAudio = "ready";
       } catch (error) {
-        await fs.logs.append("semantic-index-deferred", {
+        await engine.logs.append("semantic-index-deferred", {
           artifactId,
           manifestId: LOCAL_CLAP_MANIFEST.manifestId,
           error: error instanceof Error ? error.message : String(error),
@@ -312,13 +312,13 @@ export async function indexArtifact(
   };
 }
 
-export function registerSemanticIndexJob(fs: Engine): void {
+export function registerSemanticIndexJob(engine: Engine): void {
   registerJobHandler("semantic_index", async (payload, ctx) =>
-    runSemanticIndex(fs, payload as SemanticIndexPayload, ctx));
+    runSemanticIndex(engine, payload as SemanticIndexPayload, ctx));
 }
 
 async function indexClipArtifact(
-  fs: Engine,
+  engine: Engine,
   artifactId: string,
   artifactPath: string,
   sourcePath: string,
@@ -326,18 +326,18 @@ async function indexClipArtifact(
   streams: ArtifactStream[],
   signal?: AbortSignal,
 ): Promise<void> {
-  const provider = registerLocalClipSearchProvider(fs);
-  const registered = fs.temporalSearch.manifests.register(LOCAL_CLIP_MANIFEST);
+  const provider = registerLocalClipSearchProvider(engine);
+  const registered = engine.temporalSearch.manifests.register(LOCAL_CLIP_MANIFEST);
   if (!registered.ok) throw new Error(registered.error.message);
   await provider.prepare();
   const video = streams.find((stream) =>
     stream.kind === "video" && stream.objectHash === objectHash);
   const frames = video
-    ? await sampledFrameNames(fs, artifactId)
+    ? await sampledFrameNames(engine, artifactId)
     : [];
   const totalUnits = video ? frames.length : 1;
   await commitDeepBatches(
-    fs,
+    engine,
     {
       artifactId,
       objectHash,
@@ -378,7 +378,7 @@ async function indexClipArtifact(
       );
     },
   );
-  const activated = fs.temporalSearch.activate(
+  const activated = engine.temporalSearch.activate(
     LOCAL_CLIP_MANIFEST.manifestId,
     LOCAL_CLIP_MANIFEST.manifestId,
   );
@@ -386,7 +386,7 @@ async function indexClipArtifact(
 }
 
 async function indexClapArtifact(
-  fs: Engine,
+  engine: Engine,
   artifactId: string,
   artifactPath: string,
   sourcePath: string,
@@ -397,8 +397,8 @@ async function indexClapArtifact(
   const stream = streams.find((item) =>
     item.kind === "audio" && item.objectHash === objectHash);
   if (!stream) return;
-  const provider = registerLocalClapSearchProvider(fs, FFMPEG);
-  const registered = fs.temporalSearch.manifests.register(LOCAL_CLAP_MANIFEST);
+  const provider = registerLocalClapSearchProvider(engine, FFMPEG);
+  const registered = engine.temporalSearch.manifests.register(LOCAL_CLAP_MANIFEST);
   if (!registered.ok) throw new Error(registered.error.message);
   await provider.prepare();
   const windowTicks = Math.max(
@@ -407,7 +407,7 @@ async function indexClapArtifact(
   );
   const totalUnits = Math.ceil(stream.durationTicks / windowTicks);
   await commitDeepBatches(
-    fs,
+    engine,
     {
       artifactId,
       objectHash,
@@ -430,7 +430,7 @@ async function indexClapArtifact(
       signal,
     ),
   );
-  const activated = fs.temporalSearch.activate(
+  const activated = engine.temporalSearch.activate(
     LOCAL_CLAP_MANIFEST.manifestId,
     LOCAL_CLAP_MANIFEST.manifestId,
   );
@@ -490,10 +490,10 @@ async function clapAudioObservationBatch(
 }
 
 async function sampledFrameNames(
-  fs: Engine,
+  engine: Engine,
   artifactId: string,
 ): Promise<string[]> {
-  const listed = await fs.files.listSubdir(artifactId, "original_frames");
+  const listed = await engine.files.listSubdir(artifactId, "original_frames");
   if (!listed.ok) throw new Error(listed.error.message);
   return listed.value
     .filter((name) => name.endsWith(".jpg"))
@@ -560,11 +560,11 @@ export type DeepBatchOptions = {
 };
 
 export async function commitDeepBatches(
-  fs: Engine,
+  engine: Engine,
   options: DeepBatchOptions,
   build: (start: number, end: number) => Promise<TemporalIndexObservation[]>,
 ): Promise<void> {
-  const plan = fs.temporalSearch.plan(
+  const plan = engine.temporalSearch.plan(
     options.artifactId,
     options.objectHash,
     options.manifestId,
@@ -576,7 +576,7 @@ export async function commitDeepBatches(
   let start = cursorIndex(existing?.nextCursor, existing?.indexedUnits, options.totalUnits);
   let coveredRanges = existing?.coveredRanges ?? [];
   if (options.totalUnits === 0) {
-    const committed = fs.temporalSearch.commitBatch({
+    const committed = engine.temporalSearch.commitBatch({
       artifactId: options.artifactId,
       objectHash: options.objectHash,
       manifestId: options.manifestId,
@@ -601,7 +601,7 @@ export async function commitDeepBatches(
       ...observations.flatMap((item) => item.range ? [item.range] : []),
     ];
     const complete = end >= options.totalUnits;
-    const committed = fs.temporalSearch.commitBatch({
+    const committed = engine.temporalSearch.commitBatch({
       artifactId: options.artifactId,
       objectHash: options.objectHash,
       manifestId: options.manifestId,
@@ -633,15 +633,15 @@ function cursorIndex(
 }
 
 async function buildObservations(
-  fs: Engine,
+  engine: Engine,
   artifactId: string,
   sourcePath: string,
   objectHash: string,
   streams: ArtifactStream[],
 ): Promise<TemporalIndexObservation[]> {
-  const analysis = await readJson<AnalysisDocument>(fs, artifactId, ".original.analysis.json");
+  const analysis = await readJson<AnalysisDocument>(engine, artifactId, ".original.analysis.json");
   const transcript = await readJson<{ text?: unknown }>(
-    fs,
+    engine,
     artifactId,
     ".analysis.gpt4otrans.json",
   );
@@ -650,13 +650,13 @@ async function buildObservations(
   const audio = streams.find((stream) =>
     stream.kind === "audio" && stream.objectHash === objectHash);
   const visual = video
-    ? await videoObservations(fs, artifactId, objectHash, video, analysis)
+    ? await videoObservations(engine, artifactId, objectHash, video, analysis)
     : audio
       ? []
       : [stillObservation(artifactId, sourcePath, objectHash, analysis)];
   const observations = [...visual];
   if (audio) observations.push(audioObservation(artifactId, objectHash, audio));
-  const typedTranscripts = await fs.transcripts.list(artifactId);
+  const typedTranscripts = await engine.transcripts.list(artifactId);
   const typedTranscript = typedTranscripts.ok
     ? typedTranscripts.value.at(-1)
     : undefined;
@@ -731,18 +731,18 @@ function transcriptObservations(
 }
 
 async function videoObservations(
-  fs: Engine,
+  engine: Engine,
   artifactId: string,
   objectHash: string,
   stream: ArtifactStream,
   analysis: AnalysisDocument | null,
 ): Promise<TemporalIndexObservation[]> {
-  const list = await fs.files.listSubdir(artifactId, "original_frames");
+  const list = await engine.files.listSubdir(artifactId, "original_frames");
   const frameNames = list.ok
     ? list.value.filter((name) => name.endsWith(".jpg")).sort(numericFilename)
     : [];
   const scenes = analysisScenes(analysis);
-  const manifest = await fs.files.manifest(artifactId);
+  const manifest = await engine.files.manifest(artifactId);
   if (!manifest.ok) throw new Error(manifest.error.message);
   const frameFiles = new Map(
     manifest.value.files.map((file) => [file.name, file]),
@@ -937,11 +937,11 @@ function stringValue(value: unknown): string | null {
 }
 
 async function readJson<T>(
-  fs: Engine,
+  engine: Engine,
   artifactId: string,
   path: string,
 ): Promise<T | null> {
-  const read = await fs.files.read(artifactId, path);
+  const read = await engine.files.read(artifactId, path);
   if (!read.ok) return null;
   try {
     return JSON.parse(

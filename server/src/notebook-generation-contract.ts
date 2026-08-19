@@ -1,4 +1,3 @@
-import type { ZodRawShape } from "zod";
 import type { NotebookCell, NotebookDocument } from "videobook-engine";
 import { readSlotConstraints } from "./zod-slots.js";
 
@@ -58,7 +57,7 @@ const inputFieldSpecs: Record<string, InputFieldSpec> = {
   replace_audio_with: { kind: "audio", targets: ["replace_audio"] },
 };
 
-function inputSlots(schema: ZodRawShape): NotebookGenerationInputSlot[] {
+function inputSlots(schema: Record<string, unknown>): NotebookGenerationInputSlot[] {
   return Object.entries(inputFieldSpecs).flatMap(([field, spec]) => {
     const fieldSchema = schema[field];
     if (!fieldSchema) return [];
@@ -203,7 +202,7 @@ function wanImageToVideoContract(
 
 export function notebookGenerationInputContract(
   tool: string,
-  schema: ZodRawShape,
+  schema: Record<string, unknown>,
 ): NotebookGenerationInputContract {
   const slots = inputSlots(schema);
   if (

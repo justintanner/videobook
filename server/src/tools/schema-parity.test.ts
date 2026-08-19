@@ -1,4 +1,4 @@
-import { fs } from "../fs.js";
+import { scopedEngine } from "../engine.js";
 import { describe, it, expect } from "vitest";
 import { VIDEO_MODELS, getVideoToolSchema } from "../video-models.js";
 import { getImageModels, getImageToolSchema } from "../image-models.js";
@@ -7,7 +7,7 @@ import { getCanonicalName } from "../generation-registry.js";
 import { GENERATION_ACTIONS } from "../generation-registry.js";
 
 describe("schema parity between pickers and tool definitions", () => {
-  const tools = getAllToolDefs(fs);
+  const tools = getAllToolDefs(scopedEngine);
   const toolMap = new Map(tools.map((t) => [t.name, t]));
 
   it("checks parity for all VIDEO_MODELS", () => {

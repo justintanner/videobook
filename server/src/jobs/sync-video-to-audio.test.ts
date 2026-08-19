@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { createAudioSyncPlan } from "../audio-sync.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
 import {
   prepareAudioSyncTranscript,

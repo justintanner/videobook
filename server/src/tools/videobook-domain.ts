@@ -22,7 +22,7 @@ import {
   ensureGenerateAudioOutput,
   ensureGenerateImageOutput,
   ensureGenerateVideoOutput,
-  migrateLegacyExtractFrameCells,
+  normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { queue, stopBookQueue } from "../queue.js";
@@ -61,6 +61,7 @@ import {
   enqueueNotebookRunPlan,
   notebookRunPlanRecords,
   planNotebookRun,
+  planSelectedNotebookSubgraph,
 } from "../notebook-run-plan.js";
 import {
   reconcileInitialGenerationPrompt,
@@ -105,8 +106,11 @@ function notebookConnectionError(
       ? "Analyze cells can have only one Analysis result"
       : null;
   }
-  if (target.type === "extract_audio") {
-    if (targetInput !== "video") {
+  if (
+    target.type === "extract_audio"
+    || target.inputs?.mediaRole === "extract-audio-output"
+  ) {
+    if (targetInput !== "video" && targetInput !== "segment") {
       return "Extract audio cells accept only the video input";
     }
     return notebookCellMediaType(source) === "video"
@@ -631,7 +635,7 @@ function notebookPayload(
 ): Record<string, unknown> {
   const normalized = hydrateNotebookProviderFailures(
     engine,
-    normalizeLegacyAnalyzeDocument(migrateLegacyExtractFrameCells(notebook)),
+    normalizeLegacyAnalyzeDocument(normalizeLegacyExtractCells(notebook)),
   );
   return {
     id: normalized.id,
@@ -961,6 +965,34 @@ export function videobookDomainDefs(
       },
     },
     {
+      name: "plan_notebook_subgraph",
+      description:
+        "Plan the selected cell plus required stale ancestors, with paid-stage fingerprints, cost, and confirmation",
+      scope: "book",
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        cell_id: z.string().uuid(),
+        source_surface: z.enum(["ui", "slash", "chat"]),
+        actor: z.string().min(1),
+      },
+      handler: async (args) => {
+        try {
+          const notebook = engine.notebooks.read(String(args.notebook_id));
+          if (!notebook.ok) return failure(notebook.error.message);
+          return json(await planSelectedNotebookSubgraph(
+            engine,
+            notebook.value,
+            String(args.cell_id),
+            args.source_surface as "ui" | "slash" | "chat",
+            String(args.actor),
+          ));
+        } catch (error) {
+          return failure(error instanceof Error ? error.message : String(error));
+        }
+      },
+    },
+    {
       name: "list_notebook_run_plans",
       description: "List durable aggregate workbook run plans and their lifecycle state",
       scope: "book",
@@ -1249,7 +1281,7 @@ export function videobookDomainDefs(
         try {
           const document = hydrateNotebookProviderFailures(
             engine,
-            migrateLegacyExtractFrameCells(result.value),
+            normalizeLegacyExtractCells(result.value),
           );
           const { generateCell } = pairForCell(document, String(args.cell_id));
           const generationsResult = engine.generations.listForCell(

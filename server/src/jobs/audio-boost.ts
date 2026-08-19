@@ -30,7 +30,7 @@ type AudioBoostPayload = {
   bookId: string;
 };
 
-export function registerAudioBoostJob(fs: Engine): void {
+export function registerAudioBoostJob(engine: Engine): void {
   registerJobHandler("audio_boost", async (payload, ctx) => {
     const {
       inputPath, outputPath, boost, isVideo,
@@ -38,7 +38,7 @@ export function registerAudioBoostJob(fs: Engine): void {
     } = payload as AudioBoostPayload;
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -59,7 +59,7 @@ export function registerAudioBoostJob(fs: Engine): void {
 
         const inputFilename = basename(inputPath);
         await replaceArtifactFileFromPath(
-          fs,
+          engine,
           assetId,
           inputFilename,
           outputPath,

@@ -4,7 +4,7 @@ import type { ToolDef } from "./tool-def.js";
 import { findPrimaryMediaFile } from "videobook-engine";
 import { resolveCharacterCreateName } from "../character-name.js";
 
-export function createCharacterDef(fs: Engine): ToolDef {
+export function createCharacterDef(engine: Engine): ToolDef {
   return {
     name: "create_character",
     description: "Create a new character artifact, optionally seeded from existing image artifacts",
@@ -24,7 +24,7 @@ export function createCharacterDef(fs: Engine): ToolDef {
       for (let arg of args) {
         const isTagged = arg.startsWith("@");
         if (isTagged) arg = arg.slice(1);
-        const artifact = fs.artifacts.get(arg);
+        const artifact = engine.artifacts.get(arg);
         if (artifact.ok) {
           if (artifact.value.kind !== "image") {
             return {
@@ -61,7 +61,7 @@ export function createCharacterDef(fs: Engine): ToolDef {
         };
       }
 
-      const assetResult = await fs.artifacts.create("char", displayName);
+      const assetResult = await engine.artifacts.create("char", displayName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -72,7 +72,7 @@ export function createCharacterDef(fs: Engine): ToolDef {
 
       for (let i = 0; i < imageSources.length; i++) {
         const sourceId = imageSources[i];
-        const manifestResult = await fs.files.manifest(sourceId);
+        const manifestResult = await engine.files.manifest(sourceId);
         if (!manifestResult.ok) {
           return {
             isError: true as const,
@@ -90,7 +90,7 @@ export function createCharacterDef(fs: Engine): ToolDef {
 
         const ext = primaryFile.name.split(".").pop();
         const destFilename = `source-${String(i + 1).padStart(2, "0")}.${ext}`;
-        const copyResult = await fs.files.copy(sourceId, primaryFile.name, asset_id, destFilename);
+        const copyResult = await engine.files.copy(sourceId, primaryFile.name, asset_id, destFilename);
         if (!copyResult.ok) {
           return {
             isError: true as const,
@@ -99,7 +99,7 @@ export function createCharacterDef(fs: Engine): ToolDef {
         }
       }
 
-      const metaResult = await fs.metadata.artifacts.write(asset_id, "character", { display_name: displayName }
+      const metaResult = await engine.metadata.artifacts.write(asset_id, "character", { display_name: displayName }
       );
       if (!metaResult.ok) {
         return {

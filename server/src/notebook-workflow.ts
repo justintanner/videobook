@@ -20,6 +20,7 @@ import {
   normalizeCellActionFields,
   normalizeLegacyAnalyzeCell,
 } from "./notebook-action-catalog.js";
+import { EXTRACT_AUDIO_OUTPUT_ROLE } from "./notebook-cell-outputs.js";
 import {
   INTELLIGENCE_MODEL,
   OPENAI_ANALYSIS_TOOL,
@@ -230,7 +231,10 @@ function matchesBranchChild(
   if (kind === "last") {
     return cell.type === "image" && cell.inputs?.frameRole === "last";
   }
-  if (kind === "extract-audio") return cell.type === "extract_audio";
+  if (kind === "extract-audio") {
+    return cell.type === "extract_audio"
+      || cell.inputs?.mediaRole === EXTRACT_AUDIO_OUTPUT_ROLE;
+  }
   if (kind === "prompt") return cell.type === "prompt";
   return cell.type === "generate_video";
 }
@@ -395,7 +399,7 @@ function branchEdges(
   add(branch.splitVideo, branch.video, "media");
   add(branch.video, branch.first, "segment");
   add(branch.video, branch.last, "segment");
-  add(branch.video, branch.extractAudio, "video");
+  add(branch.video, branch.extractAudio, "segment");
   add(analysis, branch.prompt, "analysis");
   add(branch.first, branch.prompt, "first_frame");
   add(branch.last, branch.prompt, "last_frame");
@@ -587,23 +591,24 @@ function createBranchCells(
   const extractAudioExisting = existing.extractAudio;
   const extractAudioBase = extractAudioExisting
     ?? engine.notebooks.createCell({
-      type: "extract_audio",
+      type: "audio",
       label: sceneLabel(shot.ordinal, "audio extract"),
       slot: gridSlot(extractionRow, column + 1),
     });
   const extractAudio: NotebookCell = {
     ...extractAudioBase,
-    type: "extract_audio",
+    type: "audio",
     label: extractAudioBase.label,
     slot: extractAudioBase.slot,
-    provider: "local",
+    provider: undefined,
     model: undefined,
-    operation: "extract_audio",
-    tool: "ffmpeg",
+    operation: undefined,
+    tool: undefined,
     inputs: {
       ...(extractAudioBase.inputs ?? {}),
       ...commonInputs,
       workflowRole: branchRole("extract-audio", shot.ordinal),
+      mediaRole: EXTRACT_AUDIO_OUTPUT_ROLE,
       audioRole: "scene",
       state: stateForDerivedCell(extractAudioExisting),
     },
@@ -1039,14 +1044,15 @@ export function buildSevenStageScaffold(
     engine,
     roleCells.get("source-extract-audio"),
     {
-      type: "extract_audio",
+      type: "audio",
       label: "Source audio extract",
       slot: scaffoldSlot("source-extract-audio"),
-      provider: "local",
-      operation: "extract_audio",
-      tool: "ffmpeg",
+      provider: undefined,
+      operation: undefined,
+      tool: undefined,
       inputs: {
         workflowRole: "source-extract-audio",
+        mediaRole: EXTRACT_AUDIO_OUTPUT_ROLE,
         audioRole: "continuous-source",
         state: "pending",
       },
@@ -1104,7 +1110,10 @@ export function buildSevenStageScaffold(
     ) {
       return false;
     }
-    if (edge.target === extractAudio.id && edge.targetInput === "video") {
+    if (
+      edge.target === extractAudio.id
+      && (edge.targetInput === "video" || edge.targetInput === "segment")
+    ) {
       return false;
     }
     if (edge.target === assembly.id && edge.targetInput === "audio") return false;
@@ -1125,7 +1134,7 @@ export function buildSevenStageScaffold(
     engine.notebooks.createEdge({
       source: source.id,
       target: extractAudio.id,
-      targetInput: "video",
+      targetInput: "segment",
     }),
     engine.notebooks.createEdge({
       source: extractAudio.id,

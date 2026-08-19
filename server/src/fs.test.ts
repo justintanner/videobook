@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { withBookContext } from "./book-context.js";
 import {
-  fs as defaultFs,
+  scopedEngine as defaultFs,
   closeEngineForTest,
   createEngineForTest,
   environmentValue,
-} from "./fs.js";
+} from "./engine.js";
 
 describe("fs module", () => {
   let tempDir: string;

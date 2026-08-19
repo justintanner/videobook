@@ -73,7 +73,7 @@ function stringArrayOrNull(value: unknown): string[] | null {
  * and render_timeline reports missing_renders until a manual /render.
  */
 export async function enqueueLazyAnalysisIfSlotted(
-  fs: Engine,
+  engine: Engine,
   bookId: string,
   assetId: string,
 ): Promise<LazyAnalysisResult | null> {
@@ -82,16 +82,16 @@ export async function enqueueLazyAnalysisIfSlotted(
   // defense lives at the API call inside analyze-video.
   if (!process.env.OPENAI_API_KEY) return null;
 
-  const asset = fs.artifacts.get(assetId);
+  const asset = engine.artifacts.get(assetId);
   if (!asset.ok || asset.value.kind !== "video") return null;
-  const timeline = readTimeline(fs);
+  const timeline = readTimeline(engine);
   if (!timeline.slots.some((slot) => slot.artifactId === asset.value.artifactId)) return null;
 
-  const manifestResult = await fs.files.manifest(assetId);
+  const manifestResult = await engine.files.manifest(assetId);
   if (!manifestResult.ok) return null;
   const [analysis, transcription] = await Promise.all([
-    fs.files.read(assetId, ".original.analysis.json"),
-    fs.files.read(assetId, ".analysis.gpt4otrans.json"),
+    engine.files.read(assetId, ".original.analysis.json"),
+    engine.files.read(assetId, ".analysis.gpt4otrans.json"),
   ]);
   if (analysis.ok) return null;
 
@@ -108,11 +108,11 @@ export async function enqueueLazyAnalysisIfSlotted(
 }
 
 async function isRenderAlreadyQueued(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   orientation: Orientation,
 ): Promise<boolean> {
-  const work = await fs.jobs.artifactWork.read(assetId);
+  const work = await engine.jobs.artifactWork.read(assetId);
   if (!work.ok || !work.value) return false;
   const state = work.value as AssetWorkState;
   return state.status !== "ready"
@@ -121,26 +121,26 @@ async function isRenderAlreadyQueued(
 }
 
 export async function enqueueLazyTimelineRender(
-  fs: Engine,
+  engine: Engine,
   bookId: string,
   assetId: string,
   knownAsset?: Artifact,
 ): Promise<LazyRenderResult | null> {
-  const resolved = fs.artifacts.get(assetId);
+  const resolved = engine.artifacts.get(assetId);
   if (!resolved.ok || resolved.value.kind !== "video") return null;
-  const timeline = readTimeline(fs);
+  const timeline = readTimeline(engine);
   if (!timeline.slots.some((slot) => slot.artifactId === resolved.value.artifactId)) return null;
 
   const orientation = timeline.render;
-  if (await isRenderAlreadyQueued(fs, assetId, orientation)) return null;
+  if (await isRenderAlreadyQueued(engine, assetId, orientation)) return null;
 
   const asset: Artifact = knownAsset ?? resolved.value;
 
-  const renderActions = await findEligibleRenderActions(fs, [asset], orientation);
+  const renderActions = await findEligibleRenderActions(engine, [asset], orientation);
   if (renderActions.length === 0) return null;
 
   const action = renderActions[0];
-  const stored = await readStoredRenderDefaults(fs, assetId, orientation);
+  const stored = await readStoredRenderDefaults(engine, assetId, orientation);
   const subtitlesEnabled = action.hasElevenlabs && stored.subtitlesEnabled === true;
   // Stable dedupe key: concurrent triggers (job-completion hooks racing a
   // sync poll) collapse onto one queued render instead of double-rendering.

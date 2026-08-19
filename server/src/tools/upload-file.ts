@@ -3,7 +3,7 @@ import { z } from "zod";
 import { uploadLocalBytes } from "../local-upload.js";
 import type { ToolDef } from "./tool-def.js";
 
-export function uploadFileDef(fs: Engine): ToolDef {
+export function uploadFileDef(engine: Engine): ToolDef {
   return {
     name: "upload_file",
     description: "Upload a media or markdown file into a Videobook project as an asset",
@@ -14,7 +14,7 @@ export function uploadFileDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const { book_id, filename, data } = args as { book_id: string; filename: string; data: string };
-      const result = await uploadLocalBytes(fs, {
+      const result = await uploadLocalBytes(engine, {
         bookId: book_id,
         filename,
         data: Buffer.from(data, "base64"),

@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function assetManifestDef(fs: Engine): ToolDef {
+export function assetManifestDef(engine: Engine): ToolDef {
   return {
     name: "asset_manifest",
     description: "List all files in an asset directory",
@@ -12,7 +12,7 @@ export function assetManifestDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };
-      const result = await fs.files.manifest(asset_id);
+      const result = await engine.files.manifest(asset_id);
       if (!result.ok) {
         return {
           isError: true as const,

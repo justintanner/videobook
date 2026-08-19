@@ -18,7 +18,7 @@ export type ExtractNotebookFramePayload = {
 };
 
 async function writeFrameCellResult(
-  fs: Engine,
+  engine: Engine,
   input: ExtractNotebookFramePayload,
   operation: string,
   result:
@@ -26,7 +26,7 @@ async function writeFrameCellResult(
     | { status: "error"; error: string },
 ): Promise<void> {
   const written = await mutateNotebook(
-    fs,
+    engine,
     input.notebookId,
     operation,
     (notebook) => {
@@ -76,11 +76,11 @@ async function writeFrameCellResult(
   if (!written.ok) throw new Error(written.error.message);
 }
 
-export function registerExtractNotebookFrameJob(fs: Engine): void {
+export function registerExtractNotebookFrameJob(engine: Engine): void {
   registerJobHandler("extract_notebook_frame", async (payload) => {
     const input = payload as unknown as ExtractNotebookFramePayload;
     try {
-      const result = await captureFrame(fs, input.sourceArtifactId, {
+      const result = await captureFrame(engine, input.sourceArtifactId, {
         role: input.frameMode,
         ...(input.frameMode === "time"
           && typeof input.timestampSeconds === "number"
@@ -100,7 +100,7 @@ export function registerExtractNotebookFrameJob(fs: Engine): void {
           atSeconds: result.atSeconds,
         },
       } as unknown as Record<string, unknown>);
-      await writeFrameCellResult(fs, input, "complete_extract_notebook_frame", {
+      await writeFrameCellResult(engine, input, "complete_extract_notebook_frame", {
         status: "completed",
         artifactId: result.artifactId,
         atSeconds: result.atSeconds,
@@ -112,7 +112,7 @@ export function registerExtractNotebookFrameJob(fs: Engine): void {
       };
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
-      await writeFrameCellResult(fs, input, "fail_extract_notebook_frame", {
+      await writeFrameCellResult(engine, input, "fail_extract_notebook_frame", {
         status: "error",
         error: message,
       }).catch(() => undefined);

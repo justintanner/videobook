@@ -892,7 +892,16 @@ describe("notebook live analysis", () => {
       cell.operation === "split_range")).toHaveLength(0);
     expect(result.document.cells.map((cell) => cell.id).sort())
       .toEqual(configured.cells.map((cell) => cell.id).sort());
-    expect(result.document.edges).toEqual(configured.edges);
+    expect(result.document.edges).toEqual(configured.edges.map((edge) => {
+      const target = configured.cells.find((cell) => cell.id === edge.target);
+      return (
+        (target?.type === "extract_audio"
+          || target?.inputs?.mediaRole === "extract-audio-output")
+        && edge.targetInput === "video"
+      )
+        ? { ...edge, targetInput: "segment" }
+        : edge;
+    }));
     expect(result.document.cells.find((cell) =>
       cell.id === legacyAnalysis.id)).toMatchObject({
       provider: "openai",

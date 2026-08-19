@@ -24,7 +24,7 @@ const generateSeedreamImageSchema = {
 
 type Args = SchemaArgs<typeof generateSeedreamImageSchema>;
 
-export function generateSeedreamImageDef(fs: Engine): ToolDef {
+export function generateSeedreamImageDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_seedream_v5_lite_image_to_image",
     description: "Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 image artifact reference inputs. Creates a new image artifact and enqueues a background job.",
@@ -56,14 +56,14 @@ export function generateSeedreamImageDef(fs: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const resolved = await resolveImageRefs(fs, rawSlugs);
+      const resolved = await resolveImageRefs(engine, rawSlugs);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = generationLabel(modelSlug("kie", "seedream/5-lite-image-to-image"), prompt);
-      const assetResult = await fs.artifacts.create(prefix, assetName);
+      const assetResult = await engine.artifacts.create(prefix, assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

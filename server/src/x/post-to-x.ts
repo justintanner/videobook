@@ -12,7 +12,29 @@ import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 
 const APPEND_CHUNK_BYTES = 4 * 1024 * 1024;
 const STATUS_POLL_TIMEOUT_MS = 5 * 60_000;
-const STATUS_POLL_MIN_INTERVAL_MS = 2_000;
+export const STATUS_POLL_MIN_INTERVAL_MS = 2_000;
+
+export type StatusPollSleepFn = (ms: number, signal?: AbortSignal) => Promise<void>;
+
+async function defaultStatusPollSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    if (!signal) return;
+    const onAbort = () => {
+      clearTimeout(t);
+      reject(new Error("Aborted"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+let statusPollSleep: StatusPollSleepFn = defaultStatusPollSleep;
+
+export function configureXStatusPollForTests(options: {
+  sleep?: StatusPollSleepFn;
+} | null): void {
+  statusPollSleep = options?.sleep ?? defaultStatusPollSleep;
+}
 
 interface MediaTypeInfo {
   mediaType:
@@ -49,7 +71,7 @@ function inferMediaType(filename: string): MediaTypeInfo | null {
 export type PostOrientation = "portrait" | "landscape";
 
 export interface PostToXArgs {
-  fs: Engine;
+  engine: Engine;
   assetId: string;
   bookId: string;
   text?: string;
@@ -186,16 +208,7 @@ async function waitForProcessing(
       STATUS_POLL_MIN_INTERVAL_MS / 1000,
       next.check_after_secs ?? 2,
     );
-    await new Promise<void>((resolve, reject) => {
-      const t = setTimeout(resolve, waitSecs * 1000);
-      if (signal) {
-        const onAbort = () => {
-          clearTimeout(t);
-          reject(new Error("Aborted"));
-        };
-        signal.addEventListener("abort", onAbort, { once: true });
-      }
-    });
+    await statusPollSleep(waitSecs * 1000, signal);
     const status = await x.get.v2.media.upload(mediaId, signal);
     const info = status.data.processing_info;
     if (!info) return;
@@ -211,7 +224,7 @@ async function waitForProcessing(
 
 export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
   const {
-    fs,
+    engine,
     assetId,
     text,
     orientation,
@@ -220,11 +233,11 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
     signal,
   } = args;
 
-  const artifactResult = fs.artifacts.get(assetId);
+  const artifactResult = engine.artifacts.get(assetId);
   if (!artifactResult.ok) {
     throw new Error(`Asset ${assetId} not found: ${artifactResult.error.message}`);
   }
-  const manifestResult = await fs.files.manifest(assetId);
+  const manifestResult = await engine.files.manifest(assetId);
   if (!manifestResult.ok) {
     throw new Error(`Asset ${assetId} not found: ${manifestResult.error.message}`);
   }
@@ -250,14 +263,14 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
       tempPath = transformed.tempPath;
       info = { mediaType: transformed.mediaType, mediaCategory: "tweet_video" };
     } else {
-      const readResult = await fs.files.read(assetId, file.name);
+      const readResult = await engine.files.read(assetId, file.name);
       if (!readResult.ok) {
         throw new Error(`Failed to read ${file.name}: ${readResult.error.message}`);
       }
       buffer = readResult.value;
     }
   } else {
-    const readResult = await fs.files.read(assetId, file.name);
+    const readResult = await engine.files.read(assetId, file.name);
     if (!readResult.ok) {
       throw new Error(`Failed to read ${file.name}: ${readResult.error.message}`);
     }
@@ -266,7 +279,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
 
   let mediaId: string;
   try {
-    const x = await getXClient(args.fs, args.x);
+    const x = await getXClient(engine, args.x);
     mediaId = await uploadMedia(x, buffer, info, signal);
 
     const tweetRes = await x.post.v2.tweets(
@@ -282,7 +295,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
 
     try {
       await appendXPostMetadata({
-        fs,
+        engine,
         assetId,
         entry: {
           tweet_id: tweetId,

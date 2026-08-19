@@ -30,7 +30,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateQwenImageFalDef(fs: Engine): ToolDef {
+export function generateQwenImageFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_qwen_2_0_text_to_image",
     description: "Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new image artifact and enqueues a background job.",
@@ -42,7 +42,7 @@ export function generateQwenImageFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.artifacts.create("img", generationLabel(modelSlug("kie", "qwen2/text-to-image"), prompt));
+      const assetResult = await engine.artifacts.create("img", generationLabel(modelSlug("kie", "qwen2/text-to-image"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;

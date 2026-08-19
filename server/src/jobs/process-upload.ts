@@ -47,7 +47,7 @@ function uploadShapeFor(type: ArtifactKind): { mediaType: UploadMediaType; exten
 }
 
 export async function findUnprocessedUploads(
-  fs: Engine,
+  engine: Engine,
   assets: Artifact[],
 ): Promise<UnprocessedUpload[]> {
   const results = await Promise.all(
@@ -59,10 +59,10 @@ export async function findUnprocessedUploads(
       // Parallelize the independent disk/db reads — each was ~5-20ms serially,
       // multiplied by every asset on every sync.
       const [manifest, originResult, locked, work] = await Promise.all([
-        fs.files.manifest(asset.artifactId),
-        fs.metadata.artifacts.read(asset.artifactId, "original"),
-        fs.jobs.locks.isLocked(asset.path),
-        fs.jobs.artifactWork.read(asset.artifactId),
+        engine.files.manifest(asset.artifactId),
+        engine.metadata.artifacts.read(asset.artifactId, "original"),
+        engine.jobs.locks.isLocked(asset.path),
+        engine.jobs.artifactWork.read(asset.artifactId),
       ]);
       if (!manifest.ok) return null;
       if (originResult.ok) return null;
@@ -126,17 +126,17 @@ export async function findUnprocessedUploads(
 }
 
 export async function processExternalUpload(
-  fs: Engine,
+  engine: Engine,
   upload: UnprocessedUpload,
   bookId: string,
 ): Promise<void> {
   const targetFilename = `original${upload.extension}`;
 
   if (upload.mediaFilename !== targetFilename) {
-    await fs.files.rename(upload.assetId, upload.mediaFilename, targetFilename);
+    await engine.files.rename(upload.assetId, upload.mediaFilename, targetFilename);
   }
 
-  await fs.jobs.failures.clear(upload.assetId);
+  await engine.jobs.failures.clear(upload.assetId);
 
   const provenance = { origin: "external", processed_at: new Date().toISOString() };
   if (upload.mediaType === "video") {
@@ -172,6 +172,6 @@ export async function processExternalUpload(
       provenance,
     } as unknown as Record<string, unknown>);
   } else {
-    await fs.metadata.artifacts.write(upload.assetId, "original", provenance);
+    await engine.metadata.artifacts.write(upload.assetId, "original", provenance);
   }
 }

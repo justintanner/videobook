@@ -44,7 +44,7 @@ const generateGrokImagineVideoSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineVideoSchema>;
 
-export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
+export function generateGrokImagineVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_grok_imagine_image_to_video",
     description: "Generate a video from image asset(s) using Kie Grok Imagine Video 1.5. Creates a new video artifact and enqueues a background job. Requires at least one of image_refs or asset_id.",
@@ -73,13 +73,13 @@ export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
       const assetIds: string[] = [];
       const imageFilenames: string[] = [];
       for (const assetId of refs) {
-        const artifact = fs.artifacts.get(assetId);
+        const artifact = engine.artifacts.get(assetId);
         if (!artifact.ok) return toolError(artifact.error.message);
         if (artifact.value.kind !== "image") {
           return toolError(`image ref must be an image artifact, got ${artifact.value.kind}: ${assetId}`);
         }
 
-        const manifestResult = await fs.files.manifest(assetId);
+        const manifestResult = await engine.files.manifest(assetId);
         if (!manifestResult.ok) {
           return toolError(manifestResult.error.message);
         }
@@ -94,7 +94,7 @@ export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
 
       let replaceAudioWith: RefInput | undefined;
       if (replace_audio_with !== undefined && replace_audio_with.trim().length > 0) {
-        const resolvedAudio = await resolveAudioRef(fs, replace_audio_with);
+        const resolvedAudio = await resolveAudioRef(engine, replace_audio_with);
         if (!resolvedAudio.ok) {
           return toolError(resolvedAudio.error);
         }
@@ -102,7 +102,7 @@ export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
       }
 
       const videoName = deriveVideoName(assetIds[0]);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return toolError(`Failed to create video asset: ${assetResult.error.message}`);
       }

@@ -14,7 +14,7 @@ function coverSongLabel(source: Artifact): string {
   return `cover-song-${source.label?.trim() || source.artifactId}`;
 }
 
-export function makeCoverSongDef(fs: Engine): ToolDef {
+export function makeCoverSongDef(engine: Engine): ToolDef {
   return {
     name: "make_cover_song",
     description: "Create a new drums-and-strings instrumental cover from 10 to 240 seconds of source audio in a video or audio asset, generated locally by the ACE-Step (acestep.cpp) runtime with source-audio conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.",
@@ -35,7 +35,7 @@ export function makeCoverSongDef(fs: Engine): ToolDef {
         direction?: string;
       };
       const sourceAssetId = asset_id.replace(/^@/u, "");
-      const sourceArtifact = fs.artifacts.get(sourceAssetId);
+      const sourceArtifact = engine.artifacts.get(sourceAssetId);
       if (!sourceArtifact.ok) return toolError(sourceArtifact.error.message);
       const sourceKind = sourceArtifact.value.kind;
       const isVideo = sourceKind === "video";
@@ -44,7 +44,7 @@ export function makeCoverSongDef(fs: Engine): ToolDef {
         return toolError(`make_cover_song requires video or audio media; ${sourceAssetId} is ${sourceKind}`);
       }
 
-      const manifest = await fs.files.manifest(sourceAssetId);
+      const manifest = await engine.files.manifest(sourceAssetId);
       if (!manifest.ok) return toolError(manifest.error.message);
       const sourceFile = isVideo
         ? findVideoFile(manifest.value.files)
@@ -75,7 +75,7 @@ export function makeCoverSongDef(fs: Engine): ToolDef {
         );
       }
 
-      const created = await fs.artifacts.create(
+      const created = await engine.artifacts.create(
         "audio",
         coverSongLabel(sourceArtifact.value),
       );

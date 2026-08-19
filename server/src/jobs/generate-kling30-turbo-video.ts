@@ -30,15 +30,15 @@ type GenerateKling30TurboVideoPayload = {
   aspect_ratio?: KlingV3TurboAspectRatio;
 };
 
-async function uploadAll(fs: Engine, inputs: RefInput[]): Promise<string[]> {
+async function uploadAll(engine: Engine, inputs: RefInput[]): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename));
+    urls.push(await uploadAssetToKie(engine, assetId, filename));
   }
   return urls;
 }
 
-export function registerGenerateKling30TurboVideoJob(fs: Engine): void {
+export function registerGenerateKling30TurboVideoJob(engine: Engine): void {
   registerJobHandler("generate_kling30_turbo_video", async (payload, ctx) => {
     const {
       vidAssetId,
@@ -55,7 +55,7 @@ export function registerGenerateKling30TurboVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const imageUrls = await uploadAll(fs, imageInputs);
+    const imageUrls = await uploadAll(engine, imageInputs);
     const normalizedPrompt = transformProviderPrompt(
       "generate_kie_kling_3_0_turbo_video",
       {
@@ -74,7 +74,7 @@ export function registerGenerateKling30TurboVideoJob(fs: Engine): void {
       imageUrls,
     );
 
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "kling30_video",
       assetId: vidAssetId,

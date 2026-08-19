@@ -259,8 +259,10 @@ export function NotebookMediaFullscreen({
   const [captureError, setCaptureError] = useState<string | null>(null)
   const [captureMessage, setCaptureMessage] = useState<string | null>(null)
   const isVideo = asset.type === 'video' || asset.type === 'final'
-  const mediaUrl = asset.mediaUrl ?? asset.thumbnailUrl
-  const hasMedia = Boolean(mediaUrl)
+  const playbackUrl = asset.mediaUrl
+  const posterUrl = asset.thumbnailUrl
+  const mediaUrl = playbackUrl ?? posterUrl
+  const hasMedia = isVideo || Boolean(mediaUrl)
   const selectedSubjects = useMemo(
     () => subjectMap?.subjects.filter((subject) => selectedIds.has(subject.id)) ?? [],
     [selectedIds, subjectMap],
@@ -329,7 +331,7 @@ export function NotebookMediaFullscreen({
     }
   }, [hasMedia, onClose, returnFocus])
 
-  if (!mediaUrl) return null
+  if (!isVideo && !mediaUrl) return null
 
   const toggleSubject = (subjectId: string) => {
     setSelectedIds((current) => {
@@ -451,21 +453,31 @@ export function NotebookMediaFullscreen({
       >
         <X size={20} />
       </button>
-      {isVideo && asset.mediaUrl ? (
+      {isVideo ? (
         <div className="notebook-media-playback-stage">
-          <video
-            ref={videoRef}
-            key={asset.mediaUrl}
-            src={asset.mediaUrl}
-            poster={asset.thumbnailUrl ?? undefined}
-            controls
-            controlsList="nofullscreen nodownload noremoteplayback"
-            disablePictureInPicture
-            playsInline
-            autoPlay
-            preload="auto"
-          />
-          {onCaptureFrame && (
+          {playbackUrl ? (
+            <video
+              ref={videoRef}
+              key={playbackUrl}
+              src={playbackUrl}
+              poster={posterUrl ?? undefined}
+              controls
+              controlsList="nofullscreen nodownload noremoteplayback"
+              disablePictureInPicture
+              playsInline
+              autoPlay
+              preload="auto"
+            />
+          ) : (
+            <div className="notebook-media-unavailable" role="status">
+              {posterUrl ? (
+                <img src={posterUrl} alt={`@${address} poster`} />
+              ) : null}
+              <strong>Playback unavailable</strong>
+              <p>This video has a preview image but no playable media yet.</p>
+            </div>
+          )}
+          {playbackUrl && onCaptureFrame && (
             <div className="notebook-media-capture-bar">
               <button
                 type="button"
@@ -494,13 +506,13 @@ export function NotebookMediaFullscreen({
           <div className="notebook-subject-stage">
             {ready && subjectMap && removalPreview ? (
               <ImageRemovalPreview
-                mediaUrl={mediaUrl}
+                mediaUrl={mediaUrl ?? ''}
                 subjectMap={subjectMap}
                 selectedIds={selectedIds}
               />
             ) : ready && subjectMap && !overlaysHidden ? (
               <ImageSubjectOverlay
-                mediaUrl={mediaUrl}
+                mediaUrl={mediaUrl ?? ''}
                 subjectMap={subjectMap}
                 selectedIds={selectedIds}
                 hiddenIds={hiddenIds}
@@ -508,7 +520,7 @@ export function NotebookMediaFullscreen({
                 onToggle={toggleSubject}
               />
             ) : (
-              <img src={mediaUrl} alt={`@${address}`} />
+              <img src={mediaUrl ?? ''} alt={`@${address}`} />
             )}
             <div className="notebook-subject-stage-label">
               <span>@{address}</span>

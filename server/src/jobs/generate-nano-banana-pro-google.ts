@@ -52,7 +52,7 @@ function extensionForContentType(contentType: string | null): string {
   return "png";
 }
 
-export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
+export function registerGenerateNanoBananaProGoogleJob(engine: Engine): void {
   registerJobHandler("generate_nano_banana_pro_google", async (payload) => {
     const p = payload as GenerateNanoBananaProGooglePayload;
     // Unlike the kie/fal paths there is no async job to poll — the images
@@ -66,7 +66,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
       referenceIds.push(
         "url" in input
           ? await uploadUrlToGoogleFlow(provider, input.url)
-          : await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename),
+          : await uploadAssetToGoogleFlow(provider, engine, input.assetId, input.filename),
       );
     }
     const normalizedPrompt = transformProviderPrompt(
@@ -94,7 +94,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
       toolName: "generate_google_flow_nano_banana_pro_image",
       wire: true,
     });
-    await fs.metadata.artifacts.write(p.imgAssetId, "generation-payload", request);
+    await engine.metadata.artifacts.write(p.imgAssetId, "generation-payload", request);
 
     const res = await callGoogleFlowWithCaptchaRetry(
       (body) => provider.v1.images(body as GoogleFlowImagesRequest),
@@ -109,7 +109,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
     }
     const ext = extensionForContentType(download.headers.get("content-type"));
     const buffer = Buffer.from(await download.arrayBuffer());
-    await fs.files.write(p.imgAssetId, `original.${ext}`, buffer);
+    await engine.files.write(p.imgAssetId, `original.${ext}`, buffer);
 
     const provenance = {
       source_assets: p.sourceImageIds,

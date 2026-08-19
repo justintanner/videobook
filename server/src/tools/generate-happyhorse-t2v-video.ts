@@ -25,7 +25,7 @@ const generateHappyhorseT2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateHappyhorseT2vVideoSchema>;
 
-export function generateHappyhorseT2vVideoDef(fs: Engine): ToolDef {
+export function generateHappyhorseT2vVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_happyhorse_1_1_text_to_video",
     description: "Generate a video from a prompt using HappyHorse text-to-video. Creates a new video artifact and enqueues a background job.",
@@ -38,7 +38,7 @@ export function generateHappyhorseT2vVideoDef(fs: Engine): ToolDef {
       }
 
       const videoName = generationLabel(SLUG, prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }

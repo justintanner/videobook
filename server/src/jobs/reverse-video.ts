@@ -28,7 +28,7 @@ type ReverseVideoPayload = {
   bookId: string;
 };
 
-export function registerReverseVideoJob(fs: Engine): void {
+export function registerReverseVideoJob(engine: Engine): void {
   registerJobHandler("reverse_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, hasAudio,
@@ -36,7 +36,7 @@ export function registerReverseVideoJob(fs: Engine): void {
     } = payload as ReverseVideoPayload;
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -57,7 +57,7 @@ export function registerReverseVideoJob(fs: Engine): void {
 
       const inputFilename = basename(inputPath);
       await replaceArtifactFileFromPath(
-        fs,
+        engine,
         assetId,
         inputFilename,
         outputPath,

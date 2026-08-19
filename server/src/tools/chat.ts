@@ -109,7 +109,7 @@ function duplicateDestinationReference(prompt: string): string | null {
 export type ChatResolvedAsset = ResolvedArtifactRef;
 
 function buildChatNotebookContext(
-  fs: Engine,
+  engine: Engine,
   notebook: NotebookDocument | null,
 ): ChatRoutingNotebookContext | null {
   if (!notebook) return null;
@@ -118,7 +118,7 @@ function buildChatNotebookContext(
     name: notebook.name,
     cells: notebook.cells.map((cell) => {
       const artifact = cell.outputArtifactId
-        ? fs.artifacts.get(cell.outputArtifactId)
+        ? engine.artifacts.get(cell.outputArtifactId)
         : null;
       return {
         address: `@${notebookGridAddress(cell.slot)}`,
@@ -358,7 +358,7 @@ type AssetOriginMeta = {
 };
 
 export async function enrichAssetContext(
-  fs: Engine,
+  engine: Engine,
   resolvedAssets: ChatResolvedAsset[],
 ): Promise<Array<Record<string, unknown>>> {
   const rows: Array<Record<string, unknown>> = [];
@@ -369,7 +369,7 @@ export async function enrichAssetContext(
       asset_id: a.artifactId,
       has_file: a.filePath !== null,
     };
-    const metaResult = await fs.metadata.artifacts.read<AssetOriginMeta>(a.artifactId, "original"
+    const metaResult = await engine.metadata.artifacts.read<AssetOriginMeta>(a.artifactId, "original"
     );
     if (metaResult.ok) {
       const sourceUrl =
@@ -386,13 +386,13 @@ export async function enrichAssetContext(
 }
 
 export async function loadScriptContentsForChat(
-  fs: Engine,
+  engine: Engine,
   resolvedAssets: ChatResolvedAsset[],
 ): Promise<Array<{ tag: string; content: string }>> {
   const scriptContents: Array<{ tag: string; content: string }> = [];
   for (const asset of resolvedAssets) {
     if (asset.artifactType !== "script" || !asset.filePath) continue;
-    const readResult = await fs.files.read(asset.artifactId, SCRIPT_FILENAME
+    const readResult = await engine.files.read(asset.artifactId, SCRIPT_FILENAME
     );
     if (!readResult.ok) continue;
     const content = typeof readResult.value === "string"
@@ -404,7 +404,7 @@ export async function loadScriptContentsForChat(
 }
 
 function appendChatHistory(
-  fs: Engine,
+  engine: Engine,
   input: {
     prompt: string;
     tool: string;
@@ -413,10 +413,10 @@ function appendChatHistory(
     failed: boolean;
   },
 ): void {
-  void fs.logs
+  void engine.logs
     .append("chat", { role: "user", text: input.prompt, ts: Date.now() })
     .catch(() => {});
-  void fs.logs
+  void engine.logs
     .append(
       "chat",
       {
@@ -440,7 +440,7 @@ function autoApplyReason(tool: string): string {
 }
 
 async function applyChatActionPlan(
-  fs: Engine,
+  engine: Engine,
   bookId: string,
   plan: ChatActionPlan,
 ): Promise<ToolResult> {
@@ -449,7 +449,7 @@ async function applyChatActionPlan(
   }
   if (plan.tool === "chat") return error("Chat cannot route to itself");
   const { getAllToolDefs } = await import("./index.js");
-  const targetDef = getAllToolDefs(fs).find((definition) =>
+  const targetDef = getAllToolDefs(engine).find((definition) =>
     definition.name === plan.tool);
   if (!targetDef) return error(`Tool handler not found: ${plan.tool}`);
   const params = { ...plan.params, book_id: bookId };
@@ -459,7 +459,7 @@ async function applyChatActionPlan(
       `Invalid parameters for ${plan.routedTool}: ${z.prettifyError(validated.error)}`,
     );
   }
-  const wrappedDef = withLogging(targetDef, fs);
+  const wrappedDef = withLogging(targetDef, engine);
   let result: ToolResult;
   try {
     result = await wrappedDef.handler(validated.data);
@@ -467,7 +467,7 @@ async function applyChatActionPlan(
     const message = cause instanceof Error ? cause.message : String(cause);
     result = error(`${plan.routedTool} failed: ${message}`);
   }
-  appendChatHistory(fs, {
+  appendChatHistory(engine, {
     prompt: plan.prompt,
     tool: plan.routedTool,
     params: plan.params,
@@ -480,7 +480,7 @@ async function applyChatActionPlan(
 export { chatActionPlanSchema, duplicateDestinationReference };
 export type { ChatActionPlan };
 
-export function chatDef(fs: Engine): ToolDef {
+export function chatDef(engine: Engine): ToolDef {
   return {
     name: "chat",
     description: "LLM-backed router for the Videobook app composer. It executes reads and previews mutations or generation for explicit application. ChatGPT and other LLM hosts should call the specific media tools directly instead of calling this nested router.",
@@ -499,27 +499,27 @@ export function chatDef(fs: Engine): ToolDef {
         model?: ChatModelId;
         action_plan?: ChatActionPlan;
       };
-      if (actionPlan) return await applyChatActionPlan(fs, bookId, actionPlan);
+      if (actionPlan) return await applyChatActionPlan(engine, bookId, actionPlan);
       if (!prompt) return error("A chat prompt is required");
       const chatModel = resolveChatModel(model);
-      const book = fs.book.get();
+      const book = engine.book.get();
       let notebookDocument: NotebookDocument | null = null;
       try {
         if (notebookId) {
-          const notebook = fs.notebooks.read(notebookId);
+          const notebook = engine.notebooks.read(notebookId);
           if (!notebook.ok) throw new Error(notebook.error.message);
           notebookDocument = notebook.value;
         }
       } catch (cause) {
         return error(cause instanceof Error ? cause.message : String(cause));
       }
-      const notebookContext = buildChatNotebookContext(fs, notebookDocument);
+      const notebookContext = buildChatNotebookContext(engine, notebookDocument);
 
       // 1. Expand @s01 slot refs → the artifact ids they occupy
-      const expandedPrompt = expandSlotRefs(prompt, timelineSlotArtifactIds(fs));
+      const expandedPrompt = expandSlotRefs(prompt, timelineSlotArtifactIds(engine));
       const notebookResolution = notebookDocument
         ? resolveNotebookPromptReferences({
-            engine: fs,
+            engine: engine,
             document: notebookDocument,
             prompt: expandedPrompt,
             requireMedia: false,
@@ -551,7 +551,7 @@ export function chatDef(fs: Engine): ToolDef {
 
       // 2. Resolve @<artifact-id> tags
       const { resolved: resolvedAssets, unresolved } = await resolveArtifactRefs(
-        fs,
+        engine,
         parseArtifactIdTags(resolutionPrompt),
       );
 
@@ -561,7 +561,7 @@ export function chatDef(fs: Engine): ToolDef {
 
       // 3. Build asset context for the LLM (include source_url when known)
       const assetContext = attachNotebookReferences(
-        await enrichAssetContext(fs, resolvedAssets),
+        await enrichAssetContext(engine, resolvedAssets),
         notebookContext,
       );
 
@@ -574,10 +574,10 @@ export function chatDef(fs: Engine): ToolDef {
         .map((asset) => asset.filePath)
         .filter((path): path is string => path !== null);
 
-      const scriptContents = await loadScriptContentsForChat(fs, resolvedAssets);
+      const scriptContents = await loadScriptContentsForChat(engine, resolvedAssets);
 
       // 4. Read recent history for context
-      const historyLines = fs.logs.read("chat", {
+      const historyLines = engine.logs.read("chat", {
         limit: 10,
       }) as unknown as ChatLogEntry[];
       const historyContext = formatHistoryForPrompt(historyLines);
@@ -588,7 +588,7 @@ export function chatDef(fs: Engine): ToolDef {
       }
 
       const { getAllToolDefs } = await import("./index.js");
-      const allDefs = getAllToolDefs(fs);
+      const allDefs = getAllToolDefs(engine);
       const routableTools = buildRoutableTools(allDefs);
       const systemPrompt = buildChatRoutingPrompt(
         book.name,
@@ -733,7 +733,7 @@ export function chatDef(fs: Engine): ToolDef {
       }
 
       // 9. Execute (wrapped so the routed tool writes its own action log entry)
-      const wrappedDef = withLogging(targetDef, fs);
+      const wrappedDef = withLogging(targetDef, engine);
       let handlerResult: ToolResult;
       try {
         handlerResult = await wrappedDef.handler(validated.data);
@@ -742,7 +742,7 @@ export function chatDef(fs: Engine): ToolDef {
         return error(`${decision.tool} failed: ${message}`);
       }
 
-      appendChatHistory(fs, {
+      appendChatHistory(engine, {
         prompt,
         tool: decision.tool,
         params: decision.params,

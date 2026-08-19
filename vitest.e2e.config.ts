@@ -9,7 +9,10 @@ export default defineConfig({
   },
   test: {
     globalSetup: ['./vitest.global-setup.ts'],
-    fileParallelism: false,
+    // Independent of the root suite: Chromium + FFmpeg E2E files contend for
+    // GPU/CPU, so cap at 2 local workers rather than inheriting root maxWorkers=4.
+    fileParallelism: true,
+    maxWorkers: 2,
     include: [
       'tests/v2/**/*.e2e.test.ts',
       'server/src/**/*.e2e.test.ts',

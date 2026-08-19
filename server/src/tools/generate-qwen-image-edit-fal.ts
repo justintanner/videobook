@@ -58,7 +58,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateQwenImageEditFalDef(fs: Engine): ToolDef {
+export function generateQwenImageEditFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_qwen_2_0_edit_image",
     description: "Edit an image via fal.ai using Alibaba Qwen Image edit with one image artifact reference input. Creates a new image artifact and enqueues a background job.",
@@ -72,13 +72,13 @@ export function generateQwenImageEditFalDef(fs: Engine): ToolDef {
       }
 
       const [firstSlug] = image_refs;
-      const resolved = await resolveImageRefs(fs, [firstSlug]);
+      const resolved = await resolveImageRefs(engine, [firstSlug]);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [refImage] = resolved.inputs;
       const normalizedSize = normalizeImageSize(image_size);
 
-      const assetResult = await fs.artifacts.create(prefix, generationLabel(modelSlug("kie", "qwen2/image-edit"), prompt));
+      const assetResult = await engine.artifacts.create(prefix, generationLabel(modelSlug("kie", "qwen2/image-edit"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;

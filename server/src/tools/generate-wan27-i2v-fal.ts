@@ -25,7 +25,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateWan27I2vFalDef(fs: Engine): ToolDef {
+export function generateWan27I2vFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_wan_2_7_image_to_video",
     description: "Generate a video via fal.ai using Alibaba Wan v2.7 from a first-frame image (optional end frame). Creates a new video artifact and enqueues a background job.",
@@ -38,11 +38,11 @@ export function generateWan27I2vFalDef(fs: Engine): ToolDef {
       }
 
       const slugs = end_frame_ref ? [first_frame_ref, end_frame_ref] : [first_frame_ref];
-      const resolved = await resolveImageRefs(fs, slugs);
+      const resolved = await resolveImageRefs(engine, slugs);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame, endFrame] = resolved.inputs;
-      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "wan/2-7-image-to-video"), prompt));
+      const assetResult = await engine.artifacts.create("vid", generationLabel(modelSlug("kie", "wan/2-7-image-to-video"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

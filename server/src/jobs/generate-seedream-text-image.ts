@@ -16,7 +16,7 @@ type GenerateSeedreamTextImagePayload = {
   nsfwChecker?: boolean;
 };
 
-export function registerGenerateSeedreamTextImageJob(fs: Engine): void {
+export function registerGenerateSeedreamTextImageJob(engine: Engine): void {
   registerJobHandler("generate_seedream_text_image", async (payload, ctx) => {
     const {
       prompt, imgAssetId, imgAssetDir, bookId,
@@ -31,7 +31,7 @@ export function registerGenerateSeedreamTextImageJob(fs: Engine): void {
       ...(quality !== undefined ? { quality } : {}),
       ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
     });
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "seedream_text_image",
       assetId: imgAssetId,

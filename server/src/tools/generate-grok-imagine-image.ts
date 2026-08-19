@@ -33,7 +33,7 @@ const generateGrokImagineImageSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineImageSchema>;
 
-export function generateGrokImagineImageDef(fs: Engine): ToolDef {
+export function generateGrokImagineImageDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_grok_imagine_image_to_image",
     description: "Generate an image from an image asset using Grok Imagine image-to-image. Creates a new image artifact and enqueues a background job. Requires at least one of asset_id or image_refs.",
@@ -59,13 +59,13 @@ export function generateGrokImagineImageDef(fs: Engine): ToolDef {
         return toolError("asset_id or image_refs with at least one entry is required");
       }
 
-      const sourceArtifact = fs.artifacts.get(asset_id);
+      const sourceArtifact = engine.artifacts.get(asset_id);
       if (!sourceArtifact.ok) return toolError(sourceArtifact.error.message);
       if (sourceArtifact.value.kind !== "image") {
         return toolError(`asset_id must be an image artifact, got ${sourceArtifact.value.kind}: ${asset_id}`);
       }
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return toolError(manifestResult.error.message);
       }
@@ -78,7 +78,7 @@ export function generateGrokImagineImageDef(fs: Engine): ToolDef {
 
       const imagePath = join(manifest.path, imageFile.name);
       const imgName = deriveImageName(asset_id);
-      const assetResult = await fs.artifacts.create("img", imgName);
+      const assetResult = await engine.artifacts.create("img", imgName);
       if (!assetResult.ok) {
         return toolError(`Failed to create image asset: ${assetResult.error.message}`);
       }

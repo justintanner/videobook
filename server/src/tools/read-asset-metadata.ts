@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
-export function readAssetMetadataDef(fs: Engine): ToolDef {
+export function readAssetMetadataDef(engine: Engine): ToolDef {
   return {
     name: "read_asset_metadata",
     description:
@@ -19,7 +19,7 @@ export function readAssetMetadataDef(fs: Engine): ToolDef {
         name: string;
         book_id: string;
       };
-      const result = await fs.metadata.artifacts.read<Record<string, unknown>>(asset_id, name);
+      const result = await engine.metadata.artifacts.read<Record<string, unknown>>(asset_id, name);
       if (!result.ok) {
         return {
           isError: true as const,

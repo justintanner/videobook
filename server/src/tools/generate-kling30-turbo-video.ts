@@ -22,7 +22,7 @@ const generateKling30TurboVideoSchema = {
 
 type Args = SchemaArgs<typeof generateKling30TurboVideoSchema>;
 
-export function generateKling30TurboVideoDef(fs: Engine): ToolDef {
+export function generateKling30TurboVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_kling_3_0_turbo_video",
     description: "Generate a video using Kling 3.0 Turbo tier via KIE (text-to-video or image-to-video). Creates a new video artifact and enqueues a background job.",
@@ -40,7 +40,7 @@ export function generateKling30TurboVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageRef(fs, slug);
+        const r = await resolveImageRef(engine, slug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `image_refs: ${r.error}` }] };
         imageInputs.push(r.value);
       }
@@ -49,7 +49,7 @@ export function generateKling30TurboVideoDef(fs: Engine): ToolDef {
       const model = isI2V ? "kling/v3-turbo-image-to-video" : "kling/v3-turbo-text-to-video";
 
       const videoName = generationLabel(modelSlug("kie", model), prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }

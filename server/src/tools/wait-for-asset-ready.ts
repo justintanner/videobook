@@ -7,7 +7,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function waitForAssetReadyDef(fs: Engine): ToolDef {
+export function waitForAssetReadyDef(engine: Engine): ToolDef {
   return {
     name: "wait_for_asset_ready",
     description:
@@ -32,7 +32,7 @@ export function waitForAssetReadyDef(fs: Engine): ToolDef {
       };
 
       // Verify asset exists
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -50,7 +50,7 @@ export function waitForAssetReadyDef(fs: Engine): ToolDef {
       }
 
       const assetDir = manifestResult.value.path;
-      const reconcileHandler = reconcileProjectWorkDef(fs).handler;
+      const reconcileHandler = reconcileProjectWorkDef(engine).handler;
       const deadline = Date.now() + timeout_seconds * 1000;
       const startTime = Date.now();
       let iterations = 0;
@@ -92,7 +92,7 @@ export function waitForAssetReadyDef(fs: Engine): ToolDef {
           };
         }
 
-        const jobs = fs.jobs.queue.list({
+        const jobs = engine.jobs.queue.list({
           artifactId: asset_id,
           limit: 20,
         });
@@ -123,10 +123,10 @@ export function waitForAssetReadyDef(fs: Engine): ToolDef {
             job.state === "running" ||
             job.state === "completing",
         );
-        const ptRead = await fs.jobs.pending.read(asset_id);
+        const ptRead = await engine.jobs.pending.read(asset_id);
         const pendingTask = ptRead.ok ? ptRead.value : null;
-        const locked = await fs.jobs.locks.isLocked(assetDir);
-        const workRead = await fs.jobs.artifactWork.read(asset_id
+        const locked = await engine.jobs.locks.isLocked(assetDir);
+        const workRead = await engine.jobs.artifactWork.read(asset_id
         );
         const activeWork =
           workRead.ok &&

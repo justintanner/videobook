@@ -17,6 +17,7 @@
     "build:extension": "vite build --config extension/vite.config.ts",
     "build:server": "cd server && tsc && cp -r src/guides dist/guides && cp -R src/remotion/public dist/remotion/",
     "lint": "eslint . --max-warnings 0",
+    "typecheck:test": "tsc -p tsconfig.vitest.json --noEmit && tsc -p tsconfig.v2-test.json --noEmit && tsc -p tsconfig.v2-e2e.json --noEmit && tsc -p server/tsconfig.test.json --noEmit",
     "preview": "vite preview",
     "use": "op run --env-file=.env.tpl -- tsx server/src/cli.ts",
     "check:op": "op run --env-file=.env.tpl -- tsx scripts/check-op.ts",
@@ -64,7 +65,7 @@
     "remotion": "^4.0.467",
     "tailwind-merge": "^3.5.0",
     "uuid": "^14.0.0",
-    "videobook-engine": "file:../videobook-engine"
+    "videobook-engine": "file:vendor/videobook-engine-5.0.0-497f728.tgz"
   },
   "overrides": {
     "@hono/node-server": "^2.0.11",
@@ -104,6 +105,6 @@
   "allowScripts": {
     "@dolthub/doltlite@0.11.37": true,
     "esbuild": true,
-    "file:../videobook-engine": true
+    "file:vendor/videobook-engine-5.0.0-497f728.tgz": true
   }
 }

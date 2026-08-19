@@ -21,7 +21,7 @@ type GenerateGptImagePayload = {
   nsfwChecker?: boolean;
 };
 
-export function registerGenerateGptImageJob(fs: Engine): void {
+export function registerGenerateGptImageJob(engine: Engine): void {
   registerJobHandler("generate_gpt_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
@@ -35,7 +35,7 @@ export function registerGenerateGptImageJob(fs: Engine): void {
       uploadedUrls.push(
         "url" in input
           ? input.url
-          : await uploadAssetToKie(fs, input.assetId, input.filename),
+          : await uploadAssetToKie(engine, input.assetId, input.filename),
       );
     }
     const normalizedPrompt = transformProviderPrompt(
@@ -52,7 +52,7 @@ export function registerGenerateGptImageJob(fs: Engine): void {
       { prompt: normalizedPrompt, aspect_ratio: aspectRatio, resolution, nsfw_checker: nsfwChecker },
       uploadedUrls,
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "gpt_image",
       assetId: imgAssetId,

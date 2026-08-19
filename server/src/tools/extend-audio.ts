@@ -19,7 +19,7 @@ function defaultExtendedName(source: Artifact, targetDurationSeconds: number): s
   return `extended-${base}-${duration}s`;
 }
 
-export function extendAudioDef(fs: Engine): ToolDef {
+export function extendAudioDef(engine: Engine): ToolDef {
   return {
     name: "extend_audio_asset",
     description: "Extend an existing audio asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new audio asset.",
@@ -50,7 +50,7 @@ export function extendAudioDef(fs: Engine): ToolDef {
       }
 
       const sourceAssetId = asset_id.replace(/^@/, "");
-      const sourceArtifact = fs.artifacts.get(sourceAssetId);
+      const sourceArtifact = engine.artifacts.get(sourceAssetId);
       if (!sourceArtifact.ok) return toolError(sourceArtifact.error.message);
       if (sourceArtifact.value.kind !== "audio") {
         return toolError(`extend_audio requires an audio source, got ${sourceArtifact.value.kind} artifact ${sourceAssetId}`);
@@ -61,7 +61,7 @@ export function extendAudioDef(fs: Engine): ToolDef {
         return toolError(`continuation_prompt supports at most ${MAX_CONTINUATION_DIRECTION_CHARS} characters of direction`);
       }
 
-      const manifest = await fs.files.manifest(sourceAssetId);
+      const manifest = await engine.files.manifest(sourceAssetId);
       if (!manifest.ok) return toolError(manifest.error.message);
       const audioFile = findAudioFile(manifest.value.files, sourceArtifact.value.kind);
       if (!audioFile) return toolError(`No audio file found in artifact ${sourceAssetId}`);
@@ -91,7 +91,7 @@ export function extendAudioDef(fs: Engine): ToolDef {
       }
 
       const name = asset_name?.trim() || defaultExtendedName(sourceArtifact.value, target_duration_seconds);
-      const created = await fs.artifacts.create("audio", name);
+      const created = await engine.artifacts.create("audio", name);
       if (!created.ok) return toolError(`Failed to create audio asset: ${created.error.message}`);
 
       const jobId = `extend-audio-${created.value.artifactId}-${Date.now()}`;

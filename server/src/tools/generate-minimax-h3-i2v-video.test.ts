@@ -1,4 +1,4 @@
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { isUuidV7 } from "videobook-engine";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";

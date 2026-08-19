@@ -180,7 +180,7 @@ function formatTldrMarkdown(r: DescribeImageResult): string {
   return `${r.prompt.trim()}\n`;
 }
 
-export function registerRewriteScriptJob(fs: Engine): void {
+export function registerRewriteScriptJob(engine: Engine): void {
   registerJobHandler("rewrite_script", async (payload, ctx) => {
     const {
       assetId: scriptAssetId,
@@ -190,10 +190,10 @@ export function registerRewriteScriptJob(fs: Engine): void {
       customPrompt,
     } = payload as RewriteScriptPayload;
 
-    return withLocalLease(fs, scriptAssetId, ctx, "rewrite_script", async () => {
+    return withLocalLease(engine, scriptAssetId, ctx, "rewrite_script", async () => {
       const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"));
 
-      const readResult = await fs.files.read(scriptAssetId, SCRIPT_FILENAME);
+      const readResult = await engine.files.read(scriptAssetId, SCRIPT_FILENAME);
       if (!readResult.ok) {
         throw new Error(`Failed to read ${SCRIPT_FILENAME} from ${scriptAssetId}: ${readResult.error.message}`);
       }
@@ -210,12 +210,12 @@ export function registerRewriteScriptJob(fs: Engine): void {
       }, ctx.signal);
 
       const markdown = tldr ? formatTldrMarkdown(rewritten) : formatMarkdown(rewritten);
-      const writeResult = await fs.files.write(scriptAssetId, SCRIPT_FILENAME, markdown);
+      const writeResult = await engine.files.write(scriptAssetId, SCRIPT_FILENAME, markdown);
       if (!writeResult.ok) {
         throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
       }
 
-      await fs.metadata.artifacts.write(scriptAssetId, "original", {
+      await engine.metadata.artifacts.write(scriptAssetId, "original", {
           origin: "describe_image",
           sourceAssetId,
           model: INTELLIGENCE_MODEL,

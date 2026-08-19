@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";

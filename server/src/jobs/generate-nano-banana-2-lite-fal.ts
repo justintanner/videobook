@@ -21,11 +21,11 @@ type Payload = {
   seed?: number;
 };
 
-export function registerGenerateNanoBanana2LiteFalJob(fs: Engine): void {
+export function registerGenerateNanoBanana2LiteFalJob(engine: Engine): void {
   registerJobHandler("generate_nano_banana_2_lite_fal", async (payload, ctx) => {
     requireApiKey("FAL_API_KEY");
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(engine, p.imgAssetId, ctx, "generate", async (ownerId) => {
 
       const input: FalInput = {
         prompt: p.prompt,
@@ -38,7 +38,7 @@ export function registerGenerateNanoBanana2LiteFalJob(fs: Engine): void {
       };
 
       const taskId = await submitFalJob({
-        fs,
+        engine,
         bookId: p.bookId,
         assetId: p.imgAssetId,
         assetDir: p.imgAssetDir,

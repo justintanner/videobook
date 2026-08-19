@@ -31,8 +31,8 @@ describe("archive clip job helpers", () => {
     const snapshot = __archiveClipJobTest.buildAssetSnapshot({
       path: "/projects/demo/vid-demo",
       files: [
-        { name: ".original.json", size_bytes: 1, extension: "json", objectHash: "a".repeat(64) },
-        { name: "original.mp4", size_bytes: 2, extension: "mp4", objectHash: "b".repeat(64) },
+        { name: ".original.json", sizeBytes: 1, extension: "json", objectHash: "a".repeat(64) },
+        { name: "original.mp4", sizeBytes: 2, extension: "mp4", objectHash: "b".repeat(64) },
       ],
       directories: {
         original_frames: ["000001.jpg", ".frames.json"],

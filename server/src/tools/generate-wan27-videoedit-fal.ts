@@ -28,7 +28,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateWan27VideoeditFalDef(fs: Engine): ToolDef {
+export function generateWan27VideoeditFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_wan_2_7_edit_video",
     description: "Edit a video via fal.ai using Alibaba Wan v2.7 Edit-Video, optionally guided by a reference image. Creates a new video artifact and enqueues a background job.",
@@ -46,12 +46,12 @@ export function generateWan27VideoeditFalDef(fs: Engine): ToolDef {
       }
 
       const sourceVideoAssetId = video_ref.replace(/^@/, "");
-      const sourceVideoArtifact = fs.artifacts.get(sourceVideoAssetId);
+      const sourceVideoArtifact = engine.artifacts.get(sourceVideoAssetId);
       if (!sourceVideoArtifact.ok) return { isError: true as const, content: [{ type: "text" as const, text: sourceVideoArtifact.error.message }] };
       if (sourceVideoArtifact.value.kind !== "video") {
         return { isError: true as const, content: [{ type: "text" as const, text: `video_ref must be a video artifact, got ${sourceVideoArtifact.value.kind}: ${sourceVideoAssetId}` }] };
       }
-      const manifest = await fs.files.manifest(sourceVideoAssetId);
+      const manifest = await engine.files.manifest(sourceVideoAssetId);
       if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
       const sourceVideoFile = findVideoFile(manifest.value.files);
       if (!sourceVideoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${sourceVideoAssetId}` }] };
@@ -59,13 +59,13 @@ export function generateWan27VideoeditFalDef(fs: Engine): ToolDef {
       let refImage: ImageInput | undefined;
       let refImageAssetId: string | undefined;
       if (image_ref) {
-        const resolved = await resolveImageRefs(fs, [image_ref]);
+        const resolved = await resolveImageRefs(engine, [image_ref]);
         if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
         refImage = resolved.inputs[0];
         refImageAssetId = resolved.sourceImageIds[0];
       }
 
-      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "wan/2-7-videoedit"), prompt));
+      const assetResult = await engine.artifacts.create("vid", generationLabel(modelSlug("kie", "wan/2-7-videoedit"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

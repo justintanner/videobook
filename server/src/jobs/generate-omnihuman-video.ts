@@ -30,7 +30,7 @@ type GenerateOmnihumanVideoPayload = {
   seed?: number;
 };
 
-export function registerGenerateOmnihumanVideoJob(fs: Engine): void {
+export function registerGenerateOmnihumanVideoJob(engine: Engine): void {
   registerJobHandler("generate_omnihuman_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId,
@@ -40,8 +40,8 @@ export function registerGenerateOmnihumanVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const imageUrl = await uploadAssetToKie(fs, imageInput.assetId, imageInput.filename);
-    const audioUrl = await uploadAssetToKie(fs, audioInput.assetId, audioInput.filename);
+    const imageUrl = await uploadAssetToKie(engine, imageInput.assetId, imageInput.filename);
+    const audioUrl = await uploadAssetToKie(engine, audioInput.assetId, audioInput.filename);
 
     const request = buildOmnihumanPayload(
       { prompt, output_resolution, pe_fast_mode, seed },
@@ -50,14 +50,14 @@ export function registerGenerateOmnihumanVideoJob(fs: Engine): void {
 
     // omnihuman-1-5 bills per second of driving audio; schema has no duration.
     // Pass measured audio length as a cost-only hint (see KieCostHints).
-    const audioMeta = await fs.metadata.artifacts.read<{ duration?: number }>(audioInput.assetId, "original"
+    const audioMeta = await engine.metadata.artifacts.read<{ duration?: number }>(audioInput.assetId, "original"
     );
     const durationHint =
       audioMeta.ok && typeof audioMeta.value?.duration === "number" && audioMeta.value.duration > 0
         ? audioMeta.value.duration
         : 5;
 
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: OMNIHUMAN_TASK_TYPE,
       assetId: vidAssetId,

@@ -18,7 +18,7 @@ type GenerateGrokImagineT2vVideoPayload = {
   nsfw_checker?: boolean;
 };
 
-export function registerGenerateGrokImagineT2vVideoJob(fs: Engine): void {
+export function registerGenerateGrokImagineT2vVideoJob(engine: Engine): void {
   registerJobHandler("generate_grok_imagine_t2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId, prompt,
@@ -30,7 +30,7 @@ export function registerGenerateGrokImagineT2vVideoJob(fs: Engine): void {
     const request = buildGrokImagineT2vVideoPayload({
       prompt, mode, duration, resolution, aspect_ratio, nsfw_checker,
     });
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "grok_imagine_t2v_video",
       assetId: vidAssetId,

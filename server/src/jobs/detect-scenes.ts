@@ -12,12 +12,12 @@ type DetectScenesPayload = {
   bookId: string;
 };
 
-export function registerDetectScenesJob(fs: Engine): void {
+export function registerDetectScenesJob(engine: Engine): void {
   registerJobHandler("detect_scenes", async (payload, ctx) => {
     const { assetId } = payload as DetectScenesPayload;
 
-    return withLocalLease(fs, assetId, ctx, "analyze", async () => {
-      const manifestResult = await fs.files.manifest(assetId);
+    return withLocalLease(engine, assetId, ctx, "analyze", async () => {
+      const manifestResult = await engine.files.manifest(assetId);
       if (!manifestResult.ok) throw new Error(manifestResult.error.message);
 
       const videoFile = findVideoFile(manifestResult.value.files);
@@ -35,7 +35,7 @@ export function registerDetectScenesJob(fs: Engine): void {
         candidates,
       };
 
-      const writeResult = await fs.files.write(assetId, ".detect-scenes.json", JSON.stringify(final, null, 2)
+      const writeResult = await engine.files.write(assetId, ".detect-scenes.json", JSON.stringify(final, null, 2)
       );
       if (!writeResult.ok) {
         throw new Error(`Scenes detected but failed to persist: ${writeResult.error.message}`);

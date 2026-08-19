@@ -57,7 +57,7 @@ function buildFilterGraph(keeps: Array<[number, number]>, hasAudio: boolean): st
   return parts.join(";");
 }
 
-export function registerApplyCutsJob(fs: Engine): void {
+export function registerApplyCutsJob(engine: Engine): void {
   registerJobHandler("apply_cuts", async (payload, ctx) => {
     const {
       inputPath, outputPath, cuts, duration, hasAudio,
@@ -65,7 +65,7 @@ export function registerApplyCutsJob(fs: Engine): void {
     } = payload as ApplyCutsPayload;
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -92,14 +92,14 @@ export function registerApplyCutsJob(fs: Engine): void {
 
       const inputFilename = basename(inputPath);
       await replaceArtifactFileFromPath(
-        fs,
+        engine,
         assetId,
         inputFilename,
         outputPath,
       );
 
       for (const stale of STALE_DERIVATIVES) {
-        await fs.files.delete(assetId, stale);
+        await engine.files.delete(assetId, stale);
       }
 
       const newVideoPath = join(assetDir, inputFilename);

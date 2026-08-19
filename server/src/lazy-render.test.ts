@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Engine } from "videobook-engine";
-import { closeEngineForTest, createEngineForTest } from "./fs.js";
+import { closeEngineForTest, createEngineForTest } from "./engine.js";
 import { enqueueLazyAnalysisIfSlotted, enqueueLazyTimelineRender } from "./lazy-render.js";
 import { queue } from "./queue.js";
 import { writeTimeline, type TimelineRender } from "./timeline-helpers.js";

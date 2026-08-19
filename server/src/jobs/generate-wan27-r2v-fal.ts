@@ -28,18 +28,18 @@ type Payload = {
   seed?: number;
 };
 
-export function registerGenerateWan27R2vFalJob(fs: Engine): void {
+export function registerGenerateWan27R2vFalJob(engine: Engine): void {
   registerJobHandler("generate_wan27_r2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(engine, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
       const reference_image_urls: string[] = [];
       for (const img of p.imageInputs) {
-        reference_image_urls.push(await uploadAssetToFal(fs, img.assetId, img.filename));
+        reference_image_urls.push(await uploadAssetToFal(engine, img.assetId, img.filename));
       }
       const reference_video_urls: string[] = [];
       for (const vid of p.videoInputs) {
-        reference_video_urls.push(await uploadAssetToFal(fs, vid.assetId, vid.filename));
+        reference_video_urls.push(await uploadAssetToFal(engine, vid.assetId, vid.filename));
       }
   
       const input: FalInput = {
@@ -56,7 +56,7 @@ export function registerGenerateWan27R2vFalJob(fs: Engine): void {
       };
   
       const taskId = await submitFalJob({
-        fs,
+        engine,
         bookId: p.bookId,
         assetId: p.vidAssetId,
         assetDir: p.vidAssetDir,

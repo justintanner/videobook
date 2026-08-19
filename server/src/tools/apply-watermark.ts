@@ -48,8 +48,8 @@ function uniformPositions(position: OsgPosition): Record<Orientation, OsgPositio
 }
 
 /** Coarse fallback: the corner analyze-video recommended for this clip. */
-async function readRecommendedOsgPosition(fs: Engine, assetId: string): Promise<OsgPosition | null> {
-  const result = await fs.files.read(assetId, ".original.analysis.json");
+async function readRecommendedOsgPosition(engine: Engine, assetId: string): Promise<OsgPosition | null> {
+  const result = await engine.files.read(assetId, ".original.analysis.json");
   if (!result.ok) return null;
   try {
     const raw = typeof result.value === "string"
@@ -65,7 +65,7 @@ async function readRecommendedOsgPosition(fs: Engine, assetId: string): Promise<
   }
 }
 
-export function applyWatermarkDef(fs: Engine): ToolDef {
+export function applyWatermarkDef(engine: Engine): ToolDef {
   return {
     name: "apply_watermark",
     description:
@@ -123,10 +123,10 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
         mode?: "burn" | "overlay";
       };
 
-      const kindGate = await requireArtifactKind(fs, asset_id, ["video"], "apply_watermark");
+      const kindGate = await requireArtifactKind(engine, asset_id, ["video"], "apply_watermark");
       if (kindGate) return kindGate;
 
-      const config = await readWatermarkConfig(fs);
+      const config = await readWatermarkConfig(engine);
       const resolvedHandle = (handle ?? config.savedHandle ?? config.authenticatedHandle ?? DEFAULT_HANDLE)
         .replace(/^@/, "")
         .trim();
@@ -141,15 +141,15 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
       // Badge: explicit card wins, then an existing matching badge, then a fresh one.
       let cardAssetId: string;
       if (card_asset_id) {
-        const cardGate = await requireArtifactKind(fs, card_asset_id, ["image"], "card_asset_id");
+        const cardGate = await requireArtifactKind(engine, card_asset_id, ["image"], "card_asset_id");
         if (cardGate) return cardGate;
         cardAssetId = card_asset_id;
       } else {
-        const existing = await findWatermarkAsset(fs, resolvedHandle, resolvedUrl);
+        const existing = await findWatermarkAsset(engine, resolvedHandle, resolvedUrl);
         if (existing) {
           cardAssetId = existing;
         } else {
-          const created = await createWatermarkAsset(fs, resolvedHandle, resolvedUrl);
+          const created = await createWatermarkAsset(engine, resolvedHandle, resolvedUrl);
           if (!created.ok) {
             return {
               isError: true as const,
@@ -162,7 +162,7 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
 
       // Frame-aware corner pick. Never fail the tool on placement problems —
       // degrade: vision job → analyze-video recommendation → bottom-right.
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -177,7 +177,7 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
         };
       }
 
-      const framesResult = await fs.files.listSubdir(asset_id, "original_frames");
+      const framesResult = await engine.files.listSubdir(asset_id, "original_frames");
       const frameNames = framesResult.ok
         ? sampleEvenly(
             framesResult.value.filter((f) => f.endsWith(".jpg")).sort((a, b) => parseFloat(a) - parseFloat(b)),
@@ -194,13 +194,13 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
       let placementSource: WatermarkPlacementSource = "default";
       let jobId: string | undefined;
 
-      const cached = await readOsgPlacementAnalysis(fs, asset_id);
+      const cached = await readOsgPlacementAnalysis(engine, asset_id);
       if (cached && cached.fingerprint === fingerprint) {
         analysis = cached;
         placementSource = "cached";
       } else if (getApiKey("OPENAI_API_KEY") && frameNames.length > 0) {
         try {
-          await fs.jobs.failures.clear(asset_id);
+          await engine.jobs.failures.clear(asset_id);
           jobId = `osg-placement-${asset_id}-${Date.now()}`;
           const result = await queue.enqueueAndWait<OsgPlacementResult>(jobId, {
             type: "osg_placement",
@@ -216,7 +216,7 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
           console.warn(`[apply_watermark] placement job failed for ${asset_id}, falling back:`, err instanceof Error ? err.message : err);
         }
       }
-      const recommended = analysis ? null : await readRecommendedOsgPosition(fs, asset_id);
+      const recommended = analysis ? null : await readRecommendedOsgPosition(engine, asset_id);
       if (!analysis && recommended) placementSource = "analysis";
 
       const summary = {
@@ -233,7 +233,7 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
         const positions: Record<Orientation, OsgPosition> = analysis
           ? analysis.positions
           : uniformPositions(recommended ?? DEFAULT_POSITION);
-        const written = await writeOsgSettings(fs, asset_id, (orientation) => ({
+        const written = await writeOsgSettings(engine, asset_id, (orientation) => ({
           osgImagePath: null,
           osgAssetId: cardAssetId,
           osgPosition: positions[orientation],
@@ -250,7 +250,7 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
             content: [{ type: "text" as const, text: written.error }],
           };
         }
-        await recordHandle(resolvedHandle, { saveDefault: save_default }, fs).catch(() => undefined);
+        await recordHandle(resolvedHandle, { saveDefault: save_default }, engine).catch(() => undefined);
         return {
           content: [{
             type: "text" as const,
@@ -266,7 +266,7 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
 
       // Burn mode: composite the badge into the source video so the change is
       // visible in the notebook cell (renders and proxies both inherit it).
-      const badge = await resolveOsgImagePath(fs, cardAssetId);
+      const badge = await resolveOsgImagePath(engine, cardAssetId);
       if (!badge.ok) {
         return {
           isError: true as const,
@@ -292,7 +292,7 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
       }
 
       try {
-        await fs.jobs.failures.clear(asset_id);
+        await engine.jobs.failures.clear(asset_id);
         const burnJobId = `burn-watermark-${asset_id}-${Date.now()}`;
         await queue.enqueueAndWait(burnJobId, {
           type: "burn_watermark",
@@ -305,7 +305,7 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
           opacity,
           userScale: scale,
         }, BURN_TIMEOUT_MS);
-        const readiness = await waitForAssetReadyDef(fs).handler({
+        const readiness = await waitForAssetReadyDef(engine).handler({
           asset_id,
           book_id,
           timeout_seconds: 300,
@@ -323,7 +323,7 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
 
       // The badge now lives in the pixels; clear any stored render-time overlay
       // so a later render can't stamp it twice.
-      await writeOsgSettings(fs, asset_id, () => ({
+      await writeOsgSettings(engine, asset_id, () => ({
         osgImagePath: null,
         osgAssetId: null,
         osgOpacity: 1,
@@ -332,7 +332,7 @@ export function applyWatermarkDef(fs: Engine): ToolDef {
         osgTailSeconds: null,
       })).catch(() => undefined);
 
-      await recordHandle(resolvedHandle, { saveDefault: save_default }, fs).catch(() => undefined);
+      await recordHandle(resolvedHandle, { saveDefault: save_default }, engine).catch(() => undefined);
 
       return {
         content: [{

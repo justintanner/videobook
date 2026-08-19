@@ -22,7 +22,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateKlingV3StandardT2vFalDef(fs: Engine): ToolDef {
+export function generateKlingV3StandardT2vFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_kling_video_v3_standard_text_to_video",
     description: "Generate a video via fal.ai using Kling Video v3 Standard from a text prompt. Creates a new video artifact and enqueues a background job.",
@@ -34,7 +34,7 @@ export function generateKlingV3StandardT2vFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "kling-3.0/video/std"), prompt));
+      const assetResult = await engine.artifacts.create("vid", generationLabel(modelSlug("kie", "kling-3.0/video/std"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

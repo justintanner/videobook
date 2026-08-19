@@ -1,6 +1,5 @@
 import type { NotebookCell, NotebookDocument } from 'videobook-engine'
 import { notebookCellTag } from './notebook-addressing'
-import { nextNotebookHorizontalGenerationSlot } from './notebook-grid'
 import { resolveNotebookVideoSourceCell } from './notebook-video-source'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
@@ -30,10 +29,15 @@ function matchingAction(
 ): NotebookCell | null {
   const actionIds = new Set(document.edges
     .filter((edge) =>
-      edge.source === sourceCellId && edge.targetInput === 'video')
+      edge.source === sourceCellId
+      && (edge.targetInput === 'video' || edge.targetInput === 'segment'))
     .map((edge) => edge.target))
   return document.cells.find((cell) =>
-    cell.type === 'extract_audio' && actionIds.has(cell.id)) ?? null
+    actionIds.has(cell.id)
+    && (
+      cell.type === 'extract_audio'
+      || cell.inputs?.mediaRole === 'extract-audio-output'
+    )) ?? null
 }
 
 export async function enqueueNotebookAudioCommand(input: {
@@ -52,48 +56,33 @@ export async function enqueueNotebookAudioCommand(input: {
   let actionCellId = existing?.id ?? null
   let actionAddress = existing ? notebookCellTag(existing) : null
 
-  if (!actionCellId || !actionAddress) {
-    const created = recordValue(await input.callTool('create_notebook_cell', {
-      book_id: input.bookId,
-      notebook_id: input.document.id,
-      ...(input.expectedRevision
-        ? { expected_revision: input.expectedRevision }
-        : {}),
-      cell: {
-        type: 'extract_audio',
-        label: 'Extract audio',
-        slot: nextNotebookHorizontalGenerationSlot(
-          input.document.cells,
-          [source.slot],
-        ),
-      },
-    }))
-    actionCellId = nonBlankStringValue(created?.id)
-    actionAddress = nonBlankStringValue(created?.address)
-    if (!actionCellId || !actionAddress) {
-      throw new Error('The server did not return the Extract Audio cell')
+  if (existing && actionCellId && actionAddress) {
+    return {
+      actionCellId,
+      actionAddress,
+      outputCellId: actionCellId,
+      jobId: existing.outputArtifactId ? 'reused' : '',
+      runId: existing.outputArtifactId ? 'reused' : '',
+      reusedAction: true,
+      sourceCellId: source.id,
+      sourceAddress: notebookCellTag(source),
     }
-    await input.callTool('set_notebook_cell_input', {
-      book_id: input.bookId,
-      notebook_id: input.document.id,
-      target_cell_id: actionCellId,
-      target_input: 'video',
-      source_cell_id: source.id,
-    })
   }
 
-  const accepted = recordValue(await input.callTool('run_notebook_cell', {
+  const accepted = recordValue(await input.callTool('extract_notebook_audio', {
     book_id: input.bookId,
     notebook_id: input.document.id,
-    cell_id: actionCellId,
-    actor: input.actor,
-    ...(existing && input.expectedRevision
+    source_cell_id: source.id,
+    label: 'Extract audio',
+    ...(input.expectedRevision
       ? { expected_revision: input.expectedRevision }
       : {}),
   }))
+  actionCellId = nonBlankStringValue(accepted?.cell_id)
+  actionAddress = nonBlankStringValue(accepted?.address)
   const jobId = nonBlankStringValue(accepted?.job_id)
   const runId = nonBlankStringValue(accepted?.run_id)
-  if (!jobId || !runId) {
+  if (!actionCellId || !actionAddress || !jobId || !runId) {
     throw new Error('The server did not return an Extract Audio run')
   }
   return {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
 import type { Engine } from "videobook-engine";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
 import { createQrOutroDef } from "./create-qr-outro.js";
 

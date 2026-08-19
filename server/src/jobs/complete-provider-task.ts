@@ -119,7 +119,7 @@ type CompleteProviderTaskPayload = {
   resultObject?: Record<string, unknown>;
 };
 
-export function registerCompleteProviderTaskJob(fs: Engine): void {
+export function registerCompleteProviderTaskJob(engine: Engine): void {
   registerJobHandler("complete_kie_task", async (payload, ctx) => {
     const {
       taskId, taskType, assetId, bookId, meta,
@@ -129,7 +129,7 @@ export function registerCompleteProviderTaskJob(fs: Engine): void {
     // Pattern C: inherit the provider lease via getOwner, abort if the row
     // already terminated, and register the lease so the wrapper's catch path
     // CAS-fails by task_id (unaffected by a fresh retry on the same asset).
-    const ownerId = await fs.jobs.pending.getOwner(assetId, taskId);
+    const ownerId = await engine.jobs.pending.getOwner(assetId, taskId);
     if (!ownerId) {
       // The row was already removed by a fail/delete or a stale duplicate
       // dispatch. Either way the task is no longer ours to complete.
@@ -143,15 +143,15 @@ export function registerCompleteProviderTaskJob(fs: Engine): void {
     }
 
     // Resolve the asset directory at runtime so renames don't break completion.
-    const assetDirResult = await fs.workspaces.resolveArtifact(assetId);
+    const assetDirResult = await engine.workspaces.resolveArtifact(assetId);
     if (!assetDirResult.ok) {
-      await fs.jobs.pending.delete(assetId, taskId);
+      await engine.jobs.pending.delete(assetId, taskId);
       return { success: true, skipped: true };
     }
     const assetDir = assetDirResult.value;
 
     const lockState = taskType === "isolate_vocals" ? "isolating" : "generating";
-    const lockResult = await fs.jobs.locks.acquire(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: lockState } });
+    const lockResult = await engine.jobs.locks.acquire(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: lockState } });
     if (!lockResult.ok) {
       // LOCKED means another completion job for this same asset is already
       // running (sync can enqueue duplicates between polls because
@@ -166,7 +166,7 @@ export function registerCompleteProviderTaskJob(fs: Engine): void {
     // Renew the provider lease while we work — covers downloads + processing.
     const heartbeat = setInterval(() => {
       try {
-        fs.jobs.artifactWork.renew(assetId, ownerId, 60_000);
+        engine.jobs.artifactWork.renew(assetId, ownerId, 60_000);
       } catch (error) {
         console.warn(`[heartbeat] renew failed for ${assetId}:`, error);
       }
@@ -179,14 +179,14 @@ export function registerCompleteProviderTaskJob(fs: Engine): void {
     try {
       switch (completionFamily) {
         case "nanoBananaImage":
-          await completeNanoBananaImage(fs, assetId, bookId, meta, urls, taskType);
+          await completeNanoBananaImage(engine, assetId, bookId, meta, urls, taskType);
           break;
         case "qwenImage":
-          await completeQwen2ImageEdit(fs, assetId, bookId, meta, urls, taskType);
+          await completeQwen2ImageEdit(engine, assetId, bookId, meta, urls, taskType);
           break;
         case "seedreamImage":
           await completeSeedreamImage(
-            fs,
+            engine,
             assetId,
             bookId,
             meta,
@@ -195,14 +195,14 @@ export function registerCompleteProviderTaskJob(fs: Engine): void {
           );
           break;
         case "seedreamV5Image":
-          await completeSeedreamV5LiteImage(fs, assetId, bookId, meta, urls, taskType);
+          await completeSeedreamV5LiteImage(engine, assetId, bookId, meta, urls, taskType);
           break;
         case "klingVideo":
-          await completeKling30Video(fs, assetId, assetDir, bookId, meta, urls, taskType);
+          await completeKling30Video(engine, assetId, assetDir, bookId, meta, urls, taskType);
           break;
         case "providerVideo":
           await completeProviderVideo(
-            fs,
+            engine,
             assetId,
             assetDir,
             bookId,
@@ -212,22 +212,22 @@ export function registerCompleteProviderTaskJob(fs: Engine): void {
           );
           break;
         case "grokVideo":
-          await completeGrokImagineVideo(fs, assetId, assetDir, bookId, meta, urls, taskType, taskId);
+          await completeGrokImagineVideo(engine, assetId, assetDir, bookId, meta, urls, taskType, taskId);
           break;
         case "wanVideo":
-          await completeWan27Video(fs, assetId, assetDir, bookId, meta, urls, taskId);
+          await completeWan27Video(engine, assetId, assetDir, bookId, meta, urls, taskId);
           break;
         case "happyHorseVideo":
-          await completeHappyHorseVideo(fs, assetId, assetDir, bookId, meta, urls, taskType, taskId);
+          await completeHappyHorseVideo(engine, assetId, assetDir, bookId, meta, urls, taskType, taskId);
           break;
         case "miniMaxVideo":
-          await completeMiniMaxH3Video(fs, assetId, assetDir, bookId, meta, urls, taskType, taskId);
+          await completeMiniMaxH3Video(engine, assetId, assetDir, bookId, meta, urls, taskType, taskId);
           break;
         case "lipSyncVideo":
-          await completeVolcengineLipSyncVideo(fs, assetId, assetDir, bookId, meta, urls, taskId);
+          await completeVolcengineLipSyncVideo(engine, assetId, assetDir, bookId, meta, urls, taskId);
           break;
         case "omnihumanVideo":
-          await completeOmnihumanVideo(fs, assetId, assetDir, bookId, meta, urls, taskId);
+          await completeOmnihumanVideo(engine, assetId, assetDir, bookId, meta, urls, taskId);
           break;
         case "wanImage": {
           const variant = taskType === "wan27_image_pro"
@@ -235,15 +235,15 @@ export function registerCompleteProviderTaskJob(fs: Engine): void {
             || taskType === "fal_wan27_pro_edit"
             ? "wan27_image_pro"
             : "wan27_image";
-          await completeWan27Image(fs, assetId, bookId, meta, urls, variant);
+          await completeWan27Image(engine, assetId, bookId, meta, urls, variant);
           break;
         }
         case "alibabaVideo":
-          await completeAlibabaVideo(fs, assetId, assetDir, bookId, meta, urls, taskId);
+          await completeAlibabaVideo(engine, assetId, assetDir, bookId, meta, urls, taskId);
           break;
         case "alibabaImage":
           await completeAlibabaImage(
-            fs,
+            engine,
             assetId,
             bookId,
             meta,
@@ -253,7 +253,7 @@ export function registerCompleteProviderTaskJob(fs: Engine): void {
           break;
         case "alibabaQwenImage":
           await completeAlibabaQwenImage(
-            fs,
+            engine,
             assetId,
             bookId,
             meta,
@@ -262,11 +262,11 @@ export function registerCompleteProviderTaskJob(fs: Engine): void {
           );
           break;
         case "grokImage":
-          await completeGrokImagineImage(fs, assetId, bookId, meta, urls);
+          await completeGrokImagineImage(engine, assetId, bookId, meta, urls);
           break;
         case "gptImage":
           await completeGptImage(
-            fs,
+            engine,
             assetId,
             bookId,
             meta,
@@ -275,7 +275,7 @@ export function registerCompleteProviderTaskJob(fs: Engine): void {
           );
           break;
         case "isolateVocals":
-          await completeIsolateVocals(fs, assetId, meta, urls);
+          await completeIsolateVocals(engine, assetId, meta, urls);
           break;
         default: {
           const unhandledFamily: never = completionFamily;
@@ -283,11 +283,11 @@ export function registerCompleteProviderTaskJob(fs: Engine): void {
         }
       }
 
-      await fs.jobs.pending.delete(assetId, taskId);
+      await engine.jobs.pending.delete(assetId, taskId);
       return { success: true };
     } finally {
       clearInterval(heartbeat);
-      await fs.jobs.locks.release(assetDir);
+      await engine.jobs.locks.release(assetDir);
     }
   });
 }
@@ -317,7 +317,7 @@ function extractFalUrls(taskType: string, resultObject?: Record<string, unknown>
 }
 
 async function completeSeedreamImage(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   bookId: string,
   meta: Record<string, unknown>,
@@ -327,7 +327,7 @@ async function completeSeedreamImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(engine, imageUrl, assetId, "original.png", { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -353,7 +353,7 @@ async function completeSeedreamImage(
 }
 
 async function completeSeedreamV5LiteImage(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   bookId: string,
   meta: Record<string, unknown>,
@@ -363,7 +363,7 @@ async function completeSeedreamV5LiteImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(engine, imageUrl, assetId, "original.png", { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -386,7 +386,7 @@ async function completeSeedreamV5LiteImage(
 }
 
 async function completeNanoBananaImage(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   bookId: string,
   meta: Record<string, unknown>,
@@ -397,7 +397,7 @@ async function completeNanoBananaImage(
   if (!imageUrl) throw new Error("No image URL in result");
 
   const ext = (meta.outputFormat as string) ?? "png";
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(engine, imageUrl, assetId, `original.${ext}`, { kind: "image" });
 
   let model = "nano-banana-pro";
   if (taskType.includes("banana_2_lite")) {
@@ -432,7 +432,7 @@ async function completeNanoBananaImage(
 }
 
 async function completeWan27Image(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   bookId: string,
   meta: Record<string, unknown>,
@@ -442,7 +442,7 @@ async function completeWan27Image(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(engine, imageUrl, assetId, "original.png", { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -466,7 +466,7 @@ async function completeWan27Image(
 }
 
 async function completeQwen2ImageEdit(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   bookId: string,
   meta: Record<string, unknown>,
@@ -477,7 +477,7 @@ async function completeQwen2ImageEdit(
   if (!imageUrl) throw new Error("No image URL in result");
 
   const ext = (meta.outputFormat as string) ?? "png";
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(engine, imageUrl, assetId, `original.${ext}`, { kind: "image" });
 
   const model =
     taskType === "fal_qwen_image" ? "qwen2/text-to-image" : "qwen2/image-edit";
@@ -504,7 +504,7 @@ async function completeQwen2ImageEdit(
 }
 
 async function completeKling30Video(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   assetDir: string,
   bookId: string,
@@ -515,7 +515,7 @@ async function completeKling30Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(engine, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   const provenance = {
     source_assets: meta.sourceImageIds,
@@ -545,7 +545,7 @@ async function completeKling30Video(
 }
 
 async function completeProviderVideo(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   assetDir: string,
   bookId: string,
@@ -558,14 +558,14 @@ async function completeProviderVideo(
 
   const outputFormat = meta.output_format === "mov" ? "mov" : "mp4";
   const originalFilename = `original.${outputFormat}`;
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, originalFilename, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(engine, videoUrl, assetId, originalFilename, { kind: "video" });
 
   // Optionally save the returned last frame as a secondary image file
   if (meta.return_last_frame === true && resultUrls[1]) {
     const frameResponse = await fetch(resultUrls[1]);
     if (frameResponse.ok) {
       const frameBuffer = Buffer.from(await frameResponse.arrayBuffer());
-      await fs.files.write(assetId, "last_frame.png", frameBuffer);
+      await engine.files.write(assetId, "last_frame.png", frameBuffer);
     }
   }
 
@@ -585,7 +585,7 @@ async function completeProviderVideo(
   const videoPath = join(assetDir, originalFilename);
 
   if (kieTaskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId: kieTaskId });
+    await engine.metadata.artifacts.write(assetId, "kie-task-id", { taskId: kieTaskId });
   }
 
   // When the caller asked us to splice a specific audio over the seedance
@@ -596,7 +596,7 @@ async function completeProviderVideo(
   // VIDEO and seedance completion can no longer drop the audio replacement.
   const replaceAudioWith = meta.replaceAudioWith as { assetId: string; filename: string } | undefined;
   if (replaceAudioWith) {
-    const audioManifest = await fs.files.manifest(replaceAudioWith.assetId);
+    const audioManifest = await engine.files.manifest(replaceAudioWith.assetId);
     if (!audioManifest.ok) {
       throw new Error(`replaceAudioWith asset not found: ${audioManifest.error.message}`);
     }
@@ -628,7 +628,7 @@ async function completeProviderVideo(
 }
 
 async function completeWan27Video(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   assetDir: string,
   bookId: string,
@@ -639,7 +639,7 @@ async function completeWan27Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(engine, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   const wan27Model =
     meta.mode === "reference" ? "wan/2-7-r2v"
@@ -660,7 +660,7 @@ async function completeWan27Video(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
+    await engine.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -675,7 +675,7 @@ async function completeWan27Video(
 }
 
 async function completeVolcengineLipSyncVideo(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   assetDir: string,
   bookId: string,
@@ -686,7 +686,7 @@ async function completeVolcengineLipSyncVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(engine, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   const provenance = {
     source_images: meta.sourceImageIds,
@@ -701,7 +701,7 @@ async function completeVolcengineLipSyncVideo(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
+    await engine.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -716,7 +716,7 @@ async function completeVolcengineLipSyncVideo(
 }
 
 async function completeOmnihumanVideo(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   assetDir: string,
   bookId: string,
@@ -727,7 +727,7 @@ async function completeOmnihumanVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(engine, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   const provenance = {
     source_images: meta.sourceImageIds,
@@ -743,7 +743,7 @@ async function completeOmnihumanVideo(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
+    await engine.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -758,7 +758,7 @@ async function completeOmnihumanVideo(
 }
 
 async function completeGrokImagineVideo(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   assetDir: string,
   bookId: string,
@@ -770,7 +770,7 @@ async function completeGrokImagineVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(engine, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   const provenance = {
     source_asset: meta.sourceVideoId ?? meta.sourceImageId,
@@ -796,12 +796,12 @@ async function completeGrokImagineVideo(
 
   // Persist Kie taskId for future extend operations
   if (taskId !== undefined && !taskType.startsWith("xai_")) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
+    await engine.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
   }
 
   const replaceAudioWith = meta.replaceAudioWith as { assetId: string; filename: string } | undefined;
   if (replaceAudioWith) {
-    const audioManifest = await fs.files.manifest(replaceAudioWith.assetId);
+    const audioManifest = await engine.files.manifest(replaceAudioWith.assetId);
     if (!audioManifest.ok) {
       throw new Error(`replaceAudioWith asset not found: ${audioManifest.error.message}`);
     }
@@ -833,7 +833,7 @@ async function completeGrokImagineVideo(
 }
 
 async function completeGrokImagineImage(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   bookId: string,
   meta: Record<string, unknown>,
@@ -842,7 +842,7 @@ async function completeGrokImagineImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(engine, imageUrl, assetId, "original.png", { kind: "image" });
 
   const origin = {
     source_asset: meta.sourceImageId,
@@ -863,7 +863,7 @@ async function completeGrokImagineImage(
 }
 
 async function completeGptImage(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   bookId: string,
   meta: Record<string, unknown>,
@@ -873,7 +873,7 @@ async function completeGptImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(engine, imageUrl, assetId, "original.png", { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -896,7 +896,7 @@ async function completeGptImage(
 }
 
 async function completeIsolateVocals(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
@@ -928,12 +928,12 @@ async function completeIsolateVocals(
 
   if (isAudioAsset) {
     // Audio assets: write mix.mp3 and .mix.json
-    await fs.files.write(assetId, "mix.mp3", vocalsBuffer);
+    await engine.files.write(assetId, "mix.mp3", vocalsBuffer);
     const mixSettings = { volume: 100, fadeIn: 0, fadeOut: 0 };
-    await fs.files.write(assetId, ".mix.json", JSON.stringify(mixSettings, null, 2));
+    await engine.files.write(assetId, ".mix.json", JSON.stringify(mixSettings, null, 2));
   } else {
     // Video assets: write audio_vocals.mp3
-    await fs.files.write(assetId, "audio_vocals.mp3", vocalsBuffer);
+    await engine.files.write(assetId, "audio_vocals.mp3", vocalsBuffer);
 
     // Optionally write background audio if a second URL exists
     if (resultUrls[1]) {
@@ -952,12 +952,12 @@ async function completeIsolateVocals(
             await unlink(tmpBgOut).catch(() => {});
           }
         }
-        await fs.files.write(assetId, "audio_background.mp3", bgBuffer);
+        await engine.files.write(assetId, "audio_background.mp3", bgBuffer);
       }
     }
   }
 
-  await fs.history.recordOperation("isolate_vocals", assetId, { mode: "cloud" });
+  await engine.history.recordOperation("isolate_vocals", assetId, { mode: "cloud" });
 }
 
 function extensionFromUrl(url: string, fallback: string): string {
@@ -972,16 +972,16 @@ function extensionFromUrl(url: string, fallback: string): string {
 }
 
 async function readPayloadModel(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<string | undefined> {
-  const result = await fs.metadata.artifacts.read<{ model?: string }>(assetId, "generation-payload");
+  const result = await engine.metadata.artifacts.read<{ model?: string }>(assetId, "generation-payload");
   if (!result.ok) return undefined;
   return typeof result.value.model === "string" ? result.value.model : undefined;
 }
 
 async function completeAlibabaVideo(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   assetDir: string,
   bookId: string,
@@ -992,9 +992,9 @@ async function completeAlibabaVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in Alibaba result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(engine, videoUrl, assetId, "original.mp4", { kind: "video" });
 
-  const modelName = (await readPayloadModel(fs, assetId)) ?? "alibaba/wan2.7-video";
+  const modelName = (await readPayloadModel(engine, assetId)) ?? "alibaba/wan2.7-video";
 
   const provenance = {
     source_images: meta.sourceImageIds,
@@ -1008,7 +1008,7 @@ async function completeAlibabaVideo(
   };
 
   if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "alibaba-task-id", { taskId });
+    await engine.metadata.artifacts.write(assetId, "alibaba-task-id", { taskId });
   }
 
   const videoPath = join(assetDir, "original.mp4");
@@ -1024,7 +1024,7 @@ async function completeAlibabaVideo(
 }
 
 async function completeAlibabaQwenImage(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   bookId: string,
   meta: Record<string, unknown>,
@@ -1035,12 +1035,12 @@ async function completeAlibabaQwenImage(
   if (!imageUrl) throw new Error("No image URL in Alibaba Qwen result");
 
   const ext = extensionFromUrl(imageUrl, "png");
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(engine, imageUrl, assetId, `original.${ext}`, { kind: "image" });
 
   const fallbackModel = taskType === "alibaba_qwen_image_edit"
     ? "alibaba/qwen-image-edit-plus"
     : "alibaba/qwen-image-2.0-pro";
-  const modelName = (await readPayloadModel(fs, assetId))
+  const modelName = (await readPayloadModel(engine, assetId))
     ?? (typeof meta.model === "string" ? `alibaba/${meta.model}` : fallbackModel);
 
   const origin = {
@@ -1069,7 +1069,7 @@ async function completeAlibabaQwenImage(
 }
 
 async function completeHappyHorseVideo(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   assetDir: string,
   bookId: string,
@@ -1081,7 +1081,7 @@ async function completeHappyHorseVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(engine, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   // t2v/i2v/ref generate against HappyHorse 1.1; video-edit has no 1.1 endpoint
   // and stays on 1.0. This string is descriptive provenance only (never fed to
@@ -1105,7 +1105,7 @@ async function completeHappyHorseVideo(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
+    await engine.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -1120,7 +1120,7 @@ async function completeHappyHorseVideo(
 }
 
 async function completeMiniMaxH3Video(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   assetDir: string,
   bookId: string,
@@ -1132,7 +1132,7 @@ async function completeMiniMaxH3Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(engine, videoUrl, assetId, "original.mp4", { kind: "video" });
 
   // Descriptive provenance only (never fed to modelSlug/pricing).
   const minimaxModel =
@@ -1153,7 +1153,7 @@ async function completeMiniMaxH3Video(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
+    await engine.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -1168,7 +1168,7 @@ async function completeMiniMaxH3Video(
 }
 
 async function completeAlibabaImage(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   bookId: string,
   meta: Record<string, unknown>,
@@ -1179,9 +1179,9 @@ async function completeAlibabaImage(
   if (!imageUrl) throw new Error("No image URL in Alibaba result");
 
   const ext = extensionFromUrl(imageUrl, "png");
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(engine, imageUrl, assetId, `original.${ext}`, { kind: "image" });
 
-  const modelName = (await readPayloadModel(fs, assetId))
+  const modelName = (await readPayloadModel(engine, assetId))
     ?? (taskType === "alibaba_image_pro" ? "alibaba/wan2.7-image-pro" : "alibaba/wan2.7-image");
 
   const origin = {

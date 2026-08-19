@@ -25,7 +25,7 @@ function validVideoProbe(probe: ProbeResult): boolean {
   return probe.width > 0 && probe.height > 0 && probe.fps > 0 && probe.videoDuration > 0;
 }
 
-export function smoothSceneConcatDef(fs: Engine): ToolDef {
+export function smoothSceneConcatDef(engine: Engine): ToolDef {
   return {
     name: "smooth_scene_concat",
     description: "Smoothly concatenate two video scenes into a new video asset. When their boundary audio overlaps, automatically aligns the shared waveform to avoid duplicated speech and dissolves the picture across that overlap. Otherwise uses a short crossfade.",
@@ -48,9 +48,9 @@ export function smoothSceneConcatDef(fs: Engine): ToolDef {
         book_id: string;
       };
 
-      const firstArtifact = fs.artifacts.get(first_asset_id);
+      const firstArtifact = engine.artifacts.get(first_asset_id);
       if (!firstArtifact.ok) return error(`First asset: ${firstArtifact.error.message}`);
-      const secondArtifact = fs.artifacts.get(second_asset_id);
+      const secondArtifact = engine.artifacts.get(second_asset_id);
       if (!secondArtifact.ok) return error(`Second asset: ${secondArtifact.error.message}`);
       if (firstArtifact.value.kind !== "video" || secondArtifact.value.kind !== "video") {
         return error("smooth_scene_concat requires two video artifacts");
@@ -60,8 +60,8 @@ export function smoothSceneConcatDef(fs: Engine): ToolDef {
       }
 
       const [firstManifestResult, secondManifestResult] = await Promise.all([
-        fs.files.manifest(first_asset_id),
-        fs.files.manifest(second_asset_id),
+        engine.files.manifest(first_asset_id),
+        engine.files.manifest(second_asset_id),
       ]);
       if (!firstManifestResult.ok) {
         return error(`First asset: ${firstManifestResult.error.message}`);
@@ -97,7 +97,7 @@ export function smoothSceneConcatDef(fs: Engine): ToolDef {
         return error("transition_seconds must be shorter than both video clips");
       }
 
-      const assetResult = await fs.artifacts.create(
+      const assetResult = await engine.artifacts.create(
         "video",
         concatName(firstArtifact.value, secondArtifact.value),
       );

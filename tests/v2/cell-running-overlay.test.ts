@@ -12,7 +12,7 @@ describe('CellStateOverlay', () => {
   ])('renders the active %s clock overlay across the card shell', (status, label) => {
     const html = renderToStaticMarkup(createElement(CellStateOverlay, {
       kind: 'generate_image',
-      slug: 'generate-image-01',
+      address: 'a1',
       status,
       icon: createElement('span', { 'data-icon': 'img' }),
       onRetry: () => undefined,
@@ -30,7 +30,7 @@ describe('CellStateOverlay', () => {
   it('renders a failed overlay with error text and retry control', () => {
     const html = renderToStaticMarkup(createElement(CellStateOverlay, {
       kind: 'generate_image',
-      slug: 'generate-image-01',
+      address: 'a1',
       status: 'error',
       statusError: 'Job lease expired',
       icon: createElement('span', { 'data-icon': 'img' }),
@@ -48,7 +48,7 @@ describe('CellStateOverlay', () => {
   it('renders a streaming download animation', () => {
     const html = renderToStaticMarkup(createElement(CellStateOverlay, {
       kind: 'video',
-      slug: 'vid-01',
+      address: 'a1',
       status: 'downloading',
       icon: createElement('span', { 'data-icon': 'video' }),
     }))
@@ -61,7 +61,7 @@ describe('CellStateOverlay', () => {
   it('renders a passive media failure without generation retry', () => {
     const html = renderToStaticMarkup(createElement(CellStateOverlay, {
       kind: 'video',
-      slug: 'vid-01',
+      address: 'a1',
       status: 'error',
       statusError: 'Remote host returned 403',
       icon: createElement('span', { 'data-icon': 'video' }),
@@ -75,7 +75,7 @@ describe('CellStateOverlay', () => {
   it('renders nothing for an inactive cell', () => {
     const html = renderToStaticMarkup(createElement(CellStateOverlay, {
       kind: 'generate_image',
-      slug: 'generate-image-01',
+      address: 'a1',
       status: 'completed',
       icon: createElement('span', { 'data-icon': 'img' }),
       onRetry: () => undefined,

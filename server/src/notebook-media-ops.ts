@@ -281,6 +281,7 @@ export async function extractSourceAudio(
   engine: Engine,
   sourceArtifactId: string,
   title: string,
+  range?: { startSeconds: number; durationSeconds?: number },
 ): Promise<{ artifactId: string; durationSeconds: number }> {
   const source = await materializeArtifactFile(engine, sourceArtifactId, [
     "original.mp4",
@@ -291,14 +292,16 @@ export async function extractSourceAudio(
   const outDir = await mkdtemp(join(tmpdir(), "vb-audio-"));
   const outPath = join(outDir, "audio.m4a");
   try {
-    await runFfmpeg([
-      "-y",
-      "-i",
-      source.path,
-      "-vn",
-      ...AUDIO_OPTS,
-      outPath,
-    ]);
+    const args = ["-y"];
+    if (range && Number.isFinite(range.startSeconds) && range.startSeconds > 0) {
+      args.push("-ss", String(range.startSeconds));
+    }
+    args.push("-i", source.path, "-vn");
+    if (range && range.durationSeconds && range.durationSeconds > 0) {
+      args.push("-t", String(range.durationSeconds));
+    }
+    args.push(...AUDIO_OPTS, outPath);
+    await runFfmpeg(args);
     const probe = await probeVideo(outPath);
     const artifactId = await ingestOutput(
       engine,
@@ -308,6 +311,28 @@ export async function extractSourceAudio(
       outPath,
     );
     await registerMediaProbe(engine, artifactId, "original.m4a", probe);
+    const existing = await engine.metadata.artifacts.read<Record<string, unknown>>(
+      artifactId,
+      "original",
+    );
+    const metadata = await engine.metadata.artifacts.write(
+      artifactId,
+      "original",
+      {
+        ...(existing.ok ? existing.value : {}),
+        origin: "extract_audio",
+        sourceArtifactId,
+        ...(range
+          ? {
+              startSeconds: range.startSeconds,
+              ...(range.durationSeconds === undefined
+                ? {}
+                : { durationSeconds: range.durationSeconds }),
+            }
+          : {}),
+      },
+    );
+    if (!metadata.ok) throw new Error(metadata.error.message);
     return {
       artifactId,
       durationSeconds: probe.duration || probe.audioDuration || 0,

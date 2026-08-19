@@ -1,7 +1,7 @@
 import "./load-env.js";
 import { z } from "zod";
 import { stopAceServer } from "./acestep/process.js";
-import { fs } from "./fs.js";
+import { scopedEngine } from "./engine.js";
 import { queue, waitForJob } from "./queue.js";
 import { getAllToolDefs } from "./tools/index.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
@@ -29,7 +29,7 @@ function parseArgs(argv: string[]): Record<string, unknown> {
 
 async function run(): Promise<void> {
   const [toolName, ...rest] = process.argv.slice(2);
-  const tools = getAllToolDefs(fs);
+  const tools = getAllToolDefs(scopedEngine);
 
   if (!toolName) {
     console.log("Usage: npm run use <tool> [key=value ...]\n");
@@ -56,7 +56,7 @@ async function run(): Promise<void> {
   const rawArgs = parseArgs(rest);
   const parsed = z.object(tool.schema).parse(rawArgs);
 
-  registerAllJobHandlers(fs);
+  registerAllJobHandlers(scopedEngine);
   await queue.start();
   const result = await tool.handler(parsed as Record<string, unknown>);
 

@@ -31,17 +31,17 @@ function normalizeAssetId(raw: string): string {
 }
 
 async function resolveImageRef(
-  fs: Engine,
+  engine: Engine,
   raw: string,
   field: string,
 ): Promise<RefResult> {
   const assetId = normalizeAssetId(raw);
-  const artifact = fs.artifacts.get(assetId);
+  const artifact = engine.artifacts.get(assetId);
   if (!artifact.ok) return { ok: false, error: artifact.error.message };
   if (artifact.value.kind !== "image") {
     return { ok: false, error: `${field} must be an image artifact, got ${artifact.value.kind}: ${assetId}` };
   }
-  const manifest = await fs.files.manifest(assetId);
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
@@ -49,11 +49,11 @@ async function resolveImageRef(
 }
 
 async function resolveAudioRef(
-  fs: Engine,
+  engine: Engine,
   raw: string,
 ): Promise<RefResult> {
   const assetId = normalizeAssetId(raw);
-  const artifact = fs.artifacts.get(assetId);
+  const artifact = engine.artifacts.get(assetId);
   if (!artifact.ok) return { ok: false, error: artifact.error.message };
   if (artifact.value.kind !== "audio") {
     return {
@@ -61,14 +61,14 @@ async function resolveAudioRef(
       error: `sound_effect_ref must be an audio artifact, got ${artifact.value.kind}: ${assetId}`,
     };
   }
-  const manifest = await fs.files.manifest(assetId);
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, "audio");
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-export function createQrOutroDef(fs: Engine): ToolDef {
+export function createQrOutroDef(engine: Engine): ToolDef {
   return {
     name: "create_qr_outro",
     description:
@@ -123,7 +123,7 @@ export function createQrOutroDef(fs: Engine): ToolDef {
       const qrImages: QrOutroAssetRef[] = [];
       for (const raw of qr_image_refs) {
         const resolved = await resolveImageRef(
-          fs,
+          engine,
           raw,
           "qr_image_refs entry",
         );
@@ -133,7 +133,7 @@ export function createQrOutroDef(fs: Engine): ToolDef {
 
       let soundEffect: QrOutroAssetRef | null = null;
       if (include_audio && sound_effect_ref) {
-        const resolved = await resolveAudioRef(fs, sound_effect_ref);
+        const resolved = await resolveAudioRef(engine, sound_effect_ref);
         if (!resolved.ok) return toolError(resolved.error);
         soundEffect = resolved.value;
       }
@@ -143,7 +143,7 @@ export function createQrOutroDef(fs: Engine): ToolDef {
         qrImages.length,
         duration_seconds,
       );
-      const created = await fs.artifacts.create("vid", `qr-outro-${qrImages[0].assetId}`
+      const created = await engine.artifacts.create("vid", `qr-outro-${qrImages[0].assetId}`
       );
       if (!created.ok) {
         return toolError(`Failed to create output asset: ${created.error.message}`);
@@ -165,9 +165,9 @@ export function createQrOutroDef(fs: Engine): ToolDef {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        const deleted = await fs.artifacts.delete(assetId);
+        const deleted = await engine.artifacts.delete(assetId);
         if (!deleted.ok) {
-          await fs.jobs.pending.forceFail(assetId, {
+          await engine.jobs.pending.forceFail(assetId, {
             message: `Enqueue failed and rollback failed: ${deleted.error.message}`,
           });
         }

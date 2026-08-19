@@ -131,18 +131,18 @@ export function videoProxyMetadataMatches(
 }
 
 export async function probeStoredVideoFile(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   filename: string,
 ): Promise<ProbeResult> {
-  const manifest = await fs.files.manifest(assetId);
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) {
     throw new Error(`Failed to read media manifest for ${assetId}: ${manifest.error.message}`);
   }
-  const snapshot = await fs.files.readAtRevision(
+  const snapshot = await engine.files.readAtRevision(
     manifest.value.artifactId,
     filename,
-    fs.head,
+    engine.head,
   );
   if (!snapshot.ok) {
     throw new Error(`Failed to read immutable ${filename} for ${assetId}: ${snapshot.error.message}`);

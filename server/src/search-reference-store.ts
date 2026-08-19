@@ -18,12 +18,19 @@ interface StoredSearchReference {
 
 export class SearchReferenceStore {
   private readonly entries = new Map<string, StoredSearchReference>();
+  private readonly ttlMs: number;
+  private readonly maxEntries: number;
+  private readonly now: () => number;
 
   constructor(
-    private readonly ttlMs = 30 * 60_000,
-    private readonly maxEntries = 128,
-    private readonly now: () => number = Date.now,
-  ) {}
+    ttlMs = 30 * 60_000,
+    maxEntries = 128,
+    now: () => number = Date.now,
+  ) {
+    this.ttlMs = ttlMs;
+    this.maxEntries = maxEntries;
+    this.now = now;
+  }
 
   put(input: {
     kind: SearchReferenceKind;

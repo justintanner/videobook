@@ -26,7 +26,7 @@ const generateGrokImagineT2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineT2vVideoSchema>;
 
-export function generateGrokImagineT2vVideoDef(fs: Engine): ToolDef {
+export function generateGrokImagineT2vVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_grok_imagine_text_to_video",
     description: "Generate a video from a text prompt using Grok Imagine text-to-video (no images). Creates a new video artifact and enqueues a background job.",
@@ -42,7 +42,7 @@ export function generateGrokImagineT2vVideoDef(fs: Engine): ToolDef {
       }
 
       const videoName = generationLabel(modelSlug("kie", "grok-imagine/text-to-video"), prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

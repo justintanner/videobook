@@ -31,7 +31,7 @@ const generateNanoBananaProGoogleSchema = {
 
 type Args = SchemaArgs<typeof generateNanoBananaProGoogleSchema>;
 
-export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
+export function generateNanoBananaProGoogleDef(engine: Engine): ToolDef {
   return {
     name: "generate_google_flow_nano_banana_pro_image",
     description: "Generate an image using Google Nano Banana Pro via Google Flow. Text-to-image or image-to-image from up to 10 reference images. Creates a new image artifact and enqueues a background job.",
@@ -68,7 +68,7 @@ export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "aspect_ratio 'auto' requires at least one reference image" }] };
       }
 
-      const resolution = await resolveImageRefs(fs, rawSlugs);
+      const resolution = await resolveImageRefs(engine, rawSlugs);
       if (!resolution.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolution.error }] };
       }
@@ -79,7 +79,7 @@ export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
       const nameSlug = modelSlug("kie", "nano-banana-pro");
       const normalizedPrompt = rewriteImageRefMentions(prompt, rawSlugs, "reference").replace(/@referenceImage_/g, "@reference_");
       const imageName = generationLabel(nameSlug, normalizedPrompt);
-      const assetResult = await fs.artifacts.create("img", imageName);
+      const assetResult = await engine.artifacts.create("img", imageName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
       }

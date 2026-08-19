@@ -26,7 +26,7 @@ const generateMiniMaxH3I2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateMiniMaxH3I2vVideoSchema>;
 
-export function generateMiniMaxH3I2vVideoDef(fs: Engine): ToolDef {
+export function generateMiniMaxH3I2vVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_minimax_h3_image_to_video",
     description: "Generate a video from a first and/or last frame image using MiniMax H3 image-to-video. Creates a new video artifact and enqueues a background job.",
@@ -40,14 +40,14 @@ export function generateMiniMaxH3I2vVideoDef(fs: Engine): ToolDef {
 
       let firstFrame: RefInput | undefined;
       if (first_frame_ref !== undefined && first_frame_ref.trim() !== "") {
-        const r = await resolveImageRef(fs, first_frame_ref);
+        const r = await resolveImageRef(engine, first_frame_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let lastFrame: RefInput | undefined;
       if (last_frame_ref !== undefined && last_frame_ref.trim() !== "") {
-        const r = await resolveImageRef(fs, last_frame_ref);
+        const r = await resolveImageRef(engine, last_frame_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         lastFrame = r.value;
       }
@@ -57,7 +57,7 @@ export function generateMiniMaxH3I2vVideoDef(fs: Engine): ToolDef {
       }
 
       const videoName = generationLabel(SLUG, prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }

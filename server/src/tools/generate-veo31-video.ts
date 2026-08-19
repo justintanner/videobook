@@ -56,8 +56,8 @@ function makeVeo31VideoTool(
   model: GoogleVeo31Model,
   allowRefs: boolean,
   description: string,
-): (fs: Engine) => ToolDef {
-  return (fs: Engine) => ({
+): (engine: Engine) => ToolDef {
+  return (engine: Engine) => ({
     name: toolName,
     description,
     schema: buildVeo31Schema(allowRefs),
@@ -81,19 +81,19 @@ function makeVeo31VideoTool(
 
       let firstFrame: RefInput | undefined;
       if (firstFrameSlug !== undefined) {
-        const r = await resolveImageRef(fs, firstFrameSlug);
+        const r = await resolveImageRef(engine, firstFrameSlug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `first_frame_ref: ${r.error}` }] };
         firstFrame = r.value;
       }
       let lastFrame: RefInput | undefined;
       if (lastFrameSlug !== undefined) {
-        const r = await resolveImageRef(fs, lastFrameSlug);
+        const r = await resolveImageRef(engine, lastFrameSlug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `last_frame_ref: ${r.error}` }] };
         lastFrame = r.value;
       }
       const imageInputs: RefInput[] = [];
       for (const ref of imgs) {
-        const r = await resolveImageRef(fs, ref);
+        const r = await resolveImageRef(engine, ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `image_refs: ${r.error}` }] };
         imageInputs.push(r.value);
       }
@@ -110,7 +110,7 @@ function makeVeo31VideoTool(
 
       const modelSlugLiteral = VEO31_SLUGS[model];
       const videoName = generationLabel(modelSlugLiteral, prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }

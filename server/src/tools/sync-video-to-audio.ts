@@ -60,7 +60,7 @@ function validateVideoAnchors(
   }
 }
 
-export function syncVideoToAudioDef(fs: Engine): ToolDef {
+export function syncVideoToAudioDef(engine: Engine): ToolDef {
   return {
     name: "sync_video_to_audio",
     description: "Smoothly retime a video's picture through multiple anchors while preserving its original audio unchanged.",
@@ -79,7 +79,7 @@ export function syncVideoToAudioDef(fs: Engine): ToolDef {
         >;
       };
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) return errorResult(manifestResult.error.message);
       const videoFile = findVideoFile(manifestResult.value.files);
       if (!videoFile) return errorResult(`No video file found in asset ${asset_id}`);

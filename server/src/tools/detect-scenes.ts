@@ -4,7 +4,7 @@ import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
-export function detectScenesDef(fs: Engine): ToolDef {
+export function detectScenesDef(engine: Engine): ToolDef {
   return {
     name: "detect_scenes",
     description:
@@ -24,7 +24,7 @@ export function detectScenesDef(fs: Engine): ToolDef {
       };
       const sourceAssetId = source_asset_id.replace(/^@/, "");
 
-      const manifestResult = await fs.files.manifest(sourceAssetId);
+      const manifestResult = await engine.files.manifest(sourceAssetId);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

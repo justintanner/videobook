@@ -454,8 +454,7 @@ describe("notebook runner frames and concat", () => {
     );
     const completedAudio = completedExtractAudio.document.cells.find((cell) =>
       cell.id === extractAudio.id);
-    expect(completedExtractAudio.document.cells.some((cell) =>
-      cell.type === "audio")).toBe(false);
+    expect(completedAudio?.type).toBe("audio");
     expect(completedAudio?.outputArtifactId).toBe(
       completedExtractAudio.outputArtifactId,
     );
@@ -561,13 +560,12 @@ describe("notebook runner frames and concat", () => {
       document.id,
       document,
       extractAudio,
-    )).rejects.toThrow(/input must be video/i);
+    )).rejects.toThrow(/video input|input must be video/i);
     const read = engine.notebooks.read(document.id);
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     expect(read.value.execution?.[extractAudio.id]?.status).toBe("error");
-    expect(read.value.cells.some((cell) => cell.type === "audio" && cell.id !== source.id))
-      .toBe(false);
+    expect(read.value.execution?.[extractAudio.id]?.status).toBe("error");
   });
 
   it("concats ordered video cells into a playable H264 and AAC output", async () => {

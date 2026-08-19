@@ -37,7 +37,7 @@ import type { ToolDef } from "./tool-def.js";
 import { RENDER_ORIENTATIONS } from "./reconcile-project-work.js";
 
 async function persistSettings(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   enabled: boolean,
   maxCount: number,
@@ -45,9 +45,9 @@ async function persistSettings(
   keywords: string[] | null,
 ): Promise<void> {
   for (const orientation of RENDER_ORIENTATIONS) {
-    const existing = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orientation}.render`
+    const existing = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orientation}.render`
     );
-    const write = await fs.metadata.artifacts.write(assetId, `${orientation}.render`, {
+    const write = await engine.metadata.artifacts.write(assetId, `${orientation}.render`, {
       ...(existing.ok ? existing.value : {}),
       keywordGraphicsEnabled: enabled,
       keywordGraphicsMaxCount: maxCount,
@@ -71,14 +71,14 @@ function isFontSize(value: unknown): value is FontSizePreset {
 }
 
 async function placementSummary(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   graphics: KeywordGraphic[],
   analysis: KeywordPlacementAnalysis,
 ): Promise<Record<Orientation, Record<string, unknown>>> {
   const summaries = {} as Record<Orientation, Record<string, unknown>>;
   for (const orientation of RENDER_ORIENTATIONS) {
-    const storedResult = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orientation}.render`
+    const storedResult = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orientation}.render`
     );
     const stored = storedResult.ok ? storedResult.value : {};
     const settings: KeywordPlacementSettings = {
@@ -108,7 +108,7 @@ function errorResult(status: string, message: string, details: Record<string, un
   };
 }
 
-export function animateKeywordsDef(fs: Engine): ToolDef {
+export function animateKeywordsDef(engine: Engine): ToolDef {
   return {
     name: "animate_keywords",
     description:
@@ -158,19 +158,19 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
       // requireArtifactKind so callers keep parsing a status code. A missing
       // artifact falls through to the manifest read below, which reports
       // asset_not_found.
-      const kind = artifactKindOf(fs, asset_id);
+      const kind = artifactKindOf(engine, asset_id);
       if (kind !== null && kind !== "video") {
         return errorResult("invalid_asset", `animate_keywords requires a video artifact; ${asset_id} is ${kind}`);
       }
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return errorResult("asset_not_found", manifestResult.error.message);
       }
 
       if (!enabled) {
         try {
-          await persistSettings(fs, asset_id, false, max_keywords, linger_seconds, null);
+          await persistSettings(engine, asset_id, false, max_keywords, linger_seconds, null);
         } catch (error) {
           return errorResult("settings_write_failed", error instanceof Error ? error.message : String(error));
         }
@@ -182,7 +182,7 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
         };
       }
 
-      const transcriptResult = await fs.files.read(asset_id, "elevenlabs.json");
+      const transcriptResult = await engine.files.read(asset_id, "elevenlabs.json");
       if (!transcriptResult.ok) {
         return errorResult(
           "missing_transcript",
@@ -225,9 +225,9 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
       }
 
       const fingerprint = keywordPlacementFingerprint(videoFile, transcriptResult.value, graphics);
-      let analysis = await readKeywordPlacementAnalysis(fs, asset_id);
+      let analysis = await readKeywordPlacementAnalysis(engine, asset_id);
       let cached = await isKeywordPlacementCacheValid(
-        fs,
+        engine,
         asset_id,
         analysis,
         fingerprint,
@@ -241,7 +241,7 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
             "OPENAI_API_KEY is required to verify face-safe keyword placement.",
           );
         }
-        const clear = await fs.jobs.failures.clear(asset_id);
+        const clear = await engine.jobs.failures.clear(asset_id);
         if (!clear.ok) {
           return errorResult("placement_analysis_failed", clear.error.message);
         }
@@ -271,7 +271,7 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
 
       let placements: Record<Orientation, Record<string, unknown>>;
       try {
-        placements = await placementSummary(fs, asset_id, graphics, analysis);
+        placements = await placementSummary(engine, asset_id, graphics, analysis);
       } catch (error) {
         return errorResult(
           "placement_analysis_failed",
@@ -282,7 +282,7 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
       const resolvedKeywords = requested ? graphics.map((graphic) => graphic.text) : null;
       try {
         await persistSettings(
-          fs,
+          engine,
           asset_id,
           true,
           max_keywords,

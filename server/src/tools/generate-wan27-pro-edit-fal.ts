@@ -28,7 +28,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateWan27ProEditFalDef(fs: Engine): ToolDef {
+export function generateWan27ProEditFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_wan_2_7_pro_edit_image",
     description: "Edit images via fal.ai using Wan 2.7 Pro edit (higher quality image-to-image) with 1-4 image artifact reference inputs. Creates a new image artifact and enqueues a background job.",
@@ -41,10 +41,10 @@ export function generateWan27ProEditFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageRefs(fs, image_refs);
+      const resolved = await resolveImageRefs(engine, image_refs);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.artifacts.create(prefix, generationLabel(modelSlug("kie", "wan/2-7-image-pro"), prompt));
+      const assetResult = await engine.artifacts.create(prefix, generationLabel(modelSlug("kie", "wan/2-7-image-pro"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;

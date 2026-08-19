@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import type { Client } from "@modelcontextprotocol/client";
 
 // Single shared client/project. Tests use unique asset ids and only read

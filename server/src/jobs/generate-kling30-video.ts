@@ -32,7 +32,7 @@ type GenerateKling30VideoPayload = {
   multi_prompt?: MultiShotPrompt[];
 };
 
-export function registerGenerateKling30VideoJob(fs: Engine): void {
+export function registerGenerateKling30VideoJob(engine: Engine): void {
   registerJobHandler("generate_kling30_video", async (payload, ctx) => {
     const {
       imageInputs, elementInputs, sourceImageIds,
@@ -46,7 +46,7 @@ export function registerGenerateKling30VideoJob(fs: Engine): void {
     // Upload reference images
     const imageUrls: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      imageUrls.push(await uploadAssetToKie(fs, assetId, filename));
+      imageUrls.push(await uploadAssetToKie(engine, assetId, filename));
     }
 
     // Upload element media and build KlingElement array
@@ -54,7 +54,7 @@ export function registerGenerateKling30VideoJob(fs: Engine): void {
     for (const elem of elementInputs) {
       const urls: string[] = [];
       for (const { assetId, filename } of elem.inputs) {
-        urls.push(await uploadAssetToKie(fs, assetId, filename));
+        urls.push(await uploadAssetToKie(engine, assetId, filename));
       }
 
       const element: KlingElement = {
@@ -82,7 +82,7 @@ export function registerGenerateKling30VideoJob(fs: Engine): void {
       imageUrls,
       elements,
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "kling30_video",
       assetId: vidAssetId,

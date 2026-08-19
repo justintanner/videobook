@@ -10,10 +10,8 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const appSource = resolve(scriptDir, '..')
-const engineSource = resolve(appSource, '../videobook-engine')
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'videobook-clean-install-'))
 const appRoot = join(temporaryRoot, 'videobook')
-const engineRoot = join(temporaryRoot, 'videobook-engine')
 const runtimeRoot = join(temporaryRoot, 'runtime')
 const children = new Set()
 
@@ -222,20 +220,23 @@ async function verifyMcp(serverUrl) {
 try {
   await mkdir(runtimeRoot, { recursive: true })
   await writeFile(join(runtimeRoot, 'npmrc'), '', 'utf8')
-  const engineFiles = await copyRepository(engineSource, engineRoot)
   const appFiles = await copyRepository(appSource, appRoot)
   process.stdout.write(
-    `clean-install: copied ${engineFiles} engine files and ${appFiles} app files\n`,
+    `clean-install: copied ${appFiles} app files with no sibling videobook-engine\n`,
   )
-  await run('npm', ['ci', '--no-audit', '--no-fund'], engineRoot)
-  await run('npm', ['run', 'build'], engineRoot)
   await run('npm', ['ci', '--no-audit', '--no-fund'], appRoot)
   await run('npm', ['ci', '--no-audit', '--no-fund'], join(appRoot, 'server'))
   await run('npm', ['run', 'build'], appRoot)
   await run('npm', ['run', 'build:server'], appRoot)
-  const requireFromEngine = createRequire(join(engineRoot, 'package.json'))
-  const expectedEngineVersion = requireFromEngine('./package.json').version
-  const builtEngine = await import(pathToFileURL(join(engineRoot, 'dist/index.js')).href)
+  const requireFromEngine = createRequire(join(appRoot, 'package.json'))
+  const enginePackageJson = requireFromEngine('videobook-engine/package.json')
+  const expectedEngineVersion = enginePackageJson.version
+  if (expectedEngineVersion !== '5.0.0') {
+    throw new Error(`Expected videobook-engine 5.0.0, got ${expectedEngineVersion}`)
+  }
+  const builtEngine = await import(
+    pathToFileURL(join(appRoot, 'node_modules/videobook-engine/dist/index.js')).href
+  )
   const expectedSchemaVersion = builtEngine.SCHEMA_VERSION
 
   const serverPort = await freePort()

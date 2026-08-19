@@ -34,17 +34,17 @@ export type Seedance2JobPayload = {
 };
 
 async function uploadAll(
-  fs: Engine,
+  engine: Engine,
   inputs: RefInput[],
 ): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename));
+    urls.push(await uploadAssetToKie(engine, assetId, filename));
   }
   return urls;
 }
 
-export function registerSeedance2Job(fs: Engine, jobType: string): void {
+export function registerSeedance2Job(engine: Engine, jobType: string): void {
   registerJobHandler(jobType, async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId, prompt, apiModel,
@@ -59,14 +59,14 @@ export function registerSeedance2Job(fs: Engine, jobType: string): void {
     requireApiKey("KIE_API_KEY");
 
     const firstFrameUrl = firstFrame
-      ? await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename)
+      ? await uploadAssetToKie(engine, firstFrame.assetId, firstFrame.filename)
       : undefined;
     const lastFrameUrl = lastFrame
-      ? await uploadAssetToKie(fs, lastFrame.assetId, lastFrame.filename)
+      ? await uploadAssetToKie(engine, lastFrame.assetId, lastFrame.filename)
       : undefined;
-    const referenceImageUrls = await uploadAll(fs, imageInputs);
-    const referenceVideoUrls = await uploadAll(fs, videoInputs);
-    const referenceAudioUrls = await uploadAll(fs, audioInputs);
+    const referenceImageUrls = await uploadAll(engine, imageInputs);
+    const referenceVideoUrls = await uploadAll(engine, videoInputs);
+    const referenceAudioUrls = await uploadAll(engine, audioInputs);
 
     const normalizedPrompt = transformProviderPrompt(
       apiModel === "bytedance/seedance-2-fast"
@@ -102,7 +102,7 @@ export function registerSeedance2Job(fs: Engine, jobType: string): void {
       },
     );
 
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "seedance2_video",
       assetId: vidAssetId,

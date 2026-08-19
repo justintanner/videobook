@@ -43,12 +43,12 @@ type RenderQrOutroPayload = {
 };
 
 async function stageAssetFile(
-  fs: Engine,
+  engine: Engine,
   ref: QrOutroAssetRef,
   bundleDir: string,
   stem: string,
 ): Promise<{ filename: string; path: string }> {
-  const read = await fs.files.read(ref.assetId, ref.filename);
+  const read = await engine.files.read(ref.assetId, ref.filename);
   if (!read.ok) {
     throw new Error(`Failed to read ${ref.assetId}/${ref.filename}: ${read.error.message}`);
   }
@@ -65,7 +65,7 @@ function assertWrite(
   if (!result.ok) throw new Error(`${operation}: ${result.error.message}`);
 }
 
-export function registerRenderQrOutroJob(fs: Engine): void {
+export function registerRenderQrOutroJob(engine: Engine): void {
   registerJobHandler("render_qr_outro", async (payload, ctx) => {
     ctx.signal.throwIfAborted();
     const {
@@ -79,7 +79,7 @@ export function registerRenderQrOutroJob(fs: Engine): void {
       includeAudio = true,
     } = payload as RenderQrOutroPayload;
 
-    const outputManifest = await fs.files.manifest(assetId);
+    const outputManifest = await engine.files.manifest(assetId);
     if (!outputManifest.ok) {
       throw new Error(`Failed to resolve output asset: ${outputManifest.error.message}`);
     }
@@ -91,7 +91,7 @@ export function registerRenderQrOutroJob(fs: Engine): void {
 
     try {
       await withLockedLocalLease(
-        fs,
+        engine,
         assetId,
         outputManifest.value.path,
         ctx,
@@ -107,7 +107,7 @@ export function registerRenderQrOutroJob(fs: Engine): void {
           for (let index = 0; index < qrImages.length; index += 1) {
             ctx.signal.throwIfAborted();
             const qr = await stageAssetFile(
-              fs,
+              engine,
               qrImages[index],
               bundleDir,
               `qr-outro-code-${nonce}-${index}`,
@@ -119,7 +119,7 @@ export function registerRenderQrOutroJob(fs: Engine): void {
           let audioSrc: string | null = null;
           if (includeAudio && soundEffect) {
             const audio = await stageAssetFile(
-              fs,
+              engine,
               soundEffect,
               bundleDir,
               `qr-outro-audio-${nonce}`,
@@ -162,7 +162,7 @@ export function registerRenderQrOutroJob(fs: Engine): void {
           const output = await readNodeFile(tempOutputPath);
           assertWrite(
             `Failed to write ${assetId}/original.mp4`,
-            await fs.files.write(assetId, "original.mp4", output),
+            await engine.files.write(assetId, "original.mp4", output),
           );
 
           const spec = buildOutroSpec(
@@ -187,14 +187,14 @@ export function registerRenderQrOutroJob(fs: Engine): void {
             impact_frames: spec.impacts.map((impact) => impact.frame),
             rendered_at: new Date().toISOString(),
           };
-          const metadata = await fs.metadata.artifacts.write(assetId, "qr-outro", provenance
+          const metadata = await engine.metadata.artifacts.write(assetId, "qr-outro", provenance
           );
           if (!metadata.ok) {
             throw new Error(`Failed to write QR outro metadata: ${metadata.error.message}`);
           }
 
           await processVideoFiles(
-            fs,
+            engine,
             {
               type: "process_video",
               videoPath: join(outputManifest.value.path, "original.mp4"),

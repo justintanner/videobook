@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (303)
+## MCP endpoints (305)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -78,6 +78,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `extract_first_frame` — Extract the first frame of a video asset as a new image asset (JPEG). Uses 0.1s offset to avoid black frames.
 - `extract_frame` — Extract a frame at a specific timestamp from a video asset as a new image asset (JPEG).
 - `extract_last_frame` — Extract the last frame of a video asset as a new image asset (JPEG). Uses duration-0.1s to avoid fade-out.
+- `extract_notebook_audio` — Extract audio from a video cell into a new audio cell wired to its source, recording the source cell and optional time range
 - `extract_notebook_frame` — Extract a frame from a video cell into a new image cell wired to its source, recording the source cell and timestamp
 - `extract_video_clip` — Cut or extract a new video clip from a source time range while preserving the original. Use when the user says 'create a new clip from @a1 from 15s to 44s'. start_time and end_time accept seconds or timestamps such as 15s, 1:30, or 2m20s.
 - `generate_alibaba_qwen_2_0_edit_image` (historical names, not exposed: `generate_alibaba_qwen_image_edit`) — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.
@@ -219,6 +220,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `plan_notebook_generation` — Plan a notebook prompt, image, or video generation with provider, model, cost, and revision-pinned execution
 - `plan_notebook_rough_cut` — Map narration beats to non-repeating indexed visuals as a reviewable CommandPlan
 - `plan_notebook_run` — Plan every missing or stale notebook cell with aggregate provider cost and media disclosure
+- `plan_notebook_subgraph` — Plan the selected cell plus required stale ancestors, with paid-stage fingerprints, cost, and confirmation
 - `plan_sequence_edit` — Compile a UI, slash, or chat insert, trim, or volume request into one CommandPlan
 - `plan_sequence_export` — Create a queued export CommandPlan for a validated canonical sequence revision
 - `plan_sequence_sound_effects` — Suggest existing indexed audio moments for timed story beats as a selectable CommandPlan

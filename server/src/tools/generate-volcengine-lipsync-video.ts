@@ -25,7 +25,7 @@ const generateVolcengineLipsyncVideoSchema = {
 
 type Args = SchemaArgs<typeof generateVolcengineLipsyncVideoSchema>;
 
-export function generateVolcengineLipsyncVideoDef(fs: Engine): ToolDef {
+export function generateVolcengineLipsyncVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_volcengine_video_to_video_lip_sync",
     description: "Lip-sync a source video to driving audio using Volcengine video-to-video lip-sync (kie). Creates a new video artifact and enqueues a background job.",
@@ -50,16 +50,16 @@ export function generateVolcengineLipsyncVideoDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "Volcengine lip-sync requires audio_ref" }] };
       }
 
-      const videoResult = await resolveVideoRef(fs, video_ref);
+      const videoResult = await resolveVideoRef(engine, video_ref);
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const videoInput = videoResult.value;
 
-      const audioResult = await resolveAudioRef(fs, audio_ref);
+      const audioResult = await resolveAudioRef(engine, audio_ref);
       if (!audioResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: audioResult.error }] };
       const audioInput = audioResult.value;
 
       const videoName = `${SLUG}-${String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

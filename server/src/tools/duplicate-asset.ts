@@ -69,11 +69,11 @@ function failure(message: string) {
 }
 
 async function copyOriginalMetadata(
-  fs: Engine,
+  engine: Engine,
   sourceAssetId: string,
   destinationAssetId: string,
 ): Promise<void> {
-  const sourceMetadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
+  const sourceMetadata = await engine.metadata.artifacts.read<Record<string, unknown>>(
     sourceAssetId,
     "original",
   );
@@ -81,7 +81,7 @@ async function copyOriginalMetadata(
     if (sourceMetadata.error.code === "NOT_FOUND") return;
     throw new Error(sourceMetadata.error.message);
   }
-  const metadataWrite = await fs.metadata.artifacts.write(
+  const metadataWrite = await engine.metadata.artifacts.write(
     destinationAssetId,
     "original",
     sourceMetadata.value,
@@ -89,7 +89,7 @@ async function copyOriginalMetadata(
   if (!metadataWrite.ok) throw new Error(metadataWrite.error.message);
 }
 
-export function duplicateAssetDef(fs: Engine): ToolDef {
+export function duplicateAssetDef(engine: Engine): ToolDef {
   return {
     name: "duplicate_asset",
     description: "Duplicate a media asset and place its notebook cell at an optional destination or directly below the source",
@@ -114,11 +114,11 @@ export function duplicateAssetDef(fs: Engine): ToolDef {
         new_name?: string;
         notebook_id?: string;
       };
-      const sourceArtifact = fs.artifacts.get(asset_id);
+      const sourceArtifact = engine.artifacts.get(asset_id);
       if (!sourceArtifact.ok) {
         return failure(sourceArtifact.error.message);
       }
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return failure(manifestResult.error.message);
       }
@@ -133,7 +133,7 @@ export function duplicateAssetDef(fs: Engine): ToolDef {
         if (!cellType) {
           return failure(`A ${sourceArtifact.value.kind} artifact cannot be placed in a media cell`);
         }
-        const notebook = fs.notebooks.read(notebook_id);
+        const notebook = engine.notebooks.read(notebook_id);
         if (!notebook.ok) return failure(notebook.error.message);
         try {
           duplicateDestination(
@@ -146,7 +146,7 @@ export function duplicateAssetDef(fs: Engine): ToolDef {
         }
       }
 
-      const createResult = await fs.artifacts.create({
+      const createResult = await engine.artifacts.create({
         kind: sourceArtifact.value.kind,
         ...(name ? { label: name } : {}),
       });
@@ -157,22 +157,22 @@ export function duplicateAssetDef(fs: Engine): ToolDef {
       const newAssetId = createResult.value.artifactId;
 
       for (const file of manifestResult.value.files) {
-        const readResult = await fs.files.read(asset_id, file.name);
+        const readResult = await engine.files.read(asset_id, file.name);
         if (!readResult.ok) {
-          await fs.artifacts.delete(newAssetId);
+          await engine.artifacts.delete(newAssetId);
           return failure(readResult.error.message);
         }
-        const writeResult = await fs.files.write(newAssetId, file.name, readResult.value);
+        const writeResult = await engine.files.write(newAssetId, file.name, readResult.value);
         if (!writeResult.ok) {
-          await fs.artifacts.delete(newAssetId);
+          await engine.artifacts.delete(newAssetId);
           return failure(writeResult.error.message);
         }
       }
 
       try {
-        await copyOriginalMetadata(fs, asset_id, newAssetId);
+        await copyOriginalMetadata(engine, asset_id, newAssetId);
       } catch (cause) {
-        await fs.artifacts.delete(newAssetId);
+        await engine.artifacts.delete(newAssetId);
         return failure(cause instanceof Error ? cause.message : String(cause));
       }
 
@@ -180,7 +180,7 @@ export function duplicateAssetDef(fs: Engine): ToolDef {
       if (notebook_id && cellType) {
         try {
           const notebookResult = await mutateNotebook(
-            fs,
+            engine,
             notebook_id,
             "duplicate_asset",
             (notebook) => {
@@ -189,7 +189,7 @@ export function duplicateAssetDef(fs: Engine): ToolDef {
                 sourceCellForArtifact(notebook, asset_id, cellType),
                 destination,
               );
-              placement.cell = fs.notebooks.createCell({
+              placement.cell = engine.notebooks.createCell({
                 type: cellType,
                 ...(name ? { label: name } : {}),
                 slot,
@@ -214,7 +214,7 @@ export function duplicateAssetDef(fs: Engine): ToolDef {
           );
           if (!notebookResult.ok) throw new Error(notebookResult.error.message);
         } catch (cause) {
-          await fs.artifacts.delete(newAssetId);
+          await engine.artifacts.delete(newAssetId);
           return failure(cause instanceof Error ? cause.message : String(cause));
         }
       }

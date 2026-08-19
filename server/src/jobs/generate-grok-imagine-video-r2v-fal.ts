@@ -22,14 +22,14 @@ type Payload = {
   resolution?: FalInput["resolution"];
 };
 
-export function registerGenerateGrokImagineVideoR2vFalJob(fs: Engine): void {
+export function registerGenerateGrokImagineVideoR2vFalJob(engine: Engine): void {
   registerJobHandler("generate_grok_imagine_video_r2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(engine, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
       const reference_image_urls: string[] = [];
       for (const img of p.imageInputs) {
-        reference_image_urls.push(await uploadAssetToFal(fs, img.assetId, img.filename));
+        reference_image_urls.push(await uploadAssetToFal(engine, img.assetId, img.filename));
       }
   
       const input: FalInput = {
@@ -41,7 +41,7 @@ export function registerGenerateGrokImagineVideoR2vFalJob(fs: Engine): void {
       };
   
       const taskId = await submitFalJob({
-        fs,
+        engine,
         bookId: p.bookId,
         assetId: p.vidAssetId,
         assetDir: p.vidAssetDir,

@@ -11,13 +11,13 @@ import { requireAtLeastOne, toolError } from "./_shared.js";
 import { generationLabel } from "../artifact-label.js";
 
 async function resolveVideoRefList(
-  fs: Engine,
+  engine: Engine,
   rawRefs: readonly string[],
 ): Promise<{ ok: true; inputs: RefInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
   const inputs: RefInput[] = [];
   const sourceVideoIds: string[] = [];
   for (const raw of rawRefs) {
-    const r = await resolveVideoRef(fs, raw);
+    const r = await resolveVideoRef(engine, raw);
     if (!r.ok) return { ok: false, error: r.error };
     inputs.push(r.value);
     sourceVideoIds.push(r.value.assetId);
@@ -26,13 +26,13 @@ async function resolveVideoRefList(
 }
 
 async function resolveAudioRefList(
-  fs: Engine,
+  engine: Engine,
   rawRefs: readonly string[],
 ): Promise<{ ok: true; inputs: RefInput[]; sourceAudioIds: string[] } | { ok: false; error: string }> {
   const inputs: RefInput[] = [];
   const sourceAudioIds: string[] = [];
   for (const raw of rawRefs) {
-    const r = await resolveAudioRef(fs, raw);
+    const r = await resolveAudioRef(engine, raw);
     if (!r.ok) return { ok: false, error: r.error };
     inputs.push(r.value);
     sourceAudioIds.push(r.value.assetId);
@@ -57,7 +57,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateSeedance2R2vFalDef(fs: Engine): ToolDef {
+export function generateSeedance2R2vFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_seedance_2_0_reference_to_video",
     description: "Generate a video via fal.ai using ByteDance Seedance 2.0 Reference-to-Video, guided by reference images, videos, and/or audio. Creates a new video artifact and enqueues a background job. Requires at least one of image_refs, video_refs, or audio_refs (audio alone is not allowed — pair it with an image or video).",
@@ -91,16 +91,16 @@ export function generateSeedance2R2vFalDef(fs: Engine): ToolDef {
         return toolError("Total reference files across all modalities must not exceed 12");
       }
 
-      const resolvedImages = await resolveImageRefs(fs, imgRefs);
+      const resolvedImages = await resolveImageRefs(engine, imgRefs);
       if (!resolvedImages.ok) return toolError(resolvedImages.error);
 
-      const resolvedVideos = await resolveVideoRefList(fs, vidRefs);
+      const resolvedVideos = await resolveVideoRefList(engine, vidRefs);
       if (!resolvedVideos.ok) return toolError(resolvedVideos.error);
 
-      const resolvedAudios = await resolveAudioRefList(fs, audRefs);
+      const resolvedAudios = await resolveAudioRefList(engine, audRefs);
       if (!resolvedAudios.ok) return toolError(resolvedAudios.error);
 
-      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "bytedance/seedance-2"), prompt));
+      const assetResult = await engine.artifacts.create("vid", generationLabel(modelSlug("kie", "bytedance/seedance-2"), prompt));
       if (!assetResult.ok) return toolError(`Failed to create video asset: ${assetResult.error.message}`);
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

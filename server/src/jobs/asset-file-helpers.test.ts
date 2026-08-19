@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Engine } from "videobook-engine";
 
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 

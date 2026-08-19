@@ -145,6 +145,230 @@ function connectedMedia(
     });
 }
 
+function requiredSubgraphIds(
+  document: NotebookDocument,
+  targetCellId: string,
+): Set<string> {
+  const incoming = new Map<string, string[]>();
+  for (const edge of document.edges) {
+    const sources = incoming.get(edge.target) ?? [];
+    sources.push(edge.source);
+    incoming.set(edge.target, sources);
+  }
+  const seen = new Set<string>();
+  const stack = [targetCellId];
+  while (stack.length > 0) {
+    const id = stack.pop();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    for (const source of incoming.get(id) ?? []) stack.push(source);
+  }
+  return seen;
+}
+
+function cellArtifactId(
+  engine: Engine,
+  cell: NotebookCell,
+): string | null {
+  const artifactId = cell.outputArtifactId ?? null;
+  if (!artifactId) return null;
+  return engine.artifacts.get(artifactId).ok ? artifactId : null;
+}
+
+export async function planSelectedNotebookSubgraph(
+  engine: Engine,
+  document: NotebookDocument,
+  targetCellId: string,
+  sourceSurface: SourceSurface,
+  actor: string,
+): Promise<Record<string, unknown>> {
+  const target = document.cells.find((cell) => cell.id === targetCellId);
+  if (!target) throw new Error(`Target cell not found: ${targetCellId}`);
+  const allowed = requiredSubgraphIds(document, targetCellId);
+  const ordered = topologicalOrder(document).filter((cell) =>
+    allowed.has(cell.id));
+  const planId = uuidv7();
+  const stages: Array<Record<string, unknown>> = [];
+  const fingerprints: Record<string, string> = {};
+  const paidCellIds: string[] = [];
+  let knownCostUsd = 0;
+  let unknownCostCount = 0;
+  const upstreamOutputs = new Map<string, string | null>();
+
+  for (const cell of ordered) {
+    const missing = cellArtifactId(engine, cell) === null
+      && notebookCellIsRunnable(cell);
+    const stale = notebookCellIsStale(engine, document, cell);
+    const current = !stale && !missing && cellArtifactId(engine, cell) !== null;
+    const definitionFingerprint = notebookCellDefinitionFingerprint(document, cell);
+    fingerprints[cell.id] = definitionFingerprint;
+    const bindings = document.edges
+      .filter((edge) => edge.target === cell.id)
+      .map((edge) => {
+        const source = document.cells.find((candidate) =>
+          candidate.id === edge.source);
+        return {
+          targetInput: edge.targetInput,
+          sourceCellId: edge.source,
+          artifactId: source
+            ? upstreamOutputs.get(source.id) ?? cellArtifactId(engine, source)
+            : null,
+        };
+      });
+
+    if (current && cell.id !== target.id) {
+      const reused = cellArtifactId(engine, cell);
+      upstreamOutputs.set(cell.id, reused);
+      stages.push({
+        stageId: `${planId}:reuse:${stages.length}`,
+        kind: "reuse",
+        cellId: cell.id,
+        summary: `${notebookGridTag(cell.slot)} · reuse current output`,
+        cellDefinitionFingerprint: definitionFingerprint,
+        outputArtifactId: reused,
+        insertsOutput: false,
+      });
+      continue;
+    }
+
+    const paid = notebookCellIsPaid(cell);
+    const runnable = notebookCellIsRunnable(cell) || missing;
+    if (!runnable && cell.id !== target.id) {
+      upstreamOutputs.set(cell.id, cellArtifactId(engine, cell));
+      continue;
+    }
+
+    if (paid) {
+      paidCellIds.push(cell.id);
+      let tool = cell.tool ?? cell.operation ?? "unknown";
+      let provider = cell.provider ?? null;
+      let model = cell.model ?? null;
+      let actionInput: Record<string, unknown> = {};
+      let estimate: CostEstimate = {
+        estimateUnavailable: true,
+        warnings: [],
+      };
+      try {
+        const prepared = await prepareNotebookGeneration(
+          engine,
+          document,
+          cell,
+          engine.book.get().bookId,
+          { allowReferenceIssues: true },
+        );
+        tool = prepared.tool;
+        provider = prepared.provider;
+        model = prepared.model;
+        actionInput = prepared.input;
+        estimate = await estimateCall(engine, prepared.tool, prepared.input);
+      } catch (error) {
+        estimate = {
+          estimateUnavailable: true,
+          warnings: [error instanceof Error ? error.message : String(error)],
+        };
+      }
+      if (estimate.estimateUnavailable) unknownCostCount += 1;
+      else knownCostUsd += estimate.estimatedCostUsd ?? 0;
+      stages.push({
+        stageId: `${planId}:paid:${stages.length}`,
+        kind: "queued",
+        cellId: cell.id,
+        summary: `${notebookGridTag(cell.slot)} · ${tool}`,
+        jobType: "generation",
+        tool,
+        input: {
+          notebook_id: document.id,
+          cell_id: cell.id,
+          action_input: actionInput,
+          connected_media: connectedMedia(document, cell),
+          cell_definition_fingerprint: definitionFingerprint,
+          upstream_bindings: bindings,
+          subgraph_run: true,
+        },
+        provider,
+        model,
+        requiresCoverage: true,
+        cellDefinitionFingerprint: definitionFingerprint,
+        ...(estimate.estimateUnavailable
+          ? { estimateUnavailable: true }
+          : { estimatedCostUsd: estimate.estimatedCostUsd }),
+        warnings: estimate.warnings,
+        insertsOutput: false,
+      });
+    } else {
+      stages.push({
+        stageId: `${planId}:local:${stages.length}`,
+        kind: "queued",
+        cellId: cell.id,
+        summary: `${notebookGridTag(cell.slot)} · automatic local rerun`,
+        jobType: "indexing",
+        tool: cell.tool ?? cell.operation ?? "run_notebook",
+        automatic: true,
+        cellDefinitionFingerprint: definitionFingerprint,
+        input: {
+          notebook_id: document.id,
+          cell_id: cell.id,
+          upstream_bindings: bindings,
+          subgraph_run: true,
+        },
+        insertsOutput: false,
+      });
+    }
+    upstreamOutputs.set(cell.id, null);
+  }
+
+  const confirmationRequired = paidCellIds.length > 0;
+  const plan: Record<string, unknown> = {
+    planVersion: 1,
+    planId,
+    sourceSurface,
+    actor,
+    bookId: engine.book.get().bookId,
+    summary: `Run selected subgraph for ${notebookGridTag(target.slot)}`,
+    normalizedReferences: [{
+      kind: "notebook",
+      targetId: document.id,
+      revision: engine.head,
+    }],
+    stages,
+    confirmation: {
+      required: confirmationRequired,
+      policy: confirmationRequired ? "always" : "reversible-single-step",
+      reason: confirmationRequired
+        ? unknownCostCount > 0
+          ? `This selected run has ${paidCellIds.length} provider calls; ${unknownCostCount} cannot be priced`
+          : `This selected run can incur up to $${knownCostUsd.toFixed(4)} in provider spend`
+        : "Only local reversible processing will run",
+    },
+    notebookRun: {
+      notebookId: document.id,
+      targetCellId,
+      mode: "subgraph",
+      subgraphCellIds: ordered.map((cell) => cell.id),
+      staleCellIds: stages
+        .filter((stage) => stage.kind === "queued")
+        .map((stage) => stage.cellId),
+      paidCellCount: paidCellIds.length,
+      knownCostUsd,
+      unknownCostCount,
+      noOp: stages.every((stage) => stage.kind === "reuse") && !notebookCellIsRunnable(target),
+    },
+  };
+  const now = new Date().toISOString();
+  await persistNotebookRunPlan(engine, document.id, {
+    planId,
+    status: "planned",
+    plan,
+    paidCellIds,
+    cellDefinitionFingerprints: fingerprints,
+    knownCostUsd,
+    unknownCostCount,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return plan;
+}
+
 export async function planNotebookRun(
   engine: Engine,
   document: NotebookDocument,

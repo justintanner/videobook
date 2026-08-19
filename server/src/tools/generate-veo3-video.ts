@@ -24,8 +24,8 @@ function makeVeo3VideoTool(
   toolName: string,
   model: VeoModel,
   description: string,
-): (fs: Engine) => ToolDef {
-  return (fs: Engine) => ({
+): (engine: Engine) => ToolDef {
+  return (engine: Engine) => ({
     name: toolName,
     description,
     schema: veo3VideoSchema,
@@ -43,13 +43,13 @@ function makeVeo3VideoTool(
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageRef(fs, slug);
+        const r = await resolveImageRef(engine, slug);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `image_refs: ${r.error}` }] };
         imageInputs.push(r.value);
       }
 
       const videoName = generationLabel(model, prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }

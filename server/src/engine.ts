@@ -55,7 +55,7 @@ export const bookManager = new BookManager({
     : {}),
 });
 
-export const fs = scopedBookEngine;
+export const scopedEngine = scopedBookEngine;
 
 const testEngines = new Map<string, ReturnType<typeof createEngine>>();
 

@@ -44,7 +44,7 @@ export function selectPreviewImageModel(
     : fallback;
 }
 
-export function previewImageGenDef(fs: Engine): ToolDef {
+export function previewImageGenDef(engine: Engine): ToolDef {
   return {
     name: "prepare_image_generation",
     description:
@@ -64,18 +64,18 @@ export function previewImageGenDef(fs: Engine): ToolDef {
       };
 
       // 1. Expand @s01 slot refs → @<artifact-id> tokens
-      const expandedPrompt = expandTimelineSlotRefs(prompt, timelineSlotArtifactIds(fs));
+      const expandedPrompt = expandTimelineSlotRefs(prompt, timelineSlotArtifactIds(engine));
 
       // 2. Resolve @<artifact-id> tags
       const { resolved: resolvedAssets, unresolved } = await resolveArtifactRefs(
-        fs,
+        engine,
         parseArtifactIdTags(expandedPrompt),
       );
 
       // 3. Load prompt history from action log
       let historyEntries: ActionLogEntry[] = [];
       try {
-        const log = fs.history.actionLog();
+        const log = engine.history.actionLog();
         historyEntries = log as ActionLogEntry[];
       } catch {
         // action log unavailable
@@ -83,7 +83,7 @@ export function previewImageGenDef(fs: Engine): ToolDef {
 
       // 3b. Build set of valid artifact-id tags for the current book so
       //     historical references that no longer exist are stripped.
-      const allProjectAssets = fs.artifacts.list();
+      const allProjectAssets = engine.artifacts.list();
       const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.artifactId}`));
 
       // 4. Build model options for all image models

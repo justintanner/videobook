@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Engine, JobState } from "videobook-engine";
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { claimNotebookRunPlan } from "../notebook-run-plan.js";
 import { queue as appQueue, setEngineRoot } from "../queue.js";
 import {

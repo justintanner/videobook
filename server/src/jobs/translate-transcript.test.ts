@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Engine } from "videobook-engine";
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import type { JobHandlerContext } from "../queue.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import { computeSourceTextHash } from "./_translate-transcript.js";

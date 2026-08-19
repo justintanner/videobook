@@ -16,14 +16,14 @@ type GenerateMiniMaxH3T2vVideoPayload = {
   resolution?: MiniMaxH3Resolution;
 };
 
-export function registerGenerateMiniMaxH3T2vVideoJob(fs: Engine): void {
+export function registerGenerateMiniMaxH3T2vVideoJob(engine: Engine): void {
   registerJobHandler("generate_minimax_h3_t2v_video", async (payload, ctx) => {
     const { vidAssetId, vidAssetDir, bookId, prompt, aspect_ratio, duration, resolution } = payload as GenerateMiniMaxH3T2vVideoPayload;
 
     requireApiKey("KIE_API_KEY");
 
     const request = buildMiniMaxH3T2vPayload({ prompt, aspect_ratio, duration, resolution });
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "minimax_h3_t2v_video",
       assetId: vidAssetId,

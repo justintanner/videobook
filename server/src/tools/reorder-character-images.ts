@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { extname } from "node:path";
 
-export function reorderCharacterImagesDef(fs: Engine): ToolDef {
+export function reorderCharacterImagesDef(engine: Engine): ToolDef {
   return {
     name: "reorder_character_images",
     description: "Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).",
@@ -24,7 +24,7 @@ export function reorderCharacterImagesDef(fs: Engine): ToolDef {
         const tempName = `.tmp-reorder-${Date.now()}-${i}.${ext}`;
         const newName = `source-${String(i + 1).padStart(2, '0')}.${ext}`;
         
-        const renameRes = await fs.files.rename(asset_id, oldName, tempName);
+        const renameRes = await engine.files.rename(asset_id, oldName, tempName);
         if (!renameRes.ok) {
            return {
              isError: true,
@@ -36,7 +36,7 @@ export function reorderCharacterImagesDef(fs: Engine): ToolDef {
 
       // Step 2: Rename from temp names to final sequence names
       for (const mapping of tempNames) {
-        const renameRes = await fs.files.rename(asset_id, mapping.tempName, mapping.newName);
+        const renameRes = await engine.files.rename(asset_id, mapping.tempName, mapping.newName);
         if (!renameRes.ok) {
            return {
              isError: true,

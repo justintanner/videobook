@@ -1,4 +1,4 @@
-import { fs } from "../fs.js";
+import { scopedEngine } from "../engine.js";
 import { describe, it, expect } from "vitest";
 import { GENERATION_ACTIONS, getCanonicalName, getActionSpec } from "../generation-registry.js";
 import { getAllToolDefs } from "./index.js";
@@ -27,7 +27,7 @@ describe("support generation actions contract", () => {
   });
 
   it("registers canonical support actions without exposing historical aliases", () => {
-    const tools = getAllToolDefs(fs);
+    const tools = getAllToolDefs(scopedEngine);
     const registeredNames = new Set(tools.map((t) => t.name));
 
     const supportActions = GENERATION_ACTIONS.filter((a) => a.provider === "workflow");

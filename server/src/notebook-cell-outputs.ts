@@ -13,6 +13,7 @@ import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { nextGenerationOutputSlot } from "./notebook-placement.js";
 
 export const EXTRACT_FRAME_OUTPUT_ROLE = "extract-frame-output";
+export const EXTRACT_AUDIO_OUTPUT_ROLE = "extract-audio-output";
 
 function extractPairOutputType(
   extract: NotebookCell,
@@ -84,6 +85,14 @@ function adoptExtractFromPair(
     ...(adoptedArtifact ? { outputArtifactId: adoptedArtifact } : {}),
     inputs,
   };
+}
+
+export function normalizeLegacyExtractCells(
+  document: NotebookDocument,
+): NotebookDocument {
+  return migrateLegacyExtractAudioCells(
+    migrateLegacyExtractFrameCells(collapseLegacyExtractPairs(document)),
+  );
 }
 
 export function collapseLegacyExtractPairs(
@@ -203,6 +212,55 @@ function migratedFrameOutputCell(
     ...(outputArtifactId ? { outputArtifactId } : {}),
     inputs,
   };
+}
+
+export function migrateLegacyExtractAudioCells(
+  document: NotebookDocument,
+): NotebookDocument {
+  const extracts = document.cells.filter((cell) => cell.type === "extract_audio");
+  if (extracts.length === 0) return document;
+
+  const retargetEdgeIds = new Map<string, string>();
+  const replaceById = new Map<string, NotebookCell>();
+  for (const extract of extracts) {
+    const videoEdge = document.edges.find((edge) =>
+      edge.target === extract.id && edge.targetInput === "video") ?? null;
+    if (videoEdge) retargetEdgeIds.set(videoEdge.id, extract.id);
+    const inputs: Record<string, unknown> = { ...(extract.inputs ?? {}) };
+    inputs.mediaRole = EXTRACT_AUDIO_OUTPUT_ROLE;
+    if (videoEdge) inputs.sourceCellId = videoEdge.source;
+    delete inputs.producerCellId;
+    if (extract.outputArtifactId) inputs.state = "completed";
+    else if (inputs.state === "awaiting-output") delete inputs.state;
+    replaceById.set(extract.id, {
+      ...extract,
+      type: "audio",
+      operation: undefined,
+      provider: undefined,
+      model: undefined,
+      tool: undefined,
+      inputs,
+    });
+  }
+
+  const cells = document.cells.map((cell) => replaceById.get(cell.id) ?? cell);
+  const seenTargetInputs = new Set<string>();
+  const edges: NotebookEdge[] = [];
+  for (const edge of document.edges) {
+    const retarget = retargetEdgeIds.get(edge.id);
+    const target = retarget ?? edge.target;
+    const targetInput = retarget === undefined ? edge.targetInput : "segment";
+    const next =
+      target === edge.target && targetInput === edge.targetInput
+        ? edge
+        : { ...edge, target, targetInput };
+    const key = `${next.target}:${next.targetInput}`;
+    if (seenTargetInputs.has(key)) continue;
+    seenTargetInputs.add(key);
+    edges.push(next);
+  }
+
+  return { ...document, cells, edges };
 }
 
 export function migrateLegacyExtractFrameCells(

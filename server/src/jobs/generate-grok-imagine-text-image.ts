@@ -20,7 +20,7 @@ type GenerateGrokImagineTextImagePayload = {
   _provider?: string;
 };
 
-export function registerGenerateGrokImagineTextImageJob(fs: Engine): void {
+export function registerGenerateGrokImagineTextImageJob(engine: Engine): void {
   registerJobHandler("generate_grok_imagine_text_image", async (payload, ctx) => {
     const {
       prompt, imgAssetId, imgAssetDir, bookId, aspectRatio, enablePro, nsfwChecker, _provider,
@@ -40,7 +40,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: Engine): void {
         response_format: "url",
         ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio as XaiImageGenerateRequest["aspect_ratio"] } : {}),
       };
-      await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request);
+      await engine.metadata.artifacts.write(imgAssetId, "generation-payload", request);
       const result = await callXaiPaid<XaiImageGenerateRequest, XaiImageResponse>(
         provider.post.v1.images.generations,
         XAI_IMAGE_GENERATIONS_DOT_PATH,
@@ -50,7 +50,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: Engine): void {
       const imageUrl = result.data[0]?.url;
       if (!imageUrl) throw new Error("xAI returned no image URL");
 
-      await downloadUrlIntoAsset(fs, imageUrl, imgAssetId, "original.png", { kind: "result image" });
+      await downloadUrlIntoAsset(engine, imageUrl, imgAssetId, "original.png", { kind: "result image" });
 
       // Enqueue post-processing so metadata and derived crops are created
       const provenance = {
@@ -67,7 +67,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: Engine): void {
         provenance,
       } as unknown as Record<string, unknown>);
 
-      await fs.jobs.pending.delete(imgAssetId);
+      await engine.jobs.pending.delete(imgAssetId);
 
       return { success: true, provider: "xai" };
     }
@@ -81,7 +81,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: Engine): void {
       ...(enablePro !== undefined ? { enable_pro: enablePro } : {}),
       ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
     });
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "grok_imagine_text",
       assetId: imgAssetId,

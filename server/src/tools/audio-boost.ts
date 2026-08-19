@@ -15,7 +15,7 @@ function validateBoost(boost: number): string | null {
   return null;
 }
 
-export function audioBoostDef(fs: Engine): ToolDef {
+export function audioBoostDef(engine: Engine): ToolDef {
   return {
     name: "audio_boost",
     description:
@@ -40,7 +40,7 @@ export function audioBoostDef(fs: Engine): ToolDef {
         };
       }
 
-      const artifactResult = fs.artifacts.get(asset_id);
+      const artifactResult = engine.artifacts.get(asset_id);
       if (!artifactResult.ok) {
         return {
           isError: true as const,
@@ -59,7 +59,7 @@ export function audioBoostDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

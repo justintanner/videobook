@@ -16,7 +16,7 @@ type GenerateGptImageTextPayload = {
   nsfwChecker?: boolean;
 };
 
-export function registerGenerateGptImageTextJob(fs: Engine): void {
+export function registerGenerateGptImageTextJob(engine: Engine): void {
   registerJobHandler("generate_gpt_image_text", async (payload, ctx) => {
     const {
       prompt, imgAssetId, imgAssetDir, bookId, aspectRatio, resolution, nsfwChecker,
@@ -30,7 +30,7 @@ export function registerGenerateGptImageTextJob(fs: Engine): void {
       resolution,
       nsfw_checker: nsfwChecker,
     });
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "gpt_image_text",
       assetId: imgAssetId,

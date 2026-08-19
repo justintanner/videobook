@@ -21,7 +21,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateGrokImagineImageEditFalDef(fs: Engine): ToolDef {
+export function generateGrokImagineImageEditFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_grok_imagine_edit_image",
     description: "Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 image artifact reference inputs. Creates a new image artifact and enqueues a background job.",
@@ -33,10 +33,10 @@ export function generateGrokImagineImageEditFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageRefs(fs, image_refs);
+      const resolved = await resolveImageRefs(engine, image_refs);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.artifacts.create("img", generationLabel(modelSlug("kie", "grok-imagine/image-to-image"), prompt));
+      const assetResult = await engine.artifacts.create("img", generationLabel(modelSlug("kie", "grok-imagine/image-to-image"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;

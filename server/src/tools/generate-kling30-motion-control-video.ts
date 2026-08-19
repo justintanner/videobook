@@ -62,7 +62,7 @@ const generateKling30MotionControlVideoSchema = {
 
 type Args = SchemaArgs<typeof generateKling30MotionControlVideoSchema>;
 
-export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
+export function generateKling30MotionControlVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_kling_3_0_motion_control",
     description: "Apply motion from reference videos to character images using Kling 3.0 motion-control. Creates a new video artifact and enqueues a background job.",
@@ -78,11 +78,11 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
       let preferredImageOrientation: ImageOrientation | undefined;
       for (const raw of motion_video_refs) {
         const assetId = raw.replace(/^@/, "");
-        const kindGate = await requireArtifactKind(fs, assetId, ["video"], "motion_video_refs");
+        const kindGate = await requireArtifactKind(engine, assetId, ["video"], "motion_video_refs");
         if (kindGate) return kindGate;
         const [manifest, metadata] = await Promise.all([
-          fs.files.manifest(assetId),
-          fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original"),
+          engine.files.manifest(assetId),
+          engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original"),
         ]);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
         const file = findVideoFile(manifest.value.files);
@@ -96,11 +96,11 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
       const imageInputs: RefInput[] = [];
       for (const raw of character_image_refs) {
         const assetId = raw.replace(/^@/, "");
-        const kind = artifactKindOf(fs, assetId);
+        const kind = artifactKindOf(engine, assetId);
         if (kind !== "image" && kind !== "character") {
           return { isError: true as const, content: [{ type: "text" as const, text: `character_image_refs entries must be image or character artifacts; ${assetId} is ${kind ?? "not a known artifact"}` }] };
         }
-        const manifest = await fs.files.manifest(assetId);
+        const manifest = await engine.files.manifest(assetId);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
         const images = selectMotionControlImageFiles(
           kind,
@@ -113,7 +113,7 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
 
       try {
         await assertKlingMotionControlDuration(
-          fs,
+          engine,
           motion_video_refs[0],
           character_orientation === "image" ? "image" : "video",
         );
@@ -134,13 +134,13 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const firstImageArtifact = fs.artifacts.get(imageInputs[0].assetId);
+      const firstImageArtifact = engine.artifacts.get(imageInputs[0].assetId);
       const firstImageLabel = firstImageArtifact.ok ? firstImageArtifact.value.label ?? "" : "";
       const videoName = generationLabel(
         modelSlug("kie", "kling-3.0/motion-control"),
         prompt || firstImageLabel,
       );
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }

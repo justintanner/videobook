@@ -26,7 +26,7 @@ const extendWan27VideoSchema = {
 
 type Args = SchemaArgs<typeof extendWan27VideoSchema>;
 
-export function extendWan27VideoDef(fs: Engine): ToolDef {
+export function extendWan27VideoDef(engine: Engine): ToolDef {
   return {
     name: "extend_kie_wan_2_7_video",
     description: "Extend an existing video asset using Wan 2.7 Image to Video by providing the source video as first_clip. Creates a new video artifact and enqueues a background job.",
@@ -51,12 +51,12 @@ export function extendWan27VideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const videoResult = await resolveVideoRef(fs, video_ref);
+      const videoResult = await resolveVideoRef(engine, video_ref);
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const sourceVideo = videoResult.value;
 
       const videoName = generationLabel(modelSlug("kie", "wan/2-7-image-to-video"), prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

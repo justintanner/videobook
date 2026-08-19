@@ -152,7 +152,7 @@ describe("Multyculty workflow fixture", () => {
       "video",
       "analyze",
       "analysis",
-      "extract_audio",
+      "audio",
       "split_video",
       "image",
       "prompt",
@@ -175,7 +175,9 @@ describe("Multyculty workflow fixture", () => {
     expect(first.cells).toHaveLength(19);
     expect(first.edges).toHaveLength(34);
     expect(first.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
-    expect(first.cells.filter((cell) => cell.operation === "extract_audio")).toHaveLength(3);
+    expect(first.cells.filter((cell) =>
+      cell.inputs?.mediaRole === "extract-audio-output"
+      || cell.operation === "extract_audio")).toHaveLength(3);
     expect(first.cells.filter((cell) =>
       cell.inputs?.workflowRole?.toString().startsWith("scene-video-"))).toHaveLength(2);
     expect(first.cells.filter((cell) =>
@@ -308,7 +310,7 @@ describe("Multyculty workflow fixture", () => {
     expect(first.edges).toContainEqual(expect.objectContaining({
       source: source?.id,
       target: sourceExtractAudio?.id,
-      targetInput: "video",
+      targetInput: "segment",
     }));
     expect(first.edges).toContainEqual(expect.objectContaining({
       source: sourceExtractAudio?.id,
@@ -354,9 +356,9 @@ describe("Multyculty workflow fixture", () => {
       expect(first.edges).toContainEqual(expect.objectContaining({
         source: video?.id,
         target: extractAudio?.id,
-        targetInput: "video",
+        targetInput: "segment",
       }));
-      expect(extractAudio?.type).toBe("extract_audio");
+      expect(extractAudio?.type).toBe("audio");
       expect(extractAudio?.outputArtifactId).toBeTruthy();
       const prompt = first.cells.find((cell) =>
         cell.inputs?.workflowRole === `prompt-${ordinal}`);

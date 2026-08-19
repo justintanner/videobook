@@ -190,23 +190,23 @@ export async function buildQartPng(
 }
 
 async function readCoverImage(
-  fs: Engine,
+  engine: Engine,
   imageRef: string,
 ): Promise<{ ok: true; assetId: string; buffer: Buffer } | { ok: false; error: string }> {
   const assetId = imageRef.replace(/^@/, "");
-  const artifact = fs.artifacts.get(assetId);
+  const artifact = engine.artifacts.get(assetId);
   if (!artifact.ok) return { ok: false, error: artifact.error.message };
   if (artifact.value.kind !== "image") {
     return { ok: false, error: `image_ref must be an image artifact, got ${artifact.value.kind}: ${assetId}` };
   }
 
-  const manifestResult = await fs.files.manifest(assetId);
+  const manifestResult = await engine.files.manifest(assetId);
   if (!manifestResult.ok) return { ok: false, error: manifestResult.error.message };
 
   const imageFile = findImageFile(manifestResult.value.files);
   if (!imageFile) return { ok: false, error: `No image file found in asset ${assetId}` };
 
-  const readResult = await fs.files.read(assetId, imageFile.name);
+  const readResult = await engine.files.read(assetId, imageFile.name);
   if (!readResult.ok) return { ok: false, error: readResult.error.message };
 
   const buffer = Buffer.isBuffer(readResult.value)
@@ -216,35 +216,35 @@ async function readCoverImage(
 }
 
 async function persistQartAsset(
-  fs: Engine,
+  engine: Engine,
   assetName: string,
   files: QartFiles,
   metadata: Record<string, unknown>,
 ): Promise<{ ok: true; assetId: string } | { ok: false; error: string }> {
-  const created = await fs.artifacts.create("img", assetName);
+  const created = await engine.artifacts.create("img", assetName);
   if (!created.ok) return { ok: false, error: `Failed to create image asset: ${created.error.message}` };
   const assetId = created.value.artifactId;
   const writes = await Promise.all([
-    fs.files.write(assetId, "original.png", files.original),
-    fs.files.write(assetId, "landscape.jpg", files.landscape),
-    fs.files.write(assetId, "portrait.jpg", files.portrait),
-    fs.files.write(assetId, "square.jpg", files.square),
+    engine.files.write(assetId, "original.png", files.original),
+    engine.files.write(assetId, "landscape.jpg", files.landscape),
+    engine.files.write(assetId, "portrait.jpg", files.portrait),
+    engine.files.write(assetId, "square.jpg", files.square),
   ]);
   const writeFailure = writes.find((result) => !result.ok);
   if (writeFailure && !writeFailure.ok) {
-    await fs.artifacts.delete(assetId).catch(() => undefined);
+    await engine.artifacts.delete(assetId).catch(() => undefined);
     return { ok: false, error: writeFailure.error.message };
   }
 
-  const metadataResult = await fs.metadata.artifacts.write(assetId, "original", metadata);
+  const metadataResult = await engine.metadata.artifacts.write(assetId, "original", metadata);
   if (!metadataResult.ok) {
-    await fs.artifacts.delete(assetId).catch(() => undefined);
+    await engine.artifacts.delete(assetId).catch(() => undefined);
     return { ok: false, error: metadataResult.error.message };
   }
   return { ok: true, assetId };
 }
 
-export function createQartDef(fs: Engine): ToolDef {
+export function createQartDef(engine: Engine): ToolDef {
   return {
     name: "create_qart",
     description:
@@ -286,7 +286,7 @@ export function createQartDef(fs: Engine): ToolDef {
       if (!resolvedValue) return error("value must be a non-empty string");
       const resolvedSize = size ?? DEFAULT_QART_SIZE;
       const stylesToBuild = style ? [style] : (["inverted", "monochrome"] as QartStyle[]);
-      const cover = await readCoverImage(fs, image_ref);
+      const cover = await readCoverImage(engine, image_ref);
       if (!cover.ok) return error(cover.error);
 
       const qr = createQr(resolvedValue);
@@ -322,7 +322,7 @@ export function createQartDef(fs: Engine): ToolDef {
         }
 
         const resultAsset = await persistQartAsset(
-          fs,
+          engine,
           derivedLabel(`qart ${s}`, stem),
           buildFiles,
           { ...baseMeta, color_mode: s, module_pixels: buildFiles.modulePx },

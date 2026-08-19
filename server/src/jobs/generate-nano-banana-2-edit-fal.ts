@@ -27,13 +27,13 @@ type Payload = {
   seed?: number;
 };
 
-export function registerGenerateNanoBanana2EditFalJob(fs: Engine): void {
+export function registerGenerateNanoBanana2EditFalJob(engine: Engine): void {
   registerJobHandler("generate_nano_banana_2_edit_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(engine, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
       const image_urls = await Promise.all(
-        p.imageInputs.map((i) => uploadAssetToFal(fs, i.assetId, i.filename)),
+        p.imageInputs.map((i) => uploadAssetToFal(engine, i.assetId, i.filename)),
       );
   
       const input: FalInput = {
@@ -50,7 +50,7 @@ export function registerGenerateNanoBanana2EditFalJob(fs: Engine): void {
       };
   
       const taskId = await submitFalJob({
-        fs,
+        engine,
         bookId: p.bookId,
         assetId: p.imgAssetId,
         assetDir: p.imgAssetDir,

@@ -53,7 +53,7 @@ type CropVideoPayload = {
   bookId: string;
 };
 
-export function registerCropVideoJob(fs: Engine): void {
+export function registerCropVideoJob(engine: Engine): void {
   registerJobHandler("crop_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, ratio, rect,
@@ -61,7 +61,7 @@ export function registerCropVideoJob(fs: Engine): void {
     } = payload as unknown as CropVideoPayload;
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -124,7 +124,7 @@ export function registerCropVideoJob(fs: Engine): void {
 
         const inputFilename = basename(inputPath);
         await replaceArtifactFileFromPath(
-          fs,
+          engine,
           assetId,
           inputFilename,
           outputPath,
@@ -135,7 +135,7 @@ export function registerCropVideoJob(fs: Engine): void {
           ".analysis.gpt4otrans.json",
           "elevenlabs.json",
         ]) {
-          await fs.files.delete(assetId, stale);
+          await engine.files.delete(assetId, stale);
         }
 
         const videoPath = join(assetDir, inputFilename);

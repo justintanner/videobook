@@ -30,7 +30,7 @@ function deriveAudioName(source: Artifact): string {
   return `ext-${source.label ?? source.artifactId}`;
 }
 
-export function extractAudioDef(fs: Engine): ToolDef {
+export function extractAudioDef(engine: Engine): ToolDef {
   return {
     name: "extract_audio",
     description: "Extract the audio track from a video asset as MP3. By default creates a new audio asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset. Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).",
@@ -63,14 +63,14 @@ export function extractAudioDef(fs: Engine): ToolDef {
         destination?: { asset_id: string; filename: string };
         range?: { start_s: number; duration_s: number };
       };
-      const sourceArtifact = fs.artifacts.get(asset_id);
+      const sourceArtifact = engine.artifacts.get(asset_id);
       if (!sourceArtifact.ok) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: sourceArtifact.error.message }],
         };
       }
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -113,7 +113,7 @@ export function extractAudioDef(fs: Engine): ToolDef {
       const destinationMode = destination !== undefined;
 
       if (destination !== undefined) {
-        const destManifest = await fs.files.manifest(destination.asset_id);
+        const destManifest = await engine.files.manifest(destination.asset_id);
         if (!destManifest.ok) {
           return {
             isError: true as const,
@@ -135,7 +135,7 @@ export function extractAudioDef(fs: Engine): ToolDef {
         outputPath = join(audioAssetDir, destination.filename);
       } else {
         const audioName = deriveAudioName(sourceArtifact.value);
-        const assetResult = await fs.artifacts.create("audio", audioName);
+        const assetResult = await engine.artifacts.create("audio", audioName);
         if (!assetResult.ok) {
           return {
             isError: true as const,

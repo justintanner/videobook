@@ -31,7 +31,7 @@ type EvenSplitPayload = {
 };
 
 async function buildChunk(
-  fs: Engine,
+  engine: Engine,
   args: {
     sourcePath: string;
     outputPath: string;
@@ -67,17 +67,17 @@ async function buildChunk(
   }
   if (!skipMetadata) {
     await ingestWorkspaceOutputs(
-      fs,
+      engine,
       assetId,
       [outputPath.split("/").pop()!],
       "even_split_chunk",
       provenance,
     );
-    await fs.metadata.artifacts.write(assetId, "original", provenance);
+    await engine.metadata.artifacts.write(assetId, "original", provenance);
   }
 }
 
-export function registerEvenSplitJob(fs: Engine): void {
+export function registerEvenSplitJob(engine: Engine): void {
   registerJobHandler("even_split", async (payload) => {
     const { sourcePath, sourceAssetId, chunks, bookId, destination } = payload as EvenSplitPayload;
     const splitAtIso = new Date().toISOString();
@@ -96,7 +96,7 @@ export function registerEvenSplitJob(fs: Engine): void {
       };
       // Targeted chunks need exact-second container duration; the trailing
       // leftover does not (and the user explicitly doesn't care).
-      return buildChunk(fs, {
+      return buildChunk(engine, {
         sourcePath,
         outputPath: chunk.outputPath,
         start: chunk.start,
@@ -116,7 +116,7 @@ export function registerEvenSplitJob(fs: Engine): void {
       // not for scratch siblings inside a shared asset like plan/).
       const filenames = chunks.map((chunk) => chunk.outputPath.split("/").pop()!);
       await ingestWorkspaceOutputs(
-        fs,
+        engine,
         destination.assetId,
         filenames,
         "even_split",

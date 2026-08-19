@@ -39,16 +39,16 @@ function findCanonicalVideo(files: ArtifactManifestFile[]): ArtifactManifestFile
   return files.find((file) => /^original\.(mp4|mov)$/i.test(file.name)) ?? null;
 }
 
-function timelineOrientation(fs: Engine): Orientation {
-  return readTimeline(fs).render;
+function timelineOrientation(engine: Engine): Orientation {
+  return readTimeline(engine).render;
 }
 
 async function findFinalVideo(
-  fs: Engine,
+  engine: Engine,
   files: ArtifactManifestFile[],
   requested?: Orientation,
 ): Promise<{ file: ArtifactManifestFile; orientation: Orientation } | null> {
-  const preferred = requested ?? timelineOrientation(fs);
+  const preferred = requested ?? timelineOrientation(engine);
   const candidates: Orientation[] = [
     ...(preferred ? [preferred] : []),
     "landscape",
@@ -64,7 +64,7 @@ async function findFinalVideo(
   return null;
 }
 
-export function injectFirstFrameDef(fs: Engine): ToolDef {
+export function injectFirstFrameDef(engine: Engine): ToolDef {
   return {
     name: "inject_first_frame",
     description: "Replace exactly the first frame of a video artifact or the final video with an image artifact in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.",
@@ -95,22 +95,22 @@ export function injectFirstFrameDef(fs: Engine): ToolDef {
       // The timeline output is a "final"-kind artifact, so it is addressed by
       // id like any other; only its kind distinguishes it from a plain clip.
       const targetGate = await requireArtifactKind(
-        fs,
+        engine,
         targetAssetId,
         ["video", "final"],
         "inject_first_frame target_asset_id",
       );
       if (targetGate) return targetGate;
-      const isFinalTarget = artifactKindOf(fs, targetAssetId) === "final";
-      const imageGate = await requireArtifactKind(fs, imageAssetId, ["image"], "inject_first_frame image_asset_id");
+      const isFinalTarget = artifactKindOf(engine, targetAssetId) === "final";
+      const imageGate = await requireArtifactKind(engine, imageAssetId, ["image"], "inject_first_frame image_asset_id");
       if (imageGate) return imageGate;
       if (!isFinalTarget && orientation !== undefined) {
         return toolError("orientation is only valid for the final timeline render");
       }
 
       const [targetManifest, imageManifest] = await Promise.all([
-        fs.files.manifest(targetAssetId),
-        fs.files.manifest(imageAssetId),
+        engine.files.manifest(targetAssetId),
+        engine.files.manifest(imageAssetId),
       ]);
       if (!targetManifest.ok) return toolError(targetManifest.error.message);
       if (!imageManifest.ok) return toolError(imageManifest.error.message);
@@ -119,7 +119,7 @@ export function injectFirstFrameDef(fs: Engine): ToolDef {
       let targetOrientation: Orientation;
       if (isFinalTarget) {
         const resolved = await findFinalVideo(
-          fs,
+          engine,
           targetManifest.value.files,
           orientation,
         );

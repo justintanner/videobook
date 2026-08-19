@@ -21,7 +21,7 @@ type GenerateWan27ImagePayload = {
   nsfwChecker?: boolean;
 };
 
-export function registerGenerateWan27ImageJob(fs: Engine): void {
+export function registerGenerateWan27ImageJob(engine: Engine): void {
   registerJobHandler("generate_wan27_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
@@ -32,7 +32,7 @@ export function registerGenerateWan27ImageJob(fs: Engine): void {
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetToKie(fs, srcAssetId, filename));
+      uploadedUrls.push(await uploadAssetToKie(engine, srcAssetId, filename));
     }
     const normalizedPrompt = transformProviderPrompt(
       "generate_kie_wan_2_7_text_to_image",
@@ -46,7 +46,7 @@ export function registerGenerateWan27ImageJob(fs: Engine): void {
       { prompt: normalizedPrompt, aspect_ratio: aspectRatio, resolution, seed, nsfw_checker: nsfwChecker },
       uploadedUrls,
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "wan27_image",
       assetId: imgAssetId,

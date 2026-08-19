@@ -41,18 +41,18 @@ function findMediaFile(
 }
 
 export async function resolveAudioMixAsset(
-  fs: Engine,
+  engine: Engine,
   assetIdInput: string,
 ): Promise<ResolvedAudioMixAsset> {
   const assetId = normalizeAssetId(assetIdInput);
-  const artifact = fs.artifacts.get(assetId);
+  const artifact = engine.artifacts.get(assetId);
   if (!artifact.ok) throw new Error(artifact.error.message);
   if (artifact.value.kind !== "video" && artifact.value.kind !== "audio") {
     throw new Error(`Audio mix artifacts must be video or audio, got ${artifact.value.kind} artifact ${assetId}`);
   }
   const kind: AudioMixAssetKind = artifact.value.kind;
 
-  const manifestResult = await fs.files.manifest(assetId);
+  const manifestResult = await engine.files.manifest(assetId);
   if (!manifestResult.ok) throw new Error(manifestResult.error.message);
 
   const file = findMediaFile(manifestResult.value.files, kind);
@@ -69,7 +69,7 @@ export async function resolveAudioMixAsset(
   };
 }
 
-export function audioMixDef(fs: Engine): ToolDef {
+export function audioMixDef(engine: Engine): ToolDef {
   return {
     name: "audio_mix",
     description:
@@ -94,8 +94,8 @@ export function audioMixDef(fs: Engine): ToolDef {
       let layer: ResolvedAudioMixAsset;
       try {
         [target, layer] = await Promise.all([
-          resolveAudioMixAsset(fs, target_asset_id),
-          resolveAudioMixAsset(fs, layer_asset_id),
+          resolveAudioMixAsset(engine, target_asset_id),
+          resolveAudioMixAsset(engine, layer_asset_id),
         ]);
       } catch (error) {
         return toolError(error instanceof Error ? error.message : String(error));

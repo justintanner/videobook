@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
 import { queue, getEngineRoot } from "../queue.js";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import type { Client } from "@modelcontextprotocol/client";
 
 const execFileAsync = promisify(execFile);

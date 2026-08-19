@@ -245,7 +245,6 @@ const motionControlAction: NotebookGenerationAction = {
 const emptyImageCell: NotebookCell = {
   id: '01900000-0000-7000-8000-000000000001',
   type: 'generate_image',
-  slug: 'generate-image-01',
   slot: { row: 0, column: 0 },
   prompt: '',
 }
@@ -312,7 +311,6 @@ describe('notebook generation actions', () => {
       ...emptyImageCell,
       id: '01900000-0000-7000-8000-000000000002',
       type: 'image',
-      slug: 'img-source',
     }
     const edge: NotebookEdge = {
       id: '01900000-0000-7000-8000-000000000003',

@@ -13,9 +13,9 @@ function deriveImageName(stem: string): string {
   return `qwen2-${stem}`;
 }
 
-function sourceImageLabel(fs: Engine, imageAssetId: string | undefined): string {
+function sourceImageLabel(engine: Engine, imageAssetId: string | undefined): string {
   if (!imageAssetId) return `ephemeral-${Date.now()}`;
-  const artifact = fs.artifacts.get(imageAssetId);
+  const artifact = engine.artifacts.get(imageAssetId);
   const label = artifact.ok ? artifact.value.label?.trim() : undefined;
   return label || imageAssetId;
 }
@@ -36,7 +36,7 @@ const generateQwen2ImageEditSchema = {
 
 type Args = SchemaArgs<typeof generateQwen2ImageEditSchema>;
 
-export function generateQwen2ImageEditDef(fs: Engine): ToolDef {
+export function generateQwen2ImageEditDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_qwen_2_0_edit_image",
     description: "Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new image artifact and enqueues a background job.",
@@ -79,14 +79,14 @@ export function generateQwen2ImageEditDef(fs: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const resolved = await resolveImageRefs(fs, rawSlugs);
+      const resolved = await resolveImageRefs(engine, rawSlugs);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
-      const imgName = deriveImageName(sourceImageLabel(fs, sourceImageIds[0]));
-      const assetResult = await fs.artifacts.create(prefix, imgName);
+      const imgName = deriveImageName(sourceImageLabel(engine, sourceImageIds[0]));
+      const assetResult = await engine.artifacts.create(prefix, imgName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

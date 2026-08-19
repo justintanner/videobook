@@ -77,16 +77,10 @@ describe("notebook action catalog", () => {
         cellTypes: ["split_video"],
         requiredInputs: ["video"],
       });
-    expect(actions.find((action) => action.operation === "extract_audio"))
-      .toMatchObject({
-        cellTypes: ["extract_audio"],
-        requiredInputs: ["video"],
-      });
     expect(actions.some((action) =>
       action.operation === "extract_frame")).toBe(false);
     expect(actions.some((action) =>
-      action.operation === "extract_audio"
-      && action.cellTypes.includes("audio"))).toBe(false);
+      action.operation === "extract_audio")).toBe(false);
     expect(actions.some((action) =>
       action.cellTypes.some((type) =>
         type === "audio"

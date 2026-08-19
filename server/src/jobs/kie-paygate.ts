@@ -103,7 +103,7 @@ function createKieProvider(apiKey: string) {
 }
 
 export async function submitKieTask(
-  fs: Engine,
+  engine: Engine,
   ctx: JobHandlerContext,
   args: SubmitKieTaskArgs,
 ): Promise<string> {
@@ -112,14 +112,14 @@ export async function submitKieTask(
     wire: true,
   });
   const apiKey = requireApiKey("KIE_API_KEY");
-  await fs.metadata.artifacts.write(args.assetId, "generation-payload", args.request);
+  await engine.metadata.artifacts.write(args.assetId, "generation-payload", args.request);
   if (args.costHints) {
-    await fs.metadata.artifacts.write(args.assetId, "generation-cost-hints", args.costHints);
+    await engine.metadata.artifacts.write(args.assetId, "generation-cost-hints", args.costHints);
   }
   const provider = createKieProvider(apiKey);
   const taskId = await submitMediaJob(provider, args.request, { otp: mintKieOtp(args.request, 10 * 60, KIE_PAYGATE_DOT_PATH, args.costHints) });
 
-  const pendingResult = await fs.jobs.pending.write({
+  const pendingResult = await engine.jobs.pending.write({
     taskId,
     taskType: args.taskType,
     artifactId: args.assetId,
@@ -128,20 +128,20 @@ export async function submitKieTask(
   if (!pendingResult.ok) throw new Error(`Failed to write pending-task for ${args.assetId}: ${pendingResult.error.message}`);
   if (pendingResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
 
-  await fs.metadata.artifacts.write(args.assetId, "kie-task-id", { taskId });
+  await engine.metadata.artifacts.write(args.assetId, "kie-task-id", { taskId });
   ctx.setLease({ kind: "task", taskId });
   return taskId;
 }
 
 export async function submitQueuedKieTask(
-  fs: Engine,
+  engine: Engine,
   task: PendingTask,
 ): Promise<PendingTask> {
   if (task.taskId !== QUEUED_TASK_ID) throw new Error(`KIE task ${task.artifactId} is not locally queued`);
-  const ownerId = await fs.jobs.pending.getOwner(task.artifactId, QUEUED_TASK_ID);
+  const ownerId = await engine.jobs.pending.getOwner(task.artifactId, QUEUED_TASK_ID);
   if (!ownerId) throw new Error(`No active queued KIE lease found for ${task.artifactId}`);
 
-  const payloadResult = await fs.metadata.artifacts.read<MediaGenerationRequest>(task.artifactId, "generation-payload");
+  const payloadResult = await engine.metadata.artifacts.read<MediaGenerationRequest>(task.artifactId, "generation-payload");
   if (!payloadResult.ok || payloadResult.value === null) throw new Error(`No prepared KIE payload found for ${task.artifactId}`);
   assertProviderPayload(payloadResult.value, {
     toolName: task.taskType,
@@ -151,7 +151,7 @@ export async function submitQueuedKieTask(
   // Reload persisted cost hints (if any) so the OTP minted on resubmission
   // sees the same duration the original handler resolved, without leaking it
   // into the wire payload.
-  const hintsResult = await fs.metadata.artifacts.read<KieCostHints>(task.artifactId, "generation-cost-hints");
+  const hintsResult = await engine.metadata.artifacts.read<KieCostHints>(task.artifactId, "generation-cost-hints");
   const costHints = hintsResult.ok && hintsResult.value ? hintsResult.value : {};
 
   const apiKey = requireApiKey("KIE_API_KEY");
@@ -159,7 +159,7 @@ export async function submitQueuedKieTask(
   const taskId = await submitMediaJob(provider, payloadResult.value, { otp: mintKieOtp(payloadResult.value, 10 * 60, KIE_PAYGATE_DOT_PATH, costHints) });
   const meta = { ...task.meta };
   delete meta.kiePaygate;
-  const writeResult = await fs.jobs.pending.write({
+  const writeResult = await engine.jobs.pending.write({
     taskId,
     taskType: task.taskType,
     artifactId: task.artifactId,
@@ -168,7 +168,7 @@ export async function submitQueuedKieTask(
   if (!writeResult.ok) throw new Error(`Failed to write submitted pending-task for ${task.artifactId}: ${writeResult.error.message}`);
   if (writeResult.value === null) throw new Error(`Lost queued KIE lease while submitting ${task.artifactId}`);
 
-  await fs.metadata.artifacts.write(task.artifactId, "kie-task-id", { taskId });
+  await engine.metadata.artifacts.write(task.artifactId, "kie-task-id", { taskId });
   return writeResult.value.task;
 }
 
@@ -185,7 +185,7 @@ type SubmitVeoTaskArgs = {
  *  namespace (`kie.veo.post.api.v1.veo.generate`) and paygate dotPath
  *  (`api.v1.veo.generate`) from the standard `jobs.createTask` path. */
 export async function submitVeoTask(
-  fs: Engine,
+  engine: Engine,
   ctx: JobHandlerContext,
   args: SubmitVeoTaskArgs,
 ): Promise<string> {
@@ -194,7 +194,7 @@ export async function submitVeoTask(
     wire: true,
   });
   const apiKey = requireApiKey("KIE_API_KEY");
-  await fs.metadata.artifacts.write(args.assetId, "generation-payload", args.request);
+  await engine.metadata.artifacts.write(args.assetId, "generation-payload", args.request);
   const provider = createKieProvider(apiKey);
 
   const result = await provider.veo.post.api.v1.veo.generate(args.request, {
@@ -208,7 +208,7 @@ export async function submitVeoTask(
   }
   const taskId = result.data.taskId;
 
-  const pendingResult = await fs.jobs.pending.write({
+  const pendingResult = await engine.jobs.pending.write({
     taskId,
     taskType: args.taskType,
     artifactId: args.assetId,
@@ -217,7 +217,7 @@ export async function submitVeoTask(
   if (!pendingResult.ok) throw new Error(`Failed to write pending-task for ${args.assetId}: ${pendingResult.error.message}`);
   if (pendingResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
 
-  await fs.metadata.artifacts.write(args.assetId, "kie-task-id", { taskId });
+  await engine.metadata.artifacts.write(args.assetId, "kie-task-id", { taskId });
   ctx.setLease({ kind: "task", taskId });
   return taskId;
 }

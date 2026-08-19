@@ -24,7 +24,7 @@ type GenerateGrokImagineRefVideoPayload = {
   aspectRatio?: XaiVideoGenerateRequest["aspect_ratio"];
 };
 
-export function registerGenerateGrokImagineRefVideoJob(fs: Engine): void {
+export function registerGenerateGrokImagineRefVideoJob(engine: Engine): void {
   registerJobHandler("generate_grok_imagine_ref_video", async (payload, ctx) => {
     const {
       prompt, vidAssetId,
@@ -35,7 +35,7 @@ export function registerGenerateGrokImagineRefVideoJob(fs: Engine): void {
 
     const imageUrls: string[] = [];
     for (const ref of refImages) {
-      imageUrls.push(await uploadAssetFile(fs, ref.assetId, ref.filename));
+      imageUrls.push(await uploadAssetFile(engine, ref.assetId, ref.filename));
     }
 
     const provider = createXaiPaygatedProvider(apiKey, 120_000);
@@ -53,7 +53,7 @@ export function registerGenerateGrokImagineRefVideoJob(fs: Engine): void {
       imageUrls,
     );
 
-    await fs.metadata.artifacts.write(vidAssetId, "generation-payload", request);
+    await engine.metadata.artifacts.write(vidAssetId, "generation-payload", request);
     const { request_id } = await callXaiPaid<XaiVideoGenerateRequest, XaiVideoAsyncResponse>(
       provider.post.v1.videos.generations,
       XAI_VIDEO_GENERATIONS_DOT_PATH,
@@ -61,7 +61,7 @@ export function registerGenerateGrokImagineRefVideoJob(fs: Engine): void {
     );
     // Write pending task for async polling (reconcile-project-work.ts picks up xai_ prefixed tasks)
     {
-      const _ptResult = await fs.jobs.pending.write({
+      const _ptResult = await engine.jobs.pending.write({
         taskId: request_id,
         taskType: "xai_grok_imagine_ref_video",
         artifactId: vidAssetId,

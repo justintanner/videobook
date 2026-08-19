@@ -22,7 +22,7 @@ function validateRect(
   return null;
 }
 
-export function cropVideoDef(fs: Engine): ToolDef {
+export function cropVideoDef(engine: Engine): ToolDef {
   return {
     name: "crop_video",
     description:
@@ -51,7 +51,7 @@ export function cropVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

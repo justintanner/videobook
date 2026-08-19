@@ -18,7 +18,7 @@ function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
 
-export function rewriteScriptDef(fs: Engine): ToolDef {
+export function rewriteScriptDef(engine: Engine): ToolDef {
   return {
     name: "rewrite_script",
     description:
@@ -46,10 +46,10 @@ export function rewriteScriptDef(fs: Engine): ToolDef {
         book_id: string;
       };
 
-      const kindGate = await requireArtifactKind(fs, asset_id, ["script"], "rewrite_script");
+      const kindGate = await requireArtifactKind(engine, asset_id, ["script"], "rewrite_script");
       if (kindGate) return kindGate;
 
-      const originalResult = await fs.metadata.artifacts.read<OriginalMeta>(asset_id, "original");
+      const originalResult = await engine.metadata.artifacts.read<OriginalMeta>(asset_id, "original");
       if (!originalResult.ok) {
         return error(`Script ${asset_id} has no native original metadata — cannot determine origin`);
       }
@@ -64,7 +64,7 @@ export function rewriteScriptDef(fs: Engine): ToolDef {
         return error("OPENAI_API_KEY is not set");
       }
 
-      const scriptManifest = await fs.files.manifest(asset_id);
+      const scriptManifest = await engine.files.manifest(asset_id);
       if (!scriptManifest.ok) {
         return error(scriptManifest.error.message);
       }

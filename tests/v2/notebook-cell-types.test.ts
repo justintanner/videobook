@@ -33,21 +33,21 @@ const cellTypeCases = [
 describe('notebook cell type semantics', () => {
   it.each(cellTypeCases)(
     'classifies %s generation eligibility',
-    (type, generation) => {
+    (type, generation, _extractedMedia, _mediaPresentation, _mediaWork) => {
       expect(isNotebookGenerationCellType(type)).toBe(generation)
     },
   )
 
   it.each(cellTypeCases)(
     'classifies %s extracted-media output',
-    (type, _generation, extractedMedia) => {
+    (type, _generation, extractedMedia, _mediaPresentation, _mediaWork) => {
       expect(isNotebookExtractMediaCellType(type)).toBe(extractedMedia)
     },
   )
 
   it.each(cellTypeCases)(
     'classifies %s passive media presentation',
-    (type, _generation, _extractedMedia, mediaPresentation) => {
+    (type, _generation, _extractedMedia, mediaPresentation, _mediaWork) => {
       expect(isNotebookMediaPresentationCellType(type)).toBe(mediaPresentation)
     },
   )

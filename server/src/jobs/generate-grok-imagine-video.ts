@@ -27,7 +27,7 @@ type GenerateGrokImagineVideoPayload = {
   _provider?: string;
 };
 
-export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
+export function registerGenerateGrokImagineVideoJob(engine: Engine): void {
   registerJobHandler("generate_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceImageIds, imageFilenames, vidAssetId, vidAssetDir,
@@ -56,7 +56,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
 
       const imageUrls: string[] = [];
       for (let i = 0; i < sourceImageIds.length; i++) {
-        imageUrls.push(await uploadAssetFile(fs, sourceImageIds[i], imageFilenames[i]));
+        imageUrls.push(await uploadAssetFile(engine, sourceImageIds[i], imageFilenames[i]));
       }
 
       const provider = createXaiPaygatedProvider(apiKey, 120_000);
@@ -64,7 +64,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
         { prompt: normalizedPrompt, duration, resolution, aspect_ratio, nsfw_checker },
         imageUrls,
       );
-      await fs.metadata.artifacts.write(vidAssetId, "generation-payload", request);
+      await engine.metadata.artifacts.write(vidAssetId, "generation-payload", request);
       const { request_id } = await callXaiPaid<XaiVideoGenerateRequest, XaiVideoAsyncResponse>(
         provider.post.v1.videos.generations,
         XAI_VIDEO_GENERATIONS_DOT_PATH,
@@ -72,7 +72,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
       );
 
       {
-        const _ptResult = await fs.jobs.pending.write({
+        const _ptResult = await engine.jobs.pending.write({
           taskId: request_id,
           taskType: "xai_grok_imagine_video",
           artifactId: vidAssetId,
@@ -97,7 +97,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
 
     const downloadUrls: string[] = [];
     for (let i = 0; i < sourceImageIds.length; i++) {
-      downloadUrls.push(await uploadAssetToKie(fs, sourceImageIds[i], imageFilenames[i]));
+      downloadUrls.push(await uploadAssetToKie(engine, sourceImageIds[i], imageFilenames[i]));
     }
 
     const request = buildGrokImagineVideoPayload(
@@ -114,7 +114,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
       },
       downloadUrls,
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "grok_imagine_video",
       assetId: vidAssetId,

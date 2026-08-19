@@ -24,7 +24,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateKlingV3StandardI2vFalDef(fs: Engine): ToolDef {
+export function generateKlingV3StandardI2vFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_kling_video_v3_standard_image_to_video",
     description: "Generate a video via fal.ai using Kling Video v3 Standard from a first-frame image (optional end frame). Creates a new video artifact and enqueues a background job.",
@@ -37,11 +37,11 @@ export function generateKlingV3StandardI2vFalDef(fs: Engine): ToolDef {
       }
 
       const slugs = end_frame_ref ? [first_frame_ref, end_frame_ref] : [first_frame_ref];
-      const resolved = await resolveImageRefs(fs, slugs);
+      const resolved = await resolveImageRefs(engine, slugs);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame, endFrame] = resolved.inputs;
-      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "kling-3.0/video/std"), prompt));
+      const assetResult = await engine.artifacts.create("vid", generationLabel(modelSlug("kie", "kling-3.0/video/std"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

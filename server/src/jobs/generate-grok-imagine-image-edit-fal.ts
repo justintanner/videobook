@@ -21,14 +21,14 @@ type Payload = {
   output_format?: FalInput["output_format"];
 };
 
-export function registerGenerateGrokImagineImageEditFalJob(fs: Engine): void {
+export function registerGenerateGrokImagineImageEditFalJob(engine: Engine): void {
   registerJobHandler("generate_grok_imagine_image_edit_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(engine, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
       const image_urls = await Promise.all(
         p.imageInputs.map((i) =>
-          "url" in i ? i.url : uploadAssetToFal(fs, i.assetId, i.filename),
+          "url" in i ? i.url : uploadAssetToFal(engine, i.assetId, i.filename),
         ),
       );
   
@@ -41,7 +41,7 @@ export function registerGenerateGrokImagineImageEditFalJob(fs: Engine): void {
       };
   
       const taskId = await submitFalJob({
-        fs,
+        engine,
         bookId: p.bookId,
         assetId: p.imgAssetId,
         assetDir: p.imgAssetDir,

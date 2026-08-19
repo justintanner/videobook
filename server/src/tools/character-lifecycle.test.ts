@@ -1,4 +1,4 @@
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { describe, it, expect } from "vitest";
 import { isUuidV7 } from "videobook-engine";
 import { createCharacterDef } from "./create-character.js";

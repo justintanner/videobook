@@ -7,7 +7,7 @@ import {
   isImageContent,
   imageExtension,
 } from "./download-video.js";
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 
 describe("applyRequestedDownloadRange", () => {

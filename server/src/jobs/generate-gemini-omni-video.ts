@@ -27,7 +27,7 @@ type GenerateGeminiOmniVideoPayload = {
   video_clip_ends?: number;
 };
 
-export function registerGenerateGeminiOmniVideoJob(fs: Engine): void {
+export function registerGenerateGeminiOmniVideoJob(engine: Engine): void {
   registerJobHandler("generate_gemini_omni_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId,
@@ -41,10 +41,10 @@ export function registerGenerateGeminiOmniVideoJob(fs: Engine): void {
 
     const imageUrls: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      imageUrls.push(await uploadAssetToKie(fs, assetId, filename));
+      imageUrls.push(await uploadAssetToKie(engine, assetId, filename));
     }
     const videoUrl = videoInput
-      ? await uploadAssetToKie(fs, videoInput.assetId, videoInput.filename)
+      ? await uploadAssetToKie(engine, videoInput.assetId, videoInput.filename)
       : undefined;
 
     const normalizedPrompt = transformProviderPrompt(
@@ -74,7 +74,7 @@ export function registerGenerateGeminiOmniVideoJob(fs: Engine): void {
     // Reuse the shared seedance2_video TaskType + completion handler — they key
     // off taskType, not the apiModel. apiModel rides in meta so the completed
     // asset records gemini-omni-video provenance accurately.
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "seedance2_video",
       assetId: vidAssetId,

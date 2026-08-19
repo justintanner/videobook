@@ -12,7 +12,7 @@ import type { KeywordGraphic } from "./remotion/subtitles/types.js";
 
 const VIDEO_FILE: ArtifactManifestFile = {
   name: "original.mp4",
-  size_bytes: 100,
+  sizeBytes: 100,
   extension: "mp4",
   mtimeMs: 1234,
 };

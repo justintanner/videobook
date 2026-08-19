@@ -203,11 +203,11 @@ async function verifySpliceDuration(
 }
 
 async function readArtifactFile(
-  fs: Engine,
+  engine: Engine,
   artifactId: string,
   filename: string,
 ): Promise<Buffer> {
-  const result = await fs.files.read(artifactId, filename);
+  const result = await engine.files.read(artifactId, filename);
   if (!result.ok) {
     throw new Error(
       `Failed to snapshot ${artifactId}/${filename}: ${result.error.message}`,
@@ -284,7 +284,7 @@ export async function spliceVideoFiles(options: SpliceFilesOptions): Promise<Spl
   return match;
 }
 
-export function registerSpliceVideoJob(fs: Engine): void {
+export function registerSpliceVideoJob(engine: Engine): void {
   registerJobHandler("splice_video", async (payload, ctx) => {
     const {
       firstPath, secondPath, outputPath,
@@ -297,7 +297,7 @@ export function registerSpliceVideoJob(fs: Engine): void {
     } = payload as SpliceVideoPayload;
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -311,8 +311,8 @@ export function registerSpliceVideoJob(fs: Engine): void {
           const snapshotFirstPath = join(sourceDir, `first${extname(resolvedFirstFilename)}`);
           const snapshotSecondPath = join(sourceDir, `second${extname(resolvedSecondFilename)}`);
           const [firstBytes, secondBytes] = await Promise.all([
-            readArtifactFile(fs, firstAssetId, resolvedFirstFilename),
-            readArtifactFile(fs, secondAssetId, resolvedSecondFilename),
+            readArtifactFile(engine, firstAssetId, resolvedFirstFilename),
+            readArtifactFile(engine, secondAssetId, resolvedSecondFilename),
           ]);
           await Promise.all([
             writeFile(snapshotFirstPath, firstBytes),
@@ -350,13 +350,13 @@ export function registerSpliceVideoJob(fs: Engine): void {
             spliced_at: new Date().toISOString(),
           };
           await ingestWorkspaceOutputs(
-            fs,
+            engine,
             assetId,
             [basename(outputPath)],
             "splice_video",
             provenance,
           );
-          await fs.metadata.artifacts.write(assetId, "original", provenance);
+          await engine.metadata.artifacts.write(assetId, "original", provenance);
 
           return { provenance, timestamp: splice.timestamp, score: splice.score };
         } finally {

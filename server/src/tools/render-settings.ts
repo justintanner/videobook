@@ -13,12 +13,12 @@ type TranscriptInfo = {
 const TRANSLATED_SIDECAR_RE = /^elevenlabs\.([a-z]{2})\.json$/;
 
 async function readTranscriptInfo(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<TranscriptInfo> {
   const info: TranscriptInfo = { sourceLanguageCode: null, sourceLanguage: null, cachedTranslations: [] };
 
-  const manifestResult = await fs.files.manifest(assetId);
+  const manifestResult = await engine.files.manifest(assetId);
   if (manifestResult.ok) {
     for (const file of manifestResult.value.files) {
       const match = TRANSLATED_SIDECAR_RE.exec(file.name);
@@ -26,7 +26,7 @@ async function readTranscriptInfo(
     }
   }
 
-  const transcriptResult = await fs.files.read(assetId, "elevenlabs.json");
+  const transcriptResult = await engine.files.read(assetId, "elevenlabs.json");
   if (transcriptResult.ok) {
     try {
       const raw = JSON.parse(transcriptResult.value.toString()) as unknown;
@@ -40,7 +40,7 @@ async function readTranscriptInfo(
   return info;
 }
 
-export function getRenderSettingsDef(fs: Engine): ToolDef {
+export function getRenderSettingsDef(engine: Engine): ToolDef {
   return {
     name: "get_render_settings",
     description: "Fetch stored render settings for a single asset across all orientations, plus transcript language info (detected source language and cached subtitle translations)",
@@ -51,8 +51,8 @@ export function getRenderSettingsDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const { asset_id } = args as { asset_id: string; book_id: string };
       const [settings, transcript] = await Promise.all([
-        readRenderSettings(fs, asset_id, [...RENDER_ORIENTATIONS]),
-        readTranscriptInfo(fs, asset_id),
+        readRenderSettings(engine, asset_id, [...RENDER_ORIENTATIONS]),
+        readTranscriptInfo(engine, asset_id),
       ]);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ settings, transcript }) }],

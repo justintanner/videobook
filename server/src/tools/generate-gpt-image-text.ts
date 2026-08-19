@@ -20,7 +20,7 @@ const generateGptImageTextSchema = {
 
 type Args = SchemaArgs<typeof generateGptImageTextSchema>;
 
-export function generateGptImageTextDef(fs: Engine): ToolDef {
+export function generateGptImageTextDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_gpt_image_2_text_to_image",
     description: "Generate an image using GPT Image 2.0 text-to-image. Creates a new image artifact and enqueues a background job.",
@@ -47,7 +47,7 @@ export function generateGptImageTextDef(fs: Engine): ToolDef {
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
       const assetName = generationLabel("gpt-image-text", prompt);
-      const assetResult = await fs.artifacts.create("img", assetName);
+      const assetResult = await engine.artifacts.create("img", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

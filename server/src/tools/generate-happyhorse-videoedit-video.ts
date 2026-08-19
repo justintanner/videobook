@@ -35,7 +35,7 @@ const generateHappyhorseVideoeditVideoSchema = {
 
 type Args = SchemaArgs<typeof generateHappyhorseVideoeditVideoSchema>;
 
-export function generateHappyhorseVideoeditVideoDef(fs: Engine): ToolDef {
+export function generateHappyhorseVideoeditVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_happyhorse_1_1_edit_video",
     description: "Edit a source video using HappyHorse video-edit with optional reference images for character/style. Creates a new video artifact and enqueues a background job.",
@@ -48,12 +48,12 @@ export function generateHappyhorseVideoeditVideoDef(fs: Engine): ToolDef {
       }
 
       const videoAssetId = video_ref.replace(/^@/, "");
-      const videoArtifact = fs.artifacts.get(videoAssetId);
+      const videoArtifact = engine.artifacts.get(videoAssetId);
       if (!videoArtifact.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoArtifact.error.message }] };
       if (videoArtifact.value.kind !== "video") {
         return { isError: true as const, content: [{ type: "text" as const, text: `video_ref must be a video artifact, got ${videoArtifact.value.kind}: ${videoAssetId}` }] };
       }
-      const videoManifest = await fs.files.manifest(videoAssetId);
+      const videoManifest = await engine.files.manifest(videoAssetId);
       if (!videoManifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoManifest.error.message }] };
       const videoFile = findVideoFile(videoManifest.value.files);
       if (!videoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${videoAssetId}` }] };
@@ -61,12 +61,12 @@ export function generateHappyhorseVideoeditVideoDef(fs: Engine): ToolDef {
       const imageInputs: RefInput[] = [];
       for (const raw of image_refs ?? []) {
         const assetId = raw.replace(/^@/, "");
-        const artifact = fs.artifacts.get(assetId);
+        const artifact = engine.artifacts.get(assetId);
         if (!artifact.ok) return { isError: true as const, content: [{ type: "text" as const, text: artifact.error.message }] };
         if (artifact.value.kind !== "image") {
           return { isError: true as const, content: [{ type: "text" as const, text: `image_refs entries must be image artifacts, got ${artifact.value.kind}: ${assetId}` }] };
         }
-        const manifest = await fs.files.manifest(assetId);
+        const manifest = await engine.files.manifest(assetId);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
         const file = findImageFile(manifest.value.files);
         if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
@@ -74,7 +74,7 @@ export function generateHappyhorseVideoeditVideoDef(fs: Engine): ToolDef {
       }
 
       const videoName = generationLabel(modelSlug("kie", "happyhorse/video-edit"), prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }

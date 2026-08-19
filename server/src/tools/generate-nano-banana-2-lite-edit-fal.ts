@@ -23,7 +23,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateNanoBanana2LiteEditFalDef(fs: Engine): ToolDef {
+export function generateNanoBanana2LiteEditFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_nano_banana_2_lite_edit_image",
     description: "Edit images via fal.ai using Google Nano Banana 2 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.",
@@ -35,10 +35,10 @@ export function generateNanoBanana2LiteEditFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageRefs(fs, image_refs);
+      const resolved = await resolveImageRefs(engine, image_refs);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.artifacts.create("img", generationLabel("nano-banana-2-lite-edit", prompt));
+      const assetResult = await engine.artifacts.create("img", generationLabel("nano-banana-2-lite-edit", prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;

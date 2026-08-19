@@ -8,7 +8,7 @@ import {
   createEngine,
 } from "videobook-engine";
 import { activeBookEngine, withBookContext } from "./book-context.js";
-import { bookManager } from "./fs.js";
+import { bookManager } from "./engine.js";
 import { runWithJobDeadline } from "./job-deadline.js";
 
 type JobPayload = Record<string, unknown>;
@@ -36,6 +36,7 @@ interface RunnerInfo {
   reaper: { stop: () => void };
   providerPollTimer: ReturnType<typeof setInterval> | null;
   providerPollInFlight: boolean;
+  pollAbort: AbortController;
 }
 
 interface QueueIndexEntry {
@@ -72,6 +73,7 @@ const DEFAULT_PROVIDER_POLL_INTERVAL_MS = 10_000;
 let providerPollIntervalMs = DEFAULT_PROVIDER_POLL_INTERVAL_MS;
 let providerPollTimeoutOverrideMs: number | undefined;
 let providerPollTickHook: ((bookId: string) => void) | null = null;
+let providerPollWorkHook: ((signal: AbortSignal) => Promise<void>) | null = null;
 
 /** Test-only: shorten poll interval / inject age-out timeout for the driver. */
 export function configureProviderPollDriverForTests(options: {
@@ -90,6 +92,7 @@ export function resetProviderPollDriverForTests(): void {
   providerPollIntervalMs = DEFAULT_PROVIDER_POLL_INTERVAL_MS;
   providerPollTimeoutOverrideMs = undefined;
   providerPollTickHook = null;
+  providerPollWorkHook = null;
 }
 
 export function setProviderPollTickHookForTests(
@@ -98,15 +101,25 @@ export function setProviderPollTickHookForTests(
   providerPollTickHook = hook;
 }
 
+export function setProviderPollWorkHookForTests(
+  hook: ((signal: AbortSignal) => Promise<void>) | null,
+): void {
+  providerPollWorkHook = hook;
+}
+
 export function isProviderPollDriverActive(bookId: string): boolean {
   const info = runnerByBook.get(bookId);
   return info?.providerPollTimer != null;
 }
 
 async function tickProviderPoll(info: RunnerInfo): Promise<void> {
-  if (info.providerPollInFlight) return;
+  if (info.providerPollInFlight || info.pollAbort.signal.aborted) return;
   info.providerPollInFlight = true;
   try {
+    if (providerPollWorkHook) {
+      await providerPollWorkHook(info.pollAbort.signal);
+    }
+    if (info.pollAbort.signal.aborted) return;
     const { reconcileImageSubjectJobFailures } = await import(
       "./jobs/image-subjects.js"
     );
@@ -118,11 +131,15 @@ async function tickProviderPoll(info: RunnerInfo): Promise<void> {
     await pollPendingProviderTasks(
       info.engine,
       info.bookId,
-      providerPollTimeoutOverrideMs !== undefined
-        ? { timeoutMs: providerPollTimeoutOverrideMs }
-        : {},
+      {
+        signal: info.pollAbort.signal,
+        ...(providerPollTimeoutOverrideMs !== undefined
+          ? { timeoutMs: providerPollTimeoutOverrideMs }
+          : {}),
+      },
     );
   } catch (error) {
+    if (info.pollAbort.signal.aborted) return;
     console.warn(
       `[provider-poll] book ${info.bookId} tick failed:`,
       error instanceof Error ? error.message : error,
@@ -144,7 +161,17 @@ function stopProviderPollDriver(info: RunnerInfo): void {
     clearInterval(info.providerPollTimer);
     info.providerPollTimer = null;
   }
-  info.providerPollInFlight = false;
+  if (!info.pollAbort.signal.aborted) info.pollAbort.abort();
+}
+
+async function awaitProviderPollIdle(
+  info: RunnerInfo,
+  graceMs = 2_000,
+): Promise<void> {
+  const deadline = Date.now() + graceMs;
+  while (info.providerPollInFlight && Date.now() < deadline) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  }
 }
 
 export function registerJobHandler(
@@ -245,6 +272,7 @@ function jobTypeToAssetWorkKind(
       return { kind: "apply_sfx" };
     case "extract_frame":
     case "extract_notebook_frame":
+    case "extract_notebook_audio":
     case "extract_audio":
       return { kind: "extract" };
     case "describe_image":
@@ -471,6 +499,7 @@ async function ensureRunner(bookId: string): Promise<RunnerInfo> {
     reaper,
     providerPollTimer: null,
     providerPollInFlight: false,
+    pollAbort: new AbortController(),
   };
   startProviderPollDriver(info);
   runnerByBook.set(bookId, info);
@@ -568,7 +597,10 @@ export const queue: Queue = {
       stopProviderPollDriver(info);
       info.reaper.stop();
     }
-    await Promise.all(infos.map((info) => info.runner.stop()));
+    await Promise.all([
+      ...infos.map((info) => info.runner.stop()),
+      ...infos.map((info) => awaitProviderPollIdle(info)),
+    ]);
   },
 };
 
@@ -583,7 +615,7 @@ export async function stopBookQueue(bookId: string): Promise<void> {
   runnerByBook.delete(bookId);
   stopProviderPollDriver(info);
   info.reaper.stop();
-  await info.runner.stop();
+  await Promise.all([info.runner.stop(), awaitProviderPollIdle(info)]);
   const active = info.engine.jobs.queue.list({ states: ["queued", "running", "completing"] });
   await Promise.all(active.map((job) => info.engine.jobs.queue.abort(job.id, "Book deleted")));
   const pending = info.engine.jobs.pending.findAll();
@@ -601,14 +633,31 @@ export async function waitForJob(
   jobId: string,
   timeoutMs = 300_000,
 ): Promise<void> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    const status = await queue.getStatus(jobId);
-    if (status?.state === "completed") return;
-    if (status?.state === "failed") {
-      throw new Error(`Job ${jobId} failed: ${status.error?.message ?? "unknown"}`);
+  const deadline = Date.now() + timeoutMs;
+  let entry = jobIdIndex.get(jobId);
+  while (!entry) {
+    if (Date.now() >= deadline) {
+      throw new Error(`Job ${jobId} timed out after ${timeoutMs}ms`);
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await new Promise<void>((resolve) => setTimeout(resolve, 5));
+    entry = jobIdIndex.get(jobId);
+  }
+  const info = runnerByBook.get(entry.bookId);
+  if (info) {
+    try {
+      await info.runner.waitFor(entry.internalId, Math.max(1, deadline - Date.now()));
+    } catch (error) {
+      const failed = await queue.getStatus(jobId);
+      if (failed?.state === "failed") {
+        throw new Error(`Job ${jobId} failed: ${failed.error?.message ?? "unknown"}`);
+      }
+      throw error;
+    }
+  }
+  const status = await queue.getStatus(jobId);
+  if (status?.state === "completed") return;
+  if (status?.state === "failed") {
+    throw new Error(`Job ${jobId} failed: ${status.error?.message ?? "unknown"}`);
   }
   throw new Error(`Job ${jobId} timed out after ${timeoutMs}ms`);
 }

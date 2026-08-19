@@ -24,9 +24,9 @@ const SLUG = modelSlug("kie", "minimax-h3/reference-to-video");
 const REFERENCE_VIDEO_MIN_SECONDS = 2;
 const REFERENCE_VIDEO_MAX_SECONDS = 15;
 
-async function referenceVideoDurationError(fs: Engine, raw: string, assetId: string): Promise<string | null> {
+async function referenceVideoDurationError(engine: Engine, raw: string, assetId: string): Promise<string | null> {
   if (raw.includes("/")) return null;
-  const meta = await fs.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original");
+  const meta = await engine.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original");
   if (!meta.ok) return null;
   const duration = meta.value.duration;
   if (typeof duration !== "number" || duration <= 0) return null;
@@ -49,7 +49,7 @@ const generateMiniMaxH3R2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateMiniMaxH3R2vVideoSchema>;
 
-export function generateMiniMaxH3R2vVideoDef(fs: Engine): ToolDef {
+export function generateMiniMaxH3R2vVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_minimax_h3_reference_to_video",
     description: "Generate a video from reference images, videos, and/or audio using MiniMax H3 reference-to-video. Creates a new video artifact and enqueues a background job.",
@@ -64,7 +64,7 @@ export function generateMiniMaxH3R2vVideoDef(fs: Engine): ToolDef {
       const imageInputs: RefInput[] = [];
       for (const raw of image_refs ?? []) {
         if (raw.trim() === "") continue;
-        const r = await resolveImageRef(fs, raw);
+        const r = await resolveImageRef(engine, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
@@ -72,9 +72,9 @@ export function generateMiniMaxH3R2vVideoDef(fs: Engine): ToolDef {
       const videoInputs: RefInput[] = [];
       for (const raw of video_refs ?? []) {
         if (raw.trim() === "") continue;
-        const r = await resolveVideoRef(fs, raw);
+        const r = await resolveVideoRef(engine, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
-        const durationError = await referenceVideoDurationError(fs, raw, r.value.assetId);
+        const durationError = await referenceVideoDurationError(engine, raw, r.value.assetId);
         if (durationError) return { isError: true as const, content: [{ type: "text" as const, text: durationError }] };
         videoInputs.push(r.value);
       }
@@ -82,7 +82,7 @@ export function generateMiniMaxH3R2vVideoDef(fs: Engine): ToolDef {
       const audioInputs: RefInput[] = [];
       for (const raw of audio_refs ?? []) {
         if (raw.trim() === "") continue;
-        const r = await resolveAudioRef(fs, raw);
+        const r = await resolveAudioRef(engine, raw);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         audioInputs.push(r.value);
       }
@@ -92,7 +92,7 @@ export function generateMiniMaxH3R2vVideoDef(fs: Engine): ToolDef {
       }
 
       const videoName = generationLabel(SLUG, prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }

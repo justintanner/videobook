@@ -63,7 +63,7 @@ async function transcribeChunked(provider: OpenAiProvider, mediaPath: string, du
 }
 
 export async function runTranscribeVideoAudio(
-  fs: Engine,
+  engine: Engine,
   payload: TranscribeVideoAudioPayload,
   ctx: JobHandlerContext,
 ): Promise<TranscribeVideoAudioResult> {
@@ -72,7 +72,7 @@ export async function runTranscribeVideoAudio(
   const apiKey = getApiKey("OPENAI_API_KEY");
   if (!apiKey) return { success: false, reason: "OPENAI_API_KEY not set" };
 
-  const result = await withLocalLease(fs, assetId, ctx, "transcribe", async (): Promise<TranscribeVideoAudioResult> => {
+  const result = await withLocalLease(engine, assetId, ctx, "transcribe", async (): Promise<TranscribeVideoAudioResult> => {
     try {
       const provider = createOpenAi({ apiKey, timeout: 120_000 });
       const probe = await probeVideo(videoPath);
@@ -84,7 +84,7 @@ export async function runTranscribeVideoAudio(
         text = await transcribeChunked(provider, videoPath, probe.duration);
       } else {
         const sourceFilename = payload.sourceFilename ?? "original.mp3";
-        const readResult = await fs.files.read(assetId, sourceFilename);
+        const readResult = await engine.files.read(assetId, sourceFilename);
         if (!readResult.ok) throw new Error(readResult.error.message);
         text = await transcribeBytes(
           provider,
@@ -94,7 +94,7 @@ export async function runTranscribeVideoAudio(
       }
 
       const jsonString = JSON.stringify({ text }, null, 2);
-      await fs.files.write(assetId, ".analysis.gpt4otrans.json", jsonString);
+      await engine.files.write(assetId, ".analysis.gpt4otrans.json", jsonString);
       await queue.enqueue(`semantic-index-${assetId}-transcript-${Date.now()}`, {
         type: "semantic_index",
         assetId,
@@ -111,7 +111,7 @@ export async function runTranscribeVideoAudio(
       // lease, so the asset stays claimable for a later retry.
       const reason = err instanceof Error ? err.message : String(err);
       console.warn(`[transcribe_video_audio] soft-failed for ${assetId}: ${reason}`);
-      await fs.logs.append("transcribe-soft-fail", { assetId, error: reason }).catch(() => undefined);
+      await engine.logs.append("transcribe-soft-fail", { assetId, error: reason }).catch(() => undefined);
       return { success: false, reason };
     }
   }, { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS });
@@ -120,21 +120,21 @@ export async function runTranscribeVideoAudio(
   // prompt includes the fresh transcript — which revives auto-transcribe and
   // the lazy render below (that call skips while the analysis is missing).
   try {
-    await enqueueLazyAnalysisIfSlotted(fs, bookId, assetId);
+    await enqueueLazyAnalysisIfSlotted(engine, bookId, assetId);
   } catch (err) {
     void err;
   }
   try {
-    await enqueueLazyTimelineRender(fs, bookId, assetId);
+    await enqueueLazyTimelineRender(engine, bookId, assetId);
   } catch (err) {
     void err;
   }
   return result;
 }
 
-export function registerTranscribeVideoAudioJob(fs: Engine): void {
+export function registerTranscribeVideoAudioJob(engine: Engine): void {
   registerJobHandler("transcribe_video_audio", async (payload, ctx) =>
-    runTranscribeVideoAudio(fs, payload as TranscribeVideoAudioPayload, ctx));
+    runTranscribeVideoAudio(engine, payload as TranscribeVideoAudioPayload, ctx));
 }
 
 function audioMimeType(filename: string): string {

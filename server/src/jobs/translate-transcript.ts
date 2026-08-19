@@ -28,7 +28,7 @@ export type TranslateTranscriptResult = {
 };
 
 export async function runTranslateTranscript(
-  fs: Engine,
+  engine: Engine,
   payload: TranslateTranscriptPayload,
   ctx: JobHandlerContext,
 ): Promise<TranslateTranscriptResult> {
@@ -38,12 +38,12 @@ export async function runTranslateTranscript(
   // translate kind, and sharing it serializes translation against
   // re-transcription of the same asset.
   const result = await withLocalLease(
-    fs,
+    engine,
     assetId,
     ctx,
     "transcribe",
     async (): Promise<TranslateTranscriptResult> => {
-      const readResult = await fs.files.read(assetId, "elevenlabs.json");
+      const readResult = await engine.files.read(assetId, "elevenlabs.json");
       if (!readResult.ok) {
         throw new Error(`No transcript for ${assetId}: ${readResult.error.message}. Transcribe the asset first.`);
       }
@@ -54,7 +54,7 @@ export async function runTranslateTranscript(
       }
 
       const sidecarFilename = translatedTranscriptFilename(targetLanguage);
-      const existing = await fs.files.read(assetId, sidecarFilename);
+      const existing = await engine.files.read(assetId, sidecarFilename);
       if (existing.ok) {
         const sourceSegments = parseSegments(raw as Parameters<typeof parseSegments>[0]);
         try {
@@ -70,26 +70,26 @@ export async function runTranslateTranscript(
       const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"));
       const sidecar = await translateTranscript(raw, targetLanguage, responses, ctx.signal);
 
-      const writeResult = await fs.files.write(assetId, sidecarFilename, JSON.stringify(sidecar, null, 2)
+      const writeResult = await engine.files.write(assetId, sidecarFilename, JSON.stringify(sidecar, null, 2)
       );
       if (!writeResult.ok) {
         throw new Error(`Failed to write ${sidecarFilename}: ${writeResult.error.message}`);
       }
 
-      await fs.history.recordOperation("translate_transcript", assetId, { targetLanguage });
+      await engine.history.recordOperation("translate_transcript", assetId, { targetLanguage });
 
       return { success: true, targetLanguage };
     },
   );
   try {
-    await enqueueLazyTimelineRender(fs, bookId, assetId);
+    await enqueueLazyTimelineRender(engine, bookId, assetId);
   } catch (err) {
     void err;
   }
   return result;
 }
 
-export function registerTranslateTranscriptJob(fs: Engine): void {
+export function registerTranslateTranscriptJob(engine: Engine): void {
   registerJobHandler("translate_transcript", (payload, ctx) =>
-    runTranslateTranscript(fs, payload as TranslateTranscriptPayload, ctx));
+    runTranslateTranscript(engine, payload as TranslateTranscriptPayload, ctx));
 }

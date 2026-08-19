@@ -34,7 +34,7 @@ const generateHappyhorseI2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateHappyhorseI2vVideoSchema>;
 
-export function generateHappyhorseI2vVideoDef(fs: Engine): ToolDef {
+export function generateHappyhorseI2vVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_happyhorse_1_1_image_to_video",
     description: "Generate a video from a single first-frame image using HappyHorse image-to-video. Creates a new video artifact and enqueues a background job.",
@@ -47,18 +47,18 @@ export function generateHappyhorseI2vVideoDef(fs: Engine): ToolDef {
       }
 
       const assetId = first_frame_ref.replace(/^@/, "");
-      const artifact = fs.artifacts.get(assetId);
+      const artifact = engine.artifacts.get(assetId);
       if (!artifact.ok) return { isError: true as const, content: [{ type: "text" as const, text: artifact.error.message }] };
       if (artifact.value.kind !== "image") {
         return { isError: true as const, content: [{ type: "text" as const, text: `first_frame_ref must be an image artifact, got ${artifact.value.kind}: ${assetId}` }] };
       }
-      const manifest = await fs.files.manifest(assetId);
+      const manifest = await engine.files.manifest(assetId);
       if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
       const file = findImageFile(manifest.value.files);
       if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
 
       const videoName = `${SLUG}-${assetId}`;
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }

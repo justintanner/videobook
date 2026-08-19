@@ -18,7 +18,7 @@ function invalidSurface(value: unknown) {
   };
 }
 
-export function recordPromptDef(fs: Engine): ToolDef {
+export function recordPromptDef(engine: Engine): ToolDef {
   return {
     name: "record_prompt",
     description:
@@ -55,7 +55,7 @@ export function recordPromptDef(fs: Engine): ToolDef {
           ],
         };
       }
-      const result = await fs.prompts.record({
+      const result = await engine.prompts.record({
         surface,
         prompt,
         ...(params ? { context: params } : {}),
@@ -75,7 +75,7 @@ export function recordPromptDef(fs: Engine): ToolDef {
   };
 }
 
-export function listPromptHistoryDef(fs: Engine): ToolDef {
+export function listPromptHistoryDef(engine: Engine): ToolDef {
   return {
     name: "list_prompt_history",
     description:
@@ -111,7 +111,7 @@ export function listPromptHistoryDef(fs: Engine): ToolDef {
 
       const pageLimit = limit ?? 100;
       const pageOffset = offset ?? 0;
-      const entries = fs.prompts.list({
+      const entries = engine.prompts.list({
         surface,
         limit: pageOffset + pageLimit,
       });
@@ -121,7 +121,7 @@ export function listPromptHistoryDef(fs: Engine): ToolDef {
           content: [{ type: "text" as const, text: entries.error.message }],
         };
       }
-      const count = fs.prompts.count({ surface });
+      const count = engine.prompts.count({ surface });
       if (!count.ok) {
         return {
           isError: true as const,

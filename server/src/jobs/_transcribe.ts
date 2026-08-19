@@ -54,29 +54,29 @@ function inferAudioMime(filename: string): string {
  * or a failed write so the caller can surface the failure.
  */
 export async function transcribeAssetToElevenLabsJson(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   audioFilename: string,
   options: TranscribeOptions,
 ): Promise<void> {
   const response = await requestElevenLabsTranscript(
-    fs,
+    engine,
     assetId,
     audioFilename,
     options,
   );
-  await writeElevenLabsTranscript(fs, assetId, response, options);
+  await writeElevenLabsTranscript(engine, assetId, response, options);
 }
 
 export async function requestElevenLabsTranscript(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   audioFilename: string,
   options: TranscribeOptions,
 ): Promise<ElevenLabsSpeechToTextResponse> {
   const apiKey = requireApiKey("ELEVENLABS_API_KEY");
 
-  const readResult = await fs.files.read(assetId, audioFilename);
+  const readResult = await engine.files.read(assetId, audioFilename);
   if (!readResult.ok) {
     throw new Error(`Failed to read audio for ${assetId}: ${readResult.error.message}`);
   }
@@ -95,20 +95,20 @@ export async function requestElevenLabsTranscript(
 }
 
 export async function writeElevenLabsTranscript(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   response: ElevenLabsSpeechToTextResponse,
   options: TranscribeOptions,
 ): Promise<void> {
   const transcriptionStr = JSON.stringify(response, null, 2);
-  const writeResult = await fs.files.write(assetId, "elevenlabs.json", transcriptionStr
+  const writeResult = await engine.files.write(assetId, "elevenlabs.json", transcriptionStr
   );
   if (!writeResult.ok) {
     throw new Error(`Failed to write transcription: ${writeResult.error.message}`);
   }
 
-  await importElevenLabsTranscript(fs, assetId, response, options);
-  await fs.history.recordOperation("transcribe", assetId, {
+  await importElevenLabsTranscript(engine, assetId, response, options);
+  await engine.history.recordOperation("transcribe", assetId, {
       ...(options.languageCode ? { language_code: options.languageCode } : {}),
     }
   );
@@ -129,7 +129,7 @@ type SegmentDraft = {
 };
 
 export async function importElevenLabsTranscript(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   response: ElevenLabsSpeechToTextResponse,
   options: TranscribeOptions,
@@ -138,7 +138,7 @@ export async function importElevenLabsTranscript(
   if (source.length === 0) {
     throw new Error("ElevenLabs returned an acknowledgement without transcript content");
   }
-  const streams = fs.streams.list(assetId);
+  const streams = engine.streams.list(assetId);
   if (!streams.ok) {
     throw new Error(`Failed to read media streams for ${assetId}: ${streams.error.message}`);
   }
@@ -150,7 +150,7 @@ export async function importElevenLabsTranscript(
       right.language_probability - left.language_probability
     )[0]?.language_code
     ?? "und";
-  const imported = await fs.transcripts.import({
+  const imported = await engine.transcripts.import({
     artifactId: assetId,
     streamId: stream.streamId,
     objectHash: stream.objectHash,
@@ -314,17 +314,17 @@ function wordConfidence(word: TimedTranscriptWord): number | undefined {
  * missing API key, or an API/write failure so the caller surfaces the cause.
  */
 export async function ensureElevenLabsTranscript(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
 ): Promise<void> {
-  if ((await fs.files.read(assetId, "elevenlabs.json")).ok) return;
-  const manifest = await fs.files.manifest(assetId);
+  if ((await engine.files.read(assetId, "elevenlabs.json")).ok) return;
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) throw new Error(`auto-transcribe failed: ${manifest.error.message}`);
-  const artifact = fs.artifacts.get(assetId);
+  const artifact = engine.artifacts.get(assetId);
   if (!artifact.ok) throw new Error(`auto-transcribe failed: ${artifact.error.message}`);
   const audioFile = findAudioFile(manifest.value.files, artifact.value.kind);
   if (!audioFile) throw new Error(`auto-transcribe failed: no audio file found in asset ${assetId}`);
-  await transcribeAssetToElevenLabsJson(fs, assetId, audioFile.name, {
+  await transcribeAssetToElevenLabsJson(engine, assetId, audioFile.name, {
     tagAudioEvents: true,
     diarize: true,
   });

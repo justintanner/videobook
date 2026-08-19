@@ -15,7 +15,7 @@ type ExtendGrokImagineVideoPayload = {
   extend_times?: GrokVideoExtendRequest["input"]["extend_times"];
 };
 
-export function registerExtendGrokImagineVideoJob(fs: Engine): void {
+export function registerExtendGrokImagineVideoJob(engine: Engine): void {
   registerJobHandler("extend_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceVideoId, vidAssetId, vidAssetDir,
@@ -24,7 +24,7 @@ export function registerExtendGrokImagineVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const kieTaskIdResult = await fs.metadata.artifacts.read<{ taskId: string }>(sourceVideoId, "kie-task-id");
+    const kieTaskIdResult = await engine.metadata.artifacts.read<{ taskId: string }>(sourceVideoId, "kie-task-id");
     if (!kieTaskIdResult.ok) {
       throw new Error(`No Kie taskId found for source video ${sourceVideoId}. The source video must have been generated via Kie.`);
     }
@@ -38,7 +38,7 @@ export function registerExtendGrokImagineVideoJob(fs: Engine): void {
     // resolution as a top-level hint (mirrors veo3's top-level `duration` hint;
     // kie's createTask ignores unknown top-level fields), defaulting to the
     // grok-imagine default when the source predates resolution metadata.
-    const sourcePayloadResult = await fs.metadata.artifacts.read<{ input?: { resolution?: GrokImagineResolution } }>(sourceVideoId, "generation-payload"
+    const sourcePayloadResult = await engine.metadata.artifacts.read<{ input?: { resolution?: GrokImagineResolution } }>(sourceVideoId, "generation-payload"
     );
     const sourceResolution = sourcePayloadResult.ok ? sourcePayloadResult.value?.input?.resolution : undefined;
     if (sourceResolution !== undefined && sourceResolution !== "480p" && sourceResolution !== "720p") {
@@ -57,7 +57,7 @@ export function registerExtendGrokImagineVideoJob(fs: Engine): void {
       },
     };
 
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "grok_imagine_extend_video",
       assetId: vidAssetId,

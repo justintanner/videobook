@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { parseMultipartMixed } from "../acestep/client.js";
 import { resetAceStepForTests } from "../acestep/process.js";
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { queue, setEngineRoot } from "../queue.js";
 import {

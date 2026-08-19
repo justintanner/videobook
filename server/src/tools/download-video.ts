@@ -31,7 +31,7 @@ function sourcePrefix(url: string): string {
   }
 }
 
-export function downloadVideoDef(fs: Engine): ToolDef {
+export function downloadVideoDef(engine: Engine): ToolDef {
   return {
     name: "download_video",
     description: "Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.",
@@ -83,7 +83,7 @@ export function downloadVideoDef(fs: Engine): ToolDef {
       const prefix = sourcePrefix(normalizedUrl);
       const title = new URL(normalizedUrl).pathname.split("/").filter(Boolean).pop() ?? "video";
       const assetName = `${prefix} ${title}`;
-      const assetResult = await fs.artifacts.create("video", assetName);
+      const assetResult = await engine.artifacts.create("video", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

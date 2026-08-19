@@ -106,7 +106,7 @@ type RenderProjectPayload = {
 // fall back to the original-language transcript on any translation failure —
 // a render must never fail because translation did.
 async function resolveSubtitleSegments(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   raw: unknown,
   subtitleLanguage: string,
@@ -119,7 +119,7 @@ async function resolveSubtitleSegments(
   }
 
   const sidecarFilename = translatedTranscriptFilename(subtitleLanguage);
-  const existing = await fs.files.read(assetId, sidecarFilename);
+  const existing = await engine.files.read(assetId, sidecarFilename);
   if (existing.ok) {
     try {
       const sidecar = JSON.parse(existing.value.toString()) as unknown;
@@ -134,7 +134,7 @@ async function resolveSubtitleSegments(
   try {
     const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"));
     const sidecar = await translateTranscript(raw, subtitleLanguage, responses, signal);
-    const writeResult = await fs.files.write(assetId, sidecarFilename, JSON.stringify(sidecar, null, 2)
+    const writeResult = await engine.files.write(assetId, sidecarFilename, JSON.stringify(sidecar, null, 2)
     );
     if (!writeResult.ok) {
       console.warn(`[render] failed to cache ${sidecarFilename} for ${assetId}: ${writeResult.error.message}`);
@@ -149,7 +149,7 @@ async function resolveSubtitleSegments(
   }
 }
 
-export function registerRenderProjectJob(fs: Engine): void {
+export function registerRenderProjectJob(engine: Engine): void {
   registerJobHandler("render_project", async (payload, ctx) => {
     ctx.signal.throwIfAborted();
     const {
@@ -201,7 +201,7 @@ export function registerRenderProjectJob(fs: Engine): void {
     // renders — and so the path survives file moves between enqueue and run.
     let osgImagePath = payloadOsgImagePath;
     if (!osgImagePath && osgAssetId) {
-      const resolved = await resolveOsgImagePath(fs, osgAssetId);
+      const resolved = await resolveOsgImagePath(engine, osgAssetId);
       if (resolved.ok) {
         osgImagePath = resolved.path;
       } else {
@@ -226,7 +226,7 @@ export function registerRenderProjectJob(fs: Engine): void {
         try {
           ctx.signal.throwIfAborted();
           const claim = await claimLockedLease(
-            fs,
+            engine,
             asset.assetId,
             asset.assetDir,
             "render",
@@ -240,7 +240,7 @@ export function registerRenderProjectJob(fs: Engine): void {
           const lease = { ownerId: claim.ownerId };
           const heartbeat = setInterval(() => {
             try {
-              fs.jobs.artifactWork.renew(asset.assetId, lease.ownerId, 60_000
+              engine.jobs.artifactWork.renew(asset.assetId, lease.ownerId, 60_000
               );
             } catch (error) {
               console.warn(
@@ -263,13 +263,13 @@ export function registerRenderProjectJob(fs: Engine): void {
             // transcribe inline under this asset's render lease.
             let allSegments = null;
             let rawTranscript: unknown = null;
-            if ((subtitlesEnabled || keywordGraphicsEnabled) && !(await fs.files.read(asset.assetId, "elevenlabs.json")).ok) {
-              await ensureElevenLabsTranscript(fs, asset.assetId);
+            if ((subtitlesEnabled || keywordGraphicsEnabled) && !(await engine.files.read(asset.assetId, "elevenlabs.json")).ok) {
+              await ensureElevenLabsTranscript(engine, asset.assetId);
             }
-            const elevenlabsResult = await fs.files.read(asset.assetId, "elevenlabs.json");
+            const elevenlabsResult = await engine.files.read(asset.assetId, "elevenlabs.json");
             if (elevenlabsResult.ok) {
               rawTranscript = JSON.parse(elevenlabsResult.value.toString()) as unknown;
-              allSegments = await resolveSubtitleSegments(fs, asset.assetId, rawTranscript, subtitleLanguage, ctx.signal);
+              allSegments = await resolveSubtitleSegments(engine, asset.assetId, rawTranscript, subtitleLanguage, ctx.signal);
             }
 
             let chunks: Chunk[] = [];
@@ -291,7 +291,7 @@ export function registerRenderProjectJob(fs: Engine): void {
             let keywordGraphicsSkipped: string[] = [];
             let keywordGraphicsPlacementFingerprint: string | null = null;
             if (keywordGraphicsEnabled && rawTranscript && elevenlabsResult.ok) {
-              const manifestResult = await fs.files.manifest(asset.assetId);
+              const manifestResult = await engine.files.manifest(asset.assetId);
               if (!manifestResult.ok) throw new Error(manifestResult.error.message);
               const sourceVideoFile = findVideoFile(manifestResult.value.files);
               if (!sourceVideoFile) throw new Error(`No source video found for ${asset.assetId}`);
@@ -300,9 +300,9 @@ export function registerRenderProjectJob(fs: Engine): void {
                 elevenlabsResult.value,
                 selectedKeywordGraphics,
               );
-              const analysis = await readKeywordPlacementAnalysis(fs, asset.assetId);
+              const analysis = await readKeywordPlacementAnalysis(engine, asset.assetId);
               const valid = await isKeywordPlacementCacheValid(
-                fs,
+                engine,
                 asset.assetId,
                 analysis,
                 fingerprint,
@@ -437,7 +437,7 @@ export function registerRenderProjectJob(fs: Engine): void {
                 renderedPaths.push(orientFramesDirName);
               }
               await ingestWorkspaceOutputs(
-                fs,
+                engine,
                 asset.assetId,
                 renderedPaths,
                 "render",
@@ -478,7 +478,7 @@ export function registerRenderProjectJob(fs: Engine): void {
                 renderedAt: new Date().toISOString(),
                 outputs: [outputFilename, jpgFilename, orientFramesDirName],
               };
-              await fs.metadata.artifacts.write(asset.assetId, `${orientation}.render`, renderSettings);
+              await engine.metadata.artifacts.write(asset.assetId, `${orientation}.render`, renderSettings);
 
               rendered.push(asset.assetId);
               renderSucceeded = true;
@@ -488,13 +488,13 @@ export function registerRenderProjectJob(fs: Engine): void {
           } finally {
             clearInterval(heartbeat);
             if (renderSucceeded) {
-              await fs.jobs.artifactWork.complete(asset.assetId, lease.ownerId);
+              await engine.jobs.artifactWork.complete(asset.assetId, lease.ownerId);
             } else {
-              await fs.jobs.artifactWork.fail(asset.assetId, lease.ownerId, {
+              await engine.jobs.artifactWork.fail(asset.assetId, lease.ownerId, {
                 message: "render failed",
               });
             }
-            await fs.jobs.locks.release(asset.assetDir);
+            await engine.jobs.locks.release(asset.assetDir);
           }
         } catch (err) {
           if (ctx.signal.aborted) throw err;

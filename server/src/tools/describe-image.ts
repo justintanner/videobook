@@ -18,7 +18,7 @@ function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
 
-export function describeImageDef(fs: Engine): ToolDef {
+export function describeImageDef(engine: Engine): ToolDef {
   return {
     name: "describe_image",
     description:
@@ -33,7 +33,7 @@ export function describeImageDef(fs: Engine): ToolDef {
         book_id: string;
       };
 
-      const sourceArtifact = fs.artifacts.get(asset_id);
+      const sourceArtifact = engine.artifacts.get(asset_id);
       if (!sourceArtifact.ok) return error(sourceArtifact.error.message);
       if (sourceArtifact.value.kind !== "image") {
         return error(`describe_image only accepts image artifacts, got ${sourceArtifact.value.kind} artifact ${asset_id}`);
@@ -43,7 +43,7 @@ export function describeImageDef(fs: Engine): ToolDef {
         return error("OPENAI_API_KEY is not set");
       }
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return error(manifestResult.error.message);
       }
@@ -54,7 +54,7 @@ export function describeImageDef(fs: Engine): ToolDef {
       }
 
       const scriptName = `desc ${sourceArtifact.value.label ?? asset_id}`;
-      const createResult = await fs.artifacts.create("script", scriptName);
+      const createResult = await engine.artifacts.create("script", scriptName);
       if (!createResult.ok) {
         return error(`Failed to create script asset: ${createResult.error.message}`);
       }

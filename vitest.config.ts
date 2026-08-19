@@ -27,7 +27,11 @@ export default defineConfig({
       ],
     },
     globalSetup: ['./vitest.global-setup.ts'],
-    fileParallelism: false,
+    // Bounded file parallelism: 4 workers on typical 10-logical-core hosts.
+    // Each worker already isolates VIDEOBOOK_LIBRARY_DIR / APP_STATE via
+    // vitest.setup.ts (VITEST_POOL_ID + UUID). E2E uses its own worker policy.
+    fileParallelism: true,
+    maxWorkers: 4,
     include: [
       'tests/v2/**/*.test.ts',
       'tests/dolt-native-cutover.test.ts',
@@ -45,7 +49,11 @@ export default defineConfig({
       'src/videobook/command-plan.test.ts',
       'scripts/search-benchmark-corpus.test.ts',
       'src/videobook/watermark-target.test.ts',
+      'server/src/app-state.test.ts',
+      'server/src/engine-rename.test.ts',
       'server/src/archive-store.test.ts',
+      'server/src/test-media-fixtures.test.ts',
+      'server/src/test-clock-inventory.test.ts',
       'server/src/jobs/asset-file-helpers.test.ts',
       'server/src/artifact-label.test.ts',
       'server/src/archive-b2.test.ts',
@@ -93,6 +101,7 @@ export default defineConfig({
       'server/src/provider-prompt-transform.test.ts',
       'server/src/preview-payload.test.ts',
       'server/src/queue.test.ts',
+      'server/src/queue-shutdown.test.ts',
       'server/src/video-models.test.ts',
       'server/src/video-proxy.test.ts',
       'server/src/vision-regions.test.ts',

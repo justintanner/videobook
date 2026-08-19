@@ -32,13 +32,13 @@ type GenerateWan27I2vVideoPayload = {
 };
 
 async function uploadInput(
-  fs: Engine,
+  engine: Engine,
   input: RefInput,
 ): Promise<string> {
-  return uploadAssetToKie(fs, input.assetId, input.filename);
+  return uploadAssetToKie(engine, input.assetId, input.filename);
 }
 
-export function registerGenerateWan27I2vVideoJob(fs: Engine): void {
+export function registerGenerateWan27I2vVideoJob(engine: Engine): void {
   registerJobHandler("generate_wan27_i2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId, prompt, negative_prompt,
@@ -49,10 +49,10 @@ export function registerGenerateWan27I2vVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame) : undefined;
-    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame) : undefined;
-    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip) : undefined;
-    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio) : undefined;
+    const firstFrameUrl = firstFrame ? await uploadInput(engine, firstFrame) : undefined;
+    const lastFrameUrl = lastFrame ? await uploadInput(engine, lastFrame) : undefined;
+    const firstClipUrl = firstClip ? await uploadInput(engine, firstClip) : undefined;
+    const drivingAudioUrl = drivingAudio ? await uploadInput(engine, drivingAudio) : undefined;
     const normalizedPrompt = transformProviderPrompt(
       "generate_kie_wan_2_7_image_to_video",
       {
@@ -68,7 +68,7 @@ export function registerGenerateWan27I2vVideoJob(fs: Engine): void {
       { prompt: normalizedPrompt, negative_prompt, resolution, duration, prompt_extend, watermark, nsfw_checker, seed },
       { firstFrameUrl, lastFrameUrl, firstClipUrl, drivingAudioUrl },
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "wan27_i2v_video",
       assetId: vidAssetId,

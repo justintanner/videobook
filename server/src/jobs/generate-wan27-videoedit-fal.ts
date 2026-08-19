@@ -27,16 +27,16 @@ type Payload = {
   seed?: number;
 };
 
-export function registerGenerateWan27VideoeditFalJob(fs: Engine): void {
+export function registerGenerateWan27VideoeditFalJob(engine: Engine): void {
   registerJobHandler("generate_wan27_videoedit_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(engine, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
-      const video_url = await uploadAssetToFal(fs, p.sourceVideo.assetId, p.sourceVideo.filename);
+      const video_url = await uploadAssetToFal(engine, p.sourceVideo.assetId, p.sourceVideo.filename);
       const reference_image_url = p.refImage
         ? "url" in p.refImage
           ? p.refImage.url
-          : await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename)
+          : await uploadAssetToFal(engine, p.refImage.assetId, p.refImage.filename)
         : undefined;
   
       const input: FalInput = {
@@ -53,7 +53,7 @@ export function registerGenerateWan27VideoeditFalJob(fs: Engine): void {
       };
   
       const taskId = await submitFalJob({
-        fs,
+        engine,
         bookId: p.bookId,
         assetId: p.vidAssetId,
         assetDir: p.vidAssetDir,

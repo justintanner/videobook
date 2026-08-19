@@ -114,35 +114,35 @@ export async function buildQrbtfPng(
 }
 
 async function persistQrbtfAsset(
-  fs: Engine,
+  engine: Engine,
   assetName: string,
   files: QrbtfFiles,
   metadata: Record<string, unknown>,
 ): Promise<{ ok: true; assetId: string } | { ok: false; error: string }> {
-  const created = await fs.artifacts.create("img", assetName);
+  const created = await engine.artifacts.create("img", assetName);
   if (!created.ok) return { ok: false, error: `Failed to create image asset: ${created.error.message}` };
   const assetId = created.value.artifactId;
   const writes = await Promise.all([
-    fs.files.write(assetId, "original.png", files.original),
-    fs.files.write(assetId, "landscape.jpg", files.landscape),
-    fs.files.write(assetId, "portrait.jpg", files.portrait),
-    fs.files.write(assetId, "square.jpg", files.square),
+    engine.files.write(assetId, "original.png", files.original),
+    engine.files.write(assetId, "landscape.jpg", files.landscape),
+    engine.files.write(assetId, "portrait.jpg", files.portrait),
+    engine.files.write(assetId, "square.jpg", files.square),
   ]);
   const writeFailure = writes.find((result) => !result.ok);
   if (writeFailure && !writeFailure.ok) {
-    await fs.artifacts.delete(assetId).catch(() => undefined);
+    await engine.artifacts.delete(assetId).catch(() => undefined);
     return { ok: false, error: writeFailure.error.message };
   }
 
-  const metadataResult = await fs.metadata.artifacts.write(assetId, "original", metadata);
+  const metadataResult = await engine.metadata.artifacts.write(assetId, "original", metadata);
   if (!metadataResult.ok) {
-    await fs.artifacts.delete(assetId).catch(() => undefined);
+    await engine.artifacts.delete(assetId).catch(() => undefined);
     return { ok: false, error: metadataResult.error.message };
   }
   return { ok: true, assetId };
 }
 
-export function createQrbtfDef(fs: Engine): ToolDef {
+export function createQrbtfDef(engine: Engine): ToolDef {
   return {
     name: "create_qrbtf",
     description:
@@ -272,7 +272,7 @@ export function createQrbtfDef(fs: Engine): ToolDef {
       if (func_type) metadata.func_type = func_type;
 
       const resultAsset = await persistQrbtfAsset(
-        fs,
+        engine,
         derivedLabel("qrbtf", stem),
         files,
         metadata,

@@ -63,26 +63,26 @@ export type ProcessVideoResult = {
 // no-op write lets idempotent re-processing succeed. Mirrors
 // writePlanFileIfChanged in plan-notebook.ts.
 async function writeBinaryIfChanged(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   filename: string,
   data: Buffer,
 ): Promise<void> {
-  const existing = await fs.files.read(assetId, filename);
+  const existing = await engine.files.read(assetId, filename);
   if (existing.ok && existing.value.equals(data)) return;
-  const written = await fs.files.write(assetId, filename, data);
+  const written = await engine.files.write(assetId, filename, data);
   if (!written.ok) {
     throw new Error(`writeFile ${filename} failed for ${assetId}: ${written.error.message}`);
   }
 }
 
 export async function registerMediaStreams(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   sourcePath: string,
   probe: ProbeResult,
 ): Promise<void> {
-  const manifest = await fs.files.manifest(assetId);
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) {
     throw new Error(`Failed to read media manifest for ${assetId}: ${manifest.error.message}`);
   }
@@ -90,7 +90,7 @@ export async function registerMediaStreams(
   if (!objectHash) throw new Error(`Media source is missing from the manifest: ${sourcePath}`);
   for (const stream of [probe.videoStream, probe.audioStream]) {
     if (!stream) continue;
-    const registered = await fs.streams.register({
+    const registered = await engine.streams.register({
       artifactId: assetId,
       sourcePath,
       objectHash,
@@ -109,20 +109,20 @@ export async function registerMediaStreams(
 }
 
 async function snapshotAssetFile(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   filename: string,
   targetPath: string,
 ): Promise<boolean> {
-  const manifest = await fs.files.manifest(assetId);
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) {
     throw new Error(`Failed to read media manifest for ${assetId}: ${manifest.error.message}`);
   }
   if (!manifest.value.files.some((file) => file.name === filename)) return false;
-  const snapshot = await fs.files.readAtRevision(
+  const snapshot = await engine.files.readAtRevision(
     manifest.value.artifactId,
     filename,
-    fs.head,
+    engine.head,
   );
   if (!snapshot.ok) {
     throw new Error(`Failed to read immutable ${filename} for ${assetId}: ${snapshot.error.message}`);
@@ -132,12 +132,12 @@ async function snapshotAssetFile(
 }
 
 async function persistProxyMetadata(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   sourceFilename: string,
   proxy: ProbeResult,
 ): Promise<void> {
-  const manifest = await fs.files.manifest(assetId);
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) {
     throw new Error(`Failed to read media manifest for ${assetId}: ${manifest.error.message}`);
   }
@@ -146,7 +146,7 @@ async function persistProxyMetadata(
   if (!sourceFile || !proxyFile) {
     throw new Error(`Failed to record video proxy metadata for ${assetId}`);
   }
-  const written = await fs.metadata.artifacts.write(
+  const written = await engine.metadata.artifacts.write(
     assetId,
     "proxy",
     videoProxyMetadata(sourceFile, proxyFile, proxy),
@@ -157,7 +157,7 @@ async function persistProxyMetadata(
 }
 
 export async function processVideoFiles(
-  fs: Engine,
+  engine: Engine,
   payload: ProcessVideoPayload,
   signal?: AbortSignal,
 ): Promise<ProcessVideoResult> {
@@ -165,11 +165,11 @@ export async function processVideoFiles(
   const sourceFilename = basename(payload.videoPath);
   const sourcePath = join(sourceWorkspace, sourceFilename);
   try {
-    if (!await snapshotAssetFile(fs, payload.assetId, sourceFilename, sourcePath)) {
+    if (!await snapshotAssetFile(engine, payload.assetId, sourceFilename, sourcePath)) {
       await copyFile(payload.videoPath, sourcePath);
     }
     return await processVideoSnapshot(
-      fs,
+      engine,
       { ...payload, videoPath: sourcePath },
       signal,
     );
@@ -179,7 +179,7 @@ export async function processVideoFiles(
 }
 
 async function processVideoSnapshot(
-  fs: Engine,
+  engine: Engine,
   payload: ProcessVideoPayload,
   signal?: AbortSignal,
 ): Promise<ProcessVideoResult> {
@@ -195,7 +195,7 @@ async function processVideoSnapshot(
     }
     const { width, height, duration } = probe;
     const sourceFilename = basename(videoPath);
-    const importedSource = await fs.files.writeFromPath(assetId, sourceFilename, videoPath
+    const importedSource = await engine.files.writeFromPath(assetId, sourceFilename, videoPath
     );
     if (!importedSource.ok) {
       throw new Error(
@@ -241,21 +241,21 @@ async function processVideoSnapshot(
       ];
       await runFfmpeg(transcodeArgs, { signal });
       const mp4Buf = await fsReadFile(tempPath);
-      await writeBinaryIfChanged(fs, assetId, "original.mp4", mp4Buf);
+      await writeBinaryIfChanged(engine, assetId, "original.mp4", mp4Buf);
       activeVideoPath = tempPath;
     }
     const activeSourcePath = sourceExt === ".mp4" ? sourceFilename : "original.mp4";
     const activeProbe = sourceExt === ".mp4" ? probe : await probeVideo(activeVideoPath, { signal });
-    await registerMediaStreams(fs, assetId, activeSourcePath, activeProbe);
+    await registerMediaStreams(engine, assetId, activeSourcePath, activeProbe);
     let frameCount = 0;
     {
 
-    await fs.metadata.artifacts.write(assetId, "original", { ...provenance, width, height, duration, hasAudio: probe.hasAudio });
+    await engine.metadata.artifacts.write(assetId, "original", { ...provenance, width, height, duration, hasAudio: probe.hasAudio });
 
     if (duration <= 0) return { success: true, width, height, duration, frame_count: 0 };
 
     if (force) {
-      const currentManifest = await fs.files.manifest(assetId);
+      const currentManifest = await engine.files.manifest(assetId);
       if (currentManifest.ok) {
         const staleFiles = currentManifest.value.files
           .map((file) => file.name)
@@ -271,7 +271,7 @@ async function processVideoSnapshot(
             ),
           );
         for (const filename of staleFiles) {
-          await fs.files.delete(assetId, filename);
+          await engine.files.delete(assetId, filename);
         }
       }
       await rm(join(assetDir, "original_frames"), { recursive: true, force: true });
@@ -282,16 +282,16 @@ async function processVideoSnapshot(
         await rm(join(assetDir, `${orient}.mp4`), { force: true }).catch(() => {});
         await rm(join(assetDir, `${orient}.jpg`), { force: true }).catch(() => {});
         await rm(join(assetDir, `${orient}_frames`), { recursive: true, force: true }).catch(() => {});
-        await fs.metadata.artifacts.delete(assetId, `${orient}.render`);
+        await engine.metadata.artifacts.delete(assetId, `${orient}.render`);
       }
-      await fs.metadata.artifacts.delete(assetId, "proxy");
+      await engine.metadata.artifacts.delete(assetId, "proxy");
     }
 
     const proxyWorkspace = await mkdtemp(join(tmpdir(), "videobook-proxy-"));
     const proxyPath = join(proxyWorkspace, "proxy.mp4");
     try {
       let proxyProbe: ProbeResult | null = null;
-      if (await snapshotAssetFile(fs, assetId, "proxy.mp4", proxyPath)) {
+      if (await snapshotAssetFile(engine, assetId, "proxy.mp4", proxyPath)) {
         try {
           const candidate = await probeVideo(proxyPath, { signal });
           if (videoProxyValidationError(activeProbe, candidate) === null) {
@@ -302,19 +302,19 @@ async function processVideoSnapshot(
         }
       }
       if (!proxyProbe) {
-        const currentManifest = await fs.files.manifest(assetId);
+        const currentManifest = await engine.files.manifest(assetId);
         if (!currentManifest.ok) {
           throw new Error(
             `Failed to read media manifest for ${assetId}: ${currentManifest.error.message}`,
           );
         }
         if (currentManifest.value.files.some((file) => file.name === "proxy.mp4")) {
-          const deleted = await fs.files.delete(assetId, "proxy.mp4");
+          const deleted = await engine.files.delete(assetId, "proxy.mp4");
           if (!deleted.ok) throw new Error(deleted.error.message);
         }
-        await fs.metadata.artifacts.delete(assetId, "proxy");
+        await engine.metadata.artifacts.delete(assetId, "proxy");
         const proxySourcePath = join(proxyWorkspace, `source${extname(activeSourcePath)}`);
-        if (!await snapshotAssetFile(fs, assetId, activeSourcePath, proxySourcePath)) {
+        if (!await snapshotAssetFile(engine, assetId, activeSourcePath, proxySourcePath)) {
           throw new Error(`Media source is missing from the manifest: ${activeSourcePath}`);
         }
         await runFfmpeg([
@@ -337,11 +337,11 @@ async function processVideoSnapshot(
         if (validationError) {
           throw new Error(`Invalid video proxy for ${assetId}: ${validationError}`);
         }
-        const proxy = await fs.files.writeFromPath(assetId, "proxy.mp4", proxyPath);
+        const proxy = await engine.files.writeFromPath(assetId, "proxy.mp4", proxyPath);
         if (!proxy.ok) throw new Error(proxy.error.message);
         proxyProbe = candidate;
       }
-      await persistProxyMetadata(fs, assetId, activeSourcePath, proxyProbe);
+      await persistProxyMetadata(engine, assetId, activeSourcePath, proxyProbe);
     } finally {
       await rm(proxyWorkspace, { recursive: true, force: true });
     }
@@ -372,26 +372,26 @@ async function processVideoSnapshot(
     // Extract original.mp3 from the video (kept in sync with original.mp4 so
     // standalone audio reads — timeline, transcription — match the source).
     const existingMp3 = preserveAudioArtifacts
-      ? await fs.files.read(assetId, "original.mp3")
+      ? await engine.files.read(assetId, "original.mp3")
       : null;
     if (probe.hasAudio && (!existingMp3 || !existingMp3.ok)) {
       const mp3TempPath = join(assetDir, "original.mp3.tmp");
       await runFfmpeg(["-y", "-i", activeVideoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-f", "mp3", mp3TempPath], { signal });
       try {
         const mp3Buf = await fsReadFile(mp3TempPath);
-        await writeBinaryIfChanged(fs, assetId, "original.mp3", mp3Buf);
+        await writeBinaryIfChanged(engine, assetId, "original.mp3", mp3Buf);
       } finally {
         await rm(mp3TempPath, { force: true });
       }
     }
 
     const existingWaveform = preserveAudioArtifacts
-      ? await fs.metadata.waveforms.read(assetId)
+      ? await engine.metadata.waveforms.read(assetId)
       : null;
     if (!existingWaveform || !existingWaveform.ok) {
       const waveform = await extractWaveform(activeVideoPath);
       if (waveform.length > 0) {
-        const wavResult = await fs.metadata.waveforms.write(assetId, waveform);
+        const wavResult = await engine.metadata.waveforms.write(assetId, waveform);
         if (!wavResult.ok) {
           console.warn(
             `[process_video] writeAudioWaveform soft-failed for ${assetId}: ${wavResult.error.message}`,
@@ -401,11 +401,11 @@ async function processVideoSnapshot(
     }
 
     // Create original.jpg from first frame if not already set (e.g., from OG image)
-    const thumbResult = await fs.files.read(assetId, "original.jpg");
+    const thumbResult = await engine.files.read(assetId, "original.jpg");
     if (!thumbResult.ok) {
       try {
         const firstFrameBuf = await fsReadFile(join(framesDir, "0.00.jpg"));
-        await fs.files.write(assetId, "original.jpg", firstFrameBuf);
+        await engine.files.write(assetId, "original.jpg", firstFrameBuf);
       } catch { /* frame not available */ }
     }
 
@@ -415,12 +415,12 @@ async function processVideoSnapshot(
       const midTs = timestamps[Math.floor(timestamps.length / 2)];
       try {
         const midFrameBuf = await fsReadFile(join(framesDir, `${formatTimestamp(midTs)}.jpg`));
-        await fs.files.write(assetId, "original.jpg", midFrameBuf);
+        await engine.files.write(assetId, "original.jpg", midFrameBuf);
       } catch { /* mid-frame not available */ }
     }
 
     await ingestWorkspaceOutputs(
-      fs,
+      engine,
       assetId,
       ["original_frames"],
       "process_video",
@@ -464,7 +464,7 @@ async function processVideoSnapshot(
         // vision analysis here; transcribe_video_audio's tail owns it for
         // videos with audio (after the fresh transcript lands).
         try {
-          await enqueueLazyAnalysisIfSlotted(fs, bookId, assetId);
+          await enqueueLazyAnalysisIfSlotted(engine, bookId, assetId);
         } catch {
           // best-effort — analysis revival must not fail processing
         }
@@ -474,16 +474,16 @@ async function processVideoSnapshot(
     return { success: true, width, height, duration, frame_count: frameCount };
 }
 
-export function registerProcessVideoJob(fs: Engine): void {
+export function registerProcessVideoJob(engine: Engine): void {
   registerJobHandler("process_video", async (payload, ctx) => {
     const processPayload = payload as ProcessVideoPayload;
     return withLocalLease(
-      fs,
+      engine,
       processPayload.assetId,
       ctx,
       "process",
       async () => withTransientStorageRetry(
-        () => processVideoFiles(fs, processPayload, ctx.signal),
+        () => processVideoFiles(engine, processPayload, ctx.signal),
         ctx.signal,
       ),
     );

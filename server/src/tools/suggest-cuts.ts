@@ -4,7 +4,7 @@ import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 import { loadAssetForAnalysis } from "./_suggest-shared.js";
 
-export function suggestCutsDef(fs: Engine): ToolDef {
+export function suggestCutsDef(engine: Engine): ToolDef {
   return {
     name: "suggest_cuts",
     description:
@@ -26,7 +26,7 @@ export function suggestCutsDef(fs: Engine): ToolDef {
         };
       }
 
-      const loaded = await loadAssetForAnalysis(fs, assetId);
+      const loaded = await loadAssetForAnalysis(engine, assetId);
       if (!loaded.ok) {
         return {
           isError: true as const,

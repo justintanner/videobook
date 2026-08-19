@@ -20,7 +20,7 @@ type SplitVideoPayload = {
 };
 
 async function buildChunk(
-  fs: Engine,
+  engine: Engine,
   args: {
     sourcePath: string;
     outputPath: string;
@@ -39,16 +39,16 @@ async function buildChunk(
     throw err;
   }
   await ingestWorkspaceOutputs(
-    fs,
+    engine,
     assetId,
     [outputPath.split("/").pop()!],
     "split_video",
     provenance,
   );
-  await fs.metadata.artifacts.write(assetId, "original", provenance);
+  await engine.metadata.artifacts.write(assetId, "original", provenance);
 }
 
-export function registerSplitVideoJob(fs: Engine): void {
+export function registerSplitVideoJob(engine: Engine): void {
   // The destination assets are brand-new, so no other job can hold a lease on
   // them; we run the two chunks in parallel against the read-only source.
   registerJobHandler("split_video", async (payload) => {
@@ -86,13 +86,13 @@ export function registerSplitVideoJob(fs: Engine): void {
     };
 
     await Promise.all([
-      buildChunk(fs, {
+      buildChunk(engine, {
         sourcePath, outputPath: outputPathA,
         start: undefined, end: chunkAEnd,
         assetId: assetIdA,
         provenance: provenanceA,
       }),
-      buildChunk(fs, {
+      buildChunk(engine, {
         sourcePath, outputPath: outputPathB,
         start: chunkBStart, end: undefined,
         assetId: assetIdB,
@@ -143,7 +143,7 @@ export function registerSplitVideoJob(fs: Engine): void {
       if (r.status === "rejected") {
         const c = chunks[i];
         const reason = r.reason instanceof Error ? r.reason.message : String(r.reason);
-        await fs.jobs.failures.write(c.assetId, {
+        await engine.jobs.failures.write(c.assetId, {
           message: `split chunk ${c.label} was built but could not be queued for processing: ${reason}`,
           failCode: "split_enqueue_failed",
         });

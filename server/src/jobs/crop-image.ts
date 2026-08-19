@@ -31,7 +31,7 @@ type CropImagePayload = {
   bookId: string;
 };
 
-export function registerCropImageJob(fs: Engine): void {
+export function registerCropImageJob(engine: Engine): void {
   registerJobHandler("crop_image", async (payload, ctx) => {
     const {
       inputFilename, ratio, rect,
@@ -39,14 +39,14 @@ export function registerCropImageJob(fs: Engine): void {
     } = payload as unknown as CropImagePayload;
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
       "crop",
       { durationMs: LOCK_DURATION_MS, data: { state: "cropping", ratio } },
       async () => {
-        const readResult = await fs.files.read(assetId, inputFilename);
+        const readResult = await engine.files.read(assetId, inputFilename);
         if (!readResult.ok) {
           throw new Error(`Failed to read ${inputFilename}: ${readResult.error.message}`);
         }
@@ -82,14 +82,14 @@ export function registerCropImageJob(fs: Engine): void {
         }
 
         const finalFilename = "original.jpg";
-        const writeResult = await fs.files.write(assetId, finalFilename, cropped);
+        const writeResult = await engine.files.write(assetId, finalFilename, cropped);
         if (!writeResult.ok) {
           throw new Error(`Failed to write cropped image: ${writeResult.error.message}`);
         }
 
         // Drop the previous original when it was a different filename (e.g. original.png).
         if (inputFilename !== finalFilename) {
-          await fs.files.delete(assetId, inputFilename);
+          await engine.files.delete(assetId, inputFilename);
         }
 
         return { extension: ".jpg" as const };

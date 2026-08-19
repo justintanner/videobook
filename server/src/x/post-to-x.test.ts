@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createX } from "@apicity/x";
 import type { Engine } from "videobook-engine";
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
-import { postToX } from "./post-to-x.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
+import { configureXStatusPollForTests, postToX, STATUS_POLL_MIN_INTERVAL_MS } from "./post-to-x.js";
 import { readXPostMetadata, POST_METADATA_FILE } from "./post-metadata.js";
 
 interface RecordedRequest {
@@ -87,6 +87,14 @@ describe("postToX helper", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
+  beforeEach(() => {
+    configureXStatusPollForTests({ sleep: async () => undefined });
+  });
+
+  afterEach(() => {
+    configureXStatusPollForTests(null);
+  });
+
   it("posts an image asset: initialize, single append, finalize, tweet", async () => {
     const assetId = await uploadFakeAsset(fs, bookId, "img", ".jpg");
 
@@ -99,7 +107,7 @@ describe("postToX helper", () => {
     const x = createX({ accessToken: "test-token", fetch: stubFetch });
 
     const result = await postToX({
-      fs,
+      engine: fs,
       assetId,
       bookId,
       text: "hi",
@@ -146,7 +154,7 @@ describe("postToX helper", () => {
       { status: 201, body: { data: { id: "T1", text: "" } } },
     ]);
     const x1 = createX({ accessToken: "tok", fetch: firstPlan.fetch });
-    await postToX({ fs, assetId, bookId, text: "first", x: x1 });
+    await postToX({ engine: fs, assetId, bookId, text: "first", x: x1 });
 
     const secondPlan = makeStubFetch([
       { status: 200, body: { data: { id: "M2", media_key: "k", expires_after_secs: 86400, size: 19 } } },
@@ -157,7 +165,7 @@ describe("postToX helper", () => {
     const x2 = createX({ accessToken: "tok", fetch: secondPlan.fetch });
     const scheduledFor = new Date(Date.now() - 60_000).toISOString();
     await postToX({
-      fs,
+      engine: fs,
       assetId,
       bookId,
       text: "second",
@@ -209,8 +217,9 @@ describe("postToX helper", () => {
     ]);
     const x = createX({ accessToken: "test-token", fetch: stubFetch });
 
-    const result = await postToX({ fs, assetId, bookId, x });
+    const result = await postToX({ engine: fs, assetId, bookId, x });
     expect(result.tweet_id).toBe("TWEET_VID");
+    expect(STATUS_POLL_MIN_INTERVAL_MS).toBe(2_000);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       "POST https://api.x.com/2/media/upload/initialize",
       "POST https://api.x.com/2/media/upload/VID_1/append",
@@ -228,7 +237,7 @@ describe("postToX helper", () => {
 
     const x = createX({ accessToken: "test-token", fetch: makeStubFetch([]).fetch });
     await expect(
-      postToX({ fs, assetId: created.value.artifactId, bookId, x }),
+      postToX({ engine: fs, assetId: created.value.artifactId, bookId, x }),
     ).rejects.toThrow(/unsupported media file/i);
   });
 
@@ -239,7 +248,7 @@ describe("postToX helper", () => {
     ]);
     const x = createX({ accessToken: "test-token", fetch: stubFetch });
     await expect(
-      postToX({ fs, assetId, bookId, x, text: "x" }),
+      postToX({ engine: fs, assetId, bookId, x, text: "x" }),
     ).rejects.toThrow(/Bad token/);
   });
 });

@@ -1,4 +1,4 @@
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 /**
  * Freeform chat command tests — exercises the chat tool's pre-routing pipeline
  * with many different natural language inputs.

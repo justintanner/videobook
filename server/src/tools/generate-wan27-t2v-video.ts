@@ -27,7 +27,7 @@ const generateWan27T2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateWan27T2vVideoSchema>;
 
-export function generateWan27T2vVideoDef(fs: Engine): ToolDef {
+export function generateWan27T2vVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_wan_2_7_text_to_video",
     description: "Generate a video from a prompt using Wan 2.7 Text to Video. Supports optional custom audio. Creates a new video artifact and enqueues a background job.",
@@ -47,13 +47,13 @@ export function generateWan27T2vVideoDef(fs: Engine): ToolDef {
 
       let audioRef: RefInput | undefined;
       if (audio_ref) {
-        const r = await resolveAudioRef(fs, audio_ref);
+        const r = await resolveAudioRef(engine, audio_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         audioRef = r.value;
       }
 
       const videoName = generationLabel(modelSlug("kie", "wan/2-7-text-to-video"), prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

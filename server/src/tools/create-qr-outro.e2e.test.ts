@@ -5,7 +5,7 @@ import { join } from "node:path";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, waitForJob } from "../queue.js";
 import { buildOutroSpec } from "../remotion/qr-outro-spec.js";

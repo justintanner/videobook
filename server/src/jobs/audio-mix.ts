@@ -160,30 +160,30 @@ export async function mixAudioMedia(
 }
 
 async function deleteIfPresent(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   filename: string,
 ): Promise<void> {
-  const result = await fs.files.delete(assetId, filename);
+  const result = await engine.files.delete(assetId, filename);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
     throw new Error(`Failed to delete ${filename}: ${result.error.message}`);
   }
 }
 
 async function replaceMixedMedia(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   targetFilename: string,
   outputPath: string,
 ): Promise<void> {
   const output = await readFile(outputPath);
-  const writeResult = await fs.files.write(assetId, targetFilename, output);
+  const writeResult = await engine.files.write(assetId, targetFilename, output);
   if (!writeResult.ok) {
     throw new Error(`Failed to replace ${targetFilename}: ${writeResult.error.message}`);
   }
 }
 
-export function registerAudioMixJob(fs: Engine): void {
+export function registerAudioMixJob(engine: Engine): void {
   registerJobHandler("audio_mix", async (payload, ctx) => {
     const {
       targetPath,
@@ -198,7 +198,7 @@ export function registerAudioMixJob(fs: Engine): void {
     } = payload as AudioMixPayload;
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -217,19 +217,19 @@ export function registerAudioMixJob(fs: Engine): void {
             volume,
             ctx.signal,
           );
-          await replaceMixedMedia(fs, assetId, targetFilename, outputPath);
+          await replaceMixedMedia(engine, assetId, targetFilename, outputPath);
         } finally {
           await rm(tempDir, { recursive: true, force: true });
         }
 
         for (const filename of STALE_DERIVATIVES) {
-          await deleteIfPresent(fs, assetId, filename);
+          await deleteIfPresent(engine, assetId, filename);
         }
 
         const mediaPath = join(assetDir, targetFilename);
         if (targetKind === "audio") {
           const peaks = await extractWaveform(mediaPath);
-          const waveformResult = await fs.metadata.waveforms.write(assetId, peaks);
+          const waveformResult = await engine.metadata.waveforms.write(assetId, peaks);
           if (!waveformResult.ok) {
             throw new Error(`Failed to update audio waveform: ${waveformResult.error.message}`);
           }

@@ -20,7 +20,7 @@ const positionEnum = z.enum(OSG_POSITIONS);
  * rendered; `osg_positions` lets frame-aware callers store a different anchor
  * per orientation.
  */
-export function setVideoOverlayDef(fs: Engine): ToolDef {
+export function setVideoOverlayDef(engine: Engine): ToolDef {
   return {
     name: "set_video_overlay",
     description:
@@ -102,7 +102,7 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
 
       const clearing = osg_asset_id == null;
 
-      const written = await writeOsgSettings(fs, asset_id, (orientation, base) => {
+      const written = await writeOsgSettings(engine, asset_id, (orientation, base) => {
         const merged: Record<string, unknown> = {
           // osgAssetId is canonical; null out the legacy osgImagePath so a stale
           // path can't override a cleared/changed asset id at render time.

@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function pushChatHistoryDef(fs: Engine): ToolDef {
+export function pushChatHistoryDef(engine: Engine): ToolDef {
   return {
     name: "push_chat_history",
     description: "Append a message to the chat input history log.",
@@ -16,7 +16,7 @@ export function pushChatHistoryDef(fs: Engine): ToolDef {
       const { message } = args as {
         message: string;
       };
-      const result = await fs.logs.append(
+      const result = await engine.logs.append(
         "chat-input-history",
         { message, ts: Date.now() },
       );
@@ -33,7 +33,7 @@ export function pushChatHistoryDef(fs: Engine): ToolDef {
   };
 }
 
-export function listChatHistoryDef(fs: Engine): ToolDef {
+export function listChatHistoryDef(engine: Engine): ToolDef {
   return {
     name: "list_chat_history",
     description: "List recent chat input history entries.",
@@ -50,7 +50,7 @@ export function listChatHistoryDef(fs: Engine): ToolDef {
       const { limit } = args as {
         limit?: number;
       };
-      const entries = fs.logs.read("chat-input-history", {
+      const entries = engine.logs.read("chat-input-history", {
         limit: limit ?? 100,
       });
       const messages = entries

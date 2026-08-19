@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { FFMPEG } from "../ffmpeg.js";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { queue, waitForJob } from "../queue.js";
 import { createTestClient } from "../test-client.js";
 

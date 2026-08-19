@@ -87,15 +87,15 @@ const ModelOutputSchema = z.object({
   summary: z.string(),
 });
 
-export function registerSuggestCutsJob(fs: Engine): void {
+export function registerSuggestCutsJob(engine: Engine): void {
   registerJobHandler("suggest_cuts", async (payload, ctx) => {
     const { assetId } = payload as SuggestCutsPayload;
 
-    return withLocalLease(fs, assetId, ctx, "analyze", async () => {
+    return withLocalLease(engine, assetId, ctx, "analyze", async () => {
       const apiKey = getApiKey("OPENAI_API_KEY");
       if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
 
-      const loaded = await loadAssetForAnalysis(fs, assetId);
+      const loaded = await loadAssetForAnalysis(engine, assetId);
       if (!loaded.ok) throw new Error(loaded.error.message);
       const { frameNames, transcript, meta, prior } = loaded.value;
 
@@ -108,7 +108,7 @@ export function registerSuggestCutsJob(fs: Engine): void {
       const sampled = sampleFrames(frameNames);
       const frameParts: OpenAiResponseInputContent[] = [];
       for (const file of sampled) {
-        const frameRead = await fs.files.read(assetId, `original_frames/${file}`);
+        const frameRead = await engine.files.read(assetId, `original_frames/${file}`);
         if (!frameRead.ok) throw new Error(frameRead.error.message);
         frameParts.push(
           { type: "input_text", text: `Frame timestamp: ${parseFloat(file).toFixed(3)}s` },
@@ -172,7 +172,7 @@ export function registerSuggestCutsJob(fs: Engine): void {
         asset_id: assetId,
       };
 
-      const writeResult = await fs.files.write(assetId, ".suggest-cuts.json", JSON.stringify(final, null, 2)
+      const writeResult = await engine.files.write(assetId, ".suggest-cuts.json", JSON.stringify(final, null, 2)
       );
       if (!writeResult.ok) {
         throw new Error(`Suggestions generated but failed to persist: ${writeResult.error.message}`);

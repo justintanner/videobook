@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function renameAssetDef(fs: Engine): ToolDef {
+export function renameAssetDef(engine: Engine): ToolDef {
   return {
     name: "rename_asset",
     description:
@@ -14,7 +14,7 @@ export function renameAssetDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const { asset_id, new_name } = args as { asset_id: string; new_name: string };
-      const result = await fs.artifacts.rename({
+      const result = await engine.artifacts.rename({
         artifact: asset_id,
         label: new_name,
       });

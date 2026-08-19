@@ -30,15 +30,15 @@ type GenerateSeedance2MiniVideoPayload = {
   replaceAudioWith?: RefInput;
 };
 
-async function uploadAll(fs: Engine, inputs: RefInput[]): Promise<string[]> {
+async function uploadAll(engine: Engine, inputs: RefInput[]): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename));
+    urls.push(await uploadAssetToKie(engine, assetId, filename));
   }
   return urls;
 }
 
-export function registerGenerateSeedance2MiniVideoJob(fs: Engine): void {
+export function registerGenerateSeedance2MiniVideoJob(engine: Engine): void {
   registerJobHandler("generate_seedance2_mini_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId,
@@ -51,9 +51,9 @@ export function registerGenerateSeedance2MiniVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const referenceImageUrls = await uploadAll(fs, imageInputs);
-    const referenceVideoUrls = await uploadAll(fs, videoInputs);
-    const referenceAudioUrls = await uploadAll(fs, audioInputs);
+    const referenceImageUrls = await uploadAll(engine, imageInputs);
+    const referenceVideoUrls = await uploadAll(engine, videoInputs);
+    const referenceAudioUrls = await uploadAll(engine, audioInputs);
 
     const normalizedPrompt = prompt === undefined
       ? undefined
@@ -84,7 +84,7 @@ export function registerGenerateSeedance2MiniVideoJob(fs: Engine): void {
     // Reuse the shared seedance2_video TaskType + completion handler — they key
     // off taskType, not the apiModel. apiModel rides in meta so the completed
     // asset records bytedance/seedance-2-mini provenance accurately.
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "seedance2_video",
       assetId: vidAssetId,

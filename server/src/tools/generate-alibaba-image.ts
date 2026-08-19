@@ -36,7 +36,7 @@ const generateAlibabaImageSchema = {
 
 type Args = SchemaArgs<typeof generateAlibabaImageSchema>;
 
-export function generateAlibabaImageDef(fs: Engine): ToolDef {
+export function generateAlibabaImageDef(engine: Engine): ToolDef {
   return {
     name: "generate_alibaba_wan_2_7_text_to_image",
     description: "Generate an image using Alibaba Cloud Wan 2.7 Image. Creates a new image artifact and enqueues a background job. Prompt is required; reference images are optional (0-9).",
@@ -65,7 +65,7 @@ export function generateAlibabaImageDef(fs: Engine): ToolDef {
         }
 
         for (const id of ids) {
-          const artifact = fs.artifacts.get(id);
+          const artifact = engine.artifacts.get(id);
           if (!artifact.ok) {
             return {
               isError: true as const,
@@ -79,7 +79,7 @@ export function generateAlibabaImageDef(fs: Engine): ToolDef {
             };
           }
 
-          const manifestResult = await fs.files.manifest(id);
+          const manifestResult = await engine.files.manifest(id);
           if (!manifestResult.ok) {
             return {
               isError: true as const,
@@ -102,7 +102,7 @@ export function generateAlibabaImageDef(fs: Engine): ToolDef {
       }
 
       const assetName = generationLabel(modelSlug("alibaba", "wan2.7-image"), prompt);
-      const assetResult = await fs.artifacts.create("img", assetName);
+      const assetResult = await engine.artifacts.create("img", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

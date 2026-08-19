@@ -22,20 +22,20 @@ type GenerateVeo31VideoPayload = {
   seed?: number;
 };
 
-async function uploadRef(provider: GoogleFlowProvider, fs: Engine, input: RefInput): Promise<string> {
-  return uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename);
+async function uploadRef(provider: GoogleFlowProvider, engine: Engine, input: RefInput): Promise<string> {
+  return uploadAssetToGoogleFlow(provider, engine, input.assetId, input.filename);
 }
 
-export function registerGenerateVeo31VideoJob(fs: Engine): void {
+export function registerGenerateVeo31VideoJob(engine: Engine): void {
   registerJobHandler("generate_veo31_video", async (payload, ctx) => {
     const p = payload as GenerateVeo31VideoPayload;
     const provider = createGoogleFlowProvider();
 
-    const startImageId = p.firstFrame ? await uploadRef(provider, fs, p.firstFrame) : undefined;
-    const endImageId = p.lastFrame ? await uploadRef(provider, fs, p.lastFrame) : undefined;
+    const startImageId = p.firstFrame ? await uploadRef(provider, engine, p.firstFrame) : undefined;
+    const endImageId = p.lastFrame ? await uploadRef(provider, engine, p.lastFrame) : undefined;
     const referenceImageIds: string[] = [];
     for (const input of p.imageInputs) {
-      referenceImageIds.push(await uploadRef(provider, fs, input));
+      referenceImageIds.push(await uploadRef(provider, engine, input));
     }
     const toolName = p.veoModel === "veo-3.1-quality"
       ? "generate_google_flow_veo_3_1_quality_video"
@@ -66,7 +66,7 @@ export function registerGenerateVeo31VideoJob(fs: Engine): void {
       },
     );
 
-    const taskId = await submitGoogleFlowVideoTask(fs, ctx, {
+    const taskId = await submitGoogleFlowVideoTask(engine, ctx, {
       request,
       assetId: p.vidAssetId,
       assetDir: p.vidAssetDir,

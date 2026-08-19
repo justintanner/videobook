@@ -139,15 +139,15 @@ function requireExactPcmStream(
 }
 
 async function registerOutputStream(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   stream: ProbeStream,
 ): Promise<void> {
-  const manifest = await fs.files.manifest(assetId);
+  const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) throw new Error(`Failed to read cover song manifest: ${manifest.error.message}`);
   const file = manifest.value.files.find((candidate) => candidate.name === OUTPUT_FILENAME);
   if (!file) throw new Error(`Cover song is missing ${OUTPUT_FILENAME}`);
-  const registered = await fs.streams.register({
+  const registered = await engine.streams.register({
     artifactId: assetId,
     sourcePath: OUTPUT_FILENAME,
     objectHash: file.objectHash,
@@ -167,14 +167,14 @@ function coverCaption(direction: string | undefined): string {
 }
 
 export async function coverSongWithAcestep(
-  fs: Engine,
+  engine: Engine,
   payload: AcestepCoverPayload,
   signal?: AbortSignal,
 ): Promise<AcestepCoverResult> {
   const samples = targetSamples(payload.targetDurationMs);
   const targetSeconds = payload.targetDurationMs / 1_000;
   const config = aceStepConfig();
-  const source = await fs.files.read(payload.sourceAssetId, payload.sourceFilename);
+  const source = await engine.files.read(payload.sourceAssetId, payload.sourceFilename);
   if (!source.ok) throw new Error(`Failed to read source media: ${source.error.message}`);
 
   const scratch = await mkdtemp(join(tmpdir(), "videobook-acestep-cover-"));
@@ -229,17 +229,17 @@ export async function coverSongWithAcestep(
     await renderExactWav(decodedPath, outputPath, samples, signal);
     requireExactPcmStream(await probeVideo(outputPath, { signal }), samples, "Normalized cover song");
 
-    const persisted = await fs.files.writeFromPath(payload.audAssetId, OUTPUT_FILENAME, outputPath);
+    const persisted = await engine.files.writeFromPath(payload.audAssetId, OUTPUT_FILENAME, outputPath);
     if (!persisted.ok) throw new Error(`Failed to persist cover song: ${persisted.error.message}`);
     const persistedProbe = await probeVideo(persisted.value, { signal });
     const persistedStream = requireExactPcmStream(persistedProbe, samples, "Persisted cover song");
-    await registerOutputStream(fs, payload.audAssetId, persistedStream);
+    await registerOutputStream(engine, payload.audAssetId, persistedStream);
 
     const waveform = await extractWaveform(persisted.value);
-    const waveformWrite = await fs.metadata.waveforms.write(payload.audAssetId, waveform);
+    const waveformWrite = await engine.metadata.waveforms.write(payload.audAssetId, waveform);
     if (!waveformWrite.ok) throw new Error(`Failed to write cover song waveform: ${waveformWrite.error.message}`);
 
-    const metadataWrite = await fs.metadata.artifacts.write(payload.audAssetId, "original", {
+    const metadataWrite = await engine.metadata.artifacts.write(payload.audAssetId, "original", {
       origin: "make_cover_song",
       provider: "acestep.cpp",
       model: config.model,
@@ -276,14 +276,14 @@ export async function coverSongWithAcestep(
   }
 }
 
-export function registerAcestepCoverJob(fs: Engine): void {
+export function registerAcestepCoverJob(engine: Engine): void {
   registerJobHandler("generate_acestep_cover", async (rawPayload, ctx) => {
     ctx.getOwnerId();
     const payload = rawPayload as AcestepCoverPayload;
     // ctx.signal aborts the ffmpeg passes and the /synth fetch; ace-server has
     // no cancellation API, so an aborted generation finishes server-side and is
     // discarded. Acceptable for a single-user local runtime.
-    const result = await coverSongWithAcestep(fs, payload, ctx.signal);
+    const result = await coverSongWithAcestep(engine, payload, ctx.signal);
     return { success: true, provider: "acestep.cpp" as const, ...result };
   });
 }

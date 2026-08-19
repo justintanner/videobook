@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Engine, Generation, NotebookCell, NotebookDocument } from "videobook-engine";
-import { closeEngineForTest, createEngineForTest } from "../fs.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { listCellGenerationsDef } from "./list-cell-generations.js";
 import type { ListCellGenerationsResponse } from "./list-cell-generations.js";
 import { mutateNotebook } from "../notebook-mutations.js";

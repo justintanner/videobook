@@ -301,7 +301,7 @@ async function runCopyConcat(opts: {
   }
 }
 
-export function registerRenderTimelineJob(fs: Engine): void {
+export function registerRenderTimelineJob(engine: Engine): void {
   registerJobHandler("render_timeline", async (payload, ctx) => {
     ctx.signal.throwIfAborted();
     const {
@@ -311,18 +311,18 @@ export function registerRenderTimelineJob(fs: Engine): void {
       resolvedAudio = [],
     } = payload as RenderTimelinePayload;
 
-    const existingFinal = fs.artifacts.list().find((artifact) =>
+    const existingFinal = engine.artifacts.list().find((artifact) =>
       artifact.kind === "final" && artifact.label === "final");
     const finalResult = existingFinal !== undefined
       ? { ok: true as const, value: existingFinal }
-      : await fs.artifacts.create({ kind: "final", label: "final" });
+      : await engine.artifacts.create({ kind: "final", label: "final" });
     if (!finalResult.ok) throw new Error(finalResult.error.message);
     const finalId = finalResult.value.artifactId;
     const finalDir = finalResult.value.path;
     await mkdir(finalDir, { recursive: true });
 
     return withLockedLocalLease(
-      fs,
+      engine,
       finalId,
       finalDir,
       ctx,
@@ -397,7 +397,7 @@ export function registerRenderTimelineJob(fs: Engine): void {
       await runFfmpeg(["-y", "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbPath], { signal: ctx.signal });
 
       await ingestWorkspaceOutputs(
-        fs,
+        engine,
         finalId,
         [outputFilename, "original.jpg"],
         "render_timeline",
@@ -410,7 +410,7 @@ export function registerRenderTimelineJob(fs: Engine): void {
         output: outputFilename,
         renderedAt: new Date().toISOString(),
       };
-      await fs.metadata.artifacts.write(finalId, `${orientation}.render`, renderMeta);
+      await engine.metadata.artifacts.write(finalId, `${orientation}.render`, renderMeta);
 
       return { success: true, output: outputFilename };
       },

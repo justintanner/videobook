@@ -4,7 +4,7 @@ import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 import { requireArtifactKind } from "./_shared.js";
 
-export function translateSubtitlesDef(fs: Engine): ToolDef {
+export function translateSubtitlesDef(engine: Engine): ToolDef {
   return {
     name: "translate_subtitles",
     description:
@@ -24,7 +24,7 @@ export function translateSubtitlesDef(fs: Engine): ToolDef {
         language: string;
       };
 
-      const kindGate = await requireArtifactKind(fs, asset_id, ["video", "audio"], "translate_subtitles");
+      const kindGate = await requireArtifactKind(engine, asset_id, ["video", "audio"], "translate_subtitles");
       if (kindGate) return kindGate;
 
       if (!process.env.OPENAI_API_KEY) {
@@ -34,7 +34,7 @@ export function translateSubtitlesDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

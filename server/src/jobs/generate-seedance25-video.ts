@@ -35,17 +35,17 @@ type GenerateSeedance25VideoPayload = {
 };
 
 async function uploadAll(
-  fs: Engine,
+  engine: Engine,
   inputs: RefInput[],
 ): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename));
+    urls.push(await uploadAssetToKie(engine, assetId, filename));
   }
   return urls;
 }
 
-export function registerGenerateSeedance25VideoJob(fs: Engine): void {
+export function registerGenerateSeedance25VideoJob(engine: Engine): void {
   registerJobHandler("generate_seedance25_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId, prompt,
@@ -61,14 +61,14 @@ export function registerGenerateSeedance25VideoJob(fs: Engine): void {
     requireApiKey("KIE_API_KEY");
 
     const firstFrameUrl = firstFrame
-      ? await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename)
+      ? await uploadAssetToKie(engine, firstFrame.assetId, firstFrame.filename)
       : undefined;
     const lastFrameUrl = lastFrame
-      ? await uploadAssetToKie(fs, lastFrame.assetId, lastFrame.filename)
+      ? await uploadAssetToKie(engine, lastFrame.assetId, lastFrame.filename)
       : undefined;
-    const referenceImageUrls = await uploadAll(fs, imageInputs);
-    const referenceVideoUrls = await uploadAll(fs, videoInputs);
-    const referenceAudioUrls = await uploadAll(fs, audioInputs);
+    const referenceImageUrls = await uploadAll(engine, imageInputs);
+    const referenceVideoUrls = await uploadAll(engine, videoInputs);
+    const referenceAudioUrls = await uploadAll(engine, audioInputs);
     const normalizedPrompt = prompt === undefined
       ? undefined
       : transformProviderPrompt("generate_kie_seedance_2_5_video", {
@@ -106,7 +106,7 @@ export function registerGenerateSeedance25VideoJob(fs: Engine): void {
       : imageInputs.length > 0 || videoInputs.length > 0 || audioInputs.length > 0
         ? "refs"
         : "text";
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "seedance2_video",
       assetId: vidAssetId,

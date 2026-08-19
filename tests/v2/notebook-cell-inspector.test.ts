@@ -1456,6 +1456,62 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('Edit selected')
   })
 
+  it('keeps thumbnail-only videos in playback-only fullscreen', () => {
+    const html = renderToStaticMarkup(createElement(NotebookMediaFullscreen, {
+      asset: {
+        artifactId: cell.outputArtifactId!,
+        id: 'vid-source',
+        type: 'video',
+        mediaUrl: null,
+        thumbnailUrl: '/files/vid-source/original.jpg',
+        width: 1920,
+        height: 1080,
+        duration: 30,
+        audioInfo: null,
+      },
+      address: notebookGridAddress(cell.slot),
+      onAnalyzeSubjects: async () => {
+        throw new Error('video subject analysis must not run')
+      },
+      onClose: () => undefined,
+    }))
+
+    expect(html).toContain('playback-only')
+    expect(html).toContain('Playback unavailable')
+    expect(html).toContain('/files/vid-source/original.jpg')
+    expect(html).not.toContain('<video')
+    expect(html).not.toContain('People &amp; objects')
+    expect(html).not.toContain('aria-label="Subject editor"')
+    expect(html).not.toContain('Make the image editable')
+  })
+
+  it('keeps thumbnail-only final assets out of the subject editor', () => {
+    const html = renderToStaticMarkup(createElement(NotebookMediaFullscreen, {
+      asset: {
+        artifactId: 'final-artifact',
+        id: 'final-source',
+        type: 'final',
+        mediaUrl: null,
+        thumbnailUrl: '/files/final-source/poster.jpg',
+        width: 1920,
+        height: 1080,
+        duration: 12,
+        audioInfo: null,
+      },
+      address: 'z13',
+      onAnalyzeSubjects: async () => {
+        throw new Error('final subject analysis must not run')
+      },
+      onClose: () => undefined,
+    }))
+
+    expect(html).toContain('playback-only')
+    expect(html).toContain('Playback unavailable')
+    expect(html).toContain('alt="@z13 poster"')
+    expect(html).not.toContain('People &amp; objects')
+    expect(html).not.toContain('Subjects')
+  })
+
   it('renders an accessible subject workspace with deterministic overlays', () => {
     const subjectMap = asImageSubjectMap({
       status: 'ready',

@@ -41,7 +41,7 @@ function findOriginalImage(files: ArtifactManifestFile[]): ArtifactManifestFile 
   );
 }
 
-export function cropImageDef(fs: Engine): ToolDef {
+export function cropImageDef(engine: Engine): ToolDef {
   return {
     name: "crop_image",
     description:
@@ -70,7 +70,7 @@ export function cropImageDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

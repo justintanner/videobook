@@ -16,7 +16,8 @@ import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 
-import { fs, PROJECTS_DIR } from "../src/fs.js";
+import { bookManager, scopedEngine as fs } from "../src/engine.js";
+const PROJECTS_DIR = bookManager.rootDir;
 
 const ORIGINAL_RE = /^original\.(mp4|mov|mp3|wav|m4a|jpg|jpeg|png|webp)$/i;
 

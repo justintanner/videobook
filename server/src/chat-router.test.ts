@@ -14,7 +14,7 @@ import {
   effectForTool,
   getRoutableTool,
 } from "./chat-router.js";
-import { closeEngineForTest, createEngineForTest } from "./fs.js";
+import { closeEngineForTest, createEngineForTest } from "./engine.js";
 import { getAllToolDefs } from "./tools/index.js";
 import type { ToolDef } from "./tools/tool-def.js";
 

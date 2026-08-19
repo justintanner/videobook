@@ -23,7 +23,7 @@ async function probeMedia(filePath: string): Promise<{ hasAudio: boolean; durati
   return { hasAudio, duration };
 }
 
-export function changeVideoSpeedDef(fs: Engine): ToolDef {
+export function changeVideoSpeedDef(engine: Engine): ToolDef {
   return {
     name: "change_video_speed",
     description: "Change video playback speed (speed up or slow down). Operates in-place with git versioning.",
@@ -50,7 +50,7 @@ export function changeVideoSpeedDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

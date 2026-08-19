@@ -5,7 +5,7 @@ import { requireApiKey } from "../api-key.js";
 export type FalTaskType = `fal_${string}`;
 
 export type FalSubmitArgs<E extends string> = {
-  fs: Engine;
+  engine: Engine;
   bookId: string;
   assetId: string;
   assetDir: string;
@@ -22,7 +22,7 @@ export async function submitFalJob<E extends string>(args: FalSubmitArgs<E>): Pr
 
   const provider = createFal({ apiKey, timeout: 60_000 });
 
-  await args.fs.metadata.artifacts.write(args.assetId, "generation-payload", { endpoint_id: args.endpointId, input: args.input }
+  await args.engine.metadata.artifacts.write(args.assetId, "generation-payload", { endpoint_id: args.endpointId, input: args.input }
   );
 
   const submit = await provider.post.v1.queue.submit({
@@ -30,7 +30,7 @@ export async function submitFalJob<E extends string>(args: FalSubmitArgs<E>): Pr
     input: args.input,
   });
 
-  const ptResult = await args.fs.jobs.pending.write({
+  const ptResult = await args.engine.jobs.pending.write({
       taskId: submit.request_id,
       taskType: args.taskType,
       artifactId: args.assetId,

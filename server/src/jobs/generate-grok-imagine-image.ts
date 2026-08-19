@@ -22,7 +22,7 @@ type GenerateGrokImagineImagePayload = {
   _provider?: string;
 };
 
-export function registerGenerateGrokImagineImageJob(fs: Engine): void {
+export function registerGenerateGrokImagineImageJob(engine: Engine): void {
   registerJobHandler("generate_grok_imagine_image", async (payload, ctx) => {
     const {
       imageFilename, imgAssetId, imgAssetDir,
@@ -44,13 +44,13 @@ export function registerGenerateGrokImagineImageJob(fs: Engine): void {
 
       const provider = createXaiPaygatedProvider(apiKey, 120_000);
 
-      const imageUrl = await uploadAssetFile(fs, sourceImageId, imageFilename);
+      const imageUrl = await uploadAssetFile(engine, sourceImageId, imageFilename);
 
       const request = buildXaiGrokImagineImagePayload(
         { prompt: normalizedPrompt },
         [imageUrl],
       );
-      await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request);
+      await engine.metadata.artifacts.write(imgAssetId, "generation-payload", request);
       const result = await callXaiPaid<XaiImageEditRequest, XaiImageResponse>(
         provider.post.v1.images.edits,
         XAI_IMAGE_EDITS_DOT_PATH,
@@ -60,7 +60,7 @@ export function registerGenerateGrokImagineImageJob(fs: Engine): void {
       const resultImageUrl = result.data[0]?.url;
       if (!resultImageUrl) throw new Error("xAI returned no image URL");
 
-      await downloadUrlIntoAsset(fs, resultImageUrl, imgAssetId, "original.png", { kind: "result image" });
+      await downloadUrlIntoAsset(engine, resultImageUrl, imgAssetId, "original.png", { kind: "result image" });
 
       // Enqueue post-processing so metadata and derived crops are created
       const provenance = {
@@ -78,7 +78,7 @@ export function registerGenerateGrokImagineImageJob(fs: Engine): void {
       } as unknown as Record<string, unknown>);
 
       // Clear queued pending task written by tool handler
-      await fs.jobs.pending.delete(imgAssetId);
+      await engine.jobs.pending.delete(imgAssetId);
 
       return { success: true, provider: "xai" };
     }
@@ -86,13 +86,13 @@ export function registerGenerateGrokImagineImageJob(fs: Engine): void {
     // Kie path — async task-based generation
     requireApiKey("KIE_API_KEY");
 
-    const downloadUrl = await uploadAssetToKie(fs, sourceImageId, imageFilename);
+    const downloadUrl = await uploadAssetToKie(engine, sourceImageId, imageFilename);
 
     const request = buildGrokImagineImagePayload(
       { prompt: normalizedPrompt },
       [downloadUrl],
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "grok_imagine_image",
       assetId: imgAssetId,

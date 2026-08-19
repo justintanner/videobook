@@ -159,27 +159,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
       requiresConfirmation: false,
     },
   },
-  {
-    id: "local.extract_audio",
-    cellTypes: ["extract_audio"],
-    kind: "local",
-    operation: "extract_audio",
-    provider: "local",
-    model: null,
-    tool: "ffmpeg",
-    title: "Extract audio",
-    description: "Extract first-class playable audio from a source or scene split",
-    outputKind: "artifact",
-    billable: false,
-    defaults: { operation: "extract_audio", tool: "ffmpeg", provider: "local" },
-    parameters: [],
-    requiredInputs: ["video"],
-    capabilities: {
-      dualFrame: false,
-      localMedia: true,
-      requiresConfirmation: false,
-    },
-  },
+
   {
     id: "generation.rewrite_prompt",
     cellTypes: ["prompt"],
@@ -480,10 +460,7 @@ function defaultActionForCell(
     return actions.find((action) => action.operation === "split_range")
       ?? null;
   }
-  if (normalizedCell.type === "extract_audio") {
-    return actions.find((action) => action.operation === "extract_audio")
-      ?? null;
-  }
+
   if (normalizedCell.type === "concat") {
     return actions.find((action) => action.operation === "concat_video")
       ?? null;

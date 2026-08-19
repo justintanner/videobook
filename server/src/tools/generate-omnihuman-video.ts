@@ -23,7 +23,7 @@ const generateOmnihumanVideoSchema = {
 
 type Args = SchemaArgs<typeof generateOmnihumanVideoSchema>;
 
-export function generateOmnihumanVideoDef(fs: Engine): ToolDef {
+export function generateOmnihumanVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_omnihuman_1_5_video",
     description: "Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new video artifact and enqueues a background job.",
@@ -48,16 +48,16 @@ export function generateOmnihumanVideoDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "OmniHuman requires audio_ref" }] };
       }
 
-      const imageResult = await resolveImageRef(fs, image_ref);
+      const imageResult = await resolveImageRef(engine, image_ref);
       if (!imageResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: imageResult.error }] };
       const imageInput = imageResult.value;
 
-      const audioResult = await resolveAudioRef(fs, audio_ref);
+      const audioResult = await resolveAudioRef(engine, audio_ref);
       if (!audioResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: audioResult.error }] };
       const audioInput = audioResult.value;
 
       const videoName = `${SLUG}-${imageInput.assetId.replace(/^(img|char)-/, "")}`;
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

@@ -18,10 +18,10 @@ type Payload = {
   output_format?: FalInput["output_format"];
 };
 
-export function registerGenerateGrokImagineImageFalJob(fs: Engine): void {
+export function registerGenerateGrokImagineImageFalJob(engine: Engine): void {
   registerJobHandler("generate_grok_imagine_image_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(engine, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
       const input: FalInput = {
         prompt: p.prompt,
@@ -32,7 +32,7 @@ export function registerGenerateGrokImagineImageFalJob(fs: Engine): void {
       };
   
       const taskId = await submitFalJob({
-        fs,
+        engine,
         bookId: p.bookId,
         assetId: p.imgAssetId,
         assetDir: p.imgAssetDir,

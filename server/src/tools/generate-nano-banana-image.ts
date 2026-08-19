@@ -24,7 +24,7 @@ const generateNanoBananaImageSchema = {
 
 type Args = SchemaArgs<typeof generateNanoBananaImageSchema>;
 
-export function generateNanoBananaImageDef(fs: Engine): ToolDef {
+export function generateNanoBananaImageDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_nano_banana_pro_text_to_image",
     description: "Generate an image using the nano-banana-pro model. Creates a new image artifact and enqueues a background job. Prompt is required; reference images are optional.",
@@ -55,14 +55,14 @@ export function generateNanoBananaImageDef(fs: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const resolved = await resolveImageRefs(fs, rawSlugs);
+      const resolved = await resolveImageRefs(engine, rawSlugs);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = generationLabel(modelSlug("kie", "nano-banana-pro"), prompt);
-      const assetResult = await fs.artifacts.create(prefix, assetName);
+      const assetResult = await engine.artifacts.create(prefix, assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

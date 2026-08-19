@@ -53,7 +53,7 @@ function validateTrimParams(
   return { mode: "keep", trimStart, trimEnd };
 }
 
-export function trimVideoDef(fs: Engine): ToolDef {
+export function trimVideoDef(engine: Engine): ToolDef {
   return {
     name: "trim_video",
     description: "Modify an existing video in place by keeping a range or removing a middle section. Use extract_video_clip instead when the user asks for a new clip and wants the source preserved. Timestamp fields accept numbers or values such as 15s and 1:30.",
@@ -88,7 +88,7 @@ export function trimVideoDef(fs: Engine): ToolDef {
       let parsedCutStart: number | undefined;
       let parsedCutEnd: number | undefined;
       try {
-        assetId = resolveVideoAssetReference(fs, asset_id, notebook_id);
+        assetId = resolveVideoAssetReference(engine, asset_id, notebook_id);
         parsedTrimStart = parseVideoTimestamp(trim_start, "trim_start");
         parsedTrimEnd = parseVideoTimestamp(trim_end, "trim_end");
         parsedCutStart = parseVideoTimestamp(cut_start, "cut_start");
@@ -112,7 +112,7 @@ export function trimVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(assetId);
+      const manifestResult = await engine.files.manifest(assetId);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -160,7 +160,7 @@ export function trimVideoDef(fs: Engine): ToolDef {
 
       try {
         await queue.enqueueAndWait(jobId, jobPayload);
-        const readiness = await waitForAssetReadyDef(fs).handler({
+        const readiness = await waitForAssetReadyDef(engine).handler({
           asset_id: assetId,
           book_id,
           timeout_seconds: 300,

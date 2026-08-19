@@ -29,7 +29,7 @@ type ExtractAudioPayload = {
   range?: { start_s: number; duration_s: number };
 };
 
-export function registerExtractAudioJob(fs: Engine): void {
+export function registerExtractAudioJob(engine: Engine): void {
   registerJobHandler("extract_audio", async (payload, ctx) => {
     const {
       inputPath, outputPath,
@@ -37,8 +37,8 @@ export function registerExtractAudioJob(fs: Engine): void {
     } = payload as ExtractAudioPayload;
     const destinationMode = destination !== undefined;
 
-    return withLocalLease(fs, audioAssetId, ctx, "extract", async () => {
-      const lockResult = await fs.jobs.locks.acquire(audioAssetDir, { durationMs: LOCK_DURATION_MS });
+    return withLocalLease(engine, audioAssetId, ctx, "extract", async () => {
+      const lockResult = await engine.jobs.locks.acquire(audioAssetDir, { durationMs: LOCK_DURATION_MS });
       if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
       try {
@@ -63,7 +63,7 @@ export function registerExtractAudioJob(fs: Engine): void {
 
         const outputFilename = outputPath.split("/").pop()!;
         await ingestWorkspaceOutputs(
-          fs,
+          engine,
           audioAssetId,
           [outputFilename],
           "extract_audio",
@@ -83,12 +83,12 @@ export function registerExtractAudioJob(fs: Engine): void {
             source_asset: sourceVideoId,
             ...(duration !== undefined ? { duration } : {}),
           };
-          await fs.metadata.artifacts.write(audioAssetId, "original", origin);
+          await engine.metadata.artifacts.write(audioAssetId, "original", origin);
         }
 
         return { success: true };
       } finally {
-        await fs.jobs.locks.release(audioAssetDir);
+        await engine.jobs.locks.release(audioAssetDir);
       }
     });
   });

@@ -27,7 +27,7 @@ type GenerateWan27T2vVideoPayload = {
   seed?: number;
 };
 
-export function registerGenerateWan27T2vVideoJob(fs: Engine): void {
+export function registerGenerateWan27T2vVideoJob(engine: Engine): void {
   registerJobHandler("generate_wan27_t2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId, prompt, negative_prompt,
@@ -37,7 +37,7 @@ export function registerGenerateWan27T2vVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const audioUrl = audioRef ? await uploadAssetToKie(fs, audioRef.assetId, audioRef.filename) : undefined;
+    const audioUrl = audioRef ? await uploadAssetToKie(engine, audioRef.assetId, audioRef.filename) : undefined;
     const normalizedPrompt = transformProviderPrompt(
       "generate_kie_wan_2_7_text_to_video",
       { prompt, driving_audio_ref: audioRef?.assetId },
@@ -47,7 +47,7 @@ export function registerGenerateWan27T2vVideoJob(fs: Engine): void {
       { prompt: normalizedPrompt, negative_prompt, resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed },
       { audioUrl },
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "wan27_t2v_video",
       assetId: vidAssetId,

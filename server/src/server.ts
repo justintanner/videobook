@@ -6,12 +6,12 @@ import {
 import type { Engine } from "videobook-engine";
 import type { BookManager } from "./book-manager.js";
 import { registerAllTools } from "./tools/index.js";
-import { bookManager, fs as defaultFs } from "./fs.js";
+import { bookManager, scopedEngine as defaultFs } from "./engine.js";
 
 export const MCP_PROTOCOL_VERSION = "2026-07-28";
 
 function createServer(
-  fs: Engine = defaultFs,
+  engine: Engine = defaultFs,
   books: BookManager = bookManager,
 ): McpServer {
   const server = new McpServer({
@@ -21,16 +21,16 @@ function createServer(
     supportedProtocolVersions: [MCP_PROTOCOL_VERSION],
   });
 
-  registerAllTools(server, fs, books);
+  registerAllTools(server, engine, books);
 
   return server;
 }
 
 export function createHttpHandler(
-  fs: Engine = defaultFs,
+  engine: Engine = defaultFs,
   books: BookManager = bookManager,
 ): McpHttpHandler {
-  return createMcpHandler(() => createServer(fs, books), {
+  return createMcpHandler(() => createServer(engine, books), {
     legacy: "reject",
   });
 }

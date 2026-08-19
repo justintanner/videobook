@@ -35,7 +35,7 @@ const generateWan27I2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateWan27I2vVideoSchema>;
 
-export function generateWan27I2vVideoDef(fs: Engine): ToolDef {
+export function generateWan27I2vVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_wan_2_7_image_to_video",
     description: "Generate a video using Wan 2.7 Image to Video with first/last frame image control, clip continuation, or driving audio. Creates a new video artifact and enqueues a background job.",
@@ -73,34 +73,34 @@ export function generateWan27I2vVideoDef(fs: Engine): ToolDef {
 
       let firstFrame: RefInput | undefined;
       if (first_frame_ref) {
-        const r = await resolveImageRef(fs, first_frame_ref);
+        const r = await resolveImageRef(engine, first_frame_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let lastFrame: RefInput | undefined;
       if (last_frame_ref) {
-        const r = await resolveImageRef(fs, last_frame_ref);
+        const r = await resolveImageRef(engine, last_frame_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         lastFrame = r.value;
       }
 
       let firstClip: RefInput | undefined;
       if (first_clip_ref) {
-        const r = await resolveVideoRef(fs, first_clip_ref);
+        const r = await resolveVideoRef(engine, first_clip_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstClip = r.value;
       }
 
       let drivingAudio: RefInput | undefined;
       if (driving_audio_ref) {
-        const r = await resolveAudioRef(fs, driving_audio_ref);
+        const r = await resolveAudioRef(engine, driving_audio_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         drivingAudio = r.value;
       }
 
       const videoName = generationLabel(modelSlug("kie", "wan/2-7-image-to-video"), prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

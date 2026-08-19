@@ -24,14 +24,14 @@ type Payload = {
   seed?: number;
 };
 
-export function registerGenerateQwenImageEditFalJob(fs: Engine): void {
+export function registerGenerateQwenImageEditFalJob(engine: Engine): void {
   registerJobHandler("generate_qwen_image_edit_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(engine, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
       const image_url = "url" in p.refImage
         ? p.refImage.url
-        : await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename);
+        : await uploadAssetToFal(engine, p.refImage.assetId, p.refImage.filename);
   
       const input: Record<string, unknown> = {
         prompt: p.prompt,
@@ -48,7 +48,7 @@ export function registerGenerateQwenImageEditFalJob(fs: Engine): void {
       };
   
       const taskId = await submitFalJob({
-        fs,
+        engine,
         bookId: p.bookId,
         assetId: p.imgAssetId,
         assetDir: p.imgAssetDir,

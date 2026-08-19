@@ -1,4 +1,4 @@
-import { bookManager } from "../fs.js";
+import { bookManager } from "../engine.js";
 import type { BookManager } from "../book-manager.js";
 import type { ToolDef } from "./tool-def.js";
 import {

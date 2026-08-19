@@ -16,14 +16,14 @@ type GenerateHappyhorseT2vVideoPayload = {
   duration?: string;
 };
 
-export function registerGenerateHappyhorseT2vVideoJob(fs: Engine): void {
+export function registerGenerateHappyhorseT2vVideoJob(engine: Engine): void {
   registerJobHandler("generate_happyhorse_t2v_video", async (payload, ctx) => {
     const { vidAssetId, vidAssetDir, bookId, prompt, resolution, aspect_ratio, duration } = payload as GenerateHappyhorseT2vVideoPayload;
 
     requireApiKey("KIE_API_KEY");
 
     const request = buildHappyHorseT2vPayload({ prompt, resolution, aspect_ratio, duration });
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "happyhorse_t2v_video",
       assetId: vidAssetId,

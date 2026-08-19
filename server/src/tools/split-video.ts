@@ -46,7 +46,7 @@ function deriveChunkName(source: Artifact, suffix: "1" | "2"): string {
   return `${tail}-${suffix}`;
 }
 
-export function splitVideoDef(fs: Engine): ToolDef {
+export function splitVideoDef(engine: Engine): ToolDef {
   return {
     name: "split_video",
     description:
@@ -78,7 +78,7 @@ export function splitVideoDef(fs: Engine): ToolDef {
       let chunkAEnd: number;
       let chunkBStart: number;
       try {
-        assetId = resolveVideoAssetReference(fs, asset_id, notebook_id);
+        assetId = resolveVideoAssetReference(engine, asset_id, notebook_id);
         chunkAEnd = parseVideoTimestamp(chunk_a_end, "chunk_a_end")!;
         chunkBStart = parseVideoTimestamp(chunk_b_start, "chunk_b_start") ?? chunkAEnd;
       } catch (err) {
@@ -96,7 +96,7 @@ export function splitVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const sourceArtifact = fs.artifacts.get(assetId);
+      const sourceArtifact = engine.artifacts.get(assetId);
       if (!sourceArtifact.ok) {
         return {
           isError: true as const,
@@ -104,7 +104,7 @@ export function splitVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(assetId);
+      const manifestResult = await engine.files.manifest(assetId);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -159,14 +159,14 @@ export function splitVideoDef(fs: Engine): ToolDef {
       const nameA = deriveChunkName(sourceArtifact.value, "1");
       const nameB = deriveChunkName(sourceArtifact.value, "2");
 
-      const createA = await fs.artifacts.create(sourceArtifact.value.kind, nameA);
+      const createA = await engine.artifacts.create(sourceArtifact.value.kind, nameA);
       if (!createA.ok) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: `Failed to create chunk A asset: ${createA.error.message}` }],
         };
       }
-      const createB = await fs.artifacts.create(sourceArtifact.value.kind, nameB);
+      const createB = await engine.artifacts.create(sourceArtifact.value.kind, nameB);
       if (!createB.ok) {
         return {
           isError: true as const,

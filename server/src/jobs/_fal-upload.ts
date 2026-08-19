@@ -38,12 +38,12 @@ async function uploadPreparedToFal(
 // Returns a stable https://v3.fal.media/... URL that fal's own model endpoints
 // can fetch directly — no third-party free-host dependency.
 export async function uploadAssetToFal(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   filename: string,
 ): Promise<string> {
   const { data, hashedFilename, contentType } = await prepareAssetForUpload(
-    fs,
+    engine,
     assetId,
     filename,
   );

@@ -46,17 +46,17 @@ async function extractFrame(
   videoAssetId: string,
   bookId: string,
   mode: "first" | "last" | "custom",
-  fs: Engine,
+  engine: Engine,
   customTimestamp?: number,
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
-  const sourceArtifact = fs.artifacts.get(videoAssetId);
+  const sourceArtifact = engine.artifacts.get(videoAssetId);
   if (!sourceArtifact.ok) {
     return {
       isError: true,
       content: [{ type: "text" as const, text: sourceArtifact.error.message }],
     };
   }
-  const manifestResult = await fs.files.manifest(videoAssetId);
+  const manifestResult = await engine.files.manifest(videoAssetId);
   if (!manifestResult.ok) {
     return {
       isError: true,
@@ -95,7 +95,7 @@ async function extractFrame(
     ? `${baseName}-frame-${String(Math.round((customTimestamp ?? 0) * 100) / 100).replace(".", "-")}s`
     : `${baseName}-${mode}-frame`;
 
-  const assetResult = await fs.artifacts.create("image", imageName);
+  const assetResult = await engine.artifacts.create("image", imageName);
   if (!assetResult.ok) {
     return {
       isError: true,
@@ -133,7 +133,7 @@ const extractFrameSchema = {
   book_id: z.string().describe("Book UUID"),
 };
 
-export function extractFrameDefs(fs: Engine): ToolDef[] {
+export function extractFrameDefs(engine: Engine): ToolDef[] {
   return [
     {
       name: "extract_first_frame",
@@ -141,7 +141,7 @@ export function extractFrameDefs(fs: Engine): ToolDef[] {
       schema: extractFrameSchema,
       handler: async (args) => {
         const { asset_id, book_id } = args as { asset_id: string; book_id: string };
-        return extractFrame(asset_id, book_id, "first", fs);
+        return extractFrame(asset_id, book_id, "first", engine);
       },
     },
     {
@@ -150,7 +150,7 @@ export function extractFrameDefs(fs: Engine): ToolDef[] {
       schema: extractFrameSchema,
       handler: async (args) => {
         const { asset_id, book_id } = args as { asset_id: string; book_id: string };
-        return extractFrame(asset_id, book_id, "last", fs);
+        return extractFrame(asset_id, book_id, "last", engine);
       },
     },
     {
@@ -167,7 +167,7 @@ export function extractFrameDefs(fs: Engine): ToolDef[] {
           book_id: string;
           timestamp: number;
         };
-        return extractFrame(asset_id, book_id, "custom", fs, timestamp);
+        return extractFrame(asset_id, book_id, "custom", engine, timestamp);
       },
     },
   ];

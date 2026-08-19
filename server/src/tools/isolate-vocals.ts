@@ -9,7 +9,7 @@ import { queue } from "../queue.js";
 import { findAudioFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 
-export function isolateVocalsDef(fs: Engine): ToolDef {
+export function isolateVocalsDef(engine: Engine): ToolDef {
   return {
     name: "isolate_vocals",
     description:
@@ -32,7 +32,7 @@ export function isolateVocalsDef(fs: Engine): ToolDef {
         };
       }
 
-      const artifactResult = fs.artifacts.get(asset_id);
+      const artifactResult = engine.artifacts.get(asset_id);
       if (!artifactResult.ok) {
         return {
           isError: true as const,
@@ -40,7 +40,7 @@ export function isolateVocalsDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

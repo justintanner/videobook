@@ -57,7 +57,7 @@ type EnqueueOutcome =
   | { model: string; error: string };
 
 async function enqueueModel(
-  fs: Engine,
+  engine: Engine,
   spec: ModelSpec,
   prompt: string,
   bookId: string,
@@ -65,7 +65,7 @@ async function enqueueModel(
   // provenance yet, so nothing downstream reads it.
   _sourceScriptId: string | undefined,
 ): Promise<EnqueueOutcome> {
-  const assetResult = await fs.artifacts.create("img", generationLabel(spec.modelName, prompt));
+  const assetResult = await engine.artifacts.create("img", generationLabel(spec.modelName, prompt));
   if (!assetResult.ok) {
     return { model: spec.canonicalName, error: assetResult.error.message };
   }
@@ -83,7 +83,7 @@ async function enqueueModel(
   return { model: spec.canonicalName, img_asset_id: imgAssetId, job_id: jobId };
 }
 
-export function genImagesAllDef(fs: Engine): ToolDef {
+export function genImagesAllDef(engine: Engine): ToolDef {
   return {
     name: "generate_image_model_comparison",
     description:
@@ -106,7 +106,7 @@ export function genImagesAllDef(fs: Engine): ToolDef {
       }
 
       const results = await Promise.all(
-        MODELS.map((spec) => enqueueModel(fs, spec, prompt, book_id, source_script_id)),
+        MODELS.map((spec) => enqueueModel(engine, spec, prompt, book_id, source_script_id)),
       );
 
       return {

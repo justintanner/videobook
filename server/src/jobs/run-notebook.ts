@@ -20,11 +20,10 @@ import {
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { mutateNotebook } from "../notebook-mutations.js";
 import {
-  collapseLegacyExtractPairs,
   ensureGenerationMediaOutputs,
   ensureGenerationMediaOutput,
   findGenerationMediaOutput,
-  migrateLegacyExtractFrameCells,
+  normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
 import { queue, registerJobHandler, waitForJob } from "../queue.js";
 import { translateToolPayload } from "../payload-builders.js";
@@ -247,6 +246,7 @@ export function notebookCellIsPaid(cell: NotebookCell): boolean {
 }
 
 export function notebookCellIsRunnable(cell: NotebookCell): boolean {
+  if (cell.inputs?.mediaRole === "extract-audio-output") return true;
   return (
     cell.type !== "audio"
     && cell.type !== "image"
@@ -547,7 +547,8 @@ function requiredVideoInputArtifact(
   cell: NotebookCell,
 ): string {
   const input = upstreamValues(document, cell)
-    .find((entry) => entry.targetInput === "video");
+    .find((entry) =>
+      entry.targetInput === "video" || entry.targetInput === "segment");
   if (!input) {
     throw new Error(`${cell.type} cell ${cell.id} requires a video input`);
   }
@@ -1918,7 +1919,10 @@ async function executeLocalOrGeneration(
     };
   }
 
-  if (cell.type === "extract_audio" && cell.operation === "extract_audio") {
+  if (
+    (cell.type === "extract_audio" && cell.operation === "extract_audio")
+    || cell.inputs?.mediaRole === "extract-audio-output"
+  ) {
     const sourceId = requiredVideoInputArtifact(document, cell);
     const result = await extractSourceAudio(engine, sourceId, notebookGridTag(cell.slot));
     return {
@@ -2149,8 +2153,8 @@ export async function runNotebookCell(
   outputArtifactId: string;
   status: "completed" | "awaiting-output";
 }> {
-  let normalizedDocument = migrateLegacyExtractFrameCells(
-    collapseLegacyExtractPairs(normalizeLegacyAnalyzeDocument(document)),
+  let normalizedDocument = normalizeLegacyExtractCells(
+    normalizeLegacyAnalyzeDocument(document),
   );
   let normalizedCell = normalizedDocument.cells.find((candidate) =>
     candidate.id === cell.id) ?? normalizeLegacyAnalyzeCell(cell);

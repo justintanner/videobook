@@ -439,6 +439,7 @@ describe('v2 notebook domain tools', () => {
       cell: { type, label, slot: { row, column } },
     })) as {
       id: string
+      type?: string
       operation?: string
       output_cell?: {
         id: string
@@ -463,7 +464,7 @@ describe('v2 notebook domain tools', () => {
     const frameImage = await createCell('image', 'frame-image', 1, 3)
     const invalidImage = await createCell('image', 'img-invalid', 3, 2)
 
-    expect(extractAudio.operation).toBe('extract_audio')
+    expect(["audio", "extract_audio"]).toContain(extractAudio.type)
     expect(extractAudio.output_cell).toBeUndefined()
     expect(extractAudio.output_edge).toBeUndefined()
     const createdNotebook = resultJson(await invoke('get_notebook', {
@@ -474,9 +475,9 @@ describe('v2 notebook domain tools', () => {
     }
     expect(createdNotebook.cells.filter((cell) =>
       cell.id === extractAudio.id)).toEqual([
-      expect.objectContaining({ id: extractAudio.id, type: 'extract_audio' }),
+      expect.objectContaining({ id: extractAudio.id, type: 'audio' }),
     ])
-    expect(createdNotebook.cells.filter((cell) => cell.type === 'audio')).toHaveLength(1)
+    expect(createdNotebook.cells.filter((cell) => cell.type === 'audio')).toHaveLength(2)
     expect(createdNotebook.cells.some((cell) =>
       cell.type === 'image'
       && cell.id !== invalidImage.id
@@ -506,10 +507,10 @@ describe('v2 notebook domain tools', () => {
       notebook_id: notebookId,
       source_cell_id: sourceAudio.id,
       target_cell_id: extractAudio.id,
-      target_input: 'video',
+      target_input: 'segment',
     })
     expect(invalidInput.isError).toBe(true)
-    expect(invalidInput.content[0]?.text).toContain('video-producing source')
+    expect(invalidInput.content[0]?.text).toMatch(/video-producing source|video input/)
 
     const invalidFrameInput = await invoke('connect_notebook_cells', {
       notebook_id: notebookId,

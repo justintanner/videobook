@@ -7,14 +7,14 @@ import type { Engine, FailureInfo } from "videobook-engine";
  * retry that already replaced the row.
  */
 export async function failPendingTaskAndLog(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   taskId: string,
   info: FailureInfo,
 ): Promise<void> {
-  const result = await fs.jobs.pending.fail(assetId, taskId, info);
+  const result = await engine.jobs.pending.fail(assetId, taskId, info);
   if (!result.ok) return;
-  await fs
+  await engine
     .logs.append("job-error", {
         assetId,
         error: info.message,

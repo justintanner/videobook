@@ -18,7 +18,7 @@ const [
   import("../server/src/generation-registry.js"),
   import("../server/src/tools/commands.js"),
   import("../server/src/tools/index.js"),
-  import("../server/src/fs.js"),
+  import("../server/src/engine.js"),
 ]);
 
 const bookEngine = createEngine({

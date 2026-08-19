@@ -16,7 +16,7 @@ type GenerationPayloadResponse = {
   taskType: string | null;
 };
 
-export function generationPayloadDef(fs: Engine): ToolDef {
+export function generationPayloadDef(engine: Engine): ToolDef {
   return {
     name: "inspect_generation_request",
     description: "Read the persisted Kie request payload, task meta, and failure info for a single asset. Used by the /inbox hover inspector to show what was sent to the provider.",
@@ -28,9 +28,9 @@ export function generationPayloadDef(fs: Engine): ToolDef {
       const { book_id: _book_id, asset_id } = args as { book_id: string; asset_id: string };
 
       const [payloadRes, taskRes, errorRes] = await Promise.all([
-        fs.metadata.artifacts.read<unknown>(asset_id, "generation-payload"),
-        fs.jobs.pending.read(asset_id),
-        fs.jobs.failures.read(asset_id),
+        engine.metadata.artifacts.read<unknown>(asset_id, "generation-payload"),
+        engine.jobs.pending.read(asset_id),
+        engine.jobs.failures.read(asset_id),
       ]);
 
       const task = taskRes.ok ? taskRes.value : null;

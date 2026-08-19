@@ -240,10 +240,10 @@ export function normalizePromptForMatch(p: string): string {
 const ERROR_RECENCY_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function findPreviousErrorForPrompt(
-  fs: Engine,
+  engine: Engine,
   prompt: string,
 ): Promise<GenerationError | null> {
-  const result = await fs.jobs.failures.findAll();
+  const result = await engine.jobs.failures.findAll();
   if (!result.ok) return null;
   const normalized = normalizePromptForMatch(prompt);
   const cutoff = Date.now() - ERROR_RECENCY_MS;
@@ -370,14 +370,14 @@ function buildSceneResult(
 
 async function resolveImageDataUris(
   imageRefs: string[],
-  fs: Engine,
+  engine: Engine,
 ): Promise<string[]> {
-  const { resolved } = await resolveArtifactRefs(fs, imageRefs);
+  const { resolved } = await resolveArtifactRefs(engine, imageRefs);
 
   const dataUris: string[] = [];
   for (const asset of resolved) {
     if (!asset.filePath) continue;
-    const readResult = await fs.files.read(asset.artifactId, asset.filePath.split("/").pop()!
+    const readResult = await engine.files.read(asset.artifactId, asset.filePath.split("/").pop()!
     );
     if (!readResult.ok) continue;
     const buf = Buffer.from(readResult.value);
@@ -390,7 +390,7 @@ async function resolveImageDataUris(
 
 // --- Tool definition ---
 
-export function rewritePromptDef(fs: Engine): ToolDef {
+export function rewritePromptDef(engine: Engine): ToolDef {
   return {
     name: "rewrite_prompt",
     description:
@@ -464,7 +464,7 @@ export function rewritePromptDef(fs: Engine): ToolDef {
 
       // Scene rewrite mode
       if (asset_ref !== undefined && scene_index !== undefined) {
-        return handleSceneRewrite(fs, apiKey, asset_ref, scene_index, prompt);
+        return handleSceneRewrite(engine, apiKey, asset_ref, scene_index, prompt);
       }
 
       // Standard rewrite mode — require prompt OR reference images
@@ -486,7 +486,7 @@ export function rewritePromptDef(fs: Engine): ToolDef {
       if (previous_error) {
         previousError = { message: previous_error };
       } else if (prompt) {
-        const found = await findPreviousErrorForPrompt(fs, prompt);
+        const found = await findPreviousErrorForPrompt(engine, prompt);
         if (found) {
           previousError = {
             message: found.message,
@@ -498,16 +498,16 @@ export function rewritePromptDef(fs: Engine): ToolDef {
       // Expand @s01 slot refs → @<artifact-id> tokens
       let expandedPrompt = prompt ?? "";
       if (expandedPrompt) {
-        expandedPrompt = expandTimelineSlotRefs(expandedPrompt, timelineSlotArtifactIds(fs));
+        expandedPrompt = expandTimelineSlotRefs(expandedPrompt, timelineSlotArtifactIds(engine));
       }
 
-      return handleStandardRewrite(fs, apiKey, expandedPrompt, model, image_refs, platform, custom_prompt, provider_docs, previousError);
+      return handleStandardRewrite(engine, apiKey, expandedPrompt, model, image_refs, platform, custom_prompt, provider_docs, previousError);
     },
   };
 }
 
 async function handleStandardRewrite(
-  fs: Engine,
+  engine: Engine,
   apiKey: string,
   prompt: string,
   model: string,
@@ -544,7 +544,7 @@ async function handleStandardRewrite(
 
   let messages: OpenAiMessage[];
   if (imageRefs && imageRefs.length > 0) {
-    const dataUris = await resolveImageDataUris(imageRefs, fs);
+    const dataUris = await resolveImageDataUris(imageRefs, engine);
     if (dataUris.length === 0) {
       return {
         isError: true as const,
@@ -571,7 +571,7 @@ async function handleStandardRewrite(
 }
 
 async function handleSceneRewrite(
-  fs: Engine,
+  engine: Engine,
   apiKey: string,
   assetRef: string,
   sceneIndex: number,
@@ -579,7 +579,7 @@ async function handleSceneRewrite(
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
   const assetId = assetRef.replace(/^@/, "");
 
-  const metaResult = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "tool.params");
+  const metaResult = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "tool.params");
   if (!metaResult.ok) {
     return {
       isError: true as const,

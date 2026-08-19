@@ -21,7 +21,7 @@ type GenerateSeedreamImagePayload = {
   nsfwChecker?: boolean;
 };
 
-export function registerGenerateSeedreamImageJob(fs: Engine): void {
+export function registerGenerateSeedreamImageJob(engine: Engine): void {
   registerJobHandler("generate_seedream_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
@@ -35,7 +35,7 @@ export function registerGenerateSeedreamImageJob(fs: Engine): void {
       if ("url" in input) {
         uploadedUrls.push(input.url);
       } else {
-        uploadedUrls.push(await uploadAssetToKie(fs, input.assetId, input.filename));
+        uploadedUrls.push(await uploadAssetToKie(engine, input.assetId, input.filename));
       }
     }
     const normalizedPrompt = transformProviderPrompt(
@@ -57,7 +57,7 @@ export function registerGenerateSeedreamImageJob(fs: Engine): void {
       },
       uploadedUrls,
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "seedream_image",
       assetId: imgAssetId,

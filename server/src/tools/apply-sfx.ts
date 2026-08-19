@@ -70,7 +70,7 @@ export function findApplySfxSourceFile(
     ?? findVideoFile(files);
 }
 
-export function applySfxDef(fs: Engine): ToolDef {
+export function applySfxDef(engine: Engine): ToolDef {
   return {
     name: "apply_sfx",
     description:
@@ -110,7 +110,7 @@ export function applySfxDef(fs: Engine): ToolDef {
       };
       const assetId = asset_id.replace(/^@/, "");
 
-      const manifestResult = await fs.files.manifest(assetId);
+      const manifestResult = await engine.files.manifest(assetId);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -126,7 +126,7 @@ export function applySfxDef(fs: Engine): ToolDef {
         };
       }
 
-      const metaResult = await fs.metadata.artifacts.read<{ duration?: number }>(assetId, "original"
+      const metaResult = await engine.metadata.artifacts.read<{ duration?: number }>(assetId, "original"
       );
       const duration = metaResult.ok && typeof metaResult.value.duration === "number"
         ? metaResult.value.duration
@@ -144,7 +144,7 @@ export function applySfxDef(fs: Engine): ToolDef {
         };
       }
 
-      const cleared = await fs.jobs.failures.clear(assetId);
+      const cleared = await engine.jobs.failures.clear(assetId);
       if (!cleared.ok) {
         return {
           isError: true as const,

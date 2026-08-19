@@ -11,17 +11,17 @@ import { fetchAuthenticatedXHandle } from "../x/authenticated-handle.js";
  * live and update the cache on success; on any failure we fall back to the last
  * cached value (null on first-ever call).
  */
-export function getWatermarkConfigDef(fs: Engine): ToolDef {
+export function getWatermarkConfigDef(engine: Engine): ToolDef {
   return {
     name: "get_watermark_config",
     description:
       "Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the /watermark dialog.",
     schema: {},
     handler: async () => {
-      const cached = await readWatermarkConfig(fs);
+      const cached = await readWatermarkConfig(engine);
       const live = await fetchAuthenticatedXHandle();
       const authenticatedHandle = live !== null
-        ? (await setAuthenticatedHandle(live, fs)).authenticatedHandle
+        ? (await setAuthenticatedHandle(live, engine)).authenticatedHandle
         : cached.authenticatedHandle;
       const config = { ...cached, authenticatedHandle };
       return {

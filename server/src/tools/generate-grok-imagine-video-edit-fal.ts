@@ -19,7 +19,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateGrokImagineVideoEditFalDef(fs: Engine): ToolDef {
+export function generateGrokImagineVideoEditFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_grok_imagine_video_edit_video",
     description: "Edit a video via fal.ai using xAI Grok Imagine Video edit-video. Creates a new video artifact and enqueues a background job.",
@@ -32,17 +32,17 @@ export function generateGrokImagineVideoEditFalDef(fs: Engine): ToolDef {
       }
 
       const sourceVideoAssetId = video_ref.replace(/^@/, "");
-      const sourceVideoArtifact = fs.artifacts.get(sourceVideoAssetId);
+      const sourceVideoArtifact = engine.artifacts.get(sourceVideoAssetId);
       if (!sourceVideoArtifact.ok) return { isError: true as const, content: [{ type: "text" as const, text: sourceVideoArtifact.error.message }] };
       if (sourceVideoArtifact.value.kind !== "video") {
         return { isError: true as const, content: [{ type: "text" as const, text: `video_ref must be a video artifact, got ${sourceVideoArtifact.value.kind}: ${sourceVideoAssetId}` }] };
       }
-      const manifest = await fs.files.manifest(sourceVideoAssetId);
+      const manifest = await engine.files.manifest(sourceVideoAssetId);
       if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
       const sourceVideoFile = findVideoFile(manifest.value.files);
       if (!sourceVideoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${sourceVideoAssetId}` }] };
 
-      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "grok-imagine/text-to-video"), prompt));
+      const assetResult = await engine.artifacts.create("vid", generationLabel(modelSlug("kie", "grok-imagine/text-to-video"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

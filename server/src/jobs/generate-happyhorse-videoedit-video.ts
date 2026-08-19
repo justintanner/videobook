@@ -29,7 +29,7 @@ type GenerateHappyhorseVideoeditPayload = {
   seed?: number;
 };
 
-export function registerGenerateHappyhorseVideoeditVideoJob(fs: Engine): void {
+export function registerGenerateHappyhorseVideoeditVideoJob(engine: Engine): void {
   registerJobHandler("generate_happyhorse_videoedit_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId, prompt,
@@ -39,10 +39,10 @@ export function registerGenerateHappyhorseVideoeditVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const videoUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename);
+    const videoUrl = await uploadAssetToKie(engine, sourceVideo.assetId, sourceVideo.filename);
     const referenceImages: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      referenceImages.push(await uploadAssetToKie(fs, assetId, filename));
+      referenceImages.push(await uploadAssetToKie(engine, assetId, filename));
     }
 
     // happyhorse/video-edit has no `duration` field in its kie input schema —
@@ -74,14 +74,14 @@ export function registerGenerateHappyhorseVideoeditVideoJob(fs: Engine): void {
       referenceImages,
     );
 
-    const sourceMeta = await fs.metadata.artifacts.read<{ duration?: number }>(sourceVideo.assetId, "original"
+    const sourceMeta = await engine.metadata.artifacts.read<{ duration?: number }>(sourceVideo.assetId, "original"
     );
     const durationHint =
       sourceMeta.ok && typeof sourceMeta.value?.duration === "number" && sourceMeta.value.duration > 0
         ? sourceMeta.value.duration
         : FALLBACK_VIDEOEDIT_DURATION_SECONDS;
 
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "happyhorse_videoedit_video",
       assetId: vidAssetId,

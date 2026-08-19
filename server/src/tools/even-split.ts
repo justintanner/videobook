@@ -120,7 +120,7 @@ function deriveChunkName(source: Artifact, index: number): string {
   return `${tail}-${index}`;
 }
 
-export function splitVideoByDurationsDef(fs: Engine): ToolDef {
+export function splitVideoByDurationsDef(engine: Engine): ToolDef {
   return {
     name: "split_video_by_durations",
     description:
@@ -169,7 +169,7 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
         };
       }
 
-      const sourceArtifact = fs.artifacts.get(asset_id);
+      const sourceArtifact = engine.artifacts.get(asset_id);
       if (!sourceArtifact.ok) {
         return {
           isError: true as const,
@@ -177,7 +177,7 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -244,7 +244,7 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
 
       if (destination !== undefined) {
         destinationMode = true;
-        const destManifest = await fs.files.manifest(destination.asset_id);
+        const destManifest = await engine.files.manifest(destination.asset_id);
         if (!destManifest.ok) {
           return {
             isError: true as const,
@@ -278,7 +278,7 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
         for (let i = 0; i < plan.chunks.length; i++) {
           const chunk = plan.chunks[i];
           const name = deriveChunkName(sourceArtifact.value, i + 1);
-          const c = await fs.artifacts.create(sourceArtifact.value.kind, name);
+          const c = await engine.artifacts.create(sourceArtifact.value.kind, name);
           if (!c.ok) {
             return {
               isError: true as const,

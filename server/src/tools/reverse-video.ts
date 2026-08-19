@@ -20,7 +20,7 @@ async function getVideoDuration(filePath: string): Promise<number> {
   return parseFloat(probe.format.duration);
 }
 
-export function reverseVideoDef(fs: Engine): ToolDef {
+export function reverseVideoDef(engine: Engine): ToolDef {
   return {
     name: "reverse_video",
     description: "Reverse video playback (play backwards). Toggle operation — reversing twice restores original. Max 300s due to memory buffering.",
@@ -30,7 +30,7 @@ export function reverseVideoDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const { asset_id, book_id } = args as { asset_id: string; book_id: string };
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

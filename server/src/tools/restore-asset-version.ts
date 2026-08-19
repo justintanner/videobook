@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function restoreAssetVersionDef(fs: Engine): ToolDef {
+export function restoreAssetVersionDef(engine: Engine): ToolDef {
   return {
     name: "restore_asset_version",
     description: "Restore an asset from an immutable revision as a new revision",
@@ -15,9 +15,9 @@ export function restoreAssetVersionDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const { asset_id, commit_hash } = args as { asset_id: string; commit_hash: string; book_id: string };
-      const artifact = fs.artifacts.get(asset_id);
+      const artifact = engine.artifacts.get(asset_id);
       const artifactId = artifact.ok ? artifact.value.artifactId : asset_id;
-      const restored = await fs.history.restoreArtifact(
+      const restored = await engine.history.restoreArtifact(
         artifactId,
         commit_hash,
       );

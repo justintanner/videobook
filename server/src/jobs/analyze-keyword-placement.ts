@@ -167,18 +167,18 @@ async function analyzeFrames(
 }
 
 async function writeContactSheetIfChanged(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   contactSheet: Buffer,
 ): Promise<void> {
-  const existing = await fs.files.read(assetId, KEYWORD_FRAME_CACHE_FILENAME);
+  const existing = await engine.files.read(assetId, KEYWORD_FRAME_CACHE_FILENAME);
   if (existing.ok && existing.value.equals(contactSheet)) return;
-  const write = await fs.files.write(assetId, KEYWORD_FRAME_CACHE_FILENAME, contactSheet
+  const write = await engine.files.write(assetId, KEYWORD_FRAME_CACHE_FILENAME, contactSheet
   );
   if (!write.ok) throw new Error(`Failed to persist keyword frame cache: ${write.error.message}`);
 }
 
-export function registerAnalyzeKeywordPlacementJob(fs: Engine): void {
+export function registerAnalyzeKeywordPlacementJob(engine: Engine): void {
   registerJobHandler("analyze_keyword_placement", async (payload, ctx) => {
     const {
       assetId,
@@ -188,7 +188,7 @@ export function registerAnalyzeKeywordPlacementJob(fs: Engine): void {
       graphics,
     } = payload as AnalyzeKeywordPlacementPayload;
     return withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -214,8 +214,8 @@ export function registerAnalyzeKeywordPlacementJob(fs: Engine): void {
             regions: regions.get(frame.cueId) ?? [],
           })),
         };
-        await writeContactSheetIfChanged(fs, assetId, extracted.contactSheet);
-        await writeKeywordPlacementAnalysis(fs, assetId, analysis);
+        await writeContactSheetIfChanged(engine, assetId, extracted.contactSheet);
+        await writeKeywordPlacementAnalysis(engine, assetId, analysis);
         return { analysis } satisfies AnalyzeKeywordPlacementResult;
       },
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },

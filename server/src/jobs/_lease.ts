@@ -12,7 +12,7 @@ type LeaseOptions = {
   meta?: Partial<ArtifactRuntimeMeta>;
 };
 
-function sleep(ms: number): Promise<void> {
+function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -35,7 +35,7 @@ async function beginLocalLease(
     });
     if (lease) return lease;
     if (Date.now() - started >= waitForActiveMs) return null;
-    await sleep(250);
+    await leaseSleep(250);
   }
 }
 
@@ -158,7 +158,17 @@ export async function withLocalLease<T>(
   }
 }
 
-const CLAIM_RETRY_INTERVAL_MS = 1_000;
+export const CLAIM_RETRY_INTERVAL_MS = 1_000;
+
+export type LeaseSleepFn = (ms: number) => Promise<void>;
+
+let leaseSleep: LeaseSleepFn = defaultSleep;
+
+export function configureLeaseClockForTests(options: {
+  sleep?: LeaseSleepFn;
+} | null): void {
+  leaseSleep = options?.sleep ?? defaultSleep;
+}
 
 export type LockedLeaseClaim =
   | { ok: true; ownerId: string }
@@ -201,7 +211,7 @@ export async function claimLockedLease(
       reason = `Asset is locked: ${lockResult.error.message}`;
     }
     if (Date.now() - started >= waitForActiveMs) return { ok: false, reason };
-    await sleep(CLAIM_RETRY_INTERVAL_MS);
+    await leaseSleep(CLAIM_RETRY_INTERVAL_MS);
   }
 }
 

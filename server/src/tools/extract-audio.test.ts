@@ -2,40 +2,22 @@ import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from
 import { mkdtemp, rm, stat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import type { Engine } from "videobook-engine";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { createTestClient } from "../test-client.js";
 import { queue, waitForJob } from "../queue.js";
+import { probeVideo } from "../ffmpeg.js";
+import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import type { Client } from "@modelcontextprotocol/client";
-
-const execFileAsync = promisify(execFile);
-const require = createRequire(import.meta.url);
-const FFMPEG: string = require("ffmpeg-static");
 
 type TextContent = Array<{ type: string; text: string }>;
 
 async function generateTestVideo(outputPath: string): Promise<void> {
-  await execFileAsync(FFMPEG, [
-    "-y",
-    "-f", "lavfi", "-i", "testsrc=duration=2:size=320x240:rate=10",
-    "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
-    "-c:v", "libx264", "-pix_fmt", "yuv420p",
-    "-c:a", "aac", "-shortest",
-    outputPath,
-  ]);
+  await copyVideoFixture(COMMON_VIDEO_FIXTURES.extractAudio, outputPath);
 }
 
 async function generateVideoNoAudio(outputPath: string): Promise<void> {
-  await execFileAsync(FFMPEG, [
-    "-y",
-    "-f", "lavfi", "-i", "testsrc=duration=2:size=320x240:rate=10",
-    "-c:v", "libx264", "-pix_fmt", "yuv420p",
-    "-an",
-    outputPath,
-  ]);
+  await copyVideoFixture(COMMON_VIDEO_FIXTURES.extractAudioSilent, outputPath);
 }
 
 async function uploadVideo(
@@ -282,14 +264,7 @@ describe("extract_audio tool", () => {
       const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
       const mp3Path = join(manifestData.path, "s1-range.mp3");
 
-      const FFPROBE: string = require("ffprobe-static").path;
-      const { stdout } = await execFileAsync(FFPROBE, [
-        "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=nw=1:nk=1",
-        mp3Path,
-      ]);
-      const duration = Number(stdout.trim());
+      const duration = (await probeVideo(mp3Path)).duration;
       // mp3 framing slop adds a hair; the range is 0.5s, full source is 2s.
       // Anything under 0.9s confirms the range clip took effect.
       expect(duration).toBeLessThan(0.9);

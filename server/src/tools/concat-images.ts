@@ -59,7 +59,7 @@ const dimensionsByAspectRatio: Record<AspectRatio, Dimensions> = {
   "3:4": { width: 1080, height: 1440 },
 };
 
-export function concatImagesDef(fs: Engine): ToolDef {
+export function concatImagesDef(engine: Engine): ToolDef {
   return {
     name: "concat_images",
     description:
@@ -74,7 +74,7 @@ export function concatImagesDef(fs: Engine): ToolDef {
         background,
       } = args as Args;
 
-      const sourceResult = await readSourceImages(fs, image_refs);
+      const sourceResult = await readSourceImages(engine, image_refs);
       if (!sourceResult.ok) return error(sourceResult.error);
       if (!sourceResult.value.some((source) => source !== null)) {
         return error("At least one image asset is required");
@@ -98,14 +98,14 @@ export function concatImagesDef(fs: Engine): ToolDef {
         return error(`Failed to concatenate images: ${message}`);
       }
 
-      const assetName = name ?? deriveAssetName(fs, sourceImageIds);
-      const assetResult = await fs.artifacts.create("img", assetName);
+      const assetName = name ?? deriveAssetName(engine, sourceImageIds);
+      const assetResult = await engine.artifacts.create("img", assetName);
       if (!assetResult.ok) return error(`Failed to create image asset: ${assetResult.error.message}`);
 
       const imgAssetId = assetResult.value.artifactId;
-      const writeResult = await fs.files.write(imgAssetId, "original.png", output.buffer);
+      const writeResult = await engine.files.write(imgAssetId, "original.png", output.buffer);
       if (!writeResult.ok) {
-        await fs.artifacts.delete(imgAssetId).catch(() => undefined);
+        await engine.artifacts.delete(imgAssetId).catch(() => undefined);
         return error(writeResult.error.message);
       }
 
@@ -118,22 +118,22 @@ export function concatImagesDef(fs: Engine): ToolDef {
         aspect_ratio: resolvedAspectRatio,
         source_images: sourceImageIds,
       };
-      const metadataResult = await fs.metadata.artifacts.write(imgAssetId, "original", metadata);
+      const metadataResult = await engine.metadata.artifacts.write(imgAssetId, "original", metadata);
       if (!metadataResult.ok) {
-        await fs.artifacts.delete(imgAssetId).catch(() => undefined);
+        await engine.artifacts.delete(imgAssetId).catch(() => undefined);
         return error(metadataResult.error.message);
       }
 
       let variantsResult: Awaited<ReturnType<typeof writeImageVariants>>;
       try {
-        variantsResult = await writeImageVariants(fs, imgAssetId, output.buffer);
+        variantsResult = await writeImageVariants(engine, imgAssetId, output.buffer);
       } catch (e) {
-        await fs.artifacts.delete(imgAssetId).catch(() => undefined);
+        await engine.artifacts.delete(imgAssetId).catch(() => undefined);
         const message = e instanceof Error ? e.message : String(e);
         return error(`Failed to write image variants: ${message}`);
       }
       if (!variantsResult.ok) {
-        await fs.artifacts.delete(imgAssetId).catch(() => undefined);
+        await engine.artifacts.delete(imgAssetId).catch(() => undefined);
         return error(variantsResult.error);
       }
 
@@ -158,7 +158,7 @@ export function concatImagesDef(fs: Engine): ToolDef {
 }
 
 async function readSourceImages(
-  fs: Engine,
+  engine: Engine,
   rawRefs: readonly (string | null)[],
 ): Promise<{ ok: true; value: SourceImageSlot[] } | { ok: false; error: string }> {
   const sources: SourceImageSlot[] = [];
@@ -168,19 +168,19 @@ async function readSourceImages(
       continue;
     }
     const assetId = rawRef.replace(/^@/, "");
-    const artifact = fs.artifacts.get(assetId);
+    const artifact = engine.artifacts.get(assetId);
     if (!artifact.ok) return { ok: false, error: artifact.error.message };
     if (artifact.value.kind !== "image") {
       return { ok: false, error: `image ref must be an image artifact, got ${artifact.value.kind}: ${assetId}` };
     }
 
-    const manifestResult = await fs.files.manifest(assetId);
+    const manifestResult = await engine.files.manifest(assetId);
     if (!manifestResult.ok) return { ok: false, error: manifestResult.error.message };
 
     const imageFile = findImageFile(manifestResult.value.files);
     if (!imageFile) return { ok: false, error: `No image file found in asset ${assetId}` };
 
-    const readResult = await fs.files.read(assetId, imageFile.name);
+    const readResult = await engine.files.read(assetId, imageFile.name);
     if (!readResult.ok) return { ok: false, error: readResult.error.message };
 
     const buffer = Buffer.isBuffer(readResult.value)
@@ -275,7 +275,7 @@ function cellFor(index: number, grid: Grid, dimensions: Dimensions): Placement["
 }
 
 export async function writeImageVariants(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   buffer: Buffer,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -285,18 +285,18 @@ export async function writeImageVariants(
     cropToFill(buffer, 1080, 1080),
   ]);
   const results = await Promise.all([
-    fs.files.write(assetId, "landscape.jpg", landscape),
-    fs.files.write(assetId, "portrait.jpg", portrait),
-    fs.files.write(assetId, "square.jpg", square),
+    engine.files.write(assetId, "landscape.jpg", landscape),
+    engine.files.write(assetId, "portrait.jpg", portrait),
+    engine.files.write(assetId, "square.jpg", square),
   ]);
   const failure = results.find((result) => !result.ok);
   if (failure && !failure.ok) return { ok: false, error: failure.error.message };
   return { ok: true };
 }
 
-function deriveAssetName(fs: Engine, assetIds: readonly string[]): string {
+function deriveAssetName(engine: Engine, assetIds: readonly string[]): string {
   const sources = assetIds.map((assetId) => {
-    const artifact = fs.artifacts.get(assetId);
+    const artifact = engine.artifacts.get(assetId);
     return (artifact.ok ? artifact.value.label?.trim() : "") || assetId;
   });
   return derivedLabel("concat", sources.join(" + "));

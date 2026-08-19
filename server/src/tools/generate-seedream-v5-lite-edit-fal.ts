@@ -21,7 +21,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateSeedreamV5LiteEditFalDef(fs: Engine): ToolDef {
+export function generateSeedreamV5LiteEditFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_seedream_v5_lite_edit_image",
     description: "Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.",
@@ -34,10 +34,10 @@ export function generateSeedreamV5LiteEditFalDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageRefs(fs, image_refs);
+      const resolved = await resolveImageRefs(engine, image_refs);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.artifacts.create(prefix, generationLabel(modelSlug("kie", "seedream/5-lite-image-to-image"), prompt));
+      const assetResult = await engine.artifacts.create(prefix, generationLabel(modelSlug("kie", "seedream/5-lite-image-to-image"), prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;

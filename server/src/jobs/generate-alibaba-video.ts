@@ -40,14 +40,14 @@ type GenerateAlibabaVideoPayload = {
 };
 
 async function uploadInput(
-  fs: Engine,
+  engine: Engine,
   input: RefInput,
   model: string,
 ): Promise<string> {
-  return uploadAssetToAlibaba(fs, input.assetId, input.filename, model);
+  return uploadAssetToAlibaba(engine, input.assetId, input.filename, model);
 }
 
-export function registerGenerateAlibabaVideoJob(fs: Engine): void {
+export function registerGenerateAlibabaVideoJob(engine: Engine): void {
   registerJobHandler("generate_alibaba_video", async (payload, ctx) => {
     const {
       vidAssetId, prompt, negative_prompt, model,
@@ -58,11 +58,11 @@ export function registerGenerateAlibabaVideoJob(fs: Engine): void {
 
     const apiKey = requireApiKey("DASHSCOPE_API_KEY");
 
-    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame, model) : undefined;
-    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame, model) : undefined;
-    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip, model) : undefined;
-    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, model) : undefined;
-    const videoUrl = videoRef ? await uploadInput(fs, videoRef, model) : undefined;
+    const firstFrameUrl = firstFrame ? await uploadInput(engine, firstFrame, model) : undefined;
+    const lastFrameUrl = lastFrame ? await uploadInput(engine, lastFrame, model) : undefined;
+    const firstClipUrl = firstClip ? await uploadInput(engine, firstClip, model) : undefined;
+    const drivingAudioUrl = drivingAudio ? await uploadInput(engine, drivingAudio, model) : undefined;
+    const videoUrl = videoRef ? await uploadInput(engine, videoRef, model) : undefined;
 
     const provider = createAlibaba({ apiKey, timeout: 120_000 });
     const normalizedPrompt = transformProviderPrompt(
@@ -95,11 +95,11 @@ export function registerGenerateAlibabaVideoJob(fs: Engine): void {
       toolName: "generate_alibaba_wan_2_7_video",
       wire: true,
     });
-    await fs.metadata.artifacts.write(vidAssetId, "generation-payload", request);
+    await engine.metadata.artifacts.write(vidAssetId, "generation-payload", request);
     const submitResult = await provider.post.api.v1.services.aigc.videoGeneration.videoSynthesis(request);
     const taskId = submitResult.output.task_id;
     {
-      const _ptResult = await fs.jobs.pending.write({
+      const _ptResult = await engine.jobs.pending.write({
         taskId,
         taskType: "alibaba_video",
         artifactId: vidAssetId,

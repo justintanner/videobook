@@ -4,28 +4,19 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
-import { queue } from "../queue.js";
+import { queue, waitForJob } from "../queue.js";
 import { FFPROBE } from "../ffmpeg.js";
+import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import { planEvenSplit } from "./even-split.js";
 import type { Client } from "@modelcontextprotocol/client";
 
 const execFileAsync = promisify(execFile);
-const require = createRequire(import.meta.url);
-const FFMPEG: string = require("ffmpeg-static");
 
 type TextContent = Array<{ type: string; text: string }>;
 
 async function generateTestVideo(outputPath: string, durationSec: number): Promise<void> {
-  await execFileAsync(FFMPEG, [
-    "-y",
-    "-f", "lavfi", "-i", `testsrc=duration=${durationSec}:size=320x240:rate=10`,
-    "-f", "lavfi", "-i", `sine=frequency=440:duration=${durationSec}`,
-    "-c:v", "libx264", "-pix_fmt", "yuv420p",
-    "-c:a", "aac", "-shortest",
-    outputPath,
-  ]);
+  await copyVideoFixture(COMMON_VIDEO_FIXTURES.evenSplit(durationSec), outputPath);
 }
 
 async function uploadVideo(
@@ -43,18 +34,7 @@ async function uploadVideo(
 
 // even_split now enqueues fire-and-forget, so the ffmpeg work finishes in the
 // background. Wait for the job to complete before probing on-disk chunks.
-async function waitForJob(jobId: string, timeoutMs = 120_000): Promise<void> {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    const status = await queue.getStatus(jobId);
-    if (status?.state === "completed") return;
-    if (status?.state === "failed") {
-      throw new Error(`job ${jobId} failed: ${status.error?.message ?? "unknown"}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-  throw new Error(`job ${jobId} did not complete within ${timeoutMs}ms`);
-}
+
 
 async function probeDuration(filePath: string): Promise<number> {
   const { stdout } = await execFileAsync(FFPROBE, [

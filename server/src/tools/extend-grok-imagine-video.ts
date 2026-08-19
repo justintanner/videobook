@@ -22,7 +22,7 @@ const extendGrokImagineVideoSchema = {
 
 type Args = SchemaArgs<typeof extendGrokImagineVideoSchema>;
 
-export function extendGrokImagineVideoDef(fs: Engine): ToolDef {
+export function extendGrokImagineVideoDef(engine: Engine): ToolDef {
   return {
     name: "extend_kie_grok_imagine_video",
     description: "Extend an existing video asset using Kie's grok-imagine/extend. Creates a new video artifact and enqueues a background job. Requires at least one of asset_id or video_ref.",
@@ -45,10 +45,10 @@ export function extendGrokImagineVideoDef(fs: Engine): ToolDef {
         return toolError("asset_id or video_ref is required");
       }
 
-      const kindGate = await requireArtifactKind(fs, asset_id, ["video"], "extend_kie_grok_imagine_video");
+      const kindGate = await requireArtifactKind(engine, asset_id, ["video"], "extend_kie_grok_imagine_video");
       if (kindGate) return kindGate;
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return toolError(manifestResult.error.message);
       }
@@ -59,7 +59,7 @@ export function extendGrokImagineVideoDef(fs: Engine): ToolDef {
         return toolError(`No video file found in asset ${asset_id}`);
       }
 
-      const generationPayloadResult = await fs.metadata.artifacts.read<{ model?: string }>(asset_id, "generation-payload");
+      const generationPayloadResult = await engine.metadata.artifacts.read<{ model?: string }>(asset_id, "generation-payload");
       if (generationPayloadResult.ok) {
         const model = generationPayloadResult.value.model;
         if (model && !model.includes("grok-imagine")) {
@@ -69,10 +69,10 @@ export function extendGrokImagineVideoDef(fs: Engine): ToolDef {
 
       // The new artifact's label is free text derived from the source's own
       // label; the id carries no name to reuse.
-      const sourceArtifact = fs.artifacts.get(asset_id);
+      const sourceArtifact = engine.artifacts.get(asset_id);
       const baseName = (sourceArtifact.ok ? sourceArtifact.value.label?.trim() : "") || asset_id;
       const videoName = derivedLabel("extended", baseName);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return toolError(`Failed to create video asset: ${assetResult.error.message}`);
       }

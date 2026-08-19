@@ -98,13 +98,17 @@ describe('CommandPlan edit tools', () => {
       preview_hash: preview.previewHash,
     })) as { actionId: string; revision: string }
     expect(engine.sequences.getPrimary().clips).toHaveLength(1)
+    const firstOperation = intent.operations[0]
+    if (firstOperation?.kind !== 'insert-clip') {
+      throw new Error('expected insert-clip operation')
+    }
     const staleIntent: EditIntent = {
       ...intent,
       commandId: uuidv7(),
       operations: [{
-        ...intent.operations[0]!,
+        ...firstOperation,
         placement: {
-          ...intent.operations[0]!.placement,
+          ...firstOperation.placement,
           timelineStartFrame: 90,
         },
       }],

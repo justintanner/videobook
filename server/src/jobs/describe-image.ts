@@ -138,7 +138,7 @@ export async function describeImageBytes(
   return parsed;
 }
 
-export function registerDescribeImageJob(fs: Engine): void {
+export function registerDescribeImageJob(engine: Engine): void {
   registerJobHandler("describe_image", async (payload, ctx) => {
     const {
       sourceAssetId,
@@ -150,10 +150,10 @@ export function registerDescribeImageJob(fs: Engine): void {
     // the lease so the wrapper finalizes it (ready/error). Analysis-only
     // mode runs on the source asset, which already exists at status='ready'.
     const targetAssetId = scriptAssetId ?? sourceAssetId;
-    return withLocalLease(fs, targetAssetId, ctx, "describe", async () => {
+    return withLocalLease(engine, targetAssetId, ctx, "describe", async () => {
       const responses = buildResponses(requireApiKey("OPENAI_API_KEY"));
 
-      const readResult = await fs.files.read(sourceAssetId, sourceImageFilename);
+      const readResult = await engine.files.read(sourceAssetId, sourceImageFilename);
       if (!readResult.ok) {
         throw new Error(`Failed to read image ${sourceImageFilename} for ${sourceAssetId}: ${readResult.error.message}`);
       }
@@ -163,7 +163,7 @@ export function registerDescribeImageJob(fs: Engine): void {
       const parsed = await describeImageBytes(buffer, mime, responses);
 
       const analysisJson = JSON.stringify(parsed, null, 2);
-      const cacheResult = await fs.files.write(sourceAssetId, ANALYSIS_FILENAME, analysisJson);
+      const cacheResult = await engine.files.write(sourceAssetId, ANALYSIS_FILENAME, analysisJson);
       if (!cacheResult.ok) {
         if (cacheResult.error.code === "NOT_FOUND") {
           return { success: false, sourceAssetId, scriptAssetId, reason: "source_deleted" };
@@ -175,12 +175,12 @@ export function registerDescribeImageJob(fs: Engine): void {
 
       if (scriptAssetId) {
         const markdown = formatMarkdown(parsed);
-        const writeResult = await fs.files.write(scriptAssetId, SCRIPT_FILENAME, markdown);
+        const writeResult = await engine.files.write(scriptAssetId, SCRIPT_FILENAME, markdown);
         if (!writeResult.ok) {
           throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
         }
 
-        await fs.metadata.artifacts.write(scriptAssetId, "original", {
+        await engine.metadata.artifacts.write(scriptAssetId, "original", {
             origin: "describe_image",
             sourceAssetId,
             model: VISION_MODEL,

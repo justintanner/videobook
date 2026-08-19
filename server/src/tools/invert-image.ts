@@ -23,7 +23,7 @@ function findOriginalImage(files: ArtifactManifestFile[]): ArtifactManifestFile 
   );
 }
 
-export function invertImageDef(fs: Engine): ToolDef {
+export function invertImageDef(engine: Engine): ToolDef {
   return {
     name: "invert_image",
     description: "In-place inverts an img-* asset and regenerates crops.",
@@ -34,7 +34,7 @@ export function invertImageDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const { asset_id, book_id } = args as { asset_id: string; book_id: string };
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return { isError: true, content: [{ type: "text", text: manifestResult.error.message }] };
       }
@@ -47,7 +47,7 @@ export function invertImageDef(fs: Engine): ToolDef {
       const rawExt = imageFile.extension ?? extname(imageFile.name);
       const extWithDot = rawExt.startsWith(".") ? rawExt : `.${rawExt}`;
       
-      const readResult = await fs.files.read(asset_id, imageFile.name);
+      const readResult = await engine.files.read(asset_id, imageFile.name);
       if (!readResult.ok) {
         return { isError: true, content: [{ type: "text", text: readResult.error.message }] };
       }
@@ -61,12 +61,12 @@ export function invertImageDef(fs: Engine): ToolDef {
         return { isError: true, content: [{ type: "text", text: `Invert failed: ${err instanceof Error ? err.message : String(err)}` }] };
       }
 
-      const writeResult = await fs.files.write(asset_id, imageFile.name, inverted);
+      const writeResult = await engine.files.write(asset_id, imageFile.name, inverted);
       if (!writeResult.ok) {
         return { isError: true, content: [{ type: "text", text: writeResult.error.message }] };
       }
 
-      const metadataResult = await fs.metadata.artifacts.read(asset_id, "original");
+      const metadataResult = await engine.metadata.artifacts.read(asset_id, "original");
       const provenance = metadataResult.ok && metadataResult.value ? metadataResult.value : { origin: "invert_image" };
 
       const jobId = `invert-${asset_id}-${Date.now()}`;

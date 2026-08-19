@@ -14,7 +14,7 @@ import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { createHttpHandler, MCP_PROTOCOL_VERSION } from "../src/server.js";
-import { fs as liveFs } from "../src/fs.js";
+import { scopedEngine as liveFs } from "../src/engine.js";
 import { registerAllJobHandlers } from "../src/jobs/index.js";
 import { queue } from "../src/queue.js";
 

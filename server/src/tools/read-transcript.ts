@@ -40,7 +40,7 @@ function isTimedWord(v: unknown): v is TimedWord {
     && typeof (v as Record<string, unknown>).end === "number";
 }
 
-export function readTranscriptDef(fs: Engine): ToolDef {
+export function readTranscriptDef(engine: Engine): ToolDef {
   return {
     name: "read_transcript",
     description:
@@ -52,7 +52,7 @@ export function readTranscriptDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };
 
-      const elevenLabsResult = await fs.files.read(asset_id, "elevenlabs.json");
+      const elevenLabsResult = await engine.files.read(asset_id, "elevenlabs.json");
       if (elevenLabsResult.ok) {
         try {
           const raw = JSON.parse(elevenLabsResult.value.toString()) as unknown;
@@ -90,7 +90,7 @@ export function readTranscriptDef(fs: Engine): ToolDef {
         }
       }
 
-      const plainResult = await fs.files.read(asset_id, ".analysis.gpt4otrans.json");
+      const plainResult = await engine.files.read(asset_id, ".analysis.gpt4otrans.json");
       if (plainResult.ok) {
         try {
           const data = JSON.parse(plainResult.value.toString()) as { text?: string };

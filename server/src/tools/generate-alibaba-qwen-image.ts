@@ -39,7 +39,7 @@ const generateAlibabaQwenImageSchema = {
 
 type Args = SchemaArgs<typeof generateAlibabaQwenImageSchema>;
 
-export function generateAlibabaQwenImageDef(fs: Engine): ToolDef {
+export function generateAlibabaQwenImageDef(engine: Engine): ToolDef {
   return {
     name: "generate_alibaba_qwen_2_0_text_to_image",
     description: "Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.",
@@ -69,7 +69,7 @@ export function generateAlibabaQwenImageDef(fs: Engine): ToolDef {
       const sourceImageIds: string[] = [];
 
       for (const id of ids) {
-        const artifact = fs.artifacts.get(id);
+        const artifact = engine.artifacts.get(id);
         if (!artifact.ok) {
           return {
             isError: true as const,
@@ -82,7 +82,7 @@ export function generateAlibabaQwenImageDef(fs: Engine): ToolDef {
             content: [{ type: "text" as const, text: `image_refs entries must be image artifacts, got ${artifact.value.kind}: ${id}` }],
           };
         }
-        const manifestResult = await fs.files.manifest(id);
+        const manifestResult = await engine.files.manifest(id);
         if (!manifestResult.ok) {
           return {
             isError: true as const,
@@ -102,7 +102,7 @@ export function generateAlibabaQwenImageDef(fs: Engine): ToolDef {
 
       const resolvedModel = AlibabaQwenImageGenerationStableModelSchema.parse(model);
 
-      const assetResult = await fs.artifacts.create("img", generationLabel(modelSlug("alibaba", resolvedModel), prompt));
+      const assetResult = await engine.artifacts.create("img", generationLabel(modelSlug("alibaba", resolvedModel), prompt));
       if (!assetResult.ok) {
         return {
           isError: true as const,

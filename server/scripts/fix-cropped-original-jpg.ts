@@ -19,7 +19,8 @@
  * If no asset IDs are given, scans every img-* asset in the project.
  */
 import "dotenv/config";
-import { fs, PROJECTS_DIR } from "../src/fs.js";
+import { bookManager, scopedEngine as fs } from "../src/engine.js";
+const PROJECTS_DIR = bookManager.rootDir;
 import { probeImage, cropToFill } from "../src/image.js";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";

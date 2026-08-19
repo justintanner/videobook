@@ -21,7 +21,7 @@ const generateSeedreamTextImageSchema = {
 
 type Args = SchemaArgs<typeof generateSeedreamTextImageSchema>;
 
-export function generateSeedreamTextImageDef(fs: Engine): ToolDef {
+export function generateSeedreamTextImageDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_seedream_v5_lite_text_to_image",
     description: "Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.",
@@ -48,7 +48,7 @@ export function generateSeedreamTextImageDef(fs: Engine): ToolDef {
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
       const assetName = generationLabel(modelSlug("kie", "seedream/5-lite-text-to-image"), prompt);
-      const assetResult = await fs.artifacts.create("img", assetName);
+      const assetResult = await engine.artifacts.create("img", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

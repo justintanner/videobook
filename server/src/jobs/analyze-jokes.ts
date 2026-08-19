@@ -103,15 +103,15 @@ function buildJokesContext(eleven: ElevenLabs): string {
   ].join("\n");
 }
 
-export function registerAnalyzeJokesJob(fs: Engine): void {
+export function registerAnalyzeJokesJob(engine: Engine): void {
   registerJobHandler("analyze_jokes", async (payload, ctx) => {
     const { assetId } = payload as AnalyzeJokesPayload;
 
-    return withLocalLease(fs, assetId, ctx, "analyze", async () => {
+    return withLocalLease(engine, assetId, ctx, "analyze", async () => {
       const apiKey = getApiKey("OPENAI_API_KEY");
       if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
 
-      const read = await fs.files.read(assetId, "elevenlabs.json");
+      const read = await engine.files.read(assetId, "elevenlabs.json");
       if (!read.ok) {
         throw new Error(`No ElevenLabs transcript found for ${assetId} — run /transcribe @${assetId} first.`);
       }
@@ -161,7 +161,7 @@ export function registerAnalyzeJokesJob(fs: Engine): void {
         asset_id: assetId,
       };
 
-      const writeResult = await fs.files.write(assetId, ".analyze-jokes.json", JSON.stringify(final, null, 2)
+      const writeResult = await engine.files.write(assetId, ".analyze-jokes.json", JSON.stringify(final, null, 2)
       );
       if (!writeResult.ok) {
         throw new Error(`Jokes analyzed but failed to persist: ${writeResult.error.message}`);

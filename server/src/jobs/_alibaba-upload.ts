@@ -7,13 +7,13 @@ import { getApiKey } from "../api-key.js";
 // helper. Falls back to the free-host rotation if the policy fetch or OSS
 // POST fails.
 export async function uploadAssetToAlibaba(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   filename: string,
   model: string,
 ): Promise<string> {
   const { data, hashedFilename, contentType } = await prepareAssetForUpload(
-    fs,
+    engine,
     assetId,
     filename,
   );

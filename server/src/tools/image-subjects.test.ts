@@ -23,7 +23,7 @@ import {
   reconcileImageSubjectJobFailures,
   seedreamLayerDecompositionRequest,
 } from "../jobs/image-subjects.js";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import {
   enqueueOptions,
   queue,

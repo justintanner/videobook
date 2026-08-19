@@ -13,7 +13,7 @@ import { SCHEMA_VERSION } from "videobook-engine";
 import { v7 as uuidv7 } from "uuid";
 import { stopAceServer } from "./acestep/process.js";
 import { localArchiveDir } from "./archive-store.js";
-import { bookManager, fs as scopedBookEngine } from "./fs.js";
+import { bookManager, scopedEngine as scopedBookEngine } from "./engine.js";
 import { ensureDancingWorkflow } from "./dancing-workflow.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { reconcileImageSubjectJobFailures } from "./jobs/image-subjects.js";

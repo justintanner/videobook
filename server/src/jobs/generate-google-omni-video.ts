@@ -25,20 +25,20 @@ type GenerateGoogleOmniVideoPayload = {
   character_refs?: string[];
 };
 
-export function registerGenerateGoogleOmniVideoJob(fs: Engine): void {
+export function registerGenerateGoogleOmniVideoJob(engine: Engine): void {
   registerJobHandler("generate_google_omni_video", async (payload, ctx) => {
     const p = payload as GenerateGoogleOmniVideoPayload;
     const provider = createGoogleFlowProvider();
 
     const referenceImageIds: string[] = [];
     for (const input of p.imageInputs) {
-      referenceImageIds.push(await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename));
+      referenceImageIds.push(await uploadAssetToGoogleFlow(provider, engine, input.assetId, input.filename));
     }
     const startImageId = p.firstFrame
-      ? await uploadAssetToGoogleFlow(provider, fs, p.firstFrame.assetId, p.firstFrame.filename)
+      ? await uploadAssetToGoogleFlow(provider, engine, p.firstFrame.assetId, p.firstFrame.filename)
       : undefined;
     const referenceVideoId = p.videoInput
-      ? await uploadAssetToGoogleFlow(provider, fs, p.videoInput.assetId, p.videoInput.filename)
+      ? await uploadAssetToGoogleFlow(provider, engine, p.videoInput.assetId, p.videoInput.filename)
       : undefined;
     const normalizedPrompt = transformProviderPrompt(
       "generate_google_flow_omni_flash_video",
@@ -70,7 +70,7 @@ export function registerGenerateGoogleOmniVideoJob(fs: Engine): void {
       },
     );
 
-    const taskId = await submitGoogleFlowVideoTask(fs, ctx, {
+    const taskId = await submitGoogleFlowVideoTask(engine, ctx, {
       request,
       assetId: p.vidAssetId,
       assetDir: p.vidAssetDir,

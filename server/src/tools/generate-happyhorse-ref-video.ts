@@ -39,7 +39,7 @@ const generateHappyhorseRefVideoSchema = {
 
 type Args = SchemaArgs<typeof generateHappyhorseRefVideoSchema>;
 
-export function generateHappyhorseRefVideoDef(fs: Engine): ToolDef {
+export function generateHappyhorseRefVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_happyhorse_1_1_reference_to_video",
     description: "Generate a multi-character video using HappyHorse reference-to-video (1-9 reference images, order defines character1/character2/...). Creates a new video artifact and enqueues a background job.",
@@ -54,12 +54,12 @@ export function generateHappyhorseRefVideoDef(fs: Engine): ToolDef {
       const imageInputs: RefInput[] = [];
       for (const raw of image_refs) {
         const assetId = raw.replace(/^@/, "");
-        const artifact = fs.artifacts.get(assetId);
+        const artifact = engine.artifacts.get(assetId);
         if (!artifact.ok) return { isError: true as const, content: [{ type: "text" as const, text: artifact.error.message }] };
         if (artifact.value.kind !== "image") {
           return { isError: true as const, content: [{ type: "text" as const, text: `image_refs entries must be image artifacts, got ${artifact.value.kind}: ${assetId}` }] };
         }
-        const manifest = await fs.files.manifest(assetId);
+        const manifest = await engine.files.manifest(assetId);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
         const file = findImageFile(manifest.value.files);
         if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
@@ -67,7 +67,7 @@ export function generateHappyhorseRefVideoDef(fs: Engine): ToolDef {
       }
 
       const videoName = generationLabel(SLUG, prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }

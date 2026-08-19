@@ -8,7 +8,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
-import { registerRunNotebookJob } from '../../server/src/jobs/run-notebook.js'
+import { registerExtractNotebookAudioJob } from '../../server/src/jobs/extract-notebook-audio.js'
+import { extractNotebookAudioDef } from '../../server/src/tools/extract-notebook-audio.js'
 import {
   queue,
   setEngineRoot,
@@ -71,10 +72,13 @@ describe('notebook audio commands', () => {
     if (!managed.ok) return
     const engine = managed.value.engine
     await setEngineRoot(rootDir, engine)
-    registerRunNotebookJob(engine)
+    registerExtractNotebookAudioJob(engine)
 
     const defs = new Map(
-      videobookDomainDefs(scopedBookEngine, books).map((def) => [def.name, def]),
+      [
+        ...videobookDomainDefs(scopedBookEngine, books),
+        extractNotebookAudioDef(engine),
+      ].map((def) => [def.name, def]),
     )
     const callTool = async (
       name: string,
@@ -164,21 +168,21 @@ describe('notebook audio commands', () => {
     const action = completed.cells.find((cell) =>
       cell.id === firstRun.actionCellId)
     expect(action).toMatchObject({
-      type: 'extract_audio',
+      type: 'audio',
       label: 'Extract audio',
       slot: { row: 0, column: 2 },
-      operation: 'extract_audio',
       outputArtifactId: expect.any(String),
       inputs: expect.objectContaining({
         state: 'completed',
+        mediaRole: 'extract-audio-output',
+        sourceCellId: source.id,
       }),
     })
-    expect(completed.cells.some((cell) => cell.type === 'audio')).toBe(false)
     expect(completed.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         source: source.id,
         target: firstRun.actionCellId,
-        targetInput: 'video',
+        targetInput: 'segment',
       }),
     ]))
     expect(completed.edges.some((edge) =>
@@ -201,6 +205,8 @@ describe('notebook audio commands', () => {
       outputCellId: firstRun.actionCellId,
       reusedAction: true,
     })
-    await waitForJob(secondRun.jobId)
+    if (secondRun.jobId && secondRun.jobId !== 'reused') {
+      await waitForJob(secondRun.jobId)
+    }
   }, 30_000)
 })

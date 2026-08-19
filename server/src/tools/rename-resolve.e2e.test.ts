@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import type { Engine } from "videobook-engine";
 
 const PROJECT = "e2e-rename-resolve";

@@ -33,24 +33,24 @@ type GenerateWan27R2vVideoPayload = {
 };
 
 async function uploadInputs(
-  fs: Engine,
+  engine: Engine,
   inputs: RefInput[],
 ): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename));
+    urls.push(await uploadAssetToKie(engine, assetId, filename));
   }
   return urls;
 }
 
 async function uploadSingle(
-  fs: Engine,
+  engine: Engine,
   input: RefInput,
 ): Promise<string> {
-  return uploadAssetToKie(fs, input.assetId, input.filename);
+  return uploadAssetToKie(engine, input.assetId, input.filename);
 }
 
-export function registerGenerateWan27R2vVideoJob(fs: Engine): void {
+export function registerGenerateWan27R2vVideoJob(engine: Engine): void {
   registerJobHandler("generate_wan27_r2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId, prompt, negative_prompt,
@@ -61,10 +61,10 @@ export function registerGenerateWan27R2vVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const referenceImageUrls = await uploadInputs(fs, imageInputs);
-    const referenceVideoUrls = await uploadInputs(fs, videoInputs);
-    const firstFrameUrl = firstFrame ? await uploadSingle(fs, firstFrame) : undefined;
-    const referenceVoiceUrl = voiceRef ? await uploadSingle(fs, voiceRef) : undefined;
+    const referenceImageUrls = await uploadInputs(engine, imageInputs);
+    const referenceVideoUrls = await uploadInputs(engine, videoInputs);
+    const firstFrameUrl = firstFrame ? await uploadSingle(engine, firstFrame) : undefined;
+    const referenceVoiceUrl = voiceRef ? await uploadSingle(engine, voiceRef) : undefined;
     const normalizedPrompt = transformProviderPrompt(
       "generate_kie_wan_2_7_reference_to_video",
       {
@@ -80,7 +80,7 @@ export function registerGenerateWan27R2vVideoJob(fs: Engine): void {
       { prompt: normalizedPrompt, negative_prompt, resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed },
       { referenceImageUrls, referenceVideoUrls, firstFrameUrl, referenceVoiceUrl },
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "wan27_r2v_video",
       assetId: vidAssetId,

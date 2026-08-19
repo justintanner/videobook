@@ -1,6 +1,6 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { createHttpHandler, MCP_PROTOCOL_VERSION } from "./server.js";
-import { closeEngineForTest, createEngineForTest } from "./fs.js";
+import { closeEngineForTest, createEngineForTest } from "./engine.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { queue, setEngineRoot } from "./queue.js";
 

@@ -11,7 +11,7 @@ import type { ToolDef } from "./tool-def.js";
 
 const JOB_TIMEOUT_MS = 30 * 60_000;
 
-export function removeSoundDef(fs: Engine): ToolDef {
+export function removeSoundDef(engine: Engine): ToolDef {
   return {
     name: "remove_sound",
     description: "Remove a described sound (e.g. a horse neigh) from a video or audio asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.",
@@ -32,7 +32,7 @@ export function removeSoundDef(fs: Engine): ToolDef {
       }
 
       const assetId = asset_id.replace(/^@/, "");
-      const artifact = fs.artifacts.get(assetId);
+      const artifact = engine.artifacts.get(assetId);
       if (!artifact.ok) return toolError(artifact.error.message);
       const kind: RemoveSoundAssetKind | null = artifact.value.kind === "video"
         ? "video"
@@ -41,7 +41,7 @@ export function removeSoundDef(fs: Engine): ToolDef {
         return toolError(`remove_sound only supports video or audio artifacts, got ${artifact.value.kind} artifact ${assetId}`);
       }
 
-      const manifest = await fs.files.manifest(assetId);
+      const manifest = await engine.files.manifest(assetId);
       if (!manifest.ok) return toolError(manifest.error.message);
       const file = kind === "video"
         ? findVideoFile(manifest.value.files)

@@ -4,32 +4,18 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
-import { queue } from "../queue.js";
+import { queue, waitForJob } from "../queue.js";
 import { FFPROBE } from "../ffmpeg.js";
+import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import type { Client } from "@modelcontextprotocol/client";
 
 const execFileAsync = promisify(execFile);
-const require = createRequire(import.meta.url);
-const FFMPEG: string = require("ffmpeg-static");
 
 type TextContent = Array<{ type: string; text: string }>;
 
 async function generateTestVideo(outputPath: string, durationSec: number, hasAudio: boolean): Promise<void> {
-  const args = [
-    "-y",
-    "-f", "lavfi", "-i", `testsrc=duration=${durationSec}:size=320x240:rate=30`,
-  ];
-  if (hasAudio) {
-    args.push("-f", "lavfi", "-i", `sine=frequency=440:duration=${durationSec}`);
-  }
-  args.push("-c:v", "libx264", "-pix_fmt", "yuv420p");
-  if (hasAudio) {
-    args.push("-c:a", "aac", "-shortest");
-  }
-  args.push(outputPath);
-  await execFileAsync(FFMPEG, args);
+  await copyVideoFixture(COMMON_VIDEO_FIXTURES.padVideo(durationSec, hasAudio), outputPath);
 }
 
 async function uploadVideo(
@@ -43,19 +29,6 @@ async function uploadVideo(
     arguments: { book_id: bookId, filename: "original.mp4", data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
-}
-
-async function waitForJob(jobId: string, timeoutMs = 120_000): Promise<void> {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    const status = await queue.getStatus(jobId);
-    if (status?.state === "completed") return;
-    if (status?.state === "failed") {
-      throw new Error(`job ${jobId} failed: ${status.error?.message ?? "unknown"}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-  throw new Error(`job ${jobId} did not complete within ${timeoutMs}ms`);
 }
 
 async function probeDuration(filePath: string): Promise<number> {

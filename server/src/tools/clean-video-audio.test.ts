@@ -1,4 +1,4 @@
-import { createEngineForTest } from "../fs.js";
+import { createEngineForTest } from "../engine.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Client } from "@modelcontextprotocol/client";
 import type { ArtifactKind, Engine } from "videobook-engine";

@@ -14,7 +14,7 @@ import { mutateNotebook } from "../notebook-mutations.js";
 import {
   EXTRACT_FRAME_OUTPUT_ROLE,
   findGenerationMediaOutput,
-  migrateLegacyExtractFrameCells,
+  normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
 import { slotRight } from "../notebook-placement.js";
 import {
@@ -42,7 +42,7 @@ function effectiveVideoSource(
   return output?.outputCell ?? cell;
 }
 
-export function extractNotebookFrameDef(fs: Engine): ToolDef {
+export function extractNotebookFrameDef(engine: Engine): ToolDef {
   return {
     name: "extract_notebook_frame",
     description:
@@ -73,15 +73,15 @@ export function extractNotebookFrameDef(fs: Engine): ToolDef {
       }
       if (
         typeof args.expected_revision === "string"
-        && args.expected_revision !== fs.head
+        && args.expected_revision !== engine.head
       ) {
         return toolError(
           `Stale notebook revision: expected ${args.expected_revision}`,
         );
       }
-      const read = fs.notebooks.read(notebookId);
+      const read = engine.notebooks.read(notebookId);
       if (!read.ok) return toolError(read.error.message);
-      const document = migrateLegacyExtractFrameCells(read.value);
+      const document = normalizeLegacyExtractCells(read.value);
       const requested = document.cells.find((cell) =>
         cell.id === sourceCellId);
       if (!requested) {
@@ -109,7 +109,7 @@ export function extractNotebookFrameDef(fs: Engine): ToolDef {
         : frameLabel(frameMode, timestampSeconds);
       const placement: { cell: NotebookCell | null } = { cell: null };
       const result = await mutateNotebook(
-        fs,
+        engine,
         notebookId,
         "extract_notebook_frame",
         (notebook) => {
@@ -117,7 +117,7 @@ export function extractNotebookFrameDef(fs: Engine): ToolDef {
           if (!anchor) throw new Error(`Source cell not found: ${source.id}`);
           const occupied = notebook.cells.map((cell) => cell.slot);
           const slot = nextHorizontalSlotFrom(slotRight(anchor.slot), occupied);
-          const cell = fs.notebooks.createCell({
+          const cell = engine.notebooks.createCell({
             type: "image",
             label,
             slot,
@@ -129,7 +129,7 @@ export function extractNotebookFrameDef(fs: Engine): ToolDef {
               state: "queued",
             },
           });
-          const edge = fs.notebooks.createEdge({
+          const edge = engine.notebooks.createEdge({
             source: anchor.id,
             target: cell.id,
             targetInput: "segment",

@@ -11,13 +11,13 @@ import { requireAtLeastOne, toolError } from "./_shared.js";
 import { generationLabel } from "../artifact-label.js";
 
 async function resolveVideoRefList(
-  fs: Engine,
+  engine: Engine,
   rawRefs: readonly string[],
 ): Promise<{ ok: true; inputs: RefInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
   const inputs: RefInput[] = [];
   const sourceVideoIds: string[] = [];
   for (const raw of rawRefs) {
-    const r = await resolveVideoRef(fs, raw);
+    const r = await resolveVideoRef(engine, raw);
     if (!r.ok) return { ok: false, error: r.error };
     inputs.push(r.value);
     sourceVideoIds.push(r.value.assetId);
@@ -43,7 +43,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateWan27R2vFalDef(fs: Engine): ToolDef {
+export function generateWan27R2vFalDef(engine: Engine): ToolDef {
   return {
     name: "generate_fal_wan_2_7_reference_to_video",
     description: "Generate a video via fal.ai using Alibaba Wan v2.7 Reference-to-Video guided by reference images and/or videos. Creates a new video artifact and enqueues a background job. Requires at least one of image_refs or video_refs.",
@@ -69,13 +69,13 @@ export function generateWan27R2vFalDef(fs: Engine): ToolDef {
       const imgRefs = image_refs ?? [];
       const vidRefs = video_refs ?? [];
 
-      const resolvedImages = await resolveImageRefs(fs, imgRefs);
+      const resolvedImages = await resolveImageRefs(engine, imgRefs);
       if (!resolvedImages.ok) return toolError(resolvedImages.error);
 
-      const resolvedVideos = await resolveVideoRefList(fs, vidRefs);
+      const resolvedVideos = await resolveVideoRefList(engine, vidRefs);
       if (!resolvedVideos.ok) return toolError(resolvedVideos.error);
 
-      const assetResult = await fs.artifacts.create("vid", generationLabel(modelSlug("kie", "wan/2-7-r2v"), prompt));
+      const assetResult = await engine.artifacts.create("vid", generationLabel(modelSlug("kie", "wan/2-7-r2v"), prompt));
       if (!assetResult.ok) return toolError(`Failed to create video asset: ${assetResult.error.message}`);
 
       const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;

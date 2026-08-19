@@ -1,8 +1,5 @@
 import type { Engine, NotebookDocument } from "videobook-engine";
-import {
-  collapseLegacyExtractPairs,
-  migrateLegacyExtractFrameCells,
-} from "./notebook-cell-outputs.js";
+import { normalizeLegacyExtractCells } from "./notebook-cell-outputs.js";
 
 type NotebookMutationResult = Awaited<ReturnType<Engine["notebooks"]["write"]>>;
 
@@ -22,7 +19,7 @@ export async function mutateNotebook(
     if (!read.ok) return read;
     return await engine.notebooks.write(
       mutate(
-        migrateLegacyExtractFrameCells(collapseLegacyExtractPairs(read.value)),
+        normalizeLegacyExtractCells(read.value),
       ),
       {
       operation,

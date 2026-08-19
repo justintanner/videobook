@@ -39,7 +39,7 @@ const generateWan27VideoeditVideoSchema = {
 
 type Args = SchemaArgs<typeof generateWan27VideoeditVideoSchema>;
 
-export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
+export function generateWan27VideoeditVideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_wan_2_7_edit_video",
     description: "Edit a video using Wan 2.7 Video Edit with optional reference image for character, clothing, or style guidance. Creates a new video artifact and enqueues a background job.",
@@ -65,7 +65,7 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const videoResult = await resolveVideoRef(fs, video_ref);
+      const videoResult = await resolveVideoRef(engine, video_ref);
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const videoInput = videoResult.value;
 
@@ -74,7 +74,7 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
       // second, so a 10s preset typically produces ~10.01s. Allow a small
       // tolerance before failing.
       const DURATION_TOLERANCE = 0.05;
-      const meta = await fs.metadata.artifacts.read<{ duration?: number }>(videoInput.assetId, "original");
+      const meta = await engine.metadata.artifacts.read<{ duration?: number }>(videoInput.assetId, "original");
       if (meta.ok && typeof meta.value.duration === "number" && meta.value.duration > MAX_INPUT_DURATION + DURATION_TOLERANCE) {
         return {
           isError: true as const,
@@ -84,13 +84,13 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
 
       let imageInput: RefInput | undefined;
       if (image_ref) {
-        const r = await resolveImageRef(fs, image_ref);
+        const r = await resolveImageRef(engine, image_ref);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInput = r.value;
       }
 
       const videoName = generationLabel(modelSlug("kie", "wan/2-7-videoedit"), prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

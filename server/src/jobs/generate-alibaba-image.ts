@@ -25,7 +25,7 @@ type GenerateAlibabaImagePayload = {
   seed?: number;
 };
 
-export function registerGenerateAlibabaImageJob(fs: Engine): void {
+export function registerGenerateAlibabaImageJob(engine: Engine): void {
   registerJobHandler("generate_alibaba_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId,
@@ -36,7 +36,7 @@ export function registerGenerateAlibabaImageJob(fs: Engine): void {
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, model));
+      uploadedUrls.push(await uploadAssetToAlibaba(engine, srcAssetId, filename, model));
     }
 
     const provider = createAlibaba({ apiKey, timeout: 120_000 });
@@ -56,11 +56,11 @@ export function registerGenerateAlibabaImageJob(fs: Engine): void {
       toolName: "generate_alibaba_wan_2_7_text_to_image",
       wire: true,
     });
-    await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request);
+    await engine.metadata.artifacts.write(imgAssetId, "generation-payload", request);
     const submitResult = await provider.post.api.v1.services.aigc.imageGeneration.generation(request);
     const taskId = submitResult.output.task_id;
     {
-      const _ptResult = await fs.jobs.pending.write({
+      const _ptResult = await engine.jobs.pending.write({
         taskId,
         taskType: "alibaba_image",
         artifactId: imgAssetId,
@@ -83,7 +83,7 @@ export function registerGenerateAlibabaImageJob(fs: Engine): void {
   });
 }
 
-export function registerGenerateAlibabaImageProJob(fs: Engine): void {
+export function registerGenerateAlibabaImageProJob(engine: Engine): void {
   registerJobHandler("generate_alibaba_image_pro", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId,
@@ -94,7 +94,7 @@ export function registerGenerateAlibabaImageProJob(fs: Engine): void {
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, "wan2.7-image-pro"));
+      uploadedUrls.push(await uploadAssetToAlibaba(engine, srcAssetId, filename, "wan2.7-image-pro"));
     }
 
     const provider = createAlibaba({ apiKey, timeout: 120_000 });
@@ -114,11 +114,11 @@ export function registerGenerateAlibabaImageProJob(fs: Engine): void {
       toolName: "generate_alibaba_wan_2_7_pro_text_to_image",
       wire: true,
     });
-    await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request);
+    await engine.metadata.artifacts.write(imgAssetId, "generation-payload", request);
     const submitResult = await provider.post.api.v1.services.aigc.imageGeneration.generation(request);
     const taskId = submitResult.output.task_id;
     {
-      const _ptResult = await fs.jobs.pending.write({
+      const _ptResult = await engine.jobs.pending.write({
         taskId,
         taskType: "alibaba_image_pro",
         artifactId: imgAssetId,

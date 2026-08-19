@@ -13,15 +13,15 @@ export type OsgSettingsResult = { ok: true } | { ok: false; error: string };
  * stored values.
  */
 export async function writeOsgSettings(
-  fs: Engine,
+  engine: Engine,
   assetId: string,
   patch: (orientation: Orientation, base: Record<string, unknown>) => Record<string, unknown>,
 ): Promise<OsgSettingsResult> {
   for (const orientation of ORIENTATIONS) {
-    const existing = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orientation}.render`);
+    const existing = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orientation}.render`);
     const base = existing.ok ? existing.value : {};
     const merged: Record<string, unknown> = { ...base, ...patch(orientation, base) };
-    const written = await fs.metadata.artifacts.write(assetId, `${orientation}.render`, merged);
+    const written = await engine.metadata.artifacts.write(assetId, `${orientation}.render`, merged);
     if (!written.ok) return { ok: false, error: written.error.message };
   }
   return { ok: true };

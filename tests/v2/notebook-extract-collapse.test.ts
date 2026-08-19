@@ -165,10 +165,13 @@ describe("legacy extract migration", () => {
     const completedAudio = migrated.cells.find((cell) => cell.id === extractAudio.id);
     const frameOutput = migrated.cells.find((cell) => cell.id === image.id);
     expect(completedAudio).toMatchObject({
+      type: "audio",
       outputArtifactId: audioArtifact.value.artifactId,
       inputs: expect.objectContaining({
         durationSeconds: 4,
         state: "completed",
+        mediaRole: "extract-audio-output",
+        sourceCellId: source.id,
       }),
     });
     expect(frameOutput).toMatchObject({

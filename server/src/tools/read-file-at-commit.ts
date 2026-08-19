@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
-export function readFileAtCommitDef(fs: Engine): ToolDef {
+export function readFileAtCommitDef(engine: Engine): ToolDef {
   return {
     name: "read_file_at_commit",
     description:
@@ -21,9 +21,9 @@ export function readFileAtCommitDef(fs: Engine): ToolDef {
         commit_hash: string;
         book_id: string;
       };
-      const artifact = fs.artifacts.get(asset_id);
+      const artifact = engine.artifacts.get(asset_id);
       const artifactId = artifact.ok ? artifact.value.artifactId : asset_id;
-      const result = await fs.files.readAtRevision(
+      const result = await engine.files.readAtRevision(
         artifactId,
         filename,
         commit_hash,

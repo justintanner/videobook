@@ -62,7 +62,7 @@ const generateKling30VideoSchema = {
 
 type Args = SchemaArgs<typeof generateKling30VideoSchema>;
 
-export function generateKling30VideoDef(fs: Engine): ToolDef {
+export function generateKling30VideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_kling_3_0_video",
     description: "Generate a video using Kling 3.0 with optional reference images, character elements, and multi-shot mode. Creates a new video artifact and enqueues a background job.",
@@ -89,9 +89,9 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
       const slugs = (image_refs ?? []).map((s) => s.replace(/^@/, ""));
 
       for (const assetId of slugs) {
-        const kindGate = await requireArtifactKind(fs, assetId, ["image"], "image_refs");
+        const kindGate = await requireArtifactKind(engine, assetId, ["image"], "image_refs");
         if (kindGate) return kindGate;
-        const manifestResult = await fs.files.manifest(assetId);
+        const manifestResult = await engine.files.manifest(assetId);
         if (!manifestResult.ok) {
           return {
             isError: true as const,
@@ -125,7 +125,7 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
         let hasVideo = false;
         for (const raw of rawSlugs) {
           const assetId = raw.replace(/^@/, "");
-          const kind = artifactKindOf(fs, assetId);
+          const kind = artifactKindOf(engine, assetId);
           const isVideo = kind === "video";
           const isImage = kind === "image";
           if (!isVideo && !isImage) {
@@ -136,7 +136,7 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
           }
           if (isVideo) hasVideo = true;
 
-          const manifestResult = await fs.files.manifest(assetId);
+          const manifestResult = await engine.files.manifest(assetId);
           if (!manifestResult.ok) {
             return {
               isError: true as const,
@@ -163,7 +163,7 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
 
       // Create output video asset
       const videoName = generationLabel(modelSlug("kie", "kling-3.0/video"), prompt);
-      const assetResult = await fs.artifacts.create("vid", videoName);
+      const assetResult = await engine.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

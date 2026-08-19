@@ -38,7 +38,7 @@ type ApplySfxPayload = {
 
 async function generateAndWriteSfx(
   provider: ReturnType<typeof createElevenLabs>,
-  fs: Engine,
+  engine: Engine,
   entry: SfxEntry,
   index: number,
   assetId: string,
@@ -50,7 +50,7 @@ async function generateAndWriteSfx(
     prompt_influence: 0.75,
   });
   const filename = `original.sfx.${index}.mp3`;
-  const writeResult = await fs.files.write(assetId, filename, Buffer.from(audio));
+  const writeResult = await engine.files.write(assetId, filename, Buffer.from(audio));
   if (!writeResult.ok) throw new Error(`SFX ${index} write failed: ${writeResult.error.message}`);
   return filename;
 }
@@ -119,7 +119,7 @@ export async function mixSfxIntoVideo(
   await runFfmpeg(ffmpegArgs, { signal });
 }
 
-export function registerApplySfxJob(fs: Engine): void {
+export function registerApplySfxJob(engine: Engine): void {
   registerJobHandler("apply_sfx", async (payload, ctx) => {
     const {
       videoPath, outputPath, sfx,
@@ -129,7 +129,7 @@ export function registerApplySfxJob(fs: Engine): void {
     const apiKey = requireApiKey("ELEVENLABS_API_KEY");
 
     const result = await withLockedLocalLease(
-      fs,
+      engine,
       assetId,
       assetDir,
       ctx,
@@ -139,7 +139,7 @@ export function registerApplySfxJob(fs: Engine): void {
       const provider = createElevenLabs({ apiKey, timeout: 60_000 });
 
       const generatedFilenames = await Promise.all(
-        sfx.map((entry, i) => generateAndWriteSfx(provider, fs, entry, i, assetId)),
+        sfx.map((entry, i) => generateAndWriteSfx(provider, engine, entry, i, assetId)),
       );
 
       await mixSfxIntoVideo(
@@ -152,17 +152,17 @@ export function registerApplySfxJob(fs: Engine): void {
 
       const inputFilename = basename(videoPath);
       await replaceArtifactFileFromPath(
-        fs,
+        engine,
         assetId,
         inputFilename,
         outputPath,
       );
 
       for (const fn of generatedFilenames) {
-        await fs.files.delete(assetId, fn).catch(() => {});
+        await engine.files.delete(assetId, fn).catch(() => {});
       }
       for (const stale of STALE_DERIVATIVES) {
-        await fs.files.delete(assetId, stale);
+        await engine.files.delete(assetId, stale);
       }
 
       const newVideoPath = join(assetDir, inputFilename);

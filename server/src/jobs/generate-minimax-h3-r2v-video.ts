@@ -27,17 +27,17 @@ type GenerateMiniMaxH3R2vVideoPayload = {
 };
 
 async function uploadAll(
-  fs: Engine,
+  engine: Engine,
   inputs: RefInput[],
 ): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename));
+    urls.push(await uploadAssetToKie(engine, assetId, filename));
   }
   return urls;
 }
 
-export function registerGenerateMiniMaxH3R2vVideoJob(fs: Engine): void {
+export function registerGenerateMiniMaxH3R2vVideoJob(engine: Engine): void {
   registerJobHandler("generate_minimax_h3_r2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, bookId, prompt, duration,
@@ -48,9 +48,9 @@ export function registerGenerateMiniMaxH3R2vVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const referenceImageUrls = await uploadAll(fs, imageInputs);
-    const referenceVideoUrls = await uploadAll(fs, videoInputs);
-    const referenceAudioUrls = await uploadAll(fs, audioInputs);
+    const referenceImageUrls = await uploadAll(engine, imageInputs);
+    const referenceVideoUrls = await uploadAll(engine, videoInputs);
+    const referenceAudioUrls = await uploadAll(engine, audioInputs);
 
     const normalizedPrompt = transformProviderPrompt("generate_kie_minimax_h3_reference_to_video", {
       prompt,
@@ -66,7 +66,7 @@ export function registerGenerateMiniMaxH3R2vVideoJob(fs: Engine): void {
         ...(referenceAudioUrls.length > 0 ? { referenceAudioUrls } : {}),
       },
     );
-    const taskId = await submitKieTask(fs, ctx, {
+    const taskId = await submitKieTask(engine, ctx, {
       request,
       taskType: "minimax_h3_r2v_video",
       assetId: vidAssetId,

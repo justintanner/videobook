@@ -20,7 +20,7 @@ const generateGrokImagineTextImageSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineTextImageSchema>;
 
-export function generateGrokImagineTextImageDef(fs: Engine): ToolDef {
+export function generateGrokImagineTextImageDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_grok_imagine_text_to_image",
     description:
@@ -39,7 +39,7 @@ export function generateGrokImagineTextImageDef(fs: Engine): ToolDef {
       }
 
       const assetName = generationLabel(modelSlug("kie", "grok-imagine/text-to-image"), prompt);
-      const assetResult = await fs.artifacts.create("img", assetName);
+      const assetResult = await engine.artifacts.create("img", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

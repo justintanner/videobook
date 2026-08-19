@@ -39,7 +39,7 @@ const generateAlibabaQwenImageEditSchema = {
 
 type Args = SchemaArgs<typeof generateAlibabaQwenImageEditSchema>;
 
-export function generateAlibabaQwenImageEditDef(fs: Engine): ToolDef {
+export function generateAlibabaQwenImageEditDef(engine: Engine): ToolDef {
   return {
     name: "generate_alibaba_qwen_2_0_edit_image",
     description: "Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.",
@@ -92,7 +92,7 @@ export function generateAlibabaQwenImageEditDef(fs: Engine): ToolDef {
       const sourceImageIds: string[] = [];
 
       for (const id of ids) {
-        const artifact = fs.artifacts.get(id);
+        const artifact = engine.artifacts.get(id);
         if (!artifact.ok) {
           return {
             isError: true as const,
@@ -105,7 +105,7 @@ export function generateAlibabaQwenImageEditDef(fs: Engine): ToolDef {
             content: [{ type: "text" as const, text: `image_refs entries must be image artifacts, got ${artifact.value.kind}: ${id}` }],
           };
         }
-        const manifestResult = await fs.files.manifest(id);
+        const manifestResult = await engine.files.manifest(id);
         if (!manifestResult.ok) {
           return {
             isError: true as const,
@@ -123,7 +123,7 @@ export function generateAlibabaQwenImageEditDef(fs: Engine): ToolDef {
         sourceImageIds.push(id);
       }
 
-      const assetResult = await fs.artifacts.create("img", generationLabel(modelSlug("alibaba", resolvedModel), prompt));
+      const assetResult = await engine.artifacts.create("img", generationLabel(modelSlug("alibaba", resolvedModel), prompt));
       if (!assetResult.ok) {
         return {
           isError: true as const,

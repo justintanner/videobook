@@ -17,7 +17,7 @@ export type ProcessAudioPayload = {
 };
 
 export async function processAudioFile(
-  fs: Engine,
+  engine: Engine,
   payload: ProcessAudioPayload,
   signal?: AbortSignal,
 ): Promise<{ success: true; duration: number }> {
@@ -27,13 +27,13 @@ export async function processAudioFile(
     throw new Error(`process_audio requires an audio stream: ${payload.assetId}`);
   }
   await registerMediaStreams(
-    fs,
+    engine,
     payload.assetId,
     payload.sourceFilename,
     probe,
   );
   const duration = probe.audioDuration ?? probe.duration;
-  await fs.metadata.artifacts.write(payload.assetId, "original", {
+  await engine.metadata.artifacts.write(payload.assetId, "original", {
     ...payload.provenance,
     duration,
     sampleRateHz: probe.audioStream.audio?.sampleRateHz,
@@ -41,7 +41,7 @@ export async function processAudioFile(
   });
   const waveform = await extractWaveform(payload.audioPath);
   if (waveform.length > 0) {
-    const written = await fs.metadata.waveforms.write(payload.assetId, waveform);
+    const written = await engine.metadata.waveforms.write(payload.assetId, waveform);
     if (!written.ok) throw new Error(written.error.message);
   }
   if (process.env.NODE_ENV !== "test") {
@@ -75,16 +75,16 @@ export async function processAudioFile(
   return { success: true, duration };
 }
 
-export function registerProcessAudioJob(fs: Engine): void {
+export function registerProcessAudioJob(engine: Engine): void {
   registerJobHandler("process_audio", async (payload, ctx) => {
     const input = payload as ProcessAudioPayload;
     return withLocalLease(
-      fs,
+      engine,
       input.assetId,
       ctx,
       "process",
       async () => withTransientStorageRetry(
-        () => processAudioFile(fs, input, ctx.signal),
+        () => processAudioFile(engine, input, ctx.signal),
         ctx.signal,
       ),
     );

@@ -6,7 +6,7 @@ function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
 
-export function recoverAssetDef(fs: Engine): ToolDef {
+export function recoverAssetDef(engine: Engine): ToolDef {
   return {
     name: "recover_asset",
     description:
@@ -21,7 +21,7 @@ export function recoverAssetDef(fs: Engine): ToolDef {
       const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };
       const assetId = asset_id.replace(/^@/, "");
 
-      const cleared = await fs.jobs.failures.clear(assetId);
+      const cleared = await engine.jobs.failures.clear(assetId);
       if (!cleared.ok) {
         return error(`Failed to clear error for ${assetId}: ${cleared.error.message}`);
       }

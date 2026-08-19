@@ -272,7 +272,7 @@ const createGoogleFlowCharacterSchema = {
     .describe("Optional voice: a preset name (e.g. 'Kore') or a custom voice ref from create_google_flow_voice"),
 } satisfies ZodRawShape;
 
-export function createGoogleFlowCharacterDef(fs: Engine): ToolDef {
+export function createGoogleFlowCharacterDef(engine: Engine): ToolDef {
   return {
     name: "create_google_flow_character",
     description:
@@ -291,11 +291,11 @@ export function createGoogleFlowCharacterDef(fs: Engine): ToolDef {
       const resolved: Array<{ assetId: string; filename: string }> = [];
       for (const slug of slugs) {
         const assetId = slug.replace(/^@/, "");
-        const kind = artifactKindOf(fs, assetId);
+        const kind = artifactKindOf(engine, assetId);
         if (kind !== "image" && kind !== "character") {
           return toolError(`image_refs entries must be image or character artifacts; ${assetId} is ${kind ?? "not a known artifact"}`);
         }
-        const manifest = await fs.files.manifest(assetId);
+        const manifest = await engine.files.manifest(assetId);
         if (!manifest.ok) return toolError(`image_refs: ${manifest.error.message}`);
         const images = getImagesFromManifest(manifest.value.files);
         if (images.length === 0) return toolError(`image_refs: No image files found in asset ${assetId}`);
@@ -315,7 +315,7 @@ export function createGoogleFlowCharacterDef(fs: Engine): ToolDef {
         const imageReferences: string[] = [];
         for (const input of resolved) {
           imageReferences.push(
-            await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename),
+            await uploadAssetToGoogleFlow(provider, engine, input.assetId, input.filename),
           );
         }
         const result = await createGoogleFlowCharacter(provider, {
@@ -456,7 +456,7 @@ export type ReplacedGoogleFlowCharacter = {
 
 export async function replaceGoogleFlowCharacter(
   provider: GoogleFlowProvider,
-  fs: Engine | undefined,
+  engine: Engine | undefined,
   bookId: string | undefined,
   ref: string,
   opts: {
@@ -473,7 +473,7 @@ export async function replaceGoogleFlowCharacter(
 
   let imageReferences: string[] = [];
   if (opts.imageRefs && opts.imageRefs.length > 0) {
-    if (!fs) throw new Error("fs is required when providing new image_refs");
+    if (!engine) throw new Error("fs is required when providing new image_refs");
     if (!bookId) throw new Error("book_id is required when providing new image_refs");
     const blank = (v: unknown): v is "" => typeof v === "string" && v.trim() === "";
     const slugs = opts.imageRefs.filter((s) => !blank(s));
@@ -482,11 +482,11 @@ export async function replaceGoogleFlowCharacter(
     const resolved: Array<{ assetId: string; filename: string }> = [];
     for (const slug of slugs) {
       const assetId = slug.replace(/^@/, "");
-      const kind = artifactKindOf(fs, assetId);
+      const kind = artifactKindOf(engine, assetId);
       if (kind !== "image" && kind !== "character") {
         throw new Error(`image_refs entries must be image or character artifacts; ${assetId} is ${kind ?? "not a known artifact"}`);
       }
-      const manifest = await fs.files.manifest(assetId);
+      const manifest = await engine.files.manifest(assetId);
       if (!manifest.ok) throw new Error(`image_refs: ${manifest.error.message}`);
       const images = getImagesFromManifest(manifest.value.files);
       if (images.length === 0) throw new Error(`image_refs: No image files found in asset ${assetId}`);
@@ -500,7 +500,7 @@ export async function replaceGoogleFlowCharacter(
 
     for (const input of resolved) {
       imageReferences.push(
-        await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename),
+        await uploadAssetToGoogleFlow(provider, engine, input.assetId, input.filename),
       );
     }
   } else {
@@ -572,7 +572,7 @@ const replaceGoogleFlowCharacterSchema = {
   clear_voice: z.boolean().optional().describe("Clear existing voice"),
 } satisfies ZodRawShape;
 
-export function replaceGoogleFlowCharacterDef(fs: Engine): ToolDef {
+export function replaceGoogleFlowCharacterDef(engine: Engine): ToolDef {
   return {
     name: "replace_google_flow_character",
     description: "Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.",
@@ -584,7 +584,7 @@ export function replaceGoogleFlowCharacterDef(fs: Engine): ToolDef {
       }
       try {
         const provider = createGoogleFlowProvider();
-        return jsonResult(await replaceGoogleFlowCharacter(provider, fs, a.book_id, a.ref, {
+        return jsonResult(await replaceGoogleFlowCharacter(provider, engine, a.book_id, a.ref, {
           displayName: a.display_name as string | undefined,
           imageRefs: a.image_refs as string[] | undefined,
           personalityNotes: a.personality_notes as string | undefined,

@@ -10,7 +10,7 @@ function deriveSpliceName(firstId: string, secondId: string): string {
   return `splice-${firstId}-${secondId}`;
 }
 
-export function spliceVideoDef(fs: Engine): ToolDef {
+export function spliceVideoDef(engine: Engine): ToolDef {
   return {
     name: "splice_video",
     description: "Splice two videos with an explicit overlap window. An overlap of 0 concatenates both complete videos; a positive overlap searches that many seconds at the end of the first video for the frame that best matches the first frame of the second. Creates a new video asset.",
@@ -36,8 +36,8 @@ export function spliceVideoDef(fs: Engine): ToolDef {
       }
 
       const [firstManifestRes, secondManifestRes] = await Promise.all([
-        fs.files.manifest(first_asset_id),
-        fs.files.manifest(second_asset_id),
+        engine.files.manifest(first_asset_id),
+        engine.files.manifest(second_asset_id),
       ]);
       if (!firstManifestRes.ok) {
         return {
@@ -83,7 +83,7 @@ export function spliceVideoDef(fs: Engine): ToolDef {
       }
 
       const spliceName = deriveSpliceName(first_asset_id, second_asset_id);
-      const assetResult = await fs.artifacts.create("video", spliceName);
+      const assetResult = await engine.artifacts.create("video", spliceName);
       if (!assetResult.ok) {
         return {
           isError: true as const,

@@ -7,7 +7,7 @@ import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 
 export function exportAssetDef(
-  fs: Engine,
+  engine: Engine,
   books?: BookManager,
 ): ToolDef {
   return {
@@ -90,7 +90,7 @@ export function exportAssetDef(
         }
       }
 
-      const sourceArtifact = fs.artifacts.get(asset_id);
+      const sourceArtifact = engine.artifacts.get(asset_id);
       if (!sourceArtifact.ok) {
         return {
           isError: true as const,
@@ -98,7 +98,7 @@ export function exportAssetDef(
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -108,7 +108,7 @@ export function exportAssetDef(
 
       const name = new_name ?? sourceArtifact.value.label;
 
-      const createResult = await fs.artifacts.create({
+      const createResult = await engine.artifacts.create({
         kind: sourceArtifact.value.kind,
         ...(name ? { label: name } : {}),
       });
@@ -122,14 +122,14 @@ export function exportAssetDef(
       const newAssetId = createResult.value.artifactId;
 
       for (const file of manifestResult.value.files) {
-        const readResult = await fs.files.read(asset_id, file.name);
+        const readResult = await engine.files.read(asset_id, file.name);
         if (!readResult.ok) {
           return {
             isError: true as const,
             content: [{ type: "text" as const, text: readResult.error.message }],
           };
         }
-        const writeResult = await fs.files.write(newAssetId, file.name, readResult.value);
+        const writeResult = await engine.files.write(newAssetId, file.name, readResult.value);
         if (!writeResult.ok) {
           return {
             isError: true as const,
