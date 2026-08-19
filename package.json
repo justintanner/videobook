@@ -40,12 +40,12 @@
   "dependencies": {
     "@apicity/alibaba": "^0.9.1",
     "@apicity/b2": "^0.9.1",
-    "@apicity/cost": "^0.9.1",
+    "@apicity/cost": "^0.10.0",
     "@apicity/elevenlabs": "^0.9.1",
     "@apicity/fal": "^0.9.1",
     "@apicity/free-media-upload": "^0.9.1",
     "@apicity/googleflow": "^0.9.1",
-    "@apicity/kie": "^0.9.1",
+    "@apicity/kie": "^0.10.0",
     "@apicity/kimicoding": "^0.9.1",
     "@apicity/openai": "^0.9.1",
     "@apicity/x": "^0.9.1",
@@ -68,6 +68,7 @@
     "videobook-engine": "file:vendor/videobook-engine-5.0.0-497f728.tgz"
   },
   "overrides": {
+    "sharp": "^0.35.3",
     "@hono/node-server": "^2.0.11",
     "hono": "^4.12.31",
     "yauzl": ">=3.2.1",
