@@ -215,14 +215,29 @@ export function parseSeedreamLayerResult(resultJson: string): KieLayerResult {
   return { baseUrl: base.url, layers };
 }
 
+// The paygate prices layer decomposition per explicit size tier (1K/1.5K/2K);
+// the upstream default "auto" selects no rate and mintKieOtp rejects it as
+// unbounded, so we always pick the tier nearest the source's longest side.
+export function seedreamLayerDecompositionSize(
+  width: number,
+  height: number,
+): "1K" | "1.5K" | "2K" {
+  const longestSide = Math.max(width, height);
+  if (longestSide <= 1280) return "1K";
+  if (longestSide <= 1792) return "1.5K";
+  return "2K";
+}
+
 export function seedreamLayerDecompositionRequest(
   imageUrl: string,
+  width: number,
+  height: number,
 ): SeedreamProLayerDecompositionRequest {
   return SeedreamProLayerDecompositionRequestSchema.parse({
     model: "seedream/5-pro-layer-decomposition",
     input: {
       image_url: imageUrl,
-      size: "auto",
+      size: seedreamLayerDecompositionSize(width, height),
       output_format: "jpeg",
     },
   });
@@ -1295,7 +1310,11 @@ export function registerImageSubjectJobs(engine: Engine): void {
         if (Date.now() >= deadlineAt) {
           throw new Error("Subject analysis did not finish within 25 minutes. Retry the analysis.");
         }
-        const request = seedreamLayerDecompositionRequest(imageUrl);
+        const request = seedreamLayerDecompositionRequest(
+          imageUrl,
+          source.width,
+          source.height,
+        );
         taskId = await submitMediaJob(provider, request, {
           otp: mintKieOtp(request),
         });

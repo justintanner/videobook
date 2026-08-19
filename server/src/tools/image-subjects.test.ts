@@ -31,6 +31,7 @@ import {
   reconcileImageSubjectJobFailures,
   regionReplacementPrompt,
   seedreamLayerDecompositionRequest,
+  seedreamLayerDecompositionSize,
   seedreamProImageUrlCapacityError,
   seedreamRegionReplacementRequest,
   SEEDREAM_PRO_I2I_MAX_IMAGE_URLS,
@@ -412,15 +413,33 @@ describe("image subject tools", () => {
 
   it("uses the JPEG layer request and a persisted absolute analysis deadline", () => {
     const startedAt = "2026-08-17T07:00:00.000Z";
-    expect(seedreamLayerDecompositionRequest(
+    const request = seedreamLayerDecompositionRequest(
       "https://example.test/source.jpg",
-    ).input.output_format).toBe("jpeg");
+      1920,
+      1080,
+    );
+    expect(request.input.output_format).toBe("jpeg");
     expect(imageSubjectAnalysisDeadline(startedAt)).toBe(
       Date.parse(startedAt) + 25 * 60_000,
     );
     expect(subjectAnalysisProviderFailureMessage("Internal Error")).toBe(
       "Subject analysis provider failed: Internal Error. Retry in a moment.",
     );
+  });
+
+  it("selects an explicit paygate-priced size tier from source dimensions", () => {
+    // "auto" has no paygate rate; the request must always carry a priced tier.
+    expect(seedreamLayerDecompositionSize(1024, 768)).toBe("1K");
+    expect(seedreamLayerDecompositionSize(1280, 1280)).toBe("1K");
+    expect(seedreamLayerDecompositionSize(768, 1536)).toBe("1.5K");
+    expect(seedreamLayerDecompositionSize(1792, 1024)).toBe("1.5K");
+    expect(seedreamLayerDecompositionSize(1920, 1080)).toBe("2K");
+    expect(seedreamLayerDecompositionSize(4096, 4096)).toBe("2K");
+    expect(seedreamLayerDecompositionRequest(
+      "https://example.test/source.jpg",
+      640,
+      480,
+    ).input.size).toBe("1K");
   });
 
   it("rejects cropped layers that have no valid placement box", async () => {

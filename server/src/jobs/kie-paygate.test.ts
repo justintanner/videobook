@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { canonicalHash, computeEstimate, parseOtp, verifyOtp } from "@apicity/cost";
 import { ensurePaygateSecret, KIE_PAYGATE_DOT_PATH, mintKieOtp } from "./kie-paygate.js";
 import { buildGrokImagineT2vVideoPayload } from "../payload-builders.js";
+import { seedreamLayerDecompositionRequest } from "./image-subjects.js";
 
 describe("kie paygate", () => {
   let tempDir: string;
@@ -77,6 +78,28 @@ describe("kie paygate", () => {
       resolution: "480p",
     });
     expect(() => mintKieOtp(request, 60)).not.toThrow();
+  });
+
+  it("mints a bounded OTP for a layer-decomposition request with an explicit size tier", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+    // The rate table prices size 1K/1.5K/2K only; the upstream default "auto"
+    // selects no rate, so request builders must always send a concrete tier.
+    const request = seedreamLayerDecompositionRequest(
+      "https://example.test/source.jpg",
+      1920,
+      1080,
+    );
+    expect(request.input.size).toBe("2K");
+    expect(() => mintKieOtp(request, 60)).not.toThrow();
+
+    const unbounded = {
+      model: "seedream/5-pro-layer-decomposition" as const,
+      input: {
+        image_url: "https://example.test/source.jpg",
+        size: "auto" as const,
+      },
+    };
+    expect(() => mintKieOtp(unbounded, 60)).toThrow(/cost estimate is not bounded/);
   });
 
   it("rejects a grok-imagine/extend request with no resolution hint as unbounded", () => {
