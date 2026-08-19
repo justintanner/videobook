@@ -360,7 +360,7 @@ function applyBytedanceNamedModelRoute(input: BytedanceRouteInput): BytedanceRou
     };
   }
 
-  if (hasVideo || targetType === "video") {
+  if (hasVideo) {
     const videoRefs = uniqueMentions([
       ...(target && targetType === "video" ? [target] : []),
       ...videoMentions,

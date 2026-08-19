@@ -1295,7 +1295,10 @@ describe("image subject tools", () => {
           { role: "replacement", artifactId: right.value.artifactId },
         ],
       });
-      expect(job?.payload.orderedImageRefs[0]).toEqual({
+      const orderedRefs = job?.payload.orderedImageRefs as
+        | Array<{ role: string; artifactId: string }>
+        | undefined;
+      expect(orderedRefs?.[0]).toEqual({
         role: "base",
         artifactId: source.artifactId,
       });
