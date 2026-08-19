@@ -3,7 +3,14 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import jsQR from "jsqr";
+import jsQRImport from "jsqr";
+
+const jsQR = jsQRImport as unknown as (
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  options?: { inversionAttempts?: string },
+) => { data: string } | null;
 import sharp from "sharp";
 import { type Engine } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
@@ -90,7 +97,7 @@ describe("create_qrbtf tool", () => {
       expect(parsed.size).toBe(DEFAULT_QRBTF_SIZE);
       expect(parsed.bg_color).toBe("#000000");
 
-      const manifest = await fs.files.manifest(parsed.asset_id, PROJECT);
+      const manifest = await fs.files.manifest(parsed.asset_id);
       expect(manifest.ok).toBe(true);
       if (!manifest.ok) return;
       const fileNames = new Set(manifest.value.files.map((f) => f.name));

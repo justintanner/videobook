@@ -3,7 +3,14 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import jsQR from "jsqr";
+import jsQRImport from "jsqr";
+
+const jsQR = jsQRImport as unknown as (
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  options?: { inversionAttempts?: string },
+) => { data: string } | null;
 import QRCode from "qrcode";
 import sharp from "sharp";
 import type { ArtifactKind } from "videobook-engine";
@@ -125,7 +132,7 @@ describe("create_qart tool", () => {
     expect(parsed.qr_version).toBe(QART_MIN_VERSION);
 
     for (const assetId of [parsed.inverted_asset_id, parsed.monochrome_asset_id]) {
-      const manifest = await fs.files.manifest(assetId, PROJECT);
+      const manifest = await fs.files.manifest(assetId);
       expect(manifest.ok).toBe(true);
       if (!manifest.ok) return;
       const fileNames = new Set(manifest.value.files.map((file) => file.name));

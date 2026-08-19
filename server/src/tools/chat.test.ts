@@ -505,11 +505,9 @@ describe("enrichAssetContext", () => {
         tag: asset.value.artifactId,
         artifactType: "video",
         artifactId: asset.value.artifactId,
-        artifactSlug: asset.value.artifactId,
         filePath: join(asset.value.path, "original.mp4"),
         workspacePath: asset.value.path,
       }],
-      "enrich-proj",
     );
 
     expect(rows).toHaveLength(1);
@@ -545,11 +543,9 @@ describe("loadScriptContentsForChat", () => {
         tag: script.value.artifactId,
         artifactType: "script",
         artifactId: script.value.artifactId,
-        artifactSlug: script.value.artifactId,
         filePath: join(script.value.path, SCRIPT_FILENAME),
         workspacePath: script.value.path,
       }],
-      "chat-script-proj",
     );
 
     expect(contents).toEqual([{ tag: script.value.artifactId, content: body }]);
@@ -570,11 +566,9 @@ describe("loadScriptContentsForChat", () => {
         tag: script.value.artifactId,
         artifactType: "script",
         artifactId: script.value.artifactId,
-        artifactSlug: script.value.artifactId,
         filePath: join(script.value.path, "index.md"),
         workspacePath: script.value.path,
       }],
-      "chat-script-proj",
     );
 
     expect(contents).toEqual([]);

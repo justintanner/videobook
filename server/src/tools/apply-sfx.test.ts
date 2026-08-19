@@ -97,8 +97,8 @@ describe("apply_sfx tool", () => {
 
   it("prefers the canonical video over a stale partial SFX output", () => {
     const file = findApplySfxSourceFile([
-      { name: "original_sfx.mp4", sizeBytes: 10, extension: ".mp4", mtimeMs: 2 },
-      { name: "original.mp4", sizeBytes: 10, extension: ".mp4", mtimeMs: 1 },
+      { name: "original_sfx.mp4", sizeBytes: 10, extension: ".mp4", objectHash: "a".repeat(64) },
+      { name: "original.mp4", sizeBytes: 10, extension: ".mp4", objectHash: "b".repeat(64) },
     ]);
     expect(file?.name).toBe("original.mp4");
   });

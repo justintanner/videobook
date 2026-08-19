@@ -11,7 +11,7 @@ import {
   createGoogleFlowCharacter,
   listGoogleFlowCharacters,
   deleteGoogleFlowCharacter,
-  renameGoogleFlowCharacter,
+  replaceGoogleFlowCharacter,
 } from "./google-flow-characters.js";
 
 /**
@@ -111,7 +111,13 @@ describe.skipIf(!LIVE)("google flow entities — live lifecycle", () => {
     let surviving = created.character_ref;
     try {
       const newName = `videocity-renamed-${Date.now()}`;
-      const renamed = await renameGoogleFlowCharacter(provider, created.character_ref, newName);
+      const renamed = await replaceGoogleFlowCharacter(
+        provider,
+        undefined,
+        undefined,
+        created.character_ref,
+        { displayName: newName },
+      );
       surviving = renamed.character_ref;
       expect(renamed.old_ref).toBe(created.character_ref);
       expect(renamed.character_ref).not.toBe(created.character_ref);

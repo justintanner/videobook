@@ -85,7 +85,24 @@ describe("enqueueLazyTimelineRender", () => {
   }
 
   it("enqueues assigned video renders with clean audio and subtitles off by default", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createVideoAsset();
     await setTimelineSlot(fs, assetId, "portrait");
 
@@ -108,7 +125,24 @@ describe("enqueueLazyTimelineRender", () => {
   });
 
   it("carries stored subtitle and audio overrides through to the render payload", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createVideoAsset();
     await fs.metadata.artifacts.write(assetId, "landscape.render", {
       subtitlesEnabled: true,
@@ -129,7 +163,24 @@ describe("enqueueLazyTimelineRender", () => {
   });
 
   it("carries stored watermark OSG settings through to the render payload", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createVideoAsset();
     await fs.metadata.artifacts.write(assetId, "portrait.render", {
       osgAssetId: "img-badge",
@@ -152,7 +203,24 @@ describe("enqueueLazyTimelineRender", () => {
   });
 
   it("carries a stored subtitleLanguage through to the render payload", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createVideoAsset();
     // Settings live on another orientation: target-orientation metadata would
     // mark the clip already rendered, and readStoredRenderDefaults falls back.
@@ -166,7 +234,24 @@ describe("enqueueLazyTimelineRender", () => {
   });
 
   it("normalizes an invalid stored subtitleLanguage to 'original'", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createVideoAsset();
     await fs.metadata.artifacts.write(assetId, "landscape.render", { subtitleLanguage: "english!!" });
     await setTimelineSlot(fs, assetId, "portrait");
@@ -178,7 +263,24 @@ describe("enqueueLazyTimelineRender", () => {
   });
 
   it("does not enqueue when the asset is not assigned to the timeline", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createVideoAsset();
 
     const result = await enqueueLazyTimelineRender(fs, bookId, assetId);
@@ -229,7 +331,24 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
   }
 
   it("enqueues analyze_video for a slotted video missing its analysis", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createTrimmedVideoAsset();
     await assignToTimeline(assetId);
 
@@ -247,7 +366,24 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
   });
 
   it("does not enqueue when the analysis already exists", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createTrimmedVideoAsset();
     const written = await fs.files.write(assetId, ".original.analysis.json", Buffer.from(JSON.stringify({ burnedInSubtitles: null }))
     );
@@ -261,7 +397,24 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
   });
 
   it("does not enqueue when the asset is not assigned to the timeline", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createTrimmedVideoAsset();
 
     const result = await enqueueLazyAnalysisIfSlotted(fs, bookId, assetId);
@@ -272,7 +425,24 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
 
   it("does not enqueue without a vision provider key", async () => {
     vi.stubEnv("OPENAI_API_KEY", "");
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createTrimmedVideoAsset();
     await assignToTimeline(assetId);
 

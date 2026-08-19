@@ -103,9 +103,10 @@ describe("generate_google_omni_video tool", () => {
     const meta = await fs.metadata.artifacts.read<{ prompt: string }>(parsed.vid_asset_id, "generation-request"
     );
     expect(meta.ok && meta.value).toBeTruthy();
+    if (!meta.ok) return;
     // Image ref → @referenceImage_1; clip mention removed (no inline form);
     // already-positional @character_1 untouched.
-    expect(meta.value!.prompt).toBe("fade to @referenceImage_1 inside while @character_1 waves");
+    expect(meta.value.prompt).toBe("fade to @referenceImage_1 inside while @character_1 waves");
   });
 
   it("enqueues with a first-frame image ref before provider upload", async () => {
@@ -235,9 +236,10 @@ describe("generate_google_omni_video tool", () => {
     const meta = await fs.metadata.artifacts.read<{ type: string; vidAssetId: string; prompt: string }>(parsed.vid_asset_id, "generation-request"
     );
     expect(meta.ok && meta.value).toBeTruthy();
-    expect(meta.value!.type).toBe("generate_google_omni_video");
-    expect(meta.value!.vidAssetId).toBe(parsed.vid_asset_id);
-    expect(meta.value!.prompt).toBe("cast the scene");
+    if (!meta.ok) return;
+    expect(meta.value.type).toBe("generate_google_omni_video");
+    expect(meta.value.vidAssetId).toBe(parsed.vid_asset_id);
+    expect(meta.value.prompt).toBe("cast the scene");
   });
 
   it("rejects more than 5 voice refs at the schema layer", async () => {

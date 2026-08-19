@@ -15,7 +15,7 @@ describe("Character lifecycle (create + metadata)", () => {
     
     // Create
     const createTool = createCharacterDef(fs);
-    const createResult = await createTool.handler({ book_id: slug, args: ["bob"] }, {});
+    const createResult = await createTool.handler({ book_id: slug, args: ["bob"] });
     expect(createResult.isError).toBeFalsy();
     const createdText = (createResult.content[0] as { type: "text", text: string }).text;
     const parsed = JSON.parse(createdText);
@@ -33,7 +33,7 @@ describe("Character lifecycle (create + metadata)", () => {
       book_id: slug,
       char_asset_id: charId,
       metadata: JSON.stringify({ age: 32, traits: ["brave", "tall"] })
-    }, {});
+    });
     expect(setResult.isError).toBeFalsy();
     
     // Verify metadata
@@ -50,7 +50,7 @@ describe("Character lifecycle (create + metadata)", () => {
     const slug = fs.book.get().bookId;
 
     const createTool = createCharacterDef(fs);
-    const createResult = await createTool.handler({ book_id: slug, args: ["ada"] }, {});
+    const createResult = await createTool.handler({ book_id: slug, args: ["ada"] });
     const charId = JSON.parse((createResult.content[0] as { text: string }).text).asset_id as string;
     const setTool = setCharacterMetadataDef(fs);
 
@@ -59,7 +59,7 @@ describe("Character lifecycle (create + metadata)", () => {
       book_id: slug,
       char_asset_id: charId,
       metadata: "French headshot, friendly tone",
-    }, {});
+    });
     expect(notesResult.isError).toBeFalsy();
     const notesRead = await fs.metadata.artifacts.read(charId, "character");
     expect(notesRead.ok && notesRead.value).toMatchObject({
@@ -71,7 +71,7 @@ describe("Character lifecycle (create + metadata)", () => {
       book_id: slug,
       char_asset_id: charId,
       metadata: { google_flow_character_ref: "character:abc", display_name: "Ada" },
-    }, {});
+    });
     expect(objResult.isError).toBeFalsy();
     const objRead = await fs.metadata.artifacts.read(charId, "character");
     expect(objRead.ok && objRead.value).toMatchObject({
@@ -84,7 +84,7 @@ describe("Character lifecycle (create + metadata)", () => {
       book_id: slug,
       char_asset_id: charId,
       metadata: "{character_ref: unquoted}",
-    }, {});
+    });
     expect(bad.isError).toBe(true);
     expect((bad.content[0] as { text: string }).text).toMatch(/Invalid JSON metadata/);
     expect((bad.content[0] as { text: string }).text).toMatch(/double-quoted keys/);
@@ -107,7 +107,7 @@ describe("Character lifecycle (create + metadata)", () => {
     const createTool = createCharacterDef(fs);
 
     // Test with one image and explicit name
-    const createRes1 = await createTool.handler({ book_id: slug, args: [faceId, "alice"] }, {});
+    const createRes1 = await createTool.handler({ book_id: slug, args: [faceId, "alice"] });
     expect(createRes1.isError).toBeFalsy();
     const parsed1 = JSON.parse((createRes1.content[0] as { type: "text", text: string }).text);
     expect(isUuidV7(parsed1.asset_id)).toBe(true);
@@ -116,7 +116,7 @@ describe("Character lifecycle (create + metadata)", () => {
     expect(meta1.ok && meta1.value).toMatchObject({ display_name: "alice" });
 
     // Multiple images and no explicit name → the first source's label is the stem
-    const createRes2 = await createTool.handler({ book_id: slug, args: [`@${faceId}`, bodyId] }, {});
+    const createRes2 = await createTool.handler({ book_id: slug, args: [`@${faceId}`, bodyId] });
     expect(createRes2.isError).toBeFalsy();
     const parsed2 = JSON.parse((createRes2.content[0] as { type: "text", text: string }).text);
     expect(isUuidV7(parsed2.asset_id)).toBe(true);
@@ -125,7 +125,7 @@ describe("Character lifecycle (create + metadata)", () => {
     expect(meta2.ok && meta2.value).toMatchObject({ display_name: "face" });
 
     // Test validation for duplicate images
-    const createRes3 = await createTool.handler({ book_id: slug, args: [faceId, faceId] }, {});
+    const createRes3 = await createTool.handler({ book_id: slug, args: [faceId, faceId] });
     expect(createRes3.isError).toBe(true);
 
     // Test validation for non-image sources
@@ -134,7 +134,7 @@ describe("Character lifecycle (create + metadata)", () => {
     const createRes4 = await createTool.handler({
       book_id: slug,
       args: [clip.value.artifactId],
-    }, {});
+    });
     expect(createRes4.isError).toBe(true);
   });
 
@@ -144,7 +144,7 @@ describe("Character lifecycle (create + metadata)", () => {
     const slug = fs.book.get().bookId;
     const createTool = createCharacterDef(fs);
     // The typed name becomes the character's display label; the id is a UUID.
-    const res = await createTool.handler({ book_id: slug, args: ["the-guy"] }, {});
+    const res = await createTool.handler({ book_id: slug, args: ["the-guy"] });
     expect(res.isError).toBeFalsy();
     const parsed = JSON.parse((res.content[0] as { text: string }).text);
     expect(isUuidV7(parsed.asset_id)).toBe(true);

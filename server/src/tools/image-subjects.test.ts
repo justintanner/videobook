@@ -373,7 +373,7 @@ describe("image subject tools", () => {
     expect(reuseImageSubjectAnalysis(source.map, source.objectHash, false, false)).toBe(true);
     expect(reuseImageSubjectAnalysis(source.map, source.objectHash, true, false)).toBe(false);
     const analyzing = {
-      version: 1,
+      version: 1 as const,
       status: "analyzing" as const,
       artifactId: source.artifactId,
       objectHash: source.objectHash,

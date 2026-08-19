@@ -40,7 +40,7 @@ describe("render-timeline constants", () => {
 });
 
 describe("buildAudioFilter", () => {
-  const slot = { slug: "vid-a", volume: 100, fadeIn: 0, fadeOut: 0, assetDir: "/tmp" };
+  const slot = { artifactId: "vid-a", volume: 100, fadeIn: 0, fadeOut: 0, assetDir: "/tmp" };
 
   it("uses the real a:0 stream when the slot has audio", () => {
     const filter = buildAudioFilter(1, slot, 4.5, true);
@@ -129,8 +129,8 @@ describe("timeline re-encode with real ffmpeg", () => {
 
   it("concatenating mixed-fps slots produces a constant-frame-rate file", async () => {
     const slots = [
-      { slug: "vid-a", volume: 100, fadeIn: 0, fadeOut: 0, assetDir: workDir },
-      { slug: "vid-b", volume: 100, fadeIn: 0, fadeOut: 0, assetDir: workDir },
+      { artifactId: "vid-a", volume: 100, fadeIn: 0, fadeOut: 0, assetDir: workDir },
+      { artifactId: "vid-b", volume: 100, fadeIn: 0, fadeOut: 0, assetDir: workDir },
     ];
     const probes = await Promise.all([probeVideo(clip24), probeVideo(clip30)]);
     const plan = planTimelineVideo(

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
-import jsQR from "jsqr";
+import jsQRImport from "jsqr";
+
+const jsQR = jsQRImport as unknown as (
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  options?: { inversionAttempts?: string },
+) => { data: string } | null;
 import {
   BADGE_ASPECT,
   BADGE_HEIGHT,

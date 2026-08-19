@@ -72,9 +72,9 @@ describe("download_video tool", () => {
   });
 
   it("always enqueues original.mp4 without download sections", async () => {
-    let capturedPayload: Record<string, unknown> | null = null;
+    const captured = { payload: null as Record<string, unknown> | null };
     registerJobHandler("download_video", async (payload) => {
-      capturedPayload = payload;
+      captured.payload = payload;
       return { stubbed: true };
     });
 
@@ -93,11 +93,12 @@ describe("download_video tool", () => {
     const parsed = JSON.parse(content[0].text) as { job_id: string };
     await waitForJob(parsed.job_id);
 
-    if (!capturedPayload) throw new Error("download job payload was not captured");
-    expect(String(capturedPayload.outputPath)).toMatch(/original\.mp4$/);
-    expect(capturedPayload).not.toHaveProperty("downloadSections");
-    expect(capturedPayload.requestedRange).toEqual({ start: 10, end: 30 });
-    expect(capturedPayload.full).toBe(true);
+    const payload = captured.payload;
+    if (!payload) throw new Error("download job payload was not captured");
+    expect(String(payload.outputPath)).toMatch(/original\.mp4$/);
+    expect(payload).not.toHaveProperty("downloadSections");
+    expect(payload.requestedRange).toEqual({ start: 10, end: 30 });
+    expect(payload.full).toBe(true);
   });
 
   it("returns error when start_time >= end_time", async () => {

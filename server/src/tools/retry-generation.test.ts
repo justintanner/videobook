@@ -11,7 +11,7 @@ import type { Engine } from "videobook-engine";
 
 type TextContent = Array<{ type: string; text: string }>;
 
-async function failAsset(fs: Engine, bookId: string, assetId: string, taskId: string): Promise<void> {
+async function failAsset(fs: Engine, _bookId: string, assetId: string, taskId: string): Promise<void> {
   const lease = await fs.jobs.artifactWork.begin(assetId, {
     kind: "generate",
     ownerKind: "job",

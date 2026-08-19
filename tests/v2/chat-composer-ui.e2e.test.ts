@@ -595,6 +595,7 @@ describe('chat composer browser flow', () => {
       await page.goto(appUrl, { waitUntil: 'commit' })
       appReady = true
       notebookDirty = false
+      if (options.cold) return page
     } else {
       await page.keyboard.press('Escape').catch(() => undefined)
       await page.keyboard.press('Escape').catch(() => undefined)
@@ -1140,6 +1141,16 @@ describe('chat composer browser flow', () => {
   it('keeps cell identity and prompt actions in compact inspector headers', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          writeText: async (value: string) => {
+            sessionStorage.setItem('videobook-test-clipboard', value)
+          },
+        },
+      })
+    })
+    await page.evaluate(() => {
       Object.defineProperty(navigator, 'clipboard', {
         configurable: true,
         value: {

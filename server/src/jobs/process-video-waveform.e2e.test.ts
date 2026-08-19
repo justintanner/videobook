@@ -75,7 +75,7 @@ describe("process_video persists audio waveform via videobook-engine primitive",
     expect(Array.isArray(wave.value.peaks)).toBe(true);
     expect(wave.value.peaks.length).toBeGreaterThan(0);
 
-    const manifest = await fs.files.manifest(assetId, PROJECT);
+    const manifest = await fs.files.manifest(assetId);
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     expect(manifest.value.files.find((f) => f.name === "waveform.json")).toBeUndefined();

@@ -8,13 +8,13 @@ import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 
-async function createImageAsset(fs: Engine, bookId: string, name: string): Promise<string> {
+async function createImageAsset(fs: Engine, _bookId: string, name: string): Promise<string> {
   const result = await fs.artifacts.create("img", name);
   if (!result.ok) throw new Error(`createAsset failed: ${result.error.message}`);
   return result.value.artifactId;
 }
 
-async function failAsset(fs: Engine, bookId: string, assetId: string, taskId: string): Promise<void> {
+async function failAsset(fs: Engine, _bookId: string, assetId: string, taskId: string): Promise<void> {
   const lease = await fs.jobs.artifactWork.begin(assetId, {
     kind: "generate",
     ownerKind: "job",

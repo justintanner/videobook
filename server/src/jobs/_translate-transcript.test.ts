@@ -174,22 +174,22 @@ describe("translateTranscript", () => {
   });
 
   it("uses the shared intelligence defaults and a strict response schema", async () => {
-    let request: OpenAiResponseRequest | null = null;
+    const captured = { request: null as OpenAiResponseRequest | null };
     const responses = fakeResponses(
       { translations: ["Here, baby, drink the milk.", "Thank you, mom."] },
-      (captured) => {
-        request = captured;
+      (request) => {
+        captured.request = request;
       },
     );
 
     await translateTranscript(raw, "en", responses);
 
-    expect(request).not.toBeNull();
-    expect(request?.model).toBe(INTELLIGENCE_MODEL);
-    expect(request?.reasoning).toEqual({ effort: "medium" });
-    expect(request?.store).toBe(false);
-    expect(request?.temperature).toBeUndefined();
-    expect(request?.text?.format).toMatchObject({
+    expect(captured.request).not.toBeNull();
+    expect(captured.request?.model).toBe(INTELLIGENCE_MODEL);
+    expect(captured.request?.reasoning).toEqual({ effort: "medium" });
+    expect(captured.request?.store).toBe(false);
+    expect(captured.request?.temperature).toBeUndefined();
+    expect(captured.request?.text?.format).toMatchObject({
       type: "json_schema",
       name: "translated_transcript",
       strict: true,

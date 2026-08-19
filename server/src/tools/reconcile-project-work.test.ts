@@ -284,7 +284,6 @@ describe("buildAssetList", () => {
     const ingested = await fs.files.ingestWorkspace(
       createResult.value.artifactId,
       ["original.mp3"],
-      "test-proj",
       "test_fixture",
     );
     expect(ingested.ok).toBe(true);

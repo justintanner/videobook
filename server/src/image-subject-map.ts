@@ -4,7 +4,7 @@ import type { ArtifactManifestFile, Engine } from "videobook-engine";
 import { findPrimaryMediaFile } from "videobook-engine";
 import { z } from "zod";
 
-export const IMAGE_SUBJECT_MAP_VERSION = 1;
+export const IMAGE_SUBJECT_MAP_VERSION = 1 as const;
 export const IMAGE_SUBJECT_MAP_METADATA_KEY = "image-subject-map.v1";
 
 const imageSubjectMapWriteChains = new Map<string, Promise<void>>();

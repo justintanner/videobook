@@ -127,7 +127,7 @@ describe("apply_watermark tool", () => {
     const assetId = await createVideoAsset();
     const parsed = await apply({ asset_id: assetId, handle: "someone", mode: "overlay" });
     expect(parsed.placement_source).toBe("default");
-    expect(parsed.positions.landscape).toBe("bottom-right");
+    expect(parsed.positions?.landscape).toBe("bottom-right");
   });
 
   it("reuses the badge asset across applies and honors custom opacity/scale", async () => {

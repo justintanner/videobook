@@ -66,7 +66,9 @@ describe("chat routing catalog", () => {
     expect(download?.params).toContain("start_time");
     expect(download?.params).toContain("end_time");
     expect(download?.params).not.toContain("book_id");
-    expect(downloadDefinition?.schema.start_time?.safeParse(30).success).toBe(true);
+    const startTime = downloadDefinition?.schema.start_time as
+      { safeParse?: (value: unknown) => { success: boolean } } | undefined;
+    expect(startTime?.safeParse?.(30).success).toBe(true);
   });
 
   it("publishes permissive source-preserving clip tools", () => {
@@ -79,8 +81,12 @@ describe("chat routing catalog", () => {
       definition.name === "extract_video_clip");
     expect(split?.requiredParams).toEqual(["asset_id", "chunk_a_end"]);
     expect(extract?.requiredParams).toEqual(["asset_id", "end_time"]);
-    expect(splitDefinition?.schema.chunk_a_end?.safeParse("15s").success).toBe(true);
-    expect(extractDefinition?.schema.end_time?.safeParse("0:44").success).toBe(true);
+    const chunkEnd = splitDefinition?.schema.chunk_a_end as
+      { safeParse?: (value: unknown) => { success: boolean } } | undefined;
+    const endTime = extractDefinition?.schema.end_time as
+      { safeParse?: (value: unknown) => { success: boolean } } | undefined;
+    expect(chunkEnd?.safeParse?.("15s").success).toBe(true);
+    expect(endTime?.safeParse?.("0:44").success).toBe(true);
     expect(splitDefinition?.annotations?.destructiveHint).toBe(false);
     expect(extractDefinition?.annotations?.destructiveHint).toBe(false);
   });

@@ -109,7 +109,7 @@ describe("concat_images tool", () => {
     expect(parsed.layout).toBe("horizontal");
     expect(parsed.aspect_ratio).toBe("16:9");
 
-    const manifest = await fs.files.manifest(parsed.img_asset_id, PROJECT);
+    const manifest = await fs.files.manifest(parsed.img_asset_id);
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     const fileNames = new Set(manifest.value.files.map((file) => file.name));

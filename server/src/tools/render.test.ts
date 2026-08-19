@@ -41,7 +41,24 @@ describe("render tool", () => {
   }
 
   it("enqueues one render job per orientation when none is specified", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createVideoAsset();
 
     const result = await client.callTool({
@@ -62,7 +79,24 @@ describe("render tool", () => {
   });
 
   it("preserves explicit subtitle and audio settings", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createVideoAsset();
 
     const result = await client.callTool({
@@ -101,7 +135,24 @@ describe("render tool", () => {
   }
 
   it("resolves the OSG image to the original file, not a preview variant", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createVideoAsset();
     const osgAssetId = await createWatermarkImageAsset();
 
@@ -124,7 +175,24 @@ describe("render tool", () => {
   });
 
   it("falls back to stored per-orientation OSG settings when args omit them", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createVideoAsset();
     const osgAssetId = await createWatermarkImageAsset();
 
@@ -157,6 +225,8 @@ describe("render tool", () => {
       ["square", "top-right"],
     ] as const) {
       const payload = byOrientation.get(orientation);
+      expect(payload).toBeDefined();
+      if (!payload) return;
       expect(payload.osgAssetId).toBe(osgAssetId);
       expect(String(payload.osgImagePath)).toMatch(/original\.png$/);
       expect(payload.osgPosition).toBe(expected);
@@ -166,7 +236,24 @@ describe("render tool", () => {
   });
 
   it("renders without an OSG when nothing is stored", async () => {
-    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createVideoAsset();
 
     const result = await client.callTool({
@@ -183,7 +270,24 @@ describe("render tool", () => {
   });
 
   it("clears a stale error row so a re-render can claim the asset", async () => {
-    vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    vi.spyOn(queue, "enqueue").mockResolvedValue({
+      id: 1,
+      operationId: "test-job",
+      type: "render_project",
+      artifactId: null,
+      externalTaskId: null,
+      state: "queued",
+      payload: {},
+      result: null,
+      attempts: 0,
+      maxAttempts: 1,
+      error: null,
+      enqueuedAt: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseExpiresAt: null,
+      fence: 0,
+    });
     const assetId = await createVideoAsset();
     // Wedge the asset the way a failed job does: status='error' rows are
     // refused by beginAssetWork and never reset by enqueue.

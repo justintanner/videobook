@@ -8,7 +8,7 @@ import {
   COMMAND_ADAPTERS,
   adaptCommandArgs,
   parseCommandArgs,
-} from "@/lib/command-registry";
+} from "../../../src/lib/command-registry.js";
 import { BookManager } from "../book-manager.js";
 import { commandsDef } from "./commands.js";
 
@@ -18,6 +18,7 @@ interface Command {
   command: string;
   description: string;
   category: string;
+  canonical?: string;
   params: Array<{
     name: string;
     type: "string" | "number" | "boolean" | "string[]";

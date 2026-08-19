@@ -209,9 +209,11 @@ describe("buildVisionMessages", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0].role).toBe("user");
     const content = messages[0].content;
+    expect(Array.isArray(content)).toBe(true);
+    if (!Array.isArray(content)) return;
     expect(content.length).toBe(2); // 1 image + 1 text
-    expect(content[0].type).toBe("image_url");
-    expect(content[1].type).toBe("text");
+    expect(content[0]?.type).toBe("image_url");
+    expect(content[1]?.type).toBe("text");
   });
 
   it("includes multiple images when provided", () => {
@@ -220,10 +222,12 @@ describe("buildVisionMessages", () => {
       "data:image/jpeg;base64,def",
     ]);
     const content = messages[0].content;
+    expect(Array.isArray(content)).toBe(true);
+    if (!Array.isArray(content)) return;
     expect(content.length).toBe(3); // 2 images + 1 text
-    expect(content[0].type).toBe("image_url");
-    expect(content[1].type).toBe("image_url");
-    expect(content[2].type).toBe("text");
+    expect(content[0]?.type).toBe("image_url");
+    expect(content[1]?.type).toBe("image_url");
+    expect(content[2]?.type).toBe("text");
   });
 });
 
@@ -535,7 +539,7 @@ describe("buildSceneRewriteText", () => {
 
   it("includes elements when provided", () => {
     const scenes = [{ prompt: "test", duration: 5 }];
-    const elements = [{ name: "Hero", desc: "Main character", slugs: ["@img-a"] }];
+    const elements = [{ name: "Hero", desc: "Main character", refs: ["@img-a"] }];
     const text = buildSceneRewriteText("guide", scenes, elements, 0);
     expect(text).toContain("@Hero");
     expect(text).toContain("Main character");

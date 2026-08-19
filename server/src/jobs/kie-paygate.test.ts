@@ -88,7 +88,7 @@ describe("kie paygate", () => {
       input: {
         task_id: "task-123",
         prompt: "extend it",
-        extend_at: "4",
+        extend_at: 4,
         extend_times: "6" as const,
       },
     };
@@ -104,7 +104,7 @@ describe("kie paygate", () => {
       input: {
         task_id: "task-123",
         prompt: "extend it",
-        extend_at: "4",
+        extend_at: 4,
         extend_times: "6" as const,
       },
     };
@@ -363,7 +363,7 @@ describe("kie paygate", () => {
       model: "minimax-h3/text-to-video" as const,
       input: { prompt: "a kitten", aspect_ratio: "9:16" as const, resolution: "768P" as const },
     };
-    expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded/);
+    expect(() => mintKieOtp(request as never, 60)).toThrow(/cost estimate is not bounded/);
   });
 
   it("rejects a kling-3.0/motion-control request with no duration hint as unbounded", () => {

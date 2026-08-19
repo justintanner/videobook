@@ -4,7 +4,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import sharp from "sharp";
-import jsQR from "jsqr";
+import jsQRImport from "jsqr";
+
+const jsQR = jsQRImport as unknown as (
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  options?: { inversionAttempts?: string },
+) => { data: string } | null;
 import { createTestClient } from "../test-client.js";
 import { readWatermarkConfig } from "../watermark-config.js";
 import { BADGE_HEIGHT, BADGE_WIDTH, WATERMARK_BADGE_LAYOUT } from "../watermark-badge.js";
@@ -71,7 +78,7 @@ describe("create_watermark tool", () => {
     expect(parsed.handle).toBe("someone");
     expect(parsed.url).toBe("https://x.com/someone");
 
-    const manifest = await fs.files.manifest(parsed.asset_id, PROJECT);
+    const manifest = await fs.files.manifest(parsed.asset_id);
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     const fileNames = new Set(manifest.value.files.map((file) => file.name));

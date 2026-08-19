@@ -25,12 +25,13 @@ describe("job deadlines", () => {
   });
 
   it("fails the job and releases its asset lease and file lock", async () => {
-    fs = createEngineForTest(projectsDir);
-    const asset = await fs.artifacts.create("vid", "deadline");
+    const engine = createEngineForTest(projectsDir);
+    fs = engine;
+    const asset = await engine.artifacts.create("vid", "deadline");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
-    const runner = await fs.jobs.queue.createRunner({
+    const runner = await engine.jobs.queue.createRunner({
       concurrency: 1,
       pollIntervalMs: 10,
       resolveHandler: (type) => type === "deadline_probe"
@@ -47,9 +48,10 @@ describe("job deadlines", () => {
                 if (lease?.kind === "owner") return lease.ownerId;
                 throw new Error("owner lease not registered");
               },
+              markAssetFailureHandled() {},
             };
             return withLockedLocalLease(
-              fs,
+              engine,
               asset.value.artifactId,
               asset.value.path,
               ctx,
@@ -69,9 +71,9 @@ describe("job deadlines", () => {
     runner.start();
 
     try {
-      const enqueued = await fs.jobs.queue.enqueue({
+      const enqueued = await engine.jobs.queue.enqueue({
         type: "deadline_probe",
-        assetId: asset.value.artifactId,
+        artifactId: asset.value.artifactId,
         payload: {},
         dedupeKey: "deadline-probe",
         artifactWorkKind: "render",
@@ -81,20 +83,20 @@ describe("job deadlines", () => {
         "Job deadline_probe timed out after 50ms",
       );
 
-      const job = fs.jobs.queue.get(enqueued.job.id);
+      const job = engine.jobs.queue.get(enqueued.job.id);
       expect(job?.state).toBe("failed");
       expect(job?.error?.code).toBe(JobDeadlineError.name);
 
-      const work = await fs.jobs.artifactWork.read(asset.value.artifactId);
+      const work = await engine.jobs.artifactWork.read(asset.value.artifactId);
       expect(work.ok).toBe(true);
       if (work.ok) {
         expect(work.value?.status).toBe("error");
         expect(work.value?.ownerId).toBeNull();
       }
 
-      const lock = await fs.jobs.locks.acquire(asset.value.path, { durationMs: 1_000 });
+      const lock = await engine.jobs.locks.acquire(asset.value.path, { durationMs: 1_000 });
       expect(lock.ok).toBe(true);
-      if (lock.ok) await fs.jobs.locks.release(asset.value.path);
+      if (lock.ok) await engine.jobs.locks.release(asset.value.path);
     } finally {
       await runner.stop();
     }

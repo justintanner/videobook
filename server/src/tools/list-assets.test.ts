@@ -161,9 +161,15 @@ describe("list_assets tool", () => {
     const engine = createEngineForTest(root);
     try {
       const bookId = engine.book.get().bookId;
-      const current = (await engine.artifacts.create("image", "current")).value!;
-      const historical = (await engine.artifacts.create("image", "historical")).value!;
-      const provider = (await engine.artifacts.create("image", "provider")).value!;
+      const currentCreated = await engine.artifacts.create("image", "current");
+      const historicalCreated = await engine.artifacts.create("image", "historical");
+      const providerCreated = await engine.artifacts.create("image", "provider");
+      if (!currentCreated.ok || !historicalCreated.ok || !providerCreated.ok) {
+        throw new Error("fixture artifact creation failed");
+      }
+      const current = currentCreated.value;
+      const historical = historicalCreated.value;
+      const provider = providerCreated.value;
       const png = MINIMAL_PNG;
       for (const artifact of [current, historical, provider]) {
         const written = await engine.files.write(
@@ -173,7 +179,9 @@ describe("list_assets tool", () => {
         );
         if (!written.ok) throw new Error(written.error.message);
       }
-      const notebook = (await engine.notebooks.create("Refs")).value!;
+      const notebookCreated = await engine.notebooks.create("Refs");
+      if (!notebookCreated.ok) throw new Error(notebookCreated.error.message);
+      const notebook = notebookCreated.value;
       const cell = engine.notebooks.createCell({
         type: "image",
         slot: { row: 0, column: 0 },

@@ -7,7 +7,7 @@ import {
   selectCommandForInput,
 } from "../../../src/lib/command-registry.js";
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
-import { executeUiAction } from "@/lib/ui-actions";
+import { executeUiAction } from "../../../src/lib/ui-actions.js";
 import { getCanonicalCommands } from "./commands.js";
 
 describe("slash command parse/normalize/dispatch", () => {

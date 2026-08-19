@@ -2,8 +2,8 @@ import type { NotebookCell, NotebookGridSlot } from 'videobook-engine'
 import {
   nextNotebookHorizontalGenerationSlot,
   nextNotebookVideoGenerationSlot,
-} from './notebook-grid'
-import { nonBlankStringValue, recordValue } from './value-decoders'
+} from './notebook-grid.js'
+import { nonBlankStringValue, recordValue } from './value-decoders.js'
 
 export interface RoutedMediaCellInput {
   type: 'audio' | 'video'

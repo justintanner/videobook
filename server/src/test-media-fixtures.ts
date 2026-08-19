@@ -133,10 +133,10 @@ export async function copyVideoFixture(
 
 export const COMMON_VIDEO_FIXTURES = {
   evenSplit: (durationSec: number): CachedVideoSpec => ({
-    width: 320,
-    height: 240,
+    width: 160,
+    height: 120,
     durationSec,
-    fps: 10,
+    fps: 8,
     source: "testsrc",
     audio: { frequency: 440 },
   }),
@@ -173,10 +173,10 @@ export const COMMON_VIDEO_FIXTURES = {
     audio: false,
   } satisfies CachedVideoSpec,
   padVideo: (durationSec: number, hasAudio: boolean): CachedVideoSpec => ({
-    width: 320,
-    height: 240,
+    width: 160,
+    height: 120,
     durationSec,
-    fps: 30,
+    fps: 10,
     source: "testsrc",
     audio: hasAudio ? { frequency: 440 } : false,
   }),

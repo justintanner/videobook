@@ -478,7 +478,7 @@ describe("google flow image provider", () => {
       expect(noRefs.image_slots).toEqual({ min: 0, max: 10 });
 
       const withRefs = buildImageModelOption("nano_banana", models.nano_banana, { prompt: "x" }, [
-        { tag: "@img-ref", asset_id: "img-ref", asset_type: "image", file_path: "/p/ref.png", asset_dir: "/p" },
+        { tag: "@img-ref", artifactId: "img-ref", artifactType: "image", filePath: "/p/ref.png", workspacePath: "/p" },
       ], undefined, "google");
       expect(withRefs.tool_name).toBe("generate_google_flow_nano_banana_pro_image");
     } finally {

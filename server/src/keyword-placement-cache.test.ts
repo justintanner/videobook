@@ -14,7 +14,7 @@ const VIDEO_FILE: ArtifactManifestFile = {
   name: "original.mp4",
   sizeBytes: 100,
   extension: "mp4",
-  mtimeMs: 1234,
+  objectHash: "a".repeat(64),
 };
 
 const GRAPHICS: KeywordGraphic[] = [{

@@ -47,7 +47,7 @@ async function generateSilentVideo(outputPath: string): Promise<void> {
 // whichever test happens to be next.
 async function placeVideo(
   projectsDir: string,
-  bookId: string,
+  _bookId: string,
   videoPath: string,
 ): Promise<{ assetId: string; path: string }> {
   const fs = createEngineForTest(projectsDir);

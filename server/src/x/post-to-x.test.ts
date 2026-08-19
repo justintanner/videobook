@@ -58,7 +58,7 @@ function makeStubFetch(plan: StubResponse[]): { fetch: typeof fetch; calls: Reco
 
 async function uploadFakeAsset(
   fs: Engine,
-  bookId: string,
+  _bookId: string,
   prefix: string,
   ext: string,
 ): Promise<string> {
