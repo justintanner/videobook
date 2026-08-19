@@ -1,6 +1,7 @@
 import {
   Braces,
   Camera,
+  Columns3,
   Copy,
   History,
   Image,
@@ -8,6 +9,7 @@ import {
   Maximize2,
   PanelRightOpen,
   Play,
+  Rows3,
   Scissors,
   Trash2,
   Video,
@@ -22,6 +24,8 @@ import {
 import { createPortal } from 'react-dom'
 
 type NotebookCellContextActionIcon =
+  | 'arrange-column'
+  | 'arrange-row'
   | 'duplicate'
   | 'extract-frame'
   | 'generate-image'
@@ -55,6 +59,8 @@ type NotebookCellContextMenuProps = {
 }
 
 const actionIcons: Record<NotebookCellContextActionIcon, LucideIcon> = {
+  'arrange-column': Columns3,
+  'arrange-row': Rows3,
   duplicate: Copy,
   'extract-frame': Camera,
   'generate-image': Image,

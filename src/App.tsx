@@ -208,6 +208,10 @@ import {
   revealNotebookArrangement,
 } from '@/videobook/notebook-auto-arrange'
 import {
+  planVideoAxisArrangement,
+  type NotebookVideoAxis,
+} from '@/videobook/notebook-video-axis-arrange'
+import {
   notebookSourcePortId,
   notebookSourcePortOffsets,
   type NotebookSourceSide,
@@ -4199,6 +4203,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     })),
     [assetById, notebook],
   )
+  const notebookVideoCellIds = useMemo(
+    () => new Set([...notebookCellAssets].flatMap(([cellId, cellAsset]) =>
+      cellAsset.type === 'video' || cellAsset.type === 'final' ? [cellId] : [])),
+    [notebookCellAssets],
+  )
   const selectedCellError = notebook && selectedNotebookCell
     ? (
       notebookCellExecutionObservation(notebook, selectedNotebookCell.id).error
@@ -5125,6 +5134,57 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } catch (error) {
       await refreshNotebook(bookId, notebook.id).catch(() => undefined)
       setNotice(error instanceof Error ? error.message : String(error), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const arrangeVideoCellsOnAxis = async (
+    axis: NotebookVideoAxis,
+    anchor: NotebookGridSlot,
+  ): Promise<{ ok: boolean; message: string }> => {
+    if (!bookId || !notebook) {
+      return { ok: false, message: 'No notebook is open' }
+    }
+    const planned = planVideoAxisArrangement(
+      notebook,
+      notebookVideoCellIds,
+      anchor,
+      axis,
+    )
+    if (!planned.ok) {
+      setNotice(planned.message, 'error')
+      return { ok: false, message: planned.message }
+    }
+    const axisLabel = axis === 'column'
+      ? `column ${anchor.column + 1}`
+      : `row ${String.fromCharCode(97 + anchor.row)}`
+    if (planned.movedCount === 0) {
+      const message = `Videos are already arranged in ${axisLabel}`
+      setNotice(message)
+      return { ok: true, message }
+    }
+
+    const revision = asString(recordValue(notebook)?.revision)
+    setBusy(true)
+    try {
+      await call('move_notebook_cells', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        ...(revision ? { expected_revision: revision } : {}),
+        slots: planned.slots,
+      })
+      await refreshNotebook(bookId, notebook.id)
+      rememberLastWorkSlot({ row: anchor.row, column: anchor.column })
+      const videoCount = planned.slots.length - planned.displacedCount
+      const message = `Arranged ${videoCount} ${videoCount === 1 ? 'video' : 'videos'} in ${axisLabel}`
+      setNotice(message)
+      return { ok: true, message }
+    } catch (error) {
+      await refreshNotebook(bookId, notebook.id).catch(() => undefined)
+      const message = error instanceof Error ? error.message : String(error)
+      setNotice(message, 'error')
+      return { ok: false, message }
     } finally {
       setBusy(false)
     }
@@ -7925,6 +7985,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
         return await prepareGenerationPlan(cell.id, 'slash')
       }
+      if (
+        commandToken === '/arrange-videos-column'
+        || commandToken === '/arrange-videos-row'
+      ) {
+        const anchor = selectedNotebookCell?.slot ?? lastWorkSlot
+        if (!anchor) {
+          return { ok: false, message: 'Select a cell to anchor the arrangement' }
+        }
+        return await arrangeVideoCellsOnAxis(
+          commandToken === '/arrange-videos-column' ? 'column' : 'row',
+          anchor,
+        )
+      }
       if (commandToken === '/track-add') {
         const [kindValue, ...nameParts] = restParts
         if (
@@ -8881,6 +8954,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         disabled: busy || !contextMenuDuplicateDestinationAvailable,
       })
     }
+    if (notebookVideoCellIds.size > 0) {
+      contextMenuActions.push(
+        {
+          id: 'arrange_videos_column',
+          label: 'Arrange videos in column',
+          icon: 'arrange-column',
+          disabled: busy,
+        },
+        {
+          id: 'arrange_videos_row',
+          label: 'Arrange videos in row',
+          icon: 'arrange-row',
+          disabled: busy,
+        },
+      )
+    }
     if (contextMenuSplitSource) {
       contextMenuActions.push({
         id: 'split',
@@ -8995,6 +9084,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (actionId === 'duplicate') {
       void duplicateContextMenuAsset()
+      return
+    }
+    if (actionId === 'arrange_videos_column' || actionId === 'arrange_videos_row') {
+      void arrangeVideoCellsOnAxis(
+        actionId === 'arrange_videos_column' ? 'column' : 'row',
+        contextMenuCell.slot,
+      )
       return
     }
     if (actionId === 'generate_video' || actionId === 'generate_image') {

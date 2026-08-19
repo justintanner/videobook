@@ -310,7 +310,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.
 
-## Slash commands (121 static commands)
+## Slash commands (123 static commands)
 
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
@@ -319,6 +319,8 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/archive` — Archive a full video or audio asset to the global clip archive and transcribe it; MCP: `archive_clip`
 - `/archive-browse` — Open the clip archive browser, optionally with an initial search; UI: `open_archive`
 - `/archive-restore` — Restore archived clips into the current project by archive ID; MCP: `restore_archive_clips`
+- `/arrange-videos-column` — Stack all video cells into the current column starting at the selected cell; cells in the way move to free slots
+- `/arrange-videos-row` — Line up all video cells across the current row starting at the selected cell; cells in the way move to free slots
 - `/assign` — Assign asset to timeline slot; MCP: `assign_slot`
 - `/audio-add` — Add an audio asset to the timeline audio lane (times in seconds); UI: `timeline_audio_add`
 - `/audio-boost` — Boost audio volume of a video or audio asset (linear multiplier, 1.0–4.0). In-place with git versioning.; MCP: `audio_boost`
