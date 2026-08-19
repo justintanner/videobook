@@ -28,7 +28,6 @@ const cellPaletteIcons: Record<NotebookCellAddType, LucideIcon> = {
   generate_image: Image,
   generate_audio: AudioWaveform,
   extract_audio: AudioWaveform,
-  extract_frame: Image,
   split_video: Film,
   concat: Film,
   splice: Film,

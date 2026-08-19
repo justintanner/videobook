@@ -460,15 +460,12 @@ describe('v2 notebook domain tools', () => {
     const extractAudio = await createCell('extract_audio', 'extract-audio-source', 1, 0)
     const splitVideo = await createCell('split_video', 'split-video-source', 1, 2)
     const videoOutput = await createCell('video', 'vid-output', 2, 1)
-    const extractFrame = await createCell('extract_frame', 'extract-frame-source', 1, 3)
+    const frameImage = await createCell('image', 'frame-image', 1, 3)
     const invalidImage = await createCell('image', 'img-invalid', 3, 2)
 
     expect(extractAudio.operation).toBe('extract_audio')
     expect(extractAudio.output_cell).toBeUndefined()
     expect(extractAudio.output_edge).toBeUndefined()
-    expect(extractFrame.operation).toBe('extract_frame')
-    expect(extractFrame.output_cell).toBeUndefined()
-    expect(extractFrame.output_edge).toBeUndefined()
     const createdNotebook = resultJson(await invoke('get_notebook', {
       notebook_id: notebookId,
     })) as {
@@ -481,9 +478,11 @@ describe('v2 notebook domain tools', () => {
     ])
     expect(createdNotebook.cells.filter((cell) => cell.type === 'audio')).toHaveLength(1)
     expect(createdNotebook.cells.some((cell) =>
-      cell.type === 'image' && cell.id !== invalidImage.id)).toBe(false)
+      cell.type === 'image'
+      && cell.id !== invalidImage.id
+      && cell.id !== frameImage.id)).toBe(false)
     expect(createdNotebook.edges.some((edge) =>
-      (edge.source === extractAudio.id || edge.source === extractFrame.id)
+      edge.source === extractAudio.id
       && edge.targetInput === 'media')).toBe(false)
     expect(splitVideo.operation).toBe('split_range')
     const retypedAction = await invoke('update_notebook_cell', {
@@ -515,8 +514,8 @@ describe('v2 notebook domain tools', () => {
     const invalidFrameInput = await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
       source_cell_id: sourceAudio.id,
-      target_cell_id: extractFrame.id,
-      target_input: 'video',
+      target_cell_id: frameImage.id,
+      target_input: 'segment',
     })
     expect(invalidFrameInput.isError).toBe(true)
     expect(invalidFrameInput.content[0]?.text).toContain('video-producing source')
@@ -539,8 +538,8 @@ describe('v2 notebook domain tools', () => {
       },
       {
         source_cell_id: sourceVideo.id,
-        target_cell_id: extractFrame.id,
-        target_input: 'video',
+        target_cell_id: frameImage.id,
+        target_input: 'segment',
       },
     ]) {
       resultJson(await invoke('connect_notebook_cells', {
@@ -551,7 +550,7 @@ describe('v2 notebook domain tools', () => {
 
     const invalidExtractActionSource = await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
-      source_cell_id: extractFrame.id,
+      source_cell_id: frameImage.id,
       target_cell_id: invalidImage.id,
       target_input: 'input',
     })
@@ -559,18 +558,6 @@ describe('v2 notebook domain tools', () => {
     expect(invalidExtractActionSource.content[0]?.text).toContain(
       'Image cells accept media or segment inputs',
     )
-
-    resultJson(await invoke('update_notebook_cell', {
-      notebook_id: notebookId,
-      cell_id: extractFrame.id,
-      cell: { inputs: { frameMode: 'last' } },
-    }))
-    const changedFrameMode = resultJson(await invoke('get_notebook', {
-      notebook_id: notebookId,
-    })) as {
-      execution?: Record<string, { stale?: boolean }>
-    }
-    expect(changedFrameMode.execution?.[extractFrame.id]?.stale).toBe(true)
 
     const invalidOutput = await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
@@ -588,7 +575,7 @@ describe('v2 notebook domain tools', () => {
       target_input: 'media',
     })
     expect(invalidImageOutput.isError).toBe(true)
-    expect(invalidImageOutput.content[0]?.text).toContain('extract frame source')
+    expect(invalidImageOutput.content[0]?.text).toContain('created automatically')
 
     const bypassedMedia = await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
@@ -602,8 +589,8 @@ describe('v2 notebook domain tools', () => {
     const bypassedFrameMedia = await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
       source_cell_id: splitVideo.id,
-      target_cell_id: extractFrame.id,
-      target_input: 'video',
+      target_cell_id: invalidImage.id,
+      target_input: 'segment',
     })
     expect(bypassedFrameMedia.isError).toBe(true)
     expect(bypassedFrameMedia.content[0]?.text).toContain('video-producing source')

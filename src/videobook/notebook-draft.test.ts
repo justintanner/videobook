@@ -85,11 +85,6 @@ describe('notebook draft conversion', () => {
         },
         {
           ...source.cells[0]!,
-          id: '018f7cf5-0d31-7d96-8c0f-800000000007',
-          type: 'extract_frame',
-        },
-        {
-          ...source.cells[0]!,
           id: '018f7cf5-0d31-7d96-8c0f-800000000008',
           type: 'split_video',
         },
@@ -112,7 +107,6 @@ describe('notebook draft conversion', () => {
     }
 
     expect(notebookNodes(typed).map((node) => node.data.targetInputs)).toEqual([
-      ['video'],
       ['video'],
       ['video', 'analysis'],
       ['media'],

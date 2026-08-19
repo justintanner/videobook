@@ -93,7 +93,6 @@ import {
 
 const actionCellTypes = new Set<NotebookCell['type']>([
   'extract_audio',
-  'extract_frame',
   'split_video',
   'prompt',
   'analyze',
@@ -241,9 +240,6 @@ function cellFormIsValid(cell: NotebookCell, draft: CellFormDraft): boolean {
   if (cell.type === 'splice' && draft.operation === 'splice_video') {
     return validTimingValue(draft.overlap)
   }
-  if (cell.type === 'extract_frame' && draft.frameMode === 'time') {
-    return validTimingValue(draft.timestampSeconds)
-  }
   return true
 }
 
@@ -345,24 +341,6 @@ function cellFormPatch(
       overlap: Number(draft.overlap),
     }
   }
-  if (
-    cell.type === 'extract_frame'
-    && (
-      draft.frameMode !== persisted.frameMode
-      || (
-        draft.frameMode === 'time'
-        && draft.timestampSeconds !== persisted.timestampSeconds
-      )
-    )
-  ) {
-    patch.inputs = {
-      ...(cell.inputs ?? {}),
-      frameMode: draft.frameMode,
-      ...(draft.frameMode === 'time'
-        ? { timestampSeconds: Number(draft.timestampSeconds) }
-        : {}),
-    }
-  }
   return patch
 }
 
@@ -452,7 +430,6 @@ function isPassiveOutputCell(cell: NotebookCell): boolean {
 
 function defaultInputNames(cell: NotebookCell): string[] {
   if (cell.type === 'extract_audio') return ['video']
-  if (cell.type === 'extract_frame') return ['video']
   if (cell.type === 'split_video') return ['video', 'analysis']
   if (cell.type === 'analysis') return ['result']
   if (cell.type === 'image') return ['media', 'segment']
@@ -486,9 +463,6 @@ function compatibleSource(
   if (target.type === 'extract_audio') {
     return targetInput === 'video' && isVideoProducingSource(source)
   }
-  if (target.type === 'extract_frame') {
-    return targetInput === 'video' && isVideoProducingSource(source)
-  }
   if (target.type === 'split_video') {
     if (targetInput === 'analysis') return source.type === 'analysis'
     if (targetInput === 'video') return isVideoProducingSource(source)
@@ -504,10 +478,10 @@ function compatibleSource(
     return source.type === 'split_video'
   }
   if (target.type === 'image' && targetInput === 'media') {
-    return source.type === 'extract_frame' || source.type === 'generate_image'
+    return source.type === 'generate_image'
   }
   if (target.type === 'image' && targetInput === 'segment') {
-    return source.type === 'video'
+    return isVideoProducingSource(source)
   }
   return true
 }
@@ -2084,7 +2058,6 @@ function ExecutableCellInspector({
   const previewCell = cell.type === 'character'
     || generationCell
     || cell.type === 'extract_audio'
-    || cell.type === 'extract_frame'
   const actionCell = isActionCellType(cell.type)
   const dirty = cellFormIsDirty(cell, draft, generationControls)
   const valid = cellFormIsValid(cell, draft)
@@ -2488,39 +2461,6 @@ function ExecutableCellInspector({
                 onChange={(event) => updateDraft('endSeconds', event.target.value)}
               />
             </label>
-          </div>
-        )}
-        {cell.type === 'extract_frame' && (
-          <div className="inspector-field-pair">
-            <label>
-              Frame
-              <select
-                value={draft.frameMode}
-                onChange={(event) => updateDraft(
-                  'frameMode',
-                  event.target.value as CellFormDraft['frameMode'],
-                )}
-              >
-                <option value="first">First</option>
-                <option value="time">Time</option>
-                <option value="last">Last</option>
-              </select>
-            </label>
-            {draft.frameMode === 'time' && (
-              <label>
-                Timestamp seconds
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={draft.timestampSeconds}
-                  onChange={(event) => updateDraft(
-                    'timestampSeconds',
-                    event.target.value,
-                  )}
-                />
-              </label>
-            )}
           </div>
         )}
         {cell.type === 'splice' && draft.operation === 'splice_video' && (

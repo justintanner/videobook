@@ -1,4 +1,5 @@
 import {
+  Camera,
   Eraser,
   Eye,
   EyeOff,
@@ -28,6 +29,7 @@ type NotebookMediaFullscreenProps = {
   composerPortalRef?: (element: HTMLDivElement | null) => void
   returnFocus?: HTMLElement | null
   onAnalyzeSubjects?: (force?: boolean) => Promise<void>
+  onCaptureFrame?: (timestampSeconds: number) => Promise<string>
   onEditingChange?: (editing: boolean) => void
   onEditSubjects?: (input: ImageSubjectEditInput) => Promise<boolean>
   onSelectedSubjectIdsChange?: (subjectIds: readonly string[]) => void
@@ -228,12 +230,14 @@ export function NotebookMediaFullscreen({
   composerPortalRef,
   returnFocus = null,
   onAnalyzeSubjects,
+  onCaptureFrame,
   onEditingChange,
   onEditSubjects,
   onSelectedSubjectIdsChange,
   onClose,
 }: NotebookMediaFullscreenProps) {
   const dialogRef = useRef<HTMLElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
   const mountedRef = useRef(false)
@@ -251,6 +255,9 @@ export function NotebookMediaFullscreen({
   >(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [capturePending, setCapturePending] = useState(false)
+  const [captureError, setCaptureError] = useState<string | null>(null)
+  const [captureMessage, setCaptureMessage] = useState<string | null>(null)
   const isVideo = asset.type === 'video' || asset.type === 'final'
   const mediaUrl = asset.mediaUrl ?? asset.thumbnailUrl
   const hasMedia = Boolean(mediaUrl)
@@ -387,6 +394,30 @@ export function NotebookMediaFullscreen({
       }
     }
   }
+  const captureCurrentFrame = async () => {
+    const video = videoRef.current
+    if (!video || !onCaptureFrame || capturePending) return
+    const duration = Number.isFinite(video.duration) ? video.duration : null
+    const timestamp = Math.max(
+      0,
+      duration === null
+        ? video.currentTime
+        : Math.min(video.currentTime, Math.max(0, duration - 0.05)),
+    )
+    setCapturePending(true)
+    setCaptureError(null)
+    setCaptureMessage(null)
+    try {
+      const savedAddress = await onCaptureFrame(timestamp)
+      if (!mountedRef.current) return
+      setCaptureMessage(`Frame saved to ${savedAddress}`)
+    } catch (error) {
+      if (!mountedRef.current) return
+      setCaptureError(error instanceof Error ? error.message : String(error))
+    } finally {
+      if (mountedRef.current) setCapturePending(false)
+    }
+  }
   const ready = subjectMap?.status === 'ready'
   const checkingCache = subjectMapLoading
     && subjectMap?.status !== 'analyzing'
@@ -423,6 +454,7 @@ export function NotebookMediaFullscreen({
       {isVideo && asset.mediaUrl ? (
         <div className="notebook-media-playback-stage">
           <video
+            ref={videoRef}
             key={asset.mediaUrl}
             src={asset.mediaUrl}
             poster={asset.thumbnailUrl ?? undefined}
@@ -433,6 +465,29 @@ export function NotebookMediaFullscreen({
             autoPlay
             preload="auto"
           />
+          {onCaptureFrame && (
+            <div className="notebook-media-capture-bar">
+              <button
+                type="button"
+                className="notebook-media-capture-button"
+                disabled={capturePending}
+                onClick={() => void captureCurrentFrame()}
+              >
+                {capturePending
+                  ? <BusyIndicator size={14} />
+                  : <Camera size={14} />}
+                Extract frame
+              </button>
+              {(captureError || captureMessage) && (
+                <p
+                  className={captureError ? 'error' : 'success'}
+                  role="status"
+                >
+                  {captureError ?? captureMessage}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <>

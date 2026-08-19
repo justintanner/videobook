@@ -9,6 +9,7 @@ import type {
   NotebookCellType,
   NotebookDocument,
 } from 'videobook-engine'
+import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { notebookGridPosition } from './notebook-grid'
 import {
   defaultNotebookBusRiverRoute,
@@ -42,6 +43,12 @@ export interface NotebookCellData extends Record<string, unknown> {
   targetConnectionCount?: number
   targetInputConnectionCounts?: Record<string, number>
   sourcePorts?: string[]
+  frameProvenance?: NotebookFrameProvenance
+}
+
+export type NotebookFrameProvenance = {
+  sourceAddress: string | null
+  atSeconds: number | null
 }
 
 type NotebookReferenceKind = 'image' | 'video' | 'audio'
@@ -51,7 +58,6 @@ function notebookReferenceKind(
 ): NotebookReferenceKind | null {
   if (
     type === 'image'
-    || type === 'extract_frame'
     || type === 'generate_image'
   ) return 'image'
   if (
@@ -118,7 +124,6 @@ export function notebookConnectionTargetInput(
 
 function defaultTargetInputs(type: NotebookCellType): string[] {
   if (type === 'extract_audio') return ['video']
-  if (type === 'extract_frame') return ['video']
   if (type === 'split_video') return ['video', 'analysis']
   if (type === 'analysis') return ['result']
   if (type === 'image') return ['media', 'segment']
@@ -126,7 +131,26 @@ function defaultTargetInputs(type: NotebookCellType): string[] {
   return ['input']
 }
 
+function cellFrameProvenance(
+  cellsById: ReadonlyMap<string, NotebookCell>,
+  cell: NotebookCell,
+): NotebookFrameProvenance | null {
+  if (cell.inputs?.mediaRole !== 'extract-frame-output') return null
+  const sourceCellId = typeof cell.inputs.sourceCellId === 'string'
+    ? cell.inputs.sourceCellId
+    : null
+  const sourceCell = sourceCellId ? cellsById.get(sourceCellId) : undefined
+  const atSecondsValue = Number(
+    cell.inputs.atSeconds ?? cell.inputs.timestampSeconds,
+  )
+  return {
+    sourceAddress: sourceCell ? notebookGridTag(sourceCell.slot) : null,
+    atSeconds: Number.isFinite(atSecondsValue) ? atSecondsValue : null,
+  }
+}
+
 export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCellData>> {
+  const cellsById = new Map(document.cells.map((cell) => [cell.id, cell]))
   const routes = notebookBusRiverRoutes(document)
   const targetInputs = new Map<string, string[]>()
   const targetConnectionCounts = new Map<string, number>()
@@ -150,6 +174,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
     sourcePorts.set(edge.source, ports)
   }
   return document.cells.map((cell) => {
+    const frameProvenance = cellFrameProvenance(cellsById, cell)
     return {
       id: cell.id,
       type: 'cell',
@@ -177,6 +202,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
           ? {}
           : { outputArtifactId: cell.outputArtifactId }),
         ...(cell.inputs === undefined ? {} : { inputs: cell.inputs }),
+        ...(frameProvenance === null ? {} : { frameProvenance }),
       },
     }
   })

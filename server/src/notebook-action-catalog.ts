@@ -181,48 +181,6 @@ const LOCAL_ACTIONS: NotebookAction[] = [
     },
   },
   {
-    id: "local.extract_frame",
-    cellTypes: ["extract_frame"],
-    kind: "local",
-    operation: "extract_frame",
-    provider: "local",
-    model: null,
-    tool: "ffmpeg",
-    title: "Extract frame",
-    description: "Extract a first, exact-time, or last frame into an Image cell",
-    outputKind: "artifact",
-    billable: false,
-    defaults: {
-      operation: "extract_frame",
-      tool: "ffmpeg",
-      provider: "local",
-      frameMode: "first",
-    },
-    parameters: [
-      {
-        name: "frameMode",
-        type: "enum",
-        required: true,
-        default: "first",
-        enumValues: ["first", "time", "last"],
-        description: "Select the first frame, an exact timestamp, or the last frame",
-      },
-      {
-        name: "timestampSeconds",
-        type: "number",
-        required: false,
-        default: null,
-        description: "Source timestamp required when frame mode is time",
-      },
-    ],
-    requiredInputs: ["video"],
-    capabilities: {
-      dualFrame: false,
-      localMedia: true,
-      requiresConfirmation: false,
-    },
-  },
-  {
     id: "generation.rewrite_prompt",
     cellTypes: ["prompt"],
     kind: "generation",
@@ -524,10 +482,6 @@ function defaultActionForCell(
   }
   if (normalizedCell.type === "extract_audio") {
     return actions.find((action) => action.operation === "extract_audio")
-      ?? null;
-  }
-  if (normalizedCell.type === "extract_frame") {
-    return actions.find((action) => action.operation === "extract_frame")
       ?? null;
   }
   if (normalizedCell.type === "concat") {

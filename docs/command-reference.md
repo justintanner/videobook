@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (302)
+## MCP endpoints (303)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -78,6 +78,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `extract_first_frame` — Extract the first frame of a video asset as a new image asset (JPEG). Uses 0.1s offset to avoid black frames.
 - `extract_frame` — Extract a frame at a specific timestamp from a video asset as a new image asset (JPEG).
 - `extract_last_frame` — Extract the last frame of a video asset as a new image asset (JPEG). Uses duration-0.1s to avoid fade-out.
+- `extract_notebook_frame` — Extract a frame from a video cell into a new image cell wired to its source, recording the source cell and timestamp
 - `extract_video_clip` — Cut or extract a new video clip from a source time range while preserving the original. Use when the user says 'create a new clip from @a1 from 15s to 44s'. start_time and end_time accept seconds or timestamps such as 15s, 1:30, or 2m20s.
 - `generate_alibaba_qwen_2_0_edit_image` (historical names, not exposed: `generate_alibaba_qwen_image_edit`) — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.
 - `generate_alibaba_qwen_2_0_text_to_image` (historical names, not exposed: `generate_alibaba_qwen_image`) — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.

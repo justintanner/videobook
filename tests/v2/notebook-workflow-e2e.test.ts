@@ -36,7 +36,6 @@ describe('transparent runnable DAG e2e (offline)', () => {
       'image',
       'video',
       'extract_audio',
-      'extract_frame',
       'split_video',
       'prompt',
       'character',

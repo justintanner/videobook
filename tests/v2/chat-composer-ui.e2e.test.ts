@@ -627,9 +627,9 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () =>
       await addCellSearch.evaluate((element) => document.activeElement === element),
     ).toBe(true)
-    await addCellSearch.fill('frame')
+    await addCellSearch.fill('split')
     const addCellMenu = page.locator('.canvas-add-menu')
-    await addCellMenu.getByRole('button', { name: 'Extract frame' })
+    await addCellMenu.getByRole('button', { name: 'Split video' })
       .waitFor({ state: 'visible' })
     expect(await addCellMenu.getByRole('button', { name: 'Audio', exact: true }).count())
       .toBe(0)
@@ -1589,7 +1589,14 @@ describe('chat composer browser flow', () => {
     expect(itemLabels.at(-1)).toBe('Delete cell')
     expect(new Set(itemLabels).size).toBe(itemLabels.length)
     expect(itemLabels.filter((label) => !requiredLabels.includes(label)).every((label) =>
-      ['Open media', 'Duplicate', 'Split video'].includes(label))).toBe(true)
+      [
+        'Open media',
+        'Extract frame',
+        'Generate video',
+        'Generate image',
+        'Duplicate',
+        'Split video',
+      ].includes(label))).toBe(true)
     expect(await menu.locator('.cell-context-menu-danger').evaluate((element) =>
       getComputedStyle(element).borderTopStyle)).toBe('solid')
     const menuBox = await menu.boundingBox()
@@ -1644,6 +1651,7 @@ describe('chat composer browser flow', () => {
       .map((label) => label.replace('⌫', '').trim())).toEqual([
       'Edit cell',
       'Open media',
+      'Extract frame',
       'Generate video',
       'Duplicate',
       'Split video',
@@ -1933,7 +1941,7 @@ describe('chat composer browser flow', () => {
       && record(call.arguments.cell)?.type === 'generate_audio')).toBe(true)
   }, 60_000)
 
-  it('auto-arranges the notebook from the upper-left with video assets below', async () => {
+  it('auto-arranges the notebook into left-aligned workflow bands', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await page.goto(appUrl, { waitUntil: 'commit' })
     const input = page.getByLabel('Videobook command input')
@@ -1961,17 +1969,30 @@ describe('chat composer browser flow', () => {
     const slotKeys = new Set(slots.map((slot) => `${slot!.row}:${slot!.column}`))
     const slotsById = new Map(slots.flatMap((slot) =>
       typeof slot?.id === 'string' ? [[slot.id, slot] as const] : []))
-    const generationSlot = slotsById.get(generationCellId)
-    const outputVideoSlot = slotsById.get(outputVideoCellId)
+    const generationSlot = slotsById.get(fullscreenImageGenerationCellId)
+    const imageSlot = slotsById.get(fullscreenImageCellId)
+    const occupiedRows = new Set(slots.map((slot) => Number(slot!.row)))
+    const minRow = Math.min(...occupiedRows)
+    const maxRow = Math.max(...occupiedRows)
+    const blankRows = Array.from(
+      { length: Math.max(0, maxRow - minRow - 1) },
+      (_, index) => minRow + 1 + index,
+    ).filter((row) => !occupiedRows.has(row))
 
     expect(moveCall?.arguments.book_id).toBe(bookId)
     expect(moveCall?.arguments.notebook_id).toBe(notebookId)
     expect(typeof moveCall?.arguments.expected_revision).toBe('string')
     expect(slots.length).toBeGreaterThan(0)
     expect(slotKeys.size).toBe(slots.length)
+    expect(slots.every((slot) =>
+      Number(slot!.column) >= 0 && Number(slot!.column) <= 6)).toBe(true)
+    expect(slots.every((slot) =>
+      Number(slot!.row) >= 0 && Number(slot!.row) <= 25)).toBe(true)
     expect(typeof generationSlot?.row).toBe('number')
-    expect(typeof outputVideoSlot?.row).toBe('number')
-    expect(Number(generationSlot?.row)).toBeLessThan(Number(outputVideoSlot?.row))
+    expect(typeof imageSlot?.row).toBe('number')
+    expect(Number(imageSlot?.row)).toBe(Number(generationSlot?.row))
+    expect(Number(imageSlot?.column)).toBe(Number(generationSlot?.column) + 1)
+    expect(blankRows.length).toBeGreaterThan(0)
     await page.getByText(/^Auto-arranged \d+ tiles?$/u).waitFor({
       state: 'visible',
       timeout: 30_000,

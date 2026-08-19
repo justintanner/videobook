@@ -187,7 +187,6 @@ export function nextNotebookGridSlot<T extends NotebookGridData>(
 const imageCellTypes = new Set([
   'image',
   'generate_image',
-  'extract_frame',
   'character',
 ])
 
@@ -230,7 +229,6 @@ function slotRightForPair(slot: NotebookGridSlot): NotebookGridSlot {
 const horizontalCreationTypes = new Set([
   'generate_image',
   'generate_audio',
-  'extract_frame',
   'extract_audio',
 ])
 

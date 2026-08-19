@@ -1,6 +1,5 @@
-import type { NotebookCell, NotebookDocument } from 'videobook-engine'
+import type { NotebookDocument } from 'videobook-engine'
 import { notebookCellTag } from './notebook-addressing'
-import { nextNotebookHorizontalGenerationSlot } from './notebook-grid'
 import { resolveNotebookVideoSourceCell } from './notebook-video-source'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
@@ -42,57 +41,6 @@ function normalizedTimestamp(value: unknown): number | null {
     : null
 }
 
-function frameMode(cell: NotebookCell): NotebookFrameMode | null {
-  if (cell.inputs?.frameMode === 'last') return 'last'
-  if (cell.inputs?.frameMode === 'time') return 'time'
-  if (
-    cell.inputs?.frameMode === undefined
-    || cell.inputs.frameMode === 'first'
-  ) return 'first'
-  return null
-}
-
-function matchingAction(
-  document: NotebookDocument,
-  sourceCellId: string,
-  command: NotebookFrameCommand,
-): NotebookCell | null {
-  const actionIds = new Set(document.edges
-    .filter((edge) =>
-      edge.source === sourceCellId && edge.targetInput === 'video')
-    .map((edge) => edge.target))
-  const requestedTimestamp = command.frameMode === 'time'
-    ? normalizedTimestamp(command.timestampSeconds)
-    : null
-  return document.cells.find((cell) => {
-    if (cell.type !== 'extract_frame' || !actionIds.has(cell.id)) return false
-    if (frameMode(cell) !== command.frameMode) return false
-    if (command.frameMode !== 'time') return true
-    return normalizedTimestamp(cell.inputs?.timestampSeconds) === requestedTimestamp
-  }) ?? null
-}
-
-function frameActionLabel(command: NotebookFrameCommand): string {
-  if (command.frameMode === 'last') return 'Last frame'
-  if (command.frameMode === 'time') {
-    const timestamp = normalizedTimestamp(command.timestampSeconds) ?? 0
-    return `Frame at ${timestamp}s`
-  }
-  return 'First frame'
-}
-
-function frameActionInputs(
-  command: NotebookFrameCommand,
-): Record<string, unknown> {
-  if (command.frameMode === 'time') {
-    return {
-      frameMode: 'time',
-      timestampSeconds: normalizedTimestamp(command.timestampSeconds) ?? 0,
-    }
-  }
-  return { frameMode: command.frameMode }
-}
-
 export function parseNotebookFrameCommand(
   input: string,
 ): NotebookFrameCommand | null {
@@ -112,76 +60,42 @@ export async function enqueueNotebookFrameCommand(input: {
   document: NotebookDocument
   expectedRevision?: string
 }): Promise<NotebookFrameCommandRun> {
-  if (
-    input.command.frameMode === 'time'
-    && normalizedTimestamp(input.command.timestampSeconds) === null
-  ) {
+  const timestampSeconds = input.command.frameMode === 'time'
+    ? normalizedTimestamp(input.command.timestampSeconds)
+    : null
+  if (input.command.frameMode === 'time' && timestampSeconds === null) {
     throw new Error('A valid timestamp is required for time-mode frame extraction')
   }
   const source = resolveNotebookVideoSourceCell(
     input.document,
     input.command.sourceReference,
   )
-  const existing = matchingAction(
-    input.document,
-    source.id,
-    input.command,
-  )
-  let actionCellId = existing?.id ?? null
-  let actionAddress = existing ? notebookCellTag(existing) : null
-
-  if (!actionCellId || !actionAddress) {
-    const created = recordValue(await input.callTool('create_notebook_cell', {
-      book_id: input.bookId,
-      notebook_id: input.document.id,
-      ...(input.expectedRevision
-        ? { expected_revision: input.expectedRevision }
-        : {}),
-      cell: {
-        type: 'extract_frame',
-        label: frameActionLabel(input.command),
-        slot: nextNotebookHorizontalGenerationSlot(
-          input.document.cells,
-          [source.slot],
-        ),
-        inputs: frameActionInputs(input.command),
-      },
-    }))
-    actionCellId = nonBlankStringValue(created?.id)
-    actionAddress = nonBlankStringValue(created?.address)
-    if (!actionCellId || !actionAddress) {
-      throw new Error('The server did not return the Extract Frame cell')
-    }
-    await input.callTool('set_notebook_cell_input', {
-      book_id: input.bookId,
-      notebook_id: input.document.id,
-      target_cell_id: actionCellId,
-      target_input: 'video',
-      source_cell_id: source.id,
-    })
-  }
-
-  const accepted = recordValue(await input.callTool('run_notebook_cell', {
+  const accepted = recordValue(await input.callTool('extract_notebook_frame', {
     book_id: input.bookId,
     notebook_id: input.document.id,
-    cell_id: actionCellId,
-    actor: input.actor,
-    ...(existing && input.expectedRevision
+    source_cell_id: source.id,
+    frame_mode: input.command.frameMode,
+    ...(timestampSeconds === null
+      ? {}
+      : { timestamp_seconds: timestampSeconds }),
+    ...(input.expectedRevision
       ? { expected_revision: input.expectedRevision }
       : {}),
   }))
+  const cellId = nonBlankStringValue(accepted?.cell_id)
+  const address = nonBlankStringValue(accepted?.address)
   const jobId = nonBlankStringValue(accepted?.job_id)
   const runId = nonBlankStringValue(accepted?.run_id)
-  if (!jobId || !runId) {
-    throw new Error('The server did not return an Extract Frame run')
+  if (!cellId || !address || !jobId || !runId) {
+    throw new Error('The server did not return the frame extraction cell')
   }
   return {
-    actionCellId,
-    actionAddress,
-    outputCellId: actionCellId,
+    actionCellId: cellId,
+    actionAddress: address,
+    outputCellId: cellId,
     jobId,
     runId,
-    reusedAction: existing !== null,
+    reusedAction: false,
     sourceCellId: source.id,
     sourceAddress: notebookCellTag(source),
   }

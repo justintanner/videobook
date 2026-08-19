@@ -5,9 +5,7 @@ export type NotebookGenerationCellType =
   | 'generate_image'
   | 'generate_video'
 
-export type NotebookExtractMediaCellType =
-  | 'extract_audio'
-  | 'extract_frame'
+export type NotebookExtractMediaCellType = 'extract_audio'
 
 export type NotebookMediaPresentationCellType =
   | 'audio'
@@ -28,7 +26,6 @@ const generationCellTypes = new Set<string>([
 
 const extractMediaCellTypes = new Set<string>([
   'extract_audio',
-  'extract_frame',
 ] satisfies NotebookCellType[])
 
 const mediaWorkCellTypeValues = [

@@ -102,12 +102,11 @@ describe("Dancing workflow fixture", () => {
       state: "completed",
     }));
     expect(extract).toEqual(expect.objectContaining({
-      type: "extract_frame",
-      operation: "extract_frame",
-      tool: "ffmpeg",
+      type: "image",
       outputArtifactId: expect.any(String),
     }));
     expect(extract?.inputs).toEqual(expect.objectContaining({
+      mediaRole: "extract-frame-output",
       atSeconds: 0.1,
       frameMode: "first",
       state: "completed",
@@ -163,7 +162,7 @@ describe("Dancing workflow fixture", () => {
       expect.objectContaining({
         source: source?.id,
         target: extract?.id,
-        targetInput: "video",
+        targetInput: "segment",
       }),
       expect.objectContaining({
         source: extract?.id,

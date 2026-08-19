@@ -13,6 +13,7 @@ import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
 import {
   collapseLegacyExtractPairs,
+  migrateLegacyExtractFrameCells,
   ensureGenerateAudioOutput,
   ensureGenerateImageOutput,
   ensureGenerateVideoOutput,
@@ -289,16 +290,16 @@ describe('directional canvas placement', () => {
         outputArtifactId: videoArtifacts[index]!.artifactId,
       }))
     const extractA = engine.notebooks.createCell({
-      type: 'extract_frame',
+      type: 'image',
       label: 'frame-a',
       slot: { row: 0, column: 4 },
-      inputs: { frameMode: 'first' },
+      inputs: { mediaRole: 'extract-frame-output', frameMode: 'first' },
     })
     const extractB = engine.notebooks.createCell({
-      type: 'extract_frame',
+      type: 'image',
       label: 'frame-b',
       slot: { row: 2, column: 2 },
-      inputs: { frameMode: 'first' },
+      inputs: { mediaRole: 'extract-frame-output', frameMode: 'first' },
     })
 
     const edges = [
@@ -314,12 +315,12 @@ describe('directional canvas placement', () => {
       engine.notebooks.createEdge({
         source: generateVideos[2]!.id,
         target: extractA.id,
-        targetInput: 'video',
+        targetInput: 'segment',
       }),
       engine.notebooks.createEdge({
         source: generateVideos[3]!.id,
         target: extractB.id,
-        targetInput: 'video',
+        targetInput: 'segment',
       }),
     ]
 
@@ -362,7 +363,8 @@ describe('directional canvas placement', () => {
     expect(after.edges.length).toBe(originalEdgeCount + 5)
 
     const sourceImages = after.cells
-      .filter((cell) => cell.type === 'image')
+      .filter((cell) => cell.type === 'image'
+        && cell.inputs?.mediaRole !== 'extract-frame-output')
       .sort((left, right) => left.slot.column - right.slot.column)
     expect(sourceImages.map((cell) => cell.slot)).toEqual([
       { row: 0, column: 0 },
@@ -371,9 +373,10 @@ describe('directional canvas placement', () => {
       { row: 0, column: 3 },
     ])
 
-    for (const extract of after.cells.filter((cell) => cell.type === 'extract_frame')) {
+    for (const extract of after.cells.filter((cell) =>
+      cell.inputs?.mediaRole === 'extract-frame-output')) {
       const sourceEdge = after.edges.find((edge) =>
-        edge.target === extract.id && edge.targetInput === 'video')
+        edge.target === extract.id && edge.targetInput === 'segment')
       expect(sourceEdge).toBeTruthy()
       const sourceCell = after.cells.find((cell) => cell.id === sourceEdge!.source)!
       const videoAnchor = sourceCell.type === 'generate_video'
@@ -419,13 +422,16 @@ describe('directional canvas placement', () => {
     const notebook = value(engine.notebooks.read(engine.notebooks.list()[0]!.id))
     const document = {
       ...notebook,
-      cells: fixture.cells,
+      cells: fixture.cells.map((cell) =>
+        (cell.type as string) === 'extract_frame'
+          ? { ...cell, type: 'image' as const, operation: 'extract_frame' }
+          : cell),
       edges: fixture.edges,
     }
 
     const relaid = relayoutNotebookDocument(
       engine,
-      collapseLegacyExtractPairs(document),
+      migrateLegacyExtractFrameCells(collapseLegacyExtractPairs(document)),
     )
     const slotByUserAddress = new Map(fixture.cells.map((cell) => [
       `@${String.fromCharCode(97 + cell.slot.row)}${cell.slot.column + 1}`,
@@ -438,20 +444,21 @@ describe('directional canvas placement', () => {
     }
 
     expect(relaid.cells.some((cell) =>
-      cell.inputs?.mediaRole === 'extract-frame-output')).toBe(false)
+      cell.operation === 'extract_frame')).toBe(false)
+    expect(relaid.cells.filter((cell) =>
+      cell.inputs?.mediaRole === 'extract-frame-output')).toHaveLength(2)
     for (const stable of [
       '@a1', '@a2', '@a3', '@a4',
       '@b1', '@b2', '@b3',
-      '@c1', '@c2', '@c3', '@c4',
+      '@c1', '@c2', '@c3',
     ]) {
       expect(relaidAddress(stable), `cell placed at ${stable} by hand`)
         .toBe(stable)
     }
-    // Extract cells sit in the source video row. Without a stacked pair
-    // image, the second generation lane packs one row earlier.
+    expect(relaidAddress('@d3')).toBe('@c4')
     expect(relaidAddress('@e3')).toBe('@d4')
     expect(relaidAddress('@f3')).toBe('@e4')
-    expect(relaidAddress('@e4')).toBe('@e5')
+    expect(relaidAddress('@e5')).toBe('@e5')
     expect(relaidAddress('@f5')).toBe('@f5')
     expect(relaidAddress('@g5')).toBe('@g5')
 

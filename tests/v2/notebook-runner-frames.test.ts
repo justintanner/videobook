@@ -151,13 +151,14 @@ describe("notebook runner frames and concat", () => {
     });
   });
 
-  it("accepts Extract Frame cells as generation image sources", () => {
-    const extractFrame = {
+  it("accepts extracted-frame image cells as generation image sources", () => {
+    const extractedFrame = {
       id: "019f0000-0000-7000-8000-000000000030",
-      type: "extract_frame" as const,
-      label: "Extract source frame",
+      type: "image" as const,
+      label: "Extracted source frame",
       slot: { row: 0, column: 0 },
       outputArtifactId: "019f0000-0000-7000-8000-000000000031",
+      inputs: { mediaRole: "extract-frame-output", frameMode: "first" },
     };
     const image = {
       id: "019f0000-0000-7000-8000-000000000032",
@@ -175,11 +176,11 @@ describe("notebook runner frames and concat", () => {
     const document: NotebookDocument = {
       id: "019f0000-0000-7000-8000-000000000035",
       name: "Extracted image source",
-      cells: [extractFrame, image, generate],
+      cells: [extractedFrame, image, generate],
       edges: [
         {
           id: "019f0000-0000-7000-8000-000000000036",
-          source: extractFrame.id,
+          source: extractedFrame.id,
           target: generate.id,
           targetInput: "image",
         },
@@ -203,7 +204,7 @@ describe("notebook runner frames and concat", () => {
 
     expect(modelArgs(definition, document, generate, "book-id").image_refs)
       .toEqual([
-        `@${extractFrame.outputArtifactId}`,
+        `@${extractedFrame.outputArtifactId}`,
         `@${image.outputArtifactId}`,
       ]);
   });
@@ -505,190 +506,6 @@ describe("notebook runner frames and concat", () => {
       completedExtractAudio.outputArtifactId,
       rerun.outputArtifactId,
     ]);
-  }, 90_000);
-
-  it("lands extract_frame artifacts on the extract cell itself", async () => {
-    rootDir = await mkdtemp(join(tmpdir(), "vb-runner-extract-frame-"));
-    engine = createEngine({ rootDir, initialBookName: "runner-extract-frame" });
-    await engine.ready;
-
-    const clipPath = join(rootDir, "source.mp4");
-    await makeClip(clipPath, 3);
-    const sourceArtifact = await engine.artifacts.create({
-      kind: "video",
-      label: "Source video",
-    });
-    expect(sourceArtifact.ok).toBe(true);
-    if (!sourceArtifact.ok) return;
-    await engine.files.writeFromPath(
-      sourceArtifact.value.artifactId,
-      "original.mp4",
-      clipPath,
-    );
-
-    const notebook = await engine.notebooks.create("Main");
-    expect(notebook.ok).toBe(true);
-    if (!notebook.ok) return;
-    const source = engine.notebooks.createCell({
-      type: "video",
-      label: "Source video",
-      slot: { row: 0, column: 0 },
-      outputArtifactId: sourceArtifact.value.artifactId,
-    });
-    const extractFrame = engine.notebooks.createCell({
-      type: "extract_frame",
-      label: "Extract source frame",
-      slot: { row: 1, column: 0 },
-      provider: "local",
-      operation: "extract_frame",
-      tool: "ffmpeg",
-      inputs: { frameMode: "first" },
-    });
-    const occupiedBelow = engine.notebooks.createCell({
-      type: "image",
-      label: "Placeholder image",
-      slot: { row: 2, column: 0 },
-    });
-    let current: NotebookDocument = {
-      ...notebook.value,
-      cells: [source, extractFrame, occupiedBelow],
-      edges: [
-        engine.notebooks.createEdge({
-          source: source.id,
-          target: extractFrame.id,
-          targetInput: "video",
-        }),
-      ],
-    };
-    await engine.notebooks.write(current);
-
-    const runConfigured = async (
-      frameMode: "first" | "time" | "last",
-      timestampSeconds?: number,
-    ) => {
-      current = {
-        ...current,
-        cells: current.cells.map((cell) =>
-          cell.id === extractFrame.id
-            ? {
-                ...cell,
-                inputs: {
-                  ...(cell.inputs ?? {}),
-                  frameMode,
-                  ...(timestampSeconds === undefined
-                    ? {}
-                    : { timestampSeconds }),
-                },
-              }
-            : cell),
-      };
-      const written = await engine!.notebooks.write(current);
-      expect(written.ok).toBe(true);
-      const action = current.cells.find((cell) =>
-        cell.id === extractFrame.id);
-      expect(action).toBeTruthy();
-      if (!action) throw new Error("Extract Frame action missing");
-      const completed = await runNotebookCell(
-        engine!,
-        engine!.book.get().bookId,
-        current.id,
-        current,
-        action,
-      );
-      current = completed.document;
-      return completed;
-    };
-
-    const first = await runConfigured("first");
-    const firstExtract = first.document.cells.find((cell) =>
-      cell.id === extractFrame.id);
-    expect(firstExtract).toMatchObject({
-      type: "extract_frame",
-      outputArtifactId: first.outputArtifactId,
-      inputs: {
-        frameMode: "first",
-        atSeconds: 0,
-        outputVersionArtifactIds: [first.outputArtifactId],
-        state: "completed",
-      },
-    });
-    expect(first.document.edges.filter((edge) =>
-      edge.source === extractFrame.id && edge.targetInput === "media"))
-      .toHaveLength(0);
-    expect(first.document.cells.filter((cell) => cell.type === "image"))
-      .toHaveLength(1);
-
-    const repeatedFirst = await runConfigured("first");
-    const repeatedFirstExtract = repeatedFirst.document.cells.find((cell) =>
-      cell.id === extractFrame.id);
-    expect(repeatedFirstExtract).toMatchObject({
-      outputArtifactId: repeatedFirst.outputArtifactId,
-      inputs: {
-        frameMode: "first",
-        outputVersionArtifactIds: [
-          first.outputArtifactId,
-          repeatedFirst.outputArtifactId,
-        ],
-      },
-    });
-
-    const timed = await runConfigured("time", 1.25);
-    const timedExtract = timed.document.cells.find((cell) =>
-      cell.id === extractFrame.id);
-    expect(timedExtract).toMatchObject({
-      outputArtifactId: timed.outputArtifactId,
-      inputs: {
-        frameMode: "time",
-        timestampSeconds: 1.25,
-        atSeconds: 1.25,
-        outputVersionArtifactIds: [
-          first.outputArtifactId,
-          repeatedFirst.outputArtifactId,
-          timed.outputArtifactId,
-        ],
-      },
-    });
-
-    const last = await runConfigured("last");
-    const lastExtract = last.document.cells.find((cell) =>
-      cell.id === extractFrame.id);
-    expect(lastExtract?.outputArtifactId).toBe(last.outputArtifactId);
-    expect(Number(lastExtract?.inputs?.atSeconds)).toBeGreaterThan(2.9);
-    expect(lastExtract?.inputs?.frameMode).toBe("last");
-    expect(lastExtract?.inputs?.outputVersionArtifactIds).toEqual([
-      first.outputArtifactId,
-      repeatedFirst.outputArtifactId,
-      timed.outputArtifactId,
-      last.outputArtifactId,
-    ]);
-    expect(last.document.cells.filter((cell) => cell.type === "image"))
-      .toHaveLength(1);
-    expect(last.document.edges.filter((edge) =>
-      edge.source === extractFrame.id && edge.targetInput === "media"))
-      .toHaveLength(0);
-    expect(last.document.cells.some((cell) => cell.type === "audio")).toBe(false);
-
-    const manifest = await engine.files.manifest(last.outputArtifactId);
-    expect(manifest.ok && manifest.value.files.some((file) =>
-      file.name === "original.jpg")).toBe(true);
-    const metadata = await engine.metadata.artifacts.read<{
-      origin?: string;
-      sourceArtifactId?: string;
-      frameMode?: string;
-      atSeconds?: number;
-    }>(last.outputArtifactId, "original");
-    expect(metadata.ok && metadata.value).toMatchObject({
-      origin: "extract_frame",
-      sourceArtifactId: sourceArtifact.value.artifactId,
-      frameMode: "last",
-      atSeconds: expect.any(Number),
-    });
-    const listed = (await buildAssetList(
-      engine,
-      engine.book.get().bookId,
-    )).find((asset) => asset.artifact_id === last.outputArtifactId);
-    expect(listed?.type).toBe("image");
-    expect(listed?.media_url).toContain("original.jpg");
   }, 90_000);
 
   it("rejects extract audio actions connected to non-video media", async () => {

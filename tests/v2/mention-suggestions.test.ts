@@ -151,7 +151,7 @@ describe('asset mention suggestions', () => {
     expect(notebookMentionAssets([
       {
         slot: { row: 0, column: 0 },
-        type: 'extract_frame',
+        type: 'video',
         outputArtifactId: frame.artifactId,
       },
       {

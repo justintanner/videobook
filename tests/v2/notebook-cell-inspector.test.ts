@@ -1292,18 +1292,17 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Analyze')
   })
 
-  it('configures Extract Frame with first, time, and last modes', () => {
-    const extractFrameCell: NotebookCell = {
+  it('shows the segment input for extracted-frame image cells', () => {
+    const frameImageCell: NotebookCell = {
       ...cell,
-      type: 'extract_frame',
-      label: 'extract-frame-source',
-      provider: 'local',
-      operation: 'extract_frame',
-      tool: 'ffmpeg',
+      type: 'image',
+      label: 'First frame',
       outputArtifactId: undefined,
       inputs: {
+        mediaRole: 'extract-frame-output',
         frameMode: 'time',
         timestampSeconds: 1.25,
+        sourceCellId: '01900000-0000-7000-8000-000000000010',
       },
     }
     const sourceCell: NotebookCell = {
@@ -1314,13 +1313,13 @@ describe('NotebookCellInspector', () => {
     const edges: NotebookEdge[] = [{
       id: '01900000-0000-7000-8000-000000000011',
       source: sourceCell.id,
-      target: extractFrameCell.id,
-      targetInput: 'video',
+      target: frameImageCell.id,
+      targetInput: 'segment',
     }]
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
       notebookId: '01900000-0000-7000-8000-000000000003',
-      cell: extractFrameCell,
-      cells: [extractFrameCell, sourceCell],
+      cell: frameImageCell,
+      cells: [frameImageCell, sourceCell],
       edges,
       asset: undefined,
       status: 'pending',
@@ -1335,15 +1334,8 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).not.toContain('inspector-input-source-label')
-    expect(html).toContain('aria-label="video input"')
-    expect(html).toContain('<option value="first">First</option>')
-    expect(html).toContain('<option value="time" selected="">Time</option>')
-    expect(html).toContain('<option value="last">Last</option>')
-    expect(html).toContain('Timestamp seconds')
-    expect(html).toContain('value="1.25"')
-    expect(html).toContain('Extract')
-    expect(html).not.toContain('Audio')
+    expect(html).toContain('aria-label="segment input"')
+    expect(html).not.toContain('Timestamp seconds')
   })
 
   it('persists dirty action fields before running', async () => {

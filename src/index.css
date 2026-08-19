@@ -1633,7 +1633,6 @@ textarea:focus-visible {
 .cell-kind-image,
 .cell-kind-video,
 .cell-kind-character,
-.cell-kind-extract_frame,
 .cell-kind-generate_audio,
 .cell-kind-generate_image,
 .cell-kind-generate_video {
@@ -7763,12 +7762,60 @@ textarea:focus-visible {
 }
 
 .notebook-media-playback-stage {
+  position: relative;
   display: grid;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
   place-items: center;
+}
+
+.notebook-media-capture-bar {
+  position: absolute;
+  bottom: 22px;
+  left: 28px;
+  z-index: 430;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notebook-media-capture-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  gap: 6px;
+  border: 1px solid rgba(79, 139, 103, 0.42);
+  color: #a9d8bd;
+  background: rgba(11, 26, 17, 0.82);
+  cursor: pointer;
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.notebook-media-capture-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.notebook-media-capture-bar p {
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 9px;
+  line-height: 1.4;
+  background: rgba(11, 26, 17, 0.82);
+}
+
+.notebook-media-capture-bar p.error {
+  color: #d69b9b;
+}
+
+.notebook-media-capture-bar p.success {
+  color: #79c99a;
 }
 
 .notebook-media-playback-stage video,

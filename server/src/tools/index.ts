@@ -68,6 +68,7 @@ import { audioMixDef } from "./audio-mix.js";
 import { reverseVideoDef } from "./reverse-video.js";
 import { injectFirstFrameDef } from "./inject-first-frame.js";
 import { extractFrameDefs } from "./extract-frame.js";
+import { extractNotebookFrameDef } from "./extract-notebook-frame.js";
 import { extractAudioDef } from "./extract-audio.js";
 import { makeCoverSongDef } from "./make-cover-song.js";
 import { extendAudioDef } from "./extend-audio.js";
@@ -251,6 +252,7 @@ export function getVideoEditingToolDefs(fs: Engine): ToolDef[] {
     reverseVideoDef(fs),
     injectFirstFrameDef(fs),
     ...extractFrameDefs(fs),
+    extractNotebookFrameDef(fs),
     extractAudioDef(fs),
     makeCoverSongDef(fs),
     extendAudioDef(fs),

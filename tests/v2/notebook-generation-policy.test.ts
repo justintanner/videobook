@@ -16,7 +16,6 @@ const localTypes = [
   'image',
   'video',
   'extract_audio',
-  'extract_frame',
   'split_video',
   'prompt',
 ] satisfies NotebookCellType[]

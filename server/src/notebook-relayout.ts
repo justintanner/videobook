@@ -226,11 +226,15 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
     }
 
     for (const action of cells) {
-      if (action.type !== "extract_frame" || newSlots.has(action.id)) continue;
+      if (!isExtractFrameOutputCell(action) || newSlots.has(action.id)) continue;
       const sourceEdge = document.edges.find((edge) =>
-        edge.target === action.id && edge.targetInput === "video");
-      const sourceCell = sourceEdge
-        ? document.cells.find((cell) => cell.id === sourceEdge.source)
+        edge.target === action.id && edge.targetInput === "segment");
+      const sourceCellId = sourceEdge?.source
+        ?? (typeof action.inputs?.sourceCellId === "string"
+          ? action.inputs.sourceCellId
+          : undefined);
+      const sourceCell = sourceCellId
+        ? document.cells.find((cell) => cell.id === sourceCellId)
         : undefined;
       let videoSlot: NotebookGridSlot | null = null;
       if (sourceCell?.type === "generate_video") {

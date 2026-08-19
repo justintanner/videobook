@@ -12,71 +12,12 @@ import {
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { nextGenerationOutputSlot } from "./notebook-placement.js";
 
-type ExtractFrameMode = "first" | "time" | "last";
-
-type ExtractFrameSelection = {
-  frameMode: ExtractFrameMode;
-  sourceCellId: string | null;
-  timestampSeconds: number | null;
-  key: string;
-};
-
-function normalizedFrameMode(value: unknown): ExtractFrameMode {
-  return value === "time" || value === "last" ? value : "first";
-}
-
-function normalizedTimestamp(value: unknown): number | null {
-  const timestamp = Number(value);
-  return Number.isFinite(timestamp) && timestamp >= 0
-    ? Math.round(timestamp * 1_000) / 1_000
-    : null;
-}
-
-function extractFrameSelectionKey(
-  sourceCellId: string | null,
-  frameMode: ExtractFrameMode,
-  timestampSeconds: number | null = null,
-): string {
-  const source = sourceCellId ?? "unconnected";
-  const timestamp = frameMode === "time"
-    ? String(timestampSeconds ?? "invalid")
-    : "frame";
-  return `${source}:${frameMode}:${timestamp}`;
-}
-
-export function extractFrameSelection(
-  document: NotebookDocument,
-  extractFrameCellId: string,
-): ExtractFrameSelection {
-  const extractFrame = document.cells.find((cell) =>
-    cell.id === extractFrameCellId);
-  if (extractFrame?.type !== "extract_frame") {
-    throw new Error(`Extract Frame cell not found: ${extractFrameCellId}`);
-  }
-  const frameMode = normalizedFrameMode(extractFrame.inputs?.frameMode);
-  const timestampSeconds = frameMode === "time"
-    ? normalizedTimestamp(extractFrame.inputs?.timestampSeconds)
-    : null;
-  const sourceCellId = document.edges.find((edge) =>
-    edge.target === extractFrameCellId && edge.targetInput === "video")
-    ?.source ?? null;
-  return {
-    frameMode,
-    sourceCellId,
-    timestampSeconds,
-    key: extractFrameSelectionKey(
-      sourceCellId,
-      frameMode,
-      timestampSeconds,
-    ),
-  };
-}
+export const EXTRACT_FRAME_OUTPUT_ROLE = "extract-frame-output";
 
 function extractPairOutputType(
   extract: NotebookCell,
-): "audio" | "image" | null {
+): "audio" | null {
   if (extract.type === "extract_audio") return "audio";
-  if (extract.type === "extract_frame") return "image";
   return null;
 }
 
@@ -189,6 +130,146 @@ export function collapseLegacyExtractPairs(
     delete execution[pair.outputCell.id];
     if (execution[pair.extract.id]?.status === "awaiting-output") {
       delete execution[pair.extract.id];
+    }
+  }
+
+  return {
+    ...document,
+    cells,
+    edges,
+    execution,
+  };
+}
+
+function isLegacyExtractFrameProducer(
+  document: NotebookDocument,
+  cell: NotebookCell,
+): boolean {
+  if (cell.type !== "image") return false;
+  const inputs = cell.inputs ?? {};
+  if (inputs.mediaRole !== undefined) return false;
+  if (cell.operation === "extract_frame") return true;
+  if (inputs.frameMode !== undefined) return true;
+  return document.edges.some((edge) =>
+    edge.target === cell.id && edge.targetInput === "video");
+}
+
+function findLegacyExtractFrameOutput(
+  document: NotebookDocument,
+  producer: NotebookCell,
+): { outputCell: NotebookCell; outputEdge: NotebookEdge } | null {
+  for (const edge of document.edges) {
+    if (edge.source !== producer.id || edge.targetInput !== "media") continue;
+    const outputCell = document.cells.find((cell) => cell.id === edge.target);
+    if (outputCell?.type === "image") {
+      return { outputCell, outputEdge: edge };
+    }
+  }
+  return null;
+}
+
+function migratedFrameOutputCell(
+  carrier: NotebookCell,
+  producer: NotebookCell,
+  sourceCellId: string | null,
+): NotebookCell {
+  const inputs: Record<string, unknown> = { ...(carrier.inputs ?? {}) };
+  const producerInputs = producer.inputs ?? {};
+  for (const key of ["frameMode", "timestampSeconds", "atSeconds"] as const) {
+    if (inputs[key] === undefined && producerInputs[key] !== undefined) {
+      inputs[key] = producerInputs[key];
+    }
+  }
+  const outputVersionArtifactIds = [...new Set([
+    ...versionArtifactIds(producer),
+    ...versionArtifactIds(carrier),
+  ])];
+  if (outputVersionArtifactIds.length > 0) {
+    inputs.outputVersionArtifactIds = outputVersionArtifactIds;
+  }
+  inputs.mediaRole = EXTRACT_FRAME_OUTPUT_ROLE;
+  if (sourceCellId) inputs.sourceCellId = sourceCellId;
+  delete inputs.producerCellId;
+  const outputArtifactId =
+    carrier.outputArtifactId ?? producer.outputArtifactId;
+  if (outputArtifactId) inputs.state = "completed";
+  else if (inputs.state === "awaiting-output") delete inputs.state;
+  return {
+    ...carrier,
+    operation: undefined,
+    provider: undefined,
+    model: undefined,
+    tool: undefined,
+    ...(outputArtifactId ? { outputArtifactId } : {}),
+    inputs,
+  };
+}
+
+export function migrateLegacyExtractFrameCells(
+  document: NotebookDocument,
+): NotebookDocument {
+  const producers = document.cells.filter((cell) =>
+    isLegacyExtractFrameProducer(document, cell));
+  if (producers.length === 0) return document;
+
+  const deletedCellIds = new Set<string>();
+  const deletedEdgeIds = new Set<string>();
+  const rewireFrom = new Map<string, string>();
+  const retargetEdgeIds = new Map<string, string>();
+  const replaceById = new Map<string, NotebookCell>();
+
+  for (const producer of producers) {
+    const videoEdge = document.edges.find((edge) =>
+      edge.target === producer.id && edge.targetInput === "video") ?? null;
+    const sourceCellId = videoEdge?.source ?? null;
+    const pair = findLegacyExtractFrameOutput(document, producer);
+    const carrier = pair?.outputCell ?? producer;
+    if (pair) {
+      deletedCellIds.add(producer.id);
+      deletedEdgeIds.add(pair.outputEdge.id);
+      rewireFrom.set(producer.id, carrier.id);
+    }
+    if (videoEdge) retargetEdgeIds.set(videoEdge.id, carrier.id);
+    replaceById.set(
+      carrier.id,
+      migratedFrameOutputCell(carrier, producer, sourceCellId),
+    );
+  }
+
+  const cells = document.cells
+    .filter((cell) => !deletedCellIds.has(cell.id))
+    .map((cell) => replaceById.get(cell.id) ?? cell);
+
+  const seenTargetInputs = new Set<string>();
+  const edges: NotebookEdge[] = [];
+  for (const edge of document.edges) {
+    if (deletedEdgeIds.has(edge.id)) continue;
+    const retarget = retargetEdgeIds.get(edge.id);
+    if (retarget === undefined && deletedCellIds.has(edge.target)) continue;
+    const source = deletedCellIds.has(edge.source)
+      ? rewireFrom.get(edge.source) ?? edge.source
+      : edge.source;
+    const target = retarget ?? edge.target;
+    const targetInput = retarget === undefined ? edge.targetInput : "segment";
+    const next =
+      source === edge.source
+        && target === edge.target
+        && targetInput === edge.targetInput
+        ? edge
+        : { ...edge, source, target, targetInput };
+    const key = `${next.target}:${next.targetInput}`;
+    if (seenTargetInputs.has(key)) continue;
+    seenTargetInputs.add(key);
+    edges.push(next);
+  }
+
+  const execution = { ...(document.execution ?? {}) };
+  for (const cellId of deletedCellIds) {
+    delete execution[cellId];
+  }
+  for (const carrierId of replaceById.keys()) {
+    if (execution[carrierId]?.status === "awaiting-output") {
+      delete execution[carrierId];
     }
   }
 

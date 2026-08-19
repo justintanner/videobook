@@ -82,30 +82,11 @@ describe("notebook action catalog", () => {
         cellTypes: ["extract_audio"],
         requiredInputs: ["video"],
       });
-    expect(actions.find((action) => action.operation === "extract_frame"))
-      .toMatchObject({
-        cellTypes: ["extract_frame"],
-        requiredInputs: ["video"],
-        parameters: [
-          {
-            name: "frameMode",
-            type: "enum",
-            default: "first",
-            enumValues: ["first", "time", "last"],
-          },
-          {
-            name: "timestampSeconds",
-            type: "number",
-            default: null,
-          },
-        ],
-      });
+    expect(actions.some((action) =>
+      action.operation === "extract_frame")).toBe(false);
     expect(actions.some((action) =>
       action.operation === "extract_audio"
       && action.cellTypes.includes("audio"))).toBe(false);
-    expect(actions.some((action) =>
-      action.operation === "extract_frame"
-      && action.cellTypes.includes("image"))).toBe(false);
     expect(actions.some((action) =>
       action.cellTypes.some((type) =>
         type === "audio"

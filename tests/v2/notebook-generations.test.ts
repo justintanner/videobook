@@ -284,7 +284,7 @@ describe("notebook generation rows", () => {
     ]);
   }, 60_000);
 
-  // Local ffmpeg cells (extract_frame/extract_audio) run inline and never
+  // Local ffmpeg cells (extract_audio) run inline and never
   // reach generationTool, so they create no generations rows by design;
   // the two-dispatch case is covered with a stubbed provider generation.
   it("records exactly two rows for two dispatches of the same cell", async () => {

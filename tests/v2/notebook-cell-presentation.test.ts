@@ -47,12 +47,6 @@ describe('notebook cell presentation', () => {
       tool: 'ffmpeg',
       outputArtifactId: 'audio-artifact',
     }, 'completed')).toEqual({ disabled: false, label: 'Re-run' })
-    expect(notebookCellSupportsExecution({
-      type: 'extract_frame',
-      operation: 'extract_frame',
-      tool: 'ffmpeg',
-      outputArtifactId: 'frame-artifact',
-    })).toBe(true)
     expect(notebookCellPresentsMedia({
       type: 'extract_audio',
       operation: 'extract_audio',
@@ -65,9 +59,7 @@ describe('notebook cell presentation', () => {
       outputArtifactId: 'audio-artifact',
     })).toBe(true)
     expect(notebookCellPresentsMedia({
-      type: 'extract_frame',
-      operation: 'extract_frame',
-      tool: 'ffmpeg',
+      type: 'image',
       outputArtifactId: 'frame-artifact',
     })).toBe(true)
     expect(notebookCellPresentsMedia({
@@ -155,7 +147,6 @@ describe('notebook cell presentation', () => {
 
   it('uses operation-aware action copy in the inspector', () => {
     expect(notebookCellInspectorActionLabel('extract_audio', 'Re-run')).toBe('Extract again')
-    expect(notebookCellInspectorActionLabel('extract_frame', 'Run')).toBe('Extract')
     expect(notebookCellInspectorActionLabel('split_video', 'Run')).toBe('Split')
     expect(notebookCellInspectorActionLabel('generate_video', 'Gen')).toBe('Generate')
   })

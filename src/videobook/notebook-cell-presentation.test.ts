@@ -56,7 +56,7 @@ describe('notebookCellClockLabel', () => {
   it('maps running labels by cell kind', () => {
     expect(notebookCellClockLabel('running', 'generate_video')).toBe('GENERATING')
     expect(notebookCellClockLabel('running', 'analyze')).toBe('ANALYZING')
-    expect(notebookCellClockLabel('running', 'extract_frame')).toBe('EXTRACTING')
+    expect(notebookCellClockLabel('running', 'extract_audio')).toBe('EXTRACTING')
     expect(notebookCellClockLabel('running', 'split_video')).toBe('SPLITTING')
     expect(notebookCellClockLabel('running', 'splice')).toBe('SPLICING')
     expect(notebookCellClockLabel('running', 'concat')).toBe('CONCATENATING')

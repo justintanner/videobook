@@ -63,7 +63,6 @@ const inspectorActionVerbs: Partial<Record<NotebookCellType, string>> = {
   analyze: 'Analyze',
   concat: 'Concatenate',
   extract_audio: 'Extract',
-  extract_frame: 'Extract',
   generate_audio: 'Generate',
   generate_image: 'Generate',
   generate_video: 'Generate',

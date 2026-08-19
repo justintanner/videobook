@@ -26,7 +26,6 @@ const notebookCellAddItems = [
   { type: 'generate_image', label: 'Generate image', group: 'Generation' },
   { type: 'generate_audio', label: 'Generate audio', group: 'Generation' },
   { type: 'extract_audio', label: 'Extract audio', group: 'Edit' },
-  { type: 'extract_frame', label: 'Extract frame', group: 'Edit' },
   { type: 'split_video', label: 'Split video', group: 'Edit' },
   { type: 'concat', label: 'Concat', group: 'Edit' },
   { type: 'splice', label: 'Splice', group: 'Edit' },

@@ -244,6 +244,7 @@ function jobTypeToAssetWorkKind(
     case "apply_sfx":
       return { kind: "apply_sfx" };
     case "extract_frame":
+    case "extract_notebook_frame":
     case "extract_audio":
       return { kind: "extract" };
     case "describe_image":

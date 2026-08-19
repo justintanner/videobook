@@ -363,19 +363,21 @@ export async function captureFrame(
       && (
         typeof requestedTimestamp !== "number"
         || !Number.isFinite(requestedTimestamp)
-        || requestedTimestamp < start
-        || requestedTimestamp >= end
       )
     ) {
       throw new Error(
-        `Cannot capture frame from artifact ${sourceArtifactId}: requested timestamp ${String(requestedTimestamp)}s is outside the available range ${start}s–${end}s`,
+        `Cannot capture frame from artifact ${sourceArtifactId}: requested timestamp ${String(requestedTimestamp)}s is not a finite number`,
       );
     }
+    const lastFrameAt = Math.max(
+      start,
+      end - (1 / Math.max(probe.avgFps ?? probe.fps, 1)),
+    );
     const atSeconds = options.role === "first"
       ? start
       : options.role === "time"
-        ? requestedTimestamp!
-        : Math.max(start, end - (1 / Math.max(probe.avgFps ?? probe.fps, 1)));
+        ? Math.min(Math.max(requestedTimestamp!, start), lastFrameAt)
+        : lastFrameAt;
     await runFfmpeg([
       "-y",
       "-ss",

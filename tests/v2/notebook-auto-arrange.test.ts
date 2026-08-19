@@ -87,7 +87,25 @@ function value<T>(
 }
 
 describe('notebook readable auto-arrange', () => {
-  it('packs dependencies from the upper-left and carries video assets below them', () => {
+  it('keeps a full chain on a single band row regardless of cell type', () => {
+    const source = document(
+      [
+        cell('root', 8, 1),
+        cell('gen', 4, 10),
+        cell('vid', 1, 11, 'video'),
+      ],
+      [edge('root', 'gen'), edge('gen', 'vid')],
+    )
+    const planned = planNotebookArrangement(source)
+    const slots = assignmentMap(planned)
+
+    expect(planned.ok && planned.rowCount).toBe(1)
+    expect(slots.get('root')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('gen')).toEqual({ row: 0, column: 1 })
+    expect(slots.get('vid')).toEqual({ row: 0, column: 2 })
+  })
+
+  it('continues the deepest branch on the anchor row and stacks siblings below', () => {
     const source = document(
       [
         cell('root', 8, 1),
@@ -108,111 +126,150 @@ describe('notebook readable auto-arrange', () => {
     expect(first.ok && first.rowCount).toBe(2)
     expect(slots.get('root')).toEqual({ row: 0, column: 0 })
     expect(slots.get('left')).toEqual({ row: 0, column: 1 })
-    expect(slots.get('right')).toEqual({ row: 0, column: 2 })
-    expect(slots.get('sink')).toEqual({ row: 1, column: 0 })
-    for (const connection of source.edges) {
-      const sourceSlot = slots.get(connection.source)!
-      const targetSlot = slots.get(connection.target)!
-      const sourceIndex = sourceSlot.row * 13 + sourceSlot.column
-      const targetIndex = targetSlot.row * 13 + targetSlot.column
-      expect(sourceIndex).toBeLessThan(targetIndex)
-    }
+    expect(slots.get('right')).toEqual({ row: 1, column: 1 })
+    expect(slots.get('sink')).toEqual({ row: 0, column: 2 })
 
     const arranged = applyAssignments(source, slots)
     expect(planNotebookArrangement(arranged)).toEqual(first)
   })
 
-  it('puts video leaves from branches of different depths together at the bottom', () => {
+  it('separates each workflow band with one blank row and packs loose cells last', () => {
     const source = document(
       [
-        cell('root', 7, 8),
-        cell('middle', 3, 2),
-        cell('short-video', 9, 10, 'video'),
-        cell('long-video', 5, 4, 'video'),
+        cell('alpha-src', 9, 9),
+        cell('alpha-out', 3, 1),
+        cell('beta-src', 6, 5),
+        cell('beta-out', 2, 12, 'video'),
+        cell('loose-a', 7, 7),
+        cell('loose-b', 0, 0),
       ],
-      [
-        edge('root', 'short-video'),
-        edge('root', 'middle'),
-        edge('middle', 'long-video'),
-      ],
-    )
-    const slots = assignmentMap(planNotebookArrangement(source))
-
-    expect(slots.get('root')).toEqual({ row: 0, column: 0 })
-    expect(slots.get('middle')).toEqual({ row: 0, column: 1 })
-    expect(slots.get('long-video')).toEqual({ row: 1, column: 0 })
-    expect(slots.get('short-video')).toEqual({ row: 1, column: 1 })
-  })
-
-  it('packs wide dependency graphs into left-aligned rows', () => {
-    const children = Array.from({ length: 14 }, (_, index) =>
-      cell(`child-${String(index).padStart(2, '0')}`, 12 - index % 10, index % 13))
-    const sink = cell('sink', 20, 12, 'video')
-    const source = document(
-      [cell('root', 15, 0), ...children, sink],
-      [
-        ...children.map((item, index) => edge('root', item.id, index)),
-        ...children.map((item, index) => edge(item.id, sink.id, index)),
-      ],
+      [edge('alpha-src', 'alpha-out'), edge('beta-src', 'beta-out')],
     )
     const planned = planNotebookArrangement(source)
     const slots = assignmentMap(planned)
-    const childRows = new Map<number, NotebookCell[]>()
-    for (const item of children) {
-      const row = slots.get(item.id)!.row
-      childRows.set(row, [...(childRows.get(row) ?? []), item])
-    }
-    const rows = [...childRows.keys()].sort((left, right) => left - right)
+    const occupiedRows = new Set([...slots.values()].map((slot) => slot.row))
 
-    expect(planned.ok && planned.rowCount).toBe(3)
-    expect(rows).toEqual([0, 1])
-    expect(rows.map((row) => childRows.get(row)!.length)).toEqual([12, 2])
-    expect(slots.get('root')).toEqual({ row: 0, column: 0 })
-    expect(slots.get('child-00')).toEqual({ row: 0, column: 1 })
-    expect(slots.get('child-11')).toEqual({ row: 0, column: 12 })
-    expect(slots.get('child-12')).toEqual({ row: 1, column: 0 })
-    expect(slots.get('child-13')).toEqual({ row: 1, column: 1 })
-    expect(slots.get('sink')).toEqual({ row: 2, column: 0 })
+    expect(planned.ok && planned.rowCount).toBe(5)
+    expect(slots.get('alpha-src')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('alpha-out')).toEqual({ row: 0, column: 1 })
+    expect(slots.get('beta-src')).toEqual({ row: 2, column: 0 })
+    expect(slots.get('beta-out')).toEqual({ row: 2, column: 1 })
+    expect(slots.get('loose-a')).toEqual({ row: 4, column: 0 })
+    expect(slots.get('loose-b')).toEqual({ row: 4, column: 1 })
+    expect(occupiedRows).toEqual(new Set([0, 2, 4]))
   })
 
-  it('keeps disconnected content left aligned before the video section', () => {
-    const source = document(
-      [
-        cell('root', 8, 8),
-        cell('child', 4, 4, 'video'),
-        cell('loose-a', 9, 9),
-        cell('loose-b', 3, 1),
-        cell('loose-c', 6, 5),
-      ],
-      [edge('root', 'child')],
-    )
-    const planned = planNotebookArrangement(source)
+  it('wraps chains deeper than seven tiles onto the next band row', () => {
+    const chain = Array.from({ length: 9 }, (_, index) =>
+      cell(`chain-${String(index).padStart(2, '0')}`, index % 26, index % 13))
+    const planned = planNotebookArrangement(document(
+      chain,
+      chain.slice(1).map((item, index) => edge(chain[index]!.id, item.id)),
+    ))
     const slots = assignmentMap(planned)
 
     expect(planned.ok && planned.rowCount).toBe(2)
-    expect(slots.get('root')).toEqual({ row: 0, column: 0 })
-    expect(slots.get('loose-a')).toEqual({ row: 0, column: 1 })
-    expect(slots.get('loose-b')).toEqual({ row: 0, column: 2 })
-    expect(slots.get('loose-c')).toEqual({ row: 0, column: 3 })
-    expect(slots.get('child')).toEqual({ row: 1, column: 0 })
+    for (let index = 0; index < 7; index += 1) {
+      expect(slots.get(chain[index]!.id)).toEqual({ row: 0, column: index })
+    }
+    expect(slots.get('chain-07')).toEqual({ row: 1, column: 0 })
+    expect(slots.get('chain-08')).toEqual({ row: 1, column: 1 })
+    expect([...slots.values()].every((slot) => slot.column <= 6)).toBe(true)
   })
 
-  it('fits a full disconnected grid without an unnecessary spacer', () => {
-    const cells = Array.from({ length: 338 }, (_, index) =>
+  it('emits unique in-bounds slots that never pass column six', () => {
+    const source = document(
+      [
+        cell('mix-root', 12, 12),
+        cell('mix-a', 3, 4),
+        cell('mix-b', 5, 6, 'video'),
+        cell('mix-c', 7, 8),
+        cell('solo-a', 9, 10, 'video'),
+        cell('solo-b', 11, 2),
+      ],
+      [
+        edge('mix-root', 'mix-a'),
+        edge('mix-root', 'mix-b'),
+        edge('mix-a', 'mix-c'),
+        edge('mix-b', 'mix-c'),
+      ],
+    )
+    const planned = planNotebookArrangement(source)
+    const slots = assignmentMap(planned)
+    const keys = new Set([...slots.values()].map((slot) => `${slot.row}:${slot.column}`))
+
+    expect(planned.ok).toBe(true)
+    expect(slots.size).toBe(source.cells.length)
+    expect(keys.size).toBe(source.cells.length)
+    expect([...slots.values()].every((slot) =>
+      slot.row >= 0 && slot.row < 26 && slot.column >= 0 && slot.column <= 6))
+      .toBe(true)
+  })
+
+  it('drops the blank spacer rows when the gapped layout would overflow the grid', () => {
+    const pairs = Array.from({ length: 14 }, (_, index) => ({
+      source: cell(`pair-${String(index).padStart(2, '0')}-src`, index % 26, 0),
+      target: cell(`pair-${String(index).padStart(2, '0')}-out`, index % 26, 1),
+    }))
+    const planned = planNotebookArrangement(document(
+      pairs.flatMap(({ source, target }) => [source, target]),
+      pairs.map(({ source, target }) => edge(source.id, target.id)),
+    ))
+    const slots = assignmentMap(planned)
+    const occupiedRows = new Set([...slots.values()].map((slot) => slot.row))
+
+    expect(planned.ok && planned.rowCount).toBe(14)
+    expect(occupiedRows).toEqual(new Set(Array.from({ length: 14 }, (_, row) => row)))
+    pairs.forEach(({ source, target }, index) => {
+      expect(slots.get(source.id)).toEqual({ row: index, column: 0 })
+      expect(slots.get(target.id)).toEqual({ row: index, column: 1 })
+    })
+  })
+
+  it('falls back to a dense pack when even gapless bands exceed the grid', () => {
+    const children = Array.from({ length: 30 }, (_, index) =>
+      cell(`star-${String(index).padStart(2, '0')}`, index % 26, index % 13))
+    const source = document(
+      [cell('root', 20, 12), ...children],
+      children.map((item, index) => edge('root', item.id, index)),
+    )
+    const planned = planNotebookArrangement(source)
+    const slots = assignmentMap(planned)
+
+    expect(planned.ok && planned.rowCount).toBe(5)
+    expect(slots.get('root')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('star-00')).toEqual({ row: 0, column: 1 })
+    expect(slots.get('star-06')).toEqual({ row: 1, column: 0 })
+    expect(slots.get('star-29')).toEqual({ row: 4, column: 2 })
+
+    const arranged = applyAssignments(source, slots)
+    expect(planNotebookArrangement(arranged)).toEqual(planned)
+  })
+
+  it('fills all 26 rows with loose cells and rejects one cell more', () => {
+    const full = Array.from({ length: 182 }, (_, index) =>
       cell(`cell-${String(index).padStart(3, '0')}`, 25 - Math.floor(index / 13), 12 - index % 13))
-    const planned = planNotebookArrangement(document(cells))
+    const planned = planNotebookArrangement(document(full))
     const slots = assignmentMap(planned)
     const keys = new Set([...slots.values()].map((slot) => `${slot.row}:${slot.column}`))
 
     expect(planned.ok && planned.rowCount).toBe(26)
-    expect(slots.size).toBe(338)
-    expect(keys.size).toBe(338)
+    expect(slots.size).toBe(182)
+    expect(keys.size).toBe(182)
     expect([...slots.values()].every((slot) =>
-      slot.row >= 0 && slot.row < 26 && slot.column >= 0 && slot.column < 13))
+      slot.row >= 0 && slot.row < 26 && slot.column >= 0 && slot.column <= 6))
       .toBe(true)
+
+    const overflow = planNotebookArrangement(document(
+      Array.from({ length: 183 }, (_, index) =>
+        cell(`cell-${String(index).padStart(3, '0')}`, index % 26, index % 13)),
+    ))
+    expect(overflow).toMatchObject({ ok: false, code: 'capacity' })
+    expect(!overflow.ok && overflow.message).toContain('needs 27 rows')
+    expect(!overflow.ok && overflow.message).toContain('supports 26')
   })
 
-  it('rejects cycles, missing cells, and layouts that exceed 26 rows', () => {
+  it('rejects cycles, missing cells, and duplicate cell ids', () => {
     const cyclic = planNotebookArrangement(document(
       [cell('a', 0, 0), cell('b', 0, 1)],
       [edge('a', 'b'), edge('b', 'a')],
@@ -224,6 +281,13 @@ describe('notebook readable auto-arrange', () => {
       [edge('a', 'missing')],
     ))
     expect(missing).toMatchObject({ ok: false, code: 'invalid-edge' })
+    expect(!missing.ok && missing.message).toContain('missing cell missing')
+
+    const duplicate = planNotebookArrangement(document(
+      [cell('a', 0, 0), cell('a', 0, 1)],
+    ))
+    expect(duplicate).toMatchObject({ ok: false, code: 'invalid-edge' })
+    expect(!duplicate.ok && duplicate.message).toContain('duplicate cell IDs')
 
     const compactChain = Array.from({ length: 27 }, (_, index) =>
       cell(`chain-${String(index).padStart(2, '0')}`, index % 26, index % 13))
@@ -232,13 +296,7 @@ describe('notebook readable auto-arrange', () => {
       compactChain.slice(1).map((item, index) =>
         edge(compactChain[index]!.id, item.id)),
     ))
-    expect(compact).toMatchObject({ ok: true, rowCount: 3 })
-
-    const overflow = planNotebookArrangement(document(
-      Array.from({ length: 339 }, (_, index) =>
-        cell(`overflow-${String(index).padStart(3, '0')}`, index % 26, index % 13)),
-    ))
-    expect(overflow).toMatchObject({ ok: false, code: 'capacity' })
+    expect(compact).toMatchObject({ ok: true, rowCount: 4 })
   })
 
   it('waits for refreshed layout before revealing the upper-left', () => {

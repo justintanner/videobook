@@ -26,6 +26,7 @@ import { registerAudioMixJob } from "./audio-mix.js";
 import { registerReverseVideoJob } from "./reverse-video.js";
 import { registerInjectFirstFrameJob } from "./inject-first-frame.js";
 import { registerExtractFrameJob } from "./extract-frame.js";
+import { registerExtractNotebookFrameJob } from "./extract-notebook-frame.js";
 import { registerExtractAudioJob } from "./extract-audio.js";
 import { registerExtractWaveformJob } from "./extract-waveform.js";
 import { registerReplaceVideoAudioJob } from "./replace-video-audio.js";
@@ -172,6 +173,7 @@ export function registerAllJobHandlers(
   registerReverseVideoJob(fs);
   registerInjectFirstFrameJob(fs);
   registerExtractFrameJob(fs);
+  registerExtractNotebookFrameJob(fs);
   registerExtractAudioJob(fs);
   registerExtractWaveformJob(fs);
   registerReplaceVideoAudioJob(fs);

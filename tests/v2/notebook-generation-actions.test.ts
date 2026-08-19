@@ -402,24 +402,23 @@ describe('notebook generation actions', () => {
     }])
   })
 
-  it('treats extract_frame cells as image sources', () => {
-    const extractFrame: NotebookCell = {
+  it('treats extracted-frame image cells as image sources', () => {
+    const extractedFrame: NotebookCell = {
       ...emptyImageCell,
       id: '01900000-0000-7000-8000-000000000004',
-      type: 'extract_frame',
-      slug: 'extract-frame-source',
-      operation: 'extract_frame',
+      type: 'image',
+      inputs: { mediaRole: 'extract-frame-output', frameMode: 'first' },
     }
     const edge: NotebookEdge = {
       id: '01900000-0000-7000-8000-000000000005',
-      source: extractFrame.id,
+      source: extractedFrame.id,
       target: emptyImageCell.id,
       targetInput: 'image',
     }
-    expect(generationInputKind(extractFrame)).toBe('image')
+    expect(generationInputKind(extractedFrame)).toBe('image')
     expect(generationConnectedInputs(
       emptyImageCell.id,
-      [emptyImageCell, extractFrame],
+      [emptyImageCell, extractedFrame],
       [edge],
     )).toEqual([{
       kind: 'image',

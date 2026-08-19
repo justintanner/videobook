@@ -33,7 +33,6 @@ export function ArtifactThumb({
     || kindHint === 'splice'
   const image = kind === 'image'
     || kindHint === 'generate_image'
-    || kindHint === 'extract_frame'
   const videoUrl = !thumbnailUrl && (kind === 'video' || kind === 'final')
     ? asset?.mediaUrl
     : null

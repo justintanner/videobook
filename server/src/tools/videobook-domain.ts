@@ -22,6 +22,7 @@ import {
   ensureGenerateAudioOutput,
   ensureGenerateImageOutput,
   ensureGenerateVideoOutput,
+  migrateLegacyExtractFrameCells,
 } from "../notebook-cell-outputs.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { queue, stopBookQueue } from "../queue.js";
@@ -113,15 +114,6 @@ function notebookConnectionError(
       ? null
       : "Extract audio cells require a video-producing source";
   }
-  if (target.type === "extract_frame") {
-    if (targetInput !== "video") {
-      return "Extract frame cells accept only the video input";
-    }
-    return notebookCellMediaType(source) === "video"
-      && source.type !== "split_video"
-      ? null
-      : "Extract frame cells require a video-producing source";
-  }
   if (target.type === "split_video") {
     if (targetInput === "analysis") {
       return source.type === "analysis"
@@ -156,19 +148,16 @@ function notebookConnectionError(
   ) {
     return "Video media outputs require a split video source";
   }
-  if (
-    targetInput === "media"
-    && target.type === "image"
-    && source.type !== "extract_frame"
-  ) {
-    return "Image media outputs require an extract frame source";
+  if (targetInput === "media" && target.type === "image") {
+    return "Image media outputs are created automatically by generation cells";
   }
   if (
     targetInput === "segment"
     && target.type === "image"
-    && source.type !== "video"
+    && (notebookCellMediaType(source) !== "video"
+      || source.type === "split_video")
   ) {
-    return "Image frame outputs require a video source";
+    return "Image frame outputs require a video-producing source";
   }
   return null;
 }
@@ -642,7 +631,7 @@ function notebookPayload(
 ): Record<string, unknown> {
   const normalized = hydrateNotebookProviderFailures(
     engine,
-    normalizeLegacyAnalyzeDocument(notebook),
+    normalizeLegacyAnalyzeDocument(migrateLegacyExtractFrameCells(notebook)),
   );
   return {
     id: normalized.id,
@@ -1258,7 +1247,10 @@ export function videobookDomainDefs(
         const result = engine.notebooks.read(String(args.notebook_id));
         if (!result.ok) return failure(result.error.message);
         try {
-          const document = hydrateNotebookProviderFailures(engine, result.value);
+          const document = hydrateNotebookProviderFailures(
+            engine,
+            migrateLegacyExtractFrameCells(result.value),
+          );
           const { generateCell } = pairForCell(document, String(args.cell_id));
           const generationsResult = engine.generations.listForCell(
             String(args.notebook_id),
@@ -1525,11 +1517,7 @@ export function videobookDomainDefs(
                 ...document,
                 cells,
               });
-              const updatedCell = cells.find((cell) =>
-                cell.id === args.cell_id);
-              return updatedCell?.type === "extract_frame"
-                ? markCellStale(updated, String(args.cell_id))
-                : markDescendantsStale(updated, String(args.cell_id));
+              return markDescendantsStale(updated, String(args.cell_id));
             },
             { cellId: args.cell_id },
           );
@@ -1857,9 +1845,7 @@ export function videobookDomainDefs(
                 edges = [...retained, edge];
               }
               const updated = { ...notebook, edges };
-              const marked = target.type === "extract_frame"
-                ? markCellStale(updated, targetCellId)
-                : markCellAndDescendantsStale(updated, targetCellId);
+              const marked = markCellAndDescendantsStale(updated, targetCellId);
               return seedInitialGenerationPrompt(marked, targetCellId);
             },
             {

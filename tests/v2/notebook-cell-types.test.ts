@@ -14,7 +14,6 @@ const cellTypeCases = [
   ['character', false, false, true, false],
   ['concat', false, false, false, false],
   ['extract_audio', false, true, false, false],
-  ['extract_frame', false, true, false, false],
   ['generate_audio', true, false, false, false],
   ['generate_image', true, false, false, false],
   ['generate_video', true, false, false, false],

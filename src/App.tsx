@@ -673,7 +673,6 @@ const notebookCellTypes = new Set<string>([
   'image',
   'video',
   'extract_audio',
-  'extract_frame',
   'split_video',
   'prompt',
   'character',
@@ -1768,11 +1767,9 @@ function CellIcon({ kind }: { kind: NotebookCellType }) {
   if (kind === 'video' || kind === 'generate_video' || kind === 'split_video') {
     return <Video size={14} />
   }
-  if (
-    kind === 'image'
-    || kind === 'extract_frame'
-    || kind === 'generate_image'
-  ) return <Image size={14} />
+  if (kind === 'image' || kind === 'generate_image') {
+    return <Image size={14} />
+  }
   if (kind === 'audio' || kind === 'extract_audio' || kind === 'generate_audio') {
     return <AudioWaveform size={14} />
   }
@@ -1807,15 +1804,6 @@ function emptyCellLabel(data: CanvasCellData): string {
   }
   if (data.kind === 'character') return 'Select a character'
   if (data.kind === 'extract_audio') return 'Connect a video to extract audio'
-  if (data.kind === 'extract_frame') {
-    const mode = asString(data.inputs?.frameMode) ?? 'first'
-    if (mode === 'time') {
-      return `Extract frame at ${formatMediaTime(
-        asNumber(data.inputs?.timestampSeconds) ?? 0,
-      )}`
-    }
-    return mode === 'last' ? 'Extract last frame' : 'Extract first frame'
-  }
   if (data.kind === 'analysis') return 'Run the connected Analyze cell'
   if (data.kind === 'split_video') return 'Configure a video range'
   if (data.kind === 'concat') return 'Connect clip:0 and clip:1'
@@ -1829,6 +1817,7 @@ type ImageCardMetadataBadgesProps = {
   tool: string | null
   model: string | null
   prompt: string | null
+  provenance?: string | null
 }
 
 export function ImageCardMetadataBadges({
@@ -1837,6 +1826,7 @@ export function ImageCardMetadataBadges({
   tool,
   model,
   prompt,
+  provenance = null,
 }: ImageCardMetadataBadgesProps) {
   const dimensions = width !== null
     && height !== null
@@ -1852,13 +1842,14 @@ export function ImageCardMetadataBadges({
     ? abbreviateGenerationPhrases(generator)
     : null
 
-  if (!dimensions && !aspectRatio && !generatorLabel) return null
+  if (!dimensions && !aspectRatio && !generatorLabel && !provenance) return null
 
   const ariaLabel = [
     'Image metadata',
     dimensions ? `Dimensions ${dimensions}` : null,
     aspectRatio ? `Aspect ratio ${aspectRatio}` : null,
     generatorLabel ? `Generator ${generatorLabel}` : null,
+    provenance ? `Extracted from ${provenance}` : null,
     prompt ? `Prompt: ${prompt}` : null,
   ].filter(Boolean).join('. ')
 
@@ -1884,6 +1875,14 @@ export function ImageCardMetadataBadges({
           title={generatorLabel}
         >
           {generatorLabel}
+        </span>
+      )}
+      {provenance && (
+        <span
+          className="cell-image-metadata-badge cell-image-metadata-generator"
+          title={`Extracted from ${provenance}`}
+        >
+          {provenance}
         </span>
       )}
     </div>
@@ -2362,11 +2361,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     || data.kind === 'extract_audio'
   const visualMediaCell = data.kind === 'video'
     || data.kind === 'image'
-    || data.kind === 'extract_frame'
-  const imageMediaCell = !playableVideo && (
-    data.kind === 'image'
-    || data.kind === 'extract_frame'
-  )
+  const imageMediaCell = !playableVideo && data.kind === 'image'
   const textCell = data.kind === 'prompt' || data.kind === 'analyze'
   const isTopRow = data.slot.row === 0
   const handleLayoutSignature = [
@@ -2454,7 +2449,6 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     || data.kind === 'video'
     || data.kind === 'analysis'
     || data.kind === 'extract_audio'
-    || data.kind === 'extract_frame'
   ) && outputVersions.length > 1
   const activeOutputVersion = Math.max(
     1,
@@ -2657,6 +2651,14 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 tool={imageToolTitle}
                 model={data.model ?? data.tool ?? null}
                 prompt={imagePrompt}
+                provenance={data.frameProvenance
+                  ? [
+                      data.frameProvenance.sourceAddress,
+                      data.frameProvenance.atSeconds === null
+                        ? null
+                        : formatMediaTime(data.frameProvenance.atSeconds),
+                    ].filter(Boolean).join(' · ') || null
+                  : null}
               />
             ) : data.kind !== 'video' && (
               <NotebookMediaMetadata
@@ -4472,6 +4474,49 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         : [...subjectIds]
     ))
   }, [])
+
+  const captureFullscreenFrame = async (
+    session: MediaFullscreenSession,
+    timestampSeconds: number,
+  ): Promise<string> => {
+    const accepted = recordValue(await call('extract_notebook_frame', {
+      book_id: session.bookId,
+      notebook_id: session.notebookId,
+      source_cell_id: session.cellId,
+      frame_mode: 'time',
+      timestamp_seconds: Math.round(timestampSeconds * 1_000) / 1_000,
+    }))
+    const cellId = asString(accepted?.cell_id)
+    const addressTag = asString(accepted?.address)
+    const runId = asString(accepted?.run_id)
+    const jobId = asString(accepted?.job_id)
+    if (!cellId || !addressTag || !runId || !jobId) {
+      throw new Error('The server did not return the frame extraction cell')
+    }
+    setCellRunError(cellId, null)
+    setCellQueued(cellId, true)
+    void watchNotebookRun({
+      bookId: session.bookId,
+      notebookId: session.notebookId,
+      cellId,
+      address: addressTag.replace(/^@/, ''),
+      runId,
+      jobOperationId: jobId,
+      intervalMs: notebookRunPollIntervalMs,
+      timeoutMs: notebookRunPollTimeoutMs,
+      maxPollFailures: 1,
+    }).then((outcome) => {
+      if (outcome.kind === 'failed' || outcome.kind === 'timeout') {
+        const message = outcome.message
+          ?? `Frame extraction into ${addressTag} failed`
+        setCellRunError(cellId, message)
+        setNotice(message, 'error')
+      }
+    }).finally(() => {
+      setCellQueued(cellId, false)
+    })
+    return addressTag
+  }
 
   const analyzeFullscreenSubjects = useCallback(async (
     session: MediaFullscreenSession,
@@ -6927,7 +6972,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           cellId: source.id,
         }],
         notebookId: currentNotebook.id,
-        reason: 'This request creates and runs an Extract Frame cell',
+        reason: 'This request extracts a frame into a new image cell',
         summary: frameSummary,
       })
       return applyReadyOutcome('Frame extraction ready to apply')
@@ -8794,6 +8839,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         icon: 'media',
       })
     }
+    if (
+      contextMenuVisualAsset
+      && (contextMenuVisualAsset.type === 'video'
+        || contextMenuVisualAsset.type === 'final')
+    ) {
+      contextMenuActions.push({
+        id: 'extract_frame',
+        label: 'Extract frame',
+        icon: 'extract-frame',
+        disabled: busy,
+      })
+    }
     for (const cellType of contextMenuGenerationTypes) {
       const video = cellType === 'generate_video'
       contextMenuActions.push({
@@ -8913,7 +8970,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       openMediaLibrary(contextMenuCell.id)
       return
     }
-    if (actionId === 'media') {
+    if (actionId === 'media' || actionId === 'extract_frame') {
       if (contextMenuVisualAsset) {
         openMediaFullscreen(
           contextMenuCell,
@@ -10313,6 +10370,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           }
           onAnalyzeSubjects={(force) =>
             analyzeFullscreenSubjects(mediaFullscreen, force)}
+          onCaptureFrame={
+            mediaFullscreen.asset.type === 'video'
+            || mediaFullscreen.asset.type === 'final'
+              ? (timestampSeconds) =>
+                  captureFullscreenFrame(mediaFullscreen, timestampSeconds)
+              : undefined
+          }
           onEditingChange={setMediaFullscreenSidebarEditing}
           onEditSubjects={(input) =>
             editFullscreenSubjects(mediaFullscreen, input)}

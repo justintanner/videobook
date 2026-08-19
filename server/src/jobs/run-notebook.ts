@@ -23,8 +23,8 @@ import {
   collapseLegacyExtractPairs,
   ensureGenerationMediaOutputs,
   ensureGenerationMediaOutput,
-  extractFrameSelection,
   findGenerationMediaOutput,
+  migrateLegacyExtractFrameCells,
 } from "../notebook-cell-outputs.js";
 import { queue, registerJobHandler, waitForJob } from "../queue.js";
 import { translateToolPayload } from "../payload-builders.js";
@@ -225,7 +225,6 @@ export function notebookCellMediaType(
   if (
     cell.type === "image"
     || cell.type === "generate_image"
-    || cell.type === "extract_frame"
   ) return "image";
   if (
     cell.type === "audio"
@@ -1933,38 +1932,6 @@ async function executeLocalOrGeneration(
     };
   }
 
-  if (cell.type === "extract_frame" && cell.operation === "extract_frame") {
-    const sourceId = requiredVideoInputArtifact(document, cell);
-    const selection = extractFrameSelection(document, cell.id);
-    const frameMode = selection.frameMode;
-    const timestampSeconds = selection.timestampSeconds;
-    const timestampInput: { timestampSeconds?: number } = {};
-    if (frameMode === "time") {
-      if (timestampSeconds === null) {
-        throw new Error(
-          `extract_frame cell ${cell.id} requires a nonnegative timestamp`,
-        );
-      }
-      timestampInput.timestampSeconds = timestampSeconds;
-    }
-    const result = await captureFrame(engine, sourceId, {
-      role: frameMode,
-      ...timestampInput,
-      title: `${notebookGridTag(cell.slot)} · ${frameMode} frame`,
-    });
-    return {
-      artifactId: result.artifactId,
-      tool: "ffmpeg",
-      cellInputs: {
-        frameMode,
-        ...timestampInput,
-        atSeconds: result.atSeconds,
-        outputVersionArtifactIds: withOutputVersionIds(cell, result.artifactId),
-        state: "completed",
-      },
-    };
-  }
-
   if (cell.type === "analyze" && cell.operation === "analyze_source") {
     const sourceId = firstUpstreamArtifact(document, cell, "source")
       ?? firstUpstreamArtifact(document, cell);
@@ -2182,8 +2149,8 @@ export async function runNotebookCell(
   outputArtifactId: string;
   status: "completed" | "awaiting-output";
 }> {
-  let normalizedDocument = collapseLegacyExtractPairs(
-    normalizeLegacyAnalyzeDocument(document),
+  let normalizedDocument = migrateLegacyExtractFrameCells(
+    collapseLegacyExtractPairs(normalizeLegacyAnalyzeDocument(document)),
   );
   let normalizedCell = normalizedDocument.cells.find((candidate) =>
     candidate.id === cell.id) ?? normalizeLegacyAnalyzeCell(cell);

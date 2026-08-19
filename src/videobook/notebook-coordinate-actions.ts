@@ -50,7 +50,6 @@ const cellTypes = new Map<string, NotebookCellType>([
   ['image', 'image'],
   ['video', 'video'],
   ['extract audio', 'extract_audio'],
-  ['extract frame', 'extract_frame'],
   ['split video', 'split_video'],
   ['prompt', 'prompt'],
   ['character', 'character'],
@@ -106,7 +105,7 @@ export function parseNotebookCoordinateAction(
     }
   }
   const create = normalized.match(new RegExp(
-    `^(?:please\\s+)?(?:create|add)\\s+(?:a\\s+|an\\s+|new\\s+)*(extract audio|extract frame|split video|generate video|generate image|generate audio|audio|image|video|prompt|character|analyze|analysis|concat|splice)(?:\\s+cell)?(?:\\s+(?:at|in|on)\\s+@${addressPattern})?(?:\\s+please)?$`,
+    `^(?:please\\s+)?(?:create|add)\\s+(?:a\\s+|an\\s+|new\\s+)*(extract audio|split video|generate video|generate image|generate audio|audio|image|video|prompt|character|analyze|analysis|concat|splice)(?:\\s+cell)?(?:\\s+(?:at|in|on)\\s+@${addressPattern})?(?:\\s+please)?$`,
     'iu',
   ))
   if (create) {

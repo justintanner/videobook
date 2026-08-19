@@ -36,6 +36,21 @@ interface NotebookAutoArrangeScrollTarget {
 
 type FrameScheduler = (callback: FrameRequestCallback) => number
 
+const ARRANGE_COLUMN_COUNT = Math.min(7, NOTEBOOK_GRID_COLUMN_COUNT)
+const BAND_GAP_ROWS = 1
+
+interface ArrangeGraph {
+  connectedIds: ReadonlySet<string>
+  parents: ReadonlyMap<string, ReadonlySet<string>>
+  children: ReadonlyMap<string, ReadonlySet<string>>
+  looseIds: readonly string[]
+}
+
+interface ArrangeBand {
+  rowCount: number
+  slots: NotebookAutoArrangeAssignment[]
+}
+
 function compareCellIds(leftId: string, rightId: string): number {
   return leftId.localeCompare(rightId)
 }
@@ -51,25 +66,10 @@ function failure(
   return { ok: false, code, message }
 }
 
-function groupRowCount(count: number): number {
-  return Math.ceil(count / NOTEBOOK_GRID_COLUMN_COUNT)
-}
-
-function placeGroup(
-  ids: readonly string[],
-  startRow: number,
-): NotebookAutoArrangeAssignment[] {
-  return ids.map((id, index) => ({
-    id,
-    row: startRow + Math.floor(index / NOTEBOOK_GRID_COLUMN_COUNT),
-    column: index % NOTEBOOK_GRID_COLUMN_COUNT,
-  }))
-}
-
-function orderedCellIds(
+function buildArrangeGraph(
   document: NotebookDocument,
   cellsById: ReadonlyMap<string, NotebookCell>,
-): string[] | NotebookAutoArrangeResult {
+): ArrangeGraph | NotebookAutoArrangeResult {
   const connectedIds = new Set<string>()
 
   for (const edge of document.edges) {
@@ -95,11 +95,22 @@ function orderedCellIds(
     children.get(edge.source)?.add(edge.target)
   }
 
+  const looseIds = sortCellIds(
+    document.cells
+      .filter((cell) => !connectedIds.has(cell.id))
+      .map((cell) => cell.id),
+  )
+  return { connectedIds, parents, children, looseIds }
+}
+
+function topologicalOrder(
+  graph: ArrangeGraph,
+): string[] | NotebookAutoArrangeResult {
   const incoming = new Map(
-    [...parents].map(([id, sources]) => [id, sources.size]),
+    [...graph.parents].map(([id, sources]) => [id, sources.size]),
   )
   const ready = sortCellIds(
-    [...connectedIds].filter((id) => incoming.get(id) === 0),
+    [...graph.connectedIds].filter((id) => incoming.get(id) === 0),
   )
   const orderedIds: string[] = []
 
@@ -107,7 +118,7 @@ function orderedCellIds(
     const id = ready.shift()
     if (!id) continue
     orderedIds.push(id)
-    for (const childId of sortCellIds(children.get(id) ?? [])) {
+    for (const childId of sortCellIds(graph.children.get(id) ?? [])) {
       const count = (incoming.get(childId) ?? 0) - 1
       incoming.set(childId, count)
       if (count === 0) {
@@ -117,20 +128,147 @@ function orderedCellIds(
     }
   }
 
-  if (orderedIds.length !== connectedIds.size) {
+  if (orderedIds.length !== graph.connectedIds.size) {
     return failure(
       'cycle',
       'Cannot auto-arrange because the notebook graph contains a cycle.',
     )
   }
-  return [
-    ...orderedIds,
-    ...sortCellIds(
-      document.cells
-        .filter((cell) => !connectedIds.has(cell.id))
-        .map((cell) => cell.id),
-    ),
-  ]
+  return orderedIds
+}
+
+function longestPathDepths(
+  graph: ArrangeGraph,
+  orderedIds: readonly string[],
+): Map<string, number> {
+  const depths = new Map(orderedIds.map((id) => [id, 0]))
+  for (const id of orderedIds) {
+    const parentDepth = depths.get(id) ?? 0
+    for (const childId of graph.children.get(id) ?? []) {
+      depths.set(childId, Math.max(depths.get(childId) ?? 0, parentDepth + 1))
+    }
+  }
+  return depths
+}
+
+function componentKeyByCell(graph: ArrangeGraph): Map<string, string> {
+  const keyByCell = new Map<string, string>()
+  for (const id of sortCellIds(graph.connectedIds)) {
+    if (keyByCell.has(id)) continue
+    const pending = [id]
+    while (pending.length > 0) {
+      const memberId = pending.pop()
+      if (!memberId || keyByCell.has(memberId)) continue
+      keyByCell.set(memberId, id)
+      pending.push(
+        ...(graph.parents.get(memberId) ?? []),
+        ...(graph.children.get(memberId) ?? []),
+      )
+    }
+  }
+  return keyByCell
+}
+
+function anchorParentId(
+  id: string,
+  graph: ArrangeGraph,
+  depths: ReadonlyMap<string, number>,
+): string | undefined {
+  let anchorId: string | undefined
+  let anchorDepth = -1
+  for (const parentId of sortCellIds(graph.parents.get(id) ?? [])) {
+    const parentDepth = depths.get(parentId) ?? 0
+    if (parentDepth > anchorDepth) {
+      anchorId = parentId
+      anchorDepth = parentDepth
+    }
+  }
+  return anchorId
+}
+
+function wrapRowOffset(depth: number): number {
+  return Math.floor(depth / ARRANGE_COLUMN_COUNT)
+}
+
+function layoutChainBand(
+  memberIds: readonly string[],
+  graph: ArrangeGraph,
+  depths: ReadonlyMap<string, number>,
+): ArrangeBand {
+  const rowByCell = new Map<string, number>()
+  const occupied = new Set<string>()
+  const slots: NotebookAutoArrangeAssignment[] = []
+  let rowCount = 0
+
+  for (const id of memberIds) {
+    const depth = depths.get(id) ?? 0
+    const column = depth % ARRANGE_COLUMN_COUNT
+    const anchorId = anchorParentId(id, graph, depths)
+    let row = 0
+    if (anchorId !== undefined) {
+      const anchorDepth = depths.get(anchorId) ?? 0
+      const anchorRow = rowByCell.get(anchorId) ?? 0
+      row = anchorRow + wrapRowOffset(depth) - wrapRowOffset(anchorDepth)
+    }
+    while (occupied.has(`${row}:${column}`)) row += 1
+    occupied.add(`${row}:${column}`)
+    rowByCell.set(id, row)
+    rowCount = Math.max(rowCount, row + 1)
+    slots.push({ id, row, column })
+  }
+
+  return { rowCount, slots }
+}
+
+function layoutPackedBand(ids: readonly string[]): ArrangeBand {
+  return {
+    rowCount: Math.ceil(ids.length / ARRANGE_COLUMN_COUNT),
+    slots: ids.map((id, index) => ({
+      id,
+      row: Math.floor(index / ARRANGE_COLUMN_COUNT),
+      column: index % ARRANGE_COLUMN_COUNT,
+    })),
+  }
+}
+
+function arrangeBands(
+  graph: ArrangeGraph,
+  orderedIds: readonly string[],
+  depths: ReadonlyMap<string, number>,
+): ArrangeBand[] {
+  const keyByCell = componentKeyByCell(graph)
+  const memberIdsByKey = new Map<string, string[]>()
+  for (const id of orderedIds) {
+    const key = keyByCell.get(id) ?? id
+    const memberIds = memberIdsByKey.get(key) ?? []
+    memberIds.push(id)
+    memberIdsByKey.set(key, memberIds)
+  }
+
+  const bands = sortCellIds(memberIdsByKey.keys()).map((key) =>
+    layoutChainBand(memberIdsByKey.get(key) ?? [], graph, depths))
+  if (graph.looseIds.length > 0) {
+    bands.push(layoutPackedBand(graph.looseIds))
+  }
+  return bands
+}
+
+function stackBands(
+  bands: readonly ArrangeBand[],
+  gapRows: number,
+): { rowCount: number; slots: NotebookAutoArrangeAssignment[] } {
+  const slots: NotebookAutoArrangeAssignment[] = []
+  let nextBandRow = 0
+  for (const band of bands) {
+    for (const slot of band.slots) {
+      slots.push({ ...slot, row: nextBandRow + slot.row })
+    }
+    nextBandRow += band.rowCount + gapRows
+  }
+  return {
+    rowCount: Math.max(0, nextBandRow - gapRows),
+    slots,
+  }
 }
 
 export function planNotebookArrangement(
@@ -144,29 +282,28 @@ export function planNotebookArrangement(
     )
   }
 
-  const orderedIds = orderedCellIds(document, cellsById)
+  const graph = buildArrangeGraph(document, cellsById)
+  if ('ok' in graph) return graph
+  const orderedIds = topologicalOrder(graph)
   if (!Array.isArray(orderedIds)) return orderedIds
 
-  const contentIds = orderedIds.filter((id) => cellsById.get(id)?.type !== 'video')
-  const videoIds = orderedIds.filter((id) => cellsById.get(id)?.type === 'video')
-  const contentRowCount = groupRowCount(contentIds.length)
-  const videoRowCount = groupRowCount(videoIds.length)
-  const requiredRows = contentRowCount + videoRowCount
-  if (requiredRows > NOTEBOOK_GRID_ROW_COUNT) {
-    return failure(
-      'capacity',
-      `Cannot auto-arrange because the layout needs ${requiredRows} rows, but the grid supports ${NOTEBOOK_GRID_ROW_COUNT}.`,
-    )
+  const depths = longestPathDepths(graph, orderedIds)
+  const bands = arrangeBands(graph, orderedIds, depths)
+  for (const gapRows of [BAND_GAP_ROWS, 0]) {
+    const stacked = stackBands(bands, gapRows)
+    if (stacked.rowCount <= NOTEBOOK_GRID_ROW_COUNT) {
+      return { ok: true, rowCount: stacked.rowCount, slots: stacked.slots }
+    }
   }
 
-  return {
-    ok: true,
-    rowCount: requiredRows,
-    slots: [
-      ...placeGroup(contentIds, 0),
-      ...placeGroup(videoIds, contentRowCount),
-    ],
+  const packed = layoutPackedBand([...orderedIds, ...graph.looseIds])
+  if (packed.rowCount <= NOTEBOOK_GRID_ROW_COUNT) {
+    return { ok: true, rowCount: packed.rowCount, slots: packed.slots }
   }
+  return failure(
+    'capacity',
+    `Cannot auto-arrange because the layout needs ${packed.rowCount} rows, but the grid supports ${NOTEBOOK_GRID_ROW_COUNT}.`,
+  )
 }
 
 export function revealNotebookArrangement(

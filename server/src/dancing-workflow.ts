@@ -21,7 +21,7 @@ export type DancingFixtureOptions = {
 };
 
 export const DANCING_FIXTURE_OWNER = "dancing-default";
-export const DANCING_FIXTURE_VERSION = 5;
+export const DANCING_FIXTURE_VERSION = 6;
 const DANCING_SOURCE_URL = "https://www.youtube.com/watch?v=8GwZveBYRJI";
 export const DANCING_MOTION_DURATION_SECONDS = 10;
 
@@ -357,15 +357,14 @@ export async function seedDancingWorkflow(
     },
   });
   const extract = engine.notebooks.createCell({
-    type: "extract_frame",
-    label: "Extract first frame",
+    type: "image",
+    label: "First frame",
     slot: { row: 1, column: 0 },
-    provider: "local",
-    operation: "extract_frame",
-    tool: "ffmpeg",
     outputArtifactId: frameArtifact.artifactId,
     inputs: {
       ...ownedInputs("extract-first-frame"),
+      mediaRole: "extract-frame-output",
+      sourceCellId: source.id,
       atSeconds: 0.1,
       frameMode: "first",
       state: "completed",
@@ -438,7 +437,7 @@ export async function seedDancingWorkflow(
     engine.notebooks.createEdge({
       source: source.id,
       target: extract.id,
-      targetInput: "video",
+      targetInput: "segment",
     }),
     engine.notebooks.createEdge({
       source: extract.id,

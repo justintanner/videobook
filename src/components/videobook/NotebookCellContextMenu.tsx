@@ -1,5 +1,6 @@
 import {
   Braces,
+  Camera,
   Copy,
   History,
   Image,
@@ -22,6 +23,7 @@ import { createPortal } from 'react-dom'
 
 export type NotebookCellContextActionIcon =
   | 'duplicate'
+  | 'extract-frame'
   | 'generate-image'
   | 'generate-video'
   | 'generations'
@@ -54,6 +56,7 @@ type NotebookCellContextMenuProps = {
 
 const actionIcons: Record<NotebookCellContextActionIcon, LucideIcon> = {
   duplicate: Copy,
+  'extract-frame': Camera,
   'generate-image': Image,
   'generate-video': Video,
   generations: History,
