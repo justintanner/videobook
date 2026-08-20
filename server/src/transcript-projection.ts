@@ -112,25 +112,65 @@ export function plainTranscriptFrom(raw: unknown): AssetTranscript | null {
   return { kind: "plain", text: quality.text };
 }
 
+export type AssetTranscriptWordSummary = {
+  text: string;
+  start: number;
+  end: number;
+};
+
+export type AssetTranscriptSourceSummary = AssetTranscriptSummary & {
+  words?: AssetTranscriptWordSummary[];
+};
+
+/** Compact two-source transcript shipped inside asset payloads — no raw sidecar JSON. */
+export type AssetTranscriptSources = {
+  elevenlabs: AssetTranscriptSourceSummary | null;
+  plain: AssetTranscriptSourceSummary | null;
+};
+
+export type TranscriptSidecarKind = "elevenlabs" | "plain";
+
+export type TranscriptSidecarText = {
+  source: TranscriptSidecarKind;
+  file: string;
+  text: string;
+};
+
 type AssetTranscriptRead = {
   transcript: AssetTranscript;
   source: "timed" | "plain" | "none";
 };
 
+function sidecarFile(source: TranscriptSidecarKind): string {
+  return source === "elevenlabs" ? TIMED_TRANSCRIPT_FILE : PLAIN_TRANSCRIPT_FILE;
+}
+
+async function readTimedTranscript(
+  engine: Engine,
+  assetId: string,
+): Promise<AssetTranscript | null> {
+  const timedRead = await engine.files.read(assetId, TIMED_TRANSCRIPT_FILE);
+  if (!timedRead.ok) return null;
+  return timedTranscriptFrom(parseJson(timedRead.value));
+}
+
+async function readPlainTranscript(
+  engine: Engine,
+  assetId: string,
+): Promise<AssetTranscript | null> {
+  const plainRead = await engine.files.read(assetId, PLAIN_TRANSCRIPT_FILE);
+  if (!plainRead.ok) return null;
+  return plainTranscriptFrom(parseJson(plainRead.value));
+}
+
 async function readAssetTranscriptWithSource(
   engine: Engine,
   assetId: string,
 ): Promise<AssetTranscriptRead> {
-  const timedRead = await engine.files.read(assetId, TIMED_TRANSCRIPT_FILE);
-  if (timedRead.ok) {
-    const timed = timedTranscriptFrom(parseJson(timedRead.value));
-    if (timed) return { transcript: timed, source: "timed" };
-  }
-  const plainRead = await engine.files.read(assetId, PLAIN_TRANSCRIPT_FILE);
-  if (plainRead.ok) {
-    const plain = plainTranscriptFrom(parseJson(plainRead.value));
-    if (plain) return { transcript: plain, source: "plain" };
-  }
+  const timed = await readTimedTranscript(engine, assetId);
+  if (timed) return { transcript: timed, source: "timed" };
+  const plain = await readPlainTranscript(engine, assetId);
+  if (plain) return { transcript: plain, source: "plain" };
   return { transcript: { kind: "missing" }, source: "none" };
 }
 
@@ -173,14 +213,30 @@ export function transcriptSummary(
   };
 }
 
+export function transcriptSourceSummary(
+  transcript: AssetTranscript,
+): AssetTranscriptSourceSummary | null {
+  const summary = transcriptSummary(transcript);
+  if (!summary) return null;
+  if (transcript.kind !== "timed") return summary;
+  return {
+    ...summary,
+    words: transcript.words.map((word) => ({
+      text: word.text,
+      start: word.start,
+      end: word.end,
+    })),
+  };
+}
+
 /** Word-timed transcripts are large; asset listings re-read them constantly.
  *  Their content-addressed hash makes an in-process memo safe and exact. */
 const SUMMARY_CACHE_LIMIT = 512;
-const summaryByObjectHash = new Map<string, AssetTranscriptSummary>();
+const summaryByObjectHash = new Map<string, AssetTranscriptSourceSummary>();
 
 function rememberSummary(
   objectHash: string,
-  summary: AssetTranscriptSummary,
+  summary: AssetTranscriptSourceSummary,
 ): void {
   summaryByObjectHash.delete(objectHash);
   summaryByObjectHash.set(objectHash, summary);
@@ -191,25 +247,76 @@ function rememberSummary(
   }
 }
 
-/** Transcript projection for an artifact, or null when there is nothing to show.
- *  Pass the artifact's manifest files to reuse the cached projection of an
- *  unchanged word-timed transcript. */
+function compactSummary(
+  summary: AssetTranscriptSourceSummary,
+): AssetTranscriptSummary {
+  return {
+    kind: summary.kind,
+    language_code: summary.language_code,
+    text: summary.text,
+    word_count: summary.word_count,
+  };
+}
+
+async function readTimedSource(
+  engine: Engine,
+  assetId: string,
+  timedHash: string | null,
+): Promise<AssetTranscriptSourceSummary | null> {
+  if (timedHash) {
+    const cached = summaryByObjectHash.get(timedHash);
+    if (cached) return cached;
+  }
+  const timed = await readTimedTranscript(engine, assetId);
+  if (!timed) return null;
+  const summary = transcriptSourceSummary(timed);
+  if (timedHash && summary) rememberSummary(timedHash, summary);
+  return summary;
+}
+
+/** Both transcript sidecars, independently, or null when neither exists.
+ *  Pass the artifact's manifest files to skip missing sidecars and reuse the
+ *  cached projection of an unchanged word-timed transcript. */
+export async function readAssetTranscriptSources(
+  engine: Engine,
+  assetId: string,
+  files?: readonly ArtifactManifestFile[],
+): Promise<AssetTranscriptSources | null> {
+  const timedHash = files
+    ?.find((file) => file.name === TIMED_TRANSCRIPT_FILE)
+    ?.objectHash ?? null;
+  const elevenlabs = await readTimedSource(engine, assetId, timedHash);
+  const plain = transcriptSourceSummary(
+    await readPlainTranscript(engine, assetId) ?? { kind: "missing" },
+  );
+  if (!elevenlabs && !plain) return null;
+  return { elevenlabs, plain };
+}
+
+export async function readTranscriptSidecarText(
+  engine: Engine,
+  assetId: string,
+  source?: TranscriptSidecarKind,
+): Promise<TranscriptSidecarText | null> {
+  const order: TranscriptSidecarKind[] = source
+    ? [source]
+    : ["elevenlabs", "plain"];
+  for (const kind of order) {
+    const file = sidecarFile(kind);
+    const read = await engine.files.read(assetId, file);
+    if (!read.ok) continue;
+    return { source: kind, file, text: read.value.toString() };
+  }
+  return null;
+}
+
+/** Preferred single-source projection (timed, else plain), or null. */
 export async function readAssetTranscriptSummary(
   engine: Engine,
   assetId: string,
   files?: readonly ArtifactManifestFile[],
 ): Promise<AssetTranscriptSummary | null> {
-  const timedHash = files
-    ?.find((file) => file.name === TIMED_TRANSCRIPT_FILE)
-    ?.objectHash ?? null;
-  if (timedHash) {
-    const cached = summaryByObjectHash.get(timedHash);
-    if (cached) return cached;
-  }
-  const read = await readAssetTranscriptWithSource(engine, assetId);
-  const summary = transcriptSummary(read.transcript);
-  if (timedHash && summary && read.source === "timed") {
-    rememberSummary(timedHash, summary);
-  }
-  return summary;
+  const sources = await readAssetTranscriptSources(engine, assetId, files);
+  const preferred = sources?.elevenlabs ?? sources?.plain ?? null;
+  return preferred ? compactSummary(preferred) : null;
 }

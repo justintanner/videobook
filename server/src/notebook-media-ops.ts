@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Engine } from "videobook-engine";
+import { srtContent } from "./srt.js";
 import {
   AUDIO_OPTS,
   H264_MEDIUM,
@@ -613,25 +614,12 @@ export async function normalizeSceneVideo(
   }
 }
 
-function srtTimestamp(seconds: number): string {
-  const millis = Math.max(0, Math.round(seconds * 1000));
-  const hours = Math.floor(millis / 3_600_000);
-  const minutes = Math.floor((millis % 3_600_000) / 60_000);
-  const secs = Math.floor((millis % 60_000) / 1000);
-  const remainder = millis % 1000;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")},${String(remainder).padStart(3, "0")}`;
-}
-
-function srtContent(captions: BurnInCaption[]): string {
-  return captions.map((caption, index) => {
-    const endSeconds = caption.startSeconds + caption.durationSeconds;
-    return [
-      String(index + 1),
-      `${srtTimestamp(caption.startSeconds)} --> ${srtTimestamp(endSeconds)}`,
-      caption.text,
-      "",
-    ].join("\n");
-  }).join("\n");
+function burnInSrt(captions: BurnInCaption[]): string {
+  return srtContent(captions.map((caption) => ({
+    startSeconds: caption.startSeconds,
+    endSeconds: caption.startSeconds + caption.durationSeconds,
+    text: caption.text,
+  })));
 }
 
 function subtitleFilterPath(path: string): string {
@@ -681,7 +669,7 @@ export async function exportSequenceMaster(
     ]);
     const captions = options.captions ?? [];
     if (captions.length > 0) {
-      await writeFile(captionsPath, srtContent(captions));
+      await writeFile(captionsPath, burnInSrt(captions));
     }
     const videoFilter = captions.length > 0
       ? [

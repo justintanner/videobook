@@ -34,11 +34,32 @@ export function mediaInsightRunningPatch(
     : { analyzing: running }
 }
 
+export type TimedTranscriptWord = {
+  text: string
+  start: number
+  end: number
+}
+
 export type MediaTranscript = {
   kind: MediaTranscriptKind
   languageCode: string | null
   text: string
   wordCount: number
+  words: TimedTranscriptWord[]
+}
+
+export type MediaTranscriptSources = {
+  elevenlabs: MediaTranscript | null
+  plain: MediaTranscript | null
+}
+
+export type TranscriptTabId = 'elevenlabs' | 'prompt' | 'json'
+
+export type TranscriptTabState = {
+  id: TranscriptTabId
+  label: string
+  enabled: boolean
+  disabledReason: string | null
 }
 
 export type MediaVisionAnalysis = {
@@ -71,6 +92,17 @@ function wholeNumber(value: unknown): number {
     : 0
 }
 
+function timedWords(value: unknown): TimedTranscriptWord[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    const item = recordValue(entry)
+    if (!item || typeof item.text !== 'string') return []
+    if (typeof item.start !== 'number' || !Number.isFinite(item.start)) return []
+    if (typeof item.end !== 'number' || !Number.isFinite(item.end)) return []
+    return [{ text: item.text, start: item.start, end: item.end }]
+  })
+}
+
 export function asMediaTranscript(value: unknown): MediaTranscript | null {
   const item = recordValue(value)
   const kind = item && transcriptKind(item.kind)
@@ -80,7 +112,26 @@ export function asMediaTranscript(value: unknown): MediaTranscript | null {
     languageCode: nonBlankStringValue(item.language_code ?? item.languageCode),
     text: typeof item.text === 'string' ? item.text : '',
     wordCount: wholeNumber(item.word_count ?? item.wordCount),
+    words: timedWords(item.words),
   }
+}
+
+export function asMediaTranscriptSources(
+  value: unknown,
+): MediaTranscriptSources | null {
+  const item = recordValue(value)
+  if (!item) return null
+  if ('elevenlabs' in item || 'plain' in item) {
+    const elevenlabs = asMediaTranscript(item.elevenlabs)
+    const plain = asMediaTranscript(item.plain)
+    if (!elevenlabs && !plain) return null
+    return { elevenlabs, plain }
+  }
+  const single = asMediaTranscript(item)
+  if (!single) return null
+  return single.kind === 'plain'
+    ? { elevenlabs: null, plain: single }
+    : { elevenlabs: single, plain: null }
 }
 
 export function asMediaVisionAnalysis(value: unknown): MediaVisionAnalysis | null {
@@ -132,4 +183,146 @@ export function visionAnalysisDetailLabel(
   if (analysis.mood) details.push(analysis.mood)
   if (analysis.setting) details.push(analysis.setting)
   return details.length > 0 ? details.join(' · ') : null
+}
+
+const CUE_GAP_SECONDS = 0.4
+const CUE_MAX_WORDS = 12
+
+export function cuesFromTimedWords(
+  words: readonly TimedTranscriptWord[],
+): { start: number; text: string }[] {
+  const cues: { start: number; text: string }[] = []
+  let current: TimedTranscriptWord[] = []
+  for (const word of words) {
+    const last = current.at(-1)
+    const gap = last ? word.start - last.end : 0
+    const sentenceEnd = last ? /[.!?]$/.test(last.text.trim()) : false
+    if (
+      current.length > 0
+      && (gap > CUE_GAP_SECONDS || sentenceEnd || current.length >= CUE_MAX_WORDS)
+    ) {
+      const text = current.map((item) => item.text).join(' ').replace(/\s+/g, ' ').trim()
+      if (text) cues.push({ start: current[0]!.start, text })
+      current = []
+    }
+    current.push(word)
+  }
+  if (current.length > 0) {
+    const text = current.map((item) => item.text).join(' ').replace(/\s+/g, ' ').trim()
+    if (text) cues.push({ start: current[0]!.start, text })
+  }
+  return cues
+}
+
+export function formatCueTimestamp(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds))
+  const minutes = Math.floor(total / 60)
+  const secs = total % 60
+  return `${minutes}:${String(secs).padStart(2, '0')}`
+}
+
+export function formatTranscriptCues(
+  words: readonly TimedTranscriptWord[],
+): string {
+  return cuesFromTimedWords(words)
+    .map((cue) => `${formatCueTimestamp(cue.start)}  ${cue.text}`)
+    .join('\n')
+}
+
+export function transcriptTabStates(
+  sources: MediaTranscriptSources | null,
+): TranscriptTabState[] {
+  const hasElevenlabs = Boolean(sources?.elevenlabs)
+  const hasPlain = Boolean(sources?.plain)
+  return [
+    {
+      id: 'elevenlabs',
+      label: 'ELEVENLABS',
+      enabled: hasElevenlabs,
+      disabledReason: hasElevenlabs ? null : 'No ElevenLabs transcript',
+    },
+    {
+      id: 'prompt',
+      label: 'PROMPT',
+      enabled: hasPlain,
+      disabledReason: hasPlain ? null : 'No gpt-4o transcription',
+    },
+    {
+      id: 'json',
+      label: 'JSON',
+      enabled: hasElevenlabs || hasPlain,
+      disabledReason: hasElevenlabs || hasPlain ? null : 'No transcript sidecar',
+    },
+  ]
+}
+
+export function resolveTranscriptTab(
+  sources: MediaTranscriptSources | null,
+  requested: TranscriptTabId | null,
+): TranscriptTabId {
+  const enabled = new Set(
+    transcriptTabStates(sources)
+      .filter((tab) => tab.enabled)
+      .map((tab) => tab.id),
+  )
+  if (requested && enabled.has(requested)) return requested
+  if (enabled.has('elevenlabs')) return 'elevenlabs'
+  if (enabled.has('prompt')) return 'prompt'
+  return 'json'
+}
+
+export function transcriptTabCopyText(input: {
+  tab: TranscriptTabId
+  sources: MediaTranscriptSources | null
+  jsonText: string | null
+}): string {
+  if (input.tab === 'json') return input.jsonText ?? ''
+  if (input.tab === 'prompt') return input.sources?.plain?.text ?? ''
+  const timed = input.sources?.elevenlabs
+  if (!timed) return ''
+  if (timed.kind === 'timed' && timed.words.length > 0) {
+    return formatTranscriptCues(timed.words)
+  }
+  return timed.text
+}
+
+export function transcriptTabBody(input: {
+  tab: TranscriptTabId
+  sources: MediaTranscriptSources | null
+  jsonText: string | null
+}): string {
+  return transcriptTabCopyText(input)
+}
+
+export function transcriptTabMeta(
+  tab: TranscriptTabId,
+  sources: MediaTranscriptSources | null,
+  jsonFile: string | null,
+): string | null {
+  if (tab === 'json') {
+    return jsonFile ? `Raw sidecar · ${jsonFile}` : 'Raw sidecar'
+  }
+  const source = tab === 'prompt' ? sources?.plain : sources?.elevenlabs
+  return source ? transcriptDetailLabel(source) : null
+}
+
+export function canDownloadTranscriptSrt(
+  sources: MediaTranscriptSources | null,
+): boolean {
+  return sources?.elevenlabs?.kind === 'timed'
+}
+
+export function sourcesHaveTranscriptText(
+  sources: MediaTranscriptSources | null,
+): boolean {
+  return transcriptHasText(sources?.elevenlabs ?? null)
+    || transcriptHasText(sources?.plain ?? null)
+}
+
+export function sourcesAreSilenceOnly(
+  sources: MediaTranscriptSources | null,
+): boolean {
+  if (!sources) return false
+  const present = [sources.elevenlabs, sources.plain].filter(Boolean)
+  return present.length > 0 && present.every((item) => item?.kind === 'silence')
 }

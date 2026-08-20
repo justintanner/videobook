@@ -227,4 +227,31 @@ describe("read_transcript tool (integration)", () => {
     expect(response.words).toHaveLength(2);
     expect(response.words[0].text).toBe("Timed");
   }, 30_000);
+
+  it("returns untouched sidecar text when raw=true", async () => {
+    const elevenLabsJson = {
+      language_code: "eng",
+      transcription_id: "keep-me",
+      text: "Raw sidecar",
+      words: [
+        { text: "Raw", start: 0.0, end: 0.5, type: "word", speaker_id: "spk_0" },
+        { text: "sidecar", start: 0.5, end: 1.0, type: "word", speaker_id: "spk_0" },
+      ],
+    };
+    const assetId = await uploadAndWriteTranscript("elevenlabs.json", elevenLabsJson);
+    const result = await client.callTool({
+      name: "read_transcript",
+      arguments: { asset_id: assetId, book_id: "transcript-proj", raw: true },
+    });
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse((result.content as TextContent)[0].text) as {
+      source: string;
+      file: string;
+      text: string;
+    };
+    expect(payload.source).toBe("elevenlabs");
+    expect(payload.file).toBe("elevenlabs.json");
+    expect(payload.text).toContain("keep-me");
+    expect(payload.text).toContain("transcription_id");
+  }, 30_000);
 });

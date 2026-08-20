@@ -340,14 +340,14 @@ import {
 } from '@/videobook/image-subject-map'
 import { pollImageSubjectMap } from '@/videobook/image-subject-map-poll'
 import {
-  asMediaTranscript,
+  asMediaTranscriptSources,
   asMediaVisionAnalysis,
   idleMediaInsightWork,
   mediaInsightIsRunning,
   mediaInsightRunningPatch,
   type MediaInsightKind,
   type MediaInsightWork,
-  type MediaTranscript,
+  type MediaTranscriptSources,
   type MediaVisionAnalysis,
 } from '@/videobook/media-insights'
 import {
@@ -379,7 +379,7 @@ type AssetRecord = {
   fps: number | null
   audioInfo: NotebookAudioInfo | null
   analysisInfo: NotebookAnalysisInfo | null
-  transcript: MediaTranscript | null
+  transcript: MediaTranscriptSources | null
   visionAnalysis: MediaVisionAnalysis | null
 }
 
@@ -1142,7 +1142,7 @@ function asAsset(value: unknown): AssetRecord | null {
     fps: asNumber(item.fps),
     audioInfo,
     analysisInfo,
-    transcript: asMediaTranscript(item.transcript),
+    transcript: asMediaTranscriptSources(item.transcript),
     visionAnalysis: asMediaVisionAnalysis(
       item.vision_analysis ?? item.visionAnalysis,
     ),
@@ -4502,6 +4502,34 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const analyzeAsset = useCallback((artifactId: string) => {
     void runAssetInsight(artifactId, 'analysis')
   }, [runAssetInsight])
+
+  const loadTranscriptJson = useCallback(async (artifactId: string) => {
+    if (!bookId) throw new Error('Book is not ready')
+    const value = await call('read_transcript', {
+      book_id: bookId,
+      asset_id: artifactId,
+      raw: true,
+    }, { background: true })
+    const item = recordValue(value)
+    const text = typeof item?.text === 'string' ? item.text : null
+    const file = asString(item?.file)
+    if (!text || !file) throw new Error('No transcript sidecar for this asset')
+    return { text, file }
+  }, [bookId, call])
+
+  const exportTranscriptSrt = useCallback((artifactId: string) => {
+    if (!bookId) return
+    void call('export_transcript_srt', {
+      book_id: bookId,
+      asset_id: artifactId,
+    }).then((value) => {
+      const item = recordValue(value)
+      const path = asString(item?.path)
+      setNotice(path ? `Saved ${path}` : 'Saved SRT to Downloads')
+    }).catch((error: unknown) => {
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
+    })
+  }, [bookId, call, setNotice])
 
   const refreshNotebook = useCallback(async (targetBookId: string, notebookId: string) => {
     const value = await call('get_notebook', {
@@ -9857,6 +9885,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     mediaInsightWork={mediaInsightWork}
                     onTranscribeAsset={transcribeAsset}
                     onAnalyzeAsset={analyzeAsset}
+                    onLoadTranscriptJson={loadTranscriptJson}
+                    onDownloadTranscriptSrt={exportTranscriptSrt}
                   />
                 ) : null}
               </aside>

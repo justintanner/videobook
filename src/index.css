@@ -4304,6 +4304,43 @@ textarea:focus-visible {
   }
 }
 
+.inspector-transcript-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.inspector-transcript-tab {
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  color: #668c75;
+  background: transparent;
+  cursor: pointer;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inspector-transcript-tab:hover:not(:disabled),
+.inspector-transcript-tab:focus-visible:not(:disabled) {
+  border-color: var(--control-border);
+  color: var(--row-fg-hover);
+  background: var(--row-bg-hover);
+  outline: 0;
+}
+
+.inspector-transcript-tab.active {
+  border-color: var(--line-bright);
+  color: #d5fbff;
+  background: rgba(4, 18, 11, 0.9);
+}
+
+.inspector-transcript-tab:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
 .inspector-insight-meta {
   margin: 0;
   color: #789483;
@@ -4939,6 +4976,11 @@ textarea:focus-visible {
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.48);
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   scrollbar-width: thin;
+}
+
+.inspector-source-picker-above > .inspector-source-picker-options {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .inspector-source-picker-options button {

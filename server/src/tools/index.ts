@@ -149,6 +149,7 @@ import { renderTimelineDef } from "./render-timeline.js";
 import { showFolderDef } from "./show-folder.js";
 import { copyFileToClipboardDef } from "./copy-file-to-clipboard.js";
 import { exportToDownloadsDef } from "./export-to-downloads.js";
+import { exportTranscriptSrtDef } from "./export-transcript-srt.js";
 import { pushChatHistoryDef, listChatHistoryDef } from "./chat-history.js";
 import { recordPromptDef, listPromptHistoryDef } from "./prompt-history.js";
 import { rewritePromptDef } from "./rewrite-prompt.js";
@@ -456,6 +457,7 @@ export function getAllToolDefs(
     showFolderDef(engine),
     copyFileToClipboardDef(engine),
     exportToDownloadsDef(engine),
+    exportTranscriptSrtDef(engine),
     pushChatHistoryDef(engine),
     listChatHistoryDef(engine),
     recordPromptDef(engine),

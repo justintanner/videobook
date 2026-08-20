@@ -101,6 +101,8 @@ export default defineConfig({
       'server/src/remotion/subtitles/chunker.test.ts',
       'server/src/remotion/subtitles/segments.test.ts',
       'server/src/remotion/util.test.ts',
+      'server/src/transcript-projection.test.ts',
+      'server/src/transcript-srt.test.ts',
       'server/src/time-parse.test.ts',
       'server/src/timewarp.test.ts',
       'server/src/tools/**/*.test.ts',

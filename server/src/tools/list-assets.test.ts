@@ -203,11 +203,19 @@ describe("list_assets tool", () => {
       };
       const row = data.assets.find((asset) => asset.artifact_id === artifactId);
       expect(row?.transcript).toEqual({
-        kind: "timed",
-        language_code: "eng",
-        text: "Hello world",
-        word_count: 2,
+        elevenlabs: {
+          kind: "timed",
+          language_code: "eng",
+          text: "Hello world",
+          word_count: 2,
+          words: [
+            { text: "Hello", start: 0, end: 0.5 },
+            { text: "world", start: 0.6, end: 1 },
+          ],
+        },
+        plain: null,
       });
+      expect(JSON.stringify(row?.transcript)).not.toContain("speaker_id");
       expect(row?.vision_analysis).toEqual({
         summary: "A greeting.",
         mood: "warm",

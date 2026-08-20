@@ -610,12 +610,9 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('role="tab"')
     expect(html).not.toContain('<label>Address</label>')
     expect(html).toContain('class="inspector-media-field-label">VIDEO</span>')
-    expect(html).toContain('<h3>Inputs</h3>')
+    expect(html).not.toContain('<h3>Inputs</h3>')
     expect(html.indexOf('class="inspector-media-field-label"')).toBeLessThan(
       html.indexOf('aria-label="Cell output media"'),
-    )
-    expect(html.indexOf('aria-label="Cell output media"')).toBeLessThan(
-      html.indexOf('<h3>Inputs</h3>'),
     )
     expect(html).not.toContain('Dolt source')
     expect(html).toContain('inspector-delete-cell-button')
@@ -625,8 +622,8 @@ describe('NotebookCellInspector', () => {
       'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell cleanup actions"',
     )
     expect(html).not.toContain('record-card-actions inspector-media-actions')
-    expect(html.indexOf('<h3>Inputs</h3>')).toBeLessThan(
-      html.indexOf('class="inspector-cell-actions inspector-compact-actions"'),
+    expect(html).toContain(
+      'class="inspector-cell-actions inspector-compact-actions"',
     )
     expect(html).toContain('aria-label="Open @b3 fullscreen"')
     expect(html).not.toContain('aria-label="Edit @b3 image"')
@@ -1024,7 +1021,7 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('RichJson')
     expect(html).not.toContain('Restore')
     expect(html).not.toContain('inspector-input-source-label')
-    expect(html).toContain('aria-label="result input"')
+    expect(html).not.toContain('aria-label="result input"')
     expect(html).toContain(
       'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell cleanup actions"',
     )
@@ -1036,10 +1033,17 @@ describe('NotebookCellInspector', () => {
       ...cell,
       outputArtifactId: undefined,
     }
+    const splitter: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000014',
+      type: 'split_video',
+      label: 'split-source',
+      slot: { row: 0, column: 0 },
+    }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: pendingCell,
-      cells: [pendingCell],
+      cells: [pendingCell, splitter],
       edges: [],
       asset: undefined,
       status: 'pending',
@@ -1799,5 +1803,241 @@ describe('NotebookCellInspector', () => {
       'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell cleanup actions"',
     )
     expect(html).not.toContain('Dolt source')
+  })
+
+  it('tabs the transcript box as ELEVENLABS / PROMPT / JSON', () => {
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell,
+      cells: [cell],
+      edges: [],
+      asset: {
+        artifactId: cell.outputArtifactId!,
+        id: 'vid-source',
+        type: 'video',
+        mediaUrl: '/files/vid-source/original.mp4',
+        thumbnailUrl: '/files/vid-source/original.jpg',
+        width: 1920,
+        height: 1080,
+        duration: 30,
+        audioInfo: null,
+        transcript: {
+          elevenlabs: {
+            kind: 'timed',
+            languageCode: 'eng',
+            text: 'Hello world this later',
+            wordCount: 4,
+            words: [
+              { text: 'Hello', start: 0, end: 0.4 },
+              { text: 'world', start: 0.45, end: 0.9 },
+              { text: 'this', start: 5.2, end: 5.5 },
+              { text: 'later', start: 5.55, end: 6 },
+            ],
+          },
+          plain: {
+            kind: 'plain',
+            languageCode: null,
+            text: 'The gpt-4o transcription.',
+            wordCount: 3,
+            words: [],
+          },
+        },
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+      onTranscribeAsset: () => undefined,
+      onAnalyzeAsset: () => undefined,
+      onDownloadTranscriptSrt: () => undefined,
+    }))
+
+    expect(html).toContain('aria-label="Transcript"')
+    expect(html).toContain('role="tablist" aria-label="Transcript source"')
+    expect(html).toContain('>ELEVENLABS</button>')
+    expect(html).toContain('>PROMPT</button>')
+    expect(html).toContain('>JSON</button>')
+    expect(html).toContain('0:00  Hello world')
+    expect(html).toContain('0:05  this later')
+    expect(html).toContain('Word-timed · 4 words · eng')
+    expect(html).toContain('aria-label="Download SRT"')
+    expect(html).toContain('aria-label="Transcribe again"')
+    expect(html).not.toContain('aria-disabled="true"')
+  })
+
+  it('disables missing transcript tabs and the SRT control', () => {
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell,
+      cells: [cell],
+      edges: [],
+      asset: {
+        artifactId: cell.outputArtifactId!,
+        id: 'vid-source',
+        type: 'video',
+        mediaUrl: '/files/vid-source/original.mp4',
+        thumbnailUrl: null,
+        width: 1920,
+        height: 1080,
+        duration: 30,
+        audioInfo: null,
+        transcript: {
+          elevenlabs: null,
+          plain: {
+            kind: 'plain',
+            languageCode: null,
+            text: 'Plain transcription only.',
+            wordCount: 3,
+            words: [],
+          },
+        },
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+      onTranscribeAsset: () => undefined,
+      onAnalyzeAsset: () => undefined,
+      onDownloadTranscriptSrt: () => undefined,
+    }))
+
+    expect(html).toContain('title="No ElevenLabs transcript"')
+    expect(html).toContain('aria-label="Download SRT unavailable"')
+    expect(html).toContain('title="No word-timed ElevenLabs transcript"')
+    expect(html).toContain('Plain transcription only.')
+  })
+
+  it('hides the dead INPUTS picker on a passive video cell with no candidates', () => {
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell,
+      cells: [cell],
+      edges: [],
+      asset: {
+        artifactId: cell.outputArtifactId!,
+        id: 'vid-source',
+        type: 'video',
+        mediaUrl: '/files/vid-source/original.mp4',
+        thumbnailUrl: null,
+        width: 1920,
+        height: 1080,
+        duration: 30,
+        audioInfo: null,
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).not.toContain('<h3>Inputs</h3>')
+    expect(html).not.toContain('aria-label="media input"')
+  })
+
+  it('keeps the INPUTS picker when a compatible producer exists', () => {
+    const splitter: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000015',
+      type: 'split_video',
+      label: 'split-source',
+      slot: { row: 0, column: 0 },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell,
+      cells: [cell, splitter],
+      edges: [],
+      asset: {
+        artifactId: cell.outputArtifactId!,
+        id: 'vid-source',
+        type: 'video',
+        mediaUrl: '/files/vid-source/original.mp4',
+        thumbnailUrl: null,
+        width: 1920,
+        height: 1080,
+        duration: 30,
+        audioInfo: null,
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('<h3>Inputs</h3>')
+    expect(html).toContain('aria-label="media input"')
+    expect(html).toContain('role="listbox" aria-label="media input options"')
+    expect(html).toContain('<strong>@a1</strong>')
+  })
+
+  it('keeps disconnect available when a media input is connected', () => {
+    const splitter: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000016',
+      type: 'split_video',
+      label: 'split-source',
+      slot: { row: 0, column: 0 },
+    }
+    const edges: NotebookEdge[] = [{
+      id: '01900000-0000-7000-8000-000000000017',
+      source: splitter.id,
+      target: cell.id,
+      targetInput: 'media',
+    }]
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell,
+      cells: [cell, splitter],
+      edges,
+      asset: {
+        artifactId: cell.outputArtifactId!,
+        id: 'vid-source',
+        type: 'video',
+        mediaUrl: '/files/vid-source/original.mp4',
+        thumbnailUrl: null,
+        width: 1920,
+        height: 1080,
+        duration: 30,
+        audioInfo: null,
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('<h3>Inputs</h3>')
+    expect(html).toContain('aria-label="Remove @a1 from media input"')
+    expect(html).toContain('Disconnect input')
   })
 })

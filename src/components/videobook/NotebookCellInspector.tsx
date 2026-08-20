@@ -91,7 +91,7 @@ import {
   mediaCellHasSpokenAudio,
   mediaCellIsAnalyzableVideo,
   type MediaInsightWork,
-  type MediaTranscript,
+  type MediaTranscriptSources,
   type MediaVisionAnalysis,
 } from '@/videobook/media-insights'
 import { RichJson } from './RichJson'
@@ -365,7 +365,7 @@ export type NotebookCellInspectorAsset = {
   duration: number | null
   audioInfo: NotebookAudioInfo | null
   analysisInfo?: NotebookAnalysisInfo | null
-  transcript?: MediaTranscript | null
+  transcript?: MediaTranscriptSources | null
   visionAnalysis?: MediaVisionAnalysis | null
 }
 
@@ -422,6 +422,10 @@ type NotebookCellInspectorProps = {
   onDelete: () => Promise<void>
   onTranscribeAsset?: (artifactId: string) => void
   onAnalyzeAsset?: (artifactId: string) => void
+  onLoadTranscriptJson?: (
+    artifactId: string,
+  ) => Promise<{ text: string; file: string }>
+  onDownloadTranscriptSrt?: (artifactId: string) => void
   onOpenFullscreen: (asset: NotebookCellInspectorAsset) => void
   onPreviewPayload?: (
     cellId: string,
@@ -464,6 +468,33 @@ function isVideoProducingSource(cell: NotebookCell): boolean {
     || cell.type === 'generate_video'
     || cell.type === 'concat'
     || cell.type === 'splice'
+}
+
+function inspectorInputRowVisible(
+  connected: boolean,
+  compatibleCandidateCount: number,
+): boolean {
+  return connected || compatibleCandidateCount > 0
+}
+
+function positionOpenSourcePicker(details: HTMLDetailsElement): void {
+  details.classList.remove('inspector-source-picker-above')
+  if (!details.open) return
+  const summary = details.querySelector('summary')
+  summary?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  const options = details.querySelector<HTMLElement>('.inspector-source-picker-options')
+  const container = details.closest<HTMLElement>('.inspector-media-content')
+    ?? details.closest<HTMLElement>('.inspector-analysis-body')
+    ?? details.closest<HTMLElement>('.inspector-body')
+  if (!options || !container) return
+  const containerRect = container.getBoundingClientRect()
+  const summaryRect = (summary ?? details).getBoundingClientRect()
+  const spaceBelow = containerRect.bottom - summaryRect.bottom
+  const spaceAbove = summaryRect.top - containerRect.top
+  const needed = Math.min(252, options.scrollHeight || 160)
+  if (spaceBelow < needed && spaceAbove > spaceBelow) {
+    details.classList.add('inspector-source-picker-above')
+  }
 }
 
 function compatibleSource(
@@ -812,6 +843,9 @@ function SourceCellPicker({
     <details
       ref={detailsRef}
       className="inspector-source-picker"
+      onToggle={(event) => {
+        positionOpenSourcePicker(event.currentTarget)
+      }}
       onBlur={(event) => {
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
           return
@@ -943,6 +977,9 @@ function AttachSourcePicker({
     <details
       ref={detailsRef}
       className="inspector-source-picker inspector-attach-source-picker"
+      onToggle={(event) => {
+        positionOpenSourcePicker(event.currentTarget)
+      }}
       onBlur={(event) => {
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
           return
@@ -1034,30 +1071,38 @@ function InputSources({
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
 }) {
   const inputs = cellInputNames(cell, edges)
+  const rows = inputs.flatMap((input) => {
+    const edge = edges.find((candidate) =>
+      candidate.target === cell.id && candidate.targetInput === input)
+    const sourceCell = edge
+      ? cells.find((candidate) => candidate.id === edge.source)
+      : undefined
+    const candidates = cells
+      .filter((candidate) =>
+        compatibleSource(cell, input, candidate)
+        || candidate.id === edge?.source)
+      .sort((left, right) =>
+        left.slot.row - right.slot.row
+        || left.slot.column - right.slot.column)
+    if (!inspectorInputRowVisible(Boolean(edge), candidates.length)) return []
+    return [{
+      input,
+      edge,
+      sourceCell,
+      candidates,
+      inputLabel: input === 'input'
+        ? 'input'
+        : `${input.replaceAll('_', ' ')} input`,
+    }]
+  })
 
-  if (inputs.length === 0 && attachments.length === 0) return null
+  if (rows.length === 0 && attachments.length === 0) return null
 
   return (
     <section className="inspector-input-sources">
       <h3>Inputs</h3>
       <div className="inspector-input-source-rows">
-        {inputs.map((input) => {
-          const edge = edges.find((candidate) =>
-            candidate.target === cell.id && candidate.targetInput === input)
-          const sourceCell = edge
-            ? cells.find((candidate) => candidate.id === edge.source)
-            : undefined
-          const inputLabel = input === 'input'
-            ? 'input'
-            : `${input.replaceAll('_', ' ')} input`
-          const candidates = cells
-            .filter((candidate) =>
-              compatibleSource(cell, input, candidate)
-              || candidate.id === edge?.source)
-            .sort((left, right) =>
-              left.slot.row - right.slot.row
-              || left.slot.column - right.slot.column)
-          return (
+        {rows.map(({ input, edge, sourceCell, candidates, inputLabel }) => (
             <div
               className={edge
                 ? 'inspector-input-source-row connected'
@@ -1087,8 +1132,7 @@ function InputSources({
                 </button>
               )}
             </div>
-          )
-        })}
+        ))}
         {attachments.length > 0 && (
           <div className="inspector-input-source-row">
             <AttachSourcePicker
@@ -1218,6 +1262,8 @@ function MediaCellInspector({
   onOpenFullscreen,
   onTranscribeAsset,
   onAnalyzeAsset,
+  onLoadTranscriptJson,
+  onDownloadTranscriptSrt,
 }: Pick<
   NotebookCellInspectorProps,
   | 'cell'
@@ -1235,6 +1281,8 @@ function MediaCellInspector({
   | 'onOpenFullscreen'
   | 'onTranscribeAsset'
   | 'onAnalyzeAsset'
+  | 'onLoadTranscriptJson'
+  | 'onDownloadTranscriptSrt'
 >) {
   const versionArtifactIds = cell.type === 'audio'
     || cell.type === 'image'
@@ -1326,6 +1374,7 @@ function MediaCellInspector({
           && onTranscribeAsset
           && onAnalyzeAsset && (
           <MediaInsightsPanel
+            artifactId={previewAsset.artifactId}
             transcript={previewAsset.transcript ?? null}
             analysis={previewAsset.visionAnalysis ?? null}
             analyzable={mediaCellIsAnalyzableVideo(previewAsset.type)}
@@ -1335,6 +1384,12 @@ function MediaCellInspector({
             error={insightWork.error}
             onTranscribe={() => onTranscribeAsset(previewAsset.artifactId)}
             onAnalyze={() => onAnalyzeAsset(previewAsset.artifactId)}
+            onLoadTranscriptJson={onLoadTranscriptJson
+              ? () => onLoadTranscriptJson(previewAsset.artifactId)
+              : undefined}
+            onDownloadTranscriptSrt={onDownloadTranscriptSrt
+              ? () => onDownloadTranscriptSrt(previewAsset.artifactId)
+              : undefined}
           />
         )}
         <InputSources
@@ -3047,6 +3102,8 @@ export function NotebookCellInspector({
   onLoadGenerationPayload,
   onTranscribeAsset,
   onAnalyzeAsset,
+  onLoadTranscriptJson,
+  onDownloadTranscriptSrt,
   generations,
   mentionAssets,
   voiceCatalog,
@@ -3122,6 +3179,8 @@ export function NotebookCellInspector({
         onOpenFullscreen={onOpenFullscreen}
         onTranscribeAsset={onTranscribeAsset}
         onAnalyzeAsset={onAnalyzeAsset}
+        onLoadTranscriptJson={onLoadTranscriptJson}
+        onDownloadTranscriptSrt={onDownloadTranscriptSrt}
       />
     )
   }

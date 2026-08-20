@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (306)
+## MCP endpoints (307)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -71,6 +71,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `estimate_cost` — Estimate the USD cost of a generation tool call before invoking it. Accepts one or more {tool_name, input} pairs and returns a single CostEstimate summed across all calls. Token-based providers (openai/anthropic/xai) use a chars/4 heuristic and price via a bundled local rate table. Tools without a registered cost adapter return a $0 estimate with a warning.
 - `export_asset_to_project` — Export an asset from one project to a different project
 - `export_to_downloads` — Copy an asset's original media file to the user's Downloads folder
+- `export_transcript_srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.
 - `extend_audio_asset` (historical names, not exposed: `extend_audio`) — Extend an existing audio asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new audio asset.
 - `extend_fal_grok_imagine_video` (historical names, not exposed: `generate_grok_imagine_video_extend_fal`, `generate_grok_imagine_extend_fal_video`) — Extend a video via fal.ai using xAI Grok Imagine Video extend-video. Creates a new video artifact and enqueues a background job.
 - `extend_kie_grok_imagine_video` (historical names, not exposed: `extend_grok_imagine_video`) — Extend an existing video asset using Kie's grok-imagine/extend. Creates a new video artifact and enqueues a background job. Requires at least one of asset_id or video_ref.
@@ -235,7 +236,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `push_chat_history` — Append a message to the chat input history log.
 - `read_asset_metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.
 - `read_file_at_commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it.
-- `read_transcript` — Read the transcript for a video or audio asset. Prefers timed ElevenLabs word-level cues (elevenlabs.json), falling back to plain text (.analysis.gpt4otrans.json). Returns kind='timed' with per-word start/end cues, kind='plain' with full text, kind='silence' if a transcript exists but contains no dialog, or kind='missing' if no transcript file exists.
+- `read_transcript` — Read the transcript for a video or audio asset. Prefers timed ElevenLabs word-level cues (elevenlabs.json), falling back to plain text (.analysis.gpt4otrans.json). Returns kind='timed' with per-word start/end cues, kind='plain' with full text, kind='silence' if a transcript exists but contains no dialog, or kind='missing' if no transcript file exists. Pass raw=true to return the untouched sidecar text instead of the parsed projection.
 - `reconcile_project_work` (historical names, not exposed: `sync`) — Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.
 - `record_prompt` — Append a user-typed prompt to the per-surface, per-project Dolt history. Surfaces: chat, image_rewrite, video_rewrite, script_rewrite, post, image_generate, video_generate, audio_generate.
 - `recover_asset` — Recover a single asset stuck in the failed/error state by clearing its persisted generation error. Non-destructive: the asset and its media files are kept intact — only the error record is removed, returning the card to its normal ready state. Use this instead of clean_failed_assets when the asset must be preserved.

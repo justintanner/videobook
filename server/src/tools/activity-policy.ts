@@ -10,6 +10,7 @@ const EXCLUDED_TOOLS = new Set([
   "detect_scenes",
   "estimate_cost",
   "export_to_downloads",
+  "export_transcript_srt",
   "inspect_generation_request",
   "ensure_default_project",
   "get_timeline",

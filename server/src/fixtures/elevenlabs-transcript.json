@@ -1,0 +1,29 @@
+{
+  "language_code": "eng",
+  "language_probability": 0.99,
+  "text": "Hello world this is a test of the SRT exporter.",
+  "words": [
+    { "text": "Hello", "start": 0.0, "end": 0.4, "type": "word", "speaker_id": "spk_0" },
+    { "text": " ", "start": 0.4, "end": 0.45, "type": "spacing", "speaker_id": null },
+    { "text": "world", "start": 0.45, "end": 0.9, "type": "word", "speaker_id": "spk_0" },
+    { "text": " ", "start": 0.9, "end": 0.95, "type": "spacing", "speaker_id": null },
+    { "text": "this", "start": 1.2, "end": 1.4, "type": "word", "speaker_id": "spk_0" },
+    { "text": " ", "start": 1.4, "end": 1.45, "type": "spacing", "speaker_id": null },
+    { "text": "is", "start": 1.45, "end": 1.6, "type": "word", "speaker_id": "spk_0" },
+    { "text": " ", "start": 1.6, "end": 1.65, "type": "spacing", "speaker_id": null },
+    { "text": "a", "start": 1.65, "end": 1.75, "type": "word", "speaker_id": "spk_0" },
+    { "text": " ", "start": 1.75, "end": 1.8, "type": "spacing", "speaker_id": null },
+    { "text": "test", "start": 1.8, "end": 2.1, "type": "word", "speaker_id": "spk_0" },
+    { "text": " ", "start": 2.1, "end": 2.15, "type": "spacing", "speaker_id": null },
+    { "text": "of", "start": 2.15, "end": 2.3, "type": "word", "speaker_id": "spk_0" },
+    { "text": " ", "start": 2.3, "end": 2.35, "type": "spacing", "speaker_id": null },
+    { "text": "the", "start": 2.35, "end": 2.5, "type": "word", "speaker_id": "spk_0" },
+    { "text": " ", "start": 2.5, "end": 2.55, "type": "spacing", "speaker_id": null },
+    { "text": "SRT", "start": 2.55, "end": 2.9, "type": "word", "speaker_id": "spk_0" },
+    { "text": " ", "start": 2.9, "end": 2.95, "type": "spacing", "speaker_id": null },
+    { "text": "exporter.", "start": 2.95, "end": 3.6, "type": "word", "speaker_id": "spk_0" }
+  ],
+  "channel_index": 0,
+  "transcription_id": null,
+  "audio_duration_secs": 4.0
+}

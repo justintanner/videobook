@@ -22,8 +22,8 @@ import {
 import { readAndAssessDialog } from "../dialog-quality.js";
 import {
   hasSpokenAudio,
-  readAssetTranscriptSummary,
-  type AssetTranscriptSummary,
+  readAssetTranscriptSources,
+  type AssetTranscriptSources,
 } from "../transcript-projection.js";
 import {
   isAnalyzableVideo,
@@ -125,10 +125,9 @@ export type ProjectAsset = {
     duration_seconds: number;
   } | null;
   analysis_info: ProjectAssetAnalysis | null;
-  /** Video/audio assets only: the asset transcript, or null when none exists.
-   *  Lets the inspector show a copiable transcript without a second round trip
-   *  and decide whether to offer the Transcribe action. */
-  transcript: AssetTranscriptSummary | null;
+  /** Video/audio assets only: ElevenLabs and gpt-4o sources side by side, or
+   *  null when neither sidecar exists. Compact summaries only — no raw JSON. */
+  transcript: AssetTranscriptSources | null;
   /** Video assets only: compact vision analysis from `.original.analysis.json`,
    *  or null when the asset has not been analyzed yet. */
   vision_analysis: VideoAnalysisSummary | null;
@@ -693,7 +692,7 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
       // transcripts resolve from the object-hash memo on repeat listings.
       const [transcript, vision_analysis] = await Promise.all([
         hasSpokenAudio(a.kind)
-          ? readAssetTranscriptSummary(engine, a.artifactId, files)
+          ? readAssetTranscriptSources(engine, a.artifactId, files)
           : Promise.resolve(null),
         isAnalyzableVideo(a.kind)
           ? readVideoAnalysisSummary(engine, a.artifactId)

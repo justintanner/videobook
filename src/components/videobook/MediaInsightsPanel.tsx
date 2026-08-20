@@ -4,21 +4,30 @@ import {
   Check,
   CircleAlert,
   Copy,
+  Download,
   RefreshCw,
   ScanEye,
 } from 'lucide-react'
 import {
-  transcriptDetailLabel,
-  transcriptHasText,
+  canDownloadTranscriptSrt,
+  resolveTranscriptTab,
+  sourcesAreSilenceOnly,
+  sourcesHaveTranscriptText,
+  transcriptTabBody,
+  transcriptTabCopyText,
+  transcriptTabMeta,
+  transcriptTabStates,
   visionAnalysisDetailLabel,
-  type MediaTranscript,
+  type MediaTranscriptSources,
   type MediaVisionAnalysis,
+  type TranscriptTabId,
 } from '@/videobook/media-insights'
 
 type CopyState = 'idle' | 'copied' | 'failed'
 
 export type MediaInsightsPanelProps = {
-  transcript: MediaTranscript | null
+  artifactId: string
+  transcript: MediaTranscriptSources | null
   analysis: MediaVisionAnalysis | null
   analyzable: boolean
   busy: boolean
@@ -27,6 +36,8 @@ export type MediaInsightsPanelProps = {
   error: string | null
   onTranscribe: () => void
   onAnalyze: () => void
+  onLoadTranscriptJson?: () => Promise<{ text: string; file: string }>
+  onDownloadTranscriptSrt?: () => void
 }
 
 function copyLabel(state: CopyState): string {
@@ -34,12 +45,12 @@ function copyLabel(state: CopyState): string {
   return state === 'failed' ? 'Retry' : 'Copy'
 }
 
-function TranscriptText({ text }: { text: string }) {
+function TranscriptText({ text, label }: { text: string; label: string }) {
   return (
     <pre
       className="inspector-transcript-text"
       tabIndex={0}
-      aria-label="Transcript"
+      aria-label={label}
     >
       {text}
     </pre>
@@ -106,28 +117,93 @@ function TranscriptSection({
   busy,
   transcribing,
   onTranscribe,
+  onLoadTranscriptJson,
+  onDownloadTranscriptSrt,
 }: Pick<
   MediaInsightsPanelProps,
-  'transcript' | 'busy' | 'transcribing' | 'onTranscribe'
+  | 'transcript'
+  | 'busy'
+  | 'transcribing'
+  | 'onTranscribe'
+  | 'onLoadTranscriptJson'
+  | 'onDownloadTranscriptSrt'
 >) {
+  const tabs = transcriptTabStates(transcript)
+  const [requestedTab, setRequestedTab] = useState<TranscriptTabId | null>(null)
   const [copyState, setCopyState] = useState<CopyState>('idle')
-  const hasText = transcriptHasText(transcript)
+  const [jsonText, setJsonText] = useState<string | null>(null)
+  const [jsonFile, setJsonFile] = useState<string | null>(null)
+  const [jsonError, setJsonError] = useState<string | null>(null)
+  const [jsonLoading, setJsonLoading] = useState(false)
+  const activeTab = resolveTranscriptTab(transcript, requestedTab)
+  const hasText = sourcesHaveTranscriptText(transcript)
+  const silenceOnly = sourcesAreSilenceOnly(transcript)
+  const canDownload = canDownloadTranscriptSrt(transcript)
+  const body = transcriptTabBody({
+    tab: activeTab,
+    sources: transcript,
+    jsonText,
+  })
+  const meta = transcriptTabMeta(activeTab, transcript, jsonFile)
+  const activeState = tabs.find((tab) => tab.id === activeTab)
+
   const copy = async () => {
-    if (!transcript) return
+    const text = transcriptTabCopyText({
+      tab: activeTab,
+      sources: transcript,
+      jsonText,
+    })
+    if (!text) return
     try {
-      await navigator.clipboard.writeText(transcript.text)
+      await navigator.clipboard.writeText(text)
       setCopyState('copied')
     } catch {
       setCopyState('failed')
     }
   }
 
+  const selectTab = (id: TranscriptTabId) => {
+    const tab = tabs.find((candidate) => candidate.id === id)
+    if (!tab?.enabled) return
+    setRequestedTab(id)
+    if (id !== 'json' || jsonText !== null || jsonLoading || !onLoadTranscriptJson) {
+      return
+    }
+    setJsonLoading(true)
+    setJsonError(null)
+    void onLoadTranscriptJson()
+      .then((result) => {
+        setJsonText(result.text)
+        setJsonFile(result.file)
+      })
+      .catch((error: unknown) => {
+        setJsonError(error instanceof Error ? error.message : String(error))
+      })
+      .finally(() => {
+        setJsonLoading(false)
+      })
+  }
+
+  const emptyMessage = silenceOnly
+    ? 'This clip has a transcript but no spoken dialog.'
+    : !transcript
+      ? 'No transcript yet.'
+      : activeState && !activeState.enabled
+        ? activeState.disabledReason
+        : activeTab === 'json' && jsonLoading
+          ? 'Loading sidecar…'
+          : activeTab === 'json' && jsonError
+            ? jsonError
+            : !body
+              ? 'No transcript yet.'
+              : null
+
   return (
     <section className="inspector-insight-block" aria-label="Transcript">
       <header className="inspector-insight-header">
         <span className="inspector-media-field-label">Transcript</span>
-        {hasText && (
-          <div className="inspector-insight-header-actions">
+        <div className="inspector-insight-header-actions">
+          {hasText && (
             <button
               type="button"
               className={`inspector-prompt-copy${copyState === 'copied' ? ' copied' : ''}`}
@@ -144,39 +220,71 @@ function TranscriptSection({
                 : <Copy size={12} aria-hidden="true" />}
               <span aria-live="polite">{copyLabel(copyState)}</span>
             </button>
+          )}
+          <button
+            type="button"
+            className="inspector-prompt-copy"
+            aria-label={canDownload
+              ? 'Download SRT'
+              : 'Download SRT unavailable'}
+            title={canDownload
+              ? 'Download SRT'
+              : 'No word-timed ElevenLabs transcript'}
+            disabled={!canDownload || busy || !onDownloadTranscriptSrt}
+            onClick={() => onDownloadTranscriptSrt?.()}
+          >
+            <Download size={12} aria-hidden="true" />
+            <span>SRT</span>
+          </button>
+          {hasText && (
             <InsightRerunButton
               label="Transcribe again"
               running={transcribing}
               disabled={busy || transcribing}
               onClick={onTranscribe}
             />
-          </div>
-        )}
+          )}
+        </div>
       </header>
-      {hasText && transcript
-        ? (
-          <>
-            <p className="inspector-insight-meta">
-              {transcriptDetailLabel(transcript)}
-            </p>
-            <TranscriptText text={transcript.text} />
-          </>
-        )
+      <div
+        className="inspector-transcript-tabs"
+        role="tablist"
+        aria-label="Transcript source"
+      >
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            aria-disabled={!tab.enabled}
+            disabled={!tab.enabled}
+            title={tab.disabledReason ?? tab.label}
+            className={activeTab === tab.id
+              ? 'inspector-transcript-tab active'
+              : 'inspector-transcript-tab'}
+            onClick={() => selectTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {meta && <p className="inspector-insight-meta">{meta}</p>}
+      {body && !emptyMessage
+        ? <TranscriptText text={body} label={`${activeState?.label ?? 'Transcript'} transcript`} />
         : (
           <div className="inspector-insight-empty">
-            <p>
-              {transcript?.kind === 'silence'
-                ? 'This clip has a transcript but no spoken dialog.'
-                : 'No transcript yet.'}
-            </p>
-            <InsightStartButton
-              icon={<Captions size={13} aria-hidden="true" />}
-              label={transcript ? 'Transcribe again' : 'Transcribe'}
-              runningLabel="Transcribing…"
-              running={transcribing}
-              disabled={busy || transcribing}
-              onClick={onTranscribe}
-            />
+            <p>{emptyMessage ?? 'No transcript yet.'}</p>
+            {!hasText && (
+              <InsightStartButton
+                icon={<Captions size={13} aria-hidden="true" />}
+                label={transcript ? 'Transcribe again' : 'Transcribe'}
+                runningLabel="Transcribing…"
+                running={transcribing}
+                disabled={busy || transcribing}
+                onClick={onTranscribe}
+              />
+            )}
           </div>
         )}
     </section>
@@ -241,6 +349,7 @@ function AnalysisSection({
 }
 
 export function MediaInsightsPanel({
+  artifactId,
   transcript,
   analysis,
   analyzable,
@@ -250,14 +359,19 @@ export function MediaInsightsPanel({
   error,
   onTranscribe,
   onAnalyze,
+  onLoadTranscriptJson,
+  onDownloadTranscriptSrt,
 }: MediaInsightsPanelProps) {
   return (
     <div className="inspector-media-insights">
       <TranscriptSection
+        key={artifactId}
         transcript={transcript}
         busy={busy}
         transcribing={transcribing}
         onTranscribe={onTranscribe}
+        onLoadTranscriptJson={onLoadTranscriptJson}
+        onDownloadTranscriptSrt={onDownloadTranscriptSrt}
       />
       {analyzable && (
         <AnalysisSection

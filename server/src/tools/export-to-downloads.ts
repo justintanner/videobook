@@ -1,31 +1,10 @@
-import { copyFile, access } from "node:fs/promises";
-import { constants as fsConstants } from "node:fs";
-import { homedir } from "node:os";
+import { copyFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { findPrimaryMediaFile } from "videobook-engine";
+import { resolveDownloadDestination } from "../downloads-dest.js";
 import type { ToolDef } from "./tool-def.js";
-
-async function resolveDestination(baseName: string, ext: string): Promise<string> {
-  const downloads = join(homedir(), "Downloads");
-  let candidate = join(downloads, `${baseName}${ext}`);
-  let n = 2;
-  while (await fileExists(candidate)) {
-    candidate = join(downloads, `${baseName} (${n})${ext}`);
-    n += 1;
-  }
-  return candidate;
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path, fsConstants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export function exportToDownloadsDef(engine: Engine): ToolDef {
   return {
@@ -63,7 +42,10 @@ export function exportToDownloadsDef(engine: Engine): ToolDef {
 
       const source = join(manifest.path, file.name);
       const ext = extname(file.name);
-      const dest = await resolveDestination(artifactResult.value.label ?? asset_id, ext);
+      const dest = await resolveDownloadDestination(
+        artifactResult.value.label ?? asset_id,
+        ext,
+      );
 
       try {
         await copyFile(source, dest);
