@@ -6,9 +6,11 @@ import {
   canDownloadTranscriptSrt,
   formatCueTimestamp,
   formatTranscriptCues,
-  resolveTranscriptTab,
-  transcriptTabCopyText,
-  transcriptTabStates,
+  resolveTranscriptCardView,
+  transcriptSourceBody,
+  transcriptSourceCopyText,
+  transcriptSourceEmptyMessage,
+  transcriptSourceMeta,
   visionAnalysisDetailLabel,
   transcriptDetailLabel,
   transcriptHasText,
@@ -220,38 +222,176 @@ describe('asMediaTranscriptSources', () => {
   })
 })
 
-describe('transcript tabs', () => {
-  it('disables missing-source tabs with a reason', () => {
-    const states = transcriptTabStates({
-      elevenlabs: {
-        kind: 'timed',
-        languageCode: 'eng',
-        text: 'Hello',
-        wordCount: 1,
-        words: [{ text: 'Hello', start: 0, end: 0.4 }],
-      },
-      plain: null,
+describe('per-source transcript cards', () => {
+  const sources = asMediaTranscriptSources(twoSourcePayload)
+  const plainOnly = {
+    elevenlabs: null,
+    plain: {
+      kind: 'plain' as const,
+      languageCode: null,
+      text: 'Plain only.',
+      wordCount: 2,
+      words: [],
+    },
+  }
+  const elevenlabsOnly = {
+    elevenlabs: {
+      kind: 'timed' as const,
+      languageCode: 'eng',
+      text: 'Hello world this later',
+      wordCount: 4,
+      words: timedWords,
+    },
+    plain: null,
+  }
+  const silence = {
+    kind: 'silence' as const,
+    languageCode: null,
+    text: '',
+    wordCount: 0,
+    words: [],
+  }
+
+  it('keeps GPT-4o copy, body, and meta free of ElevenLabs cues', () => {
+    const copy = transcriptSourceCopyText({
+      source: 'plain',
+      transcript: sources!.plain,
+      view: 'text',
+      jsonText: '{"elevenlabs":"must-not-leak"}',
     })
-    expect(states.map((tab) => tab.label)).toEqual([
-      'ELEVENLABS',
-      'PROMPT',
-      'JSON',
-    ])
-    expect(states.find((tab) => tab.id === 'prompt')).toMatchObject({
-      enabled: false,
-      disabledReason: 'No gpt-4o transcription',
+    const body = transcriptSourceBody({
+      source: 'plain',
+      transcript: sources!.plain,
+      view: 'text',
+      jsonText: '{"elevenlabs":"must-not-leak"}',
     })
-    expect(states.find((tab) => tab.id === 'json')?.enabled).toBe(true)
+    const meta = transcriptSourceMeta({
+      transcript: sources!.plain,
+      view: 'text',
+      jsonFile: 'elevenlabs.json',
+    })
+    expect(copy).toBe('The gpt-4o transcription.')
+    expect(body).toBe('The gpt-4o transcription.')
+    expect(meta).toBe('Plain text · 3 words')
+    expect(copy).not.toContain('0:00')
+    expect(body).not.toContain('Hello world')
+    expect(meta).not.toContain('Word-timed')
+    expect(meta).not.toContain('elevenlabs.json')
   })
 
-  it('disables every tab when no sidecar exists', () => {
-    const states = transcriptTabStates(null)
-    expect(states.every((tab) => !tab.enabled)).toBe(true)
+  it('formats ElevenLabs copy from timed cues when words exist', () => {
+    expect(transcriptSourceCopyText({
+      source: 'elevenlabs',
+      transcript: sources!.elevenlabs,
+      view: 'text',
+      jsonText: '{"plain":"must-not-leak"}',
+    })).toBe('0:00  Hello world\n0:05  this later')
+    expect(transcriptSourceBody({
+      source: 'elevenlabs',
+      transcript: sources!.elevenlabs,
+      view: 'text',
+      jsonText: null,
+    })).toBe('0:00  Hello world\n0:05  this later')
+    expect(transcriptSourceMeta({
+      transcript: sources!.elevenlabs,
+      view: 'text',
+      jsonFile: '.analysis.gpt4otrans.json',
+    })).toBe('Word-timed · 4 words · eng')
   })
 
-  it('prefers the elevenlabs tab when both sources exist', () => {
-    expect(resolveTranscriptTab(asMediaTranscriptSources(twoSourcePayload), null))
-      .toBe('elevenlabs')
+  it('uses each source sidecar for JSON copy and meta', () => {
+    expect(transcriptSourceCopyText({
+      source: 'plain',
+      transcript: sources!.plain,
+      view: 'json',
+      jsonText: '{"text":"gpt4o"}',
+    })).toBe('{"text":"gpt4o"}')
+    expect(transcriptSourceMeta({
+      transcript: sources!.plain,
+      view: 'json',
+      jsonFile: '.analysis.gpt4otrans.json',
+    })).toBe('Raw sidecar · .analysis.gpt4otrans.json')
+    expect(transcriptSourceCopyText({
+      source: 'elevenlabs',
+      transcript: sources!.elevenlabs,
+      view: 'json',
+      jsonText: '{"text":"scribe"}',
+    })).toBe('{"text":"scribe"}')
+    expect(transcriptSourceMeta({
+      transcript: sources!.elevenlabs,
+      view: 'json',
+      jsonFile: 'elevenlabs.json',
+    })).toBe('Raw sidecar · elevenlabs.json')
+  })
+
+  it('keeps dual-source, single-source, silence, and missing cases distinct', () => {
+    expect(transcriptSourceCopyText({
+      source: 'plain',
+      transcript: sources!.plain,
+      view: 'text',
+      jsonText: null,
+    })).not.toBe(transcriptSourceCopyText({
+      source: 'elevenlabs',
+      transcript: sources!.elevenlabs,
+      view: 'text',
+      jsonText: null,
+    }))
+    expect(transcriptSourceCopyText({
+      source: 'plain',
+      transcript: plainOnly.plain,
+      view: 'text',
+      jsonText: null,
+    })).toBe('Plain only.')
+    expect(transcriptSourceCopyText({
+      source: 'elevenlabs',
+      transcript: plainOnly.elevenlabs,
+      view: 'text',
+      jsonText: null,
+    })).toBe('')
+    expect(transcriptSourceCopyText({
+      source: 'elevenlabs',
+      transcript: elevenlabsOnly.elevenlabs,
+      view: 'text',
+      jsonText: null,
+    })).toContain('0:00')
+    expect(transcriptSourceCopyText({
+      source: 'plain',
+      transcript: elevenlabsOnly.plain,
+      view: 'text',
+      jsonText: null,
+    })).toBe('')
+    expect(transcriptSourceCopyText({
+      source: 'plain',
+      transcript: silence,
+      view: 'text',
+      jsonText: null,
+    })).toBe('')
+    expect(transcriptSourceEmptyMessage({
+      source: 'plain',
+      transcript: silence,
+      view: 'text',
+      jsonLoading: false,
+      jsonError: null,
+      body: '',
+    })).toBe('This clip has a transcript but no spoken dialog.')
+    expect(transcriptSourceEmptyMessage({
+      source: 'plain',
+      transcript: null,
+      view: 'text',
+      jsonLoading: false,
+      jsonError: null,
+      body: '',
+    })).toBe('No GPT-4o translation yet.')
+    expect(transcriptSourceEmptyMessage({
+      source: 'elevenlabs',
+      transcript: null,
+      view: 'text',
+      jsonLoading: false,
+      jsonError: null,
+      body: '',
+    })).toBe('No transcript yet.')
+    expect(resolveTranscriptCardView(null, 'json')).toBe('text')
+    expect(resolveTranscriptCardView(sources!.plain, 'json')).toBe('json')
   })
 })
 
@@ -264,40 +404,25 @@ describe('cue formatting', () => {
   })
 })
 
-describe('transcriptTabCopyText', () => {
-  it('copies the active tab content', () => {
-    const sources = asMediaTranscriptSources(twoSourcePayload)
-    expect(transcriptTabCopyText({
-      tab: 'elevenlabs',
-      sources,
-      jsonText: null,
-    })).toBe('0:00  Hello world\n0:05  this later')
-    expect(transcriptTabCopyText({
-      tab: 'prompt',
-      sources,
-      jsonText: null,
-    })).toBe('The gpt-4o transcription.')
-    expect(transcriptTabCopyText({
-      tab: 'json',
-      sources,
-      jsonText: '{"text":"raw"}',
-    })).toBe('{"text":"raw"}')
-  })
-})
-
 describe('canDownloadTranscriptSrt', () => {
   it('is true only for a word-timed ElevenLabs source', () => {
-    expect(canDownloadTranscriptSrt(asMediaTranscriptSources(twoSourcePayload)))
-      .toBe(true)
+    const sources = asMediaTranscriptSources(twoSourcePayload)
+    expect(canDownloadTranscriptSrt(sources!.elevenlabs)).toBe(true)
+    expect(canDownloadTranscriptSrt(sources!.plain)).toBe(false)
     expect(canDownloadTranscriptSrt({
-      elevenlabs: null,
-      plain: {
-        kind: 'plain',
-        languageCode: null,
-        text: 'Plain only.',
-        wordCount: 2,
-        words: [],
-      },
+      kind: 'plain',
+      languageCode: null,
+      text: 'Plain only.',
+      wordCount: 2,
+      words: [],
     })).toBe(false)
+    expect(canDownloadTranscriptSrt({
+      kind: 'silence',
+      languageCode: null,
+      text: '',
+      wordCount: 0,
+      words: [],
+    })).toBe(false)
+    expect(canDownloadTranscriptSrt(null)).toBe(false)
   })
 })

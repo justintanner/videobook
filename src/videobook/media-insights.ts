@@ -53,14 +53,13 @@ export type MediaTranscriptSources = {
   plain: MediaTranscript | null
 }
 
-export type TranscriptTabId = 'elevenlabs' | 'prompt' | 'json'
+/** Sidecar identity passed to `read_transcript` when loading raw JSON. */
+export type TranscriptSidecarSource = 'plain' | 'elevenlabs'
 
-export type TranscriptTabState = {
-  id: TranscriptTabId
-  label: string
-  enabled: boolean
-  disabledReason: string | null
-}
+export type TranscriptCardView = 'text' | 'json'
+
+export const PLAIN_TRANSCRIPT_CARD_TITLE = 'GPT-4o Translation'
+export const ELEVENLABS_TRANSCRIPT_CARD_TITLE = 'ElevenLabs Transcript'
 
 export type MediaVisionAnalysis = {
   summary: string
@@ -229,100 +228,81 @@ export function formatTranscriptCues(
     .join('\n')
 }
 
-export function transcriptTabStates(
-  sources: MediaTranscriptSources | null,
-): TranscriptTabState[] {
-  const hasElevenlabs = Boolean(sources?.elevenlabs)
-  const hasPlain = Boolean(sources?.plain)
-  return [
-    {
-      id: 'elevenlabs',
-      label: 'ELEVENLABS',
-      enabled: hasElevenlabs,
-      disabledReason: hasElevenlabs ? null : 'No ElevenLabs transcript',
-    },
-    {
-      id: 'prompt',
-      label: 'PROMPT',
-      enabled: hasPlain,
-      disabledReason: hasPlain ? null : 'No gpt-4o transcription',
-    },
-    {
-      id: 'json',
-      label: 'JSON',
-      enabled: hasElevenlabs || hasPlain,
-      disabledReason: hasElevenlabs || hasPlain ? null : 'No transcript sidecar',
-    },
-  ]
+export function resolveTranscriptCardView(
+  transcript: MediaTranscript | null,
+  requested: TranscriptCardView | null,
+): TranscriptCardView {
+  if (requested === 'json' && transcript) return 'json'
+  return 'text'
 }
 
-export function resolveTranscriptTab(
-  sources: MediaTranscriptSources | null,
-  requested: TranscriptTabId | null,
-): TranscriptTabId {
-  const enabled = new Set(
-    transcriptTabStates(sources)
-      .filter((tab) => tab.enabled)
-      .map((tab) => tab.id),
-  )
-  if (requested && enabled.has(requested)) return requested
-  if (enabled.has('elevenlabs')) return 'elevenlabs'
-  if (enabled.has('prompt')) return 'prompt'
-  return 'json'
+function sourceText(input: {
+  source: TranscriptSidecarSource
+  transcript: MediaTranscript | null
+}): string {
+  const transcript = input.transcript
+  if (!transcript || transcript.kind === 'silence') return ''
+  if (
+    input.source === 'elevenlabs'
+    && transcript.kind === 'timed'
+    && transcript.words.length > 0
+  ) {
+    return formatTranscriptCues(transcript.words)
+  }
+  return transcript.text
 }
 
-export function transcriptTabCopyText(input: {
-  tab: TranscriptTabId
-  sources: MediaTranscriptSources | null
+export function transcriptSourceCopyText(input: {
+  source: TranscriptSidecarSource
+  transcript: MediaTranscript | null
+  view: TranscriptCardView
   jsonText: string | null
 }): string {
-  if (input.tab === 'json') return input.jsonText ?? ''
-  if (input.tab === 'prompt') return input.sources?.plain?.text ?? ''
-  const timed = input.sources?.elevenlabs
-  if (!timed) return ''
-  if (timed.kind === 'timed' && timed.words.length > 0) {
-    return formatTranscriptCues(timed.words)
-  }
-  return timed.text
+  if (input.view === 'json') return input.jsonText ?? ''
+  return sourceText(input)
 }
 
-export function transcriptTabBody(input: {
-  tab: TranscriptTabId
-  sources: MediaTranscriptSources | null
+export function transcriptSourceBody(input: {
+  source: TranscriptSidecarSource
+  transcript: MediaTranscript | null
+  view: TranscriptCardView
   jsonText: string | null
 }): string {
-  return transcriptTabCopyText(input)
+  return transcriptSourceCopyText(input)
 }
 
-export function transcriptTabMeta(
-  tab: TranscriptTabId,
-  sources: MediaTranscriptSources | null,
-  jsonFile: string | null,
-): string | null {
-  if (tab === 'json') {
-    return jsonFile ? `Raw sidecar · ${jsonFile}` : 'Raw sidecar'
+export function transcriptSourceMeta(input: {
+  transcript: MediaTranscript | null
+  view: TranscriptCardView
+  jsonFile: string | null
+}): string | null {
+  if (input.view === 'json') {
+    return input.jsonFile ? `Raw sidecar · ${input.jsonFile}` : 'Raw sidecar'
   }
-  const source = tab === 'prompt' ? sources?.plain : sources?.elevenlabs
-  return source ? transcriptDetailLabel(source) : null
+  return input.transcript ? transcriptDetailLabel(input.transcript) : null
+}
+
+export function transcriptSourceEmptyMessage(input: {
+  source: TranscriptSidecarSource
+  transcript: MediaTranscript | null
+  view: TranscriptCardView
+  jsonLoading: boolean
+  jsonError: string | null
+  body: string
+}): string | null {
+  if (input.view === 'json' && input.jsonLoading) return 'Loading sidecar…'
+  if (input.view === 'json' && input.jsonError) return input.jsonError
+  if (input.transcript?.kind === 'silence') {
+    return 'This clip has a transcript but no spoken dialog.'
+  }
+  if (input.body) return null
+  return input.source === 'plain'
+    ? 'No GPT-4o translation yet.'
+    : 'No transcript yet.'
 }
 
 export function canDownloadTranscriptSrt(
-  sources: MediaTranscriptSources | null,
+  elevenlabs: MediaTranscript | null,
 ): boolean {
-  return sources?.elevenlabs?.kind === 'timed'
-}
-
-export function sourcesHaveTranscriptText(
-  sources: MediaTranscriptSources | null,
-): boolean {
-  return transcriptHasText(sources?.elevenlabs ?? null)
-    || transcriptHasText(sources?.plain ?? null)
-}
-
-export function sourcesAreSilenceOnly(
-  sources: MediaTranscriptSources | null,
-): boolean {
-  if (!sources) return false
-  const present = [sources.elevenlabs, sources.plain].filter(Boolean)
-  return present.length > 0 && present.every((item) => item?.kind === 'silence')
+  return elevenlabs?.kind === 'timed'
 }

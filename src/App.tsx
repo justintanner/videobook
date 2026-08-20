@@ -349,6 +349,7 @@ import {
   type MediaInsightWork,
   type MediaTranscriptSources,
   type MediaVisionAnalysis,
+  type TranscriptSidecarSource,
 } from '@/videobook/media-insights'
 import {
   mediaInsightWatchStep,
@@ -4463,8 +4464,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         insight === 'transcript' ? 'transcribe' : 'analyze_video',
         insight === 'transcript'
           ? { book_id: bookId, asset_id: artifactId }
-          // Re-analysis only happens from the panel's rerun control, which is
-          // shown once an analysis exists — force past the skip-if-present gate.
           : { book_id: bookId, asset_id: artifactId, force: hadInsight },
         { background: true },
       )
@@ -4499,16 +4498,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     void runAssetInsight(artifactId, 'transcript')
   }, [runAssetInsight])
 
-  const analyzeAsset = useCallback((artifactId: string) => {
-    void runAssetInsight(artifactId, 'analysis')
-  }, [runAssetInsight])
-
-  const loadTranscriptJson = useCallback(async (artifactId: string) => {
+  const loadTranscriptJson = useCallback(async (
+    artifactId: string,
+    source: TranscriptSidecarSource,
+  ) => {
     if (!bookId) throw new Error('Book is not ready')
     const value = await call('read_transcript', {
       book_id: bookId,
       asset_id: artifactId,
       raw: true,
+      source,
     }, { background: true })
     const item = recordValue(value)
     const text = typeof item?.text === 'string' ? item.text : null
@@ -9884,7 +9883,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     onLoadGenerationPayload={loadGenerationPayload}
                     mediaInsightWork={mediaInsightWork}
                     onTranscribeAsset={transcribeAsset}
-                    onAnalyzeAsset={analyzeAsset}
                     onLoadTranscriptJson={loadTranscriptJson}
                     onDownloadTranscriptSrt={exportTranscriptSrt}
                   />

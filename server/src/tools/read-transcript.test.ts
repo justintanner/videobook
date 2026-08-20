@@ -228,6 +228,88 @@ describe("read_transcript tool (integration)", () => {
     expect(response.words[0].text).toBe("Timed");
   }, 30_000);
 
+  it("selects the plain sidecar when raw=true and source=plain even if elevenlabs exists", async () => {
+    const elevenLabsJson = {
+      language_code: "eng",
+      transcription_id: "keep-me-elevenlabs",
+      text: "Timed sidecar",
+      words: [
+        { text: "Timed", start: 0.0, end: 0.5, type: "word", speaker_id: "spk_0" },
+        { text: "sidecar", start: 0.5, end: 1.0, type: "word", speaker_id: "spk_0" },
+      ],
+    };
+    const plainJson = {
+      text: "This is a plain text transcript with enough words to pass quality checks.",
+    };
+
+    const uploadResult = await client.callTool({
+      name: "upload_file",
+      arguments: {
+        book_id: "transcript-proj",
+        filename: "original.mp4",
+        data: Buffer.from("fake-video-data").toString("base64"),
+      },
+    });
+    const asset = JSON.parse((uploadResult.content as TextContent)[0].text) as {
+      assetId: string;
+    };
+    const assetId = asset.assetId;
+    const timedWrite = await fs.files.write(
+      assetId,
+      "elevenlabs.json",
+      JSON.stringify(elevenLabsJson, null, 2),
+    );
+    const plainWrite = await fs.files.write(
+      assetId,
+      ".analysis.gpt4otrans.json",
+      JSON.stringify(plainJson, null, 2),
+    );
+    if (!timedWrite.ok) throw new Error(timedWrite.error.message);
+    if (!plainWrite.ok) throw new Error(plainWrite.error.message);
+
+    const plainResult = await client.callTool({
+      name: "read_transcript",
+      arguments: {
+        asset_id: assetId,
+        book_id: "transcript-proj",
+        raw: true,
+        source: "plain",
+      },
+    });
+    expect(plainResult.isError).toBeFalsy();
+    const plainPayload = JSON.parse((plainResult.content as TextContent)[0].text) as {
+      source: string;
+      file: string;
+      text: string;
+    };
+    expect(plainPayload.source).toBe("plain");
+    expect(plainPayload.file).toBe(".analysis.gpt4otrans.json");
+    expect(plainPayload.text).toContain("plain text transcript");
+    expect(plainPayload.text).not.toContain("keep-me-elevenlabs");
+    expect(plainPayload.text).not.toContain("transcription_id");
+
+    const elevenResult = await client.callTool({
+      name: "read_transcript",
+      arguments: {
+        asset_id: assetId,
+        book_id: "transcript-proj",
+        raw: true,
+        source: "elevenlabs",
+      },
+    });
+    expect(elevenResult.isError).toBeFalsy();
+    const elevenPayload = JSON.parse((elevenResult.content as TextContent)[0].text) as {
+      source: string;
+      file: string;
+      text: string;
+    };
+    expect(elevenPayload.source).toBe("elevenlabs");
+    expect(elevenPayload.file).toBe("elevenlabs.json");
+    expect(elevenPayload.text).toContain("keep-me-elevenlabs");
+    expect(elevenPayload.text).toContain("transcription_id");
+    expect(elevenPayload.text).not.toContain("plain text transcript");
+  }, 30_000);
+
   it("returns untouched sidecar text when raw=true", async () => {
     const elevenLabsJson = {
       language_code: "eng",

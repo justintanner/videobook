@@ -607,7 +607,9 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('<span>1920×1080</span>')
     expect(html).toContain('dateTime="PT30S"')
     expect(html).toContain('aria-label="Duration 0:30"')
-    expect(html).not.toContain('role="tab"')
+    expect(html).toContain('aria-label="GPT-4o Translation"')
+    expect(html).toContain('aria-label="ElevenLabs Transcript"')
+    expect(html).not.toContain('aria-label="Video analysis"')
     expect(html).not.toContain('<label>Address</label>')
     expect(html).toContain('class="inspector-media-field-label">VIDEO</span>')
     expect(html).not.toContain('<h3>Inputs</h3>')
@@ -1805,43 +1807,73 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('Dolt source')
   })
 
-  it('tabs the transcript box as ELEVENLABS / PROMPT / JSON', () => {
-    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+  const timedWords = [
+    { text: 'Hello', start: 0, end: 0.4 },
+    { text: 'world', start: 0.45, end: 0.9 },
+    { text: 'this', start: 5.2, end: 5.5 },
+    { text: 'later', start: 5.55, end: 6 },
+  ]
+  const dualTranscript = {
+    elevenlabs: {
+      kind: 'timed' as const,
+      languageCode: 'eng',
+      text: 'Hello world this later',
+      wordCount: 4,
+      words: timedWords,
+    },
+    plain: {
+      kind: 'plain' as const,
+      languageCode: null,
+      text: 'The gpt-4o transcription.',
+      wordCount: 3,
+      words: [],
+    },
+  }
+  const silenceTranscript = {
+    kind: 'silence' as const,
+    languageCode: null,
+    text: '',
+    wordCount: 0,
+    words: [],
+  }
+
+  function insightSection(html: string, label: string): string {
+    const marker = `aria-label="${label}"`
+    const mark = html.indexOf(marker)
+    if (mark < 0) return ''
+    const start = html.lastIndexOf('<section', mark)
+    const end = html.indexOf('</section>', mark)
+    return html.slice(start, end + '</section>'.length)
+  }
+
+  function renderSpokenInspector(input: {
+    type?: 'video' | 'audio' | 'final'
+    cellType?: NotebookCell['type']
+    transcript?: typeof dualTranscript | {
+      elevenlabs: typeof dualTranscript.elevenlabs | typeof silenceTranscript | null
+      plain: typeof dualTranscript.plain | typeof silenceTranscript | null
+    } | null
+  } = {}) {
+    const spokenCell: NotebookCell = {
+      ...cell,
+      type: input.cellType ?? (input.type === 'audio' ? 'audio' : 'video'),
+    }
+    return renderToStaticMarkup(createElement(NotebookCellInspector, {
       notebookId: '01900000-0000-7000-8000-000000000003',
-      cell,
-      cells: [cell],
+      cell: spokenCell,
+      cells: [spokenCell],
       edges: [],
       asset: {
-        artifactId: cell.outputArtifactId!,
+        artifactId: spokenCell.outputArtifactId!,
         id: 'vid-source',
-        type: 'video',
+        type: input.type ?? 'video',
         mediaUrl: '/files/vid-source/original.mp4',
         thumbnailUrl: '/files/vid-source/original.jpg',
         width: 1920,
         height: 1080,
         duration: 30,
         audioInfo: null,
-        transcript: {
-          elevenlabs: {
-            kind: 'timed',
-            languageCode: 'eng',
-            text: 'Hello world this later',
-            wordCount: 4,
-            words: [
-              { text: 'Hello', start: 0, end: 0.4 },
-              { text: 'world', start: 0.45, end: 0.9 },
-              { text: 'this', start: 5.2, end: 5.5 },
-              { text: 'later', start: 5.55, end: 6 },
-            ],
-          },
-          plain: {
-            kind: 'plain',
-            languageCode: null,
-            text: 'The gpt-4o transcription.',
-            wordCount: 3,
-            words: [],
-          },
-        },
+        transcript: input.transcript === undefined ? dualTranscript : input.transcript,
       },
       status: 'completed',
       error: null,
@@ -1854,70 +1886,119 @@ describe('NotebookCellInspector', () => {
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
       onTranscribeAsset: () => undefined,
-      onAnalyzeAsset: () => undefined,
       onDownloadTranscriptSrt: () => undefined,
     }))
+  }
 
-    expect(html).toContain('aria-label="Transcript"')
-    expect(html).toContain('role="tablist" aria-label="Transcript source"')
-    expect(html).toContain('>ELEVENLABS</button>')
-    expect(html).toContain('>PROMPT</button>')
-    expect(html).toContain('>JSON</button>')
-    expect(html).toContain('0:00  Hello world')
-    expect(html).toContain('0:05  this later')
-    expect(html).toContain('Word-timed · 4 words · eng')
-    expect(html).toContain('aria-label="Download SRT"')
-    expect(html).toContain('aria-label="Transcribe again"')
-    expect(html).not.toContain('aria-disabled="true"')
+  it('renders independent GPT-4o Translation and ElevenLabs Transcript cards', () => {
+    const html = renderSpokenInspector()
+    const gpt = insightSection(html, 'GPT-4o Translation')
+    const eleven = insightSection(html, 'ElevenLabs Transcript')
+
+    expect(html).toContain('aria-label="GPT-4o Translation"')
+    expect(html).toContain('aria-label="ElevenLabs Transcript"')
+    expect(html).not.toContain('aria-label="Transcript"')
+    expect(html).not.toContain('aria-label="Transcript source"')
+    expect(html).not.toContain('>ELEVENLABS</button>')
+    expect(html).not.toContain('>PROMPT</button>')
+    expect(html).not.toContain('aria-label="Video analysis"')
+    expect(html).not.toContain('Analyze again')
+    expect(html).not.toContain('>Analyze</')
+    expect(html).not.toContain('No vision analysis yet.')
+
+    expect(gpt).toContain('The gpt-4o transcription.')
+    expect(gpt).toContain('Plain text · 3 words')
+    expect(gpt).not.toContain('0:00')
+    expect(gpt).not.toContain('Download SRT')
+    expect(gpt).not.toContain('Transcribe')
+    expect(gpt).toContain('aria-label="GPT-4o Translation view"')
+    expect(gpt).toContain('>JSON</button>')
+
+    expect(eleven).toContain('0:00  Hello world')
+    expect(eleven).toContain('0:05  this later')
+    expect(eleven).toContain('Word-timed · 4 words · eng')
+    expect(eleven).not.toContain('The gpt-4o transcription.')
+    expect(eleven).toContain('aria-label="Download SRT"')
+    expect(eleven).toContain('aria-label="Transcribe again"')
+    expect(eleven).toContain('aria-label="ElevenLabs Transcript view"')
+    expect(eleven).toContain('>JSON</button>')
   })
 
-  it('disables missing transcript tabs and the SRT control', () => {
-    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
-      notebookId: '01900000-0000-7000-8000-000000000003',
-      cell,
-      cells: [cell],
-      edges: [],
-      asset: {
-        artifactId: cell.outputArtifactId!,
-        id: 'vid-source',
-        type: 'video',
-        mediaUrl: '/files/vid-source/original.mp4',
-        thumbnailUrl: null,
-        width: 1920,
-        height: 1080,
-        duration: 30,
-        audioInfo: null,
-        transcript: {
-          elevenlabs: null,
-          plain: {
-            kind: 'plain',
-            languageCode: null,
-            text: 'Plain transcription only.',
-            wordCount: 3,
-            words: [],
-          },
-        },
+  it('keeps GPT-4o text when only the plain sidecar exists', () => {
+    const html = renderSpokenInspector({
+      transcript: {
+        elevenlabs: null,
+        plain: dualTranscript.plain,
       },
-      status: 'completed',
-      error: null,
-      busy: false,
-      deleting: false,
-      sourceVisible: false,
-      onUpdate: async () => undefined,
-      onSetInput: async () => undefined,
-      onRun: async () => undefined,
-      onDelete: async () => undefined,
-      onOpenFullscreen: () => undefined,
-      onTranscribeAsset: () => undefined,
-      onAnalyzeAsset: () => undefined,
-      onDownloadTranscriptSrt: () => undefined,
-    }))
+    })
+    const gpt = insightSection(html, 'GPT-4o Translation')
+    const eleven = insightSection(html, 'ElevenLabs Transcript')
 
-    expect(html).toContain('title="No ElevenLabs transcript"')
-    expect(html).toContain('aria-label="Download SRT unavailable"')
-    expect(html).toContain('title="No word-timed ElevenLabs transcript"')
-    expect(html).toContain('Plain transcription only.')
+    expect(gpt).toContain('The gpt-4o transcription.')
+    expect(eleven).toContain('No transcript yet.')
+    expect(eleven).toContain('title="No ElevenLabs transcript"')
+    expect(eleven).toContain('aria-label="Download SRT unavailable"')
+    expect(eleven).toContain('>Transcribe</span>')
+    expect(gpt).not.toContain('Transcribe')
+    expect(html).not.toContain('aria-label="Video analysis"')
   })
+
+  it('keeps ElevenLabs cues when only the timed sidecar exists', () => {
+    const html = renderSpokenInspector({
+      transcript: {
+        elevenlabs: dualTranscript.elevenlabs,
+        plain: null,
+      },
+    })
+    const gpt = insightSection(html, 'GPT-4o Translation')
+    const eleven = insightSection(html, 'ElevenLabs Transcript')
+
+    expect(gpt).toContain('No GPT-4o translation yet.')
+    expect(gpt).toContain('title="No GPT-4o translation"')
+    expect(eleven).toContain('0:00  Hello world')
+    expect(eleven).toContain('aria-label="Download SRT"')
+    expect(eleven).toContain('aria-label="Transcribe again"')
+    expect(gpt).not.toContain('0:00')
+  })
+
+  it('shows silence independently of missing sources', () => {
+    const html = renderSpokenInspector({
+      transcript: {
+        elevenlabs: silenceTranscript,
+        plain: silenceTranscript,
+      },
+    })
+    const gpt = insightSection(html, 'GPT-4o Translation')
+    const eleven = insightSection(html, 'ElevenLabs Transcript')
+
+    expect(gpt).toContain('This clip has a transcript but no spoken dialog.')
+    expect(eleven).toContain('This clip has a transcript but no spoken dialog.')
+    expect(eleven).toContain('>Transcribe again</span>')
+    expect(html).not.toContain('aria-label="Video analysis"')
+  })
+
+  it('shows both empty cards when neither sidecar exists', () => {
+    const html = renderSpokenInspector({ transcript: null })
+    const gpt = insightSection(html, 'GPT-4o Translation')
+    const eleven = insightSection(html, 'ElevenLabs Transcript')
+
+    expect(gpt).toContain('No GPT-4o translation yet.')
+    expect(eleven).toContain('No transcript yet.')
+    expect(eleven).toContain('>Transcribe</span>')
+    expect(gpt).not.toContain('Transcribe')
+    expect(html).not.toContain('aria-label="Video analysis"')
+    expect(html).not.toContain('Analyze again')
+  })
+
+  it.each(['video', 'audio', 'final'] as const)(
+    'shows the split insight cards on %s media',
+    (type) => {
+      const html = renderSpokenInspector({ type })
+      expect(html).toContain('aria-label="GPT-4o Translation"')
+      expect(html).toContain('aria-label="ElevenLabs Transcript"')
+      expect(html).not.toContain('aria-label="Video analysis"')
+    },
+  )
 
   it('hides the dead INPUTS picker on a passive video cell with no candidates', () => {
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {

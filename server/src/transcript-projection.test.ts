@@ -131,4 +131,28 @@ describe("readAssetTranscriptSources", () => {
       text: raw,
     });
   });
+
+  it("selects an explicit sidecar even when the other source exists", async () => {
+    const { engine, artifactId } = await createVideo();
+    const timedRaw = JSON.stringify(timedJson);
+    const plainRaw = JSON.stringify(plainJson);
+    const writes = await Promise.all([
+      engine.files.write(artifactId, "elevenlabs.json", timedRaw),
+      engine.files.write(artifactId, ".analysis.gpt4otrans.json", plainRaw),
+    ]);
+    for (const write of writes) {
+      if (!write.ok) throw new Error(write.error.message);
+    }
+
+    expect(await readTranscriptSidecarText(engine, artifactId, "plain")).toEqual({
+      source: "plain",
+      file: ".analysis.gpt4otrans.json",
+      text: plainRaw,
+    });
+    expect(await readTranscriptSidecarText(engine, artifactId, "elevenlabs")).toEqual({
+      source: "elevenlabs",
+      file: "elevenlabs.json",
+      text: timedRaw,
+    });
+  });
 });

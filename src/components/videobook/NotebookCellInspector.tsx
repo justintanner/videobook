@@ -89,10 +89,10 @@ import { MediaInsightsPanel } from './MediaInsightsPanel'
 import {
   idleMediaInsightWork,
   mediaCellHasSpokenAudio,
-  mediaCellIsAnalyzableVideo,
   type MediaInsightWork,
   type MediaTranscriptSources,
   type MediaVisionAnalysis,
+  type TranscriptSidecarSource,
 } from '@/videobook/media-insights'
 import { RichJson } from './RichJson'
 import {
@@ -421,9 +421,9 @@ type NotebookCellInspectorProps = {
   onRun: (cellId: string) => Promise<unknown>
   onDelete: () => Promise<void>
   onTranscribeAsset?: (artifactId: string) => void
-  onAnalyzeAsset?: (artifactId: string) => void
   onLoadTranscriptJson?: (
     artifactId: string,
+    source: TranscriptSidecarSource,
   ) => Promise<{ text: string; file: string }>
   onDownloadTranscriptSrt?: (artifactId: string) => void
   onOpenFullscreen: (asset: NotebookCellInspectorAsset) => void
@@ -1261,7 +1261,6 @@ function MediaCellInspector({
   onDelete,
   onOpenFullscreen,
   onTranscribeAsset,
-  onAnalyzeAsset,
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
 }: Pick<
@@ -1280,7 +1279,6 @@ function MediaCellInspector({
   | 'onDelete'
   | 'onOpenFullscreen'
   | 'onTranscribeAsset'
-  | 'onAnalyzeAsset'
   | 'onLoadTranscriptJson'
   | 'onDownloadTranscriptSrt'
 >) {
@@ -1369,23 +1367,18 @@ function MediaCellInspector({
             <p>Connect a source and rerun its producer to populate this preview.</p>
           </div>
         )}
-        {previewAsset
-          && mediaCellHasSpokenAudio(previewAsset.type)
-          && onTranscribeAsset
-          && onAnalyzeAsset && (
+        {previewAsset && mediaCellHasSpokenAudio(previewAsset.type) && (
           <MediaInsightsPanel
             artifactId={previewAsset.artifactId}
             transcript={previewAsset.transcript ?? null}
-            analysis={previewAsset.visionAnalysis ?? null}
-            analyzable={mediaCellIsAnalyzableVideo(previewAsset.type)}
             busy={busy}
             transcribing={insightWork.transcribing}
-            analyzing={insightWork.analyzing}
             error={insightWork.error}
-            onTranscribe={() => onTranscribeAsset(previewAsset.artifactId)}
-            onAnalyze={() => onAnalyzeAsset(previewAsset.artifactId)}
+            onTranscribe={onTranscribeAsset
+              ? () => onTranscribeAsset(previewAsset.artifactId)
+              : undefined}
             onLoadTranscriptJson={onLoadTranscriptJson
-              ? () => onLoadTranscriptJson(previewAsset.artifactId)
+              ? (source) => onLoadTranscriptJson(previewAsset.artifactId, source)
               : undefined}
             onDownloadTranscriptSrt={onDownloadTranscriptSrt
               ? () => onDownloadTranscriptSrt(previewAsset.artifactId)
@@ -3101,7 +3094,6 @@ export function NotebookCellInspector({
   onPreviewPayload,
   onLoadGenerationPayload,
   onTranscribeAsset,
-  onAnalyzeAsset,
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
   generations,
@@ -3178,7 +3170,6 @@ export function NotebookCellInspector({
         onDelete={onDelete}
         onOpenFullscreen={onOpenFullscreen}
         onTranscribeAsset={onTranscribeAsset}
-        onAnalyzeAsset={onAnalyzeAsset}
         onLoadTranscriptJson={onLoadTranscriptJson}
         onDownloadTranscriptSrt={onDownloadTranscriptSrt}
       />

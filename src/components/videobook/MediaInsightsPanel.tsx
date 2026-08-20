@@ -6,21 +6,21 @@ import {
   Copy,
   Download,
   RefreshCw,
-  ScanEye,
 } from 'lucide-react'
 import {
   canDownloadTranscriptSrt,
-  resolveTranscriptTab,
-  sourcesAreSilenceOnly,
-  sourcesHaveTranscriptText,
-  transcriptTabBody,
-  transcriptTabCopyText,
-  transcriptTabMeta,
-  transcriptTabStates,
-  visionAnalysisDetailLabel,
+  ELEVENLABS_TRANSCRIPT_CARD_TITLE,
+  PLAIN_TRANSCRIPT_CARD_TITLE,
+  resolveTranscriptCardView,
+  transcriptHasText,
+  transcriptSourceBody,
+  transcriptSourceCopyText,
+  transcriptSourceEmptyMessage,
+  transcriptSourceMeta,
+  type MediaTranscript,
   type MediaTranscriptSources,
-  type MediaVisionAnalysis,
-  type TranscriptTabId,
+  type TranscriptCardView,
+  type TranscriptSidecarSource,
 } from '@/videobook/media-insights'
 
 type CopyState = 'idle' | 'copied' | 'failed'
@@ -28,15 +28,13 @@ type CopyState = 'idle' | 'copied' | 'failed'
 export type MediaInsightsPanelProps = {
   artifactId: string
   transcript: MediaTranscriptSources | null
-  analysis: MediaVisionAnalysis | null
-  analyzable: boolean
   busy: boolean
   transcribing: boolean
-  analyzing: boolean
   error: string | null
-  onTranscribe: () => void
-  onAnalyze: () => void
-  onLoadTranscriptJson?: () => Promise<{ text: string; file: string }>
+  onTranscribe?: () => void
+  onLoadTranscriptJson?: (
+    source: TranscriptSidecarSource,
+  ) => Promise<{ text: string; file: string }>
   onDownloadTranscriptSrt?: () => void
 }
 
@@ -112,66 +110,90 @@ function InsightStartButton({
   )
 }
 
-function TranscriptSection({
+function TranscriptSourceCard({
+  source,
+  title,
   transcript,
   busy,
   transcribing,
   onTranscribe,
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
-}: Pick<
-  MediaInsightsPanelProps,
-  | 'transcript'
-  | 'busy'
-  | 'transcribing'
-  | 'onTranscribe'
-  | 'onLoadTranscriptJson'
-  | 'onDownloadTranscriptSrt'
->) {
-  const tabs = transcriptTabStates(transcript)
-  const [requestedTab, setRequestedTab] = useState<TranscriptTabId | null>(null)
+}: {
+  source: TranscriptSidecarSource
+  title: string
+  transcript: MediaTranscript | null
+  busy: boolean
+  transcribing?: boolean
+  onTranscribe?: () => void
+  onLoadTranscriptJson?: MediaInsightsPanelProps['onLoadTranscriptJson']
+  onDownloadTranscriptSrt?: () => void
+}) {
+  const [requestedView, setRequestedView] = useState<TranscriptCardView | null>(
+    null,
+  )
   const [copyState, setCopyState] = useState<CopyState>('idle')
   const [jsonText, setJsonText] = useState<string | null>(null)
   const [jsonFile, setJsonFile] = useState<string | null>(null)
   const [jsonError, setJsonError] = useState<string | null>(null)
   const [jsonLoading, setJsonLoading] = useState(false)
-  const activeTab = resolveTranscriptTab(transcript, requestedTab)
-  const hasText = sourcesHaveTranscriptText(transcript)
-  const silenceOnly = sourcesAreSilenceOnly(transcript)
-  const canDownload = canDownloadTranscriptSrt(transcript)
-  const body = transcriptTabBody({
-    tab: activeTab,
-    sources: transcript,
+  const view = resolveTranscriptCardView(transcript, requestedView)
+  const hasText = transcriptHasText(transcript)
+  const showSrt = source === 'elevenlabs'
+  const transcribe = source === 'elevenlabs' ? onTranscribe : undefined
+  const canDownload = showSrt && canDownloadTranscriptSrt(transcript)
+  const body = transcriptSourceBody({
+    source,
+    transcript,
+    view,
     jsonText,
   })
-  const meta = transcriptTabMeta(activeTab, transcript, jsonFile)
-  const activeState = tabs.find((tab) => tab.id === activeTab)
+  const meta = transcriptSourceMeta({
+    transcript,
+    view,
+    jsonFile,
+  })
+  const copyText = transcriptSourceCopyText({
+    source,
+    transcript,
+    view,
+    jsonText,
+  })
+  const emptyMessage = transcriptSourceEmptyMessage({
+    source,
+    transcript,
+    view,
+    jsonLoading,
+    jsonError,
+    body,
+  })
+  const jsonEnabled = Boolean(transcript)
+  const canCopy = Boolean(copyText)
 
   const copy = async () => {
-    const text = transcriptTabCopyText({
-      tab: activeTab,
-      sources: transcript,
-      jsonText,
-    })
-    if (!text) return
+    if (!copyText) return
     try {
-      await navigator.clipboard.writeText(text)
+      await navigator.clipboard.writeText(copyText)
       setCopyState('copied')
     } catch {
       setCopyState('failed')
     }
   }
 
-  const selectTab = (id: TranscriptTabId) => {
-    const tab = tabs.find((candidate) => candidate.id === id)
-    if (!tab?.enabled) return
-    setRequestedTab(id)
-    if (id !== 'json' || jsonText !== null || jsonLoading || !onLoadTranscriptJson) {
+  const selectView = (next: TranscriptCardView) => {
+    if (next === 'json' && !jsonEnabled) return
+    setRequestedView(next)
+    if (
+      next !== 'json'
+      || jsonText !== null
+      || jsonLoading
+      || !onLoadTranscriptJson
+    ) {
       return
     }
     setJsonLoading(true)
     setJsonError(null)
-    void onLoadTranscriptJson()
+    void onLoadTranscriptJson(source)
       .then((result) => {
         setJsonText(result.text)
         setJsonFile(result.file)
@@ -184,35 +206,21 @@ function TranscriptSection({
       })
   }
 
-  const emptyMessage = silenceOnly
-    ? 'This clip has a transcript but no spoken dialog.'
-    : !transcript
-      ? 'No transcript yet.'
-      : activeState && !activeState.enabled
-        ? activeState.disabledReason
-        : activeTab === 'json' && jsonLoading
-          ? 'Loading sidecar…'
-          : activeTab === 'json' && jsonError
-            ? jsonError
-            : !body
-              ? 'No transcript yet.'
-              : null
-
   return (
-    <section className="inspector-insight-block" aria-label="Transcript">
+    <section className="inspector-insight-block" aria-label={title}>
       <header className="inspector-insight-header">
-        <span className="inspector-media-field-label">Transcript</span>
+        <span className="inspector-media-field-label">{title}</span>
         <div className="inspector-insight-header-actions">
-          {hasText && (
+          {canCopy && (
             <button
               type="button"
               className={`inspector-prompt-copy${copyState === 'copied' ? ' copied' : ''}`}
               aria-label={copyState === 'copied'
-                ? 'Transcript copied'
-                : 'Copy transcript'}
+                ? `${title} copied`
+                : `Copy ${title}`}
               title={copyState === 'copied'
-                ? 'Transcript copied'
-                : 'Copy transcript'}
+                ? `${title} copied`
+                : `Copy ${title}`}
               onClick={() => void copy()}
             >
               {copyState === 'copied'
@@ -221,27 +229,29 @@ function TranscriptSection({
               <span aria-live="polite">{copyLabel(copyState)}</span>
             </button>
           )}
-          <button
-            type="button"
-            className="inspector-prompt-copy"
-            aria-label={canDownload
-              ? 'Download SRT'
-              : 'Download SRT unavailable'}
-            title={canDownload
-              ? 'Download SRT'
-              : 'No word-timed ElevenLabs transcript'}
-            disabled={!canDownload || busy || !onDownloadTranscriptSrt}
-            onClick={() => onDownloadTranscriptSrt?.()}
-          >
-            <Download size={12} aria-hidden="true" />
-            <span>SRT</span>
-          </button>
-          {hasText && (
+          {showSrt && (
+            <button
+              type="button"
+              className="inspector-prompt-copy"
+              aria-label={canDownload
+                ? 'Download SRT'
+                : 'Download SRT unavailable'}
+              title={canDownload
+                ? 'Download SRT'
+                : 'No word-timed ElevenLabs transcript'}
+              disabled={!canDownload || busy || !onDownloadTranscriptSrt}
+              onClick={() => onDownloadTranscriptSrt?.()}
+            >
+              <Download size={12} aria-hidden="true" />
+              <span>SRT</span>
+            </button>
+          )}
+          {transcribe && hasText && (
             <InsightRerunButton
               label="Transcribe again"
-              running={transcribing}
-              disabled={busy || transcribing}
-              onClick={onTranscribe}
+              running={Boolean(transcribing)}
+              disabled={busy || Boolean(transcribing)}
+              onClick={transcribe}
             />
           )}
         </div>
@@ -249,99 +259,54 @@ function TranscriptSection({
       <div
         className="inspector-transcript-tabs"
         role="tablist"
-        aria-label="Transcript source"
+        aria-label={`${title} view`}
       >
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            aria-disabled={!tab.enabled}
-            disabled={!tab.enabled}
-            title={tab.disabledReason ?? tab.label}
-            className={activeTab === tab.id
-              ? 'inspector-transcript-tab active'
-              : 'inspector-transcript-tab'}
-            onClick={() => selectTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'text'}
+          className={view === 'text'
+            ? 'inspector-transcript-tab active'
+            : 'inspector-transcript-tab'}
+          onClick={() => selectView('text')}
+        >
+          TEXT
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'json'}
+          aria-disabled={!jsonEnabled}
+          disabled={!jsonEnabled}
+          title={jsonEnabled
+            ? 'JSON'
+            : source === 'plain'
+              ? 'No GPT-4o translation'
+              : 'No ElevenLabs transcript'}
+          className={view === 'json'
+            ? 'inspector-transcript-tab active'
+            : 'inspector-transcript-tab'}
+          onClick={() => selectView('json')}
+        >
+          JSON
+        </button>
       </div>
       {meta && <p className="inspector-insight-meta">{meta}</p>}
       {body && !emptyMessage
-        ? <TranscriptText text={body} label={`${activeState?.label ?? 'Transcript'} transcript`} />
+        ? <TranscriptText text={body} label={`${title} ${view}`} />
         : (
           <div className="inspector-insight-empty">
             <p>{emptyMessage ?? 'No transcript yet.'}</p>
-            {!hasText && (
+            {transcribe && !hasText && (
               <InsightStartButton
                 icon={<Captions size={13} aria-hidden="true" />}
                 label={transcript ? 'Transcribe again' : 'Transcribe'}
                 runningLabel="Transcribing…"
-                running={transcribing}
-                disabled={busy || transcribing}
-                onClick={onTranscribe}
+                running={Boolean(transcribing)}
+                disabled={busy || Boolean(transcribing)}
+                onClick={transcribe}
               />
             )}
-          </div>
-        )}
-    </section>
-  )
-}
-
-function AnalysisSection({
-  analysis,
-  busy,
-  analyzing,
-  onAnalyze,
-}: Pick<
-  MediaInsightsPanelProps,
-  'analysis' | 'busy' | 'analyzing' | 'onAnalyze'
->) {
-  const detail = analysis ? visionAnalysisDetailLabel(analysis) : null
-
-  return (
-    <section className="inspector-insight-block" aria-label="Video analysis">
-      <header className="inspector-insight-header">
-        <span className="inspector-media-field-label">Analysis</span>
-        {analysis && (
-          <div className="inspector-insight-header-actions">
-            <InsightRerunButton
-              label="Analyze again"
-              running={analyzing}
-              disabled={busy || analyzing}
-              onClick={onAnalyze}
-            />
-          </div>
-        )}
-      </header>
-      {analysis
-        ? (
-          <>
-            {detail && <p className="inspector-insight-meta">{detail}</p>}
-            {analysis.summary && (
-              <p className="inspector-insight-summary">{analysis.summary}</p>
-            )}
-            {analysis.tags.length > 0 && (
-              <ul className="inspector-insight-tags">
-                {analysis.tags.map((tag) => <li key={tag}>{tag}</li>)}
-              </ul>
-            )}
-          </>
-        )
-        : (
-          <div className="inspector-insight-empty">
-            <p>No vision analysis yet.</p>
-            <InsightStartButton
-              icon={<ScanEye size={13} aria-hidden="true" />}
-              label="Analyze"
-              runningLabel="Analyzing…"
-              running={analyzing}
-              disabled={busy || analyzing}
-              onClick={onAnalyze}
-            />
           </div>
         )}
     </section>
@@ -351,36 +316,34 @@ function AnalysisSection({
 export function MediaInsightsPanel({
   artifactId,
   transcript,
-  analysis,
-  analyzable,
   busy,
   transcribing,
-  analyzing,
   error,
   onTranscribe,
-  onAnalyze,
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
 }: MediaInsightsPanelProps) {
   return (
     <div className="inspector-media-insights">
-      <TranscriptSection
-        key={artifactId}
-        transcript={transcript}
+      <TranscriptSourceCard
+        key={`${artifactId}:plain`}
+        source="plain"
+        title={PLAIN_TRANSCRIPT_CARD_TITLE}
+        transcript={transcript?.plain ?? null}
+        busy={busy}
+        onLoadTranscriptJson={onLoadTranscriptJson}
+      />
+      <TranscriptSourceCard
+        key={`${artifactId}:elevenlabs`}
+        source="elevenlabs"
+        title={ELEVENLABS_TRANSCRIPT_CARD_TITLE}
+        transcript={transcript?.elevenlabs ?? null}
         busy={busy}
         transcribing={transcribing}
         onTranscribe={onTranscribe}
         onLoadTranscriptJson={onLoadTranscriptJson}
         onDownloadTranscriptSrt={onDownloadTranscriptSrt}
       />
-      {analyzable && (
-        <AnalysisSection
-          analysis={analysis}
-          busy={busy}
-          analyzing={analyzing}
-          onAnalyze={onAnalyze}
-        />
-      )}
       {error && (
         <p className="inspector-insight-error" role="alert">
           <CircleAlert size={12} aria-hidden="true" />
