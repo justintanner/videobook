@@ -13,6 +13,7 @@ describe("transcribe tool", () => {
   let client: Client;
   let tempDir: string;
   const originalKey = process.env.ELEVENLABS_API_KEY;
+  const originalOpenAiKey = process.env.OPENAI_API_KEY;
 
   beforeAll(async () => {
     await queue.start();
@@ -24,6 +25,7 @@ describe("transcribe tool", () => {
 
   beforeEach(async () => {
     delete process.env.ELEVENLABS_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     tempDir = await mkdtemp(join(tmpdir(), "videocity-transcribe-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
@@ -38,11 +40,16 @@ describe("transcribe tool", () => {
     } else {
       delete process.env.ELEVENLABS_API_KEY;
     }
+    if (originalOpenAiKey) {
+      process.env.OPENAI_API_KEY = originalOpenAiKey;
+    } else {
+      delete process.env.OPENAI_API_KEY;
+    }
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns error when ELEVENLABS_API_KEY is not set", async () => {
+  it("returns error when no speech-to-text provider key is set", async () => {
     const result = await client.callTool({
       name: "transcribe",
       arguments: {
@@ -53,7 +60,30 @@ describe("transcribe tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("not set");
+    expect(content[0].text).toContain("neither is set");
+  });
+
+  it("falls back to OpenAI speech-to-text for a video without an audio track file", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("video", "no-audio-sidecar");
+    if (!asset.ok) throw new Error("Failed to create asset");
+
+    await fs.files.write(asset.value.artifactId, "original.mp4", Buffer.from("fake-mp4"));
+
+    const result = await client.callTool({
+      name: "transcribe",
+      arguments: {
+        asset_id: asset.value.artifactId,
+        book_id: "test-proj",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.provider).toBe("openai");
+    expect(parsed.status).toBe("enqueued");
   });
 
   it("returns error for nonexistent asset", async () => {

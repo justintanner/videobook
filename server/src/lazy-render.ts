@@ -10,6 +10,11 @@ import { isOsgPosition, isOsgSize } from "./osg-assets.js";
 import { queue } from "./queue.js";
 import { readTimeline } from "./timeline-helpers.js";
 import { isLanguageSetting } from "./jobs/_translate-transcript.js";
+import {
+  PLAIN_TRANSCRIPT_FILE,
+  TIMED_TRANSCRIPT_FILE,
+} from "./transcript-projection.js";
+import { VIDEO_ANALYSIS_FILE } from "./video-analysis-projection.js";
 import { findEligibleRenderActions, readStoredRenderDefaults } from "./tools/reconcile-project-work.js";
 import {
   DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
@@ -89,9 +94,10 @@ export async function enqueueLazyAnalysisIfSlotted(
 
   const manifestResult = await engine.files.manifest(assetId);
   if (!manifestResult.ok) return null;
-  const [analysis, transcription] = await Promise.all([
-    engine.files.read(assetId, ".original.analysis.json"),
-    engine.files.read(assetId, ".analysis.gpt4otrans.json"),
+  const [analysis, plainTranscript, timedTranscript] = await Promise.all([
+    engine.files.read(assetId, VIDEO_ANALYSIS_FILE),
+    engine.files.read(assetId, PLAIN_TRANSCRIPT_FILE),
+    engine.files.read(assetId, TIMED_TRANSCRIPT_FILE),
   ]);
   if (analysis.ok) return null;
 
@@ -102,7 +108,7 @@ export async function enqueueLazyAnalysisIfSlotted(
     assetId,
     assetDir: manifestResult.value.path,
     bookId,
-    hasTranscription: transcription.ok,
+    hasTranscription: plainTranscript.ok || timedTranscript.ok,
   });
   return { jobId };
 }

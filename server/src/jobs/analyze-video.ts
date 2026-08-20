@@ -16,6 +16,7 @@ import {
 } from "./_lease.js";
 import { findAudioFile } from "videobook-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
+import { readAssetTranscript } from "../transcript-projection.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
 
 type AnalyzeVideoPayload = {
@@ -179,20 +180,13 @@ export function registerAnalyzeVideoJob(engine: Engine): void {
       );
     }
 
+    // Prefers ElevenLabs word cues, falls back to the plain ingest transcript —
+    // a manual /transcribe leaves only the former behind.
     let transcriptionText = "";
     if (hasTranscription) {
-      const transResult = await engine.files.read(assetId, ".analysis.gpt4otrans.json");
-      if (transResult.ok) {
-        try {
-          const parsed = JSON.parse(
-            typeof transResult.value === "string"
-              ? transResult.value
-              : new TextDecoder().decode(transResult.value)
-          ) as { text?: string };
-          transcriptionText = parsed.text ?? "";
-        } catch {
-          // ignore parse errors
-        }
+      const transcript = await readAssetTranscript(engine, assetId);
+      if (transcript.kind === "timed" || transcript.kind === "plain") {
+        transcriptionText = transcript.text;
       }
     }
 

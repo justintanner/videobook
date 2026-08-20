@@ -85,6 +85,15 @@ import {
 } from '@/videobook/notebook-generation-actions'
 import { isNotebookGenerationCellType } from '@/videobook/notebook-cell-types'
 import { NotebookMediaMetadata } from './NotebookMediaMetadata'
+import { MediaInsightsPanel } from './MediaInsightsPanel'
+import {
+  idleMediaInsightWork,
+  mediaCellHasSpokenAudio,
+  mediaCellIsAnalyzableVideo,
+  type MediaInsightWork,
+  type MediaTranscript,
+  type MediaVisionAnalysis,
+} from '@/videobook/media-insights'
 import { RichJson } from './RichJson'
 import {
   AutocompleteDropdown,
@@ -356,6 +365,8 @@ export type NotebookCellInspectorAsset = {
   duration: number | null
   audioInfo: NotebookAudioInfo | null
   analysisInfo?: NotebookAnalysisInfo | null
+  transcript?: MediaTranscript | null
+  visionAnalysis?: MediaVisionAnalysis | null
 }
 
 type CellGenerationTransition = {
@@ -403,10 +414,14 @@ type NotebookCellInspectorProps = {
   generationActions?: readonly NotebookGenerationAction[]
   mentionAssets?: readonly AssetMentionCandidate[]
   voiceCatalog?: ElevenLabsVoicesState
+  /** Transcribe / analyze progress, keyed by artifact id. */
+  mediaInsightWork?: Readonly<Record<string, MediaInsightWork>>
   onUpdate: NotebookCellUpdate
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
   onRun: (cellId: string) => Promise<unknown>
   onDelete: () => Promise<void>
+  onTranscribeAsset?: (artifactId: string) => void
+  onAnalyzeAsset?: (artifactId: string) => void
   onOpenFullscreen: (asset: NotebookCellInspectorAsset) => void
   onPreviewPayload?: (
     cellId: string,
@@ -1197,9 +1212,12 @@ function MediaCellInspector({
   versionAssets,
   busy,
   deleting,
+  mediaInsightWork,
   onSetInput,
   onDelete,
   onOpenFullscreen,
+  onTranscribeAsset,
+  onAnalyzeAsset,
 }: Pick<
   NotebookCellInspectorProps,
   | 'cell'
@@ -1210,10 +1228,13 @@ function MediaCellInspector({
   | 'versionAssets'
   | 'busy'
   | 'deleting'
+  | 'mediaInsightWork'
   | 'onUpdate'
   | 'onSetInput'
   | 'onDelete'
   | 'onOpenFullscreen'
+  | 'onTranscribeAsset'
+  | 'onAnalyzeAsset'
 >) {
   const versionArtifactIds = cell.type === 'audio'
     || cell.type === 'image'
@@ -1265,6 +1286,9 @@ function MediaCellInspector({
       versionKey,
     })
   }
+  const insightWork = previewAsset
+    ? mediaInsightWork?.[previewAsset.artifactId] ?? idleMediaInsightWork
+    : idleMediaInsightWork
 
   return (
     <div className="inspector-body inspector-media-body">
@@ -1296,6 +1320,22 @@ function MediaCellInspector({
             <span>Output pending</span>
             <p>Connect a source and rerun its producer to populate this preview.</p>
           </div>
+        )}
+        {previewAsset
+          && mediaCellHasSpokenAudio(previewAsset.type)
+          && onTranscribeAsset
+          && onAnalyzeAsset && (
+          <MediaInsightsPanel
+            transcript={previewAsset.transcript ?? null}
+            analysis={previewAsset.visionAnalysis ?? null}
+            analyzable={mediaCellIsAnalyzableVideo(previewAsset.type)}
+            busy={busy}
+            transcribing={insightWork.transcribing}
+            analyzing={insightWork.analyzing}
+            error={insightWork.error}
+            onTranscribe={() => onTranscribeAsset(previewAsset.artifactId)}
+            onAnalyze={() => onAnalyzeAsset(previewAsset.artifactId)}
+          />
         )}
         <InputSources
           cell={cell}
@@ -2997,6 +3037,7 @@ export function NotebookCellInspector({
   sourceVisible,
   generationsVisible = false,
   generationActions,
+  mediaInsightWork,
   onUpdate,
   onSetInput,
   onRun,
@@ -3004,6 +3045,8 @@ export function NotebookCellInspector({
   onOpenFullscreen,
   onPreviewPayload,
   onLoadGenerationPayload,
+  onTranscribeAsset,
+  onAnalyzeAsset,
   generations,
   mentionAssets,
   voiceCatalog,
@@ -3072,10 +3115,13 @@ export function NotebookCellInspector({
         versionAssets={versionAssets}
         busy={busy}
         deleting={deleting}
+        mediaInsightWork={mediaInsightWork}
         onUpdate={onUpdate}
         onSetInput={onSetInput}
         onDelete={onDelete}
         onOpenFullscreen={onOpenFullscreen}
+        onTranscribeAsset={onTranscribeAsset}
+        onAnalyzeAsset={onAnalyzeAsset}
       />
     )
   }

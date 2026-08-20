@@ -2,12 +2,13 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (305)
+## MCP endpoints (306)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
 - `analyze_image_subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro
 - `analyze_jokes` — Analyze a clip's ElevenLabs transcript and identify the jokes in the bit, classified by type (pun, self-deprecating, observational, etc.). Each joke includes the verbatim text, start/end timestamps, and a one-line note on why it works. Runs in the background and persists to .analyze-jokes.json. Requires an ElevenLabs transcript — run /transcribe first if missing.
+- `analyze_video` — Analyze a video asset with vision: samples frames, folds in the transcript when one exists, and writes .original.analysis.json (summary, scenes, tags, subjects, burned-in subtitle and watermark detection). Returns as soon as the job is enqueued; the analysis appears on the asset once the job completes.
 - `animate_keywords` — Configure transcript-timed keyword graphics for a video. Extracts exact word-time frames and waits for vision-guided placement that avoids faces, subtitles, and existing text or graphics. Pass keywords for exact transcript words, or omit them for automatic selection. Renders cinematic white serif over-the-shoulder titles. Use enabled=false to turn them off.
 - `apply_cuts` — Splice out one or more time ranges from a video asset in-place. Operates via ffmpeg concat-splice; re-runs process_video downstream so frames, transcripts, and analyses are regenerated. Pair with /suggest-cuts to source ranges, or hand-pick them.
 - `apply_sfx` — Generate sound effects via ElevenLabs text-to-sound-effects and mix them onto a video asset's audio track in-place. Each entry yields one discrete SFX cue at `duration_seconds`, mixed at the given timestamp. Re-runs process_video downstream. Pair with /suggest-sfx to source entries.
@@ -291,7 +292,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `suggest_sfx` — Analyze a video asset (frames + transcript + metadata) and return structured SFX suggestions: timestamps, slug types, and descriptions. Runs in the background and persists to .suggest-sfx.json. Requires a transcript — run /transcribe first if missing. Use /apply-sfx to mix the result.
 - `sync_video_to_audio` — Smoothly retime a video's picture through multiple anchors while preserving its original audio unchanged.
 - `timewarp_video` — Retime one video range and compensate the remaining picture to preserve the original duration and audio.
-- `transcribe` — Transcribe audio from a video or audio asset using ElevenLabs speech-to-text. Writes elevenlabs.json into the asset directory.
+- `transcribe` — Transcribe audio from a video or audio asset. Uses ElevenLabs speech-to-text when an audio file and ELEVENLABS_API_KEY are available (writes word-timed elevenlabs.json), otherwise falls back to OpenAI speech-to-text straight off the video (writes .analysis.gpt4otrans.json).
 - `translate_subtitles` — Translate an asset's transcribed subtitles into another language. Writes elevenlabs.<lang>.json next to elevenlabs.json; renders with subtitle_language set to that language use it. Cached per language — re-runs only after re-transcription.
 - `trim_audio` — Trim an audio asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for video assets so picture and sound remain synchronized. Operates in-place with git versioning.
 - `trim_video` — Modify an existing video in place by keeping a range or removing a middle section. Use extract_video_clip instead when the user asks for a new clip and wants the source preserved. Timestamp fields accept numbers or values such as 15s and 1:30.

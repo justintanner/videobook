@@ -154,6 +154,113 @@ describe("list_assets tool", () => {
     expect(newestIds).toEqual([...oldestIds].reverse());
   });
 
+  it("projects the transcript and vision analysis onto video assets", async () => {
+    const { createEngineForTest, closeEngineForTest } = await import("../engine.js");
+    const { listAssetsDef } = await import("./list-assets.js");
+    const root = await mkdtemp(join(tmpdir(), "list-assets-transcript-"));
+    const engine = createEngineForTest(root);
+    try {
+      const bookId = engine.book.get().bookId;
+      const created = await engine.artifacts.create("video", "clip");
+      if (!created.ok) throw new Error(created.error.message);
+      const artifactId = created.value.artifactId;
+      const writes = await Promise.all([
+        engine.files.write(artifactId, "original.mp4", Buffer.from("fake-video")),
+        engine.files.write(artifactId, "elevenlabs.json", JSON.stringify({
+          language_code: "eng",
+          text: "Hello world",
+          words: [
+            { text: "Hello", start: 0, end: 0.5, type: "word", speaker_id: "spk_0" },
+            { text: " ", start: 0.5, end: 0.6, type: "spacing", speaker_id: null },
+            { text: "world", start: 0.6, end: 1, type: "word", speaker_id: "spk_0" },
+          ],
+        })),
+        engine.files.write(artifactId, ".original.analysis.json", JSON.stringify({
+          summary: "A greeting.",
+          scenes: [{ timestamp: 0, description: "Greeting", tags: ["hello"] }],
+          tags: ["hello"],
+          mood: "warm",
+          subjects: ["speaker"],
+          setting: "a room",
+        })),
+      ]);
+      for (const write of writes) {
+        if (!write.ok) throw new Error(write.error.message);
+      }
+
+      const result = await listAssetsDef(engine).handler({
+        book_id: bookId,
+        sort: "newest",
+      });
+      const data = JSON.parse(
+        (result.content as Array<{ type: string; text: string }>)[0]!.text,
+      ) as {
+        assets: Array<{
+          artifact_id: string;
+          transcript: unknown;
+          vision_analysis: unknown;
+        }>;
+      };
+      const row = data.assets.find((asset) => asset.artifact_id === artifactId);
+      expect(row?.transcript).toEqual({
+        kind: "timed",
+        language_code: "eng",
+        text: "Hello world",
+        word_count: 2,
+      });
+      expect(row?.vision_analysis).toEqual({
+        summary: "A greeting.",
+        mood: "warm",
+        setting: "a room",
+        tags: ["hello"],
+        subjects: ["speaker"],
+        scene_count: 1,
+      });
+    } finally {
+      closeEngineForTest(root, engine);
+      await rm(root, { recursive: true, force: true, maxRetries: 3 });
+    }
+  });
+
+  it("leaves transcript and vision analysis null for un-transcribed assets", async () => {
+    const { createEngineForTest, closeEngineForTest } = await import("../engine.js");
+    const { listAssetsDef } = await import("./list-assets.js");
+    const root = await mkdtemp(join(tmpdir(), "list-assets-no-transcript-"));
+    const engine = createEngineForTest(root);
+    try {
+      const bookId = engine.book.get().bookId;
+      const created = await engine.artifacts.create("video", "silent-clip");
+      if (!created.ok) throw new Error(created.error.message);
+      const written = await engine.files.write(
+        created.value.artifactId,
+        "original.mp4",
+        Buffer.from("fake-video"),
+      );
+      if (!written.ok) throw new Error(written.error.message);
+
+      const result = await listAssetsDef(engine).handler({
+        book_id: bookId,
+        sort: "newest",
+      });
+      const data = JSON.parse(
+        (result.content as Array<{ type: string; text: string }>)[0]!.text,
+      ) as {
+        assets: Array<{
+          artifact_id: string;
+          transcript: unknown;
+          vision_analysis: unknown;
+        }>;
+      };
+      const row = data.assets.find((asset) =>
+        asset.artifact_id === created.value.artifactId);
+      expect(row?.transcript).toBeNull();
+      expect(row?.vision_analysis).toBeNull();
+    } finally {
+      closeEngineForTest(root, engine);
+      await rm(root, { recursive: true, force: true, maxRetries: 3 });
+    }
+  });
+
   it("include_referenced backfills outputVersionArtifactIds and providerArtifactId", async () => {
     const { createEngineForTest, closeEngineForTest } = await import("../engine.js");
     const { listAssetsDef } = await import("./list-assets.js");

@@ -1,44 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { assessDialogQuality } from "../dialog-quality.js";
+import { readAssetTranscript } from "../transcript-projection.js";
 import type { ToolDef } from "./tool-def.js";
-
-interface TimedWord {
-  text: string;
-  start: number;
-  end: number;
-  type: string;
-  speaker_id: string | null;
-}
-
-interface ElevenLabsTranscriptShape {
-  language_code?: string;
-  text?: string;
-  words?: TimedWord[];
-}
-
-interface ElevenLabsMultichannelShape {
-  transcripts?: ElevenLabsTranscriptShape[];
-}
-
-function extractTranscript(raw: unknown): ElevenLabsTranscriptShape | null {
-  if (typeof raw !== "object" || raw === null) return null;
-  const obj = raw as Record<string, unknown>;
-  if (typeof obj.words !== "undefined") {
-    return obj as unknown as ElevenLabsTranscriptShape;
-  }
-  if (Array.isArray((obj as ElevenLabsMultichannelShape).transcripts) && (obj as ElevenLabsMultichannelShape).transcripts!.length > 0) {
-    return (obj as ElevenLabsMultichannelShape).transcripts![0];
-  }
-  return null;
-}
-
-function isTimedWord(v: unknown): v is TimedWord {
-  return typeof v === "object" && v !== null
-    && typeof (v as Record<string, unknown>).text === "string"
-    && typeof (v as Record<string, unknown>).start === "number"
-    && typeof (v as Record<string, unknown>).end === "number";
-}
 
 export function readTranscriptDef(engine: Engine): ToolDef {
   return {
@@ -52,73 +15,23 @@ export function readTranscriptDef(engine: Engine): ToolDef {
     handler: async (args) => {
       const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };
 
-      const elevenLabsResult = await engine.files.read(asset_id, "elevenlabs.json");
-      if (elevenLabsResult.ok) {
-        try {
-          const raw = JSON.parse(elevenLabsResult.value.toString()) as unknown;
-          const transcript = extractTranscript(raw);
-          if (transcript && Array.isArray(transcript.words)) {
-            const allWords = transcript.words.filter(isTimedWord);
-            const speechWords = allWords.filter((w) => w.type !== "audio_event" && w.type !== "spacing");
-            if (speechWords.length === 0) {
-              return {
-                content: [{
-                  type: "text" as const,
-                  text: JSON.stringify({ kind: "silence" }),
-                }],
-              };
-            }
-            return {
-              content: [{
-                type: "text" as const,
-                text: JSON.stringify({
-                  kind: "timed",
-                  language_code: transcript.language_code ?? null,
-                  text: transcript.text ?? speechWords.map((w) => w.text).join(""),
-                  words: speechWords.map((w) => ({
-                    text: w.text,
-                    start: w.start,
-                    end: w.end,
-                    ...(w.speaker_id ? { speaker_id: w.speaker_id } : {}),
-                  })),
-                }),
-              }],
-            };
-          }
-        } catch {
-          void 0;
+      const transcript = await readAssetTranscript(engine, asset_id);
+      const payload = transcript.kind === "timed"
+        ? {
+          kind: "timed",
+          language_code: transcript.languageCode,
+          text: transcript.text,
+          words: transcript.words.map((word) => ({
+            text: word.text,
+            start: word.start,
+            end: word.end,
+            ...(word.speakerId ? { speaker_id: word.speakerId } : {}),
+          })),
         }
-      }
-
-      const plainResult = await engine.files.read(asset_id, ".analysis.gpt4otrans.json");
-      if (plainResult.ok) {
-        try {
-          const data = JSON.parse(plainResult.value.toString()) as { text?: string };
-          const quality = assessDialogQuality(data);
-          if (!quality.hasDialog && (quality.reason === "empty" || quality.reason === "noise_only")) {
-            return {
-              content: [{
-                type: "text" as const,
-                text: JSON.stringify({ kind: "silence" }),
-              }],
-            };
-          }
-          return {
-            content: [{
-              type: "text" as const,
-              text: JSON.stringify({ kind: "plain", text: quality.text }),
-            }],
-          };
-        } catch {
-          void 0;
-        }
-      }
+        : transcript;
 
       return {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify({ kind: "missing" }),
-        }],
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };
     },
   };

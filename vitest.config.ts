@@ -49,6 +49,8 @@ export default defineConfig({
       'src/videobook/last-work-slot.test.ts',
       'src/videobook/notebook-routing.test.ts',
       'src/videobook/notebook-run-watch.test.ts',
+      'src/videobook/media-insight-watch.test.ts',
+      'src/videobook/media-insights.test.ts',
       'src/videobook/notebook-cell-presentation.test.ts',
       'src/videobook/notebook-cell-add-menu.test.ts',
       'src/videobook/notebook-coordinate-actions.test.ts',

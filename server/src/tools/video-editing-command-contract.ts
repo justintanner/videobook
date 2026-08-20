@@ -283,6 +283,7 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "sync_video_to_audio", exposure: "direct", command: "/sync-audio", purpose: "Retime video to audio anchors" },
   { tool: "transcribe", exposure: "direct", command: "/transcribe", purpose: "Transcribe an asset" },
   { tool: "read_transcript", exposure: "direct", command: "/transcript", purpose: "Read an asset transcript" },
+  { tool: "analyze_video", exposure: "internal", purpose: "Describe a video from sampled frames and its transcript" },
   { tool: "translate_subtitles", exposure: "direct", command: "/translate-subs", purpose: "Translate timed subtitles" },
   { tool: "clean_video_audio", exposure: "direct", command: "/clean-audio", purpose: "Clean a video soundtrack" },
   { tool: "isolate_vocals", exposure: "direct", command: "/vocals", purpose: "Isolate vocals" },

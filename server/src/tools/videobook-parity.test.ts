@@ -20,8 +20,8 @@ describe("Videobook MCP parity", () => {
     const names = getAllToolDefs(fs).map((definition) => definition.name);
     fs.close();
 
-    expect(names).toHaveLength(305);
-    expect(new Set(names).size).toBe(305);
+    expect(names).toHaveLength(306);
+    expect(new Set(names).size).toBe(306);
     expect(names).toEqual(
       expect.arrayContaining([
         "list_books",
@@ -55,6 +55,7 @@ describe("Videobook MCP parity", () => {
         "get_image_subject_map",
         "analyze_image_subjects",
         "edit_image_subjects",
+        "analyze_video",
       ]),
     );
   });

@@ -80,6 +80,7 @@ import { spliceVideoDef } from "./splice-video.js";
 import { smoothSceneConcatDef } from "./smooth-scene-concat.js";
 import { transcribeDef } from "./transcribe.js";
 import { readTranscriptDef } from "./read-transcript.js";
+import { analyzeVideoDef } from "./analyze-video.js";
 import { translateSubtitlesDef } from "./translate-subtitles.js";
 import { generateGrokImagineVideoDef } from "./generate-grok-imagine-video.js";
 import { generateGrokImagineRefVideoDef } from "./generate-grok-imagine-ref-video.js";
@@ -264,6 +265,7 @@ export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
     smoothSceneConcatDef(engine),
     transcribeDef(engine),
     readTranscriptDef(engine),
+    analyzeVideoDef(engine),
     translateSubtitlesDef(engine),
     isolateVocalsDef(engine),
     cleanVideoAudioDef(engine),

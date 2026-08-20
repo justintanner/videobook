@@ -339,6 +339,21 @@ import {
   type ImageSubjectMap,
 } from '@/videobook/image-subject-map'
 import { pollImageSubjectMap } from '@/videobook/image-subject-map-poll'
+import {
+  asMediaTranscript,
+  asMediaVisionAnalysis,
+  idleMediaInsightWork,
+  mediaInsightIsRunning,
+  mediaInsightRunningPatch,
+  type MediaInsightKind,
+  type MediaInsightWork,
+  type MediaTranscript,
+  type MediaVisionAnalysis,
+} from '@/videobook/media-insights'
+import {
+  mediaInsightWatchStep,
+  type MediaInsightWatchStep,
+} from '@/videobook/media-insight-watch'
 import { guardedAsyncResult } from '@/videobook/async-request-guard'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
@@ -364,6 +379,8 @@ type AssetRecord = {
   fps: number | null
   audioInfo: NotebookAudioInfo | null
   analysisInfo: NotebookAnalysisInfo | null
+  transcript: MediaTranscript | null
+  visionAnalysis: MediaVisionAnalysis | null
 }
 
 type MediaFullscreenSession = {
@@ -660,6 +677,8 @@ const notebookRunPollTimeoutMs = 5 * 60_000
 const notebookGenerationWatchIntervalMs = 2_000
 const notebookGenerationWatchTimeoutMs = 45 * 60_000
 const downloadWatchIntervalMs = 5_000
+const mediaInsightWatchIntervalMs = 3_000
+const mediaInsightWatchTimeoutMs = 20 * 60_000
 const mediaProcessWatchIntervalMs = 750
 const mediaAssetWatchTimeoutMs = 45 * 60_000
 const activeJobStates = new Set(['queued', 'running', 'completing'])
@@ -698,6 +717,15 @@ const notebookCellTypes = new Set<string>([
 
 function asString(value: unknown): string | null {
   return typeof value === 'string' ? value : null
+}
+
+function assetHasInsight(
+  asset: AssetRecord | undefined,
+  insight: MediaInsightKind,
+): boolean {
+  return Boolean(insight === 'transcript'
+    ? asset?.transcript
+    : asset?.visionAnalysis)
 }
 
 function asNumber(value: unknown): number | null {
@@ -1114,6 +1142,10 @@ function asAsset(value: unknown): AssetRecord | null {
     fps: asNumber(item.fps),
     audioInfo,
     analysisInfo,
+    transcript: asMediaTranscript(item.transcript),
+    visionAnalysis: asMediaVisionAnalysis(
+      item.vision_analysis ?? item.visionAnalysis,
+    ),
   }
 }
 
@@ -2817,6 +2849,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => new Set(),
   )
   const [mediaSlotStates, setMediaSlotStates] = useState<Record<string, MediaSlotState>>({})
+  const [mediaInsightWork, setMediaInsightWork] = useState<
+    Record<string, MediaInsightWork>
+  >({})
   const [cellRunErrors, setCellRunErrors] = useState<Record<string, string>>({})
   const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
   const mediaLibraryReference = useSearchReferenceLifecycle()
@@ -4326,6 +4361,147 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     return data.payload
   }, [bookId, call])
+
+  const updateMediaInsightWork = useCallback((
+    artifactId: string,
+    patch: Partial<MediaInsightWork>,
+  ) => {
+    setMediaInsightWork((current) => ({
+      ...current,
+      [artifactId]: {
+        ...(current[artifactId] ?? idleMediaInsightWork),
+        ...patch,
+      },
+    }))
+  }, [])
+
+  const watchAssetInsight = useCallback(async (params: {
+    bookId: string
+    notebookId: string
+    artifactId: string
+    insight: MediaInsightKind
+    since: number
+    hadInsight: boolean
+  }): Promise<MediaInsightWatchStep> => {
+    const deadline = Date.now() + mediaInsightWatchTimeoutMs
+    while (Date.now() < deadline) {
+      await delay(mediaInsightWatchIntervalMs)
+      const scope = watchScopeRef.current
+      if (
+        scope.bookId !== params.bookId
+        || scope.notebookId !== params.notebookId
+      ) {
+        return { kind: 'continue' }
+      }
+      const fetchedAt = performance.now()
+      const [notebookValue, assetValue, jobValue] = await Promise.all([
+        callRef.current('get_notebook', {
+          book_id: params.bookId,
+          notebook_id: params.notebookId,
+        }, { background: true }),
+        callRef.current('list_assets', {
+          book_id: params.bookId,
+          sort: 'newest',
+          limit: 200,
+          include_referenced: true,
+        }, { background: true }),
+        callRef.current('list_jobs', {
+          book_id: params.bookId,
+          limit: 200,
+        }, { background: true }),
+      ])
+      const nextNotebook = asNotebook(notebookValue)
+      const nextAssets = asAssets(assetValue)
+      const nextJobs = asJobs(jobValue)
+      if (nextNotebook && fetchedAt >= watchSnapshotClockRef.current) {
+        watchSnapshotClockRef.current = fetchedAt
+        setAssets((current) =>
+          jsonEqual(current, nextAssets) ? current : nextAssets)
+        applyJobsSnapshot(nextJobs)
+        applyNotebook(nextNotebook, nextAssets, nextJobs)
+      }
+      const asset = nextAssets.find((candidate) =>
+        candidate.artifactId === params.artifactId)
+      const step = mediaInsightWatchStep({
+        insight: params.insight,
+        artifactId: params.artifactId,
+        since: params.since,
+        hasInsight: assetHasInsight(asset, params.insight),
+        hadInsight: params.hadInsight,
+        jobs: nextJobs,
+      })
+      if (step.kind !== 'continue') return step
+    }
+    return {
+      kind: 'failed',
+      message: params.insight === 'transcript'
+        ? 'Transcription did not finish in time. Check the jobs screen.'
+        : 'Video analysis did not finish in time. Check the jobs screen.',
+    }
+  }, [applyJobsSnapshot, applyNotebook])
+
+  const runAssetInsight = useCallback(async (
+    artifactId: string,
+    insight: MediaInsightKind,
+  ) => {
+    const notebookId = notebook?.id
+    if (!bookId || !notebookId) return
+    const work = mediaInsightWork[artifactId] ?? idleMediaInsightWork
+    if (mediaInsightIsRunning(work, insight)) return
+    const hadInsight = assetHasInsight(
+      watchScopeRef.current.assets.find((candidate) =>
+        candidate.artifactId === artifactId),
+      insight,
+    )
+    const since = Date.now()
+    updateMediaInsightWork(artifactId, {
+      ...mediaInsightRunningPatch(insight, true),
+      error: null,
+    })
+    try {
+      await call(
+        insight === 'transcript' ? 'transcribe' : 'analyze_video',
+        insight === 'transcript'
+          ? { book_id: bookId, asset_id: artifactId }
+          // Re-analysis only happens from the panel's rerun control, which is
+          // shown once an analysis exists — force past the skip-if-present gate.
+          : { book_id: bookId, asset_id: artifactId, force: hadInsight },
+        { background: true },
+      )
+      const step = await watchAssetInsight({
+        bookId,
+        notebookId,
+        artifactId,
+        insight,
+        since,
+        hadInsight,
+      })
+      updateMediaInsightWork(artifactId, {
+        ...mediaInsightRunningPatch(insight, false),
+        error: step.kind === 'failed' ? step.message : null,
+      })
+    } catch (error) {
+      updateMediaInsightWork(artifactId, {
+        ...mediaInsightRunningPatch(insight, false),
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }, [
+    bookId,
+    call,
+    mediaInsightWork,
+    notebook,
+    updateMediaInsightWork,
+    watchAssetInsight,
+  ])
+
+  const transcribeAsset = useCallback((artifactId: string) => {
+    void runAssetInsight(artifactId, 'transcript')
+  }, [runAssetInsight])
+
+  const analyzeAsset = useCallback((artifactId: string) => {
+    void runAssetInsight(artifactId, 'analysis')
+  }, [runAssetInsight])
 
   const refreshNotebook = useCallback(async (targetBookId: string, notebookId: string) => {
     const value = await call('get_notebook', {
@@ -9678,6 +9854,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     }}
                     onPreviewPayload={previewGenerationPayload}
                     onLoadGenerationPayload={loadGenerationPayload}
+                    mediaInsightWork={mediaInsightWork}
+                    onTranscribeAsset={transcribeAsset}
+                    onAnalyzeAsset={analyzeAsset}
                   />
                 ) : null}
               </aside>

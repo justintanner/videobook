@@ -20,6 +20,16 @@ import {
   RENDER_ORIENTATIONS as MEDIA_RENDER_ORIENTATIONS,
 } from "videobook-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
+import {
+  hasSpokenAudio,
+  readAssetTranscriptSummary,
+  type AssetTranscriptSummary,
+} from "../transcript-projection.js";
+import {
+  isAnalyzableVideo,
+  readVideoAnalysisSummary,
+  type VideoAnalysisSummary,
+} from "../video-analysis-projection.js";
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";
 import type { PendingTask } from "videobook-engine";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
@@ -115,6 +125,13 @@ export type ProjectAsset = {
     duration_seconds: number;
   } | null;
   analysis_info: ProjectAssetAnalysis | null;
+  /** Video/audio assets only: the asset transcript, or null when none exists.
+   *  Lets the inspector show a copiable transcript without a second round trip
+   *  and decide whether to offer the Transcribe action. */
+  transcript: AssetTranscriptSummary | null;
+  /** Video assets only: compact vision analysis from `.original.analysis.json`,
+   *  or null when the asset has not been analyzed yet. */
+  vision_analysis: VideoAnalysisSummary | null;
   waveform: number[] | null;
   frame_dirs: Record<string, string[]>;
   archive_id: string | null;
@@ -670,6 +687,18 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
       const renders = renderedOrientationsFor(files, a.kind);
       const hasPartFile = files.some((f) => PARTIAL_DOWNLOAD_RE.test(f.name));
       const frameDirs = buildFrameDirs(directories, book_id, a.artifactId);
+      // Spoken-media assets: ship the transcript so the inspector can show a
+      // copiable transcript (and offer Transcribe when there is none) without a
+      // second round trip. One small sidecar read per eligible asset; word-timed
+      // transcripts resolve from the object-hash memo on repeat listings.
+      const [transcript, vision_analysis] = await Promise.all([
+        hasSpokenAudio(a.kind)
+          ? readAssetTranscriptSummary(engine, a.artifactId, files)
+          : Promise.resolve(null),
+        isAnalyzableVideo(a.kind)
+          ? readVideoAnalysisSummary(engine, a.artifactId)
+          : Promise.resolve(null),
+      ]);
       const waveform = await readWaveformOrSchedule(
         engine,
         a.artifactId,
@@ -859,6 +888,8 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
         })(),
         audio_info,
         analysis_info: analysisInfo,
+        transcript,
+        vision_analysis,
         waveform,
         frame_dirs: frameDirs,
         archive_id: typeof archiveMeta?.archive_id === "string" ? archiveMeta.archive_id : null,
@@ -895,6 +926,8 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
       fps: null,
       audio_info: null,
       analysis_info: null,
+      transcript: null,
+      vision_analysis: null,
       waveform: null,
       frame_dirs: {},
       archive_id: null,
