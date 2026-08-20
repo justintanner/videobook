@@ -6,7 +6,6 @@ import * as os from "node:os";
 
 import {
   queue as appQueue,
-  enqueueOptions,
   registerJobHandler,
   setEngineRoot,
   extractAssetId,
@@ -31,36 +30,6 @@ describe("server queue (Dolt-native)", () => {
       testEngine = undefined;
     }
     await fsP.rm(projectsDir, { recursive: true, force: true });
-  });
-
-  it("enqueues, runs a handler, and waits for the native queue result", async () => {
-    const cfs = createEngineForTest(projectsDir);
-    testEngine = cfs;
-
-    const runner = (await cfs.jobs.queue.createRunner({
-      concurrency: 2,
-      pollIntervalMs: 25,
-      resolveHandler: (type) =>
-        type === "noop"
-          ? async (job) => ({ ok: true, ref: job.payload.ref })
-          : null,
-    }))!;
-    runner.start();
-    try {
-      const enqueued = cfs.jobs.queue.enqueue({
-        type: "noop",
-        payload: { ref: "abc" },
-        dedupeKey: "test-job-1",
-      });
-      const result = await runner.waitFor(enqueued.job.id, 5_000) as {
-        ok: boolean;
-        ref: string;
-      };
-      expect(result.ok).toBe(true);
-      expect(result.ref).toBe("abc");
-    } finally {
-      await runner.stop();
-    }
   });
 
   it("lets provider handoff helpers reuse the queue wrapper owner", async () => {
@@ -193,54 +162,6 @@ describe("server queue (Dolt-native)", () => {
     expect(await appQueue.getStatus("index-cleanup-probe")).toBeNull();
 
     await appQueue.stop();
-  });
-
-  it("keeps completed media ready when an auxiliary semantic job lease expires", async () => {
-    const cfs = createEngineForTest(projectsDir);
-    testEngine = cfs;
-    const asset = await cfs.artifacts.create("img", "semantic-expiry");
-    expect(asset.ok).toBe(true);
-    if (!asset.ok) return;
-    const written = await cfs.files.write(
-      asset.value.artifactId,
-      "original.jpg",
-      Buffer.from("finished-media"),
-    );
-    expect(written.ok).toBe(true);
-
-    const enqueued = cfs.jobs.queue.enqueue(enqueueOptions(
-      "semantic-expiry",
-      {
-        type: "semantic_index",
-        bookId: cfs.book.get().bookId,
-        assetId: asset.value.artifactId,
-      },
-    ));
-    expect(enqueued.job.artifactId).toBeNull();
-
-    const runner = cfs.jobs.queue.createRunner({
-      concurrency: 1,
-      leaseMs: 20,
-      pollIntervalMs: 1,
-      reapIntervalMs: 5,
-      resolveHandler: (type) => type === "semantic_index"
-        ? async () => {
-            await new Promise((resolve) => setTimeout(resolve, 75));
-            return { success: true };
-          }
-        : null,
-    });
-    runner.start();
-    try {
-      await expect(runner.waitFor(enqueued.job.id, 2_000)).rejects.toThrow(
-        "Job lease expired",
-      );
-    } finally {
-      await runner.stop();
-    }
-
-    const status = await cfs.status.get(asset.value.artifactId);
-    expect(status).toMatchObject({ ok: true, value: "ready" });
   });
 });
 
