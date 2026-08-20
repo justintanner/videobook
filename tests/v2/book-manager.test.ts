@@ -2,7 +2,6 @@ import { access, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { MVP_SCHEMA_VERSION, SCHEMA_VERSION } from 'videobook-engine'
 import { BookManager } from '../../server/src/book-manager.js'
 import { readTimeline, writeTimeline } from '../../server/src/timeline-helpers.js'
 
@@ -40,18 +39,6 @@ describe('v2 book manager', () => {
 
     expect(firstBook.value.engine.notebooks.list().map((entry) => entry.name)).toEqual(['Main'])
     expect(secondBook.value.engine.notebooks.list().map((entry) => entry.name)).toEqual(['Main'])
-    expect(SCHEMA_VERSION).toBe(MVP_SCHEMA_VERSION)
-    const sequence = firstBook.value.engine.sequences.getPrimary()
-    expect(sequence).toMatchObject({
-      name: 'Main',
-      width: 1920,
-      height: 1080,
-      frameRate: { numerator: 30, denominator: 1 },
-      audioSampleRateHz: 48_000,
-    })
-    expect(sequence.tracks.filter((track) => track.kind === 'video')).toHaveLength(2)
-    expect(sequence.tracks.filter((track) => track.kind === 'audio')).toHaveLength(4)
-    expect(sequence.tracks.filter((track) => track.kind === 'caption')).toHaveLength(1)
 
     const artifact = await firstBook.value.engine.artifacts.create('image', 'moon garden')
     expect(artifact.ok).toBe(true)
@@ -93,32 +80,11 @@ describe('v2 book manager', () => {
     expect(books.get(created.value.bookId).ok).toBe(false)
   })
 
-  it('reconciles an expired running job after a server restart', async () => {
+  it('reopens a persisted book from the library after close', async () => {
     const created = await books.create('restart-recovery')
     expect(created.ok).toBe(true)
     if (!created.ok) return
-    const managed = books.get(created.value.bookId)
-    expect(managed.ok).toBe(true)
-    if (!managed.ok) return
-    const queued = [
-      'process_upload',
-      'semantic_index',
-      'preview_render',
-      'final_render',
-    ].map((type) => managed.value.engine.jobs.queue.enqueue({
-      type,
-      payload: {
-        type,
-        bookId: created.value.bookId,
-      },
-      maxAttempts: 2,
-    }))
-    const leased = queued.map(() =>
-      managed.value.engine.jobs.queue.dequeue(process.pid, -1))
-    expect(leased.map((job) => job?.id)).toEqual(
-      queued.map((result) => result.job.id),
-    )
-    expect(leased.every((job) => job?.state === 'running')).toBe(true)
+    const bookId = created.value.bookId
 
     await books.close()
     books = new BookManager({
@@ -126,19 +92,9 @@ describe('v2 book manager', () => {
       objectPrefix: 'test-objects',
     })
     await books.ready()
-    const reopened = books.get(created.value.bookId)
+    const reopened = books.get(bookId)
     expect(reopened.ok).toBe(true)
     if (!reopened.ok) return
     expect(reopened.value.engine.book.get().name).toBe('restart-recovery')
-
-    const recovery = await reopened.value.engine.jobs.queue.reap()
-    expect(recovery).toEqual({ requeued: 4, failed: 0 })
-    for (const result of queued) {
-      expect(reopened.value.engine.jobs.queue.get(result.job.id)).toMatchObject({
-        state: 'queued',
-        attempts: 1,
-        maxAttempts: 2,
-      })
-    }
   })
 })

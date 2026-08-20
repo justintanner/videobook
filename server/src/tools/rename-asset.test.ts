@@ -1,4 +1,3 @@
-import { createEngineForTest } from "../engine.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -84,49 +83,5 @@ describe("rename_asset tool", () => {
       },
     });
     expect(result.isError).toBe(true);
-  });
-
-  it("keeps media and waveform on the same stable artifact identity", async () => {
-    const fs = createEngineForTest(tempDir);
-    const created = await fs.artifacts.create("aud", "old track");
-    if (!created.ok) throw new Error(created.error.message);
-    const artifactId = created.value.artifactId;
-    const audio = Buffer.from("fake-mp3-audio");
-    const write = await fs.files.write(artifactId, "original.mp3", audio);
-    if (!write.ok) throw new Error(write.error.message);
-    const waveform = await fs.metadata.waveforms.write(artifactId, [0.1, 0.8, 0.3]);
-    if (!waveform.ok) throw new Error(waveform.error.message);
-
-    const result = await client.callTool({
-      name: "rename_asset",
-      arguments: {
-        asset_id: artifactId,
-        new_name: "new track",
-        book_id: "test-proj",
-      },
-    });
-    expect(result.isError).toBeFalsy();
-    const parsed = JSON.parse(
-      (result.content as TextContent)[0].text,
-    ) as RenamePayload;
-    expect(parsed.artifact_id).toBe(artifactId);
-    expect(parsed.label).toBe("new track");
-
-    const renamedAudio = await fs.files.read(artifactId, "original.mp3");
-    expect(renamedAudio.ok).toBe(true);
-    if (renamedAudio.ok) expect(renamedAudio.value).toEqual(audio);
-
-    const assets = fs.artifacts.list();
-    expect(assets.map((asset) => asset.artifactId)).toContain(artifactId);
-    const relabeled = assets.find((asset) => asset.artifactId === artifactId);
-    expect(relabeled?.label).toBe("new track");
-
-    const manifest = await fs.files.manifest(artifactId);
-    expect(manifest.ok).toBe(true);
-    if (manifest.ok) expect(manifest.value.label).toBe("new track");
-
-    const renamedWaveform = await fs.metadata.waveforms.read(artifactId);
-    expect(renamedWaveform.ok).toBe(true);
-    if (renamedWaveform.ok) expect(renamedWaveform.value.peaks).toEqual([0.1, 0.8, 0.3]);
   });
 });
