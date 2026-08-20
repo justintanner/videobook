@@ -79,6 +79,7 @@ export default defineConfig({
       'server/src/chat-router.test.ts',
       'server/src/chat-models.test.ts',
       'server/src/dialog-quality.test.ts',
+      'server/src/downloads-dest.test.ts',
       'server/src/google-flow-cost.test.ts',
       'server/src/google-flow-refs.test.ts',
       'server/src/image.test.ts',

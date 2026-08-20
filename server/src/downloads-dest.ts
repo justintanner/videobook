@@ -7,16 +7,30 @@ export function defaultDownloadsDir(): string {
   return join(homedir(), "Downloads");
 }
 
+/** Flatten a display label into a single Downloads filename stem.
+ *  Generation labels include model slugs like `kling-3.0/video — …`; those
+ *  slashes (and `..` / backslashes) must not become path segments. */
+export function sanitizeDownloadBaseName(baseName: string): string {
+  const parts = baseName.split(/[/\\]+/u).flatMap((part) => {
+    const trimmed = part.replaceAll("\0", "").trim();
+    if (!trimmed || trimmed === "." || trimmed === "..") return [];
+    return [trimmed];
+  });
+  const joined = parts.join(" - ").replace(/\s+/gu, " ").trim();
+  return joined || "download";
+}
+
 export async function resolveDownloadDestination(
   baseName: string,
   ext: string,
   downloadsDir: string = defaultDownloadsDir(),
 ): Promise<string> {
+  const stem = sanitizeDownloadBaseName(baseName);
   const suffix = ext.startsWith(".") ? ext : `.${ext}`;
-  let candidate = join(downloadsDir, `${baseName}${suffix}`);
+  let candidate = join(downloadsDir, `${stem}${suffix}`);
   let n = 2;
   while (await fileExists(candidate)) {
-    candidate = join(downloadsDir, `${baseName} (${n})${suffix}`);
+    candidate = join(downloadsDir, `${stem} (${n})${suffix}`);
     n += 1;
   }
   return candidate;
