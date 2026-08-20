@@ -77,6 +77,11 @@ describe("notebook action catalog", () => {
         cellTypes: ["split_video"],
         requiredInputs: ["video"],
       });
+    expect(actions.find((action) => action.operation === "split_ranges"))
+      .toMatchObject({
+        cellTypes: ["split_video"],
+        requiredInputs: ["video"],
+      });
     expect(actions.some((action) =>
       action.operation === "extract_frame")).toBe(false);
     expect(actions.some((action) =>

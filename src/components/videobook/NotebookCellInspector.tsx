@@ -2415,7 +2415,9 @@ function ExecutableCellInspector({
             )}
           </section>
         )}
-        {cell.type === 'split_video' && cell.operation === 'split_at_points' && (
+        {cell.type === 'split_video'
+          && (cell.operation === 'split_at_points'
+            || cell.operation === 'split_ranges') && (
           <div className="inspector-field-pair">
             <label>
               Cut points
@@ -2439,7 +2441,9 @@ function ExecutableCellInspector({
             </label>
           </div>
         )}
-        {cell.type === 'split_video' && cell.operation !== 'split_at_points' && (
+        {cell.type === 'split_video'
+          && cell.operation !== 'split_at_points'
+          && cell.operation !== 'split_ranges' && (
           <div className="inspector-field-pair">
             <label>
               Start seconds

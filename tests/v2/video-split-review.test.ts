@@ -1,62 +1,61 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { VideoSplitReview } from '../../src/components/videobook/VideoSplitReview'
-import {
-  durationTargetsToCutPoints,
-  insertSplitCutPoint,
-  nudgeSplitCutPoint,
-  removeSplitCutPoint,
-  splitPreviewWindows,
-} from '../../src/videobook/video-split-review'
+import { VideoSegmentSplit } from '../../src/components/videobook/VideoSegmentSplit'
+import { writeFileSync } from 'node:fs'
+const DRAWER_DUMP = process.env.VIDEO_SEGMENT_SPLIT_HTML_PATH
 
-describe('video split review', () => {
-  it('renders two quick previews and button-based cut controls without a range input', () => {
-    const html = renderToStaticMarkup(createElement(VideoSplitReview, {
+describe('video segment split', () => {
+  it('renders a buttons-only editor with KEEP/REMOVE/ALL and two loop tiles', () => {
+    const html = renderToStaticMarkup(createElement(VideoSegmentSplit, {
       applyFormId: 'apply',
+      availableEmptyCells: 8,
       busy: false,
-      cutPointsSeconds: [4, 8],
-      maxChunkCount: 10,
+      cutPointsSeconds: [0.03, 0.11],
       mediaUrl: '/files/book/video/proxy.mp4',
       onCancel: () => undefined,
-      onCutPointsChange: () => undefined,
-      sourceDurationSeconds: 12,
+      onChange: () => undefined,
+      outputMode: 'keep',
+      selectedIndex: 1,
+      sourceDurationSeconds: 30,
+      sourceFps: 24,
       sourceLabel: '@a1',
     }))
-    expect(html.match(/<video/g)).toHaveLength(2)
-    expect(html).toContain('−0.1s')
-    expect(html).toContain('+0.1s')
-    expect(html).toContain('Split chunk')
-    expect(html).toContain('Remove cut')
+    if (DRAWER_DUMP) writeFileSync(DRAWER_DUMP, html)
+    expect(html.match(/<video/g)).toHaveLength(3)
+    expect(html).toContain('KEEP segment')
+    expect(html).toContain('REMOVE segment')
+    expect(html).toContain('ALL pieces')
+    expect(html).toContain('+0.01s')
+    expect(html).toContain('−0.01s')
+    expect(html).toContain('SET IN HERE')
+    expect(html).toContain('SET OUT HERE')
+    expect(html).toContain('PREV FRAME')
+    expect(html).toContain('NEXT FRAME')
+    expect(html).toContain('Slow x0.25')
     expect(html).not.toContain('type="range"')
-    expect(html).not.toContain('controls=""')
+    expect(html).toContain('controls')
+    expect(html).toContain('0:00.030')
+    expect(html).toContain('0:00.110')
   })
 
-  it('nudges, clamps, inserts, and removes cut points', () => {
-    expect(nudgeSplitCutPoint({
-      cutPointsSeconds: [1, 2],
-      deltaSeconds: 1,
-      index: 0,
-      sourceDurationSeconds: 3,
-    })).toEqual([1.5, 2])
-    expect(insertSplitCutPoint({
-      chunkIndex: 1,
-      cutPointsSeconds: [2],
-      sourceDurationSeconds: 6,
-    })).toEqual([2, 4])
-    expect(removeSplitCutPoint([2, 4], 0)).toEqual([4])
-    expect(removeSplitCutPoint([2], 0)).toEqual([2])
-  })
-
-  it('derives duration cuts and preview windows', () => {
-    expect(durationTargetsToCutPoints([3, 4.5, 2])).toEqual([3, 7.5, 9.5])
-    expect(splitPreviewWindows({
-      cutPointSeconds: 5,
-      previousBoundarySeconds: 4,
-      nextBoundarySeconds: 6,
-    })).toEqual({
-      before: { startSeconds: 4, endSeconds: 5 },
-      after: { startSeconds: 5, endSeconds: 6 },
-    })
+  it('hides frame steps when fps is unknown', () => {
+    const html = renderToStaticMarkup(createElement(VideoSegmentSplit, {
+      applyFormId: 'apply',
+      availableEmptyCells: 8,
+      busy: false,
+      cutPointsSeconds: [15],
+      mediaUrl: '/files/book/video/proxy.mp4',
+      onCancel: () => undefined,
+      onChange: () => undefined,
+      outputMode: 'all',
+      selectedIndex: 0,
+      sourceDurationSeconds: 30,
+      sourceFps: null,
+      sourceLabel: '@a1',
+    }))
+    expect(html).not.toContain('PREV FRAME')
+    expect(html).not.toContain('NEXT FRAME')
+    expect(html).not.toContain('type="range"')
   })
 })

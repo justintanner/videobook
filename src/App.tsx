@@ -136,7 +136,7 @@ import {
   NotebookCellAddMenu,
 } from '@/components/videobook/NotebookCellAddMenu'
 import { isNotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
-import { VideoSplitReview } from '@/components/videobook/VideoSplitReview'
+import { VideoSegmentSplit } from '@/components/videobook/VideoSegmentSplit'
 import {
   CanonicalSequencePlayer,
   type TimelineKeyboardAction,
@@ -254,14 +254,18 @@ import {
 } from '@/videobook/notebook-frame-command'
 import {
   enqueueNotebookSplitCommand,
+  notebookSplitCellBudget,
   notebookSplitCutPoints,
+  notebookSplitPieces,
+  notebookSplitSummary,
   parseNotebookSplitCommand,
   planNotebookSplitCommand,
   type NotebookSplitCommand,
+  type NotebookSplitOutputMode,
   type NotebookSplitRun,
 } from '@/videobook/notebook-split-command'
 import { resolveNotebookVideoSourceCell } from '@/videobook/notebook-video-source'
-import { durationTargetsToCutPoints } from '@/videobook/video-split-review'
+import { durationTargetsToCutPoints } from '@/videobook/video-split-segments'
 import {
   generationCellTypeForRoutedTool,
   materializeNotebookChatGeneration,
@@ -357,6 +361,7 @@ type AssetRecord = {
   width: number | null
   height: number | null
   duration: number | null
+  fps: number | null
   audioInfo: NotebookAudioInfo | null
   analysisInfo: NotebookAnalysisInfo | null
 }
@@ -502,6 +507,7 @@ type PendingChatAction =
       expectations: NotebookAddressExpectation[]
       notebookId: string
       reason: string
+      sourceDurationSeconds: number
       summary: string
     }
   | {
@@ -1105,6 +1111,7 @@ function asAsset(value: unknown): AssetRecord | null {
     width: asNumber(item.width),
     height: asNumber(item.height),
     duration: asNumber(item.duration),
+    fps: asNumber(item.fps),
     audioInfo,
     analysisInfo,
   }
@@ -3982,14 +3989,30 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setPendingChatAction(null)
     focusCommandComposer()
   }, [focusCommandComposer])
-  const updatePendingSplitCutPoints = useCallback((cutPointsSeconds: number[]) => {
+  const updatePendingSplitSelection = useCallback((next: {
+    cutPointsSeconds: number[]
+    outputMode: NotebookSplitOutputMode
+    selectedIndex: number
+  }) => {
     setPendingChatAction((current) => {
       if (current?.kind !== 'split') return current
       const sourceAddress = current.expectations[0]?.address ?? 'video'
+      const command: NotebookSplitCommand = {
+        ...current.command,
+        cutPointsSeconds: next.cutPointsSeconds,
+        outputMode: next.outputMode,
+        selectedChunkIndexes: [next.selectedIndex],
+      }
       return {
         ...current,
-        command: { ...current.command, cutPointsSeconds },
-        summary: `Split ${sourceAddress} into ${cutPointsSeconds.length + 1} chunks`,
+        command,
+        summary: notebookSplitSummary({
+          cutPointsSeconds: command.cutPointsSeconds,
+          outputMode: command.outputMode,
+          selectedChunkIndexes: command.selectedChunkIndexes,
+          sourceAddress,
+          sourceDurationSeconds: current.sourceDurationSeconds,
+        }),
       }
     })
   }, [])
@@ -4262,10 +4285,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const maximumCellCount = notebookGrid.maximumRowCount
         * notebookGrid.columnCount
       return {
+        availableEmptyCells: Math.max(0, maximumCellCount - notebook.cells.length),
         cutPointsSeconds: pendingChatAction.command.cutPointsSeconds,
-        maxChunkCount: Math.max(0, maximumCellCount - notebook.cells.length - 1),
         mediaUrl: asset.mediaUrl,
+        outputMode: pendingChatAction.command.outputMode ?? 'all',
+        selectedIndex: pendingChatAction.command.selectedChunkIndexes?.[0] ?? 0,
         sourceDurationSeconds: duration,
+        sourceFps: asset.fps,
         sourceLabel: notebookGridTag(source.slot),
       }
     } catch {
@@ -7087,17 +7113,36 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       const maximumCellCount = notebookGrid.maximumRowCount
         * notebookGrid.columnCount
-      if (maximumCellCount - currentNotebook.cells.length < 3) {
-        throw new Error('The notebook needs three empty cells to split a video')
-      }
+      const outputMode = command.outputMode ?? 'all'
       const requestedCutPoints = command.cutPointsSeconds.filter((cutPoint) =>
         sourceDurationSeconds === null
         || Math.abs(cutPoint - sourceDurationSeconds) > 0.001)
-      const cutPointsSeconds = notebookSplitCutPoints({
-        cutPointsSeconds: requestedCutPoints,
+      const cutPointsSeconds = outputMode === 'all'
+        ? notebookSplitCutPoints({
+            cutPointsSeconds: requestedCutPoints,
+            sourceDurationSeconds: sourceDurationSeconds ?? Number.NaN,
+          })
+        : notebookSplitPieces({
+            cutPointsSeconds: requestedCutPoints,
+            sourceDurationSeconds: sourceDurationSeconds ?? Number.NaN,
+          }).slice(0, -1).map((piece) => piece.endSeconds)
+      const preparedCommand: NotebookSplitCommand = {
+        ...command,
+        cutPointsSeconds,
+        outputMode,
+        selectedChunkIndexes: command.selectedChunkIndexes
+          ?? (outputMode === 'all' ? [0] : command.selectedChunkIndexes ?? [0]),
+      }
+      const pieceCount = notebookSplitPieces({
+        cutPointsSeconds,
         sourceDurationSeconds: sourceDurationSeconds ?? Number.NaN,
-      })
-      const preparedCommand = { ...command, cutPointsSeconds }
+      }).length
+      const neededCells = notebookSplitCellBudget(outputMode, pieceCount)
+      if (maximumCellCount - currentNotebook.cells.length < neededCells) {
+        throw new Error(
+          `The notebook needs ${neededCells} empty cells to split a video`,
+        )
+      }
       setPendingCommandPlan(null)
       setPendingChatAction({
         kind: 'split',
@@ -7108,7 +7153,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }],
         notebookId: currentNotebook.id,
         reason: 'This request creates and runs a Split Video workflow',
-        summary: `Split ${notebookGridTag(source.slot)} into ${cutPointsSeconds.length + 1} chunks`,
+        sourceDurationSeconds: sourceDurationSeconds ?? Number.NaN,
+        summary: notebookSplitSummary({
+          cutPointsSeconds,
+          outputMode,
+          selectedChunkIndexes: preparedCommand.selectedChunkIndexes,
+          sourceAddress: notebookGridTag(source.slot),
+          sourceDurationSeconds: sourceDurationSeconds ?? Number.NaN,
+        }),
       })
       return applyReadyOutcome('Video split ready to apply')
     } catch (error) {
@@ -7945,7 +7997,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (commandToken === '/split') {
         const command = parseNotebookSplitCommand(input)
         if (!command) {
-          return { ok: false, message: 'Usage: /split @video [at 5s, 12.5s]' }
+          return { ok: false, message: 'Usage: /split @video [at 5s, 12.5s] | keep 0.03-0.11 | remove 0.03-0.11' }
         }
         return await previewNotebookSplitCommand(command)
       }
@@ -10717,16 +10769,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           />
         )}
         {pendingChatAction?.kind === 'split' && pendingSplitReview && (
-          <VideoSplitReview
+          <VideoSegmentSplit
             applyFormId={COMMAND_COMPOSER_FORM_ID}
+            availableEmptyCells={pendingSplitReview.availableEmptyCells}
             busy={busy}
             cutPointsSeconds={pendingSplitReview.cutPointsSeconds}
-            maxChunkCount={pendingSplitReview.maxChunkCount}
             mediaUrl={pendingSplitReview.mediaUrl}
+            outputMode={pendingSplitReview.outputMode}
+            selectedIndex={pendingSplitReview.selectedIndex}
             sourceDurationSeconds={pendingSplitReview.sourceDurationSeconds}
+            sourceFps={pendingSplitReview.sourceFps}
             sourceLabel={pendingSplitReview.sourceLabel}
             onCancel={dismissPendingCommandPlan}
-            onCutPointsChange={updatePendingSplitCutPoints}
+            onChange={updatePendingSplitSelection}
           />
         )}
         {pendingChatAction

@@ -251,7 +251,7 @@ async function processVideoSnapshot(
     let frameCount = 0;
     {
 
-    await engine.metadata.artifacts.write(assetId, "original", { ...provenance, width, height, duration, hasAudio: probe.hasAudio });
+    await engine.metadata.artifacts.write(assetId, "original", { ...provenance, width, height, duration, fps: probe.fps, hasAudio: probe.hasAudio });
 
     if (duration <= 0) return { success: true, width, height, duration, frame_count: 0 };
 

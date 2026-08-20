@@ -37,8 +37,10 @@ import {
 } from "../generation-registry.js";
 import {
   captureFrame,
+  concatSourceRanges,
   exportSequenceMaster,
   extractSourceAudio,
+  MINIMUM_SPLIT_PIECE_SECONDS,
   normalizeSceneVideo,
   splitSourceRange,
   splitSourceRanges,
@@ -620,6 +622,34 @@ function requiredTwoWaySplitVideoOutputCellIds(
     );
   }
   return { first, remaining };
+}
+
+function parseSplitOutputGroups(
+  value: unknown,
+): Array<Array<{ startSeconds: number; endSeconds: number }>> {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error("outputsSeconds must be a non-empty list of range groups");
+  }
+  return value.map((group) => {
+    if (!Array.isArray(group) || group.length === 0) {
+      throw new Error("Each split output group must contain at least one range");
+    }
+    return group.map((entry) => {
+      const record = entry && typeof entry === "object"
+        ? entry as Record<string, unknown>
+        : {};
+      const startSeconds = Number(record.startSeconds);
+      const endSeconds = Number(record.endSeconds);
+      if (
+        !Number.isFinite(startSeconds)
+        || !Number.isFinite(endSeconds)
+        || !(endSeconds > startSeconds)
+      ) {
+        throw new Error("Split output ranges must use finite start and end seconds");
+      }
+      return { startSeconds, endSeconds };
+    });
+  });
 }
 
 function requiredIndexedSplitVideoOutputCellIds(
@@ -1712,6 +1742,72 @@ async function executeLocalOrGeneration(
   cellInputs?: Record<string, unknown>;
   awaitingOutput?: boolean;
 }> {
+  if (cell.type === "split_video" && cell.operation === "split_ranges") {
+    const sourceId = requiredVideoInputArtifact(document, cell);
+    const groups = parseSplitOutputGroups(cell.inputs?.outputsSeconds);
+    if (groups.length === 0) {
+      throw new Error(
+        `split_video cell ${cell.id} requires outputsSeconds range groups`,
+      );
+    }
+    for (const group of groups) {
+      const total = group.reduce(
+        (sum, range) => sum + (range.endSeconds - range.startSeconds),
+        0,
+      );
+      if (total < MINIMUM_SPLIT_PIECE_SECONDS) {
+        throw new Error(
+          `split_video cell ${cell.id} requires every output range to be at least ${MINIMUM_SPLIT_PIECE_SECONDS}s`,
+        );
+      }
+    }
+    const outputCellIds = requiredIndexedSplitVideoOutputCellIds(
+      document,
+      cell,
+      groups.length,
+    );
+    const results = [];
+    for (const [index, group] of groups.entries()) {
+      const title = `${notebookGridTag(cell.slot)} output ${String(index + 1).padStart(2, "0")}`;
+      const result = group.length === 1
+        ? await splitSourceRange(engine, sourceId, group[0]!, title)
+        : await concatSourceRanges(engine, sourceId, group, title);
+      results.push(result);
+    }
+    const [firstFrame, lastFrame] = await Promise.all([
+      captureFrame(engine, results[0]!.artifactId, {
+        role: "first",
+        title: `${notebookGridTag(cell.slot)} · first frame`,
+      }),
+      captureFrame(engine, results.at(-1)!.artifactId, {
+        role: "last",
+        title: `${notebookGridTag(cell.slot)} · last frame`,
+      }),
+    ]);
+    let withOutputs = document;
+    for (const [index, result] of results.entries()) {
+      withOutputs = withMediaOutput(
+        withOutputs,
+        outputCellIds[index]!,
+        result.artifactId,
+        { durationSeconds: result.durationSeconds },
+      );
+    }
+    return {
+      artifactId: results[0]!.artifactId,
+      tool: "ffmpeg",
+      document: withOutputs,
+      cellInputs: {
+        durationSeconds: results.reduce(
+          (total, result) => total + result.durationSeconds,
+          0,
+        ),
+        firstFrameArtifactId: firstFrame.artifactId,
+        lastFrameArtifactId: lastFrame.artifactId,
+      },
+    };
+  }
+
   if (cell.type === "split_video" && cell.operation === "split_at_points") {
     const sourceId = requiredVideoInputArtifact(document, cell);
     const rawCutPoints = cell.inputs?.cutPointsSeconds;
@@ -1733,11 +1829,12 @@ async function executeLocalOrGeneration(
     for (const cutPoint of cutPoints) {
       if (
         !Number.isFinite(cutPoint)
-        || cutPoint - previous < 0.5
-        || sourceDurationSeconds - cutPoint < 0.5
+        || cutPoint <= previous
+        || sourceDurationSeconds - cutPoint < MINIMUM_SPLIT_PIECE_SECONDS
+        || cutPoint - previous < MINIMUM_SPLIT_PIECE_SECONDS
       ) {
         throw new Error(
-          `split_video cell ${cell.id} requires ordered cut points at least 0.5s apart`,
+          `split_video cell ${cell.id} requires ordered cut points at least ${MINIMUM_SPLIT_PIECE_SECONDS}s apart`,
         );
       }
       previous = cutPoint;

@@ -1509,8 +1509,11 @@ describe('chat composer browser flow', () => {
     await page.getByLabel('Send command').click()
     const review = page.getByLabel('Video split review')
     await review.waitFor({ state: 'visible', timeout: 30_000 })
-    expect(await review.locator('video').count()).toBe(2)
+    expect(await review.locator('video').count()).toBe(3)
     expect(await review.locator('input[type="range"]').count()).toBe(0)
+    expect(await review.getByRole('button', { name: 'KEEP segment' }).count()).toBe(1)
+    expect(await review.getByRole('button', { name: 'REMOVE segment' }).count()).toBe(1)
+    expect(await review.getByRole('button', { name: 'ALL pieces' }).count()).toBe(1)
     const rangeResponse = await review.locator('video').first().evaluate(
       async (video) => {
         const response = await fetch((video as HTMLVideoElement).src, {
@@ -1528,17 +1531,17 @@ describe('chat composer browser flow', () => {
       contentRange: expect.stringMatching(/^bytes 0-15\/\d+$/u),
       status: 206,
     })
-    const exactSeconds = review.getByLabel('Exact seconds')
-    await expect.poll(async () => await exactSeconds.inputValue()).toBe('1.5')
+    const outSeconds = review.getByLabel('OUT seconds')
+    await expect.poll(async () => await outSeconds.inputValue()).toBe('1.500')
 
-    await review.getByRole('button', { name: '+0.1s' }).click()
-    await expect.poll(async () => await exactSeconds.inputValue()).toBe('1.6')
-    await review.getByRole('button', { name: /Before cut/ }).press('ArrowRight')
-    await expect.poll(async () => await exactSeconds.inputValue()).toBe('1.7')
-    await review.getByRole('button', { name: /Split chunk/ }).first().click()
-    await expect.poll(async () => await review.locator('h2').textContent())
-      .toBe('3 contiguous chunks')
-    expect(await review.getByRole('button', { name: /Cut \d/ }).count()).toBe(2)
+    const outRow = review.locator('.video-segment-bound-row').filter({ hasText: 'OUT' })
+    await outRow.getByRole('button', { name: '+0.1s' }).click()
+    await expect.poll(async () => await outSeconds.inputValue()).toBe('1.600')
+    await outRow.getByRole('button', { name: '+0.1s' }).press('ArrowRight')
+    await expect.poll(async () => await outSeconds.inputValue()).toBe('1.700')
+    await review.getByRole('button', { name: /Split piece in half/ }).click()
+    await expect.poll(async () => await review.getByRole('button', { name: /^0\d / }).count())
+      .toBe(3)
 
     observedCalls.length = 0
     await review.getByRole('button', { name: 'Apply split' }).click()

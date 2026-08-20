@@ -20,6 +20,8 @@ interface MediaSplitRequest {
   title: string;
 }
 
+export const MINIMUM_SPLIT_PIECE_SECONDS = 0.02;
+
 export interface BurnInCaption {
   text: string;
   startSeconds: number;
@@ -107,6 +109,7 @@ async function registerMediaProbe(
       width: probe.width,
       height: probe.height,
       duration: probe.duration,
+      fps: probe.fps,
       hasAudio: probe.hasAudio,
       videoCodec: probe.videoCodec,
       audioCodec: probe.audioCodec,
@@ -260,6 +263,110 @@ export async function splitSourceRanges(
     return results;
   } finally {
     await source.cleanup();
+  }
+}
+
+function buildConcatFilterGraph(
+  ranges: readonly MediaRange[],
+  hasAudio: boolean,
+): string {
+  const parts: string[] = [];
+  ranges.forEach((range, index) => {
+    parts.push(
+      `[0:v]trim=start=${range.startSeconds}:end=${range.endSeconds},setpts=PTS-STARTPTS[v${index}]`,
+    );
+    if (hasAudio) {
+      parts.push(
+        `[0:a]atrim=start=${range.startSeconds}:end=${range.endSeconds},asetpts=PTS-STARTPTS[a${index}]`,
+      );
+    }
+  });
+  const concatInputs = ranges
+    .map((_, index) => (hasAudio ? `[v${index}][a${index}]` : `[v${index}]`))
+    .join("");
+  const tail = hasAudio ? "[v][a]" : "[v]";
+  parts.push(
+    `${concatInputs}concat=n=${ranges.length}:v=1:a=${hasAudio ? 1 : 0}${tail}`,
+  );
+  return parts.join(";");
+}
+
+export async function concatSourceRanges(
+  engine: Engine,
+  sourceArtifactId: string,
+  ranges: readonly MediaRange[],
+  title: string,
+): Promise<{ artifactId: string; durationSeconds: number }> {
+  if (ranges.length === 0) {
+    throw new Error("At least one concat range is required");
+  }
+  if (ranges.length === 1) {
+    return await splitSourceRange(
+      engine,
+      sourceArtifactId,
+      ranges[0]!,
+      title,
+    );
+  }
+  const source = await materializeArtifactFile(engine, sourceArtifactId, [
+    "original.mp4",
+    "original.mov",
+  ]);
+  const outDir = await mkdtemp(join(tmpdir(), "vb-concat-"));
+  const outPath = join(outDir, "concat.mp4");
+  try {
+    const probe = await probeVideo(source.path);
+    if (!probe.videoStream) {
+      throw new Error(
+        `Cannot concat artifact ${sourceArtifactId}: source has no video stream`,
+      );
+    }
+    const sourceDuration = probe.videoDuration || probe.duration;
+    for (const range of ranges) {
+      validateSplitRange(sourceArtifactId, sourceDuration, range);
+    }
+    const hasAudio = probe.hasAudio;
+    const filter = buildConcatFilterGraph(ranges, hasAudio);
+    await runFfmpeg([
+      "-y",
+      "-i",
+      source.path,
+      "-filter_complex",
+      filter,
+      "-map",
+      "[v]",
+      ...(hasAudio ? ["-map", "[a]"] : []),
+      ...H264_MEDIUM,
+      ...(hasAudio ? AUDIO_OPTS : []),
+      "-movflags",
+      "+faststart",
+      outPath,
+    ]);
+    const outputProbe = await probeVideo(outPath);
+    if (!outputProbe.videoStream) {
+      throw new Error(
+        `Cannot concat artifact ${sourceArtifactId}: FFmpeg output has no video stream`,
+      );
+    }
+    const artifactId = await ingestOutput(
+      engine,
+      "video",
+      title,
+      "original.mp4",
+      outPath,
+    );
+    await registerMediaProbe(engine, artifactId, "original.mp4", outputProbe);
+    return {
+      artifactId,
+      durationSeconds: outputProbe.duration
+        || ranges.reduce(
+          (total, range) => total + (range.endSeconds - range.startSeconds),
+          0,
+        ),
+    };
+  } finally {
+    await source.cleanup();
+    await rm(outDir, { recursive: true, force: true });
   }
 }
 

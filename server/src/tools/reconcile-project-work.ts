@@ -106,6 +106,7 @@ export type ProjectAsset = {
   prompt: string | null;
   renders: string[];
   duration: number | null;
+  fps: number | null;
   audio_info: {
     codec: string;
     sample_rate_hz: number;
@@ -847,6 +848,15 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
         prompt,
         renders,
         duration,
+        fps: (() => {
+          const metadataFps = Number(meta?.fps);
+          if (Number.isFinite(metadataFps) && metadataFps > 0) return metadataFps;
+          if (frameRate && frameRate.denominator > 0) {
+            const streamFps = frameRate.numerator / frameRate.denominator;
+            return Number.isFinite(streamFps) && streamFps > 0 ? streamFps : null;
+          }
+          return null;
+        })(),
         audio_info,
         analysis_info: analysisInfo,
         waveform,
@@ -882,6 +892,7 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
           : notebook.name,
       renders: [],
       duration: null,
+      fps: null,
       audio_info: null,
       analysis_info: null,
       waveform: null,

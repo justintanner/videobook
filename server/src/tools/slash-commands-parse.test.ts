@@ -394,6 +394,14 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(args.split_spec).toBe("into 15s and the remaining");
     });
 
+    it("passes keep/remove range phrasing through split_spec", () => {
+      const keep = simulateParse("/split", "@a1 keep 0.03-0.11");
+      expect(keep.cell).toBe("a1");
+      expect(keep.split_spec).toBe("keep 0.03-0.11");
+      const remove = simulateParse("/split", "@a1 remove 0:00.030-0:00.110");
+      expect(remove.split_spec).toBe("remove 0:00.030-0:00.110");
+    });
+
     it("keeps canonical-sequence splitting under /split-clip", () => {
       const args = simulateParse("/split-clip", "@clip-id 45");
       expect(args.clip_id).toBe("clip-id");
