@@ -105,13 +105,16 @@ function renderReview(
     previewLoading: false,
     previewStale,
     sources: [],
+    sourceOptions: [],
     summary: 'Generate audio as @a1',
     ...(catalog ? { voiceCatalog: catalog } : {}),
     onActionChange: () => undefined,
+    onAddSource: () => undefined,
     onCancel: () => undefined,
     onModeChange: () => undefined,
     onPromptChange: () => undefined,
     onRefreshPreview: () => undefined,
+    onRemoveSource: () => undefined,
     onSelectSource: () => undefined,
     onSettingChange: () => undefined,
   }))
@@ -190,5 +193,72 @@ describe('GenerationChatReview voice picker', () => {
 
     expect(html).not.toContain('role="alert"')
     expect(html).not.toContain('class="command-plan-apply" disabled=""')
+  })
+})
+
+describe('GenerationChatReview input editing', () => {
+  const imageSource = {
+    cellId: '00000000-0000-7000-8000-0000000000a2',
+    address: 'a2',
+    type: 'image',
+    asset: null,
+  }
+  const imageOption = {
+    cellId: '00000000-0000-7000-8000-0000000000a3',
+    address: 'a3',
+    type: 'image',
+    asset: null,
+  }
+
+  function renderInputs(
+    sources: { cellId: string; address: string; type: string; asset: null }[],
+    sourceOptions: { cellId: string; address: string; type: string; asset: null }[],
+  ): string {
+    return renderToStaticMarkup(createElement(GenerationChatReview, {
+      actions: [ttsAction],
+      applyFormId: 'apply-form',
+      busy: false,
+      draft: speechDraft(),
+      modes: ttsAction.inputContract.modes,
+      preview: null,
+      previewError: null,
+      previewLoading: false,
+      previewStale: false,
+      sources,
+      sourceOptions,
+      summary: 'Generate audio as @a1',
+      onActionChange: () => undefined,
+      onAddSource: () => undefined,
+      onCancel: () => undefined,
+      onModeChange: () => undefined,
+      onPromptChange: () => undefined,
+      onRefreshPreview: () => undefined,
+      onRemoveSource: () => undefined,
+      onSelectSource: () => undefined,
+      onSettingChange: () => undefined,
+    }))
+  }
+
+  it('offers a remove control for each connected input', () => {
+    const html = renderInputs([imageSource], [])
+
+    expect(html).toContain('aria-label="Remove @a2 input"')
+    expect(html).toContain('Select @a2 on the board')
+    expect(html).not.toContain('Add input')
+  })
+
+  it('offers an add control while candidate cells remain', () => {
+    const html = renderInputs([imageSource], [imageOption])
+
+    expect(html).toContain('aria-label="Remove @a2 input"')
+    expect(html).toContain('Add input')
+    expect(html).not.toContain('Available input cells')
+  })
+
+  it('offers the add control from the prompt-only empty state', () => {
+    const html = renderInputs([], [imageOption])
+
+    expect(html).toContain('Prompt only')
+    expect(html).toContain('Add input')
   })
 })

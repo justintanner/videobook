@@ -1,4 +1,5 @@
-import { Check, CircleAlert, X } from 'lucide-react'
+import { useState } from 'react'
+import { Check, CircleAlert, Plus, X } from 'lucide-react'
 import type {
   GenerationControl,
   GenerationControlValue,
@@ -39,13 +40,16 @@ type GenerationChatReviewProps = {
   previewLoading: boolean
   previewStale: boolean
   sources: readonly GenerationReviewSource[]
+  sourceOptions: readonly GenerationReviewSource[]
   summary: string
   voiceCatalog?: ElevenLabsVoicesState
   onActionChange: (actionId: string) => void
+  onAddSource: (cellId: string) => void
   onCancel: () => void
   onModeChange: (modeId: string) => void
   onPromptChange: (prompt: string) => void
   onRefreshPreview: () => void
+  onRemoveSource: (cellId: string) => void
   onSelectSource: (cellId: string) => void
   onSettingChange: (
     name: string,
@@ -162,16 +166,20 @@ export function GenerationChatReview({
   previewLoading,
   previewStale,
   sources,
+  sourceOptions,
   summary,
   voiceCatalog,
   onActionChange,
+  onAddSource,
   onCancel,
   onModeChange,
   onPromptChange,
   onRefreshPreview,
+  onRemoveSource,
   onSelectSource,
   onSettingChange,
 }: GenerationChatReviewProps) {
+  const [showSourcePicker, setShowSourcePicker] = useState(false)
   const settings = notebookChatGenerationSettings(draft)
   const previewPlayer = useVoicePreviewPlayer()
   const ensureVoiceCatalog = () => {
@@ -251,40 +259,98 @@ export function GenerationChatReview({
         <section className="generation-review-section generation-review-input-section">
           <span className="generation-review-label">Inputs</span>
           <div className="generation-review-sources">
-            {sources.length > 0 ? sources.map((source) => (
-              <button
-                type="button"
-                className="generation-review-source"
-                key={source.cellId}
-                disabled={busy}
-                onClick={() => onSelectSource(source.cellId)}
-                title={`Select @${source.address} on the board`}
-              >
-                <span className="generation-review-source-badge">Input</span>
-                <span className="generation-review-source-preview">
-                  <MediaLibraryAssetPreview
-                    asset={source.asset ?? {
-                      type: source.type,
-                      mediaUrl: null,
-                      thumbnailUrl: null,
-                      duration: null,
-                    }}
-                    eager
-                  />
-                </span>
-                <span className="generation-review-source-copy">
-                  <strong>@{source.address}</strong>
-                  <small>{source.type.replaceAll('_', ' ')}</small>
-                </span>
-              </button>
-            )) : (
+            {sources.map((source) => (
+              <div className="generation-review-source-wrap" key={source.cellId}>
+                <button
+                  type="button"
+                  className="generation-review-source"
+                  disabled={busy}
+                  onClick={() => onSelectSource(source.cellId)}
+                  title={`Select @${source.address} on the board`}
+                >
+                  <span className="generation-review-source-badge">Input</span>
+                  <span className="generation-review-source-preview">
+                    <MediaLibraryAssetPreview
+                      asset={source.asset ?? {
+                        type: source.type,
+                        mediaUrl: null,
+                        thumbnailUrl: null,
+                        duration: null,
+                      }}
+                      eager
+                    />
+                  </span>
+                  <span className="generation-review-source-copy">
+                    <strong>@{source.address}</strong>
+                    <small>{source.type.replaceAll('_', ' ')}</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="generation-review-source-remove"
+                  disabled={busy}
+                  aria-label={`Remove @${source.address} input`}
+                  title={`Remove @${source.address} input`}
+                  onClick={() => onRemoveSource(source.cellId)}
+                >
+                  <X size={11} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+            {sources.length === 0 && (
               <div className="generation-review-text-input">
                 <span>Input</span>
                 <strong>Prompt only</strong>
                 <small>No source media attached</small>
               </div>
             )}
+            {sourceOptions.length > 0 && (
+              <button
+                type="button"
+                className="generation-review-source-add"
+                disabled={busy}
+                aria-expanded={showSourcePicker}
+                onClick={() => setShowSourcePicker((current) => !current)}
+              >
+                <Plus size={14} aria-hidden="true" />
+                <span>Add input</span>
+              </button>
+            )}
           </div>
+          {showSourcePicker && sourceOptions.length > 0 && (
+            <div
+              className="generation-review-sources generation-review-source-options"
+              aria-label="Available input cells"
+            >
+              {sourceOptions.map((option) => (
+                <button
+                  type="button"
+                  className="generation-review-source"
+                  key={option.cellId}
+                  disabled={busy}
+                  onClick={() => onAddSource(option.cellId)}
+                  title={`Add @${option.address} as input`}
+                >
+                  <span className="generation-review-source-badge">Add</span>
+                  <span className="generation-review-source-preview">
+                    <MediaLibraryAssetPreview
+                      asset={option.asset ?? {
+                        type: option.type,
+                        mediaUrl: null,
+                        thumbnailUrl: null,
+                        duration: null,
+                      }}
+                      eager
+                    />
+                  </span>
+                  <span className="generation-review-source-copy">
+                    <strong>@{option.address}</strong>
+                    <small>{option.type.replaceAll('_', ' ')}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="generation-review-section generation-review-prompt-section">

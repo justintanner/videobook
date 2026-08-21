@@ -18,11 +18,13 @@ import {
   notebookChatGenerationConnectedInputs,
   notebookChatGenerationReferences,
   notebookChatGenerationSettings,
+  notebookChatGenerationSourceOptions,
   planNotebookChatGeneration,
   reviseNotebookChatGenerationAction,
   reviseNotebookChatGenerationMode,
   reviseNotebookChatGenerationPrompt,
   reviseNotebookChatGenerationSetting,
+  reviseNotebookChatGenerationSources,
   validateNotebookChatGenerationPromptSources,
   type NotebookChatGenerationCommand,
 } from '../../src/videobook/notebook-chat-generation'
@@ -414,5 +416,192 @@ describe('notebook chat generation', () => {
       cell.id === materialized.cellId)?.prompt).toBe(
       'scene @a2, character @a3, fluffy kitten standing',
     )
+  })
+
+  it('revises generation sources, reselecting actions and rejecting stale inputs', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'revise-generation-sources',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const notebookId = managed.value.engine.notebooks.list()[0]!.id
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const definition = byName.get(name)
+      if (!definition) throw new Error(`Missing ${name}`)
+      return resultJson(await withBookContext(
+        { bookId: created.bookId, engine: managed.value.engine },
+        () => definition.handler({ book_id: created.bookId, ...args }),
+      ))
+    }
+    const firstArtifact = await managed.value.engine.artifacts.create(
+      'image',
+      'img one',
+    )
+    const secondArtifact = await managed.value.engine.artifacts.create(
+      'image',
+      'img two',
+    )
+    expect(firstArtifact.ok && secondArtifact.ok).toBe(true)
+    if (!firstArtifact.ok || !secondArtifact.ok) return
+    const firstSource = await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'image',
+        label: 'img one',
+        slot: { row: 0, column: 1 },
+        output_artifact_id: firstArtifact.value.artifactId,
+      },
+    }) as { id: string }
+    const secondSource = await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'image',
+        label: 'img two',
+        slot: { row: 0, column: 2 },
+        output_artifact_id: secondArtifact.value.artifactId,
+      },
+    }) as { id: string }
+    const noteCell = await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'prompt',
+        label: 'note',
+        slot: { row: 1, column: 1 },
+        prompt: 'not media',
+      },
+    }) as { id: string }
+    const pendingImageCell = await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'image',
+        label: 'pending image',
+        slot: { row: 1, column: 2 },
+      },
+    }) as { id: string }
+    const current = managed.value.engine.notebooks.read(notebookId)
+    expect(current.ok).toBe(true)
+    if (!current.ok) return
+    const actions = asNotebookGenerationActions(
+      await invoke('list_notebook_actions', { cell_type: 'generate_image' }),
+    )
+    const draft = planNotebookChatGeneration({
+      actions,
+      cellId: '01900000-0000-7000-8000-000000000030',
+      command: {
+        cellType: 'generate_image',
+        mediaKind: 'image',
+        prompt: 'swap me',
+        sourceReferences: ['a2'],
+      },
+      document: current.value,
+      fallbackSlot: { row: 0, column: 0 },
+      preferredTool: 'generate_google_flow_nano_banana_pro_image',
+    })
+    expect(draft.sourceCellIds).toEqual([firstSource.id])
+
+    const options = notebookChatGenerationSourceOptions(
+      current.value,
+      draft.sourceCellIds,
+    )
+    expect(options.map((option) => option.cell.id)).toEqual([secondSource.id])
+    expect(
+      notebookChatGenerationSourceOptions(current.value)
+        .map((option) => option.cell.id)
+        .sort(),
+    ).toEqual([firstSource.id, secondSource.id].sort())
+
+    const expanded = reviseNotebookChatGenerationSources({
+      actions,
+      draft,
+      document: current.value,
+      sourceCellIds: [firstSource.id, secondSource.id],
+    })
+    expect(expanded.action.id).toBe(draft.action.id)
+    expect(expanded.sourceCellIds).toEqual([firstSource.id, secondSource.id])
+    expect(expanded.sourceAddresses).toEqual(['@a2', '@a3'])
+    expect(expanded.connections).toEqual([
+      { sourceCellId: firstSource.id, targetInput: 'image' },
+      { sourceCellId: secondSource.id, targetInput: 'image_2' },
+    ])
+    expect(expanded.cell.slot).toEqual(draft.cell.slot)
+    expect(expanded.cell.prompt).toBe('swap me')
+    expect(notebookChatGenerationConnectedInputs(expanded, current.value))
+      .toEqual([
+        { kind: 'image', target: 'image' },
+        { kind: 'image', target: 'image' },
+      ])
+
+    const deduped = reviseNotebookChatGenerationSources({
+      actions,
+      draft,
+      document: current.value,
+      sourceCellIds: [firstSource.id, firstSource.id],
+    })
+    expect(deduped.connections).toEqual([
+      { sourceCellId: firstSource.id, targetInput: 'image' },
+    ])
+
+    const staleDraft = {
+      ...draft,
+      action: {
+        ...draft.action,
+        id: 'generation.stale-test',
+        tool: 'generate_stale_image',
+        inputContract: { modes: [] },
+      },
+    }
+    const reselected = reviseNotebookChatGenerationSources({
+      actions,
+      draft: staleDraft,
+      document: current.value,
+      sourceCellIds: [firstSource.id],
+    })
+    expect(reselected.action.id).not.toBe('generation.stale-test')
+    expect(reselected.cell.tool).toBe(reselected.action.tool)
+
+    const textOnlyAction = {
+      ...draft.action,
+      id: 'generation.text-only-test',
+      tool: 'generate_text_only_image',
+      inputContract: { modes: [{ id: 't2i', slots: [], requiredGroups: [] }] },
+    }
+    const cleared = reviseNotebookChatGenerationSources({
+      actions: [textOnlyAction],
+      draft: { ...draft, action: textOnlyAction },
+      document: current.value,
+      sourceCellIds: [],
+    })
+    expect(cleared.sourceCellIds).toEqual([])
+    expect(cleared.sourceAddresses).toEqual([])
+    expect(cleared.connections).toEqual([])
+    expect(cleared.cell.inputs?.generationMode).toBe('t2i')
+
+    expect(() => reviseNotebookChatGenerationSources({
+      actions,
+      draft,
+      document: current.value,
+      sourceCellIds: ['missing-cell-id'],
+    })).toThrow('The selected source cell is no longer available')
+    expect(() => reviseNotebookChatGenerationSources({
+      actions,
+      draft,
+      document: current.value,
+      sourceCellIds: [noteCell.id],
+    })).toThrow('is not a media-producing cell')
+    expect(() => reviseNotebookChatGenerationSources({
+      actions,
+      draft,
+      document: current.value,
+      sourceCellIds: [pendingImageCell.id],
+    })).toThrow('does not have media output yet')
+    expect(() => reviseNotebookChatGenerationSources({
+      actions: [],
+      draft: staleDraft,
+      document: current.value,
+      sourceCellIds: [firstSource.id],
+    })).toThrow('No available image generation action accepts these references')
   })
 })

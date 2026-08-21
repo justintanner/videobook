@@ -57,7 +57,7 @@ type NotebookToolCall = (
   args: Record<string, unknown>,
 ) => Promise<unknown>
 
-type GenerationSource = {
+export type NotebookChatGenerationSource = {
   cell: NotebookCell
   kind: GenerationConnectedInput['kind']
 }
@@ -108,7 +108,7 @@ function uniqueConnectionTargets(
 }
 
 function connectedInputCandidates(
-  sources: readonly GenerationSource[],
+  sources: readonly NotebookChatGenerationSource[],
 ): GenerationConnectedInput[][] {
   const generic = sources.map((source) => ({
     kind: source.kind,
@@ -201,18 +201,39 @@ export function generationCellTypeForRoutedTool(
   return 'generate_video'
 }
 
+function notebookChatGenerationSource(
+  document: NotebookDocument,
+  cell: NotebookCell,
+): NotebookChatGenerationSource {
+  const kind = mediaInputKind(cell)
+  if (!kind) throw new Error(`${notebookCellTag(cell)} is not a media-producing cell`)
+  if (!resolveNotebookCellArtifactId(document, cell)) {
+    throw new Error(`${notebookCellTag(cell)} does not have media output yet`)
+  }
+  return { cell, kind }
+}
+
 function resolveNotebookChatGenerationSources(
   document: NotebookDocument,
   sourceReferences: readonly string[],
-): GenerationSource[] {
-  return sourceReferences.map((sourceReference) => {
-    const cell = resolveNotebookCellReference(document, sourceReference)
+): NotebookChatGenerationSource[] {
+  return sourceReferences.map((sourceReference) =>
+    notebookChatGenerationSource(
+      document,
+      resolveNotebookCellReference(document, sourceReference),
+    ))
+}
+
+export function notebookChatGenerationSourceOptions(
+  document: NotebookDocument,
+  excludeCellIds: readonly string[] = [],
+): NotebookChatGenerationSource[] {
+  const excluded = new Set(excludeCellIds)
+  return document.cells.flatMap((cell) => {
+    if (excluded.has(cell.id)) return []
     const kind = mediaInputKind(cell)
-    if (!kind) throw new Error(`${notebookCellTag(cell)} is not a media-producing cell`)
-    if (!resolveNotebookCellArtifactId(document, cell)) {
-      throw new Error(`${notebookCellTag(cell)} does not have media output yet`)
-    }
-    return { cell, kind }
+    if (!kind || !resolveNotebookCellArtifactId(document, cell)) return []
+    return [{ cell, kind }]
   })
 }
 
@@ -422,6 +443,82 @@ export function reviseNotebookChatGenerationSetting(
         generationSettings: settings,
       },
     },
+  }
+}
+
+export function reviseNotebookChatGenerationSources(input: {
+  actions: readonly NotebookGenerationAction[]
+  draft: NotebookChatGenerationDraft
+  document: NotebookDocument
+  sourceCellIds: readonly string[]
+}): NotebookChatGenerationDraft {
+  const cellType = input.draft.cell.type as NotebookGenerationCellType
+  const sources = [...new Set(input.sourceCellIds)].map((cellId) => {
+    const cell = input.document.cells.find((candidate) => candidate.id === cellId)
+    if (!cell) throw new Error('The selected source cell is no longer available')
+    return notebookChatGenerationSource(input.document, cell)
+  })
+  const candidates = connectedInputCandidates(sources)
+  let action: NotebookGenerationAction | null = null
+  let connectedInputs: GenerationConnectedInput[] = []
+  for (const candidate of candidates) {
+    if (!generationActionIsCompatible(input.draft.action, candidate)) continue
+    action = input.draft.action
+    connectedInputs = candidate
+    break
+  }
+  if (!action) {
+    for (const candidate of candidates) {
+      const selected = selectGenerationAction({
+        actions: input.actions,
+        cellType,
+        connectedInputs: candidate,
+      })
+      if (!selected) continue
+      action = selected
+      connectedInputs = candidate
+      break
+    }
+  }
+  if (!action) {
+    const mediaKind = cellType === 'generate_audio' ? 'audio'
+      : cellType === 'generate_image' ? 'image'
+      : 'video'
+    throw new Error(
+      `No available ${mediaKind} generation action accepts these references`,
+    )
+  }
+  const compatibleModes = compatibleGenerationModes(action, connectedInputs)
+  const currentInputs = recordValue(input.draft.cell.inputs) ?? {}
+  const currentMode = nonBlankStringValue(currentInputs.generationMode)
+  const mode = compatibleModes.find((candidate) => candidate.id === currentMode)
+    ?? compatibleModes[0]
+  if (!mode) {
+    throw new Error('The selected generation model does not have a compatible mode')
+  }
+  const currentSettings = notebookChatGenerationSettings(input.draft)
+  const nextSettings = Object.fromEntries(action.controls.flatMap((control) => {
+    const value = currentSettings[control.name]
+    return value === undefined ? [] : [[control.name, value]]
+  }))
+  const targetInputs = uniqueConnectionTargets(connectedInputs)
+  return {
+    action,
+    cell: {
+      ...input.draft.cell,
+      ...generationSelectionForAction(action),
+      inputs: {
+        ...currentInputs,
+        generationMode: mode.id,
+        generationSettings: nextSettings,
+      },
+    },
+    connections: sources.map((source, index) => ({
+      sourceCellId: source.cell.id,
+      targetInput: targetInputs[index] ?? source.kind,
+    })),
+    sourceCellIds: sources.map((source) => source.cell.id),
+    sourceAddresses: sources.map((source) => notebookCellTag(source.cell)),
   }
 }
 

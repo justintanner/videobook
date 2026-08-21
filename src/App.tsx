@@ -273,11 +273,13 @@ import {
   notebookChatGenerationParameterReferences,
   notebookChatGenerationReferences,
   notebookChatGenerationSettings,
+  notebookChatGenerationSourceOptions,
   planNotebookChatGeneration,
   reviseNotebookChatGenerationAction,
   reviseNotebookChatGenerationMode,
   reviseNotebookChatGenerationPrompt,
   reviseNotebookChatGenerationSetting,
+  reviseNotebookChatGenerationSources,
   validateNotebookChatGenerationPromptSources,
   type NotebookChatGenerationCommand,
   type NotebookChatGenerationDraft,
@@ -3057,6 +3059,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : [],
     [assetById, notebook, pendingGenerationDraft],
   )
+  const pendingGenerationSourceOptions = useMemo<GenerationReviewSource[]>(
+    () => pendingGenerationDraft && notebook
+      ? notebookChatGenerationSourceOptions(
+          notebook,
+          pendingGenerationDraft.sourceCellIds,
+        ).map(({ cell }) => ({
+          cellId: cell.id,
+          address: notebookGridAddress(cell.slot),
+          type: cell.type,
+          asset: cell.outputArtifactId
+            ? assetById.get(cell.outputArtifactId) ?? null
+            : null,
+        }))
+      : [],
+    [assetById, notebook, pendingGenerationDraft],
+  )
   const playbackAssets = useMemo(
     () => assets.flatMap((asset) =>
       asset.mediaUrl
@@ -4212,6 +4230,62 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     selectCanvasCell(cellId)
     setInspectorOpen(true)
   }, [selectCanvasCell])
+  const updatePendingGenerationSources = useCallback((sourceCellIds: string[]) => {
+    if (!pendingGenerationDraft || !notebook) return
+    let next: NotebookChatGenerationDraft
+    try {
+      next = reviseNotebookChatGenerationSources({
+        actions: generationActions,
+        draft: pendingGenerationDraft,
+        document: notebook,
+        sourceCellIds,
+      })
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
+      return
+    }
+    const expectations: NotebookAddressExpectation[] = [
+      ...next.sourceCellIds.flatMap((cellId) => {
+        const cell = notebook.cells.find((candidate) => candidate.id === cellId)
+        return cell ? [{ address: notebookGridTag(cell.slot), cellId: cell.id }] : []
+      }),
+      { address: notebookGridTag(next.cell.slot), cellId: null },
+    ]
+    const references = next.sourceAddresses.length > 0
+      ? ` from ${next.sourceAddresses.join(', ')}`
+      : ''
+    setPendingChatAction((current) => current?.kind === 'generation'
+      && current.draft.cell.id === next.cell.id
+      ? {
+          ...current,
+          draft: next,
+          expectations,
+          previewError: null,
+          previewLoading: false,
+          previewStale: true,
+          summary: `Generate ${generationMediaKind(
+            next.cell.type as NotebookChatGenerationCommand['cellType'],
+          )} as ${notebookGridTag(next.cell.slot)}${references}`,
+        }
+      : current)
+    requestPendingGenerationPreview(next, notebook)
+  }, [
+    generationActions,
+    notebook,
+    pendingGenerationDraft,
+    requestPendingGenerationPreview,
+    setNotice,
+  ])
+  const addPendingGenerationSource = useCallback((cellId: string) => {
+    if (!pendingGenerationDraft) return
+    updatePendingGenerationSources([...pendingGenerationDraft.sourceCellIds, cellId])
+  }, [pendingGenerationDraft, updatePendingGenerationSources])
+  const removePendingGenerationSource = useCallback((cellId: string) => {
+    if (!pendingGenerationDraft) return
+    updatePendingGenerationSources(
+      pendingGenerationDraft.sourceCellIds.filter((id) => id !== cellId),
+    )
+  }, [pendingGenerationDraft, updatePendingGenerationSources])
 
   useLayoutEffect(() => {
     const container = notebookScrollRef.current
@@ -10964,13 +11038,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             previewLoading={pendingChatAction.previewLoading}
             previewStale={pendingChatAction.previewStale}
             sources={pendingGenerationSources}
+            sourceOptions={pendingGenerationSourceOptions}
             summary={pendingChatAction.summary}
             voiceCatalog={elevenLabsVoices}
             onActionChange={updatePendingGenerationAction}
+            onAddSource={addPendingGenerationSource}
             onCancel={dismissPendingCommandPlan}
             onModeChange={updatePendingGenerationMode}
             onPromptChange={updatePendingGenerationPrompt}
             onRefreshPreview={refreshPendingGenerationPreview}
+            onRemoveSource={removePendingGenerationSource}
             onSelectSource={selectPendingGenerationSource}
             onSettingChange={updatePendingGenerationSetting}
           />
