@@ -3735,11 +3735,16 @@ textarea:focus-visible {
   scrollbar-width: thin;
 }
 
-.inspector-image-media-content {
+.inspector-image-media-content,
+.inspector-compact-media-content {
   padding-top: 12px;
 }
 
 .inspector-image-media-content .inspector-media-field-label {
+  margin-top: 0;
+}
+
+.inspector-compact-media-content > .inspector-media-field-label:first-child {
   margin-top: 0;
 }
 

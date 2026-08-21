@@ -611,6 +611,9 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="ElevenLabs Transcript"')
     expect(html).not.toContain('aria-label="Video analysis"')
     expect(html).not.toContain('<label>Address</label>')
+    expect(html).toContain(
+      'class="inspector-media-content inspector-compact-media-content"',
+    )
     expect(html).toContain('class="inspector-media-field-label">VIDEO</span>')
     expect(html).not.toContain('<h3>Inputs</h3>')
     expect(html.indexOf('class="inspector-media-field-label"')).toBeLessThan(
@@ -667,7 +670,7 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain(
-      'class="inspector-media-content inspector-image-media-content"',
+      'class="inspector-media-content inspector-compact-media-content inspector-image-media-content"',
     )
     expect(html).toContain(
       'class="inspector-media-actions inspector-media-actions-image"',
@@ -769,6 +772,10 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
+    expect(html).toContain(
+      'class="inspector-media-content inspector-compact-media-content"',
+    )
+    expect(html).toContain('class="inspector-media-field-label">AUDIO</span>')
     expect(html).toContain('class="inspector-cell-preview inspector-cell-preview-audio"')
     expect(html).toContain('<audio')
     expect(html).toContain('/files/aud-source/original.m4a')

@@ -1339,7 +1339,13 @@ function MediaCellInspector({
   return (
     <div className="inspector-body inspector-media-body">
       <div
-        className={`inspector-media-content${cell.type === 'image' ? ' inspector-image-media-content' : ''}`}
+        className={[
+          'inspector-media-content',
+          cell.type === 'image' || cell.type === 'video' || cell.type === 'audio'
+            ? 'inspector-compact-media-content'
+            : '',
+          cell.type === 'image' ? 'inspector-image-media-content' : '',
+        ].filter(Boolean).join(' ')}
       >
         <span className="inspector-media-field-label">
           {cell.type.replaceAll('_', ' ').toUpperCase()}

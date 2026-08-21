@@ -33,6 +33,7 @@ import {
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";
 import type { PendingTask } from "videobook-engine";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
+import { planVideoTranscriptJobs } from "../jobs/process-video.js";
 import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 import { submitQueuedKieTask } from "../jobs/kie-paygate.js";
@@ -358,6 +359,7 @@ type ReconcileProjectWorkResult = {
   failed: Array<{ assetId: string; taskType: string; failMsg: string; failedAt: string; prompt: string | null }>;
   external_uploads: Array<{ assetId: string; mediaFilename: string }>;
   auto_transcribe: Array<{ assetId: string; jobId: string }>;
+  auto_plain_transcript: Array<{ assetId: string; jobId: string }>;
 };
 
 function metaPrompt(meta: Record<string, unknown> | undefined): string | null {
@@ -1409,17 +1411,18 @@ export async function reconcileProjectWork(
 ): Promise<ReconcileProjectWorkResult> {
   const result: ReconcileProjectWorkResult = {
     pending: [], completed: [], failed: [],
-    external_uploads: [], auto_transcribe: [],
+    external_uploads: [], auto_transcribe: [], auto_plain_transcript: [],
   };
 
   // Single listAssets call, shared by all consumers
   const assets = await engine.artifacts.list();
 
   // Run discovery steps in parallel with provider polling
-  const [uploads, providerResult, transcribeActions, failuresRes] = await Promise.all([
+  const [uploads, providerResult, transcribeActions, plainTranscriptActions, failuresRes] = await Promise.all([
     findUnprocessedUploads(engine, assets),
     pollPendingProviderTasks(engine, book_id),
     findAutoTranscribeActions(engine, assets),
+    findAutoPlainTranscriptActions(engine, assets),
     engine.jobs.failures.findAll(),
   ]);
   const persistedFailures = failuresRes.ok ? failuresRes.value : [];
@@ -1474,10 +1477,10 @@ export async function reconcileProjectWork(
   // Auto-render and auto-analyze are intentionally NOT performed here.
   // Renders fire from explicit /render or assign_slot (lazy on slot drop).
   // Gemini analysis fires from assign_slot (lazy on slot drop) and
-  // gpt-4o-mini speech-to-text fires eagerly from process_video on upload.
-  // Reconciliation only retries the ElevenLabs transcribe step (auto_transcribe), which
-  // is gated on .original.analysis.json already existing — i.e. only kicks in
-  // for assets the user has actually slotted.
+  // OpenAI plain speech-to-text fires eagerly from process_video on upload,
+  // with a revision-scoped backfill here for processed videos that missed
+  // .analysis.gpt4otrans.json. Reconciliation still retries ElevenLabs
+  // (auto_transcribe) only after .original.analysis.json exists.
 
   // Auto-pipeline: advance analyzed videos through transcription. Stable
   // dedupe key, shared with analyze-video's auto-transcribe trigger: racing
@@ -1495,6 +1498,24 @@ export async function reconcileProjectWork(
       bookId: book_id,
     } as unknown as Record<string, unknown>);
     result.auto_transcribe.push({ assetId: action.assetId, jobId });
+  }
+
+  for (const action of plainTranscriptActions) {
+    const planned = planVideoTranscriptJobs({
+      skipDownstreamJobs: false,
+      hasAudio: true,
+      assetId: action.assetId,
+      assetDir: action.assetDir,
+      bookId: book_id,
+      videoFilename: action.videoFilename,
+      identity: action.revision,
+      hasOpenAiKey: true,
+      hasElevenLabsKey: false,
+    });
+    for (const job of planned) {
+      await queue.enqueue(job.jobId, job.payload as unknown as Record<string, unknown>);
+      result.auto_plain_transcript.push({ assetId: action.assetId, jobId: job.jobId });
+    }
   }
 
   return result;
@@ -1709,4 +1730,61 @@ async function findAutoTranscribeActions(
     })
   );
   return candidates.filter((c): c is TranscribeAction => c !== null);
+}
+
+type PlainTranscriptAction = {
+  assetId: string;
+  assetDir: string;
+  videoFilename: string;
+  revision: string;
+};
+
+async function findAutoPlainTranscriptActions(
+  engine: Engine,
+  assets: Artifact[],
+): Promise<PlainTranscriptAction[]> {
+  if (!process.env.OPENAI_API_KEY) return [];
+
+  const candidates = await Promise.all(
+    assets.filter((a) => a.kind === "video").map(async (asset): Promise<PlainTranscriptAction | null> => {
+      const [manifestResult, locked, errorRow, originalMeta] = await Promise.all([
+        engine.files.manifest(asset.artifactId),
+        engine.jobs.locks.isLocked(asset.path),
+        engine.jobs.failures.read(asset.artifactId),
+        engine.metadata.artifacts.read<{ hasAudio?: boolean }>(asset.artifactId, "original"),
+      ]);
+      if (!manifestResult.ok) return null;
+      if (!originalMeta.ok) return null;
+      if (originalMeta.value.hasAudio === false) return null;
+      if (errorRow.ok && errorRow.value !== null) return null;
+      if (locked) return null;
+
+      const manifest = manifestResult.value;
+      const files = manifest.files;
+      if ((await engine.files.read(asset.artifactId, ".analysis.gpt4otrans.json")).ok) {
+        return null;
+      }
+
+      const audioFile = findAudioFile(files, asset.kind);
+      if (!audioFile) return null;
+      const videoFile = files.find((file) => file.name === "original.mp4")
+        ?? findVideoFile(files);
+      if (!videoFile) return null;
+
+      const revision = videoFile.objectHash;
+      const existing = engine.jobs.queue.list({
+        type: "transcribe_video_audio",
+        artifactId: asset.artifactId,
+      });
+      if (existing.some((job) => job.payload.mediaRevision === revision)) return null;
+
+      return {
+        assetId: asset.artifactId,
+        assetDir: manifest.path,
+        videoFilename: videoFile.name,
+        revision,
+      };
+    })
+  );
+  return candidates.filter((c): c is PlainTranscriptAction => c !== null);
 }

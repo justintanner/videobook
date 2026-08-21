@@ -52,6 +52,107 @@ type ProcessVideoResult = {
   frame_count: number;
 };
 
+export type PlanVideoTranscriptJobsInput = {
+  skipDownstreamJobs: boolean;
+  hasAudio: boolean;
+  assetId: string;
+  assetDir: string;
+  bookId: string;
+  videoFilename: string;
+  identity: string;
+  hasOpenAiKey: boolean;
+  hasElevenLabsKey: boolean;
+};
+
+export type OpenAiVideoTranscriptPayload = {
+  type: "transcribe_video_audio";
+  videoPath: string;
+  assetId: string;
+  assetDir: string;
+  bookId: string;
+  sourceFilename: "original.mp3";
+  mediaRevision: string;
+};
+
+export type ElevenLabsVideoTranscriptPayload = {
+  type: "transcribe";
+  audioPath: string;
+  audioFilename: "original.mp3";
+  tagAudioEvents: true;
+  diarize: true;
+  assetId: string;
+  assetDir: string;
+  bookId: string;
+};
+
+export type VideoTranscriptJobPlan =
+  | { jobId: string; payload: OpenAiVideoTranscriptPayload }
+  | { jobId: string; payload: ElevenLabsVideoTranscriptPayload };
+
+export function planVideoTranscriptJobs(
+  input: PlanVideoTranscriptJobsInput,
+): VideoTranscriptJobPlan[] {
+  if (input.skipDownstreamJobs || !input.hasAudio) return [];
+
+  const jobs: VideoTranscriptJobPlan[] = [];
+  if (input.hasOpenAiKey) {
+    jobs.push({
+      jobId: `transcribe-openai-${input.assetId}-${input.identity}`,
+      payload: {
+        type: "transcribe_video_audio",
+        videoPath: join(input.assetDir, input.videoFilename),
+        assetId: input.assetId,
+        assetDir: input.assetDir,
+        bookId: input.bookId,
+        sourceFilename: "original.mp3",
+        mediaRevision: input.identity,
+      },
+    });
+  }
+  if (input.hasElevenLabsKey) {
+    jobs.push({
+      jobId: `transcribe-elevenlabs-${input.assetId}-${input.identity}`,
+      payload: {
+        type: "transcribe",
+        audioPath: join(input.assetDir, "original.mp3"),
+        audioFilename: "original.mp3",
+        tagAudioEvents: true,
+        diarize: true,
+        assetId: input.assetId,
+        assetDir: input.assetDir,
+        bookId: input.bookId,
+      },
+    });
+  }
+  return jobs;
+}
+
+export async function enqueueVideoTranscriptJobs(
+  jobs: readonly VideoTranscriptJobPlan[],
+): Promise<void> {
+  for (const job of jobs) {
+    try {
+      await queue.enqueue(job.jobId, job.payload as unknown as Record<string, unknown>);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      logger.warn(`[process_video] failed to enqueue ${job.payload.type}: ${reason}`);
+    }
+  }
+}
+
+async function videoTranscriptIdentity(
+  engine: Engine,
+  assetId: string,
+  videoFilename: string,
+): Promise<string> {
+  const manifest = await engine.files.manifest(assetId);
+  if (!manifest.ok) return String(Date.now());
+  const file = manifest.value.files.find((entry) => entry.name === videoFilename)
+    ?? manifest.value.files.find((entry) => entry.name === "original.mp4")
+    ?? manifest.value.files.find((entry) => entry.name === "original.mp3");
+  return file?.objectHash ?? String(Date.now());
+}
+
 // Write a derived binary file, skipping the write when the bytes are unchanged.
 //
 // The engine commits each write scoped to that file's path. A scoped
@@ -435,6 +536,17 @@ async function processVideoSnapshot(
     // analysis (Gemini) is gated to slot drop in tools/assign-slot.ts — plus
     // the slot-gated revival below for re-processed (trimmed/re-downloaded)
     // videos, whose analysis sidecar was just invalidated.
+    const transcriptJobs = planVideoTranscriptJobs({
+      skipDownstreamJobs: Boolean(skipDownstreamJobs),
+      hasAudio: probe.hasAudio,
+      assetId,
+      assetDir,
+      bookId,
+      videoFilename: activeSourcePath,
+      identity: await videoTranscriptIdentity(engine, assetId, activeSourcePath),
+      hasOpenAiKey: Boolean(getApiKey("OPENAI_API_KEY")),
+      hasElevenLabsKey: Boolean(getApiKey("ELEVENLABS_API_KEY")),
+    });
     if (process.env.NODE_ENV !== "test") {
       await queue.enqueue(`semantic-index-${assetId}-${Date.now()}`, {
         type: "semantic_index",
@@ -442,24 +554,7 @@ async function processVideoSnapshot(
         bookId,
       } as unknown as Record<string, unknown>);
       if (!skipDownstreamJobs && probe.hasAudio) {
-        const transcribeJobId = `transcribe-video-audio-${assetId}-${Date.now()}`;
-        if (getApiKey("ELEVENLABS_API_KEY")) {
-          await queue.enqueue(transcribeJobId, {
-            type: "transcribe",
-            audioPath: join(assetDir, "original.mp3"),
-            audioFilename: "original.mp3",
-            tagAudioEvents: true,
-            diarize: true,
-            assetId,
-            assetDir,
-            bookId,
-          } as unknown as Record<string, unknown>);
-        } else if (getApiKey("OPENAI_API_KEY")) {
-          await queue.enqueue(transcribeJobId, {
-            type: "transcribe_video_audio",
-            videoPath: activeVideoPath, assetId, assetDir, bookId,
-          } as unknown as Record<string, unknown>);
-        }
+        await enqueueVideoTranscriptJobs(transcriptJobs);
       } else if (!skipDownstreamJobs || reviveVisualAnalysis) {
         // Silent video: no transcribe job will run, so revive the slot-drop
         // vision analysis here; transcribe_video_audio's tail owns it for

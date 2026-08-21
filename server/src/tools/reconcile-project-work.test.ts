@@ -63,6 +63,7 @@ describe("reconcile_project_work tool", () => {
     expect(data.failed).toEqual([]);
     expect(data.external_uploads).toEqual([]);
     expect(data.auto_transcribe).toEqual([]);
+    expect(data.auto_plain_transcript).toEqual([]);
   });
 
   it("reconciliation after creating assets returns no errors", async () => {
@@ -84,6 +85,7 @@ describe("reconcile_project_work tool", () => {
     expect(data).toHaveProperty("failed");
     expect(data).toHaveProperty("external_uploads");
     expect(data).toHaveProperty("auto_transcribe");
+    expect(data).toHaveProperty("auto_plain_transcript");
   });
 });
 
@@ -503,6 +505,7 @@ describe("reconcileProjectWork", () => {
     expect(result.failed).toEqual([]);
     expect(result.external_uploads).toEqual([]);
     expect(result.auto_transcribe).toEqual([]);
+    expect(result.auto_plain_transcript).toEqual([]);
   });
 
   it("reconcileProjectWork skips KIE task polling when KIE_API_KEY is not set", async () => {
@@ -706,6 +709,199 @@ describe("reconcileProjectWork — auto-transcribe", () => {
 
     const result = await reconcileProjectWork(fs, fs.book.get().bookId);
     expect(result.auto_transcribe.length).toBe(0);
+  });
+});
+
+describe("reconcileProjectWork — OpenAI plain-transcript backfill", () => {
+  let fs: Engine;
+  let tempDir: string;
+  let savedKey: string | undefined;
+
+  beforeAll(async () => {
+    await queue.start();
+  });
+
+  afterAll(async () => {
+    await queue.stop();
+  });
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-plain-transcript-test-"));
+    fs = createEngineForTest(tempDir);
+    await setEngineRoot(tempDir, fs);
+    savedKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-key";
+  });
+
+  afterEach(async () => {
+    if (savedKey !== undefined) {
+      process.env.OPENAI_API_KEY = savedKey;
+    } else {
+      delete process.env.OPENAI_API_KEY;
+    }
+    await queue.stop();
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  async function processedVideo(label: string): Promise<{
+    assetId: string;
+    assetDir: string;
+  }> {
+    const createResult = await fs.artifacts.create("vid", label);
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetId = createResult.value.artifactId;
+    const assetDir = createResult.value.path;
+    await writeNativeFile(fs, join(assetDir, "original.mp4"), `video-${label}`);
+    await writeNativeFile(fs, join(assetDir, "original.mp3"), `audio-${label}`);
+    const meta = await fs.metadata.artifacts.write(assetId, "original", {
+      hasAudio: true,
+      width: 320,
+      height: 240,
+      duration: 1,
+    });
+    if (!meta.ok) throw new Error(meta.error.message);
+    return { assetId, assetDir };
+  }
+
+  it("enqueues one OpenAI job for a processed video missing .analysis.gpt4otrans.json", async () => {
+    const { reconcileProjectWork } = await import("./reconcile-project-work.js");
+    const { assetId } = await processedVideo("plain-missing");
+
+    const result = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(result.auto_plain_transcript).toHaveLength(1);
+    expect(result.auto_plain_transcript[0].assetId).toBe(assetId);
+    expect(result.auto_plain_transcript[0].jobId).toContain("transcribe-openai");
+
+    const jobs = fs.jobs.queue.list({
+      type: "transcribe_video_audio",
+      artifactId: assetId,
+    });
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.payload).toMatchObject({
+      type: "transcribe_video_audio",
+      assetId,
+      sourceFilename: "original.mp3",
+    });
+    expect(String(jobs[0]?.payload.videoPath)).toContain(assetId);
+    expect(String(jobs[0]?.payload.videoPath)).toContain("original.mp4");
+  });
+
+  it("enqueues OpenAI even when elevenlabs.json already exists", async () => {
+    const { reconcileProjectWork } = await import("./reconcile-project-work.js");
+    const { assetId, assetDir } = await processedVideo("has-elevenlabs");
+    await writeNativeFile(fs, join(assetDir, "elevenlabs.json"), JSON.stringify({ words: [] }));
+
+    const result = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(result.auto_plain_transcript).toHaveLength(1);
+    expect(result.auto_plain_transcript[0].assetId).toBe(assetId);
+  });
+
+  it("skips when the GPT-4o sidecar is already present", async () => {
+    const { reconcileProjectWork } = await import("./reconcile-project-work.js");
+    const { assetDir } = await processedVideo("sidecar-present");
+    await writeNativeFile(fs, join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
+      text: "already transcribed",
+    }));
+
+    const result = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(result.auto_plain_transcript).toEqual([]);
+  });
+
+  it("skips silent processed video", async () => {
+    const { reconcileProjectWork } = await import("./reconcile-project-work.js");
+    const createResult = await fs.artifacts.create("vid", "silent");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    await writeNativeFile(fs, join(createResult.value.path, "original.mp4"), "silent-video");
+    const meta = await fs.metadata.artifacts.write(createResult.value.artifactId, "original", {
+      hasAudio: false,
+      width: 320,
+      height: 240,
+      duration: 1,
+    });
+    if (!meta.ok) throw new Error(meta.error.message);
+
+    const result = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(result.auto_plain_transcript).toEqual([]);
+  });
+
+  it("skips when OPENAI_API_KEY is missing", async () => {
+    const { reconcileProjectWork } = await import("./reconcile-project-work.js");
+    await processedVideo("no-key");
+    delete process.env.OPENAI_API_KEY;
+
+    const result = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(result.auto_plain_transcript).toEqual([]);
+  });
+
+  it("skips incomplete video without original metadata", async () => {
+    const { reconcileProjectWork } = await import("./reconcile-project-work.js");
+    const createResult = await fs.artifacts.create("vid", "incomplete");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    await writeNativeFile(fs, join(createResult.value.path, "original.mp4"), "incomplete-video");
+    await writeNativeFile(fs, join(createResult.value.path, "original.mp3"), "incomplete-audio");
+
+    const result = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(result.auto_plain_transcript).toEqual([]);
+  });
+
+  it("skips locked video", async () => {
+    const { reconcileProjectWork } = await import("./reconcile-project-work.js");
+    const { assetDir } = await processedVideo("locked");
+    await fs.jobs.locks.acquire(assetDir, { durationMs: 60_000 });
+
+    const result = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(result.auto_plain_transcript).toEqual([]);
+    await fs.jobs.locks.release(assetDir);
+  });
+
+  it("skips retry-policy-excluded video with a persisted failure", async () => {
+    const { reconcileProjectWork } = await import("./reconcile-project-work.js");
+    const { assetId } = await processedVideo("failed-prior");
+    const writeErr = await fs.jobs.failures.write(assetId, {
+      message: "prior transcript failed",
+      failCode: "500",
+    });
+    if (!writeErr.ok) throw new Error(writeErr.error.message);
+
+    const result = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(result.auto_plain_transcript).toEqual([]);
+  });
+
+  it("collapses overlapping polls of the same media revision", async () => {
+    const { reconcileProjectWork } = await import("./reconcile-project-work.js");
+    const { assetId } = await processedVideo("dedupe");
+
+    const first = await reconcileProjectWork(fs, fs.book.get().bookId);
+    const second = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(first.auto_plain_transcript).toHaveLength(1);
+    expect(second.auto_plain_transcript).toEqual([]);
+
+    const jobs = fs.jobs.queue.list({
+      type: "transcribe_video_audio",
+      artifactId: assetId,
+      states: ["queued", "running", "completing", "done", "failed", "aborted"],
+    });
+    expect(jobs).toHaveLength(1);
+  });
+
+  it("enqueues again after the source video is replaced", async () => {
+    const { reconcileProjectWork } = await import("./reconcile-project-work.js");
+    const { assetId, assetDir } = await processedVideo("replaced-source");
+
+    const first = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(first.auto_plain_transcript).toHaveLength(1);
+
+    await writeNativeFile(fs, join(assetDir, "original.mp4"), "replaced-video-bytes");
+    const second = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(second.auto_plain_transcript).toHaveLength(1);
+    expect(second.auto_plain_transcript[0].jobId).not.toBe(first.auto_plain_transcript[0].jobId);
+
+    const jobs = fs.jobs.queue.list({
+      type: "transcribe_video_audio",
+      artifactId: assetId,
+      states: ["queued", "running", "completing", "done", "failed", "aborted"],
+    });
+    expect(jobs.length).toBeGreaterThanOrEqual(2);
   });
 });
 
