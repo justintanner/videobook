@@ -16,7 +16,7 @@ import {
   modelArgs,
   notebookCellIsStale,
 } from "../../server/src/jobs/run-notebook.js";
-import { generateKling30MotionControlVideoDef } from "../../server/src/tools/generate-kling30-motion-control-video.js";
+import { generateKlingOmniTransformationDef } from "../../server/src/tools/generate-kling30-omni-video.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -93,9 +93,9 @@ describe("Dancing workflow fixture", () => {
     const kittenOutput = owned.find((cell) =>
       cell.inputs?.workflowRole === "kittens-freeway-output");
     const motion = owned.find((cell) =>
-      cell.inputs?.workflowRole === "kling-motion-control");
+      cell.inputs?.workflowRole === "kling-omni-transformation");
     const motionOutput = owned.find((cell) =>
-      cell.inputs?.workflowRole === "kling-motion-control-output");
+      cell.inputs?.workflowRole === "kling-omni-transformation-output");
     expect(source?.inputs).toEqual(expect.objectContaining({
       sourceOperation: "download_video",
       selectedRangeSeconds: [0, 10],
@@ -136,15 +136,15 @@ describe("Dancing workflow fixture", () => {
     }));
     expect(motion).toEqual(expect.objectContaining({
       type: "generate_video",
-      operation: "motion_control",
-      tool: "generate_kie_kling_3_0_motion_control",
-      model: "kling-3.0/motion-control",
+      operation: "transformation",
+      tool: "generate_kie_kling_3_0_omni_transformation",
+      model: "kling-3.0-omni/transformation",
     }));
     expect(motion?.inputs).toEqual(expect.objectContaining({
       generationSettings: {
-        mode: "720p",
-        character_orientation: "video",
-        background_source: "input_image",
+        resolution: "720p",
+        aspect_ratio: "9:16",
+        duration: "10",
       },
       requiresConfirmation: true,
       state: "pending",
@@ -210,18 +210,18 @@ describe("Dancing workflow fixture", () => {
     expect(probe.duration).toBeGreaterThanOrEqual(9.9);
     expect(probe.duration).toBeLessThanOrEqual(10.1);
     const args = modelArgs(
-      generateKling30MotionControlVideoDef(engine),
+      generateKlingOmniTransformationDef(engine),
       seeded,
       motion,
       engine.book.get().bookId,
       engine,
     );
     expect(args).toEqual(expect.objectContaining({
-      mode: "720p",
-      character_orientation: "video",
-      background_source: "input_image",
-      character_image_refs: [`@${kittenOutput?.outputArtifactId}`],
-      motion_video_refs: [`@${source.outputArtifactId}`],
+      resolution: "720p",
+      aspect_ratio: "9:16",
+      duration: "10",
+      image_refs: [`@${kittenOutput?.outputArtifactId}`],
+      video_refs: [`@${source.outputArtifactId}`],
     }));
     if (!extract || !kittens) {
       throw new Error("Dancing fixture preparation cells are missing");

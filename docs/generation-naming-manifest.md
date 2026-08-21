@@ -4,8 +4,8 @@ This is the authoritative registry-derived list of canonical generation and work
 
 ## Summary
 
-- Total actions: 96
-- Provider actions: 87
+- Total actions: 84
+- Provider actions: 75
 - Workflow and support actions: 9
 
 ## Naming grammar
@@ -19,13 +19,11 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `generate_kie_grok_imagine_text_to_video` | kie | `GrokTextToVideoRequestSchema` | video | text_to_video | hidden_fal_variant | `generate_grok_imagine_t2v_video` |
 | `extend_kie_grok_imagine_video` | kie | `GrokVideoExtendRequestSchema` | video | extend_video | hidden_fal_variant | `extend_grok_imagine_video` |
 | `upscale_kie_grok_imagine_video` | kie | `GrokVideoUpscaleRequestSchema` | video | upscale_video | hidden_fal_variant | `upscale_grok_imagine_video` |
-| `generate_kie_kling_3_0_video` | kie | `KlingVideoRequestSchema` | video | image_to_video | visible | `generate_kling30_video` |
-| `generate_kie_kling_3_0_motion_control` | kie | `KlingMotionControlRequestSchema` | video | motion_control | visible | `generate_kling30_motion_control_video` |
-| `generate_kie_kling_3_0_turbo_video` | kie | `KlingV3TurboImageToVideoRequestSchema` | video | image_to_video | visible | `generate_kling30_turbo_video` |
+| `generate_kie_kling_3_0_omni_text_to_video` | kie | `KlingOmniTextToVideoRequestSchema` | video | text_to_video | visible |  |
+| `generate_kie_kling_3_0_omni_image_to_video` | kie | `KlingOmniImageToVideoRequestSchema` | video | image_to_video | visible |  |
+| `generate_kie_kling_3_0_omni_reference_to_video` | kie | `KlingOmniReferenceToVideoRequestSchema` | video | reference_to_video | visible |  |
+| `generate_kie_kling_3_0_omni_transformation` | kie | `KlingOmniTransformationRequestSchema` | video | transformation | visible |  |
 | `generate_kie_seedance_2_5_video` | kie | `Seedance25InputSchema` | video | image_to_video | visible | `generate_seedance25_video` |
-| `generate_kie_seedance_2_0_video` | kie | `Seedance2InputSchema` | video | image_to_video | visible | `generate_seedance2_video` |
-| `generate_kie_seedance_2_0_fast_video` | kie | `Seedance2FastInputSchema` | video | image_to_video | visible | `generate_seedance2_fast_video` |
-| `generate_kie_seedance_2_0_mini_video` | kie | `Seedance2MiniInputSchema` | video | image_to_video | visible | `generate_seedance2_mini_video` |
 | `generate_kie_gemini_omni_video` | kie | `GeminiOmniVideoRequestSchema` | video | image_to_video | visible | `generate_gemini_omni_video` |
 | `generate_kie_wan_2_7_text_to_video` | kie | `Wan27TextToVideoRequestSchema` | video | text_to_video | hidden_fal_variant | `generate_wan27_t2v_video` |
 | `generate_kie_wan_2_7_image_to_video` | kie | `Wan27ImageToVideoRequestSchema` | video | image_to_video | visible | `generate_wan27_i2v_video` |
@@ -64,12 +62,6 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `generate_alibaba_qwen_2_0_text_to_image` | alibaba | `AlibabaQwenImageGenerationStableModelSchema` | image | text_to_image | visible | `generate_alibaba_qwen_image` |
 | `generate_alibaba_qwen_2_0_edit_image` | alibaba | `AlibabaQwenImageEditStableModelSchema` | image | edit_image | visible | `generate_alibaba_qwen_image_edit` |
 | `generate_alibaba_wan_2_7_video` | alibaba | `AlibabaVideoSynthesisInputSchema` | video | generate_video | visible | `generate_alibaba_video`, `generate_alibaba_wan_2_1_text_to_video` |
-| `generate_fal_seedance_2_0_image_to_video` | fal | `fal-ai/bytedance/seedance/v2/i2v` | video | image_to_video | hidden_fal_variant | `generate_seedance2_i2v_fal` |
-| `generate_fal_seedance_2_0_text_to_video` | fal | `fal-ai/bytedance/seedance/v2/t2v` | video | text_to_video | hidden_fal_variant | `generate_seedance2_t2v_fal` |
-| `generate_fal_seedance_2_0_reference_to_video` | fal | `fal-ai/bytedance/seedance/v2/r2v` | video | reference_to_video | hidden_fal_variant | `generate_seedance2_r2v_fal` |
-| `generate_fal_seedance_2_0_fast_text_to_video` | fal | `fal-ai/bytedance/seedance/v2/fast/t2v` | video | text_to_video | hidden_fal_variant | `generate_seedance2_fast_t2v_fal` |
-| `generate_fal_seedance_2_0_fast_image_to_video` | fal | `fal-ai/bytedance/seedance/v2/fast/i2v` | video | image_to_video | hidden_fal_variant | `generate_seedance2_fast_i2v_fal` |
-| `generate_fal_seedance_2_0_fast_reference_to_video` | fal | `fal-ai/bytedance/seedance/v2/fast/r2v` | video | reference_to_video | hidden_fal_variant | `generate_seedance2_fast_r2v_fal` |
 | `generate_fal_nano_banana_text_to_image` | fal | `fal-ai/nano-banana` | image | text_to_image | hidden_fal_variant | `generate_nano_banana_fal` |
 | `generate_fal_nano_banana_edit_image` | fal | `fal-ai/nano-banana/edit` | image | edit_image | hidden_fal_variant | `generate_nano_banana_edit_fal` |
 | `generate_fal_nano_banana_2_text_to_image` | fal | `fal-ai/nano-banana-2` | image | text_to_image | hidden_fal_variant | `generate_nano_banana_2_fal` |
@@ -94,10 +86,6 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `generate_fal_grok_imagine_video_reference_to_video` | fal | `fal-ai/xai/grok-imagine-video/r2v` | video | reference_to_video | hidden_fal_variant | `generate_grok_imagine_video_r2v_fal`, `generate_grok_imagine_r2v_fal_video` |
 | `extend_fal_grok_imagine_video` | fal | `fal-ai/xai/grok-imagine-video/extend` | video | extend_video | hidden_fal_variant | `generate_grok_imagine_video_extend_fal`, `generate_grok_imagine_extend_fal_video` |
 | `generate_fal_grok_imagine_video_edit_video` | fal | `fal-ai/xai/grok-imagine-video/edit` | video | edit_video | hidden_fal_variant | `generate_grok_imagine_video_edit_fal` |
-| `generate_fal_kling_video_v3_pro_text_to_video` | fal | `fal-ai/kling-video/v3/pro/t2v` | video | text_to_video | hidden_fal_variant | `generate_kling_v3_pro_t2v_fal` |
-| `generate_fal_kling_video_v3_pro_image_to_video` | fal | `fal-ai/kling-video/v3/pro/i2v` | video | image_to_video | hidden_fal_variant | `generate_kling_v3_pro_i2v_fal` |
-| `generate_fal_kling_video_v3_standard_text_to_video` | fal | `fal-ai/kling-video/v3/standard/t2v` | video | text_to_video | hidden_fal_variant | `generate_kling_v3_standard_t2v_fal` |
-| `generate_fal_kling_video_v3_standard_image_to_video` | fal | `fal-ai/kling-video/v3/standard/i2v` | video | image_to_video | hidden_fal_variant | `generate_kling_v3_standard_i2v_fal` |
 | `generate_fal_qwen_2_0_text_to_image` | fal | `fal-ai/qwen-image/t2i` | image | text_to_image | hidden_fal_variant | `generate_qwen_image_fal` |
 | `generate_fal_qwen_2_0_edit_image` | fal | `fal-ai/qwen-image/edit` | image | edit_image | hidden_fal_variant | `generate_qwen_image_edit_fal` |
 | `generate_elevenlabs_text_to_audio` | elevenlabs | `@apicity/elevenlabs` | audio | text_to_audio | workflow_tool | `generate_elevenlabs_t2a` |

@@ -29,6 +29,7 @@ describe("provider completion routing", () => {
     ["seedream_image", "seedreamImage"],
     ["fal_seedream_v5_lite_edit", "seedreamV5Image"],
     ["kling30_motion_control_video", "klingVideo"],
+    ["kling30_omni_video", "providerVideo"],
     ["seedance2_video", "providerVideo"],
     ["fal_wan27_videoedit", "providerVideo"],
     ["fal_grok_imagine_video_extend", "providerVideo"],

@@ -102,7 +102,7 @@ describe('notebook initial generation prompts', () => {
         provider: 'kie',
         model: 'Seedance2InputSchema',
         operation: 'image_to_video',
-        tool: 'generate_kie_seedance_2_0_video',
+        tool: 'generate_kie_seedance_2_5_video',
         inputs: { generationMode: 'r2v' },
       },
     })) as {

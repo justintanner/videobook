@@ -162,6 +162,8 @@ export function transformProviderPrompt(
   let transformed = prompt;
 
   switch (toolName) {
+    case "generate_kie_kling_3_0_omni_text_to_video":
+    case "generate_kie_kling_3_0_omni_image_to_video":
     case "generate_kie_kling_3_0_video":
     case "generate_kie_kling_3_0_turbo_video":
     case "generate_kie_nano_banana_pro_text_to_image":
@@ -182,6 +184,13 @@ export function transformProviderPrompt(
       transformed = provider?.startsWith("xai")
         ? naturalImagePrompt(prompt, args)
         : prompt;
+      break;
+    case "generate_kie_kling_3_0_omni_reference_to_video":
+    case "generate_kie_kling_3_0_omni_transformation":
+      transformed = replaceNaturalAssetMentions(prompt, {
+        imageRefs,
+        videoRefs: stringArray(args.video_refs),
+      });
       break;
     case "generate_kie_kling_3_0_motion_control":
       transformed = replaceNaturalAssetMentions(prompt, {

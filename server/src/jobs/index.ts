@@ -40,6 +40,7 @@ import { registerExtendGrokImagineVideoJob } from "./extend-grok-imagine-video.j
 import { registerUpscaleGrokImagineVideoJob } from "./upscale-grok-imagine-video.js";
 import { registerGenerateKling30VideoJob } from "./generate-kling30-video.js";
 import { registerGenerateKling30MotionControlVideoJob } from "./generate-kling30-motion-control-video.js";
+import { registerGenerateKlingOmniVideoJob } from "./generate-kling30-omni-video.js";
 import { registerGenerateSeedance25VideoJob } from "./generate-seedance25-video.js";
 import { registerGenerateSeedance2VideoJob } from "./generate-seedance2-video.js";
 import { registerGenerateSeedance2FastVideoJob } from "./generate-seedance2-fast-video.js";
@@ -188,6 +189,7 @@ export function registerAllJobHandlers(
   registerUpscaleGrokImagineVideoJob(engine);
   registerGenerateKling30VideoJob(engine);
   registerGenerateKling30MotionControlVideoJob(engine);
+  registerGenerateKlingOmniVideoJob(engine);
   registerGenerateSeedance25VideoJob(engine);
   registerGenerateSeedance2VideoJob(engine);
   registerGenerateSeedance2FastVideoJob(engine);

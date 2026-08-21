@@ -193,7 +193,7 @@ function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
 }
 
 const SEEDREAM_IMAGE_I2I_TOOL = "generate_kie_seedream_v5_lite_image_to_image";
-const SEEDANCE_VIDEO_TOOL = "generate_kie_seedance_2_0_video";
+const SEEDANCE_VIDEO_TOOL = "generate_kie_seedance_2_5_video";
 const SEEDANCE_SUBSTITUTION_NOTE =
   "Using Seedream for this image edit (Seedance is video).";
 
@@ -442,7 +442,7 @@ Parameter guidelines:
 - Preserve every consumed notebook @address in the generation prompt at the semantic position where it belongs. Do not strip, rename, or expand notebook references into prose
 - For generate_video: put the compact generation description in "prompt" and preserve every consumed @ reference
 - For generate_image: put the compact image description in "prompt" and preserve every consumed image @address there; use image_refs ONLY for the corresponding resolved asset tags whose asset context type is "image", in the same order (include @ prefix). Never put a video or audio asset tag in image_refs — if the user wants an image inspired by a video, describe that source without connecting it as an image
-- ByteDance naming: Seedance is video, Seedream is image. Users often say Seedance for both. When the query names seedance, bytedance, or seedream: if the edit/replace target is an image, use generate_kie_seedream_v5_lite_image_to_image and put the edit-target image first in image_refs, followed by replacement image refs. If the target is a video, use generate_kie_seedance_2_0_video with that clip in video_refs and replacement stills in image_refs. Never route an image-target Seedance ask to a Seedance video tool or to Nano Banana Pro
+- ByteDance naming: Seedance is video, Seedream is image. Users often say Seedance for both. When the query names seedance, bytedance, or seedream: if the edit/replace target is an image, use generate_kie_seedream_v5_lite_image_to_image and put the edit-target image first in image_refs, followed by replacement image refs. If the target is a video, use generate_kie_seedance_2_5_video with that clip in video_refs and replacement stills in image_refs. Never route an image-target Seedance ask to a Seedance video tool or to Nano Banana Pro
 - Treat "Seedance 5.0 edit", "Seedance 5", and "Seedream 5" as Seedream 5. Generic chat uses Seedream 5 Lite image-to-image; Seedream 5 Pro edit lives in the subject/region pipeline. When Seedream is used for an image ask that said Seedance, the status message must note that substitution
 - For create_watermark_card (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
 - For create_qart (artistic / picture QR): use when turning an image asset into scan-safe color and monochrome QR mosaics; pass image_ref and value (URL/text). Prefer over create_watermark_card when the user wants a photo integrated into the QR modules

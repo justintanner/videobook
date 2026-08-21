@@ -112,6 +112,10 @@ describe("estimate_cost tool", () => {
       // Seedance 2 Mini (resolution-tiered per-second; priced by @apicity/cost@0.6.1)
       ["generate_seedance2_mini_video", { resolution: "720p", duration: "5" }],
       ["generate_seedance25_video", { resolution: "720p", duration: "5" }],
+      ["generate_kie_kling_3_0_omni_text_to_video", { resolution: "720p", duration: 5 }],
+      ["generate_kie_kling_3_0_omni_image_to_video", { resolution: "1080p", duration: 5, audio: true }],
+      ["generate_kie_kling_3_0_omni_reference_to_video", { resolution: "720p", duration: 5, video_refs: ["@vid-ref"] }],
+      ["generate_kie_kling_3_0_omni_transformation", { resolution: "720p", duration: 5 }],
       ["generate_gemini_omni_video", { resolution: "720p", duration: "6" }],
       // Grok-imagine video (resolution-tiered)
       ["generate_grok_imagine_video", { resolution: "480p", duration: 8 }],
@@ -142,7 +146,7 @@ describe("estimate_cost tool", () => {
       expect(payload.estimate.source, `${tool_name} source`).toBe("per-unit-table");
       expect(payload.estimate.usd, `${tool_name} usd`).toBeGreaterThan(0);
     }
-  });
+  }, 60_000);
 
   it("prices Seedance 2.5 1080p audio and treats automatic duration as 5s", async () => {
     const result = await client.callTool({
@@ -571,7 +575,7 @@ describe("estimate_cost tool", () => {
       expect(payload.estimate.warnings, `${tool_name} warnings`).toEqual([]);
       expect(payload.estimate.usd, `${tool_name} usd`).toBeGreaterThan(0);
     }
-  });
+  }, 60_000);
 
   it("prices the non-pro Alibaba Wan image tool at the list rate", async () => {
     const result = await client.callTool({

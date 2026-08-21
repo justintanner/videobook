@@ -147,7 +147,7 @@ const seedanceAction: NotebookGenerationAction = {
   providerLabel: 'Kie',
   model: 'Seedance2InputSchema',
   operation: 'image_to_video',
-  tool: 'generate_kie_seedance_2_0_video',
+  tool: 'generate_kie_seedance_2_5_video',
   title: 'Seedance 2',
   isDefault: false,
   defaultPriority: 1,
@@ -207,36 +207,36 @@ const seedanceAction: NotebookGenerationAction = {
 }
 
 const motionControlAction: NotebookGenerationAction = {
-  id: 'generation.kling-motion-control',
+  id: 'generation.kling-omni-transformation',
   cellTypes: ['generate_video'],
   provider: 'kie',
   providerLabel: 'Kie',
-  model: 'KlingMotionControlRequestSchema',
-  operation: 'motion_control',
-  tool: 'generate_kie_kling_3_0_motion_control',
-  title: 'Kling 3.0 Motion Control',
+  model: 'KlingOmniTransformationRequestSchema',
+  operation: 'transformation',
+  tool: 'generate_kie_kling_3_0_omni_transformation',
+  title: 'Kling 3.0 Omni Transformation',
   isDefault: false,
   defaultPriority: null,
   inputContract: {
     modes: [{
-      id: 'default',
+      id: 'transformation',
       slots: [
         {
-          field: 'character_image_slugs',
+          field: 'image_refs',
           kind: 'image',
           targets: ['image'],
-          min: 1,
-          max: 1,
+          min: 0,
+          max: 4,
         },
         {
-          field: 'motion_video_slugs',
+          field: 'video_refs',
           kind: 'video',
           targets: ['video'],
           min: 1,
           max: 1,
         },
       ],
-      requiredGroups: [],
+      requiredGroups: [['video_refs']],
     }],
   },
   controls: [],
@@ -437,7 +437,7 @@ describe('notebook generation actions', () => {
     expect(generationModeLabel('r2v')).toBe('R2V · Reference to video')
   })
 
-  it('offers Kling motion control for a character image and motion video', () => {
+  it('offers Kling Omni transformation for a character image and motion video', () => {
     expect(compatibleGenerationActions(
       [motionControlAction],
       'generate_video',
@@ -451,7 +451,7 @@ describe('notebook generation actions', () => {
         { kind: 'video', target: 'video' },
       ],
     ).map((action) => action.tool)).toEqual([
-      'generate_kie_kling_3_0_motion_control',
+      'generate_kie_kling_3_0_omni_transformation',
     ])
   })
 

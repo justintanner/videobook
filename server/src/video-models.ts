@@ -7,11 +7,10 @@ import {
   GrokTextToVideoRequestSchema,
   GrokVideoExtendRequestSchema,
   GrokImagineModeSchema,
-  KlingMotionControlRequestSchema,
-  KlingVideoRequestSchema,
-  Seedance2FastInputSchema,
-  Seedance2InputSchema,
-  Seedance2MiniInputSchema,
+  KlingOmniImageToVideoInputSchema,
+  KlingOmniReferenceToVideoInputSchema,
+  KlingOmniTextToVideoInputSchema,
+  KlingOmniTransformationInputSchema,
   Seedance25InputSchema,
   Wan27AudioSettingSchema,
   Wan27ImageToVideoRequestSchema,
@@ -32,8 +31,6 @@ import {
   Omnihuman15RequestSchema,
   GeminiOmniVideoRequestSchema,
   VeoGenerateRequestSchema,
-  KlingV3TurboImageToVideoRequestSchema,
-  KlingV3TurboTextToVideoRequestSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import {
@@ -46,8 +43,6 @@ import {
   FalWanV2p7ImageToVideoRequestSchema,
   FalWanV2p7ReferenceToVideoRequestSchema,
   FalWanV2p7TextToVideoRequestSchema,
-  FalSeedance2p0FastReferenceToVideoRequestSchema,
-  FalSeedance2p0ReferenceToVideoRequestSchema,
   FalXaiGrokImagineVideoExtendVideoRequestSchema,
   FalXaiGrokImagineVideoReferenceToVideoRequestSchema,
   FalXaiGrokImagineVideoEditVideoRequestSchema,
@@ -67,6 +62,16 @@ import {
 } from "./zod-slots.js";
 import { totalOmniReferenceSlots } from "./google-flow-refs.js";
 import { getCanonicalName, isGenerationAction } from "./generation-registry.js";
+import {
+  isKlingOmniTool,
+  KLING_OMNI_IMAGE_TO_VIDEO_TOOL,
+  KLING_OMNI_REFERENCE_TO_VIDEO_TOOL,
+  KLING_OMNI_TEXT_TO_VIDEO_TOOL,
+  KLING_OMNI_TOOL_PARAMS,
+  KLING_OMNI_TOOLS,
+  KLING_OMNI_TRANSFORMATION_TOOL,
+  klingOmniToolForParams,
+} from "./kling-omni.js";
 
 // ---------------------------------------------------------------------------
 // Provider routes
@@ -101,29 +106,13 @@ type VideoModelInfo = {
 
 const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   kling30: {
-    label: "Kling 3.0",
-    tool_name: "generate_kie_kling_3_0_video",
-    description: "Kling 3.0 text/image-to-video with duration, sound, and aspect ratio control",
+    label: "Kling 3.0 Omni",
+    tool_name: KLING_OMNI_TEXT_TO_VIDEO_TOOL,
+    description: "Kling 3.0 Omni text, image, reference, and transformation video at 720p, 1080p, or 4k",
     params: [
-      "prompt", "mode", "image_refs",
-      "element1_refs", "element1_name", "element1_desc",
-      "element2_refs", "element2_name", "element2_desc",
-      "element3_refs", "element3_name", "element3_desc",
-      "multi_prompt", "multi_shots",
-      "duration", "sound", "aspect_ratio",
-    ],
-    defaults: {},
-    providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
-    ],
-  },
-  kling30_motion_control: {
-    label: "Kling 3.0 Motion Control",
-    tool_name: "generate_kie_kling_3_0_motion_control",
-    description: "Apply motion from reference videos to character images using Kling 3.0 motion-control",
-    params: [
-      "prompt", "character_image_refs", "motion_video_refs",
-      "mode", "character_orientation", "background_source",
+      "prompt", "image_refs", "video_refs",
+      "audio", "resolution", "aspect_ratio", "duration",
+      "customize_multi_shots", "prefer_multi_shots", "multi_prompt",
     ],
     defaults: {},
     providers: [
@@ -141,55 +130,6 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "return_last_frame", "generate_audio",
       "resolution", "aspect_ratio", "duration", "output_format",
       "web_search", "nsfw_checker",
-    ],
-    defaults: {},
-    providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
-    ],
-  },
-  seedance2: {
-    label: "Seedance 2",
-    tool_name: "generate_kie_seedance_2_0_video",
-    description: "ByteDance Seedance 2 — text/image-to-video with optional first/last frame and reference images, videos, and/or audio (up to 1080p)",
-    params: [
-      "prompt",
-      "first_frame_ref", "last_frame_ref",
-      "image_refs", "video_refs", "audio_refs",
-      "aspect_ratio", "resolution", "duration",
-      "generate_audio", "web_search", "nsfw_checker",
-    ],
-    defaults: {},
-    providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
-    ],
-    falToolNames: { noRefs: "generate_fal_seedance_2_0_text_to_video", withRefs: "generate_fal_seedance_2_0_image_to_video" },
-  },
-  seedance2_fast: {
-    label: "Seedance 2 Fast",
-    tool_name: "generate_kie_seedance_2_0_fast_video",
-    description: "ByteDance Seedance 2 Fast — text/image-to-video with optional first/last frame and reference images, videos, and/or audio (up to 720p)",
-    params: [
-      "prompt",
-      "first_frame_ref", "last_frame_ref",
-      "image_refs", "video_refs", "audio_refs",
-      "aspect_ratio", "resolution", "duration",
-      "generate_audio", "web_search", "nsfw_checker",
-    ],
-    defaults: {},
-    providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
-    ],
-    falToolNames: { noRefs: "generate_fal_seedance_2_0_fast_text_to_video", withRefs: "generate_fal_seedance_2_0_fast_image_to_video" },
-  },
-  seedance2_mini: {
-    label: "Seedance 2 Mini",
-    tool_name: "generate_kie_seedance_2_0_mini_video",
-    description: "ByteDance Seedance 2 Mini — text-to-video with optional reference images, videos, and/or audio (no first/last frame; up to 720p)",
-    params: [
-      "prompt",
-      "image_refs", "video_refs", "audio_refs",
-      "aspect_ratio", "resolution", "duration",
-      "generate_audio", "web_search", "nsfw_checker",
     ],
     defaults: {},
     providers: [
@@ -269,16 +209,6 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     defaults: {},
     providers: [
       { key: "google", label: "Google Flow", provider_path: "googleflow.v1.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" },
-    ],
-  },
-  kling30_turbo: {
-    label: "Kling 3.0 Turbo",
-    tool_name: "generate_kie_kling_3_0_turbo_video",
-    description: "Kling Video v3 Turbo tier via KIE (text- or image-to-video)",
-    params: ["prompt", "image_refs", "duration", "resolution", "aspect_ratio"],
-    defaults: { duration: "5", resolution: "720p" },
-    providers: [
-      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   wan27_t2v: {
@@ -505,24 +435,6 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       { key: "alibaba", label: "Alibaba", provider_path: "alibaba.post.api.v1.services.aigc.video-generation.video-synthesis.synthesis(request, { otp })", envKey: "DASHSCOPE_API_KEY" },
     ],
   },
-  seedance2_fast_t2v: {
-    label: "Seedance 2.0 Fast — Text",
-    tool_name: "generate_fal_seedance_2_0_fast_text_to_video",
-    description: "ByteDance Seedance 2.0 Fast text-to-video via fal.ai",
-    params: ["prompt", "resolution", "duration", "aspect_ratio", "generate_audio", "seed"],
-    defaults: {},
-    providers: [],
-    falToolNames: { noRefs: "generate_fal_seedance_2_0_fast_text_to_video" },
-  },
-  seedance2_fast_i2v: {
-    label: "Seedance 2.0 Fast — First Frame",
-    tool_name: "generate_fal_seedance_2_0_fast_image_to_video",
-    description: "ByteDance Seedance 2.0 Fast image-to-video via fal.ai",
-    params: ["prompt", "first_frame_ref", "end_frame_ref", "resolution", "duration", "aspect_ratio", "generate_audio", "seed"],
-    defaults: {},
-    providers: [],
-    falToolNames: { withRefs: "generate_fal_seedance_2_0_fast_image_to_video" },
-  },
   wan27_t2v_fal: {
     label: "Wan v2.7 — Text (fal)",
     tool_name: "generate_fal_wan_2_7_text_to_video",
@@ -541,24 +453,6 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [],
     falToolNames: { withRefs: "generate_fal_wan_2_7_image_to_video" },
   },
-  kling30_standard: {
-    label: "Kling 3.0 Standard",
-    tool_name: "generate_fal_kling_video_v3_standard_text_to_video",
-    description: "Kling Video v3 Standard tier via fal.ai (text- or image-to-video)",
-    params: ["prompt", "first_frame_ref", "end_frame_ref", "duration", "aspect_ratio", "generate_audio", "shot_type", "negative_prompt", "cfg_scale"],
-    defaults: {},
-    providers: [],
-    falToolNames: { noRefs: "generate_fal_kling_video_v3_standard_text_to_video", withRefs: "generate_fal_kling_video_v3_standard_image_to_video" },
-  },
-  kling30_pro_fal: {
-    label: "Kling 3.0 Pro",
-    tool_name: "generate_fal_kling_video_v3_pro_text_to_video",
-    description: "Kling Video v3 Pro tier via fal.ai (text- or image-to-video)",
-    params: ["prompt", "first_frame_ref", "end_frame_ref", "duration", "aspect_ratio", "generate_audio", "shot_type", "negative_prompt", "cfg_scale"],
-    defaults: {},
-    providers: [],
-    falToolNames: { noRefs: "generate_fal_kling_video_v3_pro_text_to_video", withRefs: "generate_fal_kling_video_v3_pro_image_to_video" },
-  },
   wan27_r2v_fal: {
     label: "Wan v2.7 — Reference (fal)",
     tool_name: "generate_fal_wan_2_7_reference_to_video",
@@ -576,24 +470,6 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     defaults: {},
     providers: [],
     falToolNames: { noRefs: "generate_fal_wan_2_7_edit_video", withRefs: "generate_fal_wan_2_7_edit_video" },
-  },
-  seedance2_r2v_fal: {
-    label: "Seedance 2.0 — Reference (fal)",
-    tool_name: "generate_fal_seedance_2_0_reference_to_video",
-    description: "ByteDance Seedance 2.0 reference-to-video via fal.ai",
-    params: ["prompt", "image_refs", "video_refs", "audio_refs", "resolution", "duration", "aspect_ratio", "generate_audio", "seed"],
-    defaults: {},
-    providers: [],
-    falToolNames: { noRefs: "generate_fal_seedance_2_0_reference_to_video", withRefs: "generate_fal_seedance_2_0_reference_to_video" },
-  },
-  seedance2_fast_r2v_fal: {
-    label: "Seedance 2.0 Fast — Reference (fal)",
-    tool_name: "generate_fal_seedance_2_0_fast_reference_to_video",
-    description: "ByteDance Seedance 2.0 Fast reference-to-video via fal.ai",
-    params: ["prompt", "image_refs", "video_refs", "audio_refs", "resolution", "duration", "aspect_ratio", "generate_audio", "seed"],
-    defaults: {},
-    providers: [],
-    falToolNames: { noRefs: "generate_fal_seedance_2_0_fast_reference_to_video", withRefs: "generate_fal_seedance_2_0_fast_reference_to_video" },
   },
   grok_imagine_r2v_fal: {
     label: "Grok Imagine — Reference (fal)",
@@ -624,7 +500,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
 };
 
-const DEFAULT_VIDEO_MODEL_KEY = "seedance2";
+const DEFAULT_VIDEO_MODEL_KEY = "seedance25";
 
 // Google Flow provider aliases: a base video tool can expose a "google"
 // provider (see VideoModelInfo.googleToolName) whose effective tool name and
@@ -709,64 +585,6 @@ type ModelModes = {
 // alongside a clip; image_refs caps at 7 for pure references and 5 alongside
 // a clip. The kie sibling generate_kie_gemini_omni_video is deliberately NOT here
 // (it legally combines image_refs + a clip, which tabs would misrepresent).
-// Shared Seedance 2 / Fast modes: text | frames (first/last) | refs (img/vid/aud).
-// Frames and refs are exclusive so reference audio never coexists with first/last
-// frame (Seedance rejects that combination). Mini omits frames entirely.
-const SEEDANCE2_SHARED_PARAMS = [
-  "prompt", "aspect_ratio", "resolution", "duration",
-  "generate_audio", "web_search", "nsfw_checker",
-];
-
-const SEEDANCE2_REFS_MODE: ModeSpec = {
-  key: "refs",
-  label: "refs",
-  description: "Reference images, videos (≤3), and/or audio (≤3)",
-  params: ["image_refs", "video_refs", "audio_refs"],
-  asset_slots: [
-    { param: "image_refs", kind: "image", label: "Images", min: 0, max: null },
-    { param: "video_refs", kind: "video", label: "Videos", min: 0, max: 3 },
-    { param: "audio_refs", kind: "audio", label: "Audio", min: 0, max: 3 },
-  ],
-};
-
-const SEEDANCE2_FULL_MODES: ModelModes = {
-  shared_params: SEEDANCE2_SHARED_PARAMS,
-  default_mode: "text",
-  modes: [
-    {
-      key: "text",
-      label: "text",
-      description: "Prompt-only generation",
-      params: [],
-    },
-    {
-      key: "frames",
-      label: "frames",
-      description: "Animate with first and/or last frame (no reference audio)",
-      params: ["first_frame_ref", "last_frame_ref"],
-      asset_slots: [
-        { param: "first_frame_ref", kind: "image", label: "First Frame" },
-        { param: "last_frame_ref", kind: "image", label: "Last Frame" },
-      ],
-    },
-    SEEDANCE2_REFS_MODE,
-  ],
-};
-
-const SEEDANCE2_MINI_MODES: ModelModes = {
-  shared_params: SEEDANCE2_SHARED_PARAMS,
-  default_mode: "text",
-  modes: [
-    {
-      key: "text",
-      label: "text",
-      description: "Prompt-only generation",
-      params: [],
-    },
-    SEEDANCE2_REFS_MODE,
-  ],
-};
-
 const SEEDANCE25_SHARED_PARAMS = [
   "prompt", "return_last_frame", "generate_audio",
   "resolution", "aspect_ratio", "duration", "output_format",
@@ -806,6 +624,58 @@ const SEEDANCE25_MODES: ModelModes = {
       ],
     },
     SEEDANCE25_REFS_MODE,
+  ],
+};
+
+const KLING_OMNI_MODES: ModelModes = {
+  shared_params: [
+    "prompt", "audio", "resolution", "aspect_ratio", "duration",
+    "customize_multi_shots", "prefer_multi_shots", "multi_prompt",
+  ],
+  default_mode: "text",
+  modes: [
+    {
+      key: "text",
+      label: "text",
+      description: "Prompt-only generation",
+      params: [],
+      tool_name: KLING_OMNI_TEXT_TO_VIDEO_TOOL,
+    },
+    {
+      key: "image",
+      label: "image",
+      description: "Animate a first frame, or first and last frames",
+      params: ["image_refs"],
+      required: ["image_refs"],
+      tool_name: KLING_OMNI_IMAGE_TO_VIDEO_TOOL,
+      asset_slots: [
+        { param: "image_refs", kind: "image", label: "Frames", min: 1, max: 2 },
+      ],
+    },
+    {
+      key: "reference",
+      label: "reference",
+      description: "Guide with reference images and/or one reference video",
+      params: ["image_refs", "video_refs"],
+      tool_name: KLING_OMNI_REFERENCE_TO_VIDEO_TOOL,
+      asset_slots: [
+        { param: "image_refs", kind: "image", label: "Images", min: 0, max: 7 },
+        { param: "video_refs", kind: "video", label: "Video", min: 0, max: 1 },
+      ],
+    },
+    {
+      key: "transformation",
+      label: "transformation",
+      description: "Transfer motion from a source video onto optional character images",
+      params: ["image_refs", "video_refs"],
+      required: ["video_refs"],
+      tool_name: KLING_OMNI_TRANSFORMATION_TOOL,
+      hidden_shared_params: ["customize_multi_shots", "prefer_multi_shots", "multi_prompt"],
+      asset_slots: [
+        { param: "image_refs", kind: "image", label: "Images", min: 0, max: 4 },
+        { param: "video_refs", kind: "video", label: "Motion", min: 1, max: 1 },
+      ],
+    },
   ],
 };
 
@@ -851,9 +721,7 @@ const VIDEO_TOOL_MODES: Record<string, ModelModes> = {
     ],
   },
   generate_kie_seedance_2_5_video: SEEDANCE25_MODES,
-  generate_kie_seedance_2_0_video: SEEDANCE2_FULL_MODES,
-  generate_kie_seedance_2_0_fast_video: SEEDANCE2_FULL_MODES,
-  generate_kie_seedance_2_0_mini_video: SEEDANCE2_MINI_MODES,
+  [KLING_OMNI_TEXT_TO_VIDEO_TOOL]: KLING_OMNI_MODES,
 };
 
 // ---------------------------------------------------------------------------
@@ -865,16 +733,15 @@ const VIDEO_TOOL_MODES: Record<string, ModelModes> = {
 type ZodLike = { _def?: unknown; unwrap?: () => unknown };
 
 const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
-  generate_kie_kling_3_0_video: KlingVideoRequestSchema.shape.input.shape.image_urls,
+  [KLING_OMNI_IMAGE_TO_VIDEO_TOOL]: KlingOmniImageToVideoInputSchema.shape.image_urls,
+  [KLING_OMNI_REFERENCE_TO_VIDEO_TOOL]: KlingOmniReferenceToVideoInputSchema.shape.image_urls,
+  [KLING_OMNI_TRANSFORMATION_TOOL]: KlingOmniTransformationInputSchema.shape.image_urls,
   generate_kie_seedance_2_5_video: Seedance25InputSchema.shape.reference_image_urls,
-  generate_kie_seedance_2_0_video: Seedance2InputSchema.shape.reference_image_urls,
-  generate_kie_seedance_2_0_fast_video: Seedance2FastInputSchema.shape.reference_image_urls,
-  generate_kie_seedance_2_0_mini_video: Seedance2MiniInputSchema.shape.reference_image_urls,
   generate_kie_gemini_omni_video: GeminiOmniVideoRequestSchema.shape.input.shape.image_urls,
   generate_kie_grok_imagine_image_to_video: GrokImageToVideoRequestSchema.shape.input.shape.image_urls,
   generate_kie_veo_3_0_video: VeoGenerateRequestSchema.shape.imageUrls,
   generate_kie_veo_3_0_fast_video: VeoGenerateRequestSchema.shape.imageUrls,
-  generate_kie_kling_3_0_turbo_video: KlingV3TurboImageToVideoRequestSchema.shape.input.shape.image_urls,
+
   generate_xai_grok_imagine_video: XaiVideoGenerateRequestSchema.shape.reference_images,
   generate_kie_wan_2_7_reference_to_video: Wan27RefToVideoRequestSchema.shape.input.shape.reference_image,
   generate_kie_happyhorse_1_1_reference_to_video: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.reference_image,
@@ -893,20 +760,47 @@ const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
 };
 
 const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
-  generate_kie_kling_3_0_video: {
-    prompt: KlingVideoRequestSchema.shape.input.shape.prompt,
-    sound: KlingVideoRequestSchema.shape.input.shape.sound,
-    duration: KlingVideoRequestSchema.shape.input.shape.duration,
-    aspect_ratio: KlingVideoRequestSchema.shape.input.shape.aspect_ratio,
-    mode: KlingVideoRequestSchema.shape.input.shape.mode,
-    multi_shots: KlingVideoRequestSchema.shape.input.shape.multi_shots,
-    multi_prompt: KlingVideoRequestSchema.shape.input.shape.multi_prompt,
+  [KLING_OMNI_TEXT_TO_VIDEO_TOOL]: {
+    prompt: KlingOmniTextToVideoInputSchema.shape.prompt,
+    audio: KlingOmniTextToVideoInputSchema.shape.audio,
+    resolution: KlingOmniTextToVideoInputSchema.shape.resolution,
+    aspect_ratio: KlingOmniTextToVideoInputSchema.shape.aspect_ratio,
+    duration: KlingOmniTextToVideoInputSchema.shape.duration,
+    customize_multi_shots: KlingOmniTextToVideoInputSchema.shape.customize_multi_shots,
+    prefer_multi_shots: KlingOmniTextToVideoInputSchema.shape.prefer_multi_shots,
+    multi_prompt: KlingOmniTextToVideoInputSchema.shape.multi_prompt,
   },
-  generate_kie_kling_3_0_motion_control: {
-    prompt: KlingMotionControlRequestSchema.shape.input.shape.prompt,
-    mode: KlingMotionControlRequestSchema.shape.input.shape.mode,
-    character_orientation: KlingMotionControlRequestSchema.shape.input.shape.character_orientation,
-    background_source: KlingMotionControlRequestSchema.shape.input.shape.background_source,
+  [KLING_OMNI_IMAGE_TO_VIDEO_TOOL]: {
+    prompt: KlingOmniImageToVideoInputSchema.shape.prompt,
+    image_refs: KlingOmniImageToVideoInputSchema.shape.image_urls,
+    audio: KlingOmniImageToVideoInputSchema.shape.audio,
+    resolution: KlingOmniImageToVideoInputSchema.shape.resolution,
+    aspect_ratio: KlingOmniImageToVideoInputSchema.shape.aspect_ratio,
+    duration: KlingOmniImageToVideoInputSchema.shape.duration,
+    customize_multi_shots: KlingOmniImageToVideoInputSchema.shape.customize_multi_shots,
+    prefer_multi_shots: KlingOmniImageToVideoInputSchema.shape.prefer_multi_shots,
+    multi_prompt: KlingOmniImageToVideoInputSchema.shape.multi_prompt,
+  },
+  [KLING_OMNI_REFERENCE_TO_VIDEO_TOOL]: {
+    prompt: KlingOmniReferenceToVideoInputSchema.shape.prompt,
+    image_refs: KlingOmniReferenceToVideoInputSchema.shape.image_urls,
+    video_refs: KlingOmniReferenceToVideoInputSchema.shape.video_urls,
+    audio: KlingOmniReferenceToVideoInputSchema.shape.audio,
+    resolution: KlingOmniReferenceToVideoInputSchema.shape.resolution,
+    aspect_ratio: KlingOmniReferenceToVideoInputSchema.shape.aspect_ratio,
+    duration: KlingOmniReferenceToVideoInputSchema.shape.duration,
+    customize_multi_shots: KlingOmniReferenceToVideoInputSchema.shape.customize_multi_shots,
+    prefer_multi_shots: KlingOmniReferenceToVideoInputSchema.shape.prefer_multi_shots,
+    multi_prompt: KlingOmniReferenceToVideoInputSchema.shape.multi_prompt,
+  },
+  [KLING_OMNI_TRANSFORMATION_TOOL]: {
+    prompt: KlingOmniTransformationInputSchema.shape.prompt,
+    image_refs: KlingOmniTransformationInputSchema.shape.image_urls,
+    video_refs: KlingOmniTransformationInputSchema.shape.video_urls,
+    audio: KlingOmniTransformationInputSchema.shape.audio,
+    resolution: KlingOmniTransformationInputSchema.shape.resolution,
+    aspect_ratio: KlingOmniTransformationInputSchema.shape.aspect_ratio,
+    duration: KlingOmniTransformationInputSchema.shape.duration,
   },
   generate_kie_seedance_2_5_video: {
     prompt: Seedance25InputSchema.shape.prompt,
@@ -921,33 +815,6 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     output_format: Seedance25InputSchema.shape.output_format,
     web_search: Seedance25InputSchema.shape.web_search,
     nsfw_checker: Seedance25InputSchema.shape.nsfw_checker,
-  },
-  generate_kie_seedance_2_0_video: {
-    prompt: Seedance2InputSchema.shape.prompt,
-    resolution: Seedance2InputSchema.shape.resolution,
-    aspect_ratio: Seedance2InputSchema.shape.aspect_ratio,
-    duration: Seedance2InputSchema.shape.duration,
-    generate_audio: Seedance2InputSchema.shape.generate_audio,
-    web_search: Seedance2InputSchema.shape.web_search,
-    nsfw_checker: Seedance2InputSchema.shape.nsfw_checker,
-  },
-  generate_kie_seedance_2_0_fast_video: {
-    prompt: Seedance2FastInputSchema.shape.prompt,
-    resolution: Seedance2FastInputSchema.shape.resolution,
-    aspect_ratio: Seedance2FastInputSchema.shape.aspect_ratio,
-    duration: Seedance2FastInputSchema.shape.duration,
-    generate_audio: Seedance2FastInputSchema.shape.generate_audio,
-    web_search: Seedance2FastInputSchema.shape.web_search,
-    nsfw_checker: Seedance2FastInputSchema.shape.nsfw_checker,
-  },
-  generate_kie_seedance_2_0_mini_video: {
-    prompt: Seedance2MiniInputSchema.shape.prompt,
-    resolution: Seedance2MiniInputSchema.shape.resolution,
-    aspect_ratio: Seedance2MiniInputSchema.shape.aspect_ratio,
-    duration: Seedance2MiniInputSchema.shape.duration,
-    generate_audio: Seedance2MiniInputSchema.shape.generate_audio,
-    web_search: Seedance2MiniInputSchema.shape.web_search,
-    nsfw_checker: Seedance2MiniInputSchema.shape.nsfw_checker,
   },
   generate_kie_gemini_omni_video: {
     prompt: GeminiOmniVideoRequestSchema.shape.input.shape.prompt,
@@ -987,12 +854,6 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     prompt: VeoGenerateRequestSchema.shape.prompt,
     aspect_ratio: VeoGenerateRequestSchema.shape.aspectRatio,
     seed: VeoGenerateRequestSchema.shape.seeds,
-  },
-  generate_kie_kling_3_0_turbo_video: {
-    prompt: KlingV3TurboTextToVideoRequestSchema.shape.input.shape.prompt,
-    duration: KlingV3TurboTextToVideoRequestSchema.shape.input.shape.duration,
-    resolution: KlingV3TurboTextToVideoRequestSchema.shape.input.shape.resolution,
-    aspect_ratio: KlingV3TurboTextToVideoRequestSchema.shape.input.shape.aspect_ratio,
   },
   extend_kie_grok_imagine_video: {
     extend_at: GrokVideoExtendRequestSchema.shape.input.shape.extend_at,
@@ -1117,28 +978,6 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     audio_setting: AlibabaVideoSynthesisParametersSchema.shape.audio_setting,
     seed: AlibabaVideoSynthesisParametersSchema.shape.seed,
   },
-  generate_fal_seedance_2_0_reference_to_video: {
-    prompt: FalSeedance2p0ReferenceToVideoRequestSchema.shape.prompt,
-    image_refs: FalSeedance2p0ReferenceToVideoRequestSchema.shape.image_urls,
-    video_refs: FalSeedance2p0ReferenceToVideoRequestSchema.shape.video_urls,
-    audio_refs: FalSeedance2p0ReferenceToVideoRequestSchema.shape.audio_urls,
-    resolution: FalSeedance2p0ReferenceToVideoRequestSchema.shape.resolution,
-    duration: FalSeedance2p0ReferenceToVideoRequestSchema.shape.duration,
-    aspect_ratio: FalSeedance2p0ReferenceToVideoRequestSchema.shape.aspect_ratio,
-    generate_audio: FalSeedance2p0ReferenceToVideoRequestSchema.shape.generate_audio,
-    seed: FalSeedance2p0ReferenceToVideoRequestSchema.shape.seed,
-  },
-  generate_fal_seedance_2_0_fast_reference_to_video: {
-    prompt: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.prompt,
-    image_refs: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.image_urls,
-    video_refs: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.video_urls,
-    audio_refs: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.audio_urls,
-    resolution: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.resolution,
-    duration: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.duration,
-    aspect_ratio: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.aspect_ratio,
-    generate_audio: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.generate_audio,
-    seed: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.seed,
-  },
   generate_fal_wan_2_7_text_to_video: {
     prompt: FalWanV2p7TextToVideoRequestSchema.shape.prompt,
     negative_prompt: FalWanV2p7TextToVideoRequestSchema.shape.negative_prompt,
@@ -1225,12 +1064,7 @@ type ParamSchema = {
 // schema-build time (see applyApicityConstraints). Only constants that encode a
 // deliberate divergence from Apicity, or that feed PARAM_SCHEMAS, remain here.
 
-const SEEDANCE2_TOOL_NAMES = [
-  "generate_kie_seedance_2_0_video",
-  "generate_kie_seedance_2_0_video",
-  "generate_kie_seedance_2_0_fast_video",
-  "generate_kie_seedance_2_0_fast_video",
-];
+const SEEDANCE2_TOOL_NAMES: string[] = [];
 
 // grok image-to-video rejects "spicy" though the Apicity mode enum includes it.
 const GROK_IMAGINE_MODES = enumOptions(GrokImagineModeSchema);
@@ -1271,6 +1105,9 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   return_last_frame: { type: "boolean", description: "Return final frame as image" },
   web_search: { type: "boolean", description: "Use web search for enhanced grounding" },
   sound: { type: "boolean", description: "Generate audio for the video" },
+  audio: { type: "boolean", description: "Generate native audio for the video" },
+  customize_multi_shots: { type: "boolean", description: "Enable a custom multi-shot list" },
+  prefer_multi_shots: { type: "boolean", description: "Enable intelligent shot planning" },
   multi_shots: { type: "boolean", description: "Enable multi-shot mode" },
   enable_safety_checker: { type: "boolean", description: "Content safety filter" },
   enable_prompt_expansion: { type: "boolean", description: "Intelligent prompt rewriting" },
@@ -1423,6 +1260,8 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
     (m) => m.tool_name === baseName
       || m.tool_name === canonical
       || getCanonicalName(m.tool_name) === canonical
+      || ((isKlingOmniTool(baseName) || isKlingOmniTool(canonical))
+        && m.tool_name === KLING_OMNI_TEXT_TO_VIDEO_TOOL)
       || (m.falToolNames && Object.values(m.falToolNames).some((n) => n === baseName || n === canonical || getCanonicalName(n!) === canonical)),
   );
   if (!model) return null;
@@ -1435,7 +1274,13 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
     ?? VIDEO_PARAM_ZOD_SCHEMAS[canonical]
     ?? {};
 
-  const paramList = isGoogleAlias ? (GOOGLE_VIDEO_PARAMS.generate_google_flow_omni_flash_video ?? model.params) : model.params;
+  const paramList = isGoogleAlias
+    ? (GOOGLE_VIDEO_PARAMS.generate_google_flow_omni_flash_video ?? model.params)
+    : isKlingOmniTool(baseName)
+      ? KLING_OMNI_TOOL_PARAMS[baseName]
+      : isKlingOmniTool(canonical)
+        ? KLING_OMNI_TOOL_PARAMS[canonical]
+        : model.params;
   for (const param of paramList) {
     const base = PARAM_SCHEMAS[param];
     if (!base) continue;
@@ -1443,21 +1288,19 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
     const prop = { ...base };
 
     // Tool-specific enum/description overrides
-    if (toolName === "generate_kie_kling_3_0_video" || canonical === "generate_kie_kling_3_0_video") {
-      if (param === "prompt") prop.description = "Video description";
-      if (param === "mode") prop.description = "Resolution mode: std (standard) / pro (professional) / 4K";
-      if (param === "duration") prop.description = "Video duration: 3s-15s";
-      if (param === "aspect_ratio") prop.description = "Video aspect ratio";
-      if (param === "sound") prop.description = "Generate audio for the video";
-      if (param === "image_refs") prop.description = "Reference image assets for start/end frames (0-2 slugs like @img-sunset)";
-    }
-    if (toolName === "generate_kie_kling_3_0_motion_control" || canonical === "generate_kie_kling_3_0_motion_control") {
-      if (param === "prompt") prop.description = "Optional motion description";
-      if (param === "character_image_refs") prop.description = "Character image @slugs (input_urls)";
-      if (param === "motion_video_refs") prop.description = "Motion reference video @slugs (video_urls)";
-      if (param === "mode") prop.description = "Output resolution: 720p / 1080p";
-      if (param === "character_orientation") prop.description = "Character orientation source: video / image";
-      if (param === "background_source") prop.description = "Background source: input_video / input_image";
+    if (isKlingOmniTool(toolName) || isKlingOmniTool(canonical)) {
+      if (param === "prompt") prop.description = "Video description (1-3072 characters)";
+      if (param === "image_refs") prop.description = "Reference image assets";
+      if (param === "video_refs") prop.description = "Reference or motion video assets";
+      if (param === "audio") prop.description = "Generate native audio";
+      if (param === "resolution") prop.description = "Output resolution: 720p / 1080p / 4k";
+      if (param === "aspect_ratio") prop.description = "Output aspect ratio";
+      if (param === "duration") prop.description = "Video duration in seconds (3-15)";
+      if (param === "customize_multi_shots") {
+        prop.description = "Enable a custom multi-shot list";
+        prop.default = false;
+        defaults.customize_multi_shots = false;
+      }
     }
     if (toolName === "generate_kie_seedance_2_5_video") {
       if (param === "prompt") prop.description = "Video description (optional, max 30000 characters)";
@@ -1767,10 +1610,9 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
       if (zodIsRequired(providerSchema) && !(isGoogleAlias && param === "duration")) required.add(param);
     }
 
-    if (toolName === "generate_kie_seedance_2_0_mini_video" && param === "nsfw_checker") {
-      prop.description = "Content safety filter (default false)";
+    if ((isKlingOmniTool(toolName) || isKlingOmniTool(canonical)) && param === "customize_multi_shots") {
       prop.default = false;
-      defaults.nsfw_checker = false;
+      defaults.customize_multi_shots = false;
     }
 
     if (toolName === "generate_kie_grok_imagine_text_to_video") {
@@ -1793,8 +1635,6 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
       && canonical !== "generate_fal_grok_imagine_video"
       && toolName !== "generate_kie_wan_2_7_edit_video"
       && canonical !== "generate_kie_wan_2_7_edit_video"
-      && toolName !== "generate_kie_kling_3_0_motion_control"
-      && canonical !== "generate_kie_kling_3_0_motion_control"
       && toolName !== "generate_kie_seedance_2_5_video"
       && canonical !== "generate_kie_seedance_2_5_video"
       && toolName !== "generate_kie_omnihuman_1_5_video"
@@ -1814,8 +1654,12 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
     )) required.add(param);
     if (param === "audio_ref" && (toolName === "generate_kie_volcengine_video_to_video_lip_sync" || toolName === "generate_kie_omnihuman_1_5_video")) required.add(param);
     if (
-      toolName === "generate_kie_kling_3_0_motion_control"
-      && (param === "character_image_refs" || param === "motion_video_refs")
+      (toolName === KLING_OMNI_IMAGE_TO_VIDEO_TOOL || canonical === KLING_OMNI_IMAGE_TO_VIDEO_TOOL)
+      && param === "image_refs"
+    ) required.add(param);
+    if (
+      (toolName === KLING_OMNI_TRANSFORMATION_TOOL || canonical === KLING_OMNI_TRANSFORMATION_TOOL)
+      && param === "video_refs"
     ) required.add(param);
   }
 
@@ -1875,18 +1719,6 @@ function validateVideoParams(rawToolName: string, params: Record<string, unknown
     const duration = Number(params.duration);
     if (totalImages > 0 && Number.isFinite(duration) && duration > 10) {
       warnings.push("xAI reference-to-video supports at most 10 seconds when reference images are supplied");
-    }
-  }
-
-  if (toolName === "generate_kie_kling_3_0_video" || canonical === "generate_kie_kling_3_0_video") {
-    const multiPrompt = params.multi_prompt as unknown[] | undefined;
-    if (multiPrompt && totalImages > 1) warnings.push(`Kling 3.0 multi-shot mode allows max 1 reference image (got ${totalImages})`);
-  }
-
-  if (toolName === "generate_kie_seedance_2_0_fast_video" || canonical === "generate_kie_seedance_2_0_fast_video") {
-    const resolution = params.resolution as string | undefined;
-    if (resolution === "1080p") {
-      warnings.push("Seedance 2 Fast caps at 720p — use generate_kie_seedance_2_0_video for 1080p");
     }
   }
 
@@ -2007,20 +1839,6 @@ function validateVideoParams(rawToolName: string, params: Record<string, unknown
     if (audioRefs.length > 10) warnings.push(`Seedance 2.5 supports up to 10 reference audio files (got ${audioRefs.length})`);
   }
 
-  if (
-    toolName === "generate_kie_seedance_2_0_video" || canonical === "generate_kie_seedance_2_0_video" ||
-    toolName === "generate_kie_seedance_2_0_fast_video" || canonical === "generate_kie_seedance_2_0_fast_video"
-  ) {
-    const audioRefs = params.audio_refs as string[] | undefined;
-    const firstFrame = params.first_frame_ref as string | undefined;
-    const lastFrame = params.last_frame_ref as string | undefined;
-    const hasAudio = (audioRefs?.filter(Boolean).length ?? 0) > 0;
-    const hasFrame = !!firstFrame || !!lastFrame;
-    if (hasAudio && hasFrame) {
-      warnings.push("Seedance 2 does not support reference audio combined with first/last frame — pick one or the other");
-    }
-  }
-
   if (toolName === "generate_kie_wan_2_7_image_to_video" || canonical === "generate_kie_wan_2_7_image_to_video") {
     const firstFrame = params.first_frame_ref as string | undefined;
     const lastFrame = params.last_frame_ref as string | undefined;
@@ -2060,7 +1878,7 @@ function validateVideoParams(rawToolName: string, params: Record<string, unknown
 
   const imageSlots = IMAGE_SLOT_OVERRIDES[toolName] ?? readSlotConstraints(IMAGE_FIELD_SCHEMAS[toolName]);
 
-  const multiPromptSlots = toolName === "generate_kie_kling_3_0_video" ? 5 : null;
+  const multiPromptSlots = isKlingOmniTool(toolName) ? 6 : null;
 
   return { valid: missing.length === 0, missing_required: missing, warnings, image_slots: imageSlots, multi_prompt_slots: multiPromptSlots };
 }
@@ -2086,7 +1904,10 @@ function applyVideoToolConstraints(
 // Routing prompt
 // ---------------------------------------------------------------------------
 
-const VIDEO_TOOL_NAMES = Object.values(VIDEO_MODELS).map((m) => m.tool_name);
+const VIDEO_TOOL_NAMES = [
+  ...Object.values(VIDEO_MODELS).map((m) => m.tool_name),
+  ...KLING_OMNI_TOOLS.filter((name) => name !== KLING_OMNI_TEXT_TO_VIDEO_TOOL),
+];
 
 function buildVideoRoutingPrompt(): string {
   const toolLines: string[] = [];
@@ -2098,6 +1919,9 @@ function buildVideoRoutingPrompt(): string {
     toolLines.push(`  Parameters: ${paramStr}`);
     if (defaultStr) toolLines.push(`  Defaults: ${defaultStr}`);
   }
+  toolLines.push(`- ${KLING_OMNI_IMAGE_TO_VIDEO_TOOL}: Kling 3.0 Omni image-to-video (1-2 frames)`);
+  toolLines.push(`- ${KLING_OMNI_REFERENCE_TO_VIDEO_TOOL}: Kling 3.0 Omni reference-to-video`);
+  toolLines.push(`- ${KLING_OMNI_TRANSFORMATION_TOOL}: Kling 3.0 Omni transformation (motion video plus optional images)`);
 
   return `You are a routing assistant for a video generation system.
 You ONLY route to these video generation tools:
@@ -2110,10 +1934,11 @@ Given a user query (possibly with @asset references), determine:
 
 ROUTING PREFERENCES:
 - PREFER ${VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name} as the DEFAULT for ALL video generation requests
-- Use generate_kie_seedance_2_5_video when the user explicitly asks for "Seedance 2.5". Supports prompt-only, first/last frames, or multimodal references with all KIE options
-- Use generate_kie_seedance_2_0_video when user mentions "seedance" or "bytedance" and wants 1080p, or just defaults to the higher-quality variant. Accepts any input combination: text-only, first/last frame, reference images/videos/audio
-- Use generate_kie_seedance_2_0_fast_video when user mentions "seedance fast" or 480p/720p is acceptable (faster/cheaper). Same input flexibility as the full variant
-- Use generate_kie_seedance_2_0_mini_video when user mentions "seedance mini". Text prompt plus optional reference images/videos/audio; no first/last frame; 480p/720p
+- Use generate_kie_seedance_2_5_video for Seedance, ByteDance, or unspecified video generation. Supports prompt-only, first/last frames, or multimodal references with all KIE options
+- Use ${KLING_OMNI_TEXT_TO_VIDEO_TOOL} when the user asks for Kling or Kling Omni text-to-video
+- Use ${KLING_OMNI_IMAGE_TO_VIDEO_TOOL} when the user asks for Kling image-to-video or supplies 1-2 frames
+- Use ${KLING_OMNI_REFERENCE_TO_VIDEO_TOOL} when the user asks for Kling reference-to-video
+- Use ${KLING_OMNI_TRANSFORMATION_TOOL} when the user asks for Kling transformation, motion transfer, or dancing from a motion video plus character images
 - Use generate_kie_gemini_omni_video only when the user explicitly asks for Gemini or Google Omni. Multimodal text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes
 - Use generate_google_flow_veo_3_1_fast_video when user mentions "veo" or "veo 3.1"; pick generate_google_flow_veo_3_1_quality_video for "veo quality", generate_google_flow_veo_3_1_lite_video for "veo lite", and generate_google_flow_veo_3_1_lite_low_priority_video for "veo lite low priority" / "veo lp". Text-to-video, first/last frame image-to-video, or reference images (fast/lite/lite-lp only)
 - Use generate_kie_wan_2_7_image_to_video ONLY when user mentions "wan" with first/last frame or clip continuation
@@ -2126,10 +1951,8 @@ ROUTING PREFERENCES:
 - Use generate_kie_omnihuman_1_5_video ONLY when user explicitly mentions "omnihuman" or wants to animate a portrait/photo with a voice or audio track (talking/singing avatar from a still image)
 
 KEY CONSTRAINTS:
-- For generate_kie_kling_3_0_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
+- For Kling 3.0 Omni tools: resolution "720p"/"1080p"/"4k", duration 3-15 seconds, audio boolean. Text-to-video is prompt-only. Image-to-video requires image_refs (1-2). Reference-to-video requires image_refs and/or one video_ref. Transformation requires video_refs and optional image_refs
 - For generate_kie_seedance_2_5_video: optional prompt up to 30000 characters; duration "-1" (automatic) or "4"-"30"; resolution "480p"/"720p"/"1080p"; aspect_ratio "1:1"/"4:3"/"3:4"/"16:9"/"9:16"/"21:9"/"adaptive"; output_format "mp4"/"mov"; return_last_frame, generate_audio, web_search, and nsfw_checker booleans. Use either first_frame_ref with optional last_frame_ref, or image_refs (0-30), video_refs (0-10), and audio_refs (0-10), never frames and references together
-- For generate_kie_seedance_2_0_video and generate_kie_seedance_2_0_fast_video: duration "4"-"15", aspect_ratio includes "adaptive"; full variant accepts "480p"/"720p"/"1080p", fast variant accepts "480p"/"720p" only. Inputs are all optional and free to mix: first_frame_ref, last_frame_ref, image_refs (0-9), video_refs (0-3, total ≤15s), audio_refs (0-3, total ≤15s). Pure text prompt is fine too
-- For generate_kie_seedance_2_0_mini_video: duration "4"-"15" (default 15), aspect_ratio includes "adaptive", resolution "480p"/"720p". No first/last frame; mix prompt with image_refs, video_refs (0-3, total ≤15s), audio_refs (0-3, total ≤15s). Prompt is optional when references are supplied
 - For generate_kie_gemini_omni_video: REQUIRES prompt and duration "4"/"6"/"8"/"10"; aspect_ratio "16:9"/"9:16"; resolution "720p"/"1080p"/"4k" (default 720p); seed integer. Optional image_refs (0-7) and one video_ref with video_clip_start/video_clip_ends (ends > start and < start+10s)
 - For generate_google_flow_veo_3_1_quality_video: 8s output only; optional first_frame_ref/last_frame_ref (last requires first); aspect_ratio "16:9"/"9:16"/"1:1"/"4:3"/"3:4"; NO reference images
 - For generate_google_flow_veo_3_1_fast_video, generate_google_flow_veo_3_1_lite_video, and generate_google_flow_veo_3_1_lite_low_priority_video: duration "4"/"6"/"8" (default "8"); image_refs (0-3) OR first_frame_ref/last_frame_ref, not both; aspect_ratio "16:9"/"9:16"/"1:1"/"4:3"/"3:4"
@@ -2245,7 +2068,8 @@ function extractLastUsedModel(log: ActionLogEntry[]): string | null {
       if (
         info.tool_name === rawToolName ||
         getCanonicalName(info.tool_name) === canonicalEntryName ||
-        (info.googleToolName && getCanonicalName(info.googleToolName) === canonicalEntryName)
+        (info.googleToolName && getCanonicalName(info.googleToolName) === canonicalEntryName) ||
+        (key === "kling30" && isKlingOmniTool(canonicalEntryName))
       ) return key;
     }
   }
@@ -2323,6 +2147,21 @@ function buildModelOption(
       : providerList[0].key;
 
   let effectiveToolName = toolName;
+  if (modelKey === "kling30" || isKlingOmniTool(toolName)) {
+    const inferredImages = Array.isArray(baseParams.image_refs)
+      ? (baseParams.image_refs as unknown[]).filter((item): item is string =>
+        typeof item === "string" && item.trim() !== "")
+      : resolvedAssets.filter((asset) => asset.artifactType === "image" && asset.filePath).map((asset) => asset.tag);
+    const inferredVideos = Array.isArray(baseParams.video_refs)
+      ? (baseParams.video_refs as unknown[]).filter((item): item is string =>
+        typeof item === "string" && item.trim() !== "")
+      : resolvedAssets.filter((asset) => asset.artifactType === "video").map((asset) => asset.tag);
+    effectiveToolName = klingOmniToolForParams({
+      ...baseParams,
+      image_refs: inferredImages,
+      video_refs: inferredVideos,
+    });
+  }
   if (selectedProvider === "fal") {
     const imageSlugCount = Array.isArray(baseParams.image_refs)
       ? (baseParams.image_refs as unknown[]).length
@@ -2356,15 +2195,13 @@ function buildModelOption(
 
   const canonicalToolName = getCanonicalName(toolName);
 
-  // Ensure Kling 3.0 element/multi-shot defaults
-  if (toolName === "generate_kie_kling_3_0_video" || canonicalToolName === "generate_kie_kling_3_0_video") {
-    for (let slot = 1; slot <= 3; slot++) {
-      params[`element${slot}_refs`] ??= [];
-      params[`element${slot}_name`] ??= "";
-      params[`element${slot}_desc`] ??= "";
-    }
+  if (modelKey === "kling30" || isKlingOmniTool(toolName) || isKlingOmniTool(canonicalToolName)) {
+    const videoTags = resolvedAssets
+      .filter((asset) => asset.artifactType === "video")
+      .map((asset) => asset.tag);
+    if (videoTags.length > 0) params.video_refs = videoTags;
     params.multi_prompt ??= [];
-    params.multi_shots ??= false;
+    params.customize_multi_shots ??= false;
   }
 
   // For video extension tools — and Gemini Omni, whose "edit" mode is a V2V

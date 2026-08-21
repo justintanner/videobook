@@ -76,6 +76,7 @@ export default defineConfig({
       'server/src/frame-utils.test.ts',
       'server/src/fs.test.ts',
       'server/src/generation-registry.test.ts',
+      'server/src/retired-kling-seedance.test.ts',
       'server/src/chat-router.test.ts',
       'server/src/chat-models.test.ts',
       'server/src/dialog-quality.test.ts',

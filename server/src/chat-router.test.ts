@@ -94,22 +94,21 @@ describe("chat routing catalog", () => {
 
   it("publishes required parameters and enum domains to the router", () => {
     const tools = buildRoutableTools(definitions);
-    const motionControl = getRoutableTool(
+    const transformation = getRoutableTool(
       tools,
-      "generate_kie_kling_3_0_motion_control",
+      "generate_kie_kling_3_0_omni_transformation",
     );
-    expect(motionControl?.requiredParams).toEqual([
-      "character_image_refs",
-      "motion_video_refs",
+    expect(transformation?.requiredParams).toEqual([
+      "prompt",
+      "video_refs",
     ]);
-    expect(motionControl?.constraints).toEqual([
-      'mode="720p"|"1080p"',
-      'character_orientation="video"|"image"',
-      'background_source="input_video"|"input_image"',
+    expect(transformation?.constraints).toEqual([
+      'resolution="720p"|"1080p"|"4k"',
+      'aspect_ratio="16:9"|"9:16"|"1:1"|"auto"',
     ]);
     const prompt = buildChatRoutingPrompt("my-book", tools);
     expect(prompt).toContain(
-      'allowed: mode="720p"|"1080p", character_orientation="video"|"image", background_source="input_video"|"input_image"',
+      'allowed: resolution="720p"|"1080p"|"4k", aspect_ratio="16:9"|"9:16"|"1:1"|"auto"',
     );
     expect(prompt).toContain("Omit optional parameters");
   });
@@ -212,7 +211,7 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("Seedance is video, Seedream is image");
     expect(prompt).toContain("generate_kie_seedream_v5_lite_image_to_image");
     expect(prompt).toContain("edit-target image first");
-    expect(prompt).toContain("generate_kie_seedance_2_0_video");
+    expect(prompt).toContain("generate_kie_seedance_2_5_video");
   });
 });
 
@@ -228,7 +227,7 @@ describe("ByteDance named-model routing", () => {
   it("routes a seedance-named image actor replacement to Seedream i2i with the edit target first", () => {
     const routed = applyBytedanceNamedModelRoute({
       query: "replace the three actors in @e2 with @d1 @d2 @d3 using seedance",
-      tool: "generate_kie_seedance_2_0_video",
+      tool: "generate_kie_seedance_2_5_video",
       params: {
         prompt: "replace the three actors",
         video_refs: ["@e2"],
@@ -255,7 +254,7 @@ describe("ByteDance named-model routing", () => {
       message: "Generating image.",
       assetContext: actorAssets,
     });
-    expect(routed.tool).toBe("generate_kie_seedance_2_0_video");
+    expect(routed.tool).toBe("generate_kie_seedance_2_5_video");
     expect(routed.params.video_refs).toEqual(["@e1"]);
     expect(routed.params.image_refs).toEqual(["@d1", "@d2", "@d3"]);
     expect(routed.substituted).toBe(false);

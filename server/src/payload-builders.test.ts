@@ -16,6 +16,10 @@ import {
   KlingMotionControlRequestSchema,
   KlingV3TurboImageToVideoRequestSchema,
   KlingV3TurboTextToVideoRequestSchema,
+  KlingOmniImageToVideoRequestSchema,
+  KlingOmniReferenceToVideoRequestSchema,
+  KlingOmniTextToVideoRequestSchema,
+  KlingOmniTransformationRequestSchema,
   KlingVideoRequestSchema,
   MiniMaxH3ImageToVideoRequestSchema,
   MiniMaxH3ReferenceToVideoRequestSchema,
@@ -50,6 +54,10 @@ import {
 } from "./provider-prompt-transform.js";
 
 const payloadCases: Array<{ tool: string; provider?: string }> = [
+  { tool: "generate_kie_kling_3_0_omni_text_to_video" },
+  { tool: "generate_kie_kling_3_0_omni_image_to_video" },
+  { tool: "generate_kie_kling_3_0_omni_reference_to_video" },
+  { tool: "generate_kie_kling_3_0_omni_transformation" },
   { tool: "generate_kie_kling_3_0_video" },
   { tool: "generate_kie_kling_3_0_motion_control" },
   { tool: "generate_kie_kling_3_0_turbo_video" },
@@ -187,6 +195,37 @@ type KieGuardCase = {
 };
 
 const kieGuardCases: KieGuardCase[] = [
+  {
+    tool: "generate_kie_kling_3_0_omni_text_to_video",
+    schema: KlingOmniTextToVideoRequestSchema,
+    args: { prompt: "plain prompt", customize_multi_shots: false, resolution: "720p" },
+  },
+  {
+    tool: "generate_kie_kling_3_0_omni_image_to_video",
+    schema: KlingOmniImageToVideoRequestSchema,
+    args: {
+      prompt: "plain prompt",
+      image_refs: ["https://example.test/image.png"],
+    },
+  },
+  {
+    tool: "generate_kie_kling_3_0_omni_reference_to_video",
+    schema: KlingOmniReferenceToVideoRequestSchema,
+    args: {
+      prompt: "plain prompt",
+      image_refs: ["https://example.test/image.png"],
+    },
+  },
+  {
+    tool: "generate_kie_kling_3_0_omni_transformation",
+    schema: KlingOmniTransformationRequestSchema,
+    args: {
+      prompt: "plain prompt",
+      image_refs: ["https://example.test/image.png"],
+      video_refs: ["https://example.test/video.mp4"],
+      aspect_ratio: "9:16",
+    },
+  },
   {
     tool: "generate_kie_kling_3_0_video",
     schema: KlingVideoRequestSchema,

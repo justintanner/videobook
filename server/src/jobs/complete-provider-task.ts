@@ -42,6 +42,7 @@ const TASK_TYPES_BY_COMPLETION_FAMILY = {
     "fal_kling_v3_pro_t2v",
     "fal_kling_v3_standard_i2v",
     "fal_kling_v3_standard_t2v",
+    "kling30_omni_video",
     "fal_grok_imagine_video_i2v",
     "fal_grok_imagine_video_r2v",
     "fal_grok_imagine_video_extend",

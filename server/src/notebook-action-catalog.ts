@@ -312,7 +312,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
 ];
 
-const DEFAULT_ANIMATION_TOOL = "generate_kie_seedance_2_0_video";
+const DEFAULT_ANIMATION_TOOL = "generate_kie_seedance_2_5_video";
 const DEFAULT_VIDEO_TOOL = "generate_kie_gemini_omni_video";
 const DEFAULT_IMAGE_TOOL = "generate_kie_nano_banana_pro_text_to_image";
 const DEFAULT_AUDIO_TOOL = "generate_elevenlabs_text_to_audio";
@@ -323,9 +323,10 @@ const generationTitleOverrides: Record<string, string> = {
   generate_kie_nano_banana_pro_text_to_image: "Nano Banana Pro",
   generate_google_flow_nano_banana_pro_image: "Nano Banana Pro",
   generate_kie_seedance_2_5_video: "Seedance 2.5",
-  generate_kie_seedance_2_0_video: "Seedance 2",
-  generate_kie_seedance_2_0_fast_video: "Seedance 2 Fast",
-  generate_kie_seedance_2_0_mini_video: "Seedance 2 Mini",
+  generate_kie_kling_3_0_omni_text_to_video: "Kling 3.0 Omni",
+  generate_kie_kling_3_0_omni_image_to_video: "Kling 3.0 Omni Image",
+  generate_kie_kling_3_0_omni_reference_to_video: "Kling 3.0 Omni Reference",
+  generate_kie_kling_3_0_omni_transformation: "Kling 3.0 Omni Transformation",
   generate_elevenlabs_text_to_audio: "ElevenLabs",
 };
 

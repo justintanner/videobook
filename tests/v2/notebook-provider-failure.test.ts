@@ -107,7 +107,7 @@ describe("notebook provider failures", () => {
   it("shows generic provider details while redacting secrets", async () => {
     const { input } = await setupFailure(
       "kie",
-      "generate_kie_kling_3_0_motion_control",
+      "generate_kie_kling_3_0_omni_transformation",
     );
     const secret = "provider-secret-value";
     const previousApiKey = process.env.KIE_API_KEY;
@@ -134,7 +134,7 @@ describe("notebook provider failures", () => {
   it("retains the artifact fallback when no failure record exists", async () => {
     const { input } = await setupFailure(
       "kie",
-      "generate_kie_kling_3_0_motion_control",
+      "generate_kie_kling_3_0_omni_transformation",
     );
     expect(notebookProviderFailureMessage(engine, input)).toBe(
       `Provider output ${input.providerArtifactId} failed`,
@@ -144,7 +144,7 @@ describe("notebook provider failures", () => {
   it("hydrates an already-persisted opaque error for notebook reads", async () => {
     const { input, cellId } = await setupFailure(
       "kie",
-      "generate_kie_kling_3_0_motion_control",
+      "generate_kie_kling_3_0_omni_transformation",
     );
     const failure = await engine.jobs.failures.write(input.providerArtifactId, {
       message: "Motion video duration must be between 3 and 30 seconds",

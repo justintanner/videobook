@@ -76,6 +76,10 @@ import type {
   KlingV3TurboTextToVideoDuration,
   KlingV3TurboResolution,
   KlingV3TurboAspectRatio,
+  KlingOmniTextToVideoRequest,
+  KlingOmniImageToVideoRequest,
+  KlingOmniReferenceToVideoRequest,
+  KlingOmniTransformationRequest,
 } from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
 import type { GoogleFlowImagesRequest, GoogleFlowVideosRequest } from "@apicity/googleflow";
@@ -107,6 +111,14 @@ import {
   Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
 import { zodDefault } from "./zod-slots.js";
+import {
+  KLING_OMNI_API_MODELS,
+  KLING_OMNI_IMAGE_TO_VIDEO_TOOL,
+  KLING_OMNI_REFERENCE_TO_VIDEO_TOOL,
+  KLING_OMNI_TEXT_TO_VIDEO_TOOL,
+  KLING_OMNI_TRANSFORMATION_TOOL,
+  type KlingOmniMode,
+} from "./kling-omni.js";
 import {
   assertProviderPayload,
   transformProviderPrompt,
@@ -216,6 +228,129 @@ function buildKling30MotionControlPayload(
       background_source: args.background_source || "input_video",
     },
   });
+}
+
+type KlingOmniVideoArgs = {
+  prompt: string;
+  audio?: boolean;
+  resolution?: "720p" | "1080p" | "4k";
+  aspect_ratio?: "16:9" | "9:16" | "1:1" | "auto";
+  duration?: number | string;
+  customize_multi_shots?: boolean;
+  prefer_multi_shots?: boolean;
+  multi_prompt?: Array<{ prompt: string; duration: number }>;
+};
+
+type KlingOmniVideoOpts = {
+  imageUrls?: string[];
+  videoUrls?: string[];
+};
+
+type KlingOmniVideoRequest =
+  | KlingOmniTextToVideoRequest
+  | KlingOmniImageToVideoRequest
+  | KlingOmniReferenceToVideoRequest
+  | KlingOmniTransformationRequest;
+
+function omniDurationNumber(value: number | string | undefined): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function buildKlingOmniVideoPayload(
+  mode: KlingOmniMode,
+  args: KlingOmniVideoArgs,
+  opts: KlingOmniVideoOpts,
+): KlingOmniVideoRequest {
+  const imageUrls = opts.imageUrls ?? [];
+  const videoUrls = opts.videoUrls ?? [];
+  const hasImages = imageUrls.length > 0;
+  const hasVideo = videoUrls.length > 0;
+  const multiPrompt = args.multi_prompt && args.multi_prompt.length > 0
+    ? args.multi_prompt
+    : undefined;
+  const customize = args.customize_multi_shots ?? (multiPrompt !== undefined);
+  const durationNumber = omniDurationNumber(args.duration);
+
+  if (mode === "text") {
+    return {
+      model: KLING_OMNI_API_MODELS.text,
+      input: {
+        prompt: args.prompt,
+        customize_multi_shots: customize === true,
+        ...(args.prefer_multi_shots !== undefined
+          ? { prefer_multi_shots: args.prefer_multi_shots }
+          : {}),
+        ...(multiPrompt && customize === true ? { multi_prompt: multiPrompt } : {}),
+        ...(args.audio !== undefined ? { audio: args.audio } : {}),
+        ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+        ...(args.aspect_ratio !== undefined && args.aspect_ratio !== "auto"
+          ? { aspect_ratio: args.aspect_ratio }
+          : {}),
+        ...(durationNumber !== undefined ? { duration: durationNumber } : {}),
+      },
+    };
+  }
+
+  if (mode === "image") {
+    return {
+      model: KLING_OMNI_API_MODELS.image,
+      input: {
+        prompt: args.prompt,
+        image_urls: imageUrls,
+        ...(durationNumber !== undefined ? { duration: durationNumber } : {}),
+        ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+        ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
+        ...(args.audio !== undefined ? { audio: args.audio } : {}),
+        ...(customize !== undefined ? { customize_multi_shots: customize } : {}),
+        ...(args.prefer_multi_shots !== undefined
+          ? { prefer_multi_shots: args.prefer_multi_shots }
+          : {}),
+        ...(multiPrompt ? { multi_prompt: multiPrompt } : {}),
+      },
+    };
+  }
+
+  if (mode === "reference") {
+    return {
+      model: KLING_OMNI_API_MODELS.reference,
+      input: {
+        prompt: args.prompt,
+        ...(hasImages ? { image_urls: imageUrls } : {}),
+        ...(hasVideo ? { video_urls: videoUrls } : {}),
+        ...(durationNumber !== undefined ? { duration: durationNumber } : {}),
+        ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+        ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
+        ...(hasVideo ? { audio: false } : args.audio !== undefined ? { audio: args.audio } : {}),
+        ...(customize !== undefined ? { customize_multi_shots: customize } : {}),
+        ...(args.prefer_multi_shots !== undefined
+          ? { prefer_multi_shots: args.prefer_multi_shots }
+          : {}),
+        ...(multiPrompt ? { multi_prompt: multiPrompt } : {}),
+      },
+    };
+  }
+
+  return {
+    model: KLING_OMNI_API_MODELS.transformation,
+    input: {
+      prompt: args.prompt,
+      ...(hasImages ? { image_urls: imageUrls } : {}),
+      video_urls: videoUrls,
+      ...(hasImages && args.duration !== undefined
+        ? { duration: String(args.duration) }
+        : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      ...(args.aspect_ratio !== undefined
+        ? { aspect_ratio: args.aspect_ratio }
+        : hasImages ? {} : { aspect_ratio: "auto" }),
+      ...(args.audio !== undefined ? { audio: args.audio } : {}),
+    },
+  };
 }
 
 type GrokImagineVideoArgs = {
@@ -1698,6 +1833,28 @@ function translateToolPayloadUnchecked(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
+    case KLING_OMNI_TEXT_TO_VIDEO_TOOL:
+    case KLING_OMNI_IMAGE_TO_VIDEO_TOOL:
+    case KLING_OMNI_REFERENCE_TO_VIDEO_TOOL:
+    case KLING_OMNI_TRANSFORMATION_TOOL: {
+      const mode: KlingOmniMode =
+        toolName === KLING_OMNI_IMAGE_TO_VIDEO_TOOL
+          ? "image"
+          : toolName === KLING_OMNI_REFERENCE_TO_VIDEO_TOOL
+            ? "reference"
+            : toolName === KLING_OMNI_TRANSFORMATION_TOOL
+              ? "transformation"
+              : "text";
+      const payload = buildKlingOmniVideoPayload(
+        mode,
+        args as KlingOmniVideoArgs,
+        {
+          imageUrls: imageRefs,
+          videoUrls: (args.video_refs as string[] | undefined) ?? [],
+        },
+      );
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_kie_grok_imagine_image_to_video": {
       if (isXaiProvider(provider)) {
         const payload = buildXaiGrokImagineVideoPayload(
@@ -2116,6 +2273,7 @@ function translateToolPayload(
 export {
   buildKling30VideoPayload,
   buildKling30MotionControlPayload,
+  buildKlingOmniVideoPayload,
   buildGrokImagineVideoPayload,
   buildGrokImagineT2vVideoPayload,
   buildGrokImagineImagePayload,

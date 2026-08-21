@@ -636,7 +636,7 @@ function createBranchCells(
       ...(promptBase.inputs ?? {}),
       ...commonInputs,
       workflowRole: branchRole("prompt", shot.ordinal),
-      targetModel: "seedance2",
+      targetModel: "seedance25",
       featureBrief: promptBrief,
       analysisPrompt,
       shotContext: {
@@ -663,7 +663,7 @@ function createBranchCells(
     slot: animateBase.slot,
     prompt: "",
     provider: "kie",
-    model: "bytedance/seedance-2",
+    model: "bytedance/seedance-2-5",
     operation: "image_to_video",
     tool: DEFAULT_ANIMATION_TOOL,
     inputs: {

@@ -955,7 +955,7 @@ function modelArgsWithMentions(
   if (cell.operation === "rewrite_prompt" && "model" in definition.schema) {
     args.model = typeof cell.inputs?.targetModel === "string"
       ? cell.inputs.targetModel
-      : "seedance2";
+      : "seedance25";
   }
   const firstFrame = upstream.find((entry) =>
     entry.targetInput === "first_frame"

@@ -195,18 +195,18 @@ describe("notebook runner frames and concat", () => {
       createdAt: "2026-01-01T00:00:00.000Z",
     };
     const definition = {
-      name: "generate_kie_kling_3_0_motion_control",
+      name: "generate_kie_kling_3_0_omni_transformation",
       schema: {
         book_id: {},
         prompt: {},
-        character_image_refs: {},
-        motion_video_refs: {},
+        image_refs: {},
+        video_refs: {},
       },
     } as unknown as ToolDef;
 
     expect(modelArgs(definition, document, generate, "book-id")).toMatchObject({
-      character_image_refs: [`@${image.outputArtifactId}`],
-      motion_video_refs: [`@${video.outputArtifactId}`],
+      image_refs: [`@${image.outputArtifactId}`],
+      video_refs: [`@${video.outputArtifactId}`],
     });
   });
 

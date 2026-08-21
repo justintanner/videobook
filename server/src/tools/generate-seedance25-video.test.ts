@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildSeedance25Schema } from "./generate-seedance25-video.js";
 
 describe("buildSeedance25Schema", () => {
-  it("exposes every Apicity 0.10.1 Seedance 2.5 option", () => {
+  it("exposes every Apicity 0.10.2 Seedance 2.5 option", () => {
     const schema = buildSeedance25Schema();
 
     expect(Object.keys(schema)).toEqual([

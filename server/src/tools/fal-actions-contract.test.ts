@@ -6,7 +6,7 @@ import { getAllToolDefs } from "./index.js";
 describe("fal generation actions contract", () => {
   it("verifies all 36 Fal generation actions have canonical names and exact endpoint IDs", () => {
     const falActions = GENERATION_ACTIONS.filter((a) => a.provider === "fal");
-    expect(falActions.length).toBe(36);
+    expect(falActions.length).toBe(26);
 
     for (const action of falActions) {
       expect(action.canonical_name).toMatch(/^generate_fal_|^extend_fal_/);

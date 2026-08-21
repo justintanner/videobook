@@ -21,7 +21,7 @@ type DancingFixtureOptions = {
 };
 
 export const DANCING_FIXTURE_OWNER = "dancing-default";
-export const DANCING_FIXTURE_VERSION = 6;
+export const DANCING_FIXTURE_VERSION = 7;
 const DANCING_SOURCE_URL = "https://www.youtube.com/watch?v=8GwZveBYRJI";
 export const DANCING_MOTION_DURATION_SECONDS = 10;
 
@@ -40,8 +40,8 @@ const FIXTURE_ROLES = [
   "extract-first-frame",
   "kittens-freeway",
   "kittens-freeway-output",
-  "kling-motion-control",
-  "kling-motion-control-output",
+  "kling-omni-transformation",
+  "kling-omni-transformation-output",
 ] as const;
 
 function roleOf(cell: NotebookCell): string | null {
@@ -407,16 +407,16 @@ export async function seedDancingWorkflow(
     slot: { row: 3, column: 2 },
     prompt: MOTION_PROMPT,
     provider: "kie",
-    model: "kling-3.0/motion-control",
-    operation: "motion_control",
-    tool: "generate_kie_kling_3_0_motion_control",
+    model: "kling-3.0-omni/transformation",
+    operation: "transformation",
+    tool: "generate_kie_kling_3_0_omni_transformation",
     inputs: {
-      ...ownedInputs("kling-motion-control"),
-      generationMode: "default",
+      ...ownedInputs("kling-omni-transformation"),
+      generationMode: "transformation",
       generationSettings: {
-        mode: "720p",
-        character_orientation: "video",
-        background_source: "input_image",
+        resolution: "720p",
+        aspect_ratio: "9:16",
+        duration: "10",
       },
       requiresConfirmation: true,
       state: "pending",
@@ -427,7 +427,7 @@ export async function seedDancingWorkflow(
     label: "Kittens dancing video",
     slot: { row: 4, column: 2 },
     inputs: {
-      ...ownedInputs("kling-motion-control-output"),
+      ...ownedInputs("kling-omni-transformation-output"),
       mediaRole: "generate-video-output",
       producerCellId: motion.id,
       state: "pending",
@@ -469,7 +469,7 @@ export async function seedDancingWorkflow(
   const document: NotebookDocument = {
     ...notebook,
     name: "Dancing Kittens",
-    description: "Download a dance reference, extract its first frame, replace the dancers with kittens beside a freeway, then transfer the dance with Kling 3.0 Motion Control.",
+    description: "Download a dance reference, extract its first frame, replace the dancers with kittens beside a freeway, then transfer the dance with Kling 3.0 Omni transformation.",
     lifecycleState: "in-progress",
     cells: [
       ...preservedCells,

@@ -87,12 +87,13 @@ import { generateGrokImagineRefVideoDef } from "./generate-grok-imagine-ref-vide
 import { generateGrokImagineT2vVideoDef } from "./generate-grok-imagine-t2v-video.js";
 import { extendGrokImagineVideoDef } from "./extend-grok-imagine-video.js";
 import { upscaleGrokImagineVideoDef } from "./upscale-grok-imagine-video.js";
-import { generateKling30VideoDef } from "./generate-kling30-video.js";
-import { generateKling30MotionControlVideoDef } from "./generate-kling30-motion-control-video.js";
+import {
+  generateKlingOmniImageToVideoDef,
+  generateKlingOmniReferenceToVideoDef,
+  generateKlingOmniTextToVideoDef,
+  generateKlingOmniTransformationDef,
+} from "./generate-kling30-omni-video.js";
 import { generateSeedance25VideoDef } from "./generate-seedance25-video.js";
-import { generateSeedance2VideoDef } from "./generate-seedance2-video.js";
-import { generateSeedance2FastVideoDef } from "./generate-seedance2-fast-video.js";
-import { generateSeedance2MiniVideoDef } from "./generate-seedance2-mini-video.js";
 import { generateGeminiOmniVideoDef } from "./generate-gemini-omni-video.js";
 import { generateGoogleOmniVideoDef } from "./generate-google-omni-video.js";
 import { generateVeo3VideoDef, generateVeo3FastVideoDef } from "./generate-veo3-video.js";
@@ -103,7 +104,7 @@ import {
   generateVeo31LiteLowPriorityVideoDef,
 } from "./generate-veo31-video.js";
 import { generateNanoBananaProGoogleDef } from "./generate-nano-banana-pro-google.js";
-import { generateKling30TurboVideoDef } from "./generate-kling30-turbo-video.js";
+
 import { generateWan27T2vVideoDef } from "./generate-wan27-t2v-video.js";
 import { generateWan27I2vVideoDef } from "./generate-wan27-i2v-video.js";
 import { generateWan27VideoeditVideoDef } from "./generate-wan27-videoedit-video.js";
@@ -169,8 +170,7 @@ import { commandsDef } from "./commands.js";
 import { getRenderSettingsDef } from "./render-settings.js";
 import { translatePayloadDef } from "./translate-payload.js";
 import { updateScriptDef } from "./update-script.js";
-import { generateSeedance2I2vFalDef } from "./generate-seedance2-i2v-fal.js";
-import { generateSeedance2T2vFalDef } from "./generate-seedance2-t2v-fal.js";
+
 import { generateNanoBananaProFalDef } from "./generate-nano-banana-pro-fal.js";
 import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
 import { generateSeedreamV5LiteFalDef } from "./generate-seedream-v5-lite-fal.js";
@@ -181,7 +181,7 @@ import { generateWan27ProFalDef } from "./generate-wan27-pro-fal.js";
 import { generateWan27ProEditFalDef } from "./generate-wan27-pro-edit-fal.js";
 import { generateGrokImagineImageFalDef } from "./generate-grok-imagine-image-fal.js";
 import { generateGrokImagineImageEditFalDef } from "./generate-grok-imagine-image-edit-fal.js";
-import { generateKlingV3ProI2vFalDef } from "./generate-kling-v3-pro-i2v-fal.js";
+
 import { generateGrokImagineVideoI2vFalDef } from "./generate-grok-imagine-video-i2v-fal.js";
 import { generateNanoBananaFalDef } from "./generate-nano-banana-fal.js";
 import { generateNanoBananaEditFalDef } from "./generate-nano-banana-edit-fal.js";
@@ -191,17 +191,13 @@ import { generateNanoBanana2LiteFalDef } from "./generate-nano-banana-2-lite-fal
 import { generateNanoBanana2LiteEditFalDef } from "./generate-nano-banana-2-lite-edit-fal.js";
 import { generateQwenImageFalDef } from "./generate-qwen-image-fal.js";
 import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
-import { generateSeedance2FastT2vFalDef } from "./generate-seedance2-fast-t2v-fal.js";
-import { generateSeedance2FastI2vFalDef } from "./generate-seedance2-fast-i2v-fal.js";
+
 import { generateWan27T2vFalDef } from "./generate-wan27-t2v-fal.js";
 import { generateWan27I2vFalDef } from "./generate-wan27-i2v-fal.js";
-import { generateKlingV3ProT2vFalDef } from "./generate-kling-v3-pro-t2v-fal.js";
-import { generateKlingV3StandardT2vFalDef } from "./generate-kling-v3-standard-t2v-fal.js";
-import { generateKlingV3StandardI2vFalDef } from "./generate-kling-v3-standard-i2v-fal.js";
+
 import { generateWan27R2vFalDef } from "./generate-wan27-r2v-fal.js";
 import { generateWan27VideoeditFalDef } from "./generate-wan27-videoedit-fal.js";
-import { generateSeedance2R2vFalDef } from "./generate-seedance2-r2v-fal.js";
-import { generateSeedance2FastR2vFalDef } from "./generate-seedance2-fast-r2v-fal.js";
+
 import { generateGrokImagineVideoR2vFalDef } from "./generate-grok-imagine-video-r2v-fal.js";
 import { generateGrokImagineVideoExtendFalDef } from "./generate-grok-imagine-video-extend-fal.js";
 import { generateGrokImagineVideoEditFalDef } from "./generate-grok-imagine-video-edit-fal.js";
@@ -400,12 +396,11 @@ export function getAllToolDefs(
     generateGrokImagineT2vVideoDef(engine),
     extendGrokImagineVideoDef(engine),
     upscaleGrokImagineVideoDef(engine),
-    generateKling30VideoDef(engine),
-    generateKling30MotionControlVideoDef(engine),
+    generateKlingOmniTextToVideoDef(engine),
+    generateKlingOmniImageToVideoDef(engine),
+    generateKlingOmniReferenceToVideoDef(engine),
+    generateKlingOmniTransformationDef(engine),
     generateSeedance25VideoDef(engine),
-    generateSeedance2VideoDef(engine),
-    generateSeedance2FastVideoDef(engine),
-    generateSeedance2MiniVideoDef(engine),
     generateGeminiOmniVideoDef(engine),
     generateGoogleOmniVideoDef(engine),
     generateVeo3VideoDef(engine),
@@ -415,7 +410,7 @@ export function getAllToolDefs(
     generateVeo31LiteVideoDef(engine),
     generateVeo31LiteLowPriorityVideoDef(engine),
     generateNanoBananaProGoogleDef(engine),
-    generateKling30TurboVideoDef(engine),
+
     generateWan27T2vVideoDef(engine),
     generateWan27I2vVideoDef(engine),
     generateWan27VideoeditVideoDef(engine),
@@ -468,8 +463,7 @@ export function getAllToolDefs(
     commandsDef(books),
     translatePayloadDef(),
     updateScriptDef(engine),
-    generateSeedance2I2vFalDef(engine),
-    generateSeedance2T2vFalDef(engine),
+
     generateNanoBananaProFalDef(engine),
     generateNanoBananaProEditFalDef(engine),
     generateSeedreamV5LiteFalDef(engine),
@@ -480,7 +474,7 @@ export function getAllToolDefs(
     generateWan27ProEditFalDef(engine),
     generateGrokImagineImageFalDef(engine),
     generateGrokImagineImageEditFalDef(engine),
-    generateKlingV3ProI2vFalDef(engine),
+
     generateGrokImagineVideoI2vFalDef(engine),
     generateNanoBananaFalDef(engine),
     generateNanoBananaEditFalDef(engine),
@@ -490,17 +484,13 @@ export function getAllToolDefs(
     generateNanoBanana2LiteEditFalDef(engine),
     generateQwenImageFalDef(engine),
     generateQwenImageEditFalDef(engine),
-    generateSeedance2FastT2vFalDef(engine),
-    generateSeedance2FastI2vFalDef(engine),
+
     generateWan27T2vFalDef(engine),
     generateWan27I2vFalDef(engine),
-    generateKlingV3ProT2vFalDef(engine),
-    generateKlingV3StandardT2vFalDef(engine),
-    generateKlingV3StandardI2vFalDef(engine),
+
     generateWan27R2vFalDef(engine),
     generateWan27VideoeditFalDef(engine),
-    generateSeedance2R2vFalDef(engine),
-    generateSeedance2FastR2vFalDef(engine),
+
     generateGrokImagineVideoR2vFalDef(engine),
     generateGrokImagineVideoExtendFalDef(engine),
     generateGrokImagineVideoEditFalDef(engine),

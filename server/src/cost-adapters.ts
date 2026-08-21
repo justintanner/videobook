@@ -7,6 +7,7 @@ import {
   HappyHorse11ImageToVideoRequestSchema,
   HappyHorse11ReferenceToVideoRequestSchema,
   HappyHorse11TextToVideoRequestSchema,
+  KlingOmniTextToVideoInputSchema,
   KlingV3TurboTextToVideoRequestSchema,
   NanoBananaProRequestSchema,
   Seedance2FastInputSchema,
@@ -51,6 +52,8 @@ const SEEDANCE25_GENERATE_AUDIO = apicityDefault<boolean>(Seedance25InputSchema.
 const GROK_I2V_DURATION = apicityDefault<number>(GrokImageToVideoRequestSchema.shape.input.shape.duration, "Grok image-to-video duration");
 const GROK_I2V_RESOLUTION = apicityDefault<string>(GrokImageToVideoRequestSchema.shape.input.shape.resolution, "Grok image-to-video resolution");
 const KLING_TURBO_DURATION = apicityDefault<string>(KlingV3TurboTextToVideoRequestSchema.shape.input.shape.duration, "Kling Turbo duration");
+const KLING_OMNI_DURATION = apicityDefault<number>(KlingOmniTextToVideoInputSchema.shape.duration, "Kling 3.0 Omni duration");
+const KLING_OMNI_RESOLUTION = apicityDefault<string>(KlingOmniTextToVideoInputSchema.shape.resolution, "Kling 3.0 Omni resolution");
 const KLING_TURBO_RESOLUTION = apicityDefault<string>(KlingV3TurboTextToVideoRequestSchema.shape.input.shape.resolution, "Kling Turbo resolution");
 const HAPPYHORSE_T2V_DURATION = apicityDefault<number>(HappyHorse11TextToVideoRequestSchema.shape.input.shape.duration, "HappyHorse text-to-video duration");
 const HAPPYHORSE_T2V_RESOLUTION = apicityDefault<string>(HappyHorse11TextToVideoRequestSchema.shape.input.shape.resolution, "HappyHorse text-to-video resolution");
@@ -151,6 +154,32 @@ const kieKling30MotionControl: CostAdapter = (input) => ({
     },
   },
 });
+
+function kieKlingOmni(
+  model:
+    | "kling-3.0-omni/text-to-video"
+    | "kling-3.0-omni/image-to-video"
+    | "kling-3.0-omni/reference-to-video"
+    | "kling-3.0-omni/transformation",
+): CostAdapter {
+  return (input) => {
+    const hasVideo = Array.isArray(input.video_refs) && input.video_refs.length > 0;
+    return {
+      provider: "kie",
+      payload: {
+        model,
+        input: {
+          resolution: str(input.resolution) || KLING_OMNI_RESOLUTION,
+          duration: num(input.duration) ?? KLING_OMNI_DURATION,
+          ...(input.audio === true ? { audio: true } : {}),
+          ...(model === "kling-3.0-omni/reference-to-video" && hasVideo
+            ? { video_urls: ["https://example.com/ref.mp4"] }
+            : {}),
+        },
+      },
+    };
+  };
+}
 
 // kie image-tier adapter: prices keyed by input.resolution ("1K"|"2K"|"4K").
 // gpt-image-2, nano-banana-pro, and wan/2-7-image{,-pro} all accept resolution
@@ -300,6 +329,10 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
   generate_kie_gemini_omni_video: kieGeminiOmniVideo,
   generate_kie_kling_3_0_video: kieKling30Video,
   generate_kie_kling_3_0_motion_control: kieKling30MotionControl,
+  generate_kie_kling_3_0_omni_text_to_video: kieKlingOmni("kling-3.0-omni/text-to-video"),
+  generate_kie_kling_3_0_omni_image_to_video: kieKlingOmni("kling-3.0-omni/image-to-video"),
+  generate_kie_kling_3_0_omni_reference_to_video: kieKlingOmni("kling-3.0-omni/reference-to-video"),
+  generate_kie_kling_3_0_omni_transformation: kieKlingOmni("kling-3.0-omni/transformation"),
   generate_kie_kling_3_0_turbo_video: (args: Record<string, unknown>) => {
     const imageRefs = (args.image_refs as string[] | undefined) ?? [];
     const model = imageRefs.length > 0 ? "kling/v3-turbo-image-to-video" : "kling/v3-turbo-text-to-video";

@@ -205,13 +205,44 @@ export function notebookGenerationInputContract(
   schema: Record<string, unknown>,
 ): NotebookGenerationInputContract {
   const slots = inputSlots(schema);
-  if (
-    tool === "generate_kie_seedance_2_5_video"
-    || tool === "generate_kie_seedance_2_0_video"
-    || tool === "generate_kie_seedance_2_0_fast_video"
-    || tool === "generate_kie_seedance_2_0_mini_video"
-  ) {
+  if (tool === "generate_kie_seedance_2_5_video") {
     return seedanceContract(tool, slots);
+  }
+  if (tool === "generate_kie_kling_3_0_omni_text_to_video") {
+    return { modes: [mode("t2v", [])] };
+  }
+  if (tool === "generate_kie_kling_3_0_omni_image_to_video") {
+    return {
+      modes: [
+        mode(
+          "i2v",
+          slotsByField(slots, ["image_refs"]),
+          [["image_refs"]],
+        ),
+      ],
+    };
+  }
+  if (tool === "generate_kie_kling_3_0_omni_reference_to_video") {
+    return {
+      modes: [
+        mode(
+          "r2v",
+          slotsByField(slots, ["image_refs", "video_refs"]),
+          [["image_refs", "video_refs"]],
+        ),
+      ],
+    };
+  }
+  if (tool === "generate_kie_kling_3_0_omni_transformation") {
+    return {
+      modes: [
+        mode(
+          "transformation",
+          slotsByField(slots, ["image_refs", "video_refs"]),
+          [["video_refs"]],
+        ),
+      ],
+    };
   }
   if (tool === "generate_kie_gemini_omni_video") {
     return kieOmniContract(slots);

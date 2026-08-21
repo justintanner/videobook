@@ -16,6 +16,7 @@ import type { ActionLogEntry } from "../video-models.js";
 import type { ToolDef } from "./tool-def.js";
 
 import { getCanonicalName } from "../generation-registry.js";
+import { isKlingOmniTool } from "../kling-omni.js";
 import { expandTimelineSlotRefs, timelineSlotArtifactIds } from "../timeline-helpers.js";
 import { parseArtifactIdTags, resolveArtifactRefs } from "../artifact-refs.js";
 import {
@@ -29,6 +30,7 @@ function findSelectedModel(rawToolName: string): string | null {
   for (const [key, info] of Object.entries(VIDEO_MODELS)) {
     if (info.tool_name === rawToolName || info.tool_name === canonical || getCanonicalName(info.tool_name) === canonical) return key;
     if (info.googleToolName === rawToolName || info.googleToolName === canonical || (info.googleToolName && getCanonicalName(info.googleToolName) === canonical)) return key;
+    if (key === "kling30" && isKlingOmniTool(canonical)) return key;
   }
   return null;
 }
@@ -134,7 +136,10 @@ Determine which video generation tool to use and what parameters to pass.`;
             params?: Record<string, unknown>;
           };
 
-          if (decision.tool && Object.values(VIDEO_MODELS).some((m) => m.tool_name === decision.tool)) {
+          if (decision.tool && (
+            Object.values(VIDEO_MODELS).some((m) => m.tool_name === decision.tool)
+            || isKlingOmniTool(decision.tool)
+          )) {
             routedToolName = decision.tool;
             routedParams = decision.params ?? {};
           }

@@ -326,7 +326,7 @@ describe('chat composer browser flow', () => {
       provider: 'kie',
       model: 'Seedance2MiniInputSchema',
       operation: 'image_to_video',
-      tool: 'generate_kie_seedance_2_0_mini_video',
+      tool: 'generate_kie_seedance_2_5_video',
       inputs: {
         state: 'running',
         generationSettings: {
@@ -366,7 +366,7 @@ describe('chat composer browser flow', () => {
       provider: 'kie',
       model: 'Seedance2MiniInputSchema',
       operation: 'text_to_video',
-      tool: 'generate_kie_seedance_2_0_mini_video',
+      tool: 'generate_kie_seedance_2_5_video',
       inputs: {
         generationSettings: {
           duration: '5',
@@ -821,7 +821,7 @@ describe('chat composer browser flow', () => {
         provider: 'kie',
         model: 'Seedance2MiniInputSchema',
         operation: 'image_to_video',
-        tool: 'generate_kie_seedance_2_0_mini_video',
+        tool: 'generate_kie_seedance_2_5_video',
       })
       dynamicCellIds.push(videoTargetCellId)
       await refreshNotebook()

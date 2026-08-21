@@ -26,6 +26,7 @@ const GUIDE_FILES: Record<string, string> = {
   grok_imagine: "grok_imagine_prompting_guide.md",
   grok_image: "grok_imagine_prompting_guide.md",
   seedance2: "seedance_2_prompting_guide.md",
+  seedance25: "seedance_2_prompting_guide.md",
 };
 
 const SUPPORTED_MODELS = Object.keys(GUIDE_FILES).sort();
@@ -292,7 +293,7 @@ export function validateSceneRewrite(
   sceneIndex: number,
 ): void {
   const tool = toolParams.tool as string | undefined;
-  if (tool === undefined || getCanonicalName(tool) !== "generate_kie_kling_3_0_video") {
+  if (tool === undefined || !getCanonicalName(tool).startsWith("generate_kie_kling_3_0")) {
     throw new Error(`Scene rewrite requires a Kling 3.0 asset, got tool: ${tool}`);
   }
   const multiPrompt = toolParams.multi_prompt as SceneDef[] | undefined;
@@ -400,7 +401,7 @@ export function rewritePromptDef(engine: Engine): ToolDef {
     schema: {
       prompt: z.string().optional().describe("Prompt to rewrite. In scene mode, serves as optional creative direction."),
       model: z
-        .enum(["nano_banana", "gpt_image", "kling30", "grok_imagine", "grok_image", "seedance2", "gemini_omni"])
+        .enum(["nano_banana", "gpt_image", "kling30", "grok_imagine", "grok_image", "seedance2", "seedance25", "gemini_omni"])
         .default("kling30")
         .describe("Target model for prompt optimization"),
       image_refs: z

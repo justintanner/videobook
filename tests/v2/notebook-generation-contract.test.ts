@@ -39,40 +39,40 @@ describe("notebook generation input contracts", () => {
     });
   });
 
-  it("publishes Kling motion control image and video requirements", () => {
+  it("publishes Kling Omni transformation image and video requirements", () => {
     expect(notebookGenerationInputContract(
-      "generate_kie_kling_3_0_motion_control",
+      "generate_kie_kling_3_0_omni_transformation",
       {
-        character_image_refs: z.array(z.string()).min(1).max(1),
-        motion_video_refs: z.array(z.string()).min(1).max(1),
+        image_refs: z.array(z.string()).min(1).max(4).optional(),
+        video_refs: z.array(z.string()).min(1).max(1),
       },
     )).toEqual({
       modes: [{
-        id: "default",
+        id: "transformation",
         slots: [
           {
-            field: "character_image_refs",
+            field: "image_refs",
             kind: "image",
             targets: ["image"],
-            min: 1,
-            max: 1,
+            min: 0,
+            max: 4,
           },
           {
-            field: "motion_video_refs",
+            field: "video_refs",
             kind: "video",
             targets: ["video"],
             min: 1,
             max: 1,
           },
         ],
-        requiredGroups: [],
+        requiredGroups: [["video_refs"]],
       }],
     });
   });
 
   it("keeps Seedance frame and reference modes exclusive", () => {
     const contract = notebookGenerationInputContract(
-      "generate_kie_seedance_2_0_video",
+      "generate_kie_seedance_2_5_video",
       {
         first_frame_ref: z.string().optional(),
         last_frame_ref: z.string().optional(),

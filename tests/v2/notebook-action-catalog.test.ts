@@ -260,35 +260,28 @@ describe("notebook action catalog", () => {
       defaultValue: "720p",
       options: ["480p", "720p", "1080p"],
     });
-    const motionControlAction = generationCatalog.actions.find((action) =>
-      action.tool === "generate_kie_kling_3_0_motion_control");
-    expect(motionControlAction).toMatchObject({
-      title: "Kling 3.0 Motion Control",
+    const omniTransformationAction = generationCatalog.actions.find((action) =>
+      action.tool === "generate_kie_kling_3_0_omni_transformation");
+    expect(omniTransformationAction).toMatchObject({
+      title: "Kling 3.0 Omni Transformation",
       providerLabel: "Kie",
     });
-    expect(motionControlAction?.inputContract?.modes).toEqual([{
-      id: "default",
-      slots: [
-        {
-          field: "character_image_refs",
-          kind: "image",
-          min: 1,
-          max: 1,
-          targets: ["image"],
-        },
-        {
-          field: "motion_video_refs",
+    expect(omniTransformationAction?.inputContract?.modes.map((mode) => mode.id))
+      .toEqual(["transformation"]);
+    expect(omniTransformationAction?.inputContract?.modes[0]?.slots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "video_refs",
           kind: "video",
           min: 1,
           max: 1,
           targets: ["video"],
-        },
-      ],
-      requiredGroups: [],
-    }]);
-    expect(motionControlAction?.controls?.find((control) =>
-      control.name === "mode")).toMatchObject({
-      options: ["720p", "1080p"],
+        }),
+      ]),
+    );
+    expect(omniTransformationAction?.controls?.find((control) =>
+      control.name === "resolution")).toMatchObject({
+      options: ["720p", "1080p", "4k"],
     });
     const fullCatalog = resultJson(await invoke("list_notebook_actions", {})) as {
       actions: Array<{

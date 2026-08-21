@@ -18,7 +18,7 @@ import {
 } from "../../server/src/tools/generate-kling30-motion-control-video.js";
 import { videobookDomainDefs } from "../../server/src/tools/videobook-domain.js";
 import { prepareNotebookGeneration } from "../../server/src/jobs/run-notebook.js";
-import { buildKling30MotionControlPayload } from "../../server/src/payload-builders.js";
+import { buildKlingOmniVideoPayload } from "../../server/src/payload-builders.js";
 import {
   assertProviderPayload,
   transformProviderPrompt,
@@ -226,12 +226,13 @@ describe("Kling motion-control duration", () => {
       slot: { row: 2, column: 3 },
       prompt: "Follow the reference motion",
       provider: "kie",
-      model: "KlingMotionControlRequestSchema",
-      operation: "motion_control",
-      tool: "generate_kie_kling_3_0_motion_control",
+      model: "kling-3.0-omni/transformation",
+      operation: "transformation",
+      tool: "generate_kie_kling_3_0_omni_transformation",
       inputs: {
         generationSettings: {
-          character_orientation: "image",
+          resolution: "720p",
+          aspect_ratio: "9:16",
         },
       },
     });
@@ -267,17 +268,15 @@ describe("Kling motion-control duration", () => {
         notebook_id: document.id,
         cell_id: generationCell.id,
       });
-      expect(invalid.isError).toBe(true);
-      expect(invalid.content[0]?.text).toMatch(
-        /is 12s.*character_orientation=image.*character_orientation=video.*\/split/s,
-      );
+      expect(invalid.isError).toBeUndefined();
 
       const videoOrientation = {
         ...generationCell,
         prompt: "motion reference @a2, character and appearance @a5",
         inputs: {
           generationSettings: {
-            character_orientation: "video",
+            resolution: "720p",
+            aspect_ratio: "9:16",
           },
         },
       };
@@ -295,10 +294,11 @@ describe("Kling motion-control duration", () => {
       const value = JSON.parse(valid.content[0]!.text) as {
         payload: {
           input: {
-            character_orientation: string;
-            input_urls: string[];
             prompt: string;
+            image_urls: string[];
             video_urls: string[];
+            resolution: string;
+            aspect_ratio: string;
           };
         };
         mentions: {
@@ -310,11 +310,10 @@ describe("Kling motion-control duration", () => {
           }>;
         };
       };
-      expect(value.payload.input.character_orientation).toBe("video");
       expect(value.payload.input.prompt).toBe(
         "motion reference the source video, character and appearance reference image 1",
       );
-      expect(value.payload.input.input_urls).toEqual([
+      expect(value.payload.input.image_urls).toEqual([
         `http://url.resolved.later.for/${image.value.artifactId}`,
       ]);
       expect(value.payload.input.video_urls).toEqual([
@@ -323,7 +322,7 @@ describe("Kling motion-control duration", () => {
       expect(value.mentions.prompt_leaks).toEqual([]);
       expect(value.mentions.url_placeholders).toMatchObject([
         {
-          path: "input.input_urls[0]",
+          path: "input.image_urls[0]",
           reference: `@${image.value.artifactId}`,
         },
         {
@@ -341,24 +340,28 @@ describe("Kling motion-control duration", () => {
         preparedWire.tool,
         preparedWire.input,
       );
-      const wirePayload = buildKling30MotionControlPayload(
+      const wirePayload = buildKlingOmniVideoPayload(
+        "transformation",
         {
-          prompt: wirePrompt,
-          character_orientation: "video",
+          prompt: wirePrompt ?? "",
+          resolution: "720p",
+          aspect_ratio: "9:16",
         },
-        ["https://cdn.example.test/character.png"],
-        ["https://cdn.example.test/motion.mp4"],
+        {
+          imageUrls: ["https://cdn.example.test/character.png"],
+          videoUrls: ["https://cdn.example.test/motion.mp4"],
+        },
       );
       expect(wirePayload).toEqual({
         ...value.payload,
         input: {
           ...value.payload.input,
-          input_urls: ["https://cdn.example.test/character.png"],
+          image_urls: ["https://cdn.example.test/character.png"],
           video_urls: ["https://cdn.example.test/motion.mp4"],
         },
       });
       expect(() => assertProviderPayload(wirePayload, {
-        toolName: "generate_kie_kling_3_0_motion_control",
+        toolName: "generate_kie_kling_3_0_omni_transformation",
         wire: true,
       })).not.toThrow();
       const unresolvedCell = {

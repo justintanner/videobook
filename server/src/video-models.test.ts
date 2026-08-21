@@ -176,12 +176,12 @@ describe("extractLastUsedModel", () => {
       },
       {
         hash: "h2",
-        action: "tool-generate-seedance2-video",
+        action: "tool-generate-seedance25-video",
         payload: { prompt: "test" },
         date: "2026-03-08T01:00:00Z",
       },
     ];
-    expect(extractLastUsedModel(log)).toBe("seedance2");
+    expect(extractLastUsedModel(log)).toBe("seedance25");
   });
 
   it("skips entries with string payloads", () => {
@@ -209,70 +209,49 @@ describe("extractLastUsedModel", () => {
 
 describe("buildModelOption history integration", () => {
   const kling = VIDEO_MODELS.kling30;
-  const seedance = VIDEO_MODELS.seedance2;
+  const seedance = VIDEO_MODELS.seedance25;
 
   it("history params fill in as defaults when router params are empty", () => {
     const history: ActionLogEntry[] = [
       {
         hash: "h1",
-        action: "tool-generate-kling30-video",
-        payload: { prompt: "old prompt", mode: "pro", duration: "12" },
+        action: "tool-generate-kie-kling-3-0-omni-text-to-video",
+        payload: { prompt: "old prompt", resolution: "1080p", duration: 12 },
         date: "2026-03-08T00:00:00Z",
       },
     ];
     const option = buildModelOption("kling30", kling, {}, [], history);
     expect(option.prefilled_values.prompt).toBe("old prompt");
-    expect(option.prefilled_values.mode).toBe("pro");
+    expect(option.prefilled_values.resolution).toBe("1080p");
     expect(option.prefilled_values.duration).toBe("12");
-  });
-
-  it("router params take precedence over history params", () => {
-    const history: ActionLogEntry[] = [
-      {
-        hash: "h1",
-        action: "tool-generate-kling30-video",
-        payload: { prompt: "old prompt", mode: "pro", duration: "12" },
-        date: "2026-03-08T00:00:00Z",
-      },
-    ];
-    const routerParams = { mode: "std", duration: "5" };
-    const option = buildModelOption("kling30", kling, routerParams, [], history);
-    // History overrides router params (last-used settings persist)
-    expect(option.prefilled_values.mode).toBe("pro");
-    expect(option.prefilled_values.duration).toBe("12");
-    // History fills in where router didn't specify
-    expect(option.prefilled_values.prompt).toBe("old prompt");
   });
 
   it("history for model X does not leak into model Y", () => {
     const history: ActionLogEntry[] = [
       {
         hash: "h1",
-        action: "tool-generate-kling30-video",
-        payload: { prompt: "kling prompt", mode: "pro" },
+        action: "tool-generate-kie-kling-3-0-omni-text-to-video",
+        payload: { prompt: "kling prompt", resolution: "4k" },
         date: "2026-03-08T00:00:00Z",
       },
     ];
-    const option = buildModelOption("seedance2", seedance, {}, [], history);
-    // Should not have kling's prompt or mode
+    const option = buildModelOption("seedance25", seedance, {}, [], history);
     expect(option.prefilled_values.prompt).toBeUndefined();
-    // mode is not in seedance2's params at all, so it shouldn't appear
-    expect(option.prefilled_values).not.toHaveProperty("mode");
+    expect(option.prefilled_values).not.toHaveProperty("audio");
   });
 
   it("history params filtered by model's allowedParams", () => {
     const history: ActionLogEntry[] = [
       {
         hash: "h1",
-        action: "tool-generate-seedance2-video",
+        action: "tool-generate-seedance25-video",
         payload: { prompt: "test", resolution: "720p", sound: true },
         date: "2026-03-08T00:00:00Z",
       },
     ];
-    const option = buildModelOption("seedance2", seedance, {}, [], history);
+    const option = buildModelOption("seedance25", seedance, {}, [], history);
     expect(option.prefilled_values.prompt).toBe("test");
     expect(option.prefilled_values.resolution).toBe("720p");
-    // sound is not in seedance2's allowed params
     expect(option.prefilled_values).not.toHaveProperty("sound");
   });
 });
@@ -286,39 +265,23 @@ describe("getVideoToolSchema", () => {
     expect(getVideoToolSchema("nonexistent_tool")).toBeNull();
   });
 
-  it("kling30: prompt required, correct mode/duration/aspect_ratio enums", () => {
-    const schema = getVideoToolSchema("generate_kie_kling_3_0_video");
+  it("kling omni text: prompt required, 720p/1080p/4k, duration 3-15", () => {
+    const schema = getVideoToolSchema("generate_kie_kling_3_0_omni_text_to_video");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
-    expect(schema!.properties.mode.enum).toEqual(["std", "pro", "4K"]);
-    expect(schema!.properties.duration.enum).toHaveLength(13); // "3" through "15"
-    expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16", "1:1"]);
-    expect(schema!.properties.sound).toBeDefined();
+    expect(schema!.properties.resolution.enum).toEqual(["720p", "1080p", "4k"]);
+    expect(schema!.properties.audio).toBeDefined();
+    expect(schema!.defaults.resolution).toBe("720p");
+    expect(schema!.defaults.customize_multi_shots).toBe(false);
+    expect(schema!.properties.image_refs).toBeUndefined();
   });
 
-  it("seedance2 (full): duration default comes from Apicity, full resolution range, all input slots exposed", () => {
-    const schema = getVideoToolSchema("generate_kie_seedance_2_0_video");
+  it("kling omni image requires image_refs and rejects extra frames", () => {
+    const schema = getVideoToolSchema("generate_kie_kling_3_0_omni_image_to_video");
     expect(schema).not.toBeNull();
-    expect(schema!.required).toContain("prompt");
-    expect(schema!.required).not.toContain("aspect_ratio");
-    expect(schema!.required).not.toContain("duration");
-    expect(schema!.required).not.toContain("first_frame_ref");
-    expect(schema!.required).not.toContain("last_frame_ref");
-    expect(schema!.required).not.toContain("image_refs");
-    expect(schema!.properties.aspect_ratio.enum).toEqual(["1:1", "4:3", "3:4", "16:9", "9:16", "21:9", "adaptive"]);
-    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p", "1080p", "4k"]);
-    expect(schema!.properties.duration.enum).toEqual(["4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]);
-    expect(schema!.properties.first_frame_ref).toBeDefined();
-    expect(schema!.properties.last_frame_ref).toBeDefined();
-    expect(schema!.properties.image_refs).toBeDefined();
-    expect(schema!.properties.video_refs).toBeDefined();
-    expect(schema!.properties.audio_refs).toBeDefined();
-    expect(schema!.properties.nsfw_checker).toBeDefined();
-    expect(schema!.defaults.duration).toBe("5");
-    expect(schema!.defaults.nsfw_checker).toBe(false);
-    expect(schema!.properties.model).toBeUndefined();
-    expect(schema!.properties.prompt.minLength).toBe(3);
-    expect(schema!.properties.prompt.maxLength).toBe(20000);
+    expect(schema!.required).toContain("image_refs");
+    expect(schema!.properties.image_refs.minItems).toBe(1);
+    expect(schema!.properties.image_refs.maxItems).toBe(2);
   });
 
   it("seedance 2.5 exposes every Apicity option and reference limit", () => {
@@ -351,13 +314,11 @@ describe("getVideoToolSchema", () => {
     });
   });
 
-  it("seedance2 fast: same input shape but resolution capped at 720p", () => {
-    const schema = getVideoToolSchema("generate_kie_seedance_2_0_fast_video");
+  it("kling omni transformation requires video_refs", () => {
+    const schema = getVideoToolSchema("generate_kie_kling_3_0_omni_transformation");
     expect(schema).not.toBeNull();
-    expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
-    expect(schema!.properties.first_frame_ref).toBeDefined();
-    expect(schema!.properties.image_refs).toBeDefined();
-    expect(schema!.properties.model).toBeUndefined();
+    expect(schema!.required).toContain("video_refs");
+    expect(schema!.properties.video_refs.maxItems).toBe(1);
   });
 
   it("grok_imagine: uses Kie Grok Imagine Video 1.5 defaults", () => {
@@ -395,12 +356,13 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.resolution.default).toBe("480p");
   });
 
-  it("does not invent Kling 3.0 defaults when Apicity has none", () => {
-    const schema = getVideoToolSchema("generate_kie_kling_3_0_video");
-    expect(schema!.defaults).toEqual({});
-    // sound is optional in @apicity/kie@0.8.0 so multi-shot can promote default true
-    expect(schema!.required).toEqual(expect.arrayContaining(["prompt", "mode", "duration", "multi_shots"]));
-    expect(schema!.required).not.toContain("sound");
+  it("uses Apicity Kling Omni defaults without inventing extra ones", () => {
+    const schema = getVideoToolSchema("generate_kie_kling_3_0_omni_text_to_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.defaults.resolution).toBe("720p");
+    expect(schema!.defaults.customize_multi_shots).toBe(false);
+    expect(schema!.required).toContain("prompt");
+    expect(schema!.required).not.toContain("audio");
   });
 
   it("gemini_omni: prompt+duration required, Apicity-derived enums and resolution default", () => {
@@ -481,73 +443,39 @@ describe("validateVideoParams", () => {
     expect(result.warnings).toContain("Unknown tool");
   });
 
-  it("valid kling30 params pass", () => {
-    const result = validateVideoParams("generate_kie_kling_3_0_video", {
+  it("valid kling omni text params pass", () => {
+    const result = validateVideoParams("generate_kie_kling_3_0_omni_text_to_video", {
       prompt: "a sunset",
-      mode: "std",
+      resolution: "720p",
       duration: "8",
-      sound: true,
-      multi_shots: false,
-      aspect_ratio: "16:9",
+      audio: true,
     });
     expect(result.valid).toBe(true);
     expect(result.warnings).toHaveLength(0);
   });
 
-  it("kling30: missing prompt is flagged", () => {
-    const result = validateVideoParams("generate_kie_kling_3_0_video", {
-      mode: "std",
+  it("kling omni: missing prompt is flagged", () => {
+    const result = validateVideoParams("generate_kie_kling_3_0_omni_text_to_video", {
+      resolution: "720p",
     });
     expect(result.valid).toBe(false);
     expect(result.missing_required).toContain("prompt");
   });
 
-  it("kling30: warns on invalid enum value", () => {
-    const result = validateVideoParams("generate_kie_kling_3_0_video", {
+  it("kling omni: warns on invalid resolution", () => {
+    const result = validateVideoParams("generate_kie_kling_3_0_omni_text_to_video", {
       prompt: "test",
-      mode: "ultra",
+      resolution: "480p",
     });
-    expect(result.warnings.some((w) => w.includes("mode") && w.includes("ultra"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("resolution") && w.includes("480p"))).toBe(true);
   });
 
-  it("kling30: warns when multi-shot with >1 image", () => {
-    const result = validateVideoParams("generate_kie_kling_3_0_video", {
+  it("kling omni image mode requires image_refs", () => {
+    const result = validateVideoParams("generate_kie_kling_3_0_omni_image_to_video", {
       prompt: "test",
-      image_refs: ["@img-a", "@img-b"],
-      multi_prompt: [{ prompt: "s1", duration: 5 }],
     });
-    expect(result.warnings.some((w) => w.includes("multi-shot mode allows max 1"))).toBe(true);
-  });
-
-  it("seedance2 (full): text-only with aspect_ratio + duration is valid", () => {
-    const result = validateVideoParams("generate_kie_seedance_2_0_video", {
-      prompt: "test",
-      aspect_ratio: "16:9",
-      duration: "8",
-    });
-    expect(result.valid).toBe(true);
-    expect(result.missing_required).toEqual([]);
-  });
-
-  it("seedance2 fast: 1080p resolution produces warning", () => {
-    const result = validateVideoParams("generate_kie_seedance_2_0_fast_video", {
-      prompt: "test",
-      aspect_ratio: "16:9",
-      duration: "8",
-      resolution: "1080p",
-    });
-    expect(result.warnings.some((w) => w.includes("Fast caps at 720p"))).toBe(true);
-  });
-
-  it("seedance2 (full): 1080p resolution is accepted without warning", () => {
-    const result = validateVideoParams("generate_kie_seedance_2_0_video", {
-      prompt: "test",
-      first_frame_ref: "@img-a",
-      aspect_ratio: "16:9",
-      duration: "8",
-      resolution: "1080p",
-    });
-    expect(result.warnings.some((w) => w.includes("1080p"))).toBe(false);
+    expect(result.valid).toBe(false);
+    expect(result.missing_required).toContain("image_refs");
   });
 
   it("seedance 2.5 enforces frame scenarios and expanded reference limits", () => {
@@ -569,8 +497,8 @@ describe("validateVideoParams", () => {
   });
 
   it("derives image_slots from Apicity Zod", () => {
-    const klingResult = validateVideoParams("generate_kie_kling_3_0_video", { prompt: "test" });
-    expect(klingResult.image_slots).toEqual({ min: 0, max: null });
+    const klingResult = validateVideoParams("generate_kie_kling_3_0_omni_image_to_video", { prompt: "test", image_refs: ["@img-a"] });
+    expect(klingResult.image_slots).toEqual({ min: 1, max: 2 });
 
     const grokResult = validateVideoParams("generate_kie_grok_imagine_image_to_video", { image_refs: ["@img-a"] });
     expect(grokResult.image_slots).toEqual({ min: 1, max: 7 });
@@ -600,9 +528,9 @@ describe("validateVideoParams", () => {
     expect(extendResult.image_slots).toBeNull();
   });
 
-  it("multi_prompt_slots: 5 for kling30, null for others", () => {
-    const klingResult = validateVideoParams("generate_kie_kling_3_0_video", { prompt: "test" });
-    expect(klingResult.multi_prompt_slots).toBe(5);
+  it("multi_prompt_slots: 6 for kling omni, null for others", () => {
+    const klingResult = validateVideoParams("generate_kie_kling_3_0_omni_text_to_video", { prompt: "test" });
+    expect(klingResult.multi_prompt_slots).toBe(6);
 
     const grokResult = validateVideoParams("generate_kie_grok_imagine_image_to_video", { prompt: "test" });
     expect(grokResult.multi_prompt_slots).toBeNull();
@@ -641,13 +569,13 @@ describe("validateVideoParams", () => {
 
 describe("applyVideoToolConstraints", () => {
   it("is a no-op for tools without cross-field rewriting", () => {
-    const schema = getVideoToolSchema("generate_kie_kling_3_0_video")!;
+    const schema = getVideoToolSchema("generate_kie_kling_3_0_omni_text_to_video")!;
     const params: Record<string, unknown> = {
       prompt: "test",
-      mode: "std",
+      resolution: "720p",
     };
-    applyVideoToolConstraints("generate_kie_kling_3_0_video", schema, params);
-    expect(params.mode).toBe("std");
+    applyVideoToolConstraints("generate_kie_kling_3_0_omni_text_to_video", schema, params);
+    expect(params.resolution).toBe("720p");
   });
 });
 
@@ -656,9 +584,9 @@ describe("applyVideoToolConstraints", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildVideoRoutingPrompt", () => {
-  it("defaults video generation to Seedance 2", () => {
-    expect(DEFAULT_VIDEO_MODEL_KEY).toBe("seedance2");
-    expect(VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name).toBe("generate_kie_seedance_2_0_video");
+  it("defaults video generation to Seedance 2.5", () => {
+    expect(DEFAULT_VIDEO_MODEL_KEY).toBe("seedance25");
+    expect(VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name).toBe("generate_kie_seedance_2_5_video");
   });
 
   it("returns a non-empty string", () => {
@@ -676,7 +604,7 @@ describe("buildVideoRoutingPrompt", () => {
   it("includes routing preferences", () => {
     const prompt = buildVideoRoutingPrompt();
     expect(prompt).toContain("ROUTING PREFERENCES");
-    expect(prompt).toContain("PREFER generate_kie_seedance_2_0_video");
+    expect(prompt).toContain("PREFER generate_kie_seedance_2_5_video");
     expect(prompt).toContain("generate_kie_gemini_omni_video only when the user explicitly asks");
     expect(prompt).not.toContain("Gemini Omni — the DEFAULT model");
   });
@@ -693,10 +621,8 @@ describe("buildVideoRoutingPrompt", () => {
 
 describe("IMAGE_FIELD_SCHEMAS", () => {
   it("maps tools with image-array inputs to their Apicity Zod schemas", () => {
-    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_kling_3_0_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_kling_3_0_omni_image_to_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_seedance_2_5_video");
-    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_seedance_2_0_video");
-    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_seedance_2_0_fast_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_grok_imagine_image_to_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_wan_2_7_reference_to_video");
   });
@@ -776,12 +702,15 @@ describe("VIDEO_TOOL_MODES contract", () => {
       expect(modes.modes.some((m) => m.key === modes.default_mode)).toBe(true);
       for (const p of modes.shared_params) expect(props.has(p), `${toolName} shared ${p}`).toBe(true);
       for (const mode of modes.modes) {
-        for (const p of mode.params) expect(props.has(p), `${toolName}/${mode.key} param ${p}`).toBe(true);
+        const modeSchema = getVideoToolSchema(mode.tool_name ?? toolName);
+        expect(modeSchema, `${toolName}/${mode.key} tool`).not.toBeNull();
+        const modeProps = new Set(Object.keys(modeSchema!.properties));
+        for (const p of mode.params) expect(modeProps.has(p), `${toolName}/${mode.key} param ${p}`).toBe(true);
         for (const p of mode.required ?? []) {
-          expect(props.has(p), `${toolName}/${mode.key} required ${p}`).toBe(true);
+          expect(modeProps.has(p), `${toolName}/${mode.key} required ${p}`).toBe(true);
         }
         for (const slot of mode.asset_slots ?? []) {
-          expect(props.has(slot.param), `${toolName}/${mode.key} slot ${slot.param}`).toBe(true);
+          expect(modeProps.has(slot.param), `${toolName}/${mode.key} slot ${slot.param}`).toBe(true);
           expect(mode.params.includes(slot.param), `${toolName}/${mode.key} slot ${slot.param} in params`).toBe(true);
         }
         for (const hidden of mode.hidden_shared_params ?? []) {
@@ -805,35 +734,18 @@ describe("VIDEO_TOOL_MODES contract", () => {
     expect(kie.modes).toBeNull();
   });
 
-  it("non-moded models carry no modes", () => {
-    const kling = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, []);
-    expect(kling.modes).toBeNull();
-  });
-
-  it("seedance2 mini ships text + refs modes", () => {
-    const option = buildModelOption("seedance2_mini", VIDEO_MODELS.seedance2_mini, {}, []);
+  it("kling omni ships four modes that switch canonical tools", () => {
+    const option = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, []);
     expect(option.modes).not.toBeNull();
     expect(option.modes!.default_mode).toBe("text");
-    expect(option.modes!.modes.map((m) => m.key)).toEqual(["text", "refs"]);
-    const refs = option.modes!.modes.find((m) => m.key === "refs")!;
-    expect(refs.params).toEqual(["image_refs", "video_refs", "audio_refs"]);
-    expect(refs.asset_slots?.map((s) => s.param)).toEqual(["image_refs", "video_refs", "audio_refs"]);
-    expect(refs.asset_slots?.find((s) => s.param === "video_refs")?.max).toBe(3);
-    expect(refs.asset_slots?.find((s) => s.param === "audio_refs")?.max).toBe(3);
-  });
-
-  it("seedance2 full/fast ship text + frames + refs (audio/frames exclusive)", () => {
-    for (const key of ["seedance2", "seedance2_fast"] as const) {
-      const option = buildModelOption(key, VIDEO_MODELS[key], {}, []);
-      expect(option.modes, key).not.toBeNull();
-      expect(option.modes!.modes.map((m) => m.key)).toEqual(["text", "frames", "refs"]);
-      const frames = option.modes!.modes.find((m) => m.key === "frames")!;
-      expect(frames.params).toEqual(["first_frame_ref", "last_frame_ref"]);
-      expect(frames.asset_slots?.some((s) => s.param === "audio_refs")).toBe(false);
-      const refs = option.modes!.modes.find((m) => m.key === "refs")!;
-      expect(refs.params).toContain("audio_refs");
-      expect(refs.params).not.toContain("first_frame_ref");
-    }
+    expect(option.modes!.modes.map((m) => m.key)).toEqual(["text", "image", "reference", "transformation"]);
+    expect(option.modes!.modes.map((m) => m.tool_name)).toEqual([
+      "generate_kie_kling_3_0_omni_text_to_video",
+      "generate_kie_kling_3_0_omni_image_to_video",
+      "generate_kie_kling_3_0_omni_reference_to_video",
+      "generate_kie_kling_3_0_omni_transformation",
+    ]);
+    expect(option.tool_name).toBe("generate_kie_kling_3_0_omni_text_to_video");
   });
 
   it("seedance 2.5 ships all modes with expanded reference slots", () => {
@@ -850,7 +762,7 @@ describe("VIDEO_TOOL_MODES contract", () => {
     expect(option.schema?.properties).toHaveProperty("output_format");
   });
 
-  it("coerces numeric duration to string for kling30", () => {
+  it("keeps integer duration for kling omni", () => {
     const option = buildModelOption("kling30", VIDEO_MODELS.kling30, { duration: 8 }, []);
     expect(option.prefilled_values.duration).toBe("8");
   });
@@ -865,20 +777,17 @@ describe("VIDEO_TOOL_MODES contract", () => {
     expect(option.prefilled_values.duration).toBe(6);
   });
 
-  it("initializes kling30 element defaults", () => {
+  it("initializes kling omni multi-shot defaults", () => {
     const option = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, []);
-    expect(option.prefilled_values.element1_refs).toEqual([]);
-    expect(option.prefilled_values.element1_name).toBe("");
-    expect(option.prefilled_values.element1_desc).toBe("");
     expect(option.prefilled_values.multi_prompt).toEqual([]);
-    expect(option.prefilled_values.multi_shots).toBe(false);
+    expect(option.prefilled_values.customize_multi_shots).toBe(false);
   });
 
   it("returns valid ModelOption structure", () => {
     const option = buildModelOption("kling30", VIDEO_MODELS.kling30, { prompt: "test" }, []);
     expect(option.key).toBe("kling30");
-    expect(option.label).toBe("Kling 3.0");
-    expect(option.tool_name).toBe("generate_kie_kling_3_0_video");
+    expect(option.label).toBe("Kling 3.0 Omni");
+    expect(option.tool_name).toBe("generate_kie_kling_3_0_omni_text_to_video");
     expect(option.schema).not.toBeNull();
     expect(option.validation).toBeDefined();
     expect(typeof option.validation.valid).toBe("boolean");

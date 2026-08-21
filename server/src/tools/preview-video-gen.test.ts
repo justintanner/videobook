@@ -155,22 +155,22 @@ describe("preview_video tool", () => {
     const omniOption = parsed.model_options.find((o: { key: string }) => o.key === "gemini_omni");
     expect(omniOption.modes).not.toBeNull();
     expect(omniOption.modes.modes.map((m: { key: string }) => m.key)).toEqual(["t2v", "i2v", "r2v", "edit"]);
-    const nonModed = parsed.model_options.find((o: { key: string }) => o.key === "kling30");
-    expect(nonModed.modes).toBeNull();
+    const kling = parsed.model_options.find((o: { key: string }) => o.key === "kling30");
+    expect(kling.modes.modes.map((m: { key: string }) => m.key)).toEqual(["text", "image", "reference", "transformation"]);
   });
 });
 
 describe("selectPreviewVideoModel", () => {
-  it("uses Seedance 2 when no explicit, historical, or routed model applies", () => {
-    expect(selectPreviewVideoModel(undefined, null, "unknown_tool")).toBe("seedance2");
+  it("uses Seedance 2.5 when no explicit, historical, or routed model applies", () => {
+    expect(selectPreviewVideoModel(undefined, null, "unknown_tool")).toBe("seedance25");
   });
 
   it("does not silently restore Gemini Omni from history", () => {
     expect(selectPreviewVideoModel(
       undefined,
       "gemini_omni",
-      "generate_kie_seedance_2_0_video",
-    )).toBe("seedance2");
+      "generate_kie_seedance_2_5_video",
+    )).toBe("seedance25");
   });
 
   it("keeps an explicit Gemini Omni selection", () => {

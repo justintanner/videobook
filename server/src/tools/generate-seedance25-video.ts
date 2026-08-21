@@ -61,7 +61,7 @@ function nonBlank(values: string[] | undefined): string[] {
 export function generateSeedance25VideoDef(engine: Engine): ToolDef {
   return {
     name: "generate_kie_seedance_2_5_video",
-    description: "Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.10.1 generation option including 1080p. Creates a new video artifact and enqueues a background job.",
+    description: "Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.10.2 generation option including 1080p. Creates a new video artifact and enqueues a background job.",
     schema: generateSeedance25VideoSchema,
     handler: async (args) => {
       const raw = args as Args;
