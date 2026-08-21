@@ -84,6 +84,7 @@ import {
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
 import { isNotebookGenerationCellType } from '@/videobook/notebook-cell-types'
+import { GenerationControlField } from './GenerationControlField'
 import { NotebookMediaMetadata } from './NotebookMediaMetadata'
 import { MediaInsightsPanel } from './MediaInsightsPanel'
 import {
@@ -1812,107 +1813,6 @@ function AnalysisCellInspector({
   )
 }
 
-function generationControlOptionValue(value: GenerationControlValue): string {
-  return `${typeof value}:${String(value)}`
-}
-
-function GenerationControlField({
-  control,
-  settings,
-  busy,
-  onFocus,
-  onChange,
-}: {
-  control: GenerationControl
-  settings: Record<string, GenerationControlValue>
-  busy: boolean
-  onFocus?: () => void
-  onChange: (value: GenerationControlValue | undefined) => void
-}) {
-  const rawValue = settings[control.name]
-  const value = effectiveGenerationControlValue(control, settings)
-  if (control.kind === 'boolean') {
-    return (
-      <label className="inspector-generation-toggle" title={control.description}>
-        <input
-          type="checkbox"
-          checked={value === true}
-          disabled={busy}
-          onFocus={onFocus}
-          onChange={(event) => onChange(event.target.checked)}
-        />
-        <span>{control.label}</span>
-      </label>
-    )
-  }
-  if (control.kind === 'select') {
-    const encodedValue = rawValue === undefined
-      ? ''
-      : generationControlOptionValue(rawValue)
-    const savedOption = rawValue !== undefined
-      && !control.options.some((option) => option === rawValue)
-    return (
-      <label title={control.description}>
-        {control.label}
-        <select
-          aria-label={control.label}
-          value={encodedValue}
-          disabled={busy}
-          onFocus={onFocus}
-          onChange={(event) => {
-            const selected = control.options.find((option) =>
-              generationControlOptionValue(option) === event.target.value)
-            onChange(selected)
-          }}
-        >
-          <option value="">
-            {control.defaultValue === undefined
-              ? control.required ? 'Select…' : 'Auto'
-              : `Default · ${String(control.defaultValue)}`}
-          </option>
-          {savedOption && (
-            <option value={encodedValue}>{String(rawValue)} · incompatible</option>
-          )}
-          {control.options.map((option) => (
-            <option
-              key={generationControlOptionValue(option)}
-              value={generationControlOptionValue(option)}
-            >
-              {String(option)}
-            </option>
-          ))}
-        </select>
-      </label>
-    )
-  }
-  return (
-    <label title={control.description}>
-      {control.label}
-      <input
-        type={control.kind === 'number' ? 'number' : 'text'}
-        aria-label={control.label}
-        min={control.minimum}
-        max={control.maximum}
-        step={control.kind === 'number' ? 'any' : undefined}
-        value={value === undefined ? '' : String(value)}
-        disabled={busy}
-        onFocus={onFocus}
-        onChange={(event) => {
-          const next = event.target.value
-          if (!next) {
-            onChange(undefined)
-            return
-          }
-          const numeric = Number(next)
-          onChange(control.kind === 'number'
-            ? Number.isFinite(numeric) ? numeric : undefined
-            : next)
-        }}
-      />
-    </label>
-  )
-}
-
 function ExecutableCellInspector({
   cell,
   cells,
@@ -2650,6 +2550,9 @@ function ExecutableCellInspector({
                       control={control}
                       settings={draft.generationSettings}
                       busy={busy || saving}
+                      toggleClassName="inspector-generation-toggle"
+                      booleanLabelFirst={false}
+                      labelAsSpan={false}
                       onChange={(value) => updateGenerationSetting(
                         control.name,
                         value,
@@ -2717,6 +2620,9 @@ function ExecutableCellInspector({
                       control={control}
                       settings={draft.generationSettings}
                       busy={busy || saving}
+                      toggleClassName="inspector-generation-toggle"
+                      booleanLabelFirst={false}
+                      labelAsSpan={false}
                       onFocus={control.name === 'voice_id'
                         ? ensureVoiceCatalog
                         : undefined}

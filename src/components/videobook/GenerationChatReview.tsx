@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { Check, CircleAlert, Plus, X } from 'lucide-react'
 import type {
-  GenerationControl,
   GenerationControlValue,
   GenerationInputMode,
   NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
-import { effectiveGenerationControlValue } from '@/videobook/notebook-generation-actions'
+import { GenerationControlField } from './GenerationControlField'
 import {
   notebookChatGenerationSettings,
   type NotebookChatGenerationDraft,
@@ -55,97 +54,6 @@ type GenerationChatReviewProps = {
     name: string,
     value: GenerationControlValue | undefined,
   ) => void
-}
-
-function controlOptionValue(value: GenerationControlValue): string {
-  return `${typeof value}:${String(value)}`
-}
-
-function GenerationReviewControl({
-  busy,
-  control,
-  settings,
-  onFocus,
-  onChange,
-}: {
-  busy: boolean
-  control: GenerationControl
-  settings: Record<string, GenerationControlValue>
-  onFocus?: () => void
-  onChange: (value: GenerationControlValue | undefined) => void
-}) {
-  const rawValue = settings[control.name]
-  const value = effectiveGenerationControlValue(control, settings)
-  if (control.kind === 'boolean') {
-    return (
-      <label className="generation-review-toggle" title={control.description}>
-        <span>{control.label}</span>
-        <input
-          type="checkbox"
-          checked={value === true}
-          disabled={busy}
-          onFocus={onFocus}
-          onChange={(event) => onChange(event.target.checked)}
-        />
-      </label>
-    )
-  }
-  if (control.kind === 'select') {
-    const encodedValue = rawValue === undefined ? '' : controlOptionValue(rawValue)
-    return (
-      <label title={control.description}>
-        <span>{control.label}</span>
-        <select
-          aria-label={control.label}
-          value={encodedValue}
-          disabled={busy}
-          onFocus={onFocus}
-          onChange={(event) => {
-            const selected = control.options.find((option) =>
-              controlOptionValue(option) === event.target.value)
-            onChange(selected)
-          }}
-        >
-          <option value="">
-            {control.defaultValue === undefined
-              ? control.required ? 'Select…' : 'Auto'
-              : `Default · ${String(control.defaultValue)}`}
-          </option>
-          {control.options.map((option) => (
-            <option key={controlOptionValue(option)} value={controlOptionValue(option)}>
-              {String(option)}
-            </option>
-          ))}
-        </select>
-      </label>
-    )
-  }
-  return (
-    <label title={control.description}>
-      <span>{control.label}</span>
-      <input
-        type={control.kind === 'number' ? 'number' : 'text'}
-        aria-label={control.label}
-        min={control.minimum}
-        max={control.maximum}
-        step={control.kind === 'number' ? 'any' : undefined}
-        value={value === undefined ? '' : String(value)}
-        disabled={busy}
-        onFocus={onFocus}
-        onChange={(event) => {
-          const next = event.target.value
-          if (!next) {
-            onChange(undefined)
-            return
-          }
-          const numeric = Number(next)
-          onChange(control.kind === 'number'
-            ? Number.isFinite(numeric) ? numeric : undefined
-            : next)
-        }}
-      />
-    </label>
-  )
 }
 
 function generationMode(draft: NotebookChatGenerationDraft): string {
@@ -478,11 +386,12 @@ export function GenerationChatReview({
           <span className="generation-review-label">Settings</span>
           <div className="generation-review-settings">
             {generalControls.length > 0 ? generalControls.map((control) => (
-              <GenerationReviewControl
+              <GenerationControlField
                 key={control.name}
-                busy={busy}
                 control={control}
                 settings={settings}
+                busy={busy}
+                toggleClassName="generation-review-toggle"
                 onFocus={control.name === 'voice_id'
                   ? ensureVoiceCatalog
                   : undefined}
