@@ -7,6 +7,7 @@ import {
   GrokTextToVideoRequestSchema,
   GrokVideoExtendRequestSchema,
   GrokImagineModeSchema,
+  KlingMotionControlRequestSchema,
   KlingOmniImageToVideoInputSchema,
   KlingOmniReferenceToVideoInputSchema,
   KlingOmniTextToVideoInputSchema,
@@ -113,6 +114,19 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "prompt", "image_refs", "video_refs",
       "audio", "resolution", "aspect_ratio", "duration",
       "customize_multi_shots", "prefer_multi_shots", "multi_prompt",
+    ],
+    defaults: {},
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
+  kling30_motion_control: {
+    label: "Kling 3.0 Motion Control",
+    tool_name: "generate_kie_kling_3_0_motion_control",
+    description: "Apply motion from reference videos to character images using Kling 3.0 motion-control",
+    params: [
+      "prompt", "character_image_refs", "motion_video_refs",
+      "mode", "character_orientation", "background_source",
     ],
     defaults: {},
     providers: [
@@ -736,6 +750,7 @@ const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
   [KLING_OMNI_IMAGE_TO_VIDEO_TOOL]: KlingOmniImageToVideoInputSchema.shape.image_urls,
   [KLING_OMNI_REFERENCE_TO_VIDEO_TOOL]: KlingOmniReferenceToVideoInputSchema.shape.image_urls,
   [KLING_OMNI_TRANSFORMATION_TOOL]: KlingOmniTransformationInputSchema.shape.image_urls,
+  generate_kie_kling_3_0_motion_control: KlingMotionControlRequestSchema.shape.input.shape.input_urls,
   generate_kie_seedance_2_5_video: Seedance25InputSchema.shape.reference_image_urls,
   generate_kie_gemini_omni_video: GeminiOmniVideoRequestSchema.shape.input.shape.image_urls,
   generate_kie_grok_imagine_image_to_video: GrokImageToVideoRequestSchema.shape.input.shape.image_urls,
@@ -801,6 +816,12 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     resolution: KlingOmniTransformationInputSchema.shape.resolution,
     aspect_ratio: KlingOmniTransformationInputSchema.shape.aspect_ratio,
     duration: KlingOmniTransformationInputSchema.shape.duration,
+  },
+  generate_kie_kling_3_0_motion_control: {
+    prompt: KlingMotionControlRequestSchema.shape.input.shape.prompt,
+    mode: KlingMotionControlRequestSchema.shape.input.shape.mode,
+    character_orientation: KlingMotionControlRequestSchema.shape.input.shape.character_orientation,
+    background_source: KlingMotionControlRequestSchema.shape.input.shape.background_source,
   },
   generate_kie_seedance_2_5_video: {
     prompt: Seedance25InputSchema.shape.prompt,
@@ -1288,6 +1309,14 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
     const prop = { ...base };
 
     // Tool-specific enum/description overrides
+    if (toolName === "generate_kie_kling_3_0_motion_control" || canonical === "generate_kie_kling_3_0_motion_control") {
+      if (param === "prompt") prop.description = "Optional motion description";
+      if (param === "character_image_refs") prop.description = "Character image @slugs (input_urls)";
+      if (param === "motion_video_refs") prop.description = "Motion reference video @slugs (video_urls)";
+      if (param === "mode") prop.description = "Output resolution: 720p / 1080p";
+      if (param === "character_orientation") prop.description = "Character orientation source: video / image";
+      if (param === "background_source") prop.description = "Background source: input_video / input_image";
+    }
     if (isKlingOmniTool(toolName) || isKlingOmniTool(canonical)) {
       if (param === "prompt") prop.description = "Video description (1-3072 characters)";
       if (param === "image_refs") prop.description = "Reference image assets";
@@ -1639,6 +1668,8 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
       && canonical !== "generate_kie_seedance_2_5_video"
       && toolName !== "generate_kie_omnihuman_1_5_video"
       && canonical !== "generate_kie_omnihuman_1_5_video"
+      && toolName !== "generate_kie_kling_3_0_motion_control"
+      && canonical !== "generate_kie_kling_3_0_motion_control"
     ) required.add(param);
     if ((toolName === "generate_kie_grok_imagine_image_to_video" || canonical === "generate_fal_grok_imagine_video") && param === "image_refs") required.add(param);
     if (param === "image_ref" && (toolName === "generate_kie_omnihuman_1_5_video" || canonical === "generate_kie_omnihuman_1_5_video")) required.add(param);
@@ -1660,6 +1691,10 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
     if (
       (toolName === KLING_OMNI_TRANSFORMATION_TOOL || canonical === KLING_OMNI_TRANSFORMATION_TOOL)
       && param === "video_refs"
+    ) required.add(param);
+    if (
+      (toolName === "generate_kie_kling_3_0_motion_control" || canonical === "generate_kie_kling_3_0_motion_control")
+      && (param === "character_image_refs" || param === "motion_video_refs")
     ) required.add(param);
   }
 
@@ -2194,6 +2229,20 @@ function buildModelOption(
   params.image_refs = imageTags.length > 0 ? imageTags : [];
 
   const canonicalToolName = getCanonicalName(toolName);
+
+  if (
+    modelKey === "kling30_motion_control"
+    || toolName === "generate_kie_kling_3_0_motion_control"
+    || canonicalToolName === "generate_kie_kling_3_0_motion_control"
+  ) {
+    if (imageTags.length > 0) params.character_image_refs = imageTags;
+    const motionTags = resolvedAssets
+      .filter((asset) => asset.artifactType === "video")
+      .map((asset) => asset.tag);
+    if (motionTags.length > 0) params.motion_video_refs = motionTags;
+    delete params.image_refs;
+    delete params.video_refs;
+  }
 
   if (modelKey === "kling30" || isKlingOmniTool(toolName) || isKlingOmniTool(canonicalToolName)) {
     const videoTags = resolvedAssets

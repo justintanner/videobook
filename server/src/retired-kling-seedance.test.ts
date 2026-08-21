@@ -35,7 +35,6 @@ describe("retired Kling and Seedance surfaces", () => {
     expect(RETIRED_GENERATION_ACTIONS.map((action) => action.canonical_name)).toEqual(
       expect.arrayContaining([
         "generate_kie_kling_3_0_video",
-        "generate_kie_kling_3_0_motion_control",
         "generate_kie_kling_3_0_turbo_video",
         "generate_kie_seedance_2_0_video",
         "generate_fal_kling_video_v3_pro_text_to_video",
@@ -47,16 +46,19 @@ describe("retired Kling and Seedance surfaces", () => {
   it("exposes Omni and Seedance 2.5 and hides retired names from picker, routing, catalogs, and docs", () => {
     const pickerTools = Object.values(VIDEO_MODELS).map((model) => model.tool_name);
     expect(pickerTools).toContain(KLING_OMNI_TEXT_TO_VIDEO_TOOL);
+    expect(pickerTools).toContain("generate_kie_kling_3_0_motion_control");
     expect(pickerTools).toContain("generate_kie_seedance_2_5_video");
     expect(DEFAULT_VIDEO_MODEL_KEY).toBe("seedance25");
     expect(VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name).toBe("generate_kie_seedance_2_5_video");
     expect(VIDEO_MODELS.kling30.label).toBe("Kling 3.0 Omni");
+    expect(VIDEO_MODELS.kling30_motion_control.label).toBe("Kling 3.0 Motion Control");
 
     const routing = buildVideoRoutingPrompt();
     expect(routing).toContain(KLING_OMNI_TEXT_TO_VIDEO_TOOL);
     expect(routing).toContain(KLING_OMNI_IMAGE_TO_VIDEO_TOOL);
     expect(routing).toContain(KLING_OMNI_REFERENCE_TO_VIDEO_TOOL);
     expect(routing).toContain(KLING_OMNI_TRANSFORMATION_TOOL);
+    expect(routing).toContain("generate_kie_kling_3_0_motion_control");
     expect(routing).toContain("generate_kie_seedance_2_5_video");
     expect(routing).toContain("PREFER generate_kie_seedance_2_5_video");
     for (const name of RETIRED_KLING_AND_SEEDANCE_TOOL_NAMES) {
@@ -66,6 +68,7 @@ describe("retired Kling and Seedance surfaces", () => {
 
     const catalogTools = listNotebookActions().map((action) => action.tool);
     expect(catalogTools).toContain(KLING_OMNI_TEXT_TO_VIDEO_TOOL);
+    expect(catalogTools).toContain("generate_kie_kling_3_0_motion_control");
     expect(catalogTools).toContain("generate_kie_seedance_2_5_video");
     for (const name of RETIRED_KLING_AND_SEEDANCE_TOOL_NAMES) {
       expect(catalogTools.includes(name), name).toBe(false);
@@ -78,11 +81,12 @@ describe("retired Kling and Seedance surfaces", () => {
     );
     const manifest = renderGenerationNamingManifest(GENERATION_ACTIONS);
     expect(docs).toContain(KLING_OMNI_TEXT_TO_VIDEO_TOOL);
+    expect(docs).toContain("generate_kie_kling_3_0_motion_control");
     expect(docs).toContain("generate_kie_seedance_2_5_video");
     expect(manifest).toContain(KLING_OMNI_TRANSFORMATION_TOOL);
+    expect(manifest).toContain("generate_kie_kling_3_0_motion_control");
     for (const name of [
       "generate_kie_kling_3_0_video",
-      "generate_kie_kling_3_0_motion_control",
       "generate_kie_seedance_2_0_video",
       "generate_fal_kling_video_v3_pro_text_to_video",
       "generate_fal_seedance_2_0_text_to_video",

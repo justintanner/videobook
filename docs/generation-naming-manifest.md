@@ -4,8 +4,8 @@ This is the authoritative registry-derived list of canonical generation and work
 
 ## Summary
 
-- Total actions: 84
-- Provider actions: 75
+- Total actions: 85
+- Provider actions: 76
 - Workflow and support actions: 9
 
 ## Naming grammar
@@ -23,6 +23,7 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `generate_kie_kling_3_0_omni_image_to_video` | kie | `KlingOmniImageToVideoRequestSchema` | video | image_to_video | visible |  |
 | `generate_kie_kling_3_0_omni_reference_to_video` | kie | `KlingOmniReferenceToVideoRequestSchema` | video | reference_to_video | visible |  |
 | `generate_kie_kling_3_0_omni_transformation` | kie | `KlingOmniTransformationRequestSchema` | video | transformation | visible |  |
+| `generate_kie_kling_3_0_motion_control` | kie | `KlingMotionControlRequestSchema` | video | motion_control | visible | `generate_kling30_motion_control_video` |
 | `generate_kie_seedance_2_5_video` | kie | `Seedance25InputSchema` | video | image_to_video | visible | `generate_seedance25_video` |
 | `generate_kie_gemini_omni_video` | kie | `GeminiOmniVideoRequestSchema` | video | image_to_video | visible | `generate_gemini_omni_video` |
 | `generate_kie_wan_2_7_text_to_video` | kie | `Wan27TextToVideoRequestSchema` | video | text_to_video | hidden_fal_variant | `generate_wan27_t2v_video` |

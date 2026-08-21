@@ -208,6 +208,20 @@ describe("notebook runner frames and concat", () => {
       image_refs: [`@${image.outputArtifactId}`],
       video_refs: [`@${video.outputArtifactId}`],
     });
+
+    const motionControlDefinition = {
+      name: "generate_kie_kling_3_0_motion_control",
+      schema: {
+        book_id: {},
+        prompt: {},
+        character_image_refs: {},
+        motion_video_refs: {},
+      },
+    } as unknown as ToolDef;
+    expect(modelArgs(motionControlDefinition, document, generate, "book-id")).toMatchObject({
+      character_image_refs: [`@${image.outputArtifactId}`],
+      motion_video_refs: [`@${video.outputArtifactId}`],
+    });
   });
 
   it("accepts extracted-frame image cells as generation image sources", () => {

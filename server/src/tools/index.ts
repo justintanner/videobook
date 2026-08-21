@@ -87,6 +87,7 @@ import { generateGrokImagineRefVideoDef } from "./generate-grok-imagine-ref-vide
 import { generateGrokImagineT2vVideoDef } from "./generate-grok-imagine-t2v-video.js";
 import { extendGrokImagineVideoDef } from "./extend-grok-imagine-video.js";
 import { upscaleGrokImagineVideoDef } from "./upscale-grok-imagine-video.js";
+import { generateKling30MotionControlVideoDef } from "./generate-kling30-motion-control-video.js";
 import {
   generateKlingOmniImageToVideoDef,
   generateKlingOmniReferenceToVideoDef,
@@ -400,6 +401,7 @@ export function getAllToolDefs(
     generateKlingOmniImageToVideoDef(engine),
     generateKlingOmniReferenceToVideoDef(engine),
     generateKlingOmniTransformationDef(engine),
+    generateKling30MotionControlVideoDef(engine),
     generateSeedance25VideoDef(engine),
     generateGeminiOmniVideoDef(engine),
     generateGoogleOmniVideoDef(engine),

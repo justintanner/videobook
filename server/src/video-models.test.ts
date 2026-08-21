@@ -622,6 +622,7 @@ describe("buildVideoRoutingPrompt", () => {
 describe("IMAGE_FIELD_SCHEMAS", () => {
   it("maps tools with image-array inputs to their Apicity Zod schemas", () => {
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_kling_3_0_omni_image_to_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_kling_3_0_motion_control");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_seedance_2_5_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_grok_imagine_image_to_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_wan_2_7_reference_to_video");
@@ -732,6 +733,22 @@ describe("VIDEO_TOOL_MODES contract", () => {
 
     const kie = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, [], undefined, "kie");
     expect(kie.modes).toBeNull();
+  });
+
+  it("exposes Kling 3.0 Motion Control as its own picker card", () => {
+    const option = buildModelOption(
+      "kling30_motion_control",
+      VIDEO_MODELS.kling30_motion_control,
+      {},
+      [],
+    );
+    expect(option.label).toBe("Kling 3.0 Motion Control");
+    expect(option.tool_name).toBe("generate_kie_kling_3_0_motion_control");
+    expect(option.modes).toBeNull();
+    expect(option.schema?.required).toEqual(
+      expect.arrayContaining(["character_image_refs", "motion_video_refs"]),
+    );
+    expect(option.schema?.required).not.toContain("prompt");
   });
 
   it("kling omni ships four modes that switch canonical tools", () => {

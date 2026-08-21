@@ -327,6 +327,7 @@ const generationTitleOverrides: Record<string, string> = {
   generate_kie_kling_3_0_omni_image_to_video: "Kling 3.0 Omni Image",
   generate_kie_kling_3_0_omni_reference_to_video: "Kling 3.0 Omni Reference",
   generate_kie_kling_3_0_omni_transformation: "Kling 3.0 Omni Transformation",
+  generate_kie_kling_3_0_motion_control: "Kling 3.0 Motion Control",
   generate_elevenlabs_text_to_audio: "ElevenLabs",
 };
 

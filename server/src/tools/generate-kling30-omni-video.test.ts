@@ -227,7 +227,7 @@ describe("Kling 3.0 Omni tools", () => {
     expect(names).toContain(KLING_OMNI_IMAGE_TO_VIDEO_TOOL);
     expect(names).toContain(KLING_OMNI_REFERENCE_TO_VIDEO_TOOL);
     expect(names).toContain(KLING_OMNI_TRANSFORMATION_TOOL);
+    expect(names).toContain("generate_kie_kling_3_0_motion_control");
     expect(names).not.toContain("generate_kie_kling_3_0_video");
-    expect(names).not.toContain("generate_kie_kling_3_0_motion_control");
   });
 });

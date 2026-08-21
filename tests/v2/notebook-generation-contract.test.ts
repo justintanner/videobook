@@ -39,6 +39,37 @@ describe("notebook generation input contracts", () => {
     });
   });
 
+  it("publishes Kling 3.0 Motion Control character and motion inputs", () => {
+    expect(notebookGenerationInputContract(
+      "generate_kie_kling_3_0_motion_control",
+      {
+        character_image_refs: z.array(z.string()).min(1),
+        motion_video_refs: z.array(z.string()).min(1).max(1),
+      },
+    )).toEqual({
+      modes: [{
+        id: "default",
+        slots: [
+          {
+            field: "character_image_refs",
+            kind: "image",
+            targets: ["image"],
+            min: 1,
+            max: null,
+          },
+          {
+            field: "motion_video_refs",
+            kind: "video",
+            targets: ["video"],
+            min: 1,
+            max: 1,
+          },
+        ],
+        requiredGroups: [],
+      }],
+    });
+  });
+
   it("publishes Kling Omni transformation image and video requirements", () => {
     expect(notebookGenerationInputContract(
       "generate_kie_kling_3_0_omni_transformation",

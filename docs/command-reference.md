@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (295)
+## MCP endpoints (296)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -132,6 +132,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `generate_kie_happyhorse_1_1_image_to_video` (historical names, not exposed: `generate_happyhorse_i2v_video`) — Generate a video from a single first-frame image using HappyHorse image-to-video. Creates a new video artifact and enqueues a background job.
 - `generate_kie_happyhorse_1_1_reference_to_video` (historical names, not exposed: `generate_happyhorse_ref_video`) — Generate a multi-character video using HappyHorse reference-to-video (1-9 reference images, order defines character1/character2/...). Creates a new video artifact and enqueues a background job.
 - `generate_kie_happyhorse_1_1_text_to_video` (historical names, not exposed: `generate_happyhorse_t2v_video`) — Generate a video from a prompt using HappyHorse text-to-video. Creates a new video artifact and enqueues a background job.
+- `generate_kie_kling_3_0_motion_control` (historical names, not exposed: `generate_kling30_motion_control_video`) — Apply motion from reference videos to character images using Kling 3.0 motion-control. Creates a new video artifact and enqueues a background job.
 - `generate_kie_kling_3_0_omni_image_to_video` — Generate a video using Kling 3.0 Omni image-to-video (KIE). Requires one first-frame image, or first and last frames. Creates a new video artifact and enqueues a background job.
 - `generate_kie_kling_3_0_omni_reference_to_video` — Generate a video using Kling 3.0 Omni reference-to-video (KIE). Requires at least one reference image or one reference video. Creates a new video artifact and enqueues a background job.
 - `generate_kie_kling_3_0_omni_text_to_video` — Generate a video using Kling 3.0 Omni text-to-video (KIE). Prompt-only generation at 720p, 1080p, or 4k with optional native audio and multi-shot controls. Creates a new video artifact and enqueues a background job.

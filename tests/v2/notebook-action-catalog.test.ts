@@ -260,6 +260,12 @@ describe("notebook action catalog", () => {
       defaultValue: "720p",
       options: ["480p", "720p", "1080p"],
     });
+    const motionControlAction = generationCatalog.actions.find((action) =>
+      action.tool === "generate_kie_kling_3_0_motion_control");
+    expect(motionControlAction).toMatchObject({
+      title: "Kling 3.0 Motion Control",
+      providerLabel: "Kie",
+    });
     const omniTransformationAction = generationCatalog.actions.find((action) =>
       action.tool === "generate_kie_kling_3_0_omni_transformation");
     expect(omniTransformationAction).toMatchObject({
