@@ -150,6 +150,12 @@ describe('GenerationChatReview voice picker', () => {
     expect(html).toContain('aria-label="Voice id"')
   })
 
+  it('renders setting fields as direct children of the shared grid', () => {
+    const html = renderReview(speechDraft())
+
+    expect(html).toContain('class="generation-review-settings"><label')
+  })
+
   it('offers event-driven loading when the catalog is empty', () => {
     const html = renderReview(speechDraft(), {
       ...voiceCatalog,

@@ -107,6 +107,49 @@ describe('notebook chrome tokens', () => {
     expect(declaration(editor, 'overflow')).toBe('auto')
   })
 
+  it('keeps the generation review editor responsive arrangements', () => {
+    const editor = rule(css, '.generation-review-editor')
+    expect(declaration(editor, 'grid-template-areas').replace(/\s+/g, ' '))
+      .toBe(`'inputs prompt model estimate' 'inputs prompt settings estimate'`)
+    const tablet = braceBlock(css, css.indexOf('@media (max-width: 1500px) {'))
+    expect(declaration(rule(tablet, '.generation-review-editor'), 'grid-template-columns'))
+      .toBe('repeat(2, minmax(0, 1fr))')
+    const mobile = braceBlock(css, css.indexOf('@media (max-width: 720px) {'))
+    expect(declaration(rule(mobile, '.generation-review-editor'), 'grid-template-columns'))
+      .toBe('minmax(0, 1fr)')
+  })
+
+  it('sizes compact generation review source cards from a shared token', () => {
+    const review = rule(css, '.generation-chat-review')
+    expect(pixelCount(
+      declaration(review, '--generation-review-source-preview-size'),
+    )).toBe(72)
+    const preview = rule(css, '.generation-review-source-preview')
+    expect(declaration(preview, 'min-height'))
+      .toBe('var(--generation-review-source-preview-size)')
+    const media = rule(
+      css,
+      '.generation-review-source-preview > .media-library-asset-placeholder',
+    )
+    expect(declaration(media, 'height'))
+      .toBe('var(--generation-review-source-preview-size)')
+    expect(declaration(media, 'object-fit')).toBe('contain')
+    const cardCap = 'calc(var(--generation-review-source-preview-size) + 33px)'
+    expect(declaration(rule(css, '.generation-review-text-input'), 'min-height'))
+      .toBe(cardCap)
+    expect(declaration(rule(css, '.generation-review-source-add'), 'min-height'))
+      .toBe(cardCap)
+  })
+
+  it('groups generation review settings with the inspector auto-fit grid', () => {
+    const settings = rule(css, '.generation-review-settings')
+    expect(declaration(settings, 'grid-template-columns'))
+      .toBe('repeat(auto-fit, minmax(112px, 1fr))')
+    const primary = rule(css, '.inspector-generation-primary')
+    expect(declaration(primary, 'grid-template-columns'))
+      .toBe('repeat(auto-fit, minmax(112px, 1fr))')
+  })
+
   it('drops the UA outline on the notebook canvas without a global * focus wipe', () => {
     expect(css).not.toMatch(/\*\s*(?:,[^{]+)?\{[^}]*outline:\s*none/)
     const focusRule = [...css.matchAll(
