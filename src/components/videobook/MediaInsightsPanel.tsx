@@ -25,7 +25,7 @@ import {
 
 type CopyState = 'idle' | 'copied' | 'failed'
 
-export type MediaInsightsPanelProps = {
+type MediaInsightsPanelProps = {
   artifactId: string
   transcript: MediaTranscriptSources | null
   busy: boolean

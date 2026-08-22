@@ -1,25 +1,18 @@
 import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { findAudioFile, findVideoFile } from "videobook-engine";
 import { extname } from "node:path";
-import { modelSlug } from "@apicity/cost";
 import type { Seedance2FastRequest, Seedance2Request } from "@apicity/kie";
 import { z, type ZodRawShape } from "zod";
 import {
   Seedance2InputSchema,
   Seedance2FastInputSchema,
-  Seedance2FastRequestSchema,
-  Seedance2RequestSchema,
 } from "@apicity/kie/zod";
-import { queue } from "../queue.js";
-import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { zodErrorToToolResult } from "./_shared.js";
 import {
   apicityField,
   apicityStringArrayField,
   apicityStringField,
   apicityStringNumberField,
 } from "./schema-from-apicity.js";
-import { generationLabel } from "../artifact-label.js";
 
 type Seedance2Model = Seedance2Request["model"] | Seedance2FastRequest["model"];
 
@@ -135,179 +128,4 @@ export function buildSeedance2Schema(apiModel: Seedance2Model) {
     replace_audio_with: z.string().optional().describe("After generation, splice an audio artifact over the Seedance output. Runs server-side as part of the generation pipeline so the asset only reaches 'ready' once the splice is in."),
     _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
   } satisfies ZodRawShape;
-}
-
-type Seedance2ToolFactoryOpts = {
-  toolName: string;
-  jobType: string;
-  description: string;
-  apiModel: Seedance2Model;
-};
-
-export function buildSeedance2ToolDef(
-  engine: Engine,
-  opts: Seedance2ToolFactoryOpts,
-): ToolDef {
-  const schema = buildSeedance2Schema(opts.apiModel);
-  type Args = SchemaArgs<typeof schema>;
-
-  return {
-    name: opts.toolName,
-    description: opts.description,
-    schema,
-    handler: async (args) => {
-      const raw = args as Args;
-      const {
-        book_id, prompt,
-        image_refs, video_refs, audio_refs,
-        aspect_ratio, resolution, duration,
-        generate_audio, web_search, nsfw_checker,
-      } = raw;
-      const blank = (v: unknown): v is "" => typeof v === "string" && v.trim() === "";
-      const first_frame_ref = blank(raw.first_frame_ref) ? undefined : raw.first_frame_ref;
-      const last_frame_ref = blank(raw.last_frame_ref) ? undefined : raw.last_frame_ref;
-      const replace_audio_with = blank(raw.replace_audio_with) ? undefined : raw.replace_audio_with;
-
-      if (!process.env.KIE_API_KEY) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
-        };
-      }
-
-      const dropBlanks = (xs: string[] | undefined): string[] =>
-        (xs ?? []).filter((s) => !blank(s));
-      const imgs = dropBlanks(image_refs);
-      const vids = dropBlanks(video_refs);
-      const auds = dropBlanks(audio_refs);
-
-      if (auds.length > 0 && (first_frame_ref !== undefined || last_frame_ref !== undefined)) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "Seedance 2 does not support reference audio combined with first/last frame — pick one or the other" }],
-        };
-      }
-
-      const requestSchema = opts.apiModel === "bytedance/seedance-2"
-        ? Seedance2RequestSchema
-        : Seedance2FastRequestSchema;
-      const apicityCheck = requestSchema.safeParse({
-        model: opts.apiModel,
-        input: {
-          prompt,
-          web_search: web_search ?? false,
-          nsfw_checker: nsfw_checker ?? false,
-          ...(first_frame_ref !== undefined ? { first_frame_url: first_frame_ref } : {}),
-          ...(last_frame_ref !== undefined ? { last_frame_url: last_frame_ref } : {}),
-          ...(imgs.length > 0 ? { reference_image_urls: imgs } : {}),
-          ...(vids.length > 0 ? { reference_video_urls: vids } : {}),
-          ...(auds.length > 0 ? { reference_audio_urls: auds } : {}),
-          ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
-          ...(resolution !== undefined ? { resolution } : {}),
-          ...(duration !== undefined ? { duration: parseInt(duration, 10) } : {}),
-          ...(generate_audio !== undefined ? { generate_audio } : {}),
-        },
-      });
-      if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
-
-      let firstFrame: RefInput | undefined;
-      if (first_frame_ref !== undefined) {
-        const r = await resolveImageRef(engine, first_frame_ref);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
-        firstFrame = r.value;
-      }
-
-      let lastFrame: RefInput | undefined;
-      if (last_frame_ref !== undefined) {
-        const r = await resolveImageRef(engine, last_frame_ref);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
-        lastFrame = r.value;
-      }
-
-      const imageInputs: RefInput[] = [];
-      for (const raw of imgs) {
-        const r = await resolveImageRef(engine, raw);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
-        imageInputs.push(r.value);
-      }
-
-      const videoInputs: RefInput[] = [];
-      for (const raw of vids) {
-        const r = await resolveVideoRef(engine, raw);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
-        videoInputs.push(r.value);
-      }
-
-      const audioInputs: RefInput[] = [];
-      for (const raw of auds) {
-        const r = await resolveAudioRef(engine, raw);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
-        audioInputs.push(r.value);
-      }
-
-      let replaceAudioWith: RefInput | undefined;
-      if (replace_audio_with !== undefined) {
-        const r = await resolveAudioRef(engine, replace_audio_with);
-        if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `replace_audio_with: ${r.error}` }] };
-        replaceAudioWith = r.value;
-      }
-
-      const videoName = generationLabel(modelSlug("kie", opts.apiModel), prompt);
-      const assetResult = await engine.artifacts.create("vid", videoName);
-      if (!assetResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }],
-        };
-      }
-
-      const { artifactId: vidAssetId, path: vidAssetDir } = assetResult.value;
-      const sourceImageIds: string[] = [];
-      if (firstFrame) sourceImageIds.push(firstFrame.assetId);
-      if (lastFrame && lastFrame.assetId !== firstFrame?.assetId) sourceImageIds.push(lastFrame.assetId);
-      for (const i of imageInputs) sourceImageIds.push(i.assetId);
-      const sourceVideoIds = videoInputs.map((i) => i.assetId);
-      const sourceAudioIds = audioInputs.map((i) => i.assetId);
-
-      const jobId = `${modelSlug("kie", opts.apiModel)}-${vidAssetId}-${Date.now()}`;
-
-      await queue.enqueue(jobId, {
-        type: opts.jobType,
-        vidAssetId,
-        vidAssetDir,
-        bookId: book_id,
-        prompt,
-        apiModel: opts.apiModel,
-        ...(firstFrame ? { firstFrame } : {}),
-        ...(lastFrame ? { lastFrame } : {}),
-        imageInputs,
-        videoInputs,
-        audioInputs,
-        sourceImageIds,
-        sourceVideoIds,
-        sourceAudioIds,
-        ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
-        ...(resolution !== undefined ? { resolution } : {}),
-        ...(duration !== undefined ? { duration } : {}),
-        ...(generate_audio !== undefined ? { generate_audio } : {}),
-        web_search: web_search ?? false,
-        ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
-        ...(replaceAudioWith ? { replaceAudioWith } : {}),
-      } as unknown as Record<string, unknown>);
-
-      return {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            vid_asset_id: vidAssetId,
-            source_images: sourceImageIds,
-            source_videos: sourceVideoIds,
-            source_audios: sourceAudioIds,
-            job_id: jobId,
-            status: "enqueued",
-          }),
-        }],
-      };
-    },
-  };
 }

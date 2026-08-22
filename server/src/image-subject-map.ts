@@ -111,9 +111,9 @@ export function grokMaskIndex(index: number): number | undefined {
   return Number.isInteger(index) && index >= 0 ? index : undefined;
 }
 
-export const SUBJECT_BOX_IOU_THRESHOLD = 0.25;
+const SUBJECT_BOX_IOU_THRESHOLD = 0.25;
 
-export function boxIou(
+function boxIou(
   left: ImageSubjectNormalizedBox,
   right: ImageSubjectNormalizedBox,
 ): number {

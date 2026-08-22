@@ -1,27 +1,24 @@
 import {
   compileNotebookSplitOutputs,
-  formatSplitTimestamp,
   minimumSplitPieceSeconds,
   roundedSplitSeconds,
   type NotebookSplitOutputMode,
   type NotebookSplitRange,
 } from './notebook-split-command'
 
-export { formatSplitTimestamp, roundedSplitSeconds }
-
-export type SplitSegment = {
+type SplitSegment = {
   durationSeconds: number
   endSeconds: number
   index: number
   startSeconds: number
 }
 
-export type SplitSegmentEdit = {
+type SplitSegmentEdit = {
   cutPointsSeconds: number[]
   selectedIndex: number
 }
 
-export type SplitPreviewWindows = {
+type SplitPreviewWindows = {
   segment: NotebookSplitRange
   surroundings: NotebookSplitRange[]
 }
@@ -111,7 +108,7 @@ export function previewWindows(input: {
   }
 }
 
-export function segmentBoundLimits(input: {
+function segmentBoundLimits(input: {
   cutPointsSeconds: readonly number[]
   index: number
   sourceDurationSeconds: number

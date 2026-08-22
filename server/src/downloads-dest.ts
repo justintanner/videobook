@@ -3,14 +3,14 @@ import { constants as fsConstants } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export function defaultDownloadsDir(): string {
+function defaultDownloadsDir(): string {
   return join(homedir(), "Downloads");
 }
 
 /** Flatten a display label into a single Downloads filename stem.
  *  Generation labels include model slugs like `kling-3.0/video — …`; those
  *  slashes (and `..` / backslashes) must not become path segments. */
-export function sanitizeDownloadBaseName(baseName: string): string {
+function sanitizeDownloadBaseName(baseName: string): string {
   const parts = baseName.split(/[/\\]+/u).flatMap((part) => {
     const trimmed = part.replaceAll("\0", "").trim();
     if (!trimmed || trimmed === "." || trimmed === "..") return [];

@@ -1,9 +1,9 @@
-export type SegmentLoopWindow = {
+type SegmentLoopWindow = {
   endSeconds: number
   startSeconds: number
 }
 
-export type SegmentLoopAction =
+type SegmentLoopAction =
   | { type: 'continue' }
   | { type: 'seek'; timeSeconds: number; windowIndex: number }
 

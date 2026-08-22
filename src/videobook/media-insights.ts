@@ -1,6 +1,6 @@
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
-export type MediaTranscriptKind = 'timed' | 'plain' | 'silence'
+type MediaTranscriptKind = 'timed' | 'plain' | 'silence'
 
 /** The two insights an asset can carry, each produced by its own job. */
 export type MediaInsightKind = 'transcript' | 'analysis'
@@ -34,7 +34,7 @@ export function mediaInsightRunningPatch(
     : { analyzing: running }
 }
 
-export type TimedTranscriptWord = {
+type TimedTranscriptWord = {
   text: string
   start: number
   end: number
@@ -151,11 +151,6 @@ export function mediaCellHasSpokenAudio(cellType: string): boolean {
   return cellType === 'video' || cellType === 'audio' || cellType === 'final'
 }
 
-/** Media kinds the vision analyzer can describe from sampled frames. */
-export function mediaCellIsAnalyzableVideo(cellType: string): boolean {
-  return cellType === 'video' || cellType === 'final'
-}
-
 export function transcriptHasText(transcript: MediaTranscript | null): boolean {
   return Boolean(transcript && transcript.kind !== 'silence' && transcript.text.trim())
 }
@@ -187,7 +182,7 @@ export function visionAnalysisDetailLabel(
 const CUE_GAP_SECONDS = 0.4
 const CUE_MAX_WORDS = 12
 
-export function cuesFromTimedWords(
+function cuesFromTimedWords(
   words: readonly TimedTranscriptWord[],
 ): { start: number; text: string }[] {
   const cues: { start: number; text: string }[] = []

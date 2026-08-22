@@ -16,7 +16,7 @@ export type NotebookSplitRange = {
   startSeconds: number
 }
 
-export type NotebookSplitOutputGroup = NotebookSplitRange[]
+type NotebookSplitOutputGroup = NotebookSplitRange[]
 
 export type NotebookSplitCommand = {
   sourceReference: string
@@ -70,7 +70,6 @@ type NotebookToolCall = (
 ) => Promise<unknown>
 
 export const minimumSplitPieceSeconds = 0.02
-export const minimumSplitChunkSeconds = minimumSplitPieceSeconds
 
 export function roundedSplitSeconds(value: number): number {
   return Math.round(value * 1000) / 1000
@@ -270,7 +269,7 @@ export function parseNotebookSplitCommand(
   }
 }
 
-export function assertSplitOutputRanges(
+function assertSplitOutputRanges(
   ranges: readonly NotebookSplitRange[],
 ): void {
   for (const range of ranges) {

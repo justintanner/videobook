@@ -11,14 +11,14 @@ export const TIMED_TRANSCRIPT_FILE = "elevenlabs.json";
 /** Plain-text transcription sidecar written during ingest. */
 export const PLAIN_TRANSCRIPT_FILE = ".analysis.gpt4otrans.json";
 
-export type TranscriptWord = {
+type TranscriptWord = {
   text: string;
   start: number;
   end: number;
   speakerId: string | null;
 };
 
-export type AssetTranscript =
+type AssetTranscript =
   | {
     kind: "timed";
     languageCode: string | null;
@@ -30,7 +30,7 @@ export type AssetTranscript =
   | { kind: "missing" };
 
 /** Compact transcript shipped inside asset payloads — no per-word cues. */
-export type AssetTranscriptSummary = {
+type AssetTranscriptSummary = {
   kind: "timed" | "plain" | "silence";
   language_code: string | null;
   text: string;
@@ -103,7 +103,7 @@ export function timedTranscriptFrom(raw: unknown): AssetTranscript | null {
   };
 }
 
-export function plainTranscriptFrom(raw: unknown): AssetTranscript | null {
+function plainTranscriptFrom(raw: unknown): AssetTranscript | null {
   if (typeof raw !== "object" || raw === null) return null;
   const quality = assessDialogQuality(raw as { text?: string });
   if (!quality.hasDialog && (quality.reason === "empty" || quality.reason === "noise_only")) {
@@ -112,13 +112,13 @@ export function plainTranscriptFrom(raw: unknown): AssetTranscript | null {
   return { kind: "plain", text: quality.text };
 }
 
-export type AssetTranscriptWordSummary = {
+type AssetTranscriptWordSummary = {
   text: string;
   start: number;
   end: number;
 };
 
-export type AssetTranscriptSourceSummary = AssetTranscriptSummary & {
+type AssetTranscriptSourceSummary = AssetTranscriptSummary & {
   words?: AssetTranscriptWordSummary[];
 };
 
@@ -128,9 +128,9 @@ export type AssetTranscriptSources = {
   plain: AssetTranscriptSourceSummary | null;
 };
 
-export type TranscriptSidecarKind = "elevenlabs" | "plain";
+type TranscriptSidecarKind = "elevenlabs" | "plain";
 
-export type TranscriptSidecarText = {
+type TranscriptSidecarText = {
   source: TranscriptSidecarKind;
   file: string;
   text: string;
@@ -185,12 +185,12 @@ export async function readAssetTranscript(
   return (await readAssetTranscriptWithSource(engine, assetId)).transcript;
 }
 
-export function countWords(text: string): number {
+function countWords(text: string): number {
   const stripped = text.replace(/\[[^\]]*\]/g, "").trim();
   return stripped.length === 0 ? 0 : stripped.split(/\s+/).length;
 }
 
-export function transcriptSummary(
+function transcriptSummary(
   transcript: AssetTranscript,
 ): AssetTranscriptSummary | null {
   if (transcript.kind === "missing") return null;
@@ -213,7 +213,7 @@ export function transcriptSummary(
   };
 }
 
-export function transcriptSourceSummary(
+function transcriptSourceSummary(
   transcript: AssetTranscript,
 ): AssetTranscriptSourceSummary | null {
   const summary = transcriptSummary(transcript);
@@ -245,17 +245,6 @@ function rememberSummary(
     if (typeof oldest !== "string") return;
     summaryByObjectHash.delete(oldest);
   }
-}
-
-function compactSummary(
-  summary: AssetTranscriptSourceSummary,
-): AssetTranscriptSummary {
-  return {
-    kind: summary.kind,
-    language_code: summary.language_code,
-    text: summary.text,
-    word_count: summary.word_count,
-  };
 }
 
 async function readTimedSource(
@@ -308,15 +297,4 @@ export async function readTranscriptSidecarText(
     return { source: kind, file, text: read.value.toString() };
   }
   return null;
-}
-
-/** Preferred single-source projection (timed, else plain), or null. */
-export async function readAssetTranscriptSummary(
-  engine: Engine,
-  assetId: string,
-  files?: readonly ArtifactManifestFile[],
-): Promise<AssetTranscriptSummary | null> {
-  const sources = await readAssetTranscriptSources(engine, assetId, files);
-  const preferred = sources?.elevenlabs ?? sources?.plain ?? null;
-  return preferred ? compactSummary(preferred) : null;
 }
