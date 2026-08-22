@@ -1133,11 +1133,16 @@ describe("awaiting notebook output startup recovery", () => {
       status: "completed",
       outputArtifactId: saved.value.artifactId,
     });
-    expect(notebook.value.execution?.[target.id]).toMatchObject({
+    const failedOutput = notebook.value.cells.find((candidate) =>
+      candidate.id !== target.id
+      && notebook.value.execution?.[candidate.id]?.runId === runId);
+    expect(failedOutput).toBeDefined();
+    expect(notebook.value.execution?.[failedOutput?.id ?? ""]).toMatchObject({
       status: "error",
       runId,
       error: "Cell operation unsupported_generation is not runnable",
     });
+    expect(notebook.value.execution?.[target.id]?.status).not.toBe("error");
     const upstreamGenerations = engine.generations.listForCell(
       created.value.id,
       upstream.id,

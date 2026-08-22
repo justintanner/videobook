@@ -746,10 +746,13 @@ function withMediaOutput(
     cells: document.cells.map((candidate) => {
       if (!outputCellIds.has(candidate.id)) return candidate;
       if (isImageVideoGenerationResult(candidate)) {
+        const state = typeof inputs.state === "string"
+          ? inputs.state
+          : "completed";
         const nextInputs: Record<string, unknown> = {
           ...(candidate.inputs ?? {}),
           ...inputs,
-          state: "completed",
+          state,
         };
         delete nextInputs.outputVersionArtifactIds;
         return {
@@ -2313,6 +2316,11 @@ export async function runNotebookCell(
     isConcurrentGenerationProducer(normalizedCell)
     && !generateMediaOutput
   ) {
+    if (options.outputCellId) {
+      throw new Error(
+        `Generation output cell not found for run: ${options.outputCellId}`,
+      );
+    }
     const allocated = normalizedCell.type === "generate_image"
       ? allocateGenerateImageResult(engine, normalizedDocument, normalizedCell.id, {
           runId: options.runId ?? uuidv7(),
@@ -2482,23 +2490,30 @@ export async function runNotebookCell(
           && output.model !== actionBefore?.model;
         const fillActionTool = fillActionModel && !actionBefore?.tool;
         const actionCellChanged = fillActionPrompt || fillActionModel;
+        const concurrentProducer = isConcurrentGenerationProducer(activeCell);
         const withCells = {
           ...withOutput,
           cells: withOutput.cells.map((candidate) => {
             if (candidate.id === activeCell.id) {
+              const nextInputs = { ...(candidate.inputs ?? {}) };
+              if (!concurrentProducer && output.cellInputs) {
+                Object.assign(nextInputs, output.cellInputs);
+              } else if (concurrentProducer) {
+                delete nextInputs.state;
+                delete nextInputs.providerArtifactId;
+                if (
+                  typeof output.cellInputs?.resolvedPrompt === "string"
+                  && !nextInputs.resolvedPrompt
+                ) {
+                  nextInputs.resolvedPrompt = output.cellInputs.resolvedPrompt;
+                }
+              }
               return {
                 ...candidate,
                 ...(fillActionPrompt ? { prompt: resolvedPrompt } : {}),
                 ...(fillActionModel ? { model: output.model } : {}),
                 ...(fillActionTool ? { tool: output.tool } : {}),
-                ...(output.cellInputs
-                  ? {
-                      inputs: {
-                        ...(candidate.inputs ?? {}),
-                        ...output.cellInputs,
-                      },
-                    }
-                  : {}),
+                inputs: nextInputs,
               };
             }
             if (candidate.id === mediaOutput?.outputCell.id) {
@@ -2524,10 +2539,18 @@ export async function runNotebookCell(
           : state.fingerprint;
         if (!mediaOutput && !actionCellChanged) return withCells;
         const concurrent = isConcurrentGenerationProducer(activeCell);
+        const nextExecution = { ...executionState(withCells) };
+        if (
+          concurrent
+          && options.runId
+          && nextExecution[activeCell.id]?.runId === options.runId
+        ) {
+          delete nextExecution[activeCell.id];
+        }
         return {
           ...withCells,
           execution: {
-            ...executionState(withCells),
+            ...nextExecution,
             ...(concurrent
               ? {}
               : {
@@ -2604,12 +2627,34 @@ export async function runNotebookCell(
       engine,
       notebookId,
       "run_notebook_cell_failed",
-      (current) => withExecution(
-        current,
-        activeCell.id,
-        state,
-        outputArtifactId,
-      ),
+      (current) => {
+        const concurrent = isConcurrentGenerationProducer(activeCell);
+        const targetCellId = concurrent && options.outputCellId
+          ? options.outputCellId
+          : activeCell.id;
+        const withFailure = withExecution(
+          current,
+          targetCellId,
+          state,
+          concurrent ? undefined : outputArtifactId,
+        );
+        if (!concurrent) return withFailure;
+        const execution = { ...executionState(withFailure) };
+        if (
+          options.runId
+          && execution[activeCell.id]?.runId === options.runId
+        ) {
+          delete execution[activeCell.id];
+        }
+        const cells = withFailure.cells.map((candidate) => {
+          if (candidate.id !== activeCell.id) return candidate;
+          const inputs = { ...(candidate.inputs ?? {}) };
+          delete inputs.state;
+          delete inputs.providerArtifactId;
+          return { ...candidate, inputs };
+        });
+        return { ...withFailure, execution, cells };
+      },
       {
         cellId: activeCell.id,
         outputArtifactId,
@@ -2760,6 +2805,70 @@ export function generationPlanClaimOutputCellId(
   plan: Record<string, unknown>,
 ): string | null {
   return generationPlanClaimField(plan, "outputCellId");
+}
+
+function concurrentProducerIdForCell(cell: NotebookCell): string | null {
+  if (isConcurrentGenerationProducer(cell)) return cell.id;
+  const producerId = cell.inputs?.producerCellId;
+  if (isImageVideoGenerationResult(cell) && typeof producerId === "string") {
+    return producerId;
+  }
+  return null;
+}
+
+function awaitJobCoverageIds(payload: Record<string, unknown>): string[] {
+  const ids: string[] = [];
+  if (typeof payload.cellId === "string") ids.push(payload.cellId);
+  if (typeof payload.outputCellId === "string") ids.push(payload.outputCellId);
+  return [...new Set(ids)];
+}
+
+function awaitJobCoversExecution(input: {
+  payload: Record<string, unknown>;
+  notebookId: string;
+  cellId: string;
+  producerCellId: string | null;
+  runId: string;
+}): boolean {
+  if (input.payload.notebookId !== input.notebookId) return false;
+  if (
+    typeof input.payload.runId === "string"
+    && input.payload.runId !== input.runId
+  ) {
+    return false;
+  }
+  const covered = awaitJobCoverageIds(input.payload);
+  if (covered.includes(input.cellId)) return true;
+  if (input.producerCellId && covered.includes(input.producerCellId)) {
+    const jobOutput = typeof input.payload.outputCellId === "string"
+      ? input.payload.outputCellId
+      : null;
+    if (!jobOutput) return true;
+    return jobOutput === input.cellId;
+  }
+  return false;
+}
+
+function resolveAwaitNotebookTarget(
+  document: NotebookDocument,
+  input: { cellId: string; outputCellId?: string },
+): { cell: NotebookCell | undefined; outputCellId?: string } {
+  const requested = document.cells.find((candidate) =>
+    candidate.id === input.cellId);
+  if (!requested) {
+    return { cell: undefined, outputCellId: input.outputCellId };
+  }
+  if (isImageVideoGenerationResult(requested)) {
+    const producerId = requested.inputs?.producerCellId;
+    const producer = typeof producerId === "string"
+      ? document.cells.find((candidate) => candidate.id === producerId)
+      : undefined;
+    return {
+      cell: producer ?? requested,
+      outputCellId: input.outputCellId ?? requested.id,
+    };
+  }
+  return { cell: requested, outputCellId: input.outputCellId };
 }
 
 export async function claimNotebookGenerationPlan(
@@ -3121,8 +3230,25 @@ async function finishAwaitingNotebookCell(
 ): Promise<{ outputArtifactId: string; document: NotebookDocument }> {
   const read = engine.notebooks.read(input.notebookId);
   if (!read.ok) throw new Error(read.error.message);
-  const cell = read.value.cells.find((candidate) => candidate.id === input.cellId);
+  const resolvedTarget = resolveAwaitNotebookTarget(read.value, input);
+  const cell = resolvedTarget.cell;
   if (!cell) throw new Error(`Awaiting notebook cell not found: ${input.cellId}`);
+  input = {
+    ...input,
+    cellId: cell.id,
+    ...(resolvedTarget.outputCellId
+      ? { outputCellId: resolvedTarget.outputCellId }
+      : {}),
+  };
+  const initialOutput = isConcurrentGenerationProducer(cell)
+    ? findGenerationResultForRun(read.value, cell, {
+        runId: input.runId,
+        outputCellId: input.outputCellId,
+      })
+    : null;
+  if (isConcurrentGenerationProducer(cell) && !initialOutput) {
+    throw new Error(`Awaiting generation result not found for run ${input.runId}`);
+  }
   const generationId = activeGenerationIdForRun(
     engine,
     input.notebookId,
@@ -3130,7 +3256,9 @@ async function finishAwaitingNotebookCell(
     input.runId,
     input.providerArtifactId,
   );
-  const current = executionState(read.value)[cell.id];
+  const current = executionState(read.value)[
+    initialOutput?.outputCell.id ?? cell.id
+  ];
   if (
     current?.status === "completed"
     && current.outputArtifactId
@@ -3213,11 +3341,15 @@ async function finishAwaitingNotebookCell(
           outputEdge: ensured.outputEdge,
         };
       }
+      const concurrent = isConcurrentGenerationProducer(cell);
+      const executionCellId = concurrent && resolvedOutput
+        ? resolvedOutput.outputCell.id
+        : cell.id;
       let withOutput = withExecution(
         working,
-        cell.id,
+        executionCellId,
         state,
-        resolvedOutput ? undefined : outputArtifactId,
+        concurrent || resolvedOutput ? undefined : outputArtifactId,
       );
       if (resolvedOutput) {
         withOutput = withMediaOutput(
@@ -3240,13 +3372,19 @@ async function finishAwaitingNotebookCell(
         ...withOutput,
         cells: withOutput.cells.map((candidate) => {
           if (candidate.id === cell.id) {
+            const nextInputs = { ...(candidate.inputs ?? {}) };
+            if (!concurrent) Object.assign(nextInputs, cellInputs);
+            else {
+              delete nextInputs.state;
+              delete nextInputs.providerArtifactId;
+              if (resolvedPrompt && !nextInputs.resolvedPrompt) {
+                nextInputs.resolvedPrompt = resolvedPrompt;
+              }
+            }
             return {
               ...candidate,
               ...(fillActionPrompt ? { prompt: resolvedPrompt } : {}),
-              inputs: {
-                ...(candidate.inputs ?? {}),
-                ...cellInputs,
-              },
+              inputs: nextInputs,
             };
           }
           if (candidate.id === outputCellId && resolvedPrompt) {
@@ -3263,11 +3401,15 @@ async function finishAwaitingNotebookCell(
       const fingerprint = fillActionPrompt && finalCell
         ? notebookCellFingerprint(withCells, finalCell)
         : state.fingerprint;
+      const nextExecution = { ...executionState(withCells) };
+      if (concurrent && nextExecution[cell.id]?.runId === input.runId) {
+        delete nextExecution[cell.id];
+      }
       return {
         ...withCells,
         execution: {
-          ...executionState(withCells),
-          ...(isConcurrentGenerationProducer(cell)
+          ...nextExecution,
+          ...(concurrent
             ? {}
             : {
                 [cell.id]: {
@@ -3322,8 +3464,10 @@ async function failAwaitingNotebookCell(
     input.notebookId,
     "fail_notebook_provider_output",
     (document) => {
-      const cell = document.cells.find((candidate) => candidate.id === input.cellId);
+      const resolvedTarget = resolveAwaitNotebookTarget(document, input);
+      const cell = resolvedTarget.cell;
       if (!cell) return document;
+      const outputCellId = resolvedTarget.outputCellId;
       const concurrent = isConcurrentGenerationProducer(cell);
       const runMatchedOutput = concurrent
         ? document.cells.find((candidate) =>
@@ -3334,7 +3478,7 @@ async function failAwaitingNotebookCell(
           ))
         : undefined;
       const failTargetId = (concurrent
-        ? input.outputCellId ?? runMatchedOutput?.id
+        ? outputCellId ?? runMatchedOutput?.id
         : undefined) ?? cell.id;
       const current = executionState(document)[failTargetId]
         ?? executionState(document)[cell.id];
@@ -3377,7 +3521,7 @@ async function failAwaitingNotebookCell(
         withFailure,
         cell,
         input.providerArtifactId,
-        input.outputCellId,
+        outputCellId,
       );
     },
     {
@@ -3437,6 +3581,7 @@ async function enqueueNotebookResume(
     resume: true,
     force: false,
     ...(input.cellIds ? { cellIds: input.cellIds } : {}),
+    ...(input.outputCellId ? { outputCellId: input.outputCellId } : {}),
     ...(input.runPlanId ? { runPlanId: input.runPlanId } : {}),
     ...(input.generationPlan ? { generationPlan: input.generationPlan } : {}),
     ...(input.actor ? { actor: input.actor } : {}),
@@ -3529,6 +3674,9 @@ export function registerRunNotebookJob(engine: Engine): void {
         )
       : new Set<string>();
     const ordered = topologicalOrder(document);
+    const requestedOutputCellId = input.outputCellId
+      ?? generationPlanClaimOutputCellId(input.generationPlan ?? {})
+      ?? undefined;
     const outputs: Record<string, string> = {};
     const errors: string[] = [];
     const blocked = new Set<string>();
@@ -3557,7 +3705,18 @@ export function registerRunNotebookJob(engine: Engine): void {
         waiting.add(cell.id);
         continue;
       }
-      const currentExecution = executionState(document)[cell.id];
+      const invocationOutput = isConcurrentGenerationProducer(cell)
+        ? findGenerationResultForRun(document, cell, {
+            runId,
+            outputCellId: requestedOutputCellId,
+          })
+        : null;
+      const invocationExecution = invocationOutput
+        ? executionState(document)[invocationOutput.outputCell.id]
+        : undefined;
+      const currentExecution = invocationExecution?.runId === runId
+        ? invocationExecution
+        : executionState(document)[cell.id];
       if (
         currentExecution?.status === "awaiting-output"
         || currentExecution?.status === "running"
@@ -3574,6 +3733,19 @@ export function registerRunNotebookJob(engine: Engine): void {
         errors.push(`${notebookGridTag(cell.slot)}: ${message}`);
         blocked.add(cell.id);
         continue;
+      }
+      if (
+        input.resume
+        && invocationOutput
+        && currentExecution?.runId === runId
+        && currentExecution.status === "completed"
+      ) {
+        const artifactId = currentExecution.outputArtifactId
+          ?? invocationOutput.outputCell.outputArtifactId;
+        if (artifactId && engine.artifacts.get(artifactId).ok) {
+          outputs[cell.id] = artifactId;
+          continue;
+        }
       }
       const stale = notebookCellIsStale(engine, document, cell);
       const forceCell = input.force === true
@@ -3602,13 +3774,8 @@ export function registerRunNotebookJob(engine: Engine): void {
           {
             confirmPaid: paidAuthorized,
             runId,
-            ...(input.outputCellId ? { outputCellId: input.outputCellId } : {}),
-            ...(generationPlanClaimOutputCellId(input.generationPlan ?? {})
-              ? {
-                  outputCellId:
-                    generationPlanClaimOutputCellId(input.generationPlan ?? {})
-                    ?? undefined,
-                }
+            ...(requestedOutputCellId
+              ? { outputCellId: requestedOutputCellId }
               : {}),
           },
         );
@@ -3646,11 +3813,9 @@ export function registerRunNotebookJob(engine: Engine): void {
               cellId: cell.id,
               providerArtifactId: result.outputArtifactId,
               runId,
-              ...(input.outputCellId || generationPlanClaimOutputCellId(input.generationPlan ?? {})
+              ...(requestedOutputCellId
                 ? {
-                    outputCellId: input.outputCellId
-                      ?? generationPlanClaimOutputCellId(input.generationPlan ?? {})
-                      ?? undefined,
+                    outputCellId: requestedOutputCellId,
                   }
                 : {}),
               ...(input.runPlanId ? { runPlanId: input.runPlanId } : {}),
@@ -3776,15 +3941,6 @@ export async function reconcileAwaitingNotebookOutputs(
     states: ["failed", "aborted"],
     type: "await_notebook_output",
   });
-  const activeCells = new Set(activeJobs.flatMap((job) => {
-    const notebookId = typeof job.payload.notebookId === "string"
-      ? job.payload.notebookId
-      : null;
-    const cellId = typeof job.payload.cellId === "string"
-      ? job.payload.cellId
-      : null;
-    return notebookId && cellId ? [`${notebookId}:${cellId}`] : [];
-  }));
   let enqueued = 0;
   for (const notebook of engine.notebooks.list()) {
     const execution = executionState(notebook);
@@ -3793,17 +3949,39 @@ export async function reconcileAwaitingNotebookOutputs(
         state.status !== "awaiting-output"
         || !state.providerArtifactId
         || !state.runId
-        || activeCells.has(`${notebook.id}:${cellId}`)
       ) {
         continue;
       }
+      const stateRunId = state.runId;
+      const providerArtifactId = state.providerArtifactId;
+      const cell = notebook.cells.find((candidate) => candidate.id === cellId);
+      const producerCellId = cell
+        ? concurrentProducerIdForCell(cell)
+        : null;
+      const coveredByActive = activeJobs.some((job) =>
+        awaitJobCoversExecution({
+          payload: job.payload,
+          notebookId: notebook.id,
+          cellId,
+          producerCellId,
+          runId: stateRunId,
+        }));
+      if (coveredByActive) continue;
       const matchingFailed = failedJobs
         .filter((job) =>
-          job.payload.notebookId === notebook.id
-          && job.payload.cellId === cellId
-          && job.payload.runId === state.runId)
+          awaitJobCoversExecution({
+            payload: job.payload,
+            notebookId: notebook.id,
+            cellId,
+            producerCellId,
+            runId: stateRunId,
+          }))
         .sort((left, right) => right.id - left.id);
       const latestFailed = matchingFailed[0];
+      const awaitProducerId = producerCellId ?? cellId;
+      const awaitOutputCellId = cell && isImageVideoGenerationResult(cell)
+        ? cellId
+        : undefined;
       if (latestFailed) {
         const message = latestFailed.error?.message
           ?? `Notebook await ${latestFailed.state}`;
@@ -3813,42 +3991,50 @@ export async function reconcileAwaitingNotebookOutputs(
             type: "await_notebook_output",
             bookId,
             notebookId: notebook.id,
-            cellId,
-            providerArtifactId: state.providerArtifactId,
-            runId: state.runId,
+            cellId: awaitProducerId,
+            providerArtifactId,
+            runId: stateRunId,
+            ...(awaitOutputCellId ? { outputCellId: awaitOutputCellId } : {}),
           },
           message,
         );
         continue;
       }
       const runPlan = notebookRunPlanRecords(notebook).find((record) =>
-        record.runId === state.runId
+        record.runId === stateRunId
         && (
           record.status === "queued"
           || record.status === "awaiting-output"
         ));
       const generationRecords = notebook.generationPlans ?? [];
       const generationRecord = generationRecords.find((candidate) =>
-        candidate.cellId === cellId
+        (candidate.cellId === awaitProducerId || candidate.cellId === cellId)
         && (
           candidate.status === "queued"
           || candidate.status === "awaiting-output"
+        )
+        && (
+          generationPlanClaimRunId(candidate.plan) === stateRunId
+          || generationPlanClaimRunId(candidate.plan) === null
         ));
       const generationPlan = runPlan?.plan ?? generationRecord?.plan;
       await queue.enqueue(
-        `reconcile-await-notebook-${state.runId}-${cellId}-${Date.now()}`,
+        `reconcile-await-notebook-${stateRunId}-${awaitProducerId}-${
+          awaitOutputCellId ?? cellId
+        }-${Date.now()}`,
         {
           type: "await_notebook_output",
           bookId,
           notebookId: notebook.id,
-          cellId,
-          providerArtifactId: state.providerArtifactId,
-          runId: state.runId,
+          cellId: awaitProducerId,
+          providerArtifactId,
+          runId: stateRunId,
+          ...(awaitOutputCellId ? { outputCellId: awaitOutputCellId } : {}),
           ...(typeof runPlan?.planId === "string"
             ? { runPlanId: runPlan.planId }
             : {}),
           ...(generationPlan ? { generationPlan } : {}),
-          cellIds: [cellId],
+          cellIds: [awaitProducerId],
           actor: "notebook-reconciler",
         },
       );
@@ -3938,7 +4124,13 @@ export async function reconcileQueuedNotebookCells(
       const state = executionState(document)[cellId];
       if (state?.status !== "queued" || state.runId !== listedState.runId) continue;
       const cell = document.cells.find((candidate) => candidate.id === cellId);
-      if (!cell || !notebookCellIsRunnable(cell)) continue;
+      const invocationResult = Boolean(cell && isImageVideoGenerationResult(cell));
+      const producerCellId = cell
+        ? concurrentProducerIdForCell(cell) ?? cell.id
+        : cellId;
+      const producer = document.cells.find((candidate) =>
+        candidate.id === producerCellId) ?? cell;
+      if (!cell || (!invocationResult && !notebookCellIsRunnable(cell))) continue;
       const terminalJobs = engine.jobs.queue.list({
         states: ["done", "failed", "aborted"],
         type: "run_notebook",
@@ -3950,18 +4142,30 @@ export async function reconcileQueuedNotebookCells(
             || job.payload.runId !== state.runId
           ) return false;
           const cellIds = job.payload.cellIds;
-          return !Array.isArray(cellIds) || cellIds.includes(cellId);
+          const jobOutputCellId = typeof job.payload.outputCellId === "string"
+            ? job.payload.outputCellId
+            : null;
+          return !Array.isArray(cellIds)
+            || cellIds.includes(cellId)
+            || cellIds.includes(producerCellId)
+            || jobOutputCellId === cellId;
         })
         .sort((left, right) => right.id - left.id);
       const terminalJob = matchingTerminal[0];
       if (terminalJob?.state === "done") continue;
       const claimedPlans = (document.generationPlans ?? []).filter((record) =>
-        record.cellId === cellId
+        record.cellId === producerCellId
         && record.status === "queued"
-        && generationPlanClaimRunId(record.plan) === state.runId);
+        && generationPlanClaimRunId(record.plan) === state.runId
+        && (
+          !invocationResult
+          || generationPlanClaimOutputCellId(record.plan) === cellId
+          || generationPlanClaimOutputCellId(record.plan) === null
+        ));
       if (
         !terminalJob
-        && notebookCellIsPaid(cell)
+        && producer
+        && notebookCellIsPaid(producer)
         && claimedPlans.length !== 1
       ) continue;
       const runPlanId = typeof terminalJob?.payload.runPlanId === "string"
@@ -4002,7 +4206,7 @@ export async function reconcileQueuedNotebookCells(
         : undefined;
       const generationPlanId = terminalPlanId ?? claimedPlans[0]?.planId;
       terminalized += await failQueuedNotebookCells(engine, document.id, {
-        cellIds: [cellId],
+        cellIds: [...new Set([cellId, producerCellId])],
         runId: state.runId,
         error: message,
         ...(generationPlanId ? { generationPlanId } : {}),

@@ -557,7 +557,7 @@ describe('v2 notebook domain tools', () => {
       target_input: 'media',
     })
     expect(invalidOutput.isError).toBe(true)
-    expect(invalidOutput.content[0]?.text).toContain('split video source')
+    expect(invalidOutput.content[0]?.text).toContain('split video or generate video source')
 
     const invalidImageOutput = await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
@@ -566,7 +566,7 @@ describe('v2 notebook domain tools', () => {
       target_input: 'media',
     })
     expect(invalidImageOutput.isError).toBe(true)
-    expect(invalidImageOutput.content[0]?.text).toContain('created automatically')
+    expect(invalidImageOutput.content[0]?.text).toContain('generate image source')
 
     const bypassedMedia = await invoke('connect_notebook_cells', {
       notebook_id: notebookId,

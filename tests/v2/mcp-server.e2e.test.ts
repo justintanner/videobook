@@ -296,11 +296,7 @@ describe('v2 MCP server', () => {
         model: 'generate_kie_gpt_image_2_text_to_image',
       },
     })
-    expect(image.output_cell).toMatchObject({
-      id: expect.any(String),
-      type: 'image',
-    })
-    if (!image.output_cell) throw new Error('Generate image output was not created')
+    expect(image.output_cell).toBeUndefined()
     await callTool(client, 'connect_notebook_cells', {
       book_id: book.bookId,
       notebook_id: notebook.id,
@@ -327,12 +323,9 @@ describe('v2 MCP server', () => {
     ]))
     expect(document.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({ source: prompt.id, target: image.id, targetInput: 'prompt' }),
-      expect.objectContaining({
-        source: image.id,
-        target: image.output_cell.id,
-        targetInput: 'media',
-      }),
     ]))
+    expect(document.edges.some((edge) =>
+      edge.source === image.id && edge.targetInput === 'media')).toBe(false)
 
     const videoPath = join(rootDir, 'timeline-source.mp4')
     await execFileAsync(FFMPEG, [
@@ -381,7 +374,6 @@ describe('v2 MCP server', () => {
     expect(notebookWrites).toEqual(expect.arrayContaining([
       `cell:${notebook.id}:${prompt.id}`,
       `cell:${notebook.id}:${image.id}`,
-      `cell:${notebook.id}:${image.output_cell.id}`,
     ]))
     expect(server.output.join('')).not.toContain('[mcp] history record failed')
 

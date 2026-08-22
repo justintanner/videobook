@@ -829,7 +829,17 @@ export function findGenerationResultForRun(
       edge.source === producer.id
       && edge.target === identity.outputCellId
       && edge.targetInput === "media");
-    if (outputCell && outputEdge) return { outputCell, outputEdge };
+    if (!outputCell || !outputEdge) return null;
+    const boundRunId = outputCell.inputs?.generationRunId
+      ?? document.execution?.[outputCell.id]?.runId;
+    if (
+      identity.runId
+      && typeof boundRunId === "string"
+      && boundRunId !== identity.runId
+    ) {
+      return null;
+    }
+    return { outputCell, outputEdge };
   }
   if (identity.runId) {
     const spec = producer.type === "generate_image"
@@ -838,8 +848,10 @@ export function findGenerationResultForRun(
         ? VIDEO_OUTPUT_SPEC
         : AUDIO_OUTPUT_SPEC;
     const match = listGenerationOutputs(document, producer.id, spec).find((item) =>
-      item.outputCell.inputs?.generationRunId === identity.runId);
+      item.outputCell.inputs?.generationRunId === identity.runId
+      || document.execution?.[item.outputCell.id]?.runId === identity.runId);
     if (match) return match;
+    if (spec.concurrent) return null;
   }
   return findGenerationMediaOutput(document, producer);
 }

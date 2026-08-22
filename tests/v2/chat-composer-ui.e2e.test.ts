@@ -336,22 +336,25 @@ describe('chat composer browser flow', () => {
         },
       },
     })
-    const generatedNotebook = record(resultValue(await client.callTool({
-      name: 'get_notebook',
-      arguments: { book_id: bookId, notebook_id: notebookId },
-    })))
-    const outputVideoCell = (Array.isArray(generatedNotebook?.cells)
-      ? generatedNotebook.cells
-      : [])
-      .map(record)
-      .find((cell) =>
-        record(cell?.inputs)?.producerCellId === generationCellId)
-    outputVideoCellId = typeof outputVideoCell?.id === 'string'
-      ? outputVideoCell.id
-      : ''
-    if (!outputVideoCellId) {
-      throw new Error('Could not create browser fixture video output cell')
-    }
+    outputVideoCellId = await createCell({
+      type: 'video',
+      label: 'generate-video-output',
+      slot: { row: 2, column: 0 },
+      inputs: {
+        mediaRole: 'generate-video-output',
+        producerCellId: generationCellId,
+      },
+    })
+    resultValue(await client.callTool({
+      name: 'connect_notebook_cells',
+      arguments: {
+        book_id: bookId,
+        notebook_id: notebookId,
+        source_cell_id: generationCellId,
+        target_cell_id: outputVideoCellId,
+        target_input: 'media',
+      },
+    }))
     reviewGenerationCellId = await createCell({
       type: 'generate_image',
       label: 'generate-image-review',
@@ -433,36 +436,41 @@ describe('chat composer browser flow', () => {
     if (!fullscreenImageArtifactId || !fullscreenImageObjectHash || !fullscreenImageMediaUrl) {
       throw new Error('Could not create fullscreen image fixture asset')
     }
-    const fullscreenGeneration = record(resultValue(await client.callTool({
-      name: 'create_notebook_cell',
+    fullscreenImageGenerationCellId = await createCell({
+      type: 'generate_image',
+      label: 'generate-image-fullscreen',
+      slot: { row: 2, column: 1 },
+      prompt: 'A fullscreen image fixture',
+      provider: 'google-flow',
+      model: 'nano-banana-pro',
+      operation: 'text_to_image',
+      tool: 'generate_google_flow_nano_banana_pro_image',
+    })
+    fullscreenImageCellId = await createCell({
+      type: 'image',
+      label: 'generate-image-fullscreen image',
+      slot: { row: 2, column: 2 },
+      prompt: 'A fullscreen image fixture',
+      provider: 'google-flow',
+      model: 'nano-banana-pro',
+      tool: 'generate_google_flow_nano_banana_pro_image',
+      output_artifact_id: fullscreenImageArtifactId,
+      inputs: {
+        mediaRole: 'generate-image-output',
+        producerCellId: fullscreenImageGenerationCellId,
+        state: 'completed',
+      },
+    })
+    resultValue(await client.callTool({
+      name: 'connect_notebook_cells',
       arguments: {
         book_id: bookId,
         notebook_id: notebookId,
-        cell: {
-          type: 'generate_image',
-          label: 'generate-image-fullscreen',
-          slot: { row: 2, column: 1 },
-          prompt: 'A fullscreen image fixture',
-          provider: 'google-flow',
-          model: 'nano-banana-pro',
-          operation: 'text_to_image',
-          tool: 'generate_google_flow_nano_banana_pro_image',
-          output_artifact_id: fullscreenImageArtifactId,
-        },
+        source_cell_id: fullscreenImageGenerationCellId,
+        target_cell_id: fullscreenImageCellId,
+        target_input: 'media',
       },
-    })))
-    const fullscreenOutputCell = record(fullscreenGeneration?.output_cell)
-    fullscreenImageGenerationCellId = typeof fullscreenGeneration?.id === 'string'
-      ? fullscreenGeneration.id
-      : ''
-    fullscreenImageCellId = typeof fullscreenOutputCell?.id === 'string'
-      ? fullscreenOutputCell.id
-      : ''
-    if (!fullscreenImageGenerationCellId || !fullscreenImageCellId) {
-      throw new Error('Could not create browser fixture image output pair')
-    }
-    expect(fullscreenGeneration?.output_artifact_id).toBeUndefined()
-    expect(fullscreenOutputCell?.output_artifact_id).toBe(fullscreenImageArtifactId)
+    }))
     await client.close()
     viteProcess = startProcess(
       [join(process.cwd(), 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(vitePort)],
@@ -946,8 +954,14 @@ describe('chat composer browser flow', () => {
     expect(await dialog.getByLabel('Chat model').count()).toBe(0)
     expect(await dialog.locator('.command-suggestions').count()).toBe(0)
     expect(await dialog.locator('.command-composer').count()).toBe(1)
-    const image = dialog.locator('img')
-    expect(await image.getAttribute('src')).toContain(fullscreenImageMediaUrl)
+    const image = dialog.locator(
+      '.notebook-subject-stage img, .notebook-subject-stage image',
+    ).first()
+    await image.waitFor({ state: 'visible' })
+    expect(await image.evaluate((element) =>
+      element instanceof HTMLImageElement
+        ? element.src
+        : element.getAttribute('href') ?? '')).toContain(fullscreenImageMediaUrl)
     const subjects = dialog.getByRole('button', { name: 'Subjects' })
     await subjects.waitFor({ state: 'visible' })
     expect(await subjects.isVisible()).toBe(true)
@@ -959,10 +973,15 @@ describe('chat composer browser flow', () => {
       inert: element instanceof HTMLElement ? element.inert : false,
     }))).toEqual({ ariaHidden: 'true', inert: true })
     await expect.poll(async () => await image.evaluate((element) => {
-      const imageElement = element as HTMLImageElement
+      if (!(element instanceof HTMLImageElement)) {
+        return {
+          complete: Boolean(element.getAttribute('href')),
+          naturalWidth: Number(element.getAttribute('width')),
+        }
+      }
       return {
-        complete: imageElement.complete,
-        naturalWidth: imageElement.naturalWidth,
+        complete: element.complete,
+        naturalWidth: element.naturalWidth,
       }
     })).toEqual({ complete: true, naturalWidth: 1 })
     const close = page.getByLabel('Close fullscreen preview')
@@ -1540,7 +1559,7 @@ describe('chat composer browser flow', () => {
     await outRow.getByRole('button', { name: '+0.1s' }).press('ArrowRight')
     await expect.poll(async () => await outSeconds.inputValue()).toBe('1.700')
     await review.getByRole('button', { name: /Split piece in half/ }).click()
-    await expect.poll(async () => await review.getByRole('button', { name: /^0\d / }).count())
+    await expect.poll(async () => await review.locator('.video-segment-piece').count())
       .toBe(3)
 
     observedCalls.length = 0
@@ -1642,6 +1661,8 @@ describe('chat composer browser flow', () => {
         'Generate image',
         'Duplicate',
         'Split video',
+        'Arrange videos in column',
+        'Arrange videos in row',
       ].includes(label))).toBe(true)
     expect(await menu.locator('.cell-context-menu-danger').evaluate((element) =>
       getComputedStyle(element).borderTopStyle)).toBe('solid')
@@ -1700,6 +1721,8 @@ describe('chat composer browser flow', () => {
       'Extract frame',
       'Generate video',
       'Duplicate',
+      'Arrange videos in column',
+      'Arrange videos in row',
       'Split video',
       'View generations',
       'View source',
@@ -1731,6 +1754,8 @@ describe('chat composer browser flow', () => {
       'Generate video',
       'Generate image',
       'Duplicate',
+      'Arrange videos in column',
+      'Arrange videos in row',
       'View generations',
       'View source',
       'Delete cell',
@@ -1829,6 +1854,8 @@ describe('chat composer browser flow', () => {
       .map((label) => label.replace('⌫', '').trim())).toEqual([
       'Edit cell',
       'Choose media',
+      'Arrange videos in column',
+      'Arrange videos in row',
       'View generations',
       'View source',
       'Delete cell',

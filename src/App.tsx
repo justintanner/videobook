@@ -3860,7 +3860,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             }
             revealCells([outputCellId])
             setCellQueued(outputCellId, true)
-            selectCanvasCell(outputCellId)
+            if (selectedCellIdsRef.current.has(cellId)) {
+              selectCanvasCell(outputCellId)
+            }
           }
           setNotice(`${notebookGridTag(cell.slot)} queued`)
           void watchGenerationRun({

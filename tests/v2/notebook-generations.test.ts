@@ -196,7 +196,11 @@ describe("notebook generation rows", () => {
     const finished = engine.notebooks.read(notebookId);
     expect(finished.ok).toBe(true);
     if (!finished.ok) return;
-    expect(finished.value.execution?.[cell.id]?.status).toBe("completed");
+    expect(finished.value.execution?.[row.outputCellId ?? ""]?.status)
+      .toBe("completed");
+    expect(finished.value.execution?.[cell.id]?.status).not.toBe("awaiting-output");
+    expect(finished.value.cells.find((candidate) => candidate.id === cell.id)
+      ?.inputs?.state).not.toBe("awaiting-output");
     for (const candidate of finished.value.cells) {
       expect(candidate.model ?? "").not.toMatch(/RequestSchema$/);
     }

@@ -14,12 +14,25 @@ import {
   claimNotebookGenerationPlan,
   failNotebookProviderOutput,
   notebookCellDefinitionFingerprint,
+  registerRunNotebookJob,
+  runNotebookCell,
 } from "../../server/src/jobs/run-notebook.js";
+import {
+  queue,
+  registerJobHandler,
+  setEngineRoot,
+  stopBookQueue,
+  waitForJob,
+} from "../../server/src/queue.js";
 import { videobookDomainDefs } from "../../server/src/tools/videobook-domain.js";
 import { scopedBookEngine, withBookContext } from "../../server/src/book-context.js";
 import { BookManager } from "../../server/src/book-manager.js";
 import type { ToolDef } from "../../server/src/tools/tool-def.js";
-import { isImageVideoGenerationResultCell } from "../../src/videobook/notebook-cell-presentation";
+import {
+  isImageVideoGenerationResultCell,
+  notebookCellActionPresentation,
+  notebookCellIsActiveStatus,
+} from "../../src/videobook/notebook-cell-presentation";
 
 function resultJson(result: Awaited<ReturnType<ToolDef["handler"]>>): unknown {
   expect(result.isError, result.content[0]?.text).toBeUndefined();
@@ -402,4 +415,250 @@ describe("unstacked image/video generation results", () => {
     ]);
     expect(isImageVideoGenerationResultCell(audio!)).toBe(false);
   });
+});
+
+describe("unstacked generation run and await", () => {
+  const VIDEO_TOOL = "generate_kie_grok_imagine_text_to_video";
+  const VIDEO_JOB_TYPE = "generate_grok_imagine_t2v_video";
+  const IMAGE_TOOL = "generate_kie_nano_banana_pro_text_to_image";
+  const IMAGE_JOB_TYPE = "generate_nano_banana_image";
+
+  let rootDir: string;
+  let engine: Engine;
+  let bookId: string;
+  let previousKieKey: string | undefined;
+
+  beforeEach(async () => {
+    rootDir = await mkdtemp(join(tmpdir(), "videobook-unstack-run-"));
+    engine = createEngine({ rootDir, initialBookName: "unstack-run" });
+    await engine.ready;
+    bookId = engine.book.get().bookId;
+    previousKieKey = process.env.KIE_API_KEY;
+    process.env.KIE_API_KEY = "test-kie-key-unstack";
+    await setEngineRoot(rootDir, engine);
+    registerRunNotebookJob(engine);
+  });
+
+  afterEach(async () => {
+    if (previousKieKey === undefined) delete process.env.KIE_API_KEY;
+    else process.env.KIE_API_KEY = previousKieKey;
+    await stopBookQueue(bookId);
+    engine.close();
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  function stubMediaJob(jobType: string, filename: string, bytes: string): void {
+    registerJobHandler(jobType, async (payload) => {
+      const assetId = jobType === IMAGE_JOB_TYPE
+        ? (payload as { imgAssetId: string }).imgAssetId
+        : (payload as { vidAssetId: string }).vidAssetId;
+      await engine.files.write(assetId, filename, Buffer.from(bytes));
+      await engine.metadata.artifacts.write(assetId, "original", { name: filename });
+      return { success: true, taskId: `stub-${assetId}` };
+    });
+  }
+
+  async function seedProducer(input: {
+    type: "generate_image" | "generate_video";
+    tool: string;
+    model: string;
+    operation: string;
+  }): Promise<{ notebookId: string; cell: NotebookDocument["cells"][number] }> {
+    const notebook = await engine.notebooks.create("Main");
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const cell = engine.notebooks.createCell({
+      type: input.type,
+      label: input.type,
+      slot: { row: 0, column: 0 },
+      prompt: "a scene",
+      provider: "kie",
+      model: input.model,
+      operation: input.operation,
+      tool: input.tool,
+    });
+    const written = await engine.notebooks.write({
+      ...notebook.value,
+      cells: [cell],
+    });
+    expect(written.ok).toBe(true);
+    return { notebookId: notebook.value.id, cell };
+  }
+
+  async function completeAwait(input: {
+    notebookId: string;
+    producerId: string;
+    runId: string;
+    artifactId: string;
+    outputCellId?: string;
+  }): Promise<void> {
+    const awaitJobId =
+      `await-notebook-${input.runId}-${input.producerId}-${input.artifactId}`;
+    await queue.enqueue(awaitJobId, {
+      type: "await_notebook_output",
+      bookId,
+      notebookId: input.notebookId,
+      cellId: input.producerId,
+      providerArtifactId: input.artifactId,
+      runId: input.runId,
+      ...(input.outputCellId ? { outputCellId: input.outputCellId } : {}),
+    });
+    await waitForJob(awaitJobId, 30_000);
+    await waitForJob(`resume-notebook-${input.runId}`, 30_000);
+  }
+
+  it("keeps a generate_video producer idle after an accepted provider-active run", async () => {
+    stubMediaJob(VIDEO_JOB_TYPE, "original.mp4", "stub-video");
+    const { notebookId, cell } = await seedProducer({
+      type: "generate_video",
+      tool: VIDEO_TOOL,
+      model: "GrokTextToVideoRequestSchema",
+      operation: "text_to_video",
+    });
+    const document = engine.notebooks.read(notebookId);
+    expect(document.ok).toBe(true);
+    if (!document.ok) throw new Error(document.error.message);
+    const runId = "019f0000-0000-7000-8000-00000000aa01";
+    const result = await runNotebookCell(
+      engine,
+      bookId,
+      notebookId,
+      document.value,
+      cell,
+      { confirmPaid: true, runId },
+    );
+    expect(result.status).toBe("awaiting-output");
+    const after = engine.notebooks.read(notebookId);
+    expect(after.ok).toBe(true);
+    if (!after.ok) throw new Error(after.error.message);
+    const producer = after.value.cells.find((candidate) => candidate.id === cell.id)!;
+    const outputs = listGenerateVideoOutputs(after.value, cell.id);
+    expect(outputs).toHaveLength(1);
+    expect(producer.inputs?.state).not.toBe("awaiting-output");
+    expect(producer.inputs?.state).not.toBe("queued");
+    expect(producer.inputs?.state).not.toBe("running");
+    expect(after.value.execution?.[cell.id]?.status).not.toBe("awaiting-output");
+    expect(after.value.execution?.[outputs[0]!.outputCell.id]?.status)
+      .toBe("awaiting-output");
+    const producerStatus = after.value.execution?.[cell.id]?.status
+      ?? (typeof producer.inputs?.state === "string" ? producer.inputs.state : "ready");
+    expect(notebookCellIsActiveStatus(producerStatus)).toBe(false);
+    expect(notebookCellActionPresentation(producer, producerStatus)?.disabled)
+      .toBe(false);
+  });
+
+  it("completes three same-producer image and video runs out of order on distinct tiles", async () => {
+    stubMediaJob(IMAGE_JOB_TYPE, "original.jpg", "stub-image");
+    stubMediaJob(VIDEO_JOB_TYPE, "original.mp4", "stub-video");
+    const image = await seedProducer({
+      type: "generate_image",
+      tool: IMAGE_TOOL,
+      model: "NanoBananaProRequestSchema",
+      operation: "text_to_image",
+    });
+    const videoNotebook = await engine.notebooks.create("Video");
+    expect(videoNotebook.ok).toBe(true);
+    if (!videoNotebook.ok) throw new Error(videoNotebook.error.message);
+    const videoCell = engine.notebooks.createCell({
+      type: "generate_video",
+      label: "generate_video",
+      slot: { row: 0, column: 0 },
+      prompt: "a scene",
+      provider: "kie",
+      model: "GrokTextToVideoRequestSchema",
+      operation: "text_to_video",
+      tool: VIDEO_TOOL,
+    });
+    const videoWritten = await engine.notebooks.write({
+      ...videoNotebook.value,
+      cells: [videoCell],
+    });
+    expect(videoWritten.ok).toBe(true);
+
+    async function acceptThree(
+      notebookId: string,
+      producerId: string,
+      runMarker: "b" | "c",
+    ): Promise<Array<{ runId: string; artifactId: string; outputCellId: string }>> {
+      const accepted: Array<{
+        runId: string;
+        artifactId: string;
+        outputCellId: string;
+      }> = [];
+      for (const index of [1, 2, 3]) {
+        const fresh = engine.notebooks.read(notebookId);
+        expect(fresh.ok).toBe(true);
+        if (!fresh.ok) throw new Error(fresh.error.message);
+        const producer = fresh.value.cells.find((candidate) =>
+          candidate.id === producerId);
+        expect(producer).toBeTruthy();
+        const runId = `019f0000-0000-7000-8000-00000000${runMarker}00${index}`;
+        const result = await runNotebookCell(
+          engine,
+          bookId,
+          notebookId,
+          fresh.value,
+          producer!,
+          { confirmPaid: true, runId },
+        );
+        expect(result.status).toBe("awaiting-output");
+        const after = engine.notebooks.read(notebookId);
+        expect(after.ok).toBe(true);
+        if (!after.ok) throw new Error(after.error.message);
+        const output = after.value.cells.find((candidate) =>
+          after.value.execution?.[candidate.id]?.runId === runId);
+        expect(output?.id).toBeTruthy();
+        expect(after.value.execution?.[producerId]?.status).not.toBe("awaiting-output");
+        expect(after.value.cells.find((candidate) => candidate.id === producerId)
+          ?.inputs?.state).not.toBe("awaiting-output");
+        accepted.push({
+          runId,
+          artifactId: result.outputArtifactId,
+          outputCellId: output!.id,
+        });
+      }
+      expect(new Set(accepted.map((item) => item.outputCellId)).size).toBe(3);
+      expect(new Set(accepted.map((item) => item.artifactId)).size).toBe(3);
+      return accepted;
+    }
+
+    const imageRuns = await acceptThree(image.notebookId, image.cell.id, "b");
+    const videoRuns = await acceptThree(
+      videoNotebook.value.id,
+      videoCell.id,
+      "c",
+    );
+
+    for (const run of [...imageRuns].reverse()) {
+      await completeAwait({
+        notebookId: image.notebookId,
+        producerId: image.cell.id,
+        ...run,
+      });
+    }
+    for (const run of [...videoRuns].reverse()) {
+      await completeAwait({
+        notebookId: videoNotebook.value.id,
+        producerId: videoCell.id,
+        ...run,
+      });
+    }
+
+    const imageDoc = engine.notebooks.read(image.notebookId);
+    const videoDoc = engine.notebooks.read(videoNotebook.value.id);
+    expect(imageDoc.ok && videoDoc.ok).toBe(true);
+    if (!imageDoc.ok || !videoDoc.ok) throw new Error("notebooks");
+    for (const run of imageRuns) {
+      const tile = imageDoc.value.cells.find((cell) => cell.id === run.outputCellId);
+      expect(tile?.outputArtifactId).toBe(run.artifactId);
+      expect(imageDoc.value.execution?.[run.outputCellId]?.status).toBe("completed");
+    }
+    for (const run of videoRuns) {
+      const tile = videoDoc.value.cells.find((cell) => cell.id === run.outputCellId);
+      expect(tile?.outputArtifactId).toBe(run.artifactId);
+      expect(videoDoc.value.execution?.[run.outputCellId]?.status).toBe("completed");
+    }
+    expect(listGenerateImageOutputs(imageDoc.value, image.cell.id)).toHaveLength(3);
+    expect(listGenerateVideoOutputs(videoDoc.value, videoCell.id)).toHaveLength(3);
+  }, 60_000);
 });

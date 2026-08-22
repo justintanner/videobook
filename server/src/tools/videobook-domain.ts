@@ -152,11 +152,16 @@ function notebookConnectionError(
     targetInput === "media"
     && target.type === "video"
     && source.type !== "split_video"
+    && source.type !== "generate_video"
   ) {
-    return "Video media outputs require a split video source";
+    return "Video media outputs require a split video or generate video source";
   }
-  if (targetInput === "media" && target.type === "image") {
-    return "Image media outputs are created automatically by generation cells";
+  if (
+    targetInput === "media"
+    && target.type === "image"
+    && source.type !== "generate_image"
+  ) {
+    return "Image media outputs require a generate image source";
   }
   if (
     targetInput === "segment"
