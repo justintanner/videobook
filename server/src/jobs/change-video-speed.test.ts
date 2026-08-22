@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Engine, Job } from "videobook-engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { FFMPEG, probeVideo } from "../ffmpeg.js";
+import { FFMPEG, FFPROBE, probeVideo } from "../ffmpeg.js";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
 import { registerChangeVideoSpeedJob } from "./change-video-speed.js";
@@ -20,20 +20,44 @@ function valueOf<T>(
   return result.value;
 }
 
-async function generateVideo(outputPath: string): Promise<void> {
+async function generateVideo(
+  outputPath: string,
+  videoCodec = "libx264",
+  pixelFormat = "yuv420p",
+): Promise<void> {
   await execFileAsync(FFMPEG, [
     "-y",
     "-f", "lavfi", "-i", "testsrc=duration=2:size=160x90:rate=12",
     "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
     "-map", "0:v:0",
     "-map", "1:a:0",
-    "-c:v", "libx264",
+    "-c:v", videoCodec,
     "-preset", "ultrafast",
-    "-pix_fmt", "yuv420p",
+    "-pix_fmt", pixelFormat,
     "-c:a", "aac",
     "-shortest",
     outputPath,
   ]);
+}
+
+async function probeVideoFormat(
+  videoPath: string,
+): Promise<{ codec: string | null; pixelFormat: string | null }> {
+  const { stdout } = await execFileAsync(FFPROBE, [
+    "-v", "error",
+    "-select_streams", "v:0",
+    "-show_entries", "stream=codec_name,pix_fmt",
+    "-of", "json",
+    videoPath,
+  ]);
+  const data = JSON.parse(stdout) as {
+    streams?: Array<{ codec_name?: unknown; pix_fmt?: unknown }>;
+  };
+  const stream = data.streams?.[0];
+  return {
+    codec: typeof stream?.codec_name === "string" ? stream.codec_name : null,
+    pixelFormat: typeof stream?.pix_fmt === "string" ? stream.pix_fmt : null,
+  };
 }
 
 async function waitForProcessVideo(
@@ -57,13 +81,16 @@ describe("change-video-speed job handler", () => {
   let tempDir: string;
   let engineRoot: string;
   let sourcePath: string;
+  let tenBitSourcePath: string;
   let fs: Engine;
 
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videobook-speed-job-"));
     engineRoot = join(tempDir, "engine");
     sourcePath = join(tempDir, "source.mp4");
+    tenBitSourcePath = join(tempDir, "source-10-bit.mp4");
     await generateVideo(sourcePath);
+    await generateVideo(tenBitSourcePath, "libx265", "yuv420p10le");
     fs = createEngineForTest(engineRoot);
     await setEngineRoot(engineRoot, fs);
     registerChangeVideoSpeedJob(fs);
@@ -143,5 +170,42 @@ describe("change-video-speed job handler", () => {
     const outputProbe = await probeVideo(join(asset.path, "original.mp4"));
     expect(outputProbe.duration).toBeCloseTo(1, 1);
     expect(outputProbe.hasAudio).toBe(true);
+  }, 120_000);
+
+  it("normalizes 10-bit HEVC input to 8-bit H.264", async () => {
+    expect(await probeVideoFormat(tenBitSourcePath)).toEqual({
+      codec: "hevc",
+      pixelFormat: "yuv420p10le",
+    });
+    const asset = valueOf(await fs.artifacts.create("vid", "10-bit speed source"));
+    valueOf(await fs.files.write(
+      asset.artifactId,
+      "original.mp4",
+      await readFile(tenBitSourcePath),
+    ));
+    const outputPath = join(asset.path, ".speed-output.mp4");
+
+    const result = await queue.enqueueAndWait<{ success: boolean }>(
+      `speed-10-bit-${asset.artifactId}`,
+      {
+        type: "change_video_speed",
+        inputPath: join(asset.path, "original.mp4"),
+        outputPath,
+        speed: 2,
+        targetDuration: 1,
+        hasAudio: true,
+        assetId: asset.artifactId,
+        assetDir: asset.path,
+        bookId: fs.book.get().bookId,
+      },
+      120_000,
+    );
+
+    expect(result).toEqual({ success: true });
+    await waitForProcessVideo(fs, asset.artifactId);
+    expect(await probeVideoFormat(join(asset.path, "original.mp4"))).toEqual({
+      codec: "h264",
+      pixelFormat: "yuv420p",
+    });
   }, 120_000);
 });

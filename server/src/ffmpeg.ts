@@ -17,7 +17,7 @@ interface MediaProcessOptions {
   timeoutMs?: number;
 }
 
-export const H264_MEDIUM = ["-c:v", "libx264", "-preset", "medium", "-crf", "23", "-profile:v", "high", "-level:v", "4.0"];
+export const H264_MEDIUM = ["-c:v", "libx264", "-preset", "medium", "-crf", "23", "-profile:v", "high", "-level:v", "4.0", "-pix_fmt", "yuv420p"];
 // `-ac 2` downmixes any source to stereo. The native `aac` encoder rejects
 // >2-channel layouts (e.g. 5.1 sources fail with "Unsupported channel layout
 // '6 channels'"), and stereo is the right delivery format for videocity's
