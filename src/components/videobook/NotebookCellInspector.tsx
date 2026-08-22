@@ -544,6 +544,7 @@ function NotebookCellMedia({
   allowFullscreen: boolean
   onOpenFullscreen: (asset: NotebookCellInspectorAsset) => void
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
   const mediaUrl = asset.mediaUrl
   const previewUrl = asset.thumbnailUrl ?? mediaUrl
   const isVideo = asset.type === 'video' || asset.type === 'final'
@@ -556,6 +557,10 @@ function NotebookCellMedia({
     hasOutput: true,
     inputs: undefined,
   })
+  const openFullscreen = () => {
+    videoRef.current?.pause()
+    onOpenFullscreen(asset)
+  }
 
   if (!previewUrl) return null
 
@@ -567,6 +572,7 @@ function NotebookCellMedia({
       <div className="inspector-cell-media">
         {isVideo && mediaUrl ? (
           <video
+            ref={videoRef}
             key={mediaUrl}
             src={mediaUrl}
             poster={asset.thumbnailUrl ?? undefined}
@@ -620,7 +626,7 @@ function NotebookCellMedia({
                 type="button"
                 className="inspector-edit-button"
                 aria-label={`Edit @${address} image`}
-                onClick={() => onOpenFullscreen(asset)}
+                onClick={openFullscreen}
               >
                 <Pencil size={14} />Edit
               </button>
@@ -631,7 +637,7 @@ function NotebookCellMedia({
               type="button"
               className="inspector-fullscreen-button"
               aria-label={`Open @${address} fullscreen`}
-              onClick={() => onOpenFullscreen(asset)}
+              onClick={openFullscreen}
             >
               <Maximize2 size={14} />Fullscreen
             </button>

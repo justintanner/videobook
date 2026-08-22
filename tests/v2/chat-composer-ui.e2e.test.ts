@@ -1095,6 +1095,51 @@ describe('chat composer browser flow', () => {
     mockedFullscreenSubjectEditor = false
   }, 60_000)
 
+  it('pauses the sidebar video when opening fullscreen playback', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await openApp()
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    const reopen = page.getByLabel('Open inspector')
+    if (await reopen.count()) await reopen.click()
+    const videoNode = notebookCellNode(page, videoCellId)
+    await videoNode.waitFor({ state: 'visible' })
+    const videoAddress = (await videoNode.locator('.cell-node-footer strong')
+      .textContent())?.trim()
+    if (!videoAddress) throw new Error('Sidebar video address is missing')
+    await videoNode.click()
+    const sidebarVideo = page.locator('.inspector-cell-media video')
+    await sidebarVideo.waitFor({ state: 'visible' })
+    const sidebarPlaybackState = async () => await sidebarVideo.evaluate((element) =>
+      element instanceof HTMLVideoElement
+        ? { paused: element.paused, time: element.currentTime }
+        : null)
+
+    await sidebarVideo.evaluate((element) => {
+      if (element instanceof HTMLVideoElement) void element.play()
+    })
+    await expect.poll(async () => {
+      const state = await sidebarPlaybackState()
+      return state !== null && !state.paused && state.time > 0
+    }, { timeout: 10_000 }).toBe(true)
+
+    await page.getByLabel(`Open ${videoAddress} fullscreen`).click()
+    const dialog = page.getByRole('dialog', {
+      name: `Fullscreen preview for ${videoAddress}`,
+    })
+    await dialog.waitFor({ state: 'visible' })
+    await dialog.locator('video').waitFor({ state: 'visible' })
+    const pausedAtOpen = await sidebarPlaybackState()
+    expect(pausedAtOpen?.paused).toBe(true)
+    await wait(700)
+    expect(await sidebarPlaybackState()).toEqual(pausedAtOpen)
+
+    await page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'hidden' })
+    expect(await sidebarPlaybackState()).toEqual(pausedAtOpen)
+  }, 60_000)
+
   it('turns every open notebook square into a media file dropzone', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()
