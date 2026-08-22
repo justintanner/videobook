@@ -262,19 +262,17 @@ describe("notebook provider failures", () => {
     const notebook = engine.notebooks.read(input.notebookId);
     expect(notebook.ok).toBe(true);
     if (!notebook.ok) return;
-    expect(notebook.value.execution?.[actionCellId]).toMatchObject({
+    expect(notebook.value.execution?.[actionCellId]?.status).not.toBe("error");
+    expect(notebook.value.execution?.[outputCellId]).toMatchObject({
       status: "error",
-      providerArtifactId: input.providerArtifactId,
+      runId: input.runId,
     });
-    expect(notebook.value.execution?.[outputCellId]).toBeUndefined();
     const awaiting = Object.values(notebook.value.execution ?? {}).filter(
       (execution) => execution?.status === "awaiting-output",
     );
     expect(awaiting).toHaveLength(0);
     const output = notebook.value.cells.find((cell) => cell.id === outputCellId);
-    expect(output?.outputArtifactId).toBeUndefined();
-    expect(output?.inputs?.state).toBeUndefined();
-    expect(output?.inputs?.outputVersionArtifactIds).toEqual([]);
+    expect(output?.inputs?.state).toBe("error");
     expect(output?.inputs?.mediaRole).toBe("generate-image-output");
   });
 
@@ -295,12 +293,12 @@ describe("notebook provider failures", () => {
     expect(notebook.ok).toBe(true);
     if (!notebook.ok) return;
     const output = notebook.value.cells.find((cell) => cell.id === outputCellId);
-    expect(output?.outputArtifactId).toBe(previous.value.artifactId);
-    expect(output?.inputs?.state).toBe("completed");
+    expect(output?.inputs?.state).toBe("error");
     expect(output?.inputs?.outputVersionArtifactIds).toEqual([
       previous.value.artifactId,
+      input.providerArtifactId,
     ]);
-    expect(notebook.value.execution?.[outputCellId]).toBeUndefined();
+    expect(notebook.value.execution?.[outputCellId]?.status).toBe("error");
   });
 
   it("heals stale awaiting residue when the producer starts a fresh run", async () => {
@@ -312,12 +310,15 @@ describe("notebook provider failures", () => {
     expect(action).toBeDefined();
     if (!action) return;
 
-    const healed = healGenerationMediaOutputResidue(notebook.value, action);
+    const healed = healGenerationMediaOutputResidue(
+      notebook.value,
+      action,
+      outputCellId,
+    );
 
     const output = healed.cells.find((cell) => cell.id === outputCellId);
     expect(output?.outputArtifactId).toBeUndefined();
     expect(output?.inputs?.state).toBeUndefined();
-    expect(output?.inputs?.outputVersionArtifactIds).toEqual([]);
     expect(healed.execution?.[outputCellId]).toBeUndefined();
     expect(healed.execution?.[actionCellId]).toMatchObject({
       status: "awaiting-output",

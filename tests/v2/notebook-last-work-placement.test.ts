@@ -105,7 +105,7 @@ describe('last-work placement', () => {
         prompt: 'origin kitten',
       },
     })) as { id: string; output_cell?: { slot: { row: number; column: number } } }
-    expect(originImage.output_cell?.slot).toEqual({ row: 0, column: 1 })
+    expect(originImage.output_cell).toBeUndefined()
     const originDoc = value(engine.notebooks.read(notebookId))
     expect(notebookDocumentsEqual(originDoc, relayoutNotebookDocument(engine, originDoc)))
       .toBe(true)
@@ -139,7 +139,7 @@ describe('last-work placement', () => {
         prompt: 'a kitten',
       },
     })) as { id: string; output_cell?: { id: string; slot: { row: number; column: number } } }
-    expect(image.output_cell?.slot).toEqual(imageSlots.output)
+    expect(image.output_cell).toBeUndefined()
 
     const afterImage = value(engine.notebooks.read(notebookId))
     const imageRepeat = allocateNotebookHorizontalGenerationSlots(
@@ -148,7 +148,7 @@ describe('last-work placement', () => {
       lastWork,
     )
     expect(imageRepeat.tile.row).toBe(8)
-    expect(imageRepeat.tile.column).toBeGreaterThan(imageSlots.output.column)
+    expect(imageRepeat.tile.column).toBeGreaterThan(imageSlots.tile.column)
     const imageTwo = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
@@ -158,7 +158,7 @@ describe('last-work placement', () => {
         prompt: 'another kitten',
       },
     })) as { id: string; output_cell?: { slot: { row: number; column: number } } }
-    expect(imageTwo.output_cell?.slot).toEqual(imageRepeat.output)
+    expect(imageTwo.output_cell).toBeUndefined()
 
     const audioSlots = allocateNotebookHorizontalGenerationSlots(
       value(engine.notebooks.read(notebookId)).cells,
@@ -194,9 +194,7 @@ describe('last-work placement', () => {
         prompt: 'a cat walks',
       },
     })) as { id: string; output_cell?: { slot: { row: number; column: number } } }
-    expect(video.output_cell?.slot).toEqual(videoSlots.output)
-    expect(video.output_cell?.slot.column).toBe(videoSlots.tile.column)
-    expect(video.output_cell!.slot.row).toBeGreaterThan(videoSlots.tile.row)
+    expect(video.output_cell).toBeUndefined()
 
     const beforeRelayout = value(engine.notebooks.read(notebookId))
     const createdLayout: NotebookDocument = {
@@ -231,7 +229,7 @@ describe('last-work placement', () => {
         prompt: 'based on source',
       },
     })) as { id: string; output_cell?: { slot: { row: number; column: number } } }
-    expect(sourceFed.output_cell?.slot).toEqual({ row: 3, column: 4 })
+    expect(sourceFed.output_cell).toBeUndefined()
     resultJson(await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
       source_cell_id: source.id,
@@ -253,7 +251,7 @@ describe('last-work placement', () => {
         prompt: 'edge',
       },
     })) as { output_cell?: { slot: { row: number; column: number } } }
-    expect(edgeImage.output_cell?.slot).toEqual({ row: 1, column: 12 })
+    expect(edgeImage.output_cell).toBeUndefined()
 
     const edgeVideo = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
@@ -264,15 +262,13 @@ describe('last-work placement', () => {
         prompt: 'edge walk',
       },
     })) as { output_cell?: { slot: { row: number; column: number } } }
-    expect(edgeVideo.output_cell?.slot).toEqual({ row: 25, column: 1 })
+    expect(edgeVideo.output_cell).toBeUndefined()
 
     const notebook = value(engine.notebooks.read(notebookId))
-    expect(findGenerateImageOutput(notebook, image.id)?.outputCell.slot)
-      .toEqual(imageSlots.output)
+    expect(findGenerateImageOutput(notebook, image.id)).toBeNull()
     expect(findGenerateAudioOutput(notebook, audio.id)?.outputCell.slot)
       .toEqual(audioSlots.output)
-    expect(findGenerateVideoOutput(notebook, video.id)?.outputCell.slot)
-      .toEqual(videoSlots.output)
+    expect(findGenerateVideoOutput(notebook, video.id)).toBeNull()
     expect(notebook.cells.every((cell) =>
       cell.slot.row >= 0
       && cell.slot.row <= 25

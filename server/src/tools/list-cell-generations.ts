@@ -13,6 +13,8 @@ import {
   findGenerateAudioOutput,
   findGenerateImageOutput,
   findGenerateVideoOutput,
+  listGenerateImageOutputs,
+  listGenerateVideoOutputs,
 } from "../notebook-cell-outputs.js";
 import { buildAssetList } from "./reconcile-project-work.js";
 
@@ -55,6 +57,7 @@ export type ListCellGenerationsResponse = {
   cellId: string;
   generateCellId: string;
   outputCellId: string | null;
+  outputCellIds: string[];
   attempts: CellGenerationAttempt[];
   currentExecution: NotebookCellExecution | null;
   generationPlans: NotebookGenerationPlan[];
@@ -193,6 +196,13 @@ export function listCellGenerationsDef(engine: Engine): ToolDef {
         }
         const document = read.value;
         const { generateCell, outputCell } = pairForCell(document, cell_id);
+        const outputCellIds = generateCell.type === "generate_image"
+          ? listGenerateImageOutputs(document, generateCell.id).map((item) =>
+            item.outputCell.id)
+          : generateCell.type === "generate_video"
+            ? listGenerateVideoOutputs(document, generateCell.id).map((item) =>
+              item.outputCell.id)
+            : outputCell ? [outputCell.id] : [];
         const generationsResult = engine.generations.listForCell(
           notebook_id,
           generateCell.id,
@@ -207,7 +217,14 @@ export function listCellGenerationsDef(engine: Engine): ToolDef {
             }],
           };
         }
-        const rows = generationsResult.value;
+        const requestedResult = document.cells.find((cell) => cell.id === cell_id);
+        const filterToResult = requestedResult
+          && requestedResult.id !== generateCell.id
+          && outputCell?.id === requestedResult.id;
+        const rows = filterToResult
+          ? generationsResult.value.filter((row) =>
+            !row.outputCellId || row.outputCellId === requestedResult.id)
+          : generationsResult.value;
         const transitions = generationTransitions(engine, rows);
         const assets = await buildAssetList(engine, book_id);
         const assetById = new Map(
@@ -268,8 +285,10 @@ export function listCellGenerationsDef(engine: Engine): ToolDef {
           });
         }
 
-        const currentExecution = document.execution?.[generateCell.id]
-          ?? (outputCell ? document.execution?.[outputCell.id] : null)
+        const currentExecution = (outputCell
+          ? document.execution?.[outputCell.id]
+          : undefined)
+          ?? document.execution?.[generateCell.id]
           ?? null;
         const generationPlans = (document.generationPlans ?? []).filter(
           (plan) => plan.cellId === generateCell.id
@@ -281,6 +300,7 @@ export function listCellGenerationsDef(engine: Engine): ToolDef {
           cellId: cell_id,
           generateCellId: generateCell.id,
           outputCellId: outputCell?.id ?? null,
+          outputCellIds,
           attempts,
           currentExecution,
           generationPlans,

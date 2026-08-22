@@ -220,6 +220,7 @@ import {
   formatMediaAspectRatio,
   formatMediaTime,
   notebookAudioPresentation,
+  isImageVideoGenerationResultCell,
   notebookCellActionPresentation,
   notebookCellExecutionObservation,
   notebookCellInspectorActionLabel,
@@ -2492,10 +2493,15 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   )
   const versionedOutput = (
     data.kind === 'audio'
-    || data.kind === 'image'
-    || data.kind === 'video'
     || data.kind === 'analysis'
     || data.kind === 'extract_audio'
+    || (
+      (data.kind === 'image' || data.kind === 'video')
+      && !isImageVideoGenerationResultCell({
+        type: data.kind,
+        inputs: data.inputs,
+      })
+    )
   ) && outputVersions.length > 1
   const activeOutputVersion = Math.max(
     1,
@@ -3826,21 +3832,41 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               actor: 'videobook-user',
             }),
             onStarting: () => setCellQueued(cellId, true),
+            onAccepted: () => setCellQueued(cellId, false),
             onRejected: () => setCellQueued(cellId, false),
           })
-          const runId = asString(recordValue(accepted)?.run_id)
-          const jobOperationId = asString(recordValue(accepted)?.job_id)
+          const acceptedRecord = recordValue(accepted)
+          const runId = asString(acceptedRecord?.run_id)
+          const jobOperationId = asString(acceptedRecord?.job_id)
+          const outputCellId = asString(acceptedRecord?.output_cell_id)
           if (!runId || !jobOperationId) {
             setCellQueued(cellId, false)
             throw new Error('The server did not return a notebook run')
           }
           generationWatchStarted = true
-          const address = notebookGridAddress(cell.slot)
+          const watchCellId = outputCellId ?? cellId
+          let address = notebookGridAddress(cell.slot)
+          if (outputCellId) {
+            const notebookValue = await call('get_notebook', {
+              book_id: bookId,
+              notebook_id: plannedNotebookId,
+            }, { background: true })
+            const nextNotebook = asNotebook(notebookValue)
+            if (nextNotebook) {
+              applyNotebook(nextNotebook, assets, jobs)
+              const output = nextNotebook.cells.find((candidate) =>
+                candidate.id === outputCellId)
+              if (output) address = notebookGridAddress(output.slot)
+            }
+            revealCells([outputCellId])
+            setCellQueued(outputCellId, true)
+            selectCanvasCell(outputCellId)
+          }
           setNotice(`${notebookGridTag(cell.slot)} queued`)
           void watchGenerationRun({
             bookId,
             notebookId: plannedNotebookId,
-            cellId,
+            cellId: watchCellId,
             address,
             runId,
             jobOperationId,
@@ -3907,12 +3933,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setBusy(false)
     }
   }, [
+    applyNotebook,
+    assets,
     bookId,
     call,
     createGenerationPlan,
+    jobs,
     notebook,
     online,
     prepareGenerationPlan,
+    revealCells,
+    selectCanvasCell,
     setCellQueued,
     setCellRunError,
     setNotice,
@@ -6658,22 +6689,41 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               actor: 'videobook-user',
             }),
             onStarting: () => setCellQueued(cellId, true),
+            onAccepted: () => setCellQueued(cellId, false),
             onRejected: () => setCellQueued(cellId, false),
           })
-          const runId = asString(recordValue(accepted)?.run_id)
-          const jobOperationId = asString(recordValue(accepted)?.job_id)
+          const acceptedRecord = recordValue(accepted)
+          const runId = asString(acceptedRecord?.run_id)
+          const jobOperationId = asString(acceptedRecord?.job_id)
+          const outputCellId = asString(acceptedRecord?.output_cell_id)
           if (!runId || !jobOperationId) {
             setCellQueued(cellId, false)
             throw new Error('The server did not return a notebook run')
           }
+          const watchCellId = outputCellId ?? cellId
           const watchedCell = notebook?.cells.find((cell) => cell.id === cellId)
-          const address = watchedCell
+          let address = watchedCell
             ? notebookGridAddress(watchedCell.slot)
             : cellId.slice(0, 8)
+          if (outputCellId) {
+            const notebookValue = await call('get_notebook', {
+              book_id: bookId,
+              notebook_id: notebookId,
+            }, { background: true })
+            const nextNotebook = asNotebook(notebookValue)
+            if (nextNotebook) {
+              applyNotebook(nextNotebook, assets, jobs)
+              const output = nextNotebook.cells.find((candidate) =>
+                candidate.id === outputCellId)
+              if (output) address = notebookGridAddress(output.slot)
+            }
+            revealCells([outputCellId])
+            setCellQueued(outputCellId, true)
+          }
           void watchGenerationRun({
             bookId,
             notebookId,
-            cellId,
+            cellId: watchCellId,
             address,
             runId,
             jobOperationId,
@@ -7951,11 +8001,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         actor: 'videobook-user',
       })
       runAccepted = true
-      const runId = asString(recordValue(accepted)?.run_id)
-      const jobOperationId = asString(recordValue(accepted)?.job_id)
+      const acceptedRecord = recordValue(accepted)
+      const runId = asString(acceptedRecord?.run_id)
+      const jobOperationId = asString(acceptedRecord?.job_id)
+      const outputCellId = asString(acceptedRecord?.output_cell_id)
       setPendingChatAction(null)
+      setCellQueued(cellId, false)
       if (!runId || !jobOperationId) {
-        setCellQueued(cellId, false)
         await refreshBookData(bookId, currentNotebook.id).catch(() => undefined)
         return {
           ok: true,
@@ -7963,11 +8015,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
       }
       setNotice(`${cellAddress} queued`)
+      const watchCellId = outputCellId ?? cellId
+      let address = notebookGridAddress(preparedAction.draft.cell.slot)
+      if (outputCellId) {
+        const refreshed = await refreshNotebook(bookId, currentNotebook.id)
+          .catch(() => null)
+        revealCells([outputCellId])
+        setCellQueued(outputCellId, true)
+        const output = refreshed?.cells.find((candidate) =>
+          candidate.id === outputCellId)
+        if (output) address = notebookGridAddress(output.slot)
+      }
       void watchGenerationRun({
         bookId,
         notebookId: currentNotebook.id,
-        cellId,
-        address: notebookGridAddress(preparedAction.draft.cell.slot),
+        cellId: watchCellId,
+        address,
         runId,
         jobOperationId,
       })

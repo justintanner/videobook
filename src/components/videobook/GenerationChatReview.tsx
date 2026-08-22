@@ -414,11 +414,13 @@ export function GenerationChatReview({
           </strong>
           <span>{estimateCurrency}</span>
           <small>
-            {previewError
-              ? 'Estimate unavailable'
-              : previewStale
-                ? 'Prompt changed · refresh estimate'
-                : estimateWarnings[0] ?? 'Estimated provider cost'}
+            {previewLoading
+              ? 'Estimated provider cost'
+              : previewError || estimateUnknown || estimateUsd === null
+                ? 'Cost estimate unavailable'
+                : previewStale
+                  ? 'Prompt changed · refresh estimate'
+                  : 'Estimated provider cost'}
           </small>
           <button
             type="button"

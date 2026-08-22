@@ -14,12 +14,15 @@ import { scopedBookEngine, withBookContext } from '../../server/src/book-context
 import {
   collapseLegacyExtractPairs,
   migrateLegacyExtractFrameCells,
+  allocateGenerateImageResult,
+  allocateGenerateVideoResult,
   ensureGenerateAudioOutput,
   ensureGenerateImageOutput,
   ensureGenerateVideoOutput,
   findGenerateAudioOutput,
   findGenerateImageOutput,
   findGenerateVideoOutput,
+  listGenerateImageOutputs,
 } from '../../server/src/notebook-cell-outputs.js'
 import {
   notebookDocumentsEqual,
@@ -164,7 +167,16 @@ describe('directional canvas placement', () => {
       }
     }
 
-    expect(generated.output_cell).toMatchObject({
+    expect(generated.output_cell).toBeUndefined()
+    expect(generated.output_edge).toBeUndefined()
+    const createdNotebook = value(engine.notebooks.read(notebookId))
+    const allocated = allocateGenerateVideoResult(
+      engine,
+      createdNotebook,
+      generated.id,
+      { runId: 'run-video-1', acceptedAt: '2026-08-22T00:00:00.000Z' },
+    )
+    expect(allocated.outputCell).toMatchObject({
       type: 'video',
       slot: { row: 1, column: 0 },
       inputs: {
@@ -172,17 +184,15 @@ describe('directional canvas placement', () => {
         producerCellId: generated.id,
       },
     })
-    expect(generated.output_edge).toMatchObject({
+    expect(allocated.outputEdge).toMatchObject({
       source: generated.id,
-      target: generated.output_cell!.id,
+      target: allocated.outputCell.id,
       targetInput: 'media',
     })
 
-    const notebook = value(engine.notebooks.read(notebookId))
-    const tile = notebook.cells.find((cell) => cell.id === generated.id)!
-    const output = findGenerateVideoOutput(notebook, generated.id)!
+    const tile = createdNotebook.cells.find((cell) => cell.id === generated.id)!
     expect(tile.outputArtifactId).toBeUndefined()
-    expect(output.outputCell.slot).toEqual({ row: 1, column: 0 })
+    expect(allocated.outputCell.slot).toEqual({ row: 1, column: 0 })
   })
 
   it('resolves generated video from output cell and legacy inline artifact', async () => {
@@ -638,7 +648,16 @@ describe('directional canvas placement', () => {
       }
     }
 
-    expect(generated.output_cell).toMatchObject({
+    expect(generated.output_cell).toBeUndefined()
+    expect(generated.output_edge).toBeUndefined()
+    const createdNotebook = value(engine.notebooks.read(notebookId))
+    const allocated = allocateGenerateImageResult(
+      engine,
+      createdNotebook,
+      generated.id,
+      { runId: 'run-image-1', acceptedAt: '2026-08-22T00:00:00.000Z' },
+    )
+    expect(allocated.outputCell).toMatchObject({
       type: 'image',
       slot: { row: 0, column: 1 },
       inputs: {
@@ -646,17 +665,14 @@ describe('directional canvas placement', () => {
         producerCellId: generated.id,
       },
     })
-    expect(generated.output_edge).toMatchObject({
+    expect(allocated.outputEdge).toMatchObject({
       source: generated.id,
-      target: generated.output_cell!.id,
+      target: allocated.outputCell.id,
       targetInput: 'media',
     })
-
-    const notebook = value(engine.notebooks.read(notebookId))
-    const tile = notebook.cells.find((cell) => cell.id === generated.id)!
-    const output = findGenerateImageOutput(notebook, generated.id)!
+    const tile = createdNotebook.cells.find((cell) => cell.id === generated.id)!
     expect(tile.outputArtifactId).toBeUndefined()
-    expect(output.outputCell.slot).toEqual({ row: 0, column: 1 })
+    expect(allocated.outputCell.slot).toEqual({ row: 0, column: 1 })
   })
 
   it('resolves generated image from output cell and legacy inline artifact', async () => {
@@ -904,10 +920,11 @@ describe('directional canvas placement', () => {
     expect(repairedTile?.outputArtifactId)
       .toBeUndefined()
     expect(repairedOutput?.outputArtifactId).toBe(newerArtifact.artifactId)
-    expect(repairedOutput?.inputs?.outputVersionArtifactIds).toEqual([
-      inlineArtifact.artifactId,
-      newerArtifact.artifactId,
-    ])
+    expect(repairedOutput?.inputs?.outputVersionArtifactIds).toBeUndefined()
+    const results = listGenerateImageOutputs(repaired, tile.id)
+    expect(results.map((item) => item.outputCell.outputArtifactId).sort()).toEqual(
+      [inlineArtifact.artifactId, newerArtifact.artifactId].sort(),
+    )
     expect(await reconcileGenerationMediaOutputs(engine)).toBe(0)
   })
 

@@ -20,8 +20,6 @@ import { v7 as uuidv7 } from "uuid";
 import type { BookManager } from "../book-manager.js";
 import {
   ensureGenerateAudioOutput,
-  ensureGenerateImageOutput,
-  ensureGenerateVideoOutput,
   normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
 import { mutateNotebook } from "../notebook-mutations.js";
@@ -29,6 +27,7 @@ import { queue, stopBookQueue } from "../queue.js";
 import {
   claimNotebookGenerationPlan,
   failQueuedNotebookCells,
+  generationPlanClaimOutputCellId,
   notebookCellDefinitionFingerprint,
   notebookCellIsPaid,
   notebookCellIsRunnable,
@@ -40,6 +39,10 @@ import {
   buildGenerationInsertPlan,
   continueQueuedInsert,
 } from "./command-plan.js";
+import {
+  assessToolCallEstimate,
+  logUnavailableCostEstimate,
+} from "../jobs/cost-estimate-assessment.js";
 import { estimateCostDef } from "./estimate-cost.js";
 import { pairForCell } from "./list-cell-generations.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -399,32 +402,28 @@ async function notebookGenerationPlan(
     cell,
     engine.book.get().bookId,
   );
-  const costResult = await estimateCostDef(engine).handler({
-    calls: [{
-      tool_name: prepared.tool,
-      input: prepared.input,
-    }],
-  });
-  if (costResult.isError) {
-    throw new Error(costResult.content[0]?.text ?? "Cost estimate failed");
+  const assessment = await assessToolCallEstimate(
+    engine,
+    prepared.tool,
+    prepared.input,
+  );
+  if (!assessment.available) {
+    await logUnavailableCostEstimate({
+      assessment,
+      engine,
+      correlation: {
+        bookId: engine.book.get().bookId,
+        notebookId: notebook.id,
+        cellId: cell.id,
+        tool: prepared.tool,
+        provider: prepared.provider,
+        model: prepared.model,
+        stage: "plan-generation",
+      },
+    });
   }
-  const costText = costResult.content.find((item) => item.type === "text")?.text;
-  const costValue = costText
-    ? JSON.parse(costText) as {
-        estimate?: { usd?: unknown; warnings?: unknown };
-      }
-    : {};
-  const estimatedCost = typeof costValue.estimate?.usd === "number"
-    ? costValue.estimate.usd
-    : undefined;
-  const warnings = Array.isArray(costValue.estimate?.warnings)
-    ? costValue.estimate.warnings.filter(
-        (warning): warning is string => typeof warning === "string",
-      )
-    : [];
-  const estimateUnavailable = estimatedCost === undefined
-    || warnings.some((warning) =>
-      /not found|unavailable|no cost adapter|unknown/i.test(warning));
+  const estimatedCost = assessment.available ? assessment.usd : undefined;
+  const estimateUnavailable = !assessment.available;
   const cellDefinitionFingerprint = notebookCellDefinitionFingerprint(
     notebook,
     cell,
@@ -1408,30 +1407,6 @@ export function videobookDomainDefs(
                 targetInput: "result",
               });
             }
-            if (cell.type === "generate_video") {
-              const ensured = ensureGenerateVideoOutput(
-                engine,
-                withCell,
-                cell.id,
-              );
-              cell = ensured.document.cells.find((candidate) =>
-                candidate.id === cell.id) ?? cell;
-              outputCell = ensured.outputCell;
-              outputEdge = ensured.outputEdge;
-              return ensured.document;
-            }
-            if (cell.type === "generate_image") {
-              const ensured = ensureGenerateImageOutput(
-                engine,
-                withCell,
-                cell.id,
-              );
-              cell = ensured.document.cells.find((candidate) =>
-                candidate.id === cell.id) ?? cell;
-              outputCell = ensured.outputCell;
-              outputEdge = ensured.outputEdge;
-              return ensured.document;
-            }
             if (cell.type === "generate_audio") {
               const ensured = ensureGenerateAudioOutput(
                 engine,
@@ -2120,6 +2095,9 @@ export function videobookDomainDefs(
               runId,
             );
           }
+          const outputCellId = generationPlan
+            ? generationPlanClaimOutputCellId(generationPlan)
+            : null;
           await queue.enqueue(jobId, {
             type: "run_notebook",
             bookId: String(args.book_id),
@@ -2127,6 +2105,7 @@ export function videobookDomainDefs(
             cellIds: [String(args.cell_id)],
             force: true,
             runId,
+            ...(outputCellId ? { outputCellId } : {}),
             ...(generationPlan
               ? {
                   generationPlan,
@@ -2148,10 +2127,14 @@ export function videobookDomainDefs(
           }).catch(() => undefined);
           return failure(message);
         }
+        const outputCellId = generationPlan
+          ? generationPlanClaimOutputCellId(generationPlan)
+          : null;
         return json({
           job_id: jobId,
           run_id: runId,
           ...(generationPlan ? { plan_id: generationPlan.planId } : {}),
+          ...(outputCellId ? { output_cell_id: outputCellId } : {}),
         });
       },
     },

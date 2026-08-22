@@ -917,6 +917,49 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('aria-label="Duration 0:30"')
   })
 
+  it('does not show a version selector on unstacked generation image tiles', () => {
+    const imageCell: NotebookCell = {
+      ...cell,
+      type: 'image',
+      label: 'generated-image',
+      inputs: {
+        mediaRole: 'generate-image-output',
+        producerCellId: '01900000-0000-7000-8000-000000000010',
+        outputVersionArtifactIds: ['image-one', 'image-two'],
+      },
+      outputArtifactId: 'image-two',
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: imageCell,
+      cells: [imageCell],
+      edges: [],
+      asset: {
+        artifactId: 'image-two',
+        id: 'generated-image-2',
+        type: 'image',
+        mediaUrl: '/files/generated-2/original.jpg',
+        thumbnailUrl: null,
+        width: 320,
+        height: 240,
+        duration: null,
+        audioInfo: null,
+      },
+      versionAssets: [],
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+    expect(html).not.toContain('aria-label="Image versions"')
+  })
+
   it('shows versioned normalized shots for Analysis outputs', () => {
     const analysisCell: NotebookCell = {
       ...cell,

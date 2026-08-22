@@ -1,6 +1,6 @@
 import type { MediaGenerationRequest, VeoGenerateRequest } from "@apicity/kie";
 import { createKie, submitMediaJob, KieError } from "@apicity/kie";
-import { computeEstimate, mintOtp } from "@apicity/cost";
+import { mintOtp } from "@apicity/cost";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
@@ -9,8 +9,14 @@ import type { JobHandlerContext } from "../queue.js";
 import { QUEUED_TASK_ID } from "videobook-engine";
 import type { PendingTask, TaskType, Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
-import { toUpstreamCostHints, type KieCostHints } from "../cost-adapters.js";
+import type { KieCostHints } from "../cost-adapters.js";
 import { assertProviderPayload } from "../provider-prompt-transform.js";
+import {
+  assessKieRequestEstimate,
+  logUnavailableCostEstimate,
+  type CostEstimateAssessment,
+  type CostEstimateLogContext,
+} from "./cost-estimate-assessment.js";
 
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";
 const VEO_PAYGATE_DOT_PATH = "api.v1.veo.generate";
@@ -42,12 +48,6 @@ function writeKey(path: string, content: string, mode: number): void {
   }
 }
 
-function hasOnlyMissingPricingWarnings(warnings: readonly string[]): boolean {
-  return warnings.length > 0 && warnings.every((warning) =>
-    /^model '.+' not found in pricing table for provider '.+'$/.test(warning)
-  );
-}
-
 export function ensurePaygateSecret(): string {
   const configuredSecret = process.env.APICITY_PAYGATE_SECRET?.trim();
   if (configuredSecret) return configuredSecret;
@@ -69,22 +69,12 @@ export function mintKieOtp(
   request: MediaGenerationRequest,
   ttlSeconds = 10 * 60,
   dotPath: string = KIE_PAYGATE_DOT_PATH,
-  costHints: KieCostHints = {},
+  _costHints: KieCostHints = {},
 ): string {
   const payload = request as unknown as Record<string, unknown>;
-  const estimate = computeEstimate({
-    provider: "kie",
-    payload,
-    costHints: toUpstreamCostHints(costHints),
-  });
-  const missingPricing = estimate.usd === 0
-    && hasOnlyMissingPricingWarnings(estimate.warnings);
-  if (estimate.warnings.length > 0 && estimate.usd <= 0 && !missingPricing) {
-    throw new Error(`KIE cost estimate is not bounded: ${estimate.warnings.join("; ")}`);
-  }
-
   // The OTP hashes the wire payload verbatim — costHints never enter the hash,
   // so the request that hits Kie carries only its documented schema fields.
+  // Cost estimation is advisory and must not gate minting.
   return mintOtp(ensurePaygateSecret(), {
     provider: "kie",
     method: "POST",
@@ -92,6 +82,43 @@ export function mintKieOtp(
     request: payload,
     ttl: ttlSeconds,
   });
+}
+
+export async function authorizeKiePaygate(
+  request: MediaGenerationRequest,
+  options: {
+    ttlSeconds?: number;
+    dotPath?: string;
+    costHints?: KieCostHints;
+    engine?: Engine;
+    correlation?: CostEstimateLogContext;
+  } = {},
+): Promise<{ otp: string; assessment: CostEstimateAssessment }> {
+  const costHints = options.costHints ?? {};
+  const assessment = assessKieRequestEstimate(request, costHints);
+  if (!assessment.available) {
+    const model = typeof (request as { model?: unknown }).model === "string"
+      ? (request as { model: string }).model
+      : options.correlation?.model;
+    await logUnavailableCostEstimate({
+      assessment,
+      engine: options.engine,
+      correlation: {
+        provider: "kie",
+        ...options.correlation,
+        ...(model ? { model } : {}),
+      },
+    });
+  }
+  return {
+    otp: mintKieOtp(
+      request,
+      options.ttlSeconds,
+      options.dotPath,
+      costHints,
+    ),
+    assessment,
+  };
 }
 
 function createKieProvider(apiKey: string) {
@@ -117,7 +144,17 @@ export async function submitKieTask(
     await engine.metadata.artifacts.write(args.assetId, "generation-cost-hints", args.costHints);
   }
   const provider = createKieProvider(apiKey);
-  const taskId = await submitMediaJob(provider, args.request, { otp: mintKieOtp(args.request, 10 * 60, KIE_PAYGATE_DOT_PATH, args.costHints) });
+  const { otp } = await authorizeKiePaygate(args.request, {
+    costHints: args.costHints,
+    engine,
+    correlation: {
+      bookId: args.bookId,
+      artifactId: args.assetId,
+      tool: args.taskType,
+      stage: "submit-kie",
+    },
+  });
+  const taskId = await submitMediaJob(provider, args.request, { otp });
 
   const pendingResult = await engine.jobs.pending.write({
     taskId,
@@ -156,7 +193,16 @@ export async function submitQueuedKieTask(
 
   const apiKey = requireApiKey("KIE_API_KEY");
   const provider = createKieProvider(apiKey);
-  const taskId = await submitMediaJob(provider, payloadResult.value, { otp: mintKieOtp(payloadResult.value, 10 * 60, KIE_PAYGATE_DOT_PATH, costHints) });
+  const { otp } = await authorizeKiePaygate(payloadResult.value, {
+    costHints,
+    engine,
+    correlation: {
+      artifactId: task.artifactId,
+      tool: task.taskType,
+      stage: "submit-queued-kie",
+    },
+  });
+  const taskId = await submitMediaJob(provider, payloadResult.value, { otp });
   const meta = { ...task.meta };
   delete meta.kiePaygate;
   const writeResult = await engine.jobs.pending.write({
@@ -197,8 +243,21 @@ export async function submitVeoTask(
   await engine.metadata.artifacts.write(args.assetId, "generation-payload", args.request);
   const provider = createKieProvider(apiKey);
 
+  const { otp } = await authorizeKiePaygate(
+    args.request as unknown as MediaGenerationRequest,
+    {
+      dotPath: VEO_PAYGATE_DOT_PATH,
+      engine,
+      correlation: {
+        bookId: args.bookId,
+        artifactId: args.assetId,
+        tool: args.taskType,
+        stage: "submit-veo",
+      },
+    },
+  );
   const result = await provider.veo.post.api.v1.veo.generate(args.request, {
-    otp: mintKieOtp(args.request as unknown as MediaGenerationRequest, 10 * 60, VEO_PAYGATE_DOT_PATH, {}),
+    otp,
   });
   if (!result.data?.taskId) {
     throw new KieError(

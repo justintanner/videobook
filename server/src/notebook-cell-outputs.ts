@@ -339,29 +339,149 @@ export function migrateLegacyExtractFrameCells(
   };
 }
 
+export const GENERATE_IMAGE_OUTPUT_ROLE = "generate-image-output";
+export const GENERATE_VIDEO_OUTPUT_ROLE = "generate-video-output";
+export const GENERATE_AUDIO_OUTPUT_ROLE = "generate-audio-output";
+
 type GenerationProducerType = "generate_video" | "generate_image" | "generate_audio";
 type GenerationOutputType = "video" | "image" | "audio";
+
+export type GenerationResultMatch = {
+  outputCell: NotebookCell;
+  outputEdge: NotebookEdge;
+};
 
 type GenerationOutputSpec = {
   producerType: GenerationProducerType;
   outputType: GenerationOutputType;
   mediaRole: string;
   labelSuffix: string;
-  find: (
-    document: NotebookDocument,
-    cellId: string,
-  ) => ReturnType<typeof findGenerateVideoOutputCell>;
+  concurrent: boolean;
 };
+
+const IMAGE_OUTPUT_SPEC: GenerationOutputSpec = {
+  producerType: "generate_image",
+  outputType: "image",
+  mediaRole: GENERATE_IMAGE_OUTPUT_ROLE,
+  labelSuffix: "image",
+  concurrent: true,
+};
+
+const VIDEO_OUTPUT_SPEC: GenerationOutputSpec = {
+  producerType: "generate_video",
+  outputType: "video",
+  mediaRole: GENERATE_VIDEO_OUTPUT_ROLE,
+  labelSuffix: "video",
+  concurrent: true,
+};
+
+const AUDIO_OUTPUT_SPEC: GenerationOutputSpec = {
+  producerType: "generate_audio",
+  outputType: "audio",
+  mediaRole: GENERATE_AUDIO_OUTPUT_ROLE,
+  labelSuffix: "audio",
+  concurrent: false,
+};
+
+export function isConcurrentGenerationProducer(
+  cell: Pick<NotebookCell, "type">,
+): boolean {
+  return cell.type === "generate_image" || cell.type === "generate_video";
+}
+
+export function isImageVideoGenerationResult(
+  cell: Pick<NotebookCell, "type" | "inputs">,
+): boolean {
+  const role = cell.inputs?.mediaRole;
+  return (cell.type === "image" && role === GENERATE_IMAGE_OUTPUT_ROLE)
+    || (cell.type === "video" && role === GENERATE_VIDEO_OUTPUT_ROLE);
+}
+
+function generationAcceptedAt(cell: NotebookCell): string {
+  return typeof cell.inputs?.acceptedAt === "string" ? cell.inputs.acceptedAt : "";
+}
+
+function compareGenerationResults(
+  left: GenerationResultMatch,
+  right: GenerationResultMatch,
+): number {
+  const byAccepted = generationAcceptedAt(left.outputCell)
+    .localeCompare(generationAcceptedAt(right.outputCell));
+  if (byAccepted !== 0) return byAccepted;
+  return left.outputCell.id.localeCompare(right.outputCell.id);
+}
+
+function listGenerationOutputs(
+  document: NotebookDocument,
+  producerCellId: string,
+  spec: GenerationOutputSpec,
+): GenerationResultMatch[] {
+  const matches: GenerationResultMatch[] = [];
+  for (const edge of document.edges) {
+    if (edge.source !== producerCellId || edge.targetInput !== "media") continue;
+    const outputCell = document.cells.find((cell) => cell.id === edge.target);
+    if (outputCell?.type !== spec.outputType) continue;
+    const role = outputCell.inputs?.mediaRole;
+    const producer = outputCell.inputs?.producerCellId;
+    if (
+      role === spec.mediaRole
+      || producer === producerCellId
+      || (role === undefined && producer === undefined)
+    ) {
+      matches.push({ outputCell, outputEdge: edge });
+    }
+  }
+  return matches.sort(compareGenerationResults);
+}
+
+export function listGenerateImageOutputs(
+  document: NotebookDocument,
+  generateImageCellId: string,
+): GenerationResultMatch[] {
+  return listGenerationOutputs(document, generateImageCellId, IMAGE_OUTPUT_SPEC);
+}
+
+export function listGenerateVideoOutputs(
+  document: NotebookDocument,
+  generateVideoCellId: string,
+): GenerationResultMatch[] {
+  return listGenerationOutputs(document, generateVideoCellId, VIDEO_OUTPUT_SPEC);
+}
+
+export function listGenerateAudioOutputs(
+  document: NotebookDocument,
+  generateAudioCellId: string,
+): GenerationResultMatch[] {
+  return listGenerationOutputs(document, generateAudioCellId, AUDIO_OUTPUT_SPEC);
+}
+
+function latestCompletedResult(
+  matches: GenerationResultMatch[],
+): GenerationResultMatch | null {
+  if (matches.length === 0) return null;
+  const completed = [...matches].reverse().find((match) =>
+    typeof match.outputCell.outputArtifactId === "string"
+    && match.outputCell.outputArtifactId.length > 0);
+  return completed ?? matches[matches.length - 1] ?? null;
+}
 
 function generationOutputInputs(
   cell: NotebookCell,
   producerCellId: string,
   mediaRole: string,
+  identity?: {
+    runId?: string;
+    planId?: string;
+    acceptedAt?: string;
+  },
 ): Record<string, unknown> {
   return {
     ...(cell.inputs ?? {}),
     mediaRole,
     producerCellId,
+    ...(identity?.runId ? { generationRunId: identity.runId } : {}),
+    ...(identity?.planId ? { generationPlanId: identity.planId } : {}),
+    ...(identity?.acceptedAt ? { acceptedAt: identity.acceptedAt } : {}),
   };
 }
 
@@ -373,11 +493,15 @@ function generationOutputLabel(
   return `${base} ${labelSuffix}`;
 }
 
-function generationOutputCell(
+function stampGenerationOutputCell(
   producer: NotebookCell,
   outputCell: NotebookCell,
-  producerCellId: string,
-  mediaRole: string,
+  spec: GenerationOutputSpec,
+  identity?: {
+    runId?: string;
+    planId?: string;
+    acceptedAt?: string;
+  },
 ): NotebookCell {
   const inheritedOutput = {
     ...outputCell,
@@ -394,38 +518,30 @@ function generationOutputCell(
       ? { tool: producer.tool }
       : {}),
   };
-  let inputs = generationOutputInputs(
+  const inputs = generationOutputInputs(
     inheritedOutput,
-    producerCellId,
-    mediaRole,
+    producer.id,
+    spec.mediaRole,
+    identity,
   );
-  const inlineArtifactId = producer.outputArtifactId;
-  if (!inlineArtifactId) return { ...inheritedOutput, inputs };
-  if (!inheritedOutput.outputArtifactId) {
-    return {
-      ...inheritedOutput,
-      outputArtifactId: inlineArtifactId,
-      inputs: { ...inputs, state: "completed" },
-    };
-  }
-  if (inheritedOutput.outputArtifactId !== inlineArtifactId) {
-    inputs = {
-      ...inputs,
-      outputVersionArtifactIds: [...new Set([
-        inlineArtifactId,
-        ...versionArtifactIds(inheritedOutput),
-      ])],
-    };
+  if (spec.concurrent) {
+    delete inputs.outputVersionArtifactIds;
   }
   return { ...inheritedOutput, inputs };
 }
 
-function ensureGenerationOutput(
-  engine: Engine,
+export type AllocatedGenerationResult = {
+  document: NotebookDocument;
+  outputCell: NotebookCell;
+  outputEdge: NotebookEdge;
+  created: boolean;
+};
+
+function requireProducer(
   document: NotebookDocument,
   cellId: string,
   spec: GenerationOutputSpec,
-) {
+): NotebookCell {
   const producer = document.cells.find((cell) => cell.id === cellId);
   if (producer?.type !== spec.producerType) {
     const label = spec.producerType === "generate_image"
@@ -435,57 +551,38 @@ function ensureGenerationOutput(
         : "Generate Video";
     throw new Error(`${label} cell not found: ${cellId}`);
   }
-  const existing = spec.find(document, cellId);
-  if (existing) {
-    const outputCell = generationOutputCell(
-      producer,
-      existing.outputCell,
-      cellId,
-      spec.mediaRole,
-    );
-    const unchanged = existing.outputCell.inputs?.mediaRole === spec.mediaRole
-      && existing.outputCell.inputs?.producerCellId === cellId
-      && existing.outputCell.prompt === outputCell.prompt
-      && existing.outputCell.provider === outputCell.provider
-      && existing.outputCell.model === outputCell.model
-      && existing.outputCell.tool === outputCell.tool
-      && !producer.outputArtifactId;
-    if (unchanged) {
-      return { document, ...existing, created: false, updated: false };
-    }
-    return {
-      document: {
-        ...document,
-        cells: document.cells.map((cell) => {
-          if (cell.id === outputCell.id) return outputCell;
-          if (cell.id === producer.id && producer.outputArtifactId) {
-            return { ...cell, outputArtifactId: undefined };
-          }
-          return cell;
-        }),
-      },
-      outputCell,
-      outputEdge: existing.outputEdge,
-      created: false,
-      updated: true,
-    };
-  }
+  return producer;
+}
+
+export function allocateGenerationResult(
+  engine: Engine,
+  document: NotebookDocument,
+  producerCellId: string,
+  spec: GenerationOutputSpec,
+  identity: {
+    runId: string;
+    planId?: string;
+    acceptedAt: string;
+    artifactId?: string;
+    state?: string;
+  },
+): AllocatedGenerationResult {
+  const producer = requireProducer(document, producerCellId, spec);
   const occupied = document.cells.map((cell) => cell.slot);
-  const outputCell = generationOutputCell(
-    producer,
-    engine.notebooks.createCell({
-      type: spec.outputType,
-      label: generationOutputLabel(producer, spec.labelSuffix),
-      slot: nextGenerationOutputSlot(
-        spec.producerType,
-        producer.slot,
-        occupied,
-      ),
-      inputs: { state: "pending" },
-    }),
-    producer.id,
-    spec.mediaRole,
-  );
+  const created = engine.notebooks.createCell({
+    type: spec.outputType,
+    label: generationOutputLabel(producer, spec.labelSuffix),
+    slot: nextGenerationOutputSlot(
+      spec.producerType,
+      producer.slot,
+      occupied,
+    ),
+    inputs: {
+      state: identity.state ?? "pending",
+    },
+    ...(identity.artifactId ? { outputArtifactId: identity.artifactId } : {}),
+  });
+  const outputCell = stampGenerationOutputCell(producer, created, spec, identity);
   const outputEdge = engine.notebooks.createEdge({
     source: producer.id,
     target: outputCell.id,
@@ -506,22 +603,208 @@ function ensureGenerationOutput(
     outputCell,
     outputEdge,
     created: true,
-    updated: false,
   };
+}
+
+export function allocateGenerateImageResult(
+  engine: Engine,
+  document: NotebookDocument,
+  generateImageCellId: string,
+  identity: {
+    runId: string;
+    planId?: string;
+    acceptedAt: string;
+    artifactId?: string;
+    state?: string;
+  },
+): AllocatedGenerationResult {
+  return allocateGenerationResult(
+    engine,
+    document,
+    generateImageCellId,
+    IMAGE_OUTPUT_SPEC,
+    identity,
+  );
+}
+
+export function allocateGenerateVideoResult(
+  engine: Engine,
+  document: NotebookDocument,
+  generateVideoCellId: string,
+  identity: {
+    runId: string;
+    planId?: string;
+    acceptedAt: string;
+    artifactId?: string;
+    state?: string;
+  },
+): AllocatedGenerationResult {
+  return allocateGenerationResult(
+    engine,
+    document,
+    generateVideoCellId,
+    VIDEO_OUTPUT_SPEC,
+    identity,
+  );
+}
+
+function existingResultForArtifact(
+  matches: GenerationResultMatch[],
+  artifactId: string,
+): GenerationResultMatch | undefined {
+  return matches.find((match) => match.outputCell.outputArtifactId === artifactId);
+}
+
+function stripVersionStack(cell: NotebookCell): NotebookCell {
+  if (!("outputVersionArtifactIds" in (cell.inputs ?? {}))) return cell;
+  const inputs = { ...(cell.inputs ?? {}) };
+  delete inputs.outputVersionArtifactIds;
+  return { ...cell, inputs };
+}
+
+function expandStackedProducer(
+  engine: Engine,
+  document: NotebookDocument,
+  producer: NotebookCell,
+  spec: GenerationOutputSpec,
+): NotebookDocument {
+  let working = document;
+  let results = listGenerationOutputs(working, producer.id, spec);
+  if (results.length === 0 && producer.outputArtifactId) {
+    const allocated = allocateGenerationResult(engine, working, producer.id, spec, {
+      runId: `legacy-inline-${producer.id}`,
+      acceptedAt: producer.id,
+      artifactId: producer.outputArtifactId,
+      state: "completed",
+    });
+    working = {
+      ...allocated.document,
+      cells: allocated.document.cells.map((cell) =>
+        cell.id === producer.id ? { ...cell, outputArtifactId: undefined } : cell),
+    };
+    results = listGenerationOutputs(working, producer.id, spec);
+  }
+  const leftoverInline = working.cells.find((cell) => cell.id === producer.id)
+    ?.outputArtifactId;
+  if (leftoverInline && !existingResultForArtifact(results, leftoverInline)) {
+    const allocated = allocateGenerationResult(engine, working, producer.id, spec, {
+      runId: `legacy-inline-${leftoverInline}`,
+      acceptedAt: "0",
+      artifactId: leftoverInline,
+      state: "completed",
+    });
+    working = allocated.document;
+    results = listGenerationOutputs(working, producer.id, spec);
+  } else if (leftoverInline) {
+    working = {
+      ...working,
+      cells: working.cells.map((cell) =>
+        cell.id === producer.id ? { ...cell, outputArtifactId: undefined } : cell),
+    };
+  }
+  for (const result of results) {
+    const versions = versionArtifactIds(result.outputCell);
+    const current = result.outputCell.outputArtifactId ?? versions.at(-1);
+    const historical = versions.filter((artifactId) => artifactId !== current);
+    if (historical.length === 0) {
+      if (result.outputCell.inputs?.outputVersionArtifactIds) {
+        working = {
+          ...working,
+          cells: working.cells.map((cell) =>
+            cell.id === result.outputCell.id ? stripVersionStack(cell) : cell),
+        };
+      }
+      continue;
+    }
+    working = {
+      ...working,
+      cells: working.cells.map((cell) => {
+        if (cell.id !== result.outputCell.id) return cell;
+        const inputs = { ...(cell.inputs ?? {}) };
+        delete inputs.outputVersionArtifactIds;
+        if (current) inputs.state = "completed";
+        return {
+          ...cell,
+          ...(current ? { outputArtifactId: current } : {}),
+          inputs,
+        };
+      }),
+    };
+    const live = listGenerationOutputs(working, producer.id, spec);
+    for (const artifactId of historical) {
+      if (existingResultForArtifact(live, artifactId)) continue;
+      const allocated = allocateGenerationResult(
+        engine,
+        working,
+        producer.id,
+        spec,
+        {
+          runId: `legacy-stack-${artifactId}`,
+          acceptedAt: "0",
+          artifactId,
+          state: "completed",
+        },
+      );
+      working = allocated.document;
+      live.push({
+        outputCell: allocated.outputCell,
+        outputEdge: allocated.outputEdge,
+      });
+    }
+  }
+  return working;
+}
+
+export function migrateStackedGenerationResults(
+  engine: Engine,
+  document: NotebookDocument,
+): NotebookDocument {
+  let working = document;
+  for (const cell of document.cells) {
+    if (cell.type === "generate_image") {
+      working = expandStackedProducer(engine, working, cell, IMAGE_OUTPUT_SPEC);
+    } else if (cell.type === "generate_video") {
+      working = expandStackedProducer(engine, working, cell, VIDEO_OUTPUT_SPEC);
+    }
+  }
+  return working;
+}
+
+function lookupLatestResult(
+  document: NotebookDocument,
+  producerCellId: string,
+  spec: GenerationOutputSpec,
+  fallback: (
+    document: NotebookDocument,
+    producerCellId: string,
+  ) => GenerationResultMatch | null,
+): GenerationResultMatch | null {
+  const listed = listGenerationOutputs(document, producerCellId, spec);
+  return latestCompletedResult(listed) ?? fallback(document, producerCellId);
 }
 
 export function findGenerateVideoOutput(
   document: NotebookDocument,
   generateVideoCellId: string,
 ) {
-  return findGenerateVideoOutputCell(document, generateVideoCellId);
+  return lookupLatestResult(
+    document,
+    generateVideoCellId,
+    VIDEO_OUTPUT_SPEC,
+    findGenerateVideoOutputCell,
+  );
 }
 
 export function findGenerateImageOutput(
   document: NotebookDocument,
   generateImageCellId: string,
 ) {
-  return findGenerateImageOutputCell(document, generateImageCellId);
+  return lookupLatestResult(
+    document,
+    generateImageCellId,
+    IMAGE_OUTPUT_SPEC,
+    findGenerateImageOutputCell,
+  );
 }
 
 export function findGenerateAudioOutput(
@@ -531,17 +814,118 @@ export function findGenerateAudioOutput(
   return findGenerateAudioOutputCell(document, generateAudioCellId);
 }
 
+export function findGenerationResultForRun(
+  document: NotebookDocument,
+  producer: NotebookCell,
+  identity: {
+    runId?: string;
+    outputCellId?: string;
+  },
+): GenerationResultMatch | null {
+  if (identity.outputCellId) {
+    const outputCell = document.cells.find((cell) =>
+      cell.id === identity.outputCellId);
+    const outputEdge = document.edges.find((edge) =>
+      edge.source === producer.id
+      && edge.target === identity.outputCellId
+      && edge.targetInput === "media");
+    if (outputCell && outputEdge) return { outputCell, outputEdge };
+  }
+  if (identity.runId) {
+    const spec = producer.type === "generate_image"
+      ? IMAGE_OUTPUT_SPEC
+      : producer.type === "generate_video"
+        ? VIDEO_OUTPUT_SPEC
+        : AUDIO_OUTPUT_SPEC;
+    const match = listGenerationOutputs(document, producer.id, spec).find((item) =>
+      item.outputCell.inputs?.generationRunId === identity.runId);
+    if (match) return match;
+  }
+  return findGenerationMediaOutput(document, producer);
+}
+
+function ensureAudioOutput(
+  engine: Engine,
+  document: NotebookDocument,
+  generateAudioCellId: string,
+) {
+  const producer = requireProducer(document, generateAudioCellId, AUDIO_OUTPUT_SPEC);
+  const existing = findGenerateAudioOutput(document, generateAudioCellId);
+  if (existing) {
+    const outputCell = stampGenerationOutputCell(
+      producer,
+      existing.outputCell,
+      AUDIO_OUTPUT_SPEC,
+    );
+    const inlineArtifactId = producer.outputArtifactId;
+    const withInline = inlineArtifactId && !outputCell.outputArtifactId
+      ? {
+          ...outputCell,
+          outputArtifactId: inlineArtifactId,
+          inputs: { ...outputCell.inputs, state: "completed" },
+        }
+      : outputCell;
+    const unchanged = existing.outputCell.inputs?.mediaRole === AUDIO_OUTPUT_SPEC.mediaRole
+      && existing.outputCell.inputs?.producerCellId === generateAudioCellId
+      && existing.outputCell.prompt === withInline.prompt
+      && existing.outputCell.provider === withInline.provider
+      && existing.outputCell.model === withInline.model
+      && existing.outputCell.tool === withInline.tool
+      && !producer.outputArtifactId;
+    if (unchanged) {
+      return { document, ...existing, created: false, updated: false };
+    }
+    return {
+      document: {
+        ...document,
+        cells: document.cells.map((cell) => {
+          if (cell.id === withInline.id) return withInline;
+          if (cell.id === producer.id && producer.outputArtifactId) {
+            return { ...cell, outputArtifactId: undefined };
+          }
+          return cell;
+        }),
+      },
+      outputCell: withInline,
+      outputEdge: existing.outputEdge,
+      created: false,
+      updated: true,
+    };
+  }
+  return allocateGenerationResult(
+    engine,
+    document,
+    generateAudioCellId,
+    AUDIO_OUTPUT_SPEC,
+    {
+      runId: `audio-${generateAudioCellId}`,
+      acceptedAt: generateAudioCellId,
+      ...(producer.outputArtifactId
+        ? { artifactId: producer.outputArtifactId, state: "completed" }
+        : {}),
+    },
+  );
+}
+
 export function ensureGenerateVideoOutput(
   engine: Engine,
   document: NotebookDocument,
   generateVideoCellId: string,
 ) {
-  return ensureGenerationOutput(engine, document, generateVideoCellId, {
-    producerType: "generate_video",
-    outputType: "video",
-    mediaRole: "generate-video-output",
-    labelSuffix: "video",
-    find: findGenerateVideoOutput,
+  const producer = requireProducer(document, generateVideoCellId, VIDEO_OUTPUT_SPEC);
+  const migrated = expandStackedProducer(engine, document, producer, VIDEO_OUTPUT_SPEC);
+  const existing = findGenerateVideoOutput(migrated, generateVideoCellId);
+  if (existing) {
+    return {
+      document: migrated,
+      ...existing,
+      created: migrated !== document,
+      updated: migrated !== document,
+    };
+  }
+  return allocateGenerateVideoResult(engine, migrated, generateVideoCellId, {
+    runId: `legacy-ensure-${generateVideoCellId}`,
+    acceptedAt: generateVideoCellId,
   });
 }
 
@@ -550,12 +934,20 @@ export function ensureGenerateImageOutput(
   document: NotebookDocument,
   generateImageCellId: string,
 ) {
-  return ensureGenerationOutput(engine, document, generateImageCellId, {
-    producerType: "generate_image",
-    outputType: "image",
-    mediaRole: "generate-image-output",
-    labelSuffix: "image",
-    find: findGenerateImageOutput,
+  const producer = requireProducer(document, generateImageCellId, IMAGE_OUTPUT_SPEC);
+  const migrated = expandStackedProducer(engine, document, producer, IMAGE_OUTPUT_SPEC);
+  const existing = findGenerateImageOutput(migrated, generateImageCellId);
+  if (existing) {
+    return {
+      document: migrated,
+      ...existing,
+      created: migrated !== document,
+      updated: migrated !== document,
+    };
+  }
+  return allocateGenerateImageResult(engine, migrated, generateImageCellId, {
+    runId: `legacy-ensure-${generateImageCellId}`,
+    acceptedAt: generateImageCellId,
   });
 }
 
@@ -564,13 +956,7 @@ export function ensureGenerateAudioOutput(
   document: NotebookDocument,
   generateAudioCellId: string,
 ) {
-  return ensureGenerationOutput(engine, document, generateAudioCellId, {
-    producerType: "generate_audio",
-    outputType: "audio",
-    mediaRole: "generate-audio-output",
-    labelSuffix: "audio",
-    find: findGenerateAudioOutput,
-  });
+  return ensureAudioOutput(engine, document, generateAudioCellId);
 }
 
 export function findGenerationMediaOutput(
@@ -594,14 +980,18 @@ export function ensureGenerationMediaOutput(
   document: NotebookDocument,
   cell: NotebookCell,
 ) {
-  if (cell.type === "generate_video") {
-    return ensureGenerateVideoOutput(engine, document, cell.id);
-  }
-  if (cell.type === "generate_image") {
-    return ensureGenerateImageOutput(engine, document, cell.id);
-  }
   if (cell.type === "generate_audio") {
     return ensureGenerateAudioOutput(engine, document, cell.id);
+  }
+  if (cell.type === "generate_video") {
+    const existing = findGenerateVideoOutput(document, cell.id);
+    if (existing) return { document, ...existing, created: false, updated: false };
+    throw new Error(`Generate Video result cell is not allocated for ${cell.id}`);
+  }
+  if (cell.type === "generate_image") {
+    const existing = findGenerateImageOutput(document, cell.id);
+    if (existing) return { document, ...existing, created: false, updated: false };
+    throw new Error(`Generate Image result cell is not allocated for ${cell.id}`);
   }
   throw new Error(`Generation output cell is not supported for ${cell.type}`);
 }
@@ -610,17 +1000,10 @@ export function ensureGenerationMediaOutputs(
   engine: Engine,
   document: NotebookDocument,
 ): NotebookDocument {
-  let working = document;
-  const cellIds = document.cells
-    .filter((cell) =>
-      cell.type === "generate_video"
-      || cell.type === "generate_image"
-      || cell.type === "generate_audio")
-    .map((cell) => cell.id);
-  for (const cellId of cellIds) {
-    const cell = working.cells.find((candidate) => candidate.id === cellId);
-    if (!cell) continue;
-    working = ensureGenerationMediaOutput(engine, working, cell).document;
+  let working = migrateStackedGenerationResults(engine, document);
+  for (const cell of working.cells) {
+    if (cell.type !== "generate_audio") continue;
+    working = ensureGenerateAudioOutput(engine, working, cell.id).document;
   }
   return working;
 }

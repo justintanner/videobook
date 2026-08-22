@@ -19,7 +19,10 @@ import {
   topologicalOrder,
 } from "./jobs/run-notebook.js";
 import { queue } from "./queue.js";
-import { estimateCostDef } from "./tools/estimate-cost.js";
+import {
+  assessToolCallEstimate,
+  logUnavailableCostEstimate,
+} from "./jobs/cost-estimate-assessment.js";
 
 type NotebookRunPlanStatus =
   | "planned"
@@ -76,39 +79,38 @@ async function estimateCall(
   engine: Engine,
   tool: string,
   input: Record<string, unknown>,
+  correlation: {
+    cellId?: string;
+    notebookId?: string;
+    provider?: string | null;
+    model?: string | null;
+    stage: string;
+  },
 ): Promise<CostEstimate> {
-  const result = await estimateCostDef(engine).handler({
-    calls: [{ tool_name: tool, input }],
-  });
-  if (result.isError) {
+  const assessment = await assessToolCallEstimate(engine, tool, input);
+  if (!assessment.available) {
+    await logUnavailableCostEstimate({
+      assessment,
+      engine,
+      correlation: {
+        bookId: engine.book.get().bookId,
+        tool,
+        stage: correlation.stage,
+        ...(correlation.notebookId ? { notebookId: correlation.notebookId } : {}),
+        ...(correlation.cellId ? { cellId: correlation.cellId } : {}),
+        ...(correlation.provider ? { provider: correlation.provider } : {}),
+        ...(correlation.model ? { model: correlation.model } : {}),
+      },
+    });
     return {
       estimateUnavailable: true,
-      warnings: [result.content[0]?.text ?? "Cost estimate failed"],
+      warnings: [],
     };
   }
-  const text = result.content.find((item) => item.type === "text")?.text;
-  const parsed = text
-    ? JSON.parse(text) as {
-        estimate?: {
-          usd?: unknown;
-          warnings?: unknown;
-        };
-      }
-    : {};
-  const warnings = Array.isArray(parsed.estimate?.warnings)
-    ? parsed.estimate.warnings.filter((warning): warning is string =>
-      typeof warning === "string")
-    : [];
-  const estimatedCostUsd = typeof parsed.estimate?.usd === "number"
-    ? parsed.estimate.usd
-    : undefined;
-  const estimateUnavailable = estimatedCostUsd === undefined
-    || warnings.some((warning) =>
-      /not found|unavailable|no cost adapter|unknown/i.test(warning));
   return {
-    ...(estimateUnavailable ? {} : { estimatedCostUsd }),
-    estimateUnavailable,
-    warnings,
+    estimatedCostUsd: assessment.usd,
+    estimateUnavailable: false,
+    warnings: assessment.warnings,
   };
 }
 
@@ -260,11 +262,17 @@ export async function planSelectedNotebookSubgraph(
         provider = prepared.provider;
         model = prepared.model;
         actionInput = prepared.input;
-        estimate = await estimateCall(engine, prepared.tool, prepared.input);
-      } catch (error) {
+        estimate = await estimateCall(engine, prepared.tool, prepared.input, {
+          notebookId: document.id,
+          cellId: cell.id,
+          provider: prepared.provider,
+          model: prepared.model,
+          stage: "plan-subgraph",
+        });
+      } catch {
         estimate = {
           estimateUnavailable: true,
-          warnings: [error instanceof Error ? error.message : String(error)],
+          warnings: [],
         };
       }
       if (estimate.estimateUnavailable) unknownCostCount += 1;
@@ -292,7 +300,6 @@ export async function planSelectedNotebookSubgraph(
         ...(estimate.estimateUnavailable
           ? { estimateUnavailable: true }
           : { estimatedCostUsd: estimate.estimatedCostUsd }),
-        warnings: estimate.warnings,
         insertsOutput: false,
       });
     } else {
@@ -399,7 +406,21 @@ export async function planNotebookRun(
       cell,
       engine.book.get().bookId,
     );
-    const estimate = await estimateCall(engine, prepared.tool, prepared.input);
+    let estimate: CostEstimate;
+    try {
+      estimate = await estimateCall(engine, prepared.tool, prepared.input, {
+        notebookId: document.id,
+        cellId: cell.id,
+        provider: prepared.provider,
+        model: prepared.model,
+        stage: "plan-workbook",
+      });
+    } catch {
+      estimate = {
+        estimateUnavailable: true,
+        warnings: [],
+      };
+    }
     if (estimate.estimateUnavailable) {
       unknownCostCount += 1;
     } else {
@@ -429,7 +450,6 @@ export async function planNotebookRun(
       ...(estimate.estimateUnavailable
         ? { estimateUnavailable: true }
         : { estimatedCostUsd: estimate.estimatedCostUsd }),
-      warnings: estimate.warnings,
       insertsOutput: false,
     });
   }
@@ -533,11 +553,7 @@ export async function claimNotebookRunPlan(
         throw new Error(`Notebook run plan is already ${record.status}`);
       }
       if (record.runId) throw new Error("Notebook run plan is already claimed");
-      if (record.unknownCostCount > 0 && !options.confirmUnpriced) {
-        throw new Error(
-          `${record.unknownCostCount} provider calls have unavailable pricing and require explicit confirmation`,
-        );
-      }
+      void options.confirmUnpriced;
       for (const cellId of record.paidCellIds) {
         const cell = document.cells.find((candidate) => candidate.id === cellId);
         if (!cell) throw new Error(`Planned cell was deleted: ${cellId}`);

@@ -472,6 +472,14 @@ export function notebookAudioSummary(
   ].filter((value): value is string => Boolean(value)).join(' · ')
 }
 
+export function isImageVideoGenerationResultCell(
+  cell: Pick<NotebookCell, 'type' | 'inputs'>,
+): boolean {
+  const role = cell.inputs?.mediaRole
+  return (cell.type === 'image' && role === 'generate-image-output')
+    || (cell.type === 'video' && role === 'generate-video-output')
+}
+
 export function notebookOutputVersionArtifactIds(
   inputs: Record<string, unknown> | undefined,
   outputArtifactId: string | undefined,

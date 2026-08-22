@@ -1284,8 +1284,11 @@ function MediaCellInspector({
   | 'onDownloadTranscriptSrt'
 >) {
   const versionArtifactIds = cell.type === 'audio'
-    || cell.type === 'image'
-    || cell.type === 'video'
+    || (
+      (cell.type === 'image' || cell.type === 'video')
+      && cell.inputs?.mediaRole !== 'generate-image-output'
+      && cell.inputs?.mediaRole !== 'generate-video-output'
+    )
     ? notebookOutputVersionArtifactIds(cell.inputs, cell.outputArtifactId)
     : []
   const versionKey = versionArtifactIds.join(':')

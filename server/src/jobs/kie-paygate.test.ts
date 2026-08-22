@@ -3,7 +3,15 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { canonicalHash, computeEstimate, parseOtp, verifyOtp } from "@apicity/cost";
-import { ensurePaygateSecret, KIE_PAYGATE_DOT_PATH, mintKieOtp } from "./kie-paygate.js";
+import { createEngine } from "videobook-engine";
+import { configureLoggerForTests, resetLoggerForTests } from "../logger.js";
+import {
+  authorizeKiePaygate,
+  ensurePaygateSecret,
+  KIE_PAYGATE_DOT_PATH,
+  mintKieOtp,
+} from "./kie-paygate.js";
+import { assessKieRequestEstimate } from "./cost-estimate-assessment.js";
 import { buildGrokImagineT2vVideoPayload } from "../payload-builders.js";
 import { seedreamLayerDecompositionRequest } from "./image-subjects.js";
 
@@ -99,10 +107,11 @@ describe("kie paygate", () => {
         size: "auto" as const,
       },
     };
-    expect(() => mintKieOtp(unbounded, 60)).toThrow(/cost estimate is not bounded/);
+    expect(() => mintKieOtp(unbounded, 60)).not.toThrow();
   });
 
-  it("rejects a grok-imagine/extend request with no resolution hint as unbounded", () => {
+  it("mints a request-bound OTP for a grok-imagine/extend request with no resolution hint", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
     // grok-imagine/extend keys its rate off (extend_times, resolution). The kie
     // input schema carries only task_id + extend_times, so without a resolution
     // hint the lookup misses ("variant '6'") and the estimate is unbounded.
@@ -115,7 +124,8 @@ describe("kie paygate", () => {
         extend_times: "6" as const,
       },
     };
-    expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded/);
+    const otp = mintKieOtp(request, 60);
+    expect(parseOtp(otp).payload.requestHash).toBe(canonicalHash(request));
   });
 
   it("mints a bounded OTP for a grok-imagine/extend request with a top-level resolution hint", async () => {
@@ -137,7 +147,8 @@ describe("kie paygate", () => {
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
-  it("rejects a happyhorse/video-edit request with no duration hint as unbounded", () => {
+  it("mints a request-bound OTP for a happyhorse/video-edit request with no duration hint", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
     // happyhorse/video-edit prices per second but its kie input schema carries
     // no duration field (output length = source video). Without an out-of-band
     // cost hint the units derivation fails and the estimate is unbounded.
@@ -149,7 +160,8 @@ describe("kie paygate", () => {
         resolution: "1080p" as const,
       },
     };
-    expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded/);
+    const otp = mintKieOtp(request, 60);
+    expect(parseOtp(otp).payload.requestHash).toBe(canonicalHash(request));
   });
 
   it("mints a bounded OTP for a happyhorse/video-edit request with an out-of-band duration hint", async () => {
@@ -322,8 +334,10 @@ describe("kie paygate", () => {
         mode: "lite" as const,
       },
     },
-  ])("rejects $model without a duration cost hint as unbounded", (request) => {
-    expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded/);
+  ])("mints a request-bound OTP for $model without a duration cost hint", (request) => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+    const otp = mintKieOtp(request, 60);
+    expect(parseOtp(otp).payload.requestHash).toBe(canonicalHash(request));
   });
 
   it.each([
@@ -388,27 +402,28 @@ describe("kie paygate", () => {
     }
   });
 
-  it("rejects grok-imagine/upscale without source/target resolutions as unbounded", () => {
+  it("mints a request-bound OTP for grok-imagine/upscale without source/target resolutions", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
     const request = {
       model: "grok-imagine/upscale" as const,
       input: { task_id: "task-123" },
     };
-    expect(() => mintKieOtp(request, 60)).toThrow(
-      /source\/target resolutions are not present/,
-    );
+    const otp = mintKieOtp(request, 60);
+    expect(parseOtp(otp).payload.requestHash).toBe(canonicalHash(request));
   });
 
-  it("still rejects a MiniMax H3 request with no duration as unbounded", () => {
-    // The upstream per-second rate needs a duration to derive units; a payload
-    // without one must fail closed rather than mint against a zero estimate.
+  it("mints a request-bound OTP for a MiniMax H3 request with no duration", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
     const request = {
       model: "minimax-h3/text-to-video" as const,
       input: { prompt: "a kitten", aspect_ratio: "9:16" as const, resolution: "768P" as const },
     };
-    expect(() => mintKieOtp(request as never, 60)).toThrow(/cost estimate is not bounded/);
+    const otp = mintKieOtp(request as never, 60);
+    expect(parseOtp(otp).payload.requestHash).toBe(canonicalHash(request));
   });
 
-  it("rejects a kling-3.0/motion-control request with no duration hint as unbounded", () => {
+  it("mints a request-bound OTP for a kling-3.0/motion-control request with no duration hint", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
     // kling-3.0/motion-control prices per second but its kie input
     // schema carries no duration field (output length = motion video). Without
     // an out-of-band cost hint the units derivation fails and the estimate is
@@ -421,7 +436,8 @@ describe("kie paygate", () => {
         mode: "720p" as const,
       },
     };
-    expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded/);
+    const otp = mintKieOtp(request, 60);
+    expect(parseOtp(otp).payload.requestHash).toBe(canonicalHash(request));
   });
 
   it("mints a bounded OTP for a kling-3.0/motion-control request with an out-of-band duration hint", async () => {
@@ -440,5 +456,105 @@ describe("kie paygate", () => {
 
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
     expect(parsed.payload.requestHash).not.toBe(canonicalHash({ ...request, duration: 6.4 }));
+  });
+
+  it("mints a request-bound OTP for an unbounded Kling 3.0 Omni transformation", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+    const request = {
+      model: "kling-3.0-omni/transformation" as const,
+      input: {
+        prompt: "restyle the source clip as watercolor",
+        image_urls: ["https://kie.example/style.png"],
+        video_urls: ["https://kie.example/source.mp4"],
+        aspect_ratio: "9:16" as const,
+      },
+    };
+    const assessment = assessKieRequestEstimate(request);
+    expect(assessment.available).toBe(false);
+    const otp = mintKieOtp(request, 60);
+    expect(parseOtp(otp).payload.requestHash).toBe(canonicalHash(request));
+  });
+});
+
+describe("kie paygate advisory authorization", () => {
+  let previousSecret: string | undefined;
+  let previousSecretPath: string | undefined;
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await mkdtemp(join(tmpdir(), "videobook-kie-authorize-"));
+    previousSecret = process.env.APICITY_PAYGATE_SECRET;
+    previousSecretPath = process.env.APICITY_PAYGATE_SECRET_PATH;
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+    delete process.env.APICITY_PAYGATE_SECRET_PATH;
+  });
+
+  afterEach(async () => {
+    resetLoggerForTests();
+    if (previousSecret === undefined) delete process.env.APICITY_PAYGATE_SECRET;
+    else process.env.APICITY_PAYGATE_SECRET = previousSecret;
+    if (previousSecretPath === undefined) delete process.env.APICITY_PAYGATE_SECRET_PATH;
+    else process.env.APICITY_PAYGATE_SECRET_PATH = previousSecretPath;
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it("authorizes an unbounded Kling transformation and logs a sanitized warning", async () => {
+    const engine = createEngine({ rootDir, initialBookName: "paygate" });
+    await engine.ready;
+    const warnings: string[] = [];
+    configureLoggerForTests({
+      level: "warn",
+      sink: {
+        error: () => undefined,
+        warn: (...args: unknown[]) => {
+          warnings.push(args.map(String).join(" "));
+        },
+        info: () => undefined,
+        debug: () => undefined,
+      },
+    });
+    const secretOtp = "otp_should_never_appear";
+    const prompt = "restyle the source clip as watercolor";
+    const mediaUrl = "https://kie.example/source.mp4";
+    const request = {
+      model: "kling-3.0-omni/transformation" as const,
+      input: {
+        prompt,
+        image_urls: ["https://kie.example/style.png"],
+        video_urls: [mediaUrl],
+        aspect_ratio: "9:16" as const,
+      },
+    };
+    try {
+      const authorized = await authorizeKiePaygate(request, {
+        engine,
+        correlation: {
+          bookId: engine.book.get().bookId,
+          artifactId: "artifact-kling-omni",
+          runId: "run-kling-omni",
+          jobId: "job-kling-omni",
+          tool: "kling30_omni_video",
+          stage: "submit-kie",
+        },
+      });
+      expect(authorized.assessment.available).toBe(false);
+      expect(authorized.otp).toEqual(expect.any(String));
+      expect(authorized.otp).not.toContain(secretOtp);
+      expect(parseOtp(authorized.otp).payload.requestHash).toBe(canonicalHash(request));
+      const combined = [
+        ...warnings,
+        ...engine.logs.read("generation-cost-estimate").map((line) => JSON.stringify(line)),
+      ].join("\n");
+      expect(combined).toContain("generation-cost-estimate");
+      expect(combined).toContain("artifact-kling-omni");
+      expect(combined).toContain("submit-kie");
+      expect(combined).not.toContain(prompt);
+      expect(combined).not.toContain(mediaUrl);
+      expect(combined).not.toContain(authorized.otp);
+      expect(combined).not.toContain("APICITY_PAYGATE_SECRET");
+      expect(combined).not.toContain("test-secret");
+    } finally {
+      engine.close();
+    }
   });
 });

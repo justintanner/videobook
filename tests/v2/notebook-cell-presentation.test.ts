@@ -13,6 +13,7 @@ import {
   notebookCellRunObservation,
   notebookCellStatusLabel,
   notebookCellSupportsExecution,
+  isImageVideoGenerationResultCell,
   notebookOutputVersionArtifactIds,
   notebookSplitFrameIds,
   notebookSplitRange,
@@ -72,6 +73,25 @@ describe('notebook cell presentation', () => {
       operation: 'split_range',
       tool: 'ffmpeg',
     }, 'pending')).toEqual({ disabled: false, label: 'Run' })
+  })
+
+  it('treats generation image and video tiles as unstacked results', () => {
+    expect(isImageVideoGenerationResultCell({
+      type: 'image',
+      inputs: { mediaRole: 'generate-image-output' },
+    })).toBe(true)
+    expect(isImageVideoGenerationResultCell({
+      type: 'video',
+      inputs: { mediaRole: 'generate-video-output' },
+    })).toBe(true)
+    expect(isImageVideoGenerationResultCell({
+      type: 'audio',
+      inputs: { mediaRole: 'generate-audio-output' },
+    })).toBe(false)
+    expect(isImageVideoGenerationResultCell({
+      type: 'image',
+      inputs: { frameMode: 'time' },
+    })).toBe(false)
   })
 
   it('identifies every active execution phase', () => {

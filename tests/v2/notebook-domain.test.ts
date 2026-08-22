@@ -88,7 +88,7 @@ describe('v2 notebook domain tools', () => {
       operation: 'text_to_image',
       tool: 'generate_kie_nano_banana_pro_text_to_image',
     })
-    expect(image.output_cell?.id).toBeTruthy()
+    expect(image.output_cell).toBeUndefined()
 
     resultJson(await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
@@ -119,7 +119,7 @@ describe('v2 notebook domain tools', () => {
       }>
       edges: Array<{ source: string; target: string; targetInput: string }>
     }
-    expect(document.cells).toHaveLength(3)
+    expect(document.cells).toHaveLength(2)
     expect(document.cells.find((cell) => cell.id === image.id)).toMatchObject({
       label: 'generate-image-moon-garden',
       address: '@a1',
@@ -127,8 +127,6 @@ describe('v2 notebook domain tools', () => {
     })
     expect(document.cells.find((cell) => cell.id === prompt.id)?.slot)
       .toEqual({ row: 1, column: 0 })
-    expect(document.cells.find((cell) => cell.id === image.output_cell?.id))
-      .toBeTruthy()
     expect('grid' in document).toBe(false)
     expect(document.edges).toEqual(expect.arrayContaining([
       {
@@ -137,14 +135,8 @@ describe('v2 notebook domain tools', () => {
         targetInput: 'prompt',
         id: expect.any(String),
       },
-      {
-        source: image.id,
-        target: image.output_cell!.id,
-        targetInput: 'media',
-        id: expect.any(String),
-      },
     ]))
-    expect(document.edges).toHaveLength(2)
+    expect(document.edges).toHaveLength(1)
 
     resultJson(await invoke('move_notebook_cells', {
       notebook_id: notebookId,
@@ -401,9 +393,7 @@ describe('v2 notebook domain tools', () => {
       execution?: Record<string, unknown>
       generationPlans?: Array<{ cellId: string }>
     }
-    expect(deleted.cells.map((cell) => cell.id).sort()).toEqual(
-      [source.id, generated.output_cell!.id].sort(),
-    )
+    expect(deleted.cells.map((cell) => cell.id)).toEqual([source.id])
     expect(deleted.edges).toEqual([])
     expect(deleted.execution?.[generated.id]).toBeUndefined()
     expect(deleted.generationPlans).toEqual([])
@@ -953,14 +943,20 @@ describe('v2 notebook domain tools', () => {
         }),
       )
 
-      const queued = resultJson(result) as { job_id: string; plan_id: string }
+      const queued = resultJson(result) as {
+        job_id: string
+        plan_id: string
+        output_cell_id: string
+      }
       expect(queued.plan_id).toBe(plan.planId)
+      expect(queued.output_cell_id).toEqual(expect.any(String))
       expect(engine.jobs.queue.list({ type: 'run_notebook' })).toEqual([
         expect.objectContaining({
           payload: expect.objectContaining({
             cellIds: [target.id],
             force: true,
             jobId: queued.job_id,
+            outputCellId: queued.output_cell_id,
           }),
         }),
       ])
@@ -971,7 +967,8 @@ describe('v2 notebook domain tools', () => {
         fingerprint: 'stale-upstream-fingerprint',
         status: 'completed',
       })
-      expect(persisted.value.execution?.[target.id]).toMatchObject({
+      expect(persisted.value.execution?.[target.id]).toBeUndefined()
+      expect(persisted.value.execution?.[queued.output_cell_id]).toMatchObject({
         status: 'queued',
       })
       expect(persisted.value.generationPlans).toEqual([
@@ -1174,18 +1171,22 @@ describe('v2 notebook domain tools', () => {
     const persisted = engine.notebooks.read(notebook.id)
     expect(persisted.ok).toBe(true)
     if (!persisted.ok) return
-    expect(persisted.value.execution?.[target.id]).toMatchObject({
+    const outputCell = persisted.value.cells.find((cell) =>
+      cell.inputs?.producerCellId === target.id)
+    expect(outputCell).toBeTruthy()
+    expect(persisted.value.execution?.[target.id]).toBeUndefined()
+    expect(persisted.value.execution?.[outputCell!.id]).toMatchObject({
       status: 'error',
       error: expect.stringContaining('queue payload requires bookId'),
     })
-    const claimedRunId = persisted.value.execution?.[target.id]?.runId
+    const claimedRunId = persisted.value.execution?.[outputCell!.id]?.runId
     expect(claimedRunId).toEqual(expect.any(String))
     expect(persisted.value.generationPlans?.[0]).toMatchObject({
       planId: plan.planId,
       status: 'failed',
       error: expect.stringContaining('queue payload requires bookId'),
       plan: {
-        executionClaim: { runId: claimedRunId },
+        executionClaim: { runId: claimedRunId, outputCellId: outputCell!.id },
       },
     })
     const reused = await invoke()

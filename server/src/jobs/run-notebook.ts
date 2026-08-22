@@ -21,9 +21,15 @@ import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { logger } from "../logger.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import {
+  allocateGenerateImageResult,
+  allocateGenerateVideoResult,
   ensureGenerationMediaOutputs,
   ensureGenerationMediaOutput,
   findGenerationMediaOutput,
+  findGenerationResultForRun,
+  isConcurrentGenerationProducer,
+  isImageVideoGenerationResult,
+  migrateStackedGenerationResults,
   normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
 import { queue, registerJobHandler, waitForJob } from "../queue.js";
@@ -80,6 +86,7 @@ export interface RunNotebookPayload {
   generationPlan?: Record<string, unknown>;
   runPlanId?: string;
   runId?: string;
+  outputCellId?: string;
   resume?: boolean;
   actor?: string;
   jobId?: string;
@@ -738,6 +745,19 @@ function withMediaOutput(
     ...document,
     cells: document.cells.map((candidate) => {
       if (!outputCellIds.has(candidate.id)) return candidate;
+      if (isImageVideoGenerationResult(candidate)) {
+        const nextInputs: Record<string, unknown> = {
+          ...(candidate.inputs ?? {}),
+          ...inputs,
+          state: "completed",
+        };
+        delete nextInputs.outputVersionArtifactIds;
+        return {
+          ...candidate,
+          outputArtifactId: artifactId,
+          inputs: nextInputs,
+        };
+      }
       const persisted = Array.isArray(candidate.inputs?.outputVersionArtifactIds)
         ? candidate.inputs.outputVersionArtifactIds.filter(
             (value): value is string =>
@@ -767,8 +787,11 @@ function rollbackGenerationMediaOutput(
   document: NotebookDocument,
   cell: NotebookCell,
   staleArtifactId: string | undefined,
+  outputCellIdHint?: string,
 ): NotebookDocument {
-  const mediaOutput = findGenerationMediaOutput(document, cell);
+  const mediaOutput = findGenerationResultForRun(document, cell, {
+    outputCellId: outputCellIdHint,
+  });
   if (!mediaOutput) return document;
   const outputCellId = mediaOutput.outputCell.id;
   const remainingExecution = { ...executionState(document) };
@@ -810,9 +833,20 @@ function rollbackGenerationMediaOutput(
 export function healGenerationMediaOutputResidue(
   document: NotebookDocument,
   cell: NotebookCell,
+  outputCellId?: string,
 ): NotebookDocument {
-  const mediaOutput = findGenerationMediaOutput(document, cell);
+  if (isConcurrentGenerationProducer(cell) && !outputCellId) {
+    return document;
+  }
+  const mediaOutput = findGenerationResultForRun(document, cell, { outputCellId });
   if (!mediaOutput) return document;
+  if (
+    isConcurrentGenerationProducer(cell)
+    && outputCellId
+    && mediaOutput.outputCell.id !== outputCellId
+  ) {
+    return document;
+  }
   const outputCell = mediaOutput.outputCell;
   const awaitingInputs = outputCell.inputs?.state === "awaiting-output";
   const awaitingExecution =
@@ -822,6 +856,7 @@ export function healGenerationMediaOutputResidue(
     document,
     cell,
     outputCell.outputArtifactId,
+    outputCell.id,
   );
 }
 
@@ -1302,7 +1337,7 @@ async function generationTool(
   document: NotebookDocument,
   cell: NotebookCell,
   bookId: string,
-  options: { runId?: string } = {},
+  options: { runId?: string; outputCellId?: string } = {},
 ): Promise<{
   artifactId: string;
   tool: string;
@@ -1321,7 +1356,11 @@ async function generationTool(
   const resolvedPrompt = typeof prepared.input.prompt === "string"
     ? prepared.input.prompt
     : "";
-  const outputCellId = findGenerationMediaOutput(document, cell)?.outputCell.id;
+  const outputCellId = options.outputCellId
+    ?? findGenerationResultForRun(document, cell, {
+      runId: options.runId,
+      outputCellId: options.outputCellId,
+    })?.outputCell.id;
   const generationId = await recordGenerationDispatch(engine, {
     notebookId: document.id,
     cellId: cell.id,
@@ -1732,7 +1771,7 @@ async function executeLocalOrGeneration(
   bookId: string,
   document: NotebookDocument,
   cell: NotebookCell,
-  options: { confirmPaid?: boolean; runId?: string } = {},
+  options: { confirmPaid?: boolean; runId?: string; outputCellId?: string } = {},
 ): Promise<{
   artifactId: string;
   tool: string;
@@ -2199,6 +2238,7 @@ async function executeLocalOrGeneration(
     }
     const output = await generationTool(engine, document, cell, bookId, {
       ...(options.runId ? { runId: options.runId } : {}),
+      ...(options.outputCellId ? { outputCellId: options.outputCellId } : {}),
     });
     const surface = cell.type === "generate_image"
       ? "image_generate"
@@ -2245,38 +2285,69 @@ export async function runNotebookCell(
   notebookId: string,
   document: NotebookDocument,
   cell: NotebookCell,
-  options: { confirmPaid?: boolean; runId?: string } = {},
+  options: { confirmPaid?: boolean; runId?: string; outputCellId?: string } = {},
 ): Promise<{
   document: NotebookDocument;
   outputArtifactId: string;
   status: "completed" | "awaiting-output";
 }> {
-  let normalizedDocument = normalizeLegacyExtractCells(
-    normalizeLegacyAnalyzeDocument(document),
+  let normalizedDocument = migrateStackedGenerationResults(
+    engine,
+    normalizeLegacyExtractCells(normalizeLegacyAnalyzeDocument(document)),
   );
   let normalizedCell = normalizedDocument.cells.find((candidate) =>
     candidate.id === cell.id) ?? normalizeLegacyAnalyzeCell(cell);
-  const generateMediaOutput = normalizedCell.type === "generate_video"
-      || normalizedCell.type === "generate_image"
-      || normalizedCell.type === "generate_audio"
+  const generateMediaOutput = normalizedCell.type === "generate_audio"
     ? ensureGenerationMediaOutput(
         engine,
         normalizedDocument,
         normalizedCell,
       )
-    : null;
+    : isConcurrentGenerationProducer(normalizedCell)
+      ? findGenerationResultForRun(normalizedDocument, normalizedCell, {
+          runId: options.runId,
+          outputCellId: options.outputCellId,
+        })
+      : null;
+  if (
+    isConcurrentGenerationProducer(normalizedCell)
+    && !generateMediaOutput
+  ) {
+    const allocated = normalizedCell.type === "generate_image"
+      ? allocateGenerateImageResult(engine, normalizedDocument, normalizedCell.id, {
+          runId: options.runId ?? uuidv7(),
+          acceptedAt: new Date().toISOString(),
+        })
+      : allocateGenerateVideoResult(engine, normalizedDocument, normalizedCell.id, {
+          runId: options.runId ?? uuidv7(),
+          acceptedAt: new Date().toISOString(),
+        });
+    const reserved = await mutateNotebook(
+      engine,
+      notebookId,
+      normalizedCell.type === "generate_image"
+        ? "allocate_generate_image_output"
+        : "allocate_generate_video_output",
+      () => allocated.document,
+      { cellId: normalizedCell.id, outputCellId: allocated.outputCell.id },
+    );
+    if (!reserved.ok) throw new Error(reserved.error.message);
+    const refreshed = engine.notebooks.read(notebookId);
+    if (!refreshed.ok) throw new Error(refreshed.error.message);
+    normalizedDocument = refreshed.value;
+    normalizedCell = normalizedDocument.cells.find((candidate) =>
+      candidate.id === cell.id) ?? normalizedCell;
+    options = { ...options, outputCellId: allocated.outputCell.id };
+  }
   if (
     generateMediaOutput
+    && "document" in generateMediaOutput
     && generateMediaOutput.document !== normalizedDocument
   ) {
     const repaired = await mutateNotebook(
       engine,
       notebookId,
-      normalizedCell.type === "generate_image"
-        ? "ensure_generate_image_output"
-        : normalizedCell.type === "generate_audio"
-          ? "ensure_generate_audio_output"
-          : "ensure_generate_video_output",
+      "ensure_generate_audio_output",
       (current) => ensureGenerationMediaOutput(
         engine,
         current,
@@ -2317,16 +2388,25 @@ export async function runNotebookCell(
       healGenerationMediaOutputResidue(
         normalizeLegacyAnalyzeDocument(current),
         normalizedCell,
+        options.outputCellId,
       ),
-      normalizedCell.id,
+      options.outputCellId && isConcurrentGenerationProducer(normalizedCell)
+        ? options.outputCellId
+        : normalizedCell.id,
       runningState,
     ),
-    { cellId: normalizedCell.id, runId: options.runId },
+    { cellId: normalizedCell.id, runId: options.runId, outputCellId: options.outputCellId },
   );
   if (!started.ok) throw new Error(started.error.message);
   const activeDocument = withExecution(
-    healGenerationMediaOutputResidue(normalizedDocument, normalizedCell),
-    normalizedCell.id,
+    healGenerationMediaOutputResidue(
+      normalizedDocument,
+      normalizedCell,
+      options.outputCellId,
+    ),
+    options.outputCellId && isConcurrentGenerationProducer(normalizedCell)
+      ? options.outputCellId
+      : normalizedCell.id,
     runningState,
   );
   const activeCell = activeDocument.cells.find((candidate) =>
@@ -2361,14 +2441,21 @@ export async function runNotebookCell(
       "run_notebook_cell",
       (current) => {
         const base = output.document ?? current;
-        const mediaOutput = findGenerationMediaOutput(base, activeCell);
+        const mediaOutput = findGenerationResultForRun(base, activeCell, {
+          runId: options.runId,
+          outputCellId: options.outputCellId,
+        });
         // New-style generate_video / generate_image: artifact lives on the
         // dedicated output cell. Legacy/other cells keep inline
         // outputArtifactId on the action cell.
         const actionArtifactId = mediaOutput ? undefined : output.artifactId;
+        const executionCellId = options.outputCellId
+          && isConcurrentGenerationProducer(activeCell)
+          ? options.outputCellId
+          : activeCell.id;
         let withOutput = withExecution(
           base,
-          activeCell.id,
+          executionCellId,
           state,
           actionArtifactId,
         );
@@ -2436,15 +2523,20 @@ export async function runNotebookCell(
           ? notebookCellFingerprint(withCells, finalCell)
           : state.fingerprint;
         if (!mediaOutput && !actionCellChanged) return withCells;
+        const concurrent = isConcurrentGenerationProducer(activeCell);
         return {
           ...withCells,
           execution: {
             ...executionState(withCells),
-            [activeCell.id]: {
-              ...state,
-              fingerprint,
-              outputArtifactId: output.artifactId,
-            },
+            ...(concurrent
+              ? {}
+              : {
+                  [activeCell.id]: {
+                    ...state,
+                    fingerprint,
+                    outputArtifactId: output.artifactId,
+                  },
+                }),
             ...(mediaOutput
               ? {
                   [mediaOutput.outputCell.id]: {
@@ -2645,16 +2737,29 @@ function requiredNotebookCellIds(
   return required;
 }
 
-function generationPlanClaimRunId(
+function generationPlanClaimField(
   plan: Record<string, unknown>,
+  field: "runId" | "outputCellId",
 ): string | null {
   const claim = plan.executionClaim;
   return claim
     && typeof claim === "object"
     && !Array.isArray(claim)
-    && typeof (claim as Record<string, unknown>).runId === "string"
-    ? (claim as Record<string, unknown>).runId as string
+    && typeof (claim as Record<string, unknown>)[field] === "string"
+    ? (claim as Record<string, unknown>)[field] as string
     : null;
+}
+
+function generationPlanClaimRunId(
+  plan: Record<string, unknown>,
+): string | null {
+  return generationPlanClaimField(plan, "runId");
+}
+
+export function generationPlanClaimOutputCellId(
+  plan: Record<string, unknown>,
+): string | null {
+  return generationPlanClaimField(plan, "outputCellId");
 }
 
 export async function claimNotebookGenerationPlan(
@@ -2688,29 +2793,60 @@ export async function claimNotebookGenerationPlan(
         throw new Error("Generation plan is stale for the selected cell");
       }
       const execution = executionState(document)[cellId];
+      const concurrent = isConcurrentGenerationProducer(cell);
       if (
-        execution?.status === "queued"
-        || execution?.status === "running"
-        || execution?.status === "awaiting-output"
+        !concurrent
+        && (
+          execution?.status === "queued"
+          || execution?.status === "running"
+          || execution?.status === "awaiting-output"
+        )
       ) {
         throw new Error(
           `Notebook cell ${notebookGridTag(cell.slot)} is already ${execution.status}`,
         );
       }
+      let working = document;
+      let outputCellId: string | undefined;
+      if (cell.type === "generate_image" || cell.type === "generate_video") {
+        const allocated = cell.type === "generate_image"
+          ? allocateGenerateImageResult(engine, working, cell.id, {
+              runId,
+              planId,
+              acceptedAt: claimedAt,
+            })
+          : allocateGenerateVideoResult(engine, working, cell.id, {
+              runId,
+              planId,
+              acceptedAt: claimedAt,
+            });
+        working = allocated.document;
+        outputCellId = allocated.outputCell.id;
+      }
       claimedPlan = {
         ...record.plan,
-        executionClaim: { runId, claimedAt },
+        executionClaim: {
+          runId,
+          claimedAt,
+          ...(outputCellId ? { outputCellId } : {}),
+        },
       };
       const state: CellExecution = {
-        fingerprint: notebookCellFingerprint(document, cell),
+        fingerprint: notebookCellFingerprint(working, cell),
         status: "queued",
-        ...(cell.outputArtifactId ? { outputArtifactId: cell.outputArtifactId } : {}),
         runId,
         startedAt: claimedAt,
         updatedAt: claimedAt,
         tool: cell.tool || cell.model || cell.operation,
       };
-      const queued = withExecution(document, cellId, state);
+      const queued = outputCellId
+        ? withExecution(working, outputCellId, state)
+        : withExecution(working, cellId, {
+            ...state,
+            ...(cell.outputArtifactId
+              ? { outputArtifactId: cell.outputArtifactId }
+              : {}),
+          });
       return {
         ...queued,
         generationPlans: (queued.generationPlans ?? []).map((candidate) =>
@@ -2753,10 +2889,14 @@ export async function failQueuedNotebookCells(
   ) return 0;
   const snapshot = engine.notebooks.read(notebookId);
   if (!snapshot.ok) return 0;
-  const queuedCellIds = new Set([...selected].filter((cellId) => {
-    const state = executionState(snapshot.value)[cellId];
-    return state?.status === "queued" && state.runId === options.runId;
-  }));
+  const queuedCellIds = new Set([
+    ...[...selected].filter((cellId) => {
+      const state = executionState(snapshot.value)[cellId];
+      return state?.status === "queued" && state.runId === options.runId;
+    }),
+    ...Object.entries(executionState(snapshot.value)).flatMap(([cellId, state]) =>
+      state?.status === "queued" && state.runId === options.runId ? [cellId] : []),
+  ]);
   const failedCellIds = new Set([...selected].filter((cellId) => {
     const state = executionState(snapshot.value)[cellId];
     return state?.status === "error" && state.runId === options.runId;
@@ -2792,9 +2932,11 @@ export async function failQueuedNotebookCells(
     (document) => {
       const execution = { ...executionState(document) };
       const transitionedCellIds = new Set<string>();
-      for (const cellId of selected) {
-        const state = execution[cellId];
+      for (const [cellId, state] of Object.entries(execution)) {
         if (state?.status !== "queued" || state.runId !== options.runId) continue;
+        if (selected.size > 0 && !queuedCellIds.has(cellId) && !selected.has(cellId)) {
+          continue;
+        }
         execution[cellId] = {
           ...state,
           status: "error",
@@ -2804,9 +2946,8 @@ export async function failQueuedNotebookCells(
         };
         transitionedCellIds.add(cellId);
       }
-      const planCellIds = new Set([...transitionedCellIds]);
-      for (const cellId of selected) {
-        const state = execution[cellId];
+      const planCellIds = new Set([...selected, ...transitionedCellIds]);
+      for (const [cellId, state] of Object.entries(execution)) {
         if (state?.status === "error" && state.runId === options.runId) {
           planCellIds.add(cellId);
         }
@@ -2874,6 +3015,7 @@ export interface AwaitNotebookOutputPayload {
   cellId: string;
   providerArtifactId: string;
   runId: string;
+  outputCellId?: string;
   runPlanId?: string;
   generationPlan?: Record<string, unknown>;
   actor?: string;
@@ -3056,11 +3198,12 @@ async function finishAwaitingNotebookCell(
     "complete_notebook_provider_output",
     (document) => {
       let working = document;
-      let resolvedOutput = findGenerationMediaOutput(working, cell);
+      let resolvedOutput = findGenerationResultForRun(working, cell, {
+        runId: input.runId,
+        outputCellId: input.outputCellId,
+      });
       if (
-        (cell.type === "generate_video"
-          || cell.type === "generate_image"
-          || cell.type === "generate_audio")
+        cell.type === "generate_audio"
         && !resolvedOutput
       ) {
         const ensured = ensureGenerationMediaOutput(engine, working, cell);
@@ -3124,11 +3267,15 @@ async function finishAwaitingNotebookCell(
         ...withCells,
         execution: {
           ...executionState(withCells),
-          [cell.id]: {
-            ...state,
-            fingerprint,
-            outputArtifactId,
-          },
+          ...(isConcurrentGenerationProducer(cell)
+            ? {}
+            : {
+                [cell.id]: {
+                  ...state,
+                  fingerprint,
+                  outputArtifactId,
+                },
+              }),
           ...(outputCellId
             ? {
                 [outputCellId]: {
@@ -3177,8 +3324,21 @@ async function failAwaitingNotebookCell(
     (document) => {
       const cell = document.cells.find((candidate) => candidate.id === input.cellId);
       if (!cell) return document;
-      const current = executionState(document)[cell.id];
-      const withFailure = withExecution(document, cell.id, {
+      const concurrent = isConcurrentGenerationProducer(cell);
+      const runMatchedOutput = concurrent
+        ? document.cells.find((candidate) =>
+          candidate.id !== cell.id
+          && (
+            candidate.inputs?.generationRunId === input.runId
+            || executionState(document)[candidate.id]?.runId === input.runId
+          ))
+        : undefined;
+      const failTargetId = (concurrent
+        ? input.outputCellId ?? runMatchedOutput?.id
+        : undefined) ?? cell.id;
+      const current = executionState(document)[failTargetId]
+        ?? executionState(document)[cell.id];
+      const withFailure = withExecution(document, failTargetId, {
         fingerprint: current?.fingerprint
           ?? notebookCellFingerprint(document, cell),
         status: "error",
@@ -3189,15 +3349,35 @@ async function failAwaitingNotebookCell(
         updatedAt,
         tool: current?.tool ?? cell.tool ?? cell.model,
         error: message,
-      }, input.providerArtifactId);
-      // Dispatch acceptance stamped the paired output cell with the provider
-      // placeholder and an awaiting-output execution record. Roll both back:
-      // a lingering awaiting-output record blocks run resumption and keeps
-      // the client's generation clock running after the failure.
+      }, isConcurrentGenerationProducer(cell) ? undefined : input.providerArtifactId);
+      if (isConcurrentGenerationProducer(cell)) {
+        const execution = { ...executionState(withFailure) };
+        if (
+          execution[cell.id]?.runId === input.runId
+          && execution[cell.id]?.status === "awaiting-output"
+        ) {
+          delete execution[cell.id];
+        }
+        return {
+          ...withFailure,
+          execution,
+          cells: withFailure.cells.map((candidate) =>
+            candidate.id === failTargetId
+              ? {
+                  ...candidate,
+                  inputs: {
+                    ...(candidate.inputs ?? {}),
+                    state: "error",
+                  },
+                }
+              : candidate),
+        };
+      }
       return rollbackGenerationMediaOutput(
         withFailure,
         cell,
         input.providerArtifactId,
+        input.outputCellId,
       );
     },
     {
@@ -3419,7 +3599,18 @@ export function registerRunNotebookJob(engine: Engine): void {
           input.notebookId,
           document,
           cell,
-          { confirmPaid: paidAuthorized, runId },
+          {
+            confirmPaid: paidAuthorized,
+            runId,
+            ...(input.outputCellId ? { outputCellId: input.outputCellId } : {}),
+            ...(generationPlanClaimOutputCellId(input.generationPlan ?? {})
+              ? {
+                  outputCellId:
+                    generationPlanClaimOutputCellId(input.generationPlan ?? {})
+                    ?? undefined,
+                }
+              : {}),
+          },
         );
         document = result.document;
         outputs[cell.id] = result.outputArtifactId;
@@ -3455,6 +3646,13 @@ export function registerRunNotebookJob(engine: Engine): void {
               cellId: cell.id,
               providerArtifactId: result.outputArtifactId,
               runId,
+              ...(input.outputCellId || generationPlanClaimOutputCellId(input.generationPlan ?? {})
+                ? {
+                    outputCellId: input.outputCellId
+                      ?? generationPlanClaimOutputCellId(input.generationPlan ?? {})
+                      ?? undefined,
+                  }
+                : {}),
               ...(input.runPlanId ? { runPlanId: input.runPlanId } : {}),
               ...(input.generationPlan
                 ? { generationPlan: input.generationPlan }

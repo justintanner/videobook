@@ -251,7 +251,12 @@ describe("notebook generation rows", () => {
     const notebook = engine.notebooks.read(notebookId);
     expect(notebook.ok).toBe(true);
     if (!notebook.ok) return;
-    expect(notebook.value.execution?.[cell.id]?.status).toBe("error");
+    const outputCellId = engine.generations.listForCell(notebookId, cell.id)
+      .value?.[0]?.outputCellId;
+    expect(
+      notebook.value.execution?.[outputCellId ?? ""]?.status
+      ?? notebook.value.execution?.[cell.id]?.status,
+    ).toBe("error");
   }, 60_000);
 
   it("marks the row failed when dispatch fails before provider handoff", async () => {
