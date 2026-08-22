@@ -264,7 +264,9 @@ function normalizedVideoFilter(
   height: number,
   fps: number,
 ): string {
-  return `[${input}:v]fps=${mediaNumber(fps)},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[${label}]`;
+  // Keep fps last: some Linux FFmpeg builds report a 1/0 frame rate after
+  // setpts, which xfade correctly rejects as variable-frame-rate input.
+  return `[${input}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS,fps=${mediaNumber(fps)}[${label}]`;
 }
 
 function fixedAudioFilter(

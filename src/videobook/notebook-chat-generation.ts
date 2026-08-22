@@ -57,7 +57,7 @@ type NotebookToolCall = (
   args: Record<string, unknown>,
 ) => Promise<unknown>
 
-export type NotebookChatGenerationSource = {
+type NotebookChatGenerationSource = {
   cell: NotebookCell
   kind: GenerationConnectedInput['kind']
 }

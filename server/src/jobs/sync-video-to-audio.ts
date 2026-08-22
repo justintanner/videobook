@@ -101,6 +101,11 @@ export async function renderAudioSyncedVideo(
   plan: AudioSyncPlan,
   signal?: AbortSignal,
 ): Promise<SyncVideoToAudioAudioMode> {
+  const source = await probeVideo(inputPath, { signal });
+  if (source.audioCodec !== "aac") {
+    await runFfmpeg(outputArgs(inputPath, outputPath, plan, "aac"), { signal });
+    return "aac";
+  }
   try {
     await runFfmpeg(outputArgs(inputPath, outputPath, plan, "copy"), { signal });
     return "copy";

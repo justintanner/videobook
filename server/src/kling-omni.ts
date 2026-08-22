@@ -14,7 +14,7 @@ export const KLING_OMNI_TOOLS = [
   KLING_OMNI_TRANSFORMATION_TOOL,
 ] as const;
 
-export type KlingOmniToolName = (typeof KLING_OMNI_TOOLS)[number];
+type KlingOmniToolName = (typeof KLING_OMNI_TOOLS)[number];
 
 export type KlingOmniMode = "text" | "image" | "reference" | "transformation";
 
@@ -35,7 +35,7 @@ export const KLING_OMNI_API_MODELS = {
 export const KLING_OMNI_JOB_TYPE = "generate_kling30_omni_video";
 export const KLING_OMNI_TASK_TYPE = "kling30_omni_video";
 
-export const KLING_OMNI_SHARED_PARAMS = [
+const KLING_OMNI_SHARED_PARAMS = [
   "prompt",
   "audio",
   "resolution",
@@ -67,15 +67,6 @@ export const KLING_OMNI_TOOL_PARAMS: Record<KlingOmniToolName, string[]> = {
 
 export function isKlingOmniTool(toolName: string): toolName is KlingOmniToolName {
   return (KLING_OMNI_TOOLS as readonly string[]).includes(toolName);
-}
-
-export function klingOmniModeForTool(toolName: string): KlingOmniMode | null {
-  for (const [mode, name] of Object.entries(KLING_OMNI_MODE_TOOLS) as Array<
-    [KlingOmniMode, KlingOmniToolName]
-  >) {
-    if (name === toolName) return mode;
-  }
-  return null;
 }
 
 function nonemptyRefs(value: unknown): string[] {

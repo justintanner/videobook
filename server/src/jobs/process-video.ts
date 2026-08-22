@@ -64,7 +64,7 @@ export type PlanVideoTranscriptJobsInput = {
   hasElevenLabsKey: boolean;
 };
 
-export type OpenAiVideoTranscriptPayload = {
+type OpenAiVideoTranscriptPayload = {
   type: "transcribe_video_audio";
   videoPath: string;
   assetId: string;
@@ -74,7 +74,7 @@ export type OpenAiVideoTranscriptPayload = {
   mediaRevision: string;
 };
 
-export type ElevenLabsVideoTranscriptPayload = {
+type ElevenLabsVideoTranscriptPayload = {
   type: "transcribe";
   audioPath: string;
   audioFilename: "original.mp3";
@@ -85,7 +85,7 @@ export type ElevenLabsVideoTranscriptPayload = {
   bookId: string;
 };
 
-export type VideoTranscriptJobPlan =
+type VideoTranscriptJobPlan =
   | { jobId: string; payload: OpenAiVideoTranscriptPayload }
   | { jobId: string; payload: ElevenLabsVideoTranscriptPayload };
 
@@ -127,7 +127,7 @@ export function planVideoTranscriptJobs(
   return jobs;
 }
 
-export async function enqueueVideoTranscriptJobs(
+async function enqueueVideoTranscriptJobs(
   jobs: readonly VideoTranscriptJobPlan[],
 ): Promise<void> {
   for (const job of jobs) {

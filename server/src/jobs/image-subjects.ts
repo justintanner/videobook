@@ -240,7 +240,7 @@ export const SEEDREAM_LAYER_FALLBACK_PROMPT =
   + "person in the foreground or midground, plus at most three large, clearly "
   + "separable foreground objects. Merge all remaining detail into the base layer.";
 
-export const SEEDREAM_TOO_COMPLEX_GUIDANCE =
+const SEEDREAM_TOO_COMPLEX_GUIDANCE =
   "Seedream could not decompose this image into layers, even with a "
   + "constrained subject selection. Use Draw region to target the area you "
   + "want to edit instead.";
@@ -306,7 +306,7 @@ function closestAspectRatio(
       : best)[0];
 }
 
-export function boxPositionWording(box: ImageSubjectNormalizedBox): string {
+function boxPositionWording(box: ImageSubjectNormalizedBox): string {
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
   const horizontal = cx < 1 / 3 ? "left" : cx > 2 / 3 ? "right" : "center";
@@ -317,7 +317,7 @@ export function boxPositionWording(box: ImageSubjectNormalizedBox): string {
   return `${vertical}-${horizontal}`;
 }
 
-export function describeReplacementRegion(
+function describeReplacementRegion(
   region: ImageSubjectReplacementRegion,
   map: ImageSubjectMapReadyV1 | null,
 ): string {

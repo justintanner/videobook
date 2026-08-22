@@ -70,6 +70,12 @@ export async function renderTimewarpedVideo(
     return "none";
   }
 
+  const source = await probeVideo(inputPath, { signal });
+  if (source.audioCodec !== "aac") {
+    await runFfmpeg(outputArgs(inputPath, outputPath, plan, true, "aac"), { signal });
+    return "aac";
+  }
+
   try {
     await runFfmpeg(outputArgs(inputPath, outputPath, plan, true, "copy"), { signal });
     return "copy";

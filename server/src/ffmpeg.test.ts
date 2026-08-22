@@ -259,6 +259,19 @@ Conversion failed!
     expect(result).toContain("Conversion failed");
   });
 
+  it("preserves the root cause and final failure when truncating", () => {
+    const stderr = [
+      "[Parsed_xfade_14] The inputs need a constant frame rate",
+      ...Array.from({ length: 8 }, (_, index) => `diagnostic detail ${index}: ${"x".repeat(30)}`),
+      "Nothing was written into output file",
+    ].join("\n");
+
+    const result = summarizeFfmpegStderr(stderr, 160);
+    expect(result).toContain("constant frame rate");
+    expect(result).toContain("Nothing was written");
+    expect(result.length).toBeLessThanOrEqual(160);
+  });
+
   it("falls back gracefully when stderr is empty", () => {
     expect(summarizeFfmpegStderr("")).toBe("");
   });

@@ -3,7 +3,7 @@ import { parseSegments } from "./remotion/subtitles/segments.js";
 import type { Orientation, SubtitleStyle } from "./remotion/subtitles/types.js";
 import { srtContent, type SrtCue } from "./srt.js";
 
-export type TranscriptSrtOptions = {
+type TranscriptSrtOptions = {
   orientation?: Orientation;
   style?: SubtitleStyle;
 };

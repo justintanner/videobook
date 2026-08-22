@@ -1,4 +1,4 @@
-export type ImageEditBox = {
+type ImageEditBox = {
   x: number
   y: number
   width: number
@@ -11,7 +11,7 @@ export type ImageEditRegion = {
   matchedSubjectId?: string
 }
 
-export type ImageEditSubjectBox = {
+type ImageEditSubjectBox = {
   id: string
   box: ImageEditBox | null
 }
@@ -118,7 +118,7 @@ export function imageEditSelectionPayload(
   }
 }
 
-export type ImageReplacementTarget = {
+type ImageReplacementTarget = {
   key: string
   box?: ImageEditBox
   subjectId?: string

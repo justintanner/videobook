@@ -502,32 +502,49 @@ export async function captureFrame(
         `Cannot capture frame from artifact ${sourceArtifactId}: requested timestamp ${String(requestedTimestamp)}s is not a finite number`,
       );
     }
-    const lastFrameAt = Math.max(
-      start,
-      end - (1 / Math.max(probe.avgFps ?? probe.fps, 1)),
-    );
+    const frameDuration = 1 / Math.max(probe.avgFps ?? probe.fps, 1);
+    const lastFrameAt = Math.max(start, end - frameDuration);
     const atSeconds = options.role === "first"
       ? start
       : options.role === "time"
         ? Math.min(Math.max(requestedTimestamp!, start), lastFrameAt)
         : lastFrameAt;
-    await runFfmpeg([
-      "-y",
-      "-ss",
-      String(atSeconds),
-      "-i",
-      source.path,
-      "-map",
-      "0:v:0",
-      "-frames:v",
-      "1",
-      "-q:v",
-      "2",
-      outPath,
-    ]);
-    const bytes = await readFile(outPath);
-    if (bytes.byteLength < 32) {
-      throw new Error("Captured frame is empty");
+    const attempts = options.role === "last"
+      ? [...new Set([atSeconds, Math.max(start, atSeconds - frameDuration), start])]
+      : [atSeconds];
+    let capturedAt: number | null = null;
+    let captureError: unknown;
+    for (const candidate of attempts) {
+      try {
+        await rm(outPath, { force: true });
+        await runFfmpeg([
+          "-y",
+          "-ss",
+          String(candidate),
+          "-i",
+          source.path,
+          "-map",
+          "0:v:0",
+          "-frames:v",
+          "1",
+          "-q:v",
+          "2",
+          outPath,
+        ]);
+        const bytes = await readFile(outPath);
+        if (bytes.byteLength >= 32) {
+          capturedAt = candidate;
+          break;
+        }
+        captureError = new Error("Captured frame is empty");
+      } catch (error) {
+        captureError = error;
+      }
+    }
+    if (capturedAt === null) {
+      throw captureError instanceof Error
+        ? captureError
+        : new Error("Could not capture a frame from the source video");
     }
     const artifactId = await ingestOutput(
       engine,
@@ -543,11 +560,11 @@ export async function captureFrame(
         origin: "extract_frame",
         sourceArtifactId,
         frameMode: options.role,
-        atSeconds,
+        atSeconds: capturedAt,
       },
     );
     if (!metadata.ok) throw new Error(metadata.error.message);
-    return { artifactId, atSeconds };
+    return { artifactId, atSeconds: capturedAt };
   } finally {
     await source.cleanup();
     await rm(outDir, { recursive: true, force: true });

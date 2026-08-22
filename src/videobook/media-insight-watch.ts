@@ -1,7 +1,7 @@
 import type { MediaInsightKind } from './media-insights'
 
 /** Queue jobs that can produce each insight sidecar. */
-export const mediaInsightJobTypes: Record<MediaInsightKind, readonly string[]> = {
+const mediaInsightJobTypes: Record<MediaInsightKind, readonly string[]> = {
   transcript: ['transcribe', 'transcribe_video_audio'],
   analysis: ['analyze_video'],
 }

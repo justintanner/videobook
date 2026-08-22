@@ -290,7 +290,17 @@ export function summarizeFfmpegStderr(stderr: string, maxChars = 600): string {
     return true;
   });
   const tail = meaningful.slice(-15).join("\n");
-  return tail.length > maxChars ? tail.slice(-maxChars) : tail;
+  if (tail.length <= maxChars) return tail;
+  if (maxChars <= 0) return "";
+
+  const truncationMarker = "\n...\n";
+  if (maxChars <= truncationMarker.length) return tail.slice(0, maxChars);
+
+  const availableChars = maxChars - truncationMarker.length;
+  const headChars = Math.ceil(availableChars / 2);
+  const tailChars = availableChars - headChars;
+  const suffix = tailChars > 0 ? tail.slice(-tailChars) : "";
+  return `${tail.slice(0, headChars)}${truncationMarker}${suffix}`;
 }
 
 export function withQuietFfmpegArgs(args: string[]): string[] {

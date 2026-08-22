@@ -31,6 +31,7 @@
     "install:acestep": "tsx scripts/install-acestep.ts",
     "mint:x-token": "op run --env-file=.env.tpl -- node scripts/mint-x-token.mjs",
     "test": "vitest run",
+    "test:ci": "vitest run --exclude=server/src/jobs/smooth-scene-concat.test.ts --exclude=server/src/tools/smooth-scene-concat.test.ts && vitest run --maxWorkers=1 server/src/jobs/smooth-scene-concat.test.ts server/src/tools/smooth-scene-concat.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:clean-install": "node tools/clean-install-smoke.mjs",
     "pretest:e2e": "playwright install chromium",
@@ -68,6 +69,7 @@
     "videobook-engine": "file:vendor/videobook-engine-5.0.1-f4c3514.tgz"
   },
   "overrides": {
+    "adm-zip": "^0.6.0",
     "sharp": "^0.35.3",
     "@hono/node-server": "^2.0.11",
     "hono": "^4.12.31",

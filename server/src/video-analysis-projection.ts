@@ -28,7 +28,7 @@ function stringList(value: unknown): string[] {
     : [];
 }
 
-export function videoAnalysisSummaryFrom(raw: unknown): VideoAnalysisSummary | null {
+function videoAnalysisSummaryFrom(raw: unknown): VideoAnalysisSummary | null {
   if (typeof raw !== "object" || raw === null) return null;
   const analysis = raw as Record<string, unknown>;
   const summary = stringOrNull(analysis.summary);

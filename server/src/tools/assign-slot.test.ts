@@ -1,9 +1,10 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../engine.js";
+import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 
@@ -229,6 +230,7 @@ describe("assign_slot lazy analysis trigger", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     if (savedKey !== undefined) process.env.OPENAI_API_KEY = savedKey;
     else delete process.env.OPENAI_API_KEY;
     await client?.close();
@@ -248,6 +250,7 @@ describe("assign_slot lazy analysis trigger", () => {
 
   it("enqueues describe_image when an unanalyzed img- is dropped into a slot", async () => {
     const assetId = await uploadImage("photo.png");
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined as never);
 
     const result = await client.callTool({
       name: "assign_slot",
@@ -259,6 +262,10 @@ describe("assign_slot lazy analysis trigger", () => {
     expect(parsed.auto_analyze).toBeDefined();
     expect(parsed.auto_analyze.kind).toBe("describe_image");
     expect(typeof parsed.auto_analyze.jobId).toBe("string");
+    expect(enqueue).toHaveBeenCalledWith(
+      parsed.auto_analyze.jobId,
+      expect.objectContaining({ type: "describe_image", sourceAssetId: assetId }),
+    );
   });
 
   it("does not enqueue describe_image for svg uploads (vision unreliable on vector)", async () => {
@@ -314,6 +321,7 @@ describe("assign_slot lazy analysis trigger", () => {
     const written = await fs.files.write(created.value.artifactId, "original.mp4", "fake-video-data");
     if (!written.ok) throw new Error(written.error.message);
     await registerTestVideoStream(fs, created.value.artifactId);
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined as never);
 
     const result = await client.callTool({
       name: "assign_slot",
@@ -325,5 +333,9 @@ describe("assign_slot lazy analysis trigger", () => {
     expect(parsed.auto_analyze).toBeDefined();
     expect(parsed.auto_analyze.kind).toBe("analyze_video");
     expect(typeof parsed.auto_analyze.jobId).toBe("string");
+    expect(enqueue).toHaveBeenCalledWith(
+      parsed.auto_analyze.jobId,
+      expect.objectContaining({ type: "analyze_video", assetId }),
+    );
   });
 });

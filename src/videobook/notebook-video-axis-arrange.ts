@@ -11,15 +11,15 @@ import {
 
 export type NotebookVideoAxis = 'column' | 'row'
 
-export interface NotebookVideoAxisAssignment {
+interface NotebookVideoAxisAssignment {
   id: string
   row: number
   column: number
 }
 
-export type NotebookVideoAxisArrangeFailureCode = 'no-videos' | 'capacity'
+type NotebookVideoAxisArrangeFailureCode = 'no-videos' | 'capacity'
 
-export type NotebookVideoAxisArrangeResult =
+type NotebookVideoAxisArrangeResult =
   | {
       ok: true
       slots: NotebookVideoAxisAssignment[]
