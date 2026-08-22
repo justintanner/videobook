@@ -183,6 +183,7 @@ describe('chat composer browser flow', () => {
   let bookId = ''
   let notebookId = ''
   let videoCellId = ''
+  let videoArtifactId = ''
   let imageCellId = ''
   let generationCellId = ''
   let outputVideoCellId = ''
@@ -307,6 +308,7 @@ describe('chat composer browser flow', () => {
     if (!uploadedVideoArtifactId || typeof uploadedVideoAsset?.media_url !== 'string') {
       throw new Error('Could not create split video fixture asset')
     }
+    videoArtifactId = uploadedVideoArtifactId
     videoCellId = await createCell({
       type: 'video',
       label: 'vid-source-one',
@@ -1321,6 +1323,66 @@ describe('chat composer browser flow', () => {
         textOverflow: 'clip',
         whiteSpace: 'normal',
       })
+    } finally {
+      mockedChatActionPlan = null
+    }
+  }, 60_000)
+
+  it('shows a live speed preview at the proposed rate before applying', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    const prompt = 'speed up @a1 to 1.3x'
+    mockedChatActionPlan = {
+      prompt,
+      value: {
+        kind: 'chat-action-plan',
+        planId: '01900000-0000-7000-8000-000000000201',
+        bookId,
+        prompt,
+        routedTool: 'change_video_speed',
+        tool: 'change_video_speed',
+        params: {
+          asset_id: videoArtifactId,
+          book_id: bookId,
+          speed: 1.3,
+        },
+        message: 'Changing video speed.',
+        summary: 'Changing video speed.',
+        effect: 'mutation',
+        confirmation: {
+          required: true,
+          reason: 'This request changes the current book',
+        },
+      },
+    }
+    try {
+      await openApp()
+      const input = page.getByLabel('Videobook command input')
+      await input.waitFor({ state: 'visible', timeout: 30_000 })
+      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await input.fill(prompt)
+      await page.getByLabel('Send command').click()
+
+      const review = page.getByLabel('Chat action review')
+      await review.waitFor({ state: 'visible', timeout: 30_000 })
+      await review.getByText('Change video speed').waitFor({ state: 'visible' })
+      await review.locator('.routed-action-settings dd', { hasText: '1.3×' })
+        .first().waitFor({ state: 'visible' })
+      await review.getByText('Source duration').waitFor({ state: 'visible' })
+
+      // The proposed media preview renders live (controls, proposed playback
+      // rate) against the cache-busted source URL without mutating it.
+      const preview = review.locator('.routed-action-preview video')
+      await preview.waitFor({ state: 'visible', timeout: 30_000 })
+      expect(await preview.getAttribute('controls')).not.toBeNull()
+      expect(await preview.evaluate((element) => (element as HTMLVideoElement).playbackRate))
+        .toBe(1.3)
+      expect(await preview.getAttribute('src')).toContain('/files/')
+      await review.getByText('Live preview at 1.3× — source not yet changed')
+        .waitFor({ state: 'visible' })
+
+      // Cancel performs no mutation: the drawer closes and the cell stays put.
+      await review.getByRole('button', { name: /Cancel/ }).click()
+      await expect.poll(async () => await review.count()).toBe(0)
     } finally {
       mockedChatActionPlan = null
     }

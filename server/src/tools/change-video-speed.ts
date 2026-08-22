@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
-import { getFFmpeggy } from "../ffmpeg.js";
+import { probeVideo } from "../ffmpeg.js";
 import { findVideoFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 
@@ -13,14 +13,6 @@ function validateSpeed(speed: number): string | null {
   if (speed === 1.0) return "Speed 1.0 is a no-op — nothing to change";
   if (speed < SPEED_MIN || speed > SPEED_MAX) return `Speed must be between ${SPEED_MIN} and ${SPEED_MAX}, got ${speed}`;
   return null;
-}
-
-async function probeMedia(filePath: string): Promise<{ hasAudio: boolean; duration: number }> {
-  const FFmpeggy = await getFFmpeggy();
-  const probe = await FFmpeggy.probe(filePath);
-  const hasAudio = probe.streams.some((s) => s.codec_type === "audio");
-  const duration = parseFloat(probe.format.duration) || 0;
-  return { hasAudio, duration };
 }
 
 export function changeVideoSpeedDef(engine: Engine): ToolDef {
@@ -70,7 +62,14 @@ export function changeVideoSpeedDef(engine: Engine): ToolDef {
       const assetDir = manifest.path;
       const videoPath = join(assetDir, videoFile.name);
       
-      const { hasAudio, duration } = await probeMedia(videoPath);
+      const probe = await probeVideo(videoPath);
+      const { hasAudio } = probe;
+      // Exact-duration mode derives the multiplier from the video stream, not
+      // the container: format duration follows the longest stream, so a
+      // longer audio track would under-speed the video and leave it short of
+      // the target (and the duration cap would clip a longer video stream's
+      // tail).
+      const duration = probe.videoDuration;
       
       let speed: number;
       if (target_duration_seconds !== undefined) {

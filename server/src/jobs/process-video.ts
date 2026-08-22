@@ -419,9 +419,10 @@ async function processVideoSnapshot(
         if (!await snapshotAssetFile(engine, assetId, activeSourcePath, proxySourcePath)) {
           throw new Error(`Media source is missing from the manifest: ${activeSourcePath}`);
         }
-        await runFfmpeg([
+        const proxyArgs = (fpsMode: string[]) => [
           "-y",
           "-i", proxySourcePath,
+          ...fpsMode,
           "-map", "0:v:0",
           ...(activeProbe.hasAudio ? ["-map", "0:a:0"] : []),
           "-vf",
@@ -433,7 +434,17 @@ async function processVideoSnapshot(
           ...(activeProbe.hasAudio ? AUDIO_OPTS : ["-an"]),
           "-movflags", "+faststart",
           proxyPath,
-        ], { signal });
+        ];
+        // Passthrough keeps the source's exact frame timing — retimed
+        // (change_video_speed) and VFR sources would otherwise be resampled
+        // back onto the nominal frame grid, dropping frames and drifting the
+        // proxy away from the canonical duration. Fall back to the default
+        // sync mode for sources whose timestamps the muxer rejects.
+        try {
+          await runFfmpeg(proxyArgs(["-fps_mode:v", "passthrough"]), { signal });
+        } catch {
+          await runFfmpeg(proxyArgs([]), { signal });
+        }
         const candidate = await probeVideo(proxyPath, { signal });
         const validationError = videoProxyValidationError(activeProbe, candidate);
         if (validationError) {

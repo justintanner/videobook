@@ -305,7 +305,7 @@ import {
   resolveChatModelSelection,
   type ChatModelCatalog,
 } from '@/videobook/chat-models'
-import { routedActionReview } from '@/videobook/chat-action-review'
+import { formatSpeedMultiplier, routedActionReview } from '@/videobook/chat-action-review'
 import {
   handleModalDialogKeyDown,
   scheduleModalDialogFocusRestoration,
@@ -3012,11 +3012,42 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const pendingGenerationDraft = pendingChatAction?.kind === 'generation'
     ? pendingChatAction.draft
     : null
+  const pendingChangeSpeedPreview = useMemo(() => {
+    if (pendingChatAction?.kind !== 'routed') return null
+    const plan = pendingChatAction.plan
+    if (plan.routedTool !== 'change_video_speed') return null
+    const assetId = asString(plan.params.asset_id)
+    const mention = assetId
+      ? commandMentionAssets.find((candidate) => candidate.artifactId === assetId)
+      : undefined
+    const asset = assetId ? assetById.get(assetId) : undefined
+    const sourceDuration = asNumber(asset?.duration) ?? asNumber(mention?.duration)
+    const requestedSpeed = asNumber(plan.params.speed)
+    const targetDuration = asNumber(plan.params.target_duration_seconds)
+    const effectiveSpeed = requestedSpeed
+      ?? (sourceDuration && targetDuration && targetDuration > 0
+        ? sourceDuration / targetDuration
+        : null)
+    const mediaUrl = asset?.mediaUrl ?? null
+    const mediaType = asset?.type ?? mention?.type ?? null
+    return {
+      mediaUrl,
+      thumbnailUrl: asset?.thumbnailUrl ?? null,
+      unavailableReason: mediaType !== null && mediaType !== 'video'
+        ? 'the selected source is not a video'
+        : mediaUrl === null
+          ? 'the source media is not loaded yet'
+          : null,
+      sourceDurationSeconds: sourceDuration && sourceDuration > 0 ? sourceDuration : null,
+      effectiveSpeed: effectiveSpeed && effectiveSpeed > 0 ? effectiveSpeed : null,
+    }
+  }, [assetById, commandMentionAssets, pendingChatAction])
   const pendingRoutedActionReview = pendingChatAction?.kind === 'routed'
     ? routedActionReview({
         input: pendingChatAction.plan.prompt,
         params: pendingChatAction.plan.params,
         tool: pendingChatAction.plan.routedTool,
+        sourceDurationSeconds: pendingChangeSpeedPreview?.sourceDurationSeconds ?? null,
       })
     : null
   const pendingGenerationConnectedInputs = useMemo(
@@ -11168,7 +11199,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               </div>
             </header>
             <div className="command-plan-details command-plan-details-open">
-              <div className={`command-plan-content command-plan-content-single${pendingChatAction.kind === 'routed'
+              <div className={`command-plan-content command-plan-content-single${(pendingChatAction.kind === 'routed'
+                && !pendingChangeSpeedPreview)
                 ? ' command-plan-content-routed'
                 : ''}`}>
                 {pendingChatAction.kind !== 'routed' && (
@@ -11218,6 +11250,34 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     )}
                   </li>
                 </ol>
+                {pendingChatAction.kind === 'routed' && pendingChangeSpeedPreview && (
+                  <div className="routed-action-preview" aria-label="Speed change preview">
+                    {pendingChangeSpeedPreview.unavailableReason === null ? (
+                      <video
+                        key={pendingChangeSpeedPreview.mediaUrl ?? 'speed-preview'}
+                        ref={(element) => {
+                          if (element && pendingChangeSpeedPreview.effectiveSpeed) {
+                            element.playbackRate = pendingChangeSpeedPreview.effectiveSpeed
+                          }
+                        }}
+                        src={pendingChangeSpeedPreview.mediaUrl ?? undefined}
+                        poster={pendingChangeSpeedPreview.thumbnailUrl ?? undefined}
+                        controls
+                        playsInline
+                        preload="auto"
+                      />
+                    ) : (
+                      <p className="routed-action-preview-fallback">
+                        {`Preview unavailable — ${pendingChangeSpeedPreview.unavailableReason}.`}
+                      </p>
+                    )}
+                    <small>
+                      {pendingChangeSpeedPreview.effectiveSpeed
+                        ? `Live preview at ${formatSpeedMultiplier(pendingChangeSpeedPreview.effectiveSpeed)}× — source not yet changed`
+                        : 'Source preview — not yet changed'}
+                    </small>
+                  </div>
+                )}
               </div>
             </div>
           </aside>

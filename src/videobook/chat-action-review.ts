@@ -19,6 +19,7 @@ interface RoutedActionReviewInput {
   input: string
   params: Record<string, unknown>
   tool: string
+  sourceDurationSeconds?: number | null
 }
 
 function hasValue(params: Record<string, unknown>, key: string): boolean {
@@ -149,6 +150,50 @@ function humanize(value: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
+export function formatSpeedMultiplier(speed: number): string {
+  return String(Number(speed.toFixed(2)))
+}
+
+function changeVideoSpeedReview(input: RoutedActionReviewInput): RoutedActionReview {
+  const sourceDuration = finiteNumber(input.sourceDurationSeconds)
+  const requestedSpeed = finiteNumber(input.params.speed)
+  const targetDuration = finiteNumber(input.params.target_duration_seconds)
+  const effectiveSpeed = requestedSpeed
+    ?? (sourceDuration !== null && targetDuration !== null && targetDuration > 0
+      ? sourceDuration / targetDuration
+      : null)
+  const expectedDuration = targetDuration
+    ?? (sourceDuration !== null && effectiveSpeed !== null && effectiveSpeed > 0
+      ? sourceDuration / effectiveSpeed
+      : null)
+  const settings = [
+    setting('Source', sourceValue(input.input, input.params)),
+  ]
+  if (sourceDuration !== null && sourceDuration > 0) {
+    settings.push(setting('Source duration', formatMediaTime(sourceDuration)))
+  }
+  settings.push(setting(
+    'Speed',
+    effectiveSpeed !== null
+      ? `${formatSpeedMultiplier(effectiveSpeed)}×${requestedSpeed === null ? ' (from target duration)' : ''}`
+      : 'Calculated on apply',
+  ))
+  if (targetDuration !== null) {
+    settings.push(setting('Target duration', formatMediaTime(targetDuration)))
+  }
+  if (expectedDuration !== null && expectedDuration > 0 && targetDuration === null) {
+    settings.push(setting('Expected duration', formatMediaTime(expectedDuration)))
+  }
+  settings.push(
+    setting('Output', 'Existing source updated in place', 'warning'),
+    setting('Recovery', 'Previous version retained'),
+  )
+  return {
+    title: 'Change video speed',
+    settings,
+  }
+}
+
 const sensitiveKeyPattern = /api.?key|secret|(?:^|[_-])token(?:$|[_-])|password|credential|authorization/iu
 
 function identifiesSensitiveValue(
@@ -224,5 +269,6 @@ export function routedActionReview(
   if (input.tool === 'extract_video_clip') return extractReview(input)
   if (input.tool === 'split_video') return splitReview(input)
   if (input.tool === 'trim_video') return trimReview(input)
+  if (input.tool === 'change_video_speed') return changeVideoSpeedReview(input)
   return genericReview(input)
 }

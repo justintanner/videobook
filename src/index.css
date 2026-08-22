@@ -6676,6 +6676,40 @@ textarea:focus-visible {
   color: #e7c979;
 }
 
+.routed-action-preview {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.routed-action-preview video {
+  width: 100%;
+  max-height: 260px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #000;
+}
+
+.routed-action-preview small {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.routed-action-preview-fallback {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
 .plan-warning {
   color: #e7c979;
 }

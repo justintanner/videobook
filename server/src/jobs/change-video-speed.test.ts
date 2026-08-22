@@ -40,6 +40,118 @@ async function generateVideo(
   ]);
 }
 
+// 6s fixture with unmistakable content markers: red/green/blue thirds and a
+// 440 Hz tone that switches to an 880 Hz tail cue at 4.8s. Tail-preservation
+// assertions key off the blue segment and the 880 Hz cue.
+async function generateMarkerVideo(outputPath: string): Promise<void> {
+  await execFileAsync(FFMPEG, [
+    "-y",
+    "-f", "lavfi", "-i", "color=red:size=320x180:rate=12:duration=2",
+    "-f", "lavfi", "-i", "color=green:size=320x180:rate=12:duration=2",
+    "-f", "lavfi", "-i", "color=blue:size=320x180:rate=12:duration=2",
+    "-f", "lavfi", "-i", "aevalsrc=if(lt(t\\,4.8)\\,sin(2*PI*440*t)\\,sin(2*PI*880*t)):s=44100:duration=6",
+    "-filter_complex", "[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]",
+    "-map", "[v]", "-map", "3:a:0",
+    "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    outputPath,
+  ]);
+}
+
+// Silent variant of the marker fixture: same color thirds, no audio track.
+async function generateSilentMarkerVideo(outputPath: string): Promise<void> {
+  await execFileAsync(FFMPEG, [
+    "-y",
+    "-f", "lavfi", "-i", "color=red:size=320x180:rate=12:duration=2",
+    "-f", "lavfi", "-i", "color=green:size=320x180:rate=12:duration=2",
+    "-f", "lavfi", "-i", "color=blue:size=320x180:rate=12:duration=2",
+    "-filter_complex", "[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]",
+    "-map", "[v]",
+    "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+    "-an",
+    outputPath,
+  ]);
+}
+
+interface StreamCounts {
+  formatDuration: number;
+  video: { start: number; duration: number; frames: number };
+  audio: { duration: number } | null;
+}
+
+async function probeStreamCounts(videoPath: string): Promise<StreamCounts> {
+  const { stdout } = await execFileAsync(FFPROBE, [
+    "-v", "error", "-count_frames",
+    "-show_entries", "stream=codec_type,start_time,duration,nb_read_frames",
+    "-show_entries", "format=duration",
+    "-of", "json", videoPath,
+  ]);
+  const data = JSON.parse(stdout) as {
+    format?: { duration?: string };
+    streams?: Array<Record<string, unknown>>;
+  };
+  const video = data.streams?.find((s) => s.codec_type === "video");
+  const audio = data.streams?.find((s) => s.codec_type === "audio");
+  if (!video) throw new Error(`no video stream in ${videoPath}`);
+  return {
+    formatDuration: Number(data.format?.duration ?? 0),
+    video: {
+      start: Number(video.start_time ?? 0),
+      duration: Number(video.duration ?? 0),
+      frames: Number(video.nb_read_frames ?? 0),
+    },
+    audio: audio ? { duration: Number(audio.duration ?? 0) } : null,
+  };
+}
+
+// Seeks relative to the video stream end so a longer audio stream (container
+// overhang) cannot push the seek past the final frame. The 0.15s margin
+// absorbs a full retimed frame interval plus muxer rounding.
+async function lastFrameColor(
+  videoPath: string,
+  videoDuration: number,
+): Promise<{ r: number; g: number; b: number }> {
+  const { stdout } = await execFileAsync(FFMPEG, [
+    "-v", "error",
+    "-ss", String(Math.max(0, videoDuration - 0.15)),
+    "-i", videoPath,
+    "-an", "-frames:v", "1",
+    "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+  ], { encoding: "buffer", maxBuffer: 8 << 20 });
+  const buf = stdout as unknown as Buffer;
+  if (buf.length === 0) throw new Error(`no frame near the end of ${videoPath}`);
+  let r = 0, g = 0, b = 0;
+  const n = buf.length / 3;
+  for (let i = 0; i < buf.length; i += 3) { r += buf[i]; g += buf[i + 1]; b += buf[i + 2]; }
+  return { r: Math.round(r / n), g: Math.round(g / n), b: Math.round(b / n) };
+}
+
+async function toneFrequency(
+  videoPath: string,
+  seekArgs: string[],
+): Promise<number> {
+  const { stdout } = await execFileAsync(FFMPEG, [
+    "-v", "error", ...seekArgs, "-i", videoPath,
+    "-vn", "-ac", "1", "-ar", "8000", "-t", "0.4",
+    "-f", "s16le", "pipe:1",
+  ], { encoding: "buffer", maxBuffer: 8 << 20 });
+  const buf = stdout as unknown as Buffer;
+  let crossings = 0;
+  for (let i = 2; i + 1 < buf.length; i += 2) {
+    const prev = buf.readInt16LE(i - 2);
+    const cur = buf.readInt16LE(i);
+    if ((prev < 0 && cur >= 0) || (prev >= 0 && cur < 0)) crossings++;
+  }
+  const seconds = (buf.length / 2) / 8000;
+  return seconds > 0 ? Math.round(crossings / 2 / seconds) : 0;
+}
+
+function expectBlueTail(color: { r: number; g: number; b: number }): void {
+  expect(color.b).toBeGreaterThan(150);
+  expect(color.r).toBeLessThan(100);
+  expect(color.g).toBeLessThan(100);
+}
+
 async function probeVideoFormat(
   videoPath: string,
 ): Promise<{ codec: string | null; pixelFormat: string | null }> {
@@ -82,6 +194,7 @@ describe("change-video-speed job handler", () => {
   let engineRoot: string;
   let sourcePath: string;
   let tenBitSourcePath: string;
+  let markerSourcePath: string;
   let fs: Engine;
 
   beforeAll(async () => {
@@ -89,8 +202,10 @@ describe("change-video-speed job handler", () => {
     engineRoot = join(tempDir, "engine");
     sourcePath = join(tempDir, "source.mp4");
     tenBitSourcePath = join(tempDir, "source-10-bit.mp4");
+    markerSourcePath = join(tempDir, "source-markers.mp4");
     await generateVideo(sourcePath);
     await generateVideo(tenBitSourcePath, "libx265", "yuv420p10le");
+    await generateMarkerVideo(markerSourcePath);
     fs = createEngineForTest(engineRoot);
     await setEngineRoot(engineRoot, fs);
     registerChangeVideoSpeedJob(fs);
@@ -156,9 +271,11 @@ describe("change-video-speed job handler", () => {
       height: 90,
       hasAudio: true,
     });
-    expect(metadata.duration).toBeCloseTo(1, 1);
+    // Passthrough retiming keeps every frame; the muxer pads the final
+    // frame's display duration, so exact output duration carries a documented
+    // tolerance of one source frame interval (1/12s on this fixture).
+    expect(Math.abs(Number(metadata.duration) - 1)).toBeLessThan(0.1);
     expect(Date.parse(String(metadata.speed_changed_at))).not.toBeNaN();
-
     const streams = valueOf(fs.streams.list(asset.artifactId));
     expect(streams.map((stream) => stream.kind).sort()).toEqual(["audio", "video"]);
     expect(streams.every((stream) => (
@@ -168,7 +285,7 @@ describe("change-video-speed job handler", () => {
     ))).toBe(true);
 
     const outputProbe = await probeVideo(join(asset.path, "original.mp4"));
-    expect(outputProbe.duration).toBeCloseTo(1, 1);
+    expect(Math.abs(outputProbe.duration - 1)).toBeLessThan(0.1);
     expect(outputProbe.hasAudio).toBe(true);
   }, 120_000);
 
@@ -207,5 +324,164 @@ describe("change-video-speed job handler", () => {
       codec: "h264",
       pixelFormat: "yuv420p",
     });
+  }, 120_000);
+
+  it("preserves every source frame and the final audio cue at 1.3x", async () => {
+    const asset = valueOf(await fs.artifacts.create("vid", "speed tail markers"));
+    valueOf(await fs.files.write(asset.artifactId, "original.mp4", await readFile(markerSourcePath)));
+    const source = await probeStreamCounts(join(asset.path, "original.mp4"));
+    expect(source.video.frames).toBe(72);
+    expect(source.video.duration).toBeCloseTo(6, 1);
+    expect(source.audio?.duration).toBeCloseTo(6, 1);
+    const outputPath = join(asset.path, ".speed-output.mp4");
+
+    const result = await queue.enqueueAndWait<{ success: boolean }>(
+      `speed-tail-${asset.artifactId}`,
+      {
+        type: "change_video_speed",
+        inputPath: join(asset.path, "original.mp4"),
+        outputPath,
+        speed: 1.3,
+        hasAudio: true,
+        assetId: asset.artifactId,
+        assetDir: asset.path,
+        bookId: fs.book.get().bookId,
+      },
+      120_000,
+    );
+
+    expect(result).toEqual({ success: true });
+    await waitForProcessVideo(fs, asset.artifactId);
+
+    // Every source frame must survive: elapsed duration shrinks by the speed
+    // factor, but the frame count stays at 72 and the blue tail segment and
+    // 880 Hz cue remain, in order, at the end.
+    const canonicalPath = join(asset.path, "original.mp4");
+    const counts = await probeStreamCounts(canonicalPath);
+    const expected = source.video.duration / 1.3;
+    expect(counts.video.frames).toBe(source.video.frames);
+    expect(Math.abs(counts.video.duration - expected)).toBeLessThan(0.1);
+    expect(Math.abs((counts.audio?.duration ?? 0) - expected)).toBeLessThan(0.15);
+    expectBlueTail(await lastFrameColor(canonicalPath, counts.video.duration));
+    expect(await toneFrequency(canonicalPath, ["-ss", "0.2"])).toBeGreaterThanOrEqual(400);
+    expect(await toneFrequency(canonicalPath, ["-ss", "0.2"])).toBeLessThanOrEqual(480);
+    expect(await toneFrequency(canonicalPath, ["-sseof", "-0.45"])).toBeGreaterThanOrEqual(840);
+    expect(await toneFrequency(canonicalPath, ["-sseof", "-0.45"])).toBeLessThanOrEqual(920);
+
+    // The regenerated proxy must match the validated canonical output.
+    const manifest = valueOf(await fs.files.manifest(asset.artifactId));
+    expect(manifest.files.some((file) => file.name === "proxy.mp4")).toBe(true);
+    const proxyCounts = await probeStreamCounts(join(asset.path, "proxy.mp4"));
+    expect(proxyCounts.video.frames).toBe(source.video.frames);
+    expect(Math.abs(proxyCounts.video.duration - counts.video.duration)).toBeLessThan(0.1);
+    expectBlueTail(await lastFrameColor(join(asset.path, "proxy.mp4"), proxyCounts.video.duration));
+  }, 120_000);
+
+  it("keeps the complete tail in exact target-duration mode", async () => {
+    const asset = valueOf(await fs.artifacts.create("vid", "speed exact-duration markers"));
+    valueOf(await fs.files.write(asset.artifactId, "original.mp4", await readFile(markerSourcePath)));
+    const source = await probeStreamCounts(join(asset.path, "original.mp4"));
+    const targetDuration = 4.6;
+    const speed = source.video.duration / targetDuration;
+    const outputPath = join(asset.path, ".speed-output.mp4");
+
+    const result = await queue.enqueueAndWait<{ success: boolean }>(
+      `speed-exact-${asset.artifactId}`,
+      {
+        type: "change_video_speed",
+        inputPath: join(asset.path, "original.mp4"),
+        outputPath,
+        speed,
+        targetDuration,
+        hasAudio: true,
+        assetId: asset.artifactId,
+        assetDir: asset.path,
+        bookId: fs.book.get().bookId,
+      },
+      120_000,
+    );
+
+    expect(result).toEqual({ success: true });
+    await waitForProcessVideo(fs, asset.artifactId);
+
+    // One output frame of slack ((1/12s)/speed ≈ 0.064s) covers the muxer
+    // rounding the final frame's display duration past the cap.
+    const canonicalPath = join(asset.path, "original.mp4");
+    const counts = await probeStreamCounts(canonicalPath);
+    expect(counts.video.frames).toBe(source.video.frames);
+    expect(Math.abs(counts.video.duration - targetDuration)).toBeLessThan(0.09);
+    expect(Math.abs((counts.audio?.duration ?? 0) - targetDuration)).toBeLessThan(0.15);
+    expectBlueTail(await lastFrameColor(canonicalPath, counts.video.duration));
+    expect(await toneFrequency(canonicalPath, ["-sseof", "-0.45"])).toBeGreaterThanOrEqual(840);
+    expect(await toneFrequency(canonicalPath, ["-sseof", "-0.45"])).toBeLessThanOrEqual(920);
+  }, 120_000);
+
+  it("preserves every frame for silent sources at 1.3x", async () => {
+    const silentSourcePath = join(tempDir, "source-markers-silent.mp4");
+    await generateSilentMarkerVideo(silentSourcePath);
+    const asset = valueOf(await fs.artifacts.create("vid", "silent speed source"));
+    valueOf(await fs.files.write(asset.artifactId, "original.mp4", await readFile(silentSourcePath)));
+    const source = await probeStreamCounts(join(asset.path, "original.mp4"));
+    expect(source.video.frames).toBe(72);
+    expect(source.audio).toBeNull();
+    const outputPath = join(asset.path, ".speed-output.mp4");
+
+    const result = await queue.enqueueAndWait<{ success: boolean }>(
+      `speed-silent-${asset.artifactId}`,
+      {
+        type: "change_video_speed",
+        inputPath: join(asset.path, "original.mp4"),
+        outputPath,
+        speed: 1.3,
+        hasAudio: false,
+        assetId: asset.artifactId,
+        assetDir: asset.path,
+        bookId: fs.book.get().bookId,
+      },
+      120_000,
+    );
+
+    expect(result).toEqual({ success: true });
+    await waitForProcessVideo(fs, asset.artifactId);
+
+    const canonicalPath = join(asset.path, "original.mp4");
+    const counts = await probeStreamCounts(canonicalPath);
+    expect(counts.video.frames).toBe(source.video.frames);
+    expect(Math.abs(counts.video.duration - source.video.duration / 1.3)).toBeLessThan(0.1);
+    expect(counts.audio).toBeNull();
+    expectBlueTail(await lastFrameColor(canonicalPath, counts.video.duration));
+  }, 120_000);
+
+  it("rejects invalid retime output without replacing canonical media", async () => {    const asset = valueOf(await fs.artifacts.create("vid", "speed invalid output"));
+    valueOf(await fs.files.write(asset.artifactId, "original.mp4", await readFile(markerSourcePath)));
+    const beforeManifest = valueOf(await fs.files.manifest(asset.artifactId));
+    const beforeHash = beforeManifest.files.find((file) => file.name === "original.mp4")?.objectHash;
+    const historyCount = fs.history.artifact(asset.artifactId).length;
+    const outputPath = join(asset.path, ".speed-output.mp4");
+
+    // hasAudio:false is a lie — the source carries audio. The retime therefore
+    // produces a silent file that must fail output validation.
+    await expect(queue.enqueueAndWait(
+      `speed-invalid-${asset.artifactId}`,
+      {
+        type: "change_video_speed",
+        inputPath: join(asset.path, "original.mp4"),
+        outputPath,
+        speed: 1.3,
+        hasAudio: false,
+        assetId: asset.artifactId,
+        assetDir: asset.path,
+        bookId: fs.book.get().bookId,
+      },
+      120_000,
+    )).rejects.toThrow(/audio/i);
+
+    const manifest = valueOf(await fs.files.manifest(asset.artifactId));
+    expect(manifest.files.find((file) => file.name === "original.mp4")?.objectHash).toBe(beforeHash);
+    expect(fs.history.artifact(asset.artifactId).length).toBe(historyCount);
+    await expect(stat(outputPath)).rejects.toThrow();
+    const counts = await probeStreamCounts(join(asset.path, "original.mp4"));
+    expect(counts.video.frames).toBe(72);
+    expect(counts.audio).not.toBeNull();
   }, 120_000);
 });

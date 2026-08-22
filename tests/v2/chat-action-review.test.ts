@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { routedActionReview } from '../../src/videobook/chat-action-review'
 
-function values(tool: string, params: Record<string, unknown>, input: string) {
-  const review = routedActionReview({ tool, params, input })
+function values(
+  tool: string,
+  params: Record<string, unknown>,
+  input: string,
+  sourceDurationSeconds?: number | null,
+) {
+  const review = routedActionReview({ tool, params, input, sourceDurationSeconds })
   return {
     title: review.title,
     settings: Object.fromEntries(
@@ -82,8 +87,75 @@ describe('routedActionReview', () => {
     )).toMatchObject({ tone: 'warning' })
   })
 
-  it('hides sensitive values in the generic fallback', () => {
+  it('shows source duration, speed, and expected duration for change_video_speed', () => {
     expect(values(
+      'change_video_speed',
+      { asset_id: 'vid-source', speed: 1.3 },
+      'speed up @d2 to 1.3x',
+      6,
+    )).toEqual({
+      title: 'Change video speed',
+      settings: {
+        Source: '@d2',
+        'Source duration': '0:06',
+        Speed: '1.3×',
+        'Expected duration': '0:04.62',
+        Output: 'Existing source updated in place',
+        Recovery: 'Previous version retained',
+      },
+    })
+    expect(routedActionReview({
+      tool: 'change_video_speed',
+      params: { asset_id: 'vid-source', speed: 1.3 },
+      input: 'speed up @d2 to 1.3x',
+      sourceDurationSeconds: 6,
+    }).settings.find((setting) => setting.label === 'Output'))
+      .toMatchObject({ tone: 'warning' })
+  })
+
+  it('derives the effective speed from target duration input', () => {
+    expect(values(
+      'change_video_speed',
+      { asset_id: 'vid-source', target_duration_seconds: 4.6 },
+      'make @d2 exactly 4.6s',
+      6,
+    )).toEqual({
+      title: 'Change video speed',
+      settings: {
+        Source: '@d2',
+        'Source duration': '0:06',
+        Speed: '1.3× (from target duration)',
+        'Target duration': '0:04.60',
+        Output: 'Existing source updated in place',
+        Recovery: 'Previous version retained',
+      },
+    })
+  })
+
+  it('degrades to calculated-on-apply when the source duration is unknown', () => {
+    expect(values(
+      'change_video_speed',
+      { asset_id: 'vid-source' },
+      'change the speed of @d2',
+      null,
+    ).settings).toEqual({
+      Source: '@d2',
+      Speed: 'Calculated on apply',
+      Output: 'Existing source updated in place',
+      Recovery: 'Previous version retained',
+    })
+    expect(values(
+      'change_video_speed',
+      { asset_id: 'vid-source', target_duration_seconds: 5 },
+      'make @d2 exactly 5s',
+      null,
+    ).settings).toMatchObject({
+      Speed: 'Calculated on apply',
+      'Target duration': '0:05',
+    })
+  })
+
+  it('hides sensitive values in the generic fallback', () => {    expect(values(
       'set_env_secret',
       { key: 'OPENAI_API_KEY', value: 'secret-value' },
       'set a provider secret',
