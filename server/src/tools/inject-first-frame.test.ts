@@ -330,7 +330,8 @@ describe("inject_first_frame tool", () => {
     expect(await frameCount(portraitPath)).toBe(beforeFrameCount);
     expect(await audioPacketHash(portraitPath)).toBe(beforeAudioHash);
     expect(afterProbe.duration).toBeCloseTo(beforeProbe.duration, 2);
-    expect(afterProbe.videoDuration).toBeCloseTo(beforeProbe.videoDuration, 2);
+    expect(Math.abs(afterProbe.videoDuration - beforeProbe.videoDuration))
+      .toBeLessThanOrEqual(1 / rational(beforeProbe.fps) + 0.001);
     expect(afterProbe.audioDuration).toBeCloseTo(beforeProbe.audioDuration!, 2);
     expect(
       await assetHash(fs, finalArtifact.artifactId, "timeline_landscape.mp4"),

@@ -33,11 +33,12 @@ export default defineConfig({
       ],
     },
     globalSetup: ['./vitest.global-setup.ts'],
-    // Bounded file parallelism: 4 workers on typical 10-logical-core hosts.
-    // Each worker already isolates VIDEOBOOK_LIBRARY_DIR / APP_STATE via
-    // vitest.setup.ts (VITEST_POOL_ID + UUID). E2E uses its own worker policy.
+    // Media tests launch multithreaded FFmpeg encoders, so four Vitest workers
+    // can exhaust the smaller GitHub runner even though each test is isolated.
+    // Two workers retain file parallelism without oversubscribing encoders.
+    // E2E uses its own worker policy.
     fileParallelism: true,
-    maxWorkers: 4,
+    maxWorkers: 2,
     include: [
       'tests/v2/**/*.test.ts',
       'tests/dolt-native-cutover.test.ts',
