@@ -1369,20 +1369,108 @@ describe('chat composer browser flow', () => {
         .first().waitFor({ state: 'visible' })
       await review.getByText('Source duration').waitFor({ state: 'visible' })
 
-      // The proposed media preview renders live (controls, proposed playback
+      // The proposed media preview plays live (controls, proposed playback
       // rate) against the cache-busted source URL without mutating it.
       const preview = review.locator('.routed-action-preview video')
       await preview.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await preview.getAttribute('controls')).not.toBeNull()
-      expect(await preview.evaluate((element) => (element as HTMLVideoElement).playbackRate))
-        .toBe(1.3)
+      expect(await preview.getAttribute('loop')).not.toBeNull()
+      expect(await preview.evaluate((element) => (element as HTMLVideoElement).muted))
+        .toBe(true)
       expect(await preview.getAttribute('src')).toContain('/files/')
+      await expect.poll(async () => await preview.evaluate((element) =>
+        (element as HTMLVideoElement).playbackRate), { timeout: 30_000 })
+        .toBe(1.3)
+
+      // A paused preview is a failure: media must be ready, playing, and the
+      // playhead must advance at the proposed rate.
+      await expect.poll(async () => await preview.evaluate((element) => {
+        const video = element as HTMLVideoElement
+        return video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && !video.paused
+      }), { timeout: 30_000 }).toBe(true)
+      const firstTime = await preview.evaluate((element) =>
+        (element as HTMLVideoElement).currentTime)
+      await expect.poll(async () => await preview.evaluate((element) =>
+        (element as HTMLVideoElement).currentTime), { timeout: 10_000 })
+        .toBeGreaterThan(firstTime)
       await review.getByText('Live preview at 1.3× — source not yet changed')
         .waitFor({ state: 'visible' })
 
-      // Cancel performs no mutation: the drawer closes and the cell stays put.
+      // Cancel performs no mutation: the drawer closes, the cell stays put,
+      // and no change_video_speed call reaches the server.
+      const callsBeforeCancel = observedCalls.length
       await review.getByRole('button', { name: /Cancel/ }).click()
       await expect.poll(async () => await review.count()).toBe(0)
+      expect(observedCalls.slice(callsBeforeCancel)
+        .some((call) => call.name === 'change_video_speed')).toBe(false)
+    } finally {
+      mockedChatActionPlan = null
+    }
+  }, 60_000)
+
+  it('derives the live preview rate from a target-duration plan', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    const prompt = 'speed up @a1 to fit 2 seconds'
+    mockedChatActionPlan = {
+      prompt,
+      value: {
+        kind: 'chat-action-plan',
+        planId: '01900000-0000-7000-8000-000000000202',
+        bookId,
+        prompt,
+        routedTool: 'change_video_speed',
+        tool: 'change_video_speed',
+        params: {
+          asset_id: videoArtifactId,
+          book_id: bookId,
+          target_duration_seconds: 2,
+        },
+        message: 'Changing video speed.',
+        summary: 'Changing video speed.',
+        effect: 'mutation',
+        confirmation: {
+          required: true,
+          reason: 'This request changes the current book',
+        },
+      },
+    }
+    try {
+      await openApp()
+      const input = page.getByLabel('Videobook command input')
+      await input.waitFor({ state: 'visible', timeout: 30_000 })
+      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await input.fill(prompt)
+      await page.getByLabel('Send command').click()
+
+      const review = page.getByLabel('Chat action review')
+      await review.waitFor({ state: 'visible', timeout: 30_000 })
+      await review.getByText('Change video speed').waitFor({ state: 'visible' })
+      // The fixture source is 3s, so a 2s target yields an effective 1.5×.
+      await review.locator('.routed-action-settings dd', { hasText: '1.5×' })
+        .first().waitFor({ state: 'visible' })
+
+      const preview = review.locator('.routed-action-preview video')
+      await preview.waitFor({ state: 'visible', timeout: 30_000 })
+      await expect.poll(async () => await preview.evaluate((element) =>
+        (element as HTMLVideoElement).playbackRate), { timeout: 30_000 })
+        .toBe(1.5)
+      await expect.poll(async () => await preview.evaluate((element) => {
+        const video = element as HTMLVideoElement
+        return video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && !video.paused
+      }), { timeout: 30_000 }).toBe(true)
+      const firstTime = await preview.evaluate((element) =>
+        (element as HTMLVideoElement).currentTime)
+      await expect.poll(async () => await preview.evaluate((element) =>
+        (element as HTMLVideoElement).currentTime), { timeout: 10_000 })
+        .toBeGreaterThan(firstTime)
+      await review.getByText('Live preview at 1.5× — source not yet changed')
+        .waitFor({ state: 'visible' })
+
+      const callsBeforeCancel = observedCalls.length
+      await review.getByRole('button', { name: /Cancel/ }).click()
+      await expect.poll(async () => await review.count()).toBe(0)
+      expect(observedCalls.slice(callsBeforeCancel)
+        .some((call) => call.name === 'change_video_speed')).toBe(false)
     } finally {
       mockedChatActionPlan = null
     }

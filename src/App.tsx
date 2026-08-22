@@ -137,6 +137,7 @@ import {
 } from '@/components/videobook/NotebookCellAddMenu'
 import { isNotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 import { VideoSegmentSplit } from '@/components/videobook/VideoSegmentSplit'
+import { SpeedChangePreview } from '@/components/videobook/SpeedChangePreview'
 import {
   CanonicalSequencePlayer,
   type TimelineKeyboardAction,
@@ -305,7 +306,7 @@ import {
   resolveChatModelSelection,
   type ChatModelCatalog,
 } from '@/videobook/chat-models'
-import { formatSpeedMultiplier, routedActionReview } from '@/videobook/chat-action-review'
+import { routedActionReview } from '@/videobook/chat-action-review'
 import {
   handleModalDialogKeyDown,
   scheduleModalDialogFocusRestoration,
@@ -11253,29 +11254,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 {pendingChatAction.kind === 'routed' && pendingChangeSpeedPreview && (
                   <div className="routed-action-preview" aria-label="Speed change preview">
                     {pendingChangeSpeedPreview.unavailableReason === null ? (
-                      <video
+                      <SpeedChangePreview
                         key={pendingChangeSpeedPreview.mediaUrl ?? 'speed-preview'}
-                        ref={(element) => {
-                          if (element && pendingChangeSpeedPreview.effectiveSpeed) {
-                            element.playbackRate = pendingChangeSpeedPreview.effectiveSpeed
-                          }
-                        }}
-                        src={pendingChangeSpeedPreview.mediaUrl ?? undefined}
-                        poster={pendingChangeSpeedPreview.thumbnailUrl ?? undefined}
-                        controls
-                        playsInline
-                        preload="auto"
+                        effectiveSpeed={pendingChangeSpeedPreview.effectiveSpeed}
+                        mediaUrl={pendingChangeSpeedPreview.mediaUrl ?? ''}
+                        thumbnailUrl={pendingChangeSpeedPreview.thumbnailUrl}
                       />
                     ) : (
                       <p className="routed-action-preview-fallback">
                         {`Preview unavailable — ${pendingChangeSpeedPreview.unavailableReason}.`}
                       </p>
                     )}
-                    <small>
-                      {pendingChangeSpeedPreview.effectiveSpeed
-                        ? `Live preview at ${formatSpeedMultiplier(pendingChangeSpeedPreview.effectiveSpeed)}× — source not yet changed`
-                        : 'Source preview — not yet changed'}
-                    </small>
                   </div>
                 )}
               </div>
