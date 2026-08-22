@@ -325,16 +325,11 @@ async function renderSmoothConcat(
     "-y",
     "-i", options.firstPath,
     "-i", options.secondPath,
-    // xfade/acrossfade plus unconstrained x264 threads can oversubscribe
-    // smaller hosts when more than one media job is active.
-    "-filter_complex_threads", "1",
     "-filter_complex", filters.join(";"),
     "-map", "[v]",
     ...(withAudio ? ["-map", "[a]"] : []),
     ...H264_MEDIUM,
-    "-threads:v", "2",
     ...(withAudio ? AUDIO_OPTS : []),
-    ...(withAudio ? ["-threads:a", "1"] : []),
     "-movflags", "+faststart",
     options.outputPath,
   ], { signal: options.signal });
