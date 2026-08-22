@@ -34,6 +34,7 @@ interface RunnerInfo {
   bookId: string;
   engine: Engine;
   runner: QueueRunner;
+  searchRunner: QueueRunner;
   reaper: { stop: () => void };
   providerPollTimer: ReturnType<typeof setInterval> | null;
   providerPollInFlight: boolean;
@@ -70,6 +71,7 @@ let activeTestBookId: string | null = null;
 const JOB_INDEX_MAX = 2_000;
 const ASSET_REAPER_INTERVAL_MS = 30_000;
 const DEFAULT_PROVIDER_POLL_INTERVAL_MS = 10_000;
+const SEARCH_REFERENCE_JOB_TYPES = ["prepare_search_reference"] as const;
 
 let providerPollIntervalMs = DEFAULT_PROVIDER_POLL_INTERVAL_MS;
 let providerPollTimeoutOverrideMs: number | undefined;
@@ -489,14 +491,23 @@ async function ensureRunner(bookId: string): Promise<RunnerInfo> {
   const runner = engine.jobs.queue.createRunner({
     concurrency: 5,
     pollIntervalMs: 250,
+    preferredJobTypes: SEARCH_REFERENCE_JOB_TYPES,
+    resolveHandler: makeWrappedResolver(bookId, engine),
+  });
+  const searchRunner = engine.jobs.queue.createRunner({
+    concurrency: 1,
+    pollIntervalMs: 250,
+    jobTypes: SEARCH_REFERENCE_JOB_TYPES,
     resolveHandler: makeWrappedResolver(bookId, engine),
   });
   runner.start();
+  searchRunner.start();
   const reaper = engine.jobs.startReaper({ intervalMs: ASSET_REAPER_INTERVAL_MS });
   const info: RunnerInfo = {
     bookId,
     engine,
     runner,
+    searchRunner,
     reaper,
     providerPollTimer: null,
     providerPollInFlight: false,
@@ -601,6 +612,7 @@ export const queue: Queue = {
     await Promise.all(infos.map((info) => abortActiveJobs(info, "Queue stopped")));
     await Promise.all([
       ...infos.map((info) => info.runner.stop()),
+      ...infos.map((info) => info.searchRunner.stop()),
       ...infos.map((info) => awaitProviderPollIdle(info)),
     ]);
   },
@@ -702,7 +714,11 @@ export async function stopBookQueue(bookId: string): Promise<void> {
   stopProviderPollDriver(info);
   info.reaper.stop();
   await abortActiveJobs(info, "Book deleted");
-  await Promise.all([info.runner.stop(), awaitProviderPollIdle(info)]);
+  await Promise.all([
+    info.runner.stop(),
+    info.searchRunner.stop(),
+    awaitProviderPollIdle(info),
+  ]);
   const pending = info.engine.jobs.pending.findAll();
   if (pending.ok) {
     await Promise.all(pending.value.map((task) => (

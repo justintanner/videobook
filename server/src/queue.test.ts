@@ -163,6 +163,70 @@ describe("server queue (Dolt-native)", () => {
 
     await appQueue.stop();
   });
+
+  it("runs search reference preparation while background workers are busy", async () => {
+    const cfs = createEngineForTest(projectsDir);
+    testEngine = cfs;
+    await setEngineRoot(projectsDir, cfs);
+    const bookId = cfs.book.get().bookId;
+    const started: string[] = [];
+    const releases: Array<() => void> = [];
+    const blockers = Array.from({ length: 5 }, () =>
+      new Promise<void>((resolve) => releases.push(resolve)));
+
+    registerJobHandler("priority_blocker_probe", async (payload) => {
+      const index = Number(payload.index);
+      const blocker = blockers[index];
+      if (!blocker) throw new Error(`Missing blocker ${index}`);
+      started.push(`blocker-${index}`);
+      await blocker;
+      return { ok: true };
+    });
+    registerJobHandler("priority_background_probe", async () => {
+      started.push("background");
+      return { ok: true };
+    });
+    registerJobHandler("prepare_search_reference", async () => {
+      started.push("preferred");
+      return { ok: true };
+    });
+
+    for (let index = 0; index < blockers.length; index += 1) {
+      await appQueue.enqueue(`priority-blocker-${index}`, {
+        type: "priority_blocker_probe",
+        bookId,
+        index,
+      });
+    }
+    const runningDeadline = Date.now() + 5_000;
+    while (started.length < blockers.length && Date.now() < runningDeadline) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+    expect(started).toHaveLength(blockers.length);
+
+    const background = cfs.jobs.queue.enqueue({
+      type: "priority_background_probe",
+      payload: { type: "priority_background_probe", bookId },
+    });
+    const preferred = cfs.jobs.queue.enqueue({
+      type: "prepare_search_reference",
+      payload: { type: "prepare_search_reference", bookId },
+    });
+    try {
+      const preferredDeadline = Date.now() + 5_000;
+      while (
+        cfs.jobs.queue.get(preferred.job.id)?.state !== "done"
+        && Date.now() < preferredDeadline
+      ) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      }
+      expect(cfs.jobs.queue.get(preferred.job.id)?.state).toBe("done");
+      expect(started[blockers.length]).toBe("preferred");
+      expect(cfs.jobs.queue.get(background.job.id)?.state).toBe("queued");
+    } finally {
+      for (const release of releases) release();
+    }
+  });
 });
 
 
