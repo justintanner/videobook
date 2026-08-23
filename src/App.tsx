@@ -6082,11 +6082,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     watermarkOpenerRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null
+    const targetAsset = assets.find((asset) => asset.artifactId === assetId)
     setWatermarkDialog({
       assetId,
       targetLabel,
+      mediaUrl: targetAsset?.mediaUrl ?? null,
+      thumbnailUrl: targetAsset?.thumbnailUrl ?? null,
+      width: targetAsset?.width ?? null,
+      height: targetAsset?.height ?? null,
+      durationSeconds: targetAsset?.duration ?? null,
       handle: '',
       url: '',
+      includeQr: true,
+      position: 'auto',
+      startSeconds: 0,
+      endSeconds: null,
       saveDefault: false,
       recent: [],
       loadingConfig: true,
@@ -6121,7 +6131,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const submitWatermark = async () => {
     if (!bookId || !watermarkDialog) return
-    const { assetId, handle, url, saveDefault } = watermarkDialog
+    const {
+      assetId,
+      handle,
+      url,
+      includeQr,
+      position,
+      startSeconds,
+      endSeconds,
+      saveDefault,
+    } = watermarkDialog
     const trimmedHandle = handle.replace(/^@/, '').trim()
     if (!trimmedHandle) return
     setWatermarkDialog((current) =>
@@ -6133,16 +6152,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         book_id: bookId,
         asset_id: assetId,
         handle: trimmedHandle,
-        ...(url.trim() ? { url: url.trim() } : {}),
+        include_qr: includeQr,
+        position,
+        ...(includeQr && url.trim() ? { url: url.trim() } : {}),
+        ...(startSeconds > 0 ? { start_seconds: startSeconds } : {}),
+        ...(endSeconds !== null ? { end_seconds: endSeconds } : {}),
         ...(saveDefault ? { save_default: true } : {}),
       }))
       const source = asString(result?.placement_source)
       const corner = asString(result?.position)
       const frameAware = source === 'vision' || source === 'cached' ? ' (frame-aware)' : ''
+      const timing = startSeconds > 0 || endSeconds !== null
+        ? ` · ${startSeconds.toFixed(1)}s–${endSeconds?.toFixed(1) ?? 'end'}`
+        : ''
       await refreshBookData(bookId, notebook?.id)
       setNotice(corner
-        ? `Watermark @${trimmedHandle} burned in — ${corner}${frameAware}.`
-        : `Watermark @${trimmedHandle} applied${frameAware}.`)
+        ? `Watermark @${trimmedHandle} burned in — ${corner}${frameAware}${timing}.`
+        : `Watermark @${trimmedHandle} applied${frameAware}${timing}.`)
       closeWatermarkDialog()
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -10893,12 +10919,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       {watermarkDialog && (
         <WatermarkDialog
           state={watermarkDialog}
-          onHandle={(value) => setWatermarkDialog((current) =>
-            current ? { ...current, handle: value, error: null } : current)}
-          onUrl={(value) => setWatermarkDialog((current) =>
-            current ? { ...current, url: value, error: null } : current)}
-          onSaveDefault={(value) => setWatermarkDialog((current) =>
-            current ? { ...current, saveDefault: value } : current)}
+          onChange={(patch) => setWatermarkDialog((current) =>
+            current ? { ...current, ...patch, error: null } : current)}
+          onMediaMetadata={(metadata) => setWatermarkDialog((current) =>
+            current
+              ? {
+                  ...current,
+                  durationSeconds: metadata.durationSeconds,
+                  width: metadata.width,
+                  height: metadata.height,
+                }
+              : current)}
           onSubmit={() => void submitWatermark()}
           onClose={closeWatermarkDialog}
         />

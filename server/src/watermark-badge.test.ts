@@ -12,8 +12,10 @@ import {
   BADGE_ASPECT,
   BADGE_HEIGHT,
   BADGE_WIDTH,
+  HANDLE_ONLY_BADGE_HEIGHT,
   buildWatermarkBadgePng,
   defaultUrl,
+  watermarkBadgeAspect,
 } from "./watermark-badge.js";
 import { WATERMARK_MIN_DIM_FRACTION, WATERMARK_OPACITY } from "./remotion/osg-spec.js";
 
@@ -98,6 +100,19 @@ describe("buildWatermarkBadgePng", () => {
     const metadata = await sharp(badge).metadata();
     expect(metadata.width).toBe(BADGE_WIDTH);
     expect(metadata.height).toBe(BADGE_HEIGHT);
+  });
+
+  it("renders a handle-only pill without a QR tile", async () => {
+    const badge = await buildWatermarkBadgePng(URL, "someone", { includeQr: false });
+    const metadata = await sharp(badge).metadata();
+    expect(metadata.width).toBe(BADGE_WIDTH);
+    expect(metadata.height).toBe(HANDLE_ONLY_BADGE_HEIGHT);
+    expect(metadata.hasAlpha).toBe(true);
+    expect(await decodeQr(badge)).toBeNull();
+    expect(watermarkBadgeAspect(false)).toBeCloseTo(
+      BADGE_WIDTH / HANDLE_ONLY_BADGE_HEIGHT,
+      6,
+    );
   });
 
   it("derives the default URL from the handle", () => {

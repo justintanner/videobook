@@ -20,6 +20,8 @@ type BurnWatermarkPayload = {
   corner: OsgPosition;
   opacity: number;
   userScale: number;
+  startSeconds?: number;
+  endSeconds?: number;
 };
 
 /** ffmpeg overlay x/y expressions for a corner, inset by `padding` pixels. */
@@ -38,6 +40,40 @@ function burnOverlayPosition(corner: OsgPosition, padding: number): { x: string;
   return { x, y };
 }
 
+export function burnWatermarkEnable(
+  startSeconds?: number,
+  endSeconds?: number,
+): string {
+  if (startSeconds === undefined && endSeconds === undefined) return "";
+  const start = startSeconds ?? 0;
+  return endSeconds === undefined
+    ? `:enable='gte(t,${start})'`
+    : `:enable='between(t,${start},${endSeconds})'`;
+}
+
+export function buildBurnWatermarkFilter(options: {
+  width: number;
+  height: number;
+  corner: OsgPosition;
+  opacity: number;
+  userScale: number;
+  startSeconds?: number;
+  endSeconds?: number;
+}): string {
+  const minDim = Math.min(options.width, options.height);
+  const badgeHeight = Math.max(
+    2,
+    2 * Math.round((minDim * WATERMARK_MIN_DIM_FRACTION * options.userScale) / 2),
+  );
+  const padding = Math.round(options.width * 0.02);
+  const { x, y } = burnOverlayPosition(options.corner, padding);
+  const enable = burnWatermarkEnable(options.startSeconds, options.endSeconds);
+  return [
+    `[1:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${options.opacity}[wm]`,
+    `[0:v][wm]overlay=${x}:${y}:format=auto${enable}[vout]`,
+  ].join(";");
+}
+
 /**
  * Composite the watermark badge onto the source video: scaled to the min-dim
  * fraction the render-time overlay uses, faded to `opacity`, anchored at
@@ -48,6 +84,7 @@ export function registerBurnWatermarkJob(engine: Engine): void {
   registerJobHandler("burn_watermark", async (payload, ctx) => {
     const {
       assetId, assetDir, bookId, videoPath, badgePath, corner, opacity, userScale,
+      startSeconds, endSeconds,
     } = payload as BurnWatermarkPayload;
 
     const result = await withLockedLocalLease(
@@ -59,17 +96,27 @@ export function registerBurnWatermarkJob(engine: Engine): void {
       { durationMs: LOCK_DURATION_MS, data: { state: "burning-watermark" } },
       async () => {
         const probe = await probeVideo(videoPath, { signal: ctx.signal });
-        const minDim = Math.min(probe.width, probe.height);
-        // Even height keeps libx264-friendly dimensions on the scaled badge.
-        const badgeHeight = Math.max(2, 2 * Math.round((minDim * WATERMARK_MIN_DIM_FRACTION * userScale) / 2));
-        const padding = Math.round(probe.width * 0.02);
-        const { x, y } = burnOverlayPosition(corner, padding);
+        const effectiveStart = startSeconds ?? 0;
+        if (effectiveStart < 0 || effectiveStart >= probe.duration) {
+          throw new Error(`Watermark start must be before the ${probe.duration.toFixed(2)}s clip end`);
+        }
+        const effectiveEnd = endSeconds === undefined
+          ? undefined
+          : Math.min(endSeconds, probe.duration);
+        if (effectiveEnd !== undefined && effectiveEnd <= effectiveStart) {
+          throw new Error("Watermark end must be after its start");
+        }
 
         const outputPath = join(assetDir, "original_watermarked.mp4");
-        const filter = [
-          `[1:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${opacity}[wm]`,
-          `[0:v][wm]overlay=${x}:${y}:format=auto[vout]`,
-        ].join(";");
+        const filter = buildBurnWatermarkFilter({
+          width: probe.width,
+          height: probe.height,
+          corner,
+          opacity,
+          userScale,
+          ...(startSeconds !== undefined ? { startSeconds } : {}),
+          ...(effectiveEnd !== undefined ? { endSeconds: effectiveEnd } : {}),
+        });
         try {
           await runFfmpeg([
             "-y",

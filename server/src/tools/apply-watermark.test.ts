@@ -22,8 +22,12 @@ type ApplyResult = {
   card_asset_id: string;
   handle: string;
   url: string;
+  include_qr: boolean;
   opacity: number;
   scale: number;
+  requested_position: string;
+  start_seconds: number | null;
+  end_seconds: number | null;
   mode: string;
   positions?: Record<(typeof ORIENTATIONS)[number], string>;
   position?: string;
@@ -131,6 +135,47 @@ describe("apply_watermark tool", () => {
     expect(parsed.positions?.landscape).toBe("bottom-right");
   });
 
+  it("stores explicit placement, timing, and a handle-only badge", async () => {
+    const assetId = await createVideoAsset();
+    const parsed = await apply({
+      asset_id: assetId,
+      handle: "someone",
+      include_qr: false,
+      position: "middle-center",
+      start_seconds: 0.25,
+      end_seconds: 0.75,
+      mode: "overlay",
+    });
+
+    expect(parsed.include_qr).toBe(false);
+    expect(parsed.requested_position).toBe("middle-center");
+    expect(parsed.start_seconds).toBe(0.25);
+    expect(parsed.end_seconds).toBe(0.75);
+    expect(parsed.placement_source).toBe("explicit");
+    expect(parsed.positions).toEqual({
+      landscape: "middle-center",
+      portrait: "middle-center",
+      square: "middle-center",
+    });
+
+    const cardMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(
+      parsed.card_asset_id,
+      "original",
+    );
+    if (!cardMeta.ok) throw new Error(cardMeta.error.message);
+    expect(cardMeta.value.layout).toBe("handle-v1");
+    expect(cardMeta.value.include_qr).toBe(false);
+    expect(cardMeta.value.height).toBe(88);
+
+    for (const orient of ORIENTATIONS) {
+      const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
+      if (!meta.ok) throw new Error(`missing ${orient}.render`);
+      expect(meta.value.osgPosition).toBe("middle-center");
+      expect(meta.value.osgStartSeconds).toBe(0.25);
+      expect(meta.value.osgEndSeconds).toBe(0.75);
+    }
+  });
+
   it("reuses the badge asset across applies and honors custom opacity/scale", async () => {
     const firstAsset = await createVideoAsset();
     const secondAsset = await createVideoAsset();
@@ -179,10 +224,20 @@ describe("apply_watermark tool", () => {
     if (!before.ok) throw new Error(before.error.message);
     const beforeHash = findVideoFile(before.value.files)!.objectHash;
 
-    const parsed = await apply({ asset_id: assetId, handle: "someone" });
+    const parsed = await apply({
+      asset_id: assetId,
+      handle: "someone",
+      include_qr: false,
+      position: "top-center",
+      start_seconds: 0.2,
+      end_seconds: 0.8,
+    });
     expect(parsed.mode).toBe("burn");
-    expect(parsed.position).toBe("bottom-right");
-    expect(parsed.placement_source).toBe("default");
+    expect(parsed.position).toBe("top-center");
+    expect(parsed.placement_source).toBe("explicit");
+    expect(parsed.include_qr).toBe(false);
+    expect(parsed.start_seconds).toBe(0.2);
+    expect(parsed.end_seconds).toBe(0.8);
 
     const after = await fs.files.manifest(assetId);
     if (!after.ok) throw new Error(after.error.message);
@@ -219,5 +274,20 @@ describe("apply_watermark tool", () => {
       arguments: { book_id: bookId, asset_id: created.value.artifactId },
     });
     expect(result.isError).toBe(true);
+  });
+
+  it("rejects an empty timing window", async () => {
+    const assetId = await createVideoAsset();
+    const result = await client.callTool({
+      name: "apply_watermark",
+      arguments: {
+        book_id: bookId,
+        asset_id: assetId,
+        start_seconds: 0.8,
+        end_seconds: 0.2,
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("end_seconds");
   });
 });

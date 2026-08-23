@@ -501,7 +501,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/watermark",
-    description: "Open the watermark dialog to burn a faint floating QR + @handle watermark into a video (whole clip, auto-placed in the least-busy corner)",
+    description: "Preview and burn a faint QR + @handle or handle-only watermark with explicit positioning and timing controls",
     example: "/watermark @a1",
     category: "viewer",
     icon: "QrCode",

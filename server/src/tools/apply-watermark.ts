@@ -24,11 +24,11 @@ import {
 } from "../remotion/osg-spec.js";
 import type { Orientation, OsgPosition } from "../remotion/subtitles/types.js";
 import {
-  BADGE_ASPECT,
   createWatermarkAsset,
   DEFAULT_HANDLE,
   defaultUrl,
   findWatermarkAsset,
+  watermarkBadgeAspect,
 } from "../watermark-badge.js";
 import { readWatermarkConfig, recordHandle } from "../watermark-config.js";
 import type { ToolDef } from "./tool-def.js";
@@ -38,14 +38,28 @@ import { waitForAssetReadyDef } from "./wait-for-asset-ready.js";
 const PLACEMENT_TIMEOUT_MS = 300_000;
 const BURN_TIMEOUT_MS = 600_000;
 const MAX_PLACEMENT_FRAMES = 8;
+const WATERMARK_POSITIONS = [
+  "top-left", "top-center", "top-right",
+  "middle-left", "middle-center", "middle-right",
+  "bottom-left", "bottom-center", "bottom-right",
+] as const;
+const WATERMARK_POSITION_OPTIONS = ["auto", ...WATERMARK_POSITIONS] as const;
 
 const ANALYSIS_OSG_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "bottom-right"]);
 const DEFAULT_POSITION: OsgPosition = "bottom-right";
 
-type WatermarkPlacementSource = "cached" | "vision" | "analysis" | "default";
+type WatermarkPlacementSource = "cached" | "vision" | "analysis" | "default" | "explicit";
+type WatermarkPositionOption = "auto" | OsgPosition;
 
 function uniformPositions(position: OsgPosition): Record<Orientation, OsgPosition> {
   return { landscape: position, portrait: position, square: position };
+}
+
+function watermarkTimingError(startSeconds?: number, endSeconds?: number): string | null {
+  const start = startSeconds ?? 0;
+  return endSeconds !== undefined && endSeconds <= start
+    ? "end_seconds must be greater than start_seconds"
+    : null;
 }
 
 /** Coarse fallback: the corner analyze-video recommended for this clip. */
@@ -70,7 +84,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
   return {
     name: "apply_watermark",
     description:
-      "Apply a faint floating QR + @handle watermark to a video: builds (or reuses) the badge image, picks the least-busy corner via frame analysis, and burns the badge into the video at 50% opacity so the clip visibly updates. Pass mode=overlay to only store render-time overlay settings instead.",
+      "Previewed watermark apply for video: builds a QR + @handle or handle-only badge, uses automatic or explicit positioning and an optional visibility window, then burns it into the video at 50% opacity so the clip visibly updates. Pass mode=overlay to only store render-time overlay settings instead.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Video asset id to watermark"),
@@ -80,6 +94,24 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         .boolean()
         .optional()
         .describe("Remember this handle as the default for future watermarks"),
+      include_qr: z
+        .boolean()
+        .optional()
+        .describe("Include the QR tile above the handle (default true); false creates a handle-only badge"),
+      position: z
+        .enum(WATERMARK_POSITION_OPTIONS)
+        .optional()
+        .describe("Placement anchor, or auto (default) to choose the least-busy corner"),
+      start_seconds: z
+        .number()
+        .min(0)
+        .optional()
+        .describe("First second where the watermark is visible (default clip start)"),
+      end_seconds: z
+        .number()
+        .min(0)
+        .optional()
+        .describe("Last second where the watermark is visible (default clip end)"),
       opacity: z
         .number()
         .min(0.05)
@@ -108,6 +140,10 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         handle,
         url,
         save_default,
+        include_qr = true,
+        position = "auto",
+        start_seconds,
+        end_seconds,
         opacity = WATERMARK_OPACITY,
         scale = 1,
         card_asset_id,
@@ -118,11 +154,23 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         handle?: string;
         url?: string;
         save_default?: boolean;
+        include_qr?: boolean;
+        position?: WatermarkPositionOption;
+        start_seconds?: number;
+        end_seconds?: number;
         opacity?: number;
         scale?: number;
         card_asset_id?: string;
         mode?: "burn" | "overlay";
       };
+
+      const timingError = watermarkTimingError(start_seconds, end_seconds);
+      if (timingError) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: timingError }],
+        };
+      }
 
       const kindGate = await requireArtifactKind(engine, asset_id, ["video"], "apply_watermark");
       if (kindGate) return kindGate;
@@ -146,11 +194,15 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         if (cardGate) return cardGate;
         cardAssetId = card_asset_id;
       } else {
-        const existing = await findWatermarkAsset(engine, resolvedHandle, resolvedUrl);
+        const existing = await findWatermarkAsset(engine, resolvedHandle, resolvedUrl, {
+          includeQr: include_qr,
+        });
         if (existing) {
           cardAssetId = existing;
         } else {
-          const created = await createWatermarkAsset(engine, resolvedHandle, resolvedUrl);
+          const created = await createWatermarkAsset(engine, resolvedHandle, resolvedUrl, {
+            includeQr: include_qr,
+          });
           if (!created.ok) {
             return {
               isError: true as const,
@@ -178,62 +230,72 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         };
       }
 
-      const framesResult = await engine.files.listSubdir(asset_id, "original_frames");
-      const frameNames = framesResult.ok
-        ? sampleEvenly(
-            framesResult.value.filter((f) => f.endsWith(".jpg")).sort((a, b) => parseFloat(a) - parseFloat(b)),
-            MAX_PLACEMENT_FRAMES,
-          )
-        : [];
-      const fingerprint = osgPlacementFingerprint(videoFile, frameNames, {
-        aspect: BADGE_ASPECT,
-        minDimFraction: WATERMARK_MIN_DIM_FRACTION,
-        userScale: scale,
-      });
-
+      const badgeAspect = watermarkBadgeAspect(include_qr);
       let analysis: OsgPlacementAnalysis | null = null;
-      let placementSource: WatermarkPlacementSource = "default";
+      let recommended: OsgPosition | null = null;
+      let placementSource: WatermarkPlacementSource = position === "auto" ? "default" : "explicit";
       let jobId: string | undefined;
 
-      const cached = await readOsgPlacementAnalysis(engine, asset_id);
-      if (cached && cached.fingerprint === fingerprint) {
-        analysis = cached;
-        placementSource = "cached";
-      } else if (getApiKey("OPENAI_API_KEY") && frameNames.length > 0) {
-        try {
-          await engine.jobs.failures.clear(asset_id);
-          jobId = `osg-placement-${asset_id}-${Date.now()}`;
-          const result = await queue.enqueueAndWait<OsgPlacementResult>(jobId, {
-            type: "osg_placement",
-            assetId: asset_id,
-            assetDir: manifestResult.value.path,
-            bookId: book_id,
-            fingerprint,
-            userScale: scale,
-          }, PLACEMENT_TIMEOUT_MS);
-          analysis = result.analysis;
-          placementSource = "vision";
-        } catch (err) {
-          logger.warn(`[apply_watermark] placement job failed for ${asset_id}, falling back:`, err instanceof Error ? err.message : err);
+      if (position === "auto") {
+        const framesResult = await engine.files.listSubdir(asset_id, "original_frames");
+        const frameNames = framesResult.ok
+          ? sampleEvenly(
+              framesResult.value.filter((f) => f.endsWith(".jpg")).sort((a, b) => parseFloat(a) - parseFloat(b)),
+              MAX_PLACEMENT_FRAMES,
+            )
+          : [];
+        const fingerprint = osgPlacementFingerprint(videoFile, frameNames, {
+          aspect: badgeAspect,
+          minDimFraction: WATERMARK_MIN_DIM_FRACTION,
+          userScale: scale,
+        });
+        const cached = await readOsgPlacementAnalysis(engine, asset_id);
+        if (cached && cached.fingerprint === fingerprint) {
+          analysis = cached;
+          placementSource = "cached";
+        } else if (getApiKey("OPENAI_API_KEY") && frameNames.length > 0) {
+          try {
+            await engine.jobs.failures.clear(asset_id);
+            jobId = `osg-placement-${asset_id}-${Date.now()}`;
+            const result = await queue.enqueueAndWait<OsgPlacementResult>(jobId, {
+              type: "osg_placement",
+              assetId: asset_id,
+              assetDir: manifestResult.value.path,
+              bookId: book_id,
+              fingerprint,
+              userScale: scale,
+              badgeAspect,
+            }, PLACEMENT_TIMEOUT_MS);
+            analysis = result.analysis;
+            placementSource = "vision";
+          } catch (err) {
+            logger.warn(`[apply_watermark] placement job failed for ${asset_id}, falling back:`, err instanceof Error ? err.message : err);
+          }
         }
+        recommended = analysis ? null : await readRecommendedOsgPosition(engine, asset_id);
+        if (!analysis && recommended) placementSource = "analysis";
       }
-      const recommended = analysis ? null : await readRecommendedOsgPosition(engine, asset_id);
-      if (!analysis && recommended) placementSource = "analysis";
 
       const summary = {
         asset_id,
         card_asset_id: cardAssetId,
         handle: resolvedHandle,
         url: resolvedUrl,
+        include_qr,
         opacity,
         scale,
+        requested_position: position,
+        start_seconds: start_seconds ?? null,
+        end_seconds: end_seconds ?? null,
         ...(jobId !== undefined && placementSource === "vision" ? { job_id: jobId } : {}),
       };
 
       if (mode === "overlay") {
-        const positions: Record<Orientation, OsgPosition> = analysis
-          ? analysis.positions
-          : uniformPositions(recommended ?? DEFAULT_POSITION);
+        const positions: Record<Orientation, OsgPosition> = position !== "auto"
+          ? uniformPositions(position)
+          : analysis
+            ? analysis.positions
+            : uniformPositions(recommended ?? DEFAULT_POSITION);
         const written = await writeOsgSettings(engine, asset_id, (orientation) => ({
           osgImagePath: null,
           osgAssetId: cardAssetId,
@@ -241,8 +303,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           osgSize: WATERMARK_OSG_SIZE,
           osgScale: watermarkOsgScale(orientation, scale),
           osgOpacity: opacity,
-          osgStartSeconds: null,
-          osgEndSeconds: null,
+          osgStartSeconds: start_seconds ?? null,
+          osgEndSeconds: end_seconds ?? null,
           osgTailSeconds: null,
         }));
         if (!written.ok) {
@@ -277,14 +339,16 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
 
       const assetDir = manifestResult.value.path;
       const videoPath = join(assetDir, videoFile.name);
-      let corner: OsgPosition = recommended ?? DEFAULT_POSITION;
-      if (analysis) {
+      let corner: OsgPosition = position === "auto"
+        ? recommended ?? DEFAULT_POSITION
+        : position;
+      if (position === "auto" && analysis) {
         // Score corners against the source frame itself — a burned watermark
         // lives in source pixels, so one corner serves every orientation.
         try {
           const probe = await probeVideo(videoPath);
           corner = scoreWatermarkCornersForCanvas(probe.width, probe.height, analysis.regions, {
-            aspect: BADGE_ASPECT,
+            aspect: badgeAspect,
             userScale: scale,
           }).position;
         } catch (err) {
@@ -305,6 +369,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           corner,
           opacity,
           userScale: scale,
+          ...(start_seconds !== undefined ? { startSeconds: start_seconds } : {}),
+          ...(end_seconds !== undefined ? { endSeconds: end_seconds } : {}),
         }, BURN_TIMEOUT_MS);
         const readiness = await waitForAssetReadyDef(engine).handler({
           asset_id,

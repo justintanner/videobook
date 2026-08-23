@@ -37,6 +37,7 @@ type OsgPlacementPayload = {
   bookId: string;
   fingerprint: string;
   userScale: number;
+  badgeAspect?: number;
 };
 
 export interface OsgPlacementResult {
@@ -90,6 +91,7 @@ async function chooseWatermarkPositions(
   sourceWidth: number,
   sourceHeight: number,
   userScale: number,
+  badgeAspect: number,
 ): Promise<Record<Orientation, OsgPosition>> {
   const positions: Partial<Record<Orientation, OsgPosition>> = {};
   for (const orientation of RENDER_ORIENTATIONS) {
@@ -110,7 +112,7 @@ async function chooseWatermarkPositions(
         )
       : null;
     positions[orientation] = scoreWatermarkCorners(orientation, occupied, {
-      aspect: BADGE_ASPECT,
+      aspect: badgeAspect,
       userScale,
       subtitleBand: band,
     }).position;
@@ -120,7 +122,9 @@ async function chooseWatermarkPositions(
 
 export function registerOsgPlacementJob(engine: Engine): void {
   registerJobHandler("osg_placement", async (payload, ctx) => {
-    const { assetId, assetDir, fingerprint, userScale } = payload as OsgPlacementPayload;
+    const {
+      assetId, assetDir, fingerprint, userScale, badgeAspect = BADGE_ASPECT,
+    } = payload as OsgPlacementPayload;
     return withLockedLocalLease(
       engine,
       assetId,
@@ -167,7 +171,7 @@ export function registerOsgPlacementJob(engine: Engine): void {
         const regions = [...regionsByFrame.values()].flat();
 
         const positions = await chooseWatermarkPositions(
-          engine, assetId, regions, source.width, source.height, userScale,
+          engine, assetId, regions, source.width, source.height, userScale, badgeAspect,
         );
 
         const analysis: OsgPlacementAnalysis = {
