@@ -16,7 +16,8 @@ type BurnWatermarkPayload = {
   assetDir: string;
   bookId: string;
   videoPath: string;
-  badgePath: string;
+  qrPath?: string;
+  handlePath: string;
   corner: OsgPosition;
   opacity: number;
   userScale: number;
@@ -57,6 +58,7 @@ export function buildBurnWatermarkFilter(options: {
   corner: OsgPosition;
   opacity: number;
   userScale: number;
+  includeQr: boolean;
   startSeconds?: number;
   endSeconds?: number;
 }): string {
@@ -68,10 +70,21 @@ export function buildBurnWatermarkFilter(options: {
   const padding = Math.round(options.width * 0.02);
   const { x, y } = burnOverlayPosition(options.corner, padding);
   const enable = burnWatermarkEnable(options.startSeconds, options.endSeconds);
-  return [
-    `[1:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${options.opacity}[wm]`,
-    `[0:v][wm]overlay=${x}:${y}:format=auto${enable}[vout]`,
-  ].join(";");
+  const handleInput = options.includeQr ? 2 : 1;
+  const filters = options.includeQr
+    ? [
+        `[1:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${options.opacity}[qr]`,
+        `[${handleInput}:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${options.opacity}[handle]`,
+        `[0:v][qr]overlay=${x}:${y}:format=auto${enable}[withqr]`,
+      ]
+    : [
+        `[${handleInput}:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${options.opacity}[handle]`,
+      ];
+  const base = options.includeQr ? "withqr" : "0:v";
+  filters.push(
+    `[${base}][handle]overlay=(main_w-overlay_w)/2:main_h/3-overlay_h/2:format=auto${enable}[vout]`,
+  );
+  return filters.join(";");
 }
 
 /**
@@ -83,7 +96,7 @@ export function buildBurnWatermarkFilter(options: {
 export function registerBurnWatermarkJob(engine: Engine): void {
   registerJobHandler("burn_watermark", async (payload, ctx) => {
     const {
-      assetId, assetDir, bookId, videoPath, badgePath, corner, opacity, userScale,
+      assetId, assetDir, bookId, videoPath, qrPath, handlePath, corner, opacity, userScale,
       startSeconds, endSeconds,
     } = payload as BurnWatermarkPayload;
 
@@ -114,14 +127,18 @@ export function registerBurnWatermarkJob(engine: Engine): void {
           corner,
           opacity,
           userScale,
+          includeQr: qrPath !== undefined,
           ...(startSeconds !== undefined ? { startSeconds } : {}),
           ...(effectiveEnd !== undefined ? { endSeconds: effectiveEnd } : {}),
         });
+        const watermarkInputs = qrPath
+          ? ["-i", qrPath, "-i", handlePath]
+          : ["-i", handlePath];
         try {
           await runFfmpeg([
             "-y",
             "-i", videoPath,
-            "-i", badgePath,
+            ...watermarkInputs,
             "-filter_complex", filter,
             "-map", "[vout]",
             "-map", "0:a?",

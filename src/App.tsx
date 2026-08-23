@@ -6180,9 +6180,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? ` · ${startSeconds.toFixed(1)}s–${endSeconds?.toFixed(1) ?? 'end'}`
         : ''
       await refreshBookData(bookId, notebook?.id)
-      const message = corner
-        ? `Watermark @${trimmedHandle} burned in — ${corner}${frameAware}${timing}.`
-        : `Watermark @${trimmedHandle} applied${frameAware}${timing}.`
+      const message = includeQr && corner
+        ? `QR + @${trimmedHandle} watermarks burned in — QR ${corner}${frameAware}${timing}.`
+        : `@${trimmedHandle} watermark burned in${timing}.`
       setNotice(message)
       setPendingWatermarkReview(null)
       return { ok: true, message }

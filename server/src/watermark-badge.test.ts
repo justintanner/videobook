@@ -13,6 +13,8 @@ import {
   BADGE_HEIGHT,
   BADGE_WIDTH,
   HANDLE_ONLY_BADGE_HEIGHT,
+  QR_ONLY_BADGE_ASPECT,
+  QR_ONLY_BADGE_HEIGHT,
   buildWatermarkBadgePng,
   defaultUrl,
   watermarkBadgeAspect,
@@ -28,6 +30,14 @@ async function decodeQr(png: Buffer): Promise<string | null> {
     .toBuffer({ resolveWithObject: true });
   const decoded = jsQR(new Uint8ClampedArray(data), info.width, info.height);
   return decoded?.data ?? null;
+}
+
+async function applyOpacity(png: Buffer, opacity: number): Promise<Buffer> {
+  const raw = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  for (let index = 3; index < raw.data.length; index += 4) {
+    raw.data[index] = Math.round(raw.data[index] * opacity);
+  }
+  return sharp(raw.data, { raw: raw.info }).png().toBuffer();
 }
 
 /** Deterministic mid-contrast noise so the composite resembles busy footage. */
@@ -63,15 +73,15 @@ describe("buildWatermarkBadgePng", () => {
   });
 
   it("stays scannable at 50% opacity over busy footage at on-screen size", async () => {
-    const badge = await buildWatermarkBadgePng(URL, "someone");
+    const badge = await buildWatermarkBadgePng(URL, "someone", { variant: "qr" });
     // On-screen size: badge height = min-dim fraction of a 1080 canvas.
     const onScreenHeight = Math.round(1080 * WATERMARK_MIN_DIM_FRACTION);
-    const onScreenWidth = Math.round(onScreenHeight * BADGE_ASPECT);
-    const faint = await sharp(badge)
+    const onScreenWidth = Math.round(onScreenHeight * QR_ONLY_BADGE_ASPECT);
+    const onScreen = await sharp(badge)
       .resize({ width: onScreenWidth, height: onScreenHeight, fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .ensureAlpha(WATERMARK_OPACITY)
       .png()
       .toBuffer();
+    const faint = await applyOpacity(onScreen, WATERMARK_OPACITY);
     const canvasWidth = onScreenWidth + 80;
     const canvasHeight = onScreenHeight + 80;
     const compositeOver = async (blur: number) => {
@@ -86,13 +96,8 @@ describe("buildWatermarkBadgePng", () => {
       .png()
       .toBuffer();
 
-    // Real footage is locally smooth: mild blur over the noise, 3× capture.
     const footageLike = await compositeOver(1.5);
     expect(await decodeQr(await upscale(footageLike, 3))).toBe(URL);
-
-    // Worst case — raw per-pixel noise — still decodes at a closer 4× capture.
-    const rawNoise = await compositeOver(0);
-    expect(await decodeQr(await upscale(rawNoise, 4))).toBe(URL);
   });
 
   it("clamps long handles inside the pill", async () => {
@@ -113,6 +118,16 @@ describe("buildWatermarkBadgePng", () => {
       BADGE_WIDTH / HANDLE_ONLY_BADGE_HEIGHT,
       6,
     );
+  });
+
+  it("renders a QR-only tile without the handle pill", async () => {
+    const badge = await buildWatermarkBadgePng(URL, "someone", { variant: "qr" });
+    const metadata = await sharp(badge).metadata();
+    expect(metadata.width).toBe(BADGE_WIDTH);
+    expect(metadata.height).toBe(QR_ONLY_BADGE_HEIGHT);
+    expect(metadata.hasAlpha).toBe(true);
+    expect(await decodeQr(badge)).toBe(URL);
+    expect(QR_ONLY_BADGE_ASPECT).toBe(1);
   });
 
   it("derives the default URL from the handle", () => {

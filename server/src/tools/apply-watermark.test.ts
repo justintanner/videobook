@@ -30,7 +30,10 @@ type ApplyResult = {
   end_seconds: number | null;
   mode: string;
   positions?: Record<(typeof ORIENTATIONS)[number], string>;
-  position?: string;
+  position?: string | null;
+  qr_asset_id?: string | null;
+  handle_asset_id?: string | null;
+  handle_position?: string;
   placement_source: string;
 };
 
@@ -213,7 +216,7 @@ describe("apply_watermark tool", () => {
     expect(parsed.handle).toBe("alice");
   });
 
-  it("burns the badge into the video by default and clears overlay settings", async () => {
+  it("burns separate QR and floating handle watermarks by default and clears overlay settings", async () => {
     const assetId = await createRealVideoAsset();
 
     // Seed dormant overlay settings to prove burn clears them (the state a
@@ -227,7 +230,6 @@ describe("apply_watermark tool", () => {
     const parsed = await apply({
       asset_id: assetId,
       handle: "someone",
-      include_qr: false,
       position: "top-center",
       start_seconds: 0.2,
       end_seconds: 0.8,
@@ -235,9 +237,28 @@ describe("apply_watermark tool", () => {
     expect(parsed.mode).toBe("burn");
     expect(parsed.position).toBe("top-center");
     expect(parsed.placement_source).toBe("explicit");
-    expect(parsed.include_qr).toBe(false);
+    expect(parsed.include_qr).toBe(true);
+    expect(parsed.opacity).toBe(0.5);
     expect(parsed.start_seconds).toBe(0.2);
     expect(parsed.end_seconds).toBe(0.8);
+    expect(parsed.qr_asset_id).toBe(parsed.card_asset_id);
+    expect(parsed.handle_asset_id).not.toBe(parsed.qr_asset_id);
+    expect(parsed.handle_position).toBe("center-two-thirds-up");
+
+    const qrMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(
+      parsed.qr_asset_id!,
+      "original",
+    );
+    const handleMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(
+      parsed.handle_asset_id!,
+      "original",
+    );
+    if (!qrMeta.ok) throw new Error(qrMeta.error.message);
+    if (!handleMeta.ok) throw new Error(handleMeta.error.message);
+    expect(qrMeta.value.layout).toBe("qr-v1");
+    expect(qrMeta.value.include_handle).toBe(false);
+    expect(handleMeta.value.layout).toBe("handle-v1");
+    expect(handleMeta.value.include_qr).toBe(false);
 
     const after = await fs.files.manifest(assetId);
     if (!after.ok) throw new Error(after.error.message);

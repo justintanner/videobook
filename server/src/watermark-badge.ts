@@ -9,6 +9,7 @@ export const DEFAULT_HANDLE = "justinwtanner";
 // reuse an existing badge and skip regenerating an identical one.
 export const WATERMARK_BADGE_LAYOUT = "badge-v2";
 const WATERMARK_HANDLE_LAYOUT = "handle-v1";
+const WATERMARK_QR_LAYOUT = "qr-v1";
 
 // Compact floating badge on a transparent canvas: a rounded white tile framing
 // the QR (the tile doubles as the quiet zone) with a slim dark pill underneath
@@ -23,10 +24,15 @@ const PILL_GAP = 12;
 const PILL_HEIGHT = 88;
 export const BADGE_HEIGHT = TILE_SIZE + PILL_GAP + PILL_HEIGHT; // 580
 export const BADGE_ASPECT = BADGE_WIDTH / BADGE_HEIGHT;
+export const QR_ONLY_BADGE_HEIGHT = TILE_SIZE;
+export const QR_ONLY_BADGE_ASPECT = BADGE_WIDTH / QR_ONLY_BADGE_HEIGHT;
 export const HANDLE_ONLY_BADGE_HEIGHT = PILL_HEIGHT;
+
+type WatermarkBadgeVariant = "combined" | "qr" | "handle";
 
 type WatermarkBadgeOptions = {
   includeQr?: boolean;
+  variant?: WatermarkBadgeVariant;
 };
 
 // The X (formerly Twitter) glyph, viewBox 0 0 24 24.
@@ -50,8 +56,18 @@ export function watermarkBadgeAspect(includeQr = true): number {
   return BADGE_WIDTH / (includeQr ? BADGE_HEIGHT : HANDLE_ONLY_BADGE_HEIGHT);
 }
 
-function watermarkBadgeLayout(includeQr = true): string {
-  return includeQr ? WATERMARK_BADGE_LAYOUT : WATERMARK_HANDLE_LAYOUT;
+function watermarkBadgeVariant(options: WatermarkBadgeOptions): WatermarkBadgeVariant {
+  return options.variant ?? (options.includeQr === false ? "handle" : "combined");
+}
+
+function watermarkBadgeLayout(variant: WatermarkBadgeVariant): string {
+  if (variant === "qr") return WATERMARK_QR_LAYOUT;
+  return variant === "combined" ? WATERMARK_BADGE_LAYOUT : WATERMARK_HANDLE_LAYOUT;
+}
+
+function watermarkBadgeHeight(variant: WatermarkBadgeVariant): number {
+  if (variant === "qr") return QR_ONLY_BADGE_HEIGHT;
+  return variant === "combined" ? BADGE_HEIGHT : HANDLE_ONLY_BADGE_HEIGHT;
 }
 
 export async function buildWatermarkBadgePng(
@@ -59,7 +75,9 @@ export async function buildWatermarkBadgePng(
   handle: string,
   options: WatermarkBadgeOptions = {},
 ): Promise<Buffer> {
-  const includeQr = options.includeQr ?? true;
+  const variant = watermarkBadgeVariant(options);
+  const includeQr = variant !== "handle";
+  const includeHandle = variant !== "qr";
   const qrBuffer = includeQr
     ? await QRCode.toBuffer(url, {
         type: "png",
@@ -70,8 +88,8 @@ export async function buildWatermarkBadgePng(
       })
     : null;
 
-  const badgeHeight = includeQr ? BADGE_HEIGHT : HANDLE_ONLY_BADGE_HEIGHT;
-  const pillY = includeQr ? TILE_SIZE + PILL_GAP : 0;
+  const badgeHeight = watermarkBadgeHeight(variant);
+  const pillY = variant === "combined" ? TILE_SIZE + PILL_GAP : 0;
   const logoSize = 40;
   const logoX = 30;
   const logoY = pillY + (PILL_HEIGHT - logoSize) / 2;
@@ -84,11 +102,14 @@ export async function buildWatermarkBadgePng(
   const tile = includeQr
     ? `<rect x="0" y="0" width="${TILE_SIZE}" height="${TILE_SIZE}" rx="40" fill="#FFFFFF"/>`
     : "";
+  const pill = includeHandle
+    ? `<rect x="1" y="${pillY + 1}" width="${BADGE_WIDTH - 2}" height="${PILL_HEIGHT - 2}" rx="44" fill="#0B0B0F" fill-opacity="0.92" stroke="rgba(255,255,255,0.55)" stroke-width="2"/>
+  <svg x="${logoX}" y="${logoY}" width="${logoSize}" height="${logoSize}" viewBox="0 0 24 24"><path d="${X_LOGO_PATH}" fill="#FFFFFF"/></svg>
+  <text x="${handleX}" y="${baseline}" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="0.2" fill="#FFFFFF">${escapeXml(label)}</text>`
+    : "";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${BADGE_WIDTH}" height="${badgeHeight}" viewBox="0 0 ${BADGE_WIDTH} ${badgeHeight}">
   ${tile}
-  <rect x="1" y="${pillY + 1}" width="${BADGE_WIDTH - 2}" height="${PILL_HEIGHT - 2}" rx="44" fill="#0B0B0F" fill-opacity="0.92" stroke="rgba(255,255,255,0.55)" stroke-width="2"/>
-  <svg x="${logoX}" y="${logoY}" width="${logoSize}" height="${logoSize}" viewBox="0 0 24 24"><path d="${X_LOGO_PATH}" fill="#FFFFFF"/></svg>
-  <text x="${handleX}" y="${baseline}" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="0.2" fill="#FFFFFF">${escapeXml(label)}</text>
+  ${pill}
 </svg>`;
 
   const background = await sharp(Buffer.from(svg)).png().toBuffer();
@@ -111,15 +132,14 @@ export async function createWatermarkAsset(
   url: string,
   options: WatermarkBadgeOptions = {},
 ): Promise<WatermarkAssetResult> {
-  const includeQr = options.includeQr ?? true;
+  const variant = watermarkBadgeVariant(options);
   let buffer: Buffer;
   try {
-    buffer = await buildWatermarkBadgePng(url, handle, { includeQr });
+    buffer = await buildWatermarkBadgePng(url, handle, { variant });
   } catch (err) {
     return { ok: false, error: `Failed to build watermark card: ${err instanceof Error ? err.message : String(err)}` };
   }
 
-  const variant = includeQr ? "qr" : "handle";
   const assetName = `watermark-${variant}-${handle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36)}`;
   const created = await engine.artifacts.create("img", assetName);
   if (!created.ok) {
@@ -135,13 +155,14 @@ export async function createWatermarkAsset(
 
   const metadataResult = await engine.metadata.artifacts.write(assetId, "original", {
     origin: "watermark",
-    layout: watermarkBadgeLayout(includeQr),
+    layout: watermarkBadgeLayout(variant),
     created_at: new Date().toISOString(),
     handle,
     url,
-    include_qr: includeQr,
+    include_qr: variant !== "handle",
+    include_handle: variant !== "qr",
     width: BADGE_WIDTH,
-    height: includeQr ? BADGE_HEIGHT : HANDLE_ONLY_BADGE_HEIGHT,
+    height: watermarkBadgeHeight(variant),
   });
   if (!metadataResult.ok) {
     await engine.artifacts.delete(assetId).catch(() => undefined);
@@ -165,8 +186,8 @@ export async function findWatermarkAsset(
   url: string,
   options: WatermarkBadgeOptions = {},
 ): Promise<string | null> {
-  const includeQr = options.includeQr ?? true;
-  const layout = watermarkBadgeLayout(includeQr);
+  const variant = watermarkBadgeVariant(options);
+  const layout = watermarkBadgeLayout(variant);
   for (const artifact of engine.artifacts.list()) {
     if (artifact.kind !== "image") continue;
     const meta = await engine.metadata.artifacts.read<Record<string, unknown>>(artifact.artifactId, "original");
@@ -175,7 +196,7 @@ export async function findWatermarkAsset(
       meta.value.origin === "watermark"
       && meta.value.layout === layout
       && meta.value.handle === handle
-      && (!includeQr || meta.value.url === url)
+      && (variant === "handle" || meta.value.url === url)
     ) {
       return artifact.artifactId;
     }

@@ -28,6 +28,7 @@ import {
   DEFAULT_HANDLE,
   defaultUrl,
   findWatermarkAsset,
+  QR_ONLY_BADGE_ASPECT,
   watermarkBadgeAspect,
 } from "../watermark-badge.js";
 import { readWatermarkConfig, recordHandle } from "../watermark-config.js";
@@ -48,8 +49,13 @@ const WATERMARK_POSITION_OPTIONS = ["auto", ...WATERMARK_POSITIONS] as const;
 const ANALYSIS_OSG_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "bottom-right"]);
 const DEFAULT_POSITION: OsgPosition = "bottom-right";
 
-type WatermarkPlacementSource = "cached" | "vision" | "analysis" | "default" | "explicit";
+type WatermarkPlacementSource = "cached" | "vision" | "analysis" | "default" | "explicit" | "fixed";
 type WatermarkPositionOption = "auto" | OsgPosition;
+type WatermarkAssetVariant = "combined" | "qr" | "handle";
+
+type WatermarkAssetResolution =
+  | { ok: true; assetId: string }
+  | { ok: false; error: string };
 
 function uniformPositions(position: OsgPosition): Record<Orientation, OsgPosition> {
   return { landscape: position, portrait: position, square: position };
@@ -60,6 +66,17 @@ function watermarkTimingError(startSeconds?: number, endSeconds?: number): strin
   return endSeconds !== undefined && endSeconds <= start
     ? "end_seconds must be greater than start_seconds"
     : null;
+}
+
+async function resolveWatermarkAsset(
+  engine: Engine,
+  handle: string,
+  url: string,
+  variant: WatermarkAssetVariant,
+): Promise<WatermarkAssetResolution> {
+  const existing = await findWatermarkAsset(engine, handle, url, { variant });
+  if (existing) return { ok: true, assetId: existing };
+  return createWatermarkAsset(engine, handle, url, { variant });
 }
 
 /** Coarse fallback: the corner analyze-video recommended for this clip. */
@@ -84,7 +101,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
   return {
     name: "apply_watermark",
     description:
-      "Previewed watermark apply for video: builds a QR + @handle or handle-only badge, uses automatic or explicit positioning and an optional visibility window, then burns it into the video at 50% opacity so the clip visibly updates. Pass mode=overlay to only store render-time overlay settings instead.",
+      "Previewed watermark apply for video: burns a positioned QR plus a separate centered @handle two-thirds up the frame, both at 50% opacity and within an optional visibility window. The QR can be disabled for handle-only output. Pass mode=overlay to store the legacy single-card render-time overlay instead.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Video asset id to watermark"),
@@ -97,11 +114,11 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       include_qr: z
         .boolean()
         .optional()
-        .describe("Include the QR tile above the handle (default true); false creates a handle-only badge"),
+        .describe("Include a separately positioned QR watermark (default true); false applies only the centered handle"),
       position: z
         .enum(WATERMARK_POSITION_OPTIONS)
         .optional()
-        .describe("Placement anchor, or auto (default) to choose the least-busy corner"),
+        .describe("QR placement anchor, or auto (default) to choose the least-busy corner"),
       start_seconds: z
         .number()
         .min(0)
@@ -127,7 +144,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       card_asset_id: z
         .string()
         .optional()
-        .describe("Reuse an existing watermark image asset instead of generating one"),
+        .describe("Reuse an existing QR image asset, or a handle image when include_qr is false"),
       mode: z
         .enum(["burn", "overlay"])
         .optional()
@@ -187,30 +204,40 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       }
       const resolvedUrl = url ?? defaultUrl(resolvedHandle);
 
-      // Badge: explicit card wins, then an existing matching badge, then a fresh one.
       let cardAssetId: string;
+      let qrAssetId: string | null = null;
+      let handleAssetId: string | null = null;
       if (card_asset_id) {
         const cardGate = await requireArtifactKind(engine, card_asset_id, ["image"], "card_asset_id");
         if (cardGate) return cardGate;
         cardAssetId = card_asset_id;
+        if (mode === "burn" && include_qr) qrAssetId = card_asset_id;
+        if (mode === "burn" && !include_qr) handleAssetId = card_asset_id;
       } else {
-        const existing = await findWatermarkAsset(engine, resolvedHandle, resolvedUrl, {
-          includeQr: include_qr,
-        });
-        if (existing) {
-          cardAssetId = existing;
-        } else {
-          const created = await createWatermarkAsset(engine, resolvedHandle, resolvedUrl, {
-            includeQr: include_qr,
-          });
-          if (!created.ok) {
-            return {
-              isError: true as const,
-              content: [{ type: "text" as const, text: created.error }],
-            };
-          }
-          cardAssetId = created.assetId;
+        const variant = mode === "burn"
+          ? include_qr ? "qr" : "handle"
+          : include_qr ? "combined" : "handle";
+        const resolved = await resolveWatermarkAsset(engine, resolvedHandle, resolvedUrl, variant);
+        if (!resolved.ok) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: resolved.error }],
+          };
         }
+        cardAssetId = resolved.assetId;
+        if (mode === "burn" && include_qr) qrAssetId = resolved.assetId;
+        if (mode === "burn" && !include_qr) handleAssetId = resolved.assetId;
+      }
+
+      if (mode === "burn" && handleAssetId === null) {
+        const resolved = await resolveWatermarkAsset(engine, resolvedHandle, resolvedUrl, "handle");
+        if (!resolved.ok) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: resolved.error }],
+          };
+        }
+        handleAssetId = resolved.assetId;
       }
 
       // Frame-aware corner pick. Never fail the tool on placement problems —
@@ -230,13 +257,18 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         };
       }
 
-      const badgeAspect = watermarkBadgeAspect(include_qr);
+      const usesPosition = mode === "overlay" || include_qr;
+      const badgeAspect = mode === "burn" && include_qr
+        ? QR_ONLY_BADGE_ASPECT
+        : watermarkBadgeAspect(include_qr);
       let analysis: OsgPlacementAnalysis | null = null;
       let recommended: OsgPosition | null = null;
-      let placementSource: WatermarkPlacementSource = position === "auto" ? "default" : "explicit";
+      let placementSource: WatermarkPlacementSource = usesPosition
+        ? position === "auto" ? "default" : "explicit"
+        : "fixed";
       let jobId: string | undefined;
 
-      if (position === "auto") {
+      if (usesPosition && position === "auto") {
         const framesResult = await engine.files.listSubdir(asset_id, "original_frames");
         const frameNames = framesResult.ok
           ? sampleEvenly(
@@ -330,10 +362,22 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       // Burn mode: composite the badge into the source video so the change is
       // visible in the notebook cell (renders and proxies both inherit it).
       const badge = await resolveOsgImagePath(engine, cardAssetId);
-      if (!badge.ok) {
+      if (!badge.ok || handleAssetId === null) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: badge.error }],
+          content: [{
+            type: "text" as const,
+            text: badge.ok ? "Handle watermark asset is unavailable" : badge.error,
+          }],
+        };
+      }
+      const handleBadge = handleAssetId === cardAssetId
+        ? badge
+        : await resolveOsgImagePath(engine, handleAssetId);
+      if (!handleBadge.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: handleBadge.error }],
         };
       }
 
@@ -365,7 +409,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           assetDir,
           bookId: book_id,
           videoPath,
-          badgePath: badge.path,
+          ...(include_qr ? { qrPath: badge.path } : {}),
+          handlePath: handleBadge.path,
           corner,
           opacity,
           userScale: scale,
@@ -407,7 +452,10 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           text: JSON.stringify({
             ...summary,
             mode: "burn",
-            position: corner,
+            position: include_qr ? corner : null,
+            qr_asset_id: qrAssetId,
+            handle_asset_id: handleAssetId,
+            handle_position: "center-two-thirds-up",
             placement_source: placementSource,
           }),
         }],

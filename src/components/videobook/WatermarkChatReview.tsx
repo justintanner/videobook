@@ -61,16 +61,15 @@ function secondsLabel(value: number): string {
   return `${value.toFixed(1)}s`
 }
 
-function previewBadgeStyle(
+function previewQrStyle(
   position: Exclude<WatermarkPosition, 'auto'>,
-  includeQr: boolean,
   width: number,
   height: number,
 ): CSSProperties {
   const [vertical, horizontal] = position.split('-')
   const transforms: string[] = []
   const style: CSSProperties = {
-    aspectRatio: includeQr ? '480 / 580' : '480 / 88',
+    aspectRatio: '1 / 1',
     height: `${16 * (Math.min(width, height) / height)}%`,
   }
   if (horizontal === 'left') style.left = '2%'
@@ -88,6 +87,16 @@ function previewBadgeStyle(
   }
   if (transforms.length > 0) style.transform = transforms.join(' ')
   return style
+}
+
+function previewHandleStyle(width: number, height: number): CSSProperties {
+  return {
+    aspectRatio: '480 / 88',
+    height: `${16 * (Math.min(width, height) / height)}%`,
+    top: '33.3333%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+  }
 }
 
 export function WatermarkChatReview({
@@ -201,26 +210,25 @@ export function WatermarkChatReview({
             ) : (
               <span className="watermark-preview-empty">Video preview unavailable</span>
             )}
-            <div
-              className={`watermark-preview-badge${state.includeQr ? ' with-qr' : ' handle-only'}${visibleAtPlayhead ? '' : ' outside-window'}`}
-              style={previewBadgeStyle(
-                previewPosition,
-                state.includeQr,
-                previewWidth,
-                previewHeight,
-              )}
+            {state.includeQr && (
+              <span
+                className={`watermark-preview-overlay watermark-preview-qr${visibleAtPlayhead ? '' : ' outside-window'}`}
+                style={previewQrStyle(previewPosition, previewWidth, previewHeight)}
+                aria-hidden="true"
+              >
+                <QrCode />
+              </span>
+            )}
+            <span
+              className={`watermark-preview-overlay watermark-preview-handle${visibleAtPlayhead ? '' : ' outside-window'}`}
+              style={previewHandleStyle(previewWidth, previewHeight)}
               aria-hidden="true"
             >
-              {state.includeQr && (
-                <span className="watermark-preview-qr"><QrCode /></span>
-              )}
-              <span className="watermark-preview-handle">
-                <b>𝕏</b>
-                <span>@{handle || 'handle'}</span>
-              </span>
-            </div>
-            {state.position === 'auto' && (
-              <span className="watermark-auto-preview">AUTO · previewing bottom right</span>
+              <b>𝕏</b>
+              <span>@{handle || 'handle'}</span>
+            </span>
+            {state.includeQr && state.position === 'auto' && (
+              <span className="watermark-auto-preview">AUTO · QR previewing bottom right</span>
             )}
           </div>
           <div className="watermark-timeline" aria-label="Watermark visibility timeline">
@@ -234,9 +242,13 @@ export function WatermarkChatReview({
             />
           </div>
           <div className="watermark-preview-readout">
-            <span>{state.position === 'auto' ? 'Auto placement' : POSITION_LABELS[state.position]}</span>
+            <span>{state.includeQr
+              ? state.position === 'auto'
+                ? 'QR auto placement'
+                : `QR ${POSITION_LABELS[state.position].toLowerCase()}`
+              : 'Handle fixed center'}</span>
             <span>{secondsLabel(state.startSeconds)} → {duration > 0 ? secondsLabel(effectiveEnd) : 'clip end'}</span>
-            <span>{state.includeQr ? 'QR + handle' : 'Handle only'}</span>
+            <span>{state.includeQr ? '2 watermarks · 50% opacity' : 'Handle only · 50% opacity'}</span>
             <span>Rebuilds playable proxy</span>
           </div>
         </section>
@@ -275,7 +287,7 @@ export function WatermarkChatReview({
             <label className="watermark-toggle">
               <span>
                 <strong>Include QR code</strong>
-                <small>Add a scannable link above the handle</small>
+                <small>Add a separately placed scannable link</small>
               </span>
               <input
                 type="checkbox"
@@ -300,18 +312,18 @@ export function WatermarkChatReview({
 
           <section className="watermark-control-section">
             <div className="watermark-section-heading">
-              <span>Position</span>
+              <span>QR position</span>
               <button
                 type="button"
                 className={state.position === 'auto' ? 'active' : ''}
                 aria-pressed={state.position === 'auto'}
-                disabled={busy}
+                disabled={busy || !state.includeQr}
                 onClick={() => onChange({ position: 'auto' })}
               >
                 Auto
               </button>
             </div>
-            <div className="watermark-position-grid" role="group" aria-label="Watermark position">
+            <div className="watermark-position-grid" role="group" aria-label="QR position">
               {WATERMARK_POSITIONS.map((position) => (
                 <button
                   key={position}
@@ -320,7 +332,7 @@ export function WatermarkChatReview({
                   aria-label={POSITION_LABELS[position]}
                   aria-pressed={state.position === position}
                   title={POSITION_LABELS[position]}
-                  disabled={busy}
+                  disabled={busy || !state.includeQr}
                   onClick={() => onChange({ position })}
                 >
                   <span />
@@ -328,7 +340,7 @@ export function WatermarkChatReview({
               ))}
             </div>
             <small className="watermark-control-help">
-              Auto checks the clip for faces and text. Pick a point to lock the preview and output.
+              Auto places the QR away from faces and text. The handle stays centered two-thirds up.
             </small>
           </section>
 

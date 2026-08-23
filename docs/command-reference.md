@@ -12,7 +12,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `animate_keywords` — Configure transcript-timed keyword graphics for a video. Extracts exact word-time frames and waits for vision-guided placement that avoids faces, subtitles, and existing text or graphics. Pass keywords for exact transcript words, or omit them for automatic selection. Renders cinematic white serif over-the-shoulder titles. Use enabled=false to turn them off.
 - `apply_cuts` — Splice out one or more time ranges from a video asset in-place. Operates via ffmpeg concat-splice; re-runs process_video downstream so frames, transcripts, and analyses are regenerated. Pair with /suggest-cuts to source ranges, or hand-pick them.
 - `apply_sfx` — Generate sound effects via ElevenLabs text-to-sound-effects and mix them onto a video asset's audio track in-place. Each entry yields one discrete SFX cue at `duration_seconds`, mixed at the given timestamp. Re-runs process_video downstream. Pair with /suggest-sfx to source entries.
-- `apply_watermark` — Previewed watermark apply for video: builds a QR + @handle or handle-only badge, uses automatic or explicit positioning and an optional visibility window, then burns it into the video at 50% opacity so the clip visibly updates. Pass mode=overlay to only store render-time overlay settings instead.
+- `apply_watermark` — Previewed watermark apply for video: burns a positioned QR plus a separate centered @handle two-thirds up the frame, both at 50% opacity and within an optional visibility window. The QR can be disabled for handle-only output. Pass mode=overlay to store the legacy single-card render-time overlay instead.
 - `archive_clip` — Materialize a full URL or existing video/audio asset in the rebuildable global archive cache (B2 if configured, otherwise local), dedupe by media SHA-256, and transcribe long clips in chunks. Book-owned semantic links remain in artifact metadata.
 - `asset_history` — Get immutable Dolt revision history for an asset
 - `asset_manifest` — List all files in an asset directory
@@ -425,5 +425,5 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/upload` — Upload a file; UI: `open_upload`
 - `/vocals` — Isolate vocals from audio; MCP: `isolate_vocals`
 - `/voices` — Browse ElevenLabs voices in the speak preview; UI: `speak_preview`
-- `/watermark` — Open the chat watermark review with a live video preview, QR or handle-only styling, positioning, and timing controls; UI: `open_watermark`
+- `/watermark` — Open the chat watermark review with a positioned QR plus a centered floating handle, live preview, and timing controls; UI: `open_watermark`
 - `/<project-name>` — Switch to that project; generated dynamically for each project whose name does not conflict with a command or alias.

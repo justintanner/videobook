@@ -501,7 +501,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/watermark",
-    description: "Open the chat watermark review with a live video preview, QR or handle-only styling, positioning, and timing controls",
+    description: "Open the chat watermark review with a positioned QR plus a centered floating handle, live preview, and timing controls",
     example: "/watermark @a1",
     category: "viewer",
     icon: "QrCode",
