@@ -9,6 +9,7 @@ import { probeVideo } from "../ffmpeg.js";
 import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import { readWatermarkConfig } from "../watermark-config.js";
 import { watermarkOsgScale } from "../remotion/osg-spec.js";
+import { videoProxyMetadataMatches } from "../video-proxy.js";
 import type { Engine } from "videobook-engine";
 import type { Client } from "@modelcontextprotocol/client";
 
@@ -187,6 +188,12 @@ describe("apply_watermark tool", () => {
     if (!after.ok) throw new Error(after.error.message);
     const videoFile = findVideoFile(after.value.files)!;
     expect(videoFile.objectHash).not.toBe(beforeHash);
+    const proxyFile = after.value.files.find((file) => file.name === "proxy.mp4");
+    expect(proxyFile).toBeDefined();
+    const proxyMetadata = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "proxy");
+    expect(proxyMetadata.ok && proxyFile
+      ? videoProxyMetadataMatches(proxyMetadata.value, videoFile, proxyFile)
+      : false).toBe(true);
 
     // Same frame geometry and duration, just composited pixels.
     const probe = await probeVideo(join(after.value.path, videoFile.name));

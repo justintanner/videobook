@@ -5,6 +5,11 @@ import {
 } from '@modelcontextprotocol/client'
 
 const MCP_PROTOCOL_VERSION = '2026-07-28'
+const APPLY_WATERMARK_TIMEOUT_MS = 21 * 60_000
+
+export function mcpToolRequestTimeout(tool: string): number | undefined {
+  return tool === 'apply_watermark' ? APPLY_WATERMARK_TIMEOUT_MS : undefined
+}
 
 export async function connectMcpClient(
   url: string,
@@ -32,5 +37,9 @@ export function callMcpTool(
   tool: string,
   args: Record<string, unknown>,
 ): Promise<CallToolResult> {
-  return client.callTool({ name: tool, arguments: args })
+  const timeout = mcpToolRequestTimeout(tool)
+  return client.callTool(
+    { name: tool, arguments: args },
+    timeout === undefined ? undefined : { timeout },
+  )
 }
