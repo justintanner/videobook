@@ -5,7 +5,7 @@ import { toUpstreamCostHints, type KieCostHints } from "../cost-adapters.js";
 import { logger } from "../logger.js";
 import { estimateCostDef } from "../tools/estimate-cost.js";
 
-export type CostEstimateReason =
+type CostEstimateReason =
   | "unbounded"
   | "zero"
   | "missing-adapter"
@@ -58,7 +58,7 @@ const CORRELATION_KEYS = [
 const SECRET_VALUE = /(?:sk-|otp_|bearer\s|api[_-]?key)/i;
 const MEDIA_URL = /https?:\/\/\S+/gi;
 
-export function assessComputedEstimate(estimate: {
+function assessComputedEstimate(estimate: {
   usd: number;
   warnings: readonly string[];
 }): CostEstimateAssessment {

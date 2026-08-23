@@ -24,7 +24,7 @@ export interface WatermarkReviewState {
   error: string | null
 }
 
-export type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
+type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
   | 'handle'
   | 'url'
   | 'includeQr'

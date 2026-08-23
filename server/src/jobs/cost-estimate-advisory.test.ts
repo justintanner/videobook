@@ -14,6 +14,7 @@ import {
   assessKieRequestEstimate,
   assessToolCallEstimate,
   sanitizedCostEstimateLog,
+  type CostEstimateLogContext,
 } from "./cost-estimate-assessment.js";
 import { authorizeKiePaygate, mintKieOtp } from "./kie-paygate.js";
 import { canonicalHash, parseOtp } from "@apicity/cost";
@@ -66,6 +67,7 @@ describe("advisory cost estimation", () => {
       { prompt: "should not appear in logs" },
     );
     expect(assessment.available).toBe(false);
+    if (assessment.available) throw new Error("Expected an unavailable estimate");
     expect(assessment.reason).toBe("missing-adapter");
   });
 
@@ -109,8 +111,8 @@ describe("advisory cost estimation", () => {
         provider: "kie",
         model: "kling-3.0-omni/transformation",
         stage: "submit-kie",
-        prompt: "secret prompt" as never,
-      },
+        prompt: "secret prompt",
+      } as CostEstimateLogContext & { prompt: string },
     });
     const serialized = JSON.stringify(line);
     expect(line).toMatchObject({
@@ -211,8 +213,10 @@ describe("advisory cost estimation", () => {
     const fingerprint = notebookCellDefinitionFingerprint(document.value, producer);
     const unpricedPlanId = "019f0000-0000-7000-8000-00000000c0de";
     const now = new Date().toISOString();
+    const current = engine.notebooks.read(notebook.value.id);
+    if (!current.ok) throw new Error(current.error.message);
     const withUnpriced = await engine.notebooks.write({
-      ...engine.notebooks.read(notebook.value.id).value!,
+      ...current.value,
       notebookRunPlans: [{
         planId: unpricedPlanId,
         status: "planned",

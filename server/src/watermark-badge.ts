@@ -8,7 +8,7 @@ export const DEFAULT_HANDLE = "justinwtanner";
 // Layout identifier persisted in artifact metadata so apply_watermark can
 // reuse an existing badge and skip regenerating an identical one.
 export const WATERMARK_BADGE_LAYOUT = "badge-v2";
-export const WATERMARK_HANDLE_LAYOUT = "handle-v1";
+const WATERMARK_HANDLE_LAYOUT = "handle-v1";
 
 // Compact floating badge on a transparent canvas: a rounded white tile framing
 // the QR (the tile doubles as the quiet zone) with a slim dark pill underneath
@@ -25,7 +25,7 @@ export const BADGE_HEIGHT = TILE_SIZE + PILL_GAP + PILL_HEIGHT; // 580
 export const BADGE_ASPECT = BADGE_WIDTH / BADGE_HEIGHT;
 export const HANDLE_ONLY_BADGE_HEIGHT = PILL_HEIGHT;
 
-export type WatermarkBadgeOptions = {
+type WatermarkBadgeOptions = {
   includeQr?: boolean;
 };
 
@@ -50,7 +50,7 @@ export function watermarkBadgeAspect(includeQr = true): number {
   return BADGE_WIDTH / (includeQr ? BADGE_HEIGHT : HANDLE_ONLY_BADGE_HEIGHT);
 }
 
-export function watermarkBadgeLayout(includeQr = true): string {
+function watermarkBadgeLayout(includeQr = true): string {
   return includeQr ? WATERMARK_BADGE_LAYOUT : WATERMARK_HANDLE_LAYOUT;
 }
 

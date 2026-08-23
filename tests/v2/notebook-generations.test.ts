@@ -255,8 +255,7 @@ describe("notebook generation rows", () => {
     const notebook = engine.notebooks.read(notebookId);
     expect(notebook.ok).toBe(true);
     if (!notebook.ok) return;
-    const outputCellId = engine.generations.listForCell(notebookId, cell.id)
-      .value?.[0]?.outputCellId;
+    const outputCellId = failed.value[0]?.outputCellId;
     expect(
       notebook.value.execution?.[outputCellId ?? ""]?.status
       ?? notebook.value.execution?.[cell.id]?.status,

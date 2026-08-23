@@ -339,14 +339,14 @@ export function migrateLegacyExtractFrameCells(
   };
 }
 
-export const GENERATE_IMAGE_OUTPUT_ROLE = "generate-image-output";
-export const GENERATE_VIDEO_OUTPUT_ROLE = "generate-video-output";
-export const GENERATE_AUDIO_OUTPUT_ROLE = "generate-audio-output";
+const GENERATE_IMAGE_OUTPUT_ROLE = "generate-image-output";
+const GENERATE_VIDEO_OUTPUT_ROLE = "generate-video-output";
+const GENERATE_AUDIO_OUTPUT_ROLE = "generate-audio-output";
 
 type GenerationProducerType = "generate_video" | "generate_image" | "generate_audio";
 type GenerationOutputType = "video" | "image" | "audio";
 
-export type GenerationResultMatch = {
+type GenerationResultMatch = {
   outputCell: NotebookCell;
   outputEdge: NotebookEdge;
 };
@@ -448,13 +448,6 @@ export function listGenerateVideoOutputs(
   return listGenerationOutputs(document, generateVideoCellId, VIDEO_OUTPUT_SPEC);
 }
 
-export function listGenerateAudioOutputs(
-  document: NotebookDocument,
-  generateAudioCellId: string,
-): GenerationResultMatch[] {
-  return listGenerationOutputs(document, generateAudioCellId, AUDIO_OUTPUT_SPEC);
-}
-
 function latestCompletedResult(
   matches: GenerationResultMatch[],
 ): GenerationResultMatch | null {
@@ -530,11 +523,12 @@ function stampGenerationOutputCell(
   return { ...inheritedOutput, inputs };
 }
 
-export type AllocatedGenerationResult = {
+type AllocatedGenerationResult = {
   document: NotebookDocument;
   outputCell: NotebookCell;
   outputEdge: NotebookEdge;
   created: boolean;
+  updated: boolean;
 };
 
 function requireProducer(
@@ -554,7 +548,7 @@ function requireProducer(
   return producer;
 }
 
-export function allocateGenerationResult(
+function allocateGenerationResult(
   engine: Engine,
   document: NotebookDocument,
   producerCellId: string,
@@ -603,6 +597,7 @@ export function allocateGenerationResult(
     outputCell,
     outputEdge,
     created: true,
+    updated: false,
   };
 }
 
