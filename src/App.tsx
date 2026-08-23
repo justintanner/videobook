@@ -116,8 +116,10 @@ import {
   type ImageReplacementCandidate,
   type ImageSubjectEditInput,
 } from '@/components/videobook/NotebookMediaFullscreen'
-import { WatermarkDialog } from '@/components/videobook/WatermarkDialog'
-import type { WatermarkDialogState } from '@/components/videobook/WatermarkDialog'
+import {
+  WatermarkChatReview,
+  type WatermarkReviewState,
+} from '@/components/videobook/WatermarkChatReview'
 import { materializeNotebookSpeakCommand } from './videobook/notebook-speak-command'
 import { useElevenLabsVoices } from './videobook/use-elevenlabs-voices'
 import {
@@ -127,6 +129,7 @@ import {
   resolveSpeakVoiceId,
 } from './videobook/speak-preview'
 import { resolveWatermarkTarget } from './videobook/watermark-target'
+import { isWatermarkPosition } from './videobook/watermark-review'
 import {
   NotebookCellContextMenu,
   type NotebookCellContextAction,
@@ -2865,7 +2868,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [cellRunErrors, setCellRunErrors] = useState<Record<string, string>>({})
   const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
   const mediaLibraryReference = useSearchReferenceLifecycle()
-  const [watermarkDialog, setWatermarkDialog] = useState<WatermarkDialogState | null>(null)
+  const [pendingWatermarkReview, setPendingWatermarkReview] =
+    useState<WatermarkReviewState | null>(null)
   const momentSearchRef = useRef<MomentSearchHandle | null>(null)
   const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
   const [mediaFullscreenComposerTarget, setMediaFullscreenComposerTarget] =
@@ -2944,7 +2948,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const imageSubjectMapRequestRef = useRef(0)
   const bookDataRequestRef = useRef(0)
   const mediaLibraryOpenerRef = useRef<HTMLElement | null>(null)
-  const watermarkOpenerRef = useRef<HTMLElement | null>(null)
   const activeWatchesRef = useRef(new Map<string, string>())
   const activeMcpCallsRef = useRef(new Map<number, { tool: string; startedAt: number }>())
   const mcpActivitySequenceRef = useRef(0)
@@ -4106,6 +4109,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const dismissPendingCommandPlan = useCallback(() => {
     setPendingCommandPlan(null)
     setPendingChatAction(null)
+    setPendingWatermarkReview(null)
     focusCommandComposer()
   }, [focusCommandComposer])
   const updatePendingSplitSelection = useCallback((next: {
@@ -6068,22 +6072,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const closeWatermarkDialog = () => {
-    setWatermarkDialog(null)
-    const opener = watermarkOpenerRef.current
-    watermarkOpenerRef.current = null
-    scheduleModalDialogFocusRestoration(
-      opener,
-      (callback) => window.setTimeout(callback, 0),
-    )
-  }
-
-  const openWatermarkDialog = (assetId: string, targetLabel: string) => {
-    watermarkOpenerRef.current = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null
+  const openWatermarkReview = (
+    assetId: string,
+    targetLabel: string,
+    initial: {
+      handle?: string
+      url?: string
+      includeQr?: boolean
+      position?: WatermarkReviewState['position']
+      startSeconds?: number
+      endSeconds?: number | null
+      saveDefault?: boolean
+    } = {},
+  ) => {
     const targetAsset = assets.find((asset) => asset.artifactId === assetId)
-    setWatermarkDialog({
+    setPendingCommandPlan(null)
+    setPendingChatAction(null)
+    setPendingWatermarkReview({
       assetId,
       targetLabel,
       mediaUrl: targetAsset?.mediaUrl ?? null,
@@ -6091,16 +6096,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       width: targetAsset?.width ?? null,
       height: targetAsset?.height ?? null,
       durationSeconds: targetAsset?.duration ?? null,
-      handle: '',
-      url: '',
-      includeQr: true,
-      position: 'auto',
-      startSeconds: 0,
-      endSeconds: null,
-      saveDefault: false,
+      handle: initial.handle?.replace(/^@/, '') ?? '',
+      url: initial.url ?? '',
+      includeQr: initial.includeQr ?? true,
+      position: initial.position ?? 'auto',
+      startSeconds: initial.startSeconds ?? 0,
+      endSeconds: initial.endSeconds ?? null,
+      saveDefault: initial.saveDefault ?? false,
       recent: [],
       loadingConfig: true,
-      submitting: false,
       error: null,
     })
     void (async () => {
@@ -6111,7 +6115,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const recent = Array.isArray(config?.recent)
           ? config.recent.filter((entry): entry is string => typeof entry === 'string')
           : []
-        setWatermarkDialog((current) =>
+        setPendingWatermarkReview((current) =>
           current && current.assetId === assetId
             ? {
                 ...current,
@@ -6121,7 +6125,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               }
             : current)
       } catch {
-        setWatermarkDialog((current) =>
+        setPendingWatermarkReview((current) =>
           current && current.assetId === assetId
             ? { ...current, loadingConfig: false }
             : current)
@@ -6129,8 +6133,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     })()
   }
 
-  const submitWatermark = async () => {
-    if (!bookId || !watermarkDialog) return
+  const submitWatermark = async (): Promise<ComposerOutcome> => {
+    if (!bookId || !pendingWatermarkReview) {
+      return { ok: false, message: 'There is no pending watermark to apply.' }
+    }
     const {
       assetId,
       handle,
@@ -6140,13 +6146,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       startSeconds,
       endSeconds,
       saveDefault,
-    } = watermarkDialog
+    } = pendingWatermarkReview
     const trimmedHandle = handle.replace(/^@/, '').trim()
-    if (!trimmedHandle) return
-    setWatermarkDialog((current) =>
+    if (!trimmedHandle) {
+      return {
+        ok: false,
+        message: 'Enter an X handle before applying the watermark.',
+        nextInput: '/apply',
+        selectInput: false,
+      }
+    }
+    setPendingWatermarkReview((current) =>
       current && current.assetId === assetId
-        ? { ...current, submitting: true, error: null }
+        ? { ...current, error: null }
         : current)
+    setBusy(true)
     try {
       const result = recordValue(await call('apply_watermark', {
         book_id: bookId,
@@ -6166,16 +6180,27 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? ` · ${startSeconds.toFixed(1)}s–${endSeconds?.toFixed(1) ?? 'end'}`
         : ''
       await refreshBookData(bookId, notebook?.id)
-      setNotice(corner
+      const message = corner
         ? `Watermark @${trimmedHandle} burned in — ${corner}${frameAware}${timing}.`
-        : `Watermark @${trimmedHandle} applied${frameAware}${timing}.`)
-      closeWatermarkDialog()
+        : `Watermark @${trimmedHandle} applied${frameAware}${timing}.`
+      setNotice(message)
+      setPendingWatermarkReview(null)
+      return { ok: true, message }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      setWatermarkDialog((current) =>
+      setPendingWatermarkReview((current) =>
         current && current.assetId === assetId
-          ? { ...current, submitting: false, error: message }
+          ? { ...current, error: message }
           : current)
+      setNotice(message, 'error')
+      return {
+        ok: false,
+        message,
+        nextInput: '/apply',
+        selectInput: false,
+      }
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -7758,6 +7783,49 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         commandMentionAssets,
       ))[0] ?? null
     }
+    if (plan.tool === 'apply_watermark' || plan.routedTool === 'apply_watermark') {
+      const rawAssetId = asString(plan.params.asset_id)?.replace(/^@/, '')
+      const mention = rawAssetId
+        ? commandMentionAssets.find((candidate) =>
+            candidate.artifactId === rawAssetId
+            || candidate.cellAddress.toLowerCase() === rawAssetId.toLowerCase())
+        : undefined
+      const explicitAssetId = mention?.artifactId ?? rawAssetId
+      const target = resolveWatermarkTarget(
+        explicitAssetId,
+        selectedNotebookCell,
+        assets,
+        new Map(commandMentionAssets.map((asset) => [asset.artifactId, asset.cellAddress])),
+      )
+      if (!target.ok) return { ok: false, message: target.message }
+      const startSeconds = asNumber(plan.params.start_seconds)
+      const endSeconds = asNumber(plan.params.end_seconds)
+      const requestedPosition = plan.params.position
+      openWatermarkReview(target.artifactId, target.label, {
+        ...(asString(plan.params.handle)
+          ? { handle: asString(plan.params.handle) ?? undefined }
+          : {}),
+        ...(asString(plan.params.url)
+          ? { url: asString(plan.params.url) ?? undefined }
+          : {}),
+        ...(typeof plan.params.include_qr === 'boolean'
+          ? { includeQr: plan.params.include_qr }
+          : {}),
+        ...(isWatermarkPosition(requestedPosition)
+          ? { position: requestedPosition }
+          : {}),
+        ...(startSeconds !== null && startSeconds >= 0
+          ? { startSeconds }
+          : {}),
+        ...(endSeconds !== null && endSeconds >= 0
+          ? { endSeconds }
+          : {}),
+        ...(typeof plan.params.save_default === 'boolean'
+          ? { saveDefault: plan.params.save_default }
+          : {}),
+      })
+      return applyReadyOutcome(`Watermark review ready for ${target.label}`)
+    }
     if (plan.tool === 'extract_audio') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
       if (!sourceReference) {
@@ -8324,7 +8392,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const normalizedInput = input.trim().toLowerCase()
       const applyCommand = parsePendingApplyCommand(input)
       if (applyCommand) {
-        if (applyCommand.promptOverride && pendingChatAction?.kind !== 'generation') {
+        if (
+          applyCommand.promptOverride
+          && (pendingWatermarkReview || pendingChatAction?.kind !== 'generation')
+        ) {
           return {
             ok: false,
             message: 'A quick prompt can only revise a pending generation.',
@@ -8332,6 +8403,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             selectInput: false,
           }
         }
+        if (pendingWatermarkReview) return await submitWatermark()
         if (pendingChatAction) {
           return await applyPendingChatAction(applyCommand.promptOverride)
         }
@@ -8339,13 +8411,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return { ok: false, message: 'There is no pending action to apply.' }
       }
       if (normalizedInput === '/cancel') {
-        if (!pendingChatAction && !pendingCommandPlan) {
+        if (!pendingWatermarkReview && !pendingChatAction && !pendingCommandPlan) {
           return { ok: false, message: 'There is no pending action to cancel.' }
         }
+        setPendingWatermarkReview(null)
         setPendingChatAction(null)
         setPendingCommandPlan(null)
         return { ok: true, message: 'Pending action cancelled' }
       }
+      if (pendingWatermarkReview) setPendingWatermarkReview(null)
       if (!bookId) return { ok: false, message: 'Load or create a book first.' }
       if (!input.startsWith('/')) {
         const routed = await call('chat', {
@@ -8808,7 +8882,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return await runSpeakGeneration(action.text, action.voiceId)
       }
       if (command.uiAction === 'open_watermark') {
-        // The uiAction chain runs before the shared arg parse, so parse here.
         const parsed = parseCommandArgs(resolvedRest, command.params)
         const target = resolveWatermarkTarget(
           asString(parsed.asset_ref) ?? undefined,
@@ -8817,8 +8890,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           new Map(commandMentionAssets.map((asset) => [asset.artifactId, asset.cellAddress])),
         )
         if (!target.ok) return { ok: false, message: target.message }
-        openWatermarkDialog(target.artifactId, target.label)
-        return { ok: true, message: `Watermark dialog opened for ${target.label}` }
+        openWatermarkReview(target.artifactId, target.label)
+        return applyReadyOutcome(`Watermark review ready for ${target.label}`)
       }
       if (!command.mcpTool) return { ok: false, message: `${command.command} is available from its workspace.` }
       if (command.mcpTool.tool === 'download_video' && !notebook) {
@@ -10916,25 +10989,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         />
       )}
 
-      {watermarkDialog && (
-        <WatermarkDialog
-          state={watermarkDialog}
-          onChange={(patch) => setWatermarkDialog((current) =>
-            current ? { ...current, ...patch, error: null } : current)}
-          onMediaMetadata={(metadata) => setWatermarkDialog((current) =>
-            current
-              ? {
-                  ...current,
-                  durationSeconds: metadata.durationSeconds,
-                  width: metadata.width,
-                  height: metadata.height,
-                }
-              : current)}
-          onSubmit={() => void submitWatermark()}
-          onClose={closeWatermarkDialog}
-        />
-      )}
-
       {mediaFullscreen && (
         <NotebookMediaFullscreen
           key={mediaFullscreen.key}
@@ -10999,7 +11053,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : null}
         pendingInput={fullscreenImageEditor
           ? undefined
-          : pendingChatAction?.kind === 'generation'
+          : pendingWatermarkReview
+            ? '/apply'
+            : pendingChatAction?.kind === 'generation'
             ? '/apply '
             : pendingCommandPlan || pendingChatAction
               ? '/apply'
@@ -11009,7 +11065,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : null}
         onEnsureCatalog={refreshComposerCatalog}
         onDismissNotice={() => setNoticeState(null)}
-        onDismissPanel={!fullscreenImageEditor && (pendingCommandPlan || pendingChatAction)
+        onDismissPanel={!fullscreenImageEditor && (
+          pendingWatermarkReview
+          || pendingCommandPlan
+          || pendingChatAction
+        )
           ? dismissPendingCommandPlan
           : undefined}
         onExecute={executeComposerCommand}
@@ -11020,6 +11080,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : undefined}
         onSuccessfulExecute={revealSuccessfulComposerResult}
       >
+        {pendingWatermarkReview && (
+          <WatermarkChatReview
+            applyFormId={COMMAND_COMPOSER_FORM_ID}
+            busy={busy}
+            state={pendingWatermarkReview}
+            onChange={(patch) => setPendingWatermarkReview((current) =>
+              current ? { ...current, ...patch, error: null } : current)}
+            onMediaMetadata={(metadata) => setPendingWatermarkReview((current) =>
+              current
+                ? {
+                    ...current,
+                    durationSeconds: metadata.durationSeconds,
+                    width: metadata.width,
+                    height: metadata.height,
+                  }
+                : current)}
+            onCancel={dismissPendingCommandPlan}
+          />
+        )}
         {pendingCommandPlan && (
           <aside
             className="command-plan-drawer"

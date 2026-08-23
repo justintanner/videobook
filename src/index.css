@@ -9098,101 +9098,12 @@ textarea:focus-visible {
 
 }
 
-.watermark-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 260;
+.watermark-chat-review {
   display: grid;
-  padding: 32px;
-  place-items: center;
-  background: rgba(0, 5, 3, 0.82);
-  backdrop-filter: blur(5px);
-}
-
-.watermark-dialog {
-  display: grid;
-  width: min(1120px, 100%);
-  max-height: calc(100vh - 64px);
   grid-template-rows: auto minmax(0, 1fr);
+  max-height: min(78vh, 760px);
   overflow: hidden;
-  border: 1px solid rgba(115, 162, 135, 0.58);
-  color: var(--ink);
-  background: #06110b;
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.68);
-}
-
-.watermark-dialog > header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 22px 24px 18px;
-  border-bottom: 1px solid var(--line);
-}
-
-.watermark-dialog > header span {
-  color: #668c75;
-  font-size: 9px;
-  letter-spacing: 0.14em;
-}
-
-.watermark-dialog > header h2 {
-  margin: 5px 0 0;
-  color: #c0e4d0;
-  font-size: 20px;
-  font-weight: 500;
-}
-
-.watermark-dialog > header p {
-  margin: 7px 0 0;
-  color: #6f917e;
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.watermark-close {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  flex: none;
-  padding: 0;
-  place-items: center;
-  border: 1px solid var(--line);
-  color: #779b87;
-  background: transparent;
-  cursor: pointer;
-}
-
-.watermark-close:hover:not(:disabled),
-.watermark-close:focus-visible:not(:disabled) {
-  border-color: var(--control-border-hover);
-  color: var(--control-fg-hover);
-}
-
-.watermark-form {
-  display: grid;
-  min-height: 0;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 0;
-  overflow: hidden;
-  padding: 0;
-}
-
-.watermark-form > label {
-  display: grid;
-  gap: 7px;
-  color: #86ab95;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-}
-
-.watermark-form input[type='text'] {
-  width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--line);
-  color: var(--ink);
-  background: rgba(2, 12, 7, 0.72);
-  font-size: 13px;
+  padding: 16px 18px 14px;
 }
 
 .watermark-handle-field {
@@ -9251,51 +9162,13 @@ textarea:focus-visible {
   line-height: 1.5;
 }
 
-.watermark-form > footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding-top: 4px;
-}
-
-.watermark-form > footer button {
-  padding: 9px 16px;
-  border: 1px solid var(--line);
-  color: #86ab95;
-  background: transparent;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.watermark-form > footer button[type='submit'] {
-  border-color: rgba(115, 162, 135, 0.58);
-  color: #c0e4d0;
-}
-
-.watermark-form > footer button:hover:not(:disabled),
-.watermark-form > footer button:focus-visible:not(:disabled) {
-  border-color: var(--control-border-hover);
-  color: var(--control-fg-hover);
-}
-
-.watermark-form > footer button:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-@media (max-width: 720px) {
-  .watermark-backdrop {
-    padding: 10px;
-  }
-}
-
 .watermark-editor {
   display: grid;
   min-height: 0;
   grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.78fr);
   gap: 14px;
+  margin-top: 14px;
   overflow: auto;
-  padding: 18px 20px;
 }
 
 .watermark-preview-section,
@@ -9371,7 +9244,7 @@ textarea:focus-visible {
 
 .watermark-video-stage.tall {
   width: auto;
-  height: min(56vh, 620px);
+  height: min(48vh, 520px);
   max-width: 100%;
   justify-self: center;
 }
@@ -9642,31 +9515,6 @@ textarea:focus-visible {
   color: var(--control-fg-hover);
 }
 
-.watermark-form > footer {
-  display: flex;
-  min-height: 58px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 11px 20px;
-  border-top: 1px solid var(--line);
-  background: rgba(1, 9, 5, 0.94);
-}
-
-.watermark-form > footer > span {
-  color: var(--muted);
-  font-size: 9px;
-}
-
-.watermark-form > footer > div {
-  display: flex;
-  gap: 10px;
-}
-
-.watermark-form > footer button {
-  min-height: 34px;
-}
-
 .watermark-controls button:disabled,
 .watermark-control-section input:disabled {
   cursor: default;
@@ -9674,10 +9522,6 @@ textarea:focus-visible {
 }
 
 @media (max-width: 860px) {
-  .watermark-dialog {
-    max-height: calc(100vh - 20px);
-  }
-
   .watermark-editor {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -9696,11 +9540,7 @@ textarea:focus-visible {
 }
 
 @media (max-width: 560px) {
-  .watermark-dialog > header {
-    padding: 16px;
-  }
-
-  .watermark-editor {
+  .watermark-chat-review {
     padding: 12px;
   }
 
@@ -9708,16 +9548,6 @@ textarea:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .watermark-form > footer {
-    align-items: stretch;
-    flex-direction: column;
-    padding: 10px 12px;
-  }
-
-  .watermark-form > footer > div,
-  .watermark-form > footer button {
-    flex: 1;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,11 +1,11 @@
 /**
  * Persisted watermark handle preferences.
  *
- * The /watermark dialog remembers the X handles you've used so it can default to
+ * The chat watermark review remembers the X handles you've used so it can default to
  * your last-used (or explicitly saved) handle instead of asking every time. The
  * authenticated user's handle is read live via @apicity/x's /2/users/me endpoint
  * (see x/authenticated-handle.ts); `authenticatedHandle` below is a read-through
- * cache so the dialog still pre-fills when the API is unreachable.
+ * cache so the review still pre-fills when the API is unreachable.
  *
  * Stored as unversioned application state in the main Dolt database.
  */

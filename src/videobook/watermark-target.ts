@@ -11,12 +11,6 @@ type WatermarkTargetResult =
   | { ok: true; artifactId: string; label: string }
   | { ok: false; message: string }
 
-/**
- * Resolve the video the /watermark dialog should target: an explicit
- * `asset_ref` (already alias-resolved to an artifact id) wins, else the
- * selected canvas cell's output artifact. The target must be a known video
- * asset; `label` is the cell address when the asset sits in a cell.
- */
 export function resolveWatermarkTarget(
   assetRef: string | undefined,
   selectedCell: WatermarkTargetCell | null,

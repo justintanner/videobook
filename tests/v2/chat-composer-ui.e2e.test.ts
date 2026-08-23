@@ -203,6 +203,7 @@ describe('chat composer browser flow', () => {
     prompt: string
     value: Record<string, unknown>
   } | null = null
+  let mockedWatermarkApply = false
   let mockedFullscreenSubjectEditor = false
   let mockedSubjectEditCompletions = 0
   let mockedSubjectEditDelays: number[] = []
@@ -212,11 +213,13 @@ describe('chat composer browser flow', () => {
     mockedSubjectEditCompletions = 0
     mockedSubjectEditDelays = []
     delayChatResponses = false
+    mockedWatermarkApply = false
   })
 
   afterEach(async () => {
     mockedFullscreenSubjectEditor = false
     mockedSubjectEditDelays = []
+    mockedWatermarkApply = false
     await page?.setViewportSize({ width: 1440, height: 1000 })
   })
 
@@ -537,6 +540,42 @@ describe('chat composer browser flow', () => {
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify(Array.isArray(body) ? [response] : response),
+        })
+        return
+      }
+      const mockedWatermarkCall = mockedWatermarkApply
+        ? calls.find((call) => call.name === 'apply_watermark')
+        : null
+      if (mockedWatermarkCall) {
+        const envelopes = Array.isArray(body) ? body : [body]
+        const response = envelopes.flatMap((entry) => {
+          const envelope = record(entry)
+          const params = record(envelope?.params)
+          if (
+            envelope?.method !== 'tools/call'
+            || params?.name !== 'apply_watermark'
+            || (typeof envelope.id !== 'number' && typeof envelope.id !== 'string')
+          ) return []
+          return [{
+            jsonrpc: '2.0',
+            id: envelope.id,
+            result: {
+              resultType: 'complete',
+              content: [{
+                type: 'text',
+                text: JSON.stringify({
+                  placement_source: 'manual',
+                  position: mockedWatermarkCall.arguments.position,
+                }),
+              }],
+              isError: false,
+            },
+          }]
+        })
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(Array.isArray(body) ? response : response[0]),
         })
         return
       }
@@ -1343,6 +1382,7 @@ describe('chat composer browser flow', () => {
       },
     }
     try {
+      mockedWatermarkApply = true
       await openApp()
       const input = page.getByLabel('Videobook command input')
       await input.waitFor({ state: 'visible', timeout: 30_000 })
@@ -1369,6 +1409,92 @@ describe('chat composer browser flow', () => {
         whiteSpace: 'normal',
       })
     } finally {
+      mockedChatActionPlan = null
+    }
+  }, 60_000)
+
+  it('uses one composer watermark review for routed and direct commands', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    const prompt = 'watermark @a1 with @justinwtanner'
+    mockedChatActionPlan = {
+      prompt,
+      value: {
+        kind: 'chat-action-plan',
+        planId: '01900000-0000-7000-8000-000000000111',
+        bookId,
+        prompt,
+        routedTool: 'apply_watermark',
+        tool: 'apply_watermark',
+        params: {
+          asset_id: '@a1',
+          handle: 'justinwtanner',
+        },
+        message: 'Applying watermark.',
+        summary: 'Applying watermark.',
+        effect: 'mutation',
+        confirmation: {
+          required: true,
+          reason: 'This request changes the current book',
+        },
+      },
+    }
+    try {
+      await openApp()
+      const input = page.getByLabel('Videobook command input')
+      await input.waitFor({ state: 'visible', timeout: 30_000 })
+      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      const initialApplyCalls = observedCalls.filter((call) =>
+        call.name === 'apply_watermark').length
+
+      await input.fill(prompt)
+      await page.getByLabel('Send command').click()
+
+      const review = page.getByLabel('Watermark review')
+      await review.waitFor({ state: 'visible', timeout: 30_000 })
+      expect(await page.getByLabel('Chat action review').count()).toBe(0)
+      expect(await page.locator('.watermark-chat-review').count()).toBe(1)
+      expect(await page.locator('.watermark-backdrop, .watermark-dialog').count()).toBe(0)
+      expect(await review.locator('video').count()).toBe(1)
+      expect(await review.getByLabel('X handle').inputValue()).toBe('justinwtanner')
+      expect(await review.getByRole('checkbox', { name: 'Include QR code' }).isChecked()).toBe(true)
+      expect(await review.getByRole('button', { name: 'Auto' }).getAttribute('aria-pressed')).toBe('true')
+      expect(await review.getByRole('button', { name: 'Top left' }).count()).toBe(1)
+      expect(await review.locator('input[type="number"]').count()).toBe(2)
+      await expect.poll(async () => await input.inputValue()).toBe('/apply')
+
+      await review.getByRole('button', { name: 'Bottom left' }).click()
+      expect(await review.getByRole('button', { name: 'Bottom left' })
+        .getAttribute('aria-pressed')).toBe('true')
+      await review.getByRole('checkbox', { name: 'Include QR code' }).uncheck()
+      expect(await review.getByText('Handle only').count()).toBeGreaterThan(0)
+      await review.locator('input[type="number"]').nth(0).fill('0.5')
+      await review.locator('input[type="number"]').nth(1).fill('2.5')
+      await review.getByRole('button', { name: 'Apply' }).click()
+      await review.waitFor({ state: 'detached' })
+      const applyCalls = observedCalls.filter((call) => call.name === 'apply_watermark')
+      expect(applyCalls).toHaveLength(initialApplyCalls + 1)
+      expect(applyCalls.at(-1)?.arguments).toMatchObject({
+        book_id: bookId,
+        asset_id: videoArtifactId,
+        handle: 'justinwtanner',
+        include_qr: false,
+        position: 'bottom-left',
+        start_seconds: 0.5,
+        end_seconds: 2.5,
+      })
+
+      await input.fill('/watermark @a1')
+      await page.getByLabel('Send command').click()
+      await review.waitFor({ state: 'visible', timeout: 30_000 })
+      expect(await page.locator('.watermark-chat-review').count()).toBe(1)
+      expect(await page.locator('.watermark-backdrop, .watermark-dialog').count()).toBe(0)
+      expect(await review.getByRole('button', { name: 'Top right' }).count()).toBe(1)
+      await review.getByRole('button', { name: 'Cancel' }).click()
+      expect(observedCalls.filter((call) => call.name === 'apply_watermark')).toHaveLength(
+        initialApplyCalls + 1,
+      )
+    } finally {
+      mockedWatermarkApply = false
       mockedChatActionPlan = null
     }
   }, 60_000)

@@ -4,7 +4,7 @@ import { readWatermarkConfig, setAuthenticatedHandle } from "../watermark-config
 import { fetchAuthenticatedXHandle } from "../x/authenticated-handle.js";
 
 /**
- * Return the persisted watermark handle preferences so the /watermark dialog can
+ * Return the persisted watermark handle preferences so the chat watermark review can
  * default to the saved / last-used X handle and list recent handles to pick from.
  *
  * `authenticatedHandle` is read-through cached: we try @apicity/x's /2/users/me
@@ -15,7 +15,7 @@ export function getWatermarkConfigDef(engine: Engine): ToolDef {
   return {
     name: "get_watermark_config",
     description:
-      "Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the /watermark dialog.",
+      "Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the chat watermark review.",
     schema: {},
     handler: async () => {
       const cached = await readWatermarkConfig(engine);

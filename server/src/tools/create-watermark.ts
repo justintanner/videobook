@@ -44,7 +44,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         };
       }
 
-      // Remember the handle so the next watermark dialog defaults to it.
+      // Remember the handle so the next watermark review defaults to it.
       await recordHandle(resolvedHandle, { saveDefault: save_default }, engine).catch(() => undefined);
 
       return {

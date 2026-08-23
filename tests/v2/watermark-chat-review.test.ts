@@ -2,12 +2,14 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
-  WatermarkDialog,
-  type WatermarkDialogState,
-} from '../../src/components/videobook/WatermarkDialog'
+  WatermarkChatReview,
+  type WatermarkReviewState,
+} from '../../src/components/videobook/WatermarkChatReview'
 
-function renderWatermark(overrides: Partial<WatermarkDialogState> = {}): string {
-  return renderToStaticMarkup(createElement(WatermarkDialog, {
+function renderWatermark(overrides: Partial<WatermarkReviewState> = {}): string {
+  return renderToStaticMarkup(createElement(WatermarkChatReview, {
+    applyFormId: 'command-composer-form',
+    busy: false,
     state: {
       assetId: 'vid-1',
       targetLabel: '@a1',
@@ -25,20 +27,22 @@ function renderWatermark(overrides: Partial<WatermarkDialogState> = {}): string 
       saveDefault: false,
       recent: ['someone'],
       loadingConfig: false,
-      submitting: false,
       error: null,
       ...overrides,
     },
     onChange: () => undefined,
     onMediaMetadata: () => undefined,
-    onSubmit: () => undefined,
-    onClose: () => undefined,
+    onCancel: () => undefined,
   }))
 }
 
-describe('watermark dialog', () => {
-  it('renders a live video review with placement and timing controls', () => {
+describe('watermark chat review', () => {
+  it('renders one composer review with live placement and timing controls', () => {
     const html = renderWatermark()
+    expect(html).toContain('command-plan-drawer watermark-chat-review')
+    expect(html).toContain('aria-label="Watermark review"')
+    expect(html).toContain('WATERMARK · CHAT')
+    expect(html).toContain('form="command-composer-form"')
     expect(html).toContain('src="/files/book/vid-1/proxy.mp4"')
     expect(html).toContain('controls')
     expect(html).toContain('watermark-preview-badge with-qr')
@@ -47,6 +51,8 @@ describe('watermark dialog', () => {
     expect(html.match(/type="number"/g)).toHaveLength(2)
     expect(html).toContain('0.0s → 8.0s')
     expect(html).toContain('Set from playhead')
+    expect(html).not.toContain('watermark-backdrop')
+    expect(html).not.toContain('role="dialog"')
   })
 
   it('previews and configures a handle-only watermark', () => {

@@ -171,7 +171,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `get_search_coverage` — Read progressive semantic-index coverage for a book or artifact
 - `get_search_index_status` — Read temporal search manifests, providers, and index statistics
 - `get_timeline` — Get the selected book's typed v2 timeline
-- `get_watermark_config` — Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the /watermark dialog.
+- `get_watermark_config` — Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the chat watermark review.
 - `inject_first_frame` — Replace exactly the first frame of a video artifact or the final video with an image artifact in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.
 - `insert_timeline_slot` — Typed timelines cannot contain empty slots; assign an asset directly with assign_slot
 - `inspect_generation_request` (historical names, not exposed: `generation_payload`) — Read the persisted Kie request payload, task meta, and failure info for a single asset. Used by the /inbox hover inspector to show what was sent to the provider.
@@ -425,5 +425,5 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/upload` — Upload a file; UI: `open_upload`
 - `/vocals` — Isolate vocals from audio; MCP: `isolate_vocals`
 - `/voices` — Browse ElevenLabs voices in the speak preview; UI: `speak_preview`
-- `/watermark` — Preview and burn a faint QR + @handle or handle-only watermark with explicit positioning and timing controls; UI: `open_watermark`
+- `/watermark` — Open the chat watermark review with a live video preview, QR or handle-only styling, positioning, and timing controls; UI: `open_watermark`
 - `/<project-name>` — Switch to that project; generated dynamically for each project whose name does not conflict with a command or alias.
