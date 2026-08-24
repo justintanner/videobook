@@ -107,7 +107,7 @@ describe("buildWatermarkBadgePng", () => {
     expect(metadata.height).toBe(BADGE_HEIGHT);
   });
 
-  it("renders a handle-only pill without a QR tile", async () => {
+  it("renders a smaller centered handle without a leading X glyph", async () => {
     const badge = await buildWatermarkBadgePng(URL, "someone", { includeQr: false });
     const metadata = await sharp(badge).metadata();
     expect(metadata.width).toBe(BADGE_WIDTH);
@@ -118,6 +118,27 @@ describe("buildWatermarkBadgePng", () => {
       BADGE_WIDTH / HANDLE_ONLY_BADGE_HEIGHT,
       6,
     );
+
+    const raw = await sharp(badge).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    let leadingGlyphPixels = 0;
+    const textRows: number[] = [];
+    for (let y = 8; y < HANDLE_ONLY_BADGE_HEIGHT - 8; y += 1) {
+      for (let x = 20; x < BADGE_WIDTH - 20; x += 1) {
+        const offset = (y * raw.info.width + x) * 4;
+        const isLight = raw.data[offset] > 200
+          && raw.data[offset + 1] > 200
+          && raw.data[offset + 2] > 200;
+        if (!isLight) continue;
+        if (x < 90) leadingGlyphPixels += 1;
+        if (x >= 90 && x < BADGE_WIDTH - 90) textRows.push(y);
+      }
+    }
+    expect(leadingGlyphPixels).toBe(0);
+    expect(textRows.length).toBeGreaterThan(0);
+    const textTop = Math.min(...textRows);
+    const textBottom = Math.max(...textRows);
+    expect((textTop + textBottom) / 2).toBeCloseTo(HANDLE_ONLY_BADGE_HEIGHT / 2, 0);
+    expect(textBottom - textTop + 1).toBeLessThanOrEqual(28);
   });
 
   it("renders a QR-only tile without the handle pill", async () => {

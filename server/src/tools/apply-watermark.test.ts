@@ -166,7 +166,7 @@ describe("apply_watermark tool", () => {
       "original",
     );
     if (!cardMeta.ok) throw new Error(cardMeta.error.message);
-    expect(cardMeta.value.layout).toBe("handle-v1");
+    expect(cardMeta.value.layout).toBe("handle-v2");
     expect(cardMeta.value.include_qr).toBe(false);
     expect(cardMeta.value.height).toBe(88);
 
@@ -257,7 +257,7 @@ describe("apply_watermark tool", () => {
     if (!handleMeta.ok) throw new Error(handleMeta.error.message);
     expect(qrMeta.value.layout).toBe("qr-v1");
     expect(qrMeta.value.include_handle).toBe(false);
-    expect(handleMeta.value.layout).toBe("handle-v1");
+    expect(handleMeta.value.layout).toBe("handle-v2");
     expect(handleMeta.value.include_qr).toBe(false);
 
     const after = await fs.files.manifest(assetId);

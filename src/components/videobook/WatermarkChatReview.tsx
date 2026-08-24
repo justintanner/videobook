@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
-import { Check, QrCode, X } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import { WATERMARK_POSITIONS } from '@/videobook/watermark-review'
 import type { WatermarkPosition } from '@/videobook/watermark-review'
 
@@ -50,6 +50,72 @@ const POSITION_LABELS: Record<(typeof WATERMARK_POSITIONS)[number], string> = {
   'bottom-left': 'Bottom left',
   'bottom-center': 'Bottom center',
   'bottom-right': 'Bottom right',
+}
+
+const QR_PREVIEW_ROWS = [
+  'fe2601bf8',
+  '8209bd208',
+  'ba34532e8',
+  'ba6ee3ae8',
+  'ba95bfae8',
+  '824f55208',
+  'feaaaabf8',
+  '00ccb8800',
+  '33c3ed680',
+  '646dcd668',
+  '8abc29c48',
+  'f976883d0',
+  '2bd10cc08',
+  '246bc6840',
+  '3ae7049a0',
+  '78227f738',
+  '1fa124fc0',
+  'b072db3a8',
+  'f715de7b0',
+  'a150ca198',
+  '7aac44a60',
+  'ed6a62858',
+  '060607bf8',
+  '5d2a6a4c8',
+  'aa0132f80',
+  '0087658f0',
+  'fe9a35ac0',
+  '8277d98f8',
+  'ba51bbff0',
+  'bacc3e160',
+  'ba9403e00',
+  '824b0bc28',
+  'fe263c180',
+] as const
+
+const QR_PREVIEW_SIZE = QR_PREVIEW_ROWS.length
+
+function buildQrPreviewPath(): string {
+  const modules: string[] = []
+  for (let row = 0; row < QR_PREVIEW_SIZE; row += 1) {
+    const encodedRow = QR_PREVIEW_ROWS[row]
+    for (let column = 0; column < QR_PREVIEW_SIZE; column += 1) {
+      const nibble = Number.parseInt(encodedRow.charAt(Math.floor(column / 4)), 16)
+      if ((nibble & (8 >> (column % 4))) !== 0) {
+        modules.push(`M${column} ${row}h1v1h-1z`)
+      }
+    }
+  }
+  return modules.join('')
+}
+
+const QR_PREVIEW_PATH = buildQrPreviewPath()
+
+function WatermarkQrPreview() {
+  return (
+    <svg
+      className="watermark-preview-qr-modules"
+      viewBox={`0 0 ${QR_PREVIEW_SIZE} ${QR_PREVIEW_SIZE}`}
+      shapeRendering="crispEdges"
+    >
+      <path d={QR_PREVIEW_PATH} fill="currentColor" />
+    </svg>
+  )
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -216,7 +282,7 @@ export function WatermarkChatReview({
                 style={previewQrStyle(previewPosition, previewWidth, previewHeight)}
                 aria-hidden="true"
               >
-                <QrCode />
+                <WatermarkQrPreview />
               </span>
             )}
             <span
@@ -224,7 +290,6 @@ export function WatermarkChatReview({
               style={previewHandleStyle(previewWidth, previewHeight)}
               aria-hidden="true"
             >
-              <b>𝕏</b>
               <span>@{handle || 'handle'}</span>
             </span>
             {state.includeQr && state.position === 'auto' && (

@@ -1456,6 +1456,24 @@ describe('chat composer browser flow', () => {
       expect(await page.locator('.watermark-backdrop, .watermark-dialog').count()).toBe(0)
       expect(await review.locator('video').count()).toBe(1)
       expect(await review.getByLabel('X handle').inputValue()).toBe('justinwtanner')
+      const previewHandle = review.locator('.watermark-preview-handle')
+      expect((await previewHandle.textContent())?.trim()).toBe('@justinwtanner')
+      expect(await previewHandle.locator('b').count()).toBe(0)
+      expect(await previewHandle.evaluate((element) => {
+        const style = window.getComputedStyle(element)
+        return {
+          alignItems: style.alignItems,
+          justifyContent: style.justifyContent,
+          fontSize: Number.parseFloat(style.fontSize),
+        }
+      })).toEqual({
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 15,
+      })
+      const previewQrPath = await review.locator('.watermark-preview-qr-modules path')
+        .getAttribute('d')
+      expect(previewQrPath?.match(/M/g)).toHaveLength(541)
       expect(await review.getByRole('checkbox', { name: 'Include QR code' }).isChecked()).toBe(true)
       expect(await review.getByRole('button', { name: 'Auto' }).getAttribute('aria-pressed')).toBe('true')
       expect(await review.getByRole('button', { name: 'Top left' }).count()).toBe(1)
