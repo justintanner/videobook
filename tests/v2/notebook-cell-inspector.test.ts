@@ -7,7 +7,10 @@ import {
   type NotebookEdge,
 } from 'videobook-engine'
 import { notebookGridAddress } from 'videobook-engine/notebook-grid'
-import { NotebookCellInspector } from '../../src/components/videobook/NotebookCellInspector'
+import {
+  NotebookCellInspector,
+  type CellAssetRevision,
+} from '../../src/components/videobook/NotebookCellInspector'
 import { NotebookMediaFullscreen } from '../../src/components/videobook/NotebookMediaFullscreen'
 import {
   persistAndRunNotebookCell,
@@ -230,7 +233,82 @@ const voiceCatalog: ElevenLabsVoicesState = {
   refresh: async () => null,
 }
 
+function renderAssetHistory(history: {
+  revisions: readonly CellAssetRevision[]
+  loading: boolean
+  error: string | null
+}): string {
+  return renderToStaticMarkup(createElement(NotebookCellInspector, {
+    notebookId: '01900000-0000-7000-8000-000000000003',
+    cell,
+    cells: [cell],
+    edges: [],
+    asset: undefined,
+    status: 'completed',
+    error: null,
+    busy: false,
+    deleting: false,
+    sourceVisible: false,
+    historyVisible: true,
+    history,
+    onUpdate: async () => undefined,
+    onSetInput: async () => undefined,
+    onRun: async () => undefined,
+    onDelete: async () => undefined,
+    onOpenFullscreen: () => undefined,
+  }))
+}
+
 describe('NotebookCellInspector', () => {
+  it('renders immutable asset revisions in the history view', () => {
+    const html = renderAssetHistory({
+      revisions: [
+        {
+          hash: 'abcdef1234567890',
+          message: 'Duplicated source asset',
+          date: '2026-08-24T08:00:00.000Z',
+          author: 'Videobook',
+          operation: 'duplicate_asset',
+        },
+        {
+          hash: '1234567890abcdef',
+          message: 'Created source asset',
+          date: '2026-08-23T08:00:00.000Z',
+        },
+      ],
+      loading: false,
+      error: null,
+    })
+
+    expect(html).toContain('aria-label="Asset history"')
+    expect(html).toContain('2 revisions')
+    expect(html).toContain('duplicate asset')
+    expect(html).toContain('Duplicated source asset')
+    expect(html).toContain('abcdef12')
+    expect(html).toContain('Videobook')
+    expect(html).toContain('Asset revision')
+  })
+
+  it.each([
+    {
+      name: 'loading',
+      history: { revisions: [], loading: true, error: null },
+      message: 'Loading asset history…',
+    },
+    {
+      name: 'error',
+      history: { revisions: [], loading: false, error: 'History unavailable' },
+      message: 'History unavailable',
+    },
+    {
+      name: 'empty',
+      history: { revisions: [], loading: false, error: null },
+      message: 'No revisions recorded for this asset.',
+    },
+  ])('renders the $name asset-history state', ({ history, message }) => {
+    expect(renderAssetHistory(history)).toContain(message)
+  })
+
   it('renders the ElevenLabs voice picker for generate_audio cells', () => {
     const generationCell: NotebookCell = {
       ...cell,

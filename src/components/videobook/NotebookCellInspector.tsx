@@ -398,6 +398,14 @@ export type CellGenerationAttempt = {
   updatedAt: number
 }
 
+export type CellAssetRevision = {
+  hash: string
+  message: string
+  date: string
+  author?: string
+  operation?: string
+}
+
 type NotebookCellInspectorProps = {
   notebookId: string
   cell: NotebookCell
@@ -411,6 +419,7 @@ type NotebookCellInspectorProps = {
   busy: boolean
   deleting: boolean
   sourceVisible: boolean
+  historyVisible?: boolean
   generationsVisible?: boolean
   generationActions?: readonly NotebookGenerationAction[]
   mentionAssets?: readonly AssetMentionCandidate[]
@@ -436,6 +445,11 @@ type NotebookCellInspectorProps = {
   generations?: {
     attempts: readonly CellGenerationAttempt[]
     currentExecution: NotebookCellExecution | null
+    loading: boolean
+    error: string | null
+  }
+  history?: {
+    revisions: readonly CellAssetRevision[]
     loading: boolean
     error: string | null
   }
@@ -2824,6 +2838,68 @@ function liveGenerationAttemptId(
     ?.attemptId ?? null
 }
 
+function CellAssetHistoryPanel({
+  revisions,
+  loading,
+  error,
+}: {
+  revisions: readonly CellAssetRevision[]
+  loading: boolean
+  error: string | null
+}) {
+  return (
+    <section className="inspector-generations" aria-label="Asset history">
+      <header className="inspector-source-meta">
+        <span>
+          <History size={14} aria-hidden="true" />
+          History
+        </span>
+        <code>{revisions.length} revision{revisions.length === 1 ? '' : 's'}</code>
+      </header>
+      {loading && (
+        <p className="inspector-analysis-json-status" role="status">
+          Loading asset history…
+        </p>
+      )}
+      {error && (
+        <p className="inspector-run-error" role="alert">{error}</p>
+      )}
+      {!loading && !error && revisions.length === 0 && (
+        <p className="inspector-analysis-json-status">
+          No revisions recorded for this asset.
+        </p>
+      )}
+      <ol className="inspector-history">
+        {revisions.map((revision, index) => (
+          <li key={revision.hash}>
+            <span className="inspector-history-index">
+              {revisions.length - index}
+            </span>
+            <div>
+              <header>
+                <strong>
+                  {revision.operation?.replaceAll('_', ' ') ?? 'Asset revision'}
+                </strong>
+                <code title={revision.hash}>{revision.hash.slice(0, 8)}</code>
+              </header>
+              <p>{revision.message}</p>
+              <small>
+                <time
+                  dateTime={revision.date}
+                  title={absoluteTimeLabel(revision.date)}
+                >
+                  {relativeTimeLabel(revision.date) ?? revision.date}
+                </time>
+                {revision.author ? ` · ${revision.author}` : ''}
+              </small>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
 function CellGenerationsPanel({
   attempts,
   currentExecution,
@@ -3004,6 +3080,7 @@ export function NotebookCellInspector({
   busy,
   deleting,
   sourceVisible,
+  historyVisible = false,
   generationsVisible = false,
   generationActions,
   mediaInsightWork,
@@ -3018,6 +3095,7 @@ export function NotebookCellInspector({
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
   generations,
+  history,
   mentionAssets,
   voiceCatalog,
 }: NotebookCellInspectorProps) {
@@ -3035,6 +3113,19 @@ export function NotebookCellInspector({
           notebookId={notebookId}
           cell={cell}
           artifactAssets={artifactAssets}
+        />
+      </div>
+    )
+  }
+
+  if (historyVisible) {
+    return (
+      <div className="inspector-body inspector-source-body">
+        <CellAssetHistoryPanel
+          key={cell.id}
+          revisions={history?.revisions ?? []}
+          loading={history?.loading ?? false}
+          error={history?.error ?? null}
         />
       </div>
     )

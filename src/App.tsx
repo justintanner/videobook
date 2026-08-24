@@ -48,7 +48,6 @@ import {
   PanelRightOpen,
   Plus,
   RefreshCw,
-  Scissors,
   Search,
   Settings,
   Sparkles,
@@ -104,6 +103,7 @@ import {
 } from '@/components/videobook/MomentSearch'
 import {
   NotebookCellInspector,
+  type CellAssetRevision,
   type CellGenerationAttempt,
   type NotebookCellInspectorAsset,
 } from '@/components/videobook/NotebookCellInspector'
@@ -753,6 +753,32 @@ function assetHasInsight(
 
 function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function asCellAssetRevisions(value: unknown): CellAssetRevision[] {
+  if (!Array.isArray(value)) {
+    throw new Error('The server returned invalid asset history')
+  }
+  return value.map((entry) => {
+    const revision = recordValue(entry)
+    const hash = revision && asString(revision.hash)
+    const message = revision && asString(revision.message)
+    const date = revision && asString(revision.date)
+    if (!revision || !hash || message === null || !date) {
+      throw new Error('The server returned an invalid asset revision')
+    }
+    return {
+      hash,
+      message,
+      date,
+      ...(asString(revision.author)
+        ? { author: asString(revision.author)! }
+        : {}),
+      ...(asString(revision.operation)
+        ? { operation: asString(revision.operation)! }
+        : {}),
+    }
+  })
 }
 
 function isRunnableCell(
@@ -2902,6 +2928,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [notebookSurface, setNotebookSurface] = useState({ width: 0, height: 0 })
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [sourceViewCellId, setSourceViewCellId] = useState<string | null>(null)
+  const [historyViewCellId, setHistoryViewCellId] = useState<string | null>(null)
+  const [historyState, setHistoryState] = useState<{
+    cellId: string
+    assetId: string
+    loading: boolean
+    error: string | null
+    revisions: CellAssetRevision[]
+  } | null>(null)
   const [generationsViewCellId, setGenerationsViewCellId] = useState<string | null>(null)
   const [generationsState, setGenerationsState] = useState<{
     cellId: string
@@ -9410,20 +9444,78 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const openCellInspector = (cellId: string) => {
     selectCanvasCell(cellId)
     setSourceViewCellId(null)
+    setHistoryViewCellId(null)
     setGenerationsViewCellId(null)
     setInspectorOpen(true)
   }
 
   const openCellSource = (cellId: string) => {
     selectCanvasCell(cellId)
+    setHistoryViewCellId(null)
     setGenerationsViewCellId(null)
     setSourceViewCellId(cellId)
     setInspectorOpen(true)
   }
 
+  const openCellHistory = (cellId: string, assetId: string) => {
+    selectCanvasCell(cellId)
+    setSourceViewCellId(null)
+    setGenerationsViewCellId(null)
+    setHistoryViewCellId(cellId)
+    setInspectorOpen(true)
+    if (!bookId) {
+      setHistoryState({
+        cellId,
+        assetId,
+        loading: false,
+        error: 'Book is unavailable',
+        revisions: [],
+      })
+      return
+    }
+    setHistoryState({
+      cellId,
+      assetId,
+      loading: true,
+      error: null,
+      revisions: [],
+    })
+    void call('asset_history', {
+      asset_id: assetId,
+      book_id: bookId,
+      limit: 20,
+    }, { background: true })
+      .then((payload) => {
+        const revisions = asCellAssetRevisions(payload)
+        setHistoryState((current) =>
+          current?.cellId === cellId && current.assetId === assetId
+            ? {
+                cellId,
+                assetId,
+                loading: false,
+                error: null,
+                revisions,
+              }
+            : current)
+      })
+      .catch((cause: unknown) => {
+        setHistoryState((current) =>
+          current?.cellId === cellId && current.assetId === assetId
+            ? {
+                cellId,
+                assetId,
+                loading: false,
+                error: cause instanceof Error ? cause.message : String(cause),
+                revisions: [],
+              }
+            : current)
+      })
+  }
+
   const openCellGenerations = (cellId: string) => {
     selectCanvasCell(cellId)
     setSourceViewCellId(null)
+    setHistoryViewCellId(null)
     setGenerationsViewCellId(cellId)
     setInspectorOpen(true)
     if (!notebook || !bookId) {
@@ -10152,47 +10244,33 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   <div className="inspector-header-actions">
                     {selectedCell && (
                       <>
-                        {selectedSplitSource && (
+                        {selectedNotebookCell?.outputArtifactId && (
                           <button
                             type="button"
-                            className="inspector-source-toggle"
-                            title="Split video"
-                            aria-label="Split video"
-                            disabled={busy}
+                            className={historyViewCellId === selectedCell.id
+                              ? 'inspector-source-toggle active'
+                              : 'inspector-source-toggle'}
+                            title={historyViewCellId === selectedCell.id
+                              ? 'View cell'
+                              : 'View history'}
+                            aria-label={historyViewCellId === selectedCell.id
+                              ? 'View cell'
+                              : 'View history'}
+                            aria-pressed={historyViewCellId === selectedCell.id}
                             onClick={() => {
-                              void previewNotebookSplitCommand({
-                                sourceReference: selectedSplitSource.source.id,
-                                cutPointsSeconds: [],
-                              }).then((outcome) => {
-                                if (!outcome.ok) setNotice(outcome.message, 'error')
-                              })
+                              if (historyViewCellId === selectedCell.id) {
+                                setHistoryViewCellId(null)
+                                return
+                              }
+                              openCellHistory(
+                                selectedCell.id,
+                                selectedNotebookCell.outputArtifactId!,
+                              )
                             }}
                           >
-                            <Scissors size={15} />
+                            <History size={15} />
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className={generationsViewCellId === selectedCell.id
-                            ? 'inspector-source-toggle active'
-                            : 'inspector-source-toggle'}
-                          title={generationsViewCellId === selectedCell.id
-                            ? 'View cell'
-                            : 'View generations'}
-                          aria-label={generationsViewCellId === selectedCell.id
-                            ? 'View cell'
-                            : 'View generations'}
-                          aria-pressed={generationsViewCellId === selectedCell.id}
-                          onClick={() => {
-                            if (generationsViewCellId === selectedCell.id) {
-                              setGenerationsViewCellId(null)
-                              return
-                            }
-                            openCellGenerations(selectedCell.id)
-                          }}
-                        >
-                          <History size={15} />
-                        </button>
                         <button
                           type="button"
                           className={sourceViewCellId === selectedCell.id
@@ -10248,6 +10326,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     busy={busy || Boolean(selectedMediaSlotState?.operation)}
                     deleting={deletingCellIds.has(selectedNotebookCell.id)}
                     sourceVisible={sourceViewCellId === selectedNotebookCell.id}
+                    historyVisible={
+                      historyViewCellId === selectedNotebookCell.id
+                    }
+                    history={
+                      historyState
+                      && historyState.cellId === selectedNotebookCell.id
+                      && historyState.assetId === selectedNotebookCell.outputArtifactId
+                        ? {
+                            revisions: historyState.revisions,
+                            loading: historyState.loading,
+                            error: historyState.error,
+                          }
+                        : historyViewCellId === selectedNotebookCell.id
+                          ? {
+                              revisions: [],
+                              loading: true,
+                              error: null,
+                            }
+                          : undefined
+                    }
                     generationsVisible={
                       generationsViewCellId === selectedNotebookCell.id
                     }

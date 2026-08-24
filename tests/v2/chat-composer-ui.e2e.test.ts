@@ -2150,6 +2150,49 @@ describe('chat composer browser flow', () => {
     notebookDirty = true
   }, 60_000)
 
+  it('opens asset history from the inspector without a split shortcut', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await openApp()
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+    const target = notebookCellNode(page, videoCellId)
+    await target.waitFor({ state: 'visible' })
+    const address = (await target.locator('.cell-node-footer strong').textContent())?.trim()
+    if (!address) throw new Error('History target address is missing')
+    await target.click({ button: 'right' })
+    const menu = page.getByRole('menu', { name: `Cell actions for ${address}` })
+    await menu.waitFor({ state: 'visible' })
+    await menu.getByRole('menuitem', { name: 'Edit cell' }).click()
+
+    const inspector = page.locator('aside.inspector')
+    await inspector.locator('.inspector-cell-title').waitFor({ state: 'visible' })
+    const actions = inspector.locator('.inspector-header-actions')
+    expect(await actions.getByRole('button', { name: 'Split video' }).count()).toBe(0)
+    expect(await actions.getByRole('button', { name: 'View generations' }).count()).toBe(0)
+
+    observedCalls.length = 0
+    await actions.getByRole('button', { name: 'View history' }).click()
+    await expect.poll(() => observedCalls.find((call) =>
+      call.name === 'asset_history')).toMatchObject({
+        name: 'asset_history',
+        arguments: {
+          asset_id: videoArtifactId,
+          book_id: bookId,
+          limit: 20,
+        },
+      })
+    const history = inspector.getByRole('region', { name: 'Asset history' })
+    await history.waitFor({ state: 'visible' })
+    await expect.poll(async () => await history.locator('.inspector-history li').count())
+      .toBeGreaterThan(0)
+    expect(await history.getByText(/revision/u).first().isVisible()).toBe(true)
+
+    await actions.getByRole('button', { name: 'View cell' }).click()
+    await history.waitFor({ state: 'hidden' })
+  }, 60_000)
+
   it('opens a complete context menu from every cell tile with delete last', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()
