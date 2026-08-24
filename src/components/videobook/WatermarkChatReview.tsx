@@ -134,10 +134,7 @@ function buildQrPreviewPath(): string {
 }
 
 const QR_PREVIEW_PATH = buildQrPreviewPath()
-const HANDLE_BADGE_WIDTH = 480
 const HANDLE_BADGE_HEIGHT = 88
-const HANDLE_ICON_SIZE = 26
-const HANDLE_ICON_GAP = 14
 const HANDLE_FONT_SIZE = 28
 
 function WatermarkQrPreview() {
@@ -431,33 +428,13 @@ function previewHandleStyle(
 }
 
 function previewHandlePillStyle(
-  handle: string,
-  includeXIcon: boolean,
   padding: number,
   rounding: number,
 ): CSSProperties {
-  const iconSpace = includeXIcon ? HANDLE_ICON_SIZE + HANDLE_ICON_GAP : 0
-  const availableWidth = HANDLE_BADGE_WIDTH - 2 - padding * 2 - iconSpace
-  const fontSize = Math.max(
-    12,
-    Math.min(
-      HANDLE_FONT_SIZE,
-      Math.floor(availableWidth / (0.6 * Math.max(1, Array.from(handle).length))),
-    ),
-  )
-  const labelWidth = Math.min(
-    availableWidth,
-    fontSize * 0.6 * Array.from(handle).length,
-  )
-  const pillWidth = Math.min(
-    HANDLE_BADGE_WIDTH - 2,
-    Math.ceil(iconSpace + labelWidth + padding * 2),
-  )
   const radius = ((HANDLE_BADGE_HEIGHT - 2) / 2) * (rounding / 100)
   return {
-    width: `${(pillWidth / HANDLE_BADGE_WIDTH) * 100}%`,
-    paddingInline: `${(padding / HANDLE_BADGE_WIDTH) * 100}%`,
-    borderRadius: `${(radius / pillWidth) * 100}% / ${(radius / HANDLE_BADGE_HEIGHT) * 100}%`,
+    paddingInline: `${padding / HANDLE_FONT_SIZE}em`,
+    borderRadius: `${radius / HANDLE_FONT_SIZE}em`,
   }
 }
 
@@ -618,8 +595,6 @@ export function WatermarkChatReview({
               <span
                 className={`watermark-preview-handle-pill${state.includeHandleBorder ? '' : ' without-border'}`}
                 style={previewHandlePillStyle(
-                  handle || 'handle',
-                  state.includeXIcon,
                   state.handlePadding,
                   state.handleRounding,
                 )}

@@ -9298,8 +9298,11 @@ textarea:focus-visible {
 .watermark-preview-handle-pill {
   box-sizing: border-box;
   display: flex;
+  width: max-content;
   height: 100%;
   min-width: 0;
+  max-width: 100%;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   gap: 0.5em;
@@ -9320,10 +9323,11 @@ textarea:focus-visible {
 
 .watermark-preview-handle-pill > span {
   display: block;
-  max-width: 100%;
-  overflow: hidden;
+  max-width: none;
+  flex: 0 0 auto;
+  overflow: visible;
   line-height: 1;
-  text-overflow: ellipsis;
+  text-overflow: clip;
 }
 
 .watermark-auto-preview {

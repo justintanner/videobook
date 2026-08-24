@@ -1431,8 +1431,8 @@ describe('chat composer browser flow', () => {
           handle_vertical_percent: 41,
           include_x_icon: true,
           include_handle_border: true,
-          handle_padding: 48,
-          handle_rounding: 60,
+          handle_padding: 25,
+          handle_rounding: 41,
           qr_opacity: 0.45,
           handle_opacity: 0.55,
         },
@@ -1465,7 +1465,26 @@ describe('chat composer browser flow', () => {
       expect(await review.getByLabel('X handle').inputValue()).toBe('justinwtanner')
       const previewHandle = review.locator('.watermark-preview-handle')
       const previewHandlePill = previewHandle.locator('.watermark-preview-handle-pill')
+      const previewHandleLabel = previewHandlePill.locator(':scope > span')
       expect((await previewHandle.textContent())?.trim()).toBe('justinwtanner')
+      expect(await previewHandleLabel.evaluate((element) => {
+        const style = window.getComputedStyle(element)
+        const label = element.getBoundingClientRect()
+        const pill = element.parentElement?.getBoundingClientRect()
+        return {
+          clipped: element.scrollWidth > element.clientWidth,
+          overflow: style.overflow,
+          textOverflow: style.textOverflow,
+          withinPill: pill !== undefined
+            && label.left >= pill.left
+            && label.right <= pill.right,
+        }
+      })).toEqual({
+        clipped: false,
+        overflow: 'visible',
+        textOverflow: 'clip',
+        withinPill: true,
+      })
       expect(await previewHandle.locator('.watermark-preview-x-icon').count()).toBe(1)
       expect(await previewHandle.evaluate((element) => {
         const style = window.getComputedStyle(element)
@@ -1501,8 +1520,8 @@ describe('chat composer browser flow', () => {
       expect(await previewHandle.evaluate((element) => element.style.top)).toBe('41%')
       expect(await review.getByRole('slider', { name: 'QR opacity' }).inputValue()).toBe('45')
       expect(await review.getByRole('slider', { name: 'Handle opacity' }).inputValue()).toBe('55')
-      expect(await review.getByRole('slider', { name: 'Handle padding' }).inputValue()).toBe('48')
-      expect(await review.getByRole('slider', { name: 'Corner rounding' }).inputValue()).toBe('60')
+      expect(await review.getByRole('slider', { name: 'Handle padding' }).inputValue()).toBe('25')
+      expect(await review.getByRole('slider', { name: 'Corner rounding' }).inputValue()).toBe('41')
       expect(await review.locator('input[type="number"]').count()).toBe(4)
       await expect.poll(async () => await input.inputValue()).toBe('/apply')
 
@@ -1514,7 +1533,17 @@ describe('chat composer browser flow', () => {
       expect(await review.getByText('62% from top').count()).toBeGreaterThan(0)
       const initialPillWidth = await previewHandlePill.evaluate((element) =>
         element.getBoundingClientRect().width)
-      await review.getByRole('slider', { name: 'Handle padding' }).fill('64')
+      const handlePadding = review.getByRole('slider', { name: 'Handle padding' })
+      await handlePadding.fill('96')
+      expect(await previewHandleLabel.evaluate((element) => {
+        const label = element.getBoundingClientRect()
+        const pill = element.parentElement?.getBoundingClientRect()
+        return element.scrollWidth <= element.clientWidth
+          && pill !== undefined
+          && label.left >= pill.left
+          && label.right <= pill.right
+      })).toBe(true)
+      await handlePadding.fill('64')
       await expect.poll(async () => await previewHandlePill.evaluate((element) =>
         element.getBoundingClientRect().width)).toBeGreaterThan(initialPillWidth)
       await review.getByRole('slider', { name: 'Corner rounding' }).fill('25')

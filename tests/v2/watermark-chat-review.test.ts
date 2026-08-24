@@ -101,7 +101,7 @@ describe('watermark chat review', () => {
     expect(html).toContain('top:68%;left:50%;transform:translate(-50%, -50%)')
     expect(html).toContain('68% from top')
     expect(html).toContain('watermark-preview-handle-pill without-border')
-    expect(html).toContain('padding-inline:0%;border-radius:0% / 0%')
+    expect(html).toContain('padding-inline:0em;border-radius:0em')
     expect(html).not.toContain('watermark-preview-x-icon')
     expect(html).toContain('Handle 60% · 1.0s–12.0s')
     expect(html.match(/type="number"/g)).toHaveLength(2)
