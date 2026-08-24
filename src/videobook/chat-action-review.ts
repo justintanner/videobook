@@ -13,6 +13,7 @@ interface RoutedActionSetting {
 interface RoutedActionReview {
   title: string
   settings: RoutedActionSetting[]
+  postText?: string
 }
 
 interface RoutedActionReviewInput {
@@ -194,6 +195,26 @@ function changeVideoSpeedReview(input: RoutedActionReviewInput): RoutedActionRev
   }
 }
 
+function postToXReview(input: RoutedActionReviewInput): RoutedActionReview {
+  const scheduledFor = textValue(input.params.scheduled_for)
+  const orientation = textValue(input.params.orientation)
+  return {
+    title: 'Post to X',
+    settings: [
+      setting('Destination', 'X'),
+      setting('Source', sourceValue(input.input, input.params)),
+      setting(
+        'Publish',
+        scheduledFor ? `Scheduled · ${scheduledFor}` : 'Now',
+        'default',
+        scheduledFor !== null,
+      ),
+      setting('Orientation', orientation ? humanize(orientation) : 'Keep source'),
+    ],
+    postText: typeof input.params.text === 'string' ? input.params.text : '',
+  }
+}
+
 const sensitiveKeyPattern = /api.?key|secret|(?:^|[_-])token(?:$|[_-])|password|credential|authorization/iu
 
 function identifiesSensitiveValue(
@@ -270,5 +291,6 @@ export function routedActionReview(
   if (input.tool === 'split_video') return splitReview(input)
   if (input.tool === 'trim_video') return trimReview(input)
   if (input.tool === 'change_video_speed') return changeVideoSpeedReview(input)
+  if (input.tool === 'post') return postToXReview(input)
   return genericReview(input)
 }

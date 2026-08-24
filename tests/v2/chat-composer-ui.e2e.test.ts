@@ -200,6 +200,7 @@ describe('chat composer browser flow', () => {
   let appReady = false
   let notebookDirty = false
   let mockedChatActionPlan: {
+    applyValue?: Record<string, unknown>
     prompt: string
     value: Record<string, unknown>
   } | null = null
@@ -579,20 +580,33 @@ describe('chat composer browser flow', () => {
         })
         return
       }
-      const mockedCall = mockedChatActionPlan && calls.find((call) =>
-        call.name === 'chat'
-        && call.arguments.prompt === mockedChatActionPlan?.prompt)
       const chatPlan = mockedChatActionPlan
+      const expectedPlan = record(chatPlan?.value)
+      const mockedCall = chatPlan && calls.find((call) => {
+        if (call.name !== 'chat') return false
+        if (call.arguments.prompt === chatPlan.prompt) return true
+        const actionPlan = record(call.arguments.action_plan)
+        return Boolean(
+          chatPlan.applyValue
+          && actionPlan?.planId === expectedPlan?.planId,
+        )
+      })
       if (mockedCall && chatPlan) {
         const envelopes = Array.isArray(body) ? body : [body]
         const response = envelopes.flatMap((entry) => {
           const envelope = record(entry)
           const params = record(envelope?.params)
           const args = record(params?.arguments)
+          const actionPlan = record(args?.action_plan)
+          const previewRequest = args?.prompt === chatPlan.prompt
+          const applyRequest = Boolean(
+            chatPlan.applyValue
+            && actionPlan?.planId === expectedPlan?.planId,
+          )
           if (
             envelope?.method !== 'tools/call'
             || params?.name !== 'chat'
-            || args?.prompt !== chatPlan.prompt
+            || (!previewRequest && !applyRequest)
             || (typeof envelope.id !== 'number' && typeof envelope.id !== 'string')
           ) return []
           return [{
@@ -602,7 +616,7 @@ describe('chat composer browser flow', () => {
               resultType: 'complete',
               content: [{
                 type: 'text',
-                text: JSON.stringify(chatPlan.value),
+                text: JSON.stringify(applyRequest ? chatPlan.applyValue : chatPlan.value),
               }],
               isError: false,
             },
@@ -1408,6 +1422,93 @@ describe('chat composer browser flow', () => {
         textOverflow: 'clip',
         whiteSpace: 'normal',
       })
+    } finally {
+      mockedChatActionPlan = null
+    }
+  }, 60_000)
+
+  it('shows the exact X post and media before cancel or apply', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    const prompt = 'post @a1 to X tomorrow morning with the launch message'
+    const postText = 'The final cut is ready. Watch the full story, then tell me which moment stayed with you most.\nBehind the scenes: @videobook.'
+    const planId = '01900000-0000-7000-8000-000000000109'
+    mockedChatActionPlan = {
+      prompt,
+      applyValue: {
+        status: 'posted',
+        platform: 'x',
+        tweet_id: 'TWEET_PREVIEW_TEST',
+        tweet_url: 'https://x.com/i/web/status/TWEET_PREVIEW_TEST',
+      },
+      value: {
+        kind: 'chat-action-plan',
+        planId,
+        bookId,
+        prompt,
+        routedTool: 'post',
+        tool: 'post',
+        params: {
+          asset_id: videoArtifactId,
+          book_id: bookId,
+          orientation: 'portrait',
+          platform: 'x',
+          scheduled_for: '2026-08-25T03:00:00.000Z',
+          text: postText,
+        },
+        message: 'Posting to X.',
+        summary: 'Posting to X.',
+        effect: 'mutation',
+        confirmation: {
+          required: true,
+          reason: 'This request publishes media outside the current book',
+        },
+      },
+    }
+    const appliedCalls = () => observedCalls.filter((call) =>
+      call.name === 'chat'
+      && record(call.arguments.action_plan)?.planId === planId)
+    try {
+      await openApp()
+      const input = page.getByLabel('Videobook command input')
+      await input.waitFor({ state: 'visible', timeout: 30_000 })
+      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await input.fill(prompt)
+      await page.getByLabel('Send command').click()
+
+      const review = page.getByLabel('Chat action review')
+      await review.waitFor({ state: 'visible', timeout: 30_000 })
+      await review.getByRole('listitem').getByText('Post to X', { exact: true })
+        .waitFor({ state: 'visible' })
+      const settings = review.getByLabel('Action settings')
+      expect(await settings.textContent()).toContain('DestinationX')
+      expect(await settings.textContent()).toContain('Source@a1')
+      expect(await settings.textContent()).toContain('Scheduled · 2026-08-25T03:00:00.000Z')
+      expect(await settings.textContent()).toContain('OrientationPortrait')
+
+      const postPreview = review.getByLabel('X post preview')
+      const previewVideo = postPreview.locator('video')
+      await previewVideo.waitFor({ state: 'visible', timeout: 30_000 })
+      expect(await previewVideo.getAttribute('src')).toContain('/files/')
+      expect(await previewVideo.getAttribute('controls')).not.toBeNull()
+      expect(await postPreview.locator('.x-post-chat-preview-copy p').textContent())
+        .toBe(postText)
+      expect(await postPreview.getByText(`${postText.length}/280 characters`).count()).toBe(1)
+      expect(await appliedCalls()).toHaveLength(0)
+
+      await review.getByRole('button', { name: /Cancel/ }).click()
+      await expect.poll(async () => await review.count()).toBe(0)
+      expect(appliedCalls()).toHaveLength(0)
+
+      await input.fill(prompt)
+      await page.getByLabel('Send command').click()
+      await review.waitFor({ state: 'visible', timeout: 30_000 })
+      await review.getByRole('button', { name: 'Post to X' }).click()
+      await expect.poll(() => appliedCalls().length).toBe(1)
+      await expect.poll(async () => await review.count()).toBe(0)
+      const appliedPlan = record(appliedCalls()[0]?.arguments.action_plan)
+      const appliedParams = record(appliedPlan?.params)
+      expect(appliedParams?.text).toBe(postText)
+      expect(appliedParams?.asset_id).toBe(videoArtifactId)
     } finally {
       mockedChatActionPlan = null
     }

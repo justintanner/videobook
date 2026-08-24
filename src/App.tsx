@@ -150,6 +150,7 @@ import {
 import { isNotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 import { VideoSegmentSplit } from '@/components/videobook/VideoSegmentSplit'
 import { SpeedChangePreview } from '@/components/videobook/SpeedChangePreview'
+import { PostToXChatPreview } from '@/components/videobook/PostToXChatPreview'
 import {
   CanonicalSequencePlayer,
   type TimelineKeyboardAction,
@@ -3068,6 +3069,28 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         sourceDurationSeconds: pendingChangeSpeedPreview?.sourceDurationSeconds ?? null,
       })
     : null
+  const pendingXPostPreview = useMemo(() => {
+    if (pendingChatAction?.kind !== 'routed') return null
+    const plan = pendingChatAction.plan
+    if (plan.tool !== 'post' && plan.routedTool !== 'post') return null
+    const rawReference = asString(plan.params.asset_id)?.trim() ?? ''
+    const reference = rawReference.replace(/^@/, '')
+    const mention = commandMentionAssets.find((candidate) =>
+      candidate.artifactId === reference
+      || candidate.cellAddress.toLowerCase() === reference.toLowerCase())
+    const asset = assetById.get(mention?.artifactId ?? reference) ?? mention ?? null
+    return {
+      asset,
+      postText: pendingRoutedActionReview?.postText ?? '',
+      sourceLabel: mention
+        ? `@${mention.cellAddress}`
+        : rawReference.startsWith('@')
+          ? rawReference
+          : reference
+            ? `@${reference}`
+            : 'Selected media',
+    }
+  }, [assetById, commandMentionAssets, pendingChatAction, pendingRoutedActionReview])
   const pendingGenerationConnectedInputs = useMemo(
     () => pendingGenerationDraft && notebook
       ? notebookChatGenerationConnectedInputs(pendingGenerationDraft, notebook)
@@ -11404,7 +11427,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   className="command-plan-apply"
                   disabled={busy}
                 >
-                  <Check size={14} />Apply
+                  <Check size={14} />{pendingXPostPreview ? 'Post to X' : 'Apply'}
                 </button>
                 <button
                   type="button"
@@ -11417,7 +11440,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             </header>
             <div className="command-plan-details command-plan-details-open">
               <div className={`command-plan-content command-plan-content-single${(pendingChatAction.kind === 'routed'
-                && !pendingChangeSpeedPreview)
+                && !pendingChangeSpeedPreview
+                && !pendingXPostPreview)
                 ? ' command-plan-content-routed'
                 : ''}`}>
                 {pendingChatAction.kind !== 'routed' && (
@@ -11482,6 +11506,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       </p>
                     )}
                   </div>
+                )}
+                {pendingChatAction.kind === 'routed' && pendingXPostPreview && (
+                  <PostToXChatPreview {...pendingXPostPreview} />
                 )}
               </div>
             </div>

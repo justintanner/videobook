@@ -180,4 +180,52 @@ describe('routedActionReview', () => {
       wide: true,
     })
   })
+
+  it('prepares an exact post-to-X confirmation without truncating its message', () => {
+    const postText = `${'Full outbound message '.repeat(6).trim()}\nSecond line stays visible.`
+    const review = routedActionReview({
+      tool: 'post',
+      params: {
+        asset_id: 'vid-source',
+        orientation: 'portrait',
+        platform: 'x',
+        scheduled_for: '2026-08-25T03:00:00.000Z',
+        text: postText,
+      },
+      input: 'post @a1 to X tomorrow',
+    })
+
+    expect(review).toEqual({
+      title: 'Post to X',
+      settings: [
+        { label: 'Destination', value: 'X', tone: 'default', wide: false },
+        { label: 'Source', value: '@a1', tone: 'default', wide: false },
+        {
+          label: 'Publish',
+          value: 'Scheduled · 2026-08-25T03:00:00.000Z',
+          tone: 'default',
+          wide: true,
+        },
+        { label: 'Orientation', value: 'Portrait', tone: 'default', wide: false },
+      ],
+      postText,
+    })
+  })
+
+  it('labels an immediate media-only X post', () => {
+    expect(routedActionReview({
+      tool: 'post',
+      params: { asset_id: 'img-source', platform: 'x' },
+      input: 'post @b2 to X',
+    })).toMatchObject({
+      title: 'Post to X',
+      postText: '',
+      settings: [
+        { label: 'Destination', value: 'X' },
+        { label: 'Source', value: '@b2' },
+        { label: 'Publish', value: 'Now' },
+        { label: 'Orientation', value: 'Keep source' },
+      ],
+    })
+  })
 })

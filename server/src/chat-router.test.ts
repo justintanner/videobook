@@ -163,6 +163,10 @@ describe("chat routing catalog", () => {
     });
     expect(getRoutableTool(tools, "trim_video")?.autoApply).toBe(false);
     expect(getRoutableTool(tools, "split_video")?.autoApply).toBe(false);
+    expect(getRoutableTool(tools, "post")).toMatchObject({
+      effect: "mutation",
+      autoApply: false,
+    });
     expect(
       getRoutableTool(tools, "generate_kie_minimax_h3_text_to_video")?.autoApply,
     ).toBe(false);
