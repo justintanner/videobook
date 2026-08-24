@@ -6719,6 +6719,10 @@ textarea:focus-visible {
   background: rgba(2, 11, 7, 0.78);
 }
 
+.command-plan-drawer.x-post-chat-review {
+  max-height: min(70vh, 680px);
+}
+
 .x-post-chat-preview > header {
   display: flex;
   align-items: center;
@@ -6752,7 +6756,8 @@ textarea:focus-visible {
 }
 
 .x-post-chat-preview > header small,
-.x-post-chat-preview-copy small {
+.x-post-chat-preview-copy small,
+.x-post-chat-preview-options small {
   color: var(--muted);
   font-size: 9px;
 }
@@ -6790,25 +6795,91 @@ textarea:focus-visible {
   padding: 11px 12px 12px;
 }
 
-.x-post-chat-preview-copy > span {
+.x-post-chat-preview-copy > label,
+.x-post-chat-preview-options label > span {
   color: var(--muted);
   font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.x-post-chat-preview-copy p {
-  margin: 0;
+.x-post-chat-preview-copy textarea,
+.x-post-chat-preview-options select,
+.x-post-chat-preview-options input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
   color: #d8f4e4;
+  background: rgba(1, 9, 5, 0.9);
+}
+
+.x-post-chat-preview-copy textarea {
+  min-height: 88px;
+  padding: 9px 10px;
+  resize: vertical;
+  font: inherit;
   font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
-.x-post-chat-preview-copy .x-post-chat-preview-empty {
-  color: var(--muted);
-  font-style: italic;
+.x-post-chat-preview-copy textarea::placeholder {
+  color: #6d8d7b;
+}
+
+.x-post-chat-preview-copy textarea:focus,
+.x-post-chat-preview-options select:focus,
+.x-post-chat-preview-options input:focus {
+  border-color: var(--green);
+  outline: 0;
+  box-shadow: 0 0 0 1px rgba(114, 231, 170, 0.13);
+}
+
+.x-post-chat-preview-copy > small {
+  justify-self: end;
+}
+
+.x-post-chat-preview-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 11px 12px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.x-post-chat-preview-options label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.x-post-chat-preview-options select,
+.x-post-chat-preview-options input {
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.x-post-chat-preview-options select:disabled,
+.x-post-chat-preview-options input:disabled,
+.x-post-chat-preview-copy textarea:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
+.x-post-chat-preview-schedule {
+  grid-column: 1 / -1;
+}
+
+.x-post-chat-preview-error {
+  margin: 0;
+  padding: 9px 12px;
+  border-top: 1px solid rgba(210, 111, 111, 0.34);
+  color: #ef9b9b;
+  background: rgba(112, 39, 39, 0.12);
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .plan-warning {

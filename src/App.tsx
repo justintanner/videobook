@@ -152,6 +152,12 @@ import { VideoSegmentSplit } from '@/components/videobook/VideoSegmentSplit'
 import { SpeedChangePreview } from '@/components/videobook/SpeedChangePreview'
 import { PostToXChatPreview } from '@/components/videobook/PostToXChatPreview'
 import {
+  reviseXPostParams,
+  xPostDraftError,
+  xPostDraftFromParams,
+  type XPostDraftPatch,
+} from '@/videobook/x-post-review'
+import {
   CanonicalSequencePlayer,
   type TimelineKeyboardAction,
 } from '@/components/videobook/CanonicalSequencePlayer'
@@ -3113,9 +3119,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       candidate.artifactId === reference
       || candidate.cellAddress.toLowerCase() === reference.toLowerCase())
     const asset = assetById.get(mention?.artifactId ?? reference) ?? mention ?? null
+    const draft = xPostDraftFromParams(plan.params)
     return {
       asset,
-      postText: pendingRoutedActionReview?.postText ?? '',
+      draft,
+      error: xPostDraftError(draft),
       sourceLabel: mention
         ? `@${mention.cellAddress}`
         : rawReference.startsWith('@')
@@ -3124,7 +3132,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             ? `@${reference}`
             : 'Selected media',
     }
-  }, [assetById, commandMentionAssets, pendingChatAction, pendingRoutedActionReview])
+  }, [assetById, commandMentionAssets, pendingChatAction])
   const pendingGenerationConnectedInputs = useMemo(
     () => pendingGenerationDraft && notebook
       ? notebookChatGenerationConnectedInputs(pendingGenerationDraft, notebook)
@@ -4183,6 +4191,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setPendingWatermarkReview(null)
     focusCommandComposer()
   }, [focusCommandComposer])
+  const updatePendingXPostDraft = useCallback((patch: XPostDraftPatch) => {
+    setPendingChatAction((current) => {
+      if (current?.kind !== 'routed') return current
+      if (current.plan.tool !== 'post' && current.plan.routedTool !== 'post') {
+        return current
+      }
+      return {
+        ...current,
+        plan: {
+          ...current.plan,
+          params: reviseXPostParams(current.plan.params, patch),
+        },
+      }
+    })
+  }, [])
   const updatePendingSplitSelection = useCallback((next: {
     cutPointsSeconds: number[]
     outputMode: NotebookSplitOutputMode
@@ -8371,6 +8394,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return await applyPendingGenerationAction(pendingChatAction, promptOverride)
     }
     if (
+      pendingChatAction.kind === 'routed'
+      && (pendingChatAction.plan.tool === 'post'
+        || pendingChatAction.plan.routedTool === 'post')
+    ) {
+      const error = xPostDraftError(xPostDraftFromParams(
+        pendingChatAction.plan.params,
+      ))
+      if (error) {
+        return { ok: false, message: error, nextInput: '/apply', selectInput: false }
+      }
+    }
+    if (
       pendingChatAction.kind === 'frame'
       || pendingChatAction.kind === 'split'
       || pendingChatAction.kind === 'notebook'
@@ -11506,7 +11541,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           && pendingChatAction.kind !== 'generation'
           && (pendingChatAction.kind !== 'split' || !pendingSplitReview) && (
           <aside
-            className="command-plan-drawer"
+            className={`command-plan-drawer${pendingXPostPreview
+              ? ' x-post-chat-review'
+              : ''}`}
             aria-label="Chat action review"
             aria-keyshortcuts="Escape"
           >
@@ -11523,7 +11560,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   type="submit"
                   form={COMMAND_COMPOSER_FORM_ID}
                   className="command-plan-apply"
-                  disabled={busy}
+                  disabled={busy || Boolean(pendingXPostPreview?.error)}
                 >
                   <Check size={14} />{pendingXPostPreview ? 'Post to X' : 'Apply'}
                 </button>
@@ -11606,7 +11643,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   </div>
                 )}
                 {pendingChatAction.kind === 'routed' && pendingXPostPreview && (
-                  <PostToXChatPreview {...pendingXPostPreview} />
+                  <PostToXChatPreview
+                    {...pendingXPostPreview}
+                    busy={busy}
+                    onChange={updatePendingXPostDraft}
+                  />
                 )}
               </div>
             </div>

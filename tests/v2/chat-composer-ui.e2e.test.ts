@@ -1427,7 +1427,7 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
-  it('shows the exact X post and media before cancel or apply', async () => {
+  it('edits X post options before cancel or apply', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     const prompt = 'post @a1 to X tomorrow morning with the launch message'
     const postText = 'The final cut is ready. Watch the full story, then tell me which moment stayed with you most.\nBehind the scenes: @videobook.'
@@ -1452,7 +1452,7 @@ describe('chat composer browser flow', () => {
           book_id: bookId,
           orientation: 'portrait',
           platform: 'x',
-          scheduled_for: '2026-08-25T03:00:00.000Z',
+          scheduled_for: '2099-08-25T03:00:00.000Z',
           text: postText,
         },
         message: 'Posting to X.',
@@ -1482,7 +1482,7 @@ describe('chat composer browser flow', () => {
       const settings = review.getByLabel('Action settings')
       expect(await settings.textContent()).toContain('DestinationX')
       expect(await settings.textContent()).toContain('Source@a1')
-      expect(await settings.textContent()).toContain('Scheduled · 2026-08-25T03:00:00.000Z')
+      expect(await settings.textContent()).toContain('Scheduled · 2099-08-25T03:00:00.000Z')
       expect(await settings.textContent()).toContain('OrientationPortrait')
 
       const postPreview = review.getByLabel('X post preview')
@@ -1490,11 +1490,29 @@ describe('chat composer browser flow', () => {
       await previewVideo.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await previewVideo.getAttribute('src')).toContain('/files/')
       expect(await previewVideo.getAttribute('controls')).not.toBeNull()
-      expect(await postPreview.locator('.x-post-chat-preview-copy p').textContent())
-        .toBe(postText)
+      const message = postPreview.getByLabel('Message')
+      const publish = postPreview.getByLabel('Publish timing')
+      const orientation = postPreview.getByLabel('Video orientation')
+      expect(await message.inputValue()).toBe(postText)
+      expect(await publish.inputValue()).toBe('schedule')
+      expect(await orientation.inputValue()).toBe('portrait')
+      const schedule = postPreview.getByLabel('Schedule date and time')
+      expect(await schedule.inputValue()).not.toBe('')
       expect(await postPreview.getByText(`${postText.length}/280 characters`).count()).toBe(1)
       expect(await appliedCalls()).toHaveLength(0)
 
+      await schedule.fill('')
+      await postPreview.getByRole('alert').getByText('Choose a valid date and time.')
+        .waitFor({ state: 'visible' })
+      expect(await review.getByRole('button', { name: 'Post to X' }).isDisabled()).toBe(true)
+      await message.fill('This cancelled edit must not be posted.')
+      await publish.selectOption('now')
+      await orientation.selectOption('source')
+      expect(await postPreview.getByLabel('Schedule date and time').count()).toBe(0)
+      expect(await postPreview.getByRole('alert').count()).toBe(0)
+      expect(await review.getByRole('button', { name: 'Post to X' }).isEnabled()).toBe(true)
+      expect(await settings.textContent()).toContain('PublishNow')
+      expect(await settings.textContent()).toContain('OrientationKeep source')
       await review.getByRole('button', { name: /Cancel/ }).click()
       await expect.poll(async () => await review.count()).toBe(0)
       expect(appliedCalls()).toHaveLength(0)
@@ -1502,13 +1520,40 @@ describe('chat composer browser flow', () => {
       await input.fill(prompt)
       await page.getByLabel('Send command').click()
       await review.waitFor({ state: 'visible', timeout: 30_000 })
+      expect(await review.getByLabel('Message').inputValue()).toBe(postText)
+      expect(await review.getByLabel('Publish timing').inputValue()).toBe('schedule')
+      expect(await review.getByLabel('Video orientation').inputValue()).toBe('portrait')
+      const editedPostText = 'Edited in the confirmation screen.\nReady for the scheduled launch.'
+      const editedLocalSchedule = '2099-09-01T11:30'
+      const editedSchedule = new Date(editedLocalSchedule).toISOString()
+      await review.getByLabel('Message').fill(editedPostText)
+      await review.getByLabel('Video orientation').selectOption('landscape')
+      await review.getByLabel('Schedule date and time').fill(editedLocalSchedule)
+      expect(await settings.textContent()).toContain(`Scheduled · ${editedSchedule}`)
+      expect(await settings.textContent()).toContain('OrientationLandscape')
       await review.getByRole('button', { name: 'Post to X' }).click()
       await expect.poll(() => appliedCalls().length).toBe(1)
       await expect.poll(async () => await review.count()).toBe(0)
       const appliedPlan = record(appliedCalls()[0]?.arguments.action_plan)
       const appliedParams = record(appliedPlan?.params)
-      expect(appliedParams?.text).toBe(postText)
+      expect(appliedParams?.text).toBe(editedPostText)
       expect(appliedParams?.asset_id).toBe(videoArtifactId)
+      expect(appliedParams?.scheduled_for).toBe(editedSchedule)
+      expect(appliedParams?.orientation).toBe('landscape')
+
+      await input.fill(prompt)
+      await page.getByLabel('Send command').click()
+      await review.waitFor({ state: 'visible', timeout: 30_000 })
+      await review.getByLabel('Message').fill('')
+      await review.getByLabel('Publish timing').selectOption('now')
+      await review.getByLabel('Video orientation').selectOption('source')
+      await review.getByRole('button', { name: 'Post to X' }).click()
+      await expect.poll(() => appliedCalls().length).toBe(2)
+      const clearedPlan = record(appliedCalls()[1]?.arguments.action_plan)
+      const clearedParams = record(clearedPlan?.params)
+      expect(clearedParams).not.toHaveProperty('text')
+      expect(clearedParams).not.toHaveProperty('scheduled_for')
+      expect(clearedParams).not.toHaveProperty('orientation')
     } finally {
       mockedChatActionPlan = null
     }
