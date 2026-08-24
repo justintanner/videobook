@@ -2,8 +2,12 @@ import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Check, X } from 'lucide-react'
 import {
+  MAX_HANDLE_PADDING,
+  MAX_HANDLE_ROUNDING,
   MAX_HANDLE_VERTICAL_PERCENT,
   MAX_WATERMARK_OPACITY,
+  MIN_HANDLE_PADDING,
+  MIN_HANDLE_ROUNDING,
   MIN_HANDLE_VERTICAL_PERCENT,
   MIN_WATERMARK_OPACITY,
   WATERMARK_POSITIONS,
@@ -25,6 +29,8 @@ export interface WatermarkReviewState {
   handleVerticalPercent: number
   includeXIcon: boolean
   includeHandleBorder: boolean
+  handlePadding: number
+  handleRounding: number
   qrOpacity: number
   handleOpacity: number
   qrStartSeconds: number
@@ -45,6 +51,8 @@ type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
   | 'handleVerticalPercent'
   | 'includeXIcon'
   | 'includeHandleBorder'
+  | 'handlePadding'
+  | 'handleRounding'
   | 'qrOpacity'
   | 'handleOpacity'
   | 'qrStartSeconds'
@@ -126,6 +134,11 @@ function buildQrPreviewPath(): string {
 }
 
 const QR_PREVIEW_PATH = buildQrPreviewPath()
+const HANDLE_BADGE_WIDTH = 480
+const HANDLE_BADGE_HEIGHT = 88
+const HANDLE_ICON_SIZE = 26
+const HANDLE_ICON_GAP = 14
+const HANDLE_FONT_SIZE = 28
 
 function WatermarkQrPreview() {
   return (
@@ -221,6 +234,43 @@ function WatermarkOpacityControl({
         value={percent}
         disabled={busy}
         onChange={(event) => onChange(Number(event.target.value) / 100)}
+      />
+    </div>
+  )
+}
+
+function WatermarkIntegerControl({
+  id,
+  label,
+  value,
+  min,
+  max,
+  suffix,
+  busy,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: number
+  min: number
+  max: number
+  suffix: string
+  busy: boolean
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="watermark-range-setting">
+      <label htmlFor={id}>{label}</label>
+      <output htmlFor={id}>{value}{suffix}</output>
+      <input
+        id={id}
+        type="range"
+        min={min}
+        max={max}
+        step="1"
+        value={value}
+        disabled={busy}
+        onChange={(event) => onChange(Number(event.target.value))}
       />
     </div>
   )
@@ -380,6 +430,37 @@ function previewHandleStyle(
   }
 }
 
+function previewHandlePillStyle(
+  handle: string,
+  includeXIcon: boolean,
+  padding: number,
+  rounding: number,
+): CSSProperties {
+  const iconSpace = includeXIcon ? HANDLE_ICON_SIZE + HANDLE_ICON_GAP : 0
+  const availableWidth = HANDLE_BADGE_WIDTH - 2 - padding * 2 - iconSpace
+  const fontSize = Math.max(
+    12,
+    Math.min(
+      HANDLE_FONT_SIZE,
+      Math.floor(availableWidth / (0.6 * Math.max(1, Array.from(handle).length))),
+    ),
+  )
+  const labelWidth = Math.min(
+    availableWidth,
+    fontSize * 0.6 * Array.from(handle).length,
+  )
+  const pillWidth = Math.min(
+    HANDLE_BADGE_WIDTH - 2,
+    Math.ceil(iconSpace + labelWidth + padding * 2),
+  )
+  const radius = ((HANDLE_BADGE_HEIGHT - 2) / 2) * (rounding / 100)
+  return {
+    width: `${(pillWidth / HANDLE_BADGE_WIDTH) * 100}%`,
+    paddingInline: `${(padding / HANDLE_BADGE_WIDTH) * 100}%`,
+    borderRadius: `${(radius / pillWidth) * 100}% / ${(radius / HANDLE_BADGE_HEIGHT) * 100}%`,
+  }
+}
+
 export function WatermarkChatReview({
   applyFormId,
   busy,
@@ -523,7 +604,7 @@ export function WatermarkChatReview({
               </span>
             )}
             <span
-              className={`watermark-preview-overlay watermark-preview-handle${state.includeHandleBorder ? '' : ' without-border'}`}
+              className="watermark-preview-overlay watermark-preview-handle"
               style={{
                 ...previewHandleStyle(
                   previewWidth,
@@ -534,8 +615,18 @@ export function WatermarkChatReview({
               }}
               aria-hidden="true"
             >
-              {state.includeXIcon && <WatermarkXIcon />}
-              <span>{handle || 'handle'}</span>
+              <span
+                className={`watermark-preview-handle-pill${state.includeHandleBorder ? '' : ' without-border'}`}
+                style={previewHandlePillStyle(
+                  handle || 'handle',
+                  state.includeXIcon,
+                  state.handlePadding,
+                  state.handleRounding,
+                )}
+              >
+                {state.includeXIcon && <WatermarkXIcon />}
+                <span>{handle || 'handle'}</span>
+              </span>
             </span>
             {state.includeQr && state.position === 'auto' && (
               <span className="watermark-auto-preview">AUTO · QR previewing bottom right</span>
@@ -594,6 +685,7 @@ export function WatermarkChatReview({
                 duration,
               )}
             </span>
+            <span>Padding {state.handlePadding}px · rounding {state.handleRounding}%</span>
             <span>Rebuilds playable proxy</span>
           </div>
         </section>
@@ -681,6 +773,26 @@ export function WatermarkChatReview({
                 onChange={(event) => onChange({ includeHandleBorder: event.target.checked })}
               />
             </label>
+            <WatermarkIntegerControl
+              id="watermark-handle-padding"
+              label="Handle padding"
+              value={state.handlePadding}
+              min={MIN_HANDLE_PADDING}
+              max={MAX_HANDLE_PADDING}
+              suffix="px"
+              busy={busy}
+              onChange={(handlePadding) => onChange({ handlePadding })}
+            />
+            <WatermarkIntegerControl
+              id="watermark-handle-rounding"
+              label="Corner rounding"
+              value={state.handleRounding}
+              min={MIN_HANDLE_ROUNDING}
+              max={MAX_HANDLE_ROUNDING}
+              suffix="%"
+              busy={busy}
+              onChange={(handleRounding) => onChange({ handleRounding })}
+            />
             {state.includeQr && (
               <WatermarkOpacityControl
                 id="watermark-qr-opacity"

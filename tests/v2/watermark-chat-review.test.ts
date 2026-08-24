@@ -25,6 +25,8 @@ function renderWatermark(overrides: Partial<WatermarkReviewState> = {}): string 
       handleVerticalPercent: 33,
       includeXIcon: true,
       includeHandleBorder: true,
+      handlePadding: 48,
+      handleRounding: 60,
       qrOpacity: 0.35,
       handleOpacity: 0.7,
       qrStartSeconds: 0,
@@ -54,6 +56,7 @@ describe('watermark chat review', () => {
     expect(html).toContain('controls')
     expect(html).toContain('watermark-preview-overlay watermark-preview-qr')
     expect(html).toContain('watermark-preview-overlay watermark-preview-handle')
+    expect(html).toContain('watermark-preview-handle-pill')
     expect(html).toContain('top:33%;left:50%;transform:translate(-50%, -50%)')
     const qrPath = html.match(/class="watermark-preview-qr-modules"[^>]*>\s*<path d="([^"]+)"/)?.[1]
     expect(qrPath?.match(/M/g)).toHaveLength(541)
@@ -63,7 +66,10 @@ describe('watermark chat review', () => {
     expect(html).not.toContain('lucide-qr-code')
     expect(html).toContain('aria-label="Middle center" aria-pressed="true"')
     expect(html).toContain('type="range" min="10" max="90" step="1" value="33"')
+    expect(html).toContain('id="watermark-handle-padding" type="range" min="0" max="96" step="1" value="48"')
+    expect(html).toContain('id="watermark-handle-rounding" type="range" min="0" max="100" step="1" value="60"')
     expect(html).toContain('33% from top')
+    expect(html).toContain('Padding 48px · rounding 60%')
     expect(html.match(/type="number"/g)).toHaveLength(4)
     expect(html).toContain('QR 35% · 0.0s–4.0s')
     expect(html).toContain('Handle 70% · 0.0s–8.0s')
@@ -81,6 +87,8 @@ describe('watermark chat review', () => {
       handleVerticalPercent: 68,
       includeXIcon: false,
       includeHandleBorder: false,
+      handlePadding: 0,
+      handleRounding: 0,
       handleOpacity: 0.6,
       handleStartSeconds: 1,
       handleEndSeconds: null,
@@ -92,7 +100,8 @@ describe('watermark chat review', () => {
     expect(html).toContain('aria-label="Top left" aria-pressed="true"')
     expect(html).toContain('top:68%;left:50%;transform:translate(-50%, -50%)')
     expect(html).toContain('68% from top')
-    expect(html).toContain('watermark-preview-handle without-border')
+    expect(html).toContain('watermark-preview-handle-pill without-border')
+    expect(html).toContain('padding-inline:0%;border-radius:0% / 0%')
     expect(html).not.toContain('watermark-preview-x-icon')
     expect(html).toContain('Handle 60% · 1.0s–12.0s')
     expect(html.match(/type="number"/g)).toHaveLength(2)

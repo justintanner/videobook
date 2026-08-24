@@ -30,6 +30,8 @@ type ApplyResult = {
   requested_position: string;
   include_x_icon: boolean;
   include_handle_border: boolean;
+  handle_padding: number;
+  handle_rounding: number;
   start_seconds: number | null;
   end_seconds: number | null;
   qr_start_seconds: number | null;
@@ -121,6 +123,8 @@ describe("apply_watermark tool", () => {
     expect(parsed.opacity).toBe(0.5);
     expect(parsed.handle).toBe("someone");
     expect(parsed.url).toBe("https://x.com/someone");
+    expect(parsed.handle_padding).toBe(32);
+    expect(parsed.handle_rounding).toBe(100);
 
     const card = fs.artifacts.get(parsed.card_asset_id);
     expect(card.ok && card.value.kind).toBe("image");
@@ -175,10 +179,12 @@ describe("apply_watermark tool", () => {
       "original",
     );
     if (!cardMeta.ok) throw new Error(cardMeta.error.message);
-    expect(cardMeta.value.layout).toBe("handle-v3");
+    expect(cardMeta.value.layout).toBe("handle-v4");
     expect(cardMeta.value.include_qr).toBe(false);
     expect(cardMeta.value.include_x_icon).toBe(true);
     expect(cardMeta.value.include_handle_border).toBe(true);
+    expect(cardMeta.value.handle_padding).toBe(32);
+    expect(cardMeta.value.handle_rounding).toBe(100);
     expect(cardMeta.value.height).toBe(88);
 
     for (const orient of ORIENTATIONS) {
@@ -219,6 +225,15 @@ describe("apply_watermark tool", () => {
     });
     expect(alternateAppearance.card_asset_id).not.toBe(first.card_asset_id);
 
+    const alternateGeometry = await apply({
+      asset_id: firstAsset,
+      handle: "someone",
+      handle_padding: 64,
+      handle_rounding: 25,
+      mode: "overlay",
+    });
+    expect(alternateGeometry.card_asset_id).not.toBe(first.card_asset_id);
+
     // A different handle mints a fresh badge instead of reusing the old one.
     const other = await apply({ asset_id: firstAsset, handle: "other", mode: "overlay" });
     expect(other.card_asset_id).not.toBe(first.card_asset_id);
@@ -254,6 +269,8 @@ describe("apply_watermark tool", () => {
       handle_vertical_percent: 62,
       include_x_icon: false,
       include_handle_border: false,
+      handle_padding: 64,
+      handle_rounding: 25,
       qr_opacity: 0.35,
       handle_opacity: 0.7,
       qr_start_seconds: 0.1,
@@ -270,6 +287,8 @@ describe("apply_watermark tool", () => {
     expect(parsed.handle_opacity).toBe(0.7);
     expect(parsed.include_x_icon).toBe(false);
     expect(parsed.include_handle_border).toBe(false);
+    expect(parsed.handle_padding).toBe(64);
+    expect(parsed.handle_rounding).toBe(25);
     expect(parsed.start_seconds).toBeNull();
     expect(parsed.end_seconds).toBeNull();
     expect(parsed.qr_start_seconds).toBe(0.1);
@@ -293,10 +312,12 @@ describe("apply_watermark tool", () => {
     if (!handleMeta.ok) throw new Error(handleMeta.error.message);
     expect(qrMeta.value.layout).toBe("qr-v1");
     expect(qrMeta.value.include_handle).toBe(false);
-    expect(handleMeta.value.layout).toBe("handle-v3");
+    expect(handleMeta.value.layout).toBe("handle-v4");
     expect(handleMeta.value.include_qr).toBe(false);
     expect(handleMeta.value.include_x_icon).toBe(false);
     expect(handleMeta.value.include_handle_border).toBe(false);
+    expect(handleMeta.value.handle_padding).toBe(64);
+    expect(handleMeta.value.handle_rounding).toBe(25);
 
     const after = await fs.files.manifest(assetId);
     if (!after.ok) throw new Error(after.error.message);

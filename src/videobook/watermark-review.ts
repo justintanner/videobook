@@ -22,6 +22,12 @@ export const MAX_HANDLE_VERTICAL_PERCENT = 90
 export const DEFAULT_WATERMARK_OPACITY = 0.5
 export const MIN_WATERMARK_OPACITY = 0.05
 export const MAX_WATERMARK_OPACITY = 1
+export const DEFAULT_HANDLE_PADDING = 32
+export const MIN_HANDLE_PADDING = 0
+export const MAX_HANDLE_PADDING = 96
+export const DEFAULT_HANDLE_ROUNDING = 100
+export const MIN_HANDLE_ROUNDING = 0
+export const MAX_HANDLE_ROUNDING = 100
 
 export function clampHandleVerticalPercent(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_HANDLE_VERTICAL_PERCENT
@@ -31,6 +37,16 @@ export function clampHandleVerticalPercent(value: number): number {
 export function clampWatermarkOpacity(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_WATERMARK_OPACITY
   return Math.min(MAX_WATERMARK_OPACITY, Math.max(MIN_WATERMARK_OPACITY, value))
+}
+
+export function clampHandlePadding(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_HANDLE_PADDING
+  return Math.round(Math.min(MAX_HANDLE_PADDING, Math.max(MIN_HANDLE_PADDING, value)))
+}
+
+export function clampHandleRounding(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_HANDLE_ROUNDING
+  return Math.round(Math.min(MAX_HANDLE_ROUNDING, Math.max(MIN_HANDLE_ROUNDING, value)))
 }
 
 export function isWatermarkPosition(value: unknown): value is WatermarkPosition {

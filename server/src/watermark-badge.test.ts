@@ -122,15 +122,20 @@ describe("buildWatermarkBadgePng", () => {
 
     const raw = await sharp(badge).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     let iconPixels = 0;
+    const iconRows: number[] = [];
     const textRows: number[] = [];
     for (let y = 8; y < HANDLE_ONLY_BADGE_HEIGHT - 8; y += 1) {
       for (let x = 20; x < BADGE_WIDTH - 20; x += 1) {
         const offset = (y * raw.info.width + x) * 4;
         const isLight = raw.data[offset] > 200
           && raw.data[offset + 1] > 200
-          && raw.data[offset + 2] > 200;
+          && raw.data[offset + 2] > 200
+          && raw.data[offset + 3] > 200;
         if (!isLight) continue;
-        if (x >= 150 && x < 178) iconPixels += 1;
+        if (x >= 150 && x < 178) {
+          iconPixels += 1;
+          iconRows.push(y);
+        }
         if (x >= 190 && x < BADGE_WIDTH - 90) textRows.push(y);
       }
     }
@@ -138,10 +143,17 @@ describe("buildWatermarkBadgePng", () => {
     expect(textRows.length).toBeGreaterThan(0);
     const textTop = Math.min(...textRows);
     const textBottom = Math.max(...textRows);
+    const iconTop = Math.min(...iconRows);
+    const iconBottom = Math.max(...iconRows);
     expect(Math.abs((textTop + textBottom) / 2 - HANDLE_ONLY_BADGE_HEIGHT / 2))
       .toBeLessThanOrEqual(1);
+    expect(Math.abs((iconTop + iconBottom) / 2 - (textTop + textBottom) / 2))
+      .toBeLessThanOrEqual(1);
     expect(textBottom - textTop + 1).toBeLessThanOrEqual(28);
-    const borderOffset = (44 * raw.info.width + 1) * 4;
+    const left = Array.from({ length: raw.info.width }, (_, x) => x)
+      .find((x) => raw.data[(44 * raw.info.width + x) * 4 + 3] > 0);
+    expect(left).toBeDefined();
+    const borderOffset = (44 * raw.info.width + (left ?? 0)) * 4;
     expect(raw.data[borderOffset]).toBeGreaterThan(100);
     expect(watermarkHandleLabel("@someone")).toBe("someone");
   });
@@ -164,8 +176,48 @@ describe("buildWatermarkBadgePng", () => {
       }
     }
     expect(iconPixels).toBe(0);
-    const borderOffset = (44 * raw.info.width + 1) * 4;
+    const left = Array.from({ length: raw.info.width }, (_, x) => x)
+      .find((x) => raw.data[(44 * raw.info.width + x) * 4 + 3] > 0);
+    expect(left).toBeDefined();
+    const borderOffset = (44 * raw.info.width + (left ?? 0)) * 4;
     expect(raw.data[borderOffset]).toBeLessThan(50);
+  });
+
+  it("adjusts horizontal padding and corner rounding", async () => {
+    const compact = await buildWatermarkBadgePng(URL, "someone", {
+      includeQr: false,
+      includeXIcon: false,
+      includeHandleBorder: false,
+      handlePadding: 8,
+      handleRounding: 0,
+    });
+    const roomy = await buildWatermarkBadgePng(URL, "someone", {
+      includeQr: false,
+      includeXIcon: false,
+      includeHandleBorder: false,
+      handlePadding: 64,
+      handleRounding: 0,
+    });
+    const rounded = await buildWatermarkBadgePng(URL, "someone", {
+      includeQr: false,
+      includeXIcon: false,
+      includeHandleBorder: false,
+      handlePadding: 8,
+      handleRounding: 100,
+    });
+    const rawCompact = await sharp(compact).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const rawRoomy = await sharp(roomy).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const rawRounded = await sharp(rounded).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const visibleWidth = (raw: typeof rawCompact): number => {
+      const xs = Array.from({ length: raw.info.width }, (_, x) => x)
+        .filter((x) => raw.data[(44 * raw.info.width + x) * 4 + 3] > 0);
+      return Math.max(...xs) - Math.min(...xs) + 1;
+    };
+    expect(visibleWidth(rawRoomy)).toBeGreaterThan(visibleWidth(rawCompact));
+    const compactLeft = Math.floor((BADGE_WIDTH - visibleWidth(rawCompact)) / 2);
+    const cornerOffset = (1 * rawCompact.info.width + compactLeft) * 4 + 3;
+    expect(rawCompact.data[cornerOffset]).toBeGreaterThan(200);
+    expect(rawRounded.data[cornerOffset]).toBeLessThan(20);
   });
 
   it("renders a QR-only tile without the handle pill", async () => {

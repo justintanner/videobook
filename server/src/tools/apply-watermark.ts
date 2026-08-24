@@ -25,9 +25,15 @@ import {
 import type { Orientation, OsgPosition } from "../remotion/subtitles/types.js";
 import {
   createWatermarkAsset,
+  DEFAULT_HANDLE_PADDING,
+  DEFAULT_HANDLE_ROUNDING,
   DEFAULT_HANDLE,
   defaultUrl,
   findWatermarkAsset,
+  MAX_HANDLE_PADDING,
+  MAX_HANDLE_ROUNDING,
+  MIN_HANDLE_PADDING,
+  MIN_HANDLE_ROUNDING,
   QR_ONLY_BADGE_ASPECT,
   watermarkBadgeAspect,
 } from "../watermark-badge.js";
@@ -60,6 +66,8 @@ type WatermarkPositionOption = "auto" | OsgPosition;
 type WatermarkAssetAppearance = {
   includeXIcon: boolean;
   includeHandleBorder: boolean;
+  handlePadding: number;
+  handleRounding: number;
 };
 
 type WatermarkAssetResolution =
@@ -116,7 +124,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
   return {
     name: "apply_watermark",
     description:
-      "Previewed watermark apply for video: burns a positioned QR plus a separate horizontally centered plain X handle. Burn mode supports optional X icon and handle border, independent QR/handle opacity, independent visibility windows, and adjustable handle height. The QR can be disabled. Pass mode=overlay to store the legacy single-card render-time overlay instead.",
+      "Previewed watermark apply for video: burns a positioned QR plus a separate horizontally centered plain X handle. Burn mode supports optional X icon and handle border, adjustable handle padding and corner rounding, independent QR/handle opacity, independent visibility windows, and adjustable handle height. The QR can be disabled. Pass mode=overlay to store the legacy single-card render-time overlay instead.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Video asset id to watermark"),
@@ -148,6 +156,20 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         .boolean()
         .optional()
         .describe("Draw a border around the handle pill (default true)"),
+      handle_padding: z
+        .number()
+        .int()
+        .min(MIN_HANDLE_PADDING)
+        .max(MAX_HANDLE_PADDING)
+        .optional()
+        .describe(`Horizontal handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING})`),
+      handle_rounding: z
+        .number()
+        .int()
+        .min(MIN_HANDLE_ROUNDING)
+        .max(MAX_HANDLE_ROUNDING)
+        .optional()
+        .describe(`Handle corner rounding percent (default ${DEFAULT_HANDLE_ROUNDING}; range ${MIN_HANDLE_ROUNDING}-${MAX_HANDLE_ROUNDING})`),
       start_seconds: z
         .number()
         .min(0)
@@ -223,6 +245,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         handle_vertical_percent = DEFAULT_HANDLE_VERTICAL_PERCENT,
         include_x_icon = true,
         include_handle_border = true,
+        handle_padding = DEFAULT_HANDLE_PADDING,
+        handle_rounding = DEFAULT_HANDLE_ROUNDING,
         start_seconds,
         end_seconds,
         qr_start_seconds,
@@ -246,6 +270,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         handle_vertical_percent?: number;
         include_x_icon?: boolean;
         include_handle_border?: boolean;
+        handle_padding?: number;
+        handle_rounding?: number;
         start_seconds?: number;
         end_seconds?: number;
         opacity?: number;
@@ -297,6 +323,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       const appearance: WatermarkAssetAppearance = {
         includeXIcon: include_x_icon,
         includeHandleBorder: include_handle_border,
+        handlePadding: handle_padding,
+        handleRounding: handle_rounding,
       };
 
       let cardAssetId: string;
@@ -429,6 +457,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         handle_vertical_percent,
         include_x_icon,
         include_handle_border,
+        handle_padding,
+        handle_rounding,
         start_seconds: start_seconds ?? null,
         end_seconds: end_seconds ?? null,
         qr_start_seconds: resolvedQrStartSeconds ?? null,

@@ -1431,6 +1431,8 @@ describe('chat composer browser flow', () => {
           handle_vertical_percent: 41,
           include_x_icon: true,
           include_handle_border: true,
+          handle_padding: 48,
+          handle_rounding: 60,
           qr_opacity: 0.45,
           handle_opacity: 0.55,
         },
@@ -1462,6 +1464,7 @@ describe('chat composer browser flow', () => {
       expect(await review.locator('video').count()).toBe(1)
       expect(await review.getByLabel('X handle').inputValue()).toBe('justinwtanner')
       const previewHandle = review.locator('.watermark-preview-handle')
+      const previewHandlePill = previewHandle.locator('.watermark-preview-handle-pill')
       expect((await previewHandle.textContent())?.trim()).toBe('justinwtanner')
       expect(await previewHandle.locator('.watermark-preview-x-icon').count()).toBe(1)
       expect(await previewHandle.evaluate((element) => {
@@ -1478,6 +1481,13 @@ describe('chat composer browser flow', () => {
         fontSize: 15,
         opacity: 0.55,
       })
+      expect(await previewHandlePill.evaluate((element) => {
+        const icon = element.querySelector('.watermark-preview-x-icon')?.getBoundingClientRect()
+        const label = element.querySelector('span')?.getBoundingClientRect()
+        return icon && label
+          ? Math.abs((icon.top + icon.bottom) / 2 - (label.top + label.bottom) / 2)
+          : null
+      })).toBeLessThanOrEqual(1)
       const previewQrPath = await review.locator('.watermark-preview-qr-modules path')
         .getAttribute('d')
       expect(previewQrPath?.match(/M/g)).toHaveLength(541)
@@ -1491,6 +1501,8 @@ describe('chat composer browser flow', () => {
       expect(await previewHandle.evaluate((element) => element.style.top)).toBe('41%')
       expect(await review.getByRole('slider', { name: 'QR opacity' }).inputValue()).toBe('45')
       expect(await review.getByRole('slider', { name: 'Handle opacity' }).inputValue()).toBe('55')
+      expect(await review.getByRole('slider', { name: 'Handle padding' }).inputValue()).toBe('48')
+      expect(await review.getByRole('slider', { name: 'Corner rounding' }).inputValue()).toBe('60')
       expect(await review.locator('input[type="number"]').count()).toBe(4)
       await expect.poll(async () => await input.inputValue()).toBe('/apply')
 
@@ -1500,10 +1512,16 @@ describe('chat composer browser flow', () => {
       await handleVerticalPosition.fill('62')
       expect(await previewHandle.evaluate((element) => element.style.top)).toBe('62%')
       expect(await review.getByText('62% from top').count()).toBeGreaterThan(0)
+      const initialPillWidth = await previewHandlePill.evaluate((element) =>
+        element.getBoundingClientRect().width)
+      await review.getByRole('slider', { name: 'Handle padding' }).fill('64')
+      await expect.poll(async () => await previewHandlePill.evaluate((element) =>
+        element.getBoundingClientRect().width)).toBeGreaterThan(initialPillWidth)
+      await review.getByRole('slider', { name: 'Corner rounding' }).fill('25')
       await review.getByRole('checkbox', { name: 'Show X icon' }).uncheck()
       await review.getByRole('checkbox', { name: 'Handle border' }).uncheck()
       expect(await previewHandle.locator('.watermark-preview-x-icon').count()).toBe(0)
-      expect(await previewHandle.getAttribute('class')).toContain('without-border')
+      expect(await previewHandlePill.getAttribute('class')).toContain('without-border')
       await review.getByRole('slider', { name: 'QR opacity' }).fill('35')
       await review.getByRole('slider', { name: 'Handle opacity' }).fill('70')
       await review.getByRole('spinbutton', { name: 'QR start' }).fill('0.1')
@@ -1525,6 +1543,8 @@ describe('chat composer browser flow', () => {
         handle_vertical_percent: 62,
         include_x_icon: false,
         include_handle_border: false,
+        handle_padding: 64,
+        handle_rounding: 25,
         qr_opacity: 0.35,
         handle_opacity: 0.7,
         qr_start_seconds: 0.1,
@@ -1544,6 +1564,8 @@ describe('chat composer browser flow', () => {
       }).inputValue()).toBe('33')
       expect(await review.getByRole('checkbox', { name: 'Show X icon' }).isChecked()).toBe(true)
       expect(await review.getByRole('checkbox', { name: 'Handle border' }).isChecked()).toBe(true)
+      expect(await review.getByRole('slider', { name: 'Handle padding' }).inputValue()).toBe('32')
+      expect(await review.getByRole('slider', { name: 'Corner rounding' }).inputValue()).toBe('100')
       expect(await review.getByRole('slider', { name: 'QR opacity' }).inputValue()).toBe('50')
       expect(await review.getByRole('slider', { name: 'Handle opacity' }).inputValue()).toBe('50')
       await review.getByRole('button', { name: 'Cancel' }).click()

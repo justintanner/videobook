@@ -9287,12 +9287,7 @@ textarea:focus-visible {
   min-width: 0;
   align-items: center;
   justify-content: center;
-  gap: 5%;
-  padding: 0 8%;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  border-radius: 999px;
   color: #fff;
-  background: rgba(11, 11, 15, 0.92);
   font-family: Arial, sans-serif;
   font-size: clamp(8px, 1.15vw, 15px);
   font-weight: 700;
@@ -9300,23 +9295,35 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.watermark-preview-handle.without-border {
+.watermark-preview-handle-pill {
+  box-sizing: border-box;
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(11, 11, 15, 0.92);
+}
+
+.watermark-preview-handle-pill.without-border {
   border-color: transparent;
 }
 
 .watermark-preview-x-icon {
+  display: block;
   width: 1em;
   height: 1em;
   flex: 0 0 auto;
 }
 
-.watermark-preview-handle > span {
+.watermark-preview-handle-pill > span {
   display: block;
   max-width: 100%;
   overflow: hidden;
   line-height: 1;
   text-overflow: ellipsis;
-  transform: translateY(0.1em);
 }
 
 .watermark-auto-preview {

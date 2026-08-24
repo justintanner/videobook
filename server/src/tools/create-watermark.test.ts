@@ -69,6 +69,8 @@ describe("create_watermark tool", () => {
         handle: "@someone",
         include_x_icon: false,
         include_handle_border: false,
+        handle_padding: 64,
+        handle_rounding: 25,
       },
     });
 
@@ -79,6 +81,8 @@ describe("create_watermark tool", () => {
       url: string;
       include_x_icon: boolean;
       include_handle_border: boolean;
+      handle_padding: number;
+      handle_rounding: number;
     };
     const artifact = fs.artifacts.get(parsed.asset_id);
     expect(artifact.ok && artifact.value.kind).toBe("image");
@@ -86,6 +90,8 @@ describe("create_watermark tool", () => {
     expect(parsed.url).toBe("https://x.com/someone");
     expect(parsed.include_x_icon).toBe(false);
     expect(parsed.include_handle_border).toBe(false);
+    expect(parsed.handle_padding).toBe(64);
+    expect(parsed.handle_rounding).toBe(25);
 
     const manifest = await fs.files.manifest(parsed.asset_id);
     expect(manifest.ok).toBe(true);
@@ -115,6 +121,8 @@ describe("create_watermark tool", () => {
     expect(originalMeta.ok && originalMeta.value.origin).toBe("watermark");
     expect(originalMeta.ok && originalMeta.value.include_x_icon).toBe(false);
     expect(originalMeta.ok && originalMeta.value.include_handle_border).toBe(false);
+    expect(originalMeta.ok && originalMeta.value.handle_padding).toBe(64);
+    expect(originalMeta.ok && originalMeta.value.handle_rounding).toBe(25);
   });
 
   it("defaults the handle and derives the X URL", async () => {
@@ -124,9 +132,16 @@ describe("create_watermark tool", () => {
     });
 
     expect(result.isError).not.toBe(true);
-    const parsed = JSON.parse(resultText(result)) as { handle: string; url: string };
+    const parsed = JSON.parse(resultText(result)) as {
+      handle: string;
+      url: string;
+      handle_padding: number;
+      handle_rounding: number;
+    };
     expect(parsed.handle).toBe("justinwtanner");
     expect(parsed.url).toBe("https://x.com/justinwtanner");
+    expect(parsed.handle_padding).toBe(32);
+    expect(parsed.handle_rounding).toBe(100);
   });
 
   it("remembers used handles and the saved default", async () => {

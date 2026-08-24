@@ -129,8 +129,12 @@ import {
 } from './videobook/speak-preview'
 import { resolveWatermarkTarget } from './videobook/watermark-target'
 import {
+  clampHandlePadding,
+  clampHandleRounding,
   clampHandleVerticalPercent,
   clampWatermarkOpacity,
+  DEFAULT_HANDLE_PADDING,
+  DEFAULT_HANDLE_ROUNDING,
   DEFAULT_HANDLE_VERTICAL_PERCENT,
   DEFAULT_WATERMARK_OPACITY,
   isWatermarkPosition,
@@ -6093,6 +6097,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       handleVerticalPercent?: number
       includeXIcon?: boolean
       includeHandleBorder?: boolean
+      handlePadding?: number
+      handleRounding?: number
       qrOpacity?: number
       handleOpacity?: number
       qrStartSeconds?: number
@@ -6122,6 +6128,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         : clampHandleVerticalPercent(initial.handleVerticalPercent),
       includeXIcon: initial.includeXIcon ?? true,
       includeHandleBorder: initial.includeHandleBorder ?? true,
+      handlePadding: initial.handlePadding === undefined
+        ? DEFAULT_HANDLE_PADDING
+        : clampHandlePadding(initial.handlePadding),
+      handleRounding: initial.handleRounding === undefined
+        ? DEFAULT_HANDLE_ROUNDING
+        : clampHandleRounding(initial.handleRounding),
       qrOpacity: initial.qrOpacity === undefined
         ? DEFAULT_WATERMARK_OPACITY
         : clampWatermarkOpacity(initial.qrOpacity),
@@ -6176,6 +6188,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       handleVerticalPercent,
       includeXIcon,
       includeHandleBorder,
+      handlePadding,
+      handleRounding,
       qrOpacity,
       handleOpacity,
       qrStartSeconds,
@@ -6208,6 +6222,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         handle_vertical_percent: handleVerticalPercent,
         include_x_icon: includeXIcon,
         include_handle_border: includeHandleBorder,
+        handle_padding: handlePadding,
+        handle_rounding: handleRounding,
         handle_opacity: handleOpacity,
         ...(includeQr && url.trim() ? { url: url.trim() } : {}),
         ...(includeQr ? { qr_opacity: qrOpacity } : {}),
@@ -7859,6 +7875,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const qrOpacity = asNumber(plan.params.qr_opacity) ?? sharedOpacity
       const handleOpacity = asNumber(plan.params.handle_opacity) ?? sharedOpacity
       const handleVerticalPercent = asNumber(plan.params.handle_vertical_percent)
+      const handlePadding = asNumber(plan.params.handle_padding)
+      const handleRounding = asNumber(plan.params.handle_rounding)
       const requestedPosition = plan.params.position
       openWatermarkReview(target.artifactId, target.label, {
         ...(asString(plan.params.handle)
@@ -7881,6 +7899,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : {}),
         ...(typeof plan.params.include_handle_border === 'boolean'
           ? { includeHandleBorder: plan.params.include_handle_border }
+          : {}),
+        ...(handlePadding !== null
+          ? { handlePadding: clampHandlePadding(handlePadding) }
+          : {}),
+        ...(handleRounding !== null
+          ? { handleRounding: clampHandleRounding(handleRounding) }
           : {}),
         ...(qrOpacity !== null
           ? { qrOpacity: clampWatermarkOpacity(qrOpacity) }
