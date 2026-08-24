@@ -34,6 +34,7 @@ type ApplyResult = {
   qr_asset_id?: string | null;
   handle_asset_id?: string | null;
   handle_position?: string;
+  handle_vertical_percent: number;
   placement_source: string;
 };
 
@@ -231,6 +232,7 @@ describe("apply_watermark tool", () => {
       asset_id: assetId,
       handle: "someone",
       position: "top-center",
+      handle_vertical_percent: 62,
       start_seconds: 0.2,
       end_seconds: 0.8,
     });
@@ -243,7 +245,8 @@ describe("apply_watermark tool", () => {
     expect(parsed.end_seconds).toBe(0.8);
     expect(parsed.qr_asset_id).toBe(parsed.card_asset_id);
     expect(parsed.handle_asset_id).not.toBe(parsed.qr_asset_id);
-    expect(parsed.handle_position).toBe("center-two-thirds-up");
+    expect(parsed.handle_position).toBe("center");
+    expect(parsed.handle_vertical_percent).toBe(62);
 
     const qrMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(
       parsed.qr_asset_id!,

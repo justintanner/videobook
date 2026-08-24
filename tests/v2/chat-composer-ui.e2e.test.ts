@@ -1428,6 +1428,7 @@ describe('chat composer browser flow', () => {
         params: {
           asset_id: '@a1',
           handle: 'justinwtanner',
+          handle_vertical_percent: 41,
         },
         message: 'Applying watermark.',
         summary: 'Applying watermark.',
@@ -1477,12 +1478,20 @@ describe('chat composer browser flow', () => {
       expect(await review.getByRole('checkbox', { name: 'Include QR code' }).isChecked()).toBe(true)
       expect(await review.getByRole('button', { name: 'Auto' }).getAttribute('aria-pressed')).toBe('true')
       expect(await review.getByRole('button', { name: 'Top left' }).count()).toBe(1)
+      const handleVerticalPosition = review.getByRole('slider', {
+        name: 'Handle vertical position',
+      })
+      expect(await handleVerticalPosition.inputValue()).toBe('41')
+      expect(await previewHandle.evaluate((element) => element.style.top)).toBe('41%')
       expect(await review.locator('input[type="number"]').count()).toBe(2)
       await expect.poll(async () => await input.inputValue()).toBe('/apply')
 
       await review.getByRole('button', { name: 'Bottom left' }).click()
       expect(await review.getByRole('button', { name: 'Bottom left' })
         .getAttribute('aria-pressed')).toBe('true')
+      await handleVerticalPosition.fill('62')
+      expect(await previewHandle.evaluate((element) => element.style.top)).toBe('62%')
+      expect(await review.getByText('62% from top').count()).toBeGreaterThan(0)
       await review.getByRole('checkbox', { name: 'Include QR code' }).uncheck()
       expect(await review.getByText('Handle only').count()).toBeGreaterThan(0)
       await review.locator('input[type="number"]').nth(0).fill('0.5')
@@ -1497,6 +1506,7 @@ describe('chat composer browser flow', () => {
         handle: 'justinwtanner',
         include_qr: false,
         position: 'bottom-left',
+        handle_vertical_percent: 62,
         start_seconds: 0.5,
         end_seconds: 2.5,
       })
@@ -1507,6 +1517,9 @@ describe('chat composer browser flow', () => {
       expect(await page.locator('.watermark-chat-review').count()).toBe(1)
       expect(await page.locator('.watermark-backdrop, .watermark-dialog').count()).toBe(0)
       expect(await review.getByRole('button', { name: 'Top right' }).count()).toBe(1)
+      expect(await review.getByRole('slider', {
+        name: 'Handle vertical position',
+      }).inputValue()).toBe('33')
       await review.getByRole('button', { name: 'Cancel' }).click()
       expect(observedCalls.filter((call) => call.name === 'apply_watermark')).toHaveLength(
         initialApplyCalls + 1,

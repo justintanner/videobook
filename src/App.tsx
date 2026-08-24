@@ -129,7 +129,11 @@ import {
   resolveSpeakVoiceId,
 } from './videobook/speak-preview'
 import { resolveWatermarkTarget } from './videobook/watermark-target'
-import { isWatermarkPosition } from './videobook/watermark-review'
+import {
+  clampHandleVerticalPercent,
+  DEFAULT_HANDLE_VERTICAL_PERCENT,
+  isWatermarkPosition,
+} from './videobook/watermark-review'
 import {
   NotebookCellContextMenu,
   type NotebookCellContextAction,
@@ -6080,6 +6084,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       url?: string
       includeQr?: boolean
       position?: WatermarkReviewState['position']
+      handleVerticalPercent?: number
       startSeconds?: number
       endSeconds?: number | null
       saveDefault?: boolean
@@ -6100,6 +6105,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       url: initial.url ?? '',
       includeQr: initial.includeQr ?? true,
       position: initial.position ?? 'auto',
+      handleVerticalPercent: initial.handleVerticalPercent === undefined
+        ? DEFAULT_HANDLE_VERTICAL_PERCENT
+        : clampHandleVerticalPercent(initial.handleVerticalPercent),
       startSeconds: initial.startSeconds ?? 0,
       endSeconds: initial.endSeconds ?? null,
       saveDefault: initial.saveDefault ?? false,
@@ -6143,6 +6151,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       url,
       includeQr,
       position,
+      handleVerticalPercent,
       startSeconds,
       endSeconds,
       saveDefault,
@@ -6168,6 +6177,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         handle: trimmedHandle,
         include_qr: includeQr,
         position,
+        handle_vertical_percent: handleVerticalPercent,
         ...(includeQr && url.trim() ? { url: url.trim() } : {}),
         ...(startSeconds > 0 ? { start_seconds: startSeconds } : {}),
         ...(endSeconds !== null ? { end_seconds: endSeconds } : {}),
@@ -6179,10 +6189,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const timing = startSeconds > 0 || endSeconds !== null
         ? ` · ${startSeconds.toFixed(1)}s–${endSeconds?.toFixed(1) ?? 'end'}`
         : ''
+      const handlePosition = ` · handle ${handleVerticalPercent}% from top`
       await refreshBookData(bookId, notebook?.id)
       const message = includeQr && corner
-        ? `QR + @${trimmedHandle} watermarks burned in — QR ${corner}${frameAware}${timing}.`
-        : `@${trimmedHandle} watermark burned in${timing}.`
+        ? `QR + @${trimmedHandle} watermarks burned in — QR ${corner}${frameAware}${handlePosition}${timing}.`
+        : `@${trimmedHandle} watermark burned in${handlePosition}${timing}.`
       setNotice(message)
       setPendingWatermarkReview(null)
       return { ok: true, message }
@@ -7800,6 +7811,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!target.ok) return { ok: false, message: target.message }
       const startSeconds = asNumber(plan.params.start_seconds)
       const endSeconds = asNumber(plan.params.end_seconds)
+      const handleVerticalPercent = asNumber(plan.params.handle_vertical_percent)
       const requestedPosition = plan.params.position
       openWatermarkReview(target.artifactId, target.label, {
         ...(asString(plan.params.handle)
@@ -7813,6 +7825,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : {}),
         ...(isWatermarkPosition(requestedPosition)
           ? { position: requestedPosition }
+          : {}),
+        ...(handleVerticalPercent !== null
+          ? { handleVerticalPercent: clampHandleVerticalPercent(handleVerticalPercent) }
           : {}),
         ...(startSeconds !== null && startSeconds >= 0
           ? { startSeconds }

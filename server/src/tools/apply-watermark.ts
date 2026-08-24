@@ -32,6 +32,11 @@ import {
   watermarkBadgeAspect,
 } from "../watermark-badge.js";
 import { readWatermarkConfig, recordHandle } from "../watermark-config.js";
+import {
+  DEFAULT_HANDLE_VERTICAL_PERCENT,
+  MAX_HANDLE_VERTICAL_PERCENT,
+  MIN_HANDLE_VERTICAL_PERCENT,
+} from "../watermark-handle-position.js";
 import type { ToolDef } from "./tool-def.js";
 import { requireArtifactKind } from "./_shared.js";
 import { waitForAssetReadyDef } from "./wait-for-asset-ready.js";
@@ -101,7 +106,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
   return {
     name: "apply_watermark",
     description:
-      "Previewed watermark apply for video: burns a positioned QR plus a separate centered @handle two-thirds up the frame, both at 50% opacity and within an optional visibility window. The QR can be disabled for handle-only output. Pass mode=overlay to store the legacy single-card render-time overlay instead.",
+      "Previewed watermark apply for video: burns a positioned QR plus a separate horizontally centered @handle with adjustable vertical placement, both at 50% opacity and within an optional visibility window. The QR can be disabled for handle-only output. Pass mode=overlay to store the legacy single-card render-time overlay instead.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Video asset id to watermark"),
@@ -119,6 +124,12 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         .enum(WATERMARK_POSITION_OPTIONS)
         .optional()
         .describe("QR placement anchor, or auto (default) to choose the least-busy corner"),
+      handle_vertical_percent: z
+        .number()
+        .min(MIN_HANDLE_VERTICAL_PERCENT)
+        .max(MAX_HANDLE_VERTICAL_PERCENT)
+        .optional()
+        .describe("Burn-mode handle centerline as percent from the top (default 33; range 10-90)"),
       start_seconds: z
         .number()
         .min(0)
@@ -159,6 +170,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         save_default,
         include_qr = true,
         position = "auto",
+        handle_vertical_percent = DEFAULT_HANDLE_VERTICAL_PERCENT,
         start_seconds,
         end_seconds,
         opacity = WATERMARK_OPACITY,
@@ -173,6 +185,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         save_default?: boolean;
         include_qr?: boolean;
         position?: WatermarkPositionOption;
+        handle_vertical_percent?: number;
         start_seconds?: number;
         end_seconds?: number;
         opacity?: number;
@@ -317,6 +330,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         opacity,
         scale,
         requested_position: position,
+        handle_vertical_percent,
         start_seconds: start_seconds ?? null,
         end_seconds: end_seconds ?? null,
         ...(jobId !== undefined && placementSource === "vision" ? { job_id: jobId } : {}),
@@ -414,6 +428,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           corner,
           opacity,
           userScale: scale,
+          handleVerticalPercent: handle_vertical_percent,
           ...(start_seconds !== undefined ? { startSeconds: start_seconds } : {}),
           ...(end_seconds !== undefined ? { endSeconds: end_seconds } : {}),
         }, BURN_TIMEOUT_MS);
@@ -455,7 +470,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
             position: include_qr ? corner : null,
             qr_asset_id: qrAssetId,
             handle_asset_id: handleAssetId,
-            handle_position: "center-two-thirds-up",
+            handle_position: "center",
             placement_source: placementSource,
           }),
         }],

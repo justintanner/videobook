@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Check, X } from 'lucide-react'
-import { WATERMARK_POSITIONS } from '@/videobook/watermark-review'
+import {
+  MAX_HANDLE_VERTICAL_PERCENT,
+  MIN_HANDLE_VERTICAL_PERCENT,
+  WATERMARK_POSITIONS,
+} from '@/videobook/watermark-review'
 import type { WatermarkPosition } from '@/videobook/watermark-review'
 
 export interface WatermarkReviewState {
@@ -16,6 +20,7 @@ export interface WatermarkReviewState {
   url: string
   includeQr: boolean
   position: WatermarkPosition
+  handleVerticalPercent: number
   startSeconds: number
   endSeconds: number | null
   saveDefault: boolean
@@ -29,6 +34,7 @@ type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
   | 'url'
   | 'includeQr'
   | 'position'
+  | 'handleVerticalPercent'
   | 'startSeconds'
   | 'endSeconds'
   | 'saveDefault'
@@ -155,11 +161,15 @@ function previewQrStyle(
   return style
 }
 
-function previewHandleStyle(width: number, height: number): CSSProperties {
+function previewHandleStyle(
+  width: number,
+  height: number,
+  verticalPercent: number,
+): CSSProperties {
   return {
     aspectRatio: '480 / 88',
     height: `${16 * (Math.min(width, height) / height)}%`,
-    top: '33.3333%',
+    top: `${verticalPercent}%`,
     left: '50%',
     transform: 'translate(-50%, -50%)',
   }
@@ -287,7 +297,11 @@ export function WatermarkChatReview({
             )}
             <span
               className={`watermark-preview-overlay watermark-preview-handle${visibleAtPlayhead ? '' : ' outside-window'}`}
-              style={previewHandleStyle(previewWidth, previewHeight)}
+              style={previewHandleStyle(
+                previewWidth,
+                previewHeight,
+                state.handleVerticalPercent,
+              )}
               aria-hidden="true"
             >
               <span>@{handle || 'handle'}</span>
@@ -311,7 +325,8 @@ export function WatermarkChatReview({
               ? state.position === 'auto'
                 ? 'QR auto placement'
                 : `QR ${POSITION_LABELS[state.position].toLowerCase()}`
-              : 'Handle fixed center'}</span>
+              : 'Handle centered'}</span>
+            <span>Handle {state.handleVerticalPercent}% from top</span>
             <span>{secondsLabel(state.startSeconds)} → {duration > 0 ? secondsLabel(effectiveEnd) : 'clip end'}</span>
             <span>{state.includeQr ? '2 watermarks · 50% opacity' : 'Handle only · 50% opacity'}</span>
             <span>Rebuilds playable proxy</span>
@@ -377,7 +392,7 @@ export function WatermarkChatReview({
 
           <section className="watermark-control-section">
             <div className="watermark-section-heading">
-              <span>QR position</span>
+              <span>Position</span>
               <button
                 type="button"
                 className={state.position === 'auto' ? 'active' : ''}
@@ -404,8 +419,26 @@ export function WatermarkChatReview({
                 </button>
               ))}
             </div>
+            <div className="watermark-handle-position">
+              <label htmlFor="watermark-handle-vertical">Handle vertical position</label>
+              <output htmlFor="watermark-handle-vertical">
+                {state.handleVerticalPercent}% from top
+              </output>
+              <input
+                id="watermark-handle-vertical"
+                type="range"
+                min={MIN_HANDLE_VERTICAL_PERCENT}
+                max={MAX_HANDLE_VERTICAL_PERCENT}
+                step="1"
+                value={state.handleVerticalPercent}
+                disabled={busy}
+                onChange={(event) => onChange({
+                  handleVerticalPercent: Number(event.target.value),
+                })}
+              />
+            </div>
             <small className="watermark-control-help">
-              Auto places the QR away from faces and text. The handle stays centered two-thirds up.
+              Auto places the QR away from faces and text. The handle remains horizontally centered.
             </small>
           </section>
 

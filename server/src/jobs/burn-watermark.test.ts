@@ -13,18 +13,19 @@ describe("burn watermark filter", () => {
       opacity: 0.5,
       userScale: 1,
       includeQr: true,
+      handleVerticalPercent: 62,
       startSeconds: 0.2,
       endSeconds: 0.8,
     })).toBe(
       "[1:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.5[qr];"
       + "[2:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.5[handle];"
       + "[0:v][qr]overlay=(main_w-overlay_w)/2:6:format=auto:enable='between(t,0.2,0.8)'[withqr];"
-      + "[withqr][handle]overlay=(main_w-overlay_w)/2:main_h/3-overlay_h/2:format=auto"
+      + "[withqr][handle]overlay=(main_w-overlay_w)/2:main_h*62/100-overlay_h/2:format=auto"
       + ":enable='between(t,0.2,0.8)'[vout]",
     );
   });
 
-  it("centers a handle-only watermark two-thirds up from the bottom", () => {
+  it("uses the default handle vertical position for handle-only output", () => {
     expect(buildBurnWatermarkFilter({
       width: 320,
       height: 240,
@@ -34,7 +35,7 @@ describe("burn watermark filter", () => {
       includeQr: false,
     })).toBe(
       "[1:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.5[handle];"
-      + "[0:v][handle]overlay=(main_w-overlay_w)/2:main_h/3-overlay_h/2:format=auto[vout]",
+      + "[0:v][handle]overlay=(main_w-overlay_w)/2:main_h*33/100-overlay_h/2:format=auto[vout]",
     );
   });
 

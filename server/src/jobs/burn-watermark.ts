@@ -5,6 +5,10 @@ import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { WATERMARK_MIN_DIM_FRACTION } from "../remotion/osg-spec.js";
 import type { OsgPosition } from "../remotion/subtitles/types.js";
+import {
+  DEFAULT_HANDLE_VERTICAL_PERCENT,
+  watermarkHandleOverlayY,
+} from "../watermark-handle-position.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { withLockedLocalLease } from "./_lease.js";
 
@@ -21,6 +25,7 @@ type BurnWatermarkPayload = {
   corner: OsgPosition;
   opacity: number;
   userScale: number;
+  handleVerticalPercent?: number;
   startSeconds?: number;
   endSeconds?: number;
 };
@@ -59,6 +64,7 @@ export function buildBurnWatermarkFilter(options: {
   opacity: number;
   userScale: number;
   includeQr: boolean;
+  handleVerticalPercent?: number;
   startSeconds?: number;
   endSeconds?: number;
 }): string {
@@ -69,6 +75,9 @@ export function buildBurnWatermarkFilter(options: {
   );
   const padding = Math.round(options.width * 0.02);
   const { x, y } = burnOverlayPosition(options.corner, padding);
+  const handleY = watermarkHandleOverlayY(
+    options.handleVerticalPercent ?? DEFAULT_HANDLE_VERTICAL_PERCENT,
+  );
   const enable = burnWatermarkEnable(options.startSeconds, options.endSeconds);
   const handleInput = options.includeQr ? 2 : 1;
   const filters = options.includeQr
@@ -82,7 +91,7 @@ export function buildBurnWatermarkFilter(options: {
       ];
   const base = options.includeQr ? "withqr" : "0:v";
   filters.push(
-    `[${base}][handle]overlay=(main_w-overlay_w)/2:main_h/3-overlay_h/2:format=auto${enable}[vout]`,
+    `[${base}][handle]overlay=(main_w-overlay_w)/2:${handleY}:format=auto${enable}[vout]`,
   );
   return filters.join(";");
 }
@@ -97,7 +106,7 @@ export function registerBurnWatermarkJob(engine: Engine): void {
   registerJobHandler("burn_watermark", async (payload, ctx) => {
     const {
       assetId, assetDir, bookId, videoPath, qrPath, handlePath, corner, opacity, userScale,
-      startSeconds, endSeconds,
+      handleVerticalPercent = DEFAULT_HANDLE_VERTICAL_PERCENT, startSeconds, endSeconds,
     } = payload as BurnWatermarkPayload;
 
     const result = await withLockedLocalLease(
@@ -128,6 +137,7 @@ export function registerBurnWatermarkJob(engine: Engine): void {
           opacity,
           userScale,
           includeQr: qrPath !== undefined,
+          handleVerticalPercent,
           ...(startSeconds !== undefined ? { startSeconds } : {}),
           ...(effectiveEnd !== undefined ? { endSeconds: effectiveEnd } : {}),
         });
