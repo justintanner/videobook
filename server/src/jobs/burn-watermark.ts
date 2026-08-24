@@ -3,7 +3,7 @@ import { basename, join } from "node:path";
 import type { Engine } from "videobook-engine";
 import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
-import { WATERMARK_MIN_DIM_FRACTION } from "../remotion/osg-spec.js";
+import { WATERMARK_MIN_DIM_FRACTION, WATERMARK_OPACITY } from "../remotion/osg-spec.js";
 import type { OsgPosition } from "../remotion/subtitles/types.js";
 import {
   DEFAULT_HANDLE_VERTICAL_PERCENT,
@@ -23,11 +23,17 @@ type BurnWatermarkPayload = {
   qrPath?: string;
   handlePath: string;
   corner: OsgPosition;
-  opacity: number;
+  opacity?: number;
+  qrOpacity?: number;
+  handleOpacity?: number;
   userScale: number;
   handleVerticalPercent?: number;
   startSeconds?: number;
   endSeconds?: number;
+  qrStartSeconds?: number;
+  qrEndSeconds?: number;
+  handleStartSeconds?: number;
+  handleEndSeconds?: number;
 };
 
 /** ffmpeg overlay x/y expressions for a corner, inset by `padding` pixels. */
@@ -61,12 +67,18 @@ export function buildBurnWatermarkFilter(options: {
   width: number;
   height: number;
   corner: OsgPosition;
-  opacity: number;
+  opacity?: number;
+  qrOpacity?: number;
+  handleOpacity?: number;
   userScale: number;
   includeQr: boolean;
   handleVerticalPercent?: number;
   startSeconds?: number;
   endSeconds?: number;
+  qrStartSeconds?: number;
+  qrEndSeconds?: number;
+  handleStartSeconds?: number;
+  handleEndSeconds?: number;
 }): string {
   const minDim = Math.min(options.width, options.height);
   const badgeHeight = Math.max(
@@ -78,22 +90,59 @@ export function buildBurnWatermarkFilter(options: {
   const handleY = watermarkHandleOverlayY(
     options.handleVerticalPercent ?? DEFAULT_HANDLE_VERTICAL_PERCENT,
   );
-  const enable = burnWatermarkEnable(options.startSeconds, options.endSeconds);
+  const sharedOpacity = options.opacity ?? WATERMARK_OPACITY;
+  const qrOpacity = options.qrOpacity ?? sharedOpacity;
+  const handleOpacity = options.handleOpacity ?? sharedOpacity;
+  const qrEnable = burnWatermarkEnable(
+    options.qrStartSeconds ?? options.startSeconds,
+    options.qrEndSeconds ?? options.endSeconds,
+  );
+  const handleEnable = burnWatermarkEnable(
+    options.handleStartSeconds ?? options.startSeconds,
+    options.handleEndSeconds ?? options.endSeconds,
+  );
   const handleInput = options.includeQr ? 2 : 1;
   const filters = options.includeQr
     ? [
-        `[1:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${options.opacity}[qr]`,
-        `[${handleInput}:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${options.opacity}[handle]`,
-        `[0:v][qr]overlay=${x}:${y}:format=auto${enable}[withqr]`,
+        `[1:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${qrOpacity}[qr]`,
+        `[${handleInput}:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${handleOpacity}[handle]`,
+        `[0:v][qr]overlay=${x}:${y}:format=auto${qrEnable}[withqr]`,
       ]
     : [
-        `[${handleInput}:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${options.opacity}[handle]`,
+        `[${handleInput}:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${handleOpacity}[handle]`,
       ];
   const base = options.includeQr ? "withqr" : "0:v";
   filters.push(
-    `[${base}][handle]overlay=(main_w-overlay_w)/2:${handleY}:format=auto${enable}[vout]`,
+    `[${base}][handle]overlay=(main_w-overlay_w)/2:${handleY}:format=auto${handleEnable}[vout]`,
   );
   return filters.join(";");
+}
+
+type EffectiveWatermarkTiming = {
+  startSeconds?: number;
+  endSeconds?: number;
+};
+
+function effectiveWatermarkTiming(
+  label: string,
+  duration: number,
+  startSeconds?: number,
+  endSeconds?: number,
+): EffectiveWatermarkTiming {
+  const effectiveStart = startSeconds ?? 0;
+  if (effectiveStart < 0 || effectiveStart >= duration) {
+    throw new Error(`${label} start must be before the ${duration.toFixed(2)}s clip end`);
+  }
+  const effectiveEnd = endSeconds === undefined
+    ? undefined
+    : Math.min(endSeconds, duration);
+  if (effectiveEnd !== undefined && effectiveEnd <= effectiveStart) {
+    throw new Error(`${label} end must be after its start`);
+  }
+  return {
+    ...(startSeconds !== undefined ? { startSeconds } : {}),
+    ...(effectiveEnd !== undefined ? { endSeconds: effectiveEnd } : {}),
+  };
 }
 
 /**
@@ -106,7 +155,9 @@ export function registerBurnWatermarkJob(engine: Engine): void {
   registerJobHandler("burn_watermark", async (payload, ctx) => {
     const {
       assetId, assetDir, bookId, videoPath, qrPath, handlePath, corner, opacity, userScale,
-      handleVerticalPercent = DEFAULT_HANDLE_VERTICAL_PERCENT, startSeconds, endSeconds,
+      qrOpacity, handleOpacity, handleVerticalPercent = DEFAULT_HANDLE_VERTICAL_PERCENT,
+      startSeconds, endSeconds, qrStartSeconds, qrEndSeconds,
+      handleStartSeconds, handleEndSeconds,
     } = payload as BurnWatermarkPayload;
 
     const result = await withLockedLocalLease(
@@ -118,16 +169,20 @@ export function registerBurnWatermarkJob(engine: Engine): void {
       { durationMs: LOCK_DURATION_MS, data: { state: "burning-watermark" } },
       async () => {
         const probe = await probeVideo(videoPath, { signal: ctx.signal });
-        const effectiveStart = startSeconds ?? 0;
-        if (effectiveStart < 0 || effectiveStart >= probe.duration) {
-          throw new Error(`Watermark start must be before the ${probe.duration.toFixed(2)}s clip end`);
-        }
-        const effectiveEnd = endSeconds === undefined
-          ? undefined
-          : Math.min(endSeconds, probe.duration);
-        if (effectiveEnd !== undefined && effectiveEnd <= effectiveStart) {
-          throw new Error("Watermark end must be after its start");
-        }
+        const handleTiming = effectiveWatermarkTiming(
+          "Handle watermark",
+          probe.duration,
+          handleStartSeconds ?? startSeconds,
+          handleEndSeconds ?? endSeconds,
+        );
+        const qrTiming = qrPath
+          ? effectiveWatermarkTiming(
+              "QR watermark",
+              probe.duration,
+              qrStartSeconds ?? startSeconds,
+              qrEndSeconds ?? endSeconds,
+            )
+          : {};
 
         const outputPath = join(assetDir, "original_watermarked.mp4");
         const filter = buildBurnWatermarkFilter({
@@ -135,11 +190,23 @@ export function registerBurnWatermarkJob(engine: Engine): void {
           height: probe.height,
           corner,
           opacity,
+          qrOpacity,
+          handleOpacity,
           userScale,
           includeQr: qrPath !== undefined,
           handleVerticalPercent,
-          ...(startSeconds !== undefined ? { startSeconds } : {}),
-          ...(effectiveEnd !== undefined ? { endSeconds: effectiveEnd } : {}),
+          ...(qrTiming.startSeconds !== undefined
+            ? { qrStartSeconds: qrTiming.startSeconds }
+            : {}),
+          ...(qrTiming.endSeconds !== undefined
+            ? { qrEndSeconds: qrTiming.endSeconds }
+            : {}),
+          ...(handleTiming.startSeconds !== undefined
+            ? { handleStartSeconds: handleTiming.startSeconds }
+            : {}),
+          ...(handleTiming.endSeconds !== undefined
+            ? { handleEndSeconds: handleTiming.endSeconds }
+            : {}),
         });
         const watermarkInputs = qrPath
           ? ["-i", qrPath, "-i", handlePath]

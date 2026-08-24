@@ -1429,6 +1429,10 @@ describe('chat composer browser flow', () => {
           asset_id: '@a1',
           handle: 'justinwtanner',
           handle_vertical_percent: 41,
+          include_x_icon: true,
+          include_handle_border: true,
+          qr_opacity: 0.45,
+          handle_opacity: 0.55,
         },
         message: 'Applying watermark.',
         summary: 'Applying watermark.',
@@ -1458,19 +1462,21 @@ describe('chat composer browser flow', () => {
       expect(await review.locator('video').count()).toBe(1)
       expect(await review.getByLabel('X handle').inputValue()).toBe('justinwtanner')
       const previewHandle = review.locator('.watermark-preview-handle')
-      expect((await previewHandle.textContent())?.trim()).toBe('@justinwtanner')
-      expect(await previewHandle.locator('b').count()).toBe(0)
+      expect((await previewHandle.textContent())?.trim()).toBe('justinwtanner')
+      expect(await previewHandle.locator('.watermark-preview-x-icon').count()).toBe(1)
       expect(await previewHandle.evaluate((element) => {
         const style = window.getComputedStyle(element)
         return {
           alignItems: style.alignItems,
           justifyContent: style.justifyContent,
           fontSize: Number.parseFloat(style.fontSize),
+          opacity: Number.parseFloat(style.opacity),
         }
       })).toEqual({
         alignItems: 'center',
         justifyContent: 'center',
         fontSize: 15,
+        opacity: 0.55,
       })
       const previewQrPath = await review.locator('.watermark-preview-qr-modules path')
         .getAttribute('d')
@@ -1483,7 +1489,9 @@ describe('chat composer browser flow', () => {
       })
       expect(await handleVerticalPosition.inputValue()).toBe('41')
       expect(await previewHandle.evaluate((element) => element.style.top)).toBe('41%')
-      expect(await review.locator('input[type="number"]').count()).toBe(2)
+      expect(await review.getByRole('slider', { name: 'QR opacity' }).inputValue()).toBe('45')
+      expect(await review.getByRole('slider', { name: 'Handle opacity' }).inputValue()).toBe('55')
+      expect(await review.locator('input[type="number"]').count()).toBe(4)
       await expect.poll(async () => await input.inputValue()).toBe('/apply')
 
       await review.getByRole('button', { name: 'Bottom left' }).click()
@@ -1492,11 +1500,19 @@ describe('chat composer browser flow', () => {
       await handleVerticalPosition.fill('62')
       expect(await previewHandle.evaluate((element) => element.style.top)).toBe('62%')
       expect(await review.getByText('62% from top').count()).toBeGreaterThan(0)
-      await review.getByRole('checkbox', { name: 'Include QR code' }).uncheck()
-      expect(await review.getByText('Handle only').count()).toBeGreaterThan(0)
-      await review.locator('input[type="number"]').nth(0).fill('0.5')
-      await review.locator('input[type="number"]').nth(1).fill('2.5')
+      await review.getByRole('checkbox', { name: 'Show X icon' }).uncheck()
+      await review.getByRole('checkbox', { name: 'Handle border' }).uncheck()
+      expect(await previewHandle.locator('.watermark-preview-x-icon').count()).toBe(0)
+      expect(await previewHandle.getAttribute('class')).toContain('without-border')
+      await review.getByRole('slider', { name: 'QR opacity' }).fill('35')
+      await review.getByRole('slider', { name: 'Handle opacity' }).fill('70')
+      await review.getByRole('spinbutton', { name: 'QR start' }).fill('0.1')
+      await review.getByRole('spinbutton', { name: 'QR end' }).fill('0.6')
+      await review.getByRole('spinbutton', { name: 'Handle start' }).fill('0.2')
+      await review.getByRole('spinbutton', { name: 'Handle end' }).fill('0.8')
       await review.getByRole('button', { name: 'Apply' }).click()
+      await expect.poll(() => observedCalls.filter((call) =>
+        call.name === 'apply_watermark').length).toBe(initialApplyCalls + 1)
       await review.waitFor({ state: 'detached' })
       const applyCalls = observedCalls.filter((call) => call.name === 'apply_watermark')
       expect(applyCalls).toHaveLength(initialApplyCalls + 1)
@@ -1504,11 +1520,17 @@ describe('chat composer browser flow', () => {
         book_id: bookId,
         asset_id: videoArtifactId,
         handle: 'justinwtanner',
-        include_qr: false,
+        include_qr: true,
         position: 'bottom-left',
         handle_vertical_percent: 62,
-        start_seconds: 0.5,
-        end_seconds: 2.5,
+        include_x_icon: false,
+        include_handle_border: false,
+        qr_opacity: 0.35,
+        handle_opacity: 0.7,
+        qr_start_seconds: 0.1,
+        qr_end_seconds: 0.6,
+        handle_start_seconds: 0.2,
+        handle_end_seconds: 0.8,
       })
 
       await input.fill('/watermark @a1')
@@ -1520,6 +1542,10 @@ describe('chat composer browser flow', () => {
       expect(await review.getByRole('slider', {
         name: 'Handle vertical position',
       }).inputValue()).toBe('33')
+      expect(await review.getByRole('checkbox', { name: 'Show X icon' }).isChecked()).toBe(true)
+      expect(await review.getByRole('checkbox', { name: 'Handle border' }).isChecked()).toBe(true)
+      expect(await review.getByRole('slider', { name: 'QR opacity' }).inputValue()).toBe('50')
+      expect(await review.getByRole('slider', { name: 'Handle opacity' }).inputValue()).toBe('50')
       await review.getByRole('button', { name: 'Cancel' }).click()
       expect(observedCalls.filter((call) => call.name === 'apply_watermark')).toHaveLength(
         initialApplyCalls + 1,

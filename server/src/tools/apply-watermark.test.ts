@@ -24,10 +24,18 @@ type ApplyResult = {
   url: string;
   include_qr: boolean;
   opacity: number;
+  qr_opacity: number;
+  handle_opacity: number;
   scale: number;
   requested_position: string;
+  include_x_icon: boolean;
+  include_handle_border: boolean;
   start_seconds: number | null;
   end_seconds: number | null;
+  qr_start_seconds: number | null;
+  qr_end_seconds: number | null;
+  handle_start_seconds: number | null;
+  handle_end_seconds: number | null;
   mode: string;
   positions?: Record<(typeof ORIENTATIONS)[number], string>;
   position?: string | null;
@@ -167,8 +175,10 @@ describe("apply_watermark tool", () => {
       "original",
     );
     if (!cardMeta.ok) throw new Error(cardMeta.error.message);
-    expect(cardMeta.value.layout).toBe("handle-v2");
+    expect(cardMeta.value.layout).toBe("handle-v3");
     expect(cardMeta.value.include_qr).toBe(false);
+    expect(cardMeta.value.include_x_icon).toBe(true);
+    expect(cardMeta.value.include_handle_border).toBe(true);
     expect(cardMeta.value.height).toBe(88);
 
     for (const orient of ORIENTATIONS) {
@@ -199,6 +209,15 @@ describe("apply_watermark tool", () => {
     if (!meta.ok) throw new Error("missing portrait.render");
     expect(meta.value.osgOpacity).toBe(0.35);
     expect(meta.value.osgScale).toBeCloseTo(watermarkOsgScale("portrait", 1.5), 4);
+
+    const alternateAppearance = await apply({
+      asset_id: firstAsset,
+      handle: "someone",
+      include_x_icon: false,
+      include_handle_border: false,
+      mode: "overlay",
+    });
+    expect(alternateAppearance.card_asset_id).not.toBe(first.card_asset_id);
 
     // A different handle mints a fresh badge instead of reusing the old one.
     const other = await apply({ asset_id: firstAsset, handle: "other", mode: "overlay" });
@@ -233,16 +252,30 @@ describe("apply_watermark tool", () => {
       handle: "someone",
       position: "top-center",
       handle_vertical_percent: 62,
-      start_seconds: 0.2,
-      end_seconds: 0.8,
+      include_x_icon: false,
+      include_handle_border: false,
+      qr_opacity: 0.35,
+      handle_opacity: 0.7,
+      qr_start_seconds: 0.1,
+      qr_end_seconds: 0.6,
+      handle_start_seconds: 0.2,
+      handle_end_seconds: 0.8,
     });
     expect(parsed.mode).toBe("burn");
     expect(parsed.position).toBe("top-center");
     expect(parsed.placement_source).toBe("explicit");
     expect(parsed.include_qr).toBe(true);
     expect(parsed.opacity).toBe(0.5);
-    expect(parsed.start_seconds).toBe(0.2);
-    expect(parsed.end_seconds).toBe(0.8);
+    expect(parsed.qr_opacity).toBe(0.35);
+    expect(parsed.handle_opacity).toBe(0.7);
+    expect(parsed.include_x_icon).toBe(false);
+    expect(parsed.include_handle_border).toBe(false);
+    expect(parsed.start_seconds).toBeNull();
+    expect(parsed.end_seconds).toBeNull();
+    expect(parsed.qr_start_seconds).toBe(0.1);
+    expect(parsed.qr_end_seconds).toBe(0.6);
+    expect(parsed.handle_start_seconds).toBe(0.2);
+    expect(parsed.handle_end_seconds).toBe(0.8);
     expect(parsed.qr_asset_id).toBe(parsed.card_asset_id);
     expect(parsed.handle_asset_id).not.toBe(parsed.qr_asset_id);
     expect(parsed.handle_position).toBe("center");
@@ -260,8 +293,10 @@ describe("apply_watermark tool", () => {
     if (!handleMeta.ok) throw new Error(handleMeta.error.message);
     expect(qrMeta.value.layout).toBe("qr-v1");
     expect(qrMeta.value.include_handle).toBe(false);
-    expect(handleMeta.value.layout).toBe("handle-v2");
+    expect(handleMeta.value.layout).toBe("handle-v3");
     expect(handleMeta.value.include_qr).toBe(false);
+    expect(handleMeta.value.include_x_icon).toBe(false);
+    expect(handleMeta.value.include_handle_border).toBe(false);
 
     const after = await fs.files.manifest(assetId);
     if (!after.ok) throw new Error(after.error.message);
@@ -300,18 +335,18 @@ describe("apply_watermark tool", () => {
     expect(result.isError).toBe(true);
   });
 
-  it("rejects an empty timing window", async () => {
+  it("rejects an empty QR timing window independently", async () => {
     const assetId = await createVideoAsset();
     const result = await client.callTool({
       name: "apply_watermark",
       arguments: {
         book_id: bookId,
         asset_id: assetId,
-        start_seconds: 0.8,
-        end_seconds: 0.2,
+        qr_start_seconds: 0.8,
+        qr_end_seconds: 0.2,
       },
     });
     expect(result.isError).toBe(true);
-    expect((result.content as TextContent)[0].text).toContain("end_seconds");
+    expect((result.content as TextContent)[0].text).toContain("qr_end_seconds");
   });
 });

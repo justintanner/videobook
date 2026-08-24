@@ -9265,13 +9265,8 @@ textarea:focus-visible {
   position: absolute;
   z-index: 2;
   overflow: hidden;
-  opacity: 0.5;
   pointer-events: none;
   transition: opacity 120ms ease;
-}
-
-.watermark-preview-overlay.outside-window {
-  opacity: 0;
 }
 
 .watermark-preview-qr {
@@ -9292,6 +9287,7 @@ textarea:focus-visible {
   min-width: 0;
   align-items: center;
   justify-content: center;
+  gap: 5%;
   padding: 0 8%;
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 999px;
@@ -9302,6 +9298,16 @@ textarea:focus-visible {
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
+}
+
+.watermark-preview-handle.without-border {
+  border-color: transparent;
+}
+
+.watermark-preview-x-icon {
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
 }
 
 .watermark-preview-handle > span {
@@ -9324,6 +9330,22 @@ textarea:focus-visible {
   background: rgba(0, 8, 4, 0.78);
   font-size: 8px;
   letter-spacing: 0.08em;
+}
+
+.watermark-timeline-stack {
+  display: grid;
+  gap: 5px;
+}
+
+.watermark-timeline-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  color: #789e87;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .watermark-timeline {
@@ -9475,7 +9497,8 @@ textarea:focus-visible {
   box-shadow: 0 0 8px rgba(114, 231, 170, 0.48);
 }
 
-.watermark-handle-position {
+.watermark-handle-position,
+.watermark-range-setting {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -9486,17 +9509,61 @@ textarea:focus-visible {
   letter-spacing: 0.06em;
 }
 
-.watermark-handle-position output {
+.watermark-handle-position output,
+.watermark-range-setting output {
   color: #afd5c0;
   font-family: var(--mono);
   font-size: 9px;
 }
 
-.watermark-handle-position input[type='range'] {
+.watermark-handle-position input[type='range'],
+.watermark-range-setting input[type='range'] {
   grid-column: 1 / -1;
   width: 100%;
   margin: 0;
   accent-color: var(--green);
+  cursor: pointer;
+}
+
+.watermark-timing-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.watermark-timing-group {
+  display: grid;
+  gap: 8px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+
+.watermark-timing-group:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.watermark-timing-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.watermark-timing-heading > strong {
+  color: #afd5c0;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.watermark-timing-heading > button {
+  min-height: 25px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  color: #91bea4;
+  background: rgba(33, 88, 56, 0.14);
+  font-size: 8px;
   cursor: pointer;
 }
 
@@ -9515,6 +9582,8 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
+.watermark-timing-heading > button:hover:not(:disabled),
+.watermark-timing-heading > button:focus-visible:not(:disabled),
 .watermark-time-fields button:hover:not(:disabled),
 .watermark-time-fields button:focus-visible:not(:disabled) {
   border-color: var(--control-border-hover);

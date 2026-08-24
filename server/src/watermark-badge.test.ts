@@ -18,6 +18,7 @@ import {
   buildWatermarkBadgePng,
   defaultUrl,
   watermarkBadgeAspect,
+  watermarkHandleLabel,
 } from "./watermark-badge.js";
 import { WATERMARK_MIN_DIM_FRACTION, WATERMARK_OPACITY } from "./remotion/osg-spec.js";
 
@@ -107,7 +108,7 @@ describe("buildWatermarkBadgePng", () => {
     expect(metadata.height).toBe(BADGE_HEIGHT);
   });
 
-  it("renders a smaller centered handle without a leading X glyph", async () => {
+  it("renders an X icon followed by a plain centered handle", async () => {
     const badge = await buildWatermarkBadgePng(URL, "someone", { includeQr: false });
     const metadata = await sharp(badge).metadata();
     expect(metadata.width).toBe(BADGE_WIDTH);
@@ -120,7 +121,7 @@ describe("buildWatermarkBadgePng", () => {
     );
 
     const raw = await sharp(badge).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    let leadingGlyphPixels = 0;
+    let iconPixels = 0;
     const textRows: number[] = [];
     for (let y = 8; y < HANDLE_ONLY_BADGE_HEIGHT - 8; y += 1) {
       for (let x = 20; x < BADGE_WIDTH - 20; x += 1) {
@@ -129,16 +130,42 @@ describe("buildWatermarkBadgePng", () => {
           && raw.data[offset + 1] > 200
           && raw.data[offset + 2] > 200;
         if (!isLight) continue;
-        if (x < 90) leadingGlyphPixels += 1;
-        if (x >= 90 && x < BADGE_WIDTH - 90) textRows.push(y);
+        if (x >= 150 && x < 178) iconPixels += 1;
+        if (x >= 190 && x < BADGE_WIDTH - 90) textRows.push(y);
       }
     }
-    expect(leadingGlyphPixels).toBe(0);
+    expect(iconPixels).toBeGreaterThan(0);
     expect(textRows.length).toBeGreaterThan(0);
     const textTop = Math.min(...textRows);
     const textBottom = Math.max(...textRows);
-    expect((textTop + textBottom) / 2).toBeCloseTo(HANDLE_ONLY_BADGE_HEIGHT / 2, 0);
+    expect(Math.abs((textTop + textBottom) / 2 - HANDLE_ONLY_BADGE_HEIGHT / 2))
+      .toBeLessThanOrEqual(1);
     expect(textBottom - textTop + 1).toBeLessThanOrEqual(28);
+    const borderOffset = (44 * raw.info.width + 1) * 4;
+    expect(raw.data[borderOffset]).toBeGreaterThan(100);
+    expect(watermarkHandleLabel("@someone")).toBe("someone");
+  });
+
+  it("can hide the X icon and handle border", async () => {
+    const badge = await buildWatermarkBadgePng(URL, "someone", {
+      includeQr: false,
+      includeXIcon: false,
+      includeHandleBorder: false,
+    });
+    const raw = await sharp(badge).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    let iconPixels = 0;
+    for (let y = 20; y < HANDLE_ONLY_BADGE_HEIGHT - 20; y += 1) {
+      for (let x = 150; x < 178; x += 1) {
+        const offset = (y * raw.info.width + x) * 4;
+        const isLight = raw.data[offset] > 200
+          && raw.data[offset + 1] > 200
+          && raw.data[offset + 2] > 200;
+        if (isLight) iconPixels += 1;
+      }
+    }
+    expect(iconPixels).toBe(0);
+    const borderOffset = (44 * raw.info.width + 1) * 4;
+    expect(raw.data[borderOffset]).toBeLessThan(50);
   });
 
   it("renders a QR-only tile without the handle pill", async () => {

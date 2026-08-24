@@ -5,21 +5,24 @@ import {
 } from "./burn-watermark.js";
 
 describe("burn watermark filter", () => {
-  it("positions the badge and gates it to an explicit time window", () => {
+  it("applies independent opacity and timing to QR and handle overlays", () => {
     expect(buildBurnWatermarkFilter({
       width: 320,
       height: 240,
       corner: "top-center",
-      opacity: 0.5,
+      qrOpacity: 0.35,
+      handleOpacity: 0.7,
       userScale: 1,
       includeQr: true,
       handleVerticalPercent: 62,
-      startSeconds: 0.2,
-      endSeconds: 0.8,
+      qrStartSeconds: 0.1,
+      qrEndSeconds: 0.6,
+      handleStartSeconds: 0.2,
+      handleEndSeconds: 0.8,
     })).toBe(
-      "[1:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.5[qr];"
-      + "[2:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.5[handle];"
-      + "[0:v][qr]overlay=(main_w-overlay_w)/2:6:format=auto:enable='between(t,0.2,0.8)'[withqr];"
+      "[1:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.35[qr];"
+      + "[2:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.7[handle];"
+      + "[0:v][qr]overlay=(main_w-overlay_w)/2:6:format=auto:enable='between(t,0.1,0.6)'[withqr];"
       + "[withqr][handle]overlay=(main_w-overlay_w)/2:main_h*62/100-overlay_h/2:format=auto"
       + ":enable='between(t,0.2,0.8)'[vout]",
     );
@@ -30,12 +33,28 @@ describe("burn watermark filter", () => {
       width: 320,
       height: 240,
       corner: "bottom-right",
-      opacity: 0.5,
       userScale: 1,
       includeQr: false,
     })).toBe(
       "[1:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.5[handle];"
       + "[0:v][handle]overlay=(main_w-overlay_w)/2:main_h*33/100-overlay_h/2:format=auto[vout]",
+    );
+  });
+
+  it("keeps shared opacity and timing as legacy fallbacks", () => {
+    expect(buildBurnWatermarkFilter({
+      width: 320,
+      height: 240,
+      corner: "bottom-right",
+      opacity: 0.25,
+      userScale: 1,
+      includeQr: false,
+      startSeconds: 0.3,
+      endSeconds: 0.9,
+    })).toContain(
+      "colorchannelmixer=aa=0.25[handle];"
+      + "[0:v][handle]overlay=(main_w-overlay_w)/2:main_h*33/100-overlay_h/2:format=auto"
+      + ":enable='between(t,0.3,0.9)'[vout]",
     );
   });
 

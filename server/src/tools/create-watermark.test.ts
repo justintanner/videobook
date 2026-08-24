@@ -64,7 +64,12 @@ describe("create_watermark tool", () => {
   it("creates a ready image asset holding the QR card", async () => {
     const result = await client!.callTool({
       name: "create_watermark_card",
-      arguments: { book_id: PROJECT, handle: "@someone" },
+      arguments: {
+        book_id: PROJECT,
+        handle: "@someone",
+        include_x_icon: false,
+        include_handle_border: false,
+      },
     });
 
     expect(result.isError).not.toBe(true);
@@ -72,11 +77,15 @@ describe("create_watermark tool", () => {
       asset_id: string;
       handle: string;
       url: string;
+      include_x_icon: boolean;
+      include_handle_border: boolean;
     };
     const artifact = fs.artifacts.get(parsed.asset_id);
     expect(artifact.ok && artifact.value.kind).toBe("image");
     expect(parsed.handle).toBe("someone");
     expect(parsed.url).toBe("https://x.com/someone");
+    expect(parsed.include_x_icon).toBe(false);
+    expect(parsed.include_handle_border).toBe(false);
 
     const manifest = await fs.files.manifest(parsed.asset_id);
     expect(manifest.ok).toBe(true);
@@ -104,6 +113,8 @@ describe("create_watermark tool", () => {
     const originalMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(parsed.asset_id, "original");
     expect(originalMeta.ok && originalMeta.value.layout).toBe(WATERMARK_BADGE_LAYOUT);
     expect(originalMeta.ok && originalMeta.value.origin).toBe("watermark");
+    expect(originalMeta.ok && originalMeta.value.include_x_icon).toBe(false);
+    expect(originalMeta.ok && originalMeta.value.include_handle_border).toBe(false);
   });
 
   it("defaults the handle and derives the X URL", async () => {

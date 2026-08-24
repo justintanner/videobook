@@ -7,8 +7,8 @@ export const DEFAULT_HANDLE = "justinwtanner";
 
 // Layout identifier persisted in artifact metadata so apply_watermark can
 // reuse an existing badge and skip regenerating an identical one.
-export const WATERMARK_BADGE_LAYOUT = "badge-v3";
-const WATERMARK_HANDLE_LAYOUT = "handle-v2";
+export const WATERMARK_BADGE_LAYOUT = "badge-v4";
+const WATERMARK_HANDLE_LAYOUT = "handle-v3";
 const WATERMARK_QR_LAYOUT = "qr-v1";
 
 export const BADGE_WIDTH = 480;
@@ -23,15 +23,24 @@ export const QR_ONLY_BADGE_HEIGHT = TILE_SIZE;
 export const QR_ONLY_BADGE_ASPECT = BADGE_WIDTH / QR_ONLY_BADGE_HEIGHT;
 export const HANDLE_ONLY_BADGE_HEIGHT = PILL_HEIGHT;
 
-type WatermarkBadgeVariant = "combined" | "qr" | "handle";
+export type WatermarkBadgeVariant = "combined" | "qr" | "handle";
 
 type WatermarkBadgeOptions = {
   includeQr?: boolean;
   variant?: WatermarkBadgeVariant;
+  includeXIcon?: boolean;
+  includeHandleBorder?: boolean;
 };
+
+const X_LOGO_PATH =
+  "M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z";
 
 export function defaultUrl(handle: string): string {
   return `https://x.com/${handle}`;
+}
+
+export function watermarkHandleLabel(handle: string): string {
+  return handle.replace(/^@/, "");
 }
 
 function escapeXml(value: string): string {
@@ -69,6 +78,8 @@ export async function buildWatermarkBadgePng(
   const variant = watermarkBadgeVariant(options);
   const includeQr = variant !== "handle";
   const includeHandle = variant !== "qr";
+  const includeXIcon = includeHandle && (options.includeXIcon ?? true);
+  const includeHandleBorder = includeHandle && (options.includeHandleBorder ?? true);
   const qrBuffer = includeQr
     ? await QRCode.toBuffer(url, {
         type: "png",
@@ -81,17 +92,33 @@ export async function buildWatermarkBadgePng(
 
   const badgeHeight = watermarkBadgeHeight(variant);
   const pillY = variant === "combined" ? TILE_SIZE + PILL_GAP : 0;
-  const label = `@${handle}`;
-  const availableWidth = BADGE_WIDTH - 64;
-  const fontSize = Math.min(28, Math.floor(availableWidth / (0.6 * Array.from(label).length)));
-  const labelY = pillY + PILL_HEIGHT / 2 + 3;
+  const label = watermarkHandleLabel(handle);
+  const iconSize = 26;
+  const iconGap = 14;
+  const iconSpace = includeXIcon ? iconSize + iconGap : 0;
+  const availableWidth = BADGE_WIDTH - 64 - iconSpace;
+  const fontSize = Math.max(
+    12,
+    Math.min(28, Math.floor(availableWidth / (0.6 * Math.max(1, Array.from(label).length)))),
+  );
+  const labelWidth = Math.min(availableWidth, fontSize * 0.6 * Array.from(label).length);
+  const contentWidth = iconSpace + labelWidth;
+  const contentX = (BADGE_WIDTH - contentWidth) / 2;
+  const labelX = includeXIcon ? contentX + iconSpace : BADGE_WIDTH / 2;
+  const labelAnchor = includeXIcon ? "start" : "middle";
+  const labelY = pillY + PILL_HEIGHT / 2 + 1;
+  const logoY = pillY + (PILL_HEIGHT - iconSize) / 2;
+  const border = includeHandleBorder
+    ? ` stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="2"`
+    : "";
 
   const tile = includeQr
     ? `<rect x="0" y="0" width="${TILE_SIZE}" height="${TILE_SIZE}" rx="40" fill="#FFFFFF"/>`
     : "";
   const pill = includeHandle
-    ? `<rect x="1" y="${pillY + 1}" width="${BADGE_WIDTH - 2}" height="${PILL_HEIGHT - 2}" rx="44" fill="#0B0B0F" fill-opacity="0.92" stroke="rgba(255,255,255,0.55)" stroke-width="2"/>
-  <text x="${BADGE_WIDTH / 2}" y="${labelY}" text-anchor="middle" dominant-baseline="central" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="0.1" fill="#FFFFFF">${escapeXml(label)}</text>`
+    ? `<rect x="1" y="${pillY + 1}" width="${BADGE_WIDTH - 2}" height="${PILL_HEIGHT - 2}" rx="44" fill="#0B0B0F" fill-opacity="0.92"${border}/>
+  ${includeXIcon ? `<svg x="${contentX}" y="${logoY}" width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24"><path d="${X_LOGO_PATH}" fill="#FFFFFF"/></svg>` : ""}
+  <text x="${labelX}" y="${labelY}" text-anchor="${labelAnchor}" dominant-baseline="central" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="0.1" fill="#FFFFFF">${escapeXml(label)}</text>`
     : "";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${BADGE_WIDTH}" height="${badgeHeight}" viewBox="0 0 ${BADGE_WIDTH} ${badgeHeight}">
   ${tile}
@@ -119,9 +146,15 @@ export async function createWatermarkAsset(
   options: WatermarkBadgeOptions = {},
 ): Promise<WatermarkAssetResult> {
   const variant = watermarkBadgeVariant(options);
+  const includeXIcon = options.includeXIcon ?? true;
+  const includeHandleBorder = options.includeHandleBorder ?? true;
   let buffer: Buffer;
   try {
-    buffer = await buildWatermarkBadgePng(url, handle, { variant });
+    buffer = await buildWatermarkBadgePng(url, handle, {
+      variant,
+      includeXIcon,
+      includeHandleBorder,
+    });
   } catch (err) {
     return { ok: false, error: `Failed to build watermark card: ${err instanceof Error ? err.message : String(err)}` };
   }
@@ -147,6 +180,8 @@ export async function createWatermarkAsset(
     url,
     include_qr: variant !== "handle",
     include_handle: variant !== "qr",
+    include_x_icon: variant !== "qr" && includeXIcon,
+    include_handle_border: variant !== "qr" && includeHandleBorder,
     width: BADGE_WIDTH,
     height: watermarkBadgeHeight(variant),
   });
@@ -174,6 +209,8 @@ export async function findWatermarkAsset(
 ): Promise<string | null> {
   const variant = watermarkBadgeVariant(options);
   const layout = watermarkBadgeLayout(variant);
+  const includeXIcon = options.includeXIcon ?? true;
+  const includeHandleBorder = options.includeHandleBorder ?? true;
   for (const artifact of engine.artifacts.list()) {
     if (artifact.kind !== "image") continue;
     const meta = await engine.metadata.artifacts.read<Record<string, unknown>>(artifact.artifactId, "original");
@@ -183,6 +220,8 @@ export async function findWatermarkAsset(
       && meta.value.layout === layout
       && meta.value.handle === handle
       && (variant === "handle" || meta.value.url === url)
+      && (variant === "qr" || meta.value.include_x_icon === includeXIcon)
+      && (variant === "qr" || meta.value.include_handle_border === includeHandleBorder)
     ) {
       return artifact.artifactId;
     }

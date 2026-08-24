@@ -3,7 +3,9 @@ import type { CSSProperties } from 'react'
 import { Check, X } from 'lucide-react'
 import {
   MAX_HANDLE_VERTICAL_PERCENT,
+  MAX_WATERMARK_OPACITY,
   MIN_HANDLE_VERTICAL_PERCENT,
+  MIN_WATERMARK_OPACITY,
   WATERMARK_POSITIONS,
 } from '@/videobook/watermark-review'
 import type { WatermarkPosition } from '@/videobook/watermark-review'
@@ -21,8 +23,14 @@ export interface WatermarkReviewState {
   includeQr: boolean
   position: WatermarkPosition
   handleVerticalPercent: number
-  startSeconds: number
-  endSeconds: number | null
+  includeXIcon: boolean
+  includeHandleBorder: boolean
+  qrOpacity: number
+  handleOpacity: number
+  qrStartSeconds: number
+  qrEndSeconds: number | null
+  handleStartSeconds: number
+  handleEndSeconds: number | null
   saveDefault: boolean
   recent: string[]
   loadingConfig: boolean
@@ -35,8 +43,14 @@ type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
   | 'includeQr'
   | 'position'
   | 'handleVerticalPercent'
-  | 'startSeconds'
-  | 'endSeconds'
+  | 'includeXIcon'
+  | 'includeHandleBorder'
+  | 'qrOpacity'
+  | 'handleOpacity'
+  | 'qrStartSeconds'
+  | 'qrEndSeconds'
+  | 'handleStartSeconds'
+  | 'handleEndSeconds'
   | 'saveDefault'
 >>
 
@@ -95,6 +109,7 @@ const QR_PREVIEW_ROWS = [
 ] as const
 
 const QR_PREVIEW_SIZE = QR_PREVIEW_ROWS.length
+const X_LOGO_PATH = 'M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z'
 
 function buildQrPreviewPath(): string {
   const modules: string[] = []
@@ -121,6 +136,196 @@ function WatermarkQrPreview() {
     >
       <path d={QR_PREVIEW_PATH} fill="currentColor" />
     </svg>
+  )
+}
+
+function WatermarkXIcon() {
+  return (
+    <svg
+      className="watermark-preview-x-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path d={X_LOGO_PATH} fill="currentColor" />
+    </svg>
+  )
+}
+
+function watermarkOpacityPercent(value: number): number {
+  return Math.round(value * 100)
+}
+
+function watermarkTimingValid(
+  startSeconds: number,
+  endSeconds: number | null,
+  duration: number,
+): boolean {
+  return endSeconds !== null
+    ? endSeconds > startSeconds
+    : duration <= 0 || startSeconds < duration
+}
+
+function watermarkVisibleAt(
+  currentTime: number,
+  startSeconds: number,
+  endSeconds: number | null,
+): boolean {
+  return currentTime >= startSeconds
+    && (endSeconds === null || currentTime <= endSeconds)
+}
+
+function watermarkTimelineWindow(
+  startSeconds: number,
+  endSeconds: number | null,
+  duration: number,
+): { left: number; width: number } {
+  if (duration <= 0) return { left: 0, width: 100 }
+  const left = clamp((startSeconds / duration) * 100, 0, 100)
+  const right = clamp(((endSeconds ?? duration) / duration) * 100, left, 100)
+  return { left, width: right - left }
+}
+
+function watermarkTimingLabel(
+  startSeconds: number,
+  endSeconds: number | null,
+  duration: number,
+): string {
+  const end = endSeconds ?? (duration > 0 ? duration : null)
+  return `${secondsLabel(startSeconds)}–${end === null ? 'clip end' : secondsLabel(end)}`
+}
+
+function WatermarkOpacityControl({
+  id,
+  label,
+  value,
+  busy,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: number
+  busy: boolean
+  onChange: (value: number) => void
+}) {
+  const percent = watermarkOpacityPercent(value)
+  return (
+    <div className="watermark-range-setting">
+      <label htmlFor={id}>{label}</label>
+      <output htmlFor={id}>{percent}%</output>
+      <input
+        id={id}
+        type="range"
+        min={MIN_WATERMARK_OPACITY * 100}
+        max={MAX_WATERMARK_OPACITY * 100}
+        step="1"
+        value={percent}
+        disabled={busy}
+        onChange={(event) => onChange(Number(event.target.value) / 100)}
+      />
+    </div>
+  )
+}
+
+function WatermarkTimingControl({
+  idPrefix,
+  label,
+  startSeconds,
+  endSeconds,
+  duration,
+  currentTime,
+  busy,
+  onChange,
+}: {
+  idPrefix: string
+  label: string
+  startSeconds: number
+  endSeconds: number | null
+  duration: number
+  currentTime: number
+  busy: boolean
+  onChange: (startSeconds: number, endSeconds: number | null) => void
+}) {
+  const valid = watermarkTimingValid(startSeconds, endSeconds, duration)
+  return (
+    <div className="watermark-timing-group">
+      <div className="watermark-timing-heading">
+        <strong>{label}</strong>
+        <button
+          type="button"
+          aria-label={`Use whole clip for ${label}`}
+          disabled={busy}
+          onClick={() => onChange(0, null)}
+        >
+          Whole clip
+        </button>
+      </div>
+      <div className="watermark-time-fields">
+        <label htmlFor={`${idPrefix}-start`}>
+          Start
+          <input
+            id={`${idPrefix}-start`}
+            aria-label={`${label} start`}
+            type="number"
+            min="0"
+            max={duration > 0 ? duration : undefined}
+            step="0.1"
+            value={startSeconds}
+            disabled={busy}
+            onChange={(event) => onChange(
+              Math.max(0, Number(event.target.value) || 0),
+              endSeconds,
+            )}
+          />
+          <button
+            type="button"
+            aria-label={`Set ${label} start from playhead`}
+            disabled={busy}
+            onClick={() => onChange(
+              endSeconds === null
+                ? currentTime
+                : Math.min(currentTime, Math.max(0, endSeconds - 0.1)),
+              endSeconds,
+            )}
+          >
+            Set from playhead
+          </button>
+        </label>
+        <label htmlFor={`${idPrefix}-end`}>
+          End
+          <input
+            id={`${idPrefix}-end`}
+            aria-label={`${label} end`}
+            type="number"
+            min="0"
+            max={duration > 0 ? duration : undefined}
+            step="0.1"
+            value={endSeconds ?? ''}
+            placeholder={duration > 0 ? duration.toFixed(1) : 'Clip end'}
+            disabled={busy}
+            onChange={(event) => onChange(
+              startSeconds,
+              event.target.value === ''
+                ? null
+                : Math.max(0, Number(event.target.value) || 0),
+            )}
+          />
+          <button
+            type="button"
+            aria-label={`Set ${label} end from playhead`}
+            disabled={busy}
+            onClick={() => onChange(
+              startSeconds,
+              Math.max(currentTime, startSeconds + 0.1),
+            )}
+          >
+            Set from playhead
+          </button>
+        </label>
+      </div>
+      {!valid && (
+        <p className="watermark-error" role="alert">{label} end time must be after start time.</p>
+      )}
+    </div>
   )
 }
 
@@ -194,22 +399,41 @@ export function WatermarkChatReview({
   const handle = state.handle.replace(/^@/, '').trim()
   const urlPlaceholder = handle ? `https://x.com/${handle}` : 'https://x.com/<handle>'
   const duration = state.durationSeconds ?? 0
-  const effectiveEnd = state.endSeconds ?? duration
-  const timingValid = state.endSeconds !== null
-    ? state.endSeconds > state.startSeconds
-    : duration <= 0 || state.startSeconds < duration
-  const visibleAtPlayhead = currentTime >= state.startSeconds
-    && (state.endSeconds === null || currentTime <= state.endSeconds)
+  const qrTimingValid = watermarkTimingValid(
+    state.qrStartSeconds,
+    state.qrEndSeconds,
+    duration,
+  )
+  const handleTimingValid = watermarkTimingValid(
+    state.handleStartSeconds,
+    state.handleEndSeconds,
+    duration,
+  )
+  const timingValid = handleTimingValid && (!state.includeQr || qrTimingValid)
+  const qrVisibleAtPlayhead = watermarkVisibleAt(
+    currentTime,
+    state.qrStartSeconds,
+    state.qrEndSeconds,
+  )
+  const handleVisibleAtPlayhead = watermarkVisibleAt(
+    currentTime,
+    state.handleStartSeconds,
+    state.handleEndSeconds,
+  )
   const previewPosition = state.position === 'auto' ? 'bottom-right' : state.position
   const previewWidth = state.width !== null && state.width > 0 ? state.width : 16
   const previewHeight = state.height !== null && state.height > 0 ? state.height : 9
   const tallPreview = previewHeight >= previewWidth
-  const timelineStart = duration > 0
-    ? clamp((state.startSeconds / duration) * 100, 0, 100)
-    : 0
-  const timelineEnd = duration > 0
-    ? clamp((effectiveEnd / duration) * 100, timelineStart, 100)
-    : 100
+  const qrTimeline = watermarkTimelineWindow(
+    state.qrStartSeconds,
+    state.qrEndSeconds,
+    duration,
+  )
+  const handleTimeline = watermarkTimelineWindow(
+    state.handleStartSeconds,
+    state.handleEndSeconds,
+    duration,
+  )
   const playhead = duration > 0
     ? clamp((currentTime / duration) * 100, 0, 100)
     : 0
@@ -288,37 +512,64 @@ export function WatermarkChatReview({
             )}
             {state.includeQr && (
               <span
-                className={`watermark-preview-overlay watermark-preview-qr${visibleAtPlayhead ? '' : ' outside-window'}`}
-                style={previewQrStyle(previewPosition, previewWidth, previewHeight)}
+                className="watermark-preview-overlay watermark-preview-qr"
+                style={{
+                  ...previewQrStyle(previewPosition, previewWidth, previewHeight),
+                  opacity: qrVisibleAtPlayhead ? state.qrOpacity : 0,
+                }}
                 aria-hidden="true"
               >
                 <WatermarkQrPreview />
               </span>
             )}
             <span
-              className={`watermark-preview-overlay watermark-preview-handle${visibleAtPlayhead ? '' : ' outside-window'}`}
-              style={previewHandleStyle(
-                previewWidth,
-                previewHeight,
-                state.handleVerticalPercent,
-              )}
+              className={`watermark-preview-overlay watermark-preview-handle${state.includeHandleBorder ? '' : ' without-border'}`}
+              style={{
+                ...previewHandleStyle(
+                  previewWidth,
+                  previewHeight,
+                  state.handleVerticalPercent,
+                ),
+                opacity: handleVisibleAtPlayhead ? state.handleOpacity : 0,
+              }}
               aria-hidden="true"
             >
-              <span>@{handle || 'handle'}</span>
+              {state.includeXIcon && <WatermarkXIcon />}
+              <span>{handle || 'handle'}</span>
             </span>
             {state.includeQr && state.position === 'auto' && (
               <span className="watermark-auto-preview">AUTO · QR previewing bottom right</span>
             )}
           </div>
-          <div className="watermark-timeline" aria-label="Watermark visibility timeline">
-            <span
-              className="watermark-timeline-window"
-              style={{ left: `${timelineStart}%`, width: `${timelineEnd - timelineStart}%` }}
-            />
-            <span
-              className="watermark-timeline-playhead"
-              style={{ left: `${playhead}%` }}
-            />
+          <div className="watermark-timeline-stack">
+            {state.includeQr && (
+              <div className="watermark-timeline-row">
+                <span>QR</span>
+                <div className="watermark-timeline" aria-label="QR visibility timeline">
+                  <span
+                    className="watermark-timeline-window"
+                    style={{ left: `${qrTimeline.left}%`, width: `${qrTimeline.width}%` }}
+                  />
+                  <span
+                    className="watermark-timeline-playhead"
+                    style={{ left: `${playhead}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            <div className="watermark-timeline-row">
+              <span>Handle</span>
+              <div className="watermark-timeline" aria-label="Handle visibility timeline">
+                <span
+                  className="watermark-timeline-window"
+                  style={{ left: `${handleTimeline.left}%`, width: `${handleTimeline.width}%` }}
+                />
+                <span
+                  className="watermark-timeline-playhead"
+                  style={{ left: `${playhead}%` }}
+                />
+              </div>
+            </div>
           </div>
           <div className="watermark-preview-readout">
             <span>{state.includeQr
@@ -327,8 +578,22 @@ export function WatermarkChatReview({
                 : `QR ${POSITION_LABELS[state.position].toLowerCase()}`
               : 'Handle centered'}</span>
             <span>Handle {state.handleVerticalPercent}% from top</span>
-            <span>{secondsLabel(state.startSeconds)} → {duration > 0 ? secondsLabel(effectiveEnd) : 'clip end'}</span>
-            <span>{state.includeQr ? '2 watermarks · 50% opacity' : 'Handle only · 50% opacity'}</span>
+            {state.includeQr && (
+              <span>
+                QR {watermarkOpacityPercent(state.qrOpacity)}% · {watermarkTimingLabel(
+                  state.qrStartSeconds,
+                  state.qrEndSeconds,
+                  duration,
+                )}
+              </span>
+            )}
+            <span>
+              Handle {watermarkOpacityPercent(state.handleOpacity)}% · {watermarkTimingLabel(
+                state.handleStartSeconds,
+                state.handleEndSeconds,
+                duration,
+              )}
+            </span>
             <span>Rebuilds playable proxy</span>
           </div>
         </section>
@@ -391,6 +656,50 @@ export function WatermarkChatReview({
           </section>
 
           <section className="watermark-control-section">
+            <span className="watermark-section-label">Appearance</span>
+            <label className="watermark-toggle">
+              <span>
+                <strong>Show X icon</strong>
+                <small>Place the X mark before the plain handle</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={state.includeXIcon}
+                disabled={busy}
+                onChange={(event) => onChange({ includeXIcon: event.target.checked })}
+              />
+            </label>
+            <label className="watermark-toggle">
+              <span>
+                <strong>Handle border</strong>
+                <small>Draw the outline around the handle pill</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={state.includeHandleBorder}
+                disabled={busy}
+                onChange={(event) => onChange({ includeHandleBorder: event.target.checked })}
+              />
+            </label>
+            {state.includeQr && (
+              <WatermarkOpacityControl
+                id="watermark-qr-opacity"
+                label="QR opacity"
+                value={state.qrOpacity}
+                busy={busy}
+                onChange={(qrOpacity) => onChange({ qrOpacity })}
+              />
+            )}
+            <WatermarkOpacityControl
+              id="watermark-handle-opacity"
+              label="Handle opacity"
+              value={state.handleOpacity}
+              busy={busy}
+              onChange={(handleOpacity) => onChange({ handleOpacity })}
+            />
+          </section>
+
+          <section className="watermark-control-section">
             <div className="watermark-section-heading">
               <span>Position</span>
               <button
@@ -443,72 +752,37 @@ export function WatermarkChatReview({
           </section>
 
           <section className="watermark-control-section">
-            <div className="watermark-section-heading">
-              <span>Timing</span>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onChange({ startSeconds: 0, endSeconds: null })}
-              >
-                Whole clip
-              </button>
-            </div>
-            <div className="watermark-time-fields">
-              <label>
-                Start
-                <input
-                  type="number"
-                  min="0"
-                  max={duration > 0 ? duration : undefined}
-                  step="0.1"
-                  value={state.startSeconds}
-                  disabled={busy}
-                  onChange={(event) => onChange({
-                    startSeconds: Math.max(0, Number(event.target.value) || 0),
+            <span className="watermark-section-label">Timing</span>
+            <div className="watermark-timing-groups">
+              {state.includeQr && (
+                <WatermarkTimingControl
+                  idPrefix="watermark-qr-timing"
+                  label="QR"
+                  startSeconds={state.qrStartSeconds}
+                  endSeconds={state.qrEndSeconds}
+                  duration={duration}
+                  currentTime={currentTime}
+                  busy={busy}
+                  onChange={(qrStartSeconds, qrEndSeconds) => onChange({
+                    qrStartSeconds,
+                    qrEndSeconds,
                   })}
                 />
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onChange({
-                    startSeconds: state.endSeconds === null
-                      ? currentTime
-                      : Math.min(currentTime, Math.max(0, state.endSeconds - 0.1)),
-                  })}
-                >
-                  Set from playhead
-                </button>
-              </label>
-              <label>
-                End
-                <input
-                  type="number"
-                  min="0"
-                  max={duration > 0 ? duration : undefined}
-                  step="0.1"
-                  value={state.endSeconds ?? ''}
-                  placeholder={duration > 0 ? duration.toFixed(1) : 'Clip end'}
-                  disabled={busy}
-                  onChange={(event) => onChange({
-                    endSeconds: event.target.value === ''
-                      ? null
-                      : Math.max(0, Number(event.target.value) || 0),
-                  })}
-                />
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onChange({
-                    endSeconds: Math.max(currentTime, state.startSeconds + 0.1),
-                  })}
-                >
-                  Set from playhead
-                </button>
-              </label>
+              )}
+              <WatermarkTimingControl
+                idPrefix="watermark-handle-timing"
+                label="Handle"
+                startSeconds={state.handleStartSeconds}
+                endSeconds={state.handleEndSeconds}
+                duration={duration}
+                currentTime={currentTime}
+                busy={busy}
+                onChange={(handleStartSeconds, handleEndSeconds) => onChange({
+                  handleStartSeconds,
+                  handleEndSeconds,
+                })}
+              />
             </div>
-            {!timingValid && (
-              <p className="watermark-error" role="alert">End time must be after start time.</p>
-            )}
           </section>
 
           <label className="watermark-save-default">

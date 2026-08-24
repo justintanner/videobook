@@ -1,5 +1,7 @@
 import {
   createContext,
+  lazy,
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -116,10 +118,7 @@ import {
   type ImageReplacementCandidate,
   type ImageSubjectEditInput,
 } from '@/components/videobook/NotebookMediaFullscreen'
-import {
-  WatermarkChatReview,
-  type WatermarkReviewState,
-} from '@/components/videobook/WatermarkChatReview'
+import type { WatermarkReviewState } from '@/components/videobook/WatermarkChatReview'
 import { materializeNotebookSpeakCommand } from './videobook/notebook-speak-command'
 import { useElevenLabsVoices } from './videobook/use-elevenlabs-voices'
 import {
@@ -131,7 +130,9 @@ import {
 import { resolveWatermarkTarget } from './videobook/watermark-target'
 import {
   clampHandleVerticalPercent,
+  clampWatermarkOpacity,
   DEFAULT_HANDLE_VERTICAL_PERCENT,
+  DEFAULT_WATERMARK_OPACITY,
   isWatermarkPosition,
 } from './videobook/watermark-review'
 import {
@@ -367,6 +368,11 @@ import {
   type MediaInsightWatchStep,
 } from '@/videobook/media-insight-watch'
 import { guardedAsyncResult } from '@/videobook/async-request-guard'
+
+const WatermarkChatReview = lazy(async () => {
+  const module = await import('@/components/videobook/WatermarkChatReview')
+  return { default: module.WatermarkChatReview }
+})
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
 
@@ -6085,8 +6091,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       includeQr?: boolean
       position?: WatermarkReviewState['position']
       handleVerticalPercent?: number
-      startSeconds?: number
-      endSeconds?: number | null
+      includeXIcon?: boolean
+      includeHandleBorder?: boolean
+      qrOpacity?: number
+      handleOpacity?: number
+      qrStartSeconds?: number
+      qrEndSeconds?: number | null
+      handleStartSeconds?: number
+      handleEndSeconds?: number | null
       saveDefault?: boolean
     } = {},
   ) => {
@@ -6108,8 +6120,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       handleVerticalPercent: initial.handleVerticalPercent === undefined
         ? DEFAULT_HANDLE_VERTICAL_PERCENT
         : clampHandleVerticalPercent(initial.handleVerticalPercent),
-      startSeconds: initial.startSeconds ?? 0,
-      endSeconds: initial.endSeconds ?? null,
+      includeXIcon: initial.includeXIcon ?? true,
+      includeHandleBorder: initial.includeHandleBorder ?? true,
+      qrOpacity: initial.qrOpacity === undefined
+        ? DEFAULT_WATERMARK_OPACITY
+        : clampWatermarkOpacity(initial.qrOpacity),
+      handleOpacity: initial.handleOpacity === undefined
+        ? DEFAULT_WATERMARK_OPACITY
+        : clampWatermarkOpacity(initial.handleOpacity),
+      qrStartSeconds: initial.qrStartSeconds ?? 0,
+      qrEndSeconds: initial.qrEndSeconds ?? null,
+      handleStartSeconds: initial.handleStartSeconds ?? 0,
+      handleEndSeconds: initial.handleEndSeconds ?? null,
       saveDefault: initial.saveDefault ?? false,
       recent: [],
       loadingConfig: true,
@@ -6152,8 +6174,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       includeQr,
       position,
       handleVerticalPercent,
-      startSeconds,
-      endSeconds,
+      includeXIcon,
+      includeHandleBorder,
+      qrOpacity,
+      handleOpacity,
+      qrStartSeconds,
+      qrEndSeconds,
+      handleStartSeconds,
+      handleEndSeconds,
       saveDefault,
     } = pendingWatermarkReview
     const trimmedHandle = handle.replace(/^@/, '').trim()
@@ -6178,22 +6206,34 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         include_qr: includeQr,
         position,
         handle_vertical_percent: handleVerticalPercent,
+        include_x_icon: includeXIcon,
+        include_handle_border: includeHandleBorder,
+        handle_opacity: handleOpacity,
         ...(includeQr && url.trim() ? { url: url.trim() } : {}),
-        ...(startSeconds > 0 ? { start_seconds: startSeconds } : {}),
-        ...(endSeconds !== null ? { end_seconds: endSeconds } : {}),
+        ...(includeQr ? { qr_opacity: qrOpacity } : {}),
+        ...(includeQr && qrStartSeconds > 0
+          ? { qr_start_seconds: qrStartSeconds }
+          : {}),
+        ...(includeQr && qrEndSeconds !== null
+          ? { qr_end_seconds: qrEndSeconds }
+          : {}),
+        ...(handleStartSeconds > 0
+          ? { handle_start_seconds: handleStartSeconds }
+          : {}),
+        ...(handleEndSeconds !== null
+          ? { handle_end_seconds: handleEndSeconds }
+          : {}),
         ...(saveDefault ? { save_default: true } : {}),
       }))
       const source = asString(result?.placement_source)
       const corner = asString(result?.position)
       const frameAware = source === 'vision' || source === 'cached' ? ' (frame-aware)' : ''
-      const timing = startSeconds > 0 || endSeconds !== null
-        ? ` · ${startSeconds.toFixed(1)}s–${endSeconds?.toFixed(1) ?? 'end'}`
-        : ''
-      const handlePosition = ` · handle ${handleVerticalPercent}% from top`
+      const handlePosition = ` · handle ${handleVerticalPercent}% from top at ${Math.round(handleOpacity * 100)}%`
+      const qrAppearance = includeQr ? ` · QR ${Math.round(qrOpacity * 100)}%` : ''
       await refreshBookData(bookId, notebook?.id)
       const message = includeQr && corner
-        ? `QR + @${trimmedHandle} watermarks burned in — QR ${corner}${frameAware}${handlePosition}${timing}.`
-        : `@${trimmedHandle} watermark burned in${handlePosition}${timing}.`
+        ? `QR + @${trimmedHandle} watermarks burned in — QR ${corner}${frameAware}${qrAppearance}${handlePosition}.`
+        : `@${trimmedHandle} watermark burned in${handlePosition}.`
       setNotice(message)
       setPendingWatermarkReview(null)
       return { ok: true, message }
@@ -7809,8 +7849,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         new Map(commandMentionAssets.map((asset) => [asset.artifactId, asset.cellAddress])),
       )
       if (!target.ok) return { ok: false, message: target.message }
-      const startSeconds = asNumber(plan.params.start_seconds)
-      const endSeconds = asNumber(plan.params.end_seconds)
+      const sharedStartSeconds = asNumber(plan.params.start_seconds)
+      const sharedEndSeconds = asNumber(plan.params.end_seconds)
+      const qrStartSeconds = asNumber(plan.params.qr_start_seconds) ?? sharedStartSeconds
+      const qrEndSeconds = asNumber(plan.params.qr_end_seconds) ?? sharedEndSeconds
+      const handleStartSeconds = asNumber(plan.params.handle_start_seconds) ?? sharedStartSeconds
+      const handleEndSeconds = asNumber(plan.params.handle_end_seconds) ?? sharedEndSeconds
+      const sharedOpacity = asNumber(plan.params.opacity)
+      const qrOpacity = asNumber(plan.params.qr_opacity) ?? sharedOpacity
+      const handleOpacity = asNumber(plan.params.handle_opacity) ?? sharedOpacity
       const handleVerticalPercent = asNumber(plan.params.handle_vertical_percent)
       const requestedPosition = plan.params.position
       openWatermarkReview(target.artifactId, target.label, {
@@ -7829,11 +7876,29 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ...(handleVerticalPercent !== null
           ? { handleVerticalPercent: clampHandleVerticalPercent(handleVerticalPercent) }
           : {}),
-        ...(startSeconds !== null && startSeconds >= 0
-          ? { startSeconds }
+        ...(typeof plan.params.include_x_icon === 'boolean'
+          ? { includeXIcon: plan.params.include_x_icon }
           : {}),
-        ...(endSeconds !== null && endSeconds >= 0
-          ? { endSeconds }
+        ...(typeof plan.params.include_handle_border === 'boolean'
+          ? { includeHandleBorder: plan.params.include_handle_border }
+          : {}),
+        ...(qrOpacity !== null
+          ? { qrOpacity: clampWatermarkOpacity(qrOpacity) }
+          : {}),
+        ...(handleOpacity !== null
+          ? { handleOpacity: clampWatermarkOpacity(handleOpacity) }
+          : {}),
+        ...(qrStartSeconds !== null && qrStartSeconds >= 0
+          ? { qrStartSeconds }
+          : {}),
+        ...(qrEndSeconds !== null && qrEndSeconds >= 0
+          ? { qrEndSeconds }
+          : {}),
+        ...(handleStartSeconds !== null && handleStartSeconds >= 0
+          ? { handleStartSeconds }
+          : {}),
+        ...(handleEndSeconds !== null && handleEndSeconds >= 0
+          ? { handleEndSeconds }
           : {}),
         ...(typeof plan.params.save_default === 'boolean'
           ? { saveDefault: plan.params.save_default }
@@ -11096,23 +11161,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         onSuccessfulExecute={revealSuccessfulComposerResult}
       >
         {pendingWatermarkReview && (
-          <WatermarkChatReview
-            applyFormId={COMMAND_COMPOSER_FORM_ID}
-            busy={busy}
-            state={pendingWatermarkReview}
-            onChange={(patch) => setPendingWatermarkReview((current) =>
-              current ? { ...current, ...patch, error: null } : current)}
-            onMediaMetadata={(metadata) => setPendingWatermarkReview((current) =>
-              current
-                ? {
-                    ...current,
-                    durationSeconds: metadata.durationSeconds,
-                    width: metadata.width,
-                    height: metadata.height,
-                  }
-                : current)}
-            onCancel={dismissPendingCommandPlan}
-          />
+          <Suspense fallback={null}>
+            <WatermarkChatReview
+              applyFormId={COMMAND_COMPOSER_FORM_ID}
+              busy={busy}
+              state={pendingWatermarkReview}
+              onChange={(patch) => setPendingWatermarkReview((current) =>
+                current ? { ...current, ...patch, error: null } : current)}
+              onMediaMetadata={(metadata) => setPendingWatermarkReview((current) =>
+                current
+                  ? {
+                      ...current,
+                      durationSeconds: metadata.durationSeconds,
+                      width: metadata.width,
+                      height: metadata.height,
+                    }
+                  : current)}
+              onCancel={dismissPendingCommandPlan}
+            />
+          </Suspense>
         )}
         {pendingCommandPlan && (
           <aside
