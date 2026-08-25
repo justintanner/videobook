@@ -76,6 +76,9 @@ those exports. No curated stable-model mirror remains.
 `wan2.7-i2v`/`wan2.7-videoedit` domain. The tool, UI registry, job payload, and
 payload builder now use that schema/type directly.
 
+Update 2026-08-25 (vb-2erh.2): the alibaba-native Wan 2.7 video tool was
+retired with all Wan 2.x surfaces; see §37 for the Wan 3.0 routing decision.
+
 ## 6. (gap) ~~No exported HappyHorse duration schema~~ — RESOLVED
 
 `@apicity/kie` exports `HappyHorseDurationSchema` for integer durations from 3
@@ -267,6 +270,12 @@ for `google/nano-banana-2-lite`(/`-lite/edit`), which upstream declares
 dynamic-pricing, and `xai/grok-imagine-video/edit-video`, which has no
 published rate.
 
+Update 2026-08-25 (vb-2erh): all Wan 2.7 fal tools/adapters were retired
+(vb-2erh.2). Wan 3.0 Prime t2v/i2v/r2v is priced via `falVideo`
+($0.05/output second); the base `alibaba/wan-3.0/*` tier and
+`alibaba/qwen-image-3/edit` are upstream dynamic-pricing (per compute second),
+so they keep the unpriced "—" path with no adapter.
+
 ## 27. (gap) ~~xAI media generation has no per-unit cost contract~~ — RESOLVED in 0.8.0
 
 Per-second video (`grok-imagine-video*`) and per-generation image
@@ -281,6 +290,10 @@ International-region list rate of $0.03/image; the pro rate stays $0.075.
 `ALIBABA_ADAPTERS` covers `generate_alibaba_wan_2_7_text_to_image` via the
 normal `alibabaImage("wan2.7-image")` adapter; the unpriced "—" display path
 for that tool is gone.
+
+Update 2026-08-25 (vb-2erh.2): `generate_alibaba_wan_2_7_text_to_image` was
+retired with all Wan 2.x surfaces, so `ALIBABA_ADAPTERS` no longer carries a
+Wan entry; see §37.
 
 ## 29. (gap) ~~ElevenLabs TTS text limits are model-specific but absent from the schema~~ — RESOLVED in 0.8.0
 
@@ -423,3 +436,10 @@ native pricing.
 broader Google Flow product and schema work. One residual upstream nit from the
 0.8.8 adoption: `FalEndpointInputMap` keys Qwen edit as `fal-ai/qwen-image-edit`
 while the real endpoint is `fal-ai/qwen-image/edit` (§3).
+
+**0.11.0 Wan 3.0 / Qwen 3 update (2026-08-25, vb-2erh):** all Wan 2.x surfaces
+are retired (§5, §26, §28 updates above). Wan 3.0 + Prime ship via six fal
+tools and two kie omni tools with the kie picker route primary; native
+DashScope video is deliberately dropped (§37). Qwen Image 3 edit ships via
+`generate_fal_qwen_3_0_edit_image`; like base Wan 3.0 it is upstream
+dynamic-pricing, so it has no cost adapter (§26 update).

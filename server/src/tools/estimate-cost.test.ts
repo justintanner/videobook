@@ -111,6 +111,9 @@ describe("estimate_cost tool", () => {
       ["generate_kie_kling_3_0_omni_reference_to_video", { resolution: "720p", duration: 5, video_refs: ["@vid-ref"] }],
       ["generate_kie_kling_3_0_omni_transformation", { resolution: "720p", duration: 5 }],
       ["generate_gemini_omni_video", { resolution: "720p", duration: "6" }],
+      // Wan 3.0 omni (resolution-tiered per second, UPPERCASE tiers)
+      ["generate_kie_wan_3_0_video", { resolution: "720P", duration: 5 }],
+      ["generate_kie_wan_3_0_prime_video", { resolution: "1080P", duration: 10 }],
       // Grok-imagine video (resolution-tiered)
       ["generate_grok_imagine_video", { resolution: "480p", duration: 8 }],
       ["generate_grok_imagine_t2v_video", { resolution: "480p", duration: 6 }],
@@ -139,6 +142,26 @@ describe("estimate_cost tool", () => {
       expect(payload.estimate.usd, `${tool_name} usd`).toBeGreaterThan(0);
     }
   }, 60_000);
+
+  it("prices kie Wan 3.0 tiers and estimates intelligent duration at the 5s default", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [
+          { tool_name: "generate_kie_wan_3_0_video", input: { resolution: "720P", duration: 5 } },
+          { tool_name: "generate_kie_wan_3_0_prime_video", input: { duration: -1 } },
+        ],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.per_call[0].estimate.source).toBe("per-unit-table");
+    expect(payload.per_call[0].estimate.warnings).toEqual([]);
+    expect(payload.per_call[0].estimate.usd).toBeCloseTo(0.8);
+    expect(payload.per_call[1].estimate.source).toBe("per-unit-table");
+    expect(payload.per_call[1].estimate.warnings).toEqual([]);
+    expect(payload.per_call[1].estimate.usd).toBeCloseTo(1.26);
+    expect(payload.per_call[1].estimate.breakdown.units).toBe(5);
+  });
 
   it("prices Seedance 2.5 1080p audio and treats automatic duration as 5s", async () => {
     const result = await client.callTool({
@@ -563,6 +586,39 @@ describe("estimate_cost tool", () => {
       expect(payload.estimate.usd, `${tool_name} usd`).toBeGreaterThan(0);
     }
   }, 60_000);
+
+  it("prices fal Wan 3.0 Prime at $0.05 per output second", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [
+          { tool_name: "generate_fal_wan_3_0_prime_text_to_video", input: { duration: 5 } },
+        ],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.source).toBe("per-unit-table");
+    expect(payload.estimate.warnings).toEqual([]);
+    expect(payload.estimate.usd).toBeCloseTo(0.25);
+  });
+
+  it("returns a $0 estimate for dynamic-pricing fal endpoints (base Wan 3.0, Qwen 3 edit)", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [
+          { tool_name: "generate_fal_wan_3_0_text_to_video", input: { duration: 5 } },
+          { tool_name: "generate_fal_qwen_3_0_edit_image", input: {} },
+        ],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.per_call).toHaveLength(2);
+    for (const call of payload.per_call) {
+      expect(call.estimate.usd, call.tool_name).toBe(0);
+      expect(call.estimate.warnings.join(" "), call.tool_name).toContain("no cost adapter registered");
+    }
+  });
 
   it("prices canonical generation names across providers", async () => {
     const result = await client.callTool({
