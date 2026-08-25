@@ -199,6 +199,24 @@ const kieFlatImage = (model: string): CostAdapter => () => ({
   payload: { model, input: {} },
 });
 
+// kie wan/3-0-video[-prime]: resolution-tiered per second with UPPERCASE
+// tiers. duration -1 (intelligent) is estimated at the 5s default:
+// cost@0.11.0's wan30Seconds fails closed on the sentinel without
+// realized-seconds costHints, which would surface "—" for the default flow.
+const kieWan30Video = (model: "wan/3-0-video" | "wan/3-0-video-prime"): CostAdapter => (input) => {
+  const seconds = num(input.duration);
+  return {
+    provider: "kie",
+    payload: {
+      model,
+      input: {
+        resolution: str(input.resolution) || "1080P",
+        duration: seconds !== undefined && seconds > 0 ? seconds : 5,
+      },
+    },
+  };
+};
+
 // kie flat per-second video adapter (veo3 family — flat rate regardless of
 // resolution). The rate table reads input.duration in seconds; videocity
 // tools pass duration as a numeric string we coerce here.
@@ -334,6 +352,8 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
     const model = imageRefs.length > 0 ? "kling/v3-turbo-image-to-video" : "kling/v3-turbo-text-to-video";
     return kieResolutionVideo(model, KLING_TURBO_RESOLUTION, Number(KLING_TURBO_DURATION))(args);
   },
+  generate_kie_wan_3_0_video: kieWan30Video("wan/3-0-video"),
+  generate_kie_wan_3_0_prime_video: kieWan30Video("wan/3-0-video-prime"),
 
   // --- KIE Veo 3 / Veo 3 Fast (flat per-second, priced in cost@0.7.0) ---
   generate_kie_veo_3_0_video: kieFlatVideo("veo3"),

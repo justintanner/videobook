@@ -4,8 +4,8 @@ This is the authoritative registry-derived list of canonical generation and work
 
 ## Summary
 
-- Total actions: 73
-- Provider actions: 64
+- Total actions: 75
+- Provider actions: 66
 - Workflow and support actions: 9
 
 ## Naming grammar
@@ -26,6 +26,8 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `generate_kie_kling_3_0_motion_control` | kie | `KlingMotionControlRequestSchema` | video | motion_control | visible | `generate_kling30_motion_control_video` |
 | `generate_kie_seedance_2_5_video` | kie | `Seedance25InputSchema` | video | image_to_video | visible | `generate_seedance25_video` |
 | `generate_kie_gemini_omni_video` | kie | `GeminiOmniVideoRequestSchema` | video | image_to_video | visible | `generate_gemini_omni_video` |
+| `generate_kie_wan_3_0_video` | kie | `Wan30VideoRequestSchema` | video | generate_video | visible |  |
+| `generate_kie_wan_3_0_prime_video` | kie | `Wan30VideoPrimeRequestSchema` | video | generate_video | visible |  |
 | `generate_kie_happyhorse_1_1_text_to_video` | kie | `HappyHorse11TextToVideoRequestSchema` | video | text_to_video | hidden_fal_variant | `generate_happyhorse_t2v_video` |
 | `generate_kie_happyhorse_1_1_image_to_video` | kie | `HappyHorse11ImageToVideoRequestSchema` | video | image_to_video | visible | `generate_happyhorse_i2v_video` |
 | `generate_kie_happyhorse_1_1_reference_to_video` | kie | `HappyHorse11ReferenceToVideoRequestSchema` | video | reference_to_video | hidden_fal_variant | `generate_happyhorse_ref_video` |

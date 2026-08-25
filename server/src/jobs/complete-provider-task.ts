@@ -44,6 +44,8 @@ const TASK_TYPES_BY_COMPLETION_FAMILY = {
     "fal_wan30_prime_t2v",
     "fal_wan30_prime_i2v",
     "fal_wan30_prime_r2v",
+    "wan30_video",
+    "wan30_prime_video",
     "fal_kling_v3_pro_i2v",
     "fal_kling_v3_pro_t2v",
     "fal_kling_v3_standard_i2v",

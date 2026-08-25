@@ -188,6 +188,10 @@ import { generateWan30R2vFalDef } from "./generate-wan30-r2v-fal.js";
 import { generateWan30PrimeT2vFalDef } from "./generate-wan30-prime-t2v-fal.js";
 import { generateWan30PrimeI2vFalDef } from "./generate-wan30-prime-i2v-fal.js";
 import { generateWan30PrimeR2vFalDef } from "./generate-wan30-prime-r2v-fal.js";
+import {
+  generateKieWan30PrimeVideoDef,
+  generateKieWan30VideoDef,
+} from "./generate-wan30-video.js";
 import { genImagesAllDef } from "./gen-images-all.js";
 import { imageSubjectDefs } from "./image-subjects.js";
 
@@ -468,6 +472,8 @@ export function getAllToolDefs(
     generateWan30PrimeT2vFalDef(engine),
     generateWan30PrimeI2vFalDef(engine),
     generateWan30PrimeR2vFalDef(engine),
+    generateKieWan30VideoDef(engine),
+    generateKieWan30PrimeVideoDef(engine),
     genImagesAllDef(engine),
     ...imageSubjectDefs(engine),
 

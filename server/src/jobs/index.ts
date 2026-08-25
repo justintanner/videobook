@@ -125,6 +125,10 @@ import { registerGenerateWan30R2vFalJob } from "./generate-wan30-r2v-fal.js";
 import { registerGenerateWan30PrimeT2vFalJob } from "./generate-wan30-prime-t2v-fal.js";
 import { registerGenerateWan30PrimeI2vFalJob } from "./generate-wan30-prime-i2v-fal.js";
 import { registerGenerateWan30PrimeR2vFalJob } from "./generate-wan30-prime-r2v-fal.js";
+import {
+  registerGenerateWan30PrimeVideoJob,
+  registerGenerateWan30VideoJob,
+} from "./generate-wan30-video.js";
 import { registerPostToXJob } from "./post-to-x.js";
 import { registerGenerateElevenlabsT2aJob } from "./generate-elevenlabs-t2a.js";
 import { registerAcestepCoverJob } from "./generate-acestep-cover.js";
@@ -264,6 +268,8 @@ export function registerAllJobHandlers(
   registerGenerateWan30PrimeT2vFalJob(engine);
   registerGenerateWan30PrimeI2vFalJob(engine);
   registerGenerateWan30PrimeR2vFalJob(engine);
+  registerGenerateWan30VideoJob(engine);
+  registerGenerateWan30PrimeVideoJob(engine);
   registerGenerateElevenlabsT2aJob(engine);
   registerAcestepCoverJob(engine);
   registerExtendAudioJob(engine);

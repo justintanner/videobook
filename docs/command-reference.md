@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (284)
+## MCP endpoints (286)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -143,6 +143,8 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `generate_kie_veo_3_0_fast_video` (historical names, not exposed: `generate_veo3_fast_video`) — Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new video artifact and enqueues a background job.
 - `generate_kie_veo_3_0_video` (historical names, not exposed: `generate_veo3_video`) — Generate a video using Google Veo 3 (KIE). Text-to-video or image-to-video from reference images. Creates a new video artifact and enqueues a background job.
 - `generate_kie_volcengine_video_to_video_lip_sync` (historical names, not exposed: `generate_volcengine_lipsync_video`) — Lip-sync a source video to driving audio using Volcengine video-to-video lip-sync (kie). Creates a new video artifact and enqueues a background job.
+- `generate_kie_wan_3_0_prime_video` — Generate a video using Wan 3.0 Prime (KIE), the high-speed tier. One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.
+- `generate_kie_wan_3_0_video` — Generate a video using Wan 3.0 (KIE). One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.
 - `generate_xai_grok_imagine_video` (historical names, not exposed: `generate_grok_imagine_ref_video`, `generate_xai_grok_imagine_reference_to_video`) — Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new video artifact and enqueues a background job.
 - `get_book` — Read the current book identity
 - `get_character_entity` — Read a reusable character

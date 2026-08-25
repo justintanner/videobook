@@ -91,7 +91,10 @@ import {
   SeedreamImageToImageRequestSchema,
   SeedreamTextToImageRequestSchema,
   VolcengineVideoToVideoLipSyncRequestSchema,
+  Wan30VideoPrimeRequestSchema,
+  Wan30VideoRequestSchema,
 } from "@apicity/kie/zod";
+import type { z } from "zod";
 import { zodDefault } from "./zod-slots.js";
 import {
   KLING_OMNI_API_MODELS,
@@ -679,6 +682,52 @@ function buildSeedance25VideoPayload(
       ...(duration !== undefined ? { duration } : {}),
       ...(outputFormat !== undefined ? { output_format: outputFormat } : {}),
       ...(args.web_search !== undefined ? { web_search: args.web_search } : {}),
+      ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
+    },
+  };
+}
+
+type Wan30VideoRequest = z.input<typeof Wan30VideoRequestSchema>;
+type Wan30VideoPrimeRequest = z.input<typeof Wan30VideoPrimeRequestSchema>;
+
+type Wan30VideoArgs = {
+  prompt?: string;
+  resolution?: Wan30VideoRequest["input"]["resolution"];
+  aspect_ratio?: Wan30VideoRequest["input"]["aspect_ratio"];
+  duration?: string;
+  audio?: boolean;
+  seed?: number;
+  nsfw_checker?: boolean;
+};
+
+type Wan30VideoOpts = {
+  firstFrameUrl?: string;
+  lastFrameUrl?: string;
+  referenceImageUrls?: string[];
+  referenceVideoUrls?: string[];
+  referenceAudioUrls?: string[];
+};
+
+function buildWan30VideoPayload(
+  model: "wan/3-0-video" | "wan/3-0-video-prime",
+  args: Wan30VideoArgs,
+  opts: Wan30VideoOpts,
+): Wan30VideoRequest | Wan30VideoPrimeRequest {
+  const nsfwChecker = valueOrZodDefault(args.nsfw_checker, Wan30VideoRequestSchema.shape.input.shape.nsfw_checker);
+  return {
+    model,
+    input: {
+      ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
+      ...(opts.firstFrameUrl !== undefined ? { first_frame_url: opts.firstFrameUrl } : {}),
+      ...(opts.lastFrameUrl !== undefined ? { last_frame_url: opts.lastFrameUrl } : {}),
+      ...(opts.referenceImageUrls && opts.referenceImageUrls.length > 0 ? { reference_image_urls: opts.referenceImageUrls } : {}),
+      ...(opts.referenceVideoUrls && opts.referenceVideoUrls.length > 0 ? { reference_video_urls: opts.referenceVideoUrls } : {}),
+      ...(opts.referenceAudioUrls && opts.referenceAudioUrls.length > 0 ? { reference_audio_urls: opts.referenceAudioUrls } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
+      ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
+      ...(args.audio !== undefined ? { audio: args.audio } : {}),
+      ...(args.seed !== undefined ? { seed: args.seed } : {}),
       ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
     },
   };
@@ -1600,6 +1649,28 @@ function translateToolPayloadUnchecked(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_kie_wan_3_0_video":
+    case "generate_kie_wan_3_0_prime_video": {
+      const apiModel = toolName === "generate_kie_wan_3_0_prime_video"
+        ? "wan/3-0-video-prime"
+        : "wan/3-0-video";
+      const firstFrameUrl = (args.first_frame_ref as string | undefined) ?? undefined;
+      const lastFrameUrl = (args.last_frame_ref as string | undefined) ?? undefined;
+      const referenceVideoUrls = (args.video_refs as string[] | undefined) ?? undefined;
+      const referenceAudioUrls = (args.audio_refs as string[] | undefined) ?? undefined;
+      const payload = buildWan30VideoPayload(
+        apiModel,
+        args as Wan30VideoArgs,
+        {
+          ...(firstFrameUrl !== undefined ? { firstFrameUrl } : {}),
+          ...(lastFrameUrl !== undefined ? { lastFrameUrl } : {}),
+          ...(imageRefs.length > 0 ? { referenceImageUrls: imageRefs } : {}),
+          ...(referenceVideoUrls !== undefined && referenceVideoUrls.length > 0 ? { referenceVideoUrls } : {}),
+          ...(referenceAudioUrls !== undefined && referenceAudioUrls.length > 0 ? { referenceAudioUrls } : {}),
+        },
+      );
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_kie_seedance_2_0_video":
     case "generate_kie_seedance_2_0_fast_video": {
       const isFast = toolName === "generate_kie_seedance_2_0_fast_video";
@@ -1878,6 +1949,7 @@ export {
   buildSeedance2VideoPayload,
   buildSeedance25VideoPayload,
   buildSeedance2MiniVideoPayload,
+  buildWan30VideoPayload,
   buildGeminiOmniVideoPayload,
   buildVeo3VideoPayload,
   buildVeo31VideoPayload,

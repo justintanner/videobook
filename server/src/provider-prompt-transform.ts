@@ -197,6 +197,8 @@ export function transformProviderPrompt(
     case "generate_kie_seedance_2_5_video":
     case "generate_kie_seedance_2_0_video":
     case "generate_kie_seedance_2_0_fast_video":
+    case "generate_kie_wan_3_0_video":
+    case "generate_kie_wan_3_0_prime_video":
       transformed = stripRefMentions(
         rewriteSeedanceAssetMentions(prompt, {
           imageRefs,
