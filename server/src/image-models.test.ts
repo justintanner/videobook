@@ -375,15 +375,16 @@ describe("validateImageParams", () => {
 // ---------------------------------------------------------------------------
 
 describe("getImageModels", () => {
-  it("returns all 10 image models", () => {
+  it("returns all 11 image models", () => {
     const models = getImageModels();
-    expect(Object.keys(models)).toHaveLength(10);
+    expect(Object.keys(models)).toHaveLength(11);
     expect(models).toHaveProperty("nano_banana");
     expect(models).toHaveProperty("grok_imagine_image");
     expect(models).toHaveProperty("gpt_image");
     expect(models).toHaveProperty("gpt_image_text");
     expect(models).toHaveProperty("grok_imagine_text");
     expect(models).toHaveProperty("qwen2_image_edit");
+    expect(models).toHaveProperty("qwen3_image_edit");
     expect(models).toHaveProperty("seedream_text");
     expect(models).toHaveProperty("seedream_image");
     expect(models).toHaveProperty("alibaba_qwen_image");

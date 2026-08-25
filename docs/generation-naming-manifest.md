@@ -4,8 +4,8 @@ This is the authoritative registry-derived list of canonical generation and work
 
 ## Summary
 
-- Total actions: 75
-- Provider actions: 66
+- Total actions: 76
+- Provider actions: 67
 - Workflow and support actions: 9
 
 ## Naming grammar
@@ -73,6 +73,7 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `generate_fal_grok_imagine_video_edit_video` | fal | `fal-ai/xai/grok-imagine-video/edit` | video | edit_video | hidden_fal_variant | `generate_grok_imagine_video_edit_fal` |
 | `generate_fal_qwen_2_0_text_to_image` | fal | `fal-ai/qwen-image/t2i` | image | text_to_image | hidden_fal_variant | `generate_qwen_image_fal` |
 | `generate_fal_qwen_2_0_edit_image` | fal | `fal-ai/qwen-image/edit` | image | edit_image | hidden_fal_variant | `generate_qwen_image_edit_fal` |
+| `generate_fal_qwen_3_0_edit_image` | fal | `fal-ai/qwen-image-3/edit` | image | edit_image | visible |  |
 | `generate_fal_wan_3_0_text_to_video` | fal | `fal-ai/wan-3-0/t2v` | video | text_to_video | hidden_fal_variant |  |
 | `generate_fal_wan_3_0_image_to_video` | fal | `fal-ai/wan-3-0/i2v` | video | image_to_video | hidden_fal_variant |  |
 | `generate_fal_wan_3_0_reference_to_video` | fal | `fal-ai/wan-3-0/r2v` | video | reference_to_video | hidden_fal_variant |  |

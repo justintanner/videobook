@@ -745,6 +745,18 @@ export const GENERATION_ACTIONS: GenerationActionSpec[] = [
     persisted_history_consumers: ["notebook", "project_activity"],
   },
   {
+    canonical_name: "generate_fal_qwen_3_0_edit_image",
+    provider: "fal",
+    apicity_identifier: "fal-ai/qwen-image-3/edit",
+    media_type: "image",
+    operation: "edit_image",
+    picker_visibility: "visible",
+    legacy_names: [],
+    schema_owner: "@apicity/fal/zod",
+    job_task_discriminator: "qwen3_fal_image_edit",
+    persisted_history_consumers: ["notebook", "project_activity"],
+  },
+  {
     canonical_name: "generate_fal_wan_3_0_text_to_video",
     provider: "fal",
     apicity_identifier: "fal-ai/wan-3-0/t2v",

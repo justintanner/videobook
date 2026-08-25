@@ -27,6 +27,7 @@ import {
   AlibabaQwenImageGenerationImageSlotsSchema,
   AlibabaQwenImageGenerationStableModelSchema,
 } from "@apicity/alibaba/zod";
+import { FalAlibabaQwenImage3EditRequestSchema } from "@apicity/fal/zod";
 import {
   enumOptions,
   readSlotConstraints,
@@ -36,6 +37,7 @@ import {
   zodNumberRange,
   zodStringMaxLength,
   zodStringMinLength,
+  zodUnionEnumOptions,
   type SlotConstraints,
 } from "./zod-slots.js";
 
@@ -45,6 +47,9 @@ import {
 // AlibabaQwenImageEditImageSlotsSchema = .min(1).max(3)).
 const QWEN_GENERATION_MODEL_VALUES = enumOptions(AlibabaQwenImageGenerationStableModelSchema);
 const QWEN_EDIT_MODEL_VALUES = enumOptions(AlibabaQwenImageEditStableModelSchema);
+const qwen3FalImageSizeOptions = zodUnionEnumOptions(FalAlibabaQwenImage3EditRequestSchema.shape.image_size);
+if (!qwen3FalImageSizeOptions) throw new Error("FalAlibabaQwenImage3EditRequestSchema.image_size changed shape");
+const QWEN3_FAL_IMAGE_SIZE_OPTIONS: readonly string[] = qwen3FalImageSizeOptions;
 const GOOGLE_NBP_ASPECT_RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16", "auto"] as const;
 const GOOGLE_NBP_IMAGE_SLOTS: SlotConstraints = { min: 0, max: 10 };
 
@@ -180,6 +185,14 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
       nsfw_checker: Qwen2ImageEditRequestSchema.shape.input.shape.nsfw_checker,
     },
     falToolNames: { withRefs: "generate_fal_qwen_2_0_edit_image" },
+  },
+  {
+    key: "qwen3_image_edit",
+    tool_name: "generate_fal_qwen_3_0_edit_image",
+    label: "Qwen3 Image Edit",
+    description: "Prompt-driven image edit using Qwen Image 3 via fal.ai (1-3 ordered reference images)",
+    imageFieldSchema: FalAlibabaQwenImage3EditRequestSchema.shape.image_urls.min(1).max(3),
+    falToolNames: { withRefs: "generate_fal_qwen_3_0_edit_image" },
   },
   {
     key: "seedream_text",
@@ -455,6 +468,35 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
     };
     const required = isEdit ? ["prompt", "image_refs", "model"] : ["prompt", "model"];
     return { type: "object", properties, required, defaults };
+  }
+
+  // Qwen Image 3 edit — fal-only model (no Kie/xAI/Alibaba-native route)
+  if (config.key === "qwen3_image_edit") {
+    const shape = FalAlibabaQwenImage3EditRequestSchema.shape;
+    const properties: Record<string, ParamSchema> = {
+      prompt: {
+        type: "string",
+        description: "Edit instruction (Chinese or English; reference inputs positionally as \"image 1\", \"image 2\", \"image 3\")",
+        minLength: 1,
+        maxLength: 5000,
+      },
+      image_refs: {
+        type: "array",
+        items: { type: "string" },
+        description: imageSlotsDescription(getImageSlotsForConfig(config)),
+        minItems: 1,
+        maxItems: 3,
+      },
+      negative_prompt: { type: "string", description: "Negative prompt", maxLength: 500 },
+      image_size: { type: "string", description: "Output size (square_hd default)", enum: [...QWEN3_FAL_IMAGE_SIZE_OPTIONS] },
+      enable_prompt_expansion: zodFieldToParam(shape.enable_prompt_expansion, "Enable prompt expansion"),
+      seed: zodFieldToParam(shape.seed, "Seed for deterministic output"),
+      enable_safety_checker: zodFieldToParam(shape.enable_safety_checker, "Enable safety checker"),
+      sync_mode: zodFieldToParam(shape.sync_mode, "Wait for the result in a single request"),
+      num_images: zodFieldToParam(shape.num_images, "Number of images (1-6)"),
+      output_format: zodFieldToParam(shape.output_format, "Output image format"),
+    };
+    return { type: "object", properties, required: ["prompt", "image_refs"], defaults };
   }
 
   return null;

@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (286)
+## MCP endpoints (287)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -100,6 +100,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `generate_fal_nano_banana_text_to_image` (historical names, not exposed: `generate_nano_banana_fal`) — Generate an image via fal.ai using Google Nano Banana (v1) from a text prompt. Creates a new image artifact and enqueues a background job.
 - `generate_fal_qwen_2_0_edit_image` (historical names, not exposed: `generate_qwen_image_edit_fal`) — Edit an image via fal.ai using Alibaba Qwen Image edit with one image artifact reference input. Creates a new image artifact and enqueues a background job.
 - `generate_fal_qwen_2_0_text_to_image` (historical names, not exposed: `generate_qwen_image_fal`) — Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new image artifact and enqueues a background job.
+- `generate_fal_qwen_3_0_edit_image` — Edit images via fal.ai using Alibaba Qwen Image 3 with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_fal_seedream_v5_lite_edit_image` (historical names, not exposed: `generate_seedream_v5_lite_edit_fal`) — Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_fal_seedream_v5_lite_text_to_image` (historical names, not exposed: `generate_seedream_v5_lite_fal`) — Generate an image via fal.ai using ByteDance Seedream V5 Lite from a text prompt. Creates a new image artifact and enqueues a background job.
 - `generate_fal_wan_3_0_image_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 from a first-frame image (optional end frame and prompt). Creates a new video artifact and enqueues a background job.

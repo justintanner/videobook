@@ -109,6 +109,7 @@ import { registerGenerateNanoBanana2LiteFalJob } from "./generate-nano-banana-2-
 import { registerGenerateNanoBanana2LiteEditFalJob } from "./generate-nano-banana-2-lite-edit-fal.js";
 import { registerGenerateQwenImageFalJob } from "./generate-qwen-image-fal.js";
 import { registerGenerateQwenImageEditFalJob } from "./generate-qwen-image-edit-fal.js";
+import { registerGenerateQwen3ImageEditFalJob } from "./generate-qwen3-image-edit-fal.js";
 import { registerGenerateSeedance2FastT2vFalJob } from "./generate-seedance2-fast-t2v-fal.js";
 import { registerGenerateSeedance2FastI2vFalJob } from "./generate-seedance2-fast-i2v-fal.js";
 import { registerGenerateKlingV3ProT2vFalJob } from "./generate-kling-v3-pro-t2v-fal.js";
@@ -252,6 +253,7 @@ export function registerAllJobHandlers(
   registerGenerateNanoBanana2LiteEditFalJob(engine);
   registerGenerateQwenImageFalJob(engine);
   registerGenerateQwenImageEditFalJob(engine);
+  registerGenerateQwen3ImageEditFalJob(engine);
   registerGenerateSeedance2FastT2vFalJob(engine);
   registerGenerateSeedance2FastI2vFalJob(engine);
   registerGenerateKlingV3ProT2vFalJob(engine);

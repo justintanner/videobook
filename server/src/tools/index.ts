@@ -178,6 +178,7 @@ import { generateNanoBanana2LiteFalDef } from "./generate-nano-banana-2-lite-fal
 import { generateNanoBanana2LiteEditFalDef } from "./generate-nano-banana-2-lite-edit-fal.js";
 import { generateQwenImageFalDef } from "./generate-qwen-image-fal.js";
 import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
+import { generateQwen3ImageEditFalDef } from "./generate-qwen3-image-edit-fal.js";
 
 import { generateGrokImagineVideoR2vFalDef } from "./generate-grok-imagine-video-r2v-fal.js";
 import { generateGrokImagineVideoExtendFalDef } from "./generate-grok-imagine-video-extend-fal.js";
@@ -462,6 +463,7 @@ export function getAllToolDefs(
     generateNanoBanana2LiteEditFalDef(engine),
     generateQwenImageFalDef(engine),
     generateQwenImageEditFalDef(engine),
+    generateQwen3ImageEditFalDef(engine),
 
     generateGrokImagineVideoR2vFalDef(engine),
     generateGrokImagineVideoExtendFalDef(engine),

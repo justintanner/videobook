@@ -512,6 +512,9 @@ const FAL_ADAPTERS: Record<string, CostAdapter> = {
   // endpoint ("fal-ai/qwen-image/edit").
   generate_fal_qwen_2_0_text_to_image: falImage("fal-ai/qwen-image"),
   generate_fal_qwen_2_0_edit_image: falImage("fal-ai/qwen-image-edit"),
+  // alibaba/qwen-image-3/edit stays unpriced: cost@0.11.0 declares it
+  // dynamic-pricing (per compute second; FAL_DYNAMIC_PRICING_ENDPOINTS), so no
+  // request field — num_images included — derives a rate.
   // nano-banana-2-lite stays unpriced: upstream declares it dynamic-pricing.
 
   // --- Fal video (per second) ---
