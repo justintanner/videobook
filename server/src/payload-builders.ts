@@ -29,10 +29,6 @@ import type {
   SeedreamTextToImageRequest,
   SeedreamImageToImageRequest,
   Qwen2ImageEditRequest,
-  Wan27ImageToVideoRequest,
-  Wan27RefToVideoRequest,
-  Wan27VideoEditRequest,
-  Wan27TextToVideoRequest,
   HappyHorse11TextToVideoRequest,
   HappyHorse11ImageToVideoRequest,
   HappyHorse11ReferenceToVideoRequest,
@@ -46,8 +42,6 @@ import type {
   MiniMaxH3Resolution,
   MiniMaxH3FixedAspectRatio,
   MiniMaxH3ReferenceAspectRatio,
-  Wan27ImageRequest,
-  Wan27ImageProRequest,
   // Named union types for cleaner type annotations
   KlingMode,
   KlingDuration,
@@ -56,10 +50,6 @@ import type {
   GrokImagineResolution,
   NanoBananaResolution,
   NanoBananaOutputFormat,
-  Wan27Resolution,
-  Wan27AspectRatio,
-  Wan27ImageAspectRatio,
-  Wan27ImageResolution,
   VolcengineVideoToVideoLipSyncRequest,
   VolcengineVideoToVideoLipSyncMode,
   Omnihuman15Request,
@@ -83,12 +73,6 @@ import type {
 } from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
 import type { GoogleFlowImagesRequest, GoogleFlowVideosRequest } from "@apicity/googleflow";
-import type {
-  AlibabaImageGenerationRequest,
-  AlibabaVideoSynthesisRequest,
-  AlibabaVideoSynthesisInput,
-  AlibabaVideoSynthesisParameters,
-} from "@apicity/alibaba";
 import type { AlibabaMultimodalGenerationRequest } from "@apicity/alibaba/zod";
 import {
   GrokImageToImageRequestSchema,
@@ -107,8 +91,6 @@ import {
   SeedreamImageToImageRequestSchema,
   SeedreamTextToImageRequestSchema,
   VolcengineVideoToVideoLipSyncRequestSchema,
-  Wan27ImageProRequestSchema,
-  Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
 import { zodDefault } from "./zod-slots.js";
 import {
@@ -1126,212 +1108,6 @@ function buildGptImageTextPayload(
   };
 }
 
-type Wan27ImageArgs = {
-  prompt: string;
-  aspect_ratio?: Wan27ImageAspectRatio;
-  resolution?: Wan27ImageResolution;
-  seed?: number;
-  nsfw_checker?: boolean;
-};
-
-function buildWan27ImagePayload(
-  args: Wan27ImageArgs,
-  inputUrls: string[],
-): Wan27ImageRequest {
-  return Wan27ImageRequestSchema.parse({
-    model: "wan/2-7-image",
-    input: {
-      prompt: args.prompt,
-      ...(inputUrls.length > 0 ? { input_urls: inputUrls } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
-      // 0.8.6 requires resolution once aspect_ratio is set (and it defaults to
-      // 16:9), so the documented 2K default must be materialized here.
-      resolution: args.resolution ?? "2K",
-      ...(args.seed !== undefined ? { seed: args.seed } : {}),
-      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
-    },
-  });
-}
-
-function buildWan27ImageProPayload(
-  args: Wan27ImageArgs,
-  inputUrls: string[],
-): Wan27ImageProRequest {
-  return Wan27ImageProRequestSchema.parse({
-    model: "wan/2-7-image-pro",
-    input: {
-      prompt: args.prompt,
-      ...(inputUrls.length > 0 ? { input_urls: inputUrls } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
-      resolution: args.resolution ?? "2K",
-      ...(args.seed !== undefined ? { seed: args.seed } : {}),
-      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
-    },
-  });
-}
-
-type Wan27TextToVideoArgs = {
-  prompt: string;
-  negative_prompt?: string;
-  resolution?: Wan27Resolution;
-  aspect_ratio?: Wan27AspectRatio;
-  duration?: string;
-  prompt_extend?: boolean;
-  watermark?: boolean;
-  nsfw_checker?: boolean;
-  seed?: number;
-};
-
-type Wan27TextToVideoOpts = {
-  audioUrl?: string;
-};
-
-function buildWan27TextToVideoPayload(
-  args: Wan27TextToVideoArgs,
-  opts: Wan27TextToVideoOpts,
-): Wan27TextToVideoRequest {
-  return {
-    model: "wan/2-7-text-to-video",
-    input: {
-      prompt: args.prompt,
-      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
-      ...(opts.audioUrl !== undefined ? { audio_url: opts.audioUrl } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
-      ...(args.aspect_ratio !== undefined ? { ratio: args.aspect_ratio } : {}),
-      ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
-      ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
-      ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
-      ...(args.seed !== undefined ? { seed: args.seed } : {}),
-      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
-    },
-  };
-}
-
-type Wan27FramesVideoArgs = {
-  prompt: string;
-  negative_prompt?: string;
-  resolution?: Wan27Resolution;
-  duration?: string;
-  prompt_extend?: boolean;
-  watermark?: boolean;
-  nsfw_checker?: boolean;
-  seed?: number;
-};
-
-type Wan27FramesVideoOpts = {
-  firstFrameUrl?: string;
-  lastFrameUrl?: string;
-  firstClipUrl?: string;
-  drivingAudioUrl?: string;
-};
-
-function buildWan27FramesVideoPayload(
-  args: Wan27FramesVideoArgs,
-  opts: Wan27FramesVideoOpts,
-): Wan27ImageToVideoRequest {
-  return {
-    model: "wan/2-7-image-to-video",
-    input: {
-      prompt: args.prompt,
-      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
-      ...(opts.firstFrameUrl !== undefined ? { first_frame_url: opts.firstFrameUrl } : {}),
-      ...(opts.lastFrameUrl !== undefined ? { last_frame_url: opts.lastFrameUrl } : {}),
-      ...(opts.firstClipUrl !== undefined ? { first_clip_url: opts.firstClipUrl } : {}),
-      ...(opts.drivingAudioUrl !== undefined ? { driving_audio_url: opts.drivingAudioUrl } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
-      ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
-      ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
-      ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
-      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
-      ...(args.seed !== undefined ? { seed: args.seed } : {}),
-    },
-  };
-}
-
-type Wan27ReferenceVideoArgs = {
-  prompt: string;
-  negative_prompt?: string;
-  resolution?: Wan27Resolution;
-  aspect_ratio?: Wan27AspectRatio;
-  duration?: string;
-  prompt_extend?: boolean;
-  watermark?: boolean;
-  nsfw_checker?: boolean;
-  seed?: number;
-};
-
-type Wan27ReferenceVideoOpts = {
-  referenceImageUrls?: string[];
-  referenceVideoUrls?: string[];
-  firstFrameUrl?: string;
-  referenceVoiceUrl?: string;
-};
-
-function buildWan27ReferenceVideoPayload(
-  args: Wan27ReferenceVideoArgs,
-  opts: Wan27ReferenceVideoOpts,
-): Wan27RefToVideoRequest {
-  return {
-    model: "wan/2-7-r2v",
-    input: {
-      prompt: args.prompt,
-      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
-      ...(opts.referenceImageUrls && opts.referenceImageUrls.length > 0 ? { reference_image: opts.referenceImageUrls } : {}),
-      ...(opts.referenceVideoUrls && opts.referenceVideoUrls.length > 0 ? { reference_video: opts.referenceVideoUrls } : {}),
-      ...(opts.firstFrameUrl !== undefined ? { first_frame: opts.firstFrameUrl } : {}),
-      ...(opts.referenceVoiceUrl !== undefined ? { reference_voice: opts.referenceVoiceUrl } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
-      ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
-      ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
-      ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
-      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
-      ...(args.seed !== undefined ? { seed: args.seed } : {}),
-    },
-  };
-}
-
-type Wan27VideoEditArgs = {
-  prompt?: string;
-  negative_prompt?: string;
-  resolution?: Wan27Resolution;
-  aspect_ratio?: Wan27AspectRatio;
-  duration?: string;
-  audio_setting?: Wan27VideoEditRequest["input"]["audio_setting"];
-  prompt_extend?: boolean;
-  watermark?: boolean;
-  nsfw_checker?: boolean;
-  seed?: number;
-};
-
-type Wan27VideoEditOpts = {
-  videoUrl: string;
-  referenceImageUrl?: string;
-};
-
-export function buildWan27VideoEditPayload(
-  args: Wan27VideoEditArgs,
-  opts: Wan27VideoEditOpts,
-): Wan27VideoEditRequest {
-  return {
-    model: "wan/2-7-videoedit",
-    input: {
-      video_url: opts.videoUrl,
-      ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
-      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
-      ...(opts.referenceImageUrl !== undefined ? { reference_image: opts.referenceImageUrl } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
-      ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
-      ...(args.audio_setting !== undefined ? { audio_setting: args.audio_setting } : {}),
-      ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
-      ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
-      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
-      ...(args.seed !== undefined ? { seed: args.seed } : {}),
-    },
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Volcengine payload builders
 // ---------------------------------------------------------------------------
@@ -1627,43 +1403,6 @@ function buildXaiGrokImagineVideoPayload(
 // Alibaba payload builders
 // ---------------------------------------------------------------------------
 
-type AlibabaImageModel = AlibabaImageGenerationRequest["model"];
-
-type AlibabaImageArgs = {
-  prompt: string;
-  model?: AlibabaImageModel;
-  size?: string;
-  n?: number;
-  watermark?: boolean;
-  thinking_mode?: boolean;
-  seed?: number;
-};
-
-function buildAlibabaImagePayload(
-  args: AlibabaImageArgs,
-  imageUrls: string[],
-): AlibabaImageGenerationRequest {
-  const content: Array<{ text: string } | { image: string }> = [
-    { text: args.prompt },
-  ];
-  for (const url of imageUrls) {
-    content.push({ image: url });
-  }
-  return {
-    model: args.model ?? "wan2.7-image",
-    input: {
-      messages: [{ role: "user", content }],
-    },
-    parameters: {
-      ...(args.size !== undefined ? { size: args.size } : {}),
-      ...(args.n !== undefined ? { n: args.n } : {}),
-      ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
-      ...(args.thinking_mode !== undefined ? { thinking_mode: args.thinking_mode } : {}),
-      ...(args.seed !== undefined ? { seed: args.seed } : {}),
-    },
-  };
-}
-
 type AlibabaQwenImageModel = AlibabaMultimodalGenerationRequest["model"];
 
 type AlibabaQwenImageArgs = {
@@ -1693,49 +1432,6 @@ function buildAlibabaQwenImagePayload(
       ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
       ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
       ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
-      ...(args.seed !== undefined ? { seed: args.seed } : {}),
-    },
-  };
-}
-
-type AlibabaVideoArgs = Partial<AlibabaVideoSynthesisParameters> & {
-  prompt: string;
-  negative_prompt?: string;
-  model: AlibabaVideoSynthesisRequest["model"];
-};
-
-type AlibabaVideoMedia = {
-  firstFrameUrl?: string;
-  lastFrameUrl?: string;
-  firstClipUrl?: string;
-  drivingAudioUrl?: string;
-  videoUrl?: string;
-};
-
-function buildAlibabaVideoPayload(
-  args: AlibabaVideoArgs,
-  media: AlibabaVideoMedia,
-): AlibabaVideoSynthesisRequest {
-  const mediaItems: AlibabaVideoSynthesisInput["media"] = [];
-  if (media.firstFrameUrl) mediaItems.push({ type: "first_frame", url: media.firstFrameUrl });
-  if (media.lastFrameUrl) mediaItems.push({ type: "last_frame", url: media.lastFrameUrl });
-  if (media.firstClipUrl) mediaItems.push({ type: "first_clip", url: media.firstClipUrl });
-  if (media.drivingAudioUrl) mediaItems.push({ type: "driving_audio", url: media.drivingAudioUrl });
-  if (media.videoUrl) mediaItems.push({ type: "video", url: media.videoUrl });
-
-  return {
-    model: args.model,
-    input: {
-      prompt: args.prompt,
-      media: mediaItems,
-      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
-    },
-    parameters: {
-      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
-      ...(args.duration !== undefined ? { duration: args.duration } : {}),
-      ...(args.prompt_extend !== undefined ? { prompt_extend: args.prompt_extend } : {}),
-      ...(args.watermark !== undefined ? { watermark: args.watermark } : {}),
-      ...(args.audio_setting !== undefined ? { audio_setting: args.audio_setting } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
     },
   };
@@ -2047,56 +1743,6 @@ function translateToolPayloadUnchecked(
       const payload = buildGptImageTextPayload(args as GptImageTextArgs);
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_wan_2_7_text_to_image": {
-      const payload = buildWan27ImagePayload(
-        args as Wan27ImageArgs,
-        imageRefs,
-      );
-      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
-    }
-    case "generate_kie_wan_2_7_pro_text_to_image": {
-      const payload = buildWan27ImageProPayload(
-        args as Wan27ImageArgs,
-        imageRefs,
-      );
-      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
-    }
-    case "generate_kie_wan_2_7_text_to_video": {
-      const audioUrl = (args.audio_url as string | undefined) ?? (args.driving_audio_ref as string | undefined) ?? undefined;
-      const payload = buildWan27TextToVideoPayload(
-        args as Wan27TextToVideoArgs,
-        { audioUrl },
-      );
-      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
-    }
-    case "generate_kie_wan_2_7_image_to_video": {
-      const firstFrameSlug = (args.first_frame_ref as string | undefined) ?? undefined;
-      const lastFrameSlug = (args.last_frame_ref as string | undefined) ?? undefined;
-      const firstClipSlug = (args.first_clip_ref as string | undefined) ?? undefined;
-      const drivingAudioSlug = (args.driving_audio_ref as string | undefined) ?? undefined;
-      const payload = buildWan27FramesVideoPayload(
-        args as Wan27FramesVideoArgs,
-        {
-          firstFrameUrl: firstFrameSlug,
-          lastFrameUrl: lastFrameSlug,
-          firstClipUrl: firstClipSlug,
-          drivingAudioUrl: drivingAudioSlug,
-        },
-      );
-      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
-    }
-    case "generate_kie_wan_2_7_edit_video": {
-      const videoRef = (args.video_ref as string) ?? "";
-      const imageRef = (args.image_ref as string | undefined) ?? undefined;
-      const payload = buildWan27VideoEditPayload(
-        args as Wan27VideoEditArgs,
-        {
-          videoUrl: videoRef,
-          referenceImageUrl: imageRef,
-        },
-      );
-      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
-    }
     case "extend_kie_grok_imagine_video": {
       const payload: GrokVideoExtendRequest = {
         model: "grok-imagine/extend",
@@ -2124,26 +1770,6 @@ function translateToolPayloadUnchecked(
       const payload = buildOmnihumanPayload(args as OmnihumanArgs, {
         imageUrl: imageRef,
         audioUrl: audioRef,
-      });
-      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
-    }
-    case "generate_kie_wan_2_7_reference_to_video": {
-      const referenceImageUrls = imageRefs;
-      const referenceVideoUrls = (args.video_refs as string[] | undefined) ?? [];
-      const firstFrameUrl = (args.first_frame_ref as string | undefined) ?? undefined;
-      const referenceVoiceUrl = (args.audio_ref as string | undefined) ?? undefined;
-      const payload = buildWan27ReferenceVideoPayload(args as Wan27ReferenceVideoArgs, {
-        referenceImageUrls,
-        referenceVideoUrls,
-        firstFrameUrl,
-        referenceVoiceUrl,
-      });
-      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
-    }
-    case "extend_kie_wan_2_7_video": {
-      const firstClipSlug = (args.video_ref as string) ?? "";
-      const payload = buildWan27FramesVideoPayload(args as Wan27FramesVideoArgs, {
-        firstClipUrl: firstClipSlug,
       });
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
@@ -2208,44 +1834,6 @@ function translateToolPayloadUnchecked(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
 
-    case "generate_alibaba_wan_2_7_text_to_image": {
-      const imageUrls = imageRefs;
-      const payload = buildAlibabaImagePayload(
-        { prompt: args.prompt as string, model: (args.model as AlibabaImageModel) ?? "wan2.7-image", size: args.size as string | undefined, n: args.n as number | undefined, watermark: args.watermark as boolean | undefined, thinking_mode: args.thinking_mode as boolean | undefined, seed: args.seed as number | undefined },
-        imageUrls,
-      );
-      return { provider_path: "alibaba.post.api.v1.services.aigc.imageGeneration.generation()", payload: payload as unknown as Record<string, unknown> };
-    }
-    case "generate_alibaba_wan_2_7_pro_text_to_image": {
-      const imageUrls = imageRefs;
-      const payload = buildAlibabaImagePayload(
-        { prompt: args.prompt as string, model: "wan2.7-image-pro", size: args.size as string | undefined, n: args.n as number | undefined, watermark: args.watermark as boolean | undefined, thinking_mode: args.thinking_mode as boolean | undefined, seed: args.seed as number | undefined },
-        imageUrls,
-      );
-      return { provider_path: "alibaba.post.api.v1.services.aigc.imageGeneration.generation()", payload: payload as unknown as Record<string, unknown> };
-    }
-    case "generate_alibaba_wan_2_7_video": {
-      const firstFrameUrl = (args.first_frame_ref as string | undefined) ?? undefined;
-      const lastFrameUrl = (args.last_frame_ref as string | undefined) ?? undefined;
-      const firstClipUrl = (args.first_clip_ref as string | undefined) ?? undefined;
-      const drivingAudioUrl = (args.driving_audio_ref as string | undefined) ?? undefined;
-      const videoUrl = (args.video_ref as string | undefined) ?? undefined;
-      const payload = buildAlibabaVideoPayload(
-        {
-          prompt: args.prompt as string,
-          negative_prompt: args.negative_prompt as string | undefined,
-          model: (args.model as AlibabaVideoSynthesisRequest["model"] | undefined) ?? "wan2.7-i2v",
-          resolution: args.resolution as AlibabaVideoSynthesisParameters["resolution"],
-          duration: args.duration as AlibabaVideoSynthesisParameters["duration"],
-          prompt_extend: args.prompt_extend as AlibabaVideoSynthesisParameters["prompt_extend"],
-          watermark: args.watermark as AlibabaVideoSynthesisParameters["watermark"],
-          audio_setting: args.audio_setting as AlibabaVideoSynthesisParameters["audio_setting"],
-          seed: args.seed as AlibabaVideoSynthesisParameters["seed"],
-        },
-        { firstFrameUrl, lastFrameUrl, firstClipUrl, drivingAudioUrl, videoUrl },
-      );
-      return { provider_path: "alibaba.post.api.v1.services.aigc.videoGeneration.videoSynthesis()", payload: payload as unknown as Record<string, unknown> };
-    }
     default:
       return null;
   }
@@ -2295,11 +1883,6 @@ export {
   buildVeo31VideoPayload,
   buildGoogleOmniVideoPayload,
   buildGoogleNbpImagePayload,
-  buildWan27TextToVideoPayload,
-  buildWan27FramesVideoPayload,
-  buildWan27ReferenceVideoPayload,
-  buildWan27ImagePayload,
-  buildWan27ImageProPayload,
   buildHappyHorseT2vPayload,
   buildHappyHorseI2vPayload,
   buildHappyHorseRefPayload,
@@ -2307,9 +1890,7 @@ export {
   buildMiniMaxH3T2vPayload,
   buildMiniMaxH3I2vPayload,
   buildMiniMaxH3R2vPayload,
-  buildAlibabaImagePayload,
   buildAlibabaQwenImagePayload,
-  buildAlibabaVideoPayload,
   translateToolPayload,
 };
 export type { GoogleVeo31Model, Veo31VideoArgs, GoogleOmniVideoArgs, GoogleNbpImageArgs };

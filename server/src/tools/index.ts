@@ -106,11 +106,6 @@ import {
 } from "./generate-veo31-video.js";
 import { generateNanoBananaProGoogleDef } from "./generate-nano-banana-pro-google.js";
 
-import { generateWan27T2vVideoDef } from "./generate-wan27-t2v-video.js";
-import { generateWan27I2vVideoDef } from "./generate-wan27-i2v-video.js";
-import { generateWan27VideoeditVideoDef } from "./generate-wan27-videoedit-video.js";
-import { generateWan27R2vVideoDef } from "./generate-wan27-r2v-video.js";
-import { extendWan27VideoDef } from "./extend-wan27-video.js";
 import { generateHappyhorseT2vVideoDef } from "./generate-happyhorse-t2v-video.js";
 import { generateHappyhorseI2vVideoDef } from "./generate-happyhorse-i2v-video.js";
 import { generateHappyhorseRefVideoDef } from "./generate-happyhorse-ref-video.js";
@@ -120,8 +115,6 @@ import { generateMiniMaxH3I2vVideoDef } from "./generate-minimax-h3-i2v-video.js
 import { generateMiniMaxH3R2vVideoDef } from "./generate-minimax-h3-r2v-video.js";
 import { generateVolcengineLipsyncVideoDef } from "./generate-volcengine-lipsync-video.js";
 import { generateOmnihumanVideoDef } from "./generate-omnihuman-video.js";
-import { generateWan27ImageDef } from "./generate-wan27-image.js";
-import { generateWan27ImageProDef } from "./generate-wan27-image-pro.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
 import { generateSeedreamTextImageDef } from "./generate-seedream-text-image.js";
@@ -138,11 +131,8 @@ import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
 import { generateGrokImagineTextImageDef } from "./generate-grok-imagine-text-image.js";
 import { generateGptImageDef } from "./generate-gpt-image.js";
 import { generateGptImageTextDef } from "./generate-gpt-image-text.js";
-import { generateAlibabaImageDef } from "./generate-alibaba-image.js";
-import { generateAlibabaImageProDef } from "./generate-alibaba-image-pro.js";
 import { generateAlibabaQwenImageDef } from "./generate-alibaba-qwen-image.js";
 import { generateAlibabaQwenImageEditDef } from "./generate-alibaba-qwen-image-edit.js";
-import { generateAlibabaVideoDef } from "./generate-alibaba-video.js";
 import { concatImagesDef } from "./concat-images.js";
 import { chatDef } from "./chat.js";
 import { getTimelineDef } from "./get-timeline.js";
@@ -176,10 +166,6 @@ import { generateNanoBananaProFalDef } from "./generate-nano-banana-pro-fal.js";
 import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
 import { generateSeedreamV5LiteFalDef } from "./generate-seedream-v5-lite-fal.js";
 import { generateSeedreamV5LiteEditFalDef } from "./generate-seedream-v5-lite-edit-fal.js";
-import { generateWan27FalDef } from "./generate-wan27-fal.js";
-import { generateWan27EditFalDef } from "./generate-wan27-edit-fal.js";
-import { generateWan27ProFalDef } from "./generate-wan27-pro-fal.js";
-import { generateWan27ProEditFalDef } from "./generate-wan27-pro-edit-fal.js";
 import { generateGrokImagineImageFalDef } from "./generate-grok-imagine-image-fal.js";
 import { generateGrokImagineImageEditFalDef } from "./generate-grok-imagine-image-edit-fal.js";
 
@@ -192,12 +178,6 @@ import { generateNanoBanana2LiteFalDef } from "./generate-nano-banana-2-lite-fal
 import { generateNanoBanana2LiteEditFalDef } from "./generate-nano-banana-2-lite-edit-fal.js";
 import { generateQwenImageFalDef } from "./generate-qwen-image-fal.js";
 import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
-
-import { generateWan27T2vFalDef } from "./generate-wan27-t2v-fal.js";
-import { generateWan27I2vFalDef } from "./generate-wan27-i2v-fal.js";
-
-import { generateWan27R2vFalDef } from "./generate-wan27-r2v-fal.js";
-import { generateWan27VideoeditFalDef } from "./generate-wan27-videoedit-fal.js";
 
 import { generateGrokImagineVideoR2vFalDef } from "./generate-grok-imagine-video-r2v-fal.js";
 import { generateGrokImagineVideoExtendFalDef } from "./generate-grok-imagine-video-extend-fal.js";
@@ -413,11 +393,6 @@ export function getAllToolDefs(
     generateVeo31LiteLowPriorityVideoDef(engine),
     generateNanoBananaProGoogleDef(engine),
 
-    generateWan27T2vVideoDef(engine),
-    generateWan27I2vVideoDef(engine),
-    generateWan27VideoeditVideoDef(engine),
-    generateWan27R2vVideoDef(engine),
-    extendWan27VideoDef(engine),
     generateHappyhorseT2vVideoDef(engine),
     generateHappyhorseI2vVideoDef(engine),
     generateHappyhorseRefVideoDef(engine),
@@ -427,8 +402,6 @@ export function getAllToolDefs(
     generateMiniMaxH3R2vVideoDef(engine),
     generateVolcengineLipsyncVideoDef(engine),
     generateOmnihumanVideoDef(engine),
-    generateWan27ImageDef(engine),
-    generateWan27ImageProDef(engine),
     generateNanoBananaImageDef(engine),
     generateQwen2ImageEditDef(engine),
     generateSeedreamTextImageDef(engine),
@@ -444,11 +417,8 @@ export function getAllToolDefs(
     generateGrokImagineTextImageDef(engine),
     generateGptImageDef(engine),
     generateGptImageTextDef(engine),
-    generateAlibabaImageDef(engine),
-    generateAlibabaImageProDef(engine),
     generateAlibabaQwenImageDef(engine),
     generateAlibabaQwenImageEditDef(engine),
-    generateAlibabaVideoDef(engine),
     concatImagesDef(engine),
     chatDef(engine),
     showFolderDef(engine),
@@ -470,10 +440,6 @@ export function getAllToolDefs(
     generateNanoBananaProEditFalDef(engine),
     generateSeedreamV5LiteFalDef(engine),
     generateSeedreamV5LiteEditFalDef(engine),
-    generateWan27FalDef(engine),
-    generateWan27EditFalDef(engine),
-    generateWan27ProFalDef(engine),
-    generateWan27ProEditFalDef(engine),
     generateGrokImagineImageFalDef(engine),
     generateGrokImagineImageEditFalDef(engine),
 
@@ -486,12 +452,6 @@ export function getAllToolDefs(
     generateNanoBanana2LiteEditFalDef(engine),
     generateQwenImageFalDef(engine),
     generateQwenImageEditFalDef(engine),
-
-    generateWan27T2vFalDef(engine),
-    generateWan27I2vFalDef(engine),
-
-    generateWan27R2vFalDef(engine),
-    generateWan27VideoeditFalDef(engine),
 
     generateGrokImagineVideoR2vFalDef(engine),
     generateGrokImagineVideoExtendFalDef(engine),

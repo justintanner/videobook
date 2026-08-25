@@ -14,8 +14,6 @@ import {
   Seedance2InputSchema,
   Seedance2MiniInputSchema,
   Seedance25InputSchema,
-  Wan27ImageProRequestSchema,
-  Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
 
 type CostAdapter = (input: Record<string, unknown>) => EstimateRequest | null;
@@ -64,8 +62,6 @@ const HAPPYHORSE_R2V_RESOLUTION = apicityDefault<string>(HappyHorse11ReferenceTo
 const GPT_IMAGE_I2I_RESOLUTION = apicityDefault<string>(GptImage2ImageToImageRequestSchema.shape.input.shape.resolution, "GPT Image image-to-image resolution");
 const GPT_IMAGE_T2I_RESOLUTION = apicityDefault<string>(GptImage2TextToImageRequestSchema.shape.input.shape.resolution, "GPT Image text-to-image resolution");
 const NANO_BANANA_PRO_RESOLUTION = apicityDefault<string>(NanoBananaProRequestSchema.shape.input.shape.resolution, "Nano Banana Pro resolution");
-const WAN27_IMAGE_RESOLUTION = apicityDefault<string>(Wan27ImageRequestSchema.shape.input.shape.resolution, "Wan 2.7 Image resolution");
-const WAN27_IMAGE_PRO_RESOLUTION = apicityDefault<string>(Wan27ImageProRequestSchema.shape.input.shape.resolution, "Wan 2.7 Image Pro resolution");
 const GEMINI_OMNI_RESOLUTION = apicityDefault<string>(GeminiOmniVideoRequestSchema.shape.input.shape.resolution, "Gemini Omni resolution");
 
 // OpenAI text payloads mirror the upstream API body. The cost lib's
@@ -182,9 +178,9 @@ function kieKlingOmni(
 }
 
 // kie image-tier adapter: prices keyed by input.resolution ("1K"|"2K"|"4K").
-// gpt-image-2, nano-banana-pro, and wan/2-7-image{,-pro} all accept resolution
-// upstream — forward when present, else fall back to the default tier so an
-// unconfigured request still returns a price.
+// gpt-image-2 and nano-banana-pro both accept resolution upstream — forward
+// when present, else fall back to the default tier so an unconfigured request
+// still returns a price.
 const kieTieredImage = (model: string, defaultResolution: string): CostAdapter => (input) => ({
   provider: "kie",
   payload: {
@@ -203,9 +199,9 @@ const kieFlatImage = (model: string): CostAdapter => () => ({
   payload: { model, input: {} },
 });
 
-// kie flat per-second video adapter (wan/2-7-* video family — all priced at
-// $0.10/s regardless of resolution). The rate table reads input.duration in
-// seconds; videocity tools pass duration as a numeric string we coerce here.
+// kie flat per-second video adapter (veo3 family — flat rate regardless of
+// resolution). The rate table reads input.duration in seconds; videocity
+// tools pass duration as a numeric string we coerce here.
 const kieFlatVideo = (model: string, defaultSeconds = 5): CostAdapter => (input) => ({
   provider: "kie",
   payload: {
@@ -343,16 +339,6 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
   generate_kie_veo_3_0_video: kieFlatVideo("veo3"),
   generate_kie_veo_3_0_fast_video: kieFlatVideo("veo3_fast"),
 
-  // --- KIE Wan 2.7 video (flat $0.10/s across all four endpoints) ---
-  generate_kie_wan_2_7_text_to_video: kieFlatVideo("wan/2-7-text-to-video"),
-  generate_kie_wan_2_7_image_to_video: kieFlatVideo("wan/2-7-image-to-video"),
-  generate_kie_wan_2_7_reference_to_video: kieFlatVideo("wan/2-7-r2v"),
-  // videoedit upstream has no duration field (output matches source). Tool
-  // default is "0" which would zero out the estimate, so default to 5s.
-  generate_kie_wan_2_7_edit_video: kieFlatVideo("wan/2-7-videoedit"),
-  // extend reuses the i2v rate ($0.10/s). Tool exposes duration; default 5s.
-  extend_kie_wan_2_7_video: kieFlatVideo("wan/2-7-image-to-video"),
-
   // --- KIE Grok Imagine video (resolution-tiered, $0.008/$0.015 per sec) ---
   generate_kie_grok_imagine_image_to_video: kieResolutionVideo("grok-imagine/image-to-video", GROK_I2V_RESOLUTION, GROK_I2V_DURATION),
   generate_kie_grok_imagine_text_to_video: kieResolutionVideo("grok-imagine/text-to-video", "480p", 6),
@@ -384,10 +370,6 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
 
   // --- KIE Nano Banana Pro (per-image, tiered by resolution) ---
   generate_kie_nano_banana_pro_text_to_image: kieTieredImage("nano-banana-pro", NANO_BANANA_PRO_RESOLUTION),
-
-  // --- KIE Wan 2.7 image (per-image, tiered by resolution) ---
-  generate_kie_wan_2_7_text_to_image: kieTieredImage("wan/2-7-image", WAN27_IMAGE_RESOLUTION),
-  generate_kie_wan_2_7_pro_text_to_image: kieTieredImage("wan/2-7-image-pro", WAN27_IMAGE_PRO_RESOLUTION),
 
   // --- KIE flat per-image (qwen2 $0.028, seedream/5-lite $0.0275) ---
   generate_kie_qwen_2_0_edit_image: kieFlatImage("qwen2/image-edit"),
@@ -453,15 +435,14 @@ const falImage = (endpoint: string): CostAdapter => (input) => ({
   endpoint,
   payload: {
     ...(num(input.num_images) !== undefined ? { num_images: num(input.num_images) } : {}),
-    // wan/v2.7 text-to-image counts images from max_images (no num_images field).
     ...(num(input.max_images) !== undefined ? { max_images: num(input.max_images) } : {}),
     ...(str(input.resolution) ? { resolution: str(input.resolution) } : {}),
     ...(str(input.image_size) ? { image_size: str(input.image_size) } : {}),
   },
 });
 
-// Fal per-second video (numeric duration): wan 2.7, grok-imagine-video. The
-// table reads top-level duration/resolution.
+// Fal per-second video (numeric duration): grok-imagine-video. The table
+// reads top-level duration/resolution.
 const falVideo = (endpoint: string): CostAdapter => (input) => ({
   provider: "fal",
   endpoint,
@@ -495,14 +476,6 @@ const falKlingV3Video = (endpoint: string): CostAdapter => (input) => ({
   },
 });
 
-// Fal wan 2.7 edit-video: duration 0 means "match the source", a length the
-// payload cannot express — quote the stated 5s default like the kie side.
-const falWanEditVideo: CostAdapter = (input) => ({
-  provider: "fal",
-  endpoint: "fal-ai/wan/v2.7/edit-video",
-  payload: { duration: num(input.duration) || 5 },
-});
-
 const FAL_ADAPTERS: Record<string, CostAdapter> = {
   // --- Fal images (per image / per megapixel) ---
   generate_fal_nano_banana_text_to_image: falImage("fal-ai/nano-banana"),
@@ -513,10 +486,6 @@ const FAL_ADAPTERS: Record<string, CostAdapter> = {
   generate_fal_nano_banana_pro_edit_image: falImage("fal-ai/nano-banana-pro/edit"),
   generate_fal_seedream_v5_lite_text_to_image: falImage("fal-ai/bytedance/seedream/v5/lite/text-to-image"),
   generate_fal_seedream_v5_lite_edit_image: falImage("fal-ai/bytedance/seedream/v5/lite/edit"),
-  generate_fal_wan_2_7_text_to_image: falImage("fal-ai/wan/v2.7/text-to-image"),
-  generate_fal_wan_2_7_edit_image: falImage("fal-ai/wan/v2.7/edit"),
-  generate_fal_wan_2_7_pro_text_to_image: falImage("fal-ai/wan/v2.7/pro/text-to-image"),
-  generate_fal_wan_2_7_pro_edit_image: falImage("fal-ai/wan/v2.7/pro/edit"),
   generate_fal_grok_imagine_text_to_image: falImage("xai/grok-imagine-image"),
   generate_fal_grok_imagine_edit_image: falImage("xai/grok-imagine-image/edit"),
   // The cost table keys Qwen edit off its pricing-page slug, not the wire
@@ -532,10 +501,6 @@ const FAL_ADAPTERS: Record<string, CostAdapter> = {
   generate_fal_seedance_2_0_fast_text_to_video: falSeedanceVideo("bytedance/seedance-2.0/fast/text-to-video"),
   generate_fal_seedance_2_0_fast_image_to_video: falSeedanceVideo("bytedance/seedance-2.0/fast/image-to-video"),
   generate_fal_seedance_2_0_fast_reference_to_video: falSeedanceVideo("bytedance/seedance-2.0/fast/reference-to-video", true),
-  generate_fal_wan_2_7_text_to_video: falVideo("fal-ai/wan/v2.7/text-to-video"),
-  generate_fal_wan_2_7_image_to_video: falVideo("fal-ai/wan/v2.7/image-to-video"),
-  generate_fal_wan_2_7_reference_to_video: falVideo("fal-ai/wan/v2.7/reference-to-video"),
-  generate_fal_wan_2_7_edit_video: falWanEditVideo,
   generate_fal_grok_imagine_video_image_to_video: falVideo("xai/grok-imagine-video/image-to-video"),
   generate_fal_grok_imagine_video_reference_to_video: falVideo("xai/grok-imagine-video/reference-to-video"),
   extend_fal_grok_imagine_video: falVideo("xai/grok-imagine-video/extend-video"),
@@ -546,27 +511,15 @@ const FAL_ADAPTERS: Record<string, CostAdapter> = {
   // xai/grok-imagine-video/edit-video has no published rate — stays "—".
 };
 
-// Alibaba media rates: qwen/wan-pro landed in cost@0.8.0; non-pro
-// wan2.7-image ($0.03 list) followed in 0.8.6.
+// Alibaba media rates: qwen landed in cost@0.8.0.
 const alibabaImage = (model: string): CostAdapter => () => ({
   provider: "alibaba",
   payload: { model, input: {} },
 });
 
-const alibabaVideo = (model: string, defaultDuration: number): CostAdapter => (input) => ({
-  provider: "alibaba",
-  payload: {
-    model,
-    input: { duration: num(input.duration) ?? num(input.seconds) ?? defaultDuration },
-  },
-});
-
 const ALIBABA_ADAPTERS: Record<string, CostAdapter> = {
   generate_alibaba_qwen_2_0_text_to_image: alibabaImage("qwen-image-2.0"),
   generate_alibaba_qwen_2_0_edit_image: alibabaImage("qwen-image-edit"),
-  generate_alibaba_wan_2_7_text_to_image: alibabaImage("wan2.7-image"),
-  generate_alibaba_wan_2_7_pro_text_to_image: alibabaImage("wan2.7-image-pro"),
-  generate_alibaba_wan_2_7_video: alibabaVideo("wan2.7-i2v", 5),
 };
 
 const ADAPTERS: Record<string, CostAdapter> = {

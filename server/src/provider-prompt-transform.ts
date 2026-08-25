@@ -170,11 +170,7 @@ export function transformProviderPrompt(
     case "generate_kie_seedream_v5_lite_image_to_image":
     case "generate_kie_qwen_2_0_edit_image":
     case "generate_kie_gpt_image_2_image_to_image":
-    case "generate_kie_wan_2_7_text_to_image":
-    case "generate_kie_wan_2_7_pro_text_to_image":
     case "generate_xai_grok_imagine_video":
-    case "generate_alibaba_wan_2_7_text_to_image":
-    case "generate_alibaba_wan_2_7_pro_text_to_image":
       transformed = naturalImagePrompt(prompt, args);
       break;
     case "generate_kie_grok_imagine_image_to_image":
@@ -250,44 +246,6 @@ export function transformProviderPrompt(
     case "generate_google_flow_nano_banana_pro_image":
       transformed = rewriteImageRefMentions(prompt, imageRefs, "reference");
       break;
-    case "generate_kie_wan_2_7_text_to_video":
-      transformed = replaceNaturalAssetMentions(prompt, {
-        audioRefs: compact([
-          nonempty(args.audio_url) ?? nonempty(args.driving_audio_ref),
-        ]),
-      });
-      break;
-    case "generate_kie_wan_2_7_image_to_video":
-      transformed = replaceNaturalAssetMentions(prompt, {
-        imageRefs: compact([
-          nonempty(args.first_frame_ref),
-          nonempty(args.last_frame_ref),
-        ]),
-        videoRefs: compact([nonempty(args.first_clip_ref)]),
-        audioRefs: compact([nonempty(args.driving_audio_ref)]),
-      });
-      break;
-    case "generate_kie_wan_2_7_edit_video":
-      transformed = replaceNaturalAssetMentions(prompt, {
-        videoRefs: compact([nonempty(args.video_ref)]),
-        imageRefs: compact([nonempty(args.image_ref)]),
-      });
-      break;
-    case "generate_kie_wan_2_7_reference_to_video":
-      transformed = replaceNaturalAssetMentions(prompt, {
-        imageRefs: [
-          ...imageRefs,
-          ...compact([nonempty(args.first_frame_ref)]),
-        ],
-        videoRefs: stringArray(args.video_refs),
-        audioRefs: compact([nonempty(args.audio_ref)]),
-      });
-      break;
-    case "extend_kie_wan_2_7_video":
-      transformed = replaceNaturalAssetMentions(prompt, {
-        videoRefs: compact([nonempty(args.video_ref)]),
-      });
-      break;
     case "generate_kie_omnihuman_1_5_video":
       transformed = replaceNaturalAssetMentions(prompt, {
         imageRefs: compact([nonempty(args.image_ref)]),
@@ -325,19 +283,6 @@ export function transformProviderPrompt(
         nonempty(args.video_ref) ?? null,
         imageRefs,
       );
-      break;
-    case "generate_alibaba_wan_2_7_video":
-      transformed = replaceNaturalAssetMentions(prompt, {
-        imageRefs: compact([
-          nonempty(args.first_frame_ref),
-          nonempty(args.last_frame_ref),
-        ]),
-        videoRefs: compact([
-          nonempty(args.first_clip_ref),
-          nonempty(args.video_ref),
-        ]),
-        audioRefs: compact([nonempty(args.driving_audio_ref)]),
-      });
       break;
   }
 

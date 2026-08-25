@@ -1323,7 +1323,7 @@ describe('v2 notebook domain tools', () => {
       notebook_id: notebookId,
       plan_id: retry.planId,
       action: 'switch',
-      model: 'generate_kie_wan_2_7_text_to_image',
+      model: 'generate_kie_nano_banana_pro_text_to_image',
       source_surface: 'chat',
       actor: 'tester',
     })) as {
@@ -1331,8 +1331,8 @@ describe('v2 notebook domain tools', () => {
       stages: Array<{ model: string; input: { generation_tool: string } }>
     }
     expect(switched.stages[0]).toMatchObject({
-      model: 'wan/2-7-image',
-      input: { generation_tool: 'generate_kie_wan_2_7_text_to_image' },
+      model: 'nano-banana-pro',
+      input: { generation_tool: 'generate_kie_nano_banana_pro_text_to_image' },
     })
     resultJson(await invoke('revise_notebook_generation_plan', {
       notebook_id: notebookId,

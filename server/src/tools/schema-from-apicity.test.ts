@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import {
-  AlibabaVideoSynthesisModelSchema,
-  AlibabaVideoSynthesisParametersSchema,
-} from "@apicity/alibaba/zod";
+import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
 import { FalQwenImageRequestSchema } from "@apicity/fal/zod";
 import { Qwen2ImageEditRequestSchema, Seedance2MiniInputSchema } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
@@ -55,12 +52,5 @@ describe("schema-from-apicity", () => {
     expect(field.safeParse("square_hd").success).toBe(true);
     expect(field.safeParse("not-a-size").success).toBe(false);
     expect(field.safeParse({ width: 1280, height: 720 }).success).toBe(false);
-  });
-
-  it("narrows enum-or-alias models to listed options", () => {
-    const field = apicityUnionEnumField(AlibabaVideoSynthesisModelSchema);
-    expect(field.safeParse("wan2.7-i2v").success).toBe(true);
-    expect(field.safeParse("wan2.7-videoedit").success).toBe(true);
-    expect(field.safeParse("wan3.0-i2v").success).toBe(false);
   });
 });

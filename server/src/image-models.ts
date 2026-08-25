@@ -19,14 +19,8 @@ import {
   Qwen2ImageEditRequestSchema,
   SeedreamImageToImageRequestSchema,
   SeedreamTextToImageRequestSchema,
-  Wan27ImageInputSchema,
-  Wan27ImageProRequestSchema,
-  Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
 import {
-  AlibabaImageGenerationParametersSchema,
-  AlibabaImageTextContentSchema,
-  AlibabaImageReferenceSlotsSchema,
   AlibabaMultimodalGenerationParametersSchema,
   AlibabaQwenImageEditImageSlotsSchema,
   AlibabaQwenImageEditStableModelSchema,
@@ -215,50 +209,6 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
       nsfw_checker: SeedreamImageToImageRequestSchema.shape.input.shape.nsfw_checker,
     },
     falToolNames: { withRefs: "generate_fal_seedream_v5_lite_edit_image" },
-  },
-  {
-    key: "wan27_image",
-    kieModelId: "wan/2-7-image",
-    tool_name: "generate_kie_wan_2_7_text_to_image",
-    label: "Wan 2.7 Image",
-    description: "Text-to-image or image editing with optional reference images, aspect ratio, resolution, and thinking mode",
-    imageFieldSchema: Wan27ImageInputSchema.shape.input_urls,
-    kieImageField: "input_urls",
-    defaultSchemas: {
-      aspect_ratio: Wan27ImageRequestSchema.shape.input.shape.aspect_ratio,
-      resolution: Wan27ImageRequestSchema.shape.input.shape.resolution,
-      nsfw_checker: Wan27ImageRequestSchema.shape.input.shape.nsfw_checker,
-    },
-    falToolNames: { noRefs: "generate_fal_wan_2_7_text_to_image", withRefs: "generate_fal_wan_2_7_edit_image" },
-  },
-  {
-    key: "wan27_image_pro",
-    kieModelId: "wan/2-7-image-pro",
-    tool_name: "generate_kie_wan_2_7_pro_text_to_image",
-    label: "Wan 2.7 Image Pro",
-    description: "Pro text-to-image or image editing with optional reference images, aspect ratio, resolution, and thinking mode",
-    imageFieldSchema: Wan27ImageInputSchema.shape.input_urls,
-    kieImageField: "input_urls",
-    defaultSchemas: {
-      aspect_ratio: Wan27ImageProRequestSchema.shape.input.shape.aspect_ratio,
-      resolution: Wan27ImageProRequestSchema.shape.input.shape.resolution,
-      nsfw_checker: Wan27ImageProRequestSchema.shape.input.shape.nsfw_checker,
-    },
-    falToolNames: { noRefs: "generate_fal_wan_2_7_pro_text_to_image", withRefs: "generate_fal_wan_2_7_pro_edit_image" },
-  },
-  {
-    key: "alibaba_image",
-    tool_name: "generate_alibaba_wan_2_7_text_to_image",
-    label: "Alibaba Wan 2.7 Image",
-    description: "Alibaba Cloud image generation using Wan 2.7 with optional reference images, size, thinking mode, and color palette control",
-    imageFieldSchema: AlibabaImageReferenceSlotsSchema,
-  },
-  {
-    key: "alibaba_image_pro",
-    tool_name: "generate_alibaba_wan_2_7_pro_text_to_image",
-    label: "Alibaba Wan 2.7 Image Pro",
-    description: "Alibaba Cloud pro image generation using Wan 2.7 Pro with optional reference images, size, thinking mode, and color palette control",
-    imageFieldSchema: AlibabaImageReferenceSlotsSchema,
   },
   {
     key: "alibaba_qwen_image",
@@ -484,24 +434,6 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
     return { type: "object", properties, required, defaults };
   }
 
-  // Alibaba image models — custom schema
-  if (config.key === "alibaba_image" || config.key === "alibaba_image_pro") {
-    const properties: Record<string, ParamSchema> = {
-      prompt: zodFieldToParam(AlibabaImageTextContentSchema.shape.text, "Text prompt for image generation (max 5000 chars)"),
-      image_refs: {
-        type: "array",
-        items: { type: "string" },
-        description: imageSlotsDescription(getImageSlotsForConfig(config)),
-      },
-      size: zodFieldToParam(AlibabaImageGenerationParametersSchema.shape.size, "Output size (e.g., '1024*1024', '720*1280', '1280*720')"),
-      n: zodFieldToParam(AlibabaImageGenerationParametersSchema.shape.n, "Number of images to generate (1-12)"),
-      watermark: zodFieldToParam(AlibabaImageGenerationParametersSchema.shape.watermark, "Add watermark to generated image"),
-      thinking_mode: zodFieldToParam(AlibabaImageGenerationParametersSchema.shape.thinking_mode, "Enable thinking mode for better quality"),
-      seed: zodFieldToParam(AlibabaImageGenerationParametersSchema.shape.seed, "Random seed for reproducibility (0-2147483647)"),
-    };
-    return { type: "object", properties, required: ["prompt"], defaults };
-  }
-
   // Alibaba Qwen image models — custom schema (reconcile_project_work multimodal endpoint)
   if (config.key === "alibaba_qwen_image" || config.key === "alibaba_qwen_image_edit") {
     const isEdit = config.key === "alibaba_qwen_image_edit";
@@ -568,13 +500,6 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
       key: "alibaba",
       label: "Alibaba",
       provider_path: "alibaba.post.api.v1.services.aigc.multimodalGeneration.generation()",
-      envKey: "DASHSCOPE_API_KEY",
-    });
-  } else if (config.tool_name.startsWith("generate_alibaba_")) {
-    providers.push({
-      key: "alibaba",
-      label: "Alibaba",
-      provider_path: "alibaba.post.api.v1.services.aigc.imageGeneration.generation()",
       envKey: "DASHSCOPE_API_KEY",
     });
   }

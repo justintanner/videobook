@@ -398,37 +398,11 @@ describe("getVideoToolSchema", () => {
     expect(extension!.properties.duration).toMatchObject({ type: "integer", minimum: 2, maximum: 10 });
   });
 
-  it("derives Alibaba's exact model, duration, prompt, and seed constraints", () => {
-    const schema = getVideoToolSchema("generate_alibaba_video");
-    expect(schema).not.toBeNull();
-    expect(schema!.properties.model.enum).toEqual(["wan2.7-i2v", "wan2.7-videoedit"]);
-    expect(schema!.properties.duration.enum).toEqual([0, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    expect(schema!.properties.prompt.maxLength).toBe(5000);
-    expect(schema!.properties.negative_prompt.maxLength).toBe(500);
-    expect(schema!.properties.seed.minimum).toBe(0);
-    expect(schema!.properties.seed.maximum).toBe(2147483647);
-  });
-
-  it("uses Apicity's exported Wan Video Edit and HappyHorse duration domains", () => {
-    const wan = getVideoToolSchema("generate_wan27_videoedit_video");
+  it("uses Apicity's exported HappyHorse duration domain", () => {
     const happyHorse = getVideoToolSchema("generate_happyhorse_t2v_video");
-    expect(wan!.properties.duration.enum).toEqual(["0", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
     expect(happyHorse!.properties.duration.enum).toEqual([
       "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
     ]);
-  });
-
-  it("derives Fal Wan reference and edit contracts from their matching schemas", () => {
-    const reference = getVideoToolSchema("generate_wan27_r2v_fal_video");
-    const edit = getVideoToolSchema("generate_wan27_videoedit_fal_video");
-    expect(reference!.properties.image_refs.maxItems).toBe(4);
-    expect(reference!.properties.video_refs.maxItems).toBe(4);
-    expect(reference!.properties.duration.minimum).toBe(2);
-    expect(reference!.properties.duration.maximum).toBe(10);
-    expect(reference!.properties.prompt.maxLength).toBe(5000);
-    expect(reference!.properties.seed.maximum).toBe(2147483647);
-    expect(edit!.properties.duration.minimum).toBe(0);
-    expect(edit!.properties.duration.maximum).toBe(10);
   });
 });
 
@@ -521,9 +495,11 @@ describe("validateVideoParams", () => {
   });
 
   it("tools without image-array fields return null image_slots", () => {
-    const extendResult = validateVideoParams("extend_wan27_video", {
+    const extendResult = validateVideoParams("extend_kie_grok_imagine_video", {
       prompt: "test",
       video_ref: "@vid-a",
+      extend_at: 2,
+      extend_times: "6",
     });
     expect(extendResult.image_slots).toBeNull();
   });
@@ -625,12 +601,12 @@ describe("IMAGE_FIELD_SCHEMAS", () => {
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_kling_3_0_motion_control");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_seedance_2_5_video");
     expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_grok_imagine_image_to_video");
-    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_wan_2_7_reference_to_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_happyhorse_1_1_reference_to_video");
   });
 
   it("omits tools that take no image-array field (extend, text-to-video)", () => {
     expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("extend_kie_grok_imagine_video");
-    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_kie_wan_2_7_image_to_video");
+    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_kie_happyhorse_1_1_text_to_video");
   });
 });
 
@@ -665,11 +641,11 @@ describe("buildModelOption resolved assets and coercion", () => {
     expect(option.prefilled_values.image_refs).toEqual([]);
   });
 
-  it("extend_wan27 prefills video_ref from video assets", () => {
+  it("extend_grok_imagine prefills video_ref from video assets", () => {
     const resolvedAssets = [
       { tag: "@vid-clip", artifactId: "id-video", artifactSlug: "vid-clip", artifactType: "video" as const, filePath: "/path/clip.mp4", workspacePath: "/path" },
     ];
-    const option = buildModelOption("wan27_extend", VIDEO_MODELS.wan27_extend, {}, resolvedAssets);
+    const option = buildModelOption("grok_imagine_extend", VIDEO_MODELS.grok_imagine_extend, {}, resolvedAssets);
     expect(option.prefilled_values.video_ref).toBe("@vid-clip");
   });
 

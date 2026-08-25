@@ -34,12 +34,6 @@ import {
   SeedreamImageToImageRequestSchema,
   SeedreamTextToImageRequestSchema,
   VolcengineVideoToVideoLipSyncRequestSchema,
-  Wan27ImageProRequestSchema,
-  Wan27ImageRequestSchema,
-  Wan27ImageToVideoRequestSchema,
-  Wan27RefToVideoRequestSchema,
-  Wan27TextToVideoRequestSchema,
-  Wan27VideoEditRequestSchema,
 } from "@apicity/kie/zod";
 import { GoogleFlowVideosRequestSchema } from "@apicity/googleflow/zod";
 import {
@@ -86,16 +80,9 @@ const payloadCases: Array<{ tool: string; provider?: string }> = [
   { tool: "generate_kie_qwen_2_0_edit_image" },
   { tool: "generate_kie_gpt_image_2_image_to_image" },
   { tool: "generate_kie_gpt_image_2_text_to_image" },
-  { tool: "generate_kie_wan_2_7_text_to_image" },
-  { tool: "generate_kie_wan_2_7_pro_text_to_image" },
-  { tool: "generate_kie_wan_2_7_text_to_video" },
-  { tool: "generate_kie_wan_2_7_image_to_video" },
-  { tool: "generate_kie_wan_2_7_edit_video" },
   { tool: "extend_kie_grok_imagine_video" },
   { tool: "generate_kie_volcengine_video_to_video_lip_sync" },
   { tool: "generate_kie_omnihuman_1_5_video" },
-  { tool: "generate_kie_wan_2_7_reference_to_video" },
-  { tool: "extend_kie_wan_2_7_video" },
   { tool: "generate_kie_happyhorse_1_1_text_to_video" },
   { tool: "generate_kie_happyhorse_1_1_image_to_video" },
   { tool: "generate_kie_happyhorse_1_1_reference_to_video" },
@@ -103,9 +90,6 @@ const payloadCases: Array<{ tool: string; provider?: string }> = [
   { tool: "generate_kie_minimax_h3_text_to_video" },
   { tool: "generate_kie_minimax_h3_image_to_video" },
   { tool: "generate_kie_minimax_h3_reference_to_video" },
-  { tool: "generate_alibaba_wan_2_7_text_to_image" },
-  { tool: "generate_alibaba_wan_2_7_pro_text_to_image" },
-  { tool: "generate_alibaba_wan_2_7_video" },
 ];
 
 const payloadCaseArgs: Record<string, unknown> = {
@@ -382,42 +366,6 @@ const kieGuardCases: KieGuardCase[] = [
     args: { prompt: "plain prompt" },
   },
   {
-    tool: "generate_kie_wan_2_7_text_to_image",
-    schema: Wan27ImageRequestSchema,
-    args: { prompt: "plain prompt" },
-  },
-  {
-    tool: "generate_kie_wan_2_7_pro_text_to_image",
-    schema: Wan27ImageProRequestSchema,
-    args: { prompt: "plain prompt" },
-  },
-  {
-    tool: "generate_kie_wan_2_7_text_to_video",
-    schema: Wan27TextToVideoRequestSchema,
-    args: { prompt: "plain prompt", duration: "5", aspect_ratio: "16:9", resolution: "1080p" },
-  },
-  {
-    tool: "generate_kie_wan_2_7_image_to_video",
-    schema: Wan27ImageToVideoRequestSchema,
-    args: {
-      prompt: "plain prompt",
-      first_frame_ref: "https://example.test/first.png",
-      last_frame_ref: "https://example.test/last.png",
-      duration: "5",
-    },
-  },
-  {
-    // first_clip is mutually exclusive with first/last frame upstream.
-    tool: "generate_kie_wan_2_7_image_to_video",
-    schema: Wan27ImageToVideoRequestSchema,
-    args: { prompt: "plain prompt", first_clip_ref: "https://example.test/clip.mp4" },
-  },
-  {
-    tool: "generate_kie_wan_2_7_edit_video",
-    schema: Wan27VideoEditRequestSchema,
-    args: { prompt: "plain prompt", video_ref: "https://example.test/source.mp4" },
-  },
-  {
     tool: "extend_kie_grok_imagine_video",
     schema: GrokVideoExtendRequestSchema,
     args: { prompt: "plain prompt", extend_at: 3, extend_times: "10" },
@@ -438,20 +386,6 @@ const kieGuardCases: KieGuardCase[] = [
       image_ref: "https://example.test/source.png",
       audio_ref: "https://example.test/source.mp3",
     },
-  },
-  {
-    tool: "generate_kie_wan_2_7_reference_to_video",
-    schema: Wan27RefToVideoRequestSchema,
-    args: {
-      prompt: "plain prompt",
-      image_refs: ["https://example.test/image.png"],
-      video_refs: ["https://example.test/video.mp4"],
-    },
-  },
-  {
-    tool: "extend_kie_wan_2_7_video",
-    schema: Wan27ImageToVideoRequestSchema,
-    args: { prompt: "plain prompt", video_ref: "https://example.test/source.mp4" },
   },
   {
     tool: "generate_kie_happyhorse_1_1_text_to_video",
@@ -645,23 +579,6 @@ describe("translateToolPayload", () => {
       },
     });
     expect(KlingV3TurboImageToVideoRequestSchema.safeParse(result?.payload).success).toBe(true);
-  });
-
-  it("uses Apicity defaults for Wan 2.7 image generation", () => {
-    const result = translateToolPayload("generate_wan27_image", {
-      prompt: "a quiet lakeside cabin",
-    });
-
-    expect(result?.payload).toEqual({
-      model: "wan/2-7-image",
-      input: {
-        prompt: "a quiet lakeside cabin",
-        aspect_ratio: "16:9",
-        resolution: "2K",
-        nsfw_checker: false,
-      },
-    });
-    expect(Wan27ImageRequestSchema.safeParse(result?.payload).success).toBe(true);
   });
 
   it("uses Apicity defaults for Volcengine lip sync", () => {
@@ -1271,17 +1188,6 @@ describe("translateToolPayload", () => {
     expect(input.reference_video_urls).toEqual(["@vid-full-notats"]);
   });
 
-  it("rewrites free-form wan video-edit @slugs to natural language", () => {
-    const result = translateToolPayload("generate_wan27_videoedit_video", {
-      prompt: "make @vid-clip match @img-style",
-      video_ref: "vid-clip",
-      image_ref: "img-style",
-    });
-
-    expect((result?.payload as { input: { prompt: string } }).input.prompt).toBe(
-      "make the source video match reference image 1",
-    );
-  });
 });
 
 describe("MiniMax H3 payload builders", () => {

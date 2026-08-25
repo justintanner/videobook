@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   GrokImageToVideoRequestSchema,
+  HappyHorse11TextToVideoRequestSchema,
   NanoBananaProRequestSchema,
   Seedance2MiniInputSchema,
-  Wan27TextToVideoRequestSchema,
-  Wan27ResolutionSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
@@ -44,8 +43,8 @@ describe("zod default and required helpers", () => {
 
 describe("zodNumberRange", () => {
   it("reads a Zod 4 (kie) ZodNumber with int/min/max", () => {
-    expect(zodNumberRange(Wan27TextToVideoRequestSchema.shape.input.shape.duration)).toEqual({
-      min: 2,
+    expect(zodNumberRange(HappyHorse11TextToVideoRequestSchema.shape.input.shape.duration)).toEqual({
+      min: 3,
       max: 15,
       int: true,
     });
@@ -74,7 +73,7 @@ describe("zodNumberRange", () => {
 
   it("returns null for non-number schemas", () => {
     expect(zodNumberRange(z.string())).toBeNull();
-    expect(zodNumberRange(Wan27ResolutionSchema)).toBeNull();
+    expect(zodNumberRange(HappyHorse11TextToVideoRequestSchema.shape.input.shape.resolution)).toBeNull();
     expect(zodNumberRange(null)).toBeNull();
   });
 });
@@ -106,7 +105,7 @@ describe("readSlotConstraints", () => {
 
 describe("zodStringMaxLength / zodStringMinLength", () => {
   it("reads string bounds from an Apicity (Zod 4) field", () => {
-    const prompt = Wan27TextToVideoRequestSchema.shape.input.shape.prompt;
+    const prompt = HappyHorse11TextToVideoRequestSchema.shape.input.shape.prompt;
     expect(zodStringMaxLength(prompt)).toBe(5000);
     expect(zodStringMinLength(prompt)).toBe(1);
   });
@@ -120,11 +119,11 @@ describe("zodStringMaxLength / zodStringMinLength", () => {
 
 describe("zodEnumOptionsOrNull", () => {
   it("returns enum options for an Apicity enum field", () => {
-    expect(zodEnumOptionsOrNull(Wan27ResolutionSchema)).toEqual(["720p", "1080p"]);
+    expect(zodEnumOptionsOrNull(HappyHorse11TextToVideoRequestSchema.shape.input.shape.resolution)).toEqual(["720p", "1080p"]);
   });
 
   it("returns null for non-enum schemas instead of throwing", () => {
-    expect(zodEnumOptionsOrNull(Wan27TextToVideoRequestSchema.shape.input.shape.duration)).toBeNull();
+    expect(zodEnumOptionsOrNull(HappyHorse11TextToVideoRequestSchema.shape.input.shape.duration)).toBeNull();
     expect(zodEnumOptionsOrNull(z.string())).toBeNull();
     expect(zodEnumOptionsOrNull(null)).toBeNull();
   });

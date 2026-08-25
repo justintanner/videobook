@@ -22,13 +22,6 @@ const MODELS: readonly ModelSpec[] = [
     jobPrefix: "fal-nano-banana-pro",
   },
   {
-    canonicalName: "generate_fal_wan_2_7_pro_text_to_image",
-    jobType: "generate_wan27_pro_fal",
-    taskType: "fal_wan27_pro",
-    modelName: "wan27pro",
-    jobPrefix: "fal-wan27-pro",
-  },
-  {
     canonicalName: "generate_fal_seedream_v5_lite_text_to_image",
     jobType: "generate_seedream_v5_lite_fal",
     taskType: "fal_seedream_v5_lite",
@@ -87,7 +80,7 @@ export function genImagesAllDef(engine: Engine): ToolDef {
   return {
     name: "generate_image_model_comparison",
     description:
-      "Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Wan 2.7 Pro, Seedream v5 Lite, Grok Imagine). Creates one image artifact per model and enqueues background jobs.",
+      "Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Seedream v5 Lite, Grok Imagine). Creates one image artifact per model and enqueues background jobs.",
     schema,
     handler: async (args) => {
       const { prompt, book_id, source_script_id } = args as Args;

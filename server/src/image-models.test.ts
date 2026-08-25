@@ -375,9 +375,9 @@ describe("validateImageParams", () => {
 // ---------------------------------------------------------------------------
 
 describe("getImageModels", () => {
-  it("returns all 14 image models", () => {
+  it("returns all 10 image models", () => {
     const models = getImageModels();
-    expect(Object.keys(models)).toHaveLength(14);
+    expect(Object.keys(models)).toHaveLength(10);
     expect(models).toHaveProperty("nano_banana");
     expect(models).toHaveProperty("grok_imagine_image");
     expect(models).toHaveProperty("gpt_image");
@@ -386,10 +386,6 @@ describe("getImageModels", () => {
     expect(models).toHaveProperty("qwen2_image_edit");
     expect(models).toHaveProperty("seedream_text");
     expect(models).toHaveProperty("seedream_image");
-    expect(models).toHaveProperty("wan27_image");
-    expect(models).toHaveProperty("wan27_image_pro");
-    expect(models).toHaveProperty("alibaba_image");
-    expect(models).toHaveProperty("alibaba_image_pro");
     expect(models).toHaveProperty("alibaba_qwen_image");
     expect(models).toHaveProperty("alibaba_qwen_image_edit");
   });
@@ -431,9 +427,6 @@ describe("getImageModels", () => {
 
   it("builds the canonical Alibaba picker schemas", () => {
     const models = getImageModels();
-    expect(getImageToolSchema(models.alibaba_image.tool_name)?.required).toContain("prompt");
-    expect(getImageToolSchema(models.alibaba_image_pro.tool_name)?.properties.thinking_mode).toBeDefined();
-
     const generate = getImageToolSchema(models.alibaba_qwen_image.tool_name);
     expect(generate?.required).toEqual(["prompt", "model"]);
 

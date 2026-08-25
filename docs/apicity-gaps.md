@@ -94,13 +94,10 @@ an offline fallback.
 | ---------------------------------------------------- | -------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------- |
 | `generate_grok_imagine_video.mode`                   | `fun`/`normal`                         | includes conditionally valid `spicy`                   | Videocity exposes only the external-image path; see §2                           |
 | `generate_grok_imagine_video` with `image_urls`      | omits `index`                          | optional `index` still accepted alongside `image_urls` | Kie docs: `index` is `task_id`-only; see §2                                      |
-| `generate_wan27_videoedit_video.duration`            | exact string values `0,2..10`          | numeric schema with an opaque refine                   | the exact values are derived from `Wan27VideoEditDurationValues`                 |
 
 These are the only deliberate restrictions represented by
 `APICITY_DERIVE_SKIP` or by targeted validation against an otherwise reusable
 strict provider schema. Google Flow's broader local contract is tracked in §14.
-Fal Wan reference-to-video derives from
-`FalWanV2p7ReferenceToVideoRequestSchema`.
 
 ## 9. (gap) ~~HappyHorse 1.1 slugs and pricing~~ — RESOLVED in 0.6.1
 

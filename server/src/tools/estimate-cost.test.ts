@@ -103,12 +103,6 @@ describe("estimate_cost tool", () => {
 
   it("prices every kie tool wired into cost-adapters with a >0 estimate", async () => {
     const cases: Array<[string, Record<string, unknown>]> = [
-      // Wan 2.7 video (flat $0.10/s)
-      ["generate_wan27_t2v_video", { duration: "5" }],
-      ["generate_wan27_i2v_video", { duration: "5" }],
-      ["generate_wan27_r2v_video", { duration: "5" }],
-      ["generate_wan27_videoedit_video", {}],
-      ["extend_wan27_video", { duration: "5" }],
       // Seedance 2 Mini (resolution-tiered per-second; priced by @apicity/cost@0.6.1)
       ["generate_seedance2_mini_video", { resolution: "720p", duration: "5" }],
       ["generate_seedance25_video", { resolution: "720p", duration: "5" }],
@@ -128,8 +122,6 @@ describe("estimate_cost tool", () => {
       ["generate_happyhorse_videoedit_video", {}],
       // Per-image (tiered + flat)
       ["generate_nano_banana_image", { resolution: "2K" }],
-      ["generate_wan27_image", { resolution: "2K" }],
-      ["generate_wan27_image_pro", { resolution: "4K" }],
       ["generate_qwen2_image_edit", {}],
       ["generate_seedream_text_image", {}],
       ["generate_seedream_image", {}],
@@ -538,10 +530,6 @@ describe("estimate_cost tool", () => {
       ["generate_fal_nano_banana_pro_edit_image", { resolution: "2K" }],
       ["generate_fal_seedream_v5_lite_text_to_image", {}],
       ["generate_fal_seedream_v5_lite_edit_image", {}],
-      ["generate_fal_wan_2_7_text_to_image", {}],
-      ["generate_fal_wan_2_7_edit_image", {}],
-      ["generate_fal_wan_2_7_pro_text_to_image", {}],
-      ["generate_fal_wan_2_7_pro_edit_image", {}],
       ["generate_fal_grok_imagine_text_to_image", {}],
       ["generate_fal_grok_imagine_edit_image", {}],
       ["generate_fal_qwen_2_0_text_to_image", {}],
@@ -554,10 +542,6 @@ describe("estimate_cost tool", () => {
       ["generate_fal_seedance_2_0_fast_text_to_video", { duration: "5" }],
       ["generate_fal_seedance_2_0_fast_image_to_video", { duration: "5" }],
       ["generate_fal_seedance_2_0_fast_reference_to_video", { duration: "5", video_refs: ["@vid-ref"] }],
-      ["generate_fal_wan_2_7_text_to_video", { duration: 5 }],
-      ["generate_fal_wan_2_7_image_to_video", { duration: 5 }],
-      ["generate_fal_wan_2_7_reference_to_video", { duration: 5 }],
-      ["generate_fal_wan_2_7_edit_video", {}],
       ["generate_fal_grok_imagine_video_image_to_video", { duration: 6 }],
       ["generate_fal_grok_imagine_video_reference_to_video", { duration: 8 }],
       ["extend_fal_grok_imagine_video", { duration: 6 }],
@@ -576,18 +560,6 @@ describe("estimate_cost tool", () => {
       expect(payload.estimate.usd, `${tool_name} usd`).toBeGreaterThan(0);
     }
   }, 60_000);
-
-  it("prices the non-pro Alibaba Wan image tool at the list rate", async () => {
-    const result = await client.callTool({
-      name: "estimate_cost",
-      arguments: {
-        calls: [{ tool_name: "generate_alibaba_wan_2_7_text_to_image", input: {} }],
-      },
-    });
-    const payload = parse(result);
-    expect(payload.estimate.warnings).toEqual([]);
-    expect(payload.estimate.usd).toBeCloseTo(0.03, 6);
-  });
 
   it("prices canonical generation names across providers", async () => {
     const result = await client.callTool({

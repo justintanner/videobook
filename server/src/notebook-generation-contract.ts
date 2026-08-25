@@ -178,28 +178,6 @@ function googleOmniContract(
   };
 }
 
-function wanImageToVideoContract(
-  slots: readonly NotebookGenerationInputSlot[],
-): NotebookGenerationInputContract {
-  return {
-    modes: [
-      mode(
-        "i2v",
-        slotsByField(
-          slots,
-          ["first_frame_ref", "last_frame_ref", "driving_audio_ref"],
-        ),
-        [["first_frame_ref", "last_frame_ref"]],
-      ),
-      mode(
-        "v2v",
-        slotsByField(slots, ["first_clip_ref", "driving_audio_ref"]),
-        [["first_clip_ref"]],
-      ),
-    ],
-  };
-}
-
 export function notebookGenerationInputContract(
   tool: string,
   schema: Record<string, unknown>,
@@ -249,9 +227,6 @@ export function notebookGenerationInputContract(
   }
   if (tool === "generate_google_flow_omni_flash_video") {
     return googleOmniContract(slots);
-  }
-  if (tool === "generate_kie_wan_2_7_image_to_video") {
-    return wanImageToVideoContract(slots);
   }
   return { modes: [mode("default", slots)] };
 }
