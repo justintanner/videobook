@@ -389,6 +389,20 @@ same bound applies to `reference_audio_urls`.
 
 ---
 
+## 37. (decision) Native DashScope Wan 3.0 intentionally not carried — DECIDED 2026-08-25 (wontfix)
+
+With the Wan 2.x retirement (vb-2erh.2) the last alibaba-native
+(DashScope) video tool was removed. `@apicity/alibaba` 0.11.0 reaches Wan
+3.0 only through the versioned-id alias escape hatch (`wan3.0-i2v`,
+`wan3.0-videoedit`), which skips the listed-model refinements for ratio /
+audio_setting, and there is no native Prime tier. Since fal and kie both
+cover Wan 3.0 and Wan 3.0 Prime end-to-end with first-class schemas and
+cost entries, native DashScope video is deliberately dropped in favor of
+those routes. Revisit only if Apicity ships listed Wan 3.0 enums with
+native pricing.
+
+---
+
 ## Open / partial summary (installed 0.8.8, re-audited 2026-08-07)
 
 | Status       | Sections                                                            | What Videocity still carries                           |
