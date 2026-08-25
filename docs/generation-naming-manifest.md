@@ -4,8 +4,8 @@ This is the authoritative registry-derived list of canonical generation and work
 
 ## Summary
 
-- Total actions: 67
-- Provider actions: 58
+- Total actions: 73
+- Provider actions: 64
 - Workflow and support actions: 9
 
 ## Naming grammar
@@ -71,6 +71,12 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `generate_fal_grok_imagine_video_edit_video` | fal | `fal-ai/xai/grok-imagine-video/edit` | video | edit_video | hidden_fal_variant | `generate_grok_imagine_video_edit_fal` |
 | `generate_fal_qwen_2_0_text_to_image` | fal | `fal-ai/qwen-image/t2i` | image | text_to_image | hidden_fal_variant | `generate_qwen_image_fal` |
 | `generate_fal_qwen_2_0_edit_image` | fal | `fal-ai/qwen-image/edit` | image | edit_image | hidden_fal_variant | `generate_qwen_image_edit_fal` |
+| `generate_fal_wan_3_0_text_to_video` | fal | `fal-ai/wan-3-0/t2v` | video | text_to_video | hidden_fal_variant |  |
+| `generate_fal_wan_3_0_image_to_video` | fal | `fal-ai/wan-3-0/i2v` | video | image_to_video | hidden_fal_variant |  |
+| `generate_fal_wan_3_0_reference_to_video` | fal | `fal-ai/wan-3-0/r2v` | video | reference_to_video | hidden_fal_variant |  |
+| `generate_fal_wan_3_0_prime_text_to_video` | fal | `fal-ai/wan-3-0-prime/t2v` | video | text_to_video | hidden_fal_variant |  |
+| `generate_fal_wan_3_0_prime_image_to_video` | fal | `fal-ai/wan-3-0-prime/i2v` | video | image_to_video | hidden_fal_variant |  |
+| `generate_fal_wan_3_0_prime_reference_to_video` | fal | `fal-ai/wan-3-0-prime/r2v` | video | reference_to_video | hidden_fal_variant |  |
 | `generate_elevenlabs_text_to_audio` | elevenlabs | `@apicity/elevenlabs` | audio | text_to_audio | workflow_tool | `generate_elevenlabs_t2a` |
 | `extend_audio_asset` | workflow | `internal/audio/extend` | audio | extend_audio | workflow_tool | `extend_audio` |
 | `generate_image_model_comparison` | workflow | `internal/gen-images-all` | image | model_comparison | workflow_tool | `gen_images_all_models` |

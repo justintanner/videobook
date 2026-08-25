@@ -119,6 +119,12 @@ import { registerGenerateSeedance2FastR2vFalJob } from "./generate-seedance2-fas
 import { registerGenerateGrokImagineVideoR2vFalJob } from "./generate-grok-imagine-video-r2v-fal.js";
 import { registerGenerateGrokImagineVideoExtendFalJob } from "./generate-grok-imagine-video-extend-fal.js";
 import { registerGenerateGrokImagineVideoEditFalJob } from "./generate-grok-imagine-video-edit-fal.js";
+import { registerGenerateWan30T2vFalJob } from "./generate-wan30-t2v-fal.js";
+import { registerGenerateWan30I2vFalJob } from "./generate-wan30-i2v-fal.js";
+import { registerGenerateWan30R2vFalJob } from "./generate-wan30-r2v-fal.js";
+import { registerGenerateWan30PrimeT2vFalJob } from "./generate-wan30-prime-t2v-fal.js";
+import { registerGenerateWan30PrimeI2vFalJob } from "./generate-wan30-prime-i2v-fal.js";
+import { registerGenerateWan30PrimeR2vFalJob } from "./generate-wan30-prime-r2v-fal.js";
 import { registerPostToXJob } from "./post-to-x.js";
 import { registerGenerateElevenlabsT2aJob } from "./generate-elevenlabs-t2a.js";
 import { registerAcestepCoverJob } from "./generate-acestep-cover.js";
@@ -252,6 +258,12 @@ export function registerAllJobHandlers(
   registerGenerateGrokImagineVideoR2vFalJob(engine);
   registerGenerateGrokImagineVideoExtendFalJob(engine);
   registerGenerateGrokImagineVideoEditFalJob(engine);
+  registerGenerateWan30T2vFalJob(engine);
+  registerGenerateWan30I2vFalJob(engine);
+  registerGenerateWan30R2vFalJob(engine);
+  registerGenerateWan30PrimeT2vFalJob(engine);
+  registerGenerateWan30PrimeI2vFalJob(engine);
+  registerGenerateWan30PrimeR2vFalJob(engine);
   registerGenerateElevenlabsT2aJob(engine);
   registerAcestepCoverJob(engine);
   registerExtendAudioJob(engine);

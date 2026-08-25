@@ -508,6 +508,13 @@ const FAL_ADAPTERS: Record<string, CostAdapter> = {
   generate_fal_kling_video_v3_pro_image_to_video: falKlingV3Video("fal-ai/kling-video/v3/pro/image-to-video"),
   generate_fal_kling_video_v3_standard_text_to_video: falKlingV3Video("fal-ai/kling-video/v3/standard/text-to-video"),
   generate_fal_kling_video_v3_standard_image_to_video: falKlingV3Video("fal-ai/kling-video/v3/standard/image-to-video"),
+  // Wan 3.0 Prime bills a flat $0.05 per output second (numeric duration,
+  // schema default 5) — the falVideo shape fits. The base alibaba/wan-3.0/*
+  // family stays unpriced: cost@0.11.0 declares all three endpoints
+  // dynamic-pricing (per compute second; FAL_DYNAMIC_PRICING_ENDPOINTS).
+  generate_fal_wan_3_0_prime_text_to_video: falVideo("alibaba/wan-3.0-prime/text-to-video"),
+  generate_fal_wan_3_0_prime_image_to_video: falVideo("alibaba/wan-3.0-prime/image-to-video"),
+  generate_fal_wan_3_0_prime_reference_to_video: falVideo("alibaba/wan-3.0-prime/reference-to-video"),
   // xai/grok-imagine-video/edit-video has no published rate — stays "—".
 };
 

@@ -38,6 +38,12 @@ const TASK_TYPES_BY_COMPLETION_FAMILY = {
     "fal_wan27_i2v",
     "fal_wan27_r2v",
     "fal_wan27_videoedit",
+    "fal_wan30_t2v",
+    "fal_wan30_i2v",
+    "fal_wan30_r2v",
+    "fal_wan30_prime_t2v",
+    "fal_wan30_prime_i2v",
+    "fal_wan30_prime_r2v",
     "fal_kling_v3_pro_i2v",
     "fal_kling_v3_pro_t2v",
     "fal_kling_v3_standard_i2v",
@@ -302,6 +308,7 @@ const FAL_VIDEO_TASK_PREFIXES = [
   "fal_wan27_i2v",
   "fal_wan27_r2v",
   "fal_wan27_videoedit",
+  "fal_wan30_",
   "fal_grok_imagine_video_",
 ];
 

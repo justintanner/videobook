@@ -549,6 +549,9 @@ describe("estimate_cost tool", () => {
       ["generate_fal_kling_video_v3_pro_image_to_video", {}],
       ["generate_fal_kling_video_v3_standard_text_to_video", { duration: "10" }],
       ["generate_fal_kling_video_v3_standard_image_to_video", { duration: "10", generate_audio: false }],
+      ["generate_fal_wan_3_0_prime_text_to_video", { duration: 5 }],
+      ["generate_fal_wan_3_0_prime_image_to_video", { duration: 8, resolution: "720p" }],
+      ["generate_fal_wan_3_0_prime_reference_to_video", { duration: 10 }],
     ];
     for (const [tool_name, input] of cases) {
       const result = await client.callTool({

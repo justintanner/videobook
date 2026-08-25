@@ -20,8 +20,8 @@ describe("Videobook MCP parity", () => {
     const names = getAllToolDefs(fs).map((definition) => definition.name);
     fs.close();
 
-    expect(names).toHaveLength(278);
-    expect(new Set(names).size).toBe(278);
+    expect(names).toHaveLength(284);
+    expect(new Set(names).size).toBe(284);
     expect(names).toEqual(
       expect.arrayContaining([
         "list_books",
@@ -63,6 +63,12 @@ describe("Videobook MCP parity", () => {
         "generate_kie_kling_3_0_omni_transformation",
         "generate_kie_kling_3_0_motion_control",
         "generate_kie_seedance_2_5_video",
+        "generate_fal_wan_3_0_text_to_video",
+        "generate_fal_wan_3_0_image_to_video",
+        "generate_fal_wan_3_0_reference_to_video",
+        "generate_fal_wan_3_0_prime_text_to_video",
+        "generate_fal_wan_3_0_prime_image_to_video",
+        "generate_fal_wan_3_0_prime_reference_to_video",
       ]),
     );
   });

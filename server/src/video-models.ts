@@ -29,6 +29,8 @@ import {
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import {
+  FalWan3p0ImageToVideoRequestSchema,
+  FalWan3p0TextToVideoRequestSchema,
   FalXaiGrokImagineVideoExtendVideoRequestSchema,
   FalXaiGrokImagineVideoReferenceToVideoRequestSchema,
   FalXaiGrokImagineVideoEditVideoRequestSchema,
@@ -372,6 +374,32 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     defaults: {},
     providers: [],
     falToolNames: { noRefs: "generate_fal_grok_imagine_video_edit_video", withRefs: "generate_fal_grok_imagine_video_edit_video" },
+  },
+  wan30: {
+    label: "Wan 3.0",
+    tool_name: "generate_fal_wan_3_0_text_to_video",
+    description: "Alibaba Wan 3.0 text-to-video or first/last-frame image-to-video via fal.ai",
+    params: [
+      "prompt", "first_frame_ref", "end_frame_ref",
+      "resolution", "aspect_ratio", "duration",
+      "audio", "enable_prompt_expansion", "enable_thinking", "enable_safety_checker", "seed",
+    ],
+    defaults: {},
+    providers: [],
+    falToolNames: { noRefs: "generate_fal_wan_3_0_text_to_video", withRefs: "generate_fal_wan_3_0_image_to_video" },
+  },
+  wan30_prime: {
+    label: "Wan 3.0 Prime",
+    tool_name: "generate_fal_wan_3_0_prime_text_to_video",
+    description: "Alibaba Wan 3.0 Prime (higher quality tier) text-to-video or first/last-frame image-to-video via fal.ai",
+    params: [
+      "prompt", "first_frame_ref", "end_frame_ref",
+      "resolution", "aspect_ratio", "duration",
+      "audio", "enable_prompt_expansion", "enable_thinking", "enable_safety_checker", "seed",
+    ],
+    defaults: {},
+    providers: [],
+    falToolNames: { noRefs: "generate_fal_wan_3_0_prime_text_to_video", withRefs: "generate_fal_wan_3_0_prime_image_to_video" },
   },
 };
 
@@ -808,6 +836,32 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     prompt: FalXaiGrokImagineVideoEditVideoRequestSchema.shape.prompt,
     video_ref: FalXaiGrokImagineVideoEditVideoRequestSchema.shape.video_url,
     resolution: FalXaiGrokImagineVideoEditVideoRequestSchema.shape.resolution,
+  },
+  generate_fal_wan_3_0_text_to_video: {
+    prompt: FalWan3p0TextToVideoRequestSchema.shape.prompt,
+    resolution: FalWan3p0TextToVideoRequestSchema.shape.resolution,
+    aspect_ratio: FalWan3p0TextToVideoRequestSchema.shape.aspect_ratio,
+    duration: FalWan3p0TextToVideoRequestSchema.shape.duration,
+  },
+  generate_fal_wan_3_0_image_to_video: {
+    prompt: FalWan3p0ImageToVideoRequestSchema.shape.prompt,
+    first_frame_ref: FalWan3p0ImageToVideoRequestSchema.shape.start_image_url,
+    resolution: FalWan3p0ImageToVideoRequestSchema.shape.resolution,
+    aspect_ratio: FalWan3p0ImageToVideoRequestSchema.shape.aspect_ratio,
+    duration: FalWan3p0ImageToVideoRequestSchema.shape.duration,
+  },
+  generate_fal_wan_3_0_prime_text_to_video: {
+    prompt: FalWan3p0TextToVideoRequestSchema.shape.prompt,
+    resolution: FalWan3p0TextToVideoRequestSchema.shape.resolution,
+    aspect_ratio: FalWan3p0TextToVideoRequestSchema.shape.aspect_ratio,
+    duration: FalWan3p0TextToVideoRequestSchema.shape.duration,
+  },
+  generate_fal_wan_3_0_prime_image_to_video: {
+    prompt: FalWan3p0ImageToVideoRequestSchema.shape.prompt,
+    first_frame_ref: FalWan3p0ImageToVideoRequestSchema.shape.start_image_url,
+    resolution: FalWan3p0ImageToVideoRequestSchema.shape.resolution,
+    aspect_ratio: FalWan3p0ImageToVideoRequestSchema.shape.aspect_ratio,
+    duration: FalWan3p0ImageToVideoRequestSchema.shape.duration,
   },
 };
 
@@ -1605,6 +1659,7 @@ ROUTING PREFERENCES:
 - Use extend_kie_grok_imagine_video ONLY when user explicitly wants to extend an existing video with Grok Imagine
 - Use generate_kie_volcengine_video_to_video_lip_sync ONLY when user explicitly mentions "volcengine" or wants to lip-sync / dub an existing video to a separate audio track
 - Use generate_kie_omnihuman_1_5_video ONLY when user explicitly mentions "omnihuman" or wants to animate a portrait/photo with a voice or audio track (talking/singing avatar from a still image)
+- Use generate_fal_wan_3_0_text_to_video / generate_fal_wan_3_0_image_to_video when the user mentions "Wan" or "Wan 3.0"; pick generate_fal_wan_3_0_prime_text_to_video / generate_fal_wan_3_0_prime_image_to_video for "Wan 3.0 Prime" / higher quality Wan; use the image-to-video variant when a first frame is supplied
 
 KEY CONSTRAINTS:
 - For Kling 3.0 Omni tools: resolution "720p"/"1080p"/"4k", duration 3-15 seconds, audio boolean. Text-to-video is prompt-only. Image-to-video requires image_refs (1-2). Reference-to-video requires image_refs and/or one video_ref. Transformation requires video_refs and optional image_refs
@@ -1616,6 +1671,7 @@ KEY CONSTRAINTS:
 - For extend_kie_grok_imagine_video: REQUIRES video_ref, prompt, extend_at, and extend_times "6"/"10"
 - For generate_kie_volcengine_video_to_video_lip_sync: REQUIRES video_ref (source video) and audio_ref (driving audio); mode "lite"/"basic"
 - For generate_kie_omnihuman_1_5_video: REQUIRES image_ref (portrait) and audio_ref (driving audio ≤60s); output_resolution "720"/"1080", pe_fast_mode boolean, optional prompt
+- For generate_fal_wan_3_0_text_to_video and generate_fal_wan_3_0_prime_text_to_video: REQUIRES prompt and duration 2-30 (integer seconds); resolution "480p"/"720p"/"1080p"; aspect_ratio "adaptive"/"16:9"/"4:3"/"1:1"/"3:4"/"9:16"; audio, enable_prompt_expansion, enable_thinking, enable_safety_checker booleans. The image-to-video variants REQUIRE first_frame_ref and accept optional end_frame_ref; prompt optional there
 
 PROMPT FIELD: Do NOT include "prompt" in params. Only return tool selection and non-prompt parameters.
 DO NOT include book_id in params.

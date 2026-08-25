@@ -182,6 +182,12 @@ import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
 import { generateGrokImagineVideoR2vFalDef } from "./generate-grok-imagine-video-r2v-fal.js";
 import { generateGrokImagineVideoExtendFalDef } from "./generate-grok-imagine-video-extend-fal.js";
 import { generateGrokImagineVideoEditFalDef } from "./generate-grok-imagine-video-edit-fal.js";
+import { generateWan30T2vFalDef } from "./generate-wan30-t2v-fal.js";
+import { generateWan30I2vFalDef } from "./generate-wan30-i2v-fal.js";
+import { generateWan30R2vFalDef } from "./generate-wan30-r2v-fal.js";
+import { generateWan30PrimeT2vFalDef } from "./generate-wan30-prime-t2v-fal.js";
+import { generateWan30PrimeI2vFalDef } from "./generate-wan30-prime-i2v-fal.js";
+import { generateWan30PrimeR2vFalDef } from "./generate-wan30-prime-r2v-fal.js";
 import { genImagesAllDef } from "./gen-images-all.js";
 import { imageSubjectDefs } from "./image-subjects.js";
 
@@ -456,6 +462,12 @@ export function getAllToolDefs(
     generateGrokImagineVideoR2vFalDef(engine),
     generateGrokImagineVideoExtendFalDef(engine),
     generateGrokImagineVideoEditFalDef(engine),
+    generateWan30T2vFalDef(engine),
+    generateWan30I2vFalDef(engine),
+    generateWan30R2vFalDef(engine),
+    generateWan30PrimeT2vFalDef(engine),
+    generateWan30PrimeI2vFalDef(engine),
+    generateWan30PrimeR2vFalDef(engine),
     genImagesAllDef(engine),
     ...imageSubjectDefs(engine),
 

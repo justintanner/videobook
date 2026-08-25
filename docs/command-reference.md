@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (278)
+## MCP endpoints (284)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -102,6 +102,12 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `generate_fal_qwen_2_0_text_to_image` (historical names, not exposed: `generate_qwen_image_fal`) — Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new image artifact and enqueues a background job.
 - `generate_fal_seedream_v5_lite_edit_image` (historical names, not exposed: `generate_seedream_v5_lite_edit_fal`) — Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_fal_seedream_v5_lite_text_to_image` (historical names, not exposed: `generate_seedream_v5_lite_fal`) — Generate an image via fal.ai using ByteDance Seedream V5 Lite from a text prompt. Creates a new image artifact and enqueues a background job.
+- `generate_fal_wan_3_0_image_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 from a first-frame image (optional end frame and prompt). Creates a new video artifact and enqueues a background job.
+- `generate_fal_wan_3_0_prime_image_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 Prime (higher quality tier) from a first-frame image (optional end frame and prompt). Creates a new video artifact and enqueues a background job.
+- `generate_fal_wan_3_0_prime_reference_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 Prime (higher quality tier) Reference-to-Video guided by reference images, videos, audio, a file URL, a web URL, and/or a prompt. Creates a new video artifact and enqueues a background job. Requires at least one of prompt, image_refs, video_refs, audio_refs, file_url, or web_url.
+- `generate_fal_wan_3_0_prime_text_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 Prime (higher quality tier) from a text prompt only. Creates a new video artifact and enqueues a background job.
+- `generate_fal_wan_3_0_reference_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 Reference-to-Video guided by reference images, videos, audio, a file URL, a web URL, and/or a prompt. Creates a new video artifact and enqueues a background job. Requires at least one of prompt, image_refs, video_refs, audio_refs, file_url, or web_url.
+- `generate_fal_wan_3_0_text_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 from a text prompt only. Creates a new video artifact and enqueues a background job.
 - `generate_google_flow_nano_banana_pro_image` (historical names, not exposed: `generate_nano_banana_pro_google`) — Generate an image using Google Nano Banana Pro via Google Flow. Text-to-image or image-to-image from up to 10 reference images. Creates a new image artifact and enqueues a background job.
 - `generate_google_flow_omni_flash_video` (historical names, not exposed: `generate_google_omni_video`) — Generate a video using Google Gemini Omni via Google Flow. Multimodal: a text prompt plus optional first frame, reference images (0-7), or one reference video clip with in/out timecodes. Creates a new video artifact and enqueues a background job.
 - `generate_google_flow_veo_3_1_fast_video` (historical names, not exposed: `generate_veo31_fast_video`) — Generate a video using Google Veo 3.1 Fast (Google Flow). Text-to-video, image-to-video from start/end frames, or reference-to-video from up to 3 reference images. Creates a new video artifact and enqueues a background job.
