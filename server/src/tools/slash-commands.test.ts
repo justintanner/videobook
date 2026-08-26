@@ -85,6 +85,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/archive");
     expect(commandNames).toContain("/make-cover-song");
     expect(commandNames).toContain("/duplicate");
+    expect(commandNames).toContain("/group-images");
     expect(commandNames).toContain("/history");
     expect(commandNames).toContain("/open");
     expect(commandNames).toContain("/delete");

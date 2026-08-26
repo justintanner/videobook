@@ -56,6 +56,7 @@ export default defineConfig({
       'src/videobook/notebook-cell-add-menu.test.ts',
       'src/videobook/notebook-coordinate-actions.test.ts',
       'src/videobook/notebook-video-axis-arrange.test.ts',
+      'src/videobook/notebook-group-images.test.ts',
       'src/videobook/command-plan.test.ts',
       'src/videobook/mcp-client.test.ts',
       'scripts/search-benchmark-corpus.test.ts',

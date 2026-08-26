@@ -292,7 +292,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.
 
-## Slash commands (123 static commands)
+## Slash commands (124 static commands)
 
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
@@ -345,6 +345,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/folder` — Show asset folder; MCP: `show_folder`
 - `/gf-characters` — Manage Google Flow characters; UI: `open_gf_characters`
 - `/grok-upscale` — Upscale a Grok-Imagine video via Kie; MCP: `upscale_kie_grok_imagine_video`
+- `/group-images` — Gather all image cells into horizontal lines starting at the selected cell, wrapping onto the next row at the grid edge; cells in the way move to free slots
 - `/history` — View asset version history; UI: `show_history`
 - `/inbox` — View generations inbox; UI: `open_inbox`
 - `/info` — Show asset metadata; UI: `viewer_toggle_info`

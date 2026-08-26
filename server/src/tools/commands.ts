@@ -697,6 +697,18 @@ const CANONICAL_COMMANDS: Command[] = [
     exposure: "composite",
   },
   {
+    command: "/group-images",
+    description: "Gather all image cells into horizontal lines starting at the selected cell, wrapping onto the next row at the grid edge; cells in the way move to free slots",
+    example: "/group-images",
+    category: "action",
+    icon: "Images",
+    size: "default",
+    variant: "violet",
+    chevron: "right",
+    params: [],
+    exposure: "composite",
+  },
+  {
     command: "/history",
     description: "View asset version history",
     example: "/history @hero-intro",

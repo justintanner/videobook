@@ -231,6 +231,7 @@ import {
   planVideoAxisArrangement,
   type NotebookVideoAxis,
 } from '@/videobook/notebook-video-axis-arrange'
+import { planImageGrouping } from '@/videobook/notebook-group-images'
 import {
   notebookSourcePortId,
   notebookSourcePortOffsets,
@@ -4504,6 +4505,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       cellAsset.type === 'video' || cellAsset.type === 'final' ? [cellId] : [])),
     [notebookCellAssets],
   )
+  const notebookImageCellIds = useMemo(
+    () => new Set([...notebookCellAssets].flatMap(([cellId, cellAsset]) =>
+      cellAsset.type === 'image' ? [cellId] : [])),
+    [notebookCellAssets],
+  )
   const selectedCellError = notebook && selectedNotebookCell
     ? (
       notebookCellExecutionObservation(notebook, selectedNotebookCell.id).error
@@ -5644,6 +5650,49 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       rememberLastWorkSlot({ row: anchor.row, column: anchor.column })
       const videoCount = planned.slots.length - planned.displacedCount
       const message = `Arranged ${videoCount} ${videoCount === 1 ? 'video' : 'videos'} in ${axisLabel}`
+      setNotice(message)
+      return { ok: true, message }
+    } catch (error) {
+      await refreshNotebook(bookId, notebook.id).catch(() => undefined)
+      const message = error instanceof Error ? error.message : String(error)
+      setNotice(message, 'error')
+      return { ok: false, message }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const groupImageCells = async (
+    anchor: NotebookGridSlot,
+  ): Promise<{ ok: boolean; message: string }> => {
+    if (!bookId || !notebook) {
+      return { ok: false, message: 'No notebook is open' }
+    }
+    const planned = planImageGrouping(notebook, notebookImageCellIds, anchor)
+    if (!planned.ok) {
+      setNotice(planned.message, 'error')
+      return { ok: false, message: planned.message }
+    }
+    const anchorLabel = notebookGridTag(anchor)
+    if (planned.movedCount === 0) {
+      const message = `Images are already grouped from ${anchorLabel}`
+      setNotice(message)
+      return { ok: true, message }
+    }
+
+    const revision = asString(recordValue(notebook)?.revision)
+    setBusy(true)
+    try {
+      await call('move_notebook_cells', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        ...(revision ? { expected_revision: revision } : {}),
+        slots: planned.slots,
+      })
+      await refreshNotebook(bookId, notebook.id)
+      rememberLastWorkSlot({ row: anchor.row, column: anchor.column })
+      const imageCount = planned.slots.length - planned.displacedCount
+      const message = `Grouped ${imageCount} ${imageCount === 1 ? 'image' : 'images'} from ${anchorLabel}`
       setNotice(message)
       return { ok: true, message }
     } catch (error) {
@@ -8720,6 +8769,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           anchor,
         )
       }
+      if (commandToken === '/group-images') {
+        const anchor = selectedNotebookCell?.slot ?? lastWorkSlot
+        if (!anchor) {
+          return { ok: false, message: 'Select a cell to anchor the grouping' }
+        }
+        return await groupImageCells(anchor)
+      }
       if (commandToken === '/track-add') {
         const [kindValue, ...nameParts] = restParts
         if (
@@ -9749,6 +9805,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         },
       )
     }
+    if (notebookImageCellIds.size > 0) {
+      contextMenuActions.push({
+        id: 'group_images',
+        label: 'Group images',
+        icon: 'group-images',
+        disabled: busy,
+      })
+    }
     if (contextMenuSplitSource) {
       contextMenuActions.push({
         id: 'split',
@@ -9870,6 +9934,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         actionId === 'arrange_videos_column' ? 'column' : 'row',
         contextMenuCell.slot,
       )
+      return
+    }
+    if (actionId === 'group_images') {
+      void groupImageCells(contextMenuCell.slot)
       return
     }
     if (actionId === 'generate_video' || actionId === 'generate_image') {
