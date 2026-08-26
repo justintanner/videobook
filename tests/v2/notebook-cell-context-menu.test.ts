@@ -81,4 +81,28 @@ describe('NotebookCellContextMenu', () => {
       html.indexOf('data-cell-action="source"'),
     )
   })
+
+  it('renders an empty grid slot menu without the delete section', () => {
+    const html = renderToStaticMarkup(createElement(NotebookCellContextMenu, {
+      actions: [{
+        id: 'group_images',
+        label: 'Group images here',
+        icon: 'group-images',
+      }],
+      address: '@c5',
+      cellType: 'EMPTY',
+      menuId: 'slot-context-menu-2-4',
+      menuLabel: 'Slot actions for @c5',
+      position: { x: 40, y: 60 },
+      returnFocus: null,
+      onAction: () => undefined,
+      onClose: () => undefined,
+    }))
+
+    expect(html).toContain('aria-label="Slot actions for @c5"')
+    expect(html).toContain('data-cell-action="group_images"')
+    expect(html).toContain('Group images here')
+    expect(html).not.toContain('cell-context-menu-danger')
+    expect(html).not.toContain('data-cell-action="delete"')
+  })
 })

@@ -662,8 +662,12 @@ interface CanvasCellData extends NotebookCellData {
 
 type CanvasNode = Node<CanvasCellData>
 
+type CellContextMenuTarget =
+  | { kind: 'cell'; cellId: string }
+  | { kind: 'slot'; slot: NotebookGridSlot }
+
 type CellContextMenuState = {
-  cellId: string
+  target: CellContextMenuTarget
   position: { x: number; y: number }
   returnFocus: HTMLElement | null
 }
@@ -1893,6 +1897,10 @@ function compactCellTypeLabel(kind: NotebookCellType): string {
 
 function cellContextMenuId(cellId: string): string {
   return `cell-context-menu-${cellId}`
+}
+
+function slotContextMenuId(slot: NotebookGridSlot): string {
+  return `slot-context-menu-${slot.row}-${slot.column}`
 }
 
 function emptyCellLabel(data: CanvasCellData): string {
@@ -3475,13 +3483,24 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     returnFocus: HTMLElement | null,
   ) => {
     selectCanvasCell(cellId)
-    setCellContextMenu({ cellId, position, returnFocus })
+    setCellContextMenu({ target: { kind: 'cell', cellId }, position, returnFocus })
   }, [selectCanvasCell])
 
+  const openSlotContextMenu = useCallback((
+    slot: NotebookGridSlot,
+    position: { x: number; y: number },
+    returnFocus: HTMLElement | null,
+  ) => {
+    setCellContextMenu({ target: { kind: 'slot', slot }, position, returnFocus })
+  }, [])
+
+  const openContextMenuCellId = cellContextMenu?.target.kind === 'cell'
+    ? cellContextMenu.target.cellId
+    : null
   const cellContextMenuContextValue = useMemo<CellContextMenuContextValue>(() => ({
-    openCellId: cellContextMenu?.cellId ?? null,
+    openCellId: openContextMenuCellId,
     open: openCellContextMenu,
-  }), [cellContextMenu?.cellId, openCellContextMenu])
+  }), [openContextMenuCellId, openCellContextMenu])
 
   const applyNotebook = useCallback((
     next: NotebookDocument,
@@ -3510,7 +3529,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setMediaLibraryPicker((current) =>
       current && cellIds.has(current.cellId) ? current : null)
     setCellContextMenu((current) =>
-      current && cellIds.has(current.cellId) ? current : null)
+      !current
+      || current.target.kind === 'slot'
+      || cellIds.has(current.target.cellId)
+        ? current
+        : null)
     setNodes((current) =>
       reconcileCanvasNodes(current, canvasNodes(next, nextAssets, nextJobs)))
     setEdges((current) => reconcileFlowEdges(current, notebookEdges(next)))
@@ -9266,11 +9289,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     ))
   }
 
-  const openMediaDropSlotAt = (
+  /* The grid board is pointer-events:none, so screen points are mapped back
+     to a square here rather than read off a DOM target. Returns null for the
+     gutters between squares and for squares a cell already occupies. */
+  const emptyGridSlotAt = (
     clientX: number,
     clientY: number,
   ): NotebookGridSlot | null => {
-    if (busy) return null
     const point = flowRef.current?.screenToFlowPosition({ x: clientX, y: clientY })
     if (!point) return null
     const slot = notebookGridSquareAt(point, notebookMetrics)
@@ -9281,6 +9306,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ? null
       : slot
   }
+
+  const openMediaDropSlotAt = (
+    clientX: number,
+    clientY: number,
+  ): NotebookGridSlot | null =>
+    busy ? null : emptyGridSlotAt(clientX, clientY)
 
   const handleAppFileDragEnter = (event: DragEvent<HTMLElement>) => {
     if (screen !== 'notebook' || !dataTransferHasFiles(event.dataTransfer)) return
@@ -9660,11 +9691,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
   }
 
-  const contextMenuCell = cellContextMenu
-    ? notebook?.cells.find((cell) => cell.id === cellContextMenu.cellId) ?? null
+  const contextMenuCell = openContextMenuCellId
+    ? notebook?.cells.find((cell) => cell.id === openContextMenuCellId) ?? null
     : null
-  const contextMenuNode = cellContextMenu
-    ? presentedNodes.find((node) => node.id === cellContextMenu.cellId) ?? null
+  const contextMenuNode = openContextMenuCellId
+    ? presentedNodes.find((node) => node.id === openContextMenuCellId) ?? null
+    : null
+  const contextMenuSlot = cellContextMenu?.target.kind === 'slot'
+    ? cellContextMenu.target.slot
     : null
   const contextMenuRunAction = contextMenuNode
     ? notebookCellActionPresentation({
@@ -9707,7 +9741,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       cell.slot.row === contextMenuCell.slot.row + 1
       && cell.slot.column === contextMenuCell.slot.column),
   )
-  const contextMenuSplitSource = selectedCellId === cellContextMenu?.cellId
+  const contextMenuSplitSource = selectedCellId === openContextMenuCellId
     ? selectedSplitSource
     : null
   const contextMenuGenerationTypes = contextMenuCell && notebook
@@ -9833,6 +9867,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         icon: 'source',
       },
     )
+  }
+  /* Board-wide layout actions an empty square can anchor. Kept separate from
+     contextMenuActions because none of the cell actions apply without a cell. */
+  const slotContextMenuActions: NotebookCellContextAction[] = []
+  if (notebookImageCellIds.size > 0) {
+    slotContextMenuActions.push({
+      id: 'group_images',
+      label: 'Group images here',
+      icon: 'group-images',
+      disabled: busy,
+    })
+  }
+  const handleSlotContextAction = (actionId: string) => {
+    if (!contextMenuSlot) return
+    if (actionId === 'group_images') void groupImageCells(contextMenuSlot)
   }
   const duplicateContextMenuAsset = async () => {
     if (!contextMenuDuplicateAssetId || !bookId || !notebook) return
@@ -10233,6 +10282,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         closeCellContextMenu()
                         selectCanvasCell(null)
                         setSourceViewCellId(null)
+                      }}
+                      onPaneContextMenu={(event) => {
+                        if (slotContextMenuActions.length === 0) return
+                        const slot = emptyGridSlotAt(event.clientX, event.clientY)
+                        if (!slot) return
+                        event.preventDefault()
+                        openSlotContextMenu(
+                          slot,
+                          { x: event.clientX, y: event.clientY },
+                          document.activeElement instanceof HTMLElement
+                            ? document.activeElement
+                            : null,
+                        )
                       }}
                       onNodeDrag={(_event, node) => {
                         closeCellContextMenu()
@@ -11295,6 +11357,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onAction={handleCellContextAction}
           onClose={closeCellContextMenu}
           onDelete={deleteContextMenuCell}
+        />
+      )}
+
+      {cellContextMenu && contextMenuSlot && slotContextMenuActions.length > 0 && (
+        <NotebookCellContextMenu
+          actions={slotContextMenuActions}
+          address={notebookGridTag(contextMenuSlot)}
+          cellType="EMPTY"
+          menuId={slotContextMenuId(contextMenuSlot)}
+          menuLabel={`Slot actions for ${notebookGridTag(contextMenuSlot)}`}
+          position={cellContextMenu.position}
+          returnFocus={cellContextMenu.returnFocus}
+          onAction={handleSlotContextAction}
+          onClose={closeCellContextMenu}
         />
       )}
 

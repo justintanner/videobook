@@ -2281,6 +2281,7 @@ describe('chat composer browser flow', () => {
         'Split video',
         'Arrange videos in column',
         'Arrange videos in row',
+        'Group images',
       ].includes(label))).toBe(true)
     expect(await menu.locator('.cell-context-menu-danger').evaluate((element) =>
       getComputedStyle(element).borderTopStyle)).toBe('solid')
@@ -2341,6 +2342,7 @@ describe('chat composer browser flow', () => {
       'Duplicate',
       'Arrange videos in column',
       'Arrange videos in row',
+      'Group images',
       'Split video',
       'View generations',
       'View source',
@@ -2374,6 +2376,7 @@ describe('chat composer browser flow', () => {
       'Duplicate',
       'Arrange videos in column',
       'Arrange videos in row',
+      'Group images',
       'View generations',
       'View source',
       'Delete cell',
@@ -2474,6 +2477,7 @@ describe('chat composer browser flow', () => {
       'Choose media',
       'Arrange videos in column',
       'Arrange videos in row',
+      'Group images',
       'View generations',
       'View source',
       'Delete cell',
@@ -2496,6 +2500,38 @@ describe('chat composer browser flow', () => {
     expect(await runningMenu.locator('[data-cell-action="run"]').isDisabled())
       .toBe(true)
     await page.keyboard.press('Escape')
+    await runningMenu.waitFor({ state: 'hidden' })
+
+    /* The grid board is pointer-events:none, so an empty square is right
+       clicked through the ReactFlow pane. Which addresses are free depends on
+       what earlier tests auto-placed, so the first square whose centre hits
+       the pane is chosen: that hit test is exactly the precondition the pane
+       context menu relies on. */
+    const emptySquare = await page.evaluate(() => {
+      for (const square of document.querySelectorAll('.notebook-grid-square')) {
+        const address = square
+          .querySelector('.notebook-grid-square-label')?.textContent?.trim()
+        if (!address) continue
+        const rect = square.getBoundingClientRect()
+        const x = rect.x + rect.width / 2
+        const y = rect.y + rect.height / 2
+        if (document.elementFromPoint(x, y)?.classList.contains('react-flow__pane')) {
+          return { address, x, y }
+        }
+      }
+      return null
+    })
+    if (!emptySquare) throw new Error('No empty grid square is exposed on the pane')
+    await page.mouse.click(emptySquare.x, emptySquare.y, { button: 'right' })
+    const slotMenu = page.getByRole('menu', {
+      name: `Slot actions for ${emptySquare.address}`,
+    })
+    await slotMenu.waitFor({ state: 'visible' })
+    expect((await slotMenu.getByRole('menuitem').allTextContents())
+      .map((label) => label.trim())).toEqual(['Group images here'])
+    expect(await slotMenu.locator('.cell-context-menu-danger').count()).toBe(0)
+    await page.keyboard.press('Escape')
+    await slotMenu.waitFor({ state: 'hidden' })
   }, 60_000)
 
   it('marquee-selects multiple cells and confirms before deleting the set', async () => {

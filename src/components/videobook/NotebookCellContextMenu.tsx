@@ -53,11 +53,15 @@ type NotebookCellContextMenuProps = {
   cellType: string
   deleteDisabled?: boolean
   menuId: string
+  /* Accessible name; defaults to the cell wording. Empty grid slots pass
+     their own label because no cell backs the menu. */
+  menuLabel?: string
   position: { x: number; y: number }
   returnFocus: HTMLElement | null
   onAction: (actionId: string) => void
   onClose: () => void
-  onDelete: () => void
+  /* Omitted for menus with nothing to delete, which also hides the section. */
+  onDelete?: () => void
 }
 
 const actionIcons: Record<NotebookCellContextActionIcon, LucideIcon> = {
@@ -88,6 +92,7 @@ export function NotebookCellContextMenu({
   cellType,
   deleteDisabled = false,
   menuId,
+  menuLabel,
   position,
   returnFocus,
   onAction,
@@ -162,7 +167,8 @@ export function NotebookCellContextMenu({
       return
     }
     if (
-      !deleteDisabled
+      onDelete
+      && !deleteDisabled
       && (event.key === 'Delete' || event.key === 'Backspace')
     ) {
       event.preventDefault()
@@ -198,7 +204,7 @@ export function NotebookCellContextMenu({
       id={menuId}
       className="cell-context-menu"
       role="menu"
-      aria-label={`Cell actions for ${address}`}
+      aria-label={menuLabel ?? `Cell actions for ${address}`}
       style={{ left: position.x, top: position.y }}
       onContextMenu={(event) => event.preventDefault()}
       onKeyDown={handleKeyDown}
@@ -225,23 +231,25 @@ export function NotebookCellContextMenu({
           )
         })}
       </div>
-      <div className="cell-context-menu-danger" role="presentation">
-        <button
-          type="button"
-          role="menuitem"
-          data-cell-action="delete"
-          aria-keyshortcuts="Delete Backspace"
-          disabled={deleteDisabled}
-          onClick={() => {
-            onClose()
-            onDelete()
-          }}
-        >
-          <Trash2 size={15} aria-hidden="true" />
-          <span>Delete cell</span>
-          <kbd>⌫</kbd>
-        </button>
-      </div>
+      {onDelete && (
+        <div className="cell-context-menu-danger" role="presentation">
+          <button
+            type="button"
+            role="menuitem"
+            data-cell-action="delete"
+            aria-keyshortcuts="Delete Backspace"
+            disabled={deleteDisabled}
+            onClick={() => {
+              onClose()
+              onDelete()
+            }}
+          >
+            <Trash2 size={15} aria-hidden="true" />
+            <span>Delete cell</span>
+            <kbd>⌫</kbd>
+          </button>
+        </div>
+      )}
     </div>
   )
 
