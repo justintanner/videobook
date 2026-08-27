@@ -13,7 +13,14 @@ describe("MCP tool logging", () => {
   let root: string | undefined;
 
   afterEach(async () => {
-    if (root) await rm(root, { recursive: true, force: true });
+    if (root) {
+      await rm(root, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 100,
+      });
+    }
   });
 
   it("does not duplicate semantic activity recorded by the tool handler", async () => {
@@ -35,12 +42,15 @@ describe("MCP tool logging", () => {
       },
     }, engine);
 
-    const before = engine.history.revisions().length;
-    await wrapped.handler({ book_id: engine.book.get().bookId });
-    const revisions = engine.history.revisions();
-    expect(revisions).toHaveLength(before + 1);
-    expect(revisions[0]?.operation).toBe("rename_book");
-    engine.close();
+    try {
+      const before = engine.history.revisions().length;
+      await wrapped.handler({ book_id: engine.book.get().bookId });
+      const revisions = engine.history.revisions();
+      expect(revisions).toHaveLength(before + 1);
+      expect(revisions[0]?.operation).toBe("rename_book");
+    } finally {
+      engine.close();
+    }
   });
 
   it("appends collapsed error text to the mcp error log line", async () => {
