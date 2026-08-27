@@ -10570,8 +10570,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               }}
             >
               <header>
-                <div><span className="section-label">SEARCHABLE SOURCE LIBRARY</span><h1>Find the exact moment.</h1><p>Search language, speech, OCR, imagery, video motion, and audio across {activeBook?.name ?? 'the active project'}.</p></div>
+                <div><span className="section-label">SEARCHABLE SOURCE LIBRARY</span><h1>Find the exact moment.</h1></div>
                 <div className="library-ingest-actions">
+                  <form className="library-url-import" onSubmit={importFromUrl}>
+                    <input
+                      type="url"
+                      value={importUrl}
+                      onChange={(event) => setImportUrl(event.target.value)}
+                      placeholder="https://youtube.com/…"
+                      aria-label="Import supported URL"
+                    />
+                    <button type="submit" disabled={uploading || !importUrl.trim()}>
+                      Import URL
+                    </button>
+                  </form>
                   <button
                     type="button"
                     className={recording ? 'recording-button active' : 'recording-button'}
@@ -10584,20 +10596,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   <label className="upload-button">{uploading ? 'Importing…' : 'Import files'}<input type="file" multiple disabled={uploading} onChange={upload} /></label>
                 </div>
               </header>
-              <form className="library-url-import" onSubmit={importFromUrl}>
-                <label>
-                  Import supported URL
-                  <input
-                    type="url"
-                    value={importUrl}
-                    onChange={(event) => setImportUrl(event.target.value)}
-                    placeholder="https://youtube.com/…"
-                  />
-                </label>
-                <button type="submit" disabled={uploading || !importUrl.trim()}>
-                  Import URL
-                </button>
-              </form>
               <MomentSearch
                 ref={momentSearchRef}
                 bookId={bookId}
@@ -10614,59 +10612,87 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               <div className="workspace-section-heading">
                 <span className="section-label">SOURCE ARTIFACTS</span>
                 <h2>{sourceAssets.length} local artifacts</h2>
+                <span className="library-drop-hint">drop or paste files anywhere to import</span>
               </div>
               <div className="record-grid">
-                {sourceAssets.map((asset) => (
-                  <article className="record-card asset-card" key={asset.artifactId}>
-                    <span>{asset.type.toUpperCase()} · {asset.status}</span>
-                    {asset.mediaUrl
-                      ? asset.type === 'video' || asset.type === 'final'
-                        ? <video src={asset.mediaUrl} controls playsInline preload="metadata" />
-                        : asset.type === 'audio'
-                          ? <audio src={asset.mediaUrl} controls preload="metadata" />
-                          : <img src={asset.thumbnailUrl ?? asset.mediaUrl} alt={asset.id} />
-                      : <div className="asset-placeholder"><Library size={28} /></div>}
-                    <strong>{asset.id}</strong><small>{asset.prompt ?? asset.createdAt}</small>
-                    {(asset.type === 'image'
-                      || asset.type === 'video'
-                      || asset.type === 'final') && (
-                      <button
-                        type="button"
-                        className="asset-similar-button"
-                        disabled={busy}
-                        onClick={() => momentSearchRef.current?.searchSimilar(asset)}
-                      >
-                        <Search size={13} />Similar
-                      </button>
-                    )}
-                    {ingestStatusById.get(asset.artifactId) && (
-                      <>
-                        <span className={`ingest-phase ingest-phase-${ingestStatusById.get(asset.artifactId)!.state}`}>
-                          ingest · {ingestStatusById.get(asset.artifactId)!.state}
+                {sourceAssets.map((asset) => {
+                  const ingestStatus = ingestStatusById.get(asset.artifactId)
+                  const showRetry = asset.status === 'error'
+                    || ingestStatus?.state === 'failed'
+                    || processingArtifactId === asset.artifactId
+                  return (
+                    <article
+                      className={asset.status === 'error'
+                        ? 'record-card asset-card asset-card-error'
+                        : 'record-card asset-card'}
+                      key={asset.artifactId}
+                    >
+                      <div className="asset-card-media">
+                        {asset.mediaUrl
+                          ? asset.type === 'video' || asset.type === 'final'
+                            ? <video src={asset.mediaUrl} controls playsInline preload="metadata" />
+                            : asset.type === 'audio'
+                              ? <audio src={asset.mediaUrl} controls preload="metadata" />
+                              : <img src={asset.thumbnailUrl ?? asset.mediaUrl} alt={asset.id} />
+                          : <div className="asset-placeholder"><Library size={28} /></div>}
+                        <span
+                          className={asset.status === 'error'
+                            ? 'asset-card-status asset-card-status-error'
+                            : 'asset-card-status'}
+                        >
+                          {asset.type.toUpperCase()} · {asset.status}
                         </span>
-                        <div className="ingest-phase-grid">
-                          {Object.entries(ingestStatusById.get(asset.artifactId)!.phases)
-                            .map(([phase, state]) => (
+                      </div>
+                      <div className="asset-card-body">
+                        <div className="asset-card-text">
+                          <strong>{asset.id}</strong>
+                          <small>{asset.prompt ?? asset.createdAt}</small>
+                        </div>
+                        {(asset.type === 'image'
+                          || asset.type === 'video'
+                          || asset.type === 'final') && (
+                          <button
+                            type="button"
+                            className="asset-similar-button"
+                            disabled={busy}
+                            title="Search similar moments"
+                            aria-label={`Search moments similar to ${asset.id}`}
+                            onClick={() => momentSearchRef.current?.searchSimilar(asset)}
+                          >
+                            <Search size={13} />
+                          </button>
+                        )}
+                        {showRetry && (
+                          <button
+                            type="button"
+                            className="retry-ingest-button"
+                            disabled={busy}
+                            onClick={() => void retryIngest(asset.artifactId)}
+                          >
+                            <RefreshCw size={13} />
+                            {processingArtifactId === asset.artifactId
+                              ? 'Processing…'
+                              : 'Retry'}
+                          </button>
+                        )}
+                      </div>
+                      {ingestStatus && (
+                        <div className="asset-card-ingest">
+                          <span className={`ingest-phase ingest-phase-${ingestStatus.state}`}>
+                            ingest · {ingestStatus.state}
+                          </span>
+                          <div className="ingest-phase-grid">
+                            {Object.entries(ingestStatus.phases).map(([phase, state]) => (
                               <span className={`ingest-phase ingest-phase-${state}`} key={phase}>
                                 {phase} · {state}
                               </span>
                             ))}
+                          </div>
                         </div>
-                      </>
-                    )}
-                    <button
-                      type="button"
-                      className="retry-ingest-button"
-                      disabled={busy}
-                      onClick={() => void retryIngest(asset.artifactId)}
-                    >
-                      <RefreshCw size={13} />
-                      {processingArtifactId === asset.artifactId
-                        ? 'Processing…'
-                        : 'Retry processing'}
-                    </button>
-                  </article>
-                ))}
+                      )}
+                    </article>
+                  )
+                })}
                 {sourceAssets.length === 0 && <div className="empty-record"><Library size={25} /><strong>No assets yet</strong><p>Upload media or generate an image/video from the notebook.</p></div>}
               </div>
             </section>

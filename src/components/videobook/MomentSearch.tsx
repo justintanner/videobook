@@ -80,8 +80,8 @@ type ReplacePreviewPayload = {
 
 const modes: Array<{ id: SearchMode; label: string; icon: typeof Search }> = [
   { id: 'text', label: 'Text', icon: Search },
-  { id: 'image-reverse', label: 'Image reverse', icon: Image },
-  { id: 'video-reverse', label: 'Vid reverse', icon: Film },
+  { id: 'image-reverse', label: 'Image', icon: Image },
+  { id: 'video-reverse', label: 'Video', icon: Film },
 ]
 
 type LastSearchRequest = {
@@ -507,15 +507,14 @@ function MomentSearch({
         </div>
         {mode === 'text' ? (
           <>
-            <label className="moment-search-query">
-              Find a moment
-              <input
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                placeholder="e.g. the red van crosses the yard at sunset"
-              />
-            </label>
-            <label>
+            <input
+              className="moment-search-query"
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              aria-label="Find a moment"
+              placeholder="e.g. the red van crosses the yard at sunset — searches speech, OCR, imagery, motion & audio"
+            />
+            <label className="moment-search-inline">
               Signal
               <select
                 value={modality}
@@ -529,7 +528,7 @@ function MomentSearch({
                 <option value="metadata">Metadata</option>
               </select>
             </label>
-            <label>
+            <label className="moment-search-inline">
               Scope
               <select
                 value={scope}
@@ -596,6 +595,26 @@ function MomentSearch({
             </div>
           </ReverseSearchReference>
         )}
+        <button
+          type="button"
+          className="moment-search-secondary"
+          hidden={mode !== 'text'}
+          disabled={disabled || working || !text.trim() || !activeSequenceRange}
+          onClick={() => void suggestCoverage()}
+        >
+          Suggest coverage
+        </button>
+        <button
+          type="submit"
+          disabled={
+            disabled
+            || working
+            || preparingReference
+            || (mode === 'text' ? !text.trim() : !reference)
+          }
+        >
+          <Search size={15} />{working ? 'Searching…' : 'Search moments'}
+        </button>
         <details className="moment-search-filters">
           <summary>Filters</summary>
           <div>
@@ -659,25 +678,6 @@ function MomentSearch({
             </label>
           </div>
         </details>
-        <button
-          type="submit"
-          disabled={
-            disabled
-            || working
-            || preparingReference
-            || (mode === 'text' ? !text.trim() : !reference)
-          }
-        >
-          <Search size={15} />{working ? 'Searching…' : 'Search moments'}
-        </button>
-        <button
-          type="button"
-          hidden={mode !== 'text'}
-          disabled={disabled || working || !text.trim() || !activeSequenceRange}
-          onClick={() => void suggestCoverage()}
-        >
-          Suggest coverage
-        </button>
       </form>
       {page && (
         <div className="search-coverage">
