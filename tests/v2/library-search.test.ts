@@ -31,7 +31,7 @@ describe('library moment search', () => {
     if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
-  it('federates book-scoped results with owning-book labels and rank fusion', async () => {
+  it('federates book-scoped results with owning-book labels and similarity ordering', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-library-search-'))
     books = new BookManager({ libraryDir: join(rootDir, 'books') })
     await books.ready()
@@ -85,9 +85,102 @@ describe('library moment search', () => {
     expect(reversePayload.hits[0]?.owningBookName).toBe('alpha')
     searchReferenceStore.release(reference.reference_id)
   })
+
+  it('ranks the most similar hit first even when its book sorts last alphabetically', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-library-search-'))
+    books = new BookManager({ libraryDir: join(rootDir, 'books') })
+    await books.ready()
+    const alpha = await books.create('alpha')
+    const beta = await books.create('beta')
+    expect(alpha.ok && beta.ok).toBe(true)
+    if (!alpha.ok || !beta.ok) return
+    const alphaBook = books.get(alpha.value.bookId)
+    const betaBook = books.get(beta.value.bookId)
+    expect(alphaBook.ok && betaBook.ok).toBe(true)
+    if (!alphaBook.ok || !betaBook.ok) return
+    await indexStill(alphaBook.value.engine, 'red van alpha')
+    await indexStill(betaBook.value.engine, 'red van beta')
+
+    const tool = semanticSearchDefs(alphaBook.value.engine, books)
+      .find((entry) => entry.name === 'search_library_moments')
+    expect(tool).toBeTruthy()
+    if (!tool) return
+    const reference = searchReferenceStore.put({
+      kind: 'image',
+      name: 'beta-reference.png',
+      reference: {
+        kind: 'image',
+        embeddingSpace: manifest.embeddingSpace,
+        vector: [0, 1, 0],
+      },
+    })
+    const result = await tool.handler({
+      query: { artifactKinds: ['image'], limit: 10 },
+      reference_id: reference.reference_id,
+    })
+    expect(result.isError).toBeUndefined()
+    const payload = JSON.parse(result.content[0]!.text) as {
+      hits: Array<{ owningBookName: string; score: number }>
+    }
+    expect(payload.hits.map((hit) => hit.owningBookName)).toEqual(['beta', 'alpha'])
+    expect(payload.hits[0]?.score).toBeCloseTo(1)
+    expect(payload.hits[1]?.score ?? 1).toBeLessThan(0.5)
+    searchReferenceStore.release(reference.reference_id)
+  })
+
+  it('surfaces an exact fingerprint match above every similarity hit', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-library-search-'))
+    books = new BookManager({ libraryDir: join(rootDir, 'books') })
+    await books.ready()
+    const alpha = await books.create('alpha')
+    const beta = await books.create('beta')
+    expect(alpha.ok && beta.ok).toBe(true)
+    if (!alpha.ok || !beta.ok) return
+    const alphaBook = books.get(alpha.value.bookId)
+    const betaBook = books.get(beta.value.bookId)
+    expect(alphaBook.ok && betaBook.ok).toBe(true)
+    if (!alphaBook.ok || !betaBook.ok) return
+    await indexStill(alphaBook.value.engine, 'red van alpha')
+    await indexStill(betaBook.value.engine, 'red van beta', 'beta-source-bytes')
+
+    const tool = semanticSearchDefs(alphaBook.value.engine, books)
+      .find((entry) => entry.name === 'search_library_moments')
+    expect(tool).toBeTruthy()
+    if (!tool) return
+    const reference = searchReferenceStore.put({
+      kind: 'image',
+      name: 'beta-copy.png',
+      reference: {
+        kind: 'image',
+        embeddingSpace: manifest.embeddingSpace,
+        vector: [0, 0, 1],
+        fingerprints: [{ kind: 'sha256', value: 'beta-source-bytes' }],
+      },
+    })
+    const result = await tool.handler({
+      query: { artifactKinds: ['image'], limit: 10 },
+      reference_id: reference.reference_id,
+    })
+    expect(result.isError).toBeUndefined()
+    const payload = JSON.parse(result.content[0]!.text) as {
+      hits: Array<{
+        owningBookName: string
+        score: number
+        signals: Array<{ kind: string }>
+      }>
+    }
+    expect(payload.hits[0]?.owningBookName).toBe('beta')
+    expect(payload.hits[0]?.score).toBe(1)
+    expect(payload.hits[0]?.signals.some((signal) => signal.kind === 'exact')).toBe(true)
+    searchReferenceStore.release(reference.reference_id)
+  })
 })
 
-async function indexStill(engine: Engine, description: string): Promise<void> {
+async function indexStill(
+  engine: Engine,
+  description: string,
+  fingerprint?: string,
+): Promise<void> {
   const artifact = await engine.artifacts.create('image', description)
   if (!artifact.ok) throw new Error(artifact.error.message)
   const written = await engine.files.write(
@@ -121,7 +214,9 @@ async function indexStill(engine: Engine, description: string): Promise<void> {
         vector: description.includes('alpha') ? [1, 0, 0] : [0, 1, 0],
         sourceHash: source.objectHash,
       }],
-      fingerprints: [],
+      fingerprints: fingerprint
+        ? [{ kind: 'sha256', value: fingerprint, extractorVersion: '1' }]
+        : [],
     }],
     coveredRanges: [],
     totalUnits: 1,

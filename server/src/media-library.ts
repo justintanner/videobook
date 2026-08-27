@@ -13,6 +13,7 @@ import { registerLocalClipSearchProvider } from "./local-search-models.js";
 import { markDescendantsStale } from "./notebook-action-catalog.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { searchReferenceStore } from "./search-reference-store.js";
+import { comparableHitScore } from "./search-scoring.js";
 import { buildAssetList, type ProjectAsset } from "./tools/reconcile-project-work.js";
 
 type MediaCellType = "audio" | "image" | "video";
@@ -347,7 +348,7 @@ export async function searchLibraryAssets(
       ]),
   );
   semanticHits.sort((left, right) =>
-    right.hit.score - left.hit.score
+    comparableHitScore(right.hit) - comparableHitScore(left.hit)
     || left.key.localeCompare(right.key));
   const semanticRank = new Map<string, number>();
   const semanticMatch = new Map<string, SearchHit>();
@@ -370,7 +371,7 @@ export async function searchLibraryAssets(
           ? {
               ...asset,
               search_match: {
-                score: hit.score,
+                score: comparableHitScore(hit),
                 location: hit.location,
               },
             }

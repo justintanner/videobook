@@ -26,6 +26,7 @@ import {
 import { FFMPEG } from "../ffmpeg.js";
 import type { BookManager } from "../book-manager.js";
 import { queue } from "../queue.js";
+import { comparableHitScore } from "../search-scoring.js";
 import { searchReferenceStore } from "../search-reference-store.js";
 import { extname, join } from "node:path";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -1185,9 +1186,9 @@ function librarySearchDef(books: BookManager): ToolDef {
         };
       }));
       const hits = pages.flatMap((entry) =>
-        entry.page?.hits.map((hit, index) => ({
+        entry.page?.hits.map((hit) => ({
           ...hit,
-          score: 1 / (60 + index + 1),
+          score: comparableHitScore(hit),
           owningBookId: entry.summary.bookId,
           owningBookName: entry.summary.name,
         })) ?? []);
