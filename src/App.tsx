@@ -200,6 +200,12 @@ import {
 } from '@/videobook/search-reference-lifecycle'
 import { useSearchReferenceLifecycle } from '@/videobook/useSearchReferenceLifecycle'
 import {
+  pathForScreen,
+  screenFromPath,
+  screenTitle,
+  type Screen,
+} from '@/videobook/screen-routes'
+import {
   validateCommandPlan,
   type CommandPlan,
   type EditCommandStage,
@@ -385,8 +391,6 @@ const WatermarkChatReview = lazy(async () => {
   const module = await import('@/components/videobook/WatermarkChatReview')
   return { default: module.WatermarkChatReview }
 })
-
-type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
 
 type ToolResponse = {
   content?: Array<{ type: string; text?: string }>
@@ -2862,7 +2866,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     clientName: 'videobook',
     reconnectDelayMs: 3000,
   })
-  const [screen, setScreen] = useState<Screen>('notebook')
+  const [screen, setScreen] = useState<Screen>(
+    () => screenFromPath(window.location.pathname),
+  )
   const [books, setBooks] = useState<BookProjectSummary[]>(
     () => initialWorkspace?.books ?? [],
   )
@@ -5247,6 +5253,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     void openBookMenu()
   }, [openBookMenu])
 
+  const showScreen = useCallback((next: Screen) => {
+    setScreen(next)
+    const path = pathForScreen(next)
+    if (window.location.pathname !== path) {
+      window.history.pushState({}, '', path)
+    }
+  }, [])
+
+  useEffect(() => {
+    document.title = screenTitle(screen)
+  }, [screen])
+
+  useEffect(() => {
+    const onPopState = () => {
+      setScreen(screenFromPath(window.location.pathname))
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
   const chooseBook = useCallback(async (
     nextBookId: string,
   ): Promise<BookProjectMutationResult> => {
@@ -5255,7 +5281,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshBookData(nextBookId)
       const next = books.find((book) => book.bookId === nextBookId)
       setNotice(next ? `Opened ${next.name}` : 'Book opened')
-      setScreen('notebook')
+      showScreen('notebook')
       handleBookMenuOpenChange(false)
       return { ok: true }
     } catch (error) {
@@ -5265,7 +5291,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } finally {
       setBusy(false)
     }
-  }, [books, handleBookMenuOpenChange, refreshBookData, setNotice])
+  }, [books, handleBookMenuOpenChange, refreshBookData, setNotice, showScreen])
 
   const createBookProject = useCallback(async (
     name: string,
@@ -5280,7 +5306,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ])
       await refreshBookData(created.bookId)
       const commandError = await refreshBookCommandsAfterMutation()
-      setScreen('notebook')
+      showScreen('notebook')
       handleBookMenuOpenChange(false)
       setNotice(commandError
         ? `Created ${created.name}; commands could not refresh: ${commandError}`
@@ -5299,6 +5325,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     refreshBookCommandsAfterMutation,
     refreshBookData,
     setNotice,
+    showScreen,
   ])
 
   const renameBookProject = useCallback(async (
@@ -5349,7 +5376,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setBooks((current) => current.filter((book) => book.bookId !== targetBookId))
       if (targetBookId === bookId) {
         await refreshBookData(fallback.bookId)
-        setScreen('notebook')
+        showScreen('notebook')
         handleBookMenuOpenChange(false)
       }
       const commandError = await refreshBookCommandsAfterMutation()
@@ -5372,6 +5399,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     refreshBookCommandsAfterMutation,
     refreshBookData,
     setNotice,
+    showScreen,
   ])
 
   const createCell = async (type: NotebookCellType, position?: { x: number; y: number }) => {
@@ -9127,11 +9155,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : { ok: false, message: result.error }
       }
       if (command.uiAction === 'open_notebook') {
-        setScreen('notebook')
+        showScreen('notebook')
         return { ok: true, message: 'Notebook opened' }
       }
       if (command.uiAction === 'open_provider_keys') {
-        setScreen('settings')
+        showScreen('settings')
         await refreshSettings()
         return { ok: true, message: 'Settings opened' }
       }
@@ -9414,7 +9442,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const navigate = (next: Screen) => {
     closeCellContextMenu()
-    setScreen(next)
+    showScreen(next)
     if (next === 'settings') void refreshSettings()
     if ((next === 'library' || next === 'timeline' || next === 'jobs') && bookId) {
       void refreshBookData(bookId, notebook?.id).catch((error: unknown) => {
@@ -10570,7 +10598,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               }}
             >
               <header>
-                <div><span className="section-label">SEARCHABLE SOURCE LIBRARY</span><h1>Find the exact moment.</h1></div>
+                <div><span className="section-label">LIBRARY</span><h1>Find the exact moment.</h1></div>
                 <div className="library-ingest-actions">
                   <form className="library-url-import" onSubmit={importFromUrl}>
                     <input
@@ -10600,13 +10628,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 ref={momentSearchRef}
                 bookId={bookId}
                 notebookId={notebook?.id}
-                activeSequenceRange={activeSequenceRange}
                 assets={sourceAssets}
                 disabled={busy || mcp.state !== 'ready'}
                 call={call}
                 onNotice={setNotice}
                 onNotebookChanged={async () => {
                   if (notebook) await refreshNotebook(bookId, notebook.id)
+                }}
+                onLibraryChanged={async () => {
+                  await refreshBookData(bookId, notebook?.id)
                 }}
               />
               <div className="workspace-section-heading">

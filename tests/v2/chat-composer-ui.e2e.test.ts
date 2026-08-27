@@ -2746,4 +2746,26 @@ describe('chat composer browser flow', () => {
       .toBe(false)
     notebookDirty = true
   }, 60_000)
+
+  it('deep-links the library screen at /library and restores it via history', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    delayedBootstrap = false
+    await page.goto(`${appUrl}/library`, { waitUntil: 'commit' })
+    appReady = true
+    await page.getByRole('heading', { name: 'Find the exact moment.' })
+      .waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await page!.title()).toBe('Library · VIDEOBOOK')
+
+    await page.getByLabel('Open Timeline').click()
+    await expect.poll(async () =>
+      await page!.evaluate(() => window.location.pathname)).toBe('/timeline')
+    await expect.poll(async () => await page!.title()).toBe('Timeline · VIDEOBOOK')
+
+    await page.goBack()
+    await expect.poll(async () =>
+      await page!.evaluate(() => window.location.pathname)).toBe('/library')
+    await page.getByRole('heading', { name: 'Find the exact moment.' })
+      .waitFor({ state: 'visible', timeout: 10_000 })
+    notebookDirty = true
+  }, 60_000)
 })

@@ -1,25 +1,31 @@
 import {
   forwardRef,
   useImperativeHandle,
-  useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from 'react'
-import { Film, Image, Pin, Search, Send } from 'lucide-react'
+import { Film, Image, Paperclip, Pin, Search, Send, X } from 'lucide-react'
 import type {
   SearchHit,
   SearchModality,
   SearchPage,
   SearchQuery,
 } from 'videobook-engine'
-import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
+import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import {
   prepareExistingSearchReference,
   referenceKind,
   searchReferenceRange,
   uploadSearchReference,
   type ReverseSearchMode,
+  type SearchReferenceDescriptor,
 } from '@/videobook/search-reference'
+import {
+  detectSearchSubmitIntent,
+  searchReferenceKindForFile,
+  watchDownloadJob,
+} from '@/videobook/import-then-search'
 import { useSearchReferenceLifecycle } from '@/videobook/useSearchReferenceLifecycle'
 
 interface MomentSearchAsset {
@@ -33,19 +39,18 @@ interface MomentSearchAsset {
 interface MomentSearchProps {
   bookId: string
   notebookId?: string
-  activeSequenceRange: { startFrame: number; durationFrames: number } | null
   assets: MomentSearchAsset[]
   disabled: boolean
   call: (tool: string, args: Record<string, unknown>) => Promise<unknown>
   onNotice: (message: string) => void
   onNotebookChanged: () => Promise<void>
+  onLibraryChanged: () => Promise<void>
 }
 
 export interface MomentSearchHandle {
   searchSimilar: (asset: MomentSearchAsset) => void
 }
 
-type SearchMode = 'text' | ReverseSearchMode
 type PresentedSearchHit = SearchHit & {
   owningBookId?: string
   owningBookName?: string
@@ -78,12 +83,6 @@ type ReplacePreviewPayload = {
   }
 }
 
-const modes: Array<{ id: SearchMode; label: string; icon: typeof Search }> = [
-  { id: 'text', label: 'Text', icon: Search },
-  { id: 'image-reverse', label: 'Image', icon: Image },
-  { id: 'video-reverse', label: 'Video', icon: Film },
-]
-
 type LastSearchRequest = {
   query: SearchQuery
   tool: 'search_moments' | 'search_library_moments'
@@ -95,12 +94,12 @@ export const MomentSearch = forwardRef<MomentSearchHandle, MomentSearchProps>(
 function MomentSearch({
   bookId,
   notebookId,
-  activeSequenceRange,
   assets,
   disabled,
   call,
   onNotice,
   onNotebookChanged,
+  onLibraryChanged,
 }: MomentSearchProps, ref) {
   const searchReference = useSearchReferenceLifecycle()
   const {
@@ -110,10 +109,9 @@ function MomentSearch({
     durationSeconds,
     preparing: preparingReference,
   } = searchReference.state
-  const [scope, setScope] = useState<'book' | 'library'>('book')
+  const [scope, setScope] = useState<'book' | 'library'>('library')
   const [text, setText] = useState('')
   const [modality, setModality] = useState<SearchModality>('auto')
-  const [assetId, setAssetId] = useState('')
   const [artifactKind, setArtifactKind] = useState('')
   const [minimumDuration, setMinimumDuration] = useState('')
   const [maximumDuration, setMaximumDuration] = useState('')
@@ -133,17 +131,9 @@ function MomentSearch({
   const [replaceTargetId, setReplaceTargetId] = useState('')
   const [replacePreview, setReplacePreview] = useState<ReplacePreviewPayload | null>(null)
   const [working, setWorking] = useState(false)
-
-  const selectableAssets = useMemo(
-    () => assets.filter((asset) => {
-      if (mode === 'video-reverse') {
-        return asset.type === 'video' || asset.type === 'final'
-      }
-      if (mode === 'image-reverse') return asset.type === 'image'
-      return false
-    }),
-    [assets, mode],
-  )
+  const [importing, setImporting] = useState<{ url: string } | null>(null)
+  const [barDragOver, setBarDragOver] = useState(false)
+  const importRunRef = useRef(0)
 
   const executeSearch = async (
     nextReference = reference,
@@ -233,21 +223,77 @@ function MomentSearch({
 
   const search = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    void executeSearch()
+    const intent = detectSearchSubmitIntent(text)
+    if (intent.kind === 'url') {
+      void importThenSearch(intent.url)
+      return
+    }
+    if (intent.kind === 'text') {
+      if (reference) searchReference.lifecycle.changeMode('text')
+      void executeSearch(null, 'text')
+      return
+    }
+    if (reference) void executeSearch()
   }
 
-  const prepareFileReference = async (file: File) => {
-    if (mode === 'text') return
+  const importThenSearch = async (url: string) => {
+    const run = ++importRunRef.current
+    setImporting({ url })
+    setText('')
+    try {
+      const value = await call('download_video', {
+        book_id: bookId,
+        url,
+        export_videos: false,
+      })
+      const artifactId = importedArtifactId(value)
+      if (!artifactId) {
+        throw new Error('The server did not return an imported artifact')
+      }
+      onNotice('Importing URL — the search runs when the download finishes')
+      const outcome = await watchDownloadJob({
+        artifactId,
+        listJobs: () => call('list_jobs', { book_id: bookId, limit: 200 }),
+        isCancelled: () => importRunRef.current !== run,
+      })
+      if (outcome.kind === 'cancelled') return
+      if (outcome.kind === 'failed') throw new Error(outcome.message)
+      if (outcome.kind === 'timeout') {
+        onNotice('Import is still running — it will appear in the library; check the Jobs screen and search again when it finishes')
+        return
+      }
+      await onLibraryChanged()
+      if (importRunRef.current !== run) return
+      await prepareExistingReference('video-reverse', bookId, artifactId)
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : String(error))
+      void onLibraryChanged().catch(() => undefined)
+    } finally {
+      if (importRunRef.current === run) setImporting(null)
+    }
+  }
+
+  const cancelImportWait = () => {
+    importRunRef.current += 1
+    setImporting(null)
+    onNotice('Stopped waiting — the import continues on the Jobs screen')
+  }
+
+  const prepareDroppedFile = async (file: File) => {
+    const kind = searchReferenceKindForFile(file)
+    if (!kind) return
+    const dropMode: ReverseSearchMode = kind === 'image'
+      ? 'image-reverse'
+      : 'video-reverse'
     const result = await searchReference.lifecycle.prepare(
-      mode,
-      () => uploadSearchReference(file, bookId, referenceKind(mode)),
+      dropMode,
+      () => uploadSearchReference(file, bookId, kind),
     )
     if (result.status === 'error') {
       onNotice(result.error)
       return
     }
     if (result.status === 'stale') return
-    setAssetId('')
     await executeSearch(result.reference, result.mode, '0', '')
   }
 
@@ -273,7 +319,6 @@ function MomentSearch({
       return
     }
     if (result.status === 'stale') return
-    setAssetId(sourceArtifactId)
     await executeSearch(result.reference, result.mode, '0', '')
   }
 
@@ -299,41 +344,6 @@ function MomentSearch({
         hits: [...page.hits, ...value.hits],
       })
       onNotice(`Loaded ${value.hits.length} more moments`)
-    } catch (error) {
-      onNotice(error instanceof Error ? error.message : String(error))
-    } finally {
-      setWorking(false)
-    }
-  }
-
-  const suggestCoverage = async () => {
-    if (!text.trim() || !activeSequenceRange) return
-    setWorking(true)
-    try {
-      const value = await call('suggest_sequence_coverage', {
-        book_id: bookId,
-        text: text.trim(),
-        timeline_start_frame: activeSequenceRange.startFrame,
-        duration_frames: activeSequenceRange.durationFrames,
-        limit: 10,
-      }) as {
-        hits?: PresentedSearchHit[]
-        coverage?: PresentedSearchPage['coverage']
-        generationFallback?: { offered?: boolean }
-      }
-      const hits = Array.isArray(value.hits) ? value.hits : []
-      if (value.coverage) {
-        setPage({
-          hits,
-          coverage: value.coverage,
-        })
-      }
-      setSelectedHitIndex(0)
-      onNotice(hits.length > 0
-        ? `Ranked ${hits.length} existing moments for the selected range`
-        : value.generationFallback?.offered
-          ? 'No existing coverage found; generation can be considered after review'
-          : 'No existing coverage found')
     } catch (error) {
       onNotice(error instanceof Error ? error.message : String(error))
     } finally {
@@ -484,136 +494,120 @@ function MomentSearch({
   return (
     <section className="moment-search">
       <form className="moment-search-form" onSubmit={search}>
-        <div className="moment-search-modes" role="tablist" aria-label="Search mode">
-          {modes.map((item) => {
-            const Icon = item.icon
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={mode === item.id}
-                className={mode === item.id ? 'active' : ''}
-                disabled={disabled || working || preparingReference}
-                onClick={() => {
-                  searchReference.lifecycle.changeMode(item.id)
-                  setAssetId('')
-                }}
-              >
-                <Icon size={14} />{item.label}
-              </button>
-            )
-          })}
-        </div>
-        {mode === 'text' ? (
-          <>
-            <input
-              className="moment-search-query"
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              aria-label="Find a moment"
-              placeholder="e.g. the red van crosses the yard at sunset — searches speech, OCR, imagery, motion & audio"
-            />
-            <label className="moment-search-inline">
-              Signal
-              <select
-                value={modality}
-                onChange={(event) => setModality(event.target.value as SearchModality)}
-              >
-                <option value="auto">Hybrid</option>
-                <option value="visual">Visual</option>
-                <option value="speech">Speech</option>
-                <option value="ocr">OCR</option>
-                <option value="audio">Audio</option>
-                <option value="metadata">Metadata</option>
-              </select>
-            </label>
-            <label className="moment-search-inline">
-              Scope
-              <select
-                value={scope}
-                onChange={(event) =>
-                  setScope(event.target.value as 'book' | 'library')}
-              >
-                <option value="book">Current book</option>
-                <option value="library">All books</option>
-              </select>
-            </label>
-          </>
-        ) : (
-          <ReverseSearchReference
-            mode={mode}
-            reference={reference}
-            preparing={preparingReference}
-            disabled={disabled || working}
-            startSeconds={startSeconds}
-            durationSeconds={durationSeconds}
-            onFile={(file) => void prepareFileReference(file)}
-            onClear={() => {
-              searchReference.lifecycle.clearReference()
-              setAssetId('')
-            }}
-            onStartSeconds={searchReference.lifecycle.setStartSeconds}
-            onDurationSeconds={searchReference.lifecycle.setDurationSeconds}
-          >
-            <div className="reverse-search-existing">
-              <label>
-                Existing {referenceKind(mode)} asset
-                <select
-                  value={assetId}
-                  disabled={disabled || preparingReference || working}
-                  onChange={(event) => setAssetId(event.target.value)}
-                >
-                  <option value="">Choose from this book</option>
-                  {selectableAssets.map((asset) => (
-                    <option key={asset.artifactId} value={asset.artifactId}>
-                      {asset.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                disabled={disabled || preparingReference || working || !assetId}
-                onClick={() => {
-                  const asset = selectableAssets.find((item) =>
-                    item.artifactId === assetId)
-                  if (!asset) return
-                  void prepareExistingReference(
-                    mode,
-                    bookId,
-                    asset.artifactId,
-                    mode === 'image-reverse'
-                      ? asset.thumbnailUrl ?? asset.mediaUrl
-                      : asset.mediaUrl,
-                  )
-                }}
-              >
-                Use selected
-              </button>
-              <span>Reverse search always searches all books.</span>
-            </div>
-          </ReverseSearchReference>
-        )}
-        <button
-          type="button"
-          className="moment-search-secondary"
-          hidden={mode !== 'text'}
-          disabled={disabled || working || !text.trim() || !activeSequenceRange}
-          onClick={() => void suggestCoverage()}
+        <div
+          className={barDragOver ? 'moment-search-bar drag-over' : 'moment-search-bar'}
+          onDragOver={(event) => {
+            if (!dragHasMediaFile(event.dataTransfer)) return
+            event.preventDefault()
+            setBarDragOver(true)
+          }}
+          onDragLeave={() => setBarDragOver(false)}
+          onDrop={(event) => {
+            setBarDragOver(false)
+            const file = [...event.dataTransfer.files]
+              .find((candidate) => searchReferenceKindForFile(candidate))
+            if (!file) return
+            event.preventDefault()
+            event.stopPropagation()
+            void prepareDroppedFile(file)
+          }}
+          onPaste={(event) => {
+            const file = [...event.clipboardData.files]
+              .find((candidate) => searchReferenceKindForFile(candidate))
+            if (!file) return
+            event.preventDefault()
+            event.stopPropagation()
+            void prepareDroppedFile(file)
+          }}
         >
-          Suggest coverage
-        </button>
+          {reference || preparingReference ? (
+            <SearchReferenceChip
+              reference={reference}
+              preparing={preparingReference}
+              disabled={disabled || working}
+              startSeconds={startSeconds}
+              durationSeconds={durationSeconds}
+              onClear={() => searchReference.lifecycle.changeMode('text')}
+              onStartSeconds={searchReference.lifecycle.setStartSeconds}
+              onDurationSeconds={searchReference.lifecycle.setDurationSeconds}
+            />
+          ) : importing ? (
+            <span className="moment-search-importing">
+              <BusyIndicator size={14} />
+              Importing URL…
+              <button
+                type="button"
+                aria-label="Stop waiting for the import"
+                onClick={cancelImportWait}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ) : null}
+          <input
+            className="moment-search-query"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            aria-label="Search the library"
+            disabled={disabled || importing !== null}
+            placeholder={reference
+              ? 'Type to switch back to text search, or press Search to re-run'
+              : 'Describe a moment, paste a video URL, or drop an image/video to search by example'}
+          />
+          <label className="moment-search-attach" title="Search by example image or video">
+            <Paperclip size={14} />
+            <input
+              type="file"
+              accept="image/*,video/*"
+              disabled={disabled || working || preparingReference || importing !== null}
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                if (file) void prepareDroppedFile(file)
+              }}
+            />
+          </label>
+        </div>
+        <label className="moment-search-inline">
+          Signal
+          <select
+            value={modality}
+            disabled={reference !== null || preparingReference}
+            title={reference ? 'Reverse search uses the visual signal' : undefined}
+            onChange={(event) => setModality(event.target.value as SearchModality)}
+          >
+            <option value="auto">Hybrid</option>
+            <option value="visual">Visual</option>
+            <option value="speech">Speech</option>
+            <option value="ocr">OCR</option>
+            <option value="audio">Audio</option>
+            <option value="metadata">Metadata</option>
+          </select>
+        </label>
+        <label className="moment-search-inline">
+          Scope
+          <select
+            value={scope}
+            disabled={reference !== null || preparingReference}
+            title={reference ? 'Reverse search always spans all books' : undefined}
+            onChange={(event) =>
+              setScope(event.target.value as 'book' | 'library')}
+          >
+            <option value="library">All books</option>
+            <option value="book">Current book</option>
+          </select>
+        </label>
         <button
           type="submit"
           disabled={
             disabled
             || working
             || preparingReference
-            || (mode === 'text' ? !text.trim() : !reference)
+            || importing !== null
+            || (!text.trim() && !reference)
           }
         >
-          <Search size={15} />{working ? 'Searching…' : 'Search moments'}
+          <Search size={15} />{working ? 'Searching…' : 'Search'}
         </button>
         <details className="moment-search-filters">
           <summary>Filters</summary>
@@ -955,6 +949,103 @@ function MomentSearch({
     </section>
   )
 })
+
+interface SearchReferenceChipProps {
+  reference: SearchReferenceDescriptor | null
+  preparing: boolean
+  disabled: boolean
+  startSeconds: string
+  durationSeconds: string
+  onClear: () => void
+  onStartSeconds: (value: string) => void
+  onDurationSeconds: (value: string) => void
+}
+
+function SearchReferenceChip({
+  reference,
+  preparing,
+  disabled,
+  startSeconds,
+  durationSeconds,
+  onClear,
+  onStartSeconds,
+  onDurationSeconds,
+}: SearchReferenceChipProps) {
+  if (preparing) {
+    return (
+      <span className="moment-search-reference-chip">
+        <BusyIndicator size={14} />
+        Preparing reference…
+      </span>
+    )
+  }
+  if (!reference) return null
+  const Icon = reference.kind === 'image' ? Image : Film
+  return (
+    <span className="moment-search-reference-chip">
+      {reference.previewUrl ? (
+        reference.kind === 'image' ? (
+          <img src={reference.previewUrl} alt="" />
+        ) : (
+          <video src={reference.previewUrl} muted playsInline preload="metadata" />
+        )
+      ) : (
+        <Icon size={14} />
+      )}
+      <strong>{reference.name}</strong>
+      {reference.kind === 'video' && (
+        <span className="moment-search-reference-range">
+          <label>
+            In
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={startSeconds}
+              disabled={disabled}
+              onChange={(event) => onStartSeconds(event.target.value)}
+            />
+          </label>
+          <label>
+            For
+            <input
+              type="number"
+              min="0.1"
+              step="0.1"
+              value={durationSeconds}
+              placeholder="all"
+              disabled={disabled}
+              onChange={(event) => onDurationSeconds(event.target.value)}
+            />
+          </label>
+          {reference.durationMs !== undefined && (
+            <span>{(reference.durationMs / 1_000).toFixed(1)}s available</span>
+          )}
+        </span>
+      )}
+      <button
+        type="button"
+        aria-label="Clear search reference"
+        disabled={disabled}
+        onClick={onClear}
+      >
+        <X size={12} />
+      </button>
+    </span>
+  )
+}
+
+function dragHasMediaFile(transfer: DataTransfer): boolean {
+  return [...transfer.items].some((item) =>
+    item.kind === 'file'
+    && (item.type.startsWith('image/') || item.type.startsWith('video/')))
+}
+
+function importedArtifactId(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null) return null
+  const candidate = (value as Record<string, unknown>).artifact_id
+  return typeof candidate === 'string' ? candidate : null
+}
 
 function isSearchPage(value: unknown): value is PresentedSearchPage {
   if (typeof value !== 'object' || value === null) return false
