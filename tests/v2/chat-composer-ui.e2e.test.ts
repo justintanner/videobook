@@ -2752,7 +2752,7 @@ describe('chat composer browser flow', () => {
     delayedBootstrap = false
     await page.goto(`${appUrl}/library`, { waitUntil: 'commit' })
     appReady = true
-    await page.getByRole('heading', { name: 'Find the exact moment.' })
+    await page.getByLabel('Search the library')
       .waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await page!.title()).toBe('Library · VIDEOBOOK')
 
@@ -2764,7 +2764,7 @@ describe('chat composer browser flow', () => {
     await page.goBack()
     await expect.poll(async () =>
       await page!.evaluate(() => window.location.pathname)).toBe('/library')
-    await page.getByRole('heading', { name: 'Find the exact moment.' })
+    await page.getByLabel('Search the library')
       .waitFor({ state: 'visible', timeout: 10_000 })
     notebookDirty = true
   }, 60_000)

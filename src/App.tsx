@@ -2988,7 +2988,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [timelineZoom, setTimelineZoom] = useState(1)
   const [exportOrientation, setExportOrientation] = useState<'landscape' | 'portrait' | 'square'>('landscape')
   const [exportCaptions, setExportCaptions] = useState<'burn-in' | 'sidecar' | 'omit'>('burn-in')
-  const [importUrl, setImportUrl] = useState('')
   const [pendingCommandPlan, setPendingCommandPlan] = useState<PendingCommandPlan | null>(null)
   const [pendingChatAction, setPendingChatAction] = useState<PendingChatAction | null>(null)
   const [lastEditActionId, setLastEditActionId] = useState('')
@@ -6497,26 +6496,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         imported > 0 ? `Imported ${imported}` : '',
         reused > 0 ? `reused ${reused} existing` : '',
       ].filter(Boolean).join(' · ') || 'No files imported')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  const importFromUrl = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!bookId || !importUrl.trim()) return
-    setUploading(true)
-    try {
-      const result = await call('download_video', {
-        book_id: bookId,
-        url: importUrl.trim(),
-        export_videos: false,
-      })
-      setImportUrl('')
-      await refreshBookData(bookId, notebook?.id)
-      setNotice(messageFor(result, 'URL import queued'))
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
@@ -10597,33 +10576,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 void uploadFiles(files)
               }}
             >
-              <header>
-                <div><span className="section-label">LIBRARY</span><h1>Find the exact moment.</h1></div>
-                <div className="library-ingest-actions">
-                  <form className="library-url-import" onSubmit={importFromUrl}>
-                    <input
-                      type="url"
-                      value={importUrl}
-                      onChange={(event) => setImportUrl(event.target.value)}
-                      placeholder="https://youtube.com/…"
-                      aria-label="Import supported URL"
-                    />
-                    <button type="submit" disabled={uploading || !importUrl.trim()}>
-                      Import URL
-                    </button>
-                  </form>
-                  <button
-                    type="button"
-                    className={recording ? 'recording-button active' : 'recording-button'}
-                    disabled={uploading}
-                    onClick={recording ? stopRecording : () => void startRecording()}
-                  >
-                    {recording ? <Square size={14} /> : <Mic size={15} />}
-                    {recording ? 'Stop recording' : 'Record audio'}
-                  </button>
-                  <label className="upload-button">{uploading ? 'Importing…' : 'Import files'}<input type="file" multiple disabled={uploading} onChange={upload} /></label>
-                </div>
-              </header>
               <MomentSearch
                 ref={momentSearchRef}
                 bookId={bookId}
@@ -10638,6 +10590,35 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 onLibraryChanged={async () => {
                   await refreshBookData(bookId, notebook?.id)
                 }}
+                importControls={
+                  <>
+                    <button
+                      type="button"
+                      className={recording
+                        ? 'moment-search-tool recording-active'
+                        : 'moment-search-tool'}
+                      disabled={uploading}
+                      title={recording ? 'Stop recording' : 'Record audio'}
+                      aria-label={recording ? 'Stop recording' : 'Record audio'}
+                      onClick={recording ? stopRecording : () => void startRecording()}
+                    >
+                      {recording ? <Square size={14} /> : <Mic size={15} />}
+                    </button>
+                    <label
+                      className="moment-search-tool"
+                      title={uploading ? 'Importing…' : 'Import files'}
+                    >
+                      <Upload size={15} />
+                      <input
+                        type="file"
+                        multiple
+                        disabled={uploading}
+                        aria-label="Import files"
+                        onChange={upload}
+                      />
+                    </label>
+                  </>
+                }
               />
               <div className="workspace-section-heading">
                 <span className="section-label">SOURCE ARTIFACTS</span>

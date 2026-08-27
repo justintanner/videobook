@@ -310,28 +310,6 @@ textarea:focus-visible {
   color: #ffc0c0;
 }
 
-.upload-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 15px;
-  border: 1px solid var(--green);
-  color: #bce6cf;
-  background: rgba(36, 112, 73, 0.24);
-  cursor: pointer;
-}
-
-.upload-button input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  clip-path: inset(50%);
-}
-
 .record-card.asset-card {
   display: flex;
   flex-direction: column;
@@ -952,45 +930,6 @@ textarea:focus-visible {
   border: 1px solid var(--line);
   background: rgba(8, 26, 17, 0.74);
   cursor: pointer;
-}
-
-.library-ingest-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.library-ingest-actions .upload-button {
-  min-height: 36px;
-  padding: 0 13px;
-}
-
-.library-url-import {
-  display: flex;
-  gap: 8px;
-  margin-right: 8px;
-}
-
-.library-url-import input {
-  width: 300px;
-  min-height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  color: var(--ink);
-  background: #031009;
-}
-
-.library-url-import input:focus {
-  border-color: var(--green);
-  outline: none;
-}
-
-.workspace-screen > header .recording-button.active {
-  border-color: var(--danger-border-hover);
-  color: var(--danger-fg-hover);
-  background: var(--danger-bg-hover);
 }
 
 .canvas-toolbar {
@@ -5246,23 +5185,6 @@ textarea:focus-visible {
   padding-top: 24px;
 }
 
-.library-drop-zone > header {
-  align-items: flex-end;
-  padding-bottom: 14px;
-}
-
-.library-drop-zone > header > div {
-  display: grid;
-  gap: 4px;
-}
-
-.library-drop-zone h1 {
-  margin: 0;
-  font-size: 20px;
-  letter-spacing: -0.02em;
-  font-weight: 500;
-}
-
 .library-drop-zone .workspace-section-heading {
   display: flex;
   align-items: baseline;
@@ -5329,8 +5251,17 @@ textarea:focus-visible {
 
 .moment-search {
   display: grid;
-  gap: 18px;
-  margin-top: 18px;
+  gap: 14px;
+}
+
+.moment-search-page-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  color: var(--green);
 }
 
 .moment-search-form {
@@ -5468,6 +5399,36 @@ textarea:focus-visible {
 
 .moment-search-attach input {
   display: none;
+}
+
+.moment-search-form .moment-search-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  color: #9ac9ae;
+  background: rgba(39, 94, 62, 0.14);
+  cursor: pointer;
+}
+
+.moment-search-tool input {
+  display: none;
+}
+
+.moment-search-form .moment-search-tool.recording-active {
+  border-color: var(--danger-border-hover);
+  color: var(--danger-fg-hover);
+  background: var(--danger-bg-hover);
+}
+
+.moment-search-form .search-coverage {
+  margin-left: auto;
+  flex-wrap: nowrap;
+  gap: 6px;
 }
 
 .moment-search-importing,
@@ -5724,8 +5685,9 @@ textarea:focus-visible {
 
 .moment-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+  align-items: start;
 }
 
 .moment-card {
@@ -5743,7 +5705,7 @@ textarea:focus-visible {
 .moment-card-media {
   position: relative;
   display: grid;
-  min-height: 150px;
+  min-height: 100px;
   place-items: center;
   overflow: hidden;
   background: #020805;
@@ -5754,13 +5716,13 @@ textarea:focus-visible {
 .moment-card-media img,
 .moment-card-media audio {
   width: 100%;
-  height: 180px;
+  height: 145px;
   object-fit: cover;
 }
 
 .moment-card-media audio {
-  height: 56px;
-  margin: 60px 14px;
+  height: 40px;
+  margin: 52px 10px;
 }
 
 .moment-card-media > span {
@@ -5775,15 +5737,24 @@ textarea:focus-visible {
 
 .moment-card-body {
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 8px;
+  padding: 9px 10px;
 }
 
 .moment-card-body header {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   color: #c6ead5;
+  font-size: 11px;
+}
+
+.moment-card-body header strong {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .moment-card-body header span {
@@ -5791,11 +5762,10 @@ textarea:focus-visible {
 }
 
 .moment-card-body p {
-  min-height: 36px;
   margin: 0;
   color: #6f9480;
   font-family: system-ui, sans-serif;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -5806,21 +5776,23 @@ textarea:focus-visible {
 }
 
 .reason-chips span {
-  padding: 5px 7px;
+  padding: 3px 5px;
   border: 1px solid #173a26;
   color: #77ae8e;
   font-size: 9px;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .moment-range-adjust {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
 .moment-range-adjust label {
-  display: grid;
+  display: inline-flex;
+  align-items: center;
   gap: 5px;
   color: var(--muted);
   font-size: 9px;
@@ -5830,29 +5802,47 @@ textarea:focus-visible {
 
 .moment-range-adjust input {
   min-width: 0;
-  width: 100%;
-  min-height: 34px;
-  padding: 0 8px;
+  width: 70px;
+  min-height: 28px;
+  padding: 0 6px;
   border: 1px solid var(--line);
   color: var(--ink);
   background: rgba(1, 9, 5, 0.78);
 }
 
+.moment-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.moment-card-foot .reason-chips {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .moment-card-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-shrink: 0;
+  gap: 4px;
 }
 
 .moment-card-actions a {
   display: inline-flex;
-  min-height: 40px;
   align-items: center;
   justify-content: center;
-  padding: 0 13px;
   border: 1px solid var(--line);
   color: #94c8aa;
   text-decoration: none;
+}
+
+.moment-card-actions a,
+.moment-card-actions button {
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0 5px;
 }
 
 .load-more-moments {
@@ -8250,20 +8240,6 @@ textarea:focus-visible {
 
   .workspace-screen > header {
     flex-direction: column;
-  }
-
-  .library-ingest-actions {
-    justify-content: flex-start;
-  }
-
-  .library-url-import {
-    flex-wrap: wrap;
-    margin-right: 0;
-  }
-
-  .library-url-import input {
-    width: auto;
-    flex: 1 1 200px;
   }
 
   .workspace-screen {

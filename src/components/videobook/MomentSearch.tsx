@@ -4,8 +4,20 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from 'react'
-import { Film, Image, Paperclip, Pin, Search, Send, X } from 'lucide-react'
+import {
+  ExternalLink,
+  Film,
+  Image,
+  Library,
+  Paperclip,
+  Pin,
+  Replace,
+  Search,
+  Send,
+  X,
+} from 'lucide-react'
 import type {
   SearchHit,
   SearchModality,
@@ -45,6 +57,7 @@ interface MomentSearchProps {
   onNotice: (message: string) => void
   onNotebookChanged: () => Promise<void>
   onLibraryChanged: () => Promise<void>
+  importControls: ReactNode
 }
 
 export interface MomentSearchHandle {
@@ -100,6 +113,7 @@ function MomentSearch({
   onNotice,
   onNotebookChanged,
   onLibraryChanged,
+  importControls,
 }: MomentSearchProps, ref) {
   const searchReference = useSearchReferenceLifecycle()
   const {
@@ -494,6 +508,9 @@ function MomentSearch({
   return (
     <section className="moment-search">
       <form className="moment-search-form" onSubmit={search}>
+        <span className="moment-search-page-icon" role="img" aria-label="Library">
+          <Library size={18} />
+        </span>
         <div
           className={barDragOver ? 'moment-search-bar drag-over' : 'moment-search-bar'}
           onDragOver={(event) => {
@@ -672,14 +689,20 @@ function MomentSearch({
             </label>
           </div>
         </details>
+        {page && (
+          <div className="search-coverage">
+            <strong>{page.coverage.state}</strong>
+            <span
+              title={page.coverage.partialResults
+                ? 'Partial results update as indexing finishes'
+                : undefined}
+            >
+              {page.coverage.indexedArtifactCount}/{page.coverage.totalArtifactCount} indexed
+            </span>
+          </div>
+        )}
+        {importControls}
       </form>
-      {page && (
-        <div className="search-coverage">
-          <strong>{page.coverage.state}</strong>
-          <span>{page.coverage.indexedArtifactCount}/{page.coverage.totalArtifactCount} artifacts</span>
-          {page.coverage.partialResults && <span>Partial results update as indexing finishes</span>}
-        </div>
-      )}
       {replaceHit && (
         <section className="moment-replace-panel" aria-label="Replace sequence clip">
           <header>
@@ -773,15 +796,20 @@ function MomentSearch({
           const rangeKey = locationKey(hit)
           const rangeOverride = rangeOverrides[rangeKey]
           const presentedHit = adjustedSearchHit(hit, rangeOverride)
+          const selected = selectedHitIndex === index
+          const videoKind = asset?.type === 'video'
+            || hit.artifactKind === 'video'
+            || hit.artifactKind === 'final'
+          const audioKind = asset?.type === 'audio' || hit.artifactKind === 'audio'
           return (
             <article
-              className={selectedHitIndex === index ? 'moment-card selected' : 'moment-card'}
+              className={selected ? 'moment-card selected' : 'moment-card'}
               data-moment-index={index}
               key={`${hit.artifactId}:${rangeKey}:${index}`}
               onClick={() => setSelectedHitIndex(index)}
             >
               <div className="moment-card-media">
-                {mediaUrl && (asset?.type === 'video' || hit.artifactKind === 'video' || hit.artifactKind === 'final') ? (
+                {selected && mediaUrl && videoKind ? (
                   <video
                     src={momentMediaUrl(mediaUrl, presentedHit)}
                     poster={thumbnailUrl ?? undefined}
@@ -789,14 +817,31 @@ function MomentSearch({
                     playsInline
                     preload="metadata"
                   />
-                ) : mediaUrl && (asset?.type === 'audio' || hit.artifactKind === 'audio') ? (
+                ) : selected && mediaUrl && audioKind ? (
                   <audio
                     src={momentMediaUrl(mediaUrl, presentedHit)}
                     controls
                     preload="metadata"
                   />
-                ) : mediaUrl ? (
-                  <img src={thumbnailUrl ?? mediaUrl} alt={(hit.artifactLabel ?? hit.artifactId)} />
+                ) : thumbnailUrl ? (
+                  <img
+                    src={thumbnailUrl}
+                    alt={hit.artifactLabel ?? hit.artifactId}
+                    loading="lazy"
+                  />
+                ) : mediaUrl && videoKind ? (
+                  <video
+                    src={momentMediaUrl(mediaUrl, presentedHit)}
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                ) : mediaUrl && !audioKind ? (
+                  <img
+                    src={mediaUrl}
+                    alt={hit.artifactLabel ?? hit.artifactId}
+                    loading="lazy"
+                  />
                 ) : (
                   <Film size={28} />
                 )}
@@ -810,15 +855,8 @@ function MomentSearch({
                   </strong>
                   <span>{Math.round(hit.score * 100)}%</span>
                 </header>
-                <p>{hit.excerpt ?? 'Matched indexed media signals.'}</p>
-                <div className="reason-chips">
-                  {hit.signals.map((signal, signalIndex) => (
-                    <span key={`${signal.kind}:${signal.rank}:${signalIndex}`}>
-                      {signal.kind}{signal.explanation ? ` · ${signal.explanation}` : ''}
-                    </span>
-                  ))}
-                </div>
-                {hit.location.kind === 'timed' && (
+                {selected && <p>{hit.excerpt ?? 'Matched indexed media signals.'}</p>}
+                {selected && hit.location.kind === 'timed' && (
                   <div className="moment-range-adjust">
                     <label>
                       In
@@ -856,73 +894,99 @@ function MomentSearch({
                     </label>
                   </div>
                 )}
-                <div className="moment-card-actions">
-                  {mediaUrl && (
-                    <a href={momentMediaUrl(mediaUrl, presentedHit)} target="_blank" rel="noreferrer">
-                      Open source
-                    </a>
-                  )}
-                  {(hit.artifactKind === 'image'
-                    || hit.artifactKind === 'video'
-                    || hit.artifactKind === 'final') && (
+                <div className="moment-card-foot">
+                  <div className="reason-chips">
+                    {hit.signals.map((signal, signalIndex) => (
+                      <span
+                        key={`${signal.kind}:${signal.rank}:${signalIndex}`}
+                        title={signal.explanation ?? undefined}
+                      >
+                        {signal.kind}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="moment-card-actions">
+                    {mediaUrl && (
+                      <a
+                        href={momentMediaUrl(mediaUrl, presentedHit)}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Open source"
+                        aria-label="Open source"
+                      >
+                        <ExternalLink size={13} />
+                      </a>
+                    )}
+                    {(hit.artifactKind === 'image'
+                      || hit.artifactKind === 'video'
+                      || hit.artifactKind === 'final') && (
+                      <button
+                        type="button"
+                        title="Search for similar moments"
+                        aria-label="Search for similar moments"
+                        disabled={working || preparingReference}
+                        onClick={() => {
+                          const searchMode = hit.artifactKind === 'image'
+                            ? 'image-reverse'
+                            : 'video-reverse'
+                          const bounds = hit.location.kind === 'timed'
+                            ? momentBounds(presentedHit)
+                            : null
+                          void prepareExistingReference(
+                            searchMode,
+                            hit.owningBookId ?? bookId,
+                            hit.artifactId,
+                            searchMode === 'image-reverse'
+                              ? thumbnailUrl ?? mediaUrl
+                              : mediaUrl
+                                ? momentMediaUrl(mediaUrl, presentedHit)
+                                : null,
+                            searchMode === 'video-reverse' && bounds
+                              ? {
+                                  startSeconds: bounds.start,
+                                  durationSeconds: bounds.end - bounds.start,
+                                }
+                              : undefined,
+                          )
+                        }}
+                      >
+                        <Search size={13} />
+                      </button>
+                    )}
                     <button
                       type="button"
-                      disabled={working || preparingReference}
-                      onClick={() => {
-                        const searchMode = hit.artifactKind === 'image'
-                          ? 'image-reverse'
-                          : 'video-reverse'
-                        const bounds = hit.location.kind === 'timed'
-                          ? momentBounds(presentedHit)
-                          : null
-                        void prepareExistingReference(
-                          searchMode,
-                          hit.owningBookId ?? bookId,
-                          hit.artifactId,
-                          searchMode === 'image-reverse'
-                            ? thumbnailUrl ?? mediaUrl
-                            : mediaUrl
-                              ? momentMediaUrl(mediaUrl, presentedHit)
-                              : null,
-                          searchMode === 'video-reverse' && bounds
-                            ? {
-                                startSeconds: bounds.start,
-                                durationSeconds: bounds.end - bounds.start,
-                              }
-                            : undefined,
-                        )
-                      }}
+                      title="Pin to notebook"
+                      aria-label="Pin to notebook"
+                      disabled={working || !notebookId || (
+                        hit.owningBookId !== undefined && hit.owningBookId !== bookId
+                      )}
+                      onClick={() => void pin(presentedHit)}
                     >
-                      <Search size={13} />Similar
+                      <Pin size={13} />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    disabled={working || !notebookId || (
-                      hit.owningBookId !== undefined && hit.owningBookId !== bookId
-                    )}
-                    onClick={() => void pin(presentedHit)}
-                  >
-                    <Pin size={13} />Pin
-                  </button>
-                  <button
-                    type="button"
-                    disabled={working || (
-                      hit.owningBookId !== undefined && hit.owningBookId !== bookId
-                    )}
-                    onClick={() => void sendToSequence(presentedHit)}
-                  >
-                    <Send size={13} />Insert
-                  </button>
-                  <button
-                    type="button"
-                    disabled={working || (
-                      hit.owningBookId !== undefined && hit.owningBookId !== bookId
-                    )}
-                    onClick={() => void startReplace(presentedHit)}
-                  >
-                    Replace…
-                  </button>
+                    <button
+                      type="button"
+                      title="Insert into sequence"
+                      aria-label="Insert into sequence"
+                      disabled={working || (
+                        hit.owningBookId !== undefined && hit.owningBookId !== bookId
+                      )}
+                      onClick={() => void sendToSequence(presentedHit)}
+                    >
+                      <Send size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Replace a sequence clip"
+                      aria-label="Replace a sequence clip"
+                      disabled={working || (
+                        hit.owningBookId !== undefined && hit.owningBookId !== bookId
+                      )}
+                      onClick={() => void startReplace(presentedHit)}
+                    >
+                      <Replace size={13} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </article>
