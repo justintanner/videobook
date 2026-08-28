@@ -9,6 +9,7 @@ import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
 import { registerExtractNotebookAudioJob } from '../../server/src/jobs/extract-notebook-audio.js'
+import { registerRunNotebookJob } from '../../server/src/jobs/run-notebook.js'
 import { extractNotebookAudioDef } from '../../server/src/tools/extract-notebook-audio.js'
 import {
   queue,
@@ -27,7 +28,7 @@ function resultJson(result: Awaited<ReturnType<ToolDef['handler']>>): unknown {
 }
 
 async function waitForJob(jobId: string): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
+  for (let attempt = 0; attempt < 400; attempt += 1) {
     const status = await queue.getStatus(jobId)
     if (status?.state === 'completed') return
     if (status?.state === 'failed') {
@@ -36,6 +37,14 @@ async function waitForJob(jobId: string): Promise<void> {
     await new Promise<void>((resolve) => setTimeout(resolve, 50))
   }
   throw new Error('Audio extraction did not complete')
+}
+
+function executionOf(
+  document: NotebookDocument,
+  cellId: string,
+): Record<string, unknown> {
+  const execution = (document.execution ?? {}) as Record<string, Record<string, unknown>>
+  return execution[cellId] ?? {}
 }
 
 describe('notebook audio commands', () => {
@@ -56,7 +65,7 @@ describe('notebook audio commands', () => {
     }
   })
 
-  it('creates, runs, and reuses a horizontal Extract Audio workflow', async () => {
+  it('creates, runs, re-runs, and attaches to a horizontal Extract Audio workflow', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-audio-command-'))
     books = new BookManager({
       libraryDir: join(rootDir, 'books'),
@@ -73,6 +82,7 @@ describe('notebook audio commands', () => {
     const engine = managed.value.engine
     await setEngineRoot(rootDir, engine)
     registerExtractNotebookAudioJob(engine)
+    registerRunNotebookJob(engine)
 
     const defs = new Map(
       [
@@ -80,16 +90,23 @@ describe('notebook audio commands', () => {
         extractNotebookAudioDef(engine),
       ].map((def) => [def.name, def]),
     )
+    const calledTools: string[] = []
     const callTool = async (
       name: string,
       args: Record<string, unknown>,
     ): Promise<unknown> => {
       const def = defs.get(name)
       if (!def) throw new Error(`Missing ${name}`)
+      calledTools.push(name)
       return await withBookContext(
         { bookId: bookId!, engine },
         async () => resultJson(await def.handler(args)),
       )
+    }
+    const readNotebook = (notebookId: string): NotebookDocument => {
+      const read = engine.notebooks.read(notebookId)
+      if (!read.ok) throw new Error(read.error.message)
+      return read.value
     }
 
     const notebooks = await callTool('list_notebooks', {
@@ -140,10 +157,7 @@ describe('notebook audio commands', () => {
         slot: { row: 0, column: 1 },
       },
     })
-    const beforeResult = engine.notebooks.read(notebookId)
-    expect(beforeResult.ok).toBe(true)
-    if (!beforeResult.ok) return
-    const before: NotebookDocument = beforeResult.value
+    const before = readNotebook(notebookId)
 
     const firstRun = await enqueueNotebookAudioCommand({
       actor: 'audio-command-test',
@@ -159,12 +173,10 @@ describe('notebook audio commands', () => {
       actionAddress: '@a3',
       outputCellId: firstRun.actionCellId,
     })
+    expect(calledTools.at(-1)).toBe('extract_notebook_audio')
     await waitForJob(firstRun.jobId)
 
-    const completedResult = engine.notebooks.read(notebookId)
-    expect(completedResult.ok).toBe(true)
-    if (!completedResult.ok) return
-    const completed = completedResult.value
+    const completed = readNotebook(notebookId)
     const action = completed.cells.find((cell) =>
       cell.id === firstRun.actionCellId)
     expect(action).toMatchObject({
@@ -178,6 +190,10 @@ describe('notebook audio commands', () => {
         sourceCellId: source.id,
       }),
     })
+    expect(executionOf(completed, firstRun.actionCellId)).toMatchObject({
+      status: 'completed',
+      runId: firstRun.runId,
+    })
     expect(completed.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         source: source.id,
@@ -188,11 +204,15 @@ describe('notebook audio commands', () => {
     expect(completed.edges.some((edge) =>
       edge.source === firstRun.actionCellId && edge.targetInput === 'media'))
       .toBe(false)
-    const manifest = await engine.files.manifest(action!.outputArtifactId!)
+    const firstArtifactId = action!.outputArtifactId!
+    const manifest = await engine.files.manifest(firstArtifactId)
     expect(manifest.ok).toBe(true)
     expect(manifest.ok && manifest.value.files.some((file) =>
       file.name === 'original.m4a')).toBe(true)
 
+    // Asking again for a source that already has its audio cell must re-run
+    // that cell through the server, so the caller watches a real run instead
+    // of a placeholder that never completes.
     const secondRun = await enqueueNotebookAudioCommand({
       actor: 'audio-command-test',
       bookId,
@@ -202,11 +222,54 @@ describe('notebook audio commands', () => {
     })
     expect(secondRun).toMatchObject({
       actionCellId: firstRun.actionCellId,
+      actionAddress: '@a3',
       outputCellId: firstRun.actionCellId,
       reusedAction: true,
+      sourceCellId: source.id,
     })
-    if (secondRun.jobId && secondRun.jobId !== 'reused') {
-      await waitForJob(secondRun.jobId)
-    }
-  }, 30_000)
+    expect(calledTools.at(-1)).toBe('run_notebook_cell')
+    expect(secondRun.runId).not.toBe(firstRun.runId)
+    expect(secondRun.jobId).toMatch(/^run-notebook-/)
+
+    const queued = readNotebook(notebookId)
+    expect(executionOf(queued, firstRun.actionCellId)).toMatchObject({
+      status: 'queued',
+      runId: secondRun.runId,
+    })
+
+    // While that re-run is still in flight, a repeated request attaches to it
+    // rather than stacking another run on the same cell.
+    const toolCallsBeforeAttach = calledTools.length
+    const attached = await enqueueNotebookAudioCommand({
+      actor: 'audio-command-test',
+      bookId,
+      callTool,
+      command: { sourceReference: 'a1' },
+      document: queued,
+    })
+    expect(attached).toMatchObject({
+      actionCellId: firstRun.actionCellId,
+      reusedAction: true,
+      runId: secondRun.runId,
+      jobId: '',
+    })
+    expect(calledTools.length).toBe(toolCallsBeforeAttach)
+
+    await waitForJob(secondRun.jobId)
+    const rerun = readNotebook(notebookId)
+    const rerunAction = rerun.cells.find((cell) =>
+      cell.id === firstRun.actionCellId)
+    expect(executionOf(rerun, firstRun.actionCellId)).toMatchObject({
+      status: 'completed',
+      runId: secondRun.runId,
+    })
+    expect(rerunAction?.outputArtifactId).toEqual(expect.any(String))
+    expect(rerunAction?.outputArtifactId).not.toBe(firstArtifactId)
+    expect(rerunAction?.inputs?.outputVersionArtifactIds).toEqual(
+      expect.arrayContaining([firstArtifactId, rerunAction!.outputArtifactId!]),
+    )
+    const rerunManifest = await engine.files.manifest(rerunAction!.outputArtifactId!)
+    expect(rerunManifest.ok && rerunManifest.value.files.some((file) =>
+      file.name === 'original.m4a')).toBe(true)
+  }, 60_000)
 })

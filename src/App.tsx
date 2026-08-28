@@ -715,6 +715,14 @@ const ingestPollIntervalMs = 750
 const ingestPollTimeoutMs = 5 * 60_000
 const notebookRunPollIntervalMs = 500
 const notebookRunPollTimeoutMs = 5 * 60_000
+// A watch tolerates this many consecutive poll failures before giving up —
+// enough to ride out the MCP client's 3s reconnect after a transient error.
+const notebookRunMaxPollFailures = 10
+// After a watch ends (completed, lost contact, or timed out) it pulls the
+// server's current snapshot into the canvas so a cell is never left drawn as
+// queued once the server has moved on. Retries cover a reconnect in progress.
+const notebookRunResyncAttempts = 5
+const notebookRunResyncDelayMs = 1_000
 const notebookGenerationWatchIntervalMs = 2_000
 const notebookGenerationWatchTimeoutMs = 45 * 60_000
 const downloadWatchIntervalMs = 5_000
@@ -3570,6 +3578,52 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     let sawRun = false
     let consecutiveFailures = 0
     const deadline = Date.now() + params.timeoutMs
+    const inScope = () => {
+      const scope = watchScopeRef.current
+      return scope.bookId === params.bookId
+        && scope.notebookId === params.notebookId
+    }
+    const resyncSnapshot = async (): Promise<void> => {
+      const fetchedAt = performance.now()
+      const [notebookValue, assetValue, jobValue] = await Promise.all([
+        callRef.current('get_notebook', {
+          book_id: params.bookId,
+          notebook_id: params.notebookId,
+        }, { background: true }),
+        callRef.current('list_assets', {
+          book_id: params.bookId,
+          sort: 'newest',
+          limit: 200,
+          include_referenced: true,
+        }, { background: true }),
+        callRef.current('list_jobs', {
+          book_id: params.bookId,
+          limit: 200,
+        }, { background: true }),
+      ])
+      if (!inScope()) return
+      const nextNotebook = asNotebook(notebookValue)
+      if (!nextNotebook) return
+      const nextAssets = asAssets(assetValue)
+      const nextJobs = asJobs(jobValue)
+      if (fetchedAt < watchSnapshotClockRef.current) return
+      watchSnapshotClockRef.current = fetchedAt
+      setAssets((current) =>
+        jsonEqual(current, nextAssets) ? current : nextAssets)
+      applyJobsSnapshot(nextJobs)
+      applyNotebook(nextNotebook, nextAssets, nextJobs)
+    }
+    const settleSnapshot = async (): Promise<void> => {
+      for (let attempt = 0; attempt < notebookRunResyncAttempts; attempt += 1) {
+        if (!inScope()) return
+        try {
+          await resyncSnapshot()
+          return
+        } catch {
+          await delay(notebookRunResyncDelayMs)
+        }
+      }
+    }
     try {
       while (Date.now() < deadline) {
         if (activeWatchesRef.current.get(params.cellId) !== params.runId) {
@@ -3641,20 +3695,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             continue
           }
           if (step.kind === 'completed') {
-            const assetsFetchedAt = performance.now()
-            const assetValue = await callRef.current('list_assets', {
-              book_id: params.bookId,
-              sort: 'newest',
-              limit: 200,
-              include_referenced: true,
-            }, { background: true })
-            const nextAssets = asAssets(assetValue)
-            if (assetsFetchedAt >= watchSnapshotClockRef.current) {
-              watchSnapshotClockRef.current = assetsFetchedAt
-              setAssets((current) =>
-                jsonEqual(current, nextAssets) ? current : nextAssets)
-              applyNotebook(nextNotebook, nextAssets, nextJobs)
-            }
+            await settleSnapshot()
             setCellRunError(params.cellId, null)
             return { kind: 'completed' }
           }
@@ -3666,6 +3707,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           consecutiveFailures += 1
           if (consecutiveFailures >= params.maxPollFailures) {
             const detail = error instanceof Error ? error.message : String(error)
+            await settleSnapshot()
             return {
               kind: 'failed',
               message:
@@ -3675,6 +3717,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           await delay(params.intervalMs)
         }
       }
+      await settleSnapshot()
       return { kind: 'timeout' }
     } finally {
       if (activeWatchesRef.current.get(params.cellId) === params.runId) {
@@ -4057,7 +4100,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         jobOperationId,
         intervalMs: notebookRunPollIntervalMs,
         timeoutMs: notebookRunPollTimeoutMs,
-        maxPollFailures: 1,
+        maxPollFailures: notebookRunMaxPollFailures,
       })
       if (outcome.kind === 'failed') {
         throw new Error(outcome.message ?? `${notebookGridTag(cell.slot)} failed`)
@@ -5018,7 +5061,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       jobOperationId: jobId,
       intervalMs: notebookRunPollIntervalMs,
       timeoutMs: notebookRunPollTimeoutMs,
-      maxPollFailures: 1,
+      maxPollFailures: notebookRunMaxPollFailures,
     }).then((outcome) => {
       if (outcome.kind === 'failed' || outcome.kind === 'timeout') {
         const message = outcome.message
@@ -7529,7 +7572,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         jobOperationId: run.jobId,
         intervalMs: notebookRunPollIntervalMs,
         timeoutMs: notebookRunPollTimeoutMs,
-        maxPollFailures: 1,
+        maxPollFailures: notebookRunMaxPollFailures,
       })
       if (outcome.kind === 'failed') {
         throw new Error(outcome.message ?? `Frame extraction for ${sourceAddress} failed`)
@@ -7598,7 +7641,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         jobOperationId: run.jobId,
         intervalMs: notebookRunPollIntervalMs,
         timeoutMs: notebookRunPollTimeoutMs,
-        maxPollFailures: 1,
+        maxPollFailures: notebookRunMaxPollFailures,
       })
       if (outcome.kind === 'failed') {
         throw new Error(outcome.message ?? `Audio extraction for ${sourceAddress} failed`)
