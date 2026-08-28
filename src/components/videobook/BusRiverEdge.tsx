@@ -92,13 +92,19 @@ export const BusRiverEdge = memo(function BusRiverEdge(
   )
 
   return (
-    <BaseEdge
-      id={props.id}
-      path={path}
-      interactionWidth={18}
-      markerEnd={props.markerEnd}
-      markerStart={props.markerStart}
-      style={props.style}
-    />
+    <>
+      <BaseEdge
+        id={props.id}
+        path={path}
+        interactionWidth={18}
+        style={props.style}
+      />
+      <circle
+        className="bus-river-entry-dot"
+        cx={targetX}
+        cy={targetY}
+        r={2.5}
+      />
+    </>
   )
 })

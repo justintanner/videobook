@@ -41,6 +41,29 @@ const mediaPresentationCellTypes = new Set<string>([
 
 const mediaWorkCellTypes = new Set<string>(mediaWorkCellTypeValues)
 
+export type NotebookCellFamily = 'audio' | 'data' | 'gen' | 'image' | 'video'
+
+const cellFamilyByType: Record<NotebookCellType, NotebookCellFamily> = {
+  analysis: 'data',
+  analyze: 'data',
+  audio: 'audio',
+  character: 'data',
+  concat: 'video',
+  extract_audio: 'audio',
+  generate_audio: 'gen',
+  generate_image: 'gen',
+  generate_video: 'gen',
+  image: 'image',
+  prompt: 'gen',
+  splice: 'video',
+  split_video: 'video',
+  video: 'video',
+}
+
+export function notebookCellFamily(type: NotebookCellType): NotebookCellFamily {
+  return cellFamilyByType[type]
+}
+
 export function isNotebookGenerationCellType(
   type: string,
 ): type is NotebookGenerationCellType {

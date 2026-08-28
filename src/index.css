@@ -1538,9 +1538,43 @@ textarea:focus-visible {
   z-index: 2;
 }
 
+/* Edges carry the source cell's family hue at low opacity so long runs and
+   crossings separate by color instead of stacking into one green tangle. */
 .notebook-flow .react-flow__edge-path {
-  stroke: rgba(114, 231, 170, 0.62);
-  stroke-width: 1.6;
+  stroke: #72e7aa;
+  stroke-opacity: 0.38;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.notebook-flow .edge-family-image .react-flow__edge-path {
+  stroke: #5fc4d6;
+}
+
+.notebook-flow .edge-family-gen .react-flow__edge-path {
+  stroke: #cfae74;
+}
+
+.notebook-flow .edge-family-audio .react-flow__edge-path {
+  stroke: #c989a2;
+}
+
+.notebook-flow .bus-river-entry-dot {
+  fill: #72e7aa;
+  fill-opacity: 0.63;
+  pointer-events: none;
+}
+
+.notebook-flow .edge-family-image .bus-river-entry-dot {
+  fill: #5fc4d6;
+}
+
+.notebook-flow .edge-family-gen .bus-river-entry-dot {
+  fill: #cfae74;
+}
+
+.notebook-flow .edge-family-audio .bus-river-entry-dot {
+  fill: #c989a2;
 }
 
 .notebook-flow .react-flow__connection-path {
@@ -1550,15 +1584,42 @@ textarea:focus-visible {
 
 .notebook-flow .workflow-edge:hover .react-flow__edge-path,
 .notebook-flow .workflow-edge.selected .react-flow__edge-path {
-  stroke: rgba(154, 244, 189, 0.62);
+  stroke-opacity: 0.7;
   stroke-width: 1.8;
-  filter: drop-shadow(0 0 4px rgba(114, 231, 170, 0.2));
 }
 
 .notebook-flow .workflow-edge-cell-focus .react-flow__edge-path {
-  stroke: rgba(79, 183, 125, 0.98);
-  stroke-width: 2.15;
-  filter: drop-shadow(0 0 6px rgba(79, 183, 125, 0.52));
+  stroke: #9af4bd;
+  stroke-opacity: 0.95;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 6px rgba(114, 231, 170, 0.52));
+}
+
+.notebook-flow .workflow-edge-cell-focus.edge-family-image .react-flow__edge-path {
+  stroke: #9be2ef;
+  filter: drop-shadow(0 0 6px rgba(95, 196, 214, 0.52));
+}
+
+.notebook-flow .workflow-edge-cell-focus.edge-family-gen .react-flow__edge-path {
+  stroke: #ecd3a0;
+  filter: drop-shadow(0 0 6px rgba(207, 174, 116, 0.52));
+}
+
+.notebook-flow .workflow-edge-cell-focus.edge-family-audio .react-flow__edge-path {
+  stroke: #e3b8c9;
+  filter: drop-shadow(0 0 6px rgba(201, 137, 162, 0.52));
+}
+
+.notebook-flow .workflow-edge-cell-focus .bus-river-entry-dot {
+  fill-opacity: 0.95;
+}
+
+.notebook-flow .workflow-edge-cell-dim .react-flow__edge-path {
+  stroke-opacity: 0.22;
+}
+
+.notebook-flow .workflow-edge-cell-dim .bus-river-entry-dot {
+  fill-opacity: 0.3;
 }
 
 .cell-target-connection-count {
@@ -1634,7 +1695,7 @@ textarea:focus-visible {
   height: 240px;
   overflow: visible;
   border: 1px solid rgba(96, 176, 132, 0.35);
-  border-radius: 4px;
+  border-radius: 3px;
   color: var(--ink);
   background: rgba(4, 14, 9, 0.97);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
@@ -1649,14 +1710,27 @@ textarea:focus-visible {
   user-select: none;
 }
 
-.cell-kind-audio,
-.cell-kind-image,
-.cell-kind-video,
-.cell-kind-character,
-.cell-kind-generate_audio,
-.cell-kind-generate_image,
-.cell-kind-generate_video {
-  border-color: rgba(114, 231, 170, 0.58);
+/* Type families: hue + silhouette + corner mark, per the grid-refactor spec.
+   video = green/sharp, image = cyan/rounded, gen (prompt + generate_*) =
+   amber/dashed, audio = rose; data (analyze, analysis, character) keeps the
+   neutral base border. */
+.cell-family-video {
+  border-color: rgba(114, 231, 170, 0.5);
+}
+
+.cell-family-image {
+  border-color: rgba(99, 199, 216, 0.48);
+  border-radius: 12px;
+}
+
+.cell-family-gen {
+  border-color: rgba(213, 181, 120, 0.52);
+  border-style: dashed;
+}
+
+.cell-family-audio {
+  border-color: rgba(201, 137, 162, 0.46);
+  border-radius: 8px;
 }
 
 .cell-node-version-stack::after {
@@ -1664,7 +1738,7 @@ textarea:focus-visible {
   inset: 7px -7px -7px 7px;
   z-index: -1;
   border: 1px solid rgba(114, 231, 170, 0.3);
-  border-radius: 4px;
+  border-radius: inherit;
   background: rgba(4, 18, 11, 0.92);
   box-shadow:
     5px 5px 0 -1px rgba(4, 13, 9, 0.96),
@@ -1672,14 +1746,6 @@ textarea:focus-visible {
     0 12px 30px rgba(0, 0, 0, 0.34);
   content: '';
   pointer-events: none;
-}
-
-.cell-kind-split_video,
-.cell-kind-analyze,
-.cell-kind-analysis,
-.cell-kind-concat,
-.cell-kind-splice {
-  border-color: rgba(89, 194, 211, 0.48);
 }
 
 .cell-node::before {
@@ -1693,6 +1759,30 @@ textarea:focus-visible {
   content: '';
   pointer-events: none;
   z-index: 12;
+}
+
+.cell-family-image::before {
+  border-color: #63c7d8;
+  border-top-left-radius: 12px;
+}
+
+.cell-family-gen::before {
+  top: -4px;
+  left: -4px;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid #d5b578;
+  background: var(--surface-deep);
+  transform: rotate(45deg);
+}
+
+.cell-family-audio::before {
+  left: 8px;
+  width: 10px;
+  height: 8px;
+  border-top: 0;
+  border-left: 2px solid #c989a2;
+  border-right: 2px solid #c989a2;
 }
 
 .cell-node-selected {
@@ -2052,6 +2142,22 @@ textarea:focus-visible {
   gap: 8px;
 }
 
+.cell-family-video .cell-node-header {
+  color: #7fc79c;
+}
+
+.cell-family-image .cell-node-header {
+  color: #77b9c7;
+}
+
+.cell-family-gen .cell-node-header {
+  color: #c0a67a;
+}
+
+.cell-family-audio .cell-node-header {
+  color: #b98da0;
+}
+
 .cell-node-type {
   display: inline-flex;
   min-width: 0;
@@ -2296,6 +2402,21 @@ textarea:focus-visible {
   letter-spacing: 0.04em;
 }
 
+.cell-family-image .cell-aspect-ratio {
+  border-color: rgba(99, 199, 216, 0.32);
+  color: #9cd3de;
+}
+
+.cell-family-gen .cell-aspect-ratio {
+  border-color: rgba(213, 181, 120, 0.34);
+  color: #d8c294;
+}
+
+.cell-family-audio .cell-aspect-ratio {
+  border-color: rgba(201, 137, 162, 0.34);
+  color: #d3a8ba;
+}
+
 .cell-image-metadata {
   position: absolute;
   top: 8px;
@@ -2335,6 +2456,10 @@ textarea:focus-visible {
 .cell-image-metadata-generator {
   max-width: 104px;
   color: #9de1b8;
+}
+
+.cell-family-image .cell-image-metadata-badge {
+  border-color: rgba(99, 199, 216, 0.42);
 }
 
 .inspector-generations {
@@ -2826,6 +2951,10 @@ textarea:focus-visible {
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.cell-family-gen .cell-model-line {
+  color: #d3b57e;
 }
 
 .cell-copy-text p {

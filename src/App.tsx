@@ -316,7 +316,10 @@ import {
   providerPayloadPreviewReferenceError,
 } from '@/videobook/provider-payload-preview'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
-import { isNotebookGenerationCellType } from '@/videobook/notebook-cell-types'
+import {
+  isNotebookGenerationCellType,
+  notebookCellFamily,
+} from '@/videobook/notebook-cell-types'
 import {
   mediaFileAccept,
   mediaKindForFile,
@@ -2585,6 +2588,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
       className={[
         'cell-node',
         `cell-kind-${data.kind}`,
+        `cell-family-${notebookCellFamily(data.kind)}`,
         selected ? 'cell-node-selected' : '',
         primarySelected ? 'cell-node-primary' : '',
         running ? 'cell-node-running' : '',

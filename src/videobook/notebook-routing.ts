@@ -446,18 +446,51 @@ export function notebookBusRiverPoints(
   ]
 }
 
+export const notebookEdgeBendRadius = 8
+
+function lineCommand(
+  from: NotebookBusRiverPoint,
+  to: NotebookBusRiverPoint,
+): string {
+  if (to.x === from.x) return `V ${to.y}`
+  if (to.y === from.y) return `H ${to.x}`
+  return `L ${to.x} ${to.y}`
+}
+
 export function notebookBusRiverPath(
   coordinates: NotebookBusRiverCoordinates,
   route: NotebookBusRiverRoute,
 ): string {
   const points = notebookBusRiverPoints(coordinates, route)
-  return points.map((point, index) => {
-    if (index === 0) return `M ${point.x} ${point.y}`
-    const previous = points[index - 1]
-    if (point.x === previous.x) return `V ${point.y}`
-    if (point.y === previous.y) return `H ${point.x}`
-    return `L ${point.x} ${point.y}`
-  }).join(' ')
+  const parts = [`M ${points[0].x} ${points[0].y}`]
+  let cursor = points[0]
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const corner = points[index]
+    const next = points[index + 1]
+    const inLength = Math.hypot(corner.x - cursor.x, corner.y - cursor.y)
+    const outLength = Math.hypot(next.x - corner.x, next.y - corner.y)
+    const radius = Math.min(notebookEdgeBendRadius, inLength / 2, outLength / 2)
+    if (radius < 1) {
+      parts.push(lineCommand(cursor, corner))
+      cursor = corner
+      continue
+    }
+    const before = {
+      x: corner.x - ((corner.x - cursor.x) / inLength) * radius,
+      y: corner.y - ((corner.y - cursor.y) / inLength) * radius,
+    }
+    const after = {
+      x: corner.x + ((next.x - corner.x) / outLength) * radius,
+      y: corner.y + ((next.y - corner.y) / outLength) * radius,
+    }
+    parts.push(
+      lineCommand(cursor, before),
+      `Q ${corner.x} ${corner.y} ${after.x} ${after.y}`,
+    )
+    cursor = after
+  }
+  parts.push(lineCommand(cursor, points[points.length - 1]))
+  return parts.join(' ')
 }
 
 export function notebookSourcePortId(

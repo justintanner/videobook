@@ -1,4 +1,3 @@
-import { MarkerType } from '@xyflow/react'
 import { describe, expect, it } from 'vitest'
 import type { NotebookDocument } from 'videobook-engine'
 import {
@@ -7,7 +6,6 @@ import {
   notebookEdges,
   notebookEdgesWithCellFocus,
   notebookNodes,
-  notebookFocusedEdgeColor,
 } from './notebook-draft'
 
 const source: NotebookDocument = {
@@ -265,7 +263,7 @@ describe('notebook draft conversion', () => {
       sourceHandle: 'route-right-1',
       targetHandle: 'reference-video',
       type: 'busRiver',
-      className: 'workflow-edge',
+      className: 'workflow-edge edge-family-gen',
       data: {
         sourceSide: 'right',
         sourcePortIndex: 1,
@@ -278,20 +276,18 @@ describe('notebook draft conversion', () => {
         directRowGutter: false,
         targetPrimary: true,
       },
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        color: 'rgba(114, 231, 170, 0.38)',
-      },
     })
+    expect(notebookEdges(connected)[0]?.markerEnd).toBeUndefined()
     expect(
       notebookDocument(connected, notebookNodes(connected), notebookEdges(connected)).edges,
     ).toEqual(connected.edges)
   })
 
-  it('draws one arrowhead for a multi-input target', () => {
+  it('tints each edge by its source cell family and draws no arrowheads', () => {
     const secondSource = {
       ...source.cells[0]!,
       id: '018f7cf5-0d31-7d96-8c0f-800000000008',
+      type: 'video' as const,
       slot: { row: 0, column: 1 },
     }
     const target = {
@@ -319,18 +315,16 @@ describe('notebook draft conversion', () => {
       ],
     }
     const rendered = notebookEdges(fanIn)
-    const reversed = notebookEdges({
-      ...fanIn,
-      edges: [...fanIn.edges].reverse(),
-    })
 
     expect(rendered.map((edge) => edge.targetHandle)).toEqual([
       'reference-video',
       'reference-audio',
     ])
-    expect(rendered.filter((edge) => edge.markerEnd)).toHaveLength(1)
-    expect(rendered.find((edge) => edge.markerEnd)?.id).toBe(fanIn.edges[0]?.id)
-    expect(reversed.find((edge) => edge.markerEnd)?.id).toBe(fanIn.edges[0]?.id)
+    expect(rendered.map((edge) => edge.className)).toEqual([
+      'workflow-edge edge-family-gen',
+      'workflow-edge edge-family-video',
+    ])
+    expect(rendered.every((edge) => edge.markerEnd === undefined)).toBe(true)
     expect(
       notebookNodes(fanIn).find((node) => node.id === target.id)
         ?.data.targetConnectionCount,
@@ -385,10 +379,6 @@ describe('notebook draft conversion', () => {
     ).toEqual({ 'reference-video': 2 })
   })
 
-  it('uses the bright emerald focus color for route markers', () => {
-    expect(notebookFocusedEdgeColor).toBe('rgba(79, 183, 125, 0.98)')
-  })
-
   it('focuses only routes incident to the selected cell', () => {
     const secondSource = {
       ...source.cells[0]!,
@@ -426,11 +416,9 @@ describe('notebook draft conversion', () => {
     expect(sourceFocused.find((edge) => edge.source === secondSource.id)?.className)
       .toContain('workflow-edge-cell-focus')
     expect(sourceFocused.find((edge) => edge.source === source.cells[0]!.id)?.className)
-      .toBe('workflow-edge')
+      .toBe('workflow-edge edge-family-gen workflow-edge-cell-dim')
     expect(targetFocused.every((edge) =>
       edge.className?.includes('workflow-edge-cell-focus'))).toBe(true)
-    expect(targetFocused.find((edge) => edge.markerEnd)?.markerEnd)
-      .toMatchObject({ color: notebookFocusedEdgeColor })
     expect(notebookEdgesWithCellFocus(rendered, null)).toBe(rendered)
   })
 })

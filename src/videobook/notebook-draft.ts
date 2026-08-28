@@ -1,15 +1,11 @@
-import {
-  MarkerType,
-  type Connection,
-  type Edge,
-  type Node,
-} from '@xyflow/react'
+import type { Connection, Edge, Node } from '@xyflow/react'
 import type {
   NotebookCell,
   NotebookCellType,
   NotebookDocument,
 } from 'videobook-engine'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
+import { notebookCellFamily } from './notebook-cell-types'
 import { notebookGridPosition } from './notebook-grid'
 import {
   defaultNotebookBusRiverRoute,
@@ -17,8 +13,6 @@ import {
   notebookSourcePortId,
   type NotebookBusRiverRoute,
 } from './notebook-routing'
-
-export const notebookFocusedEdgeColor = 'rgba(79, 183, 125, 0.98)'
 
 export type NotebookFlowEdge = Edge<NotebookBusRiverRoute, 'busRiver'>
 
@@ -232,8 +226,13 @@ export function notebookEdges(
   document: NotebookDocument,
 ): NotebookFlowEdge[] {
   const routes = notebookBusRiverRoutes(document)
+  const familiesById = new Map(document.cells.map((cell) => [
+    cell.id,
+    notebookCellFamily(cell.type),
+  ]))
   return document.edges.map((edge) => {
     const route = routes.get(edge.id) ?? defaultNotebookBusRiverRoute
+    const family = familiesById.get(edge.source) ?? 'data'
     return {
       id: edge.id,
       source: edge.source,
@@ -244,18 +243,8 @@ export function notebookEdges(
       target: edge.target,
       targetHandle: edge.targetInput,
       type: 'busRiver',
-      className: 'workflow-edge',
+      className: `workflow-edge edge-family-${family}`,
       data: route,
-      ...(route.targetPrimary
-        ? {
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              width: 18,
-              height: 18,
-              color: 'rgba(114, 231, 170, 0.38)',
-            },
-          }
-        : {}),
     }
   })
 }
@@ -266,20 +255,17 @@ export function notebookEdgesWithCellFocus(
 ): NotebookFlowEdge[] {
   if (!selectedCellId) return edges
   return edges.map((edge) => {
-    if (edge.source !== selectedCellId && edge.target !== selectedCellId) {
-      return edge
-    }
     const classNames = new Set(
       (edge.className ?? '').split(/\s+/).filter(Boolean),
     )
-    classNames.add('workflow-edge-cell-focus')
-    const markerEnd = edge.markerEnd && typeof edge.markerEnd === 'object'
-      ? { ...edge.markerEnd, color: notebookFocusedEdgeColor }
-      : edge.markerEnd
+    classNames.add(
+      edge.source === selectedCellId || edge.target === selectedCellId
+        ? 'workflow-edge-cell-focus'
+        : 'workflow-edge-cell-dim',
+    )
     return {
       ...edge,
       className: [...classNames].join(' '),
-      markerEnd,
     }
   })
 }
