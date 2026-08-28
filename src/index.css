@@ -1551,10 +1551,6 @@ textarea:focus-visible {
   stroke: #5fc4d6;
 }
 
-.notebook-flow .edge-family-gen .react-flow__edge-path {
-  stroke: #cfae74;
-}
-
 .notebook-flow .edge-family-audio .react-flow__edge-path {
   stroke: #c989a2;
 }
@@ -1567,10 +1563,6 @@ textarea:focus-visible {
 
 .notebook-flow .edge-family-image .bus-river-entry-dot {
   fill: #5fc4d6;
-}
-
-.notebook-flow .edge-family-gen .bus-river-entry-dot {
-  fill: #cfae74;
 }
 
 .notebook-flow .edge-family-audio .bus-river-entry-dot {
@@ -1598,11 +1590,6 @@ textarea:focus-visible {
 .notebook-flow .workflow-edge-cell-focus.edge-family-image .react-flow__edge-path {
   stroke: #9be2ef;
   filter: drop-shadow(0 0 6px rgba(95, 196, 214, 0.52));
-}
-
-.notebook-flow .workflow-edge-cell-focus.edge-family-gen .react-flow__edge-path {
-  stroke: #ecd3a0;
-  filter: drop-shadow(0 0 6px rgba(207, 174, 116, 0.52));
 }
 
 .notebook-flow .workflow-edge-cell-focus.edge-family-audio .react-flow__edge-path {
@@ -1712,7 +1699,7 @@ textarea:focus-visible {
 
 /* Type families: hue + silhouette + corner mark, per the grid-refactor spec.
    video = green/sharp, image = cyan/rounded, gen (prompt + generate_*) =
-   amber/dashed, audio = rose; data (analyze, analysis, character) keeps the
+   green/dashed, audio = rose; data (analyze, analysis, character) keeps the
    neutral base border. */
 .cell-family-video {
   border-color: rgba(114, 231, 170, 0.5);
@@ -1724,7 +1711,7 @@ textarea:focus-visible {
 }
 
 .cell-family-gen {
-  border-color: rgba(213, 181, 120, 0.52);
+  border-color: rgba(114, 231, 170, 0.45);
   border-style: dashed;
 }
 
@@ -1766,23 +1753,9 @@ textarea:focus-visible {
   border-top-left-radius: 12px;
 }
 
-.cell-family-gen::before {
-  top: -4px;
-  left: -4px;
-  width: 7px;
-  height: 7px;
-  border: 1.5px solid #d5b578;
-  background: var(--surface-deep);
-  transform: rotate(45deg);
-}
-
 .cell-family-audio::before {
-  left: 8px;
-  width: 10px;
-  height: 8px;
-  border-top: 0;
-  border-left: 2px solid #c989a2;
-  border-right: 2px solid #c989a2;
+  border-color: #c989a2;
+  border-top-left-radius: 8px;
 }
 
 .cell-node-selected {
@@ -2150,10 +2123,6 @@ textarea:focus-visible {
   color: #77b9c7;
 }
 
-.cell-family-gen .cell-node-header {
-  color: #c0a67a;
-}
-
 .cell-family-audio .cell-node-header {
   color: #b98da0;
 }
@@ -2405,11 +2374,6 @@ textarea:focus-visible {
 .cell-family-image .cell-aspect-ratio {
   border-color: rgba(99, 199, 216, 0.32);
   color: #9cd3de;
-}
-
-.cell-family-gen .cell-aspect-ratio {
-  border-color: rgba(213, 181, 120, 0.34);
-  color: #d8c294;
 }
 
 .cell-family-audio .cell-aspect-ratio {
@@ -2951,10 +2915,6 @@ textarea:focus-visible {
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
-}
-
-.cell-family-gen .cell-model-line {
-  color: #d3b57e;
 }
 
 .cell-copy-text p {
