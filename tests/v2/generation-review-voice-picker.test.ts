@@ -1,7 +1,13 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { GenerationChatReview } from '../../src/components/videobook/GenerationChatReview'
+import { ConfirmSheet } from '../../src/components/videobook/confirm/ConfirmSheet'
+import { GenerationBody } from '../../src/components/videobook/confirm/bodies/GenerationBody'
+import { generationValidation } from '../../src/videobook/confirm-validation'
+import {
+  generationEstimate,
+  providerPayloadPreviewMentions,
+} from '../../src/videobook/provider-payload-preview'
 import type { NotebookChatGenerationDraft } from '../../src/videobook/notebook-chat-generation'
 import type { NotebookGenerationAction } from '../../src/videobook/notebook-generation-actions'
 import type { ElevenLabsVoicesState } from '../../src/videobook/use-elevenlabs-voices'
@@ -94,9 +100,10 @@ function renderReview(
   preview: unknown = null,
   previewStale = false,
 ): string {
-  return renderToStaticMarkup(createElement(GenerationChatReview, {
+  // The body renders inside the shared confirm sheet, exactly as App does,
+  // so the Apply button and the status slot come from the shell.
+  const body = createElement(GenerationBody, {
     actions: [ttsAction],
-    applyFormId: 'apply-form',
     busy: false,
     draft,
     modes: ttsAction.inputContract.modes,
@@ -106,21 +113,37 @@ function renderReview(
     previewStale,
     sources: [],
     sourceOptions: [],
-    summary: 'Generate audio as @a1',
     ...(catalog ? { voiceCatalog: catalog } : {}),
     onActionChange: () => undefined,
     onAddSource: () => undefined,
-    onCancel: () => undefined,
     onModeChange: () => undefined,
     onPromptChange: () => undefined,
     onRefreshPreview: () => undefined,
     onRemoveSource: () => undefined,
     onSelectSource: () => undefined,
     onSettingChange: () => undefined,
+  })
+  return renderToStaticMarkup(createElement(ConfirmSheet, {
+    applyFormId: 'apply-form',
+    ariaLabel: 'Generation action review',
+    busy: false,
+    children: body,
+    kind: 'generation',
+    tag: 'GENERATION · CHAT',
+    title: 'Generate audio as @a1',
+    validation: generationValidation({
+      prompt: draft.cell.prompt,
+      previewLoading: false,
+      previewError: null,
+      previewStale,
+      promptLeaks: providerPayloadPreviewMentions(preview).promptLeaks,
+      estimateUnknown: generationEstimate(preview).unknown,
+    }),
+    onCancel: () => undefined,
   }))
 }
 
-describe('GenerationChatReview voice picker', () => {
+describe('GenerationBody voice picker', () => {
   it('renders the full voice catalog with the draft voice selected', () => {
     const html = renderReview(speechDraft(), voiceCatalog)
 
@@ -183,7 +206,9 @@ describe('GenerationChatReview voice picker', () => {
     expect(html).toContain('role="alert"')
     expect(html).toContain('<code>@e2</code>')
     expect(html).toContain('@e2 does not have media output yet')
-    expect(html).toContain('class="command-plan-apply" disabled=""')
+    expect(html).toContain('class="confirm-sheet-apply" disabled=""')
+    expect(html).toContain('Can’t apply')
+    expect(html).toContain('Add it with Add input, or remove the mention.')
   })
 
   it('allows a stale preview to be revalidated on Apply', () => {
@@ -198,11 +223,11 @@ describe('GenerationChatReview voice picker', () => {
     }, true)
 
     expect(html).not.toContain('role="alert"')
-    expect(html).not.toContain('class="command-plan-apply" disabled=""')
+    expect(html).not.toContain('class="confirm-sheet-apply" disabled=""')
   })
 })
 
-describe('GenerationChatReview input editing', () => {
+describe('GenerationBody input editing', () => {
   const imageSource = {
     cellId: '00000000-0000-7000-8000-0000000000a2',
     address: 'a2',
@@ -220,9 +245,8 @@ describe('GenerationChatReview input editing', () => {
     sources: { cellId: string; address: string; type: string; asset: null }[],
     sourceOptions: { cellId: string; address: string; type: string; asset: null }[],
   ): string {
-    return renderToStaticMarkup(createElement(GenerationChatReview, {
+    return renderToStaticMarkup(createElement(GenerationBody, {
       actions: [ttsAction],
-      applyFormId: 'apply-form',
       busy: false,
       draft: speechDraft(),
       modes: ttsAction.inputContract.modes,
@@ -232,10 +256,8 @@ describe('GenerationChatReview input editing', () => {
       previewStale: false,
       sources,
       sourceOptions,
-      summary: 'Generate audio as @a1',
       onActionChange: () => undefined,
       onAddSource: () => undefined,
-      onCancel: () => undefined,
       onModeChange: () => undefined,
       onPromptChange: () => undefined,
       onRefreshPreview: () => undefined,

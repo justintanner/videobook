@@ -1,0 +1,797 @@
+import { useState } from 'react'
+import type { CSSProperties } from 'react'
+import { Play } from 'lucide-react'
+import {
+  MAX_HANDLE_PADDING,
+  MAX_HANDLE_ROUNDING,
+  MAX_HANDLE_VERTICAL_PERCENT,
+  MAX_WATERMARK_OPACITY,
+  MIN_HANDLE_PADDING,
+  MIN_HANDLE_ROUNDING,
+  MIN_HANDLE_VERTICAL_PERCENT,
+  MIN_WATERMARK_OPACITY,
+  WATERMARK_POSITIONS,
+} from '@/videobook/watermark-review'
+import type { WatermarkPosition } from '@/videobook/watermark-review'
+import {
+  watermarkHandleValue,
+  watermarkTimingValid,
+} from '@/videobook/confirm-validation'
+
+export interface WatermarkReviewState {
+  assetId: string
+  targetLabel: string
+  mediaUrl: string | null
+  thumbnailUrl: string | null
+  width: number | null
+  height: number | null
+  durationSeconds: number | null
+  handle: string
+  url: string
+  includeQr: boolean
+  includeHandle: boolean
+  position: WatermarkPosition
+  handleVerticalPercent: number
+  includeXIcon: boolean
+  includeHandleBorder: boolean
+  handlePadding: number
+  handleRounding: number
+  qrOpacity: number
+  handleOpacity: number
+  qrStartSeconds: number
+  qrEndSeconds: number | null
+  handleStartSeconds: number
+  handleEndSeconds: number | null
+  saveDefault: boolean
+  recent: string[]
+  loadingConfig: boolean
+  error: string | null
+}
+
+type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
+  | 'handle'
+  | 'url'
+  | 'includeQr'
+  | 'includeHandle'
+  | 'position'
+  | 'handleVerticalPercent'
+  | 'includeXIcon'
+  | 'includeHandleBorder'
+  | 'handlePadding'
+  | 'handleRounding'
+  | 'qrOpacity'
+  | 'handleOpacity'
+  | 'qrStartSeconds'
+  | 'qrEndSeconds'
+  | 'handleStartSeconds'
+  | 'handleEndSeconds'
+  | 'saveDefault'
+>>
+
+type MediaMetadata = {
+  durationSeconds: number
+  width: number
+  height: number
+}
+
+const POSITION_LABELS: Record<(typeof WATERMARK_POSITIONS)[number], string> = {
+  'top-left': 'Top left',
+  'top-center': 'Top center',
+  'top-right': 'Top right',
+  'middle-left': 'Middle left',
+  'middle-center': 'Middle center',
+  'middle-right': 'Middle right',
+  'bottom-left': 'Bottom left',
+  'bottom-center': 'Bottom center',
+  'bottom-right': 'Bottom right',
+}
+
+const QR_PREVIEW_ROWS = [
+  'fe2601bf8',
+  '8209bd208',
+  'ba34532e8',
+  'ba6ee3ae8',
+  'ba95bfae8',
+  '824f55208',
+  'feaaaabf8',
+  '00ccb8800',
+  '33c3ed680',
+  '646dcd668',
+  '8abc29c48',
+  'f976883d0',
+  '2bd10cc08',
+  '246bc6840',
+  '3ae7049a0',
+  '78227f738',
+  '1fa124fc0',
+  'b072db3a8',
+  'f715de7b0',
+  'a150ca198',
+  '7aac44a60',
+  'ed6a62858',
+  '060607bf8',
+  '5d2a6a4c8',
+  'aa0132f80',
+  '0087658f0',
+  'fe9a35ac0',
+  '8277d98f8',
+  'ba51bbff0',
+  'bacc3e160',
+  'ba9403e00',
+  '824b0bc28',
+  'fe263c180',
+] as const
+
+const QR_PREVIEW_SIZE = QR_PREVIEW_ROWS.length
+const X_LOGO_PATH = 'M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z'
+
+function buildQrPreviewPath(): string {
+  const modules: string[] = []
+  for (let row = 0; row < QR_PREVIEW_SIZE; row += 1) {
+    const encodedRow = QR_PREVIEW_ROWS[row]
+    for (let column = 0; column < QR_PREVIEW_SIZE; column += 1) {
+      const nibble = Number.parseInt(encodedRow.charAt(Math.floor(column / 4)), 16)
+      if ((nibble & (8 >> (column % 4))) !== 0) {
+        modules.push(`M${column} ${row}h1v1h-1z`)
+      }
+    }
+  }
+  return modules.join('')
+}
+
+const QR_PREVIEW_PATH = buildQrPreviewPath()
+const HANDLE_BADGE_HEIGHT = 88
+const HANDLE_FONT_SIZE = 28
+
+function WatermarkQrPreview() {
+  return (
+    <svg
+      className="watermark-preview-qr-modules"
+      viewBox={`0 0 ${QR_PREVIEW_SIZE} ${QR_PREVIEW_SIZE}`}
+      shapeRendering="crispEdges"
+    >
+      <path d={QR_PREVIEW_PATH} fill="currentColor" />
+    </svg>
+  )
+}
+
+function WatermarkXIcon() {
+  return (
+    <svg
+      className="watermark-preview-x-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path d={X_LOGO_PATH} fill="currentColor" />
+    </svg>
+  )
+}
+
+function watermarkOpacityPercent(value: number): number {
+  return Math.round(value * 100)
+}
+
+function watermarkVisibleAt(
+  currentTime: number,
+  startSeconds: number,
+  endSeconds: number | null,
+): boolean {
+  return currentTime >= startSeconds
+    && (endSeconds === null || currentTime <= endSeconds)
+}
+
+function watermarkTimelineWindow(
+  startSeconds: number,
+  endSeconds: number | null,
+  duration: number,
+): { left: number; width: number } {
+  if (duration <= 0) return { left: 0, width: 100 }
+  const left = clamp((startSeconds / duration) * 100, 0, 100)
+  const right = clamp(((endSeconds ?? duration) / duration) * 100, left, 100)
+  return { left, width: right - left }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function secondsLabel(value: number): string {
+  if (!Number.isFinite(value)) return '0.0s'
+  return `${value.toFixed(1)}s`
+}
+
+function previewQrStyle(
+  position: Exclude<WatermarkPosition, 'auto'>,
+  width: number,
+  height: number,
+): CSSProperties {
+  const [vertical, horizontal] = position.split('-')
+  const transforms: string[] = []
+  const style: CSSProperties = {
+    aspectRatio: '1 / 1',
+    height: `${16 * (Math.min(width, height) / height)}%`,
+  }
+  if (horizontal === 'left') style.left = '2%'
+  if (horizontal === 'right') style.right = '2%'
+  if (horizontal === 'center') {
+    style.left = '50%'
+    transforms.push('translateX(-50%)')
+  }
+  const verticalInset = `${2 * (width / height)}%`
+  if (vertical === 'top') style.top = verticalInset
+  if (vertical === 'bottom') style.bottom = verticalInset
+  if (vertical === 'middle') {
+    style.top = '50%'
+    transforms.push('translateY(-50%)')
+  }
+  if (transforms.length > 0) style.transform = transforms.join(' ')
+  return style
+}
+
+function previewHandleStyle(
+  width: number,
+  height: number,
+  verticalPercent: number,
+): CSSProperties {
+  return {
+    aspectRatio: '480 / 88',
+    height: `${16 * (Math.min(width, height) / height)}%`,
+    top: `${verticalPercent}%`,
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+  }
+}
+
+function previewHandlePillStyle(
+  padding: number,
+  rounding: number,
+): CSSProperties {
+  const radius = ((HANDLE_BADGE_HEIGHT - 2) / 2) * (rounding / 100)
+  return {
+    paddingInline: `${padding / HANDLE_FONT_SIZE}em`,
+    borderRadius: `${radius / HANDLE_FONT_SIZE}em`,
+  }
+}
+
+function WatermarkToggle({
+  busy,
+  checked,
+  description,
+  disabled = false,
+  label,
+  onChange,
+}: {
+  busy: boolean
+  checked: boolean
+  description: string
+  disabled?: boolean
+  label: string
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <label className="confirm-toggle">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={busy || disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span className="confirm-toggle-copy">
+        <strong>{label}</strong>
+        <small>{description}</small>
+      </span>
+    </label>
+  )
+}
+
+function WatermarkRange({
+  busy,
+  id,
+  label,
+  max,
+  min,
+  onChange,
+  output,
+  value,
+}: {
+  busy: boolean
+  id: string
+  label: string
+  max: number
+  min: number
+  onChange: (value: number) => void
+  output: string
+  value: number
+}) {
+  return (
+    <div className="confirm-range">
+      <label htmlFor={id}>{label}</label>
+      <output htmlFor={id}>{output}</output>
+      <input
+        id={id}
+        type="range"
+        min={min}
+        max={max}
+        step="1"
+        value={value}
+        disabled={busy}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </div>
+  )
+}
+
+function WatermarkTimingRow({
+  busy,
+  currentTime,
+  duration,
+  endSeconds,
+  idPrefix,
+  label,
+  onChange,
+  playhead,
+  startSeconds,
+}: {
+  busy: boolean
+  currentTime: number
+  duration: number
+  endSeconds: number | null
+  idPrefix: string
+  label: string
+  onChange: (startSeconds: number, endSeconds: number | null) => void
+  playhead: number
+  startSeconds: number
+}) {
+  const valid = watermarkTimingValid(startSeconds, endSeconds, duration)
+  const window = watermarkTimelineWindow(startSeconds, endSeconds, duration)
+  return (
+    <div className="confirm-watermark-timing" role="group" aria-label={`${label} timing`}>
+      <div className="confirm-watermark-timing-row">
+        <span>{label}</span>
+        <div className="watermark-timeline" aria-hidden="true">
+          <span
+            className="watermark-timeline-window"
+            style={{ left: `${window.left}%`, width: `${window.width}%` }}
+          />
+          <span
+            className="watermark-timeline-playhead"
+            style={{ left: `${playhead}%` }}
+          />
+        </div>
+        <input
+          id={`${idPrefix}-start`}
+          aria-label={`${label} start`}
+          type="number"
+          min="0"
+          max={duration > 0 ? duration : undefined}
+          step="0.1"
+          value={startSeconds}
+          disabled={busy}
+          onChange={(event) => onChange(
+            Math.max(0, Number(event.target.value) || 0),
+            endSeconds,
+          )}
+        />
+        <span className="confirm-watermark-timing-arrow" aria-hidden="true">→</span>
+        <input
+          id={`${idPrefix}-end`}
+          aria-label={`${label} end`}
+          aria-invalid={!valid}
+          type="number"
+          min="0"
+          max={duration > 0 ? duration : undefined}
+          step="0.1"
+          value={endSeconds ?? ''}
+          placeholder={duration > 0 ? duration.toFixed(1) : 'Clip end'}
+          disabled={busy}
+          onChange={(event) => onChange(
+            startSeconds,
+            event.target.value === ''
+              ? null
+              : Math.max(0, Number(event.target.value) || 0),
+          )}
+        />
+        <div className="confirm-watermark-timing-actions">
+          <button
+            type="button"
+            aria-label={`Set ${label} start from playhead`}
+            disabled={busy}
+            onClick={() => onChange(
+              endSeconds === null
+                ? currentTime
+                : Math.min(currentTime, Math.max(0, endSeconds - 0.1)),
+              endSeconds,
+            )}
+          >
+            <Play size={8} aria-hidden="true" />Start
+          </button>
+          <button
+            type="button"
+            aria-label={`Set ${label} end from playhead`}
+            disabled={busy}
+            onClick={() => onChange(
+              startSeconds,
+              Math.max(currentTime, startSeconds + 0.1),
+            )}
+          >
+            <Play size={8} aria-hidden="true" />End
+          </button>
+          <button
+            type="button"
+            aria-label={`Use whole clip for ${label}`}
+            disabled={busy}
+            onClick={() => onChange(0, null)}
+          >
+            Whole
+          </button>
+        </div>
+      </div>
+      {!valid && (
+        <p className="confirm-field-error">{label} end time must be after its start time.</p>
+      )}
+    </div>
+  )
+}
+
+export function WatermarkBody({
+  busy,
+  state,
+  onChange,
+  onMediaMetadata,
+}: {
+  busy: boolean
+  state: WatermarkReviewState
+  onChange: (patch: WatermarkReviewPatch) => void
+  onMediaMetadata: (metadata: MediaMetadata) => void
+}) {
+  const [currentTime, setCurrentTime] = useState(0)
+  const handle = watermarkHandleValue(state.handle)
+  const urlPlaceholder = handle ? `https://x.com/${handle}` : 'https://x.com/<handle>'
+  const duration = state.durationSeconds ?? 0
+  const handleMissing = state.includeHandle && !handle
+  const linkMissing = state.includeQr && !state.url.trim() && !handle
+  const qrVisibleAtPlayhead = watermarkVisibleAt(
+    currentTime,
+    state.qrStartSeconds,
+    state.qrEndSeconds,
+  )
+  const handleVisibleAtPlayhead = watermarkVisibleAt(
+    currentTime,
+    state.handleStartSeconds,
+    state.handleEndSeconds,
+  )
+  const previewPosition = state.position === 'auto' ? 'bottom-right' : state.position
+  const previewWidth = state.width !== null && state.width > 0 ? state.width : 16
+  const previewHeight = state.height !== null && state.height > 0 ? state.height : 9
+  const tallPreview = previewHeight >= previewWidth
+  const playhead = duration > 0
+    ? clamp((currentTime / duration) * 100, 0, 100)
+    : 0
+
+  return (
+    <div className="confirm-watermark">
+      <section className="confirm-section confirm-watermark-preview" aria-label="Preview">
+        <div className="confirm-section-heading">
+          <span>Preview</span>
+          <strong>{secondsLabel(currentTime)} / {duration > 0 ? secondsLabel(duration) : '—'}</strong>
+        </div>
+        <div
+          className={`watermark-video-stage${tallPreview ? ' tall' : ' wide'}`}
+          style={{ aspectRatio: `${previewWidth} / ${previewHeight}` }}
+        >
+          {state.mediaUrl ? (
+            <video
+              src={state.mediaUrl}
+              poster={state.thumbnailUrl ?? undefined}
+              controls
+              playsInline
+              preload="metadata"
+              onLoadedMetadata={(event) => {
+                const video = event.currentTarget
+                if (
+                  Number.isFinite(video.duration)
+                  && video.duration > 0
+                  && video.videoWidth > 0
+                  && video.videoHeight > 0
+                ) {
+                  onMediaMetadata({
+                    durationSeconds: video.duration,
+                    width: video.videoWidth,
+                    height: video.videoHeight,
+                  })
+                }
+              }}
+              onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+              onSeeked={(event) => setCurrentTime(event.currentTarget.currentTime)}
+            />
+          ) : state.thumbnailUrl ? (
+            <img src={state.thumbnailUrl} alt="" />
+          ) : (
+            <span className="watermark-preview-empty">Video preview unavailable</span>
+          )}
+          {state.includeQr && (
+            <span
+              className="watermark-preview-overlay watermark-preview-qr"
+              style={{
+                ...previewQrStyle(previewPosition, previewWidth, previewHeight),
+                opacity: qrVisibleAtPlayhead ? state.qrOpacity : 0,
+              }}
+              aria-hidden="true"
+            >
+              <WatermarkQrPreview />
+            </span>
+          )}
+          {state.includeHandle && (
+            <span
+              className="watermark-preview-overlay watermark-preview-handle"
+              style={{
+                ...previewHandleStyle(
+                  previewWidth,
+                  previewHeight,
+                  state.handleVerticalPercent,
+                ),
+                opacity: handleVisibleAtPlayhead ? state.handleOpacity : 0,
+              }}
+              aria-hidden="true"
+            >
+              <span
+                className={`watermark-preview-handle-pill${state.includeHandleBorder ? '' : ' without-border'}`}
+                style={previewHandlePillStyle(
+                  state.handlePadding,
+                  state.handleRounding,
+                )}
+              >
+                {state.includeXIcon && <WatermarkXIcon />}
+                <span>{handle || 'handle'}</span>
+              </span>
+            </span>
+          )}
+          {state.includeQr && state.position === 'auto' && (
+            <span className="watermark-auto-preview">AUTO · QR previewing bottom right</span>
+          )}
+        </div>
+        <div className="confirm-watermark-timings">
+          {state.includeQr && (
+            <WatermarkTimingRow
+              busy={busy}
+              currentTime={currentTime}
+              duration={duration}
+              endSeconds={state.qrEndSeconds}
+              idPrefix="watermark-qr-timing"
+              label="QR"
+              playhead={playhead}
+              startSeconds={state.qrStartSeconds}
+              onChange={(qrStartSeconds, qrEndSeconds) => onChange({
+                qrStartSeconds,
+                qrEndSeconds,
+              })}
+            />
+          )}
+          {state.includeHandle && (
+            <WatermarkTimingRow
+              busy={busy}
+              currentTime={currentTime}
+              duration={duration}
+              endSeconds={state.handleEndSeconds}
+              idPrefix="watermark-handle-timing"
+              label="Handle"
+              playhead={playhead}
+              startSeconds={state.handleStartSeconds}
+              onChange={(handleStartSeconds, handleEndSeconds) => onChange({
+                handleStartSeconds,
+                handleEndSeconds,
+              })}
+            />
+          )}
+        </div>
+      </section>
+
+      <div className="confirm-watermark-controls">
+        <section className="confirm-section" aria-label="Identity">
+          <span className="confirm-section-label">Identity</span>
+          <WatermarkToggle
+            busy={busy}
+            checked={state.includeHandle}
+            description="Centered account badge"
+            disabled={state.includeHandle && !state.includeQr}
+            label="Include handle"
+            onChange={(includeHandle) => onChange({ includeHandle })}
+          />
+          {state.includeHandle && (
+            <>
+              <label className="confirm-field">
+                <span>X handle</span>
+                <div className={`confirm-handle-field${handleMissing ? ' invalid' : ''}`}>
+                  <span aria-hidden="true">@</span>
+                  <input
+                    type="text"
+                    value={state.handle}
+                    placeholder={state.loadingConfig ? 'Loading…' : 'handle'}
+                    aria-invalid={handleMissing}
+                    disabled={busy}
+                    onChange={(event) => onChange({ handle: event.target.value })}
+                  />
+                </div>
+                {handleMissing && (
+                  <span className="confirm-field-error">Required while Include handle is on</span>
+                )}
+              </label>
+              {state.recent.length > 0 && (
+                <div className="confirm-chips" role="group" aria-label="Recent handles">
+                  {state.recent.map((recentHandle) => (
+                    <button
+                      key={recentHandle}
+                      type="button"
+                      className={recentHandle === handle ? 'active' : ''}
+                      aria-pressed={recentHandle === handle}
+                      disabled={busy}
+                      onClick={() => onChange({ handle: recentHandle })}
+                    >
+                      @{recentHandle}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+          <WatermarkToggle
+            busy={busy}
+            checked={state.includeQr}
+            description="Separately placed scannable link"
+            disabled={state.includeQr && !state.includeHandle}
+            label="Include QR code"
+            onChange={(includeQr) => onChange({ includeQr })}
+          />
+          {state.includeQr && (
+            <label className="confirm-field">
+              <span>QR link</span>
+              <input
+                type="text"
+                value={state.url}
+                placeholder={urlPlaceholder}
+                aria-invalid={linkMissing}
+                disabled={busy}
+                onChange={(event) => onChange({ url: event.target.value })}
+              />
+              {linkMissing && (
+                <span className="confirm-field-error">Enter a link, or a handle it can point to</span>
+              )}
+            </label>
+          )}
+          {state.includeHandle && (
+            <label className="confirm-check">
+              <input
+                type="checkbox"
+                checked={state.saveDefault}
+                disabled={busy}
+                onChange={(event) => onChange({ saveDefault: event.target.checked })}
+              />
+              Save as default handle
+            </label>
+          )}
+        </section>
+
+        <section className="confirm-section" aria-label="Appearance">
+          <span className="confirm-section-label">Appearance</span>
+          {state.includeHandle && (
+            <>
+              <WatermarkToggle
+                busy={busy}
+                checked={state.includeXIcon}
+                description="X mark before the handle"
+                label="Show X icon"
+                onChange={(includeXIcon) => onChange({ includeXIcon })}
+              />
+              <WatermarkToggle
+                busy={busy}
+                checked={state.includeHandleBorder}
+                description="Outline around the pill"
+                label="Handle border"
+                onChange={(includeHandleBorder) => onChange({ includeHandleBorder })}
+              />
+              <WatermarkRange
+                busy={busy}
+                id="watermark-handle-padding"
+                label="Handle padding"
+                min={MIN_HANDLE_PADDING}
+                max={MAX_HANDLE_PADDING}
+                output={`${state.handlePadding}px`}
+                value={state.handlePadding}
+                onChange={(handlePadding) => onChange({ handlePadding })}
+              />
+              <WatermarkRange
+                busy={busy}
+                id="watermark-handle-rounding"
+                label="Corner rounding"
+                min={MIN_HANDLE_ROUNDING}
+                max={MAX_HANDLE_ROUNDING}
+                output={`${state.handleRounding}%`}
+                value={state.handleRounding}
+                onChange={(handleRounding) => onChange({ handleRounding })}
+              />
+            </>
+          )}
+          {state.includeQr && (
+            <WatermarkRange
+              busy={busy}
+              id="watermark-qr-opacity"
+              label="QR opacity"
+              min={MIN_WATERMARK_OPACITY * 100}
+              max={MAX_WATERMARK_OPACITY * 100}
+              output={`${watermarkOpacityPercent(state.qrOpacity)}%`}
+              value={watermarkOpacityPercent(state.qrOpacity)}
+              onChange={(percent) => onChange({ qrOpacity: percent / 100 })}
+            />
+          )}
+          {state.includeHandle && (
+            <WatermarkRange
+              busy={busy}
+              id="watermark-handle-opacity"
+              label="Handle opacity"
+              min={MIN_WATERMARK_OPACITY * 100}
+              max={MAX_WATERMARK_OPACITY * 100}
+              output={`${watermarkOpacityPercent(state.handleOpacity)}%`}
+              value={watermarkOpacityPercent(state.handleOpacity)}
+              onChange={(percent) => onChange({ handleOpacity: percent / 100 })}
+            />
+          )}
+        </section>
+
+        <section className="confirm-section confirm-watermark-position" aria-label="Position">
+          <span className="confirm-section-label">Position</span>
+          <div className="confirm-watermark-qr-position">
+            <div className="confirm-watermark-qr-position-heading">
+              <span>QR position</span>
+              <button
+                type="button"
+                className={`confirm-chip${state.position === 'auto' ? ' active' : ''}`}
+                aria-pressed={state.position === 'auto'}
+                disabled={busy || !state.includeQr}
+                onClick={() => onChange({ position: 'auto' })}
+              >
+                Auto
+              </button>
+            </div>
+            <div className="confirm-position-grid" role="group" aria-label="QR position">
+              {WATERMARK_POSITIONS.map((position) => (
+                <button
+                  key={position}
+                  type="button"
+                  className={state.position === position ? 'active' : ''}
+                  aria-label={POSITION_LABELS[position]}
+                  aria-pressed={state.position === position}
+                  title={POSITION_LABELS[position]}
+                  disabled={busy || !state.includeQr}
+                  onClick={() => onChange({ position })}
+                >
+                  <span />
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="confirm-watermark-handle-position">
+            {state.includeHandle && (
+              <WatermarkRange
+                busy={busy}
+                id="watermark-handle-vertical"
+                label="Handle vertical position"
+                min={MIN_HANDLE_VERTICAL_PERCENT}
+                max={MAX_HANDLE_VERTICAL_PERCENT}
+                output={`${state.handleVerticalPercent}% from top`}
+                value={state.handleVerticalPercent}
+                onChange={(handleVerticalPercent) => onChange({ handleVerticalPercent })}
+              />
+            )}
+            <small className="confirm-help">
+              {state.includeQr && state.includeHandle
+                ? 'Auto places the QR away from faces and text. The handle stays horizontally centered.'
+                : state.includeQr
+                  ? 'Auto places the QR away from faces and text.'
+                  : 'The handle stays horizontally centered.'}
+            </small>
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}

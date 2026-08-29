@@ -6,15 +6,12 @@ import {
   type KeyboardEvent,
 } from 'react'
 import {
-  Check,
   Scissors,
   Volume2,
   VolumeX,
-  X,
 } from 'lucide-react'
 import {
   formatSplitTimestamp,
-  notebookSplitCellBudget,
   splitFrameStepSeconds,
   type NotebookSplitOutputMode,
 } from '@/videobook/notebook-split-command'
@@ -137,8 +134,8 @@ function SegmentLoopTile({
     : ''
 
   return (
-    <section className="video-segment-loop">
-      <div className="video-segment-loop-heading">
+    <section className="confirm-split-loop">
+      <div className="confirm-split-loop-heading">
         <span>{label}</span>
         <strong>{span}</strong>
       </div>
@@ -157,13 +154,9 @@ function SegmentLoopTile({
 const NUDGE_STEPS = [-1, -0.1, -0.01, 0.01, 0.1, 1] as const
 const MOVE_STEPS = [-1, -0.1, 0.1, 1] as const
 
-type VideoSegmentSplitProps = {
-  applyFormId: string
-  availableEmptyCells: number
-  busy: boolean
+type SplitBodyProps = {
   cutPointsSeconds: number[]
   mediaUrl: string
-  onCancel: () => void
   onChange: (next: {
     cutPointsSeconds: number[]
     outputMode: NotebookSplitOutputMode
@@ -173,23 +166,17 @@ type VideoSegmentSplitProps = {
   selectedIndex: number
   sourceDurationSeconds: number
   sourceFps?: number | null
-  sourceLabel: string
 }
 
-export function VideoSegmentSplit({
-  applyFormId,
-  availableEmptyCells,
-  busy,
+export function SplitBody({
   cutPointsSeconds,
   mediaUrl,
-  onCancel,
   onChange,
   outputMode,
   selectedIndex,
   sourceDurationSeconds,
   sourceFps,
-  sourceLabel,
-}: VideoSegmentSplitProps) {
+}: SplitBodyProps) {
   const sourceRef = useRef<HTMLVideoElement>(null)
   const [soundEnabled, setSoundEnabled] = useState(false)
   const [focusedBound, setFocusedBound] = useState<'in' | 'out'>('in')
@@ -308,11 +295,6 @@ export function VideoSegmentSplit({
     if (focusedBound === 'out') nudgeOut(direction * step)
     else nudgeIn(direction * step)
   }
-  const neededCells = notebookSplitCellBudget(outputMode, segments.length)
-  const applyDisabled = busy
-    || !selected
-    || availableEmptyCells < neededCells
-    || (outputMode === 'remove' && segments.length < 2)
   const playbackRate = slowPlayback ? 0.25 : 1
   const surroundingsLabel = outputMode === 'remove'
     ? 'JOIN PREVIEW'
@@ -325,41 +307,61 @@ export function VideoSegmentSplit({
         : `Apply creates 1 cell without ${formatSplitTimestamp(selected.startSeconds)}-${formatSplitTimestamp(selected.endSeconds)}`
     : ''
 
-  return (
-    <aside
-      className="command-plan-drawer video-segment-split"
-      aria-label="Video split review"
-      aria-keyshortcuts="ArrowLeft ArrowRight Shift+ArrowLeft Shift+ArrowRight Alt+ArrowLeft Alt+ArrowRight Escape"
-      onKeyDown={handleKeyDown}
-    >
-      <header>
-        <div className="command-plan-heading">
-          <span className="section-label">SPLIT VIDEO · {sourceLabel}</span>
-          <h2>
-            {selected
-              ? `Cutting ${formatSplitTimestamp(selected.startSeconds)}-${formatSplitTimestamp(selected.endSeconds)} (${selected.durationSeconds.toFixed(3)}s)`
-              : 'Split video'}
-          </h2>
-        </div>
-        <div className="command-plan-primary-actions">
+  const nudgeButtons = (
+    bound: 'in' | 'out',
+    nudge: (delta: number) => void,
+    move: (delta: number) => { cutPointsSeconds: number[]; selectedIndex: number },
+  ) => (
+    <div className="confirm-split-nudges">
+      {NUDGE_STEPS.map((delta) => {
+        const next = move(delta)
+        const disabled = next.cutPointsSeconds.every((value, index) =>
+          value === cutPointsSeconds[index])
+          && next.selectedIndex === selectedIndex
+        return (
           <button
-            type="submit"
-            form={applyFormId}
-            className="command-plan-apply"
-            disabled={applyDisabled}
+            key={`${bound}:${delta}`}
+            type="button"
+            disabled={disabled}
+            onFocus={() => setFocusedBound(bound)}
+            onClick={() => nudge(delta)}
           >
-            <Check size={14} />Apply split
+            {delta > 0 ? '+' : '−'}{Math.abs(delta)}s
           </button>
-          <button type="button" disabled={busy} onClick={onCancel}>
-            <X size={14} />Cancel
+        )
+      })}
+      {frameStep !== null && (
+        <>
+          <button
+            type="button"
+            aria-label="Previous frame"
+            title="Previous frame"
+            onFocus={() => setFocusedBound(bound)}
+            onClick={() => nudge(-frameStep)}
+          >
+            ◂
           </button>
-        </div>
-      </header>
-      <div className="video-segment-editor">
-        <section className="video-segment-source" aria-label="Source player">
-          <div className="video-segment-section-heading">
-            <span>SOURCE</span>
-            <small>{formatSplitTimestamp(sourceDurationSeconds)} total</small>
+          <button
+            type="button"
+            aria-label="Next frame"
+            title="Next frame"
+            onFocus={() => setFocusedBound(bound)}
+            onClick={() => nudge(frameStep)}
+          >
+            ▸
+          </button>
+        </>
+      )}
+    </div>
+  )
+
+  return (
+    <div className="confirm-split" onKeyDown={handleKeyDown}>
+      <div className="confirm-split-column">
+        <section className="confirm-section" aria-label="Source player">
+          <div className="confirm-section-heading">
+            <span>Source</span>
+            <strong>{formatSplitTimestamp(sourceDurationSeconds)} total</strong>
           </div>
           <video
             ref={sourceRef}
@@ -368,7 +370,7 @@ export function VideoSegmentSplit({
             playsInline
             preload="metadata"
           />
-          <div className="video-segment-source-actions">
+          <div className="confirm-actions-row">
             <button type="button" onClick={() => setFromPlayer('in')}>
               SET IN HERE
             </button>
@@ -377,19 +379,15 @@ export function VideoSegmentSplit({
             </button>
           </div>
         </section>
-        <section className="video-segment-pieces" aria-label="Pieces">
-          <div className="video-segment-section-heading">
-            <span>PIECES</span>
-          </div>
-          <div className="video-segment-piece-row" role="list">
+        <section className="confirm-section" aria-label="Pieces">
+          <span className="confirm-section-label">Pieces</span>
+          <div className="confirm-chips" role="list">
             {segments.map((segment) => (
               <button
                 key={`${segment.startSeconds}:${segment.endSeconds}`}
                 type="button"
                 role="listitem"
-                className={segment.index === selectedIndex
-                  ? 'video-segment-piece active'
-                  : 'video-segment-piece'}
+                className={segment.index === selectedIndex ? 'active' : undefined}
                 aria-pressed={segment.index === selectedIndex}
                 onClick={() => emit({
                   cutPointsSeconds,
@@ -401,7 +399,7 @@ export function VideoSegmentSplit({
               </button>
             ))}
           </div>
-          <div className="video-segment-piece-actions">
+          <div className="confirm-actions-row">
             <button
               type="button"
               disabled={!selected || selected.durationSeconds < 0.04}
@@ -411,7 +409,7 @@ export function VideoSegmentSplit({
                 sourceDurationSeconds,
               }))}
             >
-              <Scissors size={12} />Split piece in half
+              <Scissors size={12} aria-hidden="true" />Split piece in half
             </button>
             <button
               type="button"
@@ -426,9 +424,11 @@ export function VideoSegmentSplit({
             </button>
           </div>
         </section>
-        <section className="video-segment-preview-section">
-          <div className="video-segment-section-heading">
-            <span>LOOPS</span>
+      </div>
+      <div className="confirm-split-column">
+        <section className="confirm-section" aria-label="Loops">
+          <div className="confirm-section-heading">
+            <span>Loops</span>
             <button
               type="button"
               aria-pressed={soundEnabled}
@@ -438,7 +438,7 @@ export function VideoSegmentSplit({
               {soundEnabled ? 'Sound on' : 'Sound off'}
             </button>
           </div>
-          <div className="video-segment-loops">
+          <div className="confirm-split-loops">
             <SegmentLoopTile
               label="SEGMENT"
               mediaUrl={mediaUrl}
@@ -455,137 +455,59 @@ export function VideoSegmentSplit({
             />
           </div>
           {selected && (
-            <div className="video-segment-adjustment">
-              <div className="video-segment-bound-row">
+            <div className="confirm-split-bounds">
+              <div className="confirm-split-bound">
                 <span>IN</span>
-                <strong>{formatSplitTimestamp(selected.startSeconds)}</strong>
-                <div className="video-segment-nudge-buttons">
-                  {NUDGE_STEPS.map((delta) => {
-                    const next = moveSegmentStart({
-                      cutPointsSeconds,
-                      deltaSeconds: delta,
-                      index: selectedIndex,
-                      sourceDurationSeconds,
-                    })
-                    const disabled = next.cutPointsSeconds.every((value, index) =>
-                      value === cutPointsSeconds[index])
-                      && next.selectedIndex === selectedIndex
-                    return (
-                      <button
-                        key={`in:${delta}`}
-                        type="button"
-                        disabled={disabled}
-                        onFocus={() => setFocusedBound('in')}
-                        onClick={() => nudgeIn(delta)}
-                      >
-                        {delta > 0 ? '+' : '−'}{Math.abs(delta)}s
-                      </button>
-                    )
-                  })}
-                  {frameStep !== null && (
-                    <>
-                      <button
-                        type="button"
-                        onFocus={() => setFocusedBound('in')}
-                        onClick={() => nudgeIn(-frameStep)}
-                      >
-                        PREV FRAME
-                      </button>
-                      <button
-                        type="button"
-                        onFocus={() => setFocusedBound('in')}
-                        onClick={() => nudgeIn(frameStep)}
-                      >
-                        NEXT FRAME
-                      </button>
-                    </>
-                  )}
-                </div>
-                <label>
-                  IN seconds
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={inInput}
-                    onFocus={() => setFocusedBound('in')}
-                    onChange={(event) => setInDraft(event.target.value)}
-                    onBlur={() => commitBounds(inInput, outInput)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        commitBounds(inInput, outInput)
-                      }
-                    }}
-                  />
-                </label>
+                <input
+                  type="number"
+                  aria-label="IN seconds"
+                  step="0.001"
+                  value={inInput}
+                  onFocus={() => setFocusedBound('in')}
+                  onChange={(event) => setInDraft(event.target.value)}
+                  onBlur={() => commitBounds(inInput, outInput)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      commitBounds(inInput, outInput)
+                    }
+                  }}
+                />
+                {nudgeButtons('in', nudgeIn, (deltaSeconds) => moveSegmentStart({
+                  cutPointsSeconds,
+                  deltaSeconds,
+                  index: selectedIndex,
+                  sourceDurationSeconds,
+                }))}
               </div>
-              <div className="video-segment-bound-row">
+              <div className="confirm-split-bound">
                 <span>OUT</span>
-                <strong>{formatSplitTimestamp(selected.endSeconds)}</strong>
-                <div className="video-segment-nudge-buttons">
-                  {NUDGE_STEPS.map((delta) => {
-                    const next = moveSegmentEnd({
-                      cutPointsSeconds,
-                      deltaSeconds: delta,
-                      index: selectedIndex,
-                      sourceDurationSeconds,
-                    })
-                    const disabled = next.cutPointsSeconds.every((value, index) =>
-                      value === cutPointsSeconds[index])
-                      && next.selectedIndex === selectedIndex
-                    return (
-                      <button
-                        key={`out:${delta}`}
-                        type="button"
-                        disabled={disabled}
-                        onFocus={() => setFocusedBound('out')}
-                        onClick={() => nudgeOut(delta)}
-                      >
-                        {delta > 0 ? '+' : '−'}{Math.abs(delta)}s
-                      </button>
-                    )
-                  })}
-                  {frameStep !== null && (
-                    <>
-                      <button
-                        type="button"
-                        onFocus={() => setFocusedBound('out')}
-                        onClick={() => nudgeOut(-frameStep)}
-                      >
-                        PREV FRAME
-                      </button>
-                      <button
-                        type="button"
-                        onFocus={() => setFocusedBound('out')}
-                        onClick={() => nudgeOut(frameStep)}
-                      >
-                        NEXT FRAME
-                      </button>
-                    </>
-                  )}
-                </div>
-                <label>
-                  OUT seconds
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={outInput}
-                    onFocus={() => setFocusedBound('out')}
-                    onChange={(event) => setOutDraft(event.target.value)}
-                    onBlur={() => commitBounds(inInput, outInput)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        commitBounds(inInput, outInput)
-                      }
-                    }}
-                  />
-                </label>
+                <input
+                  type="number"
+                  aria-label="OUT seconds"
+                  step="0.001"
+                  value={outInput}
+                  onFocus={() => setFocusedBound('out')}
+                  onChange={(event) => setOutDraft(event.target.value)}
+                  onBlur={() => commitBounds(inInput, outInput)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      commitBounds(inInput, outInput)
+                    }
+                  }}
+                />
+                {nudgeButtons('out', nudgeOut, (deltaSeconds) => moveSegmentEnd({
+                  cutPointsSeconds,
+                  deltaSeconds,
+                  index: selectedIndex,
+                  sourceDurationSeconds,
+                }))}
               </div>
-              <div className="video-segment-bound-row">
-                <span>MOVE BOTH</span>
-                <strong>{selected.durationSeconds.toFixed(3)}s</strong>
-                <div className="video-segment-nudge-buttons">
+              <div className="confirm-split-bound">
+                <span>MOVE</span>
+                <output aria-label="Piece duration">{selected.durationSeconds.toFixed(3)}s</output>
+                <div className="confirm-split-nudges">
                   {MOVE_STEPS.map((delta) => {
                     const next = moveSegment({
                       cutPointsSeconds,
@@ -614,18 +536,19 @@ export function VideoSegmentSplit({
                       value: !slowPlayback,
                     })}
                   >
-                    Slow x0.25
+                    Slow ×0.25
                   </button>
                 </div>
               </div>
             </div>
           )}
+          {validationError && (
+            <p className="confirm-field-error" role="alert">{validationError}</p>
+          )}
         </section>
-        <section className="video-segment-output" aria-label="Output mode">
-          <div className="video-segment-section-heading">
-            <span>OUTPUT</span>
-          </div>
-          <div className="video-segment-modes">
+        <section className="confirm-section" aria-label="Output mode">
+          <span className="confirm-section-label">Output</span>
+          <div className="confirm-chips">
             {([
               ['keep', 'KEEP segment'],
               ['remove', 'REMOVE segment'],
@@ -647,18 +570,9 @@ export function VideoSegmentSplit({
               </button>
             ))}
           </div>
-          <p className="video-segment-output-summary">{outputSummary}</p>
-          {availableEmptyCells < neededCells && (
-            <p className="video-segment-error">
-              The notebook needs {neededCells} empty cells for this split.
-            </p>
-          )}
-          {validationError && (
-            <p className="video-segment-error" role="alert">{validationError}</p>
-          )}
-          <small>Arrow keys move 0.1s · Shift+Arrow 1s · Alt+Arrow 0.01s</small>
+          <p className="confirm-help">{outputSummary}</p>
         </section>
       </div>
-    </aside>
+    </div>
   )
 }

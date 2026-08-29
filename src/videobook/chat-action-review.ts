@@ -3,17 +3,29 @@ import { scanNotebookMentions } from 'videobook-engine/notebook-mentions'
 
 type RoutedActionSettingTone = 'default' | 'warning'
 
-interface RoutedActionSetting {
+export interface RoutedActionSetting {
   label: string
   value: string
   tone: RoutedActionSettingTone
   wide: boolean
 }
 
-interface RoutedActionReview {
+// What applying does to the source, shown as the sheet's effect chip.
+export interface RoutedActionEffect {
+  label: string
+  tone: RoutedActionSettingTone
+}
+
+export interface RoutedActionReview {
   title: string
   settings: RoutedActionSetting[]
+  effect: RoutedActionEffect | null
   postText?: string
+}
+
+const IN_PLACE_EFFECT: RoutedActionEffect = {
+  label: 'In place · previous version kept',
+  tone: 'warning',
 }
 
 interface RoutedActionReviewInput {
@@ -90,6 +102,7 @@ function extractReview(input: RoutedActionReviewInput): RoutedActionReview {
       setting('Output', 'New clip · source preserved'),
       setting('Name', textValue(input.params.name) ?? 'Automatic'),
     ],
+    effect: { label: 'New clip · source preserved', tone: 'default' },
   }
 }
 
@@ -115,6 +128,7 @@ function splitReview(input: RoutedActionReviewInput): RoutedActionReview {
       setting('Overlap', overlap),
       setting('Output', 'Two new clips · source preserved'),
     ],
+    effect: { label: 'Two new clips · source preserved', tone: 'default' },
   }
 }
 
@@ -143,6 +157,7 @@ function trimReview(input: RoutedActionReviewInput): RoutedActionReview {
       setting('Output', 'Existing source updated in place', 'warning'),
       setting('Recovery', 'Previous version retained'),
     ],
+    effect: IN_PLACE_EFFECT,
   }
 }
 
@@ -192,6 +207,7 @@ function changeVideoSpeedReview(input: RoutedActionReviewInput): RoutedActionRev
   return {
     title: 'Change video speed',
     settings,
+    effect: IN_PLACE_EFFECT,
   }
 }
 
@@ -211,6 +227,10 @@ function postToXReview(input: RoutedActionReviewInput): RoutedActionReview {
       ),
       setting('Orientation', orientation ? humanize(orientation) : 'Keep source'),
     ],
+    effect: {
+      label: scheduledFor ? 'Publishes to X · scheduled' : 'Publishes to X · now',
+      tone: 'default',
+    },
     postText: typeof input.params.text === 'string' ? input.params.text : '',
   }
 }
@@ -281,6 +301,7 @@ function genericReview(input: RoutedActionReviewInput): RoutedActionReview {
     settings: settings.length > 0
       ? settings
       : [setting('Tool', input.tool)],
+    effect: null,
   }
 }
 

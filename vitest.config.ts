@@ -59,6 +59,8 @@ export default defineConfig({
       'src/videobook/notebook-video-axis-arrange.test.ts',
       'src/videobook/notebook-group-images.test.ts',
       'src/videobook/command-plan.test.ts',
+      'src/videobook/confirm-sheet-keys.test.ts',
+      'src/videobook/confirm-validation.test.ts',
       'src/videobook/mcp-client.test.ts',
       'scripts/search-benchmark-corpus.test.ts',
       'src/videobook/watermark-target.test.ts',

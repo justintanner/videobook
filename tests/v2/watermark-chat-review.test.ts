@@ -1,47 +1,63 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { ConfirmSheet } from '../../src/components/videobook/confirm/ConfirmSheet'
 import {
-  WatermarkChatReview,
+  WatermarkBody,
   type WatermarkReviewState,
-} from '../../src/components/videobook/WatermarkChatReview'
+} from '../../src/components/videobook/confirm/bodies/WatermarkBody'
+import { watermarkValidation } from '../../src/videobook/confirm-validation'
 
 function renderWatermark(overrides: Partial<WatermarkReviewState> = {}): string {
-  return renderToStaticMarkup(createElement(WatermarkChatReview, {
+  const state: WatermarkReviewState = {
+    assetId: 'vid-1',
+    targetLabel: '@a1',
+    mediaUrl: '/files/book/vid-1/proxy.mp4',
+    thumbnailUrl: '/files/book/vid-1/original.jpg',
+    width: 1920,
+    height: 1080,
+    durationSeconds: 12,
+    handle: 'someone',
+    url: 'https://example.com/profile',
+    includeQr: true,
+    includeHandle: true,
+    position: 'middle-center',
+    handleVerticalPercent: 33,
+    includeXIcon: true,
+    includeHandleBorder: true,
+    handlePadding: 48,
+    handleRounding: 60,
+    qrOpacity: 0.35,
+    handleOpacity: 0.7,
+    qrStartSeconds: 0,
+    qrEndSeconds: 4,
+    handleStartSeconds: 0,
+    handleEndSeconds: 8,
+    saveDefault: false,
+    recent: ['someone'],
+    loadingConfig: false,
+    error: null,
+    ...overrides,
+  }
+  // Rendered inside the shared confirm sheet, exactly as App does: the Apply
+  // button and the status line come from the shell, the validation from the
+  // pure validator.
+  return renderToStaticMarkup(createElement(ConfirmSheet, {
+    address: state.targetLabel,
     applyFormId: 'command-composer-form',
+    ariaLabel: 'Watermark review',
     busy: false,
-    state: {
-      assetId: 'vid-1',
-      targetLabel: '@a1',
-      mediaUrl: '/files/book/vid-1/proxy.mp4',
-      thumbnailUrl: '/files/book/vid-1/original.jpg',
-      width: 1920,
-      height: 1080,
-      durationSeconds: 12,
-      handle: 'someone',
-      url: 'https://example.com/profile',
-      includeQr: true,
-      includeHandle: true,
-      position: 'middle-center',
-      handleVerticalPercent: 33,
-      includeXIcon: true,
-      includeHandleBorder: true,
-      handlePadding: 48,
-      handleRounding: 60,
-      qrOpacity: 0.35,
-      handleOpacity: 0.7,
-      qrStartSeconds: 0,
-      qrEndSeconds: 4,
-      handleStartSeconds: 0,
-      handleEndSeconds: 8,
-      saveDefault: false,
-      recent: ['someone'],
-      loadingConfig: false,
-      error: null,
-      ...overrides,
-    },
-    onChange: () => undefined,
-    onMediaMetadata: () => undefined,
+    children: createElement(WatermarkBody, {
+      busy: false,
+      state,
+      onChange: () => undefined,
+      onMediaMetadata: () => undefined,
+    }),
+    effect: { label: 'Rebuilds playable proxy', tone: 'default' },
+    kind: 'watermark',
+    tag: 'WATERMARK · CHAT',
+    title: 'Add handle and QR to the video',
+    validation: watermarkValidation(state),
     onCancel: () => undefined,
   }))
 }
@@ -49,9 +65,10 @@ function renderWatermark(overrides: Partial<WatermarkReviewState> = {}): string 
 describe('watermark chat review', () => {
   it('renders one composer review with live placement and timing controls', () => {
     const html = renderWatermark()
-    expect(html).toContain('command-plan-drawer watermark-chat-review')
-    expect(html).toContain('aria-label="Watermark review"')
+    expect(html).toContain('confirm-sheet confirm-sheet-watermark')
+    expect(html).toContain('role="dialog"')
     expect(html).toContain('WATERMARK · CHAT')
+    expect(html).toContain('Rebuilds playable proxy')
     expect(html).toContain('form="command-composer-form"')
     expect(html).toContain('src="/files/book/vid-1/proxy.mp4"')
     expect(html).toContain('controls')
@@ -70,16 +87,17 @@ describe('watermark chat review', () => {
     expect(html).toContain('id="watermark-handle-padding" type="range" min="0" max="96" step="1" value="48"')
     expect(html).toContain('id="watermark-handle-rounding" type="range" min="0" max="100" step="1" value="60"')
     expect(html).toContain('33% from top')
-    expect(html).toContain('Padding 48px · rounding 60%')
+    expect(html).toContain('<output for="watermark-qr-opacity">35%</output>')
+    expect(html).toContain('<output for="watermark-handle-opacity">70%</output>')
     expect(html.match(/type="number"/g)).toHaveLength(4)
-    expect(html).toContain('QR 35% · 0.0s–4.0s')
-    expect(html).toContain('Handle 70% · 0.0s–8.0s')
     expect(html).toContain('aria-label="QR start"')
+    expect(html).toContain('aria-label="QR end"')
     expect(html).toContain('aria-label="Handle end"')
     expect(html).toContain('>Include handle</strong>')
-    expect(html).toContain('Set from playhead')
-    expect(html).not.toContain('watermark-backdrop')
-    expect(html).not.toContain('role="dialog"')
+    expect(html).toContain('aria-label="Set QR start from playhead"')
+    expect(html).toContain('aria-label="Use whole clip for Handle"')
+    expect(html).toContain('confirm-sheet-foot confirm-sheet-foot-ready')
+    expect(html).toContain('class="confirm-sheet-apply">Apply <kbd>↵</kbd>')
   })
 
   it('previews and configures a handle-only watermark', () => {
@@ -105,7 +123,7 @@ describe('watermark chat review', () => {
     expect(html).toContain('watermark-preview-handle-pill without-border')
     expect(html).toContain('padding-inline:0em;border-radius:0em')
     expect(html).not.toContain('watermark-preview-x-icon')
-    expect(html).toContain('Handle 60% · 1.0s–12.0s')
+    expect(html).toContain('<output for="watermark-handle-opacity">60%</output>')
     expect(html.match(/type="number"/g)).toHaveLength(2)
   })
 
@@ -121,10 +139,19 @@ describe('watermark chat review', () => {
     expect(applyButton).not.toContain('disabled')
     expect(html).toContain('watermark-preview-overlay watermark-preview-qr')
     expect(html).not.toContain('watermark-preview-overlay watermark-preview-handle')
-    expect(html).not.toContain('aria-label="Handle visibility timeline"')
     expect(html).not.toContain('aria-label="Handle end"')
-    expect(html).not.toContain('Handle end time must be after start time.')
+    expect(html).not.toContain('Handle end time must be after its start time.')
     expect(html).not.toContain('id="watermark-handle-opacity"')
     expect(html.match(/type="number"/g)).toHaveLength(2)
+  })
+
+  it('explains a missing handle in the footer and marks the field', () => {
+    const html = renderWatermark({ handle: '' })
+    expect(html).toContain('confirm-sheet-foot confirm-sheet-foot-blocking')
+    expect(html).toContain('Can’t apply')
+    expect(html).toContain('no X handle is set')
+    expect(html).toContain('class="confirm-sheet-apply" disabled=""')
+    expect(html).toContain('aria-invalid="true"')
+    expect(html).toContain('Required while Include handle is on')
   })
 })

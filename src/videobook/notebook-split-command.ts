@@ -82,6 +82,17 @@ export function formatSplitTimestamp(value: number): string {
   return `${minutes}:${seconds.toFixed(3).padStart(6, '0')}`
 }
 
+// Header title for the split confirm sheet: the piece being cut, or the
+// generic label while nothing is selected.
+export function splitSelectionTitle(input: {
+  pieces: readonly { startSeconds: number; endSeconds: number; durationSeconds: number }[]
+  selectedIndex: number
+}): string {
+  const selected = input.pieces[input.selectedIndex] ?? input.pieces[0]
+  if (!selected) return 'Split video'
+  return `Cutting ${formatSplitTimestamp(selected.startSeconds)}–${formatSplitTimestamp(selected.endSeconds)} (${selected.durationSeconds.toFixed(3)}s)`
+}
+
 export function splitFrameStepSeconds(fps: number | null | undefined): number | null {
   if (typeof fps !== 'number' || !Number.isFinite(fps) || !(fps > 0)) return null
   return 1 / fps

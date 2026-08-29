@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { PostToXChatPreview } from '../../src/components/videobook/PostToXChatPreview'
+import { PostToXBody } from '../../src/components/videobook/confirm/bodies/PostToXBody'
 import {
   defaultXPostScheduledFor,
   reviseXPostParams,
@@ -13,10 +13,10 @@ import {
 
 const ignoreChange = () => undefined
 
-describe('PostToXChatPreview', () => {
+describe('PostToXBody', () => {
   it('renders an image and the complete outbound message', () => {
     const postText = 'First line stays exact.\nSecond line is not truncated.'
-    const html = renderToStaticMarkup(createElement(PostToXChatPreview, {
+    const html = renderToStaticMarkup(createElement(PostToXBody, {
       asset: {
         type: 'image',
         mediaUrl: '/files/image-original.png',
@@ -28,8 +28,9 @@ describe('PostToXChatPreview', () => {
         scheduledFor: '2099-08-25T03:00:00.000Z',
         orientation: null,
       },
-      error: null,
       onChange: ignoreChange,
+      prompt: 'post @b2 to X tomorrow',
+      settings: [],
       sourceLabel: '@b2',
     }))
 
@@ -46,7 +47,7 @@ describe('PostToXChatPreview', () => {
   })
 
   it('renders video controls and a media-only message state', () => {
-    const html = renderToStaticMarkup(createElement(PostToXChatPreview, {
+    const html = renderToStaticMarkup(createElement(PostToXBody, {
       asset: {
         type: 'video',
         mediaUrl: '/files/video-original.mp4',
@@ -58,8 +59,9 @@ describe('PostToXChatPreview', () => {
         scheduledFor: null,
         orientation: 'landscape',
       },
-      error: null,
       onChange: ignoreChange,
+      prompt: 'post @a1 to X',
+      settings: [],
       sourceLabel: '@a1',
     }))
 

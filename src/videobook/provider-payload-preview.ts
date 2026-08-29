@@ -51,3 +51,24 @@ export function providerPayloadPreviewReferenceError(
   const details = leaks.map((leak) => leak.message).join('; ')
   return `Fix prompt references before generating: ${details}`
 }
+
+export interface GenerationEstimate {
+  usd: number | null
+  currency: string
+  // The provider reported no usable price (dynamic pricing, missing adapter).
+  unknown: boolean
+}
+
+export function generationEstimate(preview: unknown): GenerationEstimate {
+  const estimate = recordValue(recordValue(preview)?.estimate)
+  const warnings = Array.isArray(estimate?.warnings)
+    ? estimate.warnings.filter((warning): warning is string =>
+        typeof warning === 'string')
+    : []
+  return {
+    usd: typeof estimate?.usd === 'number' ? estimate.usd : null,
+    currency: typeof estimate?.currency === 'string' ? estimate.currency : 'USD',
+    unknown: warnings.some((warning) =>
+      /not found|unavailable|no cost adapter|unknown/iu.test(warning)),
+  }
+}

@@ -208,6 +208,7 @@ describe('routedActionReview', () => {
         },
         { label: 'Orientation', value: 'Portrait', tone: 'default', wide: false },
       ],
+      effect: { label: 'Publishes to X · scheduled', tone: 'default' },
       postText,
     })
   })

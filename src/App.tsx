@@ -1,7 +1,6 @@
 import {
   createContext,
   lazy,
-  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -111,16 +110,16 @@ import {
 } from '@/components/videobook/NotebookCellInspector'
 import { MediaLibraryAssetPreview } from '@/components/videobook/MediaLibraryAssetPreview'
 import {
-  GenerationChatReview,
+  GenerationBody,
   type GenerationReviewSource,
-} from '@/components/videobook/GenerationChatReview'
+} from '@/components/videobook/confirm/bodies/GenerationBody'
 import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
 import {
   NotebookMediaFullscreen,
   type ImageReplacementCandidate,
   type ImageSubjectEditInput,
 } from '@/components/videobook/NotebookMediaFullscreen'
-import type { WatermarkReviewState } from '@/components/videobook/WatermarkChatReview'
+import type { WatermarkReviewState } from '@/components/videobook/confirm/bodies/WatermarkBody'
 import { materializeNotebookSpeakCommand } from './videobook/notebook-speak-command'
 import { useElevenLabsVoices } from './videobook/use-elevenlabs-voices'
 import {
@@ -150,9 +149,24 @@ import {
   NotebookCellAddMenu,
 } from '@/components/videobook/NotebookCellAddMenu'
 import { isNotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
-import { VideoSegmentSplit } from '@/components/videobook/VideoSegmentSplit'
-import { SpeedChangePreview } from '@/components/videobook/SpeedChangePreview'
-import { PostToXChatPreview } from '@/components/videobook/PostToXChatPreview'
+import { SplitBody } from '@/components/videobook/confirm/bodies/SplitBody'
+import { PostToXBody } from '@/components/videobook/confirm/bodies/PostToXBody'
+import { RoutedBody } from '@/components/videobook/confirm/bodies/RoutedBody'
+import { CommandPlanBody } from '@/components/videobook/confirm/bodies/CommandPlanBody'
+import { NotebookActionBody } from '@/components/videobook/confirm/bodies/NotebookActionBody'
+import { ConfirmSheet } from '@/components/videobook/confirm/ConfirmSheet'
+import {
+  commandPlanValidation,
+  generationValidation,
+  splitValidation,
+  VALID_CONFIRMATION,
+  watermarkValidation,
+  xPostValidation,
+} from '@/videobook/confirm-validation'
+import {
+  generationEstimate,
+  providerPayloadPreviewMentions,
+} from '@/videobook/provider-payload-preview'
 import {
   reviseXPostParams,
   xPostDraftError,
@@ -290,12 +304,16 @@ import {
   notebookSplitSummary,
   parseNotebookSplitCommand,
   planNotebookSplitCommand,
+  splitSelectionTitle,
   type NotebookSplitCommand,
   type NotebookSplitOutputMode,
   type NotebookSplitRun,
 } from '@/videobook/notebook-split-command'
 import { resolveNotebookVideoSourceCell } from '@/videobook/notebook-video-source'
-import { durationTargetsToCutPoints } from '@/videobook/video-split-segments'
+import {
+  durationTargetsToCutPoints,
+  splitSegments,
+} from '@/videobook/video-split-segments'
 import {
   generationCellTypeForRoutedTool,
   materializeNotebookChatGeneration,
@@ -392,9 +410,9 @@ import {
 } from '@/videobook/media-insight-watch'
 import { guardedAsyncResult } from '@/videobook/async-request-guard'
 
-const WatermarkChatReview = lazy(async () => {
-  const module = await import('@/components/videobook/WatermarkChatReview')
-  return { default: module.WatermarkChatReview }
+const WatermarkBody = lazy(async () => {
+  const module = await import('@/components/videobook/confirm/bodies/WatermarkBody')
+  return { default: module.WatermarkBody }
 })
 
 type ToolResponse = {
@@ -3405,7 +3423,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const focusCommandComposer = useCallback(() => {
     restoreCommandComposerFocus(() =>
-      document.querySelector<HTMLInputElement>('.command-composer input'))
+      document.querySelector<HTMLInputElement>(
+        '.command-composer input[aria-label="Videobook command input"]',
+      ))
   }, [])
 
   useEffect(() => {
@@ -10137,6 +10157,279 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!fullscreenImageEditor) revealLatestNotebookResult()
   }
 
+  // One confirm sheet for every pending action. The body varies; the shell,
+  // the keyboard model and the footer status slot do not.
+  const confirmSheet = (() => {
+    if (pendingWatermarkReview) {
+      const review = pendingWatermarkReview
+      const title = review.includeQr && review.includeHandle
+        ? 'Add handle and QR to the video'
+        : review.includeQr
+          ? 'Add a QR code to the video'
+          : 'Add a handle to the video'
+      return (
+        <ConfirmSheet
+          kind="watermark"
+          ariaLabel="Watermark review"
+          tag="WATERMARK · CHAT"
+          title={title}
+          address={review.targetLabel}
+          effect={{ label: 'Rebuilds playable proxy', tone: 'default' }}
+          validation={watermarkValidation(review)}
+          busy={busy}
+          applyFormId={COMMAND_COMPOSER_FORM_ID}
+          onCancel={dismissPendingCommandPlan}
+        >
+          <WatermarkBody
+            busy={busy}
+            state={review}
+            onChange={(patch) => setPendingWatermarkReview((current) =>
+              current ? { ...current, ...patch, error: null } : current)}
+            onMediaMetadata={(metadata) => setPendingWatermarkReview((current) =>
+              current
+                ? {
+                    ...current,
+                    durationSeconds: metadata.durationSeconds,
+                    width: metadata.width,
+                    height: metadata.height,
+                  }
+                : current)}
+          />
+        </ConfirmSheet>
+      )
+    }
+    if (pendingCommandPlan) {
+      const plan = pendingCommandPlan.plan
+      const previews = Object.values(pendingCommandPlan.previews)
+      const warningCount = previews.reduce(
+        (count, preview) => count + preview.warnings.length,
+        0,
+      )
+      const stageCount = `${plan.stages.length} stage${plan.stages.length === 1 ? '' : 's'}`
+      const warningLabel = warningCount > 0
+        ? ` · ${warningCount} warning${warningCount === 1 ? '' : 's'}`
+        : ''
+      return (
+        <ConfirmSheet
+          kind="plan"
+          ariaLabel="Command plan review"
+          tag={`PLAN · ${plan.sourceSurface.toUpperCase()}`}
+          title={plan.summary}
+          effect={{
+            label: `${stageCount}${warningLabel}`,
+            tone: warningCount > 0 ? 'warning' : 'default',
+          }}
+          validation={commandPlanValidation({ suggestions: plan.suggestions, previews })}
+          busy={busy}
+          applyFormId={COMMAND_COMPOSER_FORM_ID}
+          onCancel={dismissPendingCommandPlan}
+          secondaryActions={lastEditActionId
+            ? (
+                <button
+                  type="button"
+                  className="confirm-sheet-secondary"
+                  disabled={busy}
+                  onClick={() => void restoreLastCommandPlan()}
+                >
+                  <Undo2 size={13} aria-hidden="true" />Restore last edit
+                </button>
+              )
+            : null}
+        >
+          <CommandPlanBody
+            busy={busy}
+            plan={plan}
+            previews={pendingCommandPlan.previews}
+            onToggleSuggestion={(suggestionId) => void toggleCommandSuggestion(suggestionId)}
+          />
+        </ConfirmSheet>
+      )
+    }
+    if (!pendingChatAction) return null
+    if (pendingChatAction.kind === 'generation') {
+      const action = pendingChatAction
+      const firstSource = pendingGenerationSources[0]
+      return (
+        <ConfirmSheet
+          kind="generation"
+          ariaLabel="Generation action review"
+          tag="GENERATION · CHAT"
+          title={action.summary}
+          address={firstSource ? `@${firstSource.address}` : null}
+          effect={{ label: 'Queues 1 job · new cell', tone: 'default' }}
+          validation={generationValidation({
+            prompt: action.draft.cell.prompt,
+            previewLoading: action.previewLoading,
+            previewError: action.previewError,
+            previewStale: action.previewStale,
+            promptLeaks: providerPayloadPreviewMentions(action.preview).promptLeaks,
+            estimateUnknown: generationEstimate(action.preview).unknown,
+          })}
+          busy={busy}
+          applyFormId={COMMAND_COMPOSER_FORM_ID}
+          onCancel={dismissPendingCommandPlan}
+        >
+          <GenerationBody
+            actions={pendingGenerationActionOptions}
+            busy={busy}
+            draft={action.draft}
+            modes={pendingGenerationModeOptions}
+            preview={action.preview}
+            previewError={action.previewError}
+            previewLoading={action.previewLoading}
+            previewStale={action.previewStale}
+            sources={pendingGenerationSources}
+            sourceOptions={pendingGenerationSourceOptions}
+            voiceCatalog={elevenLabsVoices}
+            onActionChange={updatePendingGenerationAction}
+            onAddSource={addPendingGenerationSource}
+            onModeChange={updatePendingGenerationMode}
+            onPromptChange={updatePendingGenerationPrompt}
+            onRefreshPreview={refreshPendingGenerationPreview}
+            onRemoveSource={removePendingGenerationSource}
+            onSelectSource={selectPendingGenerationSource}
+            onSettingChange={updatePendingGenerationSetting}
+          />
+        </ConfirmSheet>
+      )
+    }
+    if (pendingChatAction.kind === 'split' && pendingSplitReview) {
+      const split = pendingSplitReview
+      const pieces = splitSegments({
+        cutPointsSeconds: split.cutPointsSeconds,
+        sourceDurationSeconds: split.sourceDurationSeconds,
+      })
+      return (
+        <ConfirmSheet
+          kind="split"
+          ariaLabel="Video split review"
+          tag="SPLIT VIDEO · CHAT"
+          title={splitSelectionTitle({ pieces, selectedIndex: split.selectedIndex })}
+          address={split.sourceLabel}
+          effect={{
+            label: split.outputMode === 'all'
+              ? `${pieces.length} new clip${pieces.length === 1 ? '' : 's'} · source preserved`
+              : 'New clip · source preserved',
+            tone: 'default',
+          }}
+          validation={splitValidation({
+            availableEmptyCells: split.availableEmptyCells,
+            cutPointsSeconds: split.cutPointsSeconds,
+            outputMode: split.outputMode,
+            sourceDurationSeconds: split.sourceDurationSeconds,
+          })}
+          busy={busy}
+          applyLabel="Apply split"
+          applyFormId={COMMAND_COMPOSER_FORM_ID}
+          hints={(
+            <span>
+              <kbd>← →</kbd> 0.1s · <kbd>⇧← →</kbd> 1s · <kbd>⌥← →</kbd> 0.01s on the focused bound · <kbd>↵</kbd> apply · <kbd>Esc</kbd> cancel
+            </span>
+          )}
+          onCancel={dismissPendingCommandPlan}
+        >
+          <SplitBody
+            cutPointsSeconds={split.cutPointsSeconds}
+            mediaUrl={split.mediaUrl}
+            outputMode={split.outputMode}
+            selectedIndex={split.selectedIndex}
+            sourceDurationSeconds={split.sourceDurationSeconds}
+            sourceFps={split.sourceFps}
+            onChange={updatePendingSplitSelection}
+          />
+        </ConfirmSheet>
+      )
+    }
+    if (pendingChatAction.kind === 'routed') {
+      const plan = pendingChatAction.plan
+      const review = pendingRoutedActionReview
+      const source = review?.settings.find((setting) => setting.label === 'Source')?.value
+      const tag = `CHAT · ${plan.routedTool.toUpperCase()}`
+      if (pendingXPostPreview) {
+        return (
+          <ConfirmSheet
+            kind="post"
+            ariaLabel="Chat action review"
+            tag={tag}
+            title={review?.title ?? 'Post to X'}
+            address={pendingXPostPreview.sourceLabel}
+            effect={review?.effect ?? null}
+            validation={xPostValidation(pendingXPostPreview.draft)}
+            busy={busy}
+            busyLabel="Posting…"
+            applyLabel="Post to X"
+            applyFormId={COMMAND_COMPOSER_FORM_ID}
+            onCancel={dismissPendingCommandPlan}
+          >
+            <PostToXBody
+              asset={pendingXPostPreview.asset}
+              busy={busy}
+              draft={pendingXPostPreview.draft}
+              prompt={plan.prompt}
+              settings={review?.settings ?? []}
+              sourceLabel={pendingXPostPreview.sourceLabel}
+              onChange={updatePendingXPostDraft}
+            />
+          </ConfirmSheet>
+        )
+      }
+      return (
+        <ConfirmSheet
+          kind="routed"
+          ariaLabel="Chat action review"
+          tag={tag}
+          title={review?.title ?? plan.summary}
+          address={source?.startsWith('@') ? source : null}
+          effect={review?.effect ?? null}
+          validation={VALID_CONFIRMATION}
+          busy={busy}
+          applyFormId={COMMAND_COMPOSER_FORM_ID}
+          onCancel={dismissPendingCommandPlan}
+        >
+          <RoutedBody
+            prompt={plan.prompt}
+            settings={review?.settings ?? []}
+            speedPreview={pendingChangeSpeedPreview}
+          />
+        </ConfirmSheet>
+      )
+    }
+    const action = pendingChatAction
+    const summary = action.kind === 'notebook' ? action.plan.summary : action.summary
+    const reason = action.kind === 'notebook' ? action.plan.reason : action.reason
+    const stageTitle = action.kind === 'notebook'
+      ? `${action.plan.action.kind} notebook cell`
+      : action.kind === 'split'
+        ? 'Split video'
+        : action.command.frameMode === 'time'
+          ? `Extract frame at ${action.command.timestampSeconds ?? 0}s`
+          : `Extract ${action.command.frameMode} frame`
+    const effectLabel = action.kind === 'notebook'
+      ? 'Edits the notebook graph'
+      : action.kind === 'frame'
+        ? 'New image cell'
+        : 'New clips · source preserved'
+    return (
+      <ConfirmSheet
+        kind={action.kind}
+        ariaLabel="Chat action review"
+        tag="NOTEBOOK · CHAT"
+        title={summary}
+        effect={{ label: effectLabel, tone: 'default' }}
+        validation={VALID_CONFIRMATION}
+        busy={busy}
+        applyFormId={COMMAND_COMPOSER_FORM_ID}
+        onCancel={dismissPendingCommandPlan}
+      >
+        <NotebookActionBody
+          kindLabel={action.kind.toUpperCase()}
+          reason={reason}
+          stageTitle={stageTitle}
+        />
+      </ConfirmSheet>
+    )
+  })()
+
   return (
     <main
       className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} ${selectedCell ? 'inspector-detail' : 'inspector-overview'} ${mediaFullscreen ? 'media-fullscreen-open' : ''}`}
@@ -11516,6 +11809,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         notice={notice
           ? { message: notice.text, tone: notice.tone }
           : null}
+        outcomeSlot={confirmSheet ? 'sheet' : 'composer'}
         onEnsureCatalog={refreshComposerCatalog}
         onDismissNotice={() => setNoticeState(null)}
         onDismissPanel={!fullscreenImageEditor && (
@@ -11533,319 +11827,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : undefined}
         onSuccessfulExecute={revealSuccessfulComposerResult}
       >
-        {pendingWatermarkReview && (
-          <Suspense fallback={null}>
-            <WatermarkChatReview
-              applyFormId={COMMAND_COMPOSER_FORM_ID}
-              busy={busy}
-              state={pendingWatermarkReview}
-              onChange={(patch) => setPendingWatermarkReview((current) =>
-                current ? { ...current, ...patch, error: null } : current)}
-              onMediaMetadata={(metadata) => setPendingWatermarkReview((current) =>
-                current
-                  ? {
-                      ...current,
-                      durationSeconds: metadata.durationSeconds,
-                      width: metadata.width,
-                      height: metadata.height,
-                    }
-                  : current)}
-              onCancel={dismissPendingCommandPlan}
-            />
-          </Suspense>
-        )}
-        {pendingCommandPlan && (
-          <aside
-            className="command-plan-drawer"
-            aria-label="Command plan review"
-            aria-keyshortcuts="Escape"
-            onKeyDown={(event) => {
-              if (event.key !== 'Escape' || busy) return
-              event.preventDefault()
-              event.stopPropagation()
-              dismissPendingCommandPlan()
-            }}
-          >
-            <header>
-              <div className="command-plan-heading">
-                <span className="section-label">
-                  COMMANDPLAN · {pendingCommandPlan.plan.sourceSurface.toUpperCase()}
-                </span>
-                <h2>{pendingCommandPlan.plan.summary}</h2>
-              </div>
-              <div className="command-plan-primary-actions">
-                <button
-                  type="submit"
-                  form={COMMAND_COMPOSER_FORM_ID}
-                  className="command-plan-apply"
-                  disabled={
-                    busy
-                    || (
-                      pendingCommandPlan.plan.suggestions?.every(
-                        (suggestion) => !suggestion.included,
-                      ) ?? false
-                    )
-                    || Object.values(pendingCommandPlan.previews).some(
-                      (preview) => !preview.valid,
-                    )
-                  }
-                >
-                  <Check size={14} />Apply
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={dismissPendingCommandPlan}
-                >
-                  Cancel
-                </button>
-              </div>
-            </header>
-            <details className="command-plan-details">
-              <summary>
-                Review {pendingCommandPlan.plan.stages.length} planned stage
-                {pendingCommandPlan.plan.stages.length === 1 ? '' : 's'}
-              </summary>
-              <div className="command-plan-content">
-              <div className="command-plan-context">
-                <p>{pendingCommandPlan.plan.confirmation.reason}</p>
-                {pendingCommandPlan.plan.suggestions && (
-                  <fieldset className="command-plan-suggestions">
-                    <legend>Include suggestions</legend>
-                    {pendingCommandPlan.plan.suggestions.map((suggestion) => (
-                      <label key={suggestion.suggestionId}>
-                        <input
-                          type="checkbox"
-                          checked={suggestion.included}
-                          disabled={busy}
-                          onChange={() => void toggleCommandSuggestion(
-                            suggestion.suggestionId,
-                          )}
-                        />
-                        <span>
-                          <strong>{suggestion.label}</strong>
-                          {suggestion.detail && <small>{suggestion.detail}</small>}
-                        </span>
-                      </label>
-                    ))}
-                  </fieldset>
-                )}
-              </div>
-              <ol className="command-plan-stages">
-                {pendingCommandPlan.plan.stages.map((stage) => {
-                  const preview = stage.kind === 'edit'
-                    ? pendingCommandPlan.previews[stage.stageId]
-                    : undefined
-                  return (
-                    <li key={stage.stageId}>
-                      <span>{stage.kind.toUpperCase()}</span>
-                      <strong>{stage.summary}</strong>
-                      {preview && (
-                        <>
-                          <small>
-                            {preview.diff.changedClipIds.length} clips · duration {preview.diff.beforeDurationFrames} → {preview.diff.afterDurationFrames} frames
-                          </small>
-                          {preview.warnings.map((warning, index) => (
-                            <p className="plan-warning" key={`${stage.stageId}:warning:${index}`}>
-                              {warning.message}
-                            </p>
-                          ))}
-                          {preview.conflicts.map((conflict, index) => (
-                            <p className="plan-conflict" key={`${stage.stageId}:conflict:${index}`}>
-                              {conflict.message}
-                            </p>
-                          ))}
-                        </>
-                      )}
-                      {stage.kind === 'queued' && (
-                        <small>
-                          {stage.provider && stage.model
-                            ? `${stage.provider} · ${stage.model}`
-                            : stage.tool}
-                          {stage.estimatedCostUsd !== undefined
-                            ? ` · estimated $${stage.estimatedCostUsd.toFixed(4)}`
-                            : stage.estimateUnavailable
-                              ? ' · cost estimate unavailable'
-                              : ''}
-                        </small>
-                      )}
-                    </li>
-                  )
-                })}
-              </ol>
-              </div>
-              {lastEditActionId && (
-                <div className="command-plan-secondary-actions">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void restoreLastCommandPlan()}
-                  >
-                    <Undo2 size={14} />Restore last edit
-                  </button>
-                </div>
-              )}
-            </details>
-          </aside>
-        )}
-        {pendingChatAction?.kind === 'generation' && (
-          <GenerationChatReview
-            actions={pendingGenerationActionOptions}
-            applyFormId={COMMAND_COMPOSER_FORM_ID}
-            busy={busy}
-            draft={pendingChatAction.draft}
-            modes={pendingGenerationModeOptions}
-            preview={pendingChatAction.preview}
-            previewError={pendingChatAction.previewError}
-            previewLoading={pendingChatAction.previewLoading}
-            previewStale={pendingChatAction.previewStale}
-            sources={pendingGenerationSources}
-            sourceOptions={pendingGenerationSourceOptions}
-            summary={pendingChatAction.summary}
-            voiceCatalog={elevenLabsVoices}
-            onActionChange={updatePendingGenerationAction}
-            onAddSource={addPendingGenerationSource}
-            onCancel={dismissPendingCommandPlan}
-            onModeChange={updatePendingGenerationMode}
-            onPromptChange={updatePendingGenerationPrompt}
-            onRefreshPreview={refreshPendingGenerationPreview}
-            onRemoveSource={removePendingGenerationSource}
-            onSelectSource={selectPendingGenerationSource}
-            onSettingChange={updatePendingGenerationSetting}
-          />
-        )}
-        {pendingChatAction?.kind === 'split' && pendingSplitReview && (
-          <VideoSegmentSplit
-            applyFormId={COMMAND_COMPOSER_FORM_ID}
-            availableEmptyCells={pendingSplitReview.availableEmptyCells}
-            busy={busy}
-            cutPointsSeconds={pendingSplitReview.cutPointsSeconds}
-            mediaUrl={pendingSplitReview.mediaUrl}
-            outputMode={pendingSplitReview.outputMode}
-            selectedIndex={pendingSplitReview.selectedIndex}
-            sourceDurationSeconds={pendingSplitReview.sourceDurationSeconds}
-            sourceFps={pendingSplitReview.sourceFps}
-            sourceLabel={pendingSplitReview.sourceLabel}
-            onCancel={dismissPendingCommandPlan}
-            onChange={updatePendingSplitSelection}
-          />
-        )}
-        {pendingChatAction
-          && pendingChatAction.kind !== 'generation'
-          && (pendingChatAction.kind !== 'split' || !pendingSplitReview) && (
-          <aside
-            className={`command-plan-drawer${pendingXPostPreview
-              ? ' x-post-chat-review'
-              : ''}`}
-            aria-label="Chat action review"
-            aria-keyshortcuts="Escape"
-          >
-            <header>
-              <div className="command-plan-heading">
-                <span className="section-label">ACTION · CHAT</span>
-                <h2>{pendingChatAction.kind === 'routed'
-                  || pendingChatAction.kind === 'notebook'
-                  ? pendingChatAction.plan.summary
-                  : pendingChatAction.summary}</h2>
-              </div>
-              <div className="command-plan-primary-actions">
-                <button
-                  type="submit"
-                  form={COMMAND_COMPOSER_FORM_ID}
-                  className="command-plan-apply"
-                  disabled={busy || Boolean(pendingXPostPreview?.error)}
-                >
-                  <Check size={14} />{pendingXPostPreview ? 'Post to X' : 'Apply'}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={dismissPendingCommandPlan}
-                >
-                  <X size={14} />Cancel
-                </button>
-              </div>
-            </header>
-            <div className="command-plan-details command-plan-details-open">
-              <div className={`command-plan-content command-plan-content-single${(pendingChatAction.kind === 'routed'
-                && !pendingChangeSpeedPreview
-                && !pendingXPostPreview)
-                ? ' command-plan-content-routed'
-                : ''}`}>
-                {pendingChatAction.kind !== 'routed' && (
-                  <div className="command-plan-context">
-                    <p>{pendingChatAction.kind === 'notebook'
-                      ? pendingChatAction.plan.reason
-                      : pendingChatAction.reason}</p>
-                  </div>
-                )}
-                <ol className="command-plan-stages">
-                  <li>
-                    <span>{pendingChatAction.kind.toUpperCase()}</span>
-                    <strong>{pendingChatAction.kind === 'routed'
-                      ? pendingRoutedActionReview?.title
-                        ?? pendingChatAction.plan.routedTool
-                      : pendingChatAction.kind === 'notebook'
-                        ? `${pendingChatAction.plan.action.kind} notebook cell`
-                        : pendingChatAction.kind === 'split'
-                          ? 'Split video'
-                          : pendingChatAction.command.frameMode === 'time'
-                            ? `Extract frame at ${pendingChatAction.command.timestampSeconds ?? 0}s`
-                            : `Extract ${pendingChatAction.command.frameMode} frame`}</strong>
-                    {pendingChatAction.kind === 'routed' && (
-                      <>
-                        <small>{pendingChatAction.plan.routedTool}</small>
-                        <dl
-                          className="routed-action-settings"
-                          aria-label="Action settings"
-                        >
-                          {pendingRoutedActionReview?.settings.map((setting) => (
-                            <div
-                              key={setting.label}
-                              className={setting.wide
-                                ? setting.tone === 'warning'
-                                  ? 'routed-action-setting-warning routed-action-setting-wide'
-                                  : 'routed-action-setting-wide'
-                                : setting.tone === 'warning'
-                                  ? 'routed-action-setting-warning'
-                                  : undefined}
-                            >
-                              <dt>{setting.label}</dt>
-                              <dd>{setting.value}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                      </>
-                    )}
-                  </li>
-                </ol>
-                {pendingChatAction.kind === 'routed' && pendingChangeSpeedPreview && (
-                  <div className="routed-action-preview" aria-label="Speed change preview">
-                    {pendingChangeSpeedPreview.unavailableReason === null ? (
-                      <SpeedChangePreview
-                        key={pendingChangeSpeedPreview.mediaUrl ?? 'speed-preview'}
-                        effectiveSpeed={pendingChangeSpeedPreview.effectiveSpeed}
-                        mediaUrl={pendingChangeSpeedPreview.mediaUrl ?? ''}
-                        thumbnailUrl={pendingChangeSpeedPreview.thumbnailUrl}
-                      />
-                    ) : (
-                      <p className="routed-action-preview-fallback">
-                        {`Preview unavailable — ${pendingChangeSpeedPreview.unavailableReason}.`}
-                      </p>
-                    )}
-                  </div>
-                )}
-                {pendingChatAction.kind === 'routed' && pendingXPostPreview && (
-                  <PostToXChatPreview
-                    {...pendingXPostPreview}
-                    busy={busy}
-                    onChange={updatePendingXPostDraft}
-                  />
-                )}
-              </div>
-            </div>
-          </aside>
-        )}
+        {confirmSheet}
       </CommandComposer>
     </main>
   )

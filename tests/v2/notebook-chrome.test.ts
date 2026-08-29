@@ -97,30 +97,31 @@ describe('notebook chrome tokens', () => {
     )
   })
 
-  it('keeps generation review actions outside the scrollable editor', () => {
-    const review = rule(css, '.generation-chat-review')
-    expect(declaration(review, 'display')).toBe('grid')
-    expect(declaration(review, 'grid-template-rows')).toBe('auto minmax(0, 1fr)')
-    expect(declaration(review, 'overflow')).toBe('hidden')
-    const editor = rule(css, '.generation-review-editor')
-    expect(declaration(editor, 'min-height')).toBe('0')
-    expect(declaration(editor, 'overflow')).toBe('auto')
+  it('keeps confirm sheet actions outside the scrollable body', () => {
+    const sheet = rule(css, '.confirm-sheet')
+    expect(declaration(sheet, 'display')).toBe('grid')
+    expect(declaration(sheet, 'grid-template-rows')).toBe('44px minmax(0, 1fr) auto')
+    const body = rule(css, '.confirm-sheet-body')
+    expect(declaration(body, 'min-height')).toBe('0')
+    expect(declaration(body, 'overflow')).toBe('auto')
+    const foot = rule(css, '.confirm-sheet-foot')
+    expect(declaration(foot, 'grid-template-columns')).toBe('minmax(0, 1fr) auto')
   })
 
-  it('keeps the generation review editor responsive arrangements', () => {
-    const editor = rule(css, '.generation-review-editor')
+  it('keeps the generation body responsive arrangements', () => {
+    const editor = rule(css, '.confirm-generation')
     expect(declaration(editor, 'grid-template-areas').replace(/\s+/g, ' '))
       .toBe(`'inputs prompt model estimate' 'inputs prompt settings estimate'`)
-    const tablet = braceBlock(css, css.indexOf('@media (max-width: 1500px) {'))
-    expect(declaration(rule(tablet, '.generation-review-editor'), 'grid-template-columns'))
+    const tablet = braceBlock(css, css.indexOf('@media (max-width: 1180px) {'))
+    expect(declaration(rule(tablet, '.confirm-generation'), 'grid-template-columns'))
       .toBe('repeat(2, minmax(0, 1fr))')
-    const mobile = braceBlock(css, css.indexOf('@media (max-width: 720px) {'))
-    expect(declaration(rule(mobile, '.generation-review-editor'), 'grid-template-columns'))
+    const mobile = braceBlock(css, css.indexOf('@media (max-width: 900px) {'))
+    expect(declaration(rule(mobile, '.confirm-generation'), 'grid-template-columns'))
       .toBe('minmax(0, 1fr)')
   })
 
   it('sizes compact generation review source cards from a shared token', () => {
-    const review = rule(css, '.generation-chat-review')
+    const review = rule(css, '.confirm-generation')
     expect(pixelCount(
       declaration(review, '--generation-review-source-preview-size'),
     )).toBe(72)

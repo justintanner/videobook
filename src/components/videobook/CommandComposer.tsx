@@ -48,6 +48,10 @@ import {
 import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
 import type { ElevenLabsVoicesState } from '@/videobook/use-elevenlabs-voices'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
+import {
+  ComposerOutcomeContext,
+  type ComposerOutcomeSlot,
+} from '@/components/videobook/composer-outcome-context'
 import { SpeakCommandPreview } from '@/components/videobook/SpeakCommandPreview'
 
 export interface ComposerOutcome {
@@ -85,6 +89,9 @@ interface CommandComposerProps {
   portalTarget?: Element | null
   pendingInput?: string
   notice?: ComposerNotice | null
+  // Where execute outcomes and the notice render: the composer's own result
+  // strip, or the footer of the confirm sheet passed as children.
+  outcomeSlot?: 'composer' | 'sheet'
   onEnsureCatalog: () => Promise<void>
   onDismissNotice?: () => void
   onDismissPanel?: () => void
@@ -127,6 +134,7 @@ export function CommandComposer({
   portalTarget = null,
   pendingInput,
   notice,
+  outcomeSlot = 'composer',
   onEnsureCatalog,
   onDismissNotice,
   onDismissPanel,
@@ -218,10 +226,19 @@ export function CommandComposer({
 
   const focusInput = (select = false) => {
     requestAnimationFrame(() => {
+      // A confirm sheet that opened on an invalid field keeps that focus.
+      if (document.activeElement?.matches('.confirm-sheet [aria-invalid="true"]')) return
       inputRef.current?.focus({ preventScroll: true })
       if (select) inputRef.current?.select()
     })
   }
+
+  const outcomeSlotValue = useMemo<ComposerOutcomeSlot>(() => ({
+    outcome,
+    notice: notice ?? null,
+    dismissOutcome: () => setOutcome(null),
+    dismissNotice: () => onDismissNotice?.(),
+  }), [notice, onDismissNotice, outcome])
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (context) return []
@@ -447,8 +464,9 @@ export function CommandComposer({
   }
 
   const composer = (
+    <ComposerOutcomeContext.Provider value={outcomeSlotValue}>
     <section className="command-composer">
-      {notice && (
+      {outcomeSlot === 'composer' && notice && (
         <div
           className={`command-result ${notice.tone === 'error' ? 'command-result-error' : 'command-result-ok'}`}
           role={notice.tone === 'error' ? 'alert' : 'status'}
@@ -464,7 +482,7 @@ export function CommandComposer({
         </div>
       )}
 
-      {outcome && outcome.message !== notice?.message && (
+      {outcomeSlot === 'composer' && outcome && outcome.message !== notice?.message && (
         <div
           className={`command-result ${outcome.ok ? 'command-result-ok' : 'command-result-error'}`}
           role="status"
@@ -689,6 +707,7 @@ export function CommandComposer({
         {transmitting && <span className="command-transmit-scan" aria-hidden="true" />}
       </form>
     </section>
+    </ComposerOutcomeContext.Provider>
   )
 
   return portalTarget ? createPortal(composer, portalTarget) : composer

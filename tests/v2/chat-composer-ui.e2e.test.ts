@@ -1407,9 +1407,9 @@ describe('chat composer browser flow', () => {
       const review = page.getByLabel('Chat action review')
       await review.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await review.getByText('This request changes the current book').count()).toBe(0)
-      const content = review.locator('.command-plan-content-routed')
+      const content = review.locator('.confirm-routed')
       expect(await content.count()).toBe(1)
-      const urlSetting = review.locator('.routed-action-setting-wide')
+      const urlSetting = review.locator('.confirm-setting-wide')
       expect(await urlSetting.locator('dd').textContent()).toBe(url)
       expect(await urlSetting.evaluate((element) =>
         window.getComputedStyle(element).gridColumnEnd)).toBe('-1')
@@ -1477,7 +1477,7 @@ describe('chat composer browser flow', () => {
 
       const review = page.getByLabel('Chat action review')
       await review.waitFor({ state: 'visible', timeout: 30_000 })
-      await review.getByRole('listitem').getByText('Post to X', { exact: true })
+      await review.getByRole('heading', { name: 'Post to X' })
         .waitFor({ state: 'visible' })
       const settings = review.getByLabel('Action settings')
       expect(await settings.textContent()).toContain('DestinationX')
@@ -1606,7 +1606,7 @@ describe('chat composer browser flow', () => {
       const review = page.getByLabel('Watermark review')
       await review.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await page.getByLabel('Chat action review').count()).toBe(0)
-      expect(await page.locator('.watermark-chat-review').count()).toBe(1)
+      expect(await page.locator('.confirm-sheet-watermark').count()).toBe(1)
       expect(await page.locator('.watermark-backdrop, .watermark-dialog').count()).toBe(0)
       expect(await review.locator('video').count()).toBe(1)
       expect(await review.getByLabel('X handle').inputValue()).toBe('justinwtanner')
@@ -1734,7 +1734,7 @@ describe('chat composer browser flow', () => {
       await input.fill('/watermark @a1')
       await page.getByLabel('Send command').click()
       await review.waitFor({ state: 'visible', timeout: 30_000 })
-      expect(await page.locator('.watermark-chat-review').count()).toBe(1)
+      expect(await page.locator('.confirm-sheet-watermark').count()).toBe(1)
       expect(await page.locator('.watermark-backdrop, .watermark-dialog').count()).toBe(0)
       expect(await review.getByRole('button', { name: 'Top right' }).count()).toBe(1)
       expect(await review.getByRole('slider', {
@@ -1749,12 +1749,12 @@ describe('chat composer browser flow', () => {
       await review.getByLabel('X handle').fill('temporary')
       await review.getByLabel('QR link').fill('https://example.com/qr-only')
       await review.getByRole('spinbutton', { name: 'Handle end' }).fill('0')
-      expect(await review.getByText('Handle end time must be after start time.').count()).toBe(1)
+      expect(await review.getByText('Handle end time must be after its start time.').count()).toBe(1)
       expect(await review.getByRole('button', { name: 'Apply' }).isDisabled()).toBe(true)
       await review.getByRole('checkbox', { name: 'Include handle' }).uncheck()
       expect(await review.locator('.watermark-preview-handle').count()).toBe(0)
       expect(await review.getByRole('spinbutton', { name: 'Handle end' }).count()).toBe(0)
-      expect(await review.getByText('Handle end time must be after start time.').count()).toBe(0)
+      expect(await review.getByText('Handle end time must be after its start time.').count()).toBe(0)
       expect(await review.locator('input[type="number"]').count()).toBe(2)
       expect(await review.getByRole('button', { name: 'Apply' }).isEnabled()).toBe(true)
       await review.getByRole('button', { name: 'Apply' }).click()
@@ -1816,13 +1816,13 @@ describe('chat composer browser flow', () => {
       const review = page.getByLabel('Chat action review')
       await review.waitFor({ state: 'visible', timeout: 30_000 })
       await review.getByText('Change video speed').waitFor({ state: 'visible' })
-      await review.locator('.routed-action-settings dd', { hasText: '1.3×' })
+      await review.locator('.confirm-settings dd', { hasText: '1.3×' })
         .first().waitFor({ state: 'visible' })
       await review.getByText('Source duration').waitFor({ state: 'visible' })
 
       // The proposed media preview plays live (controls, proposed playback
       // rate) against the cache-busted source URL without mutating it.
-      const preview = review.locator('.routed-action-preview video')
+      const preview = review.locator('.confirm-routed-preview video')
       await preview.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await preview.getAttribute('controls')).not.toBeNull()
       expect(await preview.getAttribute('loop')).not.toBeNull()
@@ -1897,10 +1897,10 @@ describe('chat composer browser flow', () => {
       await review.waitFor({ state: 'visible', timeout: 30_000 })
       await review.getByText('Change video speed').waitFor({ state: 'visible' })
       // The fixture source is 3s, so a 2s target yields an effective 1.5×.
-      await review.locator('.routed-action-settings dd', { hasText: '1.5×' })
+      await review.locator('.confirm-settings dd', { hasText: '1.5×' })
         .first().waitFor({ state: 'visible' })
 
-      const preview = review.locator('.routed-action-preview video')
+      const preview = review.locator('.confirm-routed-preview video')
       await preview.waitFor({ state: 'visible', timeout: 30_000 })
       await expect.poll(async () => await preview.evaluate((element) =>
         (element as HTMLVideoElement).playbackRate), { timeout: 30_000 })
@@ -2154,13 +2154,13 @@ describe('chat composer browser flow', () => {
     const outSeconds = review.getByLabel('OUT seconds')
     await expect.poll(async () => await outSeconds.inputValue()).toBe('1.500')
 
-    const outRow = review.locator('.video-segment-bound-row').filter({ hasText: 'OUT' })
+    const outRow = review.locator('.confirm-split-bound').filter({ hasText: 'OUT' })
     await outRow.getByRole('button', { name: '+0.1s' }).click()
     await expect.poll(async () => await outSeconds.inputValue()).toBe('1.600')
     await outRow.getByRole('button', { name: '+0.1s' }).press('ArrowRight')
     await expect.poll(async () => await outSeconds.inputValue()).toBe('1.700')
     await review.getByRole('button', { name: /Split piece in half/ }).click()
-    await expect.poll(async () => await review.locator('.video-segment-piece').count())
+    await expect.poll(async () => await review.locator('.confirm-chips [role="listitem"]').count())
       .toBe(3)
 
     observedCalls.length = 0
