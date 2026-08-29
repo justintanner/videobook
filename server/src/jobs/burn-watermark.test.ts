@@ -14,6 +14,7 @@ describe("burn watermark filter", () => {
       handleOpacity: 0.7,
       userScale: 1,
       includeQr: true,
+      includeHandle: true,
       handleVerticalPercent: 62,
       qrStartSeconds: 0.1,
       qrEndSeconds: 0.6,
@@ -35,6 +36,7 @@ describe("burn watermark filter", () => {
       corner: "bottom-right",
       userScale: 1,
       includeQr: false,
+      includeHandle: true,
     })).toBe(
       "[1:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.5[handle];"
       + "[0:v][handle]overlay=(main_w-overlay_w)/2:main_h*33/100-overlay_h/2:format=auto[vout]",
@@ -49,6 +51,7 @@ describe("burn watermark filter", () => {
       opacity: 0.25,
       userScale: 1,
       includeQr: false,
+      includeHandle: true,
       startSeconds: 0.3,
       endSeconds: 0.9,
     })).toContain(
@@ -62,5 +65,23 @@ describe("burn watermark filter", () => {
     expect(burnWatermarkEnable()).toBe("");
     expect(burnWatermarkEnable(1.5)).toBe(":enable='gte(t,1.5)'");
     expect(burnWatermarkEnable(undefined, 4)).toBe(":enable='between(t,0,4)'");
+  });
+
+  it("builds a QR-only filter without a handle input", () => {
+    expect(buildBurnWatermarkFilter({
+      width: 320,
+      height: 240,
+      corner: "bottom-right",
+      qrOpacity: 0.4,
+      userScale: 1,
+      includeQr: true,
+      includeHandle: false,
+      qrStartSeconds: 0.1,
+      qrEndSeconds: 0.6,
+    })).toBe(
+      "[1:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.4[qr];"
+      + "[0:v][qr]overlay=main_w-overlay_w-6:main_h-overlay_h-6:format=auto"
+      + ":enable='between(t,0.1,0.6)'[vout]",
+    );
   });
 });

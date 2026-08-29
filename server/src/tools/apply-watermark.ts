@@ -89,6 +89,16 @@ function watermarkTimingError(
     : null;
 }
 
+function watermarkVariantForApply(
+  mode: "burn" | "overlay",
+  includeQr: boolean,
+  includeHandle: boolean,
+): WatermarkBadgeVariant {
+  if (includeQr && !includeHandle) return "qr";
+  if (!includeQr) return "handle";
+  return mode === "burn" ? "qr" : "combined";
+}
+
 async function resolveWatermarkAsset(
   engine: Engine,
   handle: string,
@@ -124,7 +134,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
   return {
     name: "apply_watermark",
     description:
-      "Previewed watermark apply for video: burns a positioned QR plus a separate horizontally centered plain X handle. Burn mode supports optional X icon and handle border, adjustable handle padding and corner rounding, independent QR/handle opacity, independent visibility windows, and adjustable handle height. The QR can be disabled. Pass mode=overlay to store the legacy single-card render-time overlay instead.",
+      "Previewed watermark apply for video: burns an optional positioned QR and optional horizontally centered plain X handle. At least one must be included. Burn mode supports optional X icon and handle border, adjustable handle padding and corner rounding, independent QR/handle opacity, independent visibility windows, and adjustable handle height. Pass mode=overlay to store a legacy single-card render-time overlay instead.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Video asset id to watermark"),
@@ -138,6 +148,10 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         .boolean()
         .optional()
         .describe("Include a separately positioned QR watermark (default true); false applies only the centered handle"),
+      include_handle: z
+        .boolean()
+        .optional()
+        .describe("Include the horizontally centered handle watermark (default true); false applies only the QR"),
       position: z
         .enum(WATERMARK_POSITION_OPTIONS)
         .optional()
@@ -227,7 +241,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       card_asset_id: z
         .string()
         .optional()
-        .describe("Reuse an existing QR image asset, or a handle image when include_qr is false"),
+        .describe("Reuse an existing image asset for the primary QR or handle watermark"),
       mode: z
         .enum(["burn", "overlay"])
         .optional()
@@ -241,6 +255,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         url,
         save_default,
         include_qr = true,
+        include_handle = true,
         position = "auto",
         handle_vertical_percent = DEFAULT_HANDLE_VERTICAL_PERCENT,
         include_x_icon = true,
@@ -266,6 +281,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         url?: string;
         save_default?: boolean;
         include_qr?: boolean;
+        include_handle?: boolean;
         position?: WatermarkPositionOption;
         handle_vertical_percent?: number;
         include_x_icon?: boolean;
@@ -292,11 +308,19 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       const resolvedHandleEndSeconds = handle_end_seconds ?? end_seconds;
       const resolvedQrOpacity = qr_opacity ?? opacity;
       const resolvedHandleOpacity = handle_opacity ?? opacity;
-      const timingError = watermarkTimingError(
-        "handle",
-        resolvedHandleStartSeconds,
-        resolvedHandleEndSeconds,
-      ) ?? (include_qr
+      if (!include_qr && !include_handle) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "include_qr or include_handle must be true" }],
+        };
+      }
+      const timingError = (include_handle
+        ? watermarkTimingError(
+            "handle",
+            resolvedHandleStartSeconds,
+            resolvedHandleEndSeconds,
+          )
+        : null) ?? (include_qr
         ? watermarkTimingError("qr", resolvedQrStartSeconds, resolvedQrEndSeconds)
         : null);
       if (timingError) {
@@ -310,16 +334,23 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       if (kindGate) return kindGate;
 
       const config = await readWatermarkConfig(engine);
-      const resolvedHandle = (handle ?? config.savedHandle ?? config.authenticatedHandle ?? DEFAULT_HANDLE)
+      const fallbackHandle = config.savedHandle ?? config.authenticatedHandle ?? DEFAULT_HANDLE;
+      const resolvedHandle = (handle ?? (include_handle || url === undefined ? fallbackHandle : ""))
         .replace(/^@/, "")
         .trim();
-      if (!resolvedHandle) {
+      if (include_handle && !resolvedHandle) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "handle must be a non-empty string" }],
         };
       }
-      const resolvedUrl = url ?? defaultUrl(resolvedHandle);
+      const resolvedUrl = (url ?? (resolvedHandle ? defaultUrl(resolvedHandle) : "")).trim();
+      if (include_qr && !resolvedUrl) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "url or handle must provide a QR destination" }],
+        };
+      }
       const appearance: WatermarkAssetAppearance = {
         includeXIcon: include_x_icon,
         includeHandleBorder: include_handle_border,
@@ -330,16 +361,14 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       let cardAssetId: string;
       let qrAssetId: string | null = null;
       let handleAssetId: string | null = null;
+      const variant = watermarkVariantForApply(mode, include_qr, include_handle);
       if (card_asset_id) {
         const cardGate = await requireArtifactKind(engine, card_asset_id, ["image"], "card_asset_id");
         if (cardGate) return cardGate;
         cardAssetId = card_asset_id;
         if (mode === "burn" && include_qr) qrAssetId = card_asset_id;
-        if (mode === "burn" && !include_qr) handleAssetId = card_asset_id;
+        if (mode === "burn" && include_handle && !include_qr) handleAssetId = card_asset_id;
       } else {
-        const variant = mode === "burn"
-          ? include_qr ? "qr" : "handle"
-          : include_qr ? "combined" : "handle";
         const resolved = await resolveWatermarkAsset(
           engine,
           resolvedHandle,
@@ -355,10 +384,10 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         }
         cardAssetId = resolved.assetId;
         if (mode === "burn" && include_qr) qrAssetId = resolved.assetId;
-        if (mode === "burn" && !include_qr) handleAssetId = resolved.assetId;
+        if (mode === "burn" && include_handle && !include_qr) handleAssetId = resolved.assetId;
       }
 
-      if (mode === "burn" && handleAssetId === null) {
+      if (mode === "burn" && include_handle && handleAssetId === null) {
         const resolved = await resolveWatermarkAsset(
           engine,
           resolvedHandle,
@@ -393,7 +422,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       }
 
       const usesPosition = mode === "overlay" || include_qr;
-      const badgeAspect = mode === "burn" && include_qr
+      const badgeAspect = variant === "qr"
         ? QR_ONLY_BADGE_ASPECT
         : watermarkBadgeAspect(include_qr);
       let analysis: OsgPlacementAnalysis | null = null;
@@ -446,9 +475,10 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       const summary = {
         asset_id,
         card_asset_id: cardAssetId,
-        handle: resolvedHandle,
+        handle: resolvedHandle || null,
         url: resolvedUrl,
         include_qr,
+        include_handle,
         opacity,
         qr_opacity: resolvedQrOpacity,
         handle_opacity: resolvedHandleOpacity,
@@ -461,10 +491,10 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         handle_rounding,
         start_seconds: start_seconds ?? null,
         end_seconds: end_seconds ?? null,
-        qr_start_seconds: resolvedQrStartSeconds ?? null,
-        qr_end_seconds: resolvedQrEndSeconds ?? null,
-        handle_start_seconds: resolvedHandleStartSeconds ?? null,
-        handle_end_seconds: resolvedHandleEndSeconds ?? null,
+        qr_start_seconds: include_qr ? resolvedQrStartSeconds ?? null : null,
+        qr_end_seconds: include_qr ? resolvedQrEndSeconds ?? null : null,
+        handle_start_seconds: include_handle ? resolvedHandleStartSeconds ?? null : null,
+        handle_end_seconds: include_handle ? resolvedHandleEndSeconds ?? null : null,
         ...(jobId !== undefined && placementSource === "vision" ? { job_id: jobId } : {}),
       };
 
@@ -508,23 +538,30 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       // Burn mode: composite the badge into the source video so the change is
       // visible in the notebook cell (renders and proxies both inherit it).
       const badge = await resolveOsgImagePath(engine, cardAssetId);
-      if (!badge.ok || handleAssetId === null) {
+      if (!badge.ok) {
         return {
           isError: true as const,
-          content: [{
-            type: "text" as const,
-            text: badge.ok ? "Handle watermark asset is unavailable" : badge.error,
-          }],
+          content: [{ type: "text" as const, text: badge.error }],
         };
       }
-      const handleBadge = handleAssetId === cardAssetId
-        ? badge
-        : await resolveOsgImagePath(engine, handleAssetId);
-      if (!handleBadge.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: handleBadge.error }],
-        };
+      let handlePath: string | undefined;
+      if (include_handle) {
+        if (handleAssetId === null) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: "Handle watermark asset is unavailable" }],
+          };
+        }
+        const handleBadge = handleAssetId === cardAssetId
+          ? badge
+          : await resolveOsgImagePath(engine, handleAssetId);
+        if (!handleBadge.ok) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: handleBadge.error }],
+          };
+        }
+        handlePath = handleBadge.path;
       }
 
       const assetDir = manifestResult.value.path;
@@ -556,23 +593,23 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           bookId: book_id,
           videoPath,
           ...(include_qr ? { qrPath: badge.path } : {}),
-          handlePath: handleBadge.path,
+          ...(handlePath !== undefined ? { handlePath } : {}),
           corner,
           opacity,
           qrOpacity: resolvedQrOpacity,
           handleOpacity: resolvedHandleOpacity,
           userScale: scale,
-          handleVerticalPercent: handle_vertical_percent,
+          ...(include_handle ? { handleVerticalPercent: handle_vertical_percent } : {}),
           ...(resolvedQrStartSeconds !== undefined
             ? { qrStartSeconds: resolvedQrStartSeconds }
             : {}),
           ...(resolvedQrEndSeconds !== undefined
             ? { qrEndSeconds: resolvedQrEndSeconds }
             : {}),
-          ...(resolvedHandleStartSeconds !== undefined
+          ...(include_handle && resolvedHandleStartSeconds !== undefined
             ? { handleStartSeconds: resolvedHandleStartSeconds }
             : {}),
-          ...(resolvedHandleEndSeconds !== undefined
+          ...(include_handle && resolvedHandleEndSeconds !== undefined
             ? { handleEndSeconds: resolvedHandleEndSeconds }
             : {}),
         }, BURN_TIMEOUT_MS);
@@ -614,7 +651,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
             position: include_qr ? corner : null,
             qr_asset_id: qrAssetId,
             handle_asset_id: handleAssetId,
-            handle_position: "center",
+            handle_position: include_handle ? "center" : null,
             placement_source: placementSource,
           }),
         }],

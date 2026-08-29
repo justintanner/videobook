@@ -21,7 +21,7 @@ type BurnWatermarkPayload = {
   bookId: string;
   videoPath: string;
   qrPath?: string;
-  handlePath: string;
+  handlePath?: string;
   corner: OsgPosition;
   opacity?: number;
   qrOpacity?: number;
@@ -72,6 +72,7 @@ export function buildBurnWatermarkFilter(options: {
   handleOpacity?: number;
   userScale: number;
   includeQr: boolean;
+  includeHandle: boolean;
   handleVerticalPercent?: number;
   startSeconds?: number;
   endSeconds?: number;
@@ -102,19 +103,26 @@ export function buildBurnWatermarkFilter(options: {
     options.handleEndSeconds ?? options.endSeconds,
   );
   const handleInput = options.includeQr ? 2 : 1;
-  const filters = options.includeQr
-    ? [
-        `[1:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${qrOpacity}[qr]`,
-        `[${handleInput}:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${handleOpacity}[handle]`,
-        `[0:v][qr]overlay=${x}:${y}:format=auto${qrEnable}[withqr]`,
-      ]
-    : [
-        `[${handleInput}:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${handleOpacity}[handle]`,
-      ];
-  const base = options.includeQr ? "withqr" : "0:v";
-  filters.push(
-    `[${base}][handle]overlay=(main_w-overlay_w)/2:${handleY}:format=auto${handleEnable}[vout]`,
-  );
+  if (!options.includeQr && !options.includeHandle) {
+    throw new Error("QR or handle watermark input is required");
+  }
+  const filters: string[] = [];
+  if (options.includeQr) {
+    filters.push(`[1:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${qrOpacity}[qr]`);
+  }
+  if (options.includeHandle) {
+    filters.push(`[${handleInput}:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${handleOpacity}[handle]`);
+  }
+  if (options.includeQr) {
+    const output = options.includeHandle ? "withqr" : "vout";
+    filters.push(`[0:v][qr]overlay=${x}:${y}:format=auto${qrEnable}[${output}]`);
+  }
+  if (options.includeHandle) {
+    const base = options.includeQr ? "withqr" : "0:v";
+    filters.push(
+      `[${base}][handle]overlay=(main_w-overlay_w)/2:${handleY}:format=auto${handleEnable}[vout]`,
+    );
+  }
   return filters.join(";");
 }
 
@@ -169,12 +177,14 @@ export function registerBurnWatermarkJob(engine: Engine): void {
       { durationMs: LOCK_DURATION_MS, data: { state: "burning-watermark" } },
       async () => {
         const probe = await probeVideo(videoPath, { signal: ctx.signal });
-        const handleTiming = effectiveWatermarkTiming(
-          "Handle watermark",
-          probe.duration,
-          handleStartSeconds ?? startSeconds,
-          handleEndSeconds ?? endSeconds,
-        );
+        const handleTiming = handlePath
+          ? effectiveWatermarkTiming(
+              "Handle watermark",
+              probe.duration,
+              handleStartSeconds ?? startSeconds,
+              handleEndSeconds ?? endSeconds,
+            )
+          : {};
         const qrTiming = qrPath
           ? effectiveWatermarkTiming(
               "QR watermark",
@@ -194,6 +204,7 @@ export function registerBurnWatermarkJob(engine: Engine): void {
           handleOpacity,
           userScale,
           includeQr: qrPath !== undefined,
+          includeHandle: handlePath !== undefined,
           handleVerticalPercent,
           ...(qrTiming.startSeconds !== undefined
             ? { qrStartSeconds: qrTiming.startSeconds }
@@ -208,9 +219,10 @@ export function registerBurnWatermarkJob(engine: Engine): void {
             ? { handleEndSeconds: handleTiming.endSeconds }
             : {}),
         });
-        const watermarkInputs = qrPath
-          ? ["-i", qrPath, "-i", handlePath]
-          : ["-i", handlePath];
+        const watermarkInputs = [
+          ...(qrPath ? ["-i", qrPath] : []),
+          ...(handlePath ? ["-i", handlePath] : []),
+        ];
         try {
           await runFfmpeg([
             "-y",

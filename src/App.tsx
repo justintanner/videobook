@@ -6322,6 +6322,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       handle?: string
       url?: string
       includeQr?: boolean
+      includeHandle?: boolean
       position?: WatermarkReviewState['position']
       handleVerticalPercent?: number
       includeXIcon?: boolean
@@ -6351,6 +6352,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       handle: initial.handle?.replace(/^@/, '') ?? '',
       url: initial.url ?? '',
       includeQr: initial.includeQr ?? true,
+      includeHandle: initial.includeHandle ?? true,
       position: initial.position ?? 'auto',
       handleVerticalPercent: initial.handleVerticalPercent === undefined
         ? DEFAULT_HANDLE_VERTICAL_PERCENT
@@ -6413,6 +6415,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       handle,
       url,
       includeQr,
+      includeHandle,
       position,
       handleVerticalPercent,
       includeXIcon,
@@ -6428,10 +6431,27 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       saveDefault,
     } = pendingWatermarkReview
     const trimmedHandle = handle.replace(/^@/, '').trim()
-    if (!trimmedHandle) {
+    const trimmedUrl = url.trim()
+    if (!includeQr && !includeHandle) {
+      return {
+        ok: false,
+        message: 'Include a QR code, a handle, or both before applying the watermark.',
+        nextInput: '/apply',
+        selectInput: false,
+      }
+    }
+    if (includeHandle && !trimmedHandle) {
       return {
         ok: false,
         message: 'Enter an X handle before applying the watermark.',
+        nextInput: '/apply',
+        selectInput: false,
+      }
+    }
+    if (includeQr && !trimmedUrl && !trimmedHandle) {
+      return {
+        ok: false,
+        message: 'Enter a QR link before applying the watermark.',
         nextInput: '/apply',
         selectInput: false,
       }
@@ -6445,16 +6465,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const result = recordValue(await call('apply_watermark', {
         book_id: bookId,
         asset_id: assetId,
-        handle: trimmedHandle,
+        ...(trimmedHandle && (includeHandle || !trimmedUrl) ? { handle: trimmedHandle } : {}),
         include_qr: includeQr,
+        include_handle: includeHandle,
         position,
-        handle_vertical_percent: handleVerticalPercent,
-        include_x_icon: includeXIcon,
-        include_handle_border: includeHandleBorder,
-        handle_padding: handlePadding,
-        handle_rounding: handleRounding,
-        handle_opacity: handleOpacity,
-        ...(includeQr && url.trim() ? { url: url.trim() } : {}),
+        ...(includeHandle ? { handle_vertical_percent: handleVerticalPercent } : {}),
+        ...(includeHandle ? { include_x_icon: includeXIcon } : {}),
+        ...(includeHandle ? { include_handle_border: includeHandleBorder } : {}),
+        ...(includeHandle ? { handle_padding: handlePadding } : {}),
+        ...(includeHandle ? { handle_rounding: handleRounding } : {}),
+        ...(includeHandle ? { handle_opacity: handleOpacity } : {}),
+        ...(includeQr && trimmedUrl ? { url: trimmedUrl } : {}),
         ...(includeQr ? { qr_opacity: qrOpacity } : {}),
         ...(includeQr && qrStartSeconds > 0
           ? { qr_start_seconds: qrStartSeconds }
@@ -6462,22 +6483,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ...(includeQr && qrEndSeconds !== null
           ? { qr_end_seconds: qrEndSeconds }
           : {}),
-        ...(handleStartSeconds > 0
+        ...(includeHandle && handleStartSeconds > 0
           ? { handle_start_seconds: handleStartSeconds }
           : {}),
-        ...(handleEndSeconds !== null
+        ...(includeHandle && handleEndSeconds !== null
           ? { handle_end_seconds: handleEndSeconds }
           : {}),
-        ...(saveDefault ? { save_default: true } : {}),
+        ...(includeHandle && saveDefault ? { save_default: true } : {}),
       }))
       const source = asString(result?.placement_source)
       const corner = asString(result?.position)
       const frameAware = source === 'vision' || source === 'cached' ? ' (frame-aware)' : ''
-      const handlePosition = ` · handle ${handleVerticalPercent}% from top at ${Math.round(handleOpacity * 100)}%`
+      const handlePosition = includeHandle
+        ? ` · handle ${handleVerticalPercent}% from top at ${Math.round(handleOpacity * 100)}%`
+        : ''
       const qrAppearance = includeQr ? ` · QR ${Math.round(qrOpacity * 100)}%` : ''
       await refreshBookData(bookId, notebook?.id)
-      const message = includeQr && corner
-        ? `QR + @${trimmedHandle} watermarks burned in — QR ${corner}${frameAware}${qrAppearance}${handlePosition}.`
+      const message = includeQr
+        ? includeHandle
+          ? `QR + @${trimmedHandle} watermarks burned in — QR ${corner ?? position}${frameAware}${qrAppearance}${handlePosition}.`
+          : `QR watermark burned in — ${corner ?? position}${frameAware}${qrAppearance}.`
         : `@${trimmedHandle} watermark burned in${handlePosition}.`
       setNotice(message)
       setPendingWatermarkReview(null)
@@ -8096,6 +8121,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : {}),
         ...(typeof plan.params.include_qr === 'boolean'
           ? { includeQr: plan.params.include_qr }
+          : {}),
+        ...(typeof plan.params.include_handle === 'boolean'
+          ? { includeHandle: plan.params.include_handle }
           : {}),
         ...(isWatermarkPosition(requestedPosition)
           ? { position: requestedPosition }

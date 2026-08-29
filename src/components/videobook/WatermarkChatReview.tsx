@@ -25,6 +25,7 @@ export interface WatermarkReviewState {
   handle: string
   url: string
   includeQr: boolean
+  includeHandle: boolean
   position: WatermarkPosition
   handleVerticalPercent: number
   includeXIcon: boolean
@@ -47,6 +48,7 @@ type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
   | 'handle'
   | 'url'
   | 'includeQr'
+  | 'includeHandle'
   | 'position'
   | 'handleVerticalPercent'
   | 'includeXIcon'
@@ -467,7 +469,10 @@ export function WatermarkChatReview({
     state.handleEndSeconds,
     duration,
   )
-  const timingValid = handleTimingValid && (!state.includeQr || qrTimingValid)
+  const timingValid = (!state.includeHandle || handleTimingValid)
+    && (!state.includeQr || qrTimingValid)
+  const identityValid = (!state.includeHandle || Boolean(handle))
+    && (!state.includeQr || Boolean(state.url.trim() || handle))
   const qrVisibleAtPlayhead = watermarkVisibleAt(
     currentTime,
     state.qrStartSeconds,
@@ -518,7 +523,7 @@ export function WatermarkChatReview({
             type="submit"
             form={applyFormId}
             className="command-plan-apply"
-            disabled={busy || !handle || !timingValid}
+            disabled={busy || !identityValid || !timingValid || (!state.includeQr && !state.includeHandle)}
           >
             <Check size={14} />{busy ? 'Applying…' : 'Apply'}
           </button>
@@ -580,29 +585,31 @@ export function WatermarkChatReview({
                 <WatermarkQrPreview />
               </span>
             )}
-            <span
-              className="watermark-preview-overlay watermark-preview-handle"
-              style={{
-                ...previewHandleStyle(
-                  previewWidth,
-                  previewHeight,
-                  state.handleVerticalPercent,
-                ),
-                opacity: handleVisibleAtPlayhead ? state.handleOpacity : 0,
-              }}
-              aria-hidden="true"
-            >
+            {state.includeHandle && (
               <span
-                className={`watermark-preview-handle-pill${state.includeHandleBorder ? '' : ' without-border'}`}
-                style={previewHandlePillStyle(
-                  state.handlePadding,
-                  state.handleRounding,
-                )}
+                className="watermark-preview-overlay watermark-preview-handle"
+                style={{
+                  ...previewHandleStyle(
+                    previewWidth,
+                    previewHeight,
+                    state.handleVerticalPercent,
+                  ),
+                  opacity: handleVisibleAtPlayhead ? state.handleOpacity : 0,
+                }}
+                aria-hidden="true"
               >
-                {state.includeXIcon && <WatermarkXIcon />}
-                <span>{handle || 'handle'}</span>
+                <span
+                  className={`watermark-preview-handle-pill${state.includeHandleBorder ? '' : ' without-border'}`}
+                  style={previewHandlePillStyle(
+                    state.handlePadding,
+                    state.handleRounding,
+                  )}
+                >
+                  {state.includeXIcon && <WatermarkXIcon />}
+                  <span>{handle || 'handle'}</span>
+                </span>
               </span>
-            </span>
+            )}
             {state.includeQr && state.position === 'auto' && (
               <span className="watermark-auto-preview">AUTO · QR previewing bottom right</span>
             )}
@@ -623,19 +630,21 @@ export function WatermarkChatReview({
                 </div>
               </div>
             )}
-            <div className="watermark-timeline-row">
-              <span>Handle</span>
-              <div className="watermark-timeline" aria-label="Handle visibility timeline">
-                <span
-                  className="watermark-timeline-window"
-                  style={{ left: `${handleTimeline.left}%`, width: `${handleTimeline.width}%` }}
-                />
-                <span
-                  className="watermark-timeline-playhead"
-                  style={{ left: `${playhead}%` }}
-                />
+            {state.includeHandle && (
+              <div className="watermark-timeline-row">
+                <span>Handle</span>
+                <div className="watermark-timeline" aria-label="Handle visibility timeline">
+                  <span
+                    className="watermark-timeline-window"
+                    style={{ left: `${handleTimeline.left}%`, width: `${handleTimeline.width}%` }}
+                  />
+                  <span
+                    className="watermark-timeline-playhead"
+                    style={{ left: `${playhead}%` }}
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
           <div className="watermark-preview-readout">
             <span>{state.includeQr
@@ -643,7 +652,9 @@ export function WatermarkChatReview({
                 ? 'QR auto placement'
                 : `QR ${POSITION_LABELS[state.position].toLowerCase()}`
               : 'Handle centered'}</span>
-            <span>Handle {state.handleVerticalPercent}% from top</span>
+            {state.includeHandle && (
+              <span>Handle {state.handleVerticalPercent}% from top</span>
+            )}
             {state.includeQr && (
               <span>
                 QR {watermarkOpacityPercent(state.qrOpacity)}% · {watermarkTimingLabel(
@@ -653,14 +664,18 @@ export function WatermarkChatReview({
                 )}
               </span>
             )}
-            <span>
-              Handle {watermarkOpacityPercent(state.handleOpacity)}% · {watermarkTimingLabel(
-                state.handleStartSeconds,
-                state.handleEndSeconds,
-                duration,
-              )}
-            </span>
-            <span>Padding {state.handlePadding}px · rounding {state.handleRounding}%</span>
+            {state.includeHandle && (
+              <span>
+                Handle {watermarkOpacityPercent(state.handleOpacity)}% · {watermarkTimingLabel(
+                  state.handleStartSeconds,
+                  state.handleEndSeconds,
+                  duration,
+                )}
+              </span>
+            )}
+            {state.includeHandle && (
+              <span>Padding {state.handlePadding}px · rounding {state.handleRounding}%</span>
+            )}
             <span>Rebuilds playable proxy</span>
           </div>
         </section>
@@ -668,33 +683,49 @@ export function WatermarkChatReview({
         <div className="watermark-controls">
           <section className="watermark-control-section">
             <span className="watermark-section-label">Identity</span>
-            <label>
-              X handle
-              <div className="watermark-handle-field">
-                <span aria-hidden="true">@</span>
-                <input
-                  type="text"
-                  value={state.handle}
-                  placeholder={state.loadingConfig ? 'Loading…' : 'handle'}
-                  disabled={busy}
-                  onChange={(event) => onChange({ handle: event.target.value })}
-                />
-              </div>
+            <label className="watermark-toggle">
+              <span>
+                <strong>Include handle</strong>
+                <small>Add a horizontally centered account badge</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={state.includeHandle}
+                disabled={busy || (state.includeHandle && !state.includeQr)}
+                onChange={(event) => onChange({ includeHandle: event.target.checked })}
+              />
             </label>
-            {state.recent.length > 0 && (
-              <div className="watermark-recent" role="group" aria-label="Recent handles">
-                {state.recent.map((recentHandle) => (
-                  <button
-                    key={recentHandle}
-                    type="button"
-                    className={recentHandle === handle ? 'active' : ''}
-                    disabled={busy}
-                    onClick={() => onChange({ handle: recentHandle })}
-                  >
-                    @{recentHandle}
-                  </button>
-                ))}
-              </div>
+            {state.includeHandle && (
+              <>
+                <label>
+                  X handle
+                  <div className="watermark-handle-field">
+                    <span aria-hidden="true">@</span>
+                    <input
+                      type="text"
+                      value={state.handle}
+                      placeholder={state.loadingConfig ? 'Loading…' : 'handle'}
+                      disabled={busy}
+                      onChange={(event) => onChange({ handle: event.target.value })}
+                    />
+                  </div>
+                </label>
+                {state.recent.length > 0 && (
+                  <div className="watermark-recent" role="group" aria-label="Recent handles">
+                    {state.recent.map((recentHandle) => (
+                      <button
+                        key={recentHandle}
+                        type="button"
+                        className={recentHandle === handle ? 'active' : ''}
+                        disabled={busy}
+                        onClick={() => onChange({ handle: recentHandle })}
+                      >
+                        @{recentHandle}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
             <label className="watermark-toggle">
               <span>
@@ -704,7 +735,7 @@ export function WatermarkChatReview({
               <input
                 type="checkbox"
                 checked={state.includeQr}
-                disabled={busy}
+                disabled={busy || (state.includeQr && !state.includeHandle)}
                 onChange={(event) => onChange({ includeQr: event.target.checked })}
               />
             </label>
@@ -724,50 +755,54 @@ export function WatermarkChatReview({
 
           <section className="watermark-control-section">
             <span className="watermark-section-label">Appearance</span>
-            <label className="watermark-toggle">
-              <span>
-                <strong>Show X icon</strong>
-                <small>Place the X mark before the plain handle</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={state.includeXIcon}
-                disabled={busy}
-                onChange={(event) => onChange({ includeXIcon: event.target.checked })}
-              />
-            </label>
-            <label className="watermark-toggle">
-              <span>
-                <strong>Handle border</strong>
-                <small>Draw the outline around the handle pill</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={state.includeHandleBorder}
-                disabled={busy}
-                onChange={(event) => onChange({ includeHandleBorder: event.target.checked })}
-              />
-            </label>
-            <WatermarkIntegerControl
-              id="watermark-handle-padding"
-              label="Handle padding"
-              value={state.handlePadding}
-              min={MIN_HANDLE_PADDING}
-              max={MAX_HANDLE_PADDING}
-              suffix="px"
-              busy={busy}
-              onChange={(handlePadding) => onChange({ handlePadding })}
-            />
-            <WatermarkIntegerControl
-              id="watermark-handle-rounding"
-              label="Corner rounding"
-              value={state.handleRounding}
-              min={MIN_HANDLE_ROUNDING}
-              max={MAX_HANDLE_ROUNDING}
-              suffix="%"
-              busy={busy}
-              onChange={(handleRounding) => onChange({ handleRounding })}
-            />
+            {state.includeHandle && (
+              <>
+                <label className="watermark-toggle">
+                  <span>
+                    <strong>Show X icon</strong>
+                    <small>Place the X mark before the plain handle</small>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={state.includeXIcon}
+                    disabled={busy}
+                    onChange={(event) => onChange({ includeXIcon: event.target.checked })}
+                  />
+                </label>
+                <label className="watermark-toggle">
+                  <span>
+                    <strong>Handle border</strong>
+                    <small>Draw the outline around the handle pill</small>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={state.includeHandleBorder}
+                    disabled={busy}
+                    onChange={(event) => onChange({ includeHandleBorder: event.target.checked })}
+                  />
+                </label>
+                <WatermarkIntegerControl
+                  id="watermark-handle-padding"
+                  label="Handle padding"
+                  value={state.handlePadding}
+                  min={MIN_HANDLE_PADDING}
+                  max={MAX_HANDLE_PADDING}
+                  suffix="px"
+                  busy={busy}
+                  onChange={(handlePadding) => onChange({ handlePadding })}
+                />
+                <WatermarkIntegerControl
+                  id="watermark-handle-rounding"
+                  label="Corner rounding"
+                  value={state.handleRounding}
+                  min={MIN_HANDLE_ROUNDING}
+                  max={MAX_HANDLE_ROUNDING}
+                  suffix="%"
+                  busy={busy}
+                  onChange={(handleRounding) => onChange({ handleRounding })}
+                />
+              </>
+            )}
             {state.includeQr && (
               <WatermarkOpacityControl
                 id="watermark-qr-opacity"
@@ -777,13 +812,15 @@ export function WatermarkChatReview({
                 onChange={(qrOpacity) => onChange({ qrOpacity })}
               />
             )}
-            <WatermarkOpacityControl
-              id="watermark-handle-opacity"
-              label="Handle opacity"
-              value={state.handleOpacity}
-              busy={busy}
-              onChange={(handleOpacity) => onChange({ handleOpacity })}
-            />
+            {state.includeHandle && (
+              <WatermarkOpacityControl
+                id="watermark-handle-opacity"
+                label="Handle opacity"
+                value={state.handleOpacity}
+                busy={busy}
+                onChange={(handleOpacity) => onChange({ handleOpacity })}
+              />
+            )}
           </section>
 
           <section className="watermark-control-section">
@@ -815,26 +852,32 @@ export function WatermarkChatReview({
                 </button>
               ))}
             </div>
-            <div className="watermark-handle-position">
-              <label htmlFor="watermark-handle-vertical">Handle vertical position</label>
-              <output htmlFor="watermark-handle-vertical">
-                {state.handleVerticalPercent}% from top
-              </output>
-              <input
-                id="watermark-handle-vertical"
-                type="range"
-                min={MIN_HANDLE_VERTICAL_PERCENT}
-                max={MAX_HANDLE_VERTICAL_PERCENT}
-                step="1"
-                value={state.handleVerticalPercent}
-                disabled={busy}
-                onChange={(event) => onChange({
-                  handleVerticalPercent: Number(event.target.value),
-                })}
-              />
-            </div>
+            {state.includeHandle && (
+              <div className="watermark-handle-position">
+                <label htmlFor="watermark-handle-vertical">Handle vertical position</label>
+                <output htmlFor="watermark-handle-vertical">
+                  {state.handleVerticalPercent}% from top
+                </output>
+                <input
+                  id="watermark-handle-vertical"
+                  type="range"
+                  min={MIN_HANDLE_VERTICAL_PERCENT}
+                  max={MAX_HANDLE_VERTICAL_PERCENT}
+                  step="1"
+                  value={state.handleVerticalPercent}
+                  disabled={busy}
+                  onChange={(event) => onChange({
+                    handleVerticalPercent: Number(event.target.value),
+                  })}
+                />
+              </div>
+            )}
             <small className="watermark-control-help">
-              Auto places the QR away from faces and text. The handle remains horizontally centered.
+              {state.includeQr && state.includeHandle
+                ? 'Auto places the QR away from faces and text. The handle remains horizontally centered.'
+                : state.includeQr
+                  ? 'Auto places the QR away from faces and text.'
+                  : 'The handle remains horizontally centered.'}
             </small>
           </section>
 
@@ -856,31 +899,35 @@ export function WatermarkChatReview({
                   })}
                 />
               )}
-              <WatermarkTimingControl
-                idPrefix="watermark-handle-timing"
-                label="Handle"
-                startSeconds={state.handleStartSeconds}
-                endSeconds={state.handleEndSeconds}
-                duration={duration}
-                currentTime={currentTime}
-                busy={busy}
-                onChange={(handleStartSeconds, handleEndSeconds) => onChange({
-                  handleStartSeconds,
-                  handleEndSeconds,
-                })}
-              />
+              {state.includeHandle && (
+                <WatermarkTimingControl
+                  idPrefix="watermark-handle-timing"
+                  label="Handle"
+                  startSeconds={state.handleStartSeconds}
+                  endSeconds={state.handleEndSeconds}
+                  duration={duration}
+                  currentTime={currentTime}
+                  busy={busy}
+                  onChange={(handleStartSeconds, handleEndSeconds) => onChange({
+                    handleStartSeconds,
+                    handleEndSeconds,
+                  })}
+                />
+              )}
             </div>
           </section>
 
-          <label className="watermark-save-default">
-            <input
-              type="checkbox"
-              checked={state.saveDefault}
-              disabled={busy}
-              onChange={(event) => onChange({ saveDefault: event.target.checked })}
-            />
-            Save as default handle
-          </label>
+          {state.includeHandle && (
+            <label className="watermark-save-default">
+              <input
+                type="checkbox"
+                checked={state.saveDefault}
+                disabled={busy}
+                onChange={(event) => onChange({ saveDefault: event.target.checked })}
+              />
+              Save as default handle
+            </label>
+          )}
           {state.error && <p className="watermark-error" role="alert">{state.error}</p>}
         </div>
       </div>

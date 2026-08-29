@@ -1574,6 +1574,7 @@ describe('chat composer browser flow', () => {
         params: {
           asset_id: '@a1',
           handle: 'justinwtanner',
+          include_handle: true,
           handle_vertical_percent: 41,
           include_x_icon: true,
           include_handle_border: true,
@@ -1657,6 +1658,7 @@ describe('chat composer browser flow', () => {
         .getAttribute('d')
       expect(previewQrPath?.match(/M/g)).toHaveLength(541)
       expect(await review.getByRole('checkbox', { name: 'Include QR code' }).isChecked()).toBe(true)
+      expect(await review.getByRole('checkbox', { name: 'Include handle' }).isChecked()).toBe(true)
       expect(await review.getByRole('button', { name: 'Auto' }).getAttribute('aria-pressed')).toBe('true')
       expect(await review.getByRole('button', { name: 'Top left' }).count()).toBe(1)
       const handleVerticalPosition = review.getByRole('slider', {
@@ -1714,6 +1716,7 @@ describe('chat composer browser flow', () => {
         asset_id: videoArtifactId,
         handle: 'justinwtanner',
         include_qr: true,
+        include_handle: true,
         position: 'bottom-left',
         handle_vertical_percent: 62,
         include_x_icon: false,
@@ -1743,10 +1746,33 @@ describe('chat composer browser flow', () => {
       expect(await review.getByRole('slider', { name: 'Corner rounding' }).inputValue()).toBe('100')
       expect(await review.getByRole('slider', { name: 'QR opacity' }).inputValue()).toBe('50')
       expect(await review.getByRole('slider', { name: 'Handle opacity' }).inputValue()).toBe('50')
-      await review.getByRole('button', { name: 'Cancel' }).click()
-      expect(observedCalls.filter((call) => call.name === 'apply_watermark')).toHaveLength(
-        initialApplyCalls + 1,
-      )
+      await review.getByLabel('X handle').fill('temporary')
+      await review.getByLabel('QR link').fill('https://example.com/qr-only')
+      await review.getByRole('spinbutton', { name: 'Handle end' }).fill('0')
+      expect(await review.getByText('Handle end time must be after start time.').count()).toBe(1)
+      expect(await review.getByRole('button', { name: 'Apply' }).isDisabled()).toBe(true)
+      await review.getByRole('checkbox', { name: 'Include handle' }).uncheck()
+      expect(await review.locator('.watermark-preview-handle').count()).toBe(0)
+      expect(await review.getByRole('spinbutton', { name: 'Handle end' }).count()).toBe(0)
+      expect(await review.getByText('Handle end time must be after start time.').count()).toBe(0)
+      expect(await review.locator('input[type="number"]').count()).toBe(2)
+      expect(await review.getByRole('button', { name: 'Apply' }).isEnabled()).toBe(true)
+      await review.getByRole('button', { name: 'Apply' }).click()
+      await expect.poll(() => observedCalls.filter((call) =>
+        call.name === 'apply_watermark').length).toBe(initialApplyCalls + 2)
+      await review.waitFor({ state: 'detached' })
+      const qrOnlyCall = observedCalls.filter((call) => call.name === 'apply_watermark').at(-1)
+      expect(qrOnlyCall?.arguments).toMatchObject({
+        book_id: bookId,
+        asset_id: videoArtifactId,
+        include_qr: true,
+        include_handle: false,
+        url: 'https://example.com/qr-only',
+      })
+      expect(qrOnlyCall?.arguments).not.toHaveProperty('handle')
+      expect(qrOnlyCall?.arguments).not.toHaveProperty('handle_start_seconds')
+      expect(qrOnlyCall?.arguments).not.toHaveProperty('handle_end_seconds')
+      expect(qrOnlyCall?.arguments).not.toHaveProperty('handle_opacity')
     } finally {
       mockedWatermarkApply = false
       mockedChatActionPlan = null

@@ -21,6 +21,7 @@ function renderWatermark(overrides: Partial<WatermarkReviewState> = {}): string 
       handle: 'someone',
       url: 'https://example.com/profile',
       includeQr: true,
+      includeHandle: true,
       position: 'middle-center',
       handleVerticalPercent: 33,
       includeXIcon: true,
@@ -75,6 +76,7 @@ describe('watermark chat review', () => {
     expect(html).toContain('Handle 70% · 0.0s–8.0s')
     expect(html).toContain('aria-label="QR start"')
     expect(html).toContain('aria-label="Handle end"')
+    expect(html).toContain('>Include handle</strong>')
     expect(html).toContain('Set from playhead')
     expect(html).not.toContain('watermark-backdrop')
     expect(html).not.toContain('role="dialog"')
@@ -104,6 +106,25 @@ describe('watermark chat review', () => {
     expect(html).toContain('padding-inline:0em;border-radius:0em')
     expect(html).not.toContain('watermark-preview-x-icon')
     expect(html).toContain('Handle 60% · 1.0s–12.0s')
+    expect(html.match(/type="number"/g)).toHaveLength(2)
+  })
+
+  it('allows a QR-only watermark with invalid handle timing', () => {
+    const html = renderWatermark({
+      handle: '',
+      url: 'https://example.com/qr-only',
+      includeHandle: false,
+      handleStartSeconds: 0,
+      handleEndSeconds: 0,
+    })
+    const applyButton = html.match(/<button type="submit"[^>]*>/)?.[0]
+    expect(applyButton).not.toContain('disabled')
+    expect(html).toContain('watermark-preview-overlay watermark-preview-qr')
+    expect(html).not.toContain('watermark-preview-overlay watermark-preview-handle')
+    expect(html).not.toContain('aria-label="Handle visibility timeline"')
+    expect(html).not.toContain('aria-label="Handle end"')
+    expect(html).not.toContain('Handle end time must be after start time.')
+    expect(html).not.toContain('id="watermark-handle-opacity"')
     expect(html.match(/type="number"/g)).toHaveLength(2)
   })
 })

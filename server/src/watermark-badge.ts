@@ -186,7 +186,8 @@ export async function createWatermarkAsset(
     return { ok: false, error: `Failed to build watermark card: ${err instanceof Error ? err.message : String(err)}` };
   }
 
-  const assetName = `watermark-${variant}-${handle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36)}`;
+  const assetIdentity = handle.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "link";
+  const assetName = `watermark-${variant}-${assetIdentity}-${Date.now().toString(36)}`;
   const created = await engine.artifacts.create("img", assetName);
   if (!created.ok) {
     return { ok: false, error: `Failed to create image asset: ${created.error.message}` };

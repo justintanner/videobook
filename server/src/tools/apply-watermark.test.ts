@@ -20,9 +20,10 @@ const ORIENTATIONS = ["landscape", "portrait", "square"] as const;
 type ApplyResult = {
   asset_id: string;
   card_asset_id: string;
-  handle: string;
+  handle: string | null;
   url: string;
   include_qr: boolean;
+  include_handle: boolean;
   opacity: number;
   qr_opacity: number;
   handle_opacity: number;
@@ -43,7 +44,7 @@ type ApplyResult = {
   position?: string | null;
   qr_asset_id?: string | null;
   handle_asset_id?: string | null;
-  handle_position?: string;
+  handle_position?: string | null;
   handle_vertical_percent: number;
   placement_source: string;
 };
@@ -196,6 +197,41 @@ describe("apply_watermark tool", () => {
     }
   });
 
+  it("stores a QR-only overlay without requiring a handle", async () => {
+    const assetId = await createVideoAsset();
+    const parsed = await apply({
+      asset_id: assetId,
+      handle: "",
+      url: "https://example.com/qr-only",
+      include_qr: true,
+      include_handle: false,
+      position: "top-right",
+      handle_start_seconds: 0.8,
+      handle_end_seconds: 0.2,
+      mode: "overlay",
+    });
+
+    expect(parsed.handle).toBeNull();
+    expect(parsed.url).toBe("https://example.com/qr-only");
+    expect(parsed.include_qr).toBe(true);
+    expect(parsed.include_handle).toBe(false);
+    expect(parsed.handle_start_seconds).toBeNull();
+    expect(parsed.handle_end_seconds).toBeNull();
+    expect(parsed.positions).toEqual({
+      landscape: "top-right",
+      portrait: "top-right",
+      square: "top-right",
+    });
+
+    const cardMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(
+      parsed.card_asset_id,
+      "original",
+    );
+    if (!cardMeta.ok) throw new Error(cardMeta.error.message);
+    expect(cardMeta.value.layout).toBe("qr-v1");
+    expect(cardMeta.value.include_handle).toBe(false);
+  });
+
   it("reuses the badge asset across applies and honors custom opacity/scale", async () => {
     const firstAsset = await createVideoAsset();
     const secondAsset = await createVideoAsset();
@@ -346,6 +382,44 @@ describe("apply_watermark tool", () => {
     }
   }, 120_000);
 
+  it("burns a QR-only watermark without validating or rendering a handle", async () => {
+    const assetId = await createRealVideoAsset();
+    const before = await fs.files.manifest(assetId);
+    if (!before.ok) throw new Error(before.error.message);
+    const beforeHash = findVideoFile(before.value.files)!.objectHash;
+
+    const parsed = await apply({
+      asset_id: assetId,
+      handle: "",
+      url: "https://example.com/qr-only",
+      include_handle: false,
+      position: "bottom-right",
+      qr_opacity: 0.4,
+      qr_start_seconds: 0.1,
+      qr_end_seconds: 0.6,
+      handle_start_seconds: 0.8,
+      handle_end_seconds: 0.2,
+    });
+
+    expect(parsed.handle).toBeNull();
+    expect(parsed.include_qr).toBe(true);
+    expect(parsed.include_handle).toBe(false);
+    expect(parsed.qr_opacity).toBe(0.4);
+    expect(parsed.qr_start_seconds).toBe(0.1);
+    expect(parsed.qr_end_seconds).toBe(0.6);
+    expect(parsed.handle_start_seconds).toBeNull();
+    expect(parsed.handle_end_seconds).toBeNull();
+    expect(parsed.qr_asset_id).toBe(parsed.card_asset_id);
+    expect(parsed.handle_asset_id).toBeNull();
+    expect(parsed.handle_position).toBeNull();
+
+    const after = await fs.files.manifest(assetId);
+    if (!after.ok) throw new Error(after.error.message);
+    const videoFile = findVideoFile(after.value.files)!;
+    expect(videoFile.objectHash).not.toBe(beforeHash);
+    expect(after.value.files.some((file) => file.name === "proxy.mp4")).toBe(true);
+  }, 120_000);
+
   it("rejects non-video targets", async () => {
     const created = await fs.artifacts.create("img", "still");
     if (!created.ok) throw new Error(created.error.message);
@@ -369,5 +443,20 @@ describe("apply_watermark tool", () => {
     });
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("qr_end_seconds");
+  });
+
+  it("rejects a watermark with neither QR nor handle", async () => {
+    const assetId = await createVideoAsset();
+    const result = await client.callTool({
+      name: "apply_watermark",
+      arguments: {
+        book_id: bookId,
+        asset_id: assetId,
+        include_qr: false,
+        include_handle: false,
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("include_qr or include_handle");
   });
 });
