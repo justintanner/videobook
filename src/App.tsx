@@ -63,6 +63,7 @@ import {
 import { v7 as uuidv7 } from 'uuid'
 import type {
   EditPreview,
+  NotebookCell,
   NotebookCellExecution,
   NotebookCellReference,
   NotebookCellType,
@@ -88,6 +89,7 @@ import {
   type ComposerOutcome,
 } from '@/components/videobook/CommandComposer'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
+import { JobsScreen } from '@/components/videobook/JobsScreen'
 import {
   BusRiverEdge,
 } from '@/components/videobook/BusRiverEdge'
@@ -731,6 +733,7 @@ const mediaInsightWatchTimeoutMs = 20 * 60_000
 const mediaProcessWatchIntervalMs = 750
 const mediaAssetWatchTimeoutMs = 45 * 60_000
 const activeJobStates = new Set(['queued', 'running', 'completing'])
+const EMPTY_NOTEBOOK_CELLS: NotebookCell[] = []
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -11329,91 +11332,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           )}
 
           {screen === 'jobs' && (
-            <section className="workspace-screen">
-              <header><div><span className="section-label">PERSISTENT JOBS</span><h1>Book job queue</h1><p>Generation, processing, and notebook runs are recorded in the selected book’s durable queue.</p></div><button type="button" disabled={busy} onClick={() => bookId && void refreshBookData(bookId, notebook?.id)}><RefreshCw size={15} />Refresh</button></header>
-              {generationPlans.length > 0 && (
-                <div className="workspace-section-heading">
-                  <h2>Generation plans</h2>
-                  <p>Review output, retry unchanged, switch model, omit, or continue into the canonical sequence.</p>
-                </div>
-              )}
-              <div className="record-grid">
-                {generationPlans.map((plan) => {
-                  const stage = plan.plan.stages.find((candidate) =>
-                    candidate.kind === 'queued' && candidate.jobType === 'generation')
-                  return (
-                    <article className="record-card" key={plan.planId}>
-                      <span>{plan.status.toUpperCase()}</span>
-                      <strong>{plan.plan.summary}</strong>
-                      <small>
-                        {stage?.kind === 'queued'
-                          ? `${stage.provider ?? 'provider unavailable'} · ${stage.model ?? stage.tool}`
-                          : 'Generation details unavailable'}
-                      </small>
-                      <small>
-                        {stage?.kind === 'queued' && stage.estimatedCostUsd !== undefined
-                          ? `estimated $${stage.estimatedCostUsd.toFixed(4)}`
-                          : 'cost estimate unavailable'}
-                        {plan.outputArtifactId ? ` · output ${plan.outputArtifactId}` : ''}
-                      </small>
-                      {plan.error && <pre>{plan.error}</pre>}
-                      <div className="command-plan-actions">
-                        {plan.outputArtifactId && plan.status !== 'continued' && plan.status !== 'omitted' && (
-                          <button type="button" disabled={busy} onClick={() => void continueGenerationPlan(plan)}>
-                            Continue
-                          </button>
-                        )}
-                        {(plan.status === 'failed' || plan.status === 'awaiting-output') && (
-                          <>
-                            <button type="button" disabled={busy} onClick={() => void reviseGenerationPlan(plan, 'retry')}>
-                              Retry
-                            </button>
-                            <button type="button" disabled={busy} onClick={() => void reviseGenerationPlan(plan, 'switch')}>
-                              Switch model
-                            </button>
-                            <button type="button" disabled={busy} onClick={() => void reviseGenerationPlan(plan, 'omit')}>
-                              Omit
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </article>
-                  )
-                })}
-                {jobs.map((job) => (
-                  <article className="record-card" key={job.id}>
-                    <span>{job.state.toUpperCase()}</span>
-                    <strong>{job.type}</strong>
-                    <small>{job.artifactId ?? 'book-level job'}</small>
-                    <small>operation {job.operationId} · attempt {job.attempts}/{job.maxAttempts}</small>
-                    <pre>
-                      {job.error
-                        ? `${job.error.code ? `${job.error.code} · ` : ''}${job.error.message}`
-                        : `${new Date(job.enqueuedAt).toLocaleString()}${job.startedAt ? ` · ${Math.max(0, Math.round(((job.finishedAt ?? jobSnapshotAt) - job.startedAt) / 1000))}s elapsed` : ''}`}
-                    </pre>
-                    {['queued', 'running', 'completing'].includes(job.state) && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void cancelJob(job.id)}
-                      >
-                        Cancel
-                      </button>
-                    )}
-                    {['failed', 'aborted'].includes(job.state) && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void retryJob(job.id)}
-                      >
-                        Retry
-                      </button>
-                    )}
-                  </article>
-                ))}
-                {jobs.length === 0 && <div className="empty-record"><Activity size={25} /><strong>No jobs recorded</strong><p>Run a cell or a notebook to queue work.</p></div>}
-              </div>
-            </section>
+            <JobsScreen
+              bookName={activeBook?.name ?? null}
+              jobs={jobs}
+              plans={generationPlans}
+              cells={notebook?.cells ?? EMPTY_NOTEBOOK_CELLS}
+              now={jobSnapshotAt}
+              busy={busy}
+              onRefresh={() => bookId && void refreshBookData(bookId, notebook?.id)}
+              onCancelJob={(jobId) => void cancelJob(jobId)}
+              onRetryJob={(jobId) => void retryJob(jobId)}
+              onContinuePlan={(planId) => {
+                const plan = generationPlans.find((candidate) => candidate.planId === planId)
+                if (plan) void continueGenerationPlan(plan)
+              }}
+              onRevisePlan={(planId, action) => {
+                const plan = generationPlans.find((candidate) => candidate.planId === planId)
+                if (plan) void reviseGenerationPlan(plan, action)
+              }}
+            />
           )}
 
           {screen === 'settings' && (
