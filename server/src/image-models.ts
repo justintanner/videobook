@@ -548,14 +548,30 @@ type ImageModelInfo = {
 
 function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
   const providers: ProviderRoute[] = [];
+  const kieProvider: ProviderRoute | null = config.kieModelId && kieModelSchemas[config.kieModelId]
+    ? {
+        key: "kie",
+        label: "Kie",
+        provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })",
+        envKey: "KIE_API_KEY",
+      }
+    : null;
+  const falProvider: ProviderRoute | null = config.falToolNames
+    ? {
+        key: "fal",
+        label: "Fal",
+        provider_path: "fal.post.v1.queue.submit()",
+        envKey: "FAL_API_KEY",
+      }
+    : null;
 
-  if (config.kieModelId && kieModelSchemas[config.kieModelId]) {
-    providers.push({
-      key: "kie",
-      label: "Kie",
-      provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })",
-      envKey: "KIE_API_KEY",
-    });
+  // Kie's qwen3/image-to-image playground 422s with a blank task id on
+  // real multi-ref edits; Fal is the documented Qwen 3 route.
+  if (config.key === "qwen3_image_edit") {
+    if (falProvider) providers.push(falProvider);
+    if (kieProvider) providers.push(kieProvider);
+  } else if (kieProvider) {
+    providers.push(kieProvider);
   }
 
   if (config.xaiEndpoint) {
@@ -576,13 +592,8 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
     });
   }
 
-  if (config.falToolNames) {
-    providers.push({
-      key: "fal",
-      label: "Fal",
-      provider_path: "fal.post.v1.queue.submit()",
-      envKey: "FAL_API_KEY",
-    });
+  if (falProvider && config.key !== "qwen3_image_edit") {
+    providers.push(falProvider);
   }
 
   if (config.googleToolNames) {
@@ -869,7 +880,6 @@ function buildImageModelOption(
   const selectedProvider = (providerOverride && providerList.some((p) => p.key === providerOverride))
     ? providerOverride
     : (historicalProvider
-      && !(modelKey === "qwen3_image_edit" && historicalProvider === "fal")
       && providerList.some((p) => p.key === historicalProvider))
       ? historicalProvider
       : providerList[0].key;

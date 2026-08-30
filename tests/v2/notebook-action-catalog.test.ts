@@ -94,6 +94,132 @@ describe("notebook action catalog", () => {
         || type === "character"))).toBe(false);
   });
 
+  it("previews Kie Qwen 3 edits with provider-valid local image URLs", async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books);
+    const byName = new Map(defs.map((def) => [def.name, def]));
+    const created = resultJson(await byName.get("create_book")!.handler({
+      name: "qwen-3-preview",
+    })) as { bookId: string };
+    const managed = books.get(created.bookId);
+    expect(managed.ok).toBe(true);
+    if (!managed.ok) return;
+    const engine = managed.value.engine;
+
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const def = byName.get(name);
+      if (!def) throw new Error(`Missing ${name}`);
+      return await withBookContext(
+        { bookId: created.bookId, engine },
+        () => def.handler({ book_id: created.bookId, ...args }),
+      );
+    };
+
+    const notebookId = (resultJson(await invoke("list_notebooks", {})) as Array<{
+      id: string;
+    }>)[0]!.id;
+    const artifacts = await Promise.all([
+      engine.artifacts.create("image", "qwen-source-1"),
+      engine.artifacts.create("image", "qwen-source-2"),
+      engine.artifacts.create("image", "qwen-source-3"),
+    ]);
+    expect(artifacts.every((artifact) => artifact.ok)).toBe(true);
+    const artifactIds = artifacts.flatMap((artifact) =>
+      artifact.ok ? [artifact.value.artifactId] : []);
+    if (artifactIds.length !== 3) return;
+    const notebook = engine.notebooks.read(notebookId);
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) return;
+    const sources = artifactIds.map((artifactId, index) =>
+      engine.notebooks.createCell({
+        type: "image",
+        label: `qwen-source-${index + 1}`,
+        slot: { row: 0, column: index },
+        outputArtifactId: artifactId,
+      }));
+    const generation = engine.notebooks.createCell({
+      type: "generate_image",
+      label: "qwen-edit",
+      slot: { row: 1, column: 0 },
+      prompt: "combine @a1 with the other references",
+      provider: "fal",
+      model: "fal-ai/qwen-image-3/edit",
+      operation: "edit_image",
+      tool: "generate_fal_qwen_3_0_edit_image",
+      inputs: { generationMode: "default" },
+    });
+    const written = await engine.notebooks.write({
+      ...notebook.value,
+      cells: [...notebook.value.cells, ...sources, generation],
+      edges: sources.map((source, index) =>
+        engine.notebooks.createEdge({
+          source: source.id,
+          target: generation.id,
+          targetInput: index === 0 ? "image" : `image_${index + 1}`,
+        })),
+    });
+    expect(written.ok).toBe(true);
+
+    const preview = resultJson(await invoke("preview_notebook_generation", {
+      notebook_id: notebookId,
+      cell_id: generation.id,
+      draft: {
+        prompt: generation.prompt,
+        provider: "kie",
+        model: "Qwen3ImageToImageRequestSchema",
+        operation: "edit_image",
+        tool: "generate_kie_qwen_3_0_edit_image",
+        inputs: {
+          generationMode: "default",
+          generationSettings: {
+            image_size: "9:16",
+            prompt_extend: false,
+            nsfw_checker: false,
+            resolution: "2K",
+          },
+        },
+      },
+    })) as {
+      tool: string;
+      provider: string;
+      model: string;
+      payload: {
+        model: string;
+        input: {
+          prompt: string;
+          image_urls: string[];
+          image_size: string;
+          resolution: string;
+        };
+      };
+      mentions: {
+        url_placeholders: Array<{ path: string; reference: string; url: string }>;
+      };
+    };
+    const expectedUrls = artifactIds.map((artifactId) =>
+      `http://url.resolved.later.for/${artifactId}`);
+    expect(preview).toMatchObject({
+      tool: "generate_kie_qwen_3_0_edit_image",
+      provider: "kie",
+      model: "qwen3/image-to-image",
+      payload: {
+        model: "qwen3/image-to-image",
+        input: {
+          prompt: "combine reference image 1 with the other references",
+          image_urls: expectedUrls,
+          image_size: "9:16",
+          resolution: "2K",
+        },
+      },
+    });
+    expect(preview.mentions.url_placeholders).toEqual(
+      expectedUrls.map((url, index) => ({
+        path: `input.image_urls[${index}]`,
+        reference: `@${artifactIds[index]}`,
+        url,
+      })),
+    );
+  });
+
   it("rejects invalid tools and returns 14-column raw rows via MCP", async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books);
     const byName = new Map(defs.map((def) => [def.name, def]));

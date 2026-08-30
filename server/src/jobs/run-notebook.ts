@@ -229,6 +229,31 @@ export async function writeGenerationPlanProvenance(
   if (!written.ok) throw new Error(written.error.message);
 }
 
+export function numberedKindSlotIndex(
+  targetInput: string,
+  kind: "image" | "video" | "audio",
+): number | null {
+  if (targetInput === kind) return 1;
+  const prefix = `${kind}_`;
+  if (!targetInput.startsWith(prefix)) return null;
+  const suffix = targetInput.slice(prefix.length);
+  if (!/^\d+$/.test(suffix)) return null;
+  return Number(suffix);
+}
+
+function sortByKindSlot<T extends { targetInput: string }>(
+  entries: T[],
+  kind: "image" | "video" | "audio",
+): T[] {
+  return [...entries].sort((left, right) => {
+    const leftIndex = numberedKindSlotIndex(left.targetInput, kind)
+      ?? Number.MAX_SAFE_INTEGER;
+    const rightIndex = numberedKindSlotIndex(right.targetInput, kind)
+      ?? Number.MAX_SAFE_INTEGER;
+    return leftIndex - rightIndex;
+  });
+}
+
 export function notebookCellMediaType(
   cell: NotebookCell,
 ): "image" | "video" | "audio" | null {
@@ -1014,13 +1039,14 @@ function modelArgsWithMentions(
     args.end_frame_ref = refFor(lastFrame.output);
   }
 
-  const imageReferences = upstream
-    .filter(({ cell: source, output, targetInput }) =>
+  const imageReferences = sortByKindSlot(
+    upstream.filter(({ cell: source, output, targetInput }) =>
       typeof output === "string"
       && isImageLikeCell(source)
       && targetInput !== "first_frame"
-      && targetInput !== "last_frame")
-    .map(({ output }) => refFor(output!));
+      && targetInput !== "last_frame"),
+    "image",
+  ).map(({ output }) => refFor(output!));
   if ("image_refs" in definition.schema && imageReferences.length > 0) {
     args.image_refs = imageReferences;
   }
@@ -1033,11 +1059,12 @@ function modelArgsWithMentions(
   if ("image_ref" in definition.schema && imageReferences[0]) {
     args.image_ref = imageReferences[0];
   }
-  const videoReferences = upstream
-    .filter(({ cell: source, output }) =>
+  const videoReferences = sortByKindSlot(
+    upstream.filter(({ cell: source, output }) =>
       typeof output === "string"
-      && notebookCellMediaType(source) === "video")
-    .map(({ output }) => refFor(output!));
+      && notebookCellMediaType(source) === "video"),
+    "video",
+  ).map(({ output }) => refFor(output!));
   if ("video_refs" in definition.schema && videoReferences.length > 0) {
     args.video_refs = videoReferences;
   }
@@ -1061,12 +1088,13 @@ function modelArgsWithMentions(
   ) {
     args.replace_audio_with = refFor(replacementAudio.output);
   }
-  const audioReferences = upstream
-    .filter(({ cell: source, output, targetInput }) =>
+  const audioReferences = sortByKindSlot(
+    upstream.filter(({ cell: source, output, targetInput }) =>
       typeof output === "string"
       && notebookCellMediaType(source) === "audio"
-      && targetInput !== "replace_audio")
-    .map(({ output }) => refFor(output!));
+      && targetInput !== "replace_audio"),
+    "audio",
+  ).map(({ output }) => refFor(output!));
   if (
     "audio_refs" in definition.schema
     && audioReferences.length > 0

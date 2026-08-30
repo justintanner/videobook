@@ -1,4 +1,5 @@
 import type { Client } from "@modelcontextprotocol/client";
+import { KieError } from "@apicity/kie";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +7,10 @@ import sharp from "sharp";
 import { isUuidV7 } from "videobook-engine";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createEngineForTest } from "../engine.js";
+import {
+  falImageSizeForKieQwen3,
+  isKieBlankPlaygroundTaskError,
+} from "../jobs/generate-qwen3-image-edit.js";
 import { queue } from "../queue.js";
 import { createTestClient } from "../test-client.js";
 
@@ -54,6 +59,19 @@ describe("generate_kie_qwen_3_0_edit_image tool", () => {
     await engine.files.write(asset.value.artifactId, "original.png", png);
     return asset.value.artifactId;
   }
+
+  it("maps Kie aspect ratios onto Fal Qwen 3 sizes and detects playground 422s", () => {
+    expect(falImageSizeForKieQwen3("9:16")).toBe("portrait_16_9");
+    expect(falImageSizeForKieQwen3("16:9")).toBe("landscape_16_9");
+    expect(falImageSizeForKieQwen3("1:1")).toBe("square_hd");
+    expect(falImageSizeForKieQwen3("21:9")).toBeUndefined();
+    expect(isKieBlankPlaygroundTaskError(
+      new KieError("createTask failed: generate playground failed, task id is blank", 422),
+    )).toBe(true);
+    expect(isKieBlankPlaygroundTaskError(
+      new KieError("createTask failed: credits insufficient", 402),
+    )).toBe(false);
+  });
 
   it("returns an error when KIE_API_KEY is not set", async () => {
     const result = await client.callTool({

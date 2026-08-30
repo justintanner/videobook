@@ -152,6 +152,78 @@ describe("notebook runner frames and concat", () => {
     });
   });
 
+  it("orders Qwen 3 image_refs by named image/image_2/image_3 slots", () => {
+    const smoke = {
+      id: "019f0000-0000-7000-8000-000000000210",
+      type: "image" as const,
+      label: "Smoke",
+      slot: { row: 0, column: 2 },
+      outputArtifactId: "019f0000-0000-7000-8000-000000000211",
+    };
+    const first = {
+      id: "019f0000-0000-7000-8000-000000000212",
+      type: "image" as const,
+      label: "Person A",
+      slot: { row: 0, column: 0 },
+      outputArtifactId: "019f0000-0000-7000-8000-000000000213",
+    };
+    const second = {
+      id: "019f0000-0000-7000-8000-000000000214",
+      type: "image" as const,
+      label: "Person B",
+      slot: { row: 0, column: 1 },
+      outputArtifactId: "019f0000-0000-7000-8000-000000000215",
+    };
+    const generate = {
+      id: "019f0000-0000-7000-8000-000000000216",
+      type: "generate_image" as const,
+      label: "Qwen edit",
+      slot: { row: 1, column: 0 },
+      prompt: "in the smoke of @019f0000-0000-7000-8000-000000000211",
+      tool: "generate_kie_qwen_3_0_edit_image",
+    };
+    const document: NotebookDocument = {
+      id: "019f0000-0000-7000-8000-000000000217",
+      name: "Qwen slot order",
+      cells: [smoke, first, second, generate],
+      edges: [
+        {
+          id: "019f0000-0000-7000-8000-000000000218",
+          source: smoke.id,
+          target: generate.id,
+          targetInput: "image_3",
+        },
+        {
+          id: "019f0000-0000-7000-8000-000000000219",
+          source: first.id,
+          target: generate.id,
+          targetInput: "image",
+        },
+        {
+          id: "019f0000-0000-7000-8000-00000000021a",
+          source: second.id,
+          target: generate.id,
+          targetInput: "image_2",
+        },
+      ],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    const definition = {
+      name: "generate_kie_qwen_3_0_edit_image",
+      schema: {
+        book_id: {},
+        prompt: {},
+        image_refs: {},
+      },
+    } as unknown as ToolDef;
+
+    expect(modelArgs(definition, document, generate, "book-id").image_refs).toEqual([
+      `@${first.outputArtifactId}`,
+      `@${second.outputArtifactId}`,
+      `@${smoke.outputArtifactId}`,
+    ]);
+  });
+
   it("maps Kling motion control image and video inputs", () => {
     const image = {
       id: "019f0000-0000-7000-8000-000000000020",

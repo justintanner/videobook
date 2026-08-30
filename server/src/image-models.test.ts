@@ -406,7 +406,7 @@ describe("getImageModels", () => {
     }
   });
 
-  it("offers Qwen 3 through Kie by default and keeps Fal as an alternate", () => {
+  it("offers Qwen 3 through Fal by default and keeps Kie as an alternate", () => {
     const originalKie = process.env.KIE_API_KEY;
     const originalFal = process.env.FAL_API_KEY;
     process.env.KIE_API_KEY = "kie-key";
@@ -414,7 +414,7 @@ describe("getImageModels", () => {
     try {
       const models = getImageModels();
       expect(models.qwen3_image_edit.tool_name).toBe("generate_kie_qwen_3_0_edit_image");
-      expect(models.qwen3_image_edit.providers.map((provider) => provider.key)).toEqual(["kie", "fal"]);
+      expect(models.qwen3_image_edit.providers.map((provider) => provider.key)).toEqual(["fal", "kie"]);
 
       const defaultOption = buildImageModelOption(
         "qwen3_image_edit",
@@ -422,22 +422,22 @@ describe("getImageModels", () => {
         { prompt: "edit" },
         [{ tag: "@image", artifactId: "image", artifactType: "image", filePath: "/image.png", workspacePath: "/" }],
       );
-      expect(defaultOption.selected_provider).toBe("kie");
-      expect(defaultOption.tool_name).toBe("generate_kie_qwen_3_0_edit_image");
-      expect(defaultOption.schema?.properties).toHaveProperty("resolution");
+      expect(defaultOption.selected_provider).toBe("fal");
+      expect(defaultOption.tool_name).toBe("generate_fal_qwen_3_0_edit_image");
+      expect(defaultOption.schema?.properties).toHaveProperty("enable_prompt_expansion");
+      expect(defaultOption.schema?.properties).not.toHaveProperty("resolution");
 
-      const falOption = buildImageModelOption(
+      const kieOption = buildImageModelOption(
         "qwen3_image_edit",
         models.qwen3_image_edit,
         { prompt: "edit" },
         [{ tag: "@image", artifactId: "image", artifactType: "image", filePath: "/image.png", workspacePath: "/" }],
         undefined,
-        "fal",
+        "kie",
       );
-      expect(falOption.selected_provider).toBe("fal");
-      expect(falOption.tool_name).toBe("generate_fal_qwen_3_0_edit_image");
-      expect(falOption.schema?.properties).toHaveProperty("enable_prompt_expansion");
-      expect(falOption.schema?.properties).not.toHaveProperty("resolution");
+      expect(kieOption.selected_provider).toBe("kie");
+      expect(kieOption.tool_name).toBe("generate_kie_qwen_3_0_edit_image");
+      expect(kieOption.schema?.properties).toHaveProperty("resolution");
     } finally {
       if (originalKie === undefined) delete process.env.KIE_API_KEY;
       else process.env.KIE_API_KEY = originalKie;
@@ -446,7 +446,7 @@ describe("getImageModels", () => {
     }
   });
 
-  it("migrates a historical Qwen 3 Fal choice to the Kie default", () => {
+  it("preserves a historical Qwen 3 Fal choice", () => {
     const originalKie = process.env.KIE_API_KEY;
     const originalFal = process.env.FAL_API_KEY;
     process.env.KIE_API_KEY = "kie-key";
@@ -465,8 +465,8 @@ describe("getImageModels", () => {
           date: "2026-08-29T00:00:00Z",
         }],
       );
-      expect(option.selected_provider).toBe("kie");
-      expect(option.tool_name).toBe("generate_kie_qwen_3_0_edit_image");
+      expect(option.selected_provider).toBe("fal");
+      expect(option.tool_name).toBe("generate_fal_qwen_3_0_edit_image");
     } finally {
       if (originalKie === undefined) delete process.env.KIE_API_KEY;
       else process.env.KIE_API_KEY = originalKie;
