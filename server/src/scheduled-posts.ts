@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Engine } from "videobook-engine";
 import { logger } from "./logger.js";
+import type {
+  PostToXResult,
+  XPostFollowup,
+  XPostFollowupError,
+  XPostReplyResult,
+} from "./x/post-contract.js";
 import {
   listBookEngines,
   queue,
@@ -13,11 +19,13 @@ interface ScheduledPostPayload {
   platform: "x";
   text?: string;
   orientation?: "portrait" | "landscape";
+  followups?: XPostFollowup[];
 }
 
 type ScheduledPostStatus =
   | "pending"
   | "posted"
+  | "partially_posted"
   | "failed"
   | "cancelled";
 
@@ -29,6 +37,8 @@ interface ScheduledPostEntry {
   status: ScheduledPostStatus;
   tweet_id?: string;
   tweet_url?: string;
+  replies?: XPostReplyResult[];
+  followup_error?: XPostFollowupError | null;
   error?: string;
 }
 
@@ -101,7 +111,7 @@ async function firePost(bookId: string, scheduleId: string): Promise<void> {
 
   const jobId = `post-x-${scheduleId}`;
   try {
-    const result = await queue.enqueueAndWait<{ tweet_id: string; tweet_url: string }>(
+    const result = await queue.enqueueAndWait<PostToXResult>(
       jobId,
       {
         type: "post_to_x",
@@ -111,12 +121,16 @@ async function firePost(bookId: string, scheduleId: string): Promise<void> {
         orientation: entry.payload.orientation,
         scheduleId,
         scheduledFor: entry.scheduled_for,
+        followups: entry.payload.followups,
       },
     );
     await updateEntry(bookId, scheduleId, {
-      status: "posted",
+      status: result.status,
       tweet_id: result.tweet_id,
       tweet_url: result.tweet_url,
+      replies: result.replies,
+      followup_error: result.followup_error,
+      ...(result.followup_error ? { error: result.followup_error.message } : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

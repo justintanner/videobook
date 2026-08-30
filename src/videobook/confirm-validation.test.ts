@@ -159,9 +159,19 @@ describe('command plan validation', () => {
 
 describe('x post validation', () => {
   it('wraps the draft error', () => {
-    expect(xPostValidation({ postText: 'x'.repeat(281), scheduledFor: null, orientation: null }).blocking)
+    expect(xPostValidation({
+      postText: 'x'.repeat(281),
+      scheduledFor: null,
+      orientation: null,
+      followups: [],
+    }).blocking)
       .toBe('Message is 1 character too long.')
-    expect(xPostValidation({ postText: 'ok', scheduledFor: null, orientation: null }))
+    expect(xPostValidation({
+      postText: 'ok',
+      scheduledFor: null,
+      orientation: null,
+      followups: [],
+    }))
       .toEqual(VALID_CONFIRMATION)
   })
 })

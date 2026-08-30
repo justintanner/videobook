@@ -1,4 +1,6 @@
 export const X_POST_MAX_CHARACTERS = 280
+export const X_POST_MAX_FOLLOWUPS = 25
+export const X_POST_MAX_IMAGES_PER_FOLLOWUP = 4
 
 const X_POST_SCHEDULE_LEAD_MS = 5_000
 const X_POST_DEFAULT_DELAY_MS = 60 * 60 * 1_000
@@ -6,13 +8,35 @@ const X_POST_SCHEDULE_INTERVAL_MS = 5 * 60 * 1_000
 
 type XPostOrientation = 'portrait' | 'landscape' | null
 
+export type XPostFollowup = {
+  text: string
+  imageAssetIds: string[]
+}
+
 export type XPostDraft = {
   postText: string
   scheduledFor: string | null
   orientation: XPostOrientation
+  followups: XPostFollowup[]
 }
 
-export type XPostDraftPatch = Partial<XPostDraft>
+export type XPostDraftPatch = Partial<Omit<XPostDraft, 'followups'>>
+
+function xPostFollowupsFromParams(value: unknown): XPostFollowup[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
+    const item = entry as Record<string, unknown>
+    const imageValues = item.image_asset_ids
+    const hasImages = Array.isArray(imageValues)
+    const imageAssetIds = hasImages
+      ? imageValues.filter((id: unknown): id is string => typeof id === 'string')
+      : []
+    const hasText = typeof item.text === 'string'
+    const text = hasText ? item.text as string : ''
+    return hasText || hasImages ? [{ text, imageAssetIds }] : []
+  })
+}
 
 export function xPostDraftFromParams(
   params: Record<string, unknown>,
@@ -28,6 +52,7 @@ export function xPostDraftFromParams(
     postText: typeof params.text === 'string' ? params.text : '',
     scheduledFor,
     orientation,
+    followups: xPostFollowupsFromParams(params.followups),
   }
 }
 
@@ -51,6 +76,24 @@ export function reviseXPostParams(
   return next
 }
 
+export function reviseXPostFollowups(
+  params: Record<string, unknown>,
+  followups: readonly XPostFollowup[],
+): Record<string, unknown> {
+  const next = { ...params }
+  if (followups.length === 0) {
+    delete next.followups
+    return next
+  }
+  next.followups = followups.map((followup) => ({
+    text: followup.text,
+    ...(followup.imageAssetIds.length > 0
+      ? { image_asset_ids: followup.imageAssetIds }
+      : {}),
+  }))
+  return next
+}
+
 export function xPostDraftError(
   draft: XPostDraft,
   nowMs = Date.now(),
@@ -58,6 +101,21 @@ export function xPostDraftError(
   if (draft.postText.length > X_POST_MAX_CHARACTERS) {
     const overage = draft.postText.length - X_POST_MAX_CHARACTERS
     return `Message is ${overage} character${overage === 1 ? '' : 's'} too long.`
+  }
+  if (draft.followups.length > X_POST_MAX_FOLLOWUPS) {
+    return `Thread has ${draft.followups.length} replies; X posts support at most ${X_POST_MAX_FOLLOWUPS} here.`
+  }
+  for (const [index, followup] of draft.followups.entries()) {
+    if (!followup.text && followup.imageAssetIds.length === 0) {
+      return `Follow-up ${index + 1} needs text or an image.`
+    }
+    if (followup.text.length > X_POST_MAX_CHARACTERS) {
+      const overage = followup.text.length - X_POST_MAX_CHARACTERS
+      return `Follow-up ${index + 1} is ${overage} character${overage === 1 ? '' : 's'} too long.`
+    }
+    if (followup.imageAssetIds.length > X_POST_MAX_IMAGES_PER_FOLLOWUP) {
+      return `Follow-up ${index + 1} has more than ${X_POST_MAX_IMAGES_PER_FOLLOWUP} images.`
+    }
   }
   if (draft.scheduledFor === null) return null
   const scheduledAt = Date.parse(draft.scheduledFor)

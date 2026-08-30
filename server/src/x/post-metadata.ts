@@ -1,7 +1,11 @@
 import type { Engine } from "videobook-engine";
+import type {
+  XPostFollowupError,
+  XPostReplyResult,
+} from "./post-contract.js";
 
 export const POST_METADATA_FILE = ".post.x.json";
-const POST_METADATA_VERSION = 1;
+const POST_METADATA_VERSION = 2;
 
 interface XPostEntry {
   tweet_id: string;
@@ -11,6 +15,9 @@ interface XPostEntry {
   text: string | null;
   scheduled_for: string | null;
   schedule_id: string | null;
+  status?: "posted" | "partially_posted";
+  replies?: XPostReplyResult[];
+  followup_error?: XPostFollowupError | null;
 }
 
 interface XPostMetadata {

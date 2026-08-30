@@ -41,6 +41,10 @@ describe("scheduled-posts persistence", () => {
         book_id: bookId,
         platform: "x",
         text: "hello",
+        followups: [{
+          text: "Exact prompt",
+          image_asset_ids: ["img-source"],
+        }],
       },
       future,
     );
@@ -55,6 +59,10 @@ describe("scheduled-posts persistence", () => {
     expect(listed[0].schedule_id).toBe(result.schedule_id);
     expect(listed[0].status).toBe("pending");
     expect(listed[0].payload.asset_id).toBe("vid-test");
+    expect(listed[0].payload.followups).toEqual([{
+      text: "Exact prompt",
+      image_asset_ids: ["img-source"],
+    }]);
     expect(engine.settings.get(SCHEDULED_POST_SETTINGS_KEY)).toEqual(listed);
   });
 

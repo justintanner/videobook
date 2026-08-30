@@ -194,6 +194,7 @@ describe('chat composer browser flow', () => {
   let fullscreenImageArtifactId = ''
   let fullscreenImageObjectHash = ''
   let fullscreenImageMediaUrl = ''
+  let threadVideoArtifactId = ''
   const observedCalls: ToolCall[] = []
   let delayedBootstrap = false
   let delayChatResponses = false
@@ -477,6 +478,76 @@ describe('chat composer browser flow', () => {
         target_input: 'media',
       },
     }))
+    const threadVideoUpload = record(resultValue(await client.callTool({
+      name: 'upload_file',
+      arguments: {
+        book_id: bookId,
+        filename: 'thread-output.mp4',
+        data: (await readFile(splitSourcePath)).toString('base64'),
+      },
+    })))
+    const threadVideoAssetId = typeof threadVideoUpload?.assetId === 'string'
+      ? threadVideoUpload.assetId
+      : ''
+    const threadAssetsValue = record(resultValue(await client.callTool({
+      name: 'list_assets',
+      arguments: { book_id: bookId, sort: 'newest' },
+    })))
+    const threadVideoAsset = (Array.isArray(threadAssetsValue?.assets)
+      ? threadAssetsValue.assets
+      : [])
+      .map(record)
+      .find((asset) => asset?.id === threadVideoAssetId)
+    threadVideoArtifactId = typeof threadVideoAsset?.artifact_id === 'string'
+      ? threadVideoAsset.artifact_id
+      : ''
+    if (!threadVideoArtifactId) {
+      throw new Error('Could not create X thread review fixture asset')
+    }
+    const threadGenerationCellId = await createCell({
+      type: 'generate_video',
+      label: 'generate-video-thread-review',
+      slot: { row: 1, column: 3 },
+      prompt: 'Fallback thread prompt',
+      provider: 'kie',
+      model: 'Seedance2MiniInputSchema',
+      operation: 'image_to_video',
+      tool: 'generate_kie_seedance_2_5_video',
+      inputs: {
+        resolvedPrompt: 'Exact final generation prompt for the making-of thread',
+      },
+    })
+    const threadOutputCellId = await createCell({
+      type: 'video',
+      label: 'thread-review-output',
+      slot: { row: 2, column: 3 },
+      output_artifact_id: threadVideoArtifactId,
+      inputs: {
+        mediaRole: 'generate-video-output',
+        producerCellId: threadGenerationCellId,
+      },
+    })
+    for (const connection of [
+      {
+        source_cell_id: fullscreenImageCellId,
+        target_cell_id: threadGenerationCellId,
+        target_input: 'image',
+      },
+      {
+        source_cell_id: threadGenerationCellId,
+        target_cell_id: threadOutputCellId,
+        target_input: 'media',
+      },
+    ]) {
+      resultValue(await client.callTool({
+        name: 'connect_notebook_cells',
+        arguments: {
+          book_id: bookId,
+          notebook_id: notebookId,
+          ...connection,
+        },
+      }))
+    }
     await client.close()
     viteProcess = startProcess(
       [join(process.cwd(), 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(vitePort)],
@@ -1502,14 +1573,14 @@ describe('chat composer browser flow', () => {
       expect(await appliedCalls()).toHaveLength(0)
 
       await schedule.fill('')
-      await postPreview.getByRole('alert').getByText('Choose a valid date and time.')
+      await review.getByRole('alert').getByText('Choose a valid date and time.')
         .waitFor({ state: 'visible' })
       expect(await review.getByRole('button', { name: 'Post to X' }).isDisabled()).toBe(true)
       await message.fill('This cancelled edit must not be posted.')
       await publish.selectOption('now')
       await orientation.selectOption('source')
       expect(await postPreview.getByLabel('Schedule date and time').count()).toBe(0)
-      expect(await postPreview.getByRole('alert').count()).toBe(0)
+      expect(await review.getByRole('alert').count()).toBe(0)
       expect(await review.getByRole('button', { name: 'Post to X' }).isEnabled()).toBe(true)
       expect(await settings.textContent()).toContain('PublishNow')
       expect(await settings.textContent()).toContain('OrientationKeep source')
@@ -1520,13 +1591,17 @@ describe('chat composer browser flow', () => {
       await input.fill(prompt)
       await page.getByLabel('Send command').click()
       await review.waitFor({ state: 'visible', timeout: 30_000 })
-      expect(await review.getByLabel('Message').inputValue()).toBe(postText)
+      const reopenedMessage = review.getByRole('textbox', {
+        name: 'Message',
+        exact: true,
+      })
+      expect(await reopenedMessage.inputValue()).toBe(postText)
       expect(await review.getByLabel('Publish timing').inputValue()).toBe('schedule')
       expect(await review.getByLabel('Video orientation').inputValue()).toBe('portrait')
       const editedPostText = 'Edited in the confirmation screen.\nReady for the scheduled launch.'
       const editedLocalSchedule = '2099-09-01T11:30'
       const editedSchedule = new Date(editedLocalSchedule).toISOString()
-      await review.getByLabel('Message').fill(editedPostText)
+      await reopenedMessage.fill(editedPostText)
       await review.getByLabel('Video orientation').selectOption('landscape')
       await review.getByLabel('Schedule date and time').fill(editedLocalSchedule)
       expect(await settings.textContent()).toContain(`Scheduled · ${editedSchedule}`)
@@ -1544,7 +1619,7 @@ describe('chat composer browser flow', () => {
       await input.fill(prompt)
       await page.getByLabel('Send command').click()
       await review.waitFor({ state: 'visible', timeout: 30_000 })
-      await review.getByLabel('Message').fill('')
+      await review.getByRole('textbox', { name: 'Message', exact: true }).fill('')
       await review.getByLabel('Publish timing').selectOption('now')
       await review.getByLabel('Video orientation').selectOption('source')
       await review.getByRole('button', { name: 'Post to X' }).click()
@@ -1554,6 +1629,86 @@ describe('chat composer browser flow', () => {
       expect(clearedParams).not.toHaveProperty('text')
       expect(clearedParams).not.toHaveProperty('scheduled_for')
       expect(clearedParams).not.toHaveProperty('orientation')
+    } finally {
+      mockedChatActionPlan = null
+    }
+  }, 60_000)
+
+  it('reviews and edits an opt-in how-it-was-made X thread', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    const prompt = 'post the generated thread review video to X'
+    const planId = '01900000-0000-7000-8000-000000000110'
+    mockedChatActionPlan = {
+      prompt,
+      applyValue: {
+        status: 'posted',
+        platform: 'x',
+        tweet_id: 'THREAD_ROOT',
+        tweet_url: 'https://x.com/i/web/status/THREAD_ROOT',
+        replies: [{ tweet_id: 'THREAD_REPLY' }],
+      },
+      value: {
+        kind: 'chat-action-plan',
+        planId,
+        bookId,
+        prompt,
+        routedTool: 'post',
+        tool: 'post',
+        params: {
+          asset_id: threadVideoArtifactId,
+          book_id: bookId,
+          platform: 'x',
+          text: 'Generated with Videobook.',
+        },
+        message: 'Posting to X.',
+        summary: 'Posting to X.',
+        effect: 'mutation',
+        confirmation: {
+          required: true,
+          reason: 'This request publishes media outside the current book',
+        },
+      },
+    }
+    const appliedCalls = () => observedCalls.filter((call) =>
+      call.name === 'chat'
+      && record(call.arguments.action_plan)?.planId === planId)
+    try {
+      await openApp()
+      const input = page.getByLabel('Videobook command input')
+      await input.fill(prompt)
+      await page.getByLabel('Send command').click()
+
+      const review = page.getByLabel('Chat action review')
+      await review.waitFor({ state: 'visible', timeout: 30_000 })
+      const thread = review.getByLabel('How it was made thread')
+      const master = thread.getByLabel('Add how-it-was-made thread')
+      expect(await master.isChecked()).toBe(false)
+      expect(await thread.getByLabel('Thread options').count()).toBe(0)
+
+      await master.check()
+      await thread.getByLabel('Thread options').waitFor({ state: 'visible' })
+      const firstReply = thread.getByLabel('Follow-up 1')
+      expect(await firstReply.inputValue()).toContain(
+        'Exact final generation prompt for the making-of thread',
+      )
+      expect(await thread.locator('img[alt="@c3"]').count()).toBe(1)
+      expect(await thread.getByLabel('Include prompts').isChecked()).toBe(true)
+      expect(await thread.getByLabel('Attach source images').isChecked()).toBe(true)
+      expect(await appliedCalls()).toHaveLength(0)
+
+      await firstReply.fill('Edited making-of reply with the exact source image attached.')
+      await review.getByRole('button', { name: 'Post to X' }).click()
+      await expect.poll(() => appliedCalls().length).toBe(1)
+      const appliedPlan = record(appliedCalls()[0]?.arguments.action_plan)
+      const appliedParams = record(appliedPlan?.params)
+      const followups = Array.isArray(appliedParams?.followups)
+        ? appliedParams.followups.map(record)
+        : []
+      expect(followups).toHaveLength(1)
+      expect(followups[0]?.text).toBe(
+        'Edited making-of reply with the exact source image attached.',
+      )
+      expect(followups[0]?.image_asset_ids).toEqual([fullscreenImageArtifactId])
     } finally {
       mockedChatActionPlan = null
     }

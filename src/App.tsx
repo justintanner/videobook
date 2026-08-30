@@ -169,10 +169,23 @@ import {
 } from '@/videobook/provider-payload-preview'
 import {
   reviseXPostParams,
+  reviseXPostFollowups,
   xPostDraftError,
   xPostDraftFromParams,
   type XPostDraftPatch,
 } from '@/videobook/x-post-review'
+import {
+  dedupeXPostAttributions,
+  discoverXPostThreadGraph,
+  initialXPostThreadReview,
+  selectXPostGenerationPrompt,
+  xPostFollowupsFromThread,
+  xPostSourceAttribution,
+  type XPostSourceAttribution,
+  type XPostThreadOptions,
+  type XPostThreadReview,
+  type XPostThreadStep,
+} from '@/videobook/x-post-thread'
 import {
   CanonicalSequencePlayer,
   type TimelineKeyboardAction,
@@ -429,6 +442,7 @@ type AssetRecord = {
   mediaUrl: string | null
   thumbnailUrl: string | null
   status: string
+  origin: string | null
   prompt: string | null
   width: number | null
   height: number | null
@@ -592,6 +606,7 @@ type PendingChatAction =
   | {
       kind: 'routed'
       plan: ChatActionPlan
+      xPostReview?: XPostThreadReview | null
     }
 
 type JobRecord = {
@@ -1231,6 +1246,7 @@ function asAsset(value: unknown): AssetRecord | null {
     mediaUrl: asString(item.media_url ?? item.mediaUrl),
     thumbnailUrl: asString(item.thumbnail_url ?? item.thumbnailUrl),
     status: asString(item.status) ?? 'ready',
+    origin: asString(item.origin),
     prompt: asString(item.prompt),
     width: asNumber(item.width),
     height: asNumber(item.height),
@@ -3167,10 +3183,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       || candidate.cellAddress.toLowerCase() === reference.toLowerCase())
     const asset = assetById.get(mention?.artifactId ?? reference) ?? mention ?? null
     const draft = xPostDraftFromParams(plan.params)
+    const review = pendingChatAction.xPostReview
+    const validation = review?.options.enabled
+      && xPostFollowupsFromThread(review).length === 0
+      ? {
+          blocking: 'Select at least one thread detail, or turn the thread off.',
+          notice: null,
+        }
+      : xPostValidation(draft)
     return {
       asset,
       draft,
       error: xPostDraftError(draft),
+      validation,
       sourceLabel: mention
         ? `@${mention.cellAddress}`
         : rawReference.startsWith('@')
@@ -4301,6 +4326,54 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         plan: {
           ...current.plan,
           params: reviseXPostParams(current.plan.params, patch),
+        },
+      }
+    })
+  }, [])
+  const updatePendingXPostThreadOptions = useCallback((
+    patch: Partial<XPostThreadOptions>,
+  ) => {
+    setPendingChatAction((current) => {
+      if (current?.kind !== 'routed' || !current.xPostReview) return current
+      const xPostReview = {
+        ...current.xPostReview,
+        options: { ...current.xPostReview.options, ...patch },
+      }
+      return {
+        ...current,
+        xPostReview,
+        plan: {
+          ...current.plan,
+          params: reviseXPostFollowups(
+            current.plan.params,
+            xPostFollowupsFromThread(xPostReview),
+          ),
+        },
+      }
+    })
+  }, [])
+  const updatePendingXPostThreadReply = useCallback((
+    replyId: string,
+    text: string,
+  ) => {
+    setPendingChatAction((current) => {
+      if (current?.kind !== 'routed' || !current.xPostReview) return current
+      const xPostReview = {
+        ...current.xPostReview,
+        textOverrides: {
+          ...current.xPostReview.textOverrides,
+          [replyId]: text,
+        },
+      }
+      return {
+        ...current,
+        xPostReview,
+        plan: {
+          ...current.plan,
+          params: reviseXPostFollowups(
+            current.plan.params,
+            xPostFollowupsFromThread(xPostReview),
+          ),
         },
       }
     })
@@ -8092,6 +8165,75 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const prepareXPostThreadReview = async (
+    plan: ChatActionPlan,
+  ): Promise<XPostThreadReview | null> => {
+    if (!bookId || !notebook) return null
+    if (plan.tool !== 'post' && plan.routedTool !== 'post') return null
+    const rawReference = asString(plan.params.asset_id)?.trim() ?? ''
+    const reference = rawReference.replace(/^@/, '')
+    const mention = commandMentionAssets.find((candidate) =>
+      candidate.artifactId === reference
+      || candidate.cellAddress.toLowerCase() === reference.toLowerCase())
+    const assetId = mention?.artifactId ?? reference
+    const targetAsset = assetById.get(assetId) ?? mention
+    if (!assetId || (targetAsset?.type !== 'video' && targetAsset?.type !== 'final')) {
+      return null
+    }
+
+    const graph = discoverXPostThreadGraph(notebook, assetId)
+    const steps = await Promise.all(graph.steps.map(async (step): Promise<XPostThreadStep> => {
+      const payload = await call('list_cell_generations', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        cell_id: step.outputCellId ?? step.producerCellId,
+        limit: 20,
+      }, { background: true }).catch(() => null)
+      const attemptValues = recordValue(payload)?.attempts
+      const attempts = Array.isArray(attemptValues)
+        ? attemptValues as CellGenerationAttempt[]
+        : []
+      const prompt = selectXPostGenerationPrompt({
+        attempts,
+        outputArtifactId: step.outputArtifactId,
+        outputAssetPrompt: step.outputArtifactId
+          ? assetById.get(step.outputArtifactId)?.prompt ?? null
+          : null,
+        producerResolvedPrompt: step.producerResolvedPrompt,
+        producerPrompt: step.producerPrompt,
+      })
+      const images = step.sourceArtifactIds.flatMap((sourceAssetId) => {
+        const sourceAsset = assetById.get(sourceAssetId)
+        if (sourceAsset?.type !== 'image') return []
+        const sourceMention = commandMentionAssets.find((candidate) =>
+          candidate.artifactId === sourceAssetId)
+        return [{
+          assetId: sourceAssetId,
+          label: sourceMention ? `@${sourceMention.cellAddress}` : sourceAsset.id,
+          mediaUrl: sourceAsset.mediaUrl,
+          thumbnailUrl: sourceAsset.thumbnailUrl,
+        }]
+      })
+      return { id: step.id, prompt, images }
+    }))
+
+    const attributionValues = await Promise.all(graph.upstreamArtifactIds
+      .filter((upstreamAssetId) => assetById.get(upstreamAssetId)?.origin === 'download')
+      .map(async (upstreamAssetId): Promise<XPostSourceAttribution | null> => {
+        const metadata = await call('read_asset_metadata', {
+          asset_id: upstreamAssetId,
+          name: 'original',
+          book_id: bookId,
+        }, { background: true }).catch(() => null)
+        const record = recordValue(metadata)
+        return record ? xPostSourceAttribution(upstreamAssetId, record) : null
+      }))
+    const attributions = dedupeXPostAttributions(
+      attributionValues.filter((value): value is XPostSourceAttribution => value !== null),
+    )
+    return initialXPostThreadReview({ steps, attributions })
+  }
+
   const previewRoutedChatAction = async (
     plan: ChatActionPlan,
     originalInput: string,
@@ -8302,8 +8444,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (plan.confirmation.required === false) {
       return await executeRoutedChatActionNow(plan)
     }
+    const xPostReview = await prepareXPostThreadReview(plan)
+    const reviewedPlan = xPostReview
+      ? { ...plan, params: reviseXPostFollowups(plan.params, []) }
+      : plan
     setPendingCommandPlan(null)
-    setPendingChatAction({ kind: 'routed', plan })
+    setPendingChatAction({ kind: 'routed', plan: reviewedPlan, xPostReview })
     return applyReadyOutcome('Action preview ready')
   }
 
@@ -8578,8 +8724,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const error = xPostDraftError(xPostDraftFromParams(
         pendingChatAction.plan.params,
       ))
-      if (error) {
-        return { ok: false, message: error, nextInput: '/apply', selectInput: false }
+      const threadError = pendingChatAction.xPostReview?.options.enabled
+        && xPostFollowupsFromThread(pendingChatAction.xPostReview).length === 0
+        ? 'Select at least one thread detail, or turn the thread off.'
+        : null
+      if (error || threadError) {
+        return {
+          ok: false,
+          message: error ?? threadError ?? 'The post is not ready.',
+          nextInput: '/apply',
+          selectInput: false,
+        }
       }
     }
     if (
@@ -10354,7 +10509,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             title={review?.title ?? 'Post to X'}
             address={pendingXPostPreview.sourceLabel}
             effect={review?.effect ?? null}
-            validation={xPostValidation(pendingXPostPreview.draft)}
+            validation={pendingXPostPreview.validation}
             busy={busy}
             busyLabel="Posting…"
             applyLabel="Post to X"
@@ -10368,7 +10523,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               prompt={plan.prompt}
               settings={review?.settings ?? []}
               sourceLabel={pendingXPostPreview.sourceLabel}
+              threadReview={pendingChatAction.xPostReview}
               onChange={updatePendingXPostDraft}
+              onThreadOptionsChange={updatePendingXPostThreadOptions}
+              onThreadReplyChange={updatePendingXPostThreadReply}
             />
           </ConfirmSheet>
         )

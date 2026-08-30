@@ -10,6 +10,14 @@ import { getValidAccessToken } from "./x-tokens.js";
 import { appendXPostMetadata } from "./post-metadata.js";
 import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { logger } from "../logger.js";
+import type {
+  PostToXResult,
+  XPostFollowup,
+  XPostFollowupError,
+  XPostReplyResult,
+} from "./post-contract.js";
+
+export type { PostToXResult } from "./post-contract.js";
 
 const APPEND_CHUNK_BYTES = 4 * 1024 * 1024;
 const STATUS_POLL_TIMEOUT_MS = 5 * 60_000;
@@ -79,6 +87,7 @@ interface PostToXArgs {
   orientation?: PostOrientation;
   scheduleId?: string;
   scheduledFor?: string;
+  followups?: XPostFollowup[];
   x?: XProvider;
   signal?: AbortSignal;
 }
@@ -129,15 +138,101 @@ async function maybeReorientVideo(
   return { buffer, tempPath, mediaType: "video/mp4" };
 }
 
-export interface PostToXResult {
-  tweet_id: string;
-  tweet_url: string;
-  media_id: string;
-  posted_at: string;
-}
-
 function tweetUrl(id: string): string {
   return `https://x.com/i/web/status/${id}`;
+}
+
+interface PreparedMedia {
+  assetId: string;
+  buffer: Buffer;
+  info: MediaTypeInfo;
+  tempPath: string | null;
+}
+
+async function prepareMedia(
+  engine: Engine,
+  assetId: string,
+  orientation?: PostOrientation,
+): Promise<PreparedMedia> {
+  const artifactResult = engine.artifacts.get(assetId);
+  if (!artifactResult.ok) {
+    throw new Error(`Asset ${assetId} not found: ${artifactResult.error.message}`);
+  }
+  const manifestResult = await engine.files.manifest(assetId);
+  if (!manifestResult.ok) {
+    throw new Error(`Asset ${assetId} not found: ${manifestResult.error.message}`);
+  }
+  const manifest = manifestResult.value;
+  const file = findPrimaryMediaFile(manifest.files, artifactResult.value.kind);
+  if (!file) {
+    throw new Error(`Asset ${assetId} has no primary media file to post`);
+  }
+  const info = inferMediaType(file.name);
+  if (!info) {
+    throw new Error(
+      `Cannot post asset ${assetId}: unsupported media file ${file.name}`,
+    );
+  }
+
+  if (orientation && info.mediaCategory === "tweet_video") {
+    const transformed = await maybeReorientVideo(
+      join(manifest.path, file.name),
+      orientation,
+    );
+    if (transformed) {
+      return {
+        assetId,
+        buffer: transformed.buffer,
+        info: { mediaType: transformed.mediaType, mediaCategory: "tweet_video" },
+        tempPath: transformed.tempPath,
+      };
+    }
+  }
+
+  const readResult = await engine.files.read(assetId, file.name);
+  if (!readResult.ok) {
+    throw new Error(`Failed to read ${file.name}: ${readResult.error.message}`);
+  }
+  return { assetId, buffer: readResult.value, info, tempPath: null };
+}
+
+interface PreparedFollowup {
+  text?: string;
+  media: PreparedMedia[];
+}
+
+async function prepareFollowups(
+  engine: Engine,
+  followups: readonly XPostFollowup[],
+): Promise<PreparedFollowup[]> {
+  if (followups.length > 25) {
+    throw new Error("X threads support at most 25 follow-up posts here");
+  }
+  const prepared: PreparedFollowup[] = [];
+  for (const [index, followup] of followups.entries()) {
+    const text = followup.text?.trim() ? followup.text : undefined;
+    const assetIds = followup.image_asset_ids ?? [];
+    if (!text && assetIds.length === 0) {
+      throw new Error(`Follow-up ${index + 1} needs text or an image`);
+    }
+    if ((followup.text?.length ?? 0) > 280) {
+      throw new Error(`Follow-up ${index + 1} exceeds 280 characters`);
+    }
+    if (assetIds.length > 4) {
+      throw new Error(`Follow-up ${index + 1} has more than 4 images`);
+    }
+    const media = await Promise.all(assetIds.map(async (sourceAssetId) =>
+      await prepareMedia(engine, sourceAssetId)));
+    if (media.some((item) => item.info.mediaCategory === "tweet_video")) {
+      throw new Error(`Follow-up ${index + 1} attachments must be images`);
+    }
+    const gifs = media.filter((item) => item.info.mediaCategory === "tweet_gif");
+    if (gifs.length > 0 && media.length > 1) {
+      throw new Error(`Follow-up ${index + 1} can attach one GIF or up to four photos`);
+    }
+    prepared.push({ ...(text ? { text } : {}), media });
+  }
+  return prepared;
 }
 
 async function getXClient(
@@ -231,57 +326,34 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
     orientation,
     scheduleId,
     scheduledFor,
+    followups = [],
     signal,
   } = args;
-
-  const artifactResult = engine.artifacts.get(assetId);
-  if (!artifactResult.ok) {
-    throw new Error(`Asset ${assetId} not found: ${artifactResult.error.message}`);
-  }
-  const manifestResult = await engine.files.manifest(assetId);
-  if (!manifestResult.ok) {
-    throw new Error(`Asset ${assetId} not found: ${manifestResult.error.message}`);
-  }
-  const manifest = manifestResult.value;
-  const file = findPrimaryMediaFile(manifest.files, artifactResult.value.kind);
-  if (!file) {
-    throw new Error(`Asset ${assetId} has no primary media file to post`);
-  }
-  let info = inferMediaType(file.name);
-  if (!info) {
-    throw new Error(
-      `Cannot post asset ${assetId}: unsupported media file ${file.name}`,
-    );
-  }
-
-  let buffer: Buffer;
-  let tempPath: string | null = null;
-  if (orientation && info.mediaCategory === "tweet_video") {
-    const inputPath = join(manifest.path, file.name);
-    const transformed = await maybeReorientVideo(inputPath, orientation);
-    if (transformed) {
-      buffer = transformed.buffer;
-      tempPath = transformed.tempPath;
-      info = { mediaType: transformed.mediaType, mediaCategory: "tweet_video" };
-    } else {
-      const readResult = await engine.files.read(assetId, file.name);
-      if (!readResult.ok) {
-        throw new Error(`Failed to read ${file.name}: ${readResult.error.message}`);
-      }
-      buffer = readResult.value;
-    }
-  } else {
-    const readResult = await engine.files.read(assetId, file.name);
-    if (!readResult.ok) {
-      throw new Error(`Failed to read ${file.name}: ${readResult.error.message}`);
-    }
-    buffer = readResult.value;
-  }
-
-  let mediaId: string;
+  if ((text?.length ?? 0) > 280) throw new Error("Post text exceeds 280 characters");
+  const rootMedia = await prepareMedia(engine, assetId, orientation);
   try {
+    const preparedFollowups = await prepareFollowups(engine, followups);
     const x = await getXClient(engine, args.x);
-    mediaId = await uploadMedia(x, buffer, info, signal);
+    const mediaId = await uploadMedia(
+      x,
+      rootMedia.buffer,
+      rootMedia.info,
+      signal,
+    );
+    const uploadedFollowups: Array<{
+      text?: string;
+      mediaIds: string[];
+    }> = [];
+    for (const followup of preparedFollowups) {
+      const mediaIds: string[] = [];
+      for (const media of followup.media) {
+        mediaIds.push(await uploadMedia(x, media.buffer, media.info, signal));
+      }
+      uploadedFollowups.push({
+        ...(followup.text ? { text: followup.text } : {}),
+        mediaIds,
+      });
+    }
 
     const tweetRes = await x.post.v2.tweets(
       {
@@ -293,6 +365,40 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
 
     const tweetId = tweetRes.data.id;
     const postedAt = new Date().toISOString();
+    const replies: XPostReplyResult[] = [];
+    let parentTweetId = tweetId;
+    let followupError: XPostFollowupError | null = null;
+    for (const [index, followup] of uploadedFollowups.entries()) {
+      try {
+        const replyRes = await x.post.v2.tweets(
+          {
+            ...(followup.text ? { text: followup.text } : {}),
+            ...(followup.mediaIds.length > 0
+              ? { media: { media_ids: followup.mediaIds } }
+              : {}),
+            reply: { in_reply_to_tweet_id: parentTweetId },
+          },
+          signal,
+        );
+        const replyId = replyRes.data.id;
+        const replyResult: XPostReplyResult = {
+          tweet_id: replyId,
+          tweet_url: tweetUrl(replyId),
+          media_ids: followup.mediaIds,
+          text: followup.text ?? null,
+          posted_at: new Date().toISOString(),
+        };
+        replies.push(replyResult);
+        parentTweetId = replyId;
+      } catch (cause) {
+        followupError = {
+          reply_number: index + 1,
+          message: cause instanceof Error ? cause.message : String(cause),
+        };
+        break;
+      }
+    }
+    const status = followupError ? "partially_posted" : "posted";
 
     try {
       await appendXPostMetadata({
@@ -306,6 +412,9 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
           text: text !== undefined && text.length > 0 ? text : null,
           scheduled_for: scheduledFor ?? null,
           schedule_id: scheduleId ?? null,
+          status,
+          replies,
+          followup_error: followupError,
         },
       });
     } catch (err) {
@@ -316,16 +425,17 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
     }
 
     return {
+      status,
       tweet_id: tweetId,
       tweet_url: tweetUrl(tweetId),
       media_id: mediaId,
       posted_at: postedAt,
+      replies,
+      followup_error: followupError,
     };
   } finally {
-    if (tempPath) {
-      await unlink(tempPath).catch(() => {
-        /* best-effort cleanup */
-      });
+    if (rootMedia.tempPath) {
+      await unlink(rootMedia.tempPath).catch(() => undefined);
     }
   }
 }

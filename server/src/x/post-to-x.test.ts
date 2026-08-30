@@ -6,7 +6,11 @@ import { createX } from "@apicity/x";
 import type { Engine } from "videobook-engine";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { configureXStatusPollForTests, postToX, STATUS_POLL_MIN_INTERVAL_MS } from "./post-to-x.js";
-import { readXPostMetadata, POST_METADATA_FILE } from "./post-metadata.js";
+import {
+  appendXPostMetadata,
+  readXPostMetadata,
+  POST_METADATA_FILE,
+} from "./post-metadata.js";
 
 interface RecordedRequest {
   url: string;
@@ -130,7 +134,7 @@ describe("postToX helper", () => {
     expect(tweetBody.text).toBe("hi");
 
     const meta = await readXPostMetadata(fs, assetId);
-    expect(meta.version).toBe(1);
+    expect(meta.version).toBe(2);
     expect(meta.asset_id).toBe(assetId);
     expect(meta.posts).toHaveLength(1);
     expect(meta.posts[0]).toMatchObject({
@@ -187,6 +191,49 @@ describe("postToX helper", () => {
 
   it("post metadata file is named .post.x.json", () => {
     expect(POST_METADATA_FILE).toBe(".post.x.json");
+  });
+
+  it("reads version 1 metadata and upgrades it on the next append", async () => {
+    const assetId = await uploadFakeAsset(fs, bookId, "img", ".jpg");
+    const legacyEntry = {
+      tweet_id: "LEGACY",
+      tweet_url: "https://x.com/i/web/status/LEGACY",
+      posted_at: "2026-01-01T00:00:00.000Z",
+      media_id: "LEGACY_MEDIA",
+      text: "legacy",
+      scheduled_for: null,
+      schedule_id: null,
+    };
+    const write = await fs.files.write(
+      assetId,
+      POST_METADATA_FILE,
+      Buffer.from(JSON.stringify({
+        version: 1,
+        asset_id: assetId,
+        posts: [legacyEntry],
+      })),
+    );
+    if (!write.ok) throw new Error(write.error.message);
+
+    expect((await readXPostMetadata(fs, assetId)).version).toBe(1);
+    await appendXPostMetadata({
+      engine: fs,
+      assetId,
+      entry: {
+        ...legacyEntry,
+        tweet_id: "CURRENT",
+        tweet_url: "https://x.com/i/web/status/CURRENT",
+        status: "posted",
+        replies: [],
+        followup_error: null,
+      },
+    });
+    const upgraded = await readXPostMetadata(fs, assetId);
+    expect(upgraded.version).toBe(2);
+    expect(upgraded.posts.map((entry) => entry.tweet_id)).toEqual([
+      "LEGACY",
+      "CURRENT",
+    ]);
   });
 
   it("polls processing_info until succeeded for video", async () => {
@@ -250,5 +297,108 @@ describe("postToX helper", () => {
     await expect(
       postToX({ engine: fs, assetId, bookId, x, text: "x" }),
     ).rejects.toThrow(/Bad token/);
+  });
+
+  it("uploads all reply media before publishing a chained thread", async () => {
+    const rootAssetId = await uploadFakeAsset(fs, bookId, "vid", ".mp4");
+    const firstImageId = await uploadFakeAsset(fs, bookId, "img", ".png");
+    const secondImageId = await uploadFakeAsset(fs, bookId, "img", ".jpg");
+    const { fetch: stubFetch, calls } = makeStubFetch([
+      { status: 200, body: { data: { id: "ROOT_MEDIA", media_key: "k", expires_after_secs: 1, size: 19 } } },
+      { status: 200, body: { data: { expires_at: 1 } } },
+      { status: 200, body: { data: { id: "ROOT_MEDIA", media_key: "k", expires_after_secs: 1, size: 19 } } },
+      { status: 200, body: { data: { id: "IMAGE_1", media_key: "k", expires_after_secs: 1, size: 19 } } },
+      { status: 200, body: { data: { expires_at: 1 } } },
+      { status: 200, body: { data: { id: "IMAGE_1", media_key: "k", expires_after_secs: 1, size: 19 } } },
+      { status: 200, body: { data: { id: "IMAGE_2", media_key: "k", expires_after_secs: 1, size: 19 } } },
+      { status: 200, body: { data: { expires_at: 1 } } },
+      { status: 200, body: { data: { id: "IMAGE_2", media_key: "k", expires_after_secs: 1, size: 19 } } },
+      { status: 201, body: { data: { id: "ROOT_TWEET", text: "root" } } },
+      { status: 201, body: { data: { id: "REPLY_1", text: "prompt" } } },
+      { status: 201, body: { data: { id: "REPLY_2", text: "source" } } },
+    ]);
+    const x = createX({ accessToken: "test-token", fetch: stubFetch });
+
+    const result = await postToX({
+      engine: fs,
+      assetId: rootAssetId,
+      bookId,
+      text: "root",
+      followups: [
+        {
+          text: "Exact generation prompt",
+          image_asset_ids: [firstImageId, secondImageId],
+        },
+        { text: "@source https://x.com/source/status/123" },
+      ],
+      x,
+    });
+
+    expect(result.status).toBe("posted");
+    expect(result.replies.map((reply) => reply.tweet_id)).toEqual([
+      "REPLY_1",
+      "REPLY_2",
+    ]);
+    expect(calls.slice(0, 9).every((call) => call.url.includes("media/upload")))
+      .toBe(true);
+    const rootBody = JSON.parse(calls[9].body!);
+    const firstReplyBody = JSON.parse(calls[10].body!);
+    const secondReplyBody = JSON.parse(calls[11].body!);
+    expect(rootBody).toMatchObject({
+      text: "root",
+      media: { media_ids: ["ROOT_MEDIA"] },
+    });
+    expect(firstReplyBody).toMatchObject({
+      text: "Exact generation prompt",
+      media: { media_ids: ["IMAGE_1", "IMAGE_2"] },
+      reply: { in_reply_to_tweet_id: "ROOT_TWEET" },
+    });
+    expect(secondReplyBody).toMatchObject({
+      text: "@source https://x.com/source/status/123",
+      reply: { in_reply_to_tweet_id: "REPLY_1" },
+    });
+
+    const metadata = await readXPostMetadata(fs, rootAssetId);
+    expect(metadata.posts.at(-1)).toMatchObject({
+      status: "posted",
+      replies: [
+        { tweet_id: "REPLY_1", media_ids: ["IMAGE_1", "IMAGE_2"] },
+        { tweet_id: "REPLY_2", media_ids: [] },
+      ],
+      followup_error: null,
+    });
+  });
+
+  it("reports partial success without retrying the root after a reply fails", async () => {
+    const assetId = await uploadFakeAsset(fs, bookId, "img", ".png");
+    const { fetch: stubFetch, calls } = makeStubFetch([
+      { status: 200, body: { data: { id: "MEDIA", media_key: "k", expires_after_secs: 1, size: 19 } } },
+      { status: 200, body: { data: { expires_at: 1 } } },
+      { status: 200, body: { data: { id: "MEDIA", media_key: "k", expires_after_secs: 1, size: 19 } } },
+      { status: 201, body: { data: { id: "ROOT", text: "root" } } },
+      { status: 500, body: { title: "Reply failed", detail: "Temporary X error", status: 500 } },
+    ]);
+    const x = createX({ accessToken: "test-token", fetch: stubFetch });
+
+    const result = await postToX({
+      engine: fs,
+      assetId,
+      bookId,
+      text: "root",
+      followups: [{ text: "first reply" }, { text: "must not run" }],
+      x,
+    });
+
+    expect(result).toMatchObject({
+      status: "partially_posted",
+      tweet_id: "ROOT",
+      replies: [],
+      followup_error: {
+        reply_number: 1,
+        message: expect.stringContaining("Temporary X error"),
+      },
+    });
+    expect(calls.filter((call) => call.url === "https://api.x.com/2/tweets"))
+      .toHaveLength(2);
   });
 });

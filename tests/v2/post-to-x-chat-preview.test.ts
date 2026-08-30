@@ -5,11 +5,13 @@ import { PostToXBody } from '../../src/components/videobook/confirm/bodies/PostT
 import {
   defaultXPostScheduledFor,
   reviseXPostParams,
+  reviseXPostFollowups,
   xPostDraftError,
   xPostDraftFromParams,
   xPostIsoDateTimeValue,
   xPostLocalDateTimeValue,
 } from '../../src/videobook/x-post-review'
+import { initialXPostThreadReview } from '../../src/videobook/x-post-thread'
 
 const ignoreChange = () => undefined
 
@@ -27,6 +29,7 @@ describe('PostToXBody', () => {
         postText,
         scheduledFor: '2099-08-25T03:00:00.000Z',
         orientation: null,
+        followups: [],
       },
       onChange: ignoreChange,
       prompt: 'post @b2 to X tomorrow',
@@ -58,6 +61,7 @@ describe('PostToXBody', () => {
         postText: '',
         scheduledFor: null,
         orientation: 'landscape',
+        followups: [],
       },
       onChange: ignoreChange,
       prompt: 'post @a1 to X',
@@ -72,6 +76,58 @@ describe('PostToXBody', () => {
     expect(html).toContain('placeholder="No message — media only"')
     expect(html).toContain('0/280 characters')
     expect(html).not.toContain('aria-label="Schedule date and time"')
+  })
+
+  it('renders opt-in editable generation replies and source images for videos', () => {
+    const baseReview = initialXPostThreadReview({
+      steps: [{
+        id: 'generation',
+        prompt: 'Exact final generation prompt',
+        images: [{
+          assetId: 'image-source',
+          label: '@b2',
+          mediaUrl: '/files/source.png',
+          thumbnailUrl: '/files/source-thumb.jpg',
+        }],
+      }],
+      attributions: [{
+        id: 'source',
+        label: 'Source',
+        url: 'https://x.com/source/status/123',
+        xHandle: 'source',
+      }],
+    })
+    const html = renderToStaticMarkup(createElement(PostToXBody, {
+      asset: {
+        type: 'video',
+        mediaUrl: '/files/video.mp4',
+        thumbnailUrl: null,
+      },
+      busy: false,
+      draft: {
+        postText: 'Root post',
+        scheduledFor: null,
+        orientation: null,
+        followups: [],
+      },
+      onChange: ignoreChange,
+      onThreadOptionsChange: ignoreChange,
+      onThreadReplyChange: ignoreChange,
+      prompt: 'post @a1 to X',
+      settings: [],
+      sourceLabel: '@a1',
+      threadReview: {
+        ...baseReview,
+        options: { ...baseReview.options, enabled: true },
+      },
+    }))
+
+    expect(html).toContain('aria-label="How it was made thread"')
+    expect(html).toContain('Add how-it-was-made thread')
+    expect(html).toContain('aria-label="Thread options"')
+    expect(html).toContain('Exact final generation prompt')
+    expect(html).toContain('src="/files/source-thumb.jpg"')
+    expect(html).toContain('@source https://x.com/source/status/123')
   })
 })
 
@@ -88,6 +144,7 @@ describe('X post review draft', () => {
       postText: 'Original message',
       scheduledFor: '2099-08-25T03:00:00.000Z',
       orientation: 'portrait',
+      followups: [],
     })
     expect(reviseXPostParams(params, {
       postText: '',
@@ -112,22 +169,50 @@ describe('X post review draft', () => {
       postText: 'x'.repeat(281),
       scheduledFor: null,
       orientation: null,
+      followups: [],
     }, now)).toBe('Message is 1 character too long.')
     expect(xPostDraftError({
       postText: 'Ready',
       scheduledFor: '',
       orientation: null,
+      followups: [],
     }, now)).toBe('Choose a valid date and time.')
     expect(xPostDraftError({
       postText: 'Ready',
       scheduledFor: '2099-08-25T02:59:00.000Z',
       orientation: null,
+      followups: [],
     }, now)).toBe('Scheduled time must be in the future.')
     expect(xPostDraftError({
       postText: 'Ready',
       scheduledFor: '2099-08-25T04:00:00.000Z',
       orientation: null,
+      followups: [],
     }, now)).toBeNull()
+  })
+
+  it('round-trips and validates editable thread replies', () => {
+    const params = reviseXPostFollowups({ asset_id: 'video-source' }, [{
+      text: 'Exact generation prompt',
+      imageAssetIds: ['image-1', 'image-2'],
+    }])
+    expect(params).toEqual({
+      asset_id: 'video-source',
+      followups: [{
+        text: 'Exact generation prompt',
+        image_asset_ids: ['image-1', 'image-2'],
+      }],
+    })
+    expect(xPostDraftFromParams(params).followups).toEqual([{
+      text: 'Exact generation prompt',
+      imageAssetIds: ['image-1', 'image-2'],
+    }])
+    expect(xPostDraftError({
+      postText: 'Ready',
+      scheduledFor: null,
+      orientation: null,
+      followups: [{ text: 'x'.repeat(281), imageAssetIds: [] }],
+    })).toBe('Follow-up 1 is 1 character too long.')
   })
 
   it('round-trips local date-time inputs and chooses a rounded default', () => {
