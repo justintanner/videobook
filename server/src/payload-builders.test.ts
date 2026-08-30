@@ -653,6 +653,16 @@ describe("translateToolPayload", () => {
     });
   });
 
+  it("rejects Kie Grok 1080p payloads with multiple image inputs", () => {
+    expect(() => translateToolPayload("generate_grok_imagine_video", {
+      image_refs: [
+        "https://example.test/first.png",
+        "https://example.test/second.png",
+      ],
+      resolution: "1080p",
+    })).toThrow("accepts exactly 1 image at 1080p (got 2)");
+  });
+
   it("rewrites @<artifact-id> prompt mentions to Kie @imageN form", () => {
     const IMG = "01890f1c-0000-7000-8000-0000000000aa";
     const result = translateToolPayload("generate_grok_imagine_video", {

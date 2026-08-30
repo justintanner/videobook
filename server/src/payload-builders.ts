@@ -112,6 +112,7 @@ import {
   normalizeNotebookReference,
   replaceNotebookMentions,
 } from "videobook-engine/notebook-mentions";
+import { grokImagine1080pImageCountError } from "./grok-imagine-video-contract.js";
 
 // ---------------------------------------------------------------------------
 // Individual builders
@@ -480,6 +481,11 @@ function buildGrokImagineVideoPayload(
   // Preview passes slugs as imageUrls; job passes https urls + parallel image_refs.
   const refKeys = args.image_refs?.map(bareImageRef);
   const aligned = alignGrokImageUrlsAndPrompt(args.prompt, imageUrls, refKeys);
+  const resolutionError = grokImagine1080pImageCountError(
+    aligned.imageUrls.length,
+    resolution,
+  );
+  if (resolutionError) throw new Error(resolutionError);
   const hasImageUrls = aligned.imageUrls.length > 0;
   const hasTaskId = typeof args.task_id === "string" && args.task_id.length > 0;
   // Prefer image_urls when both are present (tool path always supplies urls).

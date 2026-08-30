@@ -76,6 +76,7 @@ import {
   type NotebookPromptResolution,
 } from "../notebook-reference-resolver.js";
 import { resolvedInitialGenerationPrompt } from "../notebook-initial-generation-prompt.js";
+import { grokImagine1080pImageCountError } from "../grok-imagine-video-contract.js";
 
 export interface RunNotebookPayload {
   type: "run_notebook";
@@ -1198,6 +1199,19 @@ export async function prepareNotebookGeneration(
   const parsed = z.object(definition.schema).safeParse(preparedArgs.input);
   if (!parsed.success) {
     throw new Error(parsed.error.issues.map((issue) => issue.message).join("; "));
+  }
+  if (
+    spec?.canonical_name === "generate_kie_grok_imagine_image_to_video"
+    && !(typeof parsed.data._provider === "string" && parsed.data._provider.startsWith("xai"))
+  ) {
+    const imageCount = Array.isArray(parsed.data.image_refs)
+      ? parsed.data.image_refs.length
+      : typeof parsed.data.asset_id === "string" ? 1 : 0;
+    const resolutionError = grokImagine1080pImageCountError(
+      imageCount,
+      parsed.data.resolution,
+    );
+    if (resolutionError) throw new Error(resolutionError);
   }
   if (tool === "generate_kie_kling_3_0_motion_control") {
     const motionRefs = parsed.data.motion_video_refs;

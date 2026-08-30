@@ -51,6 +51,7 @@ import {
   type SlotConstraints,
 } from "./zod-slots.js";
 import { totalOmniReferenceSlots } from "./google-flow-refs.js";
+import { grokImagine1080pImageCountError } from "./grok-imagine-video-contract.js";
 import { getCanonicalName, isGenerationAction } from "./generation-registry.js";
 import {
   isKlingOmniTool,
@@ -1247,11 +1248,11 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
       // Apicity mode enum includes "spicy" which this i2v endpoint rejects (APICITY_DERIVE_SKIP).
       if (param === "mode") { prop.enum = GROK_IMAGE_TO_VIDEO_MODES; prop.description = "Generation mode: fun / normal"; }
       if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (6-30)"; }
-      if (param === "resolution") prop.description = "Video resolution: 480p / 720p";
+      if (param === "resolution") prop.description = "Video resolution: 480p / 720p / 1080p; 1080p requires exactly one image";
       if (param === "aspect_ratio") prop.description = "Video aspect ratio";
       if (param === "nsfw_checker") { prop.description = "Enable NSFW content safety filter (default false)"; }
       if (param === "image_refs") {
-        prop.description = "1-7 reference image assets (required, e.g., @img-sunset)";
+        prop.description = "1-7 reference image assets (required, e.g., @img-sunset); 1080p accepts exactly one image";
         prop.minItems = 1;
         prop.maxItems = 7;
       }
@@ -1489,6 +1490,13 @@ function validateVideoParams(rawToolName: string, params: Record<string, unknown
   if ((toolName === "generate_kie_grok_imagine_image_to_video" || canonical === "generate_fal_grok_imagine_video") && totalImages > 7) {
     warnings.push(`Grok Imagine 1.5 supports up to 7 reference images (got ${totalImages})`);
   }
+  if (toolName === "generate_kie_grok_imagine_image_to_video") {
+    const resolutionError = grokImagine1080pImageCountError(
+      totalImages,
+      params.resolution,
+    );
+    if (resolutionError) warnings.push(resolutionError);
+  }
 
   if (toolName === "generate_xai_grok_imagine_video" || canonical === "generate_xai_grok_imagine_video") {
     if (totalImages > 7) {
@@ -1693,7 +1701,7 @@ KEY CONSTRAINTS:
 - For generate_kie_gemini_omni_video: REQUIRES prompt and duration "4"/"6"/"8"/"10"; aspect_ratio "16:9"/"9:16"; resolution "720p"/"1080p"/"4k" (default 720p); seed integer. Optional image_refs (0-7) and one video_ref with video_clip_start/video_clip_ends (ends > start and < start+10s)
 - For generate_google_flow_veo_3_1_quality_video: 8s output only; optional first_frame_ref/last_frame_ref (last requires first); aspect_ratio "16:9"/"9:16"/"1:1"/"4:3"/"3:4"; NO reference images
 - For generate_google_flow_veo_3_1_fast_video, generate_google_flow_veo_3_1_lite_video, and generate_google_flow_veo_3_1_lite_low_priority_video: duration "4"/"6"/"8" (default "8"); image_refs (0-3) OR first_frame_ref/last_frame_ref, not both; aspect_ratio "16:9"/"9:16"/"1:1"/"4:3"/"3:4"
-- For generate_kie_grok_imagine_image_to_video: REQUIRES at least one image, mode "fun"/"normal", duration 6-30 (integer seconds), aspect_ratio "2:3"/"3:2"/"1:1"/"16:9"/"9:16"
+- For generate_kie_grok_imagine_image_to_video: REQUIRES at least one image, mode "fun"/"normal", duration 6-30 (integer seconds), resolution "480p"/"720p"/"1080p" (1080p requires exactly one image), aspect_ratio "2:3"/"3:2"/"1:1"/"16:9"/"9:16"
 - For extend_kie_grok_imagine_video: REQUIRES video_ref, prompt, extend_at, and extend_times "6"/"10"
 - For generate_kie_volcengine_video_to_video_lip_sync: REQUIRES video_ref (source video) and audio_ref (driving audio); mode "lite"/"basic"
 - For generate_kie_omnihuman_1_5_video: REQUIRES image_ref (portrait) and audio_ref (driving audio ≤60s); output_resolution "720"/"1080", pe_fast_mode boolean, optional prompt

@@ -4,6 +4,7 @@ import { z, type ZodRawShape } from "zod";
 import { GrokImageToVideoRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
+import { grokImagine1080pImageCountError } from "../grok-imagine-video-contract.js";
 import { enumOptions } from "../zod-slots.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
@@ -29,13 +30,13 @@ const grokI2v = GrokImageToVideoRequestSchema.shape.input.shape;
 const GROK_IMAGE_TO_VIDEO_MODES = enumOptions(grokI2v.mode).filter((mode) => mode !== "spicy") as [string, ...string[]];
 
 const generateGrokImagineVideoSchema = {
-  image_refs: apicityStringArrayField(grokI2v.image_urls, "1-7 reference image artifact ids"),
+  image_refs: apicityStringArrayField(grokI2v.image_urls, "1-7 reference image artifact ids; 1080p accepts exactly one image"),
   asset_id: z.string().optional().describe("Single image asset ID (must be img-*); back-compat alias for image_refs[0]"),
   book_id: z.string().describe("Book id"),
   prompt: apicityStringField(grokI2v.prompt, "Optional prompt to guide video generation (max 4096 chars)"),
   mode: z.enum(GROK_IMAGE_TO_VIDEO_MODES).optional().describe("Generation mode: fun / normal"),
   duration: apicityField(grokI2v.duration, "Video duration in seconds (6-30)"),
-  resolution: apicityField(grokI2v.resolution, "Output resolution"),
+  resolution: apicityField(grokI2v.resolution, "Output resolution; 1080p requires exactly one image"),
   aspect_ratio: apicityField(grokI2v.aspect_ratio, "Output aspect ratio"),
   nsfw_checker: apicityField(grokI2v.nsfw_checker, "Enable NSFW content safety filter (default false)"),
   replace_audio_with: z.string().optional().describe("After generation, splice an aud-* artifact over the Grok output. Runs server-side so the asset only reaches ready once the splice is in."),
@@ -69,6 +70,11 @@ export function generateGrokImagineVideoDef(engine: Engine): ToolDef {
       const refs = (image_refs && image_refs.length > 0)
         ? image_refs.map((s) => s.replace(/^@/, ""))
         : (rawAssetId ? [rawAssetId.replace(/^@/, "")] : []);
+
+      const resolutionError = isXai
+        ? null
+        : grokImagine1080pImageCountError(refs.length, resolution);
+      if (resolutionError) return toolError(resolutionError);
 
       const assetIds: string[] = [];
       const imageFilenames: string[] = [];

@@ -478,6 +478,13 @@ describe("validateVideoParams", () => {
     expect(grokResult.image_slots).toEqual({ min: 1, max: 7 });
     const tooManyGrokImages = validateVideoParams("generate_kie_grok_imagine_image_to_video", { image_refs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e", "@img-f", "@img-g", "@img-h"] });
     expect(tooManyGrokImages.warnings).toContain("Grok Imagine 1.5 supports up to 7 reference images (got 8)");
+    const invalid1080p = validateVideoParams("generate_kie_grok_imagine_image_to_video", {
+      image_refs: ["@img-a", "@img-b"],
+      resolution: "1080p",
+    });
+    expect(invalid1080p.warnings).toContain(
+      "Grok Imagine image-to-video accepts exactly 1 image at 1080p (got 2); remove extra image inputs or choose 720p or 480p.",
+    );
   });
 
   it("enforces xAI's cross-field duration cap only when references are present", () => {

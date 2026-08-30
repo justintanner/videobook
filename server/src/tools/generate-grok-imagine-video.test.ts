@@ -203,6 +203,38 @@ describe("generate_grok_imagine_video tool", () => {
     expect(parsed.source_images).toEqual(ids);
   });
 
+  it("rejects multiple image_refs at 1080p before creating a video asset", async () => {
+    process.env.KIE_API_KEY = "test-key";
+
+    const fs = createEngineForTest(tempDir);
+    const ids: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const asset = await fs.artifacts.create("img", `1080p-ref-${i}`);
+      if (!asset.ok) throw new Error("Failed to create asset");
+      const png = await sharp({
+        create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
+      }).png().toBuffer();
+      await fs.files.write(asset.value.artifactId, "original.png", png);
+      ids.push(asset.value.artifactId);
+    }
+    const artifactCount = fs.artifacts.list().length;
+
+    const result = await client.callTool({
+      name: "generate_kie_grok_imagine_image_to_video",
+      arguments: {
+        image_refs: ids,
+        book_id: "test-proj",
+        resolution: "1080p",
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain(
+      "accepts exactly 1 image at 1080p (got 2)",
+    );
+    expect(fs.artifacts.list()).toHaveLength(artifactCount);
+  });
+
   it("rejects more than 7 image_refs", async () => {
     process.env.KIE_API_KEY = "test-key";
 
