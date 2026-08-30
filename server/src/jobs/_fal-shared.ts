@@ -1,4 +1,4 @@
-import { createFal } from "@apicity/fal";
+import { createFal, FalError } from "@apicity/fal";
 import type { FalEndpointId, FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
@@ -25,10 +25,17 @@ export async function submitFalJob<E extends string>(args: FalSubmitArgs<E>): Pr
   await args.engine.metadata.artifacts.write(args.assetId, "generation-payload", { endpoint_id: args.endpointId, input: args.input }
   );
 
-  const submit = await provider.post.v1.queue.submit({
-    endpoint_id: args.endpointId,
-    input: args.input,
-  });
+  let submit;
+  try {
+    submit = await provider.post.v1.queue.submit({
+      endpoint_id: args.endpointId,
+      input: args.input,
+    });
+  } catch (cause) {
+    const message = describeFalError(cause);
+    if (cause instanceof Error && message === cause.message) throw cause;
+    throw new Error(message, { cause });
+  }
 
   const ptResult = await args.engine.jobs.pending.write({
       taskId: submit.request_id,
@@ -50,4 +57,13 @@ export async function submitFalJob<E extends string>(args: FalSubmitArgs<E>): Pr
   }
 
   return submit.request_id;
+}
+
+export function describeFalError(cause: unknown): string {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  if (!(cause instanceof FalError)) return message;
+  if (!cause.body || typeof cause.body !== "object") return message;
+  const detail = (cause.body as Record<string, unknown>).detail;
+  if (typeof detail !== "string" || detail.length === 0 || message.includes(detail)) return message;
+  return `${message}: ${detail}`;
 }

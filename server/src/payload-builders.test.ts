@@ -27,6 +27,7 @@ import {
   NanoBananaProRequestSchema,
   Omnihuman15RequestSchema,
   Qwen2ImageEditRequestSchema,
+  Qwen3ImageToImageRequestSchema,
   Seedance2FastRequestSchema,
   Seedance2MiniRequestSchema,
   Seedance2RequestSchema,
@@ -78,6 +79,7 @@ const payloadCases: Array<{ tool: string; provider?: string }> = [
   { tool: "generate_kie_seedream_v5_lite_text_to_image" },
   { tool: "generate_kie_seedream_v5_lite_image_to_image" },
   { tool: "generate_kie_qwen_2_0_edit_image" },
+  { tool: "generate_kie_qwen_3_0_edit_image" },
   { tool: "generate_kie_gpt_image_2_image_to_image" },
   { tool: "generate_kie_gpt_image_2_text_to_image" },
   { tool: "extend_kie_grok_imagine_video" },
@@ -356,6 +358,11 @@ const kieGuardCases: KieGuardCase[] = [
     args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
   },
   {
+    tool: "generate_kie_qwen_3_0_edit_image",
+    schema: Qwen3ImageToImageRequestSchema,
+    args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
+  },
+  {
     tool: "generate_kie_gpt_image_2_image_to_image",
     schema: GptImage2ImageToImageRequestSchema,
     args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
@@ -434,6 +441,36 @@ const kieGuardCases: KieGuardCase[] = [
 ];
 
 describe("translateToolPayload", () => {
+  it("builds a schema-valid Qwen 3 image edit payload with provider defaults", () => {
+    const result = translateToolPayload("generate_kie_qwen_3_0_edit_image", {
+      prompt: "combine the references",
+      image_refs: [
+        "https://example.test/first.png",
+        "https://example.test/second.png",
+        "https://example.test/third.png",
+      ],
+    });
+
+    expect(result?.payload).toEqual({
+      model: "qwen3/image-to-image",
+      input: {
+        prompt: "combine the references",
+        image_urls: [
+          "https://example.test/first.png",
+          "https://example.test/second.png",
+          "https://example.test/third.png",
+        ],
+        image_size: "16:9",
+        output_format: "png",
+        prompt_extend: true,
+        nsfw_checker: false,
+        seed: 1,
+        resolution: "1K",
+      },
+    });
+    expect(Qwen3ImageToImageRequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
   it("safeParses against the kie createTask guard schema for every kie model", () => {
     for (const entry of kieGuardCases) {
       const result = translateToolPayload(entry.tool, entry.args);

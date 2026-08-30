@@ -169,6 +169,7 @@ export function transformProviderPrompt(
     case "generate_kie_nano_banana_pro_text_to_image":
     case "generate_kie_seedream_v5_lite_image_to_image":
     case "generate_kie_qwen_2_0_edit_image":
+    case "generate_kie_qwen_3_0_edit_image":
     case "generate_kie_gpt_image_2_image_to_image":
     case "generate_xai_grok_imagine_video":
       transformed = naturalImagePrompt(prompt, args);

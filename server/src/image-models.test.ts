@@ -406,6 +406,75 @@ describe("getImageModels", () => {
     }
   });
 
+  it("offers Qwen 3 through Kie by default and keeps Fal as an alternate", () => {
+    const originalKie = process.env.KIE_API_KEY;
+    const originalFal = process.env.FAL_API_KEY;
+    process.env.KIE_API_KEY = "kie-key";
+    process.env.FAL_API_KEY = "fal-key";
+    try {
+      const models = getImageModels();
+      expect(models.qwen3_image_edit.tool_name).toBe("generate_kie_qwen_3_0_edit_image");
+      expect(models.qwen3_image_edit.providers.map((provider) => provider.key)).toEqual(["kie", "fal"]);
+
+      const defaultOption = buildImageModelOption(
+        "qwen3_image_edit",
+        models.qwen3_image_edit,
+        { prompt: "edit" },
+        [{ tag: "@image", artifactId: "image", artifactType: "image", filePath: "/image.png", workspacePath: "/" }],
+      );
+      expect(defaultOption.selected_provider).toBe("kie");
+      expect(defaultOption.tool_name).toBe("generate_kie_qwen_3_0_edit_image");
+      expect(defaultOption.schema?.properties).toHaveProperty("resolution");
+
+      const falOption = buildImageModelOption(
+        "qwen3_image_edit",
+        models.qwen3_image_edit,
+        { prompt: "edit" },
+        [{ tag: "@image", artifactId: "image", artifactType: "image", filePath: "/image.png", workspacePath: "/" }],
+        undefined,
+        "fal",
+      );
+      expect(falOption.selected_provider).toBe("fal");
+      expect(falOption.tool_name).toBe("generate_fal_qwen_3_0_edit_image");
+      expect(falOption.schema?.properties).toHaveProperty("enable_prompt_expansion");
+      expect(falOption.schema?.properties).not.toHaveProperty("resolution");
+    } finally {
+      if (originalKie === undefined) delete process.env.KIE_API_KEY;
+      else process.env.KIE_API_KEY = originalKie;
+      if (originalFal === undefined) delete process.env.FAL_API_KEY;
+      else process.env.FAL_API_KEY = originalFal;
+    }
+  });
+
+  it("migrates a historical Qwen 3 Fal choice to the Kie default", () => {
+    const originalKie = process.env.KIE_API_KEY;
+    const originalFal = process.env.FAL_API_KEY;
+    process.env.KIE_API_KEY = "kie-key";
+    process.env.FAL_API_KEY = "fal-key";
+    try {
+      const models = getImageModels();
+      const option = buildImageModelOption(
+        "qwen3_image_edit",
+        models.qwen3_image_edit,
+        { prompt: "edit" },
+        [{ tag: "@image", artifactId: "image", artifactType: "image", filePath: "/image.png", workspacePath: "/" }],
+        [{
+          hash: "old",
+          action: "tool-generate-fal-qwen-3-0-edit-image",
+          payload: { prompt: "old", image_refs: ["@image"], _provider: "fal" },
+          date: "2026-08-29T00:00:00Z",
+        }],
+      );
+      expect(option.selected_provider).toBe("kie");
+      expect(option.tool_name).toBe("generate_kie_qwen_3_0_edit_image");
+    } finally {
+      if (originalKie === undefined) delete process.env.KIE_API_KEY;
+      else process.env.KIE_API_KEY = originalKie;
+      if (originalFal === undefined) delete process.env.FAL_API_KEY;
+      else process.env.FAL_API_KEY = originalFal;
+    }
+  });
+
   it("xai models list xai as a provider", () => {
     const models = getImageModels();
     expect(models.grok_imagine_image.providers.some((p) => p.key === "xai")).toBe(true);

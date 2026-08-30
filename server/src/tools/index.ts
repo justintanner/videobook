@@ -117,6 +117,7 @@ import { generateVolcengineLipsyncVideoDef } from "./generate-volcengine-lipsync
 import { generateOmnihumanVideoDef } from "./generate-omnihuman-video.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
+import { generateQwen3ImageEditDef } from "./generate-qwen3-image-edit.js";
 import { generateSeedreamTextImageDef } from "./generate-seedream-text-image.js";
 import { generateSeedreamImageDef } from "./generate-seedream-image.js";
 import { renderVideoDef } from "./render.js";
@@ -415,6 +416,7 @@ export function getAllToolDefs(
     generateOmnihumanVideoDef(engine),
     generateNanoBananaImageDef(engine),
     generateQwen2ImageEditDef(engine),
+    generateQwen3ImageEditDef(engine),
     generateSeedreamTextImageDef(engine),
     generateSeedreamImageDef(engine),
     reconcileProjectWorkDef(engine),

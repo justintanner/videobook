@@ -126,6 +126,7 @@ describe("estimate_cost tool", () => {
       // Per-image (tiered + flat)
       ["generate_nano_banana_image", { resolution: "2K" }],
       ["generate_qwen2_image_edit", {}],
+      ["generate_kie_qwen_3_0_edit_image", { image_refs: ["@a", "@b", "@c"] }],
       ["generate_seedream_text_image", {}],
       ["generate_seedream_image", {}],
       ["generate_grok_imagine_text_image", { enable_pro: true }],

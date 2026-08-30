@@ -29,6 +29,7 @@ import type {
   SeedreamTextToImageRequest,
   SeedreamImageToImageRequest,
   Qwen2ImageEditRequest,
+  Qwen3ImageToImageRequest,
   HappyHorse11TextToVideoRequest,
   HappyHorse11ImageToVideoRequest,
   HappyHorse11ReferenceToVideoRequest,
@@ -84,6 +85,7 @@ import {
   NanoBananaProRequestSchema,
   Omnihuman15RequestSchema,
   Qwen2ImageEditRequestSchema,
+  Qwen3ImageToImageRequestSchema,
   Seedance2FastInputSchema,
   Seedance2InputSchema,
   Seedance2MiniInputSchema,
@@ -1119,6 +1121,43 @@ function buildQwen2ImageEditPayload(
   };
 }
 
+type Qwen3ImageEditArgs = {
+  prompt: string;
+  image_size?: Qwen3ImageToImageRequest["input"]["image_size"];
+  output_format?: Qwen3ImageToImageRequest["input"]["output_format"];
+  prompt_extend?: boolean;
+  nsfw_checker?: boolean;
+  negative_prompt?: string;
+  seed?: number;
+  resolution?: Qwen3ImageToImageRequest["input"]["resolution"];
+};
+
+function buildQwen3ImageEditPayload(
+  args: Qwen3ImageEditArgs,
+  imageUrls: string[],
+): Qwen3ImageToImageRequest {
+  const imageSize = valueOrZodDefault(args.image_size, Qwen3ImageToImageRequestSchema.shape.input.shape.image_size);
+  const outputFormat = valueOrZodDefault(args.output_format, Qwen3ImageToImageRequestSchema.shape.input.shape.output_format);
+  const promptExtend = valueOrZodDefault(args.prompt_extend, Qwen3ImageToImageRequestSchema.shape.input.shape.prompt_extend);
+  const nsfwChecker = valueOrZodDefault(args.nsfw_checker, Qwen3ImageToImageRequestSchema.shape.input.shape.nsfw_checker);
+  const seed = valueOrZodDefault(args.seed, Qwen3ImageToImageRequestSchema.shape.input.shape.seed);
+  const resolution = valueOrZodDefault(args.resolution, Qwen3ImageToImageRequestSchema.shape.input.shape.resolution);
+  return {
+    model: "qwen3/image-to-image",
+    input: {
+      prompt: args.prompt,
+      image_urls: imageUrls,
+      ...(imageSize !== undefined ? { image_size: imageSize } : {}),
+      ...(outputFormat !== undefined ? { output_format: outputFormat } : {}),
+      ...(promptExtend !== undefined ? { prompt_extend: promptExtend } : {}),
+      ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
+      ...(args.negative_prompt !== undefined ? { negative_prompt: args.negative_prompt } : {}),
+      ...(seed !== undefined ? { seed } : {}),
+      ...(resolution !== undefined ? { resolution } : {}),
+    },
+  };
+}
+
 type GptImageArgs = {
   prompt: string;
   aspect_ratio?: GptImage2ImageToImageAspectRatio;
@@ -1809,6 +1848,13 @@ function translateToolPayloadUnchecked(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_kie_qwen_3_0_edit_image": {
+      const payload = buildQwen3ImageEditPayload(
+        args as Qwen3ImageEditArgs,
+        imageRefs,
+      );
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_kie_gpt_image_2_image_to_image": {
       const payload = buildGptImagePayload(
         args as GptImageArgs,
@@ -1947,6 +1993,7 @@ export {
   buildXaiGrokImagineVideoPayload,
   buildNanoBananaImagePayload,
   buildQwen2ImageEditPayload,
+  buildQwen3ImageEditPayload,
   buildGrokImagineTextPayload,
   buildGptImagePayload,
   buildGptImageTextPayload,

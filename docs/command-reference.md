@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (287)
+## MCP endpoints (288)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -138,6 +138,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `generate_kie_nano_banana_pro_text_to_image` (historical names, not exposed: `generate_nano_banana_image`) — Generate an image using the nano-banana-pro model. Creates a new image artifact and enqueues a background job. Prompt is required; reference images are optional.
 - `generate_kie_omnihuman_1_5_video` (historical names, not exposed: `generate_omnihuman_video`) — Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new video artifact and enqueues a background job.
 - `generate_kie_qwen_2_0_edit_image` (historical names, not exposed: `generate_qwen2_image_edit`) — Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new image artifact and enqueues a background job.
+- `generate_kie_qwen_3_0_edit_image` — Edit or compose images using Qwen Image 3 via Kie with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_kie_seedance_2_5_video` (historical names, not exposed: `generate_seedance25_video`) — Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.10.2 generation option including 1080p. Creates a new video artifact and enqueues a background job.
 - `generate_kie_seedream_v5_lite_image_to_image` (historical names, not exposed: `generate_seedream_image`) — Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_kie_seedream_v5_lite_text_to_image` (historical names, not exposed: `generate_seedream_text_image`) — Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.

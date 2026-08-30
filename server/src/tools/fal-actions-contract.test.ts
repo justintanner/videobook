@@ -10,7 +10,7 @@ describe("fal generation actions contract", () => {
 
     for (const action of falActions) {
       expect(action.canonical_name).toMatch(/^generate_fal_|^extend_fal_/);
-      expect(action.apicity_identifier).toMatch(/^fal-ai\//);
+      expect(action.apicity_identifier).toMatch(/^(fal-ai|alibaba)\//);
       expect(action.canonical_name).not.toMatch(/_t2i_/);
       expect(action.canonical_name).not.toMatch(/_i2v_/);
       expect(action.canonical_name).not.toMatch(/_r2v_/);

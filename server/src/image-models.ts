@@ -17,6 +17,7 @@ import {
   GrokTextToImageRequestSchema,
   NanoBananaProRequestSchema,
   Qwen2ImageEditRequestSchema,
+  Qwen3ImageToImageRequestSchema,
   SeedreamImageToImageRequestSchema,
   SeedreamTextToImageRequestSchema,
 } from "@apicity/kie/zod";
@@ -188,10 +189,20 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
   },
   {
     key: "qwen3_image_edit",
-    tool_name: "generate_fal_qwen_3_0_edit_image",
+    kieModelId: "qwen3/image-to-image",
+    tool_name: "generate_kie_qwen_3_0_edit_image",
     label: "Qwen3 Image Edit",
-    description: "Prompt-driven image edit using Qwen Image 3 via fal.ai (1-3 ordered reference images)",
-    imageFieldSchema: FalAlibabaQwenImage3EditRequestSchema.shape.image_urls.min(1).max(3),
+    description: "Prompt-driven image edit using Qwen Image 3 with 1-3 ordered reference images",
+    imageFieldSchema: Qwen3ImageToImageRequestSchema.shape.input.shape.image_urls,
+    kieImageField: "image_urls",
+    defaultSchemas: {
+      image_size: Qwen3ImageToImageRequestSchema.shape.input.shape.image_size,
+      output_format: Qwen3ImageToImageRequestSchema.shape.input.shape.output_format,
+      prompt_extend: Qwen3ImageToImageRequestSchema.shape.input.shape.prompt_extend,
+      nsfw_checker: Qwen3ImageToImageRequestSchema.shape.input.shape.nsfw_checker,
+      seed: Qwen3ImageToImageRequestSchema.shape.input.shape.seed,
+      resolution: Qwen3ImageToImageRequestSchema.shape.input.shape.resolution,
+    },
     falToolNames: { withRefs: "generate_fal_qwen_3_0_edit_image" },
   },
   {
@@ -243,10 +254,32 @@ function getImageSlotsForConfig(config: ImageModelConfig): SlotConstraints | nul
   return readSlotConstraints(config.imageFieldSchema);
 }
 
+function namedRouteMatches(
+  names: { noRefs?: string; withRefs?: string } | undefined,
+  rawToolName: string,
+  toolName: string,
+): boolean {
+  return Object.values(names ?? {}).some(
+    (name) => name === rawToolName || getCanonicalName(name) === toolName,
+  );
+}
+
+function imageModelConfigForTool(rawToolName: string): ImageModelConfig | undefined {
+  const toolName = getCanonicalName(rawToolName);
+  return IMAGE_MODEL_CONFIGS.find(
+    (config) =>
+      config.key === rawToolName
+      || config.tool_name === rawToolName
+      || getCanonicalName(config.tool_name) === toolName
+      || namedRouteMatches(config.falToolNames, rawToolName, toolName)
+      || namedRouteMatches(config.googleToolNames, rawToolName, toolName),
+  );
+}
+
 function getImageSlotsForToolName(rawToolName: string): SlotConstraints | null {
   const toolName = getCanonicalName(rawToolName);
   if (toolName === "generate_google_flow_nano_banana_pro_image" || rawToolName === "generate_google_flow_nano_banana_pro_image") return GOOGLE_NBP_IMAGE_SLOTS;
-  const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName || getCanonicalName(c.tool_name) === toolName);
+  const config = imageModelConfigForTool(rawToolName);
   return config ? getImageSlotsForConfig(config) : null;
 }
 
@@ -408,11 +441,37 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
     };
   }
 
-  const config = IMAGE_MODEL_CONFIGS.find(
-    (c) => c.tool_name === toolName || c.key === rawToolName || getCanonicalName(c.tool_name) === toolName,
-  );
+  const config = imageModelConfigForTool(rawToolName);
   if (!config) return null;
   const defaults = getImageDefaultsForConfig(config);
+
+  if (config.key === "qwen3_image_edit" && namedRouteMatches(config.falToolNames, rawToolName, toolName)) {
+    const shape = FalAlibabaQwenImage3EditRequestSchema.shape;
+    const properties: Record<string, ParamSchema> = {
+      prompt: {
+        type: "string",
+        description: "Edit instruction (Chinese or English; reference inputs positionally as \"image 1\", \"image 2\", \"image 3\")",
+        minLength: 1,
+        maxLength: 5000,
+      },
+      image_refs: {
+        type: "array",
+        items: { type: "string" },
+        description: imageSlotsDescription(getImageSlotsForConfig(config)),
+        minItems: 1,
+        maxItems: 3,
+      },
+      negative_prompt: { type: "string", description: "Negative prompt", maxLength: 500 },
+      image_size: { type: "string", description: "Output size (square_hd default)", enum: [...QWEN3_FAL_IMAGE_SIZE_OPTIONS] },
+      enable_prompt_expansion: zodFieldToParam(shape.enable_prompt_expansion, "Enable prompt expansion"),
+      seed: zodFieldToParam(shape.seed, "Seed for deterministic output"),
+      enable_safety_checker: zodFieldToParam(shape.enable_safety_checker, "Enable safety checker"),
+      sync_mode: zodFieldToParam(shape.sync_mode, "Wait for the result in a single request"),
+      num_images: zodFieldToParam(shape.num_images, "Number of images (1-6)"),
+      output_format: zodFieldToParam(shape.output_format, "Output image format"),
+    };
+    return { type: "object", properties, required: ["prompt", "image_refs"], defaults: {} };
+  }
 
   // Try Kie schema first
   const modelSchema = config.kieModelId ? kieModelSchemas[config.kieModelId] : null;
@@ -468,35 +527,6 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
     };
     const required = isEdit ? ["prompt", "image_refs", "model"] : ["prompt", "model"];
     return { type: "object", properties, required, defaults };
-  }
-
-  // Qwen Image 3 edit — fal-only model (no Kie/xAI/Alibaba-native route)
-  if (config.key === "qwen3_image_edit") {
-    const shape = FalAlibabaQwenImage3EditRequestSchema.shape;
-    const properties: Record<string, ParamSchema> = {
-      prompt: {
-        type: "string",
-        description: "Edit instruction (Chinese or English; reference inputs positionally as \"image 1\", \"image 2\", \"image 3\")",
-        minLength: 1,
-        maxLength: 5000,
-      },
-      image_refs: {
-        type: "array",
-        items: { type: "string" },
-        description: imageSlotsDescription(getImageSlotsForConfig(config)),
-        minItems: 1,
-        maxItems: 3,
-      },
-      negative_prompt: { type: "string", description: "Negative prompt", maxLength: 500 },
-      image_size: { type: "string", description: "Output size (square_hd default)", enum: [...QWEN3_FAL_IMAGE_SIZE_OPTIONS] },
-      enable_prompt_expansion: zodFieldToParam(shape.enable_prompt_expansion, "Enable prompt expansion"),
-      seed: zodFieldToParam(shape.seed, "Seed for deterministic output"),
-      enable_safety_checker: zodFieldToParam(shape.enable_safety_checker, "Enable safety checker"),
-      sync_mode: zodFieldToParam(shape.sync_mode, "Wait for the result in a single request"),
-      num_images: zodFieldToParam(shape.num_images, "Number of images (1-6)"),
-      output_format: zodFieldToParam(shape.output_format, "Output image format"),
-    };
-    return { type: "object", properties, required: ["prompt", "image_refs"], defaults };
   }
 
   return null;
@@ -628,7 +658,7 @@ type ValidationResult = {
 function validateImageParams(rawToolName: string, params: Record<string, unknown>): ValidationResult {
   const toolName = getCanonicalName(rawToolName);
   const schema = getImageToolSchema(rawToolName);
-  const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
+  const config = imageModelConfigForTool(rawToolName);
   if (!schema) return { valid: false, missing_required: [], warnings: ["Unknown tool"], image_slots: null };
 
   const missing: string[] = [];
@@ -838,7 +868,9 @@ function buildImageModelOption(
   const providerList = availableProviders.length > 0 ? availableProviders : modelInfo.providers;
   const selectedProvider = (providerOverride && providerList.some((p) => p.key === providerOverride))
     ? providerOverride
-    : (historicalProvider && providerList.some((p) => p.key === historicalProvider))
+    : (historicalProvider
+      && !(modelKey === "qwen3_image_edit" && historicalProvider === "fal")
+      && providerList.some((p) => p.key === historicalProvider))
       ? historicalProvider
       : providerList[0].key;
 

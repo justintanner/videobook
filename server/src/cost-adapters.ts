@@ -199,6 +199,21 @@ const kieFlatImage = (model: string): CostAdapter => () => ({
   payload: { model, input: {} },
 });
 
+const kieQwen3ImageEdit: CostAdapter = (input) => {
+  const imageRefs = Array.isArray(input.image_refs)
+    ? input.image_refs.filter((ref): ref is string => typeof ref === "string")
+    : [];
+  return {
+    provider: "kie",
+    payload: {
+      model: "qwen3/image-to-image",
+      input: {
+        image_urls: imageRefs.map((_, index) => `https://example.test/reference-${index + 1}.png`),
+      },
+    },
+  };
+};
+
 // kie wan/3-0-video[-prime]: resolution-tiered per second with UPPERCASE
 // tiers. duration -1 (intelligent) is estimated at the 5s default:
 // cost@0.11.0's wan30Seconds fails closed on the sentinel without
@@ -393,6 +408,7 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
 
   // --- KIE flat per-image (qwen2 $0.028, seedream/5-lite $0.0275) ---
   generate_kie_qwen_2_0_edit_image: kieFlatImage("qwen2/image-edit"),
+  generate_kie_qwen_3_0_edit_image: kieQwen3ImageEdit,
   generate_kie_seedream_v5_lite_text_to_image: kieFlatImage("seedream/5-lite-text-to-image"),
   generate_kie_seedream_v5_lite_image_to_image: kieFlatImage("seedream/5-lite-image-to-image"),
 

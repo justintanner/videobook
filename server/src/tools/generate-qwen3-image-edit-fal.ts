@@ -1,5 +1,4 @@
 import type { Engine } from "videobook-engine";
-import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalAlibabaQwenImage3EditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -41,12 +40,12 @@ export function generateQwen3ImageEditFalDef(engine: Engine): ToolDef {
       const resolved = await resolveImageRefs(engine, image_refs);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await engine.artifacts.create("img", generationLabel(modelSlug("kie", "qwen3/image-to-image"), prompt));
+      const assetResult = await engine.artifacts.create("img", generationLabel("qwen3", prompt));
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { artifactId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
-      const jobId = `fal-${modelSlug("kie", "qwen3/image-to-image")}-edit-${imgAssetId}-${Date.now()}`;
+      const jobId = `fal-qwen3-edit-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_qwen3_image_edit_fal",
         imgAssetId,
