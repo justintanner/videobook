@@ -178,6 +178,26 @@ function googleOmniContract(
   };
 }
 
+function wan30Contract(
+  slots: readonly NotebookGenerationInputSlot[],
+): NotebookGenerationInputContract {
+  return {
+    modes: [
+      mode("t2v", []),
+      mode(
+        "i2v",
+        slotsByField(slots, ["first_frame_ref", "last_frame_ref"]),
+        [["first_frame_ref", "last_frame_ref"]],
+      ),
+      mode(
+        "r2v",
+        slotsByField(slots, ["image_refs", "video_refs", "audio_refs"]),
+        [["image_refs", "video_refs", "audio_refs"]],
+      ),
+    ],
+  };
+}
+
 export function notebookGenerationInputContract(
   tool: string,
   schema: Record<string, unknown>,
@@ -227,6 +247,12 @@ export function notebookGenerationInputContract(
   }
   if (tool === "generate_google_flow_omni_flash_video") {
     return googleOmniContract(slots);
+  }
+  if (
+    tool === "generate_kie_wan_3_0_video"
+    || tool === "generate_kie_wan_3_0_prime_video"
+  ) {
+    return wan30Contract(slots);
   }
   return { modes: [mode("default", slots)] };
 }
@@ -283,8 +309,9 @@ function modeAcceptsInputs(
   candidate: NotebookGenerationInputMode,
   inputs: readonly ConnectedInput[],
 ): boolean {
+  const normalizedInputs = frameModeInputs(candidate, inputs);
   const counts = new Map(candidate.slots.map((slot) => [slot.field, 0]));
-  const sorted = [...inputs].sort((left, right) => {
+  const sorted = [...normalizedInputs].sort((left, right) => {
     const leftSpecific = left.target === left.kind ? 0 : 1;
     const rightSpecific = right.target === right.kind ? 0 : 1;
     return rightSpecific - leftSpecific;
@@ -318,6 +345,31 @@ function modeAcceptsInputs(
     group.some((field) => (counts.get(field) ?? 0) > 0));
 }
 
+function frameModeInputs(
+  candidate: NotebookGenerationInputMode,
+  inputs: readonly ConnectedInput[],
+): ConnectedInput[] {
+  if (
+    candidate.id !== "i2v"
+    || candidate.slots.some((slot) => slot.targets.includes("image"))
+  ) return [...inputs];
+  const availableTargets = candidate.slots
+    .flatMap((slot) => slot.targets)
+    .filter((target) => target === "first_frame" || target === "last_frame")
+    .filter((target) => !inputs.some((input) => input.target === target));
+  let targetIndex = 0;
+  return inputs.map((input) => {
+    if (
+      input.kind !== "image"
+      || input.target !== "image"
+      || targetIndex >= availableTargets.length
+    ) return input;
+    const target = availableTargets[targetIndex];
+    targetIndex += 1;
+    return target ? { ...input, target } : input;
+  });
+}
+
 export function notebookGenerationInputsAreCompatible(
   contract: NotebookGenerationInputContract,
   document: NotebookDocument,
@@ -325,8 +377,11 @@ export function notebookGenerationInputsAreCompatible(
   modeId?: string,
 ): boolean {
   const inputs = connectedInputs(document, cell);
-  const modes = modeId
+  const configuredModes = modeId
     ? contract.modes.filter((candidate) => candidate.id === modeId)
     : contract.modes;
+  const modes = modeId === "default" && configuredModes.length === 0
+    ? contract.modes
+    : configuredModes;
   return modes.some((candidate) => modeAcceptsInputs(candidate, inputs));
 }

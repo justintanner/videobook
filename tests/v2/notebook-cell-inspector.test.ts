@@ -496,6 +496,118 @@ describe('NotebookCellInspector', () => {
     expect(previewCalls).toBe(0)
   })
 
+  it('upgrades a stale default mode to Wan frame mode', () => {
+    const generationCell: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000020',
+      type: 'generate_video',
+      slot: { row: 1, column: 0 },
+      prompt: 'Walk away from the camera',
+      provider: 'kie',
+      model: 'Wan30VideoPrimeRequestSchema',
+      operation: 'generate_video',
+      tool: 'generate_kie_wan_3_0_prime_video',
+      inputs: { generationMode: 'default' },
+      outputArtifactId: undefined,
+    }
+    const first: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000021',
+      type: 'image',
+      slot: { row: 0, column: 0 },
+    }
+    const last: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000022',
+      type: 'image',
+      slot: { row: 0, column: 1 },
+    }
+    const wanAction: NotebookGenerationAction = {
+      id: 'generation.generate_kie_wan_3_0_prime_video',
+      cellTypes: ['generate_video'],
+      provider: 'kie',
+      providerLabel: 'Kie',
+      model: 'Wan30VideoPrimeRequestSchema',
+      operation: 'generate_video',
+      tool: 'generate_kie_wan_3_0_prime_video',
+      title: 'Wan 3.0 Prime Video',
+      isDefault: false,
+      defaultPriority: null,
+      inputContract: {
+        modes: [
+          { id: 't2v', slots: [], requiredGroups: [] },
+          {
+            id: 'i2v',
+            slots: [
+              {
+                field: 'first_frame_ref',
+                kind: 'image',
+                targets: ['first_frame'],
+                min: 0,
+                max: 1,
+              },
+              {
+                field: 'last_frame_ref',
+                kind: 'image',
+                targets: ['last_frame'],
+                min: 0,
+                max: 1,
+              },
+            ],
+            requiredGroups: [['first_frame_ref', 'last_frame_ref']],
+          },
+          {
+            id: 'r2v',
+            slots: [{
+              field: 'image_refs',
+              kind: 'image',
+              targets: ['image'],
+              min: 0,
+              max: 10,
+            }],
+            requiredGroups: [['image_refs']],
+          },
+        ],
+      },
+      controls: [],
+    }
+    const edges: NotebookEdge[] = [
+      {
+        id: '01900000-0000-7000-8000-000000000023',
+        source: first.id,
+        target: generationCell.id,
+        targetInput: 'image',
+      },
+      {
+        id: '01900000-0000-7000-8000-000000000024',
+        source: last.id,
+        target: generationCell.id,
+        targetInput: 'last_frame',
+      },
+    ]
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: generationCell,
+      cells: [generationCell, first, last],
+      edges,
+      asset: undefined,
+      status: 'ready',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      generationActions: [wanAction],
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('<option value="i2v" selected="">')
+    expect(html).not.toContain('This generation type does not match')
+  })
+
   it('offers compatible notebook media as an additional generation input', () => {
     const generationCell: NotebookCell = {
       ...cell,

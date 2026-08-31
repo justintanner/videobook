@@ -407,6 +407,19 @@ describe("notebook action catalog", () => {
       defaultValue: "720p",
       options: ["480p", "720p", "1080p"],
     });
+    const wan30PrimeAction = generationCatalog.actions.find((action) =>
+      action.tool === "generate_kie_wan_3_0_prime_video");
+    expect(wan30PrimeAction).toMatchObject({
+      title: "Wan 3.0 Prime Video",
+      providerLabel: "Kie",
+    });
+    expect(wan30PrimeAction?.inputContract?.modes.map((mode) => mode.id))
+      .toEqual(["t2v", "i2v", "r2v"]);
+    expect(wan30PrimeAction?.inputContract?.modes.find((mode) =>
+      mode.id === "i2v")?.slots.map((slot) => slot.field)).toEqual([
+      "first_frame_ref",
+      "last_frame_ref",
+    ]);
     const motionControlAction = generationCatalog.actions.find((action) =>
       action.tool === "generate_kie_kling_3_0_motion_control");
     expect(motionControlAction).toMatchObject({

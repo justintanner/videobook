@@ -999,6 +999,9 @@ function modelArgsWithMentions(
     connectedArtifactIds,
   });
   const prompt = mentions.prompt;
+  const generationMode = typeof cell.inputs?.generationMode === "string"
+    ? cell.inputs.generationMode
+    : undefined;
   const args: Record<string, unknown> = {
     ...(cell.inputs ?? {}),
     ...generationSettings,
@@ -1021,14 +1024,36 @@ function modelArgsWithMentions(
       ? cell.inputs.targetModel
       : "seedance25";
   }
-  const firstFrame = upstream.find((entry) =>
+  let firstFrame = upstream.find((entry) =>
     entry.targetInput === "first_frame"
     && typeof entry.output === "string"
     && isImageLikeCell(entry.cell));
-  const lastFrame = upstream.find((entry) =>
+  let lastFrame = upstream.find((entry) =>
     entry.targetInput === "last_frame"
     && typeof entry.output === "string"
     && isImageLikeCell(entry.cell));
+  const genericImages = sortByKindSlot(
+    upstream.filter(({ cell: source, output, targetInput }) =>
+      typeof output === "string"
+      && isImageLikeCell(source)
+      && targetInput !== "first_frame"
+      && targetInput !== "last_frame"),
+    "image",
+  );
+  const supportsFirstFrame = "first_frame_ref" in definition.schema;
+  const supportsLastFrame = "last_frame_ref" in definition.schema
+    || "end_frame_ref" in definition.schema;
+  const frameMode = generationMode === "i2v"
+    || (
+      (generationMode === undefined || generationMode === "default")
+      && Boolean(firstFrame?.output || lastFrame?.output)
+    );
+  if (frameMode && !firstFrame?.output && supportsFirstFrame) {
+    firstFrame = genericImages.shift();
+  }
+  if (frameMode && !lastFrame?.output && supportsLastFrame) {
+    lastFrame = genericImages.shift();
+  }
   if (firstFrame?.output && "first_frame_ref" in definition.schema) {
     args.first_frame_ref = refFor(firstFrame.output);
   }
@@ -1039,14 +1064,7 @@ function modelArgsWithMentions(
     args.end_frame_ref = refFor(lastFrame.output);
   }
 
-  const imageReferences = sortByKindSlot(
-    upstream.filter(({ cell: source, output, targetInput }) =>
-      typeof output === "string"
-      && isImageLikeCell(source)
-      && targetInput !== "first_frame"
-      && targetInput !== "last_frame"),
-    "image",
-  ).map(({ output }) => refFor(output!));
+  const imageReferences = genericImages.map(({ output }) => refFor(output!));
   if ("image_refs" in definition.schema && imageReferences.length > 0) {
     args.image_refs = imageReferences;
   }

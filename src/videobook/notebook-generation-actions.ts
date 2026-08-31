@@ -448,8 +448,9 @@ function inputModeMatches(
   mode: GenerationInputMode,
   inputs: readonly GenerationConnectedInput[],
 ): boolean {
+  const normalizedInputs = frameModeInputs(mode, inputs)
   const counts = new Map(mode.slots.map((slot) => [slot.field, 0]))
-  const sortedInputs = [...inputs].sort((left, right) => {
+  const sortedInputs = [...normalizedInputs].sort((left, right) => {
     const leftSpecific = left.target === left.kind ? 0 : 1
     const rightSpecific = right.target === right.kind ? 0 : 1
     return rightSpecific - leftSpecific
@@ -480,6 +481,31 @@ function inputModeMatches(
   }
   return mode.requiredGroups.every((group) =>
     group.some((field) => (counts.get(field) ?? 0) > 0))
+}
+
+function frameModeInputs(
+  mode: GenerationInputMode,
+  inputs: readonly GenerationConnectedInput[],
+): GenerationConnectedInput[] {
+  if (
+    mode.id !== 'i2v'
+    || mode.slots.some((slot) => slot.targets.includes('image'))
+  ) return [...inputs]
+  const availableTargets = mode.slots
+    .flatMap((slot) => slot.targets)
+    .filter((target) => target === 'first_frame' || target === 'last_frame')
+    .filter((target) => !inputs.some((input) => input.target === target))
+  let targetIndex = 0
+  return inputs.map((input) => {
+    if (
+      input.kind !== 'image'
+      || input.target !== 'image'
+      || targetIndex >= availableTargets.length
+    ) return input
+    const target = availableTargets[targetIndex]
+    targetIndex += 1
+    return target ? { ...input, target } : input
+  })
 }
 
 export function compatibleGenerationModes(

@@ -224,6 +224,80 @@ describe("notebook runner frames and concat", () => {
     ]);
   });
 
+  it("maps a legacy Wan generic image plus last frame into frame fields", () => {
+    const first = {
+      id: "019f0000-0000-7000-8000-000000000220",
+      type: "image" as const,
+      label: "First frame",
+      slot: { row: 0, column: 0 },
+      outputArtifactId: "019f0000-0000-7000-8000-000000000221",
+    };
+    const last = {
+      id: "019f0000-0000-7000-8000-000000000222",
+      type: "image" as const,
+      label: "Last frame",
+      slot: { row: 0, column: 1 },
+      outputArtifactId: "019f0000-0000-7000-8000-000000000223",
+    };
+    const generate = {
+      id: "019f0000-0000-7000-8000-000000000224",
+      type: "generate_video" as const,
+      label: "Wan Prime",
+      slot: { row: 1, column: 0 },
+      prompt: "Walk away from the camera",
+      tool: "generate_kie_wan_3_0_prime_video",
+      inputs: { generationMode: "default" },
+    };
+    const document: NotebookDocument = {
+      id: "019f0000-0000-7000-8000-000000000225",
+      name: "Wan legacy frames",
+      cells: [first, last, generate],
+      edges: [
+        {
+          id: "019f0000-0000-7000-8000-000000000226",
+          source: first.id,
+          target: generate.id,
+          targetInput: "image",
+        },
+        {
+          id: "019f0000-0000-7000-8000-000000000227",
+          source: last.id,
+          target: generate.id,
+          targetInput: "last_frame",
+        },
+      ],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    const definition = {
+      name: "generate_kie_wan_3_0_prime_video",
+      schema: {
+        book_id: {},
+        prompt: {},
+        first_frame_ref: {},
+        last_frame_ref: {},
+        image_refs: {},
+        video_refs: {},
+        audio_refs: {},
+      },
+    } as unknown as ToolDef;
+
+    expect(modelArgs(definition, document, generate, "book-id")).toMatchObject({
+      first_frame_ref: `@${first.outputArtifactId}`,
+      last_frame_ref: `@${last.outputArtifactId}`,
+    });
+    expect(modelArgs(definition, document, generate, "book-id"))
+      .not.toHaveProperty("image_refs");
+    expect(modelArgs(
+      definition,
+      document,
+      { ...generate, inputs: undefined },
+      "book-id",
+    )).toMatchObject({
+      first_frame_ref: `@${first.outputArtifactId}`,
+      last_frame_ref: `@${last.outputArtifactId}`,
+    });
+  });
+
   it("maps Kling motion control image and video inputs", () => {
     const image = {
       id: "019f0000-0000-7000-8000-000000000020",

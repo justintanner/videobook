@@ -1958,9 +1958,10 @@ function ExecutableCellInspector({
       )
     : []
   const effectiveGenerationMode = selectedGenerationAction
-    ? draft.generationMode || initialGenerationMode(
+    ? initialGenerationMode(
         selectedGenerationAction,
         connectedGenerationInputs,
+        draft.generationMode,
       )
     : ''
   const generationModeCompatible = Boolean(

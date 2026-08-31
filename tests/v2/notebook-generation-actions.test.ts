@@ -13,6 +13,7 @@ import {
   generationInputAttachments,
   generationModeLabel,
   generationSelectionForAction,
+  initialGenerationMode,
   initialGenerationSelection,
   type GenerationInputContract,
   type NotebookGenerationAction,
@@ -435,6 +436,20 @@ describe('notebook generation actions', () => {
       [{ kind: 'video', target: 'video' }],
     ).map((mode) => mode.id)).toEqual(['v2v'])
     expect(generationModeLabel('r2v')).toBe('R2V · Reference to video')
+  })
+
+  it('normalizes a generic image plus last frame into frame mode', () => {
+    const inputs = [
+      { kind: 'image' as const, target: 'image' },
+      { kind: 'image' as const, target: 'last_frame' },
+    ]
+    expect(compatibleGenerationModes(seedanceAction, inputs)
+      .map((mode) => mode.id)).toEqual(['i2v'])
+    expect(initialGenerationMode(seedanceAction, inputs, 'default')).toBe('i2v')
+    expect(compatibleGenerationModes(seedanceAction, [
+      ...inputs,
+      { kind: 'image', target: 'first_frame' },
+    ])).toEqual([])
   })
 
   it('offers Kling Omni transformation for a character image and motion video', () => {

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { notebookGenerationInputContract } from "../../server/src/notebook-generation-contract.js";
+import type { NotebookDocument } from "videobook-engine";
+import {
+  notebookGenerationInputContract,
+  notebookGenerationInputsAreCompatible,
+} from "../../server/src/notebook-generation-contract.js";
 
 describe("notebook generation input contracts", () => {
   it("reads media kinds and slot limits from registered-style schemas", () => {
@@ -191,5 +195,80 @@ describe("notebook generation input contracts", () => {
       { id: "r2v", requiredGroups: [["image_refs"]] },
       { id: "v2v", requiredGroups: [["video_ref"]] },
     ]);
+  });
+
+  it.each([
+    "generate_kie_wan_3_0_video",
+    "generate_kie_wan_3_0_prime_video",
+  ])("keeps %s frame and reference modes exclusive", (tool) => {
+    const contract = notebookGenerationInputContract(tool, {
+      first_frame_ref: z.string().optional(),
+      last_frame_ref: z.string().optional(),
+      image_refs: z.array(z.string()).max(10).optional(),
+      video_refs: z.array(z.string()).max(5).optional(),
+      audio_refs: z.array(z.string()).max(5).optional(),
+    });
+    expect(contract.modes.map((mode) => ({
+      id: mode.id,
+      fields: mode.slots.map((slot) => slot.field),
+    }))).toEqual([
+      { id: "t2v", fields: [] },
+      { id: "i2v", fields: ["first_frame_ref", "last_frame_ref"] },
+      { id: "r2v", fields: ["image_refs", "video_refs", "audio_refs"] },
+    ]);
+
+    const source = {
+      id: "01900000-0000-7000-8000-000000000001",
+      type: "image" as const,
+      slot: { row: 0, column: 0 },
+    };
+    const last = {
+      id: "01900000-0000-7000-8000-000000000002",
+      type: "image" as const,
+      slot: { row: 0, column: 1 },
+    };
+    const generate = {
+      id: "01900000-0000-7000-8000-000000000003",
+      type: "generate_video" as const,
+      slot: { row: 1, column: 0 },
+    };
+    const document: NotebookDocument = {
+      id: "01900000-0000-7000-8000-000000000004",
+      name: "Wan frames",
+      cells: [source, last, generate],
+      edges: [
+        {
+          id: "01900000-0000-7000-8000-000000000005",
+          source: source.id,
+          target: generate.id,
+          targetInput: "image",
+        },
+        {
+          id: "01900000-0000-7000-8000-000000000006",
+          source: last.id,
+          target: generate.id,
+          targetInput: "last_frame",
+        },
+      ],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    expect(notebookGenerationInputsAreCompatible(
+      contract,
+      document,
+      generate,
+      "default",
+    )).toBe(true);
+    expect(notebookGenerationInputsAreCompatible(
+      contract,
+      document,
+      generate,
+      "i2v",
+    )).toBe(true);
+    expect(notebookGenerationInputsAreCompatible(
+      contract,
+      document,
+      generate,
+      "r2v",
+    )).toBe(false);
   });
 });
