@@ -92,6 +92,27 @@ describe("notebook action catalog", () => {
         || type === "image"
         || type === "video"
         || type === "character"))).toBe(false);
+    expect(actions
+      .filter((action) => action.tool?.includes("qwen_3_0_edit_image"))
+      .map((action) => ({
+        tool: action.tool,
+        provider: action.provider,
+        providerLabel: action.providerLabel,
+        model: action.model,
+      }))).toEqual([
+      {
+        tool: "generate_fal_qwen_3_0_edit_image",
+        provider: "fal",
+        providerLabel: "Fal",
+        model: "alibaba/qwen-image-3/edit",
+      },
+      {
+        tool: "generate_kie_qwen_3_0_edit_image",
+        provider: "kie",
+        providerLabel: "Kie",
+        model: "Qwen3ImageToImageRequestSchema",
+      },
+    ]);
   });
 
   it("previews Kie Qwen 3 edits with provider-valid local image URLs", async () => {
@@ -419,6 +440,9 @@ describe("notebook action catalog", () => {
       actions: Array<{
         kind: string;
         tool?: string;
+        provider?: string;
+        providerLabel?: string;
+        model?: string;
         controls?: Array<{ name: string; required?: boolean }>;
       }>;
     };
@@ -429,6 +453,31 @@ describe("notebook action catalog", () => {
       action.tool === "generate_elevenlabs_text_to_audio")?.controls?.find(
       (control) => control.name === "voice_id",
     )).toMatchObject({ required: true });
+    const qwen3Actions = fullCatalog.actions.filter((action) =>
+      action.tool?.includes("qwen_3_0_edit_image"));
+    expect(qwen3Actions.map((action) => ({
+      tool: action.tool,
+      provider: action.provider,
+      providerLabel: action.providerLabel,
+      model: action.model,
+    }))).toEqual([
+      {
+        tool: "generate_fal_qwen_3_0_edit_image",
+        provider: "fal",
+        providerLabel: "Fal",
+        model: "alibaba/qwen-image-3/edit",
+      },
+      {
+        tool: "generate_kie_qwen_3_0_edit_image",
+        provider: "kie",
+        providerLabel: "Kie",
+        model: "Qwen3ImageToImageRequestSchema",
+      },
+    ]);
+    expect(qwen3Actions.find((action) => action.provider === "fal")
+      ?.controls?.map((control) => control.name)).toContain("enable_safety_checker");
+    expect(qwen3Actions.find((action) => action.provider === "kie")
+      ?.controls?.map((control) => control.name)).toContain("nsfw_checker");
 
     const details = resultJson(await invoke("get_notebook_cell_details", {
       notebook_id: notebookId,

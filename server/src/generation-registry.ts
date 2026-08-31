@@ -450,7 +450,7 @@ export const GENERATION_ACTIONS: GenerationActionSpec[] = [
     apicity_identifier: "Qwen3ImageToImageRequestSchema",
     media_type: "image",
     operation: "edit_image",
-    picker_visibility: "hidden_fal_variant",
+    picker_visibility: "visible",
     legacy_names: [],
     schema_owner: "@apicity/kie/zod",
     job_task_discriminator: "qwen3_image_edit_gen",
