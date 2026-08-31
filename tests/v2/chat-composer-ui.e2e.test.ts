@@ -2851,7 +2851,7 @@ describe('chat composer browser flow', () => {
     notebookDirty = true
   }, 60_000)
 
-  it('auto-arranges the notebook into left-aligned workflow bands', async () => {
+  it('auto-arranges images on the top row and videos on the third row', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()
     const input = page.getByLabel('Videobook command input')
@@ -2881,13 +2881,8 @@ describe('chat composer browser flow', () => {
       typeof slot?.id === 'string' ? [[slot.id, slot] as const] : []))
     const generationSlot = slotsById.get(fullscreenImageGenerationCellId)
     const imageSlot = slotsById.get(fullscreenImageCellId)
-    const occupiedRows = new Set(slots.map((slot) => Number(slot!.row)))
-    const minRow = Math.min(...occupiedRows)
-    const maxRow = Math.max(...occupiedRows)
-    const blankRows = Array.from(
-      { length: Math.max(0, maxRow - minRow - 1) },
-      (_, index) => minRow + 1 + index,
-    ).filter((row) => !occupiedRows.has(row))
+    const sourceImageSlot = slotsById.get(imageCellId)
+    const outputVideoSlot = slotsById.get(outputVideoCellId)
 
     expect(moveCall?.arguments.book_id).toBe(bookId)
     expect(moveCall?.arguments.notebook_id).toBe(notebookId)
@@ -2895,14 +2890,13 @@ describe('chat composer browser flow', () => {
     expect(slots.length).toBeGreaterThan(0)
     expect(slotKeys.size).toBe(slots.length)
     expect(slots.every((slot) =>
-      Number(slot!.column) >= 0 && Number(slot!.column) <= 6)).toBe(true)
+      Number(slot!.column) >= 0 && Number(slot!.column) <= 12)).toBe(true)
     expect(slots.every((slot) =>
       Number(slot!.row) >= 0 && Number(slot!.row) <= 25)).toBe(true)
-    expect(typeof generationSlot?.row).toBe('number')
-    expect(typeof imageSlot?.row).toBe('number')
-    expect(Number(imageSlot?.row)).toBe(Number(generationSlot?.row))
-    expect(Number(imageSlot?.column)).toBe(Number(generationSlot?.column) + 1)
-    expect(blankRows.length).toBeGreaterThan(0)
+    expect(Number(imageSlot?.row)).toBe(0)
+    expect(Number(sourceImageSlot?.row)).toBe(0)
+    expect(Number(generationSlot?.row)).toBe(1)
+    expect(Number(outputVideoSlot?.row)).toBe(2)
     await page.getByText(/^Auto-arranged \d+ tiles?$/u).waitFor({
       state: 'visible',
       timeout: 30_000,
