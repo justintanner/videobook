@@ -23,6 +23,7 @@ export type ImageEditSelection = {
     box: ImageEditBox
     matchedSubjectId?: string
   }>
+  replacements: Record<string, string>
 }
 
 export type ImageRegionReplacement = {
@@ -107,6 +108,7 @@ export function snapRegionToSubject(
 export function imageEditSelectionPayload(
   selectedSubjectIds: readonly string[],
   regions: readonly ImageEditRegion[],
+  replacements: Readonly<Record<string, string>> = {},
 ): ImageEditSelection {
   return {
     subjectIds: [...selectedSubjectIds],
@@ -115,14 +117,61 @@ export function imageEditSelectionPayload(
       box: region.box,
       ...(region.matchedSubjectId ? { matchedSubjectId: region.matchedSubjectId } : {}),
     })),
+    replacements: { ...replacements },
   }
 }
 
-type ImageReplacementTarget = {
+export function sameImageEditSelection(
+  left: ImageEditSelection,
+  right: ImageEditSelection,
+): boolean {
+  if (left.subjectIds.length !== right.subjectIds.length) return false
+  if (left.regions.length !== right.regions.length) return false
+  if (!left.subjectIds.every((id, index) => id === right.subjectIds[index])) return false
+  if (!left.regions.every((region, index) => {
+    const other = right.regions[index]
+    return other
+      && region.id === other.id
+      && region.box.x === other.box.x
+      && region.box.y === other.box.y
+      && region.box.width === other.box.width
+      && region.box.height === other.box.height
+      && region.matchedSubjectId === other.matchedSubjectId
+  })) return false
+  const leftKeys = Object.keys(left.replacements)
+  const rightKeys = Object.keys(right.replacements)
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key) => left.replacements[key] === right.replacements[key])
+}
+
+export type ImageReplacementTarget = {
   key: string
   box?: ImageEditBox
   subjectId?: string
   label: string
+}
+
+export const MISSING_REGION_REPLACEMENT_ERROR =
+  'Mention a replacement image (for example @g7) or assign one in the panel.'
+
+export const REGION_REPLACEMENT_MENTION_COUNT_ERROR =
+  'Mention one image for every region, or one image to use for all of them.'
+
+export const MISSING_REGION_REPLACEMENT_TARGET_ERROR =
+  'Draw a region or select a person or object to replace.'
+
+function uniqueTrimmed(values: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const unique: string[] = []
+  for (const value of values) {
+    const trimmed = value.trim()
+    if (!trimmed) continue
+    const key = trimmed.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(trimmed)
+  }
+  return unique
 }
 
 export function imageReplacementTargets(
@@ -174,6 +223,76 @@ export function regionReplacementPayload(
       ...(target.subjectId ? { subjectId: target.subjectId } : {}),
     }]
   })
+}
+
+export type MergeRegionReplacementsResult =
+  | { ok: true; replacements: Record<string, string> }
+  | { ok: false; error: string }
+
+export function mergeRegionReplacements(
+  targets: readonly ImageReplacementTarget[],
+  picker: Readonly<Record<string, string>>,
+  mentionedArtifactIds: readonly string[],
+): MergeRegionReplacementsResult {
+  if (targets.length === 0) {
+    return { ok: false, error: MISSING_REGION_REPLACEMENT_TARGET_ERROR }
+  }
+  const replacements: Record<string, string> = {}
+  for (const target of targets) {
+    const picked = picker[target.key]?.trim()
+    if (picked) replacements[target.key] = picked
+  }
+  const mentions = uniqueTrimmed(mentionedArtifactIds)
+  const unassigned = targets.filter((target) => !replacements[target.key])
+  if (mentions.length === 1) {
+    const artifactId = mentions[0]!
+    for (const target of unassigned) replacements[target.key] = artifactId
+  } else if (mentions.length > 1) {
+    if (mentions.length !== unassigned.length) {
+      return { ok: false, error: REGION_REPLACEMENT_MENTION_COUNT_ERROR }
+    }
+    unassigned.forEach((target, index) => {
+      replacements[target.key] = mentions[index]!
+    })
+  }
+  if (!targets.every((target) => Boolean(replacements[target.key]))) {
+    return { ok: false, error: MISSING_REGION_REPLACEMENT_ERROR }
+  }
+  return { ok: true, replacements }
+}
+
+export type ComposerImageReplacementMentionsResult =
+  | { ok: true; artifactIds: string[] }
+  | { ok: false; error: string }
+
+export function composerImageReplacementMentions(
+  references: readonly string[],
+  assets: readonly { cellAddress: string; artifactId: string; type: string }[],
+): ComposerImageReplacementMentionsResult {
+  const byAddress = new Map(
+    assets.map((asset) => [asset.cellAddress.toLowerCase(), asset]),
+  )
+  const artifactIds: string[] = []
+  const seenArtifacts = new Set<string>()
+  for (const reference of uniqueTrimmed(references)) {
+    const asset = byAddress.get(reference.toLowerCase())
+    if (!asset) {
+      return {
+        ok: false,
+        error: `@${reference.toLowerCase()} is not an image on this notebook.`,
+      }
+    }
+    if (asset.type.toLowerCase() !== 'image') {
+      return {
+        ok: false,
+        error: `@${asset.cellAddress} is a ${asset.type}, not an image.`,
+      }
+    }
+    if (seenArtifacts.has(asset.artifactId)) continue
+    seenArtifacts.add(asset.artifactId)
+    artifactIds.push(asset.artifactId)
+  }
+  return { ok: true, artifactIds }
 }
 
 export function nextRegionId(existing: readonly ImageEditRegion[]): string {

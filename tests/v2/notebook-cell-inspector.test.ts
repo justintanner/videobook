@@ -2021,10 +2021,88 @@ describe('NotebookCellInspector', () => {
 
     expect(html).toContain('Analysis did not finish')
     expect(html).toContain('Seedream decomposition timed out before returning layers.')
+    expect(html).toContain('You can still draw a region and replace it with another image.')
     expect(html).toContain('>Retry</button>')
     expect(html).not.toContain('Finding people and objects')
     expect(html).not.toContain('Analyzing…')
     expect(html).not.toContain('lucide-loader-circle')
+    expect(html).not.toContain('Replacement images')
+  })
+
+  it('keeps drawn regions and replacement picks after subject analysis fails', () => {
+    const html = renderToStaticMarkup(createElement(NotebookMediaFullscreen, {
+      asset: {
+        artifactId: 'image-artifact',
+        id: 'image-source',
+        objectHash: 'sha256:image',
+        type: 'image',
+        mediaUrl: '/files/book/image-artifact/original.png',
+        thumbnailUrl: null,
+        width: 1200,
+        height: 800,
+        duration: null,
+        audioInfo: null,
+      },
+      address: 'h8',
+      subjectMap: asImageSubjectMap({
+        status: 'failed',
+        artifact_id: 'image-artifact',
+        object_hash: 'sha256:image',
+        error: 'The image content could not be processed for layer decomposition. (400)',
+      }),
+      initialRegions: [{
+        id: 'region-1',
+        box: { x: 0.42, y: 0.18, width: 0.16, height: 0.12 },
+      }],
+      replacementCandidates: [{
+        artifactId: 'actor-g7',
+        address: 'g7',
+        label: 'g7',
+        thumbnailUrl: '/files/book/actor-g7/original.png',
+      }],
+      onAnalyzeSubjects: async () => undefined,
+      onEditSubjects: async () => true,
+      onClose: () => undefined,
+    }))
+
+    expect(html).toContain('Analysis did not finish')
+    expect(html).toContain('The image content could not be processed for layer decomposition. (400)')
+    expect(html).toContain('Region 1')
+    expect(html).toContain('Replacement images')
+    expect(html).toContain('@g7')
+    expect(html).toContain('or mention one in the image edit bar')
+    expect(html).toMatch(/class="replace"[^>]*disabled/)
+    expect(html).not.toContain('You can still draw a region and replace it with another image.')
+  })
+
+  it('explains how to assign a replacement when the notebook has no other images', () => {
+    const html = renderToStaticMarkup(createElement(NotebookMediaFullscreen, {
+      asset: {
+        artifactId: 'image-artifact',
+        id: 'image-source',
+        objectHash: 'sha256:image',
+        type: 'image',
+        mediaUrl: '/files/book/image-artifact/original.png',
+        thumbnailUrl: null,
+        width: 1200,
+        height: 800,
+        duration: null,
+        audioInfo: null,
+      },
+      address: 'h8',
+      initialRegions: [{
+        id: 'region-1',
+        box: { x: 0.2, y: 0.1, width: 0.35, height: 0.8 },
+      }],
+      onAnalyzeSubjects: async () => undefined,
+      onEditSubjects: async () => true,
+      onClose: () => undefined,
+    }))
+
+    expect(html).toContain('Region 1')
+    expect(html).toContain('Replacement images')
+    expect(html).toContain('Place another image on the grid, then pick it here or mention it as @address in the image edit bar.')
+    expect(html).toMatch(/class="replace"[^>]*disabled/)
   })
 
   it('projects every persisted cells-table column with raw null and JSON values', () => {

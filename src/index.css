@@ -10068,6 +10068,14 @@ textarea:focus-visible {
   color: #d7a5a5;
 }
 
+.notebook-subject-state.compact {
+  min-height: 0;
+  margin-bottom: 10px;
+  padding: 10px 8px 12px;
+  border-bottom: 1px solid rgba(72, 119, 92, 0.18);
+  gap: 6px;
+}
+
 .notebook-subject-list {
   display: grid;
   gap: 6px;
@@ -10216,6 +10224,13 @@ textarea:focus-visible {
   color: #668a75;
   font-size: 8px;
   text-transform: uppercase;
+}
+
+.notebook-replacement-empty {
+  margin: 0;
+  color: #5f7d6b;
+  font-size: 9px;
+  line-height: 1.55;
 }
 
 .notebook-replacement-row {

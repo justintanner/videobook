@@ -472,8 +472,15 @@ export function NotebookMediaFullscreen({
     onSelectionChange?.(imageEditSelectionPayload(
       selectedSubjects.map((subject) => subject.id),
       regions,
+      replacements,
     ))
-  }, [onSelectedSubjectIdsChange, onSelectionChange, regions, selectedSubjects])
+  }, [
+    onSelectedSubjectIdsChange,
+    onSelectionChange,
+    regions,
+    replacements,
+    selectedSubjects,
+  ])
 
   useEffect(() => {
     if (!hasMedia) return
@@ -714,6 +721,9 @@ export function NotebookMediaFullscreen({
     || analyzing,
   )
   const showSubjectStage = !removalPreview
+  const showRegionList = regions.length > 0
+    || (ready && (subjectMap?.subjects.length ?? 0) > 0)
+  const analysisFailed = subjectMap?.status === 'failed'
 
   const dialog = (
     <section
@@ -919,185 +929,207 @@ export function NotebookMediaFullscreen({
                   <strong>Subject tools unavailable</strong>
                   <p>{analysisUnavailableReason}</p>
                 </div>
-              ) : checkingCache ? (
-                <div className="notebook-subject-state loading">
-                  <BusyIndicator size={22} />
-                  <strong>Loading cached subjects</strong>
-                  <p>This does not start a new cloud analysis.</p>
-                </div>
-              ) : analyzing ? (
-                <div className="notebook-subject-state loading">
-                  <BusyIndicator size={22} />
-                  <strong>Finding people and objects</strong>
-                  <p>You can close this view. Analysis continues in the background.</p>
-                </div>
-              ) : subjectMap?.status === 'failed' ? (
-                <div className="notebook-subject-state error">
-                  <RotateCw size={22} />
-                  <strong>Analysis did not finish</strong>
-                  <p>{subjectMap.error ?? 'The image could not be decomposed.'}</p>
-                  <button type="button" onClick={() => void analyzeSubjects()}>
-                    <RotateCw size={13} />Retry
-                  </button>
-                </div>
-              ) : ready && subjectMap.subjects.length === 0 && regions.length === 0 ? (
-                <div className="notebook-subject-state empty">
-                  <Layers2 size={22} />
-                  <strong>No editable subjects found</strong>
-                  <p>Draw a region or try analysis again if the image changed.</p>
-                  <button type="button" onClick={() => void analyzeSubjects(true)}>
-                    <RotateCw size={13} />Analyze again
-                  </button>
-                </div>
-              ) : ready || regions.length > 0 ? (
-                <div className="notebook-subject-list">
-                  <div className="notebook-subject-list-actions">
-                    <span>
-                      {selectedSubjects.length + selectedRegionIds.size} selected
-                    </span>
-                    {ready && subjectMap && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedIds(new Set(
-                          selectedSubjects.length === subjectMap.subjects.length
-                            ? []
-                            : subjectMap.subjects.map((subject) => subject.id),
-                        ))}
-                      >
-                        {selectedSubjects.length === subjectMap.subjects.length
-                          ? 'Clear'
-                          : 'Select all'}
-                      </button>
-                    )}
-                  </div>
-                  {regions.map((region, index) => {
-                    const selected = selectedRegionIds.has(region.id)
-                    const matched = subjectMap?.subjects.find((subject) =>
-                      subject.id === region.matchedSubjectId)
-                    return (
-                      <div
-                        key={region.id}
-                        className={`notebook-subject-row${selected ? ' selected' : ''}`}
-                      >
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => toggleRegion(region.id)}
-                          />
-                          <span
-                            className="notebook-subject-swatch"
-                            style={{ backgroundColor: REGION_COLOR }}
-                            aria-hidden="true"
-                          />
-                          <span className="notebook-subject-copy">
-                            <strong>
-                              {matched ? `Region · ${matched.label}` : `Region ${index + 1}`}
-                            </strong>
-                            <small>
-                              {region.box.width.toFixed(2)} × {region.box.height.toFixed(2)}
-                            </small>
-                          </span>
-                        </label>
-                        <button
-                          type="button"
-                          className="notebook-subject-visibility"
-                          aria-label={`Remove region ${index + 1}`}
-                          onClick={() => removeRegion(region.id)}
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    )
-                  })}
-                  {ready && subjectMap.subjects.map((subject) => {
-                    const selected = selectedIds.has(subject.id)
-                    const hidden = hiddenIds.has(subject.id)
-                    return (
-                      <div
-                        key={subject.id}
-                        className={`notebook-subject-row${selected ? ' selected' : ''}`}
-                      >
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => toggleSubject(subject.id)}
-                          />
-                          <span
-                            className="notebook-subject-swatch"
-                            style={{ backgroundColor: subject.color }}
-                            aria-hidden="true"
-                          />
-                          <span className="notebook-subject-copy">
-                            <strong>{subject.label}</strong>
-                            <small>
-                              {subject.description
-                                ?? (subject.exactEdit ? 'Exact mask available' : 'Editable layer')}
-                            </small>
-                          </span>
-                        </label>
-                        <button
-                          type="button"
-                          className="notebook-subject-visibility"
-                          aria-label={`${hidden ? 'Show' : 'Hide'} ${subject.label} overlay`}
-                          aria-pressed={!hidden}
-                          onClick={() => toggleSubjectVisibility(subject.id)}
-                        >
-                          {hidden ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                      </div>
-                    )
-                  })}
-                  {replacementTargets.length > 0 && replacementCandidates.length > 0 && (
-                    <div className="notebook-replacement-list">
-                      <span>Replacement images</span>
-                      {replacementTargets.map((target) => (
-                        <div key={target.key} className="notebook-replacement-row">
-                          <strong>{target.label}</strong>
-                          <div className="notebook-replacement-picker" role="listbox" aria-label={`Replacement for ${target.label}`}>
-                            {replacementCandidates.map((candidate) => {
-                              const selected = replacements[target.key] === candidate.artifactId
-                              return (
-                                <button
-                                  key={candidate.artifactId}
-                                  type="button"
-                                  role="option"
-                                  aria-selected={selected}
-                                  className={`notebook-replacement-option${selected ? ' selected' : ''}`}
-                                  onClick={() => setReplacements((current) => ({
-                                    ...current,
-                                    [target.key]: candidate.artifactId,
-                                  }))}
-                                >
-                                  {candidate.thumbnailUrl ? (
-                                    <img
-                                      src={candidate.thumbnailUrl}
-                                      alt=""
-                                    />
-                                  ) : null}
-                                  @{candidate.address}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
+              ) : (
+                <>
+                  {checkingCache && !showRegionList && (
+                    <div className="notebook-subject-state loading">
+                      <BusyIndicator size={22} />
+                      <strong>Loading cached subjects</strong>
+                      <p>This does not start a new cloud analysis.</p>
                     </div>
                   )}
-                </div>
-              ) : (
-                <div className="notebook-subject-state idle">
-                  <Layers2 size={22} />
-                  <strong>Make the image editable</strong>
-                  <p>Subjects identifies people and objects, then colors each layer. You can also draw regions immediately.</p>
-                </div>
+                  {analyzing && (
+                    <div className={`notebook-subject-state loading${showRegionList ? ' compact' : ''}`}>
+                      {showRegionList ? <BusyIndicator size={14} /> : <BusyIndicator size={22} />}
+                      <strong>Finding people and objects</strong>
+                      <p>
+                        {showRegionList
+                          ? 'Analysis continues in the background.'
+                          : 'You can close this view. Analysis continues in the background. You can also draw a region to replace part of the image.'}
+                      </p>
+                    </div>
+                  )}
+                  {analysisFailed && !analyzing && (
+                    <div className={`notebook-subject-state error${showRegionList ? ' compact' : ''}`}>
+                      <RotateCw size={showRegionList ? 16 : 22} />
+                      <strong>Analysis did not finish</strong>
+                      <p>{subjectMap?.error ?? 'The image could not be decomposed.'}</p>
+                      {!showRegionList && (
+                        <p>You can still draw a region and replace it with another image.</p>
+                      )}
+                      <button type="button" onClick={() => void analyzeSubjects()}>
+                        <RotateCw size={13} />Retry
+                      </button>
+                    </div>
+                  )}
+                  {ready && subjectMap.subjects.length === 0 && regions.length === 0 && (
+                    <div className="notebook-subject-state empty">
+                      <Layers2 size={22} />
+                      <strong>No editable subjects found</strong>
+                      <p>Draw a region or try analysis again if the image changed.</p>
+                      <button type="button" onClick={() => void analyzeSubjects(true)}>
+                        <RotateCw size={13} />Analyze again
+                      </button>
+                    </div>
+                  )}
+                  {showRegionList ? (
+                    <div className="notebook-subject-list">
+                      <div className="notebook-subject-list-actions">
+                        <span>
+                          {selectedSubjects.length + selectedRegionIds.size} selected
+                        </span>
+                        {ready && subjectMap && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedIds(new Set(
+                              selectedSubjects.length === subjectMap.subjects.length
+                                ? []
+                                : subjectMap.subjects.map((subject) => subject.id),
+                            ))}
+                          >
+                            {selectedSubjects.length === subjectMap.subjects.length
+                              ? 'Clear'
+                              : 'Select all'}
+                          </button>
+                        )}
+                      </div>
+                      {regions.map((region, index) => {
+                        const selected = selectedRegionIds.has(region.id)
+                        const matched = subjectMap?.subjects.find((subject) =>
+                          subject.id === region.matchedSubjectId)
+                        return (
+                          <div
+                            key={region.id}
+                            className={`notebook-subject-row${selected ? ' selected' : ''}`}
+                          >
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                aria-label={`Select region ${index + 1}`}
+                                onChange={() => toggleRegion(region.id)}
+                              />
+                              <span
+                                className="notebook-subject-swatch"
+                                style={{ backgroundColor: REGION_COLOR }}
+                                aria-hidden="true"
+                              />
+                              <span className="notebook-subject-copy">
+                                <strong>
+                                  {matched ? `Region · ${matched.label}` : `Region ${index + 1}`}
+                                </strong>
+                                <small>
+                                  {region.box.width.toFixed(2)} × {region.box.height.toFixed(2)}
+                                </small>
+                              </span>
+                            </label>
+                            <button
+                              type="button"
+                              className="notebook-subject-visibility"
+                              aria-label={`Remove region ${index + 1}`}
+                              onClick={() => removeRegion(region.id)}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        )
+                      })}
+                      {ready && subjectMap.subjects.map((subject) => {
+                        const selected = selectedIds.has(subject.id)
+                        const hidden = hiddenIds.has(subject.id)
+                        return (
+                          <div
+                            key={subject.id}
+                            className={`notebook-subject-row${selected ? ' selected' : ''}`}
+                          >
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => toggleSubject(subject.id)}
+                              />
+                              <span
+                                className="notebook-subject-swatch"
+                                style={{ backgroundColor: subject.color }}
+                                aria-hidden="true"
+                              />
+                              <span className="notebook-subject-copy">
+                                <strong>{subject.label}</strong>
+                                <small>
+                                  {subject.description
+                                    ?? (subject.exactEdit ? 'Exact mask available' : 'Editable layer')}
+                                </small>
+                              </span>
+                            </label>
+                            <button
+                              type="button"
+                              className="notebook-subject-visibility"
+                              aria-label={`${hidden ? 'Show' : 'Hide'} ${subject.label} overlay`}
+                              aria-pressed={!hidden}
+                              onClick={() => toggleSubjectVisibility(subject.id)}
+                            >
+                              {hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                          </div>
+                        )
+                      })}
+                      {replacementTargets.length > 0 && (
+                        <div className="notebook-replacement-list">
+                          <span>Replacement images</span>
+                          {replacementCandidates.length === 0 ? (
+                            <p className="notebook-replacement-empty">
+                              Place another image on the grid, then pick it here or mention it as @address in the image edit bar.
+                            </p>
+                          ) : (
+                            replacementTargets.map((target) => (
+                              <div key={target.key} className="notebook-replacement-row">
+                                <strong>{target.label}</strong>
+                                <div className="notebook-replacement-picker" role="listbox" aria-label={`Replacement for ${target.label}`}>
+                                  {replacementCandidates.map((candidate) => {
+                                    const selected = replacements[target.key] === candidate.artifactId
+                                    return (
+                                      <button
+                                        key={candidate.artifactId}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={selected}
+                                        className={`notebook-replacement-option${selected ? ' selected' : ''}`}
+                                        onClick={() => setReplacements((current) => ({
+                                          ...current,
+                                          [target.key]: candidate.artifactId,
+                                        }))}
+                                      >
+                                        {candidate.thumbnailUrl ? (
+                                          <img
+                                            src={candidate.thumbnailUrl}
+                                            alt=""
+                                          />
+                                        ) : null}
+                                        @{candidate.address}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : !checkingCache && !analyzing && !analysisFailed && !ready ? (
+                    <div className="notebook-subject-state idle">
+                      <Layers2 size={22} />
+                      <strong>Make the image editable</strong>
+                      <p>Subjects identifies people and objects, then colors each layer. You can also draw regions immediately.</p>
+                    </div>
+                  ) : null}
+                </>
               )}
             </div>
             <div className="notebook-subject-actions">
               <p className="notebook-subject-composer-guidance">
                 {replacementTargets.length > 0
-                  ? 'Assign a replacement image to each region, then replace, or describe a change in the image edit bar.'
+                  ? 'Assign a replacement image to each region, then replace, or mention one in the image edit bar.'
                   : ready && selectedSubjects.length > 0
                   ? `Describe the change for ${selectedSubjects.length} selected ${selectedSubjects.length === 1 ? 'subject' : 'subjects'} in the image edit bar.`
                   : 'Select people or objects, then describe the change in the image edit bar.'}

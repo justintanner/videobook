@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MISSING_REGION_REPLACEMENT_ERROR,
+  REGION_REPLACEMENT_MENTION_COUNT_ERROR,
   SUBJECT_BOX_IOU_THRESHOLD,
   bestSubjectSnap,
   boxIou,
   canSubmitRegionReplacements,
+  composerImageReplacementMentions,
   imageEditSelectionPayload,
   imageReplacementTargets,
+  mergeRegionReplacements,
   pointerToNormalizedPoint,
   regionBoxFromDrag,
   regionReplacementPayload,
@@ -87,6 +91,7 @@ describe('image edit regions', () => {
           box: { x: 0.6, y: 0.6, width: 0.25, height: 0.2 },
         },
       ],
+      replacements: {},
     })
   })
 
@@ -147,5 +152,64 @@ describe('image edit regions', () => {
         subjectId: 'person-2',
       },
     ])
+  })
+
+  it('fills unassigned regions from composer image mentions', () => {
+    const targets = imageReplacementTargets(
+      [
+        { id: 'region-1', box: { x: 0.1, y: 0.1, width: 0.2, height: 0.4 } },
+        { id: 'region-2', box: { x: 0.6, y: 0.2, width: 0.2, height: 0.5 } },
+      ],
+      [],
+    )
+    expect(mergeRegionReplacements(targets, {}, [])).toEqual({
+      ok: false,
+      error: MISSING_REGION_REPLACEMENT_ERROR,
+    })
+    expect(mergeRegionReplacements(targets, { 'region-1': 'art-d1' }, ['art-d2'])).toEqual({
+      ok: true,
+      replacements: {
+        'region-1': 'art-d1',
+        'region-2': 'art-d2',
+      },
+    })
+    expect(mergeRegionReplacements(targets, {}, ['art-shared'])).toEqual({
+      ok: true,
+      replacements: {
+        'region-1': 'art-shared',
+        'region-2': 'art-shared',
+      },
+    })
+    expect(mergeRegionReplacements(targets, {}, ['art-a', 'art-b'])).toEqual({
+      ok: true,
+      replacements: {
+        'region-1': 'art-a',
+        'region-2': 'art-b',
+      },
+    })
+    expect(mergeRegionReplacements(targets, { 'region-1': 'art-d1' }, ['art-a', 'art-b'])).toEqual({
+      ok: false,
+      error: REGION_REPLACEMENT_MENTION_COUNT_ERROR,
+    })
+  })
+
+  it('resolves notebook image mentions and rejects other cell types', () => {
+    const assets = [
+      { cellAddress: 'g7', artifactId: 'art-g7', type: 'image' },
+      { cellAddress: 'h3', artifactId: 'art-h3', type: 'image' },
+      { cellAddress: 'v2', artifactId: 'art-v2', type: 'video' },
+    ]
+    expect(composerImageReplacementMentions(['g7', 'G7', 'h3'], assets)).toEqual({
+      ok: true,
+      artifactIds: ['art-g7', 'art-h3'],
+    })
+    expect(composerImageReplacementMentions(['v2'], assets)).toEqual({
+      ok: false,
+      error: '@v2 is a video, not an image.',
+    })
+    expect(composerImageReplacementMentions(['z9'], assets)).toEqual({
+      ok: false,
+      error: '@z9 is not an image on this notebook.',
+    })
   })
 })

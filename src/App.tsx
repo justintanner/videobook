@@ -73,7 +73,10 @@ import type {
 } from 'videobook-engine'
 import { SCHEMA_VERSION } from 'videobook-engine/catalog-metadata'
 import enginePackage from 'videobook-engine/package.json'
-import { normalizeNotebookReference } from 'videobook-engine/notebook-mentions'
+import {
+  normalizeNotebookReference,
+  stripNotebookMentions,
+} from 'videobook-engine/notebook-mentions'
 import { resolveGeneratedVideoArtifact } from 'videobook-engine/notebook-media-artifact'
 import {
   adaptCommandArgs,
@@ -399,7 +402,18 @@ import {
   type NotebookAddressExpectation,
   type NotebookCoordinateActionPlan,
 } from '@/videobook/notebook-coordinate-actions'
-import { notebookCellAtSlot } from '@/videobook/notebook-addressing'
+import {
+  notebookCellAtSlot,
+  notebookReferences,
+} from '@/videobook/notebook-addressing'
+import {
+  composerImageReplacementMentions,
+  imageReplacementTargets,
+  mergeRegionReplacements,
+  regionReplacementPayload,
+  sameImageEditSelection,
+  type ImageEditSelection,
+} from '@/videobook/image-edit-regions'
 import { recordValue } from '@/videobook/value-decoders'
 import {
   asImageSubjectMap,
@@ -2986,8 +3000,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
   const [mediaFullscreenComposerTarget, setMediaFullscreenComposerTarget] =
     useState<HTMLDivElement | null>(null)
-  const [mediaFullscreenSelectedSubjectIds, setMediaFullscreenSelectedSubjectIds] =
-    useState<readonly string[]>([])
+  const [mediaFullscreenEditSelection, setMediaFullscreenEditSelection] =
+    useState<ImageEditSelection>({
+      subjectIds: [],
+      regions: [],
+      replacements: {},
+    })
   const [mediaFullscreenComposerSending, setMediaFullscreenComposerSending] =
     useState(false)
   const [mediaFullscreenSidebarEditing, setMediaFullscreenSidebarEditing] =
@@ -5083,7 +5101,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const requestId = imageSubjectMapRequestRef.current + 1
     imageSubjectMapRequestRef.current = requestId
     setMediaFullscreenComposerTarget(null)
-    setMediaFullscreenSelectedSubjectIds([])
+    setMediaFullscreenEditSelection({
+      subjectIds: [],
+      regions: [],
+      replacements: {},
+    })
     setMediaFullscreenComposerSending(false)
     setMediaFullscreenSidebarEditing(false)
     setMediaFullscreen(session)
@@ -5113,20 +5135,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const closeMediaFullscreen = useCallback(() => {
     imageSubjectMapRequestRef.current += 1
     setMediaFullscreenComposerTarget(null)
-    setMediaFullscreenSelectedSubjectIds([])
+    setMediaFullscreenEditSelection({
+      subjectIds: [],
+      regions: [],
+      replacements: {},
+    })
     setMediaFullscreenComposerSending(false)
     setMediaFullscreenSidebarEditing(false)
     setMediaFullscreen(null)
   }, [])
 
-  const updateMediaFullscreenSelectedSubjectIds = useCallback((
-    subjectIds: readonly string[],
+  const updateMediaFullscreenSelection = useCallback((
+    selection: ImageEditSelection,
   ) => {
-    setMediaFullscreenSelectedSubjectIds((current) => (
-      current.length === subjectIds.length
-      && current.every((subjectId, index) => subjectId === subjectIds[index])
-        ? current
-        : [...subjectIds]
+    setMediaFullscreenEditSelection((current) => (
+      sameImageEditSelection(current, selection) ? current : selection
     ))
   }, [])
 
@@ -9515,18 +9538,77 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         selectInput: false,
       }
     }
+    const selection = mediaFullscreenEditSelection
+    const selectedSubjects = (session.subjectMap?.subjects ?? []).filter((subject) =>
+      selection.subjectIds.includes(subject.id))
+    const references = notebookReferences(input)
+    const mentionResult = composerImageReplacementMentions(
+      references,
+      commandMentionAssets,
+    )
+    if (!mentionResult.ok) {
+      return {
+        ok: false,
+        message: mentionResult.error,
+        nextInput: input,
+        selectInput: false,
+      }
+    }
+    if (mentionResult.artifactIds.includes(session.asset.artifactId)) {
+      return {
+        ok: false,
+        message: 'Mention a different image as the replacement.',
+        nextInput: input,
+        selectInput: false,
+      }
+    }
+    const wantsReplace = selection.regions.length > 0
+      || mentionResult.artifactIds.length > 0
+    if (wantsReplace) {
+      const targets = imageReplacementTargets(selection.regions, selectedSubjects)
+      const merged = mergeRegionReplacements(
+        targets,
+        selection.replacements,
+        mentionResult.artifactIds,
+      )
+      if (!merged.ok) {
+        return {
+          ok: false,
+          message: merged.error,
+          nextInput: input,
+          selectInput: false,
+        }
+      }
+      const prompt = stripNotebookMentions(input, references).replace(/\s+/g, ' ').trim()
+      const queued = await editFullscreenSubjects(session, {
+        operation: 'replace',
+        subjectIds: selectedSubjects.map((subject) => subject.id),
+        ...(prompt ? { prompt } : {}),
+        regions: regionReplacementPayload(targets, merged.replacements),
+      })
+      if (!queued) {
+        return {
+          ok: false,
+          message: 'The image replacement was not queued.',
+          nextInput: input,
+          selectInput: false,
+        }
+      }
+      return {
+        ok: true,
+        message: `Region replacement queued for ${targets.length} ${targets.length === 1 ? 'region' : 'regions'}.`,
+      }
+    }
     if (session.subjectMap?.status !== 'ready') {
       return {
         ok: false,
         message: session.subjectMap?.status === 'analyzing'
           ? 'Wait for people and object analysis to finish before editing.'
-          : 'Analyze the image before describing an edit.',
+          : 'Analyze the image before describing an edit, or draw a region and mention a replacement image.',
         nextInput: input,
         selectInput: false,
       }
     }
-    const selectedSubjects = session.subjectMap.subjects.filter((subject) =>
-      mediaFullscreenSelectedSubjectIds.includes(subject.id))
     if (selectedSubjects.length === 0) {
       return {
         ok: false,
@@ -10287,40 +10369,50 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const fullscreenImageEditor = mediaFullscreen?.asset.type === 'image'
     ? mediaFullscreen
     : null
-  const imageReplacementCandidates = useMemo((): ImageReplacementCandidate[] => {
+  const imageEditMentionAssets = useMemo(() => {
     if (!fullscreenImageEditor) return []
-    return commandMentionAssets.flatMap((asset) => {
-      if (asset.type !== 'image') return []
-      if (asset.artifactId === fullscreenImageEditor.asset.artifactId) return []
-      return [{
-        artifactId: asset.artifactId,
-        address: asset.cellAddress,
-        label: asset.cellAddress,
-        thumbnailUrl: asset.thumbnailUrl ?? asset.mediaUrl,
-      }]
-    })
+    return commandMentionAssets.filter((asset) =>
+      asset.type.toLowerCase() === 'image'
+      && asset.artifactId !== fullscreenImageEditor.asset.artifactId)
   }, [commandMentionAssets, fullscreenImageEditor])
+  const imageReplacementCandidates = useMemo((): ImageReplacementCandidate[] => (
+    imageEditMentionAssets.map((asset) => ({
+      artifactId: asset.artifactId,
+      address: asset.cellAddress,
+      label: asset.cellAddress,
+      thumbnailUrl: asset.thumbnailUrl ?? asset.mediaUrl,
+    }))
+  ), [imageEditMentionAssets])
   const fullscreenSelectedSubjects = fullscreenImageEditor?.subjectMap?.subjects.filter(
-    (subject) => mediaFullscreenSelectedSubjectIds.includes(subject.id),
+    (subject) => mediaFullscreenEditSelection.subjectIds.includes(subject.id),
   ) ?? []
+  const fullscreenRegionCount = mediaFullscreenEditSelection.regions.length
   const fullscreenComposerContext = fullscreenImageEditor
     ? {
         label: `@${fullscreenImageEditor.address.toUpperCase()} IMAGE EDIT`,
-        description: fullscreenSelectedSubjects.length > 0
+        description: fullscreenRegionCount > 0
+          ? `${fullscreenRegionCount} ${fullscreenRegionCount === 1 ? 'region' : 'regions'}${
+            fullscreenSelectedSubjects.length > 0
+              ? `, ${fullscreenSelectedSubjects.length} selected`
+              : ''
+          }`
+          : fullscreenSelectedSubjects.length > 0
           ? `${fullscreenSelectedSubjects.length} selected ${fullscreenSelectedSubjects.length === 1 ? 'subject' : 'subjects'}`
-          : 'Select people or objects to edit',
+          : 'Draw a region or select people or objects',
       }
     : null
   const fullscreenComposerPlaceholder = !fullscreenImageEditor
     ? undefined
-    : fullscreenImageEditor.subjectMap?.status !== 'ready'
-      ? 'Analyze the image to find editable people and objects…'
-      : fullscreenSelectedSubjects.length === 0
-        ? 'Select people or objects to edit…'
-        : `Describe how to edit ${fullscreenSelectedSubjects
-            .slice(0, 2)
-            .map((subject) => subject.label)
-            .join(' and ')}…`
+    : fullscreenRegionCount > 0
+      ? 'Mention a replacement image, e.g. @g7, or pick one in the panel…'
+      : fullscreenImageEditor.subjectMap?.status !== 'ready'
+        ? 'Analyze the image, or draw a region to replace part of it…'
+        : fullscreenSelectedSubjects.length === 0
+          ? 'Select people or objects to edit…'
+          : `Describe how to edit ${fullscreenSelectedSubjects
+              .slice(0, 2)
+              .map((subject) => subject.label)
+              .join(' and ')}…`
   const revealSuccessfulComposerResult = () => {
     if (!fullscreenImageEditor) revealLatestNotebookResult()
   }
@@ -11938,7 +12030,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           replacementCandidates={imageReplacementCandidates}
           onEditSubjects={(input) =>
             editFullscreenSubjects(mediaFullscreen, input)}
-          onSelectedSubjectIdsChange={updateMediaFullscreenSelectedSubjectIds}
+          onSelectionChange={updateMediaFullscreenSelection}
           onClose={closeMediaFullscreen}
         />
       )}
@@ -11964,6 +12056,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         mcpActivity={mcpActivity}
         selectedModel={chatModel}
         context={fullscreenComposerContext}
+        mentionAssets={imageEditMentionAssets}
         inputSession={fullscreenImageEditor
           ? `image-edit:${fullscreenImageEditor.key}`
           : 'chat'}

@@ -18,7 +18,10 @@ import { createPortal } from 'react-dom'
 import type { ServerCommand } from '@/lib/command-registry'
 import {
   applyNotebookMentionSuggestion,
+  assetMentionMetadata,
+  assetMentionSuggestions,
   notebookAddressSuggestions,
+  type AssetMentionCandidate,
   type NotebookAddressCell,
   type NotebookAddressSuggestion,
 } from '@/videobook/mention-suggestions'
@@ -84,6 +87,7 @@ interface CommandComposerProps {
     description: string
     label: string
   } | null
+  mentionAssets?: readonly AssetMentionCandidate[]
   inputSession?: string | null
   placeholder?: string
   portalTarget?: Element | null
@@ -129,6 +133,7 @@ export function CommandComposer({
   mcpActivity,
   selectedModel,
   context = null,
+  mentionAssets = [],
   inputSession = null,
   placeholder,
   portalTarget = null,
@@ -241,8 +246,15 @@ export function CommandComposer({
   }), [notice, onDismissNotice, outcome])
 
   const suggestions = useMemo<Suggestion[]>(() => {
-    if (context) return []
     if (dismissed || isSpeakCommandPreview(input)) return []
+    if (context) {
+      return assetMentionSuggestions(mentionAssets, input).map((suggestion) => ({
+        value: suggestion.value,
+        label: suggestion.label,
+        description: assetMentionMetadata(suggestion.asset).join(' · '),
+        type: 'cell' as const,
+      }))
+    }
     if (pendingInput && /^\/(?:apply|cancel)(?:\s|$)/iu.test(input)) return []
     const commandMatch = input.match(/^\/([\w-]*)$/)
     if (commandMatch) {
@@ -256,7 +268,7 @@ export function CommandComposer({
         }))
     }
     return notebookAddressSuggestions(cells, input)
-  }, [cells, commands, context, dismissed, input, pendingInput])
+  }, [cells, commands, context, dismissed, input, mentionAssets, pendingInput])
 
   const showOutcome = (next: ComposerOutcome) => {
     window.clearTimeout(successTimerRef.current)
