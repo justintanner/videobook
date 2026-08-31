@@ -666,6 +666,67 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('<strong>@a1</strong><small>image')
   })
 
+  it('omits input sources that would make the notebook cyclic', () => {
+    const output: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000034',
+      slot: { row: 0, column: 0 },
+    }
+    const currentSource: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000035',
+      type: 'split_video',
+      slot: { row: 0, column: 1 },
+    }
+    const availableSource: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000036',
+      type: 'split_video',
+      slot: { row: 0, column: 2 },
+    }
+    const descendantSource: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000037',
+      type: 'split_video',
+      slot: { row: 0, column: 3 },
+    }
+    const edges: NotebookEdge[] = [
+      {
+        id: '01900000-0000-7000-8000-000000000038',
+        source: currentSource.id,
+        target: output.id,
+        targetInput: 'media',
+      },
+      {
+        id: '01900000-0000-7000-8000-000000000039',
+        source: output.id,
+        target: descendantSource.id,
+        targetInput: 'video',
+      },
+    ]
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: output,
+      cells: [output, currentSource, availableSource, descendantSource],
+      edges,
+      asset: undefined,
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('<strong>@a2</strong>')
+    expect(html).toContain('<strong>@a3</strong>')
+    expect(html).not.toContain('<strong>@a4</strong>')
+  })
+
   it('keeps an incompatible saved model visible and disables generation', () => {
     const generationCell: NotebookCell = {
       ...cell,

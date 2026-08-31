@@ -96,6 +96,22 @@ describe('v2 notebook domain tools', () => {
       target_cell_id: image.id,
       target_input: 'prompt',
     }))
+    const cyclicConnection = await invoke('connect_notebook_cells', {
+      notebook_id: notebookId,
+      source_cell_id: image.id,
+      target_cell_id: prompt.id,
+      target_input: 'input',
+    })
+    expect(cyclicConnection.isError).toBe(true)
+    expect(cyclicConnection.content[0]?.text).toContain('would create a cycle')
+    const cyclicReplacement = await invoke('set_notebook_cell_input', {
+      notebook_id: notebookId,
+      target_cell_id: prompt.id,
+      target_input: 'input',
+      source_cell_id: image.id,
+    })
+    expect(cyclicReplacement.isError).toBe(true)
+    expect(cyclicReplacement.content[0]?.text).toContain('would create a cycle')
     resultJson(await invoke('update_notebook_cell', {
       notebook_id: notebookId,
       cell_id: image.id,

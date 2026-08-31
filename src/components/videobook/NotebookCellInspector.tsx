@@ -95,6 +95,7 @@ import {
   type MediaVisionAnalysis,
   type TranscriptSidecarSource,
 } from '@/videobook/media-insights'
+import { notebookConnectionWouldCreateCycle } from '@/videobook/notebook-graph'
 import { RichJson } from './RichJson'
 import {
   AutocompleteDropdown,
@@ -1095,12 +1096,19 @@ function InputSources({
   const rows = inputs.flatMap((input) => {
     const edge = edges.find((candidate) =>
       candidate.target === cell.id && candidate.targetInput === input)
+    const retainedEdges = edges.filter((candidate) =>
+      candidate.target !== cell.id || candidate.targetInput !== input)
     const sourceCell = edge
       ? cells.find((candidate) => candidate.id === edge.source)
       : undefined
     const candidates = cells
       .filter((candidate) =>
-        compatibleSource(cell, input, candidate)
+        (compatibleSource(cell, input, candidate)
+          && !notebookConnectionWouldCreateCycle(
+            retainedEdges,
+            candidate.id,
+            cell.id,
+          ))
         || candidate.id === edge?.source)
       .sort((left, right) =>
         left.slot.row - right.slot.row

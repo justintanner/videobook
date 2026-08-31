@@ -401,6 +401,44 @@ describe('notebook generation actions', () => {
     }])
   })
 
+  it('omits descendant media that would create a cycle', () => {
+    const target: NotebookCell = {
+      ...emptyImageCell,
+      type: 'generate_video',
+    }
+    const descendant: NotebookCell = {
+      ...emptyImageCell,
+      id: '01900000-0000-7000-8000-000000000016',
+      type: 'image',
+      slot: { row: 0, column: 1 },
+    }
+    const available: NotebookCell = {
+      ...emptyImageCell,
+      id: '01900000-0000-7000-8000-000000000017',
+      type: 'image',
+      slot: { row: 0, column: 2 },
+    }
+    const outputEdge: NotebookEdge = {
+      id: '01900000-0000-7000-8000-000000000018',
+      source: target.id,
+      target: descendant.id,
+      targetInput: 'media',
+    }
+
+    expect(generationInputAttachments(
+      seedanceAction,
+      'r2v',
+      target.id,
+      [target, descendant, available],
+      [outputEdge],
+    )).toEqual([{
+      sourceCellId: available.id,
+      targetInput: 'image',
+      target: 'image',
+      kind: 'image',
+    }])
+  })
+
   it('treats extracted-frame image cells as image sources', () => {
     const extractedFrame: NotebookCell = {
       ...emptyImageCell,

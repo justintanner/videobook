@@ -71,6 +71,7 @@ import {
   refreshInitialGenerationPrompts,
   seedInitialGenerationPrompt,
 } from "../notebook-initial-generation-prompt.js";
+import { notebookConnectionWouldCreateCycle } from "../notebook-graph.js";
 
 const bookSchema = { book_id: z.string().uuid() };
 const cellTypeSchema = z.enum(NOTEBOOK_CELL_TYPES);
@@ -89,6 +90,9 @@ function notebookConnectionError(
   const target = notebook.cells.find((cell) => cell.id === targetId);
   if (!source) return `Source cell not found: ${sourceId}`;
   if (!target) return `Target cell not found: ${targetId}`;
+  if (notebookConnectionWouldCreateCycle(notebook.edges, sourceId, targetId)) {
+    return `Connecting ${notebookGridTag(source.slot)} to ${notebookGridTag(target.slot)} would create a cycle`;
+  }
   if (
     target.type === "image"
     && targetInput !== "media"
@@ -1840,7 +1844,7 @@ export function videobookDomainDefs(
               let edges = retained;
               if (sourceCellId) {
                 const error = notebookConnectionError(
-                  notebook,
+                  { ...notebook, edges: retained },
                   sourceCellId,
                   targetCellId,
                   targetInput,

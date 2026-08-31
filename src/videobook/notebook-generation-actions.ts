@@ -6,6 +6,7 @@ import {
   isNotebookGenerationCellType,
   type NotebookGenerationCellType,
 } from './notebook-cell-types'
+import { notebookConnectionWouldCreateCycle } from './notebook-graph'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
 export type GenerationSelection = {
@@ -421,6 +422,7 @@ export function generationInputAttachments(
       left.slot.row - right.slot.row
       || left.slot.column - right.slot.column)) {
     if (connectedSources.has(source.id)) continue
+    if (notebookConnectionWouldCreateCycle(edges, source.id, cellId)) continue
     const kind = generationInputKind(source)
     if (!kind) continue
     for (const slot of mode.slots) {
