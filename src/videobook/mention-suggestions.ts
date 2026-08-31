@@ -180,6 +180,7 @@ export function assetMentionMetadata(
 export function assetMentionSuggestions(
   assets: readonly AssetMentionCandidate[],
   input: string,
+  excludeValues: ReadonlySet<string> = new Set(),
 ): AssetMentionSuggestion[] {
   const filter = notebookMentionPrefixAtEnd(input)
   if (filter === undefined) return []
@@ -191,6 +192,7 @@ export function assetMentionSuggestions(
     .filter((asset) => (
       (!requiredType || asset.type.toLowerCase() === requiredType)
       && asset.cellAddress.toLowerCase().includes(filter)
+      && !excludeValues.has(`@${asset.cellAddress}`)
     ))
     .slice(0, 12)
     .map((asset) => ({
@@ -204,6 +206,7 @@ export function assetMentionSuggestions(
 export function notebookAddressSuggestions(
   cells: readonly NotebookAddressCell[],
   input: string,
+  excludeValues: ReadonlySet<string> = new Set(),
 ): NotebookAddressSuggestion[] {
   const filter = notebookMentionPrefixAtEnd(input)
   if (filter === undefined) return []
@@ -214,7 +217,7 @@ export function notebookAddressSuggestions(
   for (let row = 0; row < NOTEBOOK_GRID_ROW_COUNT; row += 1) {
     for (let column = 0; column < NOTEBOOK_GRID_COLUMN_COUNT; column += 1) {
       const tag = notebookGridTag({ row, column })
-      if (!tag.slice(1).includes(filter)) continue
+      if (!tag.slice(1).includes(filter) || excludeValues.has(tag)) continue
       const cell = occupied.get(`${row}:${column}`)
       suggestions.push({
         value: tag,

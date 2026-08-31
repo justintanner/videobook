@@ -727,6 +727,61 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('<strong>@a4</strong>')
   })
 
+  it('omits descendant media from generation attach options', () => {
+    const generationCell: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000040',
+      type: 'generate_image',
+      slot: { row: 0, column: 0 },
+      prompt: 'edit this frame',
+      provider: 'kie',
+      model: 'NanoBananaProRequestSchema',
+      operation: 'text_to_image',
+      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      outputArtifactId: undefined,
+    }
+    const descendant: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000041',
+      type: 'image',
+      slot: { row: 0, column: 1 },
+    }
+    const available: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000042',
+      type: 'image',
+      slot: { row: 0, column: 2 },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: generationCell,
+      cells: [generationCell, descendant, available],
+      edges: [{
+        id: '01900000-0000-7000-8000-000000000043',
+        source: generationCell.id,
+        target: descendant.id,
+        targetInput: 'media',
+      }],
+      asset: undefined,
+      status: 'ready',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      generationActions,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('aria-label="Attach media input"')
+    expect(html).toContain('<strong>@a3</strong>')
+    expect(html).toContain('image · image input')
+    expect(html).not.toContain('<strong>@a2</strong>')
+  })
+
   it('keeps an incompatible saved model visible and disables generation', () => {
     const generationCell: NotebookCell = {
       ...cell,

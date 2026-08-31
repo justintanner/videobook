@@ -95,7 +95,10 @@ import {
   type MediaVisionAnalysis,
   type TranscriptSidecarSource,
 } from '@/videobook/media-insights'
-import { notebookConnectionWouldCreateCycle } from '@/videobook/notebook-graph'
+import {
+  notebookConnectionWouldCreateCycle,
+  notebookCyclicInputMentionValues,
+} from '@/videobook/notebook-graph'
 import { RichJson } from './RichJson'
 import {
   AutocompleteDropdown,
@@ -2026,30 +2029,36 @@ function ExecutableCellInspector({
     generationControls,
     draft.generationSettings,
   )
+  const cyclicInputMentions = useMemo(
+    () => notebookCyclicInputMentionValues(cells, edges, cell.id),
+    [cell.id, cells, edges],
+  )
   const promptSuggestionItems = useMemo<AutocompleteItem[]>(() => {
     const input = draft.prompt.slice(0, promptCaret)
     const seen = new Set<string>()
     return [
-      ...assetMentionSuggestions(mentionAssets, input).map((suggestion) => ({
-        type: 'mention' as const,
-        value: suggestion.value,
-        label: suggestion.label,
-        description: assetMentionMetadata(suggestion.asset).join(' · '),
-        colorScheme: 'cyan' as const,
-      })),
-      ...notebookAddressSuggestions(cells, input).map((suggestion) => ({
-        type: 'mention' as const,
-        value: suggestion.value,
-        label: suggestion.label,
-        description: suggestion.description,
-        colorScheme: 'amber' as const,
-      })),
+      ...assetMentionSuggestions(mentionAssets, input, cyclicInputMentions)
+        .map((suggestion) => ({
+          type: 'mention' as const,
+          value: suggestion.value,
+          label: suggestion.label,
+          description: assetMentionMetadata(suggestion.asset).join(' · '),
+          colorScheme: 'cyan' as const,
+        })),
+      ...notebookAddressSuggestions(cells, input, cyclicInputMentions)
+        .map((suggestion) => ({
+          type: 'mention' as const,
+          value: suggestion.value,
+          label: suggestion.label,
+          description: suggestion.description,
+          colorScheme: 'amber' as const,
+        })),
     ].filter((suggestion) => {
       if (seen.has(suggestion.value)) return false
       seen.add(suggestion.value)
       return true
     }).slice(0, 12)
-  }, [cells, draft.prompt, mentionAssets, promptCaret])
+  }, [cells, cyclicInputMentions, draft.prompt, mentionAssets, promptCaret])
   const showPromptSuggestions = promptSuggestionItems.length > 0
     && !promptSuggestionsDismissed
   const promptMentions = providerPayloadPreviewMentions(

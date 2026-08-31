@@ -26,6 +26,7 @@ import {
   resolveNotebookCellReference,
 } from './notebook-addressing'
 import { nonBlankStringValue, recordValue } from './value-decoders'
+import { notebookConnectionWouldCreateCycle } from './notebook-graph'
 
 export type NotebookChatGenerationCommand = {
   cellType: NotebookGenerationCellType
@@ -227,10 +228,15 @@ function resolveNotebookChatGenerationSources(
 export function notebookChatGenerationSourceOptions(
   document: NotebookDocument,
   excludeCellIds: readonly string[] = [],
+  targetCellId?: string,
 ): NotebookChatGenerationSource[] {
   const excluded = new Set(excludeCellIds)
   return document.cells.flatMap((cell) => {
     if (excluded.has(cell.id)) return []
+    if (
+      targetCellId
+      && notebookConnectionWouldCreateCycle(document.edges, cell.id, targetCellId)
+    ) return []
     const kind = mediaInputKind(cell)
     if (!kind || !resolveNotebookCellArtifactId(document, cell)) return []
     return [{ cell, kind }]
@@ -251,6 +257,17 @@ export function planNotebookChatGeneration(input: {
     input.document,
     input.command.sourceReferences,
   )
+  const cyclicSource = sources.find((source) =>
+    notebookConnectionWouldCreateCycle(
+      input.document.edges,
+      source.cell.id,
+      input.cellId,
+    ))
+  if (cyclicSource) {
+    throw new Error(
+      `Connecting ${notebookCellTag(cyclicSource.cell)} would create a cycle`,
+    )
+  }
   let action: NotebookGenerationAction | null = null
   let connectedInputs: GenerationConnectedInput[] = []
   for (const candidate of connectedInputCandidates(sources)) {
@@ -456,6 +473,15 @@ export function reviseNotebookChatGenerationSources(input: {
   const sources = [...new Set(input.sourceCellIds)].map((cellId) => {
     const cell = input.document.cells.find((candidate) => candidate.id === cellId)
     if (!cell) throw new Error('The selected source cell is no longer available')
+    if (notebookConnectionWouldCreateCycle(
+      input.document.edges,
+      cell.id,
+      input.draft.cell.id,
+    )) {
+      throw new Error(
+        `Connecting ${notebookCellTag(cell)} to ${notebookCellTag(input.draft.cell)} would create a cycle`,
+      )
+    }
     return notebookChatGenerationSource(input.document, cell)
   })
   const candidates = connectedInputCandidates(sources)

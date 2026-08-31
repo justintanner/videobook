@@ -199,6 +199,7 @@ import {
   type NotebookCellData,
   type NotebookFlowEdge,
 } from '@/videobook/notebook-draft'
+import { isValidNotebookFlowConnection } from '@/videobook/notebook-graph'
 import {
   abbreviateGenerationPhrases,
   asNotebookGenerationActions,
@@ -3256,6 +3257,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ? notebookChatGenerationSourceOptions(
           notebook,
           pendingGenerationDraft.sourceCellIds,
+          pendingGenerationDraft.cell.id,
         ).map(({ cell }) => ({
           cellId: cell.id,
           address: notebookGridAddress(cell.slot),
@@ -5900,6 +5902,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const connectCells = async (connection: Connection) => {
     if (!bookId || !notebook || !connection.source || !connection.target) return
+    if (!isValidNotebookFlowConnection(notebook.edges, connection)) {
+      const source = notebook.cells.find((cell) => cell.id === connection.source)
+      const target = notebook.cells.find((cell) => cell.id === connection.target)
+      setNotice(
+        source && target
+          ? `Connecting ${notebookGridTag(source.slot)} to ${notebookGridTag(target.slot)} would create a cycle`
+          : 'That connection would create a cycle',
+        'error',
+      )
+      return
+    }
     setBusy(true)
     try {
       await call('connect_notebook_cells', {
@@ -10853,6 +10866,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           void persistSlots(movedNodes)
                         }
                       }}
+                      isValidConnection={(connection) => notebook
+                        ? isValidNotebookFlowConnection(notebook.edges, connection)
+                        : false}
                       onConnect={(connection) => void connectCells(connection)}
                       onDrop={handleNotebookFlowDrop}
                       onDragLeave={handleNotebookFlowDragLeave}

@@ -605,3 +605,92 @@ describe('notebook chat generation', () => {
     })).toThrow('No available image generation action accepts these references')
   })
 })
+
+describe('notebook chat generation cycle guards', () => {
+  const generateImageId = '01900000-0000-7000-8000-000000000001'
+  const outputImageId = '01900000-0000-7000-8000-000000000002'
+  const availableImageId = '01900000-0000-7000-8000-000000000003'
+  const document = {
+    id: '01900000-0000-7000-8000-000000000010',
+    name: 'cycle-guard',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    cells: [
+      {
+        id: generateImageId,
+        type: 'generate_image' as const,
+        slot: { row: 0, column: 0 },
+      },
+      {
+        id: outputImageId,
+        type: 'image' as const,
+        slot: { row: 0, column: 1 },
+        outputArtifactId: '01900000-0000-7000-8000-000000000012',
+      },
+      {
+        id: availableImageId,
+        type: 'image' as const,
+        slot: { row: 0, column: 2 },
+        outputArtifactId: '01900000-0000-7000-8000-000000000013',
+      },
+    ],
+    edges: [{
+      id: '01900000-0000-7000-8000-000000000020',
+      source: generateImageId,
+      target: outputImageId,
+      targetInput: 'media',
+    }],
+  }
+
+  it('omits descendant media from Add input options', () => {
+    expect(notebookChatGenerationSourceOptions(
+      document,
+      [],
+      generateImageId,
+    ).map((option) => option.cell.id)).toEqual([availableImageId])
+  })
+
+  it('rejects adding a descendant source that would loop', () => {
+    const action = {
+      id: 'generation.generate_kie_nano_banana_pro_text_to_image',
+      cellTypes: ['generate_image' as const],
+      provider: 'kie',
+      providerLabel: 'Kie',
+      model: 'NanoBananaProRequestSchema',
+      operation: 'text_to_image',
+      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      title: 'Nano Banana Pro',
+      isDefault: true,
+      defaultPriority: 0,
+      inputContract: {
+        modes: [{
+          id: 'default',
+          slots: [{
+            field: 'image_refs',
+            kind: 'image' as const,
+            targets: ['image'],
+            min: 0,
+            max: 8,
+          }],
+          requiredGroups: [],
+        }],
+      },
+      controls: [],
+    }
+    expect(() => reviseNotebookChatGenerationSources({
+      actions: [action],
+      draft: {
+        action,
+        cell: {
+          id: generateImageId,
+          type: 'generate_image',
+          slot: { row: 0, column: 0 },
+        },
+        connections: [],
+        sourceCellIds: [],
+        sourceAddresses: [],
+      },
+      document,
+      sourceCellIds: [outputImageId],
+    })).toThrow('would create a cycle')
+  })
+})

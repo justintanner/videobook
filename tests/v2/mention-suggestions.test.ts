@@ -216,6 +216,28 @@ describe('asset mention suggestions', () => {
     expect(assetMentionSuggestions(assets, '@').at(-1)?.label).toBe('@a12')
   })
 
+  it('skips excluded mention values so looping cells are not offered', () => {
+    const video = mentionCandidate({ row: 0, column: 0 }, VIDEO_ARTIFACT)
+    const image = mentionCandidate({ row: 0, column: 1 }, IMAGE_ARTIFACT, {
+      type: 'image',
+    })
+    const excluded = new Set(['@a1'])
+
+    expect(assetMentionSuggestions(
+      [video, image],
+      'combine @',
+      excluded,
+    ).map((suggestion) => suggestion.label)).toEqual(['@a2'])
+    expect(notebookAddressSuggestions(
+      [{ slot: { row: 0, column: 0 }, type: 'video' }],
+      '@a',
+      excluded,
+    )[0]).toMatchObject({
+      value: '@a2',
+      description: 'Empty grid square',
+    })
+  })
+
   it('formats available media metadata and surfaces non-ready status', () => {
     expect(assetMentionMetadata(mentionCandidate(
       { row: 0, column: 0 },
