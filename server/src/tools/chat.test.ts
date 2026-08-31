@@ -10,6 +10,7 @@ import {
   chatActionPlanSchema,
   duplicateDestinationReference,
   loadScriptContentsForChat,
+  normalizeChatRoutedParams,
   normalizeChatTimestampParams,
   parseChatDecision,
   repairChatRoutingJson,
@@ -33,6 +34,51 @@ describe("duplicateDestinationReference", () => {
   it("does not treat a lone source as a destination", () => {
     expect(duplicateDestinationReference("duplicate @a1")).toBeNull();
     expect(duplicateDestinationReference("inspect @a1 and @b2")).toBeNull();
+  });
+});
+
+describe("normalizeChatRoutedParams", () => {
+  it("unwraps a single media_context object from an array", () => {
+    const context = {
+      notebook_id: "019fcc00-0000-7000-8000-000000000011",
+      cell_id: "019fcc00-0000-7000-8000-000000000012",
+      artifact_id: "019fcc00-0000-7000-8000-000000000013",
+    };
+    expect(normalizeChatRoutedParams("plan_chat_command", {
+      prompt: "insert this at frame 120",
+      media_context: [context],
+    })).toEqual({
+      prompt: "insert this at frame 120",
+      media_context: context,
+    });
+  });
+
+  it("drops a multi-clip media_context array on plan_chat_command", () => {
+    expect(normalizeChatRoutedParams("plan_chat_command", {
+      prompt: "splice together these clips",
+      media_context: [
+        { artifact_id: "019fcc00-0000-7000-8000-000000000001" },
+        { artifact_id: "019fcc00-0000-7000-8000-000000000002" },
+      ],
+    })).toEqual({
+      prompt: "splice together these clips",
+    });
+  });
+
+  it("expands splice asset_ids and defaults overlap to 0", () => {
+    expect(normalizeChatRoutedParams("splice_video", {
+      asset_ids: [
+        "@019fcc00-0000-7000-8000-000000000001",
+        "019fcc00-0000-7000-8000-000000000002",
+        "019fcc00-0000-7000-8000-000000000003",
+      ],
+      media_context: [{ artifact_id: "ignored" }],
+    })).toEqual({
+      first_asset_id: "019fcc00-0000-7000-8000-000000000001",
+      second_asset_id: "019fcc00-0000-7000-8000-000000000002",
+      additional_asset_ids: ["019fcc00-0000-7000-8000-000000000003"],
+      overlap: 0,
+    });
   });
 });
 

@@ -275,7 +275,7 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "audio_boost", exposure: "direct", command: "/audio-boost", purpose: "Increase audio volume" },
   { tool: "audio_mix", exposure: "direct", command: "/audio-mix", purpose: "Mix an audio layer into an asset" },
   { tool: "replace_video_audio", exposure: "direct", command: "/replace-audio", purpose: "Replace a video soundtrack" },
-  { tool: "splice_video", exposure: "direct", command: "/splice", purpose: "Splice two videos" },
+  { tool: "splice_video", exposure: "direct", command: "/splice", purpose: "Splice two or more videos" },
   { tool: "smooth_scene_concat", exposure: "direct", command: "/scene-concat", purpose: "Join scenes with aligned audio" },
   { tool: "reverse_video", exposure: "direct", command: "/reverse", purpose: "Reverse video playback" },
   { tool: "change_video_speed", exposure: "direct", command: "/speed", purpose: "Change playback speed or duration" },

@@ -116,6 +116,15 @@ function coverSongOutput(value: Record<string, unknown>): RoutedMediaOutput {
   }
 }
 
+function additionalSourceIds(value: Record<string, unknown>): string[] {
+  const raw = value.additional_asset_ids ?? value.additional
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((entry) => {
+    const id = nonBlankStringValue(entry)
+    return id ? [id] : []
+  })
+}
+
 function spliceOutput(
   tool: 'smooth_scene_concat' | 'splice_video',
   value: Record<string, unknown>,
@@ -127,6 +136,7 @@ function spliceOutput(
   if (!firstArtifactId || !secondArtifactId) {
     throw new Error(`${tool} did not return both source artifacts for the notebook`)
   }
+  const additional = additionalSourceIds(value)
   return {
     type: 'video',
     artifactId: requiredString(
@@ -138,6 +148,7 @@ function spliceOutput(
       sourceOperation: tool,
       first_asset_id: firstArtifactId,
       second_asset_id: secondArtifactId,
+      ...(additional.length > 0 ? { additional_asset_ids: additional } : {}),
       ...selectedValues(value, [
         'overlap',
         'transition_seconds',
@@ -176,6 +187,7 @@ function videoOutputSlots(
       ?? nonBlankStringValue(value.first),
     nonBlankStringValue(value.second_asset_id)
       ?? nonBlankStringValue(value.second),
+    ...additionalSourceIds(value),
   ].filter((artifactId): artifactId is string => artifactId !== null))
   const sourceSlots = cells
     .filter((cell) => cell.outputArtifactId

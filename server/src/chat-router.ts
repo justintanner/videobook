@@ -209,6 +209,10 @@ type BytedanceRouteInput = {
   assetContext: Array<Record<string, unknown>>;
 };
 
+type VideoJoinRouteInput = BytedanceRouteInput & {
+  notebookContext?: ChatRoutingNotebookContext | null;
+};
+
 type BytedanceRouteResult = {
   tool: string;
   params: Record<string, unknown>;
@@ -393,6 +397,193 @@ function applyBytedanceNamedModelRoute(input: BytedanceRouteInput): BytedanceRou
   };
 }
 
+const NOTEBOOK_VIDEO_CELL_TYPES = new Set([
+  "video",
+  "generate_video",
+  "splice",
+  "concat",
+  "split_video",
+]);
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+function isVideoJoinQuery(query: string): boolean {
+  if (/\b(?:splice\s+out|apply[\s-]?cuts|cut\s+out)\b/iu.test(query)) return false;
+  return /\b(?:splice(?:\s+together)?|concat(?:enate)?|stitch(?:\s+together)?)\b/iu.test(query)
+    || /\bjoin(?:ing)?\s+(?:(?:these|the|all)\s+)?(?:\d+\s+)?(?:video|clip|scene)s?\b/iu.test(query);
+}
+
+function overlapFromParams(params: Record<string, unknown>): number {
+  const raw = params.overlap;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) return raw;
+  if (typeof raw === "string" && raw.trim()) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return 0;
+}
+
+function rawMediaContextEntries(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function artifactTokenFromUnknown(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  for (const key of [
+    "artifact_id",
+    "asset_id",
+    "outputAsset",
+    "output_artifact_id",
+    "address",
+    "tag",
+  ]) {
+    if (typeof record[key] === "string" && record[key].trim()) {
+      return record[key].trim();
+    }
+  }
+  return null;
+}
+
+function uniqueAssetIds(values: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const value of values) {
+    const stripped = value.replace(/^@/u, "").trim();
+    const key = stripped.toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(stripped);
+  }
+  return unique;
+}
+
+function notebookVideoAssetId(
+  token: string,
+  notebookContext: ChatRoutingNotebookContext | null | undefined,
+): string | null {
+  if (!notebookContext) return null;
+  const needle = normalizeMention(token);
+  const cell = notebookContext.cells.find((candidate) =>
+    normalizeMention(candidate.address) === needle
+    || normalizeMention(candidate.cellId) === needle
+    || (
+      candidate.outputAsset !== null
+      && normalizeMention(candidate.outputAsset) === needle
+    ));
+  if (!cell || !cell.outputAsset) return null;
+  if (cell.type && !NOTEBOOK_VIDEO_CELL_TYPES.has(cell.type)) return null;
+  return cell.outputAsset.replace(/^@/u, "");
+}
+
+function resolveVideoAssetId(
+  token: string,
+  input: VideoJoinRouteInput,
+): string | null {
+  const mention = mentionWithAt(token);
+  const mentionedType = mediaTypeForMention(mention, input.assetContext);
+  if (mentionedType && mentionedType !== "video") return null;
+  if (mentionedType === "video") {
+    const needle = normalizeMention(token);
+    const asset = input.assetContext.find((candidate) =>
+      assetMentionKeys(candidate).includes(needle));
+    const assetId = typeof asset?.asset_id === "string" ? asset.asset_id.trim() : "";
+    return assetId || null;
+  }
+  const fromNotebook = notebookVideoAssetId(token, input.notebookContext);
+  if (fromNotebook) return fromNotebook;
+  const stripped = token.replace(/^@/u, "").trim();
+  return UUID_PATTERN.test(stripped) ? stripped : null;
+}
+
+function collectJoinAssetIds(input: VideoJoinRouteInput): string[] {
+  const fromMentions = uniqueAssetIds(
+    queryMentions(input.query).flatMap((mention) => {
+      const resolved = resolveVideoAssetId(mention, input);
+      return resolved ? [resolved] : [];
+    }),
+  );
+  const fromMediaContext = uniqueAssetIds(
+    rawMediaContextEntries(input.params.media_context).flatMap((entry) => {
+      const token = artifactTokenFromUnknown(entry);
+      if (!token) return [];
+      const resolved = resolveVideoAssetId(token, input);
+      return resolved ? [resolved] : [];
+    }),
+  );
+  const fromAssetIds = uniqueAssetIds(
+    stringList(input.params.asset_ids).flatMap((token) => {
+      const resolved = resolveVideoAssetId(token, input);
+      return resolved ? [resolved] : [];
+    }),
+  );
+  const fromPair = uniqueAssetIds([
+    ...(typeof input.params.first_asset_id === "string"
+      ? [input.params.first_asset_id]
+      : []),
+    ...(typeof input.params.second_asset_id === "string"
+      ? [input.params.second_asset_id]
+      : []),
+    ...stringList(input.params.additional_asset_ids),
+  ].flatMap((token) => {
+    const resolved = resolveVideoAssetId(token, input);
+    return resolved ? [resolved] : [];
+  }));
+  if (fromMentions.length >= 2) return fromMentions;
+  if (fromMediaContext.length >= 2) return fromMediaContext;
+  if (fromAssetIds.length >= 2) return fromAssetIds;
+  if (fromPair.length >= 2) return fromPair;
+  return [];
+}
+
+function applyVideoJoinRoute(input: VideoJoinRouteInput): BytedanceRouteResult {
+  if (input.tool === "apply_cuts" || input.tool === "smooth_scene_concat") {
+    return {
+      tool: input.tool,
+      params: input.params,
+      message: input.message,
+      substituted: false,
+    };
+  }
+  const joinQuery = isVideoJoinQuery(input.query);
+  if (!joinQuery && input.tool !== "splice_video") {
+    return {
+      tool: input.tool,
+      params: input.params,
+      message: input.message,
+      substituted: false,
+    };
+  }
+  const assetIds = collectJoinAssetIds(input);
+  if (assetIds.length < 2) {
+    return {
+      tool: input.tool,
+      params: input.params,
+      message: input.message,
+      substituted: false,
+    };
+  }
+  const additional = assetIds.slice(2);
+  return {
+    tool: "splice_video",
+    params: {
+      first_asset_id: assetIds[0],
+      second_asset_id: assetIds[1],
+      ...(additional.length > 0 ? { additional_asset_ids: additional } : {}),
+      overlap: overlapFromParams(input.params),
+    },
+    message: input.message.trim() || "Splicing videos.",
+    substituted: input.tool !== "splice_video",
+  };
+}
+
 function buildChatRoutingPrompt(
   bookName: string,
   tools: RoutableToolInfo[],
@@ -450,6 +641,8 @@ Parameter guidelines:
 - For create_qr_outro: use when the user asks for an animated QR outro video from one to four QR images. Pass every referenced QR image in order through qr_image_refs (array of image asset ids), plus sound_effect_ref only for an explicit audio asset override and aspect_ratio ("16:9", "9:16", or "1:1"). Without an audio override, the bundled impact sound is used. This creates a video asset, it is NOT generate_video or create_watermark_card.
 - For speech, voiceover, narration, or text-to-speech requests use generate_elevenlabs_text_to_audio: put the exact words to speak in "text" (write out the words even when the user paraphrases them) and omit voice_id unless the user supplies a specific ElevenLabs voice id
 - For concat_images: use image_refs for the referenced image assets; a single ref leaves the second two-slot cell empty, and null explicitly leaves a slot empty. Use aspect_ratio 16:9 or 9:16; layout is automatic unless overridden
+- For splice_video: join two or more videos into one new asset. Use this for splice, concat, or stitch requests, not plan_chat_command. Pass first_asset_id and second_asset_id in playback order, additional_asset_ids for any further clips in that same order, and overlap 0 to concatenate complete clips
+- plan_chat_command is only for timeline sequence edits such as trim, move, split, insert at a frame, or captions. media_context is an optional single object {notebook_id, cell_id, artifact_id} for one fullscreen clip — never an array of clips
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
 - Do NOT include book_id in params — it is injected automatically
 - Asset @tags are opaque artifact ids; the asset context lists each tag's media type ("image", "video", "audio", "script"). Use that type — never the tag text — to decide which parameter an asset belongs in
@@ -497,6 +690,7 @@ export {
   TIMESTAMP_PARAMS,
   NESTED_TIMESTAMP_PARAMS,
   applyBytedanceNamedModelRoute,
+  applyVideoJoinRoute,
   buildRoutableTools,
   buildChatRoutingPrompt,
   buildChatRoutingUserMessage,

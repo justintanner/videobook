@@ -8,6 +8,7 @@ import {
 } from 'videobook-engine'
 import { afterEach, describe, expect, it } from 'vitest'
 import { v7 as uuidv7 } from 'uuid'
+import { z } from 'zod'
 import { commandPlanDefs } from '../../server/src/tools/command-plan.js'
 
 function resultJson(result: {
@@ -730,6 +731,27 @@ describe('CommandPlan edit tools', () => {
     expect(mismatch.content[0]?.text).toContain(
       'Fullscreen media context does not match the cell output',
     )
+
+    const schema = z.object(tools.get('plan_chat_command')!.schema)
+    const many = schema.safeParse({
+      book_id: engine.book.get().bookId,
+      actor: 'fullscreen-user',
+      prompt: 'splice together these 4 video clips',
+      media_context: [
+        {
+          notebook_id: notebook.value.id,
+          cell_id: cell.id,
+          artifact_id: artifact.value.artifactId,
+        },
+        {
+          notebook_id: notebook.value.id,
+          cell_id: cell.id,
+          artifact_id: artifact.value.artifactId,
+        },
+      ],
+    })
+    expect(many.success).toBe(true)
+    if (many.success) expect(many.data.media_context).toBeUndefined()
     engine.close()
   })
 })

@@ -933,7 +933,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/splice",
-    description: "Splice two videos with an overlap window; use 0 to concatenate both complete clips",
+    description: "Splice videos with an overlap window; use 0 to concatenate complete clips",
     example: "/splice @a1 @a2 0",
     category: "context_menu",
     icon: "GitMerge",

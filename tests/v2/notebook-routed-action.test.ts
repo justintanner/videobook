@@ -148,6 +148,55 @@ describe('routedMediaCellInputs', () => {
     }])
   })
 
+  it('keeps additional splice sources in provenance and placement', () => {
+    const thirdId = '019fabcd-1234-7000-8000-000000000108'
+    const fourthId = '019fabcd-1234-7000-8000-000000000109'
+    expect(routedMediaCellInputs('splice_video', {
+      asset_id: SPLICE_ARTIFACT_ID,
+      first: SOURCE_ARTIFACT_ID,
+      second: SECOND_VIDEO_ARTIFACT_ID,
+      additional_asset_ids: [thirdId, fourthId],
+      overlap: 0,
+      job_id: 'splice-4',
+      status: 'enqueued',
+    }, [
+      {
+        ...existingCells[0]!,
+        outputArtifactId: SOURCE_ARTIFACT_ID,
+      },
+      {
+        id: '019fabcd-1234-7000-8000-000000000002',
+        type: 'video',
+        slot: { row: 0, column: 1 },
+        outputArtifactId: SECOND_VIDEO_ARTIFACT_ID,
+      } as NotebookCell,
+      {
+        id: '019fabcd-1234-7000-8000-000000000003',
+        type: 'video',
+        slot: { row: 0, column: 2 },
+        outputArtifactId: thirdId,
+      } as NotebookCell,
+      {
+        id: '019fabcd-1234-7000-8000-000000000004',
+        type: 'video',
+        slot: { row: 0, column: 3 },
+        outputArtifactId: fourthId,
+      } as NotebookCell,
+    ])).toEqual([{
+      type: 'video',
+      slot: { row: 1, column: 0 },
+      inputs: {
+        sourceOperation: 'splice_video',
+        first_asset_id: SOURCE_ARTIFACT_ID,
+        second_asset_id: SECOND_VIDEO_ARTIFACT_ID,
+        additional_asset_ids: [thirdId, fourthId],
+        overlap: 0,
+        job_id: 'splice-4',
+      },
+      output_artifact_id: SPLICE_ARTIFACT_ID,
+    }])
+  })
+
   it('rejects a completed splice without both source artifacts', () => {
     expect(() => routedMediaCellInputs('splice_video', {
       asset_id: SPLICE_ARTIFACT_ID,

@@ -1103,11 +1103,19 @@ export function commandPlanDefs(engine: Engine): ToolDef[] {
         ...bookSchema,
         actor: z.string().min(1),
         prompt: z.string().min(1),
-        media_context: z.object({
-          notebook_id: z.string().uuid(),
-          cell_id: z.string().uuid(),
-          artifact_id: z.string().uuid(),
-        }).optional(),
+        media_context: z.preprocess(
+          (value) => {
+            if (!Array.isArray(value)) return value;
+            return value.length === 1 ? value[0] : undefined;
+          },
+          z.object({
+            notebook_id: z.string().uuid(),
+            cell_id: z.string().uuid(),
+            artifact_id: z.string().uuid(),
+          }).optional(),
+        ).describe(
+          "Single fullscreen clip {notebook_id, cell_id, artifact_id}; never an array",
+        ),
       },
       handler: async (args) => {
         try {

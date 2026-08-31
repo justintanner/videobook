@@ -264,7 +264,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `show_folder` — Reveal an asset's folder in Finder
 - `slash_commands` — List all available UI commands with scope metadata
 - `smooth_scene_concat` — Smoothly concatenate two video scenes into a new video asset. When their boundary audio overlaps, automatically aligns the shared waveform to avoid duplicated speech and dissolves the picture across that overlap. Otherwise uses a short crossfade.
-- `splice_video` — Splice two videos with an explicit overlap window. An overlap of 0 concatenates both complete videos; a positive overlap searches that many seconds at the end of the first video for the frame that best matches the first frame of the second. Creates a new video asset.
+- `splice_video` — Splice two or more videos in playback order with an explicit overlap window. An overlap of 0 concatenates every complete clip; a positive overlap searches that many seconds at the end of each preceding clip for the frame that best matches the first frame of the next. Creates a new video asset.
 - `split_video` — Create two new clips from one video while preserving the source. Use for requests such as 'trim @a1 15s and remaining'. chunk_a_end accepts seconds or timestamps such as 15s or 1:30; omit chunk_b_start for a clean split.
 - `split_video_by_durations` — Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved. When `destination` is provided, chunks are written as files inside an existing asset (one filename per target, no leftover) instead of minting fresh video assets.
 - `storage_status` — Read catalog and object publication status
@@ -397,7 +397,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/sort` — Set sidebar sort order (no value toggles); UI: `sidebar_sort`
 - `/speak` — Generate ElevenLabs speech into the notebook from the inline voice preview; UI: `speak_preview`
 - `/speed` — Change video playback speed (0.25-4.0x) or exact duration (e.g. 8.32s); MCP: `change_video_speed`
-- `/splice` — Splice two videos with an overlap window; use 0 to concatenate both complete clips; MCP: `splice_video`
+- `/splice` — Splice videos with an overlap window; use 0 to concatenate complete clips; MCP: `splice_video`
 - `/split` — Open the interactive splitter for a notebook video, optionally seeded with cut times
 - `/split-chunks` (aliases: `/even-split`) — Split a video into targeted chunks plus a leftover while preserving the source; MCP: `split_video_by_durations`
 - `/split-clip` — Split a canonical-sequence clip at an exact sequence frame

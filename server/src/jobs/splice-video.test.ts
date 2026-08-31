@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
-import { spliceVideoFiles } from "./splice-video.js";
+import { spliceVideoChain, spliceVideoFiles } from "./splice-video.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -93,6 +93,42 @@ describe("splice video files", () => {
     expect(result.frameIndex).not.toBeNull();
     expect(result.score).not.toBeNull();
     expect(output.videoDuration).toBeCloseTo(result.timestamp + second.videoDuration, 1);
+  }, 30_000);
+
+  it("concatenates three complete clips in order", async () => {
+    const first = await probeVideo(firstPath);
+    const second = await probeVideo(secondPath);
+    const thirdPath = join(tempDir, "third.mp4");
+    await execFileAsync(FFMPEG, [
+      "-y",
+      "-f", "lavfi", "-i", "color=c=green:s=160x90:r=10:d=1",
+      "-c:v", "libx264",
+      "-pix_fmt", "yuv420p",
+      thirdPath,
+    ]);
+    const third = await probeVideo(thirdPath);
+    const outputPath = join(tempDir, "concat-three.mp4");
+
+    const result = await spliceVideoChain({
+      clips: [
+        { path: firstPath, duration: first.videoDuration, hasAudio: false },
+        { path: secondPath, duration: second.videoDuration, hasAudio: false },
+        { path: thirdPath, duration: third.videoDuration, hasAudio: false },
+      ],
+      outputPath,
+      workDir: tempDir,
+      width: first.width,
+      height: first.height,
+      fps: first.fps,
+      overlap: 0,
+    });
+
+    const output = await probeVideo(outputPath);
+    expect(result.frameIndex).toBeNull();
+    expect(output.videoDuration).toBeCloseTo(
+      first.videoDuration + second.videoDuration + third.videoDuration,
+      1,
+    );
   }, 30_000);
 
   it("rejects a completed file whose duration is shorter than both clips", async () => {

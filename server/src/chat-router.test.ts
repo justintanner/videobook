@@ -9,6 +9,7 @@ import {
   NESTED_TIMESTAMP_PARAMS,
   TIMESTAMP_PARAMS,
   applyBytedanceNamedModelRoute,
+  applyVideoJoinRoute,
   buildChatRoutingPrompt,
   buildChatRoutingUserMessage,
   buildRoutableTools,
@@ -46,6 +47,13 @@ describe("chat routing catalog", () => {
     expect(new Set(directNames)).toEqual(new Set(expectedNames));
     expect(tools).toHaveLength(expectedNames.length + CHAT_TOOL_ALIASES.length);
     expect(getRoutableTool(tools, "chat")).toBeUndefined();
+    expect(getRoutableTool(tools, "splice_video")?.params).toContain(
+      "additional_asset_ids",
+    );
+    expect(getRoutableTool(tools, "splice_video")?.requiredParams).toEqual([
+      "first_asset_id",
+      "second_asset_id",
+    ]);
   });
 
   it("includes registered destructive and administrative tools", () => {
@@ -187,6 +195,9 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("remaining/rest/remainder");
     expect(prompt).toContain("use extract_video_clip");
     expect(prompt).toContain("use trim_video only when the existing source should be changed in place");
+    expect(prompt).toContain("For splice_video:");
+    expect(prompt).toContain("additional_asset_ids");
+    expect(prompt).toContain("media_context is an optional single object");
     expect(prompt).not.toContain("\n- chat:");
   });
 
@@ -216,6 +227,76 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("generate_kie_seedream_v5_lite_image_to_image");
     expect(prompt).toContain("edit-target image first");
     expect(prompt).toContain("generate_kie_seedance_2_5_video");
+  });
+});
+
+describe("video join routing", () => {
+  const clipIds = [
+    "019fcc00-0000-7000-8000-000000000001",
+    "019fcc00-0000-7000-8000-000000000002",
+    "019fcc00-0000-7000-8000-000000000003",
+    "019fcc00-0000-7000-8000-000000000004",
+  ] as const;
+  const notebookContext = {
+    id: "019fcc00-0000-7000-8000-000000000010",
+    name: "Main",
+    cells: clipIds.map((artifactId, index) => ({
+      address: `@a${index + 1}`,
+      cellId: `019fcc00-0000-7000-8000-00000000002${index}`,
+      type: "video",
+      outputAsset: `@${artifactId}`,
+    })),
+  };
+
+  it("reroutes a four-clip splice away from plan_chat_command media_context arrays", () => {
+    const routed = applyVideoJoinRoute({
+      query: "splice together these 4 video clips",
+      tool: "plan_chat_command",
+      params: {
+        actor: "user",
+        prompt: "splice together these 4 video clips",
+        media_context: clipIds.map((artifact_id) => ({ artifact_id })),
+      },
+      message: "Planning chat command.",
+      assetContext: [],
+    });
+    expect(routed.tool).toBe("splice_video");
+    expect(routed.substituted).toBe(true);
+    expect(routed.params).toEqual({
+      first_asset_id: clipIds[0],
+      second_asset_id: clipIds[1],
+      additional_asset_ids: [clipIds[2], clipIds[3]],
+      overlap: 0,
+    });
+  });
+
+  it("uses notebook mention order for a concat request", () => {
+    const routed = applyVideoJoinRoute({
+      query: "concat @a1 @a2 @a3 @a4",
+      tool: "plan_chat_command",
+      params: { prompt: "concat @a1 @a2 @a3 @a4" },
+      message: "",
+      assetContext: [],
+      notebookContext,
+    });
+    expect(routed.tool).toBe("splice_video");
+    expect(routed.params.first_asset_id).toBe(clipIds[0]);
+    expect(routed.params.second_asset_id).toBe(clipIds[1]);
+    expect(routed.params.additional_asset_ids).toEqual([clipIds[2], clipIds[3]]);
+    expect(routed.message).toBe("Splicing videos.");
+  });
+
+  it("does not steal apply_cuts or splice-out requests", () => {
+    const routed = applyVideoJoinRoute({
+      query: "splice out the silence from @a1 and @a2",
+      tool: "apply_cuts",
+      params: { asset_id: clipIds[0] },
+      message: "Applying cuts.",
+      assetContext: [],
+      notebookContext,
+    });
+    expect(routed.tool).toBe("apply_cuts");
+    expect(routed.substituted).toBe(false);
   });
 });
 

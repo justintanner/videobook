@@ -10,6 +10,7 @@ import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import {
   applyBytedanceNamedModelRoute,
+  applyVideoJoinRoute,
   buildChatRoutingPrompt,
   buildChatRoutingUserMessage,
   buildRoutableTools,
@@ -197,6 +198,72 @@ export async function applySpeechRoutingDefaults(
     if (fallback) next.voice_id = fallback;
   }
   return next;
+}
+
+function isMediaContextObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stripAssetToken(value: string): string {
+  return value.replace(/^@/u, "").trim();
+}
+
+function stringAssetIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => typeof entry === "string" && entry.trim()
+    ? [stripAssetToken(entry)]
+    : []);
+}
+
+function overlapNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return undefined;
+}
+
+export function normalizeChatRoutedParams(
+  tool: string,
+  source: Record<string, unknown>,
+): Record<string, unknown> {
+  const params: Record<string, unknown> = { ...source };
+  if (tool === "plan_chat_command") {
+    const context = params.media_context;
+    if (Array.isArray(context)) {
+      if (context.length === 1 && isMediaContextObject(context[0])) {
+        params.media_context = context[0];
+      } else {
+        delete params.media_context;
+      }
+    }
+    return params;
+  }
+  if (tool !== "splice_video") return params;
+  const assetIds = stringAssetIds(params.asset_ids);
+  if (
+    typeof params.first_asset_id !== "string"
+    && assetIds.length >= 2
+  ) {
+    params.first_asset_id = assetIds[0];
+    params.second_asset_id = assetIds[1];
+    if (assetIds.length > 2) params.additional_asset_ids = assetIds.slice(2);
+  }
+  if (typeof params.first_asset_id === "string") {
+    params.first_asset_id = stripAssetToken(params.first_asset_id);
+  }
+  if (typeof params.second_asset_id === "string") {
+    params.second_asset_id = stripAssetToken(params.second_asset_id);
+  }
+  const additional = stringAssetIds(params.additional_asset_ids);
+  if (additional.length > 0) params.additional_asset_ids = additional;
+  const overlap = overlapNumber(params.overlap);
+  if (overlap !== undefined) params.overlap = overlap;
+  else if (params.overlap === undefined) params.overlap = 0;
+  delete params.asset_ids;
+  delete params.media_context;
+  return params;
 }
 
 export function normalizeChatTimestampParams(
@@ -653,10 +720,20 @@ export function chatDef(engine: Engine): ToolDef {
         message: decision.message,
         assetContext,
       });
+      const joinRoute = bytedanceRoute.substituted
+        ? bytedanceRoute
+        : applyVideoJoinRoute({
+          query: expandedPrompt,
+          tool: bytedanceRoute.tool,
+          params: bytedanceRoute.params,
+          message: bytedanceRoute.message,
+          assetContext,
+          notebookContext,
+        });
       decision = {
-        tool: bytedanceRoute.tool,
-        params: bytedanceRoute.params,
-        message: bytedanceRoute.message,
+        tool: joinRoute.tool,
+        params: joinRoute.params,
+        message: joinRoute.message,
       };
 
       // 6. Validate tool exists in routable registry
@@ -666,7 +743,10 @@ export function chatDef(engine: Engine): ToolDef {
       }
 
       // 7. Apply fixups (spread to avoid mutating decision.params for logging)
-      const params = normalizeChatTimestampParams(decision.tool, decision.params ?? {});
+      const params = normalizeChatRoutedParams(
+        decision.tool,
+        normalizeChatTimestampParams(decision.tool, decision.params ?? {}),
+      );
 
       // Inject book_id
       params.book_id = bookId;
