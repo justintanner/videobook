@@ -1,8 +1,9 @@
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
-import { probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { extractWaveform, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { ingestWorkspaceOutputs } from "./_persist-output.js";
+import { registerMediaStreams } from "./process-video.js";
 
 const LOCK_DURATION_MS = 120_000;
 
@@ -54,8 +55,9 @@ export function registerExtractAudioJob(engine: Engine): void {
         await runFfmpeg(ffmpegArgs);
 
         let duration: number | undefined;
+        let probe: Awaited<ReturnType<typeof probeVideo>> | null = null;
         try {
-          const probe = await probeVideo(outputPath);
+          probe = await probeVideo(outputPath);
           if (Number.isFinite(probe.duration) && probe.duration > 0) {
             duration = probe.duration;
           }
@@ -84,6 +86,17 @@ export function registerExtractAudioJob(engine: Engine): void {
             ...(duration !== undefined ? { duration } : {}),
           };
           await engine.metadata.artifacts.write(audioAssetId, "original", origin);
+          if (probe) {
+            await registerMediaStreams(engine, audioAssetId, outputFilename, probe);
+          }
+          const peaks = await extractWaveform(outputPath);
+          if (peaks.length > 0) {
+            const waveform = await engine.metadata.waveforms.write(
+              audioAssetId,
+              peaks,
+            );
+            if (!waveform.ok) throw new Error(waveform.error.message);
+          }
         }
 
         return { success: true };

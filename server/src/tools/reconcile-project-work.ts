@@ -433,6 +433,8 @@ function buildFrameDirs(
   return out;
 }
 
+const WAVEFORM_SOURCE_RE = /^original\.(mp4|mov|mp3|wav|m4a|aac|ogg|flac)$/i;
+
 async function readWaveformOrSchedule(
   engine: Engine,
   assetId: string,
@@ -445,7 +447,7 @@ async function readWaveformOrSchedule(
     // surface them as no-waveform so the UI is unchanged, but don't re-extract.
     return existing.value.peaks.length > 0 ? existing.value.peaks : null;
   }
-  if (!videoFilename || !/^original\.(mp4|mov)$/i.test(videoFilename)) {
+  if (!videoFilename || !WAVEFORM_SOURCE_RE.test(videoFilename)) {
     return null;
   }
   // Waveform extraction shells out to ffmpeg and can take several seconds for

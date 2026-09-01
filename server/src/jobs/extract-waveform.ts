@@ -4,11 +4,12 @@ import { registerJobHandler } from "../queue.js";
 import { extractWaveform } from "../ffmpeg.js";
 
 // Background cache-fill for audio waveforms. Enqueued by buildAssetList when a
-// video asset has no cached waveform, so list_assets / sync never block on the
-// ffmpeg decode. The asset id is carried under `waveformAssetId` (not a key the
-// queue treats as an asset-work id) so a failure here can't fail unrelated
-// pending tasks or flip the asset into an error state — this is a pure
-// best-effort optimization.
+// video or audio asset has no cached waveform, so list_assets / sync never
+// block on the ffmpeg decode. The asset id is carried under `waveformAssetId`
+// (not a key the queue treats as an asset-work id) so a failure here can't
+// fail unrelated pending tasks or flip the asset into an error state — this
+// is a pure best-effort optimization. `videoFilename` is the media file inside
+// the artifact (original.mp4/mov for video, original.mp3/m4a/wav for audio).
 type ExtractWaveformPayload = {
   type: "extract_waveform";
   bookId: string;

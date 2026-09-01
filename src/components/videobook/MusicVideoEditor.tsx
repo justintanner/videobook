@@ -187,6 +187,33 @@ function sourceHandleFrames(
   }
 }
 
+function isImageMediaUrl(url: string): boolean {
+  return /\.(avif|bmp|gif|jpe?g|png|webp)(?:$|\?)/i.test(url)
+}
+
+function SourceThumb({ asset }: { asset: MusicVideoAsset }) {
+  const imageUrl = asset.thumbnailUrl
+    ?? (asset.mediaUrl && isImageMediaUrl(asset.mediaUrl) ? asset.mediaUrl : null)
+  if (imageUrl) return <img src={imageUrl} alt="" />
+  if (asset.mediaUrl) {
+    return (
+      <video
+        src={asset.mediaUrl}
+        muted
+        playsInline
+        preload="metadata"
+        onLoadedMetadata={(event) => {
+          const video = event.currentTarget
+          if (video.duration > 0) {
+            video.currentTime = Math.min(0.12, video.duration * 0.15)
+          }
+        }}
+      />
+    )
+  }
+  return <Film size={24} />
+}
+
 function waveformPath(peaks: number[]): string {
   if (peaks.length === 0) return ''
   const maximumSamples = 720
@@ -242,7 +269,17 @@ export function MusicVideoEditor({
   const [timelineZoom, setTimelineZoom] = useState(1)
   const [undoSteps, setUndoSteps] = useState<RevisionStep[]>([])
   const [redoSteps, setRedoSteps] = useState<RevisionStep[]>([])
+  const [previewSourceId, setPreviewSourceId] = useState<string | null>(null)
+  const [waveformWait, setWaveformWait] = useState(false)
   const audioAsset = assets.find((asset) => asset.artifactId === audioArtifactId)
+  const audioAssetRef = useRef(audioAsset)
+  const refreshAssetsRef = useRef(onRefreshAssets)
+  useEffect(() => {
+    audioAssetRef.current = audioAsset
+  }, [audioAsset])
+  useEffect(() => {
+    refreshAssetsRef.current = onRefreshAssets
+  }, [onRefreshAssets])
   const mainTrack = sequence.tracks.find((track) =>
     track.kind === 'video' && track.enabled && !track.locked) ?? null
   const laneClips = orderedLaneClips(sequence, mainTrack?.trackId ?? null)
@@ -251,6 +288,9 @@ export function MusicVideoEditor({
     () => new Map(assets.map((asset) => [asset.artifactId, asset])),
     [assets],
   )
+  const previewAsset = previewSourceId
+    ? assetById.get(previewSourceId)
+    : undefined
   const playbackAssets = useMemo(
     () => assets.flatMap((asset) => asset.mediaUrl
       ? [{ artifactId: asset.artifactId, mediaUrl: asset.mediaUrl }]
@@ -332,6 +372,28 @@ export function MusicVideoEditor({
     }
   }, [onClose, returnFocus])
 
+  useEffect(() => {
+    if ((audioAssetRef.current?.waveform?.length ?? 0) > 0) return
+    let cancelled = false
+    setWaveformWait(true)
+    const poll = async () => {
+      for (let attempt = 0; attempt < 24 && !cancelled; attempt += 1) {
+        try {
+          await refreshAssetsRef.current()
+        } catch {
+          break
+        }
+        if ((audioAssetRef.current?.waveform?.length ?? 0) > 0) break
+        await new Promise((resolve) => window.setTimeout(resolve, 1000))
+      }
+      if (!cancelled) setWaveformWait(false)
+    }
+    void poll()
+    return () => {
+      cancelled = true
+    }
+  }, [audioArtifactId])
+
   const runEdit = async (label: string, request: Record<string, unknown>) => {
     if (!editorEnabled || working) return
     setWorking(label)
@@ -353,6 +415,7 @@ export function MusicVideoEditor({
 
   const seekTo = (frame: number) => {
     const next = Math.max(0, Math.min(durationFrames - 1, Math.round(frame)))
+    setPreviewSourceId(null)
     setPlayheadFrame(next)
     playerRef.current?.seekTo(next)
   }
@@ -369,6 +432,7 @@ export function MusicVideoEditor({
   }
 
   const selectClip = (clip: SequenceClip) => {
+    setPreviewSourceId(null)
     setSelectedClipId(clip.clipId)
     setTrimDraft({
       clipId: clip.clipId,
@@ -380,6 +444,8 @@ export function MusicVideoEditor({
   }
 
   const toggleSource = (artifactId: string) => {
+    setPreviewSourceId(artifactId)
+    setSelectedClipId(null)
     setSourceSelection((current) => current.includes(artifactId)
       ? current.filter((candidate) => candidate !== artifactId)
       : [...current, artifactId])
@@ -394,6 +460,7 @@ export function MusicVideoEditor({
       timeline_limit_frame: durationFrames,
     })
     setSourceSelection([])
+    setPreviewSourceId(null)
   }
 
   const reorder = async (clipIds: string[]) => {
@@ -594,12 +661,19 @@ export function MusicVideoEditor({
   const refreshWaveform = async () => {
     if (working) return
     setWorking('Refreshing waveform')
+    setWaveformWait(true)
     setError(null)
     try {
-      await onRefreshAssets()
+      for (let attempt = 0; attempt < 24; attempt += 1) {
+        await onRefreshAssets()
+        if ((audioAssetRef.current?.waveform?.length ?? 0) > 0) return
+        await new Promise((resolve) => window.setTimeout(resolve, 1000))
+      }
+      setError('Soundtrack waveform is still processing. Try refresh again in a moment.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
+      setWaveformWait(false)
       setWorking(null)
     }
   }
@@ -639,13 +713,32 @@ export function MusicVideoEditor({
 
       <main className="music-video-editor-main">
         <section className="music-video-preview-panel">
-          <CanonicalSequencePlayer
-            ref={playerRef}
-            sequence={sequence}
-            assets={playbackAssets}
-            onFrameUpdate={setPlayheadFrame}
-            onKeyboardAction={playerKeyboard}
-          />
+          {previewAsset?.mediaUrl ? (
+            <div className="music-video-source-preview">
+              <video
+                key={previewAsset.artifactId}
+                src={previewAsset.mediaUrl}
+                controls
+                autoPlay
+                muted
+                playsInline
+              />
+              <p>
+                Previewing source · {previewAsset.label}
+                <button type="button" onClick={() => setPreviewSourceId(null)}>
+                  Show sequence
+                </button>
+              </p>
+            </div>
+          ) : (
+            <CanonicalSequencePlayer
+              ref={playerRef}
+              sequence={sequence}
+              assets={playbackAssets}
+              onFrameUpdate={setPlayheadFrame}
+              onKeyboardAction={playerKeyboard}
+            />
+          )}
           <aside className="music-video-setup-card" data-status={setup.status}>
             <span>MASTER SOUNDTRACK</span>
             {setup.status === 'loading' && <p>Building the exact canonical setup plan…</p>}
@@ -707,17 +800,20 @@ export function MusicVideoEditor({
           <div className="music-video-source-list">
             {sourceAssets.map((asset) => {
               const selected = sourceSelection.includes(asset.artifactId)
+              const previewing = previewSourceId === asset.artifactId
               return (
                 <button
                   type="button"
-                  className={selected ? 'selected' : ''}
+                  className={[
+                    selected ? 'selected' : '',
+                    previewing ? 'previewing' : '',
+                  ].filter(Boolean).join(' ')}
                   aria-pressed={selected}
+                  aria-label={asset.label}
                   key={asset.artifactId}
                   onClick={() => toggleSource(asset.artifactId)}
                 >
-                  {asset.thumbnailUrl || asset.mediaUrl
-                    ? <img src={asset.thumbnailUrl ?? asset.mediaUrl ?? ''} alt="" />
-                    : <Film size={24} />}
+                  <SourceThumb asset={asset} />
                   <span>{asset.label}</span>
                   <small>{asset.duration ? `${asset.duration.toFixed(1)}s` : asset.type}</small>
                 </button>
@@ -796,7 +892,13 @@ export function MusicVideoEditor({
                       <path d={path} />
                     </svg>
                   )
-                  : <span className="music-video-waveform-placeholder">Waveform unavailable</span>}
+                  : (
+                    <span className="music-video-waveform-placeholder">
+                      {waveformWait
+                        ? 'Loading soundtrack waveform…'
+                        : 'Waveform unavailable'}
+                    </span>
+                  )}
                 <i style={{ left: `${playheadFrame / durationFrames * 100}%` }} />
               </button>
             </div>

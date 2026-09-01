@@ -3027,7 +3027,7 @@ describe('chat composer browser flow', () => {
     if (await editor.getByRole('button', { name: 'Create main video track' }).isVisible()) {
       await editor.getByRole('button', { name: 'Create main video track' }).click()
     }
-    if (await editor.getByText('Waveform unavailable').isVisible()) {
+    if (await editor.getByText(/Waveform unavailable|Loading soundtrack waveform/).isVisible()) {
       await editor.getByRole('button', { name: 'Refresh waveform' }).click()
     }
     await editor.locator('.music-video-waveform svg path')
@@ -3036,6 +3036,7 @@ describe('chat composer browser flow', () => {
       .filter({ hasText: 'split-source' })
       .first()
     await source.click()
+    await editor.getByText(/Previewing source/).waitFor({ state: 'visible' })
     await editor.getByRole('button', { name: 'Add selected' }).click()
     await expect.poll(() => observedCalls.filter((call) =>
       call.name === 'plan_sequence_edit'

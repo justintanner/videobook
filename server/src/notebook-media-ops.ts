@@ -6,6 +6,7 @@ import { srtContent } from "./srt.js";
 import {
   AUDIO_OPTS,
   H264_MEDIUM,
+  extractWaveform,
   probeVideo,
   runFfmpeg,
   type ProbeResult,
@@ -419,6 +420,11 @@ export async function extractSourceAudio(
       outPath,
     );
     await registerMediaProbe(engine, artifactId, "original.m4a", probe);
+    const peaks = await extractWaveform(outPath);
+    if (peaks.length > 0) {
+      const waveform = await engine.metadata.waveforms.write(artifactId, peaks);
+      if (!waveform.ok) throw new Error(waveform.error.message);
+    }
     const existing = await engine.metadata.artifacts.read<Record<string, unknown>>(
       artifactId,
       "original",

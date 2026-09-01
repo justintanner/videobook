@@ -226,6 +226,27 @@ describe("buildAssetList", () => {
     expect(wfJobs.length).toBe(1);
   });
 
+  it("defers waveform extraction for audio files instead of blocking", async () => {
+    const { buildAssetList } = await import("./reconcile-project-work.js");
+    const createResult = await fs.artifacts.create("aud", "wf-audio-defer");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    await writeNativeFile(fs, join(createResult.value.path, "original.m4a"), "fake-audio-data");
+
+    const assets = await buildAssetList(fs, fs.book.get().bookId);
+    expect(assets[0].waveform).toBeNull();
+
+    let wfJobs: Awaited<ReturnType<typeof fs.jobs.queue.list>> = [];
+    for (let i = 0; i < 50 && wfJobs.length === 0; i++) {
+      const jobs = await fs.jobs.queue.list({
+        states: ["queued", "running", "completing", "done", "failed", "aborted"],
+      });
+      wfJobs = jobs.filter((j) => j.type === "extract_waveform");
+      if (wfJobs.length === 0) await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(wfJobs.length).toBe(1);
+    expect(wfJobs[0]?.type).toBe("extract_waveform");
+  });
+
   it("finds image as primary media file when no video present", async () => {
     const { buildAssetList } = await import("./reconcile-project-work.js");
     const createResult = await fs.artifacts.create("img", "image-test");

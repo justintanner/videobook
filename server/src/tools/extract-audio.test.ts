@@ -95,6 +95,12 @@ describe("extract_audio tool", () => {
 
     const mp3Stat = await stat(join(manifestData.path, "original.mp3"));
     expect(mp3Stat.size).toBeGreaterThan(0);
+
+    const waveform = await fs.metadata.waveforms.read(parsed.audio_asset_id);
+    expect(waveform.ok).toBe(true);
+    if (waveform.ok) expect(waveform.value.peaks.length).toBeGreaterThan(0);
+    const streams = fs.streams.list(parsed.audio_asset_id);
+    expect(streams.ok && streams.value.some((stream) => stream.kind === "audio")).toBe(true);
   });
 
   it("returns error for nonexistent asset", async () => {

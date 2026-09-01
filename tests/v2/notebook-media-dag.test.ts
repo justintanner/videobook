@@ -133,6 +133,9 @@ describe("notebook local media and analysis fan-out", () => {
     if (!audioManifest.ok) return;
     expect(audioManifest.value.files.some((file) => file.name.endsWith(".m4a"))).toBe(true);
     expect(audio.durationSeconds).toBeGreaterThan(5);
+    const waveform = await engine.metadata.waveforms.read(audio.artifactId);
+    expect(waveform.ok).toBe(true);
+    if (waveform.ok) expect(waveform.value.peaks.length).toBeGreaterThan(0);
   }, 60_000);
 
   it("captures the last frame when container duration rounds past video duration", async () => {
