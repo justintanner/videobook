@@ -2,6 +2,7 @@ import {
   notebookGridTag,
   parseNotebookGridAddress,
 } from 'videobook-engine/notebook-grid'
+import { NOTEBOOK_GRID_ADDRESS_SOURCE } from 'videobook-engine/notebook-mentions'
 import type {
   NotebookCell,
   NotebookCellType,
@@ -62,7 +63,7 @@ const cellTypes = new Map<string, NotebookCellType>([
   ['splice', 'splice'],
 ])
 
-const addressPattern = '([a-z](?:1[0-3]|[1-9]))'
+const addressPattern = `(${NOTEBOOK_GRID_ADDRESS_SOURCE})`
 
 function address(value: string): NotebookGridSlot {
   const slot = parseNotebookGridAddress(value)

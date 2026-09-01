@@ -41,7 +41,7 @@ function readingOrder(cells: readonly NotebookCell[]): NotebookCell[] {
 
 /* Images flow rightward from the anchor and wrap onto the next row at the
    grid edge, so each line is a full row of NOTEBOOK_GRID_COLUMN_COUNT cells
-   apart from the anchor's own partial first line. Past @z13 the run wraps
+   apart from the anchor's own partial first line. Past @h64 the run wraps
    back to @a1, matching the axis arrange planner's grid-edge behaviour. */
 function lineTarget(anchor: NotebookGridSlot, index: number): NotebookGridSlot {
   const linear = (

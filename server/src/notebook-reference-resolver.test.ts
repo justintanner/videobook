@@ -64,7 +64,7 @@ describe("notebook reference resolver", () => {
     const result = resolveNotebookPromptReferences({
       engine: fixture.engine,
       document: fixture.document,
-      prompt: "motion @a2 with @not-a-grid-token, appearance @a5",
+      prompt: "motion @b1 with @not-a-grid-token, appearance @e1",
       connectedArtifactIds: new Set([fixture.videoId]),
     });
     expect(result.prompt).toContain(`@${fixture.videoId}`);
@@ -72,13 +72,13 @@ describe("notebook reference resolver", () => {
     expect(result.prompt).toContain("@not-a-grid-token");
     expect(result.unresolved).toEqual([]);
     expect(result.resolved).toMatchObject([
-      { mention: "@a2", artifactId: fixture.videoId, cellAddress: "@a2" },
-      { mention: "@a5", artifactId: fixture.imageId, cellAddress: "@a5" },
+      { mention: "@b1", artifactId: fixture.videoId, cellAddress: "@b1" },
+      { mention: "@e1", artifactId: fixture.imageId, cellAddress: "@e1" },
     ]);
     expect(result.unconnected).toMatchObject([{
-      mention: "@a5",
+      mention: "@e1",
       artifactId: fixture.imageId,
-      message: "@a5 is referenced but not connected",
+      message: "@e1 is referenced but not connected",
     }]);
   });
 
@@ -87,13 +87,13 @@ describe("notebook reference resolver", () => {
     const result = resolveNotebookPromptReferences({
       engine: fixture.engine,
       document: fixture.document,
-      prompt: "unknown @z13, pending @a7",
+      prompt: "unknown @h64, pending @g1",
       connectedArtifactIds: new Set(),
     });
-    expect(result.prompt).toBe("unknown @z13, pending @a7");
+    expect(result.prompt).toBe("unknown @h64, pending @g1");
     expect(result.unresolved).toMatchObject([
-      { mention: "@z13", code: "not_found" },
-      { mention: "@a7", code: "no_output" },
+      { mention: "@h64", code: "not_found" },
+      { mention: "@g1", code: "no_output" },
     ]);
   });
 });

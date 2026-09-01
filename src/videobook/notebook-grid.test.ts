@@ -25,7 +25,12 @@ import {
   snapNotebookGridMove,
   type NotebookGridData,
 } from './notebook-grid'
-import { NOTEBOOK_GRID_FULL_ERROR } from 'videobook-engine'
+import {
+  NOTEBOOK_GRID_CAPACITY,
+  NOTEBOOK_GRID_COLUMN_COUNT,
+  NOTEBOOK_GRID_FULL_ERROR,
+  NOTEBOOK_GRID_ROW_COUNT,
+} from 'videobook-engine/notebook-grid'
 
 interface TestData extends NotebookGridData {
   name: string
@@ -41,24 +46,26 @@ function node(id: string, row: number, column: number): Node<TestData> {
 }
 
 describe('notebook grid', () => {
-  it('maps pixels into the fixed @a1 through @z13 board', () => {
+  it('maps pixels into the fixed @a1 through @h64 board', () => {
     expect(notebookGridSlot({ x: -800, y: -100 })).toEqual({
       row: 0,
       column: 0,
     })
     expect(notebookGridSlot({
-      x: notebookGrid.originX + notebookGrid.columnPitch * 12,
-      y: notebookGrid.originY + notebookGrid.rowPitch * 25,
-    })).toEqual({ row: 25, column: 12 })
+      x: notebookGrid.originX + notebookGrid.columnPitch * 7,
+      y: notebookGrid.originY + notebookGrid.rowPitch * 63,
+    })).toEqual({ row: 63, column: 7 })
     expect(notebookGridTag({ row: 0, column: 0 })).toBe('@a1')
-    expect(notebookGridTag({ row: 25, column: 12 })).toBe('@z13')
+    expect(notebookGridTag({ row: 0, column: 1 })).toBe('@b1')
+    expect(notebookGridTag({ row: 1, column: 0 })).toBe('@a2')
+    expect(notebookGridTag({ row: 63, column: 7 })).toBe('@h64')
   })
 
   it('snaps a single drag to the nearest bounded square', () => {
     const source = [node('a', 0, 0), node('b', 0, 1)]
     const snapped = snapNotebookGridMove(source, 'a', { row: 100, column: -3 })
     expect(snapped[0]?.position).toEqual(
-      notebookGridPosition({ row: 25, column: 0 }),
+      notebookGridPosition({ row: NOTEBOOK_GRID_ROW_COUNT - 1, column: 0 }),
     )
     expect(snapped[0]?.data.slot).toEqual({ row: 0, column: 0 })
   })
@@ -69,7 +76,7 @@ describe('notebook grid', () => {
       node('b', 1, 1),
     ], 'a', { row: 100, column: -17 })
     expect(moved.map((item) => ({ id: item.id, slot: item.data.slot }))).toEqual([
-      { id: 'a', slot: { row: 25, column: 0 } },
+      { id: 'a', slot: { row: NOTEBOOK_GRID_ROW_COUNT - 1, column: 0 } },
       { id: 'b', slot: { row: 1, column: 1 } },
     ])
   })
@@ -149,8 +156,12 @@ describe('notebook grid', () => {
       node('b', 0, 2),
       node('c', 0, 3),
     ])).toEqual({ row: 0, column: 1 })
-    const full = Array.from({ length: 338 }, (_, index) =>
-      node(String(index), Math.floor(index / 13), index % 13))
+    const full = Array.from({ length: NOTEBOOK_GRID_CAPACITY }, (_, index) =>
+      node(
+        String(index),
+        Math.floor(index / NOTEBOOK_GRID_COLUMN_COUNT),
+        index % NOTEBOOK_GRID_COLUMN_COUNT,
+      ))
     expect(() => nextNotebookGridSlot(full)).toThrow('Notebook grid is full')
   })
 
@@ -273,46 +284,46 @@ describe('notebook grid', () => {
     })
   })
 
-  it('clamps last-work scans at @*13 and @z* without leaving the board', () => {
-    const lastColumn = { row: 4, column: 12 }
+  it('clamps last-work scans at @h* and @*64 without leaving the board', () => {
+    const lastColumn = { row: 4, column: NOTEBOOK_GRID_COLUMN_COUNT - 1 }
     expect(nextNotebookHorizontalGenerationSlot(
       [{ type: 'prompt', slot: lastColumn }],
       [],
       lastColumn,
-    )).toEqual({ row: 5, column: 12 })
+    )).toEqual({ row: 5, column: NOTEBOOK_GRID_COLUMN_COUNT - 1 })
     expect(allocateNotebookHorizontalGenerationSlots(
       [{ type: 'prompt', slot: lastColumn }],
       [],
       lastColumn,
     )).toEqual({
-      tile: { row: 5, column: 12 },
-      output: { row: 6, column: 12 },
+      tile: { row: 5, column: NOTEBOOK_GRID_COLUMN_COUNT - 1 },
+      output: { row: 6, column: NOTEBOOK_GRID_COLUMN_COUNT - 1 },
     })
 
-    const lastRow = { row: 25, column: 4 }
+    const lastRow = { row: NOTEBOOK_GRID_ROW_COUNT - 1, column: 4 }
     expect(nextNotebookVideoGenerationSlot(
       [{ type: 'prompt', slot: lastRow }],
       [],
       lastRow,
-    )).toEqual({ row: 25, column: 5 })
+    )).toEqual({ row: NOTEBOOK_GRID_ROW_COUNT - 1, column: 5 })
     expect(allocateNotebookVideoGenerationSlots(
       [{ type: 'prompt', slot: lastRow }],
       [],
       lastRow,
     )).toEqual({
-      tile: { row: 25, column: 5 },
-      output: { row: 25, column: 6 },
+      tile: { row: NOTEBOOK_GRID_ROW_COUNT - 1, column: 5 },
+      output: { row: NOTEBOOK_GRID_ROW_COUNT - 1, column: 6 },
     })
 
     expect(nextNotebookHorizontalGenerationSlot(
       [],
       [],
       { row: 100, column: -4 },
-    )).toEqual({ row: 25, column: 0 })
+    )).toEqual({ row: NOTEBOOK_GRID_ROW_COUNT - 1, column: 0 })
   })
 
   it('keeps source-fed placement even when a last-work anchor is set', () => {
-    const lastWork = { row: 8, column: 8 }
+    const lastWork = { row: 8, column: 6 }
     expect(nextNotebookHorizontalGenerationSlot(
       [{ type: 'video', slot: { row: 2, column: 0 } }],
       [{ row: 2, column: 0 }],
@@ -354,42 +365,42 @@ describe('notebook grid', () => {
       [{ row: 1, column: 0 }],
     )).toEqual({ row: 2, column: 0 })
 
-    const full = Array.from({ length: 338 }, (_, index) => ({
-      row: Math.floor(index / 13),
-      column: index % 13,
+    const full = Array.from({ length: NOTEBOOK_GRID_CAPACITY }, (_, index) => ({
+      row: Math.floor(index / NOTEBOOK_GRID_COLUMN_COUNT),
+      column: index % NOTEBOOK_GRID_COLUMN_COUNT,
     }))
     expect(() => nextVerticalSlotFrom({ row: 0, column: 0 }, full))
       .toThrow(NOTEBOOK_GRID_FULL_ERROR)
   })
 
-  it('keeps thirteen columns and grows visible rows to one trailing row', () => {
+  it('keeps eight columns and grows visible rows to one trailing row', () => {
     expect(notebookGridMetrics([
       { row: 0, column: 0 },
-      { row: 9, column: 12 },
+      { row: 9, column: 7 },
     ])).toEqual({
       rowCount: 11,
-      columnCount: 13,
+      columnCount: 8,
       minColumn: 0,
-      maxColumn: 12,
-      centerX: 1800,
-      width: 3600,
+      maxColumn: 7,
+      centerX: 1100,
+      width: 2200,
       height: 3040,
     })
     expect(notebookGridMetrics([], {
       viewportWidth: 2048,
       viewportHeight: 900,
-      zoom: 0.5,
+      zoom: 0.75,
     })).toEqual({
-      rowCount: 7,
-      columnCount: 13,
+      rowCount: 5,
+      columnCount: 8,
       minColumn: 0,
-      maxColumn: 12,
-      centerX: 1800,
-      width: 3600,
-      height: 1920,
+      maxColumn: 7,
+      centerX: 1100,
+      width: 2200,
+      height: 1360,
     })
     expect(notebookGridMetrics([]).rowCount).toBe(3)
-    expect(notebookGridMetrics([{ row: 25, column: 12 }]).rowCount).toBe(26)
+    expect(notebookGridMetrics([{ row: 63, column: 7 }]).rowCount).toBe(64)
   })
 
   it('bounds edge drops and starts the viewport at the top left', () => {
@@ -397,15 +408,15 @@ describe('notebook grid', () => {
     expect(notebookGridDropSlot({ x: -100, y: -100 }, metrics))
       .toEqual({ row: 0, column: 0 })
     expect(notebookGridDropSlot({ x: 100_000, y: 100_000 }, metrics))
-      .toEqual({ row: 25, column: 12 })
+      .toEqual({ row: NOTEBOOK_GRID_ROW_COUNT - 1, column: NOTEBOOK_GRID_COLUMN_COUNT - 1 })
     expect(notebookGridFrameSize(notebookGridMetrics([]), 1.5)).toEqual({
-      width: 5400,
-      height: 1200,
+      width: 2200,
+      height: 800,
     })
     expect(notebookGridViewport(metrics, 1.5, -40)).toEqual({
       x: 0,
       y: -40,
-      zoom: 1.5,
+      zoom: 1,
     })
   })
 
@@ -427,8 +438,10 @@ describe('notebook grid', () => {
       .toEqual({ row: 0, column: 0 })
   })
 
-  it('clamps invalid and out-of-range zoom values', () => {
+  it('snaps zoom to 75% or 100%', () => {
     expect(normalizeNotebookGridZoom(0.1)).toBe(notebookGrid.minimumZoom)
+    expect(normalizeNotebookGridZoom(0.8)).toBe(notebookGrid.minimumZoom)
+    expect(normalizeNotebookGridZoom(0.9)).toBe(notebookGrid.maximumZoom)
     expect(normalizeNotebookGridZoom(4)).toBe(notebookGrid.maximumZoom)
     expect(normalizeNotebookGridZoom(Number.NaN)).toBe(1)
   })

@@ -11,13 +11,14 @@ import {
   notebookGridTag,
   parseNotebookGridAddress,
 } from "videobook-engine/notebook-grid";
+import { NOTEBOOK_GRID_ADDRESS_SOURCE } from "videobook-engine/notebook-mentions";
 import { z } from "zod";
 import { mutateNotebook } from "../notebook-mutations.js";
 import type { ToolDef } from "./tool-def.js";
 
 const destinationSchema = z.string()
-  .regex(/^@?[a-z](?:1[0-3]|[1-9])$/iu)
-  .describe("Optional empty destination cell from a1 through z13");
+  .regex(new RegExp(`^@?${NOTEBOOK_GRID_ADDRESS_SOURCE}$`, "iu"))
+  .describe("Optional empty destination cell from a1 through h64");
 
 function mediaCellType(kind: ArtifactKind): NotebookCellType | null {
   if (kind === "final") return "video";

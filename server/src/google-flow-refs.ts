@@ -52,7 +52,7 @@ export const OMNI_V2V_MAX_REFERENCE_SLOTS = 5;
 // submit.
 
 // Mention boundary: a reference ends at any char that is not a word char or
-// dash, so "@a1" never matches inside "@a13". Longest reference first for the
+// dash, so "@a1" never matches inside "@a10". Longest reference first for the
 // same reason.
 function refMentionEntries(refs: readonly string[]): { ref: string; index: number }[] {
   return refs

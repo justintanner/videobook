@@ -65,6 +65,12 @@ function isInside(parent: string, candidate: string): boolean {
   return path !== "" && !path.startsWith(`..${sep}`) && path !== "..";
 }
 
+function isSchemaIncompatible(cause: unknown): boolean {
+  if (!cause || typeof cause !== "object" || !("error" in cause)) return false;
+  const error = (cause as { error?: { code?: unknown } }).error;
+  return error?.code === "SCHEMA_INCOMPATIBLE";
+}
+
 function sortBooks(
   books: BookSummary[],
   sort: "newest" | "oldest",
@@ -323,6 +329,9 @@ export class BookManager {
             ...dryRun.value,
             slug: identity.value.slug,
           });
+          continue;
+        }
+        if (isSchemaIncompatible(cause)) {
           continue;
         }
         throw cause;

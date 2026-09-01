@@ -31,8 +31,8 @@ export const notebookGrid = {
   maximumRowCount: NOTEBOOK_GRID_ROW_COUNT,
   minimumRowCount: 3,
   trailingRowCount: 1,
-  minimumZoom: 0.5,
-  maximumZoom: 2,
+  minimumZoom: 0.75,
+  maximumZoom: 1,
   zoomStep: 0.25,
 } as const
 
@@ -358,10 +358,10 @@ interface NotebookGridMetricsOptions {
 
 export function normalizeNotebookGridZoom(zoom: number): number {
   if (!Number.isFinite(zoom)) return 1
-  return Math.min(
-    notebookGrid.maximumZoom,
-    Math.max(notebookGrid.minimumZoom, zoom),
-  )
+  const midpoint = (notebookGrid.minimumZoom + notebookGrid.maximumZoom) / 2
+  return zoom < midpoint
+    ? notebookGrid.minimumZoom
+    : notebookGrid.maximumZoom
 }
 
 function gridWidth(): number {

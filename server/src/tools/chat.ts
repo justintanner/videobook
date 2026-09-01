@@ -45,7 +45,10 @@ import {
 import {
   notebookGridAddress,
 } from "videobook-engine/notebook-grid";
-import { replaceNotebookMentions } from "videobook-engine/notebook-mentions";
+import {
+  NOTEBOOK_GRID_ADDRESS_SOURCE,
+  replaceNotebookMentions,
+} from "videobook-engine/notebook-mentions";
 import { resolveNotebookPromptReferences } from "../notebook-reference-resolver.js";
 
 type ChatDecision = {
@@ -90,7 +93,7 @@ const chatActionPlanSchema = z.object({
 
 const CHAT_ROUTING_MAX_OUTPUT_TOKENS = 2048;
 const CHAT_ROUTING_TIMEOUT_MS = 45_000;
-const NOTEBOOK_DESTINATION_SOURCE = "[a-z](?:1[0-3]|[1-9])";
+const NOTEBOOK_DESTINATION_SOURCE = NOTEBOOK_GRID_ADDRESS_SOURCE;
 
 function duplicateDestinationReference(prompt: string): string | null {
   if (!/\b(?:copy|duplicate)\b/iu.test(prompt)) return null;

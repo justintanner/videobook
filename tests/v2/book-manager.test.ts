@@ -1,6 +1,7 @@
 import { access, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from '@dolthub/doltlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { readTimeline, writeTimeline } from '../../server/src/timeline-helpers.js'
@@ -96,5 +97,32 @@ describe('v2 book manager', () => {
     expect(reopened.ok).toBe(true)
     if (!reopened.ok) return
     expect(reopened.value.engine.book.get().name).toBe('restart-recovery')
+  })
+
+  it('skips books whose catalog schema the engine no longer supports', async () => {
+    const current = await books.create('current-schema')
+    const stale = await books.create('stale-schema')
+    expect(current.ok && stale.ok).toBe(true)
+    if (!current.ok || !stale.ok) return
+    const staleRoot = books.get(stale.value.bookId)
+    expect(staleRoot.ok).toBe(true)
+    if (!staleRoot.ok) return
+    const catalogPath = join(staleRoot.value.rootDir, 'data', 'videobook.db')
+    await books.close()
+
+    const catalog = new DatabaseSync(catalogPath)
+    catalog.prepare('UPDATE engine_schema SET version=22 WHERE singleton=1').run()
+    catalog.close()
+
+    books = new BookManager({
+      libraryDir: join(rootDir, 'books'),
+      objectPrefix: 'test-objects',
+    })
+    await books.ready()
+    expect(books.get(stale.value.bookId).ok).toBe(false)
+    const remaining = books.get(current.value.bookId)
+    expect(remaining.ok).toBe(true)
+    if (!remaining.ok) return
+    expect(remaining.value.engine.book.get().name).toBe('current-schema')
   })
 })

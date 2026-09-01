@@ -25,8 +25,8 @@ type TextContent = Array<{ type: string; text: string }>;
 
 describe("duplicateDestinationReference", () => {
   it("preserves explicit and positional duplicate destinations", () => {
-    expect(duplicateDestinationReference("duplicate @a1 to @Z13"))
-      .toBe("z13");
+    expect(duplicateDestinationReference("duplicate @a1 to @H64"))
+      .toBe("h64");
     expect(duplicateDestinationReference("copy @a1 @b2"))
       .toBe("b2");
   });

@@ -110,7 +110,7 @@ describe('last-work placement', () => {
     expect(notebookDocumentsEqual(originDoc, relayoutNotebookDocument(engine, originDoc)))
       .toBe(true)
 
-    const lastWork = { row: 8, column: 6 }
+    const lastWork = { row: 8, column: 5 }
     resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
@@ -127,8 +127,8 @@ describe('last-work placement', () => {
       lastWork,
     )
     expect(imageSlots).toEqual({
-      tile: { row: 8, column: 7 },
-      output: { row: 8, column: 8 },
+      tile: { row: 8, column: 6 },
+      output: { row: 8, column: 7 },
     })
     const image = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
@@ -247,7 +247,7 @@ describe('last-work placement', () => {
       cell: {
         type: 'generate_image',
         label: 'edge-image',
-        slot: { row: 0, column: 12 },
+        slot: { row: 0, column: 7 },
         prompt: 'edge',
       },
     })) as { output_cell?: { slot: { row: number; column: number } } }
@@ -258,7 +258,7 @@ describe('last-work placement', () => {
       cell: {
         type: 'generate_video',
         label: 'edge-video',
-        slot: { row: 25, column: 0 },
+        slot: { row: 63, column: 0 },
         prompt: 'edge walk',
       },
     })) as { output_cell?: { slot: { row: number; column: number } } }
@@ -271,9 +271,9 @@ describe('last-work placement', () => {
     expect(findGenerateVideoOutput(notebook, video.id)).toBeNull()
     expect(notebook.cells.every((cell) =>
       cell.slot.row >= 0
-      && cell.slot.row <= 25
+      && cell.slot.row <= 63
       && cell.slot.column >= 0
-      && cell.slot.column <= 12)).toBe(true)
+      && cell.slot.column <= 7)).toBe(true)
     const occupiedKeys = notebook.cells.map((cell) =>
       `${cell.slot.row}:${cell.slot.column}`)
     expect(new Set(occupiedKeys).size).toBe(occupiedKeys.length)
@@ -308,7 +308,7 @@ describe('last-work placement', () => {
       cell: {
         type: 'video',
         label: 'far-source',
-        slot: { row: 12, column: 8 },
+        slot: { row: 12, column: 4 },
       },
     }))
 
@@ -317,7 +317,7 @@ describe('last-work placement', () => {
       cell: {
         type: 'analyze',
         label: 'analyze-far',
-        slot: { row: 12, column: 9 },
+        slot: { row: 12, column: 5 },
         prompt: 'segment',
       },
     })) as {
@@ -325,7 +325,7 @@ describe('last-work placement', () => {
       output_cell?: { slot: { row: number; column: number } }
     }
     expect(analyze.output_cell?.slot).not.toEqual({ row: 0, column: 0 })
-    expect(analyze.output_cell?.slot).toEqual({ row: 12, column: 10 })
+    expect(analyze.output_cell?.slot).toEqual({ row: 12, column: 6 })
 
     const withFar = value(engine.notebooks.read(notebookId))
     const scaffold = buildSevenStageScaffold(engine, withFar)
@@ -333,7 +333,7 @@ describe('last-work placement', () => {
       .filter((cell) => !withFar.cells.some((existing) => existing.id === cell.id))
       .map((cell) => cell.slot)
     expect(newSlots.length).toBeGreaterThan(0)
-    expect(newSlots.every((slot) => slot.row >= 12 || slot.column >= 8)).toBe(true)
+    expect(newSlots.every((slot) => slot.row >= 12 || slot.column >= 4)).toBe(true)
     expect(newSlots.some((slot) => slot.row === 0 && slot.column === 0)).toBe(false)
 
     const empty = {

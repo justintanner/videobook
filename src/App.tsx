@@ -74,6 +74,7 @@ import type {
 import { SCHEMA_VERSION } from 'videobook-engine/catalog-metadata'
 import enginePackage from 'videobook-engine/package.json'
 import {
+  NOTEBOOK_GRID_ADDRESS_SOURCE,
   normalizeNotebookReference,
   stripNotebookMentions,
 } from 'videobook-engine/notebook-mentions'
@@ -9041,7 +9042,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       if (
         (commandToken === '/split-chunks' || commandToken === '/even-split')
-        && /^@[a-z](?:[1-9]|1[0-3])$/iu.test(restParts[0] ?? '')
+        && new RegExp(`^@${NOTEBOOK_GRID_ADDRESS_SOURCE}$`, 'iu')
+          .test(restParts[0] ?? '')
       ) {
         const [sourceValue, ...targetValues] = restParts
         const targets = (targetValues.length > 0 ? targetValues : ['7'])

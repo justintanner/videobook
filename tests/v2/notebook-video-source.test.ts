@@ -45,8 +45,8 @@ describe('notebook video source resolution', () => {
 
   it.each([
     ['missing source', 'missing-video', 'Notebook cell @missing-video was not found'],
-    ['wrong media kind', imageArtifactId, '@a2 is not a video-producing cell'],
-    ['missing video output', 'a3', '@a3 does not have a video output yet'],
+    ['wrong media kind', imageArtifactId, '@b1 is not a video-producing cell'],
+    ['missing video output', 'c1', '@c1 does not have a video output yet'],
   ])('rejects %s', (_case, reference, message) => {
     expect(() => resolveNotebookVideoSourceCell(document, reference)).toThrow(message)
   })

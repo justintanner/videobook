@@ -45,7 +45,7 @@ describe('planImageGrouping', () => {
   })
 
   it('wraps onto the next row once a line fills the last column', () => {
-    const images = Array.from({ length: 14 }, (_, index) =>
+    const images = Array.from({ length: 9 }, (_, index) =>
       cell(`i${index}`, 10 + index, 0, 'image'))
     const result = planImageGrouping(
       document(images),
@@ -55,14 +55,14 @@ describe('planImageGrouping', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.slots).toEqual([
-      ...Array.from({ length: 13 }, (_, column) => ({
+      ...Array.from({ length: 8 }, (_, column) => ({
         id: `i${column}`,
         row: 1,
         column,
       })),
-      { id: 'i13', row: 2, column: 0 },
+      { id: 'i8', row: 2, column: 0 },
     ])
-    expect(result.movedCount).toBe(14)
+    expect(result.movedCount).toBe(9)
     expect(result.displacedCount).toBe(0)
   })
 
@@ -75,11 +75,11 @@ describe('planImageGrouping', () => {
     const result = planImageGrouping(
       current,
       new Set(['i1', 'i2', 'i3']),
-      { row: 25, column: 11 },
+      { row: 63, column: 6 },
     )
     expect(result.ok && result.slots).toEqual([
-      { id: 'i1', row: 25, column: 11 },
-      { id: 'i2', row: 25, column: 12 },
+      { id: 'i1', row: 63, column: 6 },
+      { id: 'i2', row: 63, column: 7 },
       { id: 'i3', row: 0, column: 0 },
     ])
   })
@@ -147,8 +147,8 @@ describe('planImageGrouping', () => {
   })
 
   it('fails when the images outnumber the grid capacity', () => {
-    const images = Array.from({ length: 339 }, (_, index) =>
-      cell(`i${index}`, index % 26, index % 13, 'image'))
+    const images = Array.from({ length: 513 }, (_, index) =>
+      cell(`i${index}`, index % 64, index % 8, 'image'))
     const result = planImageGrouping(
       document(images),
       new Set(images.map((image) => image.id)),
@@ -157,14 +157,14 @@ describe('planImageGrouping', () => {
     expect(result).toEqual({
       ok: false,
       code: 'capacity',
-      message: 'Cannot group 339 images: the grid fits 338.',
+      message: 'Cannot group 513 images: the grid fits 512.',
     })
   })
 
   it('reports a full grid when more cells are displaced than free slots remain', () => {
     /* Only a document that stacks cells on one slot can displace more cells
        than the grid has room for; a well-formed board always fits. */
-    const stacked = Array.from({ length: 340 }, (_, index) =>
+    const stacked = Array.from({ length: 512 }, (_, index) =>
       cell(`blocker-${index}`, 0, 0))
     const result = planImageGrouping(
       document([cell('i1', 5, 5, 'image'), ...stacked]),

@@ -272,7 +272,7 @@ describe("Kling motion-control duration", () => {
 
       const videoOrientation = {
         ...generationCell,
-        prompt: "motion reference @a2, character and appearance @a5",
+        prompt: "motion reference @b1, character and appearance @e1",
         inputs: {
           generationSettings: {
             resolution: "720p",

@@ -286,7 +286,7 @@ describe('directional canvas placement', () => {
     )
     const generateSlots = [
       { row: 1, column: 0 },
-      { row: 1, column: 8 },
+      { row: 1, column: 7 },
       { row: 2, column: 0 },
       { row: 2, column: 1 },
       { row: 3, column: 3 },
@@ -982,7 +982,7 @@ describe('directional canvas placement', () => {
     const genVideo = engine.notebooks.createCell({
       type: 'generate_video',
       label: 'motion',
-      slot: { row: 6, column: 8 },
+      slot: { row: 6, column: 6 },
       prompt: 'the kitten dances',
       outputArtifactId: videoArtifact.artifactId,
     })

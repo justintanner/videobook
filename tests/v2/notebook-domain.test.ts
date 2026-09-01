@@ -195,7 +195,7 @@ describe('v2 notebook domain tools', () => {
 
     resultJson(await invoke('move_notebook_cells', {
       notebook_id: notebookId,
-      slots: [{ id: image.id, row: 25, column: 12 }],
+      slots: [{ id: image.id, row: 63, column: 7 }],
     }))
     const expanded = resultJson(await invoke('get_notebook', {
       notebook_id: notebookId,
@@ -204,16 +204,16 @@ describe('v2 notebook domain tools', () => {
     }
     expect('grid' in expanded).toBe(false)
     expect(expanded.cells.find((cell) => cell.id === image.id)?.slot)
-      .toEqual({ row: 25, column: 12 })
+      .toEqual({ row: 63, column: 7 })
     expect(expanded.cells.find((cell) => cell.id === prompt.id)?.slot)
       .toEqual({ row: 1, column: 0 })
 
     const offGridMove = await invoke('move_notebook_cells', {
       notebook_id: notebookId,
-      slots: [{ id: image.id, row: 26, column: 12 }],
+      slots: [{ id: image.id, row: 64, column: 0 }],
     })
     expect(offGridMove.isError).toBe(true)
-    expect(offGridMove.content[0]?.text).toContain('Cell slot must be within @a1-@z13')
+    expect(offGridMove.content[0]?.text).toContain('Cell slot must be within @a1-@h64')
   })
 
   it('retypes only unconnected URL-download placeholders to image outputs', async () => {

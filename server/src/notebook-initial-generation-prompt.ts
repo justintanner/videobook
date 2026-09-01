@@ -1,5 +1,6 @@
 import type { NotebookCell, NotebookDocument } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
+import { NOTEBOOK_GRID_ADDRESS_SOURCE } from "videobook-engine/notebook-mentions";
 
 const INITIAL_PROMPT_KEY = "initialGenerationPrompt";
 const INITIAL_PROMPT_VERSION = 1;
@@ -54,7 +55,7 @@ function initialPromptRecord(cell: NotebookCell): InitialPromptRecord | null {
 
 function cleanCue(value: string | undefined): string | null {
   const cue = value
-    ?.replace(/ ?@[a-z](?:1[0-3]|[1-9])(?![\w-])/giu, "")
+    ?.replace(new RegExp(` ?@${NOTEBOOK_GRID_ADDRESS_SOURCE}(?![\\w-])`, "giu"), "")
     .replace(
       / ?@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\w-])/giu,
       "",

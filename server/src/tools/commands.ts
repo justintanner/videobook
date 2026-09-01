@@ -664,7 +664,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to duplicate" },
       { name: "new_name", type: "string", required: false, description: "Optional name for the copy", consumeRest: true },
-      { name: "destination", type: "string", required: false, description: "Optional empty destination cell from a1 through z13" },
+      { name: "destination", type: "string", required: false, description: "Optional empty destination cell from a1 through h64" },
     ],
     mcpTool: {
       tool: "duplicate_asset",

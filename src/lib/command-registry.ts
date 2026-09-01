@@ -1,3 +1,5 @@
+import { NOTEBOOK_GRID_ADDRESS_SOURCE } from 'videobook-engine/notebook-mentions'
+
 interface CommandParam {
   name: string;
   type: 'string' | 'number' | 'boolean' | 'string[]';
@@ -480,7 +482,10 @@ function normalizeTranslateSubtitlesCommandArgs(
 
 type CommandAdapterFn = (args: Readonly<Record<string, unknown>>) => CommandToolArgs;
 
-const NOTEBOOK_DESTINATION_PATTERN = /^@?[a-z](?:1[0-3]|[1-9])$/iu;
+const NOTEBOOK_DESTINATION_PATTERN = new RegExp(
+  `^@?${NOTEBOOK_GRID_ADDRESS_SOURCE}$`,
+  'iu',
+);
 
 export const COMMAND_ADAPTERS = {
   qr_outro: (args) => {

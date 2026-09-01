@@ -79,12 +79,12 @@ describe('planVideoAxisArrangement', () => {
     const result = planVideoAxisArrangement(
       current,
       new Set(['v1', 'v2', 'v3', 'v4']),
-      { row: 24, column: 0 },
+      { row: 62, column: 0 },
       'column',
     )
     expect(result.ok && result.slots).toEqual([
-      { id: 'v1', row: 24, column: 0 },
-      { id: 'v2', row: 25, column: 0 },
+      { id: 'v1', row: 62, column: 0 },
+      { id: 'v2', row: 63, column: 0 },
       { id: 'v3', row: 0, column: 0 },
       { id: 'v4', row: 1, column: 0 },
     ])
@@ -161,7 +161,7 @@ describe('planVideoAxisArrangement', () => {
   })
 
   it('fails when the videos outnumber the axis length', () => {
-    const cells = Array.from({ length: 14 }, (_, index) =>
+    const cells = Array.from({ length: 9 }, (_, index) =>
       cell(`v${index}`, index, 0, 'video'))
     const result = planVideoAxisArrangement(
       document(cells),
@@ -172,7 +172,7 @@ describe('planVideoAxisArrangement', () => {
     expect(result).toEqual({
       ok: false,
       code: 'capacity',
-      message: 'Cannot arrange 14 videos in one row: the grid fits 13.',
+      message: 'Cannot arrange 9 videos in one row: the grid fits 8.',
     })
   })
 })

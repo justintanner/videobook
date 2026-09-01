@@ -1390,11 +1390,11 @@ describe('chat composer browser flow', () => {
     })
     await mentionMenu.waitFor({ state: 'visible' })
     expect(await mentionMenu.getByRole('button').count()).toBeGreaterThan(0)
-    await promptInput.fill('use @z13')
+    await promptInput.fill('use @h64')
     const mentionWarning = inspector.locator('.inspector-prompt-mentions')
     await mentionWarning.waitFor({ state: 'visible' })
     await expect.poll(async () => await mentionWarning.textContent())
-      .toContain('@z13')
+      .toContain('@h64')
     expect(await mentionWarning.textContent()).toContain('was not found')
 
     const prompt = 'Inspector prompt clipboard check'
@@ -2890,9 +2890,9 @@ describe('chat composer browser flow', () => {
     expect(slots.length).toBeGreaterThan(0)
     expect(slotKeys.size).toBe(slots.length)
     expect(slots.every((slot) =>
-      Number(slot!.column) >= 0 && Number(slot!.column) <= 12)).toBe(true)
+      Number(slot!.column) >= 0 && Number(slot!.column) <= 7)).toBe(true)
     expect(slots.every((slot) =>
-      Number(slot!.row) >= 0 && Number(slot!.row) <= 25)).toBe(true)
+      Number(slot!.row) >= 0 && Number(slot!.row) <= 63)).toBe(true)
     expect(Number(imageSlot?.row)).toBe(0)
     expect(Number(sourceImageSlot?.row)).toBe(0)
     expect(Number(generationSlot?.row)).toBe(1)

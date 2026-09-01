@@ -168,10 +168,10 @@ describe('notebook frame commands', () => {
       sourceReference: '019f0000-0d31-7d96-8c0f-800000000001',
     })
     expect(parseNotebookFrameCommand(
-      'grab the first frame from @Z13',
+      'grab the first frame from @H64',
     )).toEqual({
       frameMode: 'first',
-      sourceReference: 'z13',
+      sourceReference: 'h64',
     })
     expect(parseNotebookFrameCommand(
       'extracte the first frame of @a2',
@@ -215,7 +215,7 @@ describe('notebook frame commands', () => {
       reusedAction: false,
       sourceCellId,
       sourceAddress: '@a1',
-      actionAddress: '@a3',
+      actionAddress: '@c1',
     })
     expect(firstRun.outputCellId).toBe(firstRun.actionCellId)
     await waitForJob(firstRun.jobId)
@@ -279,7 +279,7 @@ describe('notebook frame commands', () => {
     })
     expect(secondRun.reusedAction).toBe(false)
     expect(secondRun.actionCellId).not.toBe(firstRun.actionCellId)
-    expect(secondRun.actionAddress).toBe('@a4')
+    expect(secondRun.actionAddress).toBe('@d1')
     await waitForJob(secondRun.jobId)
     const afterSecond = engine.notebooks.read(notebookId)
     expect(afterSecond.ok).toBe(true)

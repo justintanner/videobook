@@ -61,6 +61,6 @@ describe('notebook graph cycle guards', () => {
       [generateImage, outputImage, availableImage],
       [outputEdge],
       generateImage.id,
-    )).toEqual(new Set(['@e7', '@e8']))
+    )).toEqual(new Set(['@g5', '@h5']))
   })
 })
