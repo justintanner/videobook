@@ -1508,6 +1508,23 @@ async function musicVideoSequenceFingerprint(sequence: Sequence): Promise<string
     .join('')
 }
 
+function musicVideoSoundtrackApplied(
+  sequence: Sequence,
+  audioArtifactId: string,
+  timelineLimitFrame: number,
+): boolean {
+  const track = musicVideoSoundtrackTrack(sequence, audioArtifactId)
+  if (!track) return false
+  const clips = sequence.clips.filter((clip) => clip.trackId === track.trackId)
+  const clip = clips[0]
+  return clips.length === 1
+    && clip !== undefined
+    && clip.timelineStartFrame === 0
+    && clip.durationFrames === timelineLimitFrame
+    && clip.source.kind === 'timed'
+    && clip.source.artifactId === audioArtifactId
+}
+
 function musicVideoTimelineLimit(
   plan: CommandPlan,
   sequence: Sequence,
@@ -7627,14 +7644,32 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }) as EditPreview
       const invalid = editPreviewError(preview)
       if (invalid) throw new Error(invalid)
+      const timelineLimitFrame = musicVideoTimelineLimit(
+        plan,
+        targetSequence,
+        audioArtifactId,
+      )
+      if (musicVideoSoundtrackApplied(
+        targetSequence,
+        audioArtifactId,
+        timelineLimitFrame,
+      )) {
+        setMusicVideoSession((current) => current?.key === sessionKey
+          ? {
+              ...current,
+              setup: {
+                status: 'applied',
+                audioTrackId: audioTrack.trackId,
+                timelineLimitFrame,
+              },
+            }
+          : current)
+        return
+      }
       const prepared: MusicVideoPreparedSetup = {
         status: 'ready',
         audioTrackId: audioTrack.trackId,
-        timelineLimitFrame: musicVideoTimelineLimit(
-          plan,
-          targetSequence,
-          audioArtifactId,
-        ),
+        timelineLimitFrame,
         operationCount: stage.intent.operations.length,
         summary: musicVideoSetupSummary(plan),
         warnings: preview.warnings.map((warning) => warning.message),

@@ -468,4 +468,45 @@ describe('music-video canonical sequence plans', () => {
       speed: { numerator: 2, denominator: 5 },
     })
   })
+
+  it('rebalances an existing short clip when more sources are added', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-music-video-short-'))
+    const engine = createEngine({ rootDir, initialBookName: 'music-video-short' })
+    activeEngine = engine
+    const first = await createTimedArtifact(engine, 'video', 'first', 90)
+    const second = await createTimedArtifact(engine, 'video', 'second', 60)
+    let sequence = engine.sequences.getPrimary()
+    const track = sequence.tracks.find((candidate) => candidate.kind === 'video')!
+    sequence = await commitPlan(engine, {
+      kind: 'append_clips',
+      track_id: track.trackId,
+      artifact_ids: [first.artifactId],
+      timeline_limit_frame: 300,
+      fit: 'source',
+    })
+    expect(sequence.clips.find((clip) => clip.trackId === track.trackId)?.durationFrames)
+      .toBe(90)
+    sequence = await commitPlan(engine, {
+      kind: 'append_clips',
+      track_id: track.trackId,
+      artifact_ids: [second.artifactId],
+      timeline_limit_frame: 300,
+    })
+    const lane = sequence.clips
+      .filter((clip) => clip.trackId === track.trackId)
+      .sort((left, right) => left.timelineStartFrame - right.timelineStartFrame)
+    expect(lane).toHaveLength(2)
+    expect(lane[0]).toMatchObject({
+      timelineStartFrame: 0,
+      durationFrames: 150,
+      source: { artifactId: first.artifactId },
+      speed: { numerator: 3, denominator: 5 },
+    })
+    expect(lane[1]).toMatchObject({
+      timelineStartFrame: 150,
+      durationFrames: 150,
+      source: { artifactId: second.artifactId },
+      speed: { numerator: 2, denominator: 5 },
+    })
+  })
 })

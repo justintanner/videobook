@@ -772,38 +772,13 @@ async function operationsForRequest(
     if (laneEnd > request.timeline_limit_frame) {
       requireTimelineLimit(request.timeline_limit_frame, laneEnd);
     }
-    if (laneEnd === request.timeline_limit_frame) {
-      return rebalanceLaneAppend(
-        sequence,
-        track.trackId,
-        existing,
-        sources,
-        request.timeline_limit_frame,
-      );
-    }
-    const remaining = request.timeline_limit_frame - laneEnd;
-    if (remaining < sources.length) {
-      throw new Error(
-        `Music-video edit ends at frame ${laneEnd + sources.length}, beyond soundtrack frame ${request.timeline_limit_frame}`,
-      );
-    }
-    const slots = splitFrames(remaining, sources.length);
-    let timelineStartFrame = laneEnd;
-    const operations: EditOperation[] = [];
-    sources.forEach((source, index) => {
-      const durationFrames = slots[index]!;
-      operations.push(timedVideoPlacement(
-        track.trackId,
-        timelineStartFrame,
-        durationFrames,
-        source.artifactId,
-        source.stream,
-        source.nativeFrames,
-      ));
-      timelineStartFrame += durationFrames;
-    });
-    requireTimelineLimit(request.timeline_limit_frame, timelineStartFrame);
-    return operations;
+    return rebalanceLaneAppend(
+      sequence,
+      track.trackId,
+      existing,
+      sources,
+      request.timeline_limit_frame,
+    );
   }
   if (request.kind === "reorder_clips") {
     const track = requiredTrack(sequence, request.track_id, "video");

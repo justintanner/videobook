@@ -353,7 +353,9 @@ export function MusicVideoEditor({
   const fps = sequence.frameRate.numerator / sequence.frameRate.denominator
   const laneEnd = Math.max(0, ...laneClips.map(clipEnd))
   const overflowFrames = Math.max(0, laneEnd - durationFrames)
-  const editorEnabled = setup.status === 'applied' && mainTrack !== null
+  const editorEnabled = (
+    setup.status === 'ready' || setup.status === 'applied'
+  ) && mainTrack !== null
   const activeTrim = selectedClip
     ? trimDraft?.clipId === selectedClip.clipId
       ? trimDraft
@@ -458,7 +460,15 @@ export function MusicVideoEditor({
   }, [audioArtifactId])
 
   const runEdit = async (label: string, request: Record<string, unknown>) => {
-    if (!editorEnabled || working) return
+    if (working) return
+    if (!mainTrack) {
+      setError('Create a main video track before editing clips')
+      return
+    }
+    if (setup.status !== 'ready' && setup.status !== 'applied') {
+      setError('Wait for the soundtrack duration before editing clips')
+      return
+    }
     setWorking(label)
     setError(null)
     try {
@@ -914,7 +924,7 @@ export function MusicVideoEditor({
                 <p>{setup.operationCount} atomic operations · ends at frame {setup.timelineLimitFrame}</p>
                 {setup.warnings.map((warning) => <small key={warning}>{warning}</small>)}
                 <button type="button" disabled={Boolean(working)} onClick={() => void applySetup()}>
-                  <Check size={15} /> Apply soundtrack
+                  <AudioWaveform size={15} /> Apply soundtrack
                 </button>
               </>
             )}
@@ -1046,7 +1056,8 @@ export function MusicVideoEditor({
                           <button
                             type="button"
                             aria-label="Move clip earlier"
-                            disabled={Boolean(working) || !canMoveEarlier}
+                            disabled={!editorEnabled || Boolean(working) || !canMoveEarlier}
+                            onPointerDown={(event) => event.stopPropagation()}
                             onClick={(event) => {
                               event.stopPropagation()
                               void moveSelected(-1)
@@ -1058,7 +1069,8 @@ export function MusicVideoEditor({
                             type="button"
                             className="danger-button"
                             aria-label="Delete clip"
-                            disabled={Boolean(working)}
+                            disabled={!editorEnabled || Boolean(working)}
+                            onPointerDown={(event) => event.stopPropagation()}
                             onClick={(event) => {
                               event.stopPropagation()
                               void deleteSelected()
@@ -1069,7 +1081,8 @@ export function MusicVideoEditor({
                           <button
                             type="button"
                             aria-label="Move clip later"
-                            disabled={Boolean(working) || !canMoveLater}
+                            disabled={!editorEnabled || Boolean(working) || !canMoveLater}
+                            onPointerDown={(event) => event.stopPropagation()}
                             onClick={(event) => {
                               event.stopPropagation()
                               void moveSelected(1)
@@ -1133,10 +1146,10 @@ export function MusicVideoEditor({
                   <strong>{selectedAsset?.label ?? selectedClip.source.artifactId}</strong>
                 </div>
                 <div>
-                  <button type="button" disabled={Boolean(working) || !canMoveEarlier} onClick={() => void moveSelected(-1)}>
+                  <button type="button" disabled={!editorEnabled || Boolean(working) || !canMoveEarlier} onClick={() => void moveSelected(-1)}>
                     <ChevronLeft size={15} /> Move earlier
                   </button>
-                  <button type="button" disabled={Boolean(working) || !canMoveLater} onClick={() => void moveSelected(1)}>
+                  <button type="button" disabled={!editorEnabled || Boolean(working) || !canMoveLater} onClick={() => void moveSelected(1)}>
                     Move later <ChevronRight size={15} />
                   </button>
                 </div>
@@ -1213,10 +1226,10 @@ export function MusicVideoEditor({
                 <button type="button" disabled={Boolean(working)} onClick={() => void splitSelected()}>
                   <Scissors size={15} /> Cut at playhead
                 </button>
-                <button className="danger-button" type="button" disabled={Boolean(working)} onClick={() => void deleteSelected()}>
+                <button className="danger-button" type="button" disabled={!editorEnabled || Boolean(working)} onClick={() => void deleteSelected()}>
                   <Trash2 size={15} /> Delete clip
                 </button>
-                <button type="button" disabled={Boolean(working) || !canStretch} onClick={() => void stretchSelected()}>
+                <button type="button" disabled={!editorEnabled || Boolean(working) || !canStretch} onClick={() => void stretchSelected()}>
                   <Maximize2 size={15} /> Stretch to fill
                 </button>
                 <label>
