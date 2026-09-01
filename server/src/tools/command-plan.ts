@@ -144,6 +144,7 @@ const editRequestSchema = z.discriminatedUnion("kind", [
     track_id: z.string().uuid(),
     artifact_ids: z.array(z.string().uuid()).min(1).max(20),
     timeline_limit_frame: z.number().int().positive(),
+    fit: z.enum(["source", "fill"]).optional(),
   }),
   z.object({
     kind: z.literal("reorder_clips"),
@@ -270,6 +271,168 @@ function requireTimelineLimit(limit: number | undefined, endFrame: number): void
   if (limit !== undefined && endFrame > limit) {
     throw new Error(`Music-video edit ends at frame ${endFrame}, beyond soundtrack frame ${limit}`);
   }
+}
+
+function splitFrames(total: number, count: number): number[] {
+  const base = Math.floor(total / count);
+  const extra = total % count;
+  return Array.from({ length: count }, (_, index) =>
+    base + (index >= count - extra ? 1 : 0));
+}
+
+function nativeClipFrames(
+  sequence: Sequence,
+  clip: SequenceClip,
+): number {
+  if (clip.source.kind !== "timed") return clip.durationFrames;
+  return timelineFramesForSource(
+    clip.source.range.durationTicks,
+    clip.source.range.timeBase,
+    sequence.frameRate,
+    { numerator: 1, denominator: 1 },
+  );
+}
+
+function requiredVideoStream(engine: Engine, artifactId: string) {
+  const artifact = engine.artifacts.get(artifactId);
+  if (!artifact.ok) throw new Error(artifact.error.message);
+  if (artifact.value.kind !== "video" && artifact.value.kind !== "final") {
+    throw new Error("Music-video sources must be video or final artifacts");
+  }
+  const streams = engine.streams.list(artifactId);
+  if (!streams.ok) throw new Error(streams.error.message);
+  const stream = streams.value.find((candidate) => candidate.kind === "video");
+  if (!stream) throw new Error(`Video source has no registered stream: ${artifactId}`);
+  return stream;
+}
+
+function timedVideoPlacement(
+  trackId: string,
+  timelineStartFrame: number,
+  durationFrames: number,
+  artifactId: string,
+  stream: ReturnType<typeof requiredVideoStream>,
+  nativeFrames: number,
+): EditOperation {
+  return {
+    kind: "insert-clip",
+    mode: "overwrite",
+    placement: {
+      trackId,
+      timelineStartFrame,
+      durationFrames,
+      source: {
+        kind: "timed",
+        artifactId,
+        range: {
+          streamId: stream.streamId,
+          objectHash: stream.objectHash,
+          startTick: 0,
+          durationTicks: stream.durationTicks,
+          timeBase: stream.timeBase,
+        },
+      },
+      speed: {
+        numerator: Math.max(1, nativeFrames),
+        denominator: Math.max(1, durationFrames),
+      },
+      reverse: false,
+      audioPolicy: "mute",
+    },
+  };
+}
+
+function rebalanceLaneAppend(
+  sequence: Sequence,
+  trackId: string,
+  existing: SequenceClip[],
+  sources: Array<{
+    artifactId: string;
+    stream: ReturnType<typeof requiredVideoStream>;
+    nativeFrames: number;
+  }>,
+  limit: number,
+): EditOperation[] {
+  const count = existing.length + sources.length;
+  if (limit < count) {
+    throw new Error(
+      `Music-video edit ends at frame ${count}, beyond soundtrack frame ${limit}`,
+    );
+  }
+  const slots = splitFrames(limit, count);
+  const items = [
+    ...existing.map((clip, index) => ({
+      clipId: clip.clipId,
+      durationFrames: slots[index]!,
+      existing: clip,
+    })),
+    ...sources.map((source, index) => ({
+      clipId: uuidv7(),
+      durationFrames: slots[existing.length + index]!,
+      source,
+    })),
+  ];
+  const operations: EditOperation[] = [];
+  let temp = limit + 1;
+  for (const item of items) {
+    if ("existing" in item && item.existing) {
+      const clip = item.existing;
+      operations.push({
+        kind: "move-clip",
+        clipId: item.clipId,
+        trackId,
+        timelineStartFrame: temp,
+      });
+      operations.push({
+        kind: "trim-clip",
+        clipId: item.clipId,
+        timelineStartFrame: temp,
+        durationFrames: item.durationFrames,
+        ...(clip.source.kind === "timed"
+          ? { sourceRange: clip.source.range }
+          : {}),
+      });
+      if (clip.source.kind === "timed") {
+        operations.push({
+          kind: "set-clip-speed",
+          clipId: item.clipId,
+          speed: {
+            numerator: Math.max(1, nativeClipFrames(sequence, clip)),
+            denominator: Math.max(1, item.durationFrames),
+          },
+          reverse: clip.reverse,
+          audioPolicy: "mute",
+        });
+      }
+      temp += Math.max(clip.durationFrames, item.durationFrames) + 1;
+      continue;
+    }
+    const source = item.source!;
+    operations.push({
+      ...timedVideoPlacement(
+        trackId,
+        temp,
+        item.durationFrames,
+        source.artifactId,
+        source.stream,
+        source.nativeFrames,
+      ),
+      clipId: item.clipId,
+    });
+    temp += item.durationFrames + 1;
+  }
+  let start = 0;
+  for (const item of items) {
+    operations.push({
+      kind: "move-clip",
+      clipId: item.clipId,
+      trackId,
+      timelineStartFrame: start,
+    });
+    start += item.durationFrames;
+  }
+  requireTimelineLimit(limit, start);
+  return operations;
 }
 
 function rippleMoves(
@@ -571,56 +734,75 @@ async function operationsForRequest(
   }
   if (request.kind === "append_clips") {
     const track = requiredTrack(sequence, request.track_id, "video");
-    let timelineStartFrame = Math.max(
-      0,
-      ...clipsOnTrack(sequence, track.trackId).map(clipEnd),
-    );
-    const operations: EditOperation[] = [];
-    for (const artifactId of request.artifact_ids) {
-      const artifact = engine.artifacts.get(artifactId);
-      if (!artifact.ok) throw new Error(artifact.error.message);
-      if (artifact.value.kind !== "video" && artifact.value.kind !== "final") {
-        throw new Error("Music-video sources must be video or final artifacts");
-      }
-      const streams = engine.streams.list(artifactId);
-      if (!streams.ok) throw new Error(streams.error.message);
-      const stream = streams.value.find((candidate) => candidate.kind === "video");
-      if (!stream) throw new Error(`Video source has no registered stream: ${artifactId}`);
-      const durationFrames = sourceTicksToSequenceFrames(
-        stream.durationTicks,
-        stream.timeBase,
-        sequence.frameRate,
-        "ceil",
-      );
-      requireTimelineLimit(
-        request.timeline_limit_frame,
-        timelineStartFrame + durationFrames,
-      );
-      operations.push({
-        kind: "insert-clip",
-        mode: "insert",
-        placement: {
-          trackId: track.trackId,
+    const existing = clipsOnTrack(sequence, track.trackId);
+    const sources = request.artifact_ids.map((artifactId) => {
+      const stream = requiredVideoStream(engine, artifactId);
+      return {
+        artifactId,
+        stream,
+        nativeFrames: sourceTicksToSequenceFrames(
+          stream.durationTicks,
+          stream.timeBase,
+          sequence.frameRate,
+          "ceil",
+        ),
+      };
+    });
+    if ((request.fit ?? "fill") === "source") {
+      let timelineStartFrame = Math.max(0, ...existing.map(clipEnd));
+      const operations: EditOperation[] = [];
+      for (const source of sources) {
+        requireTimelineLimit(
+          request.timeline_limit_frame,
+          timelineStartFrame + source.nativeFrames,
+        );
+        operations.push(timedVideoPlacement(
+          track.trackId,
           timelineStartFrame,
-          durationFrames,
-          source: {
-            kind: "timed",
-            artifactId,
-            range: {
-              streamId: stream.streamId,
-              objectHash: stream.objectHash,
-              startTick: 0,
-              durationTicks: stream.durationTicks,
-              timeBase: stream.timeBase,
-            },
-          },
-          speed: { numerator: 1, denominator: 1 },
-          reverse: false,
-          audioPolicy: "mute",
-        },
-      });
-      timelineStartFrame += durationFrames;
+          source.nativeFrames,
+          source.artifactId,
+          source.stream,
+          source.nativeFrames,
+        ));
+        timelineStartFrame += source.nativeFrames;
+      }
+      return operations;
     }
+    const laneEnd = Math.max(0, ...existing.map(clipEnd));
+    if (laneEnd > request.timeline_limit_frame) {
+      requireTimelineLimit(request.timeline_limit_frame, laneEnd);
+    }
+    if (laneEnd === request.timeline_limit_frame) {
+      return rebalanceLaneAppend(
+        sequence,
+        track.trackId,
+        existing,
+        sources,
+        request.timeline_limit_frame,
+      );
+    }
+    const remaining = request.timeline_limit_frame - laneEnd;
+    if (remaining < sources.length) {
+      throw new Error(
+        `Music-video edit ends at frame ${laneEnd + sources.length}, beyond soundtrack frame ${request.timeline_limit_frame}`,
+      );
+    }
+    const slots = splitFrames(remaining, sources.length);
+    let timelineStartFrame = laneEnd;
+    const operations: EditOperation[] = [];
+    sources.forEach((source, index) => {
+      const durationFrames = slots[index]!;
+      operations.push(timedVideoPlacement(
+        track.trackId,
+        timelineStartFrame,
+        durationFrames,
+        source.artifactId,
+        source.stream,
+        source.nativeFrames,
+      ));
+      timelineStartFrame += durationFrames;
+    });
+    requireTimelineLimit(request.timeline_limit_frame, timelineStartFrame);
     return operations;
   }
   if (request.kind === "reorder_clips") {

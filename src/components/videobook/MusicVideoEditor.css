@@ -366,39 +366,66 @@
     rgba(255, 255, 255, 0.018);
 }
 
-.music-video-lane > button {
+.music-video-clip {
   position: absolute;
   inset-block: 9px;
   left: var(--music-video-clip-start);
-  width: max(36px, var(--music-video-clip-width));
+  width: max(48px, var(--music-video-clip-width));
   display: grid;
-  align-content: center;
-  justify-items: start;
+  grid-template-rows: minmax(0, 1fr) auto;
   min-width: 0;
-  padding: 7px;
-  overflow: hidden;
-  border-color: rgba(108, 226, 159, 0.24);
+  overflow: visible;
+  border: 1px solid rgba(108, 226, 159, 0.24);
   border-radius: 7px;
   background: linear-gradient(135deg, rgba(47, 149, 93, 0.72), rgba(24, 81, 50, 0.76));
-  text-align: left;
 }
 
-.music-video-lane > button.selected {
+.music-video-clip.selected {
   z-index: 2;
+  width: max(168px, var(--music-video-clip-width));
   border-color: #f7d776;
   box-shadow: 0 0 0 2px rgba(247, 215, 118, 0.24);
 }
 
-.music-video-lane > button span,
-.music-video-lane > button small {
+.music-video-clip-hit {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 7px;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: 6px 6px 0 0 !important;
+  background: transparent !important;
+  text-align: left;
+}
+
+.music-video-clip-hit span,
+.music-video-clip-hit small {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.music-video-lane > button small {
+.music-video-clip-hit small {
   color: rgba(255, 255, 255, 0.68);
+}
+
+.music-video-clip-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0 5px 5px;
+}
+
+.music-video-clip-actions button {
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px !important;
+  padding: 0 !important;
 }
 
 .music-video-playhead,

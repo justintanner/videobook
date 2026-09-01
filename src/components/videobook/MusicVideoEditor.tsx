@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Film,
   Gauge,
+  Maximize2,
   Plus,
   Redo2,
   RefreshCw,
@@ -162,6 +163,45 @@ function currentSpeed(clip: SequenceClip | null): string {
   return `${timed.speed.numerator}/${timed.speed.denominator}`
 }
 
+function sourceFramesAtOneX(clip: SequenceClip, fps: number): number {
+  if (clip.source.kind !== 'timed') return clip.durationFrames
+  const timed = clip as TimedSequenceClip
+  const seconds = timed.source.range.durationTicks
+    * timed.source.range.timeBase.numerator
+    / timed.source.range.timeBase.denominator
+  return Math.max(1, Math.ceil(seconds * fps))
+}
+
+function speedLabel(value: string): string {
+  const [numerator, denominator] = value.split('/').map(Number)
+  if (!numerator || !denominator) return value
+  const rate = numerator / denominator
+  if (Number.isInteger(rate)) return `${rate}×`
+  return `${parseFloat(rate.toFixed(2))}×`
+}
+
+function nextLaneClip(
+  lane: SequenceClip[],
+  clip: SequenceClip,
+): SequenceClip | undefined {
+  const index = lane.findIndex((candidate) => candidate.clipId === clip.clipId)
+  return index >= 0 ? lane[index + 1] : undefined
+}
+
+function clipSlideRoom(
+  clip: SequenceClip,
+  lane: SequenceClip[],
+  limit: number,
+): { left: number; right: number } {
+  const index = lane.findIndex((candidate) => candidate.clipId === clip.clipId)
+  const previous = index > 0 ? lane[index - 1] : undefined
+  const next = index >= 0 ? lane[index + 1] : undefined
+  return {
+    left: clip.timelineStartFrame - (previous ? clipEnd(previous) : 0),
+    right: (next ? next.timelineStartFrame : limit) - clipEnd(clip),
+  }
+}
+
 function sourceHandleFrames(
   clip: SequenceClip,
   asset: MusicVideoAsset | undefined,
@@ -263,7 +303,7 @@ export function MusicVideoEditor({
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null)
   const [trimDraft, setTrimDraft] = useState<TrimDraft | null>(null)
-  const [speedDraft, setSpeedDraft] = useState('1/1')
+  const [speedDraft, setSpeedDraft] = useState<string | null>(null)
   const [working, setWorking] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [timelineZoom, setTimelineZoom] = useState(1)
@@ -329,12 +369,35 @@ export function MusicVideoEditor({
   const handles = selectedClip
     ? sourceHandleFrames(selectedClip, selectedAsset, fps)
     : { before: 0, after: 0 }
+  const selectedIndex = selectedClip
+    ? laneClips.findIndex((clip) => clip.clipId === selectedClip.clipId)
+    : -1
+  const stretchEnd = selectedClip
+    ? (nextLaneClip(laneClips, selectedClip)?.timelineStartFrame ?? durationFrames)
+    : durationFrames
+  const slideRoom = selectedClip
+    ? clipSlideRoom(selectedClip, laneClips, durationFrames)
+    : { left: 0, right: 0 }
+  const canReorderEarlier = selectedIndex > 0
+  const canReorderLater = selectedIndex >= 0 && selectedIndex < laneClips.length - 1
+  const canMoveEarlier = canReorderEarlier || slideRoom.left > 0
+  const canMoveLater = canReorderLater || slideRoom.right > 0
+  const canStretch = Boolean(selectedClip && stretchEnd > clipEnd(selectedClip))
   const trimMinimum = selectedClip
     ? Math.max(0, selectedClip.timelineStartFrame - handles.before)
     : 0
   const trimMaximum = selectedClip
-    ? Math.min(durationFrames, clipEnd(selectedClip) + handles.after)
+    ? Math.min(
+      durationFrames,
+      Math.max(clipEnd(selectedClip) + handles.after, stretchEnd),
+    )
     : durationFrames
+  const selectedSpeed = currentSpeed(selectedClip)
+  const speedOptions: Array<{ label: string; value: string }> = SPEEDS.some(
+    (speed) => speed.value === selectedSpeed,
+  )
+    ? [...SPEEDS]
+    : [{ label: speedLabel(selectedSpeed), value: selectedSpeed }, ...SPEEDS]
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
@@ -406,6 +469,7 @@ export function MusicVideoEditor({
       }])
       setRedoSteps([])
       setTrimDraft(null)
+      setSpeedDraft(null)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
@@ -439,7 +503,7 @@ export function MusicVideoEditor({
       startFrame: clip.timelineStartFrame,
       endFrame: clipEnd(clip),
     })
-    setSpeedDraft(currentSpeed(clip))
+    setSpeedDraft(null)
     seekTo(clip.timelineStartFrame)
   }
 
@@ -474,22 +538,90 @@ export function MusicVideoEditor({
   }
 
   const moveSelected = async (offset: -1 | 1) => {
-    if (!selectedClip) return
+    if (!selectedClip || !mainTrack) return
     const index = laneClips.findIndex((clip) => clip.clipId === selectedClip.clipId)
     const destination = index + offset
-    if (destination < 0 || destination >= laneClips.length) return
-    const order = laneClips.map((clip) => clip.clipId)
-    const [moved] = order.splice(index, 1)
-    if (!moved) return
-    order.splice(destination, 0, moved)
-    await reorder(order)
+    if (destination >= 0 && destination < laneClips.length) {
+      const order = laneClips.map((clip) => clip.clipId)
+      const [moved] = order.splice(index, 1)
+      if (!moved) return
+      order.splice(destination, 0, moved)
+      await reorder(order)
+      return
+    }
+    const room = clipSlideRoom(selectedClip, laneClips, durationFrames)
+    const nudge = Math.max(1, Math.round(fps))
+    const delta = offset < 0
+      ? -Math.min(nudge, room.left)
+      : Math.min(nudge, room.right)
+    if (delta === 0) return
+    await runEdit('Moving clip', {
+      kind: 'move',
+      clip_id: selectedClip.clipId,
+      track_id: mainTrack.trackId,
+      timeline_start_frame: selectedClip.timelineStartFrame + delta,
+    })
+  }
+
+  const stretchSelected = async () => {
+    if (!selectedClip || stretchEnd <= clipEnd(selectedClip)) return
+    const target = stretchEnd - selectedClip.timelineStartFrame
+    if (selectedClip.source.kind !== 'timed') {
+      await runEdit('Stretching clip', {
+        kind: 'trim',
+        clip_id: selectedClip.clipId,
+        timeline_start_frame: selectedClip.timelineStartFrame,
+        duration_frames: target,
+        edge: 'end',
+        ripple: true,
+        timeline_limit_frame: durationFrames,
+      })
+      return
+    }
+    const timed = selectedClip as TimedSequenceClip
+    const native = sourceFramesAtOneX(selectedClip, fps)
+    await runEdit('Stretching clip', {
+      kind: 'speed',
+      clip_id: selectedClip.clipId,
+      numerator: native,
+      denominator: target,
+      reverse: timed.reverse,
+      audio_policy: 'mute',
+      ripple: true,
+      timeline_limit_frame: durationFrames,
+    })
+  }
+
+  const dropOnLane = async (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    if (!mainTrack) return
+    const sourceClipId = event.dataTransfer.getData('text/plain') || draggedClipId
+    const clip = laneClips.find((candidate) => candidate.clipId === sourceClipId)
+    if (!clip) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const frame = Math.round(
+      (event.clientX - bounds.left) / Math.max(1, bounds.width) * durationFrames,
+    )
+    const room = clipSlideRoom(clip, laneClips, durationFrames)
+    const minStart = clip.timelineStartFrame - room.left
+    const maxStart = clip.timelineStartFrame + room.right
+    const nextStart = Math.max(minStart, Math.min(maxStart, frame))
+    setDraggedClipId(null)
+    if (nextStart === clip.timelineStartFrame) return
+    await runEdit('Moving clip', {
+      kind: 'move',
+      clip_id: clip.clipId,
+      track_id: mainTrack.trackId,
+      timeline_start_frame: nextStart,
+    })
   }
 
   const dropClip = async (
-    event: DragEvent<HTMLButtonElement>,
+    event: DragEvent<HTMLElement>,
     targetClipId: string,
   ) => {
     event.preventDefault()
+    event.stopPropagation()
     const sourceClipId = event.dataTransfer.getData('text/plain') || draggedClipId
     if (!sourceClipId || sourceClipId === targetClipId) return
     const order = laneClips.map((clip) => clip.clipId)
@@ -516,6 +648,25 @@ export function MusicVideoEditor({
       startFrame === selectedClip.timelineStartFrame
       && endFrame === clipEnd(selectedClip)
     ) return
+    if (
+      edge === 'end'
+      && selectedClip.source.kind === 'timed'
+      && endFrame > clipEnd(selectedClip) + handles.after
+    ) {
+      const timed = selectedClip as TimedSequenceClip
+      const target = endFrame - selectedClip.timelineStartFrame
+      await runEdit('Stretching clip', {
+        kind: 'speed',
+        clip_id: selectedClip.clipId,
+        numerator: sourceFramesAtOneX(selectedClip, fps),
+        denominator: target,
+        reverse: timed.reverse,
+        audio_policy: 'mute',
+        ripple: true,
+        timeline_limit_frame: durationFrames,
+      })
+      return
+    }
     await runEdit('Trimming clip', {
       kind: 'trim',
       clip_id: selectedClip.clipId,
@@ -556,7 +707,14 @@ export function MusicVideoEditor({
 
   const applySpeed = async () => {
     if (!selectedClip || selectedClip.source.kind !== 'timed') return
-    const speed = SPEEDS.find((candidate) => candidate.value === speedDraft)
+    const value = speedDraft ?? selectedSpeed
+    const preset = SPEEDS.find((candidate) => candidate.value === value)
+    const [numerator, denominator] = value.split('/').map(Number)
+    const speed = preset ?? (
+      numerator && denominator
+        ? { numerator, denominator }
+        : null
+    )
     if (!speed) return
     const timed = selectedClip as TimedSequenceClip
     await runEdit('Retiming clip', {
@@ -847,30 +1005,81 @@ export function MusicVideoEditor({
                   <span key={ratio}>{formatTime(durationFrames * ratio, fps)}</span>
                 ))}
               </div>
-              <div className="music-video-lane">
+              <div
+                className="music-video-lane"
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => void dropOnLane(event)}
+              >
                 {laneClips.map((clip) => {
                   const asset = assetById.get(clip.source.artifactId)
+                  const selected = selectedClip?.clipId === clip.clipId
                   return (
-                    <button
-                      type="button"
-                      className={selectedClip?.clipId === clip.clipId ? 'selected' : ''}
+                    <div
+                      className={selected ? 'music-video-clip selected' : 'music-video-clip'}
                       style={clipStyle(clip, durationFrames)}
                       key={clip.clipId}
-                      draggable={editorEnabled && !working}
                       onClick={() => selectClip(clip)}
-                      onDragStart={(event) => {
-                        event.dataTransfer.effectAllowed = 'move'
-                        event.dataTransfer.setData('text/plain', clip.clipId)
-                        setDraggedClipId(clip.clipId)
+                      onDragOver={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
                       }}
-                      onDragEnd={() => setDraggedClipId(null)}
-                      onDragOver={(event) => event.preventDefault()}
                       onDrop={(event) => void dropClip(event, clip.clipId)}
-                      title={`${asset?.label ?? clip.source.artifactId} · frames ${clip.timelineStartFrame}–${clipEnd(clip)}`}
                     >
-                      <span>{asset?.label ?? clip.source.artifactId.slice(0, 8)}</span>
-                      <small>{clip.durationFrames}f</small>
-                    </button>
+                      <button
+                        type="button"
+                        className="music-video-clip-hit"
+                        draggable={editorEnabled && !working}
+                        onClick={() => selectClip(clip)}
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = 'move'
+                          event.dataTransfer.setData('text/plain', clip.clipId)
+                          setDraggedClipId(clip.clipId)
+                        }}
+                        onDragEnd={() => setDraggedClipId(null)}
+                        title={`${asset?.label ?? clip.source.artifactId} · ${formatTime(clip.durationFrames, fps)} · frames ${clip.timelineStartFrame}–${clipEnd(clip)}`}
+                      >
+                        <span>{asset?.label ?? clip.source.artifactId.slice(0, 8)}</span>
+                        <small>{formatTime(clip.durationFrames, fps)}</small>
+                      </button>
+                      {selected && (
+                        <div className="music-video-clip-actions">
+                          <button
+                            type="button"
+                            aria-label="Move clip earlier"
+                            disabled={Boolean(working) || !canMoveEarlier}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void moveSelected(-1)
+                            }}
+                          >
+                            <ChevronLeft size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="danger-button"
+                            aria-label="Delete clip"
+                            disabled={Boolean(working)}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void deleteSelected()
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Move clip later"
+                            disabled={Boolean(working) || !canMoveLater}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void moveSelected(1)
+                            }}
+                          >
+                            <ChevronRight size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )
                 })}
                 <i className="music-video-playhead" style={{ left: `${playheadFrame / durationFrames * 100}%` }} />
@@ -915,7 +1124,7 @@ export function MusicVideoEditor({
         </section>
 
         <section className="music-video-inspector" aria-label="Selected clip controls">
-          {!selectedClip && <p>Select a main-lane clip to trim, cut, delete, reorder, or retime it.</p>}
+          {!selectedClip && <p>Select a main-lane clip to trim, cut, delete, move, or stretch it.</p>}
           {selectedClip && activeTrim && (
             <>
               <header>
@@ -924,11 +1133,11 @@ export function MusicVideoEditor({
                   <strong>{selectedAsset?.label ?? selectedClip.source.artifactId}</strong>
                 </div>
                 <div>
-                  <button type="button" disabled={Boolean(working) || laneClips[0]?.clipId === selectedClip.clipId} onClick={() => void moveSelected(-1)}>
-                    <ChevronLeft size={15} /> Earlier
+                  <button type="button" disabled={Boolean(working) || !canMoveEarlier} onClick={() => void moveSelected(-1)}>
+                    <ChevronLeft size={15} /> Move earlier
                   </button>
-                  <button type="button" disabled={Boolean(working) || laneClips[laneClips.length - 1]?.clipId === selectedClip.clipId} onClick={() => void moveSelected(1)}>
-                    Later <ChevronRight size={15} />
+                  <button type="button" disabled={Boolean(working) || !canMoveLater} onClick={() => void moveSelected(1)}>
+                    Move later <ChevronRight size={15} />
                   </button>
                 </div>
               </header>
@@ -1005,12 +1214,15 @@ export function MusicVideoEditor({
                   <Scissors size={15} /> Cut at playhead
                 </button>
                 <button className="danger-button" type="button" disabled={Boolean(working)} onClick={() => void deleteSelected()}>
-                  <Trash2 size={15} /> Ripple-delete
+                  <Trash2 size={15} /> Delete clip
+                </button>
+                <button type="button" disabled={Boolean(working) || !canStretch} onClick={() => void stretchSelected()}>
+                  <Maximize2 size={15} /> Stretch to fill
                 </button>
                 <label>
                   <Gauge size={15} /> Speed
-                  <select value={speedDraft} disabled={Boolean(working) || selectedClip.source.kind !== 'timed'} onChange={(event) => setSpeedDraft(event.target.value)}>
-                    {SPEEDS.map((speed) => <option key={speed.value} value={speed.value}>{speed.label}</option>)}
+                  <select value={speedDraft ?? selectedSpeed} disabled={Boolean(working) || selectedClip.source.kind !== 'timed'} onChange={(event) => setSpeedDraft(event.target.value)}>
+                    {speedOptions.map((speed) => <option key={speed.value} value={speed.value}>{speed.label}</option>)}
                   </select>
                 </label>
                 <button type="button" disabled={Boolean(working) || selectedClip.source.kind !== 'timed'} onClick={() => void applySpeed()}>

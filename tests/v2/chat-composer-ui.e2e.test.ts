@@ -3043,9 +3043,19 @@ describe('chat composer browser flow', () => {
       && record(call.arguments.request)?.kind === 'append_clips').length, {
       timeout: 30_000,
     }).toBe(1)
-    const lane = editor.locator('.music-video-lane > button')
+    const lane = editor.locator('.music-video-clip')
     await expect.poll(async () => await lane.count(), { timeout: 30_000 }).toBe(1)
     await lane.first().click()
+    await expect.poll(async () =>
+      await editor.getByRole('button', { name: 'Delete clip' }).first().isEnabled())
+      .toBe(true)
+    await editor.getByRole('button', { name: 'Move later' }).first()
+      .waitFor({ state: 'visible' })
+    await editor.getByRole('button', { name: 'Stretch to fill' })
+      .waitFor({ state: 'visible' })
+    const clipBox = await lane.first().boundingBox()
+    const laneBox = await editor.locator('.music-video-lane').boundingBox()
+    expect((clipBox?.width ?? 0) / Math.max(1, laneBox?.width ?? 1)).toBeGreaterThan(0.8)
     const waveform = editor.getByRole('slider', { name: 'Soundtrack waveform playhead' })
     const waveformBox = await waveform.boundingBox()
     if (!waveformBox) throw new Error('Could not measure soundtrack waveform')
@@ -3067,19 +3077,19 @@ describe('chat composer browser flow', () => {
       timeout: 30_000,
     }).toBe(1)
     await expect.poll(
-      async () => await lane.first().getAttribute('draggable'),
+      async () => await lane.first().locator('.music-video-clip-hit').getAttribute('draggable'),
       { timeout: 30_000 },
     )
       .toBe('true')
     await lane.nth(1).click()
-    await editor.getByRole('button', { name: 'Earlier' }).click()
+    await editor.locator('.music-video-inspector').getByRole('button', { name: 'Move earlier' }).click()
     await expect.poll(() => observedCalls.filter((call) =>
       call.name === 'plan_sequence_edit'
       && record(call.arguments.request)?.kind === 'reorder_clips').length, {
       timeout: 30_000,
     }).toBe(1)
     await expect.poll(
-      async () => await lane.first().getAttribute('draggable'),
+      async () => await lane.first().locator('.music-video-clip-hit').getAttribute('draggable'),
       { timeout: 30_000 },
     ).toBe('true')
     await lane.first().click()
@@ -3101,15 +3111,15 @@ describe('chat composer browser flow', () => {
       call.name === 'restore_edit_action').length, { timeout: 30_000 })
       .toBe(restoreCallsBefore + 2)
     await expect.poll(
-      async () => await lane.first().getAttribute('draggable'),
+      async () => await lane.first().locator('.music-video-clip-hit').getAttribute('draggable'),
       { timeout: 30_000 },
     ).toBe('true')
     await lane.first().click()
-    const rippleDelete = editor.getByRole('button', { name: 'Ripple-delete' })
-    await expect.poll(async () => await rippleDelete.isEnabled(), {
+    const deleteClip = editor.locator('.music-video-inspector').getByRole('button', { name: 'Delete clip' })
+    await expect.poll(async () => await deleteClip.isEnabled(), {
       timeout: 30_000,
     }).toBe(true)
-    await rippleDelete.click()
+    await deleteClip.click()
     await expect.poll(() => observedCalls.filter((call) =>
       call.name === 'plan_sequence_edit'
       && record(call.arguments.request)?.kind === 'delete').length, {

@@ -219,6 +219,7 @@ describe('music-video canonical sequence plans', () => {
       track_id: videoTrack.trackId,
       artifact_ids: [secondVideo.artifactId, firstVideo.artifactId],
       timeline_limit_frame: 300,
+      fit: 'source',
     })
     const lane = sequence.clips
       .filter((clip) => clip.trackId === videoTrack.trackId)
@@ -258,6 +259,7 @@ describe('music-video canonical sequence plans', () => {
       track_id: track.trackId,
       artifact_ids: [first.artifactId, second.artifactId, third.artifactId],
       timeline_limit_frame: 600,
+      fit: 'source',
     })
     sequence = await commitPlan(engine, {
       kind: 'gap',
@@ -390,5 +392,80 @@ describe('music-video canonical sequence plans', () => {
       artifact_ids: [video.artifactId],
       timeline_limit_frame: 600,
     })).rejects.toThrow('No editable video track is available')
+  })
+
+  it('fills remaining soundtrack time when appending music-video clips', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-music-video-fill-'))
+    const engine = createEngine({ rootDir, initialBookName: 'music-video-fill' })
+    activeEngine = engine
+    const first = await createTimedArtifact(engine, 'video', 'first', 90)
+    const second = await createTimedArtifact(engine, 'video', 'second', 60)
+    let sequence = engine.sequences.getPrimary()
+    const track = sequence.tracks.find((candidate) => candidate.kind === 'video')!
+    sequence = await commitPlan(engine, {
+      kind: 'append_clips',
+      track_id: track.trackId,
+      artifact_ids: [first.artifactId, second.artifactId],
+      timeline_limit_frame: 300,
+    })
+    const lane = sequence.clips
+      .filter((clip) => clip.trackId === track.trackId)
+      .sort((left, right) => left.timelineStartFrame - right.timelineStartFrame)
+    expect(lane).toHaveLength(2)
+    expect(lane[0]).toMatchObject({
+      timelineStartFrame: 0,
+      durationFrames: 150,
+      source: { artifactId: first.artifactId },
+      speed: { numerator: 3, denominator: 5 },
+    })
+    expect(lane[1]).toMatchObject({
+      timelineStartFrame: 150,
+      durationFrames: 150,
+      source: { artifactId: second.artifactId },
+      speed: { numerator: 2, denominator: 5 },
+    })
+  })
+
+  it('rebalances a full music-video lane when more clips are added', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-music-video-rebalance-'))
+    const engine = createEngine({ rootDir, initialBookName: 'music-video-rebalance' })
+    activeEngine = engine
+    const first = await createTimedArtifact(engine, 'video', 'first', 90)
+    const second = await createTimedArtifact(engine, 'video', 'second', 60)
+    let sequence = engine.sequences.getPrimary()
+    const track = sequence.tracks.find((candidate) => candidate.kind === 'video')!
+    sequence = await commitPlan(engine, {
+      kind: 'append_clips',
+      track_id: track.trackId,
+      artifact_ids: [first.artifactId],
+      timeline_limit_frame: 300,
+    })
+    expect(sequence.clips.find((clip) => clip.trackId === track.trackId)).toMatchObject({
+      timelineStartFrame: 0,
+      durationFrames: 300,
+      speed: { numerator: 3, denominator: 10 },
+    })
+    sequence = await commitPlan(engine, {
+      kind: 'append_clips',
+      track_id: track.trackId,
+      artifact_ids: [second.artifactId],
+      timeline_limit_frame: 300,
+    })
+    const lane = sequence.clips
+      .filter((clip) => clip.trackId === track.trackId)
+      .sort((left, right) => left.timelineStartFrame - right.timelineStartFrame)
+    expect(lane).toHaveLength(2)
+    expect(lane[0]).toMatchObject({
+      timelineStartFrame: 0,
+      durationFrames: 150,
+      source: { artifactId: first.artifactId },
+      speed: { numerator: 3, denominator: 5 },
+    })
+    expect(lane[1]).toMatchObject({
+      timelineStartFrame: 150,
+      durationFrames: 150,
+      source: { artifactId: second.artifactId },
+      speed: { numerator: 2, denominator: 5 },
+    })
   })
 })
