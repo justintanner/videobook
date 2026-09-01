@@ -111,7 +111,7 @@ describe('v2 book manager', () => {
     await books.close()
 
     const catalog = new DatabaseSync(catalogPath)
-    catalog.prepare('UPDATE engine_schema SET version=22 WHERE singleton=1').run()
+    catalog.prepare('UPDATE engine_schema SET version=21 WHERE singleton=1').run()
     catalog.close()
 
     books = new BookManager({
