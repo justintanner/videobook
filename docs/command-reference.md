@@ -293,7 +293,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.
 
-## Slash commands (124 static commands)
+## Slash commands (125 static commands)
 
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
@@ -358,6 +358,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/keywords` — Animate transcript keywords in face-safe open space, or omit words for automatic selection; MCP: `animate_keywords`
 - `/landscape` — Show landscape crop (1920x1080); UI: `viewer_set_landscape`
 - `/make-cover-song` (aliases: `/replicate-song`) — Generate a rhythm-and-style-guided drums-and-strings cover with the source media's exact duration; MCP: `make_cover_song`
+- `/music-video` — Open the full-screen music-video editor with a required master soundtrack; UI: `open_music_video`
 - `/notebook` — Open a project Notebook — a workflow of prompt, image, and video steps. Opens the existing notebook when present; creates 'scratch' by default.; UI: `open_notebook`
 - `/notebooks` — List first-class notebooks in the current project; MCP: `list_notebooks`
 - `/open` — Open asset in viewer; UI: `open_asset`

@@ -107,6 +107,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/settings");
     expect(commandNames).toContain("/files");
     expect(commandNames).toContain("/notebook");
+    expect(commandNames).toContain("/music-video");
     expect(commandNames).toContain("/notebooks");
     expect(commandNames).toContain("/save");
     expect(commandNames).toContain("/run");
@@ -301,6 +302,18 @@ describe("slash_commands tool", () => {
       { name: "name", type: "string", required: false, description: "Notebook name. Omit to open the current/default notebook, or create 'scratch' if none exist." },
     ]);
     expect(notebook.category).toBe("action");
+
+    const musicVideo = commands.find((c) => c.command === "/music-video")!;
+    expect(musicVideo.uiAction).toBe("open_music_video");
+    expect(musicVideo.exposure).toBe("ui");
+    expect(musicVideo.params).toEqual([
+      {
+        name: "audio_ref",
+        type: "string",
+        required: true,
+        description: "Ready audio artifact or notebook address used as the master soundtrack",
+      },
+    ]);
 
     const save = commands.find((c) => c.command === "/save")!;
     expect(save.uiAction).toBe("save_notebook");

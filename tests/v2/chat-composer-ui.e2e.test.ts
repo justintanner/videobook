@@ -184,6 +184,8 @@ describe('chat composer browser flow', () => {
   let notebookId = ''
   let videoCellId = ''
   let videoArtifactId = ''
+  let musicAudioCellId = ''
+  let musicAudioArtifactId = ''
   let imageCellId = ''
   let generationCellId = ''
   let outputVideoCellId = ''
@@ -320,6 +322,47 @@ describe('chat composer browser flow', () => {
       slot: { row: 0, column: 0 },
       output_artifact_id: uploadedVideoArtifactId,
       inputs: { durationSeconds: 3 },
+    })
+    const musicAudioPath = join(rootDir, 'music-video-master.wav')
+    await execFileAsync(FFMPEG, [
+      '-y',
+      '-f', 'lavfi',
+      '-i', 'sine=frequency=440:sample_rate=48000:duration=8',
+      '-c:a', 'pcm_s16le',
+      musicAudioPath,
+    ])
+    const uploadedAudio = record(resultValue(await client.callTool({
+      name: 'upload_file',
+      arguments: {
+        book_id: bookId,
+        filename: 'music-video-master.wav',
+        data: (await readFile(musicAudioPath)).toString('base64'),
+      },
+    })))
+    const uploadedAudioId = typeof uploadedAudio?.assetId === 'string'
+      ? uploadedAudio.assetId
+      : ''
+    const audioAssetsValue = record(resultValue(await client.callTool({
+      name: 'list_assets',
+      arguments: { book_id: bookId, sort: 'newest' },
+    })))
+    const uploadedAudioAsset = (Array.isArray(audioAssetsValue?.assets)
+      ? audioAssetsValue.assets
+      : [])
+      .map(record)
+      .find((asset) => asset?.id === uploadedAudioId)
+    musicAudioArtifactId = typeof uploadedAudioAsset?.artifact_id === 'string'
+      ? uploadedAudioAsset.artifact_id
+      : ''
+    if (!musicAudioArtifactId || typeof uploadedAudioAsset?.media_url !== 'string') {
+      throw new Error('Could not create music-video audio fixture asset')
+    }
+    musicAudioCellId = await createCell({
+      type: 'audio',
+      label: 'aud-music-master',
+      slot: { row: 0, column: 1 },
+      output_artifact_id: musicAudioArtifactId,
+      inputs: { durationSeconds: 8 },
     })
     imageCellId = await createCell({
       type: 'image',
@@ -2943,4 +2986,143 @@ describe('chat composer browser flow', () => {
       .waitFor({ state: 'visible', timeout: 10_000 })
     notebookDirty = true
   }, 60_000)
+
+  it('edits a music video against a full-width master waveform', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    expect(musicAudioCellId).toBeTruthy()
+    expect(musicAudioArtifactId).toBeTruthy()
+    await openApp()
+    observedCalls.length = 0
+    const input = page.getByLabel('Videobook command input')
+    await input.fill('/music-video @b1')
+    await page.getByLabel('Send command').click()
+    const editor = page.getByRole('dialog', { name: 'Music video editor' })
+    await editor.waitFor({ state: 'visible', timeout: 30_000 })
+    const editorBox = await editor.boundingBox()
+    expect(editorBox?.x).toBe(0)
+    expect(editorBox?.width).toBe(1440)
+    const setupCard = editor.locator('.music-video-setup-card')
+    await expect.poll(async () => await setupCard.getAttribute('data-status'))
+      .not.toBe('loading')
+    if (await editor.getByRole('button', { name: 'Create soundtrack track' }).isVisible()) {
+      await editor.getByRole('button', { name: 'Create soundtrack track' }).click()
+    }
+    await expect.poll(async () => [
+      await setupCard.getAttribute('data-status'),
+      await setupCard.textContent(),
+      observedCalls.filter((call) => call.name.includes('sequence')).map((call) => call.name).join(','),
+    ].join(': '), { timeout: 30_000 }).toMatch(/^ready:/u)
+    await editor.getByRole('button', { name: 'Apply soundtrack' })
+      .waitFor({ state: 'visible', timeout: 30_000 })
+    const setupCall = observedCalls.find((call) =>
+      call.name === 'plan_sequence_edit'
+      && record(call.arguments.request)?.kind === 'music_video_setup')
+    expect(setupCall?.arguments.expected_revision).toEqual(expect.any(String))
+    expect(setupCall?.arguments.request).toMatchObject({
+      kind: 'music_video_setup',
+      audio_artifact_id: musicAudioArtifactId,
+    })
+    await editor.getByRole('button', { name: 'Apply soundtrack' }).click()
+    await editor.getByText('Soundtrack applied').waitFor({ state: 'visible' })
+    if (await editor.getByRole('button', { name: 'Create main video track' }).isVisible()) {
+      await editor.getByRole('button', { name: 'Create main video track' }).click()
+    }
+    if (await editor.getByText('Waveform unavailable').isVisible()) {
+      await editor.getByRole('button', { name: 'Refresh waveform' }).click()
+    }
+    await editor.locator('.music-video-waveform svg path')
+      .waitFor({ state: 'visible', timeout: 30_000 })
+    const source = editor.locator('.music-video-source-list button')
+      .filter({ hasText: 'split-source' })
+      .first()
+    await source.click()
+    await editor.getByRole('button', { name: 'Add selected' }).click()
+    await expect.poll(() => observedCalls.filter((call) =>
+      call.name === 'plan_sequence_edit'
+      && record(call.arguments.request)?.kind === 'append_clips').length, {
+      timeout: 30_000,
+    }).toBe(1)
+    const lane = editor.locator('.music-video-lane > button')
+    await expect.poll(async () => await lane.count(), { timeout: 30_000 }).toBe(1)
+    await lane.first().click()
+    const waveform = editor.getByRole('slider', { name: 'Soundtrack waveform playhead' })
+    const waveformBox = await waveform.boundingBox()
+    if (!waveformBox) throw new Error('Could not measure soundtrack waveform')
+    await page.mouse.click(
+      waveformBox.x + waveformBox.width * 0.18,
+      waveformBox.y + waveformBox.height / 2,
+    )
+    await editor.getByRole('button', { name: 'Cut at playhead' }).click()
+    await expect.poll(async () => await lane.count(), { timeout: 30_000 }).toBe(2)
+    const trimTarget = lane.first()
+    await trimTarget.click()
+    const trimOut = editor.locator('.music-video-trim-controls input').nth(1)
+    const trimOutValue = Number(await trimOut.inputValue())
+    await trimOut.fill(String(trimOutValue - 2))
+    await trimOut.dispatchEvent('pointerup')
+    await expect.poll(() => observedCalls.filter((call) =>
+      call.name === 'plan_sequence_edit'
+      && record(call.arguments.request)?.kind === 'trim').length, {
+      timeout: 30_000,
+    }).toBe(1)
+    await expect.poll(
+      async () => await lane.first().getAttribute('draggable'),
+      { timeout: 30_000 },
+    )
+      .toBe('true')
+    await lane.nth(1).click()
+    await editor.getByRole('button', { name: 'Earlier' }).click()
+    await expect.poll(() => observedCalls.filter((call) =>
+      call.name === 'plan_sequence_edit'
+      && record(call.arguments.request)?.kind === 'reorder_clips').length, {
+      timeout: 30_000,
+    }).toBe(1)
+    await expect.poll(
+      async () => await lane.first().getAttribute('draggable'),
+      { timeout: 30_000 },
+    ).toBe('true')
+    await lane.first().click()
+    await editor.getByRole('combobox').selectOption('2/1')
+    await editor.getByRole('button', { name: 'Apply speed' }).click()
+    await expect.poll(() => observedCalls.filter((call) =>
+      call.name === 'plan_sequence_edit'
+      && record(call.arguments.request)?.kind === 'speed').length, {
+      timeout: 30_000,
+    }).toBe(1)
+    const restoreCallsBefore = observedCalls.filter((call) =>
+      call.name === 'restore_edit_action').length
+    await editor.getByRole('button', { name: 'Undo' }).click()
+    await expect.poll(() => observedCalls.filter((call) =>
+      call.name === 'restore_edit_action').length, { timeout: 30_000 })
+      .toBe(restoreCallsBefore + 1)
+    await editor.getByRole('button', { name: 'Redo' }).click()
+    await expect.poll(() => observedCalls.filter((call) =>
+      call.name === 'restore_edit_action').length, { timeout: 30_000 })
+      .toBe(restoreCallsBefore + 2)
+    await expect.poll(
+      async () => await lane.first().getAttribute('draggable'),
+      { timeout: 30_000 },
+    ).toBe('true')
+    await lane.first().click()
+    const rippleDelete = editor.getByRole('button', { name: 'Ripple-delete' })
+    await expect.poll(async () => await rippleDelete.isEnabled(), {
+      timeout: 30_000,
+    }).toBe(true)
+    await rippleDelete.click()
+    await expect.poll(() => observedCalls.filter((call) =>
+      call.name === 'plan_sequence_edit'
+      && record(call.arguments.request)?.kind === 'delete').length, {
+      timeout: 30_000,
+    }).toBe(1)
+    await page.setViewportSize({ width: 600, height: 900 })
+    const sourcePanelBox = await editor.locator('.music-video-source-panel').boundingBox()
+    const timelinePanelBox = await editor.locator('.music-video-timeline-panel').boundingBox()
+    expect(Math.abs((sourcePanelBox?.x ?? 0) - (timelinePanelBox?.x ?? 1))).toBeLessThan(2)
+    await page.keyboard.press('Escape')
+    await editor.waitFor({ state: 'detached' })
+    await expect.poll(async () => await page!.evaluate(() =>
+      document.activeElement?.getAttribute('aria-label')))
+      .toBe('Videobook command input')
+    notebookDirty = true
+  }, 120_000)
 })

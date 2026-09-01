@@ -544,6 +544,17 @@ describe("slash command parse/normalize/dispatch", () => {
       const args = simulateParse("/open", "@hero-intro");
       expect(args.asset_id).toBe("hero-intro");
     });
+
+    it("/music-video requires and parses an audio reference", () => {
+      const cmd = findCommand("/music-video");
+      expect(cmd.uiAction).toBe("open_music_video");
+      expect(cmd.params).toEqual([
+        expect.objectContaining({ name: "audio_ref", required: true }),
+      ]);
+      expect(simulateParse("/music-video", "@aud-master")).toEqual({
+        audio_ref: "aud-master",
+      });
+    });
   });
 
   // -----------------------------------------------------------------------

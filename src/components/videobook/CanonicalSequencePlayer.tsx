@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react'
 import { Player, type PlayerRef } from '@remotion/player'
 import type { Sequence } from 'videobook-engine'
 import {
@@ -24,6 +32,10 @@ interface CanonicalSequencePlayerProps {
   onKeyboardAction: (action: TimelineKeyboardAction, frame: number) => void
 }
 
+export interface CanonicalSequencePlayerHandle {
+  seekTo: (frame: number) => void
+}
+
 function sequenceDuration(sequence: Sequence): number {
   return Math.max(
     1,
@@ -34,12 +46,15 @@ function sequenceDuration(sequence: Sequence): number {
   )
 }
 
-export function CanonicalSequencePlayer({
+export const CanonicalSequencePlayer = forwardRef<
+  CanonicalSequencePlayerHandle,
+  CanonicalSequencePlayerProps
+>(function CanonicalSequencePlayer({
   sequence,
   assets,
   onFrameUpdate,
   onKeyboardAction,
-}: CanonicalSequencePlayerProps) {
+}, ref) {
   const playerRef = useRef<PlayerRef>(null)
   const [frame, setFrame] = useState(0)
   const fps = sequence.frameRate.numerator / sequence.frameRate.denominator
@@ -48,6 +63,15 @@ export function CanonicalSequencePlayer({
     () => ({ sequence, assets }),
     [assets, sequence],
   )
+
+  useImperativeHandle(ref, () => ({
+    seekTo: (nextFrame) => {
+      playerRef.current?.seekTo(Math.max(
+        0,
+        Math.min(durationInFrames - 1, Math.round(nextFrame)),
+      ))
+    },
+  }), [durationInFrames])
 
   useEffect(() => {
     const player = playerRef.current
@@ -132,4 +156,4 @@ export function CanonicalSequencePlayer({
       </footer>
     </section>
   )
-}
+})

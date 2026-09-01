@@ -5,11 +5,13 @@ import type {
   EditOperation,
   Engine,
   Sequence,
+  SequenceClip,
   SourceSurface,
 } from "videobook-engine";
 import {
   findPrimaryMediaFile,
   MVP_CONTRACT_VERSION,
+  sequenceFramesToSourceTicks,
   sourceTicksToSequenceFrames,
 } from "videobook-engine";
 import { v7 as uuidv7 } from "uuid";
@@ -46,6 +48,9 @@ const editRequestSchema = z.discriminatedUnion("kind", [
     clip_id: z.string().uuid(),
     timeline_start_frame: z.number().int().nonnegative(),
     duration_frames: z.number().int().positive(),
+    edge: z.enum(["start", "end"]).optional(),
+    ripple: z.boolean().optional(),
+    timeline_limit_frame: z.number().int().positive().optional(),
   }),
   z.object({
     kind: z.literal("volume"),
@@ -108,6 +113,8 @@ const editRequestSchema = z.discriminatedUnion("kind", [
     denominator: z.number().int().positive(),
     reverse: z.boolean(),
     audio_policy: z.enum(["preserve-pitch", "resample", "mute"]),
+    ripple: z.boolean().optional(),
+    timeline_limit_frame: z.number().int().positive().optional(),
   }),
   z.object({
     kind: z.literal("transition"),
@@ -126,6 +133,23 @@ const editRequestSchema = z.discriminatedUnion("kind", [
     text: z.string().min(1),
     style_id: z.enum(["clean", "bold", "high-contrast"]),
     speaker: z.string().min(1).optional(),
+  }),
+  z.object({
+    kind: z.literal("music_video_setup"),
+    audio_artifact_id: z.string().uuid(),
+    audio_track_id: z.string().uuid(),
+  }),
+  z.object({
+    kind: z.literal("append_clips"),
+    track_id: z.string().uuid(),
+    artifact_ids: z.array(z.string().uuid()).min(1).max(20),
+    timeline_limit_frame: z.number().int().positive(),
+  }),
+  z.object({
+    kind: z.literal("reorder_clips"),
+    track_id: z.string().uuid(),
+    clip_ids: z.array(z.string().uuid()).min(1).max(500),
+    timeline_limit_frame: z.number().int().positive(),
   }),
 ]);
 const generationPlanSchema = z.object({
@@ -158,11 +182,11 @@ function failure(message: string): ToolResult {
   return { isError: true, content: [{ type: "text", text: message }] };
 }
 
-function requiredTrack(
+function requiredTrack<Kind extends "video" | "audio">(
   sequence: Sequence,
   trackId: string | undefined,
-  kind: "video" | "audio",
-) {
+  kind: Kind,
+): Extract<Sequence["tracks"][number], { kind: Kind }> {
   const track = trackId
     ? sequence.tracks.find((candidate) => candidate.trackId === trackId)
     : sequence.tracks.find((candidate) =>
@@ -170,7 +194,366 @@ function requiredTrack(
   if (!track || track.kind !== kind || !track.enabled || track.locked) {
     throw new Error(`No editable ${kind} track is available`);
   }
-  return track;
+  return track as Extract<Sequence["tracks"][number], { kind: Kind }>;
+}
+
+function clipEnd(clip: SequenceClip): number {
+  return clip.timelineStartFrame + clip.durationFrames;
+}
+
+function isTimedClip(
+  clip: SequenceClip,
+): clip is Extract<SequenceClip, { source: { kind: "timed" } }> {
+  return clip.source.kind === "timed";
+}
+
+function clipsOnTrack(sequence: Sequence, trackId: string): SequenceClip[] {
+  return sequence.clips
+    .filter((clip) => clip.trackId === trackId)
+    .sort((left, right) =>
+      left.timelineStartFrame - right.timelineStartFrame
+      || left.clipId.localeCompare(right.clipId));
+}
+
+function timelineFramesForSource(
+  ticks: number,
+  timeBase: { numerator: number; denominator: number },
+  frameRate: { numerator: number; denominator: number },
+  speed: { numerator: number; denominator: number },
+): number {
+  const frames = ticks
+    * timeBase.numerator
+    * frameRate.numerator
+    * speed.denominator
+    / timeBase.denominator
+    / frameRate.denominator
+    / speed.numerator;
+  return Math.max(1, Math.ceil(frames));
+}
+
+function sourceTicksForTimeline(
+  frames: number,
+  sequence: Sequence,
+  clip: Extract<SequenceClip, { source: { kind: "timed" } }>,
+): number {
+  return sequenceFramesToSourceTicks(
+    frames * clip.speed.numerator,
+    sequence.frameRate,
+    {
+      numerator: clip.source.range.timeBase.numerator * clip.speed.denominator,
+      denominator: clip.source.range.timeBase.denominator,
+    },
+    "nearest",
+  );
+}
+
+function shiftedTrackEnd(
+  sequence: Sequence,
+  trackId: string,
+  selectedClipId: string,
+  selectedStart: number,
+  selectedDuration: number,
+  shiftFromFrame: number,
+  deltaFrames: number,
+): number {
+  return Math.max(
+    selectedStart + selectedDuration,
+    ...clipsOnTrack(sequence, trackId)
+      .filter((clip) => clip.clipId !== selectedClipId)
+      .map((clip) => clipEnd(clip) + (
+        clip.timelineStartFrame >= shiftFromFrame ? deltaFrames : 0
+      )),
+  );
+}
+
+function requireTimelineLimit(limit: number | undefined, endFrame: number): void {
+  if (limit !== undefined && endFrame > limit) {
+    throw new Error(`Music-video edit ends at frame ${endFrame}, beyond soundtrack frame ${limit}`);
+  }
+}
+
+function rippleMoves(
+  sequence: Sequence,
+  clip: SequenceClip,
+  deltaFrames: number,
+): EditOperation[] {
+  if (deltaFrames === 0) return [];
+  const later = clipsOnTrack(sequence, clip.trackId)
+    .filter((candidate) =>
+      candidate.clipId !== clip.clipId
+      && candidate.timelineStartFrame >= clipEnd(clip))
+    .sort((left, right) => deltaFrames > 0
+      ? right.timelineStartFrame - left.timelineStartFrame
+      : left.timelineStartFrame - right.timelineStartFrame);
+  return later.map((candidate) => ({
+    kind: "move-clip" as const,
+    clipId: candidate.clipId,
+    trackId: candidate.trackId,
+    timelineStartFrame: candidate.timelineStartFrame + deltaFrames,
+  }));
+}
+
+function clipAudio(clip: SequenceClip, muted: boolean): ClipAudio {
+  return {
+    gainDb: clip.audio?.gainDb ?? 0,
+    muted,
+    fadeInFrames: clip.audio?.fadeInFrames ?? 0,
+    fadeOutFrames: clip.audio?.fadeOutFrames ?? 0,
+  };
+}
+
+function audioSetupOperations(
+  engine: Engine,
+  sequence: Sequence,
+  audioArtifactId: string,
+  audioTrackId: string,
+): EditOperation[] {
+  const artifact = engine.artifacts.get(audioArtifactId);
+  if (!artifact.ok) throw new Error(artifact.error.message);
+  if (artifact.value.kind !== "audio") {
+    throw new Error("Music-video setup requires an audio artifact");
+  }
+  const track = requiredTrack(sequence, audioTrackId, "audio");
+  if (track.muted) throw new Error("The soundtrack track is muted");
+  if (sequence.tracks.some((candidate) =>
+    candidate.kind === "audio"
+    && candidate.trackId !== track.trackId
+    && candidate.solo)) {
+    throw new Error("Disable solo on other audio tracks before applying the soundtrack");
+  }
+  const streams = engine.streams.list(audioArtifactId);
+  if (!streams.ok) throw new Error(streams.error.message);
+  const stream = streams.value.find((candidate) => candidate.kind === "audio");
+  if (!stream) throw new Error("The soundtrack has no registered audio stream");
+  const durationFrames = sourceTicksToSequenceFrames(
+    stream.durationTicks,
+    stream.timeBase,
+    sequence.frameRate,
+    "ceil",
+  );
+  const destinationClips = clipsOnTrack(sequence, track.trackId);
+  const existingMaster = destinationClips.length === 1
+    && destinationClips[0]?.source.kind === "timed"
+    && destinationClips[0].source.artifactId === audioArtifactId
+    && destinationClips[0].timelineStartFrame === 0
+    ? destinationClips[0] as Extract<SequenceClip, { source: { kind: "timed" } }>
+    : null;
+  if (destinationClips.length > 0 && !existingMaster) {
+    throw new Error("Choose an empty audio track for the master soundtrack");
+  }
+  const operations: EditOperation[] = existingMaster
+    ? [
+        {
+          kind: "trim-clip",
+          clipId: existingMaster.clipId,
+          timelineStartFrame: 0,
+          durationFrames,
+          sourceRange: {
+            streamId: stream.streamId,
+            objectHash: stream.objectHash,
+            startTick: 0,
+            durationTicks: stream.durationTicks,
+            timeBase: stream.timeBase,
+          },
+        },
+        {
+          kind: "set-clip-speed",
+          clipId: existingMaster.clipId,
+          speed: { numerator: 1, denominator: 1 },
+          reverse: false,
+          audioPolicy: "preserve-pitch",
+        },
+        {
+          kind: "set-clip-audio",
+          clipId: existingMaster.clipId,
+          audio: clipAudio(existingMaster, false),
+        },
+      ]
+    : [{
+        kind: "insert-clip",
+        mode: "insert",
+        placement: {
+          trackId: track.trackId,
+          timelineStartFrame: 0,
+          durationFrames,
+          source: {
+            kind: "timed",
+            artifactId: audioArtifactId,
+            range: {
+              streamId: stream.streamId,
+              objectHash: stream.objectHash,
+              startTick: 0,
+              durationTicks: stream.durationTicks,
+              timeBase: stream.timeBase,
+            },
+          },
+          speed: { numerator: 1, denominator: 1 },
+          reverse: false,
+          audioPolicy: "preserve-pitch",
+          audio: {
+            gainDb: 0,
+            muted: false,
+            fadeInFrames: 0,
+            fadeOutFrames: 0,
+          },
+        },
+      }];
+  for (const clip of sequence.clips) {
+    if (clip.clipId === existingMaster?.clipId || !clip.enabled) continue;
+    const clipTrack = sequence.tracks.find((candidate) =>
+      candidate.trackId === clip.trackId);
+    if (!clipTrack?.enabled) continue;
+    if (clipTrack.kind === "audio") {
+      if (clipTrack.muted || clip.audio?.muted) continue;
+      if (clipTrack.locked) {
+        throw new Error(`Unlock audio track ${clipTrack.name} before applying the soundtrack`);
+      }
+      operations.push({
+        kind: "set-clip-audio",
+        clipId: clip.clipId,
+        audio: clipAudio(clip, true),
+      });
+      continue;
+    }
+    if (
+      clipTrack.kind === "video"
+      && isTimedClip(clip)
+      && clip.audioPolicy !== "mute"
+    ) {
+      if (clipTrack.locked) {
+        throw new Error(`Unlock video track ${clipTrack.name} before muting embedded audio`);
+      }
+      operations.push({
+        kind: "set-clip-speed",
+        clipId: clip.clipId,
+        speed: clip.speed,
+        reverse: clip.reverse,
+        audioPolicy: "mute",
+      });
+    }
+  }
+  return operations;
+}
+
+function rippleTrimOperations(
+  engine: Engine,
+  sequence: Sequence,
+  request: Extract<EditRequest, { kind: "trim" }>,
+  clip: SequenceClip,
+): EditOperation[] {
+  if (!request.edge) throw new Error("Ripple trim requires a start or end edge");
+  if (isTimedClip(clip) && clip.reverse) {
+    throw new Error("Ripple trim is unavailable for reversed clips");
+  }
+  const oldEnd = clipEnd(clip);
+  const newEnd = request.timeline_start_frame + request.duration_frames;
+  if (request.edge === "start" && newEnd !== oldEnd) {
+    throw new Error("A start-edge trim must preserve the clip end frame");
+  }
+  if (
+    request.edge === "end"
+    && request.timeline_start_frame !== clip.timelineStartFrame
+  ) {
+    throw new Error("An end-edge trim must preserve the clip start frame");
+  }
+  let sourceRange = isTimedClip(clip)
+    ? { ...clip.source.range }
+    : undefined;
+  if (isTimedClip(clip)) {
+    const stream = engine.streams.get(clip.source.range.streamId);
+    if (!stream.ok) throw new Error(stream.error.message);
+    const durationTicks = sourceTicksForTimeline(
+      request.duration_frames,
+      sequence,
+      clip,
+    );
+    const sourceEndTick = clip.source.range.startTick
+      + clip.source.range.durationTicks;
+    const startTick = request.edge === "start"
+      ? sourceEndTick - durationTicks
+      : clip.source.range.startTick;
+    if (
+      startTick < 0
+      || durationTicks < 1
+      || startTick + durationTicks > stream.value.durationTicks
+    ) {
+      throw new Error("Trim exceeds the registered source handles");
+    }
+    sourceRange = {
+      ...clip.source.range,
+      startTick,
+      durationTicks,
+    };
+  }
+  const deltaFrames = newEnd - oldEnd;
+  requireTimelineLimit(
+    request.timeline_limit_frame,
+    shiftedTrackEnd(
+      sequence,
+      clip.trackId,
+      clip.clipId,
+      request.timeline_start_frame,
+      request.duration_frames,
+      oldEnd,
+      deltaFrames,
+    ),
+  );
+  const trim: EditOperation = {
+    kind: "trim-clip",
+    clipId: clip.clipId,
+    timelineStartFrame: request.timeline_start_frame,
+    durationFrames: request.duration_frames,
+    ...(sourceRange ? { sourceRange } : {}),
+  };
+  const moves = rippleMoves(sequence, clip, deltaFrames);
+  return deltaFrames > 0 ? [...moves, trim] : [trim, ...moves];
+}
+
+function rippleSpeedOperations(
+  sequence: Sequence,
+  request: Extract<EditRequest, { kind: "speed" }>,
+  clip: Extract<SequenceClip, { source: { kind: "timed" } }>,
+): EditOperation[] {
+  const durationFrames = timelineFramesForSource(
+    clip.source.range.durationTicks,
+    clip.source.range.timeBase,
+    sequence.frameRate,
+    { numerator: request.numerator, denominator: request.denominator },
+  );
+  const deltaFrames = durationFrames - clip.durationFrames;
+  requireTimelineLimit(
+    request.timeline_limit_frame,
+    shiftedTrackEnd(
+      sequence,
+      clip.trackId,
+      clip.clipId,
+      clip.timelineStartFrame,
+      durationFrames,
+      clipEnd(clip),
+      deltaFrames,
+    ),
+  );
+  const trim: EditOperation = {
+    kind: "trim-clip",
+    clipId: clip.clipId,
+    timelineStartFrame: clip.timelineStartFrame,
+    durationFrames,
+    sourceRange: clip.source.range,
+  };
+  const speed: EditOperation = {
+    kind: "set-clip-speed",
+    clipId: clip.clipId,
+    speed: {
+      numerator: request.numerator,
+      denominator: request.denominator,
+    },
+    reverse: request.reverse,
+    audioPolicy: request.audio_policy,
+  };
+  const moves = rippleMoves(sequence, clip, deltaFrames);
+  return deltaFrames > 0
+    ? [...moves, trim, speed]
+    : [trim, speed, ...moves];
 }
 
 async function operationsForRequest(
@@ -178,10 +561,131 @@ async function operationsForRequest(
   sequence: Sequence,
   request: EditRequest,
 ): Promise<EditOperation[]> {
+  if (request.kind === "music_video_setup") {
+    return audioSetupOperations(
+      engine,
+      sequence,
+      request.audio_artifact_id,
+      request.audio_track_id,
+    );
+  }
+  if (request.kind === "append_clips") {
+    const track = requiredTrack(sequence, request.track_id, "video");
+    let timelineStartFrame = Math.max(
+      0,
+      ...clipsOnTrack(sequence, track.trackId).map(clipEnd),
+    );
+    const operations: EditOperation[] = [];
+    for (const artifactId of request.artifact_ids) {
+      const artifact = engine.artifacts.get(artifactId);
+      if (!artifact.ok) throw new Error(artifact.error.message);
+      if (artifact.value.kind !== "video" && artifact.value.kind !== "final") {
+        throw new Error("Music-video sources must be video or final artifacts");
+      }
+      const streams = engine.streams.list(artifactId);
+      if (!streams.ok) throw new Error(streams.error.message);
+      const stream = streams.value.find((candidate) => candidate.kind === "video");
+      if (!stream) throw new Error(`Video source has no registered stream: ${artifactId}`);
+      const durationFrames = sourceTicksToSequenceFrames(
+        stream.durationTicks,
+        stream.timeBase,
+        sequence.frameRate,
+        "ceil",
+      );
+      requireTimelineLimit(
+        request.timeline_limit_frame,
+        timelineStartFrame + durationFrames,
+      );
+      operations.push({
+        kind: "insert-clip",
+        mode: "insert",
+        placement: {
+          trackId: track.trackId,
+          timelineStartFrame,
+          durationFrames,
+          source: {
+            kind: "timed",
+            artifactId,
+            range: {
+              streamId: stream.streamId,
+              objectHash: stream.objectHash,
+              startTick: 0,
+              durationTicks: stream.durationTicks,
+              timeBase: stream.timeBase,
+            },
+          },
+          speed: { numerator: 1, denominator: 1 },
+          reverse: false,
+          audioPolicy: "mute",
+        },
+      });
+      timelineStartFrame += durationFrames;
+    }
+    return operations;
+  }
+  if (request.kind === "reorder_clips") {
+    const track = requiredTrack(sequence, request.track_id, "video");
+    const current = clipsOnTrack(sequence, track.trackId);
+    const currentIds = new Set(current.map((clip) => clip.clipId));
+    const requestedIds = new Set(request.clip_ids);
+    if (
+      current.length !== request.clip_ids.length
+      || currentIds.size !== requestedIds.size
+      || request.clip_ids.some((clipId) => !currentIds.has(clipId))
+    ) {
+      throw new Error("Reorder requires every clip on the main video lane exactly once");
+    }
+    const byId = new Map(current.map((clip) => [clip.clipId, clip]));
+    const gaps = current.map((clip, index) => index === 0
+      ? clip.timelineStartFrame
+      : clip.timelineStartFrame - clipEnd(current[index - 1]!));
+    const finalStarts = new Map<string, number>();
+    let cursor = gaps[0] ?? 0;
+    request.clip_ids.forEach((clipId, index) => {
+      if (index > 0) cursor += gaps[index] ?? 0;
+      finalStarts.set(clipId, cursor);
+      cursor += byId.get(clipId)!.durationFrames;
+    });
+    requireTimelineLimit(request.timeline_limit_frame, cursor);
+    const unchanged = request.clip_ids.every((clipId, index) =>
+      clipId === current[index]?.clipId);
+    if (unchanged) {
+      return current.map((clip) => ({
+        kind: "move-clip" as const,
+        clipId: clip.clipId,
+        trackId: track.trackId,
+        timelineStartFrame: clip.timelineStartFrame,
+      }));
+    }
+    let temporaryCursor = Math.max(
+      request.timeline_limit_frame,
+      ...sequence.clips.map(clipEnd),
+    ) + 1;
+    const temporary = current.map((clip) => {
+      const operation: EditOperation = {
+        kind: "move-clip",
+        clipId: clip.clipId,
+        trackId: track.trackId,
+        timelineStartFrame: temporaryCursor,
+      };
+      temporaryCursor += clip.durationFrames + 1;
+      return operation;
+    });
+    const final = request.clip_ids.map((clipId) => ({
+      kind: "move-clip" as const,
+      clipId,
+      trackId: track.trackId,
+      timelineStartFrame: finalStarts.get(clipId)!,
+    }));
+    return [...temporary, ...final];
+  }
   if (request.kind === "trim") {
     const clip = sequence.clips.find((candidate) =>
       candidate.clipId === request.clip_id);
     if (!clip) throw new Error(`Sequence clip not found: ${request.clip_id}`);
+    if (request.ripple) {
+      return rippleTrimOperations(engine, sequence, request, clip);
+    }
     return [{
       kind: "trim-clip",
       clipId: clip.clipId,
@@ -426,8 +930,11 @@ async function operationsForRequest(
   if (request.kind === "speed") {
     const clip = sequence.clips.find((candidate) =>
       candidate.clipId === request.clip_id);
-    if (!clip || clip.source.kind !== "timed") {
+    if (!clip || !isTimedClip(clip)) {
       throw new Error("Speed and reverse require a timed sequence clip");
+    }
+    if (request.ripple) {
+      return rippleSpeedOperations(sequence, request, clip);
     }
     return [{
       kind: "set-clip-speed",
@@ -568,8 +1075,17 @@ async function buildSequenceEditPlan(
   input: EditRequest | EditRequest[],
   sourceSurface: SourceSurface,
   actor: string,
+  expectedRevision?: string,
 ): Promise<Record<string, unknown>> {
   const sequence = engine.sequences.getPrimary();
+  const contentRevision = sequenceContinuationRevision(sequence);
+  if (
+    expectedRevision
+    && expectedRevision !== sequence.revision
+    && expectedRevision !== contentRevision
+  ) {
+    throw new Error(`Sequence revision changed: expected ${expectedRevision}, current ${contentRevision}`);
+  }
   const commandId = uuidv7();
   const requests = Array.isArray(input) ? input : [input];
   const operations = (await Promise.all(requests.map((request) =>
@@ -1077,6 +1593,7 @@ export function commandPlanDefs(engine: Engine): ToolDef[] {
         ...bookSchema,
         source_surface: z.enum(["ui", "slash", "chat"]),
         actor: z.string().min(1),
+        expected_revision: z.string().min(1).optional(),
         request: z.union([
           editRequestSchema,
           z.array(editRequestSchema).min(1).max(20),
@@ -1089,6 +1606,9 @@ export function commandPlanDefs(engine: Engine): ToolDef[] {
             args.request as EditRequest,
             args.source_surface as SourceSurface,
             String(args.actor),
+            typeof args.expected_revision === "string"
+              ? args.expected_revision
+              : undefined,
           ));
         } catch (error) {
           return failure(error instanceof Error ? error.message : String(error));

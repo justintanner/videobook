@@ -309,6 +309,21 @@ const CANONICAL_COMMANDS: Command[] = [
     uiAction: "open_notebook",
   },
   {
+    command: "/music-video",
+    description: "Open the full-screen music-video editor with a required master soundtrack",
+    example: "/music-video @a1",
+    category: "action",
+    icon: "AudioWaveform",
+    size: "lg",
+    variant: "violet",
+    chevron: "right",
+    params: [
+      { name: "audio_ref", type: "string", required: true, description: "Ready audio artifact or notebook address used as the master soundtrack" },
+    ],
+    uiAction: "open_music_video",
+    exposure: "ui",
+  },
+  {
     command: "/notebooks",
     description: "List first-class notebooks in the current project",
     example: "/notebooks",

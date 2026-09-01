@@ -1,6 +1,7 @@
 import {
   createContext,
   lazy,
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -194,6 +195,10 @@ import {
   CanonicalSequencePlayer,
   type TimelineKeyboardAction,
 } from '@/components/videobook/CanonicalSequencePlayer'
+import type {
+  MusicVideoCommitResult,
+  MusicVideoSetupState,
+} from '@/components/videobook/MusicVideoEditor'
 import {
   notebookEdges,
   notebookEdgesWithCellFocus,
@@ -245,6 +250,7 @@ import {
   type EditCommandStage,
 } from '@/videobook/command-plan'
 import { useLastWorkSlot } from '@/videobook/last-work-slot'
+import { resolveMusicVideoCommandAsset } from '@/videobook/music-video-command'
 import {
   changedNotebookGridNodes,
   nextNotebookCreationSlot,
@@ -444,6 +450,11 @@ const WatermarkBody = lazy(async () => {
   return { default: module.WatermarkBody }
 })
 
+const MusicVideoEditor = lazy(async () => {
+  const module = await import('@/components/videobook/MusicVideoEditor')
+  return { default: module.MusicVideoEditor }
+})
+
 type ToolResponse = {
   content?: Array<{ type: string; text?: string }>
   isError?: boolean
@@ -452,6 +463,7 @@ type ToolResponse = {
 type AssetRecord = {
   id: string
   artifactId: string
+  label: string
   objectHash: string | null
   type: string
   createdAt: string
@@ -464,10 +476,28 @@ type AssetRecord = {
   height: number | null
   duration: number | null
   fps: number | null
+  waveform: number[] | null
   audioInfo: NotebookAudioInfo | null
   analysisInfo: NotebookAnalysisInfo | null
   transcript: MediaTranscriptSources | null
   visionAnalysis: MediaVisionAnalysis | null
+}
+
+type MusicVideoPreparedSetup = Extract<
+  MusicVideoSetupState,
+  { status: 'ready' }
+> & {
+  plan: CommandPlan
+  preview: EditPreview
+}
+
+type MusicVideoSession = {
+  key: string
+  audioArtifactId: string
+  returnFocus: HTMLElement | null
+  setup:
+    | Exclude<MusicVideoSetupState, { status: 'ready' }>
+    | MusicVideoPreparedSetup
 }
 
 type MediaFullscreenSession = {
@@ -682,6 +712,7 @@ const supportedUiActions = new Set([
   'open_projects',
   'open_provider_keys',
   'open_watermark',
+  'open_music_video',
   'speak_preview',
 ])
 
@@ -1253,9 +1284,16 @@ function asAsset(value: unknown): AssetRecord | null {
         shots: analysisShots,
       }
     : null
+  const waveform = Array.isArray(item.waveform)
+    ? item.waveform.flatMap((entry) =>
+        typeof entry === 'number' && Number.isFinite(entry)
+          ? [Math.max(-1, Math.min(1, entry))]
+          : [])
+    : null
   return {
     id,
     artifactId,
+    label: asString(item.label) ?? id,
     objectHash: asString(item.object_hash ?? item.objectHash),
     type,
     createdAt: asString(item.created_at ?? item.createdAt) ?? '',
@@ -1268,6 +1306,7 @@ function asAsset(value: unknown): AssetRecord | null {
     height: asNumber(item.height),
     duration: asNumber(item.duration),
     fps: asNumber(item.fps),
+    waveform,
     audioInfo,
     analysisInfo,
     transcript: asMediaTranscriptSources(item.transcript),
@@ -1434,6 +1473,80 @@ function sequenceTrackReference(sequence: Sequence | null, value: string | undef
     track.trackId.toLowerCase().startsWith(token)
     || track.name.toLowerCase() === token)
   return matches.length === 1 ? matches[0] : null
+}
+
+function musicVideoSoundtrackTrack(
+  sequence: Sequence,
+  audioArtifactId: string,
+) {
+  const candidates = sequence.tracks.filter((track) =>
+    track.kind === 'audio' && track.enabled && !track.locked && !track.muted)
+  const existing = candidates.find((track) => {
+    const clips = sequence.clips.filter((clip) => clip.trackId === track.trackId)
+    return clips.length === 1
+      && clips[0]?.timelineStartFrame === 0
+      && clips[0].source.kind === 'timed'
+      && clips[0].source.artifactId === audioArtifactId
+  })
+  return existing ?? candidates.find((track) =>
+    !sequence.clips.some((clip) => clip.trackId === track.trackId)) ?? null
+}
+
+async function musicVideoSequenceFingerprint(sequence: Sequence): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(JSON.stringify({
+      sequenceId: sequence.sequenceId,
+      frameRate: sequence.frameRate,
+      tracks: sequence.tracks,
+      clips: sequence.clips,
+      captions: sequence.captions,
+    })),
+  )
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+function musicVideoTimelineLimit(
+  plan: CommandPlan,
+  sequence: Sequence,
+  audioArtifactId: string,
+): number {
+  const stage = plan.stages.find(
+    (candidate): candidate is EditCommandStage => candidate.kind === 'edit',
+  )
+  const inserted = stage?.intent.operations.find((operation) =>
+    operation.kind === 'insert-clip'
+    && operation.placement.source.artifactId === audioArtifactId)
+  if (inserted?.kind === 'insert-clip') return inserted.placement.durationFrames
+  const existing = sequence.clips.find((clip) =>
+    clip.timelineStartFrame === 0
+    && clip.source.kind === 'timed'
+    && clip.source.artifactId === audioArtifactId)
+  const trimmed = stage?.intent.operations.find((operation) =>
+    operation.kind === 'trim-clip' && operation.clipId === existing?.clipId)
+  if (trimmed?.kind === 'trim-clip') return trimmed.durationFrames
+  if (existing) return existing.durationFrames
+  throw new Error('The soundtrack setup plan has no duration boundary')
+}
+
+function musicVideoSetupSummary(plan: CommandPlan): string {
+  const operations = plan.stages.flatMap((stage) =>
+    stage.kind === 'edit' ? stage.intent.operations : [])
+  const inserts = operations.filter((operation) => operation.kind === 'insert-clip').length
+  const muted = operations.filter((operation) =>
+    operation.kind === 'set-clip-audio'
+      ? operation.audio.muted
+      : operation.kind === 'set-clip-speed' && operation.audioPolicy === 'mute')
+    .length
+  return `${inserts > 0 ? 'Place' : 'Normalize'} master soundtrack · mute ${muted} other ${muted === 1 ? 'clip' : 'clips'}`
+}
+
+function editPreviewError(preview: EditPreview): string | null {
+  if (preview.valid) return null
+  const conflicts = preview.conflicts.map((conflict) => conflict.message)
+  return conflicts.join(' · ') || 'The canonical edit preview is invalid'
 }
 
 function requestFromEditStage(
@@ -2999,6 +3112,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     useState<WatermarkReviewState | null>(null)
   const momentSearchRef = useRef<MomentSearchHandle | null>(null)
   const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
+  const [musicVideoSession, setMusicVideoSession] = useState<MusicVideoSession | null>(null)
   const [mediaFullscreenComposerTarget, setMediaFullscreenComposerTarget] =
     useState<HTMLDivElement | null>(null)
   const [mediaFullscreenEditSelection, setMediaFullscreenEditSelection] =
@@ -7458,6 +7572,232 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const prepareMusicVideoSetup = async (
+    sessionKey: string,
+    audioArtifactId: string,
+    targetSequence: Sequence,
+  ): Promise<void> => {
+    if (!bookId) {
+      setMusicVideoSession((current) => current?.key === sessionKey
+        ? {
+            ...current,
+            setup: {
+              status: 'error',
+              message: 'Load or create a book first.',
+            },
+          }
+        : current)
+      return
+    }
+    setMusicVideoSession((current) => current?.key === sessionKey
+      ? { ...current, setup: { status: 'loading' } }
+      : current)
+    const audioTrack = musicVideoSoundtrackTrack(targetSequence, audioArtifactId)
+    if (!audioTrack) {
+      setMusicVideoSession((current) => current?.key === sessionKey
+        ? {
+            ...current,
+            setup: {
+              status: 'needs-audio-track',
+              message: 'Create an empty, enabled soundtrack track before reviewing setup.',
+            },
+          }
+        : current)
+      return
+    }
+    try {
+      const plan = asCommandPlan(await call('plan_sequence_edit', {
+        book_id: bookId,
+        source_surface: 'ui',
+        actor: 'videobook-user',
+        expected_revision: await musicVideoSequenceFingerprint(targetSequence),
+        request: {
+          kind: 'music_video_setup',
+          audio_artifact_id: audioArtifactId,
+          audio_track_id: audioTrack.trackId,
+        },
+      }))
+      const stage = plan.stages.find(
+        (candidate): candidate is EditCommandStage => candidate.kind === 'edit',
+      )
+      if (!stage) throw new Error('The soundtrack setup plan has no edit stage')
+      const preview = await call('preview_edit_intent', {
+        book_id: bookId,
+        intent: stage.intent,
+      }) as EditPreview
+      const invalid = editPreviewError(preview)
+      if (invalid) throw new Error(invalid)
+      const prepared: MusicVideoPreparedSetup = {
+        status: 'ready',
+        audioTrackId: audioTrack.trackId,
+        timelineLimitFrame: musicVideoTimelineLimit(
+          plan,
+          targetSequence,
+          audioArtifactId,
+        ),
+        operationCount: stage.intent.operations.length,
+        summary: musicVideoSetupSummary(plan),
+        warnings: preview.warnings.map((warning) => warning.message),
+        plan,
+        preview,
+      }
+      setMusicVideoSession((current) => current?.key === sessionKey
+        ? { ...current, setup: prepared }
+        : current)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setMusicVideoSession((current) => current?.key === sessionKey
+        ? { ...current, setup: { status: 'error', message } }
+        : current)
+    }
+  }
+
+  const applyMusicVideoSetup = async (): Promise<MusicVideoCommitResult> => {
+    if (!bookId || !musicVideoSession || musicVideoSession.setup.status !== 'ready') {
+      throw new Error('Review the soundtrack setup before applying it')
+    }
+    const sessionKey = musicVideoSession.key
+    const prepared = musicVideoSession.setup
+    const stage = prepared.plan.stages.find(
+      (candidate): candidate is EditCommandStage => candidate.kind === 'edit',
+    )
+    if (!stage) throw new Error('The soundtrack setup plan has no edit stage')
+    setMusicVideoSession((current) => current?.key === sessionKey
+      ? {
+          ...current,
+          setup: {
+            status: 'applying',
+            audioTrackId: prepared.audioTrackId,
+            timelineLimitFrame: prepared.timelineLimitFrame,
+            operationCount: prepared.operationCount,
+            summary: prepared.summary,
+            warnings: prepared.warnings,
+          },
+        }
+      : current)
+    try {
+      const committed = recordValue(await call('commit_edit_intent', {
+        book_id: bookId,
+        intent: stage.intent,
+        preview_hash: prepared.preview.previewHash,
+      }))
+      const nextSequence = asSequence(committed?.sequence)
+      const actionId = asString(committed?.actionId)
+      if (!nextSequence || !actionId) {
+        throw new Error('The server returned an invalid soundtrack commit')
+      }
+      setSequence(nextSequence)
+      setLastEditActionId(actionId)
+      setMusicVideoSession((current) => current?.key === sessionKey
+        ? {
+            ...current,
+            setup: {
+              status: 'applied',
+              audioTrackId: prepared.audioTrackId,
+              timelineLimitFrame: prepared.timelineLimitFrame,
+            },
+          }
+        : current)
+      return {
+        sequence: nextSequence,
+        actionId,
+        beforeRevision: stage.intent.baseRevision,
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setMusicVideoSession((current) => current?.key === sessionKey
+        ? { ...current, setup: { status: 'error', message } }
+        : current)
+      throw error
+    }
+  }
+
+  const commitMusicVideoEdit = async (
+    request: Record<string, unknown>,
+    expectedSequence: Sequence,
+  ): Promise<MusicVideoCommitResult> => {
+    if (!bookId) throw new Error('Load or create a book first.')
+    const plan = asCommandPlan(await call('plan_sequence_edit', {
+      book_id: bookId,
+      source_surface: 'ui',
+      actor: 'videobook-user',
+      expected_revision: await musicVideoSequenceFingerprint(expectedSequence),
+      request,
+    }))
+    const stage = plan.stages.find(
+      (candidate): candidate is EditCommandStage => candidate.kind === 'edit',
+    )
+    if (!stage) throw new Error('The music-video plan has no edit stage')
+    const preview = await call('preview_edit_intent', {
+      book_id: bookId,
+      intent: stage.intent,
+    }) as EditPreview
+    const invalid = editPreviewError(preview)
+    if (invalid) throw new Error(invalid)
+    const committed = recordValue(await call('commit_edit_intent', {
+      book_id: bookId,
+      intent: stage.intent,
+      preview_hash: preview.previewHash,
+    }))
+    const nextSequence = asSequence(committed?.sequence)
+    const actionId = asString(committed?.actionId)
+    if (!nextSequence || !actionId) {
+      throw new Error('The server returned an invalid music-video edit commit')
+    }
+    setSequence(nextSequence)
+    setLastEditActionId(actionId)
+    return {
+      sequence: nextSequence,
+      actionId,
+      beforeRevision: stage.intent.baseRevision,
+    }
+  }
+
+  const restoreMusicVideoRevision = async (
+    targetRevision: string,
+    expectedRevision: string,
+  ): Promise<MusicVideoCommitResult> => {
+    if (!bookId) throw new Error('Load or create a book first.')
+    const restored = recordValue(await call('restore_edit_action', {
+      book_id: bookId,
+      target_revision: targetRevision,
+      base_revision: expectedRevision,
+      actor: 'videobook-user',
+      source_surface: 'ui',
+    }))
+    const nextSequence = asSequence(restored?.sequence)
+    const actionId = asString(restored?.actionId)
+    if (!nextSequence || !actionId) {
+      throw new Error('The server returned an invalid sequence restore')
+    }
+    setSequence(nextSequence)
+    setLastEditActionId(actionId)
+    return {
+      sequence: nextSequence,
+      actionId,
+      beforeRevision: expectedRevision,
+    }
+  }
+
+  const createMusicVideoTrack = async (
+    kind: 'video' | 'audio',
+  ): Promise<Sequence> => {
+    if (!bookId) throw new Error('Load or create a book first.')
+    const nextSequence = asSequence(await call('add_sequence_track', {
+      book_id: bookId,
+      kind,
+      name: kind === 'audio' ? 'Master Soundtrack' : 'Music Video',
+    }))
+    if (!nextSequence) throw new Error('The server returned an invalid sequence')
+    setSequence(nextSequence)
+    return nextSequence
+  }
+
+  const closeMusicVideoEditor = useCallback(() => {
+    setMusicVideoSession(null)
+    window.setTimeout(focusCommandComposer, 0)
+  }, [focusCommandComposer])
+
   const handleTimelineKeyboard = (
     action: TimelineKeyboardAction,
     frame: number,
@@ -9432,6 +9772,33 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         showScreen('settings')
         await refreshSettings()
         return { ok: true, message: 'Settings opened' }
+      }
+      if (command.uiAction === 'open_music_video') {
+        if (!sequence) {
+          return { ok: false, message: 'Load the primary sequence first.' }
+        }
+        const parsed = parseCommandArgs(resolvedRest, command.params)
+        const audioReference = asString(parsed.audio_ref)
+        const resolved = resolveMusicVideoCommandAsset(audioReference, assets)
+        if (!resolved.ok) return resolved
+        const audioAsset = resolved.asset
+        const sessionKey = uuidv7()
+        const returnFocus = document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null
+        setMediaFullscreen(null)
+        setMusicVideoSession({
+          key: sessionKey,
+          audioArtifactId: audioAsset.artifactId,
+          returnFocus,
+          setup: { status: 'loading' },
+        })
+        void prepareMusicVideoSetup(
+          sessionKey,
+          audioAsset.artifactId,
+          sequence,
+        ).catch(() => undefined)
+        return { ok: true, message: `Music-video editor opened for ${audioAsset.label}` }
       }
       if (command.uiAction === 'speak_preview') {
         const parsed = parseCommandArgs(resolvedRest, command.params)
@@ -12003,6 +12370,33 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         />
       )}
 
+      {musicVideoSession && sequence && (
+        <Suspense fallback={<div role="status">Loading music-video editor…</div>}>
+          <MusicVideoEditor
+            key={musicVideoSession.key}
+            sequence={sequence}
+            assets={assets}
+            audioArtifactId={musicVideoSession.audioArtifactId}
+            setup={musicVideoSession.setup}
+            returnFocus={musicVideoSession.returnFocus}
+            onApplySetup={applyMusicVideoSetup}
+            onClose={closeMusicVideoEditor}
+            onCommit={commitMusicVideoEdit}
+            onCreateTrack={createMusicVideoTrack}
+            onRefreshAssets={async () => {
+              if (!bookId) throw new Error('Load or create a book first.')
+              await refreshBookData(bookId, notebook?.id)
+            }}
+            onRestore={restoreMusicVideoRevision}
+            onReviewSetup={(nextSequence) => prepareMusicVideoSetup(
+              musicVideoSession.key,
+              musicVideoSession.audioArtifactId,
+              nextSequence ?? sequence,
+            )}
+          />
+        </Suspense>
+      )}
+
       {mediaFullscreen && (
         <NotebookMediaFullscreen
           key={mediaFullscreen.key}
@@ -12046,6 +12440,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         disabled={
           busy
           || mediaFullscreenSidebarEditing
+          || Boolean(musicVideoSession)
           || !bookId
           || mcp.state !== 'ready'
         }
