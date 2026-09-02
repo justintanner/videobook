@@ -10,8 +10,12 @@ import {
 } from '@/videobook/x-post-review'
 import {
   buildXPostThreadReplies,
+  X_POST_EMPTY_THREAD_MESSAGE,
+  xPostThreadHasDetails,
+  xPostThreadPrompt,
   type XPostThreadOptions,
   type XPostThreadReview,
+  type XPostThreadStep,
 } from '@/videobook/x-post-thread'
 import { PromptEcho, RoutedSettings } from './RoutedSettings'
 
@@ -27,7 +31,7 @@ export function PostToXBody({
   draft,
   onChange,
   onThreadOptionsChange,
-  onThreadReplyChange,
+  onThreadPromptChange,
   prompt,
   settings,
   sourceLabel,
@@ -38,7 +42,7 @@ export function PostToXBody({
   draft: XPostDraft
   onChange: (patch: XPostDraftPatch) => void
   onThreadOptionsChange?: (patch: Partial<XPostThreadOptions>) => void
-  onThreadReplyChange?: (replyId: string, text: string) => void
+  onThreadPromptChange?: (stepId: string, text: string) => void
   prompt: string
   settings: readonly RoutedActionSetting[]
   sourceLabel: string
@@ -53,11 +57,9 @@ export function PostToXBody({
   const threadReplies = threadReview
     ? buildXPostThreadReplies(threadReview)
     : []
-  const threadAvailable = threadReview !== null
-    && threadReview !== undefined
-    && (threadReview.context.steps.some((step) =>
-      Boolean(step.prompt) || step.images.length > 0)
-      || threadReview.context.attributions.length > 0)
+  const threadAvailable = threadReview
+    ? xPostThreadHasDetails(threadReview.context)
+    : false
 
   return (
     <div className="confirm-routed confirm-post">
@@ -176,7 +178,7 @@ export function PostToXBody({
               />
               <span>
                 <strong>Add how-it-was-made thread</strong>
-                <small>Post editable replies after the video</small>
+                <small>Reply with the model, prompt and input images</small>
               </span>
             </label>
             {threadReview.loading ? (
@@ -184,93 +186,107 @@ export function PostToXBody({
             ) : threadReview.error ? (
               <small className="confirm-field-error">{threadReview.error}</small>
             ) : !threadAvailable ? (
-              <small>No generation details or original source links were found.</small>
+              <small>No generation details were found.</small>
             ) : threadReview.options.enabled ? (
-              <>
-                <div className="x-post-thread-options" role="group" aria-label="Thread options">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={threadReview.options.includePrompt}
-                      disabled={busy || threadReview.context.steps.every((step) =>
-                        !step.prompt)}
-                      onChange={(event) => onThreadOptionsChange?.({
-                        includePrompt: event.target.checked,
-                      })}
-                    />
-                    Include prompts
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={threadReview.options.includeSourceImages}
-                      disabled={busy || threadReview.context.steps.every((step) =>
-                        step.images.length === 0)}
-                      onChange={(event) => onThreadOptionsChange?.({
-                        includeSourceImages: event.target.checked,
-                      })}
-                    />
-                    Attach source images
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={threadReview.options.includeAttribution}
-                      disabled={busy || threadReview.context.attributions.length === 0}
-                      onChange={(event) => onThreadOptionsChange?.({
-                        includeAttribution: event.target.checked,
-                      })}
-                    />
-                    Credit original sources
-                  </label>
-                </div>
-                <div className="x-post-thread-replies">
-                  {threadReplies.map((reply, index) => {
-                    const replyTooLong = reply.text.length > X_POST_MAX_CHARACTERS
-                    return (
-                      <article key={reply.id} className="x-post-thread-reply">
-                        <div>
-                          <label htmlFor={`x-post-followup-${index}`}>Follow-up {index + 1}</label>
-                          <small className={replyTooLong ? 'confirm-field-error' : undefined}>
-                            {reply.text.length}/{X_POST_MAX_CHARACTERS}
-                          </small>
-                        </div>
-                        <textarea
-                          id={`x-post-followup-${index}`}
-                          aria-invalid={replyTooLong}
-                          disabled={busy}
-                          rows={3}
-                          value={reply.text}
-                          onChange={(event) => onThreadReplyChange?.(
-                            reply.id,
-                            event.target.value,
-                          )}
-                        />
-                        {reply.images.length > 0 && (
-                          <div className="x-post-thread-images">
-                            {reply.images.map((image) => (
-                              <figure key={image.assetId}>
-                                <img
-                                  src={image.thumbnailUrl ?? image.mediaUrl ?? undefined}
-                                  alt={image.label}
-                                />
-                                <figcaption>{image.label}</figcaption>
-                              </figure>
-                            ))}
-                          </div>
-                        )}
-                      </article>
-                    )
-                  })}
-                  {threadReplies.length === 0 && (
-                    <small>Select at least one thread detail to add a reply.</small>
-                  )}
-                </div>
-              </>
+              <div className="x-post-thread-steps">
+                {threadReview.context.steps.map((step, index) => (
+                  <ThreadStep
+                    key={step.id}
+                    busy={busy}
+                    index={index}
+                    prompt={xPostThreadPrompt(threadReview, step)}
+                    replyCount={threadReplies.filter((reply) =>
+                      reply.stepId === step.id).length}
+                    step={step}
+                    stepCount={threadReview.context.steps.length}
+                    onPromptChange={onThreadPromptChange}
+                  />
+                ))}
+                {threadReplies.length === 0 && (
+                  <small className="confirm-field-error">
+                    {X_POST_EMPTY_THREAD_MESSAGE}
+                  </small>
+                )}
+              </div>
             ) : null}
           </section>
         )}
       </article>
     </div>
+  )
+}
+
+function replyCountLabel(count: number): string {
+  if (count === 0) return 'nothing to post'
+  return `posts as ${count} ${count === 1 ? 'reply' : 'replies'}`
+}
+
+function ThreadStep({
+  busy,
+  index,
+  onPromptChange,
+  prompt,
+  replyCount,
+  step,
+  stepCount,
+}: {
+  busy: boolean
+  index: number
+  onPromptChange?: (stepId: string, text: string) => void
+  prompt: string
+  replyCount: number
+  step: XPostThreadStep
+  stepCount: number
+}) {
+  const promptId = `x-post-thread-prompt-${index}`
+  return (
+    <article
+      className="x-post-thread-step"
+      aria-label={stepCount > 1 ? `Generation step ${index + 1}` : 'Generation step'}
+    >
+      {stepCount > 1 && (
+        <small className="x-post-thread-step-ordinal">
+          Step {index + 1} of {stepCount}
+        </small>
+      )}
+      {step.model && (
+        <div className="x-post-thread-field">
+          <span className="x-post-thread-label">Model</span>
+          <p className="x-post-thread-model">
+            <span>{step.model.label}</span>
+            {step.model.provider && <small>via {step.model.provider}</small>}
+          </p>
+        </div>
+      )}
+      <div className="x-post-thread-field">
+        <div className="x-post-thread-field-head">
+          <label className="x-post-thread-label" htmlFor={promptId}>Prompt</label>
+          <small>{prompt.length} characters · {replyCountLabel(replyCount)}</small>
+        </div>
+        <textarea
+          id={promptId}
+          disabled={busy}
+          rows={4}
+          value={prompt}
+          onChange={(event) => onPromptChange?.(step.id, event.target.value)}
+        />
+      </div>
+      {step.images.length > 0 && (
+        <div className="x-post-thread-field">
+          <span className="x-post-thread-label">Input images</span>
+          <div className="x-post-thread-images">
+            {step.images.map((image) => (
+              <figure key={image.assetId}>
+                <img
+                  src={image.thumbnailUrl ?? image.mediaUrl ?? undefined}
+                  alt={image.label}
+                />
+                <figcaption>{image.label}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      )}
+    </article>
   )
 }

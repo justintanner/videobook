@@ -1735,20 +1735,19 @@ describe('chat composer browser flow', () => {
       const thread = review.getByLabel('How it was made thread')
       const master = thread.getByLabel('Add how-it-was-made thread')
       expect(await master.isChecked()).toBe(false)
-      expect(await thread.getByLabel('Thread options').count()).toBe(0)
+      const promptField = thread.getByLabel('Prompt', { exact: true })
+      expect(await promptField.count()).toBe(0)
 
       await master.check()
-      await thread.getByLabel('Thread options').waitFor({ state: 'visible' })
-      const firstReply = thread.getByLabel('Follow-up 1')
-      expect(await firstReply.inputValue()).toContain(
+      await promptField.waitFor({ state: 'visible' })
+      expect(await promptField.inputValue()).toContain(
         'Exact final generation prompt for the making-of thread',
       )
+      expect(await thread.getByText('Model', { exact: true }).count()).toBe(1)
       expect(await thread.locator('img[alt="@c3"]').count()).toBe(1)
-      expect(await thread.getByLabel('Include prompts').isChecked()).toBe(true)
-      expect(await thread.getByLabel('Attach source images').isChecked()).toBe(true)
       expect(await appliedCalls()).toHaveLength(0)
 
-      await firstReply.fill('Edited making-of reply with the exact source image attached.')
+      await promptField.fill('Edited making-of prompt with the exact source image attached.')
       await review.getByRole('button', { name: 'Post to X' }).click()
       await expect.poll(() => appliedCalls().length).toBe(1)
       const appliedPlan = record(appliedCalls()[0]?.arguments.action_plan)
@@ -1757,8 +1756,9 @@ describe('chat composer browser flow', () => {
         ? appliedParams.followups.map(record)
         : []
       expect(followups).toHaveLength(1)
-      expect(followups[0]?.text).toBe(
-        'Edited making-of reply with the exact source image attached.',
+      expect(followups[0]?.text).toMatch(/^How I made this video — /)
+      expect(followups[0]?.text).toContain(
+        'Edited making-of prompt with the exact source image attached.',
       )
       expect(followups[0]?.image_asset_ids).toEqual([fullscreenImageArtifactId])
     } finally {

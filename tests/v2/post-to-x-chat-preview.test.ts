@@ -78,23 +78,18 @@ describe('PostToXBody', () => {
     expect(html).not.toContain('aria-label="Schedule date and time"')
   })
 
-  it('renders opt-in editable generation replies and source images for videos', () => {
+  it('renders the opt-in model, prompt and input images for videos', () => {
     const baseReview = initialXPostThreadReview({
       steps: [{
         id: 'generation',
         prompt: 'Exact final generation prompt',
+        model: { label: 'Seedance 2.5', provider: 'Kie' },
         images: [{
           assetId: 'image-source',
           label: '@b2',
           mediaUrl: '/files/source.png',
           thumbnailUrl: '/files/source-thumb.jpg',
         }],
-      }],
-      attributions: [{
-        id: 'source',
-        label: 'Source',
-        url: 'https://x.com/source/status/123',
-        xHandle: 'source',
       }],
     })
     const html = renderToStaticMarkup(createElement(PostToXBody, {
@@ -112,7 +107,7 @@ describe('PostToXBody', () => {
       },
       onChange: ignoreChange,
       onThreadOptionsChange: ignoreChange,
-      onThreadReplyChange: ignoreChange,
+      onThreadPromptChange: ignoreChange,
       prompt: 'post @a1 to X',
       settings: [],
       sourceLabel: '@a1',
@@ -124,10 +119,12 @@ describe('PostToXBody', () => {
 
     expect(html).toContain('aria-label="How it was made thread"')
     expect(html).toContain('Add how-it-was-made thread')
-    expect(html).toContain('aria-label="Thread options"')
+    expect(html).toContain('Seedance 2.5')
+    expect(html).toContain('via Kie')
     expect(html).toContain('Exact final generation prompt')
+    expect(html).toContain('posts as 1 reply')
     expect(html).toContain('src="/files/source-thumb.jpg"')
-    expect(html).toContain('@source https://x.com/source/status/123')
+    expect(html).not.toContain('Thread options')
   })
 })
 

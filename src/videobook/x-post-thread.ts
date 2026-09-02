@@ -9,6 +9,7 @@ import {
 } from 'videobook-engine/notebook-media-artifact'
 import {
   X_POST_MAX_CHARACTERS,
+  X_POST_MAX_IMAGES_PER_FOLLOWUP,
   type XPostFollowup,
 } from './x-post-review'
 
@@ -19,12 +20,14 @@ export type XPostThreadGraphStep = {
   outputArtifactId: string | null
   producerPrompt: string | null
   producerResolvedPrompt: string | null
+  producerTool: string | null
+  producerModel: string | null
+  producerProvider: string | null
   sourceArtifactIds: string[]
 }
 
 export type XPostThreadGraph = {
   steps: XPostThreadGraphStep[]
-  upstreamArtifactIds: string[]
 }
 
 export type XPostThreadImage = {
@@ -34,33 +37,29 @@ export type XPostThreadImage = {
   thumbnailUrl: string | null
 }
 
-export type XPostSourceAttribution = {
-  id: string
+export type XPostThreadModel = {
   label: string
-  url: string
-  xHandle: string | null
+  provider: string | null
 }
 
 export type XPostThreadStep = {
   id: string
   prompt: string
+  model: XPostThreadModel | null
   images: XPostThreadImage[]
 }
 
 export type XPostThreadContext = {
   steps: XPostThreadStep[]
-  attributions: XPostSourceAttribution[]
 }
 
 export type XPostThreadOptions = {
   enabled: boolean
-  includePrompt: boolean
-  includeSourceImages: boolean
-  includeAttribution: boolean
 }
 
 export type XPostThreadReply = XPostFollowup & {
   id: string
+  stepId: string
   images: XPostThreadImage[]
 }
 
@@ -69,7 +68,8 @@ export type XPostThreadReview = {
   error: string | null
   context: XPostThreadContext
   options: XPostThreadOptions
-  textOverrides: Record<string, string>
+  /** Edited prompt text keyed by step id; unedited steps post their stored prompt. */
+  promptOverrides: Record<string, string>
 }
 
 type GenerationAttemptPrompt = {
@@ -78,7 +78,7 @@ type GenerationAttemptPrompt = {
   resolvedPrompt: string | null
 }
 
-const EMPTY_CONTEXT: XPostThreadContext = { steps: [], attributions: [] }
+const EMPTY_CONTEXT: XPostThreadContext = { steps: [] }
 
 export function initialXPostThreadReview(
   context: XPostThreadContext = EMPTY_CONTEXT,
@@ -87,13 +87,8 @@ export function initialXPostThreadReview(
     loading: false,
     error: null,
     context,
-    options: {
-      enabled: false,
-      includePrompt: true,
-      includeSourceImages: true,
-      includeAttribution: true,
-    },
-    textOverrides: {},
+    options: { enabled: false },
+    promptOverrides: {},
   }
 }
 
@@ -146,6 +141,10 @@ function inputString(cell: NotebookCell, key: string): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
+function cellString(value: string | undefined): string | null {
+  return value?.trim() ? value : null
+}
+
 function inputStrings(cell: NotebookCell, key: string): string[] {
   const value = cell.inputs?.[key]
   const values: unknown[] = Array.isArray(value) ? value : [value]
@@ -194,9 +193,8 @@ function walkUpstream(
   index: ProvenanceIndex,
   starts: readonly NotebookCell[],
   stopAt: (cell: NotebookCell) => boolean,
-): { visited: NotebookCell[]; stopped: NotebookCell[] } {
+): NotebookCell[] {
   const seen = new Set<string>()
-  const visited: NotebookCell[] = []
   const stopped: NotebookCell[] = []
   const queue = starts.map((cell) => cell.id)
   for (let position = 0; position < queue.length; position += 1) {
@@ -205,7 +203,6 @@ function walkUpstream(
     seen.add(cellId)
     const cell = index.cellsById.get(cellId)
     if (!cell) continue
-    visited.push(cell)
     if (stopAt(cell)) {
       stopped.push(cell)
       continue
@@ -214,7 +211,7 @@ function walkUpstream(
       if (!seen.has(sourceId)) queue.push(sourceId)
     }
   }
-  return { visited, stopped }
+  return stopped
 }
 
 function isGenerateVideoCell(cell: NotebookCell): boolean {
@@ -249,11 +246,12 @@ function threadGraphStep(
     outputArtifactId: output
       ? resolveNotebookCellArtifactId(document, output) ?? null
       : resolveNotebookCellArtifactId(document, producer) ?? null,
-    producerPrompt: producer.prompt?.trim()
-      ? producer.prompt
-      : inputString(producer, 'prompt'),
+    producerPrompt: cellString(producer.prompt) ?? inputString(producer, 'prompt'),
     producerResolvedPrompt: inputString(producer, 'resolvedPrompt')
       ?? inputString(producer, 'resolved_prompt'),
+    producerTool: cellString(producer.tool),
+    producerModel: cellString(producer.model),
+    producerProvider: cellString(producer.provider),
     sourceArtifactIds: cellArtifactIds(document, sources),
   }
 }
@@ -265,12 +263,9 @@ export function discoverXPostThreadGraph(
   const index = provenanceIndex(document)
   const starts = startingCells(document, artifactId)
   const producers = walkUpstream(document, index, starts, isGenerateVideoCell)
-    .stopped
     .sort(cellOrder)
-  const upstream = walkUpstream(document, index, starts, () => false).visited
   return {
     steps: producers.map((producer) => threadGraphStep(document, index, producer)),
-    upstreamArtifactIds: cellArtifactIds(document, upstream),
   }
 }
 
@@ -290,6 +285,56 @@ export function selectXPostGenerationPrompt(input: {
   if (input.producerResolvedPrompt?.trim()) return input.producerResolvedPrompt
   if (input.producerPrompt?.trim()) return input.producerPrompt
   return ''
+}
+
+type GenerationAttemptModel = {
+  status: string
+  artifactId: string | null
+  tool: string | null
+  model: string | null
+  provider: string | null
+}
+
+type GenerationActionTitle = {
+  tool: string
+  title: string
+  providerLabel: string
+}
+
+/**
+ * Name the model the way the notebook does: the generation action's title
+ * for the tool, else the recorded model id, else the tool name. The completed
+ * attempt that produced the output wins over the producer cell's current
+ * configuration.
+ */
+export function selectXPostGenerationModel(input: {
+  attempts: readonly GenerationAttemptModel[]
+  outputArtifactId: string | null
+  producerTool: string | null
+  producerModel: string | null
+  producerProvider: string | null
+  actions: readonly GenerationActionTitle[]
+}): XPostThreadModel | null {
+  const attempt = input.outputArtifactId
+    ? input.attempts.find((candidate) =>
+      candidate.status === 'completed'
+      && candidate.artifactId === input.outputArtifactId) ?? null
+    : null
+  const tool = attempt?.tool?.trim() || input.producerTool
+  const action = tool
+    ? input.actions.find((candidate) => candidate.tool === tool)
+    : undefined
+  const label = action?.title.trim()
+    || attempt?.model?.trim()
+    || input.producerModel?.trim()
+    || tool?.trim()
+    || ''
+  if (!label) return null
+  const provider = action?.providerLabel.trim()
+    || attempt?.provider?.trim()
+    || input.producerProvider?.trim()
+    || null
+  return { label, provider }
 }
 
 export type XPostPromptMention = {
@@ -338,186 +383,108 @@ export function readableXPostPrompt(
   })
 }
 
-const YOUTUBE_HOSTS = new Set(['youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be'])
-const X_HOSTS = new Set(['x.com', 'mobile.x.com', 'twitter.com', 'mobile.twitter.com'])
-const RESERVED_X_HANDLES = new Set([
-  'explore',
-  'home',
-  'i',
-  'intent',
-  'messages',
-  'notifications',
-  'search',
-  'settings',
-  'share',
-])
+export const X_POST_EMPTY_THREAD_MESSAGE =
+  'The thread has nothing to post. Add a prompt, or turn the thread off.'
 
-type SourceLink =
-  | { kind: 'youtube'; url: string; videoId: string | null }
-  | { kind: 'x'; url: string; handle: string | null; status: boolean }
-
-function youtubeVideoId(url: URL, hostname: string): string | null {
-  if (hostname === 'youtu.be') return url.pathname.split('/')[1] || null
-  const watchId = url.searchParams.get('v')
-  if (watchId) return watchId
-  return url.pathname.match(/^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]+)/)?.[1] ?? null
+export function xPostThreadHasDetails(context: XPostThreadContext): boolean {
+  return context.steps.some((step) =>
+    step.prompt.trim() !== '' || step.images.length > 0)
 }
 
-function youtubeLink(url: URL, hostname: string): SourceLink {
-  const videoId = youtubeVideoId(url, hostname)
-  if (videoId && url.pathname.startsWith('/shorts/')) {
-    return { kind: 'youtube', url: `https://www.youtube.com/shorts/${videoId}`, videoId }
-  }
-  if (videoId) return { kind: 'youtube', url: `https://youtu.be/${videoId}`, videoId }
-  url.hash = ''
-  return { kind: 'youtube', url: url.toString(), videoId: null }
-}
-
-function xLink(url: URL): SourceLink {
-  const match = url.pathname.match(/^\/([A-Za-z0-9_]{1,15})\/status\/(\d+)/)
-  if (!match) {
-    url.hash = ''
-    return { kind: 'x', url: url.toString(), handle: null, status: false }
-  }
-  const matchedHandle = match[1]!
-  const handle = RESERVED_X_HANDLES.has(matchedHandle.toLowerCase()) ? null : matchedHandle
-  return {
-    kind: 'x',
-    url: `https://x.com/${matchedHandle}/status/${match[2]}`,
-    handle,
-    status: true,
-  }
-}
-
-function sourceLink(value: unknown): SourceLink | null {
-  if (typeof value !== 'string') return null
-  try {
-    const url = new URL(value)
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
-    const hostname = url.hostname.toLowerCase().replace(/^www\./, '')
-    if (YOUTUBE_HOSTS.has(hostname)) return youtubeLink(url, hostname)
-    if (X_HOSTS.has(hostname)) return xLink(url)
-    return null
-  } catch {
-    return null
-  }
-}
-
-/** A link that names one video or post, rather than a playlist or profile page. */
-function isConcreteLink(link: SourceLink): boolean {
-  return link.kind === 'youtube' ? link.videoId !== null : link.status
-}
-
-function sourceLabel(
-  metadata: Record<string, unknown>,
-  fallback: string,
+export function xPostThreadPrompt(
+  review: XPostThreadReview,
+  step: XPostThreadStep,
 ): string {
-  if (typeof metadata.uploader !== 'string') return fallback
-  const label = metadata.uploader.replaceAll('@', '').replace(/\s+/g, ' ').trim()
-  return label || fallback
+  return review.promptOverrides[step.id] ?? step.prompt
 }
 
-export function xPostSourceAttribution(
-  assetId: string,
-  metadata: Record<string, unknown>,
-): XPostSourceAttribution | null {
-  const links = [
-    metadata.webpage_url,
-    metadata.webpageUrl,
-    metadata.source_url,
-    metadata.sourceUrl,
-  ].map(sourceLink).filter((link): link is SourceLink => link !== null)
-  const link = links.find(isConcreteLink) ?? links[0]
-  if (!link) return null
-  return {
-    id: `${assetId}:${link.url}`,
-    label: sourceLabel(metadata, link.kind === 'x' ? 'X' : 'YouTube'),
-    url: link.url,
-    xHandle: link.kind === 'x' ? link.handle : null,
-  }
+function stepOrdinal(ordinal: number, stepCount: number): string {
+  return stepCount > 1 ? ` (${ordinal + 1}/${stepCount})` : ''
 }
 
-export function dedupeXPostAttributions(
-  values: readonly XPostSourceAttribution[],
-): XPostSourceAttribution[] {
-  const seen = new Set<string>()
-  return values.filter((value) => {
-    if (seen.has(value.url)) return false
-    seen.add(value.url)
-    return true
-  })
-}
-
-function promptReplies(
+function promptPrefix(
   step: XPostThreadStep,
   ordinal: number,
   stepCount: number,
-): Array<{ id: string; text: string }> {
-  if (!step.prompt) return []
-  const replies: Array<{ id: string; text: string }> = []
-  let remaining = step.prompt
-  let part = 0
+): string {
+  const heading = `How I made this video${stepOrdinal(ordinal, stepCount)}`
+  if (!step.model) return `${heading} — prompt:\n`
+  const provider = step.model.provider ? ` via ${step.model.provider}` : ''
+  return `${heading} — ${step.model.label}${provider}. Prompt:\n`
+}
+
+function promptParts(prompt: string, firstPrefix: string): string[] {
+  const parts: string[] = []
+  let remaining = prompt
   while (remaining.length > 0) {
-    const prefix = part === 0
-      ? `How I made this video${stepCount > 1 ? ` (${ordinal + 1}/${stepCount})` : ''} — prompt:\n`
-      : `Prompt continued (${part + 1}):\n`
+    const prefix = parts.length === 0
+      ? firstPrefix
+      : `Prompt continued (${parts.length + 1}):\n`
     const capacity = X_POST_MAX_CHARACTERS - prefix.length
     let take = Math.min(remaining.length, capacity)
     if (take < remaining.length) {
       const whitespace = remaining.lastIndexOf(' ', take - 1)
       if (whitespace > Math.floor(capacity / 2)) take = whitespace + 1
     }
-    replies.push({
-      id: `step:${step.id}:prompt:${part}`,
-      text: `${prefix}${remaining.slice(0, take)}`,
-    })
+    parts.push(`${prefix}${remaining.slice(0, take)}`)
     remaining = remaining.slice(take)
-    part += 1
   }
-  return replies
+  return parts
 }
 
-function attributionText(value: XPostSourceAttribution): string {
-  const full = value.xHandle
-    ? `@${value.xHandle} ${value.url}`
-    : `${value.label} ${value.url}`
-  return full.length <= X_POST_MAX_CHARACTERS ? full : value.url
+function imageBatches(images: readonly XPostThreadImage[]): XPostThreadImage[][] {
+  const batches: XPostThreadImage[][] = []
+  for (let index = 0; index < images.length; index += X_POST_MAX_IMAGES_PER_FOLLOWUP) {
+    batches.push(images.slice(index, index + X_POST_MAX_IMAGES_PER_FOLLOWUP))
+  }
+  return batches
 }
 
-function attributionReplies(
-  values: readonly XPostSourceAttribution[],
-): Array<{ id: string; text: string }> {
-  const ordered = [...values].sort((left, right) =>
-    Number(left.xHandle !== null) - Number(right.xHandle !== null))
-  const replies: Array<{ id: string; text: string }> = []
-  let lines: string[] = []
-  for (const value of ordered) {
-    const line = attributionText(value)
-    const prefix = replies.length === 0 ? 'Original sources:\n' : 'Original sources continued:\n'
-    const candidate = `${prefix}${[...lines, line].join('\n')}`
-    if (candidate.length <= X_POST_MAX_CHARACTERS) {
-      lines.push(line)
-      continue
-    }
-    if (lines.length > 0) {
-      replies.push({
-        id: `attribution:${replies.length}`,
-        text: `${prefix}${lines.join('\n')}`,
-      })
-      lines = [line]
-      continue
-    }
-    replies.push({
-      id: `attribution:${replies.length}`,
-      text: line,
-    })
+function threadReply(
+  id: string,
+  stepId: string,
+  text: string,
+  images: readonly XPostThreadImage[],
+): XPostThreadReply {
+  return {
+    id,
+    stepId,
+    text,
+    imageAssetIds: images.map((image) => image.assetId),
+    images: [...images],
   }
-  if (lines.length > 0) {
-    const prefix = replies.length === 0 ? 'Original sources:\n' : 'Original sources continued:\n'
-    replies.push({
-      id: `attribution:${replies.length}`,
-      text: `${prefix}${lines.join('\n')}`,
-    })
+}
+
+/**
+ * One step posts its model and prompt first, split across as many replies as
+ * the limit needs, with the first four input images attached to the opening
+ * reply; further images follow in batches of four.
+ */
+function stepReplies(
+  review: XPostThreadReview,
+  step: XPostThreadStep,
+  ordinal: number,
+  stepCount: number,
+): XPostThreadReply[] {
+  const prompt = xPostThreadPrompt(review, step).trim()
+  const texts = prompt
+    ? promptParts(prompt, promptPrefix(step, ordinal, stepCount))
+    : []
+  const batches = imageBatches(step.images)
+  const replies = texts.map((text, index) => threadReply(
+    `step:${step.id}:prompt:${index}`,
+    step.id,
+    text,
+    index === 0 ? batches[0] ?? [] : [],
+  ))
+  const unattached = texts.length > 0 ? batches.slice(1) : batches
+  for (const [index, images] of unattached.entries()) {
+    replies.push(threadReply(
+      `step:${step.id}:images:${index}`,
+      step.id,
+      `Source images used for this video${stepOrdinal(ordinal, stepCount)}:`,
+      images,
+    ))
   }
   return replies
 }
@@ -526,45 +493,9 @@ export function buildXPostThreadReplies(
   review: XPostThreadReview,
 ): XPostThreadReply[] {
   if (!review.options.enabled) return []
-  const replies: XPostThreadReply[] = []
-  for (const [ordinal, step] of review.context.steps.entries()) {
-    const prompts = review.options.includePrompt
-      ? promptReplies(step, ordinal, review.context.steps.length)
-      : []
-    const images = review.options.includeSourceImages ? step.images : []
-    for (const [index, prompt] of prompts.entries()) {
-      const attached = index === 0 ? images.slice(0, 4) : []
-      replies.push({
-        id: prompt.id,
-        text: review.textOverrides[prompt.id] ?? prompt.text,
-        imageAssetIds: attached.map((image) => image.assetId),
-        images: attached,
-      })
-    }
-    const remainingImages = images.slice(prompts.length > 0 ? 4 : 0)
-    for (let index = 0; index < remainingImages.length; index += 4) {
-      const attached = remainingImages.slice(index, index + 4)
-      const id = `step:${step.id}:images:${index / 4}`
-      const text = `Source images used for this video${review.context.steps.length > 1 ? ` (${ordinal + 1}/${review.context.steps.length})` : ''}:`
-      replies.push({
-        id,
-        text: review.textOverrides[id] ?? text,
-        imageAssetIds: attached.map((image) => image.assetId),
-        images: attached,
-      })
-    }
-  }
-  if (review.options.includeAttribution) {
-    for (const attribution of attributionReplies(review.context.attributions)) {
-      replies.push({
-        ...attribution,
-        text: review.textOverrides[attribution.id] ?? attribution.text,
-        imageAssetIds: [],
-        images: [],
-      })
-    }
-  }
-  return replies
+  const stepCount = review.context.steps.length
+  return review.context.steps.flatMap((step, ordinal) =>
+    stepReplies(review, step, ordinal, stepCount))
 }
 
 export function xPostFollowupsFromThread(

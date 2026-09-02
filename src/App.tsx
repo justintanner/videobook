@@ -192,15 +192,14 @@ import {
   type XPostDraftPatch,
 } from '@/videobook/x-post-review'
 import {
-  dedupeXPostAttributions,
   discoverXPostThreadGraph,
   initialXPostThreadReview,
   readableXPostPrompt,
+  selectXPostGenerationModel,
   selectXPostGenerationPrompt,
+  X_POST_EMPTY_THREAD_MESSAGE,
   xPostFollowupsFromThread,
-  xPostSourceAttribution,
   type XPostPromptMention,
-  type XPostSourceAttribution,
   type XPostThreadOptions,
   type XPostThreadReview,
   type XPostThreadStep,
@@ -3355,7 +3354,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const validation = review?.options.enabled
       && xPostFollowupsFromThread(review).length === 0
       ? {
-          blocking: 'Select at least one thread detail, or turn the thread off.',
+          blocking: X_POST_EMPTY_THREAD_MESSAGE,
           notice: null,
         }
       : xPostValidation(draft)
@@ -4521,17 +4520,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     })
   }, [])
-  const updatePendingXPostThreadReply = useCallback((
-    replyId: string,
+  const updatePendingXPostThreadPrompt = useCallback((
+    stepId: string,
     text: string,
   ) => {
     setPendingChatAction((current) => {
       if (current?.kind !== 'routed' || !current.xPostReview) return current
       const xPostReview = {
         ...current.xPostReview,
-        textOverrides: {
-          ...current.xPostReview.textOverrides,
-          [replyId]: text,
+        promptOverrides: {
+          ...current.xPostReview.promptOverrides,
+          [stepId]: text,
         },
       }
       return {
@@ -8801,24 +8800,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           thumbnailUrl: sourceAsset.thumbnailUrl,
         }]
       })
-      return { id: step.id, prompt, images }
+      const model = selectXPostGenerationModel({
+        attempts,
+        outputArtifactId: step.outputArtifactId,
+        producerTool: step.producerTool,
+        producerModel: step.producerModel,
+        producerProvider: step.producerProvider,
+        actions: generationActions,
+      })
+      return { id: step.id, prompt, model, images }
     }))
-
-    const attributionValues = await Promise.all(graph.upstreamArtifactIds
-      .filter((upstreamAssetId) => assetById.get(upstreamAssetId)?.origin === 'download')
-      .map(async (upstreamAssetId): Promise<XPostSourceAttribution | null> => {
-        const metadata = await call('read_asset_metadata', {
-          asset_id: upstreamAssetId,
-          name: 'original',
-          book_id: bookId,
-        }, { background: true }).catch(() => null)
-        const record = recordValue(metadata)
-        return record ? xPostSourceAttribution(upstreamAssetId, record) : null
-      }))
-    const attributions = dedupeXPostAttributions(
-      attributionValues.filter((value): value is XPostSourceAttribution => value !== null),
-    )
-    return initialXPostThreadReview({ steps, attributions })
+    return initialXPostThreadReview({ steps })
   }
 
   const previewRoutedChatAction = async (
@@ -9325,7 +9317,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ))
       const threadError = pendingChatAction.xPostReview?.options.enabled
         && xPostFollowupsFromThread(pendingChatAction.xPostReview).length === 0
-        ? 'Select at least one thread detail, or turn the thread off.'
+        ? X_POST_EMPTY_THREAD_MESSAGE
         : null
       if (error || threadError) {
         return {
@@ -11222,7 +11214,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               threadReview={pendingChatAction.xPostReview}
               onChange={updatePendingXPostDraft}
               onThreadOptionsChange={updatePendingXPostThreadOptions}
-              onThreadReplyChange={updatePendingXPostThreadReply}
+              onThreadPromptChange={updatePendingXPostThreadPrompt}
             />
           </ConfirmSheet>
         )

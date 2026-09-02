@@ -6998,41 +6998,55 @@ textarea:focus-visible {
   font-size: 9px;
 }
 
-.x-post-thread-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px 12px;
-  padding: 9px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-}
-
-.x-post-thread-options label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 9px;
-}
-
-.x-post-thread-replies {
+.x-post-thread-steps {
   display: grid;
   gap: 8px;
 }
 
-.x-post-thread-reply {
+.x-post-thread-step {
   display: grid;
-  gap: 6px;
+  gap: 10px;
   padding: 9px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: rgba(8, 24, 17, 0.62);
 }
 
-.x-post-thread-reply > div:first-child {
+.x-post-thread-step-ordinal {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.x-post-thread-field {
+  display: grid;
+  gap: 5px;
+}
+
+.x-post-thread-field-head {
   display: flex;
   justify-content: space-between;
   gap: 8px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.x-post-thread-label {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.x-post-thread-model {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  color: #bee5d0;
+  font-size: 11px;
+}
+
+.x-post-thread-model small {
   color: var(--muted);
   font-size: 9px;
 }

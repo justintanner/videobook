@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { NotebookCell, NotebookDocument } from 'videobook-engine'
 import {
   buildXPostThreadReplies,
-  dedupeXPostAttributions,
   discoverXPostThreadGraph,
   initialXPostThreadReview,
   readableXPostPrompt,
+  selectXPostGenerationModel,
   selectXPostGenerationPrompt,
-  xPostSourceAttribution,
+  xPostThreadHasDetails,
+  type XPostThreadImage,
 } from './x-post-thread'
 
 function cell(
@@ -31,6 +32,9 @@ function document(): NotebookDocument {
   const producer = {
     ...cell('generate-video', 'generate_video', 2),
     prompt: 'producer prompt',
+    provider: 'kie',
+    model: 'Seedance2MiniInputSchema',
+    tool: 'generate_kie_seedance_2_5_video',
     inputs: { resolvedPrompt: 'producer resolved prompt' },
   }
   const output = cell('generated-output', 'video', 3, 'vid-generated')
@@ -49,6 +53,27 @@ function document(): NotebookDocument {
   }
 }
 
+const SEEDANCE_ACTION = {
+  tool: 'generate_kie_seedance_2_5_video',
+  title: 'Seedance 2.5',
+  providerLabel: 'Kie',
+}
+
+const SEEDANCE_PRODUCER = {
+  producerTool: 'generate_kie_seedance_2_5_video',
+  producerModel: 'Seedance2MiniInputSchema',
+  producerProvider: 'kie',
+}
+
+function image(index: number): XPostThreadImage {
+  return {
+    assetId: `image-${index}`,
+    label: `@a${index + 1}`,
+    mediaUrl: `/image-${index}.png`,
+    thumbnailUrl: null,
+  }
+}
+
 describe('X post thread provenance', () => {
   it('finds only the final generation frontier and its direct source artifacts', () => {
     const graph = discoverXPostThreadGraph(document(), 'vid-final')
@@ -59,14 +84,11 @@ describe('X post thread provenance', () => {
       outputArtifactId: 'vid-generated',
       producerPrompt: 'producer prompt',
       producerResolvedPrompt: 'producer resolved prompt',
+      producerTool: 'generate_kie_seedance_2_5_video',
+      producerModel: 'Seedance2MiniInputSchema',
+      producerProvider: 'kie',
       sourceArtifactIds: ['img-source'],
     }])
-    expect(graph.upstreamArtifactIds).toEqual(expect.arrayContaining([
-      'vid-final',
-      'vid-generated',
-      'vid-original',
-      'img-source',
-    ]))
   })
 
   it('prefers the matching completed attempt prompt before stored fallbacks', () => {
@@ -90,105 +112,116 @@ describe('X post thread provenance', () => {
     })).toBe('current exact prompt')
   })
 
-  it('keeps only YouTube and X originals and derives mentions from status URLs', () => {
-    const youtube = xPostSourceAttribution('yt', {
-      webpage_url: 'https://www.youtube.com/watch?v=abc123',
-      uploader: 'Original Filmmaker',
-    })
-    const xStatus = xPostSourceAttribution('x', {
-      source_url: 'https://twitter.com/source_owner/status/12345?ref=test',
-      uploader: 'Source Owner',
-    })
-    const xProfile = xPostSourceAttribution('profile', {
-      source_url: 'https://x.com/unverified_name',
-      uploader: '@unverified_name',
-    })
-    const unsupported = xPostSourceAttribution('site', {
-      source_url: 'https://example.com/video',
-    })
-
-    expect(youtube).toMatchObject({
-      label: 'Original Filmmaker',
-      xHandle: null,
-    })
-    expect(xStatus).toMatchObject({
-      url: 'https://x.com/source_owner/status/12345',
-      xHandle: 'source_owner',
-    })
-    expect(xProfile).toMatchObject({ label: 'unverified_name', xHandle: null })
-    expect(unsupported).toBeNull()
-    expect(dedupeXPostAttributions([
-      youtube!,
-      { ...youtube!, id: 'duplicate' },
-      xStatus!,
-    ])).toEqual([youtube, xStatus])
-  })
-
-  it('splits exact prompts and images safely and leaves attribution at the tail', () => {
-    const prompt = Array.from({ length: 90 }, (_, index) => `word-${index}`).join(' ')
-    const context = {
-      steps: [{
-        id: 'generation',
-        prompt,
-        images: Array.from({ length: 5 }, (_, index) => ({
-          assetId: `image-${index}`,
-          label: `@a${index + 1}`,
-          mediaUrl: `/image-${index}.png`,
-          thumbnailUrl: null,
-        })),
-      }],
-      attributions: [
+  it('names the model from the attempt that produced the output, then the producer cell', () => {
+    expect(selectXPostGenerationModel({
+      attempts: [
         {
-          id: 'youtube',
-          label: 'Original Channel',
-          url: 'https://www.youtube.com/watch?v=abc',
-          xHandle: null,
+          status: 'completed',
+          artifactId: 'other-output',
+          tool: 'generate_kie_veo_3_1_video',
+          model: 'veo-3.1',
+          provider: 'kie',
         },
         {
-          id: 'x',
-          label: 'Source',
-          url: 'https://x.com/source/status/123',
-          xHandle: 'source',
+          status: 'completed',
+          artifactId: 'current-output',
+          tool: 'generate_fal_kling_3_0_omni_video',
+          model: 'kling-3.0-omni',
+          provider: 'fal',
         },
       ],
+      outputArtifactId: 'current-output',
+      ...SEEDANCE_PRODUCER,
+      actions: [SEEDANCE_ACTION],
+    })).toEqual({ label: 'kling-3.0-omni', provider: 'fal' })
+    expect(selectXPostGenerationModel({
+      attempts: [],
+      outputArtifactId: 'current-output',
+      ...SEEDANCE_PRODUCER,
+      actions: [SEEDANCE_ACTION],
+    })).toEqual({ label: 'Seedance 2.5', provider: 'Kie' })
+    expect(selectXPostGenerationModel({
+      attempts: [],
+      outputArtifactId: 'current-output',
+      ...SEEDANCE_PRODUCER,
+      actions: [],
+    })).toEqual({ label: 'Seedance2MiniInputSchema', provider: 'kie' })
+    expect(selectXPostGenerationModel({
+      attempts: [],
+      outputArtifactId: null,
+      producerTool: null,
+      producerModel: null,
+      producerProvider: null,
+      actions: [],
+    })).toBeNull()
+  })
+
+  it('posts the model and prompt first and batches the input images behind them', () => {
+    const prompt = Array.from({ length: 90 }, (_, index) => `word-${index}`).join(' ')
+    const step = {
+      id: 'generation',
+      prompt,
+      model: { label: 'Seedance 2.5', provider: 'Kie' },
+      images: Array.from({ length: 5 }, (_, index) => image(index)),
     }
+    const context = { steps: [step] }
+    expect(xPostThreadHasDetails(context)).toBe(true)
+    expect(xPostThreadHasDetails({ steps: [{ ...step, prompt: ' ', images: [] }] })).toBe(false)
     const disabled = initialXPostThreadReview(context)
     expect(buildXPostThreadReplies(disabled)).toEqual([])
 
-    const enabled = {
-      ...disabled,
-      options: { ...disabled.options, enabled: true },
-    }
+    const enabled = { ...disabled, options: { enabled: true } }
     const replies = buildXPostThreadReplies(enabled)
-    expect(replies.length).toBeGreaterThan(3)
+    expect(replies.length).toBeGreaterThan(2)
+    expect(replies[0]?.text.startsWith(
+      'How I made this video — Seedance 2.5 via Kie. Prompt:\nword-0 ',
+    )).toBe(true)
     expect(replies.every((reply) => reply.text.length <= 280)).toBe(true)
+    expect(replies.every((reply) => reply.stepId === 'generation')).toBe(true)
     expect(replies.every((reply) => reply.imageAssetIds.length <= 4)).toBe(true)
-    expect(replies[0].imageAssetIds).toHaveLength(4)
-    expect(replies.some((reply) => reply.imageAssetIds.includes('image-4'))).toBe(true)
-    expect(replies.at(-1)?.text).toContain('@source https://x.com/source/status/123')
+    expect(replies[0]?.imageAssetIds).toEqual(['image-0', 'image-1', 'image-2', 'image-3'])
+    expect(replies.at(-1)).toMatchObject({
+      text: 'Source images used for this video:',
+      imageAssetIds: ['image-4'],
+    })
 
-    const firstReplyId = replies[0].id
-    const edited = {
-      ...enabled,
-      textOverrides: { [firstReplyId]: 'Edited exact reply' },
-    }
-    const hidden = {
-      ...edited,
-      options: { ...edited.options, includePrompt: false },
-    }
-    expect(buildXPostThreadReplies(hidden).some((reply) =>
-      reply.id === firstReplyId)).toBe(false)
-    expect(buildXPostThreadReplies(edited)[0].text).toBe('Edited exact reply')
+    const edited = { ...enabled, promptOverrides: { generation: 'Edited exact prompt' } }
+    expect(buildXPostThreadReplies(edited).map((reply) => reply.text)).toEqual([
+      'How I made this video — Seedance 2.5 via Kie. Prompt:\nEdited exact prompt',
+      'Source images used for this video:',
+    ])
     expect(buildXPostThreadReplies({
       ...enabled,
-      options: {
-        enabled: true,
-        includePrompt: false,
-        includeSourceImages: false,
-        includeAttribution: false,
-      },
+      context: { steps: [{ ...step, images: [] }] },
+      promptOverrides: { generation: '   ' },
     })).toEqual([])
   })
+
+  it('numbers the replies of a multi-step thread', () => {
+    const review = initialXPostThreadReview({
+      steps: [
+        { id: 'first', prompt: 'first prompt', model: null, images: [] },
+        { id: 'second', prompt: 'second prompt', model: { label: 'Veo 3.1', provider: null }, images: [image(0)] },
+      ],
+    })
+    expect(buildXPostThreadReplies({ ...review, options: { enabled: true } })).toEqual([
+      {
+        id: 'step:first:prompt:0',
+        stepId: 'first',
+        text: 'How I made this video (1/2) — prompt:\nfirst prompt',
+        imageAssetIds: [],
+        images: [],
+      },
+      {
+        id: 'step:second:prompt:0',
+        stepId: 'second',
+        text: 'How I made this video (2/2) — Veo 3.1. Prompt:\nsecond prompt',
+        imageAssetIds: ['image-0'],
+        images: [image(0)],
+      },
+    ])
+  })
+
   it('follows duplicate and routed-edit provenance recorded only in cell inputs', () => {
     const base = document()
     const duplicate = {
@@ -223,14 +256,6 @@ describe('X post thread provenance', () => {
       producerResolvedPrompt: 'producer resolved prompt',
       sourceArtifactIds: ['img-source'],
     })
-    expect(graph.upstreamArtifactIds).toEqual(expect.arrayContaining([
-      'vid-copy',
-      'vid-trimmed',
-      'vid-duplicate',
-      'vid-generated',
-      'img-source',
-    ]))
-    expect(graph.upstreamArtifactIds).not.toContain('vid-original')
   })
 
   it('rewrites notebook mentions into readable labels for public replies', () => {
@@ -244,39 +269,14 @@ describe('X post thread provenance', () => {
     expect(readableXPostPrompt('no mentions here', [])).toBe('no mentions here')
   })
 
-  it('credits the concrete YouTube video rather than its playlist page', () => {
-    expect(xPostSourceAttribution('yt', {
-      webpage_url: 'https://www.youtube.com/playlist?list=PLWxZwASNHB04',
-      source_url: 'https://youtu.be/iZlOQMYjdPg?list=PLWxZwASNHB04',
-      uploader: 'Stephanie Morris',
-    })).toEqual({
-      id: 'yt:https://youtu.be/iZlOQMYjdPg',
-      label: 'Stephanie Morris',
-      url: 'https://youtu.be/iZlOQMYjdPg',
-      xHandle: null,
-    })
-    expect(xPostSourceAttribution('shorts', {
-      webpage_url: 'https://www.youtube.com/shorts/abcDEF123?feature=share',
-    })?.url).toBe('https://www.youtube.com/shorts/abcDEF123')
-    expect(xPostSourceAttribution('playlist', {
-      webpage_url: 'https://www.youtube.com/playlist?list=PL1#top',
-    })).toMatchObject({
-      label: 'YouTube',
-      url: 'https://www.youtube.com/playlist?list=PL1',
-    })
-  })
   it('never lets a prompt chunk exceed the limit when the cut lands on a space', () => {
     const prefix = 'How I made this video — prompt:\n'
     const capacity = 280 - prefix.length
     const prompt = `${'x'.repeat(capacity)} ${'y'.repeat(40)}`
     const review = initialXPostThreadReview({
-      steps: [{ id: 'generation', prompt, images: [] }],
-      attributions: [],
+      steps: [{ id: 'generation', prompt, model: null, images: [] }],
     })
-    const replies = buildXPostThreadReplies({
-      ...review,
-      options: { ...review.options, enabled: true },
-    })
+    const replies = buildXPostThreadReplies({ ...review, options: { enabled: true } })
     expect(replies.map((reply) => reply.text.length)).toEqual([280, 63])
     expect(replies[1]?.text).toBe(`Prompt continued (2):\n ${'y'.repeat(40)}`)
   })
