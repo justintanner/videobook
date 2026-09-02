@@ -10891,7 +10891,8 @@ textarea:focus-visible {
   z-index: 2;
   overflow: hidden;
   pointer-events: none;
-  transition: opacity 120ms ease;
+  /* timeupdate ticks ~4x/s; a linear ramp between ticks reads as the burn's fade. */
+  transition: opacity 200ms linear;
 }
 
 .watermark-preview-qr {

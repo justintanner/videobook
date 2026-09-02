@@ -138,14 +138,21 @@ import {
   clampHandlePadding,
   clampHandleRounding,
   clampHandleVerticalPercent,
+  clampWatermarkFadeSeconds,
   clampWatermarkOpacity,
   DEFAULT_HANDLE_PADDING,
   DEFAULT_HANDLE_ROUNDING,
   DEFAULT_HANDLE_VERTICAL_PERCENT,
+  DEFAULT_WATERMARK_FADE_SECONDS,
   DEFAULT_WATERMARK_OPACITY,
   isWatermarkHandlePlacement,
   isWatermarkPosition,
 } from './videobook/watermark-review'
+import {
+  watermarkAppliedMessage,
+  watermarkBurnWatchStep,
+  watermarkQueuedMessage,
+} from './videobook/watermark-burn'
 import {
   NotebookCellContextMenu,
   type NotebookCellContextAction,
@@ -812,6 +819,9 @@ const downloadWatchIntervalMs = 5_000
 const mediaInsightWatchIntervalMs = 3_000
 const mediaInsightWatchTimeoutMs = 20 * 60_000
 const mediaProcessWatchIntervalMs = 750
+// Polls a queued watermark burn may spend without its job in the listing
+// before the watch gives up (the job lands in list_jobs on the first poll).
+const watermarkBurnMissingPollLimit = 20
 const mediaAssetWatchTimeoutMs = 45 * 60_000
 const activeJobStates = new Set(['queued', 'running', 'completing'])
 const EMPTY_NOTEBOOK_CELLS: NotebookCell[] = []
@@ -6599,6 +6609,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       qrEndSeconds?: number | null
       handleStartSeconds?: number
       handleEndSeconds?: number | null
+      fadeSeconds?: number
       saveDefault?: boolean
     } = {},
   ) => {
@@ -6643,6 +6654,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       qrEndSeconds: initial.qrEndSeconds ?? null,
       handleStartSeconds: initial.handleStartSeconds ?? 0,
       handleEndSeconds: initial.handleEndSeconds ?? null,
+      fadeSeconds: initial.fadeSeconds === undefined
+        ? DEFAULT_WATERMARK_FADE_SECONDS
+        : clampWatermarkFadeSeconds(initial.fadeSeconds),
       saveDefault: initial.saveDefault ?? false,
       recent: [],
       loadingConfig: true,
@@ -6680,6 +6694,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     const {
       assetId,
+      targetLabel,
       handle,
       url,
       includeQr,
@@ -6698,6 +6713,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       qrEndSeconds,
       handleStartSeconds,
       handleEndSeconds,
+      fadeSeconds,
       saveDefault,
     } = pendingWatermarkReview
     const trimmedHandle = handle.replace(/^@/, '').trim()
@@ -6763,23 +6779,51 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ...(includeHandle && handleEndSeconds !== null
           ? { handle_end_seconds: handleEndSeconds }
           : {}),
+        fade_seconds: fadeSeconds,
         ...(includeHandle && saveDefault ? { save_default: true } : {}),
+        wait: false,
       }))
-      const source = asString(result?.placement_source)
-      const corner = asString(result?.position)
-      const frameAware = source === 'vision' || source === 'cached' ? ' (frame-aware)' : ''
-      const handlePosition = includeHandle
-        ? handlePlacement === 'center'
-          ? ` · handle ${handleVerticalPercent}% from top at ${Math.round(handleOpacity * 100)}%`
-          : ` · handle ${handlePlacement.replace('-', ' ')} at ${Math.round(handleOpacity * 100)}%`
-        : ''
-      const qrAppearance = includeQr ? ` · QR ${Math.round(qrOpacity * 100)}%` : ''
+      const applied = {
+        includeQr,
+        includeHandle,
+        handle: trimmedHandle,
+        handlePlacement,
+        handleVerticalPercent,
+        handleOpacity,
+        qrOpacity,
+        requestedPosition: position,
+      }
+      const jobId = asNumber(result?.job_id)
+      if (asString(result?.status) === 'accepted' && jobId !== null) {
+        // The burn runs in the queue: hand the composer back now and watch
+        // the asset until the reprocess settles.
+        const message = watermarkQueuedMessage(
+          includeQr,
+          includeHandle,
+          trimmedHandle,
+          targetLabel,
+        )
+        setNotice(message)
+        setPendingWatermarkReview(null)
+        void watchWatermarkBurn({
+          bookId,
+          artifactId: assetId,
+          jobId,
+          targetLabel,
+          describe: (burn) => watermarkAppliedMessage({
+            ...applied,
+            corner: asString(burn?.corner),
+            placementSource: asString(burn?.placementSource),
+          }),
+        })
+        return { ok: true, message }
+      }
       await refreshBookData(bookId, notebook?.id)
-      const message = includeQr
-        ? includeHandle
-          ? `QR + @${trimmedHandle} watermarks burned in — QR ${corner ?? position}${frameAware}${qrAppearance}${handlePosition}.`
-          : `QR watermark burned in — ${corner ?? position}${frameAware}${qrAppearance}.`
-        : `@${trimmedHandle} watermark burned in${handlePosition}.`
+      const message = watermarkAppliedMessage({
+        ...applied,
+        corner: asString(result?.position),
+        placementSource: asString(result?.placement_source),
+      })
       setNotice(message)
       setPendingWatermarkReview(null)
       return { ok: true, message }
@@ -6970,6 +7014,109 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (lastError instanceof Error) throw lastError
     throw new Error('Processing did not finish within five minutes')
   }, [applyJobsSnapshot, call])
+
+  // A queued watermark burn (apply_watermark wait=false) is tracked here
+  // rather than by holding the composer: the burn job anchors the watch and
+  // the asset must settle back to ready after the reprocess it enqueues.
+  const watchWatermarkBurn = useCallback(async (params: {
+    bookId: string
+    artifactId: string
+    jobId: number
+    targetLabel: string
+    describe: (burn: Record<string, unknown> | null) => string
+  }) => {
+    const deadline = Date.now() + mediaAssetWatchTimeoutMs
+    let consecutiveFailures = 0
+    let missingPolls = 0
+    const finish = async (message: string, tone: WorkspaceNoticeTone = 'info') => {
+      try {
+        await refreshBookData(
+          params.bookId,
+          watchScopeRef.current.notebookId ?? undefined,
+        )
+      } catch {
+        void 0
+      }
+      setNotice(message, tone)
+    }
+    while (Date.now() < deadline) {
+      const scope = watchScopeRef.current
+      if (scope.bookId !== params.bookId) return
+      try {
+        const fetchedAt = performance.now()
+        const notebookId = scope.notebookId
+        const [assetValue, jobValue, notebookValue] = await Promise.all([
+          callRef.current('list_assets', {
+            book_id: params.bookId,
+            sort: 'newest',
+            limit: 200,
+            include_referenced: true,
+          }, { background: true }),
+          callRef.current('list_jobs', {
+            book_id: params.bookId,
+            limit: 200,
+          }, { background: true }),
+          notebookId
+            ? callRef.current('get_notebook', {
+                book_id: params.bookId,
+                notebook_id: notebookId,
+              }, { background: true })
+            : Promise.resolve(null),
+        ])
+        consecutiveFailures = 0
+        const afterScope = watchScopeRef.current
+        if (afterScope.bookId !== params.bookId) return
+        const nextAssets = asAssets(assetValue)
+        const nextJobs = asJobs(jobValue)
+        const nextNotebook = notebookId && afterScope.notebookId === notebookId
+          ? asNotebook(notebookValue)
+          : null
+        if (fetchedAt >= watchSnapshotClockRef.current) {
+          watchSnapshotClockRef.current = fetchedAt
+          setAssets((current) =>
+            jsonEqual(current, nextAssets) ? current : nextAssets)
+          applyJobsSnapshot(nextJobs)
+          // The cell's working badge comes from the canvas nodes, which only
+          // applyNotebook rebuilds.
+          if (nextNotebook) applyNotebook(nextNotebook, nextAssets, nextJobs)
+        }
+        const step = watermarkBurnWatchStep(
+          params.artifactId,
+          params.jobId,
+          nextAssets.find((asset) => asset.artifactId === params.artifactId),
+          nextJobs,
+        )
+        if (step.kind === 'completed') {
+          await finish(params.describe(step.result))
+          return
+        }
+        if (step.kind === 'failed') {
+          await finish(step.message, 'error')
+          return
+        }
+        missingPolls = step.kind === 'missing' ? missingPolls + 1 : 0
+        if (missingPolls >= watermarkBurnMissingPollLimit) {
+          setNotice(
+            `Lost track of the ${params.targetLabel} watermark job — check the Jobs screen`,
+            'error',
+          )
+          return
+        }
+      } catch (error) {
+        consecutiveFailures += 1
+        if (consecutiveFailures >= 10) {
+          const detail = error instanceof Error ? error.message : String(error)
+          setNotice(
+            `Stopped watching the ${params.targetLabel} watermark: ${detail}. Check the Jobs screen.`,
+            'error',
+          )
+          return
+        }
+      }
+      await delay(mediaProcessWatchIntervalMs)
+    }
+    setNotice(`${params.targetLabel} watermark is still processing — check the Jobs screen`)
+  }, [applyJobsSnapshot, applyNotebook, refreshBookData, setNotice])
 
   const retryIngest = async (artifactId: string) => {
     if (!bookId) return
@@ -8701,6 +8848,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const handlePadding = asNumber(plan.params.handle_padding)
       const handlePaddingY = asNumber(plan.params.handle_padding_y)
       const handleRounding = asNumber(plan.params.handle_rounding)
+      const fadeSeconds = asNumber(plan.params.fade_seconds)
       const requestedPosition = plan.params.position
       const requestedHandlePlacement = plan.params.handle_position
       openWatermarkReview(target.artifactId, target.label, {
@@ -8757,6 +8905,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : {}),
         ...(handleEndSeconds !== null && handleEndSeconds >= 0
           ? { handleEndSeconds }
+          : {}),
+        ...(fadeSeconds !== null
+          ? { fadeSeconds: clampWatermarkFadeSeconds(fadeSeconds) }
           : {}),
         ...(typeof plan.params.save_default === 'boolean'
           ? { saveDefault: plan.params.save_default }

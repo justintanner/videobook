@@ -120,6 +120,80 @@ async function chooseWatermarkPositions(
   return positions as Record<Orientation, OsgPosition>;
 }
 
+export interface OsgPlacementRequest {
+  assetId: string;
+  fingerprint: string;
+  userScale: number;
+  badgeAspect?: number;
+  signal: AbortSignal;
+}
+
+/**
+ * Sample frames, ask the vision model for occupied regions, and pick the
+ * least-busy corner per orientation. Writes the analysis cache on success.
+ * Throws when vision is unavailable (no key, no frames) so callers can fall
+ * back to a coarser placement.
+ */
+export async function analyzeOsgPlacement(
+  engine: Engine,
+  request: OsgPlacementRequest,
+): Promise<OsgPlacementAnalysis> {
+  const { assetId, fingerprint, userScale, badgeAspect = BADGE_ASPECT, signal } = request;
+  const apiKey = getApiKey("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
+
+  const listResult = await engine.files.listSubdir(assetId, "original_frames");
+  const frameFiles = listResult.ok
+    ? listResult.value
+        .filter((f) => f.endsWith(".jpg"))
+        .sort((a, b) => parseFloat(a) - parseFloat(b))
+    : [];
+  if (frameFiles.length === 0) {
+    throw new Error(`no_frames: asset ${assetId} has no original_frames to analyze`);
+  }
+  const sampled = sampleEvenly(frameFiles, MAX_FRAMES);
+
+  const frames: Array<{ id: string; label: string; buffer: Buffer }> = [];
+  for (const file of sampled) {
+    signal.throwIfAborted();
+    const read = await engine.files.read(assetId, `original_frames/${file}`);
+    if (!read.ok) throw new Error(read.error.message);
+    frames.push({
+      id: file,
+      label: `timestamp=${parseFloat(file).toFixed(3)}s`,
+      buffer: Buffer.from(read.value),
+    });
+  }
+
+  const source = await readSourceDimensions(engine, assetId, frames[0].buffer);
+  const regionsByFrame = await detectOccupiedRegions(frames, {
+    apiKey,
+    signal,
+    instructions: SYSTEM_PROMPT,
+    schemaName: "osg_placement_analysis",
+    errorLabel: "OSG placement",
+    timeout: 240_000,
+  });
+  const regions = [...regionsByFrame.values()].flat();
+
+  const positions = await chooseWatermarkPositions(
+    engine, assetId, regions, source.width, source.height, userScale, badgeAspect,
+  );
+
+  const analysis: OsgPlacementAnalysis = {
+    version: OSG_PLACEMENT_VERSION,
+    fingerprint,
+    sourceWidth: source.width,
+    sourceHeight: source.height,
+    frameTimes: sampled.map((file) => parseFloat(file)),
+    regions,
+    positions,
+    analyzedAt: new Date().toISOString(),
+  };
+  await writeOsgPlacementAnalysis(engine, assetId, analysis);
+  return analysis;
+}
+
 export function registerOsgPlacementJob(engine: Engine): void {
   registerJobHandler("osg_placement", async (payload, ctx) => {
     const {
@@ -133,58 +207,13 @@ export function registerOsgPlacementJob(engine: Engine): void {
       "analyze",
       { durationMs: LOCK_DURATION_MS, data: { state: "analyzing-osg-placement" } },
       async () => {
-        const apiKey = getApiKey("OPENAI_API_KEY");
-        if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
-
-        const listResult = await engine.files.listSubdir(assetId, "original_frames");
-        const frameFiles = listResult.ok
-          ? listResult.value
-              .filter((f) => f.endsWith(".jpg"))
-              .sort((a, b) => parseFloat(a) - parseFloat(b))
-          : [];
-        if (frameFiles.length === 0) {
-          throw new Error(`no_frames: asset ${assetId} has no original_frames to analyze`);
-        }
-        const sampled = sampleEvenly(frameFiles, MAX_FRAMES);
-
-        const frames: Array<{ id: string; label: string; buffer: Buffer }> = [];
-        for (const file of sampled) {
-          ctx.signal.throwIfAborted();
-          const read = await engine.files.read(assetId, `original_frames/${file}`);
-          if (!read.ok) throw new Error(read.error.message);
-          frames.push({
-            id: file,
-            label: `timestamp=${parseFloat(file).toFixed(3)}s`,
-            buffer: Buffer.from(read.value),
-          });
-        }
-
-        const source = await readSourceDimensions(engine, assetId, frames[0].buffer);
-        const regionsByFrame = await detectOccupiedRegions(frames, {
-          apiKey,
-          signal: ctx.signal,
-          instructions: SYSTEM_PROMPT,
-          schemaName: "osg_placement_analysis",
-          errorLabel: "OSG placement",
-          timeout: 240_000,
-        });
-        const regions = [...regionsByFrame.values()].flat();
-
-        const positions = await chooseWatermarkPositions(
-          engine, assetId, regions, source.width, source.height, userScale, badgeAspect,
-        );
-
-        const analysis: OsgPlacementAnalysis = {
-          version: OSG_PLACEMENT_VERSION,
+        const analysis = await analyzeOsgPlacement(engine, {
+          assetId,
           fingerprint,
-          sourceWidth: source.width,
-          sourceHeight: source.height,
-          frameTimes: sampled.map((file) => parseFloat(file)),
-          regions,
-          positions,
-          analyzedAt: new Date().toISOString(),
-        };
-        await writeOsgPlacementAnalysis(engine, assetId, analysis);
+          userScale,
+          badgeAspect,
+          signal: ctx.signal,
+        });
         return { analysis } satisfies OsgPlacementResult;
       },
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },

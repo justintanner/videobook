@@ -8,13 +8,16 @@ import {
   MAX_HANDLE_PADDING,
   MAX_HANDLE_ROUNDING,
   MAX_HANDLE_VERTICAL_PERCENT,
+  MAX_WATERMARK_FADE_SECONDS,
   MAX_WATERMARK_OPACITY,
   MIN_HANDLE_PADDING,
   MIN_HANDLE_ROUNDING,
   MIN_HANDLE_VERTICAL_PERCENT,
+  MIN_WATERMARK_FADE_SECONDS,
   MIN_WATERMARK_OPACITY,
   WATERMARK_HANDLE_PLACEMENTS,
   WATERMARK_POSITIONS,
+  watermarkPreviewOpacity,
 } from '@/videobook/watermark-review'
 import type {
   WatermarkHandlePlacement,
@@ -51,6 +54,7 @@ export interface WatermarkReviewState {
   qrEndSeconds: number | null
   handleStartSeconds: number
   handleEndSeconds: number | null
+  fadeSeconds: number
   saveDefault: boolean
   recent: string[]
   loadingConfig: boolean
@@ -76,6 +80,7 @@ type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
   | 'qrEndSeconds'
   | 'handleStartSeconds'
   | 'handleEndSeconds'
+  | 'fadeSeconds'
   | 'saveDefault'
 >>
 
@@ -188,13 +193,8 @@ function watermarkOpacityPercent(value: number): number {
   return Math.round(value * 100)
 }
 
-function watermarkVisibleAt(
-  currentTime: number,
-  startSeconds: number,
-  endSeconds: number | null,
-): boolean {
-  return currentTime >= startSeconds
-    && (endSeconds === null || currentTime <= endSeconds)
+function fadeLabel(fadeSeconds: number): string {
+  return fadeSeconds > 0 ? `${fadeSeconds.toFixed(1)}s` : 'Off'
 }
 
 function watermarkTimelineWindow(
@@ -508,15 +508,21 @@ export function WatermarkBody({
   const duration = state.durationSeconds ?? 0
   const handleMissing = state.includeHandle && !handle
   const linkMissing = state.includeQr && !state.url.trim() && !handle
-  const qrVisibleAtPlayhead = watermarkVisibleAt(
+  const qrPreviewOpacity = watermarkPreviewOpacity(
     currentTime,
     state.qrStartSeconds,
     state.qrEndSeconds,
+    duration,
+    state.qrOpacity,
+    state.fadeSeconds,
   )
-  const handleVisibleAtPlayhead = watermarkVisibleAt(
+  const handlePreviewOpacity = watermarkPreviewOpacity(
     currentTime,
     state.handleStartSeconds,
     state.handleEndSeconds,
+    duration,
+    state.handleOpacity,
+    state.fadeSeconds,
   )
   const previewPosition = state.position === 'auto' ? 'bottom-right' : state.position
   const previewWidth = state.width !== null && state.width > 0 ? state.width : 16
@@ -572,7 +578,7 @@ export function WatermarkBody({
               className="watermark-preview-overlay watermark-preview-qr"
               style={{
                 ...previewQrStyle(previewPosition, previewWidth, previewHeight),
-                opacity: qrVisibleAtPlayhead ? state.qrOpacity : 0,
+                opacity: qrPreviewOpacity,
               }}
               aria-hidden="true"
             >
@@ -591,7 +597,7 @@ export function WatermarkBody({
                   state.includeQr ? state.handlePlacement : 'center',
                   previewPosition,
                 ),
-                opacity: handleVisibleAtPlayhead ? state.handleOpacity : 0,
+                opacity: handlePreviewOpacity,
               }}
               aria-hidden="true"
             >
@@ -810,6 +816,19 @@ export function WatermarkBody({
               onChange={(percent) => onChange({ handleOpacity: percent / 100 })}
             />
           )}
+          <WatermarkRange
+            busy={busy}
+            id="watermark-fade"
+            label="Fade in/out"
+            min={MIN_WATERMARK_FADE_SECONDS * 10}
+            max={MAX_WATERMARK_FADE_SECONDS * 10}
+            output={fadeLabel(state.fadeSeconds)}
+            value={Math.round(state.fadeSeconds * 10)}
+            onChange={(tenths) => onChange({ fadeSeconds: tenths / 10 })}
+          />
+          <small className="confirm-help">
+            Fades only where a watermark starts or ends inside the clip.
+          </small>
         </section>
 
         <section className="confirm-section confirm-watermark-position" aria-label="Position">

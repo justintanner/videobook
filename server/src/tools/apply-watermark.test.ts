@@ -3,9 +3,10 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import sharp from "sharp";
 import { findVideoFile } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
-import { probeVideo } from "../ffmpeg.js";
+import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import { readWatermarkConfig } from "../watermark-config.js";
 import { watermarkOsgScale } from "../remotion/osg-spec.js";
@@ -40,7 +41,11 @@ type ApplyResult = {
   qr_end_seconds: number | null;
   handle_start_seconds: number | null;
   handle_end_seconds: number | null;
+  fade_seconds: number;
   mode: string;
+  status?: string;
+  job_id?: number;
+  operation_id?: string;
   positions?: Record<(typeof ORIENTATIONS)[number], string>;
   position?: string | null;
   qr_asset_id?: string | null;
@@ -49,6 +54,53 @@ type ApplyResult = {
   handle_vertical_percent: number;
   placement_source: string;
 };
+
+type PixelRegion = { left: number; top: number; width: number; height: number };
+
+/** Mean absolute channel difference between two videos' frame `n` inside `region`. */
+async function frameRegionDifference(
+  workDir: string,
+  originalPath: string,
+  candidatePath: string,
+  frameIndex: number,
+  region: PixelRegion,
+): Promise<number> {
+  const pixels = await Promise.all([originalPath, candidatePath].map(async (input, i) => {
+    const framePath = join(workDir, `frame-${frameIndex}-${i}-${Date.now()}.png`);
+    await runFfmpeg([
+      "-y",
+      "-i", input,
+      "-vf", `select='eq(n,${frameIndex})'`,
+      "-fps_mode", "passthrough",
+      "-frames:v", "1",
+      framePath,
+    ]);
+    const { data } = await sharp(framePath)
+      .extract(region)
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    return data;
+  }));
+  let total = 0;
+  for (let i = 0; i < pixels[0].length; i += 1) {
+    total += Math.abs(pixels[0][i] - pixels[1][i]);
+  }
+  return total / pixels[0].length;
+}
+
+/**
+ * A burn must leave no render-time overlay behind: the forced reprocess drops
+ * the per-orientation render settings outright, and any that survive must
+ * not point at a badge.
+ */
+async function expectOverlayCleared(fs: Engine, assetId: string): Promise<void> {
+  for (const orient of ORIENTATIONS) {
+    const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
+    if (!meta.ok) continue;
+    expect(meta.value.osgAssetId ?? null).toBeNull();
+  }
+}
 
 describe("apply_watermark tool", () => {
   let client: Client;
@@ -318,6 +370,9 @@ describe("apply_watermark tool", () => {
       handle_end_seconds: 0.8,
     });
     expect(parsed.mode).toBe("burn");
+    expect(parsed.status).toBe("completed");
+    expect(parsed.operation_id).toMatch(/^burn-watermark-/);
+    expect(parsed.fade_seconds).toBe(0.5);
     expect(parsed.position).toBe("top-center");
     expect(parsed.placement_source).toBe("explicit");
     expect(parsed.include_qr).toBe(true);
@@ -377,14 +432,9 @@ describe("apply_watermark tool", () => {
     expect(probe.height).toBe(240);
     expect(probe.duration).toBeGreaterThan(0.5);
 
-    // The burned badge replaces the render-time overlay; settings are cleared
-    // so a later render can't stamp the watermark twice.
-    for (const orient of ORIENTATIONS) {
-      const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
-      if (!meta.ok) throw new Error(`missing ${orient}.render`);
-      expect(meta.value.osgAssetId).toBeNull();
-      expect(meta.value.osgOpacity).toBe(1);
-    }
+    // The burned badge replaces the render-time overlay, so a later render
+    // can't stamp the watermark twice.
+    await expectOverlayCleared(fs, assetId);
   }, 120_000);
 
   it("burns a QR-only watermark without validating or rendering a handle", async () => {
@@ -423,6 +473,89 @@ describe("apply_watermark tool", () => {
     const videoFile = findVideoFile(after.value.files)!;
     expect(videoFile.objectHash).not.toBe(beforeHash);
     expect(after.value.files.some((file) => file.name === "proxy.mp4")).toBe(true);
+  }, 120_000);
+
+  it("fades a mid-clip QR in instead of cutting it in", async () => {
+    const assetId = await createRealVideoAsset();
+    const originalPath = join(tempDir, "fade-original.mp4");
+    await copyVideoFixture(COMMON_VIDEO_FIXTURES.watermark, originalPath);
+
+    // 1s, 12fps fixture: QR from 0.2s to 0.8s with 0.3s fades ramps in over
+    // frames 3-5 and is fully opaque by frame 6.
+    const parsed = await apply({
+      asset_id: assetId,
+      handle: "",
+      url: "https://example.com/fade",
+      include_handle: false,
+      position: "bottom-right",
+      qr_opacity: 1,
+      qr_start_seconds: 0.2,
+      qr_end_seconds: 0.8,
+      fade_seconds: 0.3,
+    });
+    expect(parsed.fade_seconds).toBe(0.3);
+
+    const after = await fs.files.manifest(assetId);
+    if (!after.ok) throw new Error(after.error.message);
+    const burnedPath = join(after.value.path, findVideoFile(after.value.files)!.name);
+    // 38px badge inset 6px from the bottom-right corner of the 320x240 frame.
+    const badgeRegion: PixelRegion = { left: 276, top: 196, width: 38, height: 38 };
+    const [beforeStart, midFadeIn, fullyVisible] = await Promise.all([
+      frameRegionDifference(tempDir, originalPath, burnedPath, 1, badgeRegion),
+      frameRegionDifference(tempDir, originalPath, burnedPath, 3, badgeRegion),
+      frameRegionDifference(tempDir, originalPath, burnedPath, 6, badgeRegion),
+    ]);
+    expect(beforeStart).toBeLessThan(8);
+    expect(midFadeIn).toBeGreaterThan(beforeStart + 3);
+    expect(fullyVisible).toBeGreaterThan(midFadeIn * 2);
+  }, 120_000);
+
+  it("queues the burn without waiting when wait is false", async () => {
+    const assetId = await createRealVideoAsset();
+    await apply({ asset_id: assetId, handle: "someone", mode: "overlay" });
+    const before = await fs.files.manifest(assetId);
+    if (!before.ok) throw new Error(before.error.message);
+    const beforeHash = findVideoFile(before.value.files)!.objectHash;
+
+    const parsed = await apply({
+      asset_id: assetId,
+      handle: "someone",
+      position: "top-left",
+      wait: false,
+    });
+    expect(parsed.mode).toBe("burn");
+    expect(parsed.status).toBe("accepted");
+    expect(typeof parsed.job_id).toBe("number");
+    expect(parsed.operation_id).toMatch(/^burn-watermark-/);
+    expect(parsed.position).toBe("top-left");
+    expect(parsed.placement_source).toBe("explicit");
+
+    const readiness = await client.callTool({
+      name: "wait_for_asset_ready",
+      arguments: { book_id: bookId, asset_id: assetId, timeout_seconds: 120 },
+    });
+    expect(readiness.isError).toBeFalsy();
+
+    const jobs = await client.callTool({
+      name: "list_jobs",
+      arguments: { book_id: bookId, limit: 50 },
+    });
+    const jobList = JSON.parse((jobs.content as TextContent)[0].text) as Array<{
+      id: number;
+      type: string;
+      state: string;
+      result: { corner?: string; placementSource?: string } | null;
+    }>;
+    const burnJob = jobList.find((job) => job.id === parsed.job_id);
+    expect(burnJob?.type).toBe("burn_watermark");
+    expect(burnJob?.state).toBe("done");
+    expect(burnJob?.result).toMatchObject({ corner: "top-left", placementSource: "explicit" });
+
+    const after = await fs.files.manifest(assetId);
+    if (!after.ok) throw new Error(after.error.message);
+    expect(findVideoFile(after.value.files)!.objectHash).not.toBe(beforeHash);
+    expect(after.value.files.some((file) => file.name === "proxy.mp4")).toBe(true);
+    await expectOverlayCleared(fs, assetId);
   }, 120_000);
 
   it("records handle placement and vertical padding on overlay cards", async () => {

@@ -35,6 +35,7 @@ function renderWatermark(overrides: Partial<WatermarkReviewState> = {}): string 
     qrEndSeconds: 4,
     handleStartSeconds: 0,
     handleEndSeconds: 8,
+    fadeSeconds: 0.5,
     saveDefault: false,
     recent: ['someone'],
     loadingConfig: false,
@@ -96,6 +97,11 @@ describe('watermark chat review', () => {
     expect(html).toContain('>Below QR</button>')
     expect(html).toContain('<output for="watermark-qr-opacity">35%</output>')
     expect(html).toContain('<output for="watermark-handle-opacity">70%</output>')
+    expect(html).toContain('id="watermark-fade" type="range" min="0" max="20" step="1" value="5"')
+    expect(html).toContain('<output for="watermark-fade">0.5s</output>')
+    // QR runs 0–4s of 12s: no fade in at the clip start, so the playhead at
+    // 0s previews the full set opacity.
+    expect(html).toContain('opacity:0.35')
     expect(html.match(/type="number"/g)).toHaveLength(4)
     expect(html).toContain('aria-label="QR start"')
     expect(html).toContain('aria-label="QR end"')
@@ -160,7 +166,9 @@ describe('watermark chat review', () => {
       includeHandle: false,
       handleStartSeconds: 0,
       handleEndSeconds: 0,
+      fadeSeconds: 0,
     })
+    expect(html).toContain('<output for="watermark-fade">Off</output>')
     const applyButton = html.match(/<button type="submit"[^>]*>/)?.[0]
     expect(applyButton).not.toContain('disabled')
     expect(html).toContain('watermark-preview-overlay watermark-preview-qr')

@@ -78,3 +78,64 @@ export function isWatermarkPosition(value: unknown): value is WatermarkPosition 
   return value === 'auto'
     || WATERMARK_POSITIONS.includes(value as (typeof WATERMARK_POSITIONS)[number])
 }
+
+export const DEFAULT_WATERMARK_FADE_SECONDS = 0.5
+export const MIN_WATERMARK_FADE_SECONDS = 0
+export const MAX_WATERMARK_FADE_SECONDS = 2
+const CLIP_END_TOLERANCE_SECONDS = 0.001
+
+export function clampWatermarkFadeSeconds(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_WATERMARK_FADE_SECONDS
+  const clamped = Math.min(MAX_WATERMARK_FADE_SECONDS, Math.max(MIN_WATERMARK_FADE_SECONDS, value))
+  return Math.round(clamped * 10) / 10
+}
+
+export interface WatermarkFadeWindow {
+  fadeIn: number
+  fadeOut: number
+}
+
+// Mirrors the burn job: a watermark fades in only when it starts after the
+// clip start and out only when it ends before the clip end, and each fade
+// shrinks to half the window so short windows still peak at full opacity.
+export function watermarkFadeWindow(
+  startSeconds: number,
+  endSeconds: number | null,
+  durationSeconds: number,
+  fadeSeconds: number,
+): WatermarkFadeWindow {
+  const start = Math.max(0, startSeconds)
+  const clipEnd = endSeconds === null ? durationSeconds : Math.min(endSeconds, durationSeconds)
+  const window = clipEnd - start
+  if (!(fadeSeconds > 0) || !(window > 0)) return { fadeIn: 0, fadeOut: 0 }
+  const fade = Math.min(fadeSeconds, window / 2)
+  const endsEarly = endSeconds !== null
+    && endSeconds < durationSeconds - CLIP_END_TOLERANCE_SECONDS
+  return {
+    fadeIn: start > 0 ? fade : 0,
+    fadeOut: endsEarly ? fade : 0,
+  }
+}
+
+// Preview opacity at the playhead: zero outside the window, ramping through
+// the fades, `opacity` in between.
+export function watermarkPreviewOpacity(
+  currentTime: number,
+  startSeconds: number,
+  endSeconds: number | null,
+  durationSeconds: number,
+  opacity: number,
+  fadeSeconds: number,
+): number {
+  if (currentTime < startSeconds) return 0
+  if (endSeconds !== null && currentTime > endSeconds) return 0
+  const fades = watermarkFadeWindow(startSeconds, endSeconds, durationSeconds, fadeSeconds)
+  let factor = 1
+  if (fades.fadeIn > 0) {
+    factor = Math.min(factor, (currentTime - startSeconds) / fades.fadeIn)
+  }
+  if (fades.fadeOut > 0 && endSeconds !== null) {
+    factor = Math.min(factor, (endSeconds - currentTime) / fades.fadeOut)
+  }
+  return opacity * Math.min(1, Math.max(0, factor))
+}
