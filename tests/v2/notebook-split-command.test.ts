@@ -361,9 +361,9 @@ describe('notebook split commands', () => {
     })
     expect(run.outputs).toHaveLength(3)
     expect(run.sourceAddress).toBe('@a1')
-    expect(run.actionAddress).toBe('@a2')
+    expect(run.actionAddress).toBe('@b1')
     expect(run.outputs.map((output) => output.outputAddress))
-      .toEqual(['@a3', '@a4', '@a5'])
+      .toEqual(['@c1', '@d1', '@e1'])
     const activeResult = engine.notebooks.read(notebookId)
     expect(activeResult.ok).toBe(true)
     if (!activeResult.ok) return

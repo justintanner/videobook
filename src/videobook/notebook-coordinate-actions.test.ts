@@ -26,7 +26,7 @@ function document(cells: NotebookCell[]): NotebookDocument {
 
 describe('notebook coordinate chat actions', () => {
   it('parses addresses case-insensitively into zero-based grid slots', () => {
-    expect(parseNotebookCoordinateAction('Move @A1 to @h64.')).toEqual({
+    expect(parseNotebookCoordinateAction('Move @A1 to @bl8.')).toEqual({
       kind: 'move',
       source: { row: 0, column: 0 },
       destination: { row: 63, column: 7 },
@@ -47,22 +47,22 @@ describe('notebook coordinate chat actions', () => {
     const current = document([cell('one', 0, 0), cell('two', 0, 1)])
     const move = planNotebookCoordinateAction(
       current,
-      parseNotebookCoordinateAction('move @a1 to @a2')!,
+      parseNotebookCoordinateAction('move @a1 to @b1')!,
     )
-    expect(move.summary).toBe('Move @a1 to @a2')
+    expect(move.summary).toBe('Move @a1 to @b1')
     expect(move.expectations).toEqual([
       { address: '@a1', cellId: 'one' },
-      { address: '@a2', cellId: null },
+      { address: '@b1', cellId: null },
     ])
 
     const swap = planNotebookCoordinateAction(
       current,
-      parseNotebookCoordinateAction('swap @a1 with @b1')!,
+      parseNotebookCoordinateAction('swap @a1 with @a2')!,
     )
-    expect(swap.summary).toBe('Swap @a1 with @b1')
+    expect(swap.summary).toBe('Swap @a1 with @a2')
     expect(swap.expectations).toEqual([
       { address: '@a1', cellId: 'one' },
-      { address: '@b1', cellId: 'two' },
+      { address: '@a2', cellId: 'two' },
     ])
   })
 
@@ -77,14 +77,14 @@ describe('notebook coordinate chat actions', () => {
       cellType: 'prompt',
       destination: { row: 0, column: 1 },
     })
-    expect(automatic.summary).toBe('Create a prompt cell at @b1')
+    expect(automatic.summary).toBe('Create a prompt cell at @a2')
 
     const explicit = planNotebookCoordinateAction(
       current,
-      parseNotebookCoordinateAction('create an image at @H64')!,
+      parseNotebookCoordinateAction('create an image at @BL8')!,
     )
-    expect(explicit.summary).toBe('Create a image cell at @h64')
-    expect(explicit.expectations).toEqual([{ address: '@h64', cellId: null }])
+    expect(explicit.summary).toBe('Create a image cell at @bl8')
+    expect(explicit.expectations).toEqual([{ address: '@bl8', cellId: null }])
   })
 
   it('places no-source generations next to last-work instead of the origin', () => {
@@ -115,8 +115,8 @@ describe('notebook coordinate chat actions', () => {
     const current = document([cell('one', 0, 0)])
     expect(() => planNotebookCoordinateAction(
       current,
-      parseNotebookCoordinateAction('delete @b1')!,
-    )).toThrow('Notebook cell @b1 is empty')
+      parseNotebookCoordinateAction('delete @a2')!,
+    )).toThrow('Notebook cell @a2 is empty')
     expect(() => planNotebookCoordinateAction(
       current,
       parseNotebookCoordinateAction('create a video at @a1')!,
@@ -134,7 +134,7 @@ describe('notebook coordinate chat actions', () => {
     const current = document([cell('one', 0, 0)])
     const plan = planNotebookCoordinateAction(
       current,
-      parseNotebookCoordinateAction('move @a1 to @a2')!,
+      parseNotebookCoordinateAction('move @a1 to @b1')!,
     )
     expect(notebookAddressExpectationsAreStale(current, plan.expectations)).toBe(false)
     expect(notebookAddressExpectationsAreStale(

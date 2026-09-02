@@ -77,7 +77,7 @@ describe('music-video slash command resolution', () => {
         status: input.status,
       }],
     )
-    const resolved = resolveNotebookMentionAliases('@b1', mentions)
+    const resolved = resolveNotebookMentionAliases('@a2', mentions)
     expect(resolved).toBe(`@${input.artifactId}`)
     expect(resolveMusicVideoCommandAsset(input.artifactId, [input])).toEqual({
       ok: true,

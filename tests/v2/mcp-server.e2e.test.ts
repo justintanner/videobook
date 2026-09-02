@@ -318,7 +318,7 @@ describe('v2 MCP server', () => {
       expect.objectContaining({
         id: image.id,
         label: 'generate-image-opening',
-        address: '@b1',
+        address: '@a2',
       }),
     ]))
     expect(document.edges).toEqual(expect.arrayContaining([

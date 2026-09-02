@@ -170,7 +170,7 @@ describe('notebook audio commands', () => {
       reusedAction: false,
       sourceCellId: source.id,
       sourceAddress: '@a1',
-      actionAddress: '@c1',
+      actionAddress: '@a3',
       outputCellId: firstRun.actionCellId,
     })
     expect(calledTools.at(-1)).toBe('extract_notebook_audio')
@@ -222,7 +222,7 @@ describe('notebook audio commands', () => {
     })
     expect(secondRun).toMatchObject({
       actionCellId: firstRun.actionCellId,
-      actionAddress: '@c1',
+      actionAddress: '@a3',
       outputCellId: firstRun.actionCellId,
       reusedAction: true,
       sourceCellId: source.id,

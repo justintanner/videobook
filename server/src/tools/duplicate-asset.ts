@@ -18,7 +18,7 @@ import type { ToolDef } from "./tool-def.js";
 
 const destinationSchema = z.string()
   .regex(new RegExp(`^@?${NOTEBOOK_GRID_ADDRESS_SOURCE}$`, "iu"))
-  .describe("Optional empty destination cell from a1 through h64");
+  .describe("Optional empty destination cell from a1 through bl8");
 
 function mediaCellType(kind: ArtifactKind): NotebookCellType | null {
   if (kind === "final") return "video";

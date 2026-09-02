@@ -154,14 +154,14 @@ describe("duplicate_asset tool", () => {
         asset_id: source.value.artifactId,
         book_id: fs.book.get().bookId,
         notebook_id: createdNotebook.value.id,
-        destination: "H64",
+        destination: "BL8",
       },
     });
     expect(result.isError).not.toBe(true);
     const parsed = JSON.parse(
       (result.content as Array<{ type: string; text: string }>)[0].text,
     ) as { address: string; cell_id: string; new_asset_id: string };
-    expect(parsed.address).toBe("@h64");
+    expect(parsed.address).toBe("@bl8");
     const notebook = fs.notebooks.read(createdNotebook.value.id);
     if (!notebook.ok) throw new Error(notebook.error.message);
     expect(notebook.value.cells.find((cell) => cell.id === parsed.cell_id)).toMatchObject({
@@ -200,7 +200,7 @@ describe("duplicate_asset tool", () => {
     const parsed = JSON.parse(
       (result.content as Array<{ type: string; text: string }>)[0].text,
     ) as { address: string };
-    expect(parsed.address).toBe("@c6");
+    expect(parsed.address).toBe("@f3");
   });
 
   it("rejects an occupied default destination before copying the asset", async () => {
@@ -234,7 +234,7 @@ describe("duplicate_asset tool", () => {
     });
     expect(result.isError).toBe(true);
     expect((result.content as Array<{ type: string; text: string }>)[0].text)
-      .toContain("Notebook cell @a2 is occupied");
+      .toContain("Notebook cell @b1 is occupied");
     expect(fs.artifacts.list()).toHaveLength(artifactCount);
   });
 

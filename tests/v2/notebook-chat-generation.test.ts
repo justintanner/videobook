@@ -111,7 +111,7 @@ describe('notebook chat generation', () => {
       cellType: 'generate_image',
       mediaKind: 'image',
       prompt: 'neon rain',
-      sourceReferences: ['c1'],
+      sourceReferences: ['a3'],
     } satisfies NotebookChatGenerationCommand
     const plannedCellId = '01900000-0000-7000-8000-000000000010'
     const draft = planNotebookChatGeneration({
@@ -334,7 +334,7 @@ describe('notebook chat generation', () => {
       ),
     )
     expect(draft.cell.prompt).toBe(
-      'scene @b1, character @c1, fluffy kitten standing',
+      'scene @a2, character @a3, fluffy kitten standing',
     )
     expect(draft.sourceCellIds).not.toContain(generatedSource.id)
     expect(draft.connections).toEqual([
@@ -351,13 +351,13 @@ describe('notebook chat generation', () => {
     )).not.toThrow()
     expect(() => validateNotebookChatGenerationPromptSources({
       ...draft,
-      cell: { ...draft.cell, prompt: 'use @c1' },
+      cell: { ...draft.cell, prompt: 'use @a3' },
       sourceCellIds: [firstSource.id],
-    }, current.value)).toThrow('@c1 is referenced but not connected')
+    }, current.value)).toThrow('@a3 is referenced but not connected')
     expect(() => validateNotebookChatGenerationPromptSources({
       ...draft,
-      cell: { ...draft.cell, prompt: 'use @h64' },
-    }, current.value)).toThrow('Notebook cell @h64 is empty')
+      cell: { ...draft.cell, prompt: 'use @bl8' },
+    }, current.value)).toThrow('Notebook cell @bl8 is empty')
     expect(() => validateNotebookChatGenerationPromptSources({
       ...draft,
       cell: { ...draft.cell, prompt: 'use @missing-cell' },
@@ -414,7 +414,7 @@ describe('notebook chat generation', () => {
     ]))
     expect(connected.value.cells.find((cell) =>
       cell.id === materialized.cellId)?.prompt).toBe(
-      'scene @b1, character @c1, fluffy kitten standing',
+      'scene @a2, character @a3, fluffy kitten standing',
     )
   })
 
@@ -494,7 +494,7 @@ describe('notebook chat generation', () => {
         cellType: 'generate_image',
         mediaKind: 'image',
         prompt: 'swap me',
-        sourceReferences: ['b1'],
+        sourceReferences: ['a2'],
       },
       document: current.value,
       fallbackSlot: { row: 0, column: 0 },
@@ -521,7 +521,7 @@ describe('notebook chat generation', () => {
     })
     expect(expanded.action.id).toBe(draft.action.id)
     expect(expanded.sourceCellIds).toEqual([firstSource.id, secondSource.id])
-    expect(expanded.sourceAddresses).toEqual(['@b1', '@c1'])
+    expect(expanded.sourceAddresses).toEqual(['@a2', '@a3'])
     expect(expanded.connections).toEqual([
       { sourceCellId: firstSource.id, targetInput: 'image' },
       { sourceCellId: secondSource.id, targetInput: 'image_2' },

@@ -53,9 +53,9 @@ function mentionCandidate(
 
 describe('asset mention suggestions', () => {
   it('applies a canonical mention completion at the end of input', () => {
-    expect(applyNotebookMentionSuggestion('use @A', '@a2'))
-      .toBe('use @a2')
-    expect(applyNotebookMentionSuggestion('leave this alone', '@a2'))
+    expect(applyNotebookMentionSuggestion('use @A', '@b1'))
+      .toBe('use @b1')
+    expect(applyNotebookMentionSuggestion('leave this alone', '@b1'))
       .toBe('leave this alone')
   })
 
@@ -70,18 +70,26 @@ describe('asset mention suggestions', () => {
         description: 'VIDEO cell',
         type: 'cell',
       },
-      ...Array.from({ length: 11 }, (_, index) => ({
+      // Row a fills first (@a2-@a8); rows b-z carry no "a", so the two-letter
+      // rows starting at @aa1 complete the twelve.
+      ...Array.from({ length: 7 }, (_, index) => ({
         value: `@a${index + 2}`,
         label: `@a${index + 2}`,
+        description: 'Empty grid square',
+        type: 'cell',
+      })),
+      ...Array.from({ length: 4 }, (_, index) => ({
+        value: `@aa${index + 1}`,
+        label: `@aa${index + 1}`,
         description: 'Empty grid square',
         type: 'cell',
       })),
     ])
     expect(notebookAddressSuggestions([
       { slot: { row: 63, column: 7 }, type: 'prompt' },
-    ], '@H64')).toEqual([{
-      value: '@h64',
-      label: '@h64',
+    ], '@BL8')).toEqual([{
+      value: '@bl8',
+      label: '@bl8',
       description: 'PROMPT cell',
       type: 'cell',
     }])
@@ -96,11 +104,11 @@ describe('asset mention suggestions', () => {
       outputArtifactId: asset.artifactId,
     }], [asset])[0]!
 
-    expect(candidate.cellAddress).toBe('c2')
+    expect(candidate.cellAddress).toBe('b3')
     expect(resolveNotebookMentionAliases(
-      'combine @C2 with @b4',
+      'combine @B3 with @d2',
       [candidate],
-    )).toBe(`combine @${VIDEO_ARTIFACT} with @b4`)
+    )).toBe(`combine @${VIDEO_ARTIFACT} with @d2`)
   })
 
   it('uses only deduplicated current outputs from the open notebook', () => {
@@ -138,7 +146,7 @@ describe('asset mention suggestions', () => {
         type: 'video',
       }),
       expect.objectContaining({
-        cellAddress: 'e1',
+        cellAddress: 'a5',
         artifactId: currentImage.artifactId,
         type: 'image',
       }),
@@ -161,7 +169,7 @@ describe('asset mention suggestions', () => {
       },
     ], [frame])).toEqual([
       expect.objectContaining({
-        cellAddress: 'b1',
+        cellAddress: 'a2',
         artifactId: frame.artifactId,
         type: 'image',
       }),
@@ -174,13 +182,13 @@ describe('asset mention suggestions', () => {
       type: 'image',
     })
 
-    expect(assetMentionSuggestions([video, image], 'extract @c')).toEqual([{
-      value: '@c2',
-      label: '@c2',
+    expect(assetMentionSuggestions([video, image], 'extract @b')).toEqual([{
+      value: '@b3',
+      label: '@b3',
       asset: video,
       type: 'asset',
     }])
-    expect(assetMentionSuggestions([video, image], 'extract @c')[0]?.asset)
+    expect(assetMentionSuggestions([video, image], 'extract @b')[0]?.asset)
       .toMatchObject({
         artifactId: VIDEO_ARTIFACT,
         mediaUrl: `/files/book/${VIDEO_ARTIFACT}/original.mp4`,
@@ -198,11 +206,11 @@ describe('asset mention suggestions', () => {
     expect(assetMentionSuggestions(
       [video, image],
       'generate an image of @',
-    ).map((suggestion) => suggestion.label)).toEqual(['@b1'])
+    ).map((suggestion) => suggestion.label)).toEqual(['@a2'])
     expect(assetMentionSuggestions(
       [video, image],
       'combine @',
-    ).map((suggestion) => suggestion.label)).toEqual(['@a1', '@b1'])
+    ).map((suggestion) => suggestion.label)).toEqual(['@a1', '@a2'])
   })
 
   it('caps the visible candidate list at twelve assets', () => {
@@ -213,7 +221,7 @@ describe('asset mention suggestions', () => {
       ))
 
     expect(assetMentionSuggestions(assets, '@')).toHaveLength(12)
-    expect(assetMentionSuggestions(assets, '@').at(-1)?.label).toBe('@d2')
+    expect(assetMentionSuggestions(assets, '@').at(-1)?.label).toBe('@b4')
   })
 
   it('skips excluded mention values so looping cells are not offered', () => {
@@ -227,7 +235,7 @@ describe('asset mention suggestions', () => {
       [video, image],
       'combine @',
       excluded,
-    ).map((suggestion) => suggestion.label)).toEqual(['@b1'])
+    ).map((suggestion) => suggestion.label)).toEqual(['@a2'])
     expect(notebookAddressSuggestions(
       [{ slot: { row: 0, column: 0 }, type: 'video' }],
       '@a',
@@ -269,10 +277,10 @@ describe('asset mention suggestions', () => {
     })
 
     expect(resolveNotebookMentionAliases(
-      'combine @A1 with @b1 and leave @a10 alone',
+      'combine @A1 with @a2 and leave @j1 alone',
       [video, image],
     )).toBe(
-      `combine @${VIDEO_ARTIFACT} with @${IMAGE_ARTIFACT} and leave @a10 alone`,
+      `combine @${VIDEO_ARTIFACT} with @${IMAGE_ARTIFACT} and leave @j1 alone`,
     )
   })
 
@@ -287,7 +295,7 @@ describe('asset mention suggestions', () => {
     expect(restoreNotebookMentionAliases(
       `scene @${scene.artifactId}, character @${character.artifactId}, fluffy kitten standing`,
       [scene, character],
-    )).toBe('scene @e1, character @a1, fluffy kitten standing')
+    )).toBe('scene @a5, character @a1, fluffy kitten standing')
   })
 
   it('restores a routed asset tag to the selected cell sharing its artifact', () => {
@@ -304,6 +312,6 @@ describe('asset mention suggestions', () => {
         type: 'image',
         outputArtifactId: IMAGE_ARTIFACT,
       }],
-    )).toBe('restyle @b1')
+    )).toBe('restyle @a2')
   })
 })

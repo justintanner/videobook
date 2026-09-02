@@ -661,7 +661,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="video input"')
     expect(html).toContain('aria-label="Attach media input"')
     expect(html).toContain('role="listbox" aria-label="Media input options"')
-    expect(html).toContain('<strong>@b1</strong>')
+    expect(html).toContain('<strong>@a2</strong>')
     expect(html).toContain('image · image input')
     expect(html).not.toContain('<strong>@a1</strong><small>image')
   })
@@ -722,9 +722,9 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('<strong>@b1</strong>')
-    expect(html).toContain('<strong>@c1</strong>')
-    expect(html).not.toContain('<strong>@d1</strong>')
+    expect(html).toContain('<strong>@a2</strong>')
+    expect(html).toContain('<strong>@a3</strong>')
+    expect(html).not.toContain('<strong>@a4</strong>')
   })
 
   it('omits descendant media from generation attach options', () => {
@@ -777,9 +777,9 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('aria-label="Attach media input"')
-    expect(html).toContain('<strong>@c1</strong>')
+    expect(html).toContain('<strong>@a3</strong>')
     expect(html).toContain('image · image input')
-    expect(html).not.toContain('<strong>@b1</strong>')
+    expect(html).not.toContain('<strong>@a2</strong>')
   })
 
   it('keeps an incompatible saved model visible and disables generation', () => {
@@ -936,8 +936,8 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain(
       'class="inspector-cell-actions inspector-compact-actions"',
     )
-    expect(html).toContain('aria-label="Open @c2 fullscreen"')
-    expect(html).not.toContain('aria-label="Edit @c2 image"')
+    expect(html).toContain('aria-label="Open @b3 fullscreen"')
+    expect(html).not.toContain('aria-label="Edit @b3 image"')
   })
 
   it('renders compact image edit and fullscreen actions for the same viewer', () => {
@@ -982,10 +982,10 @@ describe('NotebookCellInspector', () => {
       'class="inspector-media-actions inspector-media-actions-image"',
     )
     expect(html).toContain('aria-label="Image preview actions"')
-    expect(html).toContain('aria-label="Edit @e7 image"')
-    expect(html).toContain('aria-label="Open @e7 fullscreen"')
-    expect(html.indexOf('aria-label="Edit @e7 image"')).toBeLessThan(
-      html.indexOf('aria-label="Open @e7 fullscreen"'),
+    expect(html).toContain('aria-label="Edit @g5 image"')
+    expect(html).toContain('aria-label="Open @g5 fullscreen"')
+    expect(html.indexOf('aria-label="Edit @g5 image"')).toBeLessThan(
+      html.indexOf('aria-label="Open @g5 fullscreen"'),
     )
   })
 
@@ -1029,7 +1029,7 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('aria-label="Open @c2 fullscreen"')
+    expect(html).toContain('aria-label="Open @b3 fullscreen"')
     expect(html).toContain('<span>3840×2160</span>')
     expect(html).toContain('<svg')
     expect(html).toContain('Fullscreen</button>')
@@ -1089,8 +1089,8 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('<dt>Duration</dt><dd>1:00.01</dd>')
     expect(html).toContain('<dt>Format</dt><dd>AAC · 48 kHz · stereo</dd>')
     expect(html).not.toContain('aria-label="Audio version"')
-    expect(html).not.toContain('aria-label="Open @c2 fullscreen"')
-    expect(html).not.toContain('aria-label="Edit @c2 image"')
+    expect(html).not.toContain('aria-label="Open @b3 fullscreen"')
+    expect(html).not.toContain('aria-label="Edit @b3 image"')
   })
 
   it('labels and selects the current saved audio version', () => {
@@ -1536,7 +1536,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('role="listbox" aria-label="video input options"')
     expect(html).toContain('role="option" aria-selected="true"')
     expect(html).toContain('<strong>@a1</strong>')
-    expect(html).toContain('<strong>@b1</strong>')
+    expect(html).toContain('<strong>@a2</strong>')
     expect(html).toContain('/files/vid-continuous-source/thumb.jpg')
     expect(html).toContain('inspector-source-picker-chevron')
     expect(html).not.toContain('placeholder="Provider"')
@@ -1860,7 +1860,7 @@ describe('NotebookCellInspector', () => {
         duration: 12,
         audioInfo: null,
       },
-      address: 'h64',
+      address: 'bl8',
       onAnalyzeSubjects: async () => {
         throw new Error('final subject analysis must not run')
       },
@@ -1869,7 +1869,7 @@ describe('NotebookCellInspector', () => {
 
     expect(html).toContain('playback-only')
     expect(html).toContain('Playback unavailable')
-    expect(html).toContain('alt="@h64 poster"')
+    expect(html).toContain('alt="@bl8 poster"')
     expect(html).not.toContain('People &amp; objects')
     expect(html).not.toContain('Subjects')
   })
@@ -1966,7 +1966,7 @@ describe('NotebookCellInspector', () => {
         duration: null,
         audioInfo: null,
       },
-      address: 'e2',
+      address: 'b5',
       subjectMap,
       initialRegions: [{
         id: 'region-1',
@@ -1975,8 +1975,8 @@ describe('NotebookCellInspector', () => {
       }],
       replacementCandidates: [{
         artifactId: 'actor-d1',
-        address: 'd1',
-        label: 'd1',
+        address: 'a4',
+        label: 'a4',
         thumbnailUrl: '/files/book/actor-d1/original.png',
       }],
       onAnalyzeSubjects: async () => undefined,
@@ -1988,7 +1988,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Region · Person')
     expect(html).toContain('aria-label="Select region 1"')
     expect(html).toContain('Replacement images')
-    expect(html).toContain('@d1')
+    expect(html).toContain('@a4')
     expect(html).toContain('Replace')
     expect(html).toMatch(/class="replace"[^>]*disabled/)
   })

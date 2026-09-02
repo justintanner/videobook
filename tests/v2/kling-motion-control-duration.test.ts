@@ -272,7 +272,7 @@ describe("Kling motion-control duration", () => {
 
       const videoOrientation = {
         ...generationCell,
-        prompt: "motion reference @b1, character and appearance @e1",
+        prompt: "motion reference @a2, character and appearance @a5",
         inputs: {
           generationSettings: {
             resolution: "720p",
@@ -366,7 +366,7 @@ describe("Kling motion-control duration", () => {
       })).not.toThrow();
       const unresolvedCell = {
         ...videoOrientation,
-        prompt: "unknown source @a3",
+        prompt: "unknown source @c1",
       };
       const unresolvedDocument: NotebookDocument = {
         ...validDocument,
@@ -391,7 +391,7 @@ describe("Kling motion-control duration", () => {
       };
       expect(unresolvedValue.payload).toBeNull();
       expect(unresolvedValue.mentions.prompt_leaks).toMatchObject([{
-        token: "@a3",
+        token: "@c1",
         code: "not_found",
       }]);
       await expect(prepareNotebookGeneration(
@@ -399,7 +399,7 @@ describe("Kling motion-control duration", () => {
         unresolvedDocument,
         unresolvedCell,
         engine.book.get().bookId,
-      )).rejects.toThrow("Notebook reference @a3 was not found");
+      )).rejects.toThrow("Notebook reference @c1 was not found");
     } finally {
       await books.close();
     }

@@ -1323,7 +1323,9 @@ describe('chat composer browser flow', () => {
     })
     const squares = page.locator('.notebook-grid-square')
     const cells = page.locator('.cell-node')
-    const targetSquare = squares.filter({ hasText: /^@a2$/ })
+    // The first open square in row-major order once dragging starts; its
+    // label is read back so the dropped cell can be matched by that address.
+    const targetSquare = page.locator('.notebook-grid-square-dropzone').first()
 
     try {
       await page.dispatchEvent('.app-shell', 'dragenter', { dataTransfer })
@@ -1333,6 +1335,8 @@ describe('chat composer browser flow', () => {
       expect(await squares.filter({ hasText: /^@a1$/ }).getAttribute('class'))
         .not.toContain('notebook-grid-square-dropzone')
 
+      const targetAddress = (await targetSquare.textContent())?.trim()
+      if (!targetAddress) throw new Error('Could not read the open drop square')
       const targetBox = await targetSquare.boundingBox()
       if (!targetBox) throw new Error('Could not measure the open drop square')
       const dropPoint = {
@@ -1354,7 +1358,9 @@ describe('chat composer browser flow', () => {
         clientY: dropPoint.y,
       })
       const droppedCell = page.locator('.cell-node').filter({
-        has: page.locator('.cell-node-footer strong').filter({ hasText: /^@a2$/ }),
+        has: page.locator('.cell-node-footer strong').filter({
+          hasText: new RegExp(`^${targetAddress}$`, 'u'),
+        }),
       })
       await droppedCell.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await page.locator('.notebook-grid-square-dropzone').count()).toBe(0)
@@ -1433,11 +1439,14 @@ describe('chat composer browser flow', () => {
     })
     await mentionMenu.waitFor({ state: 'visible' })
     expect(await mentionMenu.getByRole('button').count()).toBeGreaterThan(0)
-    await promptInput.fill('use @h64')
+    await promptInput.fill('use @bl8')
     const mentionWarning = inspector.locator('.inspector-prompt-mentions')
     await mentionWarning.waitFor({ state: 'visible' })
-    await expect.poll(async () => await mentionWarning.textContent())
-      .toContain('@h64')
+    // The warning settles once the payload preview round trip returns.
+    await expect.poll(
+      async () => await mentionWarning.textContent(),
+      { timeout: 10_000 },
+    ).toContain('@bl8')
     expect(await mentionWarning.textContent()).toContain('was not found')
 
     const prompt = 'Inspector prompt clipboard check'
@@ -3013,7 +3022,7 @@ describe('chat composer browser flow', () => {
     await openApp()
     observedCalls.length = 0
     const input = page.getByLabel('Videobook command input')
-    await input.fill('/music-video @b1')
+    await input.fill('/music-video @a2')
     await page.getByLabel('Send command').click()
     const editor = page.getByRole('dialog', { name: 'Music video editor' })
     await editor.waitFor({ state: 'visible', timeout: 30_000 })

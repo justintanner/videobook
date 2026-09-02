@@ -46,7 +46,7 @@ function node(id: string, row: number, column: number): Node<TestData> {
 }
 
 describe('notebook grid', () => {
-  it('maps pixels into the fixed @a1 through @h64 board', () => {
+  it('maps pixels into the fixed @a1 through @bl8 board', () => {
     expect(notebookGridSlot({ x: -800, y: -100 })).toEqual({
       row: 0,
       column: 0,
@@ -56,9 +56,9 @@ describe('notebook grid', () => {
       y: notebookGrid.originY + notebookGrid.rowPitch * 63,
     })).toEqual({ row: 63, column: 7 })
     expect(notebookGridTag({ row: 0, column: 0 })).toBe('@a1')
-    expect(notebookGridTag({ row: 0, column: 1 })).toBe('@b1')
-    expect(notebookGridTag({ row: 1, column: 0 })).toBe('@a2')
-    expect(notebookGridTag({ row: 63, column: 7 })).toBe('@h64')
+    expect(notebookGridTag({ row: 0, column: 1 })).toBe('@a2')
+    expect(notebookGridTag({ row: 1, column: 0 })).toBe('@b1')
+    expect(notebookGridTag({ row: 63, column: 7 })).toBe('@bl8')
   })
 
   it('snaps a single drag to the nearest bounded square', () => {

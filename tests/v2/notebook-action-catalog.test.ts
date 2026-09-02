@@ -301,7 +301,7 @@ describe("notebook action catalog", () => {
     expect(analysis.output_cell).toMatchObject({
       type: "analysis",
       label: "analyze-source",
-      address: "@b1",
+      address: "@a2",
       slot: { row: 0, column: 1 },
       inputs: {
         analysisRole: "result",

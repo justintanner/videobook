@@ -184,9 +184,9 @@ describe('notebook initial generation prompts', () => {
       notebook_id: notebookId,
     })) as { cells: Array<{ id: string; prompt?: string }> }
     expect(moved.cells.find((cell) => cell.id === image.id)?.prompt)
-      .toContain('@a5')
+      .toContain('@e1')
     expect(moved.cells.find((cell) => cell.id === video.id)?.prompt)
-      .toContain('@a5')
+      .toContain('@e1')
 
     const explicitPrompt = 'Keep exact silhouette. No extra text.'
     resultJson(await invoke('update_notebook_cell', {

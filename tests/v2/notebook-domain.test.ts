@@ -213,7 +213,7 @@ describe('v2 notebook domain tools', () => {
       slots: [{ id: image.id, row: 64, column: 0 }],
     })
     expect(offGridMove.isError).toBe(true)
-    expect(offGridMove.content[0]?.text).toContain('Cell slot must be within @a1-@h64')
+    expect(offGridMove.content[0]?.text).toContain('Cell slot must be within @a1-@bl8')
   })
 
   it('retypes only unconnected URL-download placeholders to image outputs', async () => {

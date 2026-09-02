@@ -25,8 +25,8 @@ type TextContent = Array<{ type: string; text: string }>;
 
 describe("duplicateDestinationReference", () => {
   it("preserves explicit and positional duplicate destinations", () => {
-    expect(duplicateDestinationReference("duplicate @a1 to @H64"))
-      .toBe("h64");
+    expect(duplicateDestinationReference("duplicate @a1 to @BL8"))
+      .toBe("bl8");
     expect(duplicateDestinationReference("copy @a1 @b2"))
       .toBe("b2");
   });
@@ -246,7 +246,7 @@ describe("chat tool", () => {
     const result = await client.callTool({
       name: "chat",
       arguments: {
-        prompt: "duplicate @a1 to @b1",
+        prompt: "duplicate @a1 to @a2",
         book_id: "test-proj",
         notebook_id: notebookId,
       },
