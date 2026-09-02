@@ -26,6 +26,7 @@ import {
 import { FFMPEG } from "../ffmpeg.js";
 import type { BookManager } from "../book-manager.js";
 import { queue } from "../queue.js";
+import { PLAIN_TRANSCRIPT_FILE } from "../transcript-projection.js";
 import { comparableHitScore } from "../search-scoring.js";
 import { searchReferenceStore } from "../search-reference-store.js";
 import { extname, join } from "node:path";
@@ -219,6 +220,10 @@ function ingestReadiness(
   };
 }
 
+function isDotfilePath(name: string): boolean {
+  return name.split("/").some((segment) => segment.startsWith("."));
+}
+
 export function semanticSearchDefs(
   engine: Engine,
   books?: BookManager,
@@ -237,16 +242,19 @@ export function semanticSearchDefs(
         const limit = Number(args.limit) || 200;
         const artifacts = engine.artifacts.list().slice(-limit).reverse();
         const statuses = await Promise.all(artifacts.map(async (artifact) => {
-          const [manifest, streams, waveform, transcripts, coverage, proxyMetadata, legacyTranscript] = await Promise.all([
-            engine.files.manifest(artifact.artifactId),
+          const [manifest, streams, waveform, transcripts, coverage, proxyMetadata] = await Promise.all([
+            engine.files.manifest(artifact.artifactId, { includeDotfiles: true }),
             Promise.resolve(engine.streams.list(artifact.artifactId)),
-            engine.metadata.waveforms.read(artifact.artifactId),
+            engine.metadata.waveforms.exists(artifact.artifactId),
             Promise.resolve(engine.transcripts.list(artifact.artifactId)),
             Promise.resolve(engine.temporalSearch.coverage(artifact.artifactId)),
             engine.metadata.artifacts.read<VideoProxyAssessment>(artifact.artifactId, "proxy"),
-            engine.files.read(artifact.artifactId, ".analysis.gpt4otrans.json"),
           ]);
-          const files = manifest.ok ? manifest.value.files : [];
+          const allFiles = manifest.ok ? manifest.value.files : [];
+          // The legacy transcript is a dotfile beside the media, so the
+          // manifest already answers whether it exists; no object read needed.
+          const legacyTranscript = allFiles.some((file) => file.name === PLAIN_TRANSCRIPT_FILE);
+          const files = allFiles.filter((file) => !isDotfilePath(file.name));
           const sourceFile = artifact.kind === "video"
             ? findVideoFile(files.filter((file) => file.name !== "proxy.mp4"))
             : findPrimaryMediaFile(files, artifact.kind);
@@ -271,11 +279,11 @@ export function semanticSearchDefs(
                   .test(file.name)))
               ? "ready"
               : "not-indexed",
-            waveform: waveform.ok && waveform.value.peaks.length > 0
+            waveform: waveform.ok && waveform.value
               ? "ready"
               : artifact.kind === "image" || !hasAudio ? "not-applicable" : "not-indexed",
             transcript: transcripts.ok && transcripts.value.length > 0
-            || legacyTranscript.ok
+            || legacyTranscript
               ? "ready"
               : artifact.kind === "image" || !hasAudio ? "not-applicable" : "not-indexed",
             visual: phase("visual"),
