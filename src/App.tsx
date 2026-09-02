@@ -143,6 +143,7 @@ import {
   DEFAULT_HANDLE_ROUNDING,
   DEFAULT_HANDLE_VERTICAL_PERCENT,
   DEFAULT_WATERMARK_OPACITY,
+  isWatermarkHandlePlacement,
   isWatermarkPosition,
 } from './videobook/watermark-review'
 import {
@@ -6586,9 +6587,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       includeHandle?: boolean
       position?: WatermarkReviewState['position']
       handleVerticalPercent?: number
+      handlePlacement?: WatermarkReviewState['handlePlacement']
       includeXIcon?: boolean
       includeHandleBorder?: boolean
       handlePadding?: number
+      handlePaddingY?: number
       handleRounding?: number
       qrOpacity?: number
       handleOpacity?: number
@@ -6618,11 +6621,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       handleVerticalPercent: initial.handleVerticalPercent === undefined
         ? DEFAULT_HANDLE_VERTICAL_PERCENT
         : clampHandleVerticalPercent(initial.handleVerticalPercent),
+      handlePlacement: initial.handlePlacement ?? 'center',
       includeXIcon: initial.includeXIcon ?? true,
       includeHandleBorder: initial.includeHandleBorder ?? true,
       handlePadding: initial.handlePadding === undefined
         ? DEFAULT_HANDLE_PADDING
         : clampHandlePadding(initial.handlePadding),
+      handlePaddingY: initial.handlePaddingY === undefined
+        ? DEFAULT_HANDLE_PADDING
+        : clampHandlePadding(initial.handlePaddingY),
       handleRounding: initial.handleRounding === undefined
         ? DEFAULT_HANDLE_ROUNDING
         : clampHandleRounding(initial.handleRounding),
@@ -6679,9 +6686,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       includeHandle,
       position,
       handleVerticalPercent,
+      handlePlacement,
       includeXIcon,
       includeHandleBorder,
       handlePadding,
+      handlePaddingY,
       handleRounding,
       qrOpacity,
       handleOpacity,
@@ -6731,9 +6740,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         include_handle: includeHandle,
         position,
         ...(includeHandle ? { handle_vertical_percent: handleVerticalPercent } : {}),
+        ...(includeHandle && includeQr && handlePlacement !== 'center'
+          ? { handle_position: handlePlacement }
+          : {}),
         ...(includeHandle ? { include_x_icon: includeXIcon } : {}),
         ...(includeHandle ? { include_handle_border: includeHandleBorder } : {}),
         ...(includeHandle ? { handle_padding: handlePadding } : {}),
+        ...(includeHandle ? { handle_padding_y: handlePaddingY } : {}),
         ...(includeHandle ? { handle_rounding: handleRounding } : {}),
         ...(includeHandle ? { handle_opacity: handleOpacity } : {}),
         ...(includeQr && trimmedUrl ? { url: trimmedUrl } : {}),
@@ -6756,7 +6769,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const corner = asString(result?.position)
       const frameAware = source === 'vision' || source === 'cached' ? ' (frame-aware)' : ''
       const handlePosition = includeHandle
-        ? ` · handle ${handleVerticalPercent}% from top at ${Math.round(handleOpacity * 100)}%`
+        ? handlePlacement === 'center'
+          ? ` · handle ${handleVerticalPercent}% from top at ${Math.round(handleOpacity * 100)}%`
+          : ` · handle ${handlePlacement.replace('-', ' ')} at ${Math.round(handleOpacity * 100)}%`
         : ''
       const qrAppearance = includeQr ? ` · QR ${Math.round(qrOpacity * 100)}%` : ''
       await refreshBookData(bookId, notebook?.id)
@@ -8684,8 +8699,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const handleOpacity = asNumber(plan.params.handle_opacity) ?? sharedOpacity
       const handleVerticalPercent = asNumber(plan.params.handle_vertical_percent)
       const handlePadding = asNumber(plan.params.handle_padding)
+      const handlePaddingY = asNumber(plan.params.handle_padding_y)
       const handleRounding = asNumber(plan.params.handle_rounding)
       const requestedPosition = plan.params.position
+      const requestedHandlePlacement = plan.params.handle_position
       openWatermarkReview(target.artifactId, target.label, {
         ...(asString(plan.params.handle)
           ? { handle: asString(plan.params.handle) ?? undefined }
@@ -8705,6 +8722,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ...(handleVerticalPercent !== null
           ? { handleVerticalPercent: clampHandleVerticalPercent(handleVerticalPercent) }
           : {}),
+        ...(isWatermarkHandlePlacement(requestedHandlePlacement)
+          ? { handlePlacement: requestedHandlePlacement }
+          : {}),
         ...(typeof plan.params.include_x_icon === 'boolean'
           ? { includeXIcon: plan.params.include_x_icon }
           : {}),
@@ -8713,6 +8733,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : {}),
         ...(handlePadding !== null
           ? { handlePadding: clampHandlePadding(handlePadding) }
+          : {}),
+        ...(handlePaddingY !== null
+          ? { handlePaddingY: clampHandlePadding(handlePaddingY) }
           : {}),
         ...(handleRounding !== null
           ? { handleRounding: clampHandleRounding(handleRounding) }

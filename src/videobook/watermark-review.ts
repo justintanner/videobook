@@ -25,9 +25,21 @@ export const MAX_WATERMARK_OPACITY = 1
 export const DEFAULT_HANDLE_PADDING = 32
 export const MIN_HANDLE_PADDING = 0
 export const MAX_HANDLE_PADDING = 96
+export const DEFAULT_HANDLE_PILL_HEIGHT = 88
+export const HANDLE_PILL_CONTENT_SIZE = 26
+export const HANDLE_BADGE_WIDTH = 480
 export const DEFAULT_HANDLE_ROUNDING = 100
 export const MIN_HANDLE_ROUNDING = 0
 export const MAX_HANDLE_ROUNDING = 100
+
+export const WATERMARK_HANDLE_PLACEMENTS = [
+  'center',
+  'above-qr',
+  'on-qr',
+  'below-qr',
+] as const
+
+export type WatermarkHandlePlacement = (typeof WATERMARK_HANDLE_PLACEMENTS)[number]
 
 export function clampHandleVerticalPercent(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_HANDLE_VERTICAL_PERCENT
@@ -42,6 +54,19 @@ export function clampWatermarkOpacity(value: number): number {
 export function clampHandlePadding(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_HANDLE_PADDING
   return Math.round(Math.min(MAX_HANDLE_PADDING, Math.max(MIN_HANDLE_PADDING, value)))
+}
+
+export function handlePillHeight(paddingY: number): number {
+  const clamped = clampHandlePadding(paddingY)
+  return Math.max(
+    HANDLE_PILL_CONTENT_SIZE + 4,
+    DEFAULT_HANDLE_PILL_HEIGHT + 2 * (clamped - DEFAULT_HANDLE_PADDING),
+  )
+}
+
+export function isWatermarkHandlePlacement(value: unknown): value is WatermarkHandlePlacement {
+  return typeof value === 'string'
+    && (WATERMARK_HANDLE_PLACEMENTS as readonly string[]).includes(value)
 }
 
 export function clampHandleRounding(value: number): number {

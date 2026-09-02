@@ -43,7 +43,9 @@ import {
   DEFAULT_HANDLE_VERTICAL_PERCENT,
   MAX_HANDLE_VERTICAL_PERCENT,
   MIN_HANDLE_VERTICAL_PERCENT,
+  WATERMARK_HANDLE_PLACEMENTS,
 } from "../watermark-handle-position.js";
+import type { WatermarkHandlePlacement } from "../watermark-handle-position.js";
 import type { ToolDef } from "./tool-def.js";
 import { requireArtifactKind } from "./_shared.js";
 import { waitForAssetReadyDef } from "./wait-for-asset-ready.js";
@@ -67,6 +69,7 @@ type WatermarkAssetAppearance = {
   includeXIcon: boolean;
   includeHandleBorder: boolean;
   handlePadding: number;
+  handlePaddingY: number;
   handleRounding: number;
 };
 
@@ -134,7 +137,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
   return {
     name: "apply_watermark",
     description:
-      "Previewed watermark apply for video: burns an optional positioned QR and optional horizontally centered plain X handle. At least one must be included. Burn mode supports optional X icon and handle border, adjustable handle padding and corner rounding, independent QR/handle opacity, independent visibility windows, and adjustable handle height. Pass mode=overlay to store a legacy single-card render-time overlay instead.",
+      "Previewed watermark apply for video: burns an optional positioned QR and optional X handle. The handle can stay horizontally centered or sit above, on, or below the QR. At least one must be included. Burn mode supports optional X icon and handle border, independent handle padding X/Y and corner rounding, independent QR/handle opacity, independent visibility windows, and adjustable handle height. Pass mode=overlay to store a legacy single-card render-time overlay instead.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Video asset id to watermark"),
@@ -151,7 +154,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       include_handle: z
         .boolean()
         .optional()
-        .describe("Include the horizontally centered handle watermark (default true); false applies only the QR"),
+        .describe("Include the handle watermark (default true); false applies only the QR"),
       position: z
         .enum(WATERMARK_POSITION_OPTIONS)
         .optional()
@@ -161,7 +164,11 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         .min(MIN_HANDLE_VERTICAL_PERCENT)
         .max(MAX_HANDLE_VERTICAL_PERCENT)
         .optional()
-        .describe("Burn-mode handle centerline as percent from the top (default 33; range 10-90)"),
+        .describe("Burn-mode centered-handle centerline as percent from the top (default 33; range 10-90). Ignored when handle_position attaches the handle to the QR"),
+      handle_position: z
+        .enum(WATERMARK_HANDLE_PLACEMENTS)
+        .optional()
+        .describe("Burn-mode handle placement: center (default), above-qr, on-qr, or below-qr"),
       include_x_icon: z
         .boolean()
         .optional()
@@ -177,6 +184,13 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         .max(MAX_HANDLE_PADDING)
         .optional()
         .describe(`Horizontal handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING})`),
+      handle_padding_y: z
+        .number()
+        .int()
+        .min(MIN_HANDLE_PADDING)
+        .max(MAX_HANDLE_PADDING)
+        .optional()
+        .describe(`Vertical handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING})`),
       handle_rounding: z
         .number()
         .int()
@@ -258,9 +272,11 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         include_handle = true,
         position = "auto",
         handle_vertical_percent = DEFAULT_HANDLE_VERTICAL_PERCENT,
+        handle_position = "center",
         include_x_icon = true,
         include_handle_border = true,
         handle_padding = DEFAULT_HANDLE_PADDING,
+        handle_padding_y = DEFAULT_HANDLE_PADDING,
         handle_rounding = DEFAULT_HANDLE_ROUNDING,
         start_seconds,
         end_seconds,
@@ -284,9 +300,11 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         include_handle?: boolean;
         position?: WatermarkPositionOption;
         handle_vertical_percent?: number;
+        handle_position?: WatermarkHandlePlacement;
         include_x_icon?: boolean;
         include_handle_border?: boolean;
         handle_padding?: number;
+        handle_padding_y?: number;
         handle_rounding?: number;
         start_seconds?: number;
         end_seconds?: number;
@@ -351,10 +369,14 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           content: [{ type: "text" as const, text: "url or handle must provide a QR destination" }],
         };
       }
+      const resolvedHandlePosition: WatermarkHandlePlacement = include_qr
+        ? handle_position
+        : "center";
       const appearance: WatermarkAssetAppearance = {
         includeXIcon: include_x_icon,
         includeHandleBorder: include_handle_border,
         handlePadding: handle_padding,
+        handlePaddingY: handle_padding_y,
         handleRounding: handle_rounding,
       };
 
@@ -424,7 +446,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       const usesPosition = mode === "overlay" || include_qr;
       const badgeAspect = variant === "qr"
         ? QR_ONLY_BADGE_ASPECT
-        : watermarkBadgeAspect(include_qr);
+        : watermarkBadgeAspect(include_qr, handle_padding_y);
       let analysis: OsgPlacementAnalysis | null = null;
       let recommended: OsgPosition | null = null;
       let placementSource: WatermarkPlacementSource = usesPosition
@@ -485,9 +507,11 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         scale,
         requested_position: position,
         handle_vertical_percent,
+        handle_position: include_handle ? resolvedHandlePosition : null,
         include_x_icon,
         include_handle_border,
         handle_padding,
+        handle_padding_y,
         handle_rounding,
         start_seconds: start_seconds ?? null,
         end_seconds: end_seconds ?? null,
@@ -600,6 +624,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           handleOpacity: resolvedHandleOpacity,
           userScale: scale,
           ...(include_handle ? { handleVerticalPercent: handle_vertical_percent } : {}),
+          ...(include_handle ? { handlePlacement: resolvedHandlePosition } : {}),
+          ...(include_handle ? { handlePaddingY: handle_padding_y } : {}),
           ...(resolvedQrStartSeconds !== undefined
             ? { qrStartSeconds: resolvedQrStartSeconds }
             : {}),
@@ -651,7 +677,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
             position: include_qr ? corner : null,
             qr_asset_id: qrAssetId,
             handle_asset_id: handleAssetId,
-            handle_position: include_handle ? "center" : null,
+            handle_position: include_handle ? resolvedHandlePosition : null,
             placement_source: placementSource,
           }),
         }],

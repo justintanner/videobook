@@ -23,9 +23,11 @@ function renderWatermark(overrides: Partial<WatermarkReviewState> = {}): string 
     includeHandle: true,
     position: 'middle-center',
     handleVerticalPercent: 33,
+    handlePlacement: 'center',
     includeXIcon: true,
     includeHandleBorder: true,
     handlePadding: 48,
+    handlePaddingY: 24,
     handleRounding: 60,
     qrOpacity: 0.35,
     handleOpacity: 0.7,
@@ -84,9 +86,14 @@ describe('watermark chat review', () => {
     expect(html).not.toContain('lucide-qr-code')
     expect(html).toContain('aria-label="Middle center" aria-pressed="true"')
     expect(html).toContain('type="range" min="10" max="90" step="1" value="33"')
-    expect(html).toContain('id="watermark-handle-padding" type="range" min="0" max="96" step="1" value="48"')
+    expect(html).toContain('id="watermark-handle-padding-x" type="range" min="0" max="96" step="1" value="48"')
+    expect(html).toContain('id="watermark-handle-padding-y" type="range" min="0" max="96" step="1" value="24"')
     expect(html).toContain('id="watermark-handle-rounding" type="range" min="0" max="100" step="1" value="60"')
     expect(html).toContain('33% from top')
+    expect(html).toContain('aria-label="Handle placement"')
+    expect(html).toContain('>Above QR</button>')
+    expect(html).toContain('>On QR</button>')
+    expect(html).toContain('>Below QR</button>')
     expect(html).toContain('<output for="watermark-qr-opacity">35%</output>')
     expect(html).toContain('<output for="watermark-handle-opacity">70%</output>')
     expect(html.match(/type="number"/g)).toHaveLength(4)
@@ -105,9 +112,11 @@ describe('watermark chat review', () => {
       includeQr: false,
       position: 'top-left',
       handleVerticalPercent: 68,
+      handlePlacement: 'center',
       includeXIcon: false,
       includeHandleBorder: false,
       handlePadding: 0,
+      handlePaddingY: 0,
       handleRounding: 0,
       handleOpacity: 0.6,
       handleStartSeconds: 1,
@@ -122,9 +131,26 @@ describe('watermark chat review', () => {
     expect(html).toContain('68% from top')
     expect(html).toContain('watermark-preview-handle-pill without-border')
     expect(html).toContain('padding-inline:0em;border-radius:0em')
+    expect(html).toContain('>Above QR</button>')
+    expect(html).toContain('disabled=""')
     expect(html).not.toContain('watermark-preview-x-icon')
     expect(html).toContain('<output for="watermark-handle-opacity">60%</output>')
     expect(html.match(/type="number"/g)).toHaveLength(2)
+  })
+
+  it('previews the handle sitting on the QR', () => {
+    const html = renderWatermark({
+      position: 'bottom-right',
+      handlePlacement: 'on-qr',
+      handlePadding: 32,
+      handlePaddingY: 32,
+    })
+    expect(html).toContain('aria-pressed="true">On QR</button>')
+    expect(html).not.toContain('id="watermark-handle-vertical"')
+    expect(html).toContain('The handle sits with the QR.')
+    expect(html).toContain('width:9%;height:auto;top:')
+    expect(html).toContain('left:89%')
+    expect(html).not.toContain('top:33%;left:50%;transform:translate(-50%, -50%)')
   })
 
   it('allows a QR-only watermark with invalid handle timing', () => {

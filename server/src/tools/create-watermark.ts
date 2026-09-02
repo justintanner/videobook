@@ -18,7 +18,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
   return {
     name: "create_watermark_card",
     description:
-      "Generate a compact transparent QR plus plain X handle badge and store it as an image artifact. The X icon and handle border are optional, and handle padding and corner rounding are adjustable. Apply it via apply_watermark or manually through on-screen graphic settings.",
+      "Generate a compact transparent QR plus plain X handle badge and store it as an image artifact. The X icon and handle border are optional, and handle padding X/Y and corner rounding are adjustable. Apply it via apply_watermark or manually through on-screen graphic settings.",
     schema: {
       book_id: z.string().describe("Book id"),
       handle: z.string().optional().describe(`X handle without @ (default: ${DEFAULT_HANDLE})`),
@@ -42,6 +42,13 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         .max(MAX_HANDLE_PADDING)
         .optional()
         .describe(`Horizontal handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING})`),
+      handle_padding_y: z
+        .number()
+        .int()
+        .min(MIN_HANDLE_PADDING)
+        .max(MAX_HANDLE_PADDING)
+        .optional()
+        .describe(`Vertical handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING})`),
       handle_rounding: z
         .number()
         .int()
@@ -58,6 +65,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         include_x_icon = true,
         include_handle_border = true,
         handle_padding = DEFAULT_HANDLE_PADDING,
+        handle_padding_y = DEFAULT_HANDLE_PADDING,
         handle_rounding = DEFAULT_HANDLE_ROUNDING,
       } = args as {
         book_id: string;
@@ -67,6 +75,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         include_x_icon?: boolean;
         include_handle_border?: boolean;
         handle_padding?: number;
+        handle_padding_y?: number;
         handle_rounding?: number;
       };
 
@@ -83,6 +92,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         includeXIcon: include_x_icon,
         includeHandleBorder: include_handle_border,
         handlePadding: handle_padding,
+        handlePaddingY: handle_padding_y,
         handleRounding: handle_rounding,
       });
       if (!created.ok) {
@@ -105,6 +115,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
             include_x_icon,
             include_handle_border,
             handle_padding,
+            handle_padding_y,
             handle_rounding,
           }),
         }],

@@ -13,6 +13,7 @@ import {
   BADGE_HEIGHT,
   BADGE_WIDTH,
   HANDLE_ONLY_BADGE_HEIGHT,
+  handlePillHeight,
   QR_ONLY_BADGE_ASPECT,
   QR_ONLY_BADGE_HEIGHT,
   buildWatermarkBadgePng,
@@ -218,6 +219,22 @@ describe("buildWatermarkBadgePng", () => {
     const cornerOffset = (1 * rawCompact.info.width + compactLeft) * 4 + 3;
     expect(rawCompact.data[cornerOffset]).toBeGreaterThan(200);
     expect(rawRounded.data[cornerOffset]).toBeLessThan(20);
+  });
+
+  it("grows the handle pill with vertical padding", async () => {
+    expect(handlePillHeight(32)).toBe(HANDLE_ONLY_BADGE_HEIGHT);
+    expect(handlePillHeight(0)).toBe(30);
+    expect(handlePillHeight(64)).toBe(152);
+    const compact = await buildWatermarkBadgePng(URL, "someone", {
+      includeQr: false,
+      handlePaddingY: 0,
+    });
+    const roomy = await buildWatermarkBadgePng(URL, "someone", {
+      includeQr: false,
+      handlePaddingY: 64,
+    });
+    expect((await sharp(compact).metadata()).height).toBe(30);
+    expect((await sharp(roomy).metadata()).height).toBe(152);
   });
 
   it("renders a QR-only tile without the handle pill", async () => {

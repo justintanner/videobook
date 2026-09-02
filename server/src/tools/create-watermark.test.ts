@@ -82,6 +82,7 @@ describe("create_watermark tool", () => {
       include_x_icon: boolean;
       include_handle_border: boolean;
       handle_padding: number;
+      handle_padding_y: number;
       handle_rounding: number;
     };
     const artifact = fs.artifacts.get(parsed.asset_id);
@@ -91,6 +92,7 @@ describe("create_watermark tool", () => {
     expect(parsed.include_x_icon).toBe(false);
     expect(parsed.include_handle_border).toBe(false);
     expect(parsed.handle_padding).toBe(64);
+    expect(parsed.handle_padding_y).toBe(32);
     expect(parsed.handle_rounding).toBe(25);
 
     const manifest = await fs.files.manifest(parsed.asset_id);
@@ -122,6 +124,7 @@ describe("create_watermark tool", () => {
     expect(originalMeta.ok && originalMeta.value.include_x_icon).toBe(false);
     expect(originalMeta.ok && originalMeta.value.include_handle_border).toBe(false);
     expect(originalMeta.ok && originalMeta.value.handle_padding).toBe(64);
+    expect(originalMeta.ok && originalMeta.value.handle_padding_y).toBe(32);
     expect(originalMeta.ok && originalMeta.value.handle_rounding).toBe(25);
   });
 
@@ -136,11 +139,13 @@ describe("create_watermark tool", () => {
       handle: string;
       url: string;
       handle_padding: number;
+      handle_padding_y: number;
       handle_rounding: number;
     };
     expect(parsed.handle).toBe("justinwtanner");
     expect(parsed.url).toBe("https://x.com/justinwtanner");
     expect(parsed.handle_padding).toBe(32);
+    expect(parsed.handle_padding_y).toBe(32);
     expect(parsed.handle_rounding).toBe(100);
   });
 

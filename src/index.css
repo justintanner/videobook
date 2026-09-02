@@ -7273,6 +7273,27 @@ textarea:focus-visible {
   align-content: start;
 }
 
+.confirm-watermark-handle-placement {
+  display: grid;
+  gap: 6px;
+}
+
+.confirm-watermark-handle-placement > span {
+  color: #86ab95;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+.confirm-watermark-handle-placement > .confirm-chips {
+  gap: 5px;
+}
+
+.confirm-watermark-handle-placement > .confirm-chips > button {
+  min-height: 22px;
+  padding: 0 8px;
+  font-size: 9px;
+}
+
 .confirm-watermark-timings {
   display: grid;
   gap: 6px;
@@ -10888,6 +10909,7 @@ textarea:focus-visible {
 
 .watermark-preview-handle {
   display: flex;
+  z-index: 3;
   min-width: 0;
   align-items: center;
   justify-content: center;

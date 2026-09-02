@@ -2,6 +2,9 @@ import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Play } from 'lucide-react'
 import {
+  DEFAULT_HANDLE_PILL_HEIGHT,
+  HANDLE_BADGE_WIDTH,
+  handlePillHeight,
   MAX_HANDLE_PADDING,
   MAX_HANDLE_ROUNDING,
   MAX_HANDLE_VERTICAL_PERCENT,
@@ -10,9 +13,13 @@ import {
   MIN_HANDLE_ROUNDING,
   MIN_HANDLE_VERTICAL_PERCENT,
   MIN_WATERMARK_OPACITY,
+  WATERMARK_HANDLE_PLACEMENTS,
   WATERMARK_POSITIONS,
 } from '@/videobook/watermark-review'
-import type { WatermarkPosition } from '@/videobook/watermark-review'
+import type {
+  WatermarkHandlePlacement,
+  WatermarkPosition,
+} from '@/videobook/watermark-review'
 import {
   watermarkHandleValue,
   watermarkTimingValid,
@@ -32,9 +39,11 @@ export interface WatermarkReviewState {
   includeHandle: boolean
   position: WatermarkPosition
   handleVerticalPercent: number
+  handlePlacement: WatermarkHandlePlacement
   includeXIcon: boolean
   includeHandleBorder: boolean
   handlePadding: number
+  handlePaddingY: number
   handleRounding: number
   qrOpacity: number
   handleOpacity: number
@@ -55,9 +64,11 @@ type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
   | 'includeHandle'
   | 'position'
   | 'handleVerticalPercent'
+  | 'handlePlacement'
   | 'includeXIcon'
   | 'includeHandleBorder'
   | 'handlePadding'
+  | 'handlePaddingY'
   | 'handleRounding'
   | 'qrOpacity'
   | 'handleOpacity'
@@ -140,8 +151,14 @@ function buildQrPreviewPath(): string {
 }
 
 const QR_PREVIEW_PATH = buildQrPreviewPath()
-const HANDLE_BADGE_HEIGHT = 88
 const HANDLE_FONT_SIZE = 28
+const QR_PREVIEW_SIZE_PERCENT = 16
+const HANDLE_PLACEMENT_LABELS: Record<WatermarkHandlePlacement, string> = {
+  center: 'Centered',
+  'above-qr': 'Above QR',
+  'on-qr': 'On QR',
+  'below-qr': 'Below QR',
+}
 
 function WatermarkQrPreview() {
   return (
@@ -200,6 +217,10 @@ function secondsLabel(value: number): string {
   return `${value.toFixed(1)}s`
 }
 
+function previewQrSize(width: number, height: number): number {
+  return QR_PREVIEW_SIZE_PERCENT * (Math.min(width, height) / height)
+}
+
 function previewQrStyle(
   position: Exclude<WatermarkPosition, 'auto'>,
   width: number,
@@ -209,7 +230,7 @@ function previewQrStyle(
   const transforms: string[] = []
   const style: CSSProperties = {
     aspectRatio: '1 / 1',
-    height: `${16 * (Math.min(width, height) / height)}%`,
+    height: `${previewQrSize(width, height)}%`,
   }
   if (horizontal === 'left') style.left = '2%'
   if (horizontal === 'right') style.right = '2%'
@@ -232,23 +253,60 @@ function previewHandleStyle(
   width: number,
   height: number,
   verticalPercent: number,
+  paddingY: number,
+  placement: WatermarkHandlePlacement,
+  qrPosition: Exclude<WatermarkPosition, 'auto'>,
 ): CSSProperties {
+  const pillHeight = handlePillHeight(paddingY)
+  if (placement === 'center') {
+    return {
+      aspectRatio: `${HANDLE_BADGE_WIDTH} / ${pillHeight}`,
+      height: `${previewQrSize(width, height) * (pillHeight / DEFAULT_HANDLE_PILL_HEIGHT)}%`,
+      top: `${verticalPercent}%`,
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+    }
+  }
+  const [vertical, horizontal] = qrPosition.split('-')
+  const qrHeightPercent = previewQrSize(width, height)
+  const qrWidthPercent = qrHeightPercent * (height / width)
+  const handleHeightPercent = qrHeightPercent * (pillHeight / HANDLE_BADGE_WIDTH)
+  const verticalInset = 2 * (width / height)
+  const gapPercent = Math.max(0.4, qrHeightPercent * 0.06)
+  let left = horizontal === 'left'
+    ? 2
+    : horizontal === 'right'
+      ? 100 - 2 - qrWidthPercent
+      : 50 - qrWidthPercent / 2
+  const qrTop = vertical === 'top'
+    ? verticalInset
+    : vertical === 'bottom'
+      ? 100 - verticalInset - qrHeightPercent
+      : 50 - qrHeightPercent / 2
+  let top = placement === 'above-qr'
+    ? qrTop - handleHeightPercent - gapPercent
+    : placement === 'below-qr'
+      ? qrTop + qrHeightPercent + gapPercent
+      : qrTop + (qrHeightPercent - handleHeightPercent) / 2
+  left = clamp(left, 2, 100 - 2 - qrWidthPercent)
+  top = clamp(top, verticalInset, 100 - verticalInset - handleHeightPercent)
   return {
-    aspectRatio: '480 / 88',
-    height: `${16 * (Math.min(width, height) / height)}%`,
-    top: `${verticalPercent}%`,
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
+    aspectRatio: `${HANDLE_BADGE_WIDTH} / ${pillHeight}`,
+    width: `${qrWidthPercent}%`,
+    height: 'auto',
+    top: `${top}%`,
+    left: `${left}%`,
   }
 }
 
 function previewHandlePillStyle(
-  padding: number,
+  paddingX: number,
+  paddingY: number,
   rounding: number,
 ): CSSProperties {
-  const radius = ((HANDLE_BADGE_HEIGHT - 2) / 2) * (rounding / 100)
+  const radius = ((handlePillHeight(paddingY) - 2) / 2) * (rounding / 100)
   return {
-    paddingInline: `${padding / HANDLE_FONT_SIZE}em`,
+    paddingInline: `${paddingX / HANDLE_FONT_SIZE}em`,
     borderRadius: `${radius / HANDLE_FONT_SIZE}em`,
   }
 }
@@ -529,6 +587,9 @@ export function WatermarkBody({
                   previewWidth,
                   previewHeight,
                   state.handleVerticalPercent,
+                  state.handlePaddingY,
+                  state.includeQr ? state.handlePlacement : 'center',
+                  previewPosition,
                 ),
                 opacity: handleVisibleAtPlayhead ? state.handleOpacity : 0,
               }}
@@ -538,6 +599,7 @@ export function WatermarkBody({
                 className={`watermark-preview-handle-pill${state.includeHandleBorder ? '' : ' without-border'}`}
                 style={previewHandlePillStyle(
                   state.handlePadding,
+                  state.handlePaddingY,
                   state.handleRounding,
                 )}
               >
@@ -640,7 +702,10 @@ export function WatermarkBody({
             description="Separately placed scannable link"
             disabled={state.includeQr && !state.includeHandle}
             label="Include QR code"
-            onChange={(includeQr) => onChange({ includeQr })}
+            onChange={(includeQr) => onChange({
+              includeQr,
+              ...(!includeQr ? { handlePlacement: 'center' as const } : {}),
+            })}
           />
           {state.includeQr && (
             <label className="confirm-field">
@@ -691,13 +756,23 @@ export function WatermarkBody({
               />
               <WatermarkRange
                 busy={busy}
-                id="watermark-handle-padding"
-                label="Handle padding"
+                id="watermark-handle-padding-x"
+                label="Handle padding X"
                 min={MIN_HANDLE_PADDING}
                 max={MAX_HANDLE_PADDING}
                 output={`${state.handlePadding}px`}
                 value={state.handlePadding}
                 onChange={(handlePadding) => onChange({ handlePadding })}
+              />
+              <WatermarkRange
+                busy={busy}
+                id="watermark-handle-padding-y"
+                label="Handle padding Y"
+                min={MIN_HANDLE_PADDING}
+                max={MAX_HANDLE_PADDING}
+                output={`${state.handlePaddingY}px`}
+                value={state.handlePaddingY}
+                onChange={(handlePaddingY) => onChange({ handlePaddingY })}
               />
               <WatermarkRange
                 busy={busy}
@@ -771,20 +846,47 @@ export function WatermarkBody({
           </div>
           <div className="confirm-watermark-handle-position">
             {state.includeHandle && (
-              <WatermarkRange
-                busy={busy}
-                id="watermark-handle-vertical"
-                label="Handle vertical position"
-                min={MIN_HANDLE_VERTICAL_PERCENT}
-                max={MAX_HANDLE_VERTICAL_PERCENT}
-                output={`${state.handleVerticalPercent}% from top`}
-                value={state.handleVerticalPercent}
-                onChange={(handleVerticalPercent) => onChange({ handleVerticalPercent })}
-              />
+              <>
+                <div className="confirm-watermark-handle-placement">
+                  <span>Handle placement</span>
+                  <div className="confirm-chips" role="group" aria-label="Handle placement">
+                    {WATERMARK_HANDLE_PLACEMENTS.map((placement) => {
+                      const attached = placement !== 'center'
+                      const disabled = busy || (attached && !state.includeQr)
+                      return (
+                        <button
+                          key={placement}
+                          type="button"
+                          className={state.handlePlacement === placement ? 'active' : ''}
+                          aria-pressed={state.handlePlacement === placement}
+                          disabled={disabled}
+                          onClick={() => onChange({ handlePlacement: placement })}
+                        >
+                          {HANDLE_PLACEMENT_LABELS[placement]}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                {state.handlePlacement === 'center' && (
+                  <WatermarkRange
+                    busy={busy}
+                    id="watermark-handle-vertical"
+                    label="Handle vertical position"
+                    min={MIN_HANDLE_VERTICAL_PERCENT}
+                    max={MAX_HANDLE_VERTICAL_PERCENT}
+                    output={`${state.handleVerticalPercent}% from top`}
+                    value={state.handleVerticalPercent}
+                    onChange={(handleVerticalPercent) => onChange({ handleVerticalPercent })}
+                  />
+                )}
+              </>
             )}
             <small className="confirm-help">
               {state.includeQr && state.includeHandle
-                ? 'Auto places the QR away from faces and text. The handle stays horizontally centered.'
+                ? state.handlePlacement === 'center'
+                  ? 'Auto places the QR away from faces and text. The handle stays horizontally centered.'
+                  : 'Auto places the QR away from faces and text. The handle sits with the QR.'
                 : state.includeQr
                   ? 'Auto places the QR away from faces and text.'
                   : 'The handle stays horizontally centered.'}

@@ -67,6 +67,38 @@ describe("burn watermark filter", () => {
     expect(burnWatermarkEnable(undefined, 4)).toBe(":enable='between(t,0,4)'");
   });
 
+  it("places the handle on the QR at the QR corner", () => {
+    expect(buildBurnWatermarkFilter({
+      width: 320,
+      height: 240,
+      corner: "bottom-right",
+      userScale: 1,
+      includeQr: true,
+      includeHandle: true,
+      handlePlacement: "above-qr",
+    })).toBe(
+      "[1:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.5[qr];"
+      + "[2:v]scale=38:-2,format=rgba,colorchannelmixer=aa=0.5[handle];"
+      + "[0:v][qr]overlay=main_w-overlay_w-6:main_h-overlay_h-6:format=auto[withqr];"
+      + "[withqr][handle]overlay=276:187:format=auto[vout]",
+    );
+  });
+
+  it("scales independent handle height from vertical padding", () => {
+    expect(buildBurnWatermarkFilter({
+      width: 320,
+      height: 240,
+      corner: "bottom-right",
+      userScale: 1,
+      includeQr: false,
+      includeHandle: true,
+      handlePaddingY: 0,
+    })).toBe(
+      "[1:v]scale=-2:12,format=rgba,colorchannelmixer=aa=0.5[handle];"
+      + "[0:v][handle]overlay=(main_w-overlay_w)/2:main_h*33/100-overlay_h/2:format=auto[vout]",
+    );
+  });
+
   it("builds a QR-only filter without a handle input", () => {
     expect(buildBurnWatermarkFilter({
       width: 320,

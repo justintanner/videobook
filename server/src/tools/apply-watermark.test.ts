@@ -32,6 +32,7 @@ type ApplyResult = {
   include_x_icon: boolean;
   include_handle_border: boolean;
   handle_padding: number;
+  handle_padding_y: number;
   handle_rounding: number;
   start_seconds: number | null;
   end_seconds: number | null;
@@ -125,6 +126,7 @@ describe("apply_watermark tool", () => {
     expect(parsed.handle).toBe("someone");
     expect(parsed.url).toBe("https://x.com/someone");
     expect(parsed.handle_padding).toBe(32);
+    expect(parsed.handle_padding_y).toBe(32);
     expect(parsed.handle_rounding).toBe(100);
 
     const card = fs.artifacts.get(parsed.card_asset_id);
@@ -185,6 +187,7 @@ describe("apply_watermark tool", () => {
     expect(cardMeta.value.include_x_icon).toBe(true);
     expect(cardMeta.value.include_handle_border).toBe(true);
     expect(cardMeta.value.handle_padding).toBe(32);
+    expect(cardMeta.value.handle_padding_y).toBe(32);
     expect(cardMeta.value.handle_rounding).toBe(100);
     expect(cardMeta.value.height).toBe(88);
 
@@ -324,6 +327,7 @@ describe("apply_watermark tool", () => {
     expect(parsed.include_x_icon).toBe(false);
     expect(parsed.include_handle_border).toBe(false);
     expect(parsed.handle_padding).toBe(64);
+    expect(parsed.handle_padding_y).toBe(32);
     expect(parsed.handle_rounding).toBe(25);
     expect(parsed.start_seconds).toBeNull();
     expect(parsed.end_seconds).toBeNull();
@@ -353,6 +357,7 @@ describe("apply_watermark tool", () => {
     expect(handleMeta.value.include_x_icon).toBe(false);
     expect(handleMeta.value.include_handle_border).toBe(false);
     expect(handleMeta.value.handle_padding).toBe(64);
+    expect(handleMeta.value.handle_padding_y).toBe(32);
     expect(handleMeta.value.handle_rounding).toBe(25);
 
     const after = await fs.files.manifest(assetId);
@@ -419,6 +424,26 @@ describe("apply_watermark tool", () => {
     expect(videoFile.objectHash).not.toBe(beforeHash);
     expect(after.value.files.some((file) => file.name === "proxy.mp4")).toBe(true);
   }, 120_000);
+
+  it("records handle placement and vertical padding on overlay cards", async () => {
+    const assetId = await createVideoAsset();
+    const parsed = await apply({
+      asset_id: assetId,
+      handle: "someone",
+      handle_position: "on-qr",
+      handle_padding_y: 64,
+      mode: "overlay",
+    });
+    expect(parsed.handle_position).toBe("on-qr");
+    expect(parsed.handle_padding_y).toBe(64);
+    const cardMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(
+      parsed.card_asset_id,
+      "original",
+    );
+    if (!cardMeta.ok) throw new Error(cardMeta.error.message);
+    expect(cardMeta.value.handle_padding_y).toBe(64);
+    expect(cardMeta.value.height).toBe(644);
+  });
 
   it("rejects non-video targets", async () => {
     const created = await fs.artifacts.create("img", "still");

@@ -6,9 +6,16 @@ import { queue, registerJobHandler } from "../queue.js";
 import { WATERMARK_MIN_DIM_FRACTION, WATERMARK_OPACITY } from "../remotion/osg-spec.js";
 import type { OsgPosition } from "../remotion/subtitles/types.js";
 import {
+  BADGE_WIDTH,
+  DEFAULT_HANDLE_PADDING,
+  HANDLE_ONLY_BADGE_HEIGHT,
+  handlePillHeight,
+} from "../watermark-badge.js";
+import {
   DEFAULT_HANDLE_VERTICAL_PERCENT,
-  watermarkHandleOverlayY,
+  watermarkHandleOverlayPosition,
 } from "../watermark-handle-position.js";
+import type { WatermarkHandlePlacement } from "../watermark-handle-position.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { withLockedLocalLease } from "./_lease.js";
 
@@ -28,6 +35,8 @@ type BurnWatermarkPayload = {
   handleOpacity?: number;
   userScale: number;
   handleVerticalPercent?: number;
+  handlePlacement?: WatermarkHandlePlacement;
+  handlePaddingY?: number;
   startSeconds?: number;
   endSeconds?: number;
   qrStartSeconds?: number;
@@ -74,6 +83,8 @@ export function buildBurnWatermarkFilter(options: {
   includeQr: boolean;
   includeHandle: boolean;
   handleVerticalPercent?: number;
+  handlePlacement?: WatermarkHandlePlacement;
+  handlePaddingY?: number;
   startSeconds?: number;
   endSeconds?: number;
   qrStartSeconds?: number;
@@ -88,9 +99,35 @@ export function buildBurnWatermarkFilter(options: {
   );
   const padding = Math.round(options.width * 0.02);
   const { x, y } = burnOverlayPosition(options.corner, padding);
-  const handleY = watermarkHandleOverlayY(
-    options.handleVerticalPercent ?? DEFAULT_HANDLE_VERTICAL_PERCENT,
+  const handlePlacement = options.includeQr && options.handlePlacement
+    ? options.handlePlacement
+    : "center";
+  const attachedToQr = handlePlacement !== "center";
+  const handleBadgeHeight = handlePillHeight(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING);
+  const independentHandleHeight = Math.max(
+    2,
+    2 * Math.round((badgeHeight * handleBadgeHeight / HANDLE_ONLY_BADGE_HEIGHT) / 2),
   );
+  const attachedHandleHeight = Math.max(
+    2,
+    Math.round(badgeHeight * handleBadgeHeight / BADGE_WIDTH),
+  );
+  const handleScale = attachedToQr
+    ? `${badgeHeight}:-2`
+    : `-2:${independentHandleHeight}`;
+  const handleOverlay = watermarkHandleOverlayPosition({
+    placement: handlePlacement,
+    corner: options.corner,
+    canvasWidth: options.width,
+    canvasHeight: options.height,
+    qrSize: badgeHeight,
+    handleWidth: attachedToQr
+      ? badgeHeight
+      : Math.round(independentHandleHeight * BADGE_WIDTH / handleBadgeHeight),
+    handleHeight: attachedToQr ? attachedHandleHeight : independentHandleHeight,
+    padding,
+    handleVerticalPercent: options.handleVerticalPercent ?? DEFAULT_HANDLE_VERTICAL_PERCENT,
+  });
   const sharedOpacity = options.opacity ?? WATERMARK_OPACITY;
   const qrOpacity = options.qrOpacity ?? sharedOpacity;
   const handleOpacity = options.handleOpacity ?? sharedOpacity;
@@ -111,7 +148,7 @@ export function buildBurnWatermarkFilter(options: {
     filters.push(`[1:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${qrOpacity}[qr]`);
   }
   if (options.includeHandle) {
-    filters.push(`[${handleInput}:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${handleOpacity}[handle]`);
+    filters.push(`[${handleInput}:v]scale=${handleScale},format=rgba,colorchannelmixer=aa=${handleOpacity}[handle]`);
   }
   if (options.includeQr) {
     const output = options.includeHandle ? "withqr" : "vout";
@@ -120,7 +157,7 @@ export function buildBurnWatermarkFilter(options: {
   if (options.includeHandle) {
     const base = options.includeQr ? "withqr" : "0:v";
     filters.push(
-      `[${base}][handle]overlay=(main_w-overlay_w)/2:${handleY}:format=auto${handleEnable}[vout]`,
+      `[${base}][handle]overlay=${handleOverlay.x}:${handleOverlay.y}:format=auto${handleEnable}[vout]`,
     );
   }
   return filters.join(";");
@@ -164,6 +201,7 @@ export function registerBurnWatermarkJob(engine: Engine): void {
     const {
       assetId, assetDir, bookId, videoPath, qrPath, handlePath, corner, opacity, userScale,
       qrOpacity, handleOpacity, handleVerticalPercent = DEFAULT_HANDLE_VERTICAL_PERCENT,
+      handlePlacement = "center", handlePaddingY = DEFAULT_HANDLE_PADDING,
       startSeconds, endSeconds, qrStartSeconds, qrEndSeconds,
       handleStartSeconds, handleEndSeconds,
     } = payload as BurnWatermarkPayload;
@@ -206,6 +244,8 @@ export function registerBurnWatermarkJob(engine: Engine): void {
           includeQr: qrPath !== undefined,
           includeHandle: handlePath !== undefined,
           handleVerticalPercent,
+          handlePlacement,
+          handlePaddingY,
           ...(qrTiming.startSeconds !== undefined
             ? { qrStartSeconds: qrTiming.startSeconds }
             : {}),

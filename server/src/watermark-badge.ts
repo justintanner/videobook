@@ -17,6 +17,7 @@ const TILE_PAD = 48; // white frame around the QR — ≥4 quiet-zone modules up
 const TILE_SIZE = QR_SIZE + TILE_PAD * 2; // 480
 const PILL_GAP = 12;
 const PILL_HEIGHT = 88;
+const HANDLE_PILL_CONTENT = 26;
 export const BADGE_HEIGHT = TILE_SIZE + PILL_GAP + PILL_HEIGHT; // 580
 export const BADGE_ASPECT = BADGE_WIDTH / BADGE_HEIGHT;
 export const QR_ONLY_BADGE_HEIGHT = TILE_SIZE;
@@ -37,6 +38,7 @@ type WatermarkBadgeOptions = {
   includeXIcon?: boolean;
   includeHandleBorder?: boolean;
   handlePadding?: number;
+  handlePaddingY?: number;
   handleRounding?: number;
 };
 
@@ -56,6 +58,20 @@ function clampHandlePadding(value: number): number {
   return Math.round(Math.min(MAX_HANDLE_PADDING, Math.max(MIN_HANDLE_PADDING, value)));
 }
 
+export function handlePillHeight(paddingY: number = DEFAULT_HANDLE_PADDING): number {
+  const clamped = clampHandlePadding(paddingY);
+  return Math.max(
+    HANDLE_PILL_CONTENT + 4,
+    PILL_HEIGHT + 2 * (clamped - DEFAULT_HANDLE_PADDING),
+  );
+}
+
+export function watermarkCombinedBadgeHeight(
+  paddingY: number = DEFAULT_HANDLE_PADDING,
+): number {
+  return TILE_SIZE + PILL_GAP + handlePillHeight(paddingY);
+}
+
 function clampHandleRounding(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_HANDLE_ROUNDING;
   return Math.round(Math.min(MAX_HANDLE_ROUNDING, Math.max(MIN_HANDLE_ROUNDING, value)));
@@ -70,8 +86,13 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-export function watermarkBadgeAspect(includeQr = true): number {
-  return BADGE_WIDTH / (includeQr ? BADGE_HEIGHT : HANDLE_ONLY_BADGE_HEIGHT);
+export function watermarkBadgeAspect(
+  includeQr = true,
+  paddingY: number = DEFAULT_HANDLE_PADDING,
+): number {
+  return BADGE_WIDTH / (
+    includeQr ? watermarkCombinedBadgeHeight(paddingY) : handlePillHeight(paddingY)
+  );
 }
 
 function watermarkBadgeVariant(options: WatermarkBadgeOptions): WatermarkBadgeVariant {
@@ -83,9 +104,14 @@ function watermarkBadgeLayout(variant: WatermarkBadgeVariant): string {
   return variant === "combined" ? WATERMARK_BADGE_LAYOUT : WATERMARK_HANDLE_LAYOUT;
 }
 
-function watermarkBadgeHeight(variant: WatermarkBadgeVariant): number {
+function watermarkBadgeHeight(
+  variant: WatermarkBadgeVariant,
+  paddingY: number,
+): number {
   if (variant === "qr") return QR_ONLY_BADGE_HEIGHT;
-  return variant === "combined" ? BADGE_HEIGHT : HANDLE_ONLY_BADGE_HEIGHT;
+  return variant === "combined"
+    ? watermarkCombinedBadgeHeight(paddingY)
+    : handlePillHeight(paddingY);
 }
 
 export async function buildWatermarkBadgePng(
@@ -99,6 +125,7 @@ export async function buildWatermarkBadgePng(
   const includeXIcon = includeHandle && (options.includeXIcon ?? true);
   const includeHandleBorder = includeHandle && (options.includeHandleBorder ?? true);
   const handlePadding = clampHandlePadding(options.handlePadding ?? DEFAULT_HANDLE_PADDING);
+  const handlePaddingY = clampHandlePadding(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING);
   const handleRounding = clampHandleRounding(options.handleRounding ?? DEFAULT_HANDLE_ROUNDING);
   const qrBuffer = includeQr
     ? await QRCode.toBuffer(url, {
@@ -110,10 +137,11 @@ export async function buildWatermarkBadgePng(
       })
     : null;
 
-  const badgeHeight = watermarkBadgeHeight(variant);
+  const pillHeight = handlePillHeight(handlePaddingY);
+  const badgeHeight = watermarkBadgeHeight(variant, handlePaddingY);
   const pillY = variant === "combined" ? TILE_SIZE + PILL_GAP : 0;
   const label = watermarkHandleLabel(handle);
-  const iconSize = 26;
+  const iconSize = HANDLE_PILL_CONTENT;
   const iconGap = 14;
   const iconSpace = includeXIcon ? iconSize + iconGap : 0;
   const availableWidth = BADGE_WIDTH - 2 - handlePadding * 2 - iconSpace;
@@ -128,9 +156,9 @@ export async function buildWatermarkBadgePng(
   const pillX = (BADGE_WIDTH - pillWidth) / 2;
   const labelX = includeXIcon ? contentX + iconSpace : BADGE_WIDTH / 2;
   const labelAnchor = includeXIcon ? "start" : "middle";
-  const labelY = pillY + PILL_HEIGHT / 2 + 1;
-  const logoY = pillY + (PILL_HEIGHT - iconSize) / 2;
-  const pillRadius = ((PILL_HEIGHT - 2) / 2) * (handleRounding / 100);
+  const labelY = pillY + pillHeight / 2 + 1;
+  const logoY = pillY + (pillHeight - iconSize) / 2;
+  const pillRadius = ((pillHeight - 2) / 2) * (handleRounding / 100);
   const border = includeHandleBorder
     ? ` stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="2"`
     : "";
@@ -139,7 +167,7 @@ export async function buildWatermarkBadgePng(
     ? `<rect x="0" y="0" width="${TILE_SIZE}" height="${TILE_SIZE}" rx="40" fill="#FFFFFF"/>`
     : "";
   const pill = includeHandle
-    ? `<rect x="${pillX}" y="${pillY + 1}" width="${pillWidth}" height="${PILL_HEIGHT - 2}" rx="${pillRadius}" fill="#0B0B0F" fill-opacity="0.92"${border}/>
+    ? `<rect x="${pillX}" y="${pillY + 1}" width="${pillWidth}" height="${pillHeight - 2}" rx="${pillRadius}" fill="#0B0B0F" fill-opacity="0.92"${border}/>
   ${includeXIcon ? `<svg x="${contentX}" y="${logoY}" width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24"><path d="${X_LOGO_PATH}" fill="#FFFFFF"/></svg>` : ""}
   <text x="${labelX}" y="${labelY}" text-anchor="${labelAnchor}" dominant-baseline="central" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="0.1" fill="#FFFFFF">${escapeXml(label)}</text>`
     : "";
@@ -172,6 +200,7 @@ export async function createWatermarkAsset(
   const includeXIcon = options.includeXIcon ?? true;
   const includeHandleBorder = options.includeHandleBorder ?? true;
   const handlePadding = clampHandlePadding(options.handlePadding ?? DEFAULT_HANDLE_PADDING);
+  const handlePaddingY = clampHandlePadding(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING);
   const handleRounding = clampHandleRounding(options.handleRounding ?? DEFAULT_HANDLE_ROUNDING);
   let buffer: Buffer;
   try {
@@ -180,6 +209,7 @@ export async function createWatermarkAsset(
       includeXIcon,
       includeHandleBorder,
       handlePadding,
+      handlePaddingY,
       handleRounding,
     });
   } catch (err) {
@@ -211,9 +241,10 @@ export async function createWatermarkAsset(
     include_x_icon: variant !== "qr" && includeXIcon,
     include_handle_border: variant !== "qr" && includeHandleBorder,
     handle_padding: variant !== "qr" ? handlePadding : null,
+    handle_padding_y: variant !== "qr" ? handlePaddingY : null,
     handle_rounding: variant !== "qr" ? handleRounding : null,
     width: BADGE_WIDTH,
-    height: watermarkBadgeHeight(variant),
+    height: watermarkBadgeHeight(variant, handlePaddingY),
   });
   if (!metadataResult.ok) {
     await engine.artifacts.delete(assetId).catch(() => undefined);
@@ -242,11 +273,15 @@ export async function findWatermarkAsset(
   const includeXIcon = options.includeXIcon ?? true;
   const includeHandleBorder = options.includeHandleBorder ?? true;
   const handlePadding = clampHandlePadding(options.handlePadding ?? DEFAULT_HANDLE_PADDING);
+  const handlePaddingY = clampHandlePadding(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING);
   const handleRounding = clampHandleRounding(options.handleRounding ?? DEFAULT_HANDLE_ROUNDING);
   for (const artifact of engine.artifacts.list()) {
     if (artifact.kind !== "image") continue;
     const meta = await engine.metadata.artifacts.read<Record<string, unknown>>(artifact.artifactId, "original");
     if (!meta.ok) continue;
+    const storedPaddingY = typeof meta.value.handle_padding_y === "number"
+      ? meta.value.handle_padding_y
+      : DEFAULT_HANDLE_PADDING;
     if (
       meta.value.origin === "watermark"
       && meta.value.layout === layout
@@ -255,6 +290,7 @@ export async function findWatermarkAsset(
       && (variant === "qr" || meta.value.include_x_icon === includeXIcon)
       && (variant === "qr" || meta.value.include_handle_border === includeHandleBorder)
       && (variant === "qr" || meta.value.handle_padding === handlePadding)
+      && (variant === "qr" || storedPaddingY === handlePaddingY)
       && (variant === "qr" || meta.value.handle_rounding === handleRounding)
     ) {
       return artifact.artifactId;

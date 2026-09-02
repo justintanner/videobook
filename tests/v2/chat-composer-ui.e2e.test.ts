@@ -1777,6 +1777,7 @@ describe('chat composer browser flow', () => {
           include_x_icon: true,
           include_handle_border: true,
           handle_padding: 25,
+          handle_padding_y: 18,
           handle_rounding: 41,
           qr_opacity: 0.45,
           handle_opacity: 0.55,
@@ -1803,6 +1804,7 @@ describe('chat composer browser flow', () => {
 
       const review = page.getByLabel('Watermark review')
       await review.waitFor({ state: 'visible', timeout: 30_000 })
+      await review.locator('.confirm-watermark').waitFor({ state: 'visible', timeout: 30_000 })
       expect(await page.getByLabel('Chat action review').count()).toBe(0)
       expect(await page.locator('.confirm-sheet-watermark').count()).toBe(1)
       expect(await page.locator('.watermark-backdrop, .watermark-dialog').count()).toBe(0)
@@ -1866,7 +1868,9 @@ describe('chat composer browser flow', () => {
       expect(await previewHandle.evaluate((element) => element.style.top)).toBe('41%')
       expect(await review.getByRole('slider', { name: 'QR opacity' }).inputValue()).toBe('45')
       expect(await review.getByRole('slider', { name: 'Handle opacity' }).inputValue()).toBe('55')
-      expect(await review.getByRole('slider', { name: 'Handle padding' }).inputValue()).toBe('25')
+      expect(await review.getByRole('slider', { name: 'Handle padding X' }).inputValue()).toBe('25')
+      expect(await review.getByRole('slider', { name: 'Handle padding Y' }).inputValue()).toBe('18')
+      expect(await review.getByRole('button', { name: 'On QR' }).count()).toBe(1)
       expect(await review.getByRole('slider', { name: 'Corner rounding' }).inputValue()).toBe('41')
       expect(await review.locator('input[type="number"]').count()).toBe(4)
       await expect.poll(async () => await input.inputValue()).toBe('/apply')
@@ -1879,7 +1883,7 @@ describe('chat composer browser flow', () => {
       expect(await review.getByText('62% from top').count()).toBeGreaterThan(0)
       const initialPillWidth = await previewHandlePill.evaluate((element) =>
         element.getBoundingClientRect().width)
-      const handlePadding = review.getByRole('slider', { name: 'Handle padding' })
+      const handlePadding = review.getByRole('slider', { name: 'Handle padding X' })
       await handlePadding.fill('96')
       expect(await previewHandleLabel.evaluate((element) => {
         const label = element.getBoundingClientRect()
@@ -1892,6 +1896,19 @@ describe('chat composer browser flow', () => {
       await handlePadding.fill('64')
       await expect.poll(async () => await previewHandlePill.evaluate((element) =>
         element.getBoundingClientRect().width)).toBeGreaterThan(initialPillWidth)
+      const handlePaddingY = review.getByRole('slider', { name: 'Handle padding Y' })
+      const initialPillHeight = await previewHandlePill.evaluate((element) =>
+        element.getBoundingClientRect().height)
+      await handlePaddingY.fill('96')
+      await expect.poll(async () => await previewHandlePill.evaluate((element) =>
+        element.getBoundingClientRect().height)).toBeGreaterThan(initialPillHeight)
+      await handlePaddingY.fill('40')
+      await review.getByRole('button', { name: 'On QR' }).click()
+      expect(await review.getByRole('button', { name: 'On QR' })
+        .getAttribute('aria-pressed')).toBe('true')
+      expect(await review.getByRole('slider', { name: 'Handle vertical position' }).count()).toBe(0)
+      await review.getByRole('button', { name: 'Centered' }).click()
+      expect(await handleVerticalPosition.inputValue()).toBe('62')
       await review.getByRole('slider', { name: 'Corner rounding' }).fill('25')
       await review.getByRole('checkbox', { name: 'Show X icon' }).uncheck()
       await review.getByRole('checkbox', { name: 'Handle border' }).uncheck()
@@ -1920,6 +1937,7 @@ describe('chat composer browser flow', () => {
         include_x_icon: false,
         include_handle_border: false,
         handle_padding: 64,
+        handle_padding_y: 40,
         handle_rounding: 25,
         qr_opacity: 0.35,
         handle_opacity: 0.7,
@@ -1940,19 +1958,20 @@ describe('chat composer browser flow', () => {
       }).inputValue()).toBe('33')
       expect(await review.getByRole('checkbox', { name: 'Show X icon' }).isChecked()).toBe(true)
       expect(await review.getByRole('checkbox', { name: 'Handle border' }).isChecked()).toBe(true)
-      expect(await review.getByRole('slider', { name: 'Handle padding' }).inputValue()).toBe('32')
+      expect(await review.getByRole('slider', { name: 'Handle padding X' }).inputValue()).toBe('32')
+      expect(await review.getByRole('slider', { name: 'Handle padding Y' }).inputValue()).toBe('32')
       expect(await review.getByRole('slider', { name: 'Corner rounding' }).inputValue()).toBe('100')
       expect(await review.getByRole('slider', { name: 'QR opacity' }).inputValue()).toBe('50')
       expect(await review.getByRole('slider', { name: 'Handle opacity' }).inputValue()).toBe('50')
       await review.getByLabel('X handle').fill('temporary')
       await review.getByLabel('QR link').fill('https://example.com/qr-only')
       await review.getByRole('spinbutton', { name: 'Handle end' }).fill('0')
-      expect(await review.getByText('Handle end time must be after its start time.').count()).toBe(1)
+      expect(await review.getByText('Handle end time must be after its start time.', { exact: true }).count()).toBe(1)
       expect(await review.getByRole('button', { name: 'Apply' }).isDisabled()).toBe(true)
       await review.getByRole('checkbox', { name: 'Include handle' }).uncheck()
       expect(await review.locator('.watermark-preview-handle').count()).toBe(0)
       expect(await review.getByRole('spinbutton', { name: 'Handle end' }).count()).toBe(0)
-      expect(await review.getByText('Handle end time must be after its start time.').count()).toBe(0)
+      expect(await review.getByText('Handle end time must be after its start time.', { exact: true }).count()).toBe(0)
       expect(await review.locator('input[type="number"]').count()).toBe(2)
       expect(await review.getByRole('button', { name: 'Apply' }).isEnabled()).toBe(true)
       await review.getByRole('button', { name: 'Apply' }).click()
