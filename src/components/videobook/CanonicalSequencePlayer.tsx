@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -34,6 +35,8 @@ interface CanonicalSequencePlayerProps {
 
 export interface CanonicalSequencePlayerHandle {
   seekTo: (frame: number) => void
+  focus: () => void
+  handleKeyDown: (event: KeyboardEvent<HTMLElement>) => void
 }
 
 function sequenceDuration(sequence: Sequence): number {
@@ -46,6 +49,23 @@ function sequenceDuration(sequence: Sequence): number {
   )
 }
 
+function keyboardAction(
+  event: KeyboardEvent<HTMLElement>,
+): TimelineKeyboardAction | null {
+  const key = event.key.toLowerCase()
+  if (key === 'i') return 'mark-in'
+  if (key === 'o') return 'mark-out'
+  if (key === 's') return 'split'
+  if (event.key === 'Delete' || event.key === 'Backspace') return 'delete'
+  if ((event.metaKey || event.ctrlKey) && key === 'z') {
+    return event.shiftKey ? 'redo' : 'undo'
+  }
+  if (key === 'f') return 'search'
+  if (key === '+' || key === '=') return 'zoom-in'
+  if (key === '-') return 'zoom-out'
+  return null
+}
+
 export const CanonicalSequencePlayer = forwardRef<
   CanonicalSequencePlayerHandle,
   CanonicalSequencePlayerProps
@@ -56,6 +76,8 @@ export const CanonicalSequencePlayer = forwardRef<
   onKeyboardAction,
 }, ref) {
   const playerRef = useRef<PlayerRef>(null)
+  const sectionRef = useRef<HTMLElement>(null)
+  const frameRef = useRef(0)
   const [frame, setFrame] = useState(0)
   const fps = sequence.frameRate.numerator / sequence.frameRate.denominator
   const durationInFrames = sequenceDuration(sequence)
@@ -64,31 +86,12 @@ export const CanonicalSequencePlayer = forwardRef<
     [assets, sequence],
   )
 
-  useImperativeHandle(ref, () => ({
-    seekTo: (nextFrame) => {
-      playerRef.current?.seekTo(Math.max(
-        0,
-        Math.min(durationInFrames - 1, Math.round(nextFrame)),
-      ))
-    },
-  }), [durationInFrames])
-
-  useEffect(() => {
-    const player = playerRef.current
-    if (!player) return
-    const handler = (event: { detail: { frame: number } }) => {
-      setFrame(event.detail.frame)
-      onFrameUpdate(event.detail.frame)
-    }
-    player.addEventListener('frameupdate', handler)
-    return () => player.removeEventListener('frameupdate', handler)
-  }, [onFrameUpdate])
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLElement>) => {
     const element = event.target as HTMLElement
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName)) return
     const player = playerRef.current
     if (!player) return
+    const current = frameRef.current
     const key = event.key.toLowerCase()
     if (key === ' ' || key === 'k') {
       event.preventDefault()
@@ -98,44 +101,52 @@ export const CanonicalSequencePlayer = forwardRef<
     }
     if (key === 'j' || event.key === 'ArrowLeft') {
       event.preventDefault()
-      player.seekTo(Math.max(0, frame - (key === 'j' ? Math.round(fps) : 1)))
+      player.seekTo(Math.max(0, current - (key === 'j' ? Math.round(fps) : 1)))
       return
     }
     if (key === 'l' || event.key === 'ArrowRight') {
       event.preventDefault()
       player.seekTo(Math.min(
         durationInFrames - 1,
-        frame + (key === 'l' ? Math.round(fps) : 1),
+        current + (key === 'l' ? Math.round(fps) : 1),
       ))
       return
     }
-    const action = key === 'i'
-      ? 'mark-in'
-      : key === 'o'
-        ? 'mark-out'
-        : key === 's'
-          ? 'split'
-          : event.key === 'Delete' || event.key === 'Backspace'
-            ? 'delete'
-            : (event.metaKey || event.ctrlKey) && key === 'z'
-              ? event.shiftKey ? 'redo' : 'undo'
-              : key === 'f'
-                ? 'search'
-                : key === '+' || key === '='
-                  ? 'zoom-in'
-                  : key === '-'
-                    ? 'zoom-out'
-                    : null
+    const action = keyboardAction(event)
     if (!action) return
     event.preventDefault()
-    onKeyboardAction(action, frame)
-  }
+    onKeyboardAction(action, current)
+  }, [durationInFrames, fps, onKeyboardAction])
+
+  useImperativeHandle(ref, () => ({
+    seekTo: (nextFrame) => {
+      playerRef.current?.seekTo(Math.max(
+        0,
+        Math.min(durationInFrames - 1, Math.round(nextFrame)),
+      ))
+    },
+    focus: () => sectionRef.current?.focus(),
+    handleKeyDown,
+  }), [durationInFrames, handleKeyDown])
+
+  useEffect(() => {
+    const player = playerRef.current
+    if (!player) return
+    const handler = (event: { detail: { frame: number } }) => {
+      frameRef.current = event.detail.frame
+      setFrame(event.detail.frame)
+      onFrameUpdate(event.detail.frame)
+    }
+    player.addEventListener('frameupdate', handler)
+    return () => player.removeEventListener('frameupdate', handler)
+  }, [onFrameUpdate])
 
   return (
     <section
       className="canonical-player"
+      ref={sectionRef}
       tabIndex={0}
-      onKeyDown={onKeyDown}
+      onKeyDown={handleKeyDown}
       aria-label="Canonical sequence player"
     >
       <Player

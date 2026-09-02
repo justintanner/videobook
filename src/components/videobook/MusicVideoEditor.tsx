@@ -297,6 +297,7 @@ export function MusicVideoEditor({
   const dialogRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<CanonicalSequencePlayerHandle>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const previewVideoRef = useRef<HTMLVideoElement>(null)
   const [playheadFrame, setPlayheadFrame] = useState(0)
   const [query, setQuery] = useState('')
   const [sourceSelection, setSourceSelection] = useState<string[]>([])
@@ -405,7 +406,8 @@ export function MusicVideoEditor({
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const dialog = dialogRef.current
-    dialog?.focus()
+    const focusTarget = dialog?.querySelector<HTMLElement>('.canonical-player') ?? dialog
+    focusTarget?.focus()
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
@@ -846,10 +848,32 @@ export function MusicVideoEditor({
     }
   }
 
+  const dialogKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented) return
+    const target = event.target as HTMLElement
+    if (target.closest('input, textarea, select, [contenteditable="true"], .canonical-player')) return
+    if (playerRef.current) {
+      playerRef.current.handleKeyDown(event)
+      return
+    }
+    const preview = previewVideoRef.current
+    const key = event.key.toLowerCase()
+    if (!preview || (key !== ' ' && key !== 'k')) return
+    event.preventDefault()
+    if (preview.paused) void preview.play().catch(() => undefined)
+    else preview.pause()
+  }
+
   const timelineStyle = {
     '--music-video-timeline-width': `${timelineZoom * 100}%`,
   } as CSSProperties
   const path = waveformPath(audioAsset?.waveform ?? [])
+  const rulerSegments = Math.max(4, Math.round(timelineZoom * 4))
+  const rulerMarks = Array.from(
+    { length: rulerSegments + 1 },
+    (_, index) => index / rulerSegments,
+  )
+  const clipActionsDisabled = !editorEnabled || Boolean(working)
 
   return createPortal(
     <div
@@ -859,10 +883,11 @@ export function MusicVideoEditor({
       aria-label="Music video editor"
       ref={dialogRef}
       tabIndex={-1}
+      onKeyDown={dialogKeyDown}
     >
       <header className="music-video-editor-header">
-        <div>
-          <span className="music-video-kicker"><AudioWaveform size={15} /> MUSIC VIDEO</span>
+        <div className="music-video-title">
+          <span className="music-video-kicker"><AudioWaveform size={14} /> MUSIC VIDEO</span>
           <h1>{audioAsset?.label ?? audioArtifactId}</h1>
           <p>Master soundtrack · {formatTime(durationFrames, fps)} · {fps.toFixed(2)} fps</p>
         </div>
@@ -880,11 +905,66 @@ export function MusicVideoEditor({
       </header>
 
       <main className="music-video-editor-main">
-        <section className="music-video-preview-panel">
+        <section className="music-video-source-panel" aria-label="Current book video sources">
+          <header>
+            <div className="music-video-panel-title">
+              <span>SOURCE CLIPS</span>
+              <strong>{sourceSelection.length} of {sourceAssets.length} selected</strong>
+            </div>
+          </header>
+          <label className="music-video-search">
+            <Search size={15} />
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search current book"
+              aria-label="Search source clips"
+            />
+          </label>
+          <div className="music-video-source-list">
+            {sourceAssets.map((asset) => {
+              const selected = sourceSelection.includes(asset.artifactId)
+              const previewing = previewSourceId === asset.artifactId
+              return (
+                <button
+                  type="button"
+                  className={[
+                    selected ? 'selected' : '',
+                    previewing ? 'previewing' : '',
+                  ].filter(Boolean).join(' ')}
+                  aria-pressed={selected}
+                  aria-label={asset.label}
+                  key={asset.artifactId}
+                  onClick={() => toggleSource(asset.artifactId)}
+                >
+                  <span className="music-video-source-thumb">
+                    <SourceThumb asset={asset} />
+                    {selected && <i><Check size={12} /></i>}
+                  </span>
+                  <span>{asset.label}</span>
+                  <small>{asset.duration ? `${asset.duration.toFixed(1)}s` : asset.type}</small>
+                </button>
+              )
+            })}
+            {sourceAssets.length === 0 && <p>No ready video sources match this search.</p>}
+          </div>
+          <button
+            type="button"
+            className="music-video-add-selected"
+            disabled={!editorEnabled || Boolean(working) || sourceSelection.length === 0}
+            onClick={() => void appendSelection()}
+          >
+            <Plus size={15} /> Add selected
+          </button>
+        </section>
+
+        <section className="music-video-preview-panel" aria-label="Program monitor">
           {previewAsset?.mediaUrl ? (
             <div className="music-video-source-preview">
               <video
                 key={previewAsset.artifactId}
+                ref={previewVideoRef}
                 src={previewAsset.mediaUrl}
                 controls
                 autoPlay
@@ -892,7 +972,7 @@ export function MusicVideoEditor({
                 playsInline
               />
               <p>
-                Previewing source · {previewAsset.label}
+                <span>Previewing source · {previewAsset.label}</span>
                 <button type="button" onClick={() => setPreviewSourceId(null)}>
                   Show sequence
                 </button>
@@ -907,8 +987,11 @@ export function MusicVideoEditor({
               onKeyboardAction={playerKeyboard}
             />
           )}
+        </section>
+
+        <section className="music-video-inspector" aria-label="Selected clip controls">
           <aside className="music-video-setup-card" data-status={setup.status}>
-            <span>MASTER SOUNDTRACK</span>
+            <span><AudioWaveform size={13} /> MASTER SOUNDTRACK</span>
             {setup.status === 'loading' && <p>Building the exact canonical setup plan…</p>}
             {setup.status === 'needs-audio-track' && (
               <>
@@ -940,60 +1023,131 @@ export function MusicVideoEditor({
               </>
             )}
           </aside>
-        </section>
 
-        <section className="music-video-source-panel" aria-label="Current book video sources">
-          <header>
-            <div>
-              <span>SOURCE CLIPS</span>
-              <strong>{sourceSelection.length} selected</strong>
-            </div>
-            <label>
-              <Search size={15} />
-              <input
-                ref={searchRef}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search current book"
-              />
-            </label>
-            <button
-              type="button"
-              disabled={!editorEnabled || Boolean(working) || sourceSelection.length === 0}
-              onClick={() => void appendSelection()}
-            >
-              <Plus size={15} /> Add selected
-            </button>
-          </header>
-          <div className="music-video-source-list">
-            {sourceAssets.map((asset) => {
-              const selected = sourceSelection.includes(asset.artifactId)
-              const previewing = previewSourceId === asset.artifactId
-              return (
-                <button
-                  type="button"
-                  className={[
-                    selected ? 'selected' : '',
-                    previewing ? 'previewing' : '',
-                  ].filter(Boolean).join(' ')}
-                  aria-pressed={selected}
-                  aria-label={asset.label}
-                  key={asset.artifactId}
-                  onClick={() => toggleSource(asset.artifactId)}
-                >
-                  <SourceThumb asset={asset} />
-                  <span>{asset.label}</span>
-                  <small>{asset.duration ? `${asset.duration.toFixed(1)}s` : asset.type}</small>
-                </button>
-              )
-            })}
-            {sourceAssets.length === 0 && <p>No ready video sources match this search.</p>}
+          <div className="music-video-clip-panel">
+            {!selectedClip && (
+              <div className="music-video-inspector-empty">
+                <span className="music-video-kicker">SELECTED CLIP</span>
+                <p>Select a main-lane clip to trim, cut, delete, move, or stretch it.</p>
+                {laneClips.length === 0 && (
+                  <p>Pick source clips on the left and press Add selected to fill the lane.</p>
+                )}
+              </div>
+            )}
+            {selectedClip && activeTrim && (
+              <>
+                <header>
+                  <span className="music-video-kicker">SELECTED CLIP</span>
+                  <strong>{selectedAsset?.label ?? selectedClip.source.artifactId}</strong>
+                  <p>
+                    {formatTime(selectedClip.durationFrames, fps)}
+                    {' · '}F{selectedClip.timelineStartFrame}–F{clipEnd(selectedClip)}
+                    {' · '}{speedLabel(selectedSpeed)}
+                    {' · '}clip {selectedIndex + 1} of {laneClips.length}
+                  </p>
+                </header>
+                <div className="music-video-trim-controls">
+                  <label>
+                    <span>In <em>F{activeTrim.startFrame} · {formatTime(activeTrim.startFrame, fps)}</em></span>
+                    <input
+                      type="range"
+                      min={trimMinimum}
+                      max={Math.max(trimMinimum, activeTrim.endFrame - 1)}
+                      value={activeTrim.startFrame}
+                      disabled={Boolean(working)}
+                      onChange={(event) => setTrimDraft({
+                        clipId: selectedClip.clipId,
+                        startFrame: Number(event.target.value),
+                        endFrame: activeTrim.endFrame,
+                      })}
+                      onPointerUp={(event) => void commitTrim(
+                        'start',
+                        Number(event.currentTarget.value),
+                        activeTrim.endFrame,
+                      )}
+                      onBlur={(event) => void commitTrim(
+                        'start',
+                        Number(event.currentTarget.value),
+                        activeTrim.endFrame,
+                      )}
+                      onKeyUp={(event) => {
+                        if (event.key !== 'Enter') return
+                        void commitTrim(
+                          'start',
+                          Number(event.currentTarget.value),
+                          activeTrim.endFrame,
+                        )
+                      }}
+                    />
+                  </label>
+                  <label>
+                    <span>Out <em>F{activeTrim.endFrame} · {formatTime(activeTrim.endFrame, fps)}</em></span>
+                    <input
+                      type="range"
+                      min={activeTrim.startFrame + 1}
+                      max={Math.max(activeTrim.startFrame + 1, trimMaximum)}
+                      value={activeTrim.endFrame}
+                      disabled={Boolean(working)}
+                      onChange={(event) => setTrimDraft({
+                        clipId: selectedClip.clipId,
+                        startFrame: activeTrim.startFrame,
+                        endFrame: Number(event.target.value),
+                      })}
+                      onPointerUp={(event) => void commitTrim(
+                        'end',
+                        activeTrim.startFrame,
+                        Number(event.currentTarget.value),
+                      )}
+                      onBlur={(event) => void commitTrim(
+                        'end',
+                        activeTrim.startFrame,
+                        Number(event.currentTarget.value),
+                      )}
+                      onKeyUp={(event) => {
+                        if (event.key !== 'Enter') return
+                        void commitTrim(
+                          'end',
+                          activeTrim.startFrame,
+                          Number(event.currentTarget.value),
+                        )
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="music-video-edit-actions">
+                  <button type="button" disabled={Boolean(working)} onClick={() => void splitSelected()}>
+                    <Scissors size={15} /> Cut at playhead
+                  </button>
+                  <button className="danger-button" type="button" disabled={clipActionsDisabled} onClick={() => void deleteSelected()}>
+                    <Trash2 size={15} /> Delete clip
+                  </button>
+                  <button type="button" disabled={clipActionsDisabled || !canMoveEarlier} onClick={() => void moveSelected(-1)}>
+                    <ChevronLeft size={15} /> Move earlier
+                  </button>
+                  <button type="button" disabled={clipActionsDisabled || !canMoveLater} onClick={() => void moveSelected(1)}>
+                    Move later <ChevronRight size={15} />
+                  </button>
+                  <button className="music-video-span" type="button" disabled={clipActionsDisabled || !canStretch} onClick={() => void stretchSelected()}>
+                    <Maximize2 size={15} /> Stretch to fill
+                  </button>
+                  <label>
+                    <Gauge size={15} /> Speed
+                    <select value={speedDraft ?? selectedSpeed} disabled={Boolean(working) || selectedClip.source.kind !== 'timed'} onChange={(event) => setSpeedDraft(event.target.value)}>
+                      {speedOptions.map((speed) => <option key={speed.value} value={speed.value}>{speed.label}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" disabled={Boolean(working) || selectedClip.source.kind !== 'timed'} onClick={() => void applySpeed()}>
+                    Apply speed
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </section>
 
         <section className="music-video-timeline-panel" aria-label="Music video timeline">
           <header>
-            <div>
+            <div className="music-video-panel-title">
               <span>MAIN VIDEO LANE</span>
               <strong>{mainTrack?.name ?? 'No editable video track'}</strong>
             </div>
@@ -1002,6 +1156,7 @@ export function MusicVideoEditor({
                 <Plus size={15} /> Create main video track
               </button>
             )}
+            <span className="music-video-playhead-readout">F{playheadFrame} · {formatTime(playheadFrame, fps)}</span>
             <div className="music-video-zoom">
               <button type="button" aria-label="Zoom timeline out" onClick={() => setTimelineZoom((value) => Math.max(1, value - 0.25))}>−</button>
               <span>{Math.round(timelineZoom * 100)}%</span>
@@ -1011,7 +1166,7 @@ export function MusicVideoEditor({
           <div className="music-video-timeline-scroll">
             <div className="music-video-timeline" style={timelineStyle}>
               <div className="music-video-ruler" aria-hidden="true">
-                {[0, 0.25, 0.5, 0.75, 1].map((ratio) => (
+                {rulerMarks.map((ratio) => (
                   <span key={ratio}>{formatTime(durationFrames * ratio, fps)}</span>
                 ))}
               </div>
@@ -1056,7 +1211,7 @@ export function MusicVideoEditor({
                           <button
                             type="button"
                             aria-label="Move clip earlier"
-                            disabled={!editorEnabled || Boolean(working) || !canMoveEarlier}
+                            disabled={clipActionsDisabled || !canMoveEarlier}
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={(event) => {
                               event.stopPropagation()
@@ -1067,9 +1222,21 @@ export function MusicVideoEditor({
                           </button>
                           <button
                             type="button"
+                            aria-label="Cut clip at playhead"
+                            disabled={clipActionsDisabled}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void splitSelected()
+                            }}
+                          >
+                            <Scissors size={14} />
+                          </button>
+                          <button
+                            type="button"
                             className="danger-button"
                             aria-label="Delete clip"
-                            disabled={!editorEnabled || Boolean(working)}
+                            disabled={clipActionsDisabled}
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={(event) => {
                               event.stopPropagation()
@@ -1081,7 +1248,7 @@ export function MusicVideoEditor({
                           <button
                             type="button"
                             aria-label="Move clip later"
-                            disabled={!editorEnabled || Boolean(working) || !canMoveLater}
+                            disabled={clipActionsDisabled || !canMoveLater}
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={(event) => {
                               event.stopPropagation()
@@ -1125,124 +1292,15 @@ export function MusicVideoEditor({
               </button>
             </div>
           </div>
-          <footer>
-            <span>F{playheadFrame} · {formatTime(playheadFrame, fps)}</span>
-            {overflowFrames > 0 && <strong>{overflowFrames} frames beyond soundtrack</strong>}
-            {!path && (
-              <button type="button" disabled={Boolean(working)} onClick={() => void refreshWaveform()}>
-                <RefreshCw size={14} /> Refresh waveform
-              </button>
-            )}
-          </footer>
-        </section>
-
-        <section className="music-video-inspector" aria-label="Selected clip controls">
-          {!selectedClip && <p>Select a main-lane clip to trim, cut, delete, move, or stretch it.</p>}
-          {selectedClip && activeTrim && (
-            <>
-              <header>
-                <div>
-                  <span>SELECTED CLIP</span>
-                  <strong>{selectedAsset?.label ?? selectedClip.source.artifactId}</strong>
-                </div>
-                <div>
-                  <button type="button" disabled={!editorEnabled || Boolean(working) || !canMoveEarlier} onClick={() => void moveSelected(-1)}>
-                    <ChevronLeft size={15} /> Move earlier
-                  </button>
-                  <button type="button" disabled={!editorEnabled || Boolean(working) || !canMoveLater} onClick={() => void moveSelected(1)}>
-                    Move later <ChevronRight size={15} />
-                  </button>
-                </div>
-              </header>
-              <div className="music-video-trim-controls">
-                <label>
-                  In · F{activeTrim.startFrame}
-                  <input
-                    type="range"
-                    min={trimMinimum}
-                    max={Math.max(trimMinimum, activeTrim.endFrame - 1)}
-                    value={activeTrim.startFrame}
-                    disabled={Boolean(working)}
-                    onChange={(event) => setTrimDraft({
-                      clipId: selectedClip.clipId,
-                      startFrame: Number(event.target.value),
-                      endFrame: activeTrim.endFrame,
-                    })}
-                    onPointerUp={(event) => void commitTrim(
-                      'start',
-                      Number(event.currentTarget.value),
-                      activeTrim.endFrame,
-                    )}
-                    onBlur={(event) => void commitTrim(
-                      'start',
-                      Number(event.currentTarget.value),
-                      activeTrim.endFrame,
-                    )}
-                    onKeyUp={(event) => {
-                      if (event.key !== 'Enter') return
-                      void commitTrim(
-                        'start',
-                        Number(event.currentTarget.value),
-                        activeTrim.endFrame,
-                      )
-                    }}
-                  />
-                </label>
-                <label>
-                  Out · F{activeTrim.endFrame}
-                  <input
-                    type="range"
-                    min={activeTrim.startFrame + 1}
-                    max={Math.max(activeTrim.startFrame + 1, trimMaximum)}
-                    value={activeTrim.endFrame}
-                    disabled={Boolean(working)}
-                    onChange={(event) => setTrimDraft({
-                      clipId: selectedClip.clipId,
-                      startFrame: activeTrim.startFrame,
-                      endFrame: Number(event.target.value),
-                    })}
-                    onPointerUp={(event) => void commitTrim(
-                      'end',
-                      activeTrim.startFrame,
-                      Number(event.currentTarget.value),
-                    )}
-                    onBlur={(event) => void commitTrim(
-                      'end',
-                      activeTrim.startFrame,
-                      Number(event.currentTarget.value),
-                    )}
-                    onKeyUp={(event) => {
-                      if (event.key !== 'Enter') return
-                      void commitTrim(
-                        'end',
-                        activeTrim.startFrame,
-                        Number(event.currentTarget.value),
-                      )
-                    }}
-                  />
-                </label>
-              </div>
-              <div className="music-video-edit-actions">
-                <button type="button" disabled={Boolean(working)} onClick={() => void splitSelected()}>
-                  <Scissors size={15} /> Cut at playhead
+          {(overflowFrames > 0 || !path) && (
+            <footer>
+              {overflowFrames > 0 && <strong>{overflowFrames} frames beyond soundtrack</strong>}
+              {!path && (
+                <button type="button" disabled={Boolean(working)} onClick={() => void refreshWaveform()}>
+                  <RefreshCw size={14} /> Refresh waveform
                 </button>
-                <button className="danger-button" type="button" disabled={!editorEnabled || Boolean(working)} onClick={() => void deleteSelected()}>
-                  <Trash2 size={15} /> Delete clip
-                </button>
-                <button type="button" disabled={!editorEnabled || Boolean(working) || !canStretch} onClick={() => void stretchSelected()}>
-                  <Maximize2 size={15} /> Stretch to fill
-                </button>
-                <label>
-                  <Gauge size={15} /> Speed
-                  <select value={speedDraft ?? selectedSpeed} disabled={Boolean(working) || selectedClip.source.kind !== 'timed'} onChange={(event) => setSpeedDraft(event.target.value)}>
-                    {speedOptions.map((speed) => <option key={speed.value} value={speed.value}>{speed.label}</option>)}
-                  </select>
-                </label>
-                <button type="button" disabled={Boolean(working) || selectedClip.source.kind !== 'timed'} onClick={() => void applySpeed()}>
-                  Apply speed
-                </button>
-              </div>
-            </>
+              )}
+            </footer>
           )}
         </section>
       </main>
