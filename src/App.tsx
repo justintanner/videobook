@@ -79,6 +79,10 @@ import {
   normalizeNotebookReference,
   stripNotebookMentions,
 } from 'videobook-engine/notebook-mentions'
+import {
+  NOTEBOOK_GRID_COLUMN_COUNT,
+  NOTEBOOK_GRID_ROW_COUNT,
+} from 'videobook-engine/notebook-grid'
 import { resolveGeneratedVideoArtifact } from 'videobook-engine/notebook-media-artifact'
 import {
   adaptCommandArgs,
@@ -191,9 +195,11 @@ import {
   dedupeXPostAttributions,
   discoverXPostThreadGraph,
   initialXPostThreadReview,
+  readableXPostPrompt,
   selectXPostGenerationPrompt,
   xPostFollowupsFromThread,
   xPostSourceAttribution,
+  type XPostPromptMention,
   type XPostSourceAttribution,
   type XPostThreadOptions,
   type XPostThreadReview,
@@ -1095,9 +1101,9 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
     || !Number.isInteger(row)
     || !Number.isInteger(column)
     || row < 0
-    || row > 25
+    || row >= NOTEBOOK_GRID_ROW_COUNT
     || column < 0
-    || column > 12
+    || column >= NOTEBOOK_GRID_COLUMN_COUNT
   ) return null
   if (!notebookCellTypes.has(type ?? '')) return null
   const inputs = recordValue(item.inputs)
@@ -8756,6 +8762,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
 
     const graph = discoverXPostThreadGraph(notebook, assetId)
+    const promptMentions: XPostPromptMention[] = [
+      ...assets.map((asset) => ({ reference: asset.artifactId, type: asset.type })),
+      ...commandMentionAssets.map((candidate) => ({
+        reference: candidate.cellAddress,
+        type: candidate.type,
+      })),
+    ]
     const steps = await Promise.all(graph.steps.map(async (step): Promise<XPostThreadStep> => {
       const payload = await call('list_cell_generations', {
         book_id: bookId,
@@ -8767,7 +8780,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const attempts = Array.isArray(attemptValues)
         ? attemptValues as CellGenerationAttempt[]
         : []
-      const prompt = selectXPostGenerationPrompt({
+      const prompt = readableXPostPrompt(selectXPostGenerationPrompt({
         attempts,
         outputArtifactId: step.outputArtifactId,
         outputAssetPrompt: step.outputArtifactId
@@ -8775,7 +8788,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : null,
         producerResolvedPrompt: step.producerResolvedPrompt,
         producerPrompt: step.producerPrompt,
-      })
+      }), promptMentions)
       const images = step.sourceArtifactIds.flatMap((sourceAssetId) => {
         const sourceAsset = assetById.get(sourceAssetId)
         if (sourceAsset?.type !== 'image') return []

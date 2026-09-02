@@ -5,6 +5,7 @@ import {
   dedupeXPostAttributions,
   discoverXPostThreadGraph,
   initialXPostThreadReview,
+  readableXPostPrompt,
   selectXPostGenerationPrompt,
   xPostSourceAttribution,
 } from './x-post-thread'
@@ -187,5 +188,96 @@ describe('X post thread provenance', () => {
         includeAttribution: false,
       },
     })).toEqual([])
+  })
+  it('follows duplicate and routed-edit provenance recorded only in cell inputs', () => {
+    const base = document()
+    const duplicate = {
+      ...cell('duplicate-video', 'video', 5, 'vid-duplicate'),
+      inputs: {
+        sourceOperation: 'duplicate_asset',
+        sourceArtifactId: 'vid-generated',
+        state: 'completed',
+      },
+    }
+    const trimmed = {
+      ...cell('trimmed-video', 'video', 6, 'vid-trimmed'),
+      inputs: { sourceOperation: 'extract_video_clip', source_asset_id: 'vid-duplicate' },
+    }
+    const copy = {
+      ...cell('copied-video', 'video', 7, 'vid-copy'),
+      inputs: {
+        sourceOperation: 'duplicate_asset',
+        sourceArtifactId: 'vid-trimmed',
+        state: 'completed',
+      },
+    }
+    const graph = discoverXPostThreadGraph(
+      { ...base, cells: [...base.cells, duplicate, trimmed, copy] },
+      'vid-copy',
+    )
+    expect(graph.steps).toHaveLength(1)
+    expect(graph.steps[0]).toMatchObject({
+      id: 'generate-video',
+      outputCellId: 'generated-output',
+      outputArtifactId: 'vid-generated',
+      producerResolvedPrompt: 'producer resolved prompt',
+      sourceArtifactIds: ['img-source'],
+    })
+    expect(graph.upstreamArtifactIds).toEqual(expect.arrayContaining([
+      'vid-copy',
+      'vid-trimmed',
+      'vid-duplicate',
+      'vid-generated',
+      'img-source',
+    ]))
+    expect(graph.upstreamArtifactIds).not.toContain('vid-original')
+  })
+
+  it('rewrites notebook mentions into readable labels for public replies', () => {
+    const prompt = 'dance from @01a02773-e0fe-71da-9de9-c77352765a8a scene @b5, '
+      + 'again @B5 and @01a0aaaa-0000-7000-8000-000000000000; keep @Video 1 and @zz9 as typed'
+    expect(readableXPostPrompt(prompt, [
+      { reference: '01a02773-e0fe-71da-9de9-c77352765a8a', type: 'video' },
+      { reference: 'b5', type: 'image' },
+    ])).toBe('dance from [video 1] scene [image 1], '
+      + 'again [image 1] and [source 1]; keep @Video 1 and @zz9 as typed')
+    expect(readableXPostPrompt('no mentions here', [])).toBe('no mentions here')
+  })
+
+  it('credits the concrete YouTube video rather than its playlist page', () => {
+    expect(xPostSourceAttribution('yt', {
+      webpage_url: 'https://www.youtube.com/playlist?list=PLWxZwASNHB04',
+      source_url: 'https://youtu.be/iZlOQMYjdPg?list=PLWxZwASNHB04',
+      uploader: 'Stephanie Morris',
+    })).toEqual({
+      id: 'yt:https://youtu.be/iZlOQMYjdPg',
+      label: 'Stephanie Morris',
+      url: 'https://youtu.be/iZlOQMYjdPg',
+      xHandle: null,
+    })
+    expect(xPostSourceAttribution('shorts', {
+      webpage_url: 'https://www.youtube.com/shorts/abcDEF123?feature=share',
+    })?.url).toBe('https://www.youtube.com/shorts/abcDEF123')
+    expect(xPostSourceAttribution('playlist', {
+      webpage_url: 'https://www.youtube.com/playlist?list=PL1#top',
+    })).toMatchObject({
+      label: 'YouTube',
+      url: 'https://www.youtube.com/playlist?list=PL1',
+    })
+  })
+  it('never lets a prompt chunk exceed the limit when the cut lands on a space', () => {
+    const prefix = 'How I made this video — prompt:\n'
+    const capacity = 280 - prefix.length
+    const prompt = `${'x'.repeat(capacity)} ${'y'.repeat(40)}`
+    const review = initialXPostThreadReview({
+      steps: [{ id: 'generation', prompt, images: [] }],
+      attributions: [],
+    })
+    const replies = buildXPostThreadReplies({
+      ...review,
+      options: { ...review.options, enabled: true },
+    })
+    expect(replies.map((reply) => reply.text.length)).toEqual([280, 63])
+    expect(replies[1]?.text).toBe(`Prompt continued (2):\n ${'y'.repeat(40)}`)
   })
 })

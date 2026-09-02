@@ -1,5 +1,9 @@
 import type { NotebookCell, NotebookDocument } from 'videobook-engine'
 import {
+  NOTEBOOK_GRID_ADDRESS_SOURCE,
+  normalizeNotebookReference,
+} from 'videobook-engine/notebook-mentions'
+import {
   findGenerateVideoOutputCell,
   resolveNotebookCellArtifactId,
 } from 'videobook-engine/notebook-media-artifact'
@@ -113,46 +117,28 @@ function startingCells(
     resolveNotebookCellArtifactId(document, cell) === artifactId).sort(cellOrder)
 }
 
-function upstreamCellIds(
-  document: NotebookDocument,
-  starts: readonly NotebookCell[],
-): string[] {
-  const seen = new Set<string>()
-  const queue = starts.map((cell) => cell.id)
-  for (let index = 0; index < queue.length; index += 1) {
-    const cellId = queue[index]
-    if (!cellId || seen.has(cellId)) continue
-    seen.add(cellId)
-    for (const edge of document.edges) {
-      if (edge.target === cellId && !seen.has(edge.source)) queue.push(edge.source)
-    }
-  }
-  return [...seen]
-}
+const GENERATION_CELL_TYPES = new Set<NotebookCell['type']>([
+  'generate_audio',
+  'generate_image',
+  'generate_video',
+])
 
-function finalGenerationCells(
-  document: NotebookDocument,
-  starts: readonly NotebookCell[],
-): NotebookCell[] {
-  const cellsById = new Map(document.cells.map((cell) => [cell.id, cell]))
-  const seen = new Set<string>()
-  const found = new Map<string, NotebookCell>()
-  const queue = starts.map((cell) => cell.id)
-  for (let index = 0; index < queue.length; index += 1) {
-    const cellId = queue[index]
-    if (!cellId || seen.has(cellId)) continue
-    seen.add(cellId)
-    const cell = cellsById.get(cellId)
-    if (!cell) continue
-    if (cell.type === 'generate_video') {
-      found.set(cell.id, cell)
-      continue
-    }
-    for (const edge of document.edges) {
-      if (edge.target === cell.id && !seen.has(edge.source)) queue.push(edge.source)
-    }
-  }
-  return [...found.values()].sort(cellOrder)
+/**
+ * Input keys under which duplicates and routed edits (extract, split,
+ * splice, cover song) record their sources. Those cells are placed without
+ * graph edges, so provenance has to be read from here.
+ */
+const IMPLICIT_SOURCE_ARTIFACT_KEYS = [
+  'sourceArtifactId',
+  'source_asset_id',
+  'first_asset_id',
+  'second_asset_id',
+  'additional_asset_ids',
+] as const
+
+type ProvenanceIndex = {
+  cellsById: Map<string, NotebookCell>
+  cellsByArtifactId: Map<string, NotebookCell>
 }
 
 function inputString(cell: NotebookCell, key: string): string | null {
@@ -160,49 +146,131 @@ function inputString(cell: NotebookCell, key: string): string | null {
   return typeof value === 'string' && value.trim() ? value : null
 }
 
+function inputStrings(cell: NotebookCell, key: string): string[] {
+  const value = cell.inputs?.[key]
+  const values: unknown[] = Array.isArray(value) ? value : [value]
+  return values.filter((entry): entry is string =>
+    typeof entry === 'string' && entry.trim() !== '')
+}
+
+function implicitSourceArtifactIds(cell: NotebookCell): string[] {
+  return IMPLICIT_SOURCE_ARTIFACT_KEYS.flatMap((key) => inputStrings(cell, key))
+}
+
+function provenanceIndex(document: NotebookDocument): ProvenanceIndex {
+  const cellsById = new Map(document.cells.map((cell) => [cell.id, cell]))
+  const cellsByArtifactId = new Map<string, NotebookCell>()
+  for (const cell of [...document.cells].sort(cellOrder)) {
+    const artifactId = resolveNotebookCellArtifactId(document, cell)
+    if (!artifactId) continue
+    const current = cellsByArtifactId.get(artifactId)
+    const preferred = !current
+      || (GENERATION_CELL_TYPES.has(current.type)
+        && !GENERATION_CELL_TYPES.has(cell.type))
+    if (preferred) cellsByArtifactId.set(artifactId, cell)
+  }
+  return { cellsById, cellsByArtifactId }
+}
+
+function predecessorCellIds(
+  document: NotebookDocument,
+  index: ProvenanceIndex,
+  cell: NotebookCell,
+): string[] {
+  const fromEdges = document.edges
+    .filter((edge) => edge.target === cell.id)
+    .map((edge) => edge.source)
+  const fromCells = inputStrings(cell, 'sourceCellId')
+  const fromArtifacts = implicitSourceArtifactIds(cell).flatMap((artifactId) => {
+    const source = index.cellsByArtifactId.get(artifactId)
+    return source ? [source.id] : []
+  })
+  return [...new Set([...fromEdges, ...fromCells, ...fromArtifacts])]
+    .filter((cellId) => cellId !== cell.id)
+}
+
+function walkUpstream(
+  document: NotebookDocument,
+  index: ProvenanceIndex,
+  starts: readonly NotebookCell[],
+  stopAt: (cell: NotebookCell) => boolean,
+): { visited: NotebookCell[]; stopped: NotebookCell[] } {
+  const seen = new Set<string>()
+  const visited: NotebookCell[] = []
+  const stopped: NotebookCell[] = []
+  const queue = starts.map((cell) => cell.id)
+  for (let position = 0; position < queue.length; position += 1) {
+    const cellId = queue[position]
+    if (!cellId || seen.has(cellId)) continue
+    seen.add(cellId)
+    const cell = index.cellsById.get(cellId)
+    if (!cell) continue
+    visited.push(cell)
+    if (stopAt(cell)) {
+      stopped.push(cell)
+      continue
+    }
+    for (const sourceId of predecessorCellIds(document, index, cell)) {
+      if (!seen.has(sourceId)) queue.push(sourceId)
+    }
+  }
+  return { visited, stopped }
+}
+
+function isGenerateVideoCell(cell: NotebookCell): boolean {
+  return cell.type === 'generate_video'
+}
+
+function cellArtifactIds(
+  document: NotebookDocument,
+  cells: readonly NotebookCell[],
+): string[] {
+  const artifactIds = cells.flatMap((cell) => {
+    const artifactId = resolveNotebookCellArtifactId(document, cell)
+    return artifactId ? [artifactId] : []
+  })
+  return [...new Set(artifactIds)]
+}
+
+function threadGraphStep(
+  document: NotebookDocument,
+  index: ProvenanceIndex,
+  producer: NotebookCell,
+): XPostThreadGraphStep {
+  const output = findGenerateVideoOutputCell(document, producer.id)?.outputCell ?? null
+  const sources = predecessorCellIds(document, index, producer)
+    .map((cellId) => index.cellsById.get(cellId))
+    .filter((cell): cell is NotebookCell => cell !== undefined)
+    .sort(cellOrder)
+  return {
+    id: producer.id,
+    producerCellId: producer.id,
+    outputCellId: output?.id ?? null,
+    outputArtifactId: output
+      ? resolveNotebookCellArtifactId(document, output) ?? null
+      : resolveNotebookCellArtifactId(document, producer) ?? null,
+    producerPrompt: producer.prompt?.trim()
+      ? producer.prompt
+      : inputString(producer, 'prompt'),
+    producerResolvedPrompt: inputString(producer, 'resolvedPrompt')
+      ?? inputString(producer, 'resolved_prompt'),
+    sourceArtifactIds: cellArtifactIds(document, sources),
+  }
+}
+
 export function discoverXPostThreadGraph(
   document: NotebookDocument,
   artifactId: string,
 ): XPostThreadGraph {
+  const index = provenanceIndex(document)
   const starts = startingCells(document, artifactId)
-  const cellsById = new Map(document.cells.map((cell) => [cell.id, cell]))
-  const steps = finalGenerationCells(document, starts).map((producer) => {
-    const output = findGenerateVideoOutputCell(document, producer.id)?.outputCell ?? null
-    const sourceArtifactIds = document.edges
-      .filter((edge) => edge.target === producer.id)
-      .map((edge) => cellsById.get(edge.source))
-      .filter((cell): cell is NotebookCell => cell !== undefined)
-      .sort(cellOrder)
-      .flatMap((cell) => {
-        const sourceArtifactId = resolveNotebookCellArtifactId(document, cell)
-        return sourceArtifactId ? [sourceArtifactId] : []
-      })
-    return {
-      id: producer.id,
-      producerCellId: producer.id,
-      outputCellId: output?.id ?? null,
-      outputArtifactId: output
-        ? resolveNotebookCellArtifactId(document, output) ?? null
-        : resolveNotebookCellArtifactId(document, producer) ?? null,
-      producerPrompt: producer.prompt?.trim()
-        ? producer.prompt
-        : inputString(producer, 'prompt'),
-      producerResolvedPrompt: inputString(producer, 'resolvedPrompt')
-        ?? inputString(producer, 'resolved_prompt'),
-      sourceArtifactIds: [...new Set(sourceArtifactIds)],
-    }
-  })
-  const upstreamArtifactIds = upstreamCellIds(document, starts)
-    .flatMap((cellId) => {
-      const cell = cellsById.get(cellId)
-      const upstreamArtifactId = cell
-        ? resolveNotebookCellArtifactId(document, cell)
-        : undefined
-      return upstreamArtifactId ? [upstreamArtifactId] : []
-    })
+  const producers = walkUpstream(document, index, starts, isGenerateVideoCell)
+    .stopped
+    .sort(cellOrder)
+  const upstream = walkUpstream(document, index, starts, () => false).visited
   return {
-    steps,
-    upstreamArtifactIds: [...new Set(upstreamArtifactIds)],
+    steps: producers.map((producer) => threadGraphStep(document, index, producer)),
+    upstreamArtifactIds: cellArtifactIds(document, upstream),
   }
 }
 
@@ -224,23 +292,120 @@ export function selectXPostGenerationPrompt(input: {
   return ''
 }
 
-function supportedSourceUrl(value: unknown): URL | null {
+export type XPostPromptMention = {
+  reference: string
+  type: string
+}
+
+const ARTIFACT_ID_SOURCE = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+const ARTIFACT_ID_PATTERN = new RegExp(`^${ARTIFACT_ID_SOURCE}$`, 'iu')
+const PROMPT_MENTION_PATTERN = new RegExp(
+  `@(${ARTIFACT_ID_SOURCE}|${NOTEBOOK_GRID_ADDRESS_SOURCE})(?![\\w-])`,
+  'giu',
+)
+
+function mentionKind(type: string | undefined): string {
+  if (type === 'video' || type === 'final') return 'video'
+  if (type === 'image' || type === 'audio') return type
+  return 'source'
+}
+
+/**
+ * Replace notebook mentions (artifact ids or grid addresses) with numbered
+ * bracket labels so a public reply never carries internal ids or stray
+ * X-style @handles. Grid addresses that match no asset stay as typed.
+ */
+export function readableXPostPrompt(
+  prompt: string,
+  mentions: readonly XPostPromptMention[],
+): string {
+  const typesByReference = new Map(mentions.map((mention) =>
+    [normalizeNotebookReference(mention.reference), mention.type] as const))
+  const labels = new Map<string, string>()
+  const counts = new Map<string, number>()
+  return prompt.replace(PROMPT_MENTION_PATTERN, (match: string, reference: string) => {
+    const key = normalizeNotebookReference(reference)
+    const known = labels.get(key)
+    if (known) return known
+    const type = typesByReference.get(key)
+    if (!type && !ARTIFACT_ID_PATTERN.test(key)) return match
+    const kind = mentionKind(type)
+    const ordinal = (counts.get(kind) ?? 0) + 1
+    counts.set(kind, ordinal)
+    const label = `[${kind} ${ordinal}]`
+    labels.set(key, label)
+    return label
+  })
+}
+
+const YOUTUBE_HOSTS = new Set(['youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be'])
+const X_HOSTS = new Set(['x.com', 'mobile.x.com', 'twitter.com', 'mobile.twitter.com'])
+const RESERVED_X_HANDLES = new Set([
+  'explore',
+  'home',
+  'i',
+  'intent',
+  'messages',
+  'notifications',
+  'search',
+  'settings',
+  'share',
+])
+
+type SourceLink =
+  | { kind: 'youtube'; url: string; videoId: string | null }
+  | { kind: 'x'; url: string; handle: string | null; status: boolean }
+
+function youtubeVideoId(url: URL, hostname: string): string | null {
+  if (hostname === 'youtu.be') return url.pathname.split('/')[1] || null
+  const watchId = url.searchParams.get('v')
+  if (watchId) return watchId
+  return url.pathname.match(/^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]+)/)?.[1] ?? null
+}
+
+function youtubeLink(url: URL, hostname: string): SourceLink {
+  const videoId = youtubeVideoId(url, hostname)
+  if (videoId && url.pathname.startsWith('/shorts/')) {
+    return { kind: 'youtube', url: `https://www.youtube.com/shorts/${videoId}`, videoId }
+  }
+  if (videoId) return { kind: 'youtube', url: `https://youtu.be/${videoId}`, videoId }
+  url.hash = ''
+  return { kind: 'youtube', url: url.toString(), videoId: null }
+}
+
+function xLink(url: URL): SourceLink {
+  const match = url.pathname.match(/^\/([A-Za-z0-9_]{1,15})\/status\/(\d+)/)
+  if (!match) {
+    url.hash = ''
+    return { kind: 'x', url: url.toString(), handle: null, status: false }
+  }
+  const matchedHandle = match[1]!
+  const handle = RESERVED_X_HANDLES.has(matchedHandle.toLowerCase()) ? null : matchedHandle
+  return {
+    kind: 'x',
+    url: `https://x.com/${matchedHandle}/status/${match[2]}`,
+    handle,
+    status: true,
+  }
+}
+
+function sourceLink(value: unknown): SourceLink | null {
   if (typeof value !== 'string') return null
   try {
     const url = new URL(value)
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
     const hostname = url.hostname.toLowerCase().replace(/^www\./, '')
-    const supported = hostname === 'youtube.com'
-      || hostname === 'm.youtube.com'
-      || hostname === 'youtu.be'
-      || hostname === 'x.com'
-      || hostname === 'mobile.x.com'
-      || hostname === 'twitter.com'
-      || hostname === 'mobile.twitter.com'
-    return supported ? url : null
+    if (YOUTUBE_HOSTS.has(hostname)) return youtubeLink(url, hostname)
+    if (X_HOSTS.has(hostname)) return xLink(url)
+    return null
   } catch {
     return null
   }
+}
+
+/** A link that names one video or post, rather than a playlist or profile page. */
+function isConcreteLink(link: SourceLink): boolean {
+  return link.kind === 'youtube' ? link.videoId !== null : link.status
 }
 
 function sourceLabel(
@@ -256,52 +421,19 @@ export function xPostSourceAttribution(
   assetId: string,
   metadata: Record<string, unknown>,
 ): XPostSourceAttribution | null {
-  const source = supportedSourceUrl(
-    metadata.webpage_url
-      ?? metadata.webpageUrl
-      ?? metadata.source_url
-      ?? metadata.sourceUrl,
-  )
-  if (!source) return null
-  source.hash = ''
-  const hostname = source.hostname.toLowerCase().replace(/^www\./, '')
-  const xSource = hostname === 'x.com'
-    || hostname === 'mobile.x.com'
-    || hostname === 'twitter.com'
-    || hostname === 'mobile.twitter.com'
-  if (xSource) {
-    const match = source.pathname.match(/^\/([A-Za-z0-9_]{1,15})\/status\/(\d+)/)
-    const reservedHandles = new Set([
-      'explore',
-      'home',
-      'i',
-      'intent',
-      'messages',
-      'notifications',
-      'search',
-      'settings',
-      'share',
-    ])
-    const matchedHandle = match?.[1] ?? null
-    const xHandle = matchedHandle
-      && !reservedHandles.has(matchedHandle.toLowerCase())
-      ? matchedHandle
-      : null
-    const url = match
-      ? `https://x.com/${match[1]}/status/${match[2]}`
-      : source.toString()
-    return {
-      id: `${assetId}:${url}`,
-      label: sourceLabel(metadata, 'X'),
-      url,
-      xHandle,
-    }
-  }
+  const links = [
+    metadata.webpage_url,
+    metadata.webpageUrl,
+    metadata.source_url,
+    metadata.sourceUrl,
+  ].map(sourceLink).filter((link): link is SourceLink => link !== null)
+  const link = links.find(isConcreteLink) ?? links[0]
+  if (!link) return null
   return {
-    id: `${assetId}:${source.toString()}`,
-    label: sourceLabel(metadata, 'YouTube'),
-    url: source.toString(),
-    xHandle: null,
+    id: `${assetId}:${link.url}`,
+    label: sourceLabel(metadata, link.kind === 'x' ? 'X' : 'YouTube'),
+    url: link.url,
+    xHandle: link.kind === 'x' ? link.handle : null,
   }
 }
 
@@ -332,7 +464,7 @@ function promptReplies(
     const capacity = X_POST_MAX_CHARACTERS - prefix.length
     let take = Math.min(remaining.length, capacity)
     if (take < remaining.length) {
-      const whitespace = remaining.lastIndexOf(' ', take)
+      const whitespace = remaining.lastIndexOf(' ', take - 1)
       if (whitespace > Math.floor(capacity / 2)) take = whitespace + 1
     }
     replies.push({
