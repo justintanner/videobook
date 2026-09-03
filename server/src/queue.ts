@@ -404,18 +404,22 @@ function makeWrappedResolver(
           return result;
         } catch (cause) {
           const message = cause instanceof Error ? cause.message : String(cause);
-          if (assetId && !assetFailureHandled) {
+          const detached = isArtifactDetachedJobType(type);
+          if (assetId && !assetFailureHandled && !detached) {
             await dispatchFailure(engine, assetId, lease.current, message, job);
           } else {
-            // A job that rolled itself back owns the artifact's status — it
-            // stays clean rather than showing a spurious error. The attempt
-            // still belongs in the append-only log, or a failed-then-restored
-            // job would leave no record anywhere that it ran.
+            // A job that rolled itself back, or one detached from its
+            // artifact, owns the artifact's status — it stays clean rather
+            // than showing a spurious error. The attempt still belongs in the
+            // append-only log, or a failed-then-restored job would leave no
+            // record anywhere that it ran.
             await engine.logs.append("job-error", {
               jobType: type,
               operationId: job.operationId,
               error: message,
-              ...(assetId ? { assetId, rolledBack: true } : {}),
+              ...(assetId
+                ? { assetId, ...(detached ? { detached: true } : { rolledBack: true }) }
+                : {}),
               ...(typeof job.payload.bookId === "string"
                 ? { bookId: job.payload.bookId }
                 : {}),
@@ -526,6 +530,22 @@ async function ensureBookReady(
   return { bookId, engine: info.engine, runner: info.runner };
 }
 
+/**
+ * Jobs that reference an asset without producing or transforming its media.
+ * The engine queue marks a job's artifact ready when it completes and errored
+ * when it fails, so these stay detached from the artifact row and skip the
+ * wrapper's failure dispatch: a post that cannot reach X, or an index run that
+ * times out, must never flip a healthy asset into "media failed".
+ */
+const ARTIFACT_DETACHED_JOB_TYPES: ReadonlySet<string> = new Set([
+  "post_to_x",
+  "semantic_index",
+]);
+
+function isArtifactDetachedJobType(type: string): boolean {
+  return ARTIFACT_DETACHED_JOB_TYPES.has(type);
+}
+
 export function enqueueOptions(jobId: string, payload: JobPayload) {
   const type = extractType(payload);
   const assetId = extractAssetId(payload);
@@ -535,7 +555,7 @@ export function enqueueOptions(jobId: string, payload: JobPayload) {
     : 1;
   return {
     type,
-    artifactId: type === "semantic_index" ? null : assetId,
+    artifactId: isArtifactDetachedJobType(type) ? null : assetId,
     payload,
     dedupeKey: jobId,
     maxAttempts,
