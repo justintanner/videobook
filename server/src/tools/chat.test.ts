@@ -405,6 +405,37 @@ describe("chatActionPlanSchema and applyChatActionPlan", () => {
     if (payload.job_id) await waitForJob(payload.job_id);
     expect(payload.image_asset_id).toBeTruthy();
   }, 30_000);
+
+  it("lets an untitled post plan through validation so the sheet can add the title", async () => {
+    // The router validates its plan with the tool schema before the confirm
+    // sheet opens, so a missing title must survive validation and only be
+    // refused by the post handler itself.
+    const plan = {
+      kind: "chat-action-plan",
+      planId: uuidv7(),
+      bookId,
+      prompt: "post the clip to X",
+      routedTool: "post",
+      tool: "post",
+      params: { asset_id: uuidv7(), book_id: bookId, platform: "x" },
+      message: "Posting to X.",
+      summary: "Post to X",
+      effect: "mutation",
+      confirmation: {
+        required: true,
+        reason: "This request publishes media outside the current book",
+      },
+    };
+    expect(chatActionPlanSchema.safeParse(plan).success).toBe(true);
+    const result = await client.callTool({
+      name: "chat",
+      arguments: { book_id: "chat-plan-proj", action_plan: plan },
+    });
+    expect(result.isError).toBe(true);
+    const text = (result.content as TextContent)[0].text;
+    expect(text).not.toContain("Invalid parameters");
+    expect(text).toContain("A post title is required");
+  });
 });
 
 describe("sanitizeGenerateImageParams", () => {

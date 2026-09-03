@@ -25,9 +25,11 @@ export function postDef(): ToolDef {
       text: z
         .string()
         .trim()
-        .min(1, "A post title is required")
         .max(280)
-        .describe("Title of the root post (required, X limit 280 chars)."),
+        .optional()
+        .describe(
+          "Title of the root post (X limit 280 chars). Publishing requires one; pass it only when the user supplied it, since the confirm sheet asks for a missing title before applying.",
+        ),
       orientation: z
         .enum(["portrait", "landscape"])
         .optional()
@@ -59,7 +61,7 @@ export function postDef(): ToolDef {
           asset_id: string;
           book_id: string;
           platform?: "x";
-          text: string;
+          text?: string;
           orientation?: "portrait" | "landscape";
           scheduled_for?: string;
           followups?: XPostFollowup[];
@@ -70,6 +72,15 @@ export function postDef(): ToolDef {
           isError: true as const,
           content: [
             { type: "text" as const, text: `Unsupported platform: ${platform}` },
+          ],
+        };
+      }
+
+      if (!text?.trim()) {
+        return {
+          isError: true as const,
+          content: [
+            { type: "text" as const, text: "A post title is required" },
           ],
         };
       }

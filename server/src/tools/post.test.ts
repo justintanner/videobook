@@ -37,17 +37,20 @@ describe("post tool schema", () => {
     }).success).toBe(false);
   });
 
-  it("requires a non-blank title on the root post", () => {
-    expect(schema.safeParse({ asset_id: "video", book_id: "book" }).success).toBe(false);
-    expect(schema.safeParse({
-      asset_id: "video",
-      book_id: "book",
-      text: "   ",
-    }).success).toBe(false);
+  it("plans without a title but refuses to publish one", async () => {
+    // The chat router validates its plan against this schema before the
+    // confirm sheet can collect a title, so the schema must accept a missing
+    // text while the handler still refuses to post without one.
+    expect(schema.safeParse({ asset_id: "video", book_id: "book" }).success).toBe(true);
     expect(schema.parse({
       asset_id: "video",
       book_id: "book",
       text: "  Title  ",
     }).text).toBe("Title");
+    for (const text of [undefined, "", "   "]) {
+      const result = await postDef().handler({ asset_id: "video", book_id: "book", text });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]).toMatchObject({ text: "A post title is required" });
+    }
   });
 });
