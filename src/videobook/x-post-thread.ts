@@ -78,7 +78,10 @@ export type XPostThreadReview = {
   error: string | null
   context: XPostThreadContext
   options: XPostThreadOptions
-  /** Edited prompt text keyed by step id; unedited steps post their stored prompt. */
+  /**
+   * Edited prompt text keyed by step id; unedited steps post their stored
+   * prompt trimmed to fit one reply.
+   */
   promptOverrides: Record<string, string>
   /** Edited credits text; null posts the default credit line. */
   creditsOverride: string | null
@@ -99,7 +102,7 @@ export function initialXPostThreadReview(
     loading: false,
     error: null,
     context,
-    options: { enabled: false },
+    options: { enabled: xPostThreadHasDetails(context) },
     promptOverrides: {},
     creditsOverride: null,
   }
@@ -524,20 +527,84 @@ export function xPostThreadHasDetails(context: XPostThreadContext): boolean {
     step.prompt.trim() !== '' || step.images.length > 0)
 }
 
+/** X attaches at most four images to one post; the prompt reply carries the first four. */
+export function xPostThreadAttachedImages(
+  images: readonly XPostThreadImage[],
+): XPostThreadImage[] {
+  return images.slice(0, X_POST_MAX_IMAGES_PER_FOLLOWUP)
+}
+
+function stepOrdinal(ordinal: number, stepCount: number): string {
+  return stepCount > 1 ? ` (${ordinal + 1}/${stepCount})` : ''
+}
+
+/** The heading that opens a step's prompt reply, naming the model when known. */
+function xPostThreadPromptPrefix(
+  step: XPostThreadStep,
+  ordinal: number,
+  stepCount: number,
+): string {
+  const suffix = stepOrdinal(ordinal, stepCount)
+  if (!step.model) return `Prompt${suffix}:\n`
+  const provider = step.model.provider ? ` via ${step.model.provider}` : ''
+  return `Made with ${step.model.label}${provider}${suffix}. Prompt:\n`
+}
+
+const ELLIPSIS = '…'
+/** X weighs the ellipsis as two characters. */
+const ELLIPSIS_WEIGHT = 2
+
+function lastWhitespaceIndex(text: string, limit: number): number {
+  for (let index = Math.min(limit, text.length - 1); index >= 0; index -= 1) {
+    if (/\s/u.test(text.charAt(index))) return index
+  }
+  return -1
+}
+
+/** Cut a prompt at a word boundary so it fits the capacity, marking the cut. */
+function fitPrompt(prompt: string, capacity: number): string {
+  if (prompt.length <= capacity) return prompt
+  const room = Math.max(0, capacity - ELLIPSIS_WEIGHT)
+  const whitespace = lastWhitespaceIndex(prompt, room)
+  const cut = whitespace > Math.floor(room / 2) ? whitespace : room
+  return `${prompt.slice(0, cut).trimEnd()}${ELLIPSIS}`
+}
+
+/**
+ * The prompt a step posts unless edited: the stored prompt, trimmed at a
+ * word boundary so the whole reply fits behind its heading.
+ */
+function defaultXPostThreadPrompt(
+  step: XPostThreadStep,
+  ordinal: number,
+  stepCount: number,
+): string {
+  const prefix = xPostThreadPromptPrefix(step, ordinal, stepCount)
+  return fitPrompt(step.prompt.trim(), X_POST_MAX_CHARACTERS - prefix.length)
+}
+
+function stepIndex(review: XPostThreadReview, step: XPostThreadStep): number {
+  const index = review.context.steps.findIndex((candidate) => candidate.id === step.id)
+  return index === -1 ? 0 : index
+}
+
 export function xPostThreadPrompt(
   review: XPostThreadReview,
   step: XPostThreadStep,
 ): string {
-  return review.promptOverrides[step.id] ?? step.prompt
+  return review.promptOverrides[step.id]
+    ?? defaultXPostThreadPrompt(step, stepIndex(review, step), review.context.steps.length)
+}
+
+function creditName(credit: XPostSourceCredit): string {
+  return credit.xHandle ? `@${credit.xHandle}` : credit.label
 }
 
 function creditLine(credit: XPostSourceCredit): string {
-  return credit.xHandle
-    ? `@${credit.xHandle} ${credit.url}`
-    : `${credit.label} ${credit.url}`
+  return `${creditName(credit)}: ${credit.url}`
 }
 
-/** The default credits reply: at-mentions X accounts, names YouTube uploaders. */
+/** The default thanks reply: at-mentions X accounts, names YouTube uploaders. */
 export function defaultXPostThreadCredits(
   credits: readonly XPostSourceCredit[],
 ): string {
@@ -545,56 +612,14 @@ export function defaultXPostThreadCredits(
     Number(left.xHandle === null) - Number(right.xHandle === null))
   const first = ordered[0]
   if (!first) return ''
-  if (ordered.length === 1) return `Original video by ${creditLine(first)}`
-  const full = `Original videos:\n${ordered.map(creditLine).join('\n')}`
+  if (ordered.length === 1) return `Special thanks to ${creditLine(first)}`
+  const full = `Special thanks to:\n${ordered.map(creditLine).join('\n')}`
   if (full.length <= X_POST_MAX_CHARACTERS) return full
-  return `Original videos:\n${ordered.map((credit) => credit.url).join('\n')}`
+  return `Special thanks to:\n${ordered.map((credit) => credit.url).join('\n')}`
 }
 
 export function xPostThreadCreditsText(review: XPostThreadReview): string {
   return review.creditsOverride ?? defaultXPostThreadCredits(review.context.credits)
-}
-
-function stepOrdinal(ordinal: number, stepCount: number): string {
-  return stepCount > 1 ? ` (${ordinal + 1}/${stepCount})` : ''
-}
-
-function promptPrefix(
-  step: XPostThreadStep,
-  ordinal: number,
-  stepCount: number,
-): string {
-  const heading = `How I made this video${stepOrdinal(ordinal, stepCount)}`
-  if (!step.model) return `${heading} — prompt:\n`
-  const provider = step.model.provider ? ` via ${step.model.provider}` : ''
-  return `${heading} — ${step.model.label}${provider}. Prompt:\n`
-}
-
-function promptParts(prompt: string, firstPrefix: string): string[] {
-  const parts: string[] = []
-  let remaining = prompt
-  while (remaining.length > 0) {
-    const prefix = parts.length === 0
-      ? firstPrefix
-      : `Prompt continued (${parts.length + 1}):\n`
-    const capacity = X_POST_MAX_CHARACTERS - prefix.length
-    let take = Math.min(remaining.length, capacity)
-    if (take < remaining.length) {
-      const whitespace = remaining.lastIndexOf(' ', take - 1)
-      if (whitespace > Math.floor(capacity / 2)) take = whitespace + 1
-    }
-    parts.push(`${prefix}${remaining.slice(0, take)}`)
-    remaining = remaining.slice(take)
-  }
-  return parts
-}
-
-function imageBatches(images: readonly XPostThreadImage[]): XPostThreadImage[][] {
-  const batches: XPostThreadImage[][] = []
-  for (let index = 0; index < images.length; index += X_POST_MAX_IMAGES_PER_FOLLOWUP) {
-    batches.push(images.slice(index, index + X_POST_MAX_IMAGES_PER_FOLLOWUP))
-  }
-  return batches
 }
 
 function threadReply(
@@ -613,46 +638,37 @@ function threadReply(
 }
 
 /**
- * One step posts its model and prompt first, split across as many replies as
- * the limit needs, with the first four input images attached to the opening
- * reply; further images follow in batches of four.
+ * One step posts a single reply: its heading and prompt with the first four
+ * input images attached. A step without a prompt still posts its images.
  */
-function stepReplies(
+function stepReply(
   review: XPostThreadReview,
   step: XPostThreadStep,
   ordinal: number,
   stepCount: number,
-): XPostThreadReply[] {
+): XPostThreadReply | null {
   const prompt = xPostThreadPrompt(review, step).trim()
-  const texts = prompt
-    ? promptParts(prompt, promptPrefix(step, ordinal, stepCount))
-    : []
-  const batches = imageBatches(step.images)
-  const replies = texts.map((text, index) => threadReply(
-    `step:${step.id}:prompt:${index}`,
-    step.id,
-    text,
-    index === 0 ? batches[0] ?? [] : [],
-  ))
-  const unattached = texts.length > 0 ? batches.slice(1) : batches
-  for (const [index, images] of unattached.entries()) {
-    replies.push(threadReply(
-      `step:${step.id}:images:${index}`,
-      step.id,
-      `Source images used for this video${stepOrdinal(ordinal, stepCount)}:`,
-      images,
-    ))
-  }
-  return replies
+  const images = xPostThreadAttachedImages(step.images)
+  if (!prompt && images.length === 0) return null
+  const text = prompt
+    ? `${xPostThreadPromptPrefix(step, ordinal, stepCount)}${prompt}`
+    : `Input images for this video${stepOrdinal(ordinal, stepCount)}:`
+  return threadReply(`step:${step.id}`, step.id, text, images)
 }
 
+/**
+ * The thread behind the root post: one reply per generation step, then one
+ * reply thanking the original video.
+ */
 export function buildXPostThreadReplies(
   review: XPostThreadReview,
 ): XPostThreadReply[] {
   if (!review.options.enabled) return []
   const stepCount = review.context.steps.length
-  const replies = review.context.steps.flatMap((step, ordinal) =>
-    stepReplies(review, step, ordinal, stepCount))
+  const replies = review.context.steps.flatMap((step, ordinal) => {
+    const reply = stepReply(review, step, ordinal, stepCount)
+    return reply ? [reply] : []
+  })
   const credits = review.context.credits.length > 0
     ? xPostThreadCreditsText(review).trim()
     : ''

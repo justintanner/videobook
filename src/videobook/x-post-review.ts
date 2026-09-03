@@ -94,13 +94,16 @@ export function reviseXPostFollowups(
   return next
 }
 
+const X_POST_TITLE_REQUIRED_MESSAGE = 'Add a title for the post.'
+
 export function xPostDraftError(
   draft: XPostDraft,
   nowMs = Date.now(),
 ): string | null {
+  if (draft.postText.trim() === '') return X_POST_TITLE_REQUIRED_MESSAGE
   if (draft.postText.length > X_POST_MAX_CHARACTERS) {
     const overage = draft.postText.length - X_POST_MAX_CHARACTERS
-    return `Message is ${overage} character${overage === 1 ? '' : 's'} too long.`
+    return `Title is ${overage} character${overage === 1 ? '' : 's'} too long.`
   }
   if (draft.followups.length > X_POST_MAX_FOLLOWUPS) {
     return `Thread has ${draft.followups.length} replies; X posts support at most ${X_POST_MAX_FOLLOWUPS} here.`

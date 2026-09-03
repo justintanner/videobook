@@ -165,7 +165,7 @@ describe('x post validation', () => {
       orientation: null,
       followups: [],
     }).blocking)
-      .toBe('Message is 1 character too long.')
+      .toBe('Title is 1 character too long.')
     expect(xPostValidation({
       postText: 'ok',
       scheduledFor: null,

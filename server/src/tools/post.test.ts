@@ -10,6 +10,7 @@ describe("post tool schema", () => {
       asset_id: "video",
       book_id: "book",
       platform: "x",
+      text: "Title",
       followups: [
         { text: "Exact prompt", image_asset_ids: ["image-1", "image-2"] },
         { text: "@source https://x.com/source/status/123" },
@@ -25,12 +26,28 @@ describe("post tool schema", () => {
     expect(schema.safeParse({
       asset_id: "video",
       book_id: "book",
+      text: "Title",
       followups: [{}],
     }).success).toBe(false);
     expect(schema.safeParse({
       asset_id: "video",
       book_id: "book",
+      text: "Title",
       followups: [{ image_asset_ids: ["1", "2", "3", "4", "5"] }],
     }).success).toBe(false);
+  });
+
+  it("requires a non-blank title on the root post", () => {
+    expect(schema.safeParse({ asset_id: "video", book_id: "book" }).success).toBe(false);
+    expect(schema.safeParse({
+      asset_id: "video",
+      book_id: "book",
+      text: "   ",
+    }).success).toBe(false);
+    expect(schema.parse({
+      asset_id: "video",
+      book_id: "book",
+      text: "  Title  ",
+    }).text).toBe("Title");
   });
 });

@@ -329,7 +329,8 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
     followups = [],
     signal,
   } = args;
-  if ((text?.length ?? 0) > 280) throw new Error("Post text exceeds 280 characters");
+  if (!text?.trim()) throw new Error("A post title is required");
+  if (text.length > 280) throw new Error("Post title exceeds 280 characters");
   const rootMedia = await prepareMedia(engine, assetId, orientation);
   try {
     const preparedFollowups = await prepareFollowups(engine, followups);
@@ -356,10 +357,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
     }
 
     const tweetRes = await x.post.v2.tweets(
-      {
-        ...(text !== undefined && text.length > 0 ? { text } : {}),
-        media: { media_ids: [mediaId] },
-      },
+      { text, media: { media_ids: [mediaId] } },
       signal,
     );
 
@@ -409,7 +407,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
           tweet_url: tweetUrl(tweetId),
           posted_at: postedAt,
           media_id: mediaId,
-          text: text !== undefined && text.length > 0 ? text : null,
+          text,
           scheduled_for: scheduledFor ?? null,
           schedule_id: scheduleId ?? null,
           status,

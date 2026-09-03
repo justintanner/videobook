@@ -50,7 +50,7 @@ describe('PostToXBody', () => {
     expect(html).not.toContain('<video')
   })
 
-  it('renders video controls and a media-only message state', () => {
+  it('renders video controls and flags a missing title', () => {
     const html = renderToStaticMarkup(createElement(PostToXBody, {
       asset: {
         type: 'video',
@@ -74,8 +74,9 @@ describe('PostToXBody', () => {
     expect(html).toContain('src="/files/video-original.mp4"')
     expect(html).toContain('poster="/files/video-poster.jpg"')
     expect(html).toContain('controls=""')
-    expect(html).toContain('placeholder="No message — media only"')
-    expect(html).toContain('0/280 characters')
+    expect(html).toContain('placeholder="Title (required)"')
+    expect(html).toContain('A title is required')
+    expect(html).not.toContain('0/280 characters')
     expect(html).not.toContain('aria-label="Schedule date and time"')
   })
 
@@ -133,7 +134,7 @@ describe('PostToXBody', () => {
     expect(html).toContain('posts as 1 reply')
     expect(html).toContain('src="/files/source-thumb.jpg"')
     expect(html).toContain('aria-label="Credits"')
-    expect(html).toContain('Original video by @source https://x.com/source/status/123')
+    expect(html).toContain('Special thanks to @source: https://x.com/source/status/123')
     expect(html).not.toContain('Thread options')
   })
 })
@@ -170,14 +171,20 @@ describe('X post review draft', () => {
     })
   })
 
-  it('validates the character limit and scheduled time', () => {
+  it('validates the title, character limit and scheduled time', () => {
     const now = Date.parse('2099-08-25T03:00:00.000Z')
+    expect(xPostDraftError({
+      postText: '  ',
+      scheduledFor: null,
+      orientation: null,
+      followups: [],
+    }, now)).toBe('Add a title for the post.')
     expect(xPostDraftError({
       postText: 'x'.repeat(281),
       scheduledFor: null,
       orientation: null,
       followups: [],
-    }, now)).toBe('Message is 1 character too long.')
+    }, now)).toBe('Title is 1 character too long.')
     expect(xPostDraftError({
       postText: 'Ready',
       scheduledFor: '',

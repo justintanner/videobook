@@ -1613,7 +1613,7 @@ describe('chat composer browser flow', () => {
       await previewVideo.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await previewVideo.getAttribute('src')).toContain('/files/')
       expect(await previewVideo.getAttribute('controls')).not.toBeNull()
-      const message = postPreview.getByLabel('Message')
+      const message = postPreview.getByLabel('Title')
       const publish = postPreview.getByLabel('Publish timing')
       const orientation = postPreview.getByLabel('Video orientation')
       expect(await message.inputValue()).toBe(postText)
@@ -1644,7 +1644,7 @@ describe('chat composer browser flow', () => {
       await page.getByLabel('Send command').click()
       await review.waitFor({ state: 'visible', timeout: 30_000 })
       const reopenedMessage = review.getByRole('textbox', {
-        name: 'Message',
+        name: 'Title',
         exact: true,
       })
       expect(await reopenedMessage.inputValue()).toBe(postText)
@@ -1671,14 +1671,20 @@ describe('chat composer browser flow', () => {
       await input.fill(prompt)
       await page.getByLabel('Send command').click()
       await review.waitFor({ state: 'visible', timeout: 30_000 })
-      await review.getByRole('textbox', { name: 'Message', exact: true }).fill('')
+      const clearedTitle = review.getByRole('textbox', { name: 'Title', exact: true })
+      await clearedTitle.fill('')
+      await review.getByRole('alert').getByText('Add a title for the post.')
+        .waitFor({ state: 'visible' })
+      expect(await review.getByRole('button', { name: 'Post to X' }).isDisabled()).toBe(true)
+      await clearedTitle.fill('Titled again')
       await review.getByLabel('Publish timing').selectOption('now')
       await review.getByLabel('Video orientation').selectOption('source')
+      expect(await review.getByRole('alert').count()).toBe(0)
       await review.getByRole('button', { name: 'Post to X' }).click()
       await expect.poll(() => appliedCalls().length).toBe(2)
       const clearedPlan = record(appliedCalls()[1]?.arguments.action_plan)
       const clearedParams = record(clearedPlan?.params)
-      expect(clearedParams).not.toHaveProperty('text')
+      expect(clearedParams?.text).toBe('Titled again')
       expect(clearedParams).not.toHaveProperty('scheduled_for')
       expect(clearedParams).not.toHaveProperty('orientation')
     } finally {
@@ -1686,7 +1692,7 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
-  it('reviews and edits an opt-in how-it-was-made X thread', async () => {
+  it('reviews and edits the default how-it-was-made X thread', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     const prompt = 'post the generated thread review video to X'
     const planId = '01900000-0000-7000-8000-000000000110'
@@ -1734,15 +1740,17 @@ describe('chat composer browser flow', () => {
       await review.waitFor({ state: 'visible', timeout: 30_000 })
       const thread = review.getByLabel('How it was made thread')
       const master = thread.getByLabel('Add how-it-was-made thread')
-      expect(await master.isChecked()).toBe(false)
       const promptField = thread.getByLabel('Prompt', { exact: true })
-      expect(await promptField.count()).toBe(0)
-
-      await master.check()
       await promptField.waitFor({ state: 'visible' })
+      expect(await master.isChecked()).toBe(true)
       expect(await promptField.inputValue()).toContain(
         'Exact final generation prompt for the making-of thread',
       )
+
+      await master.uncheck()
+      await expect.poll(async () => await promptField.count()).toBe(0)
+      await master.check()
+      await promptField.waitFor({ state: 'visible' })
       expect(await thread.getByText('Model', { exact: true }).count()).toBe(1)
       expect(await thread.locator('img[alt="@c3"]').count()).toBe(1)
       expect(await appliedCalls()).toHaveLength(0)
@@ -1756,7 +1764,7 @@ describe('chat composer browser flow', () => {
         ? appliedParams.followups.map(record)
         : []
       expect(followups).toHaveLength(1)
-      expect(followups[0]?.text).toMatch(/^How I made this video — /)
+      expect(followups[0]?.text).toMatch(/^Made with .+\. Prompt:\n/)
       expect(followups[0]?.text).toContain(
         'Edited making-of prompt with the exact source image attached.',
       )

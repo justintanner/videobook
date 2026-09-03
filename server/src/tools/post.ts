@@ -24,9 +24,10 @@ export function postDef(): ToolDef {
       platform: z.enum(["x"]).default("x").describe("Target platform; defaults to 'x'"),
       text: z
         .string()
+        .trim()
+        .min(1, "A post title is required")
         .max(280)
-        .optional()
-        .describe("Post text (X limit 280 chars). Optional when media is attached."),
+        .describe("Title of the root post (required, X limit 280 chars)."),
       orientation: z
         .enum(["portrait", "landscape"])
         .optional()
@@ -58,7 +59,7 @@ export function postDef(): ToolDef {
           asset_id: string;
           book_id: string;
           platform?: "x";
-          text?: string;
+          text: string;
           orientation?: "portrait" | "landscape";
           scheduled_for?: string;
           followups?: XPostFollowup[];

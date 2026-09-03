@@ -9139,7 +9139,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     const xPostReview = await prepareXPostThreadReview(plan)
     const reviewedPlan = xPostReview
-      ? { ...plan, params: reviseXPostFollowups(plan.params, []) }
+      ? {
+          ...plan,
+          params: reviseXPostFollowups(
+            plan.params,
+            xPostFollowupsFromThread(xPostReview),
+          ),
+        }
       : plan
     if (plan.tool === 'post' || plan.routedTool === 'post') void refreshXConnection()
     setPendingCommandPlan(null)

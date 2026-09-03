@@ -10,6 +10,7 @@ import {
   selectXPostGenerationPrompt,
   xPostSourceCredit,
   xPostThreadHasDetails,
+  xPostThreadPrompt,
   type XPostThreadImage,
 } from './x-post-thread'
 
@@ -164,7 +165,8 @@ describe('X post thread provenance', () => {
     })).toBeNull()
   })
 
-  it('posts the model and prompt first and batches the input images behind them', () => {
+  it('posts one reply with the heading, the trimmed prompt and the first four images', () => {
+    const heading = 'Made with Seedance 2.5 via Kie. Prompt:\n'
     const prompt = Array.from({ length: 90 }, (_, index) => `word-${index}`).join(' ')
     const step = {
       id: 'generation',
@@ -178,31 +180,39 @@ describe('X post thread provenance', () => {
       steps: [{ ...step, prompt: ' ', images: [] }],
       credits: [],
     })).toBe(false)
-    const disabled = initialXPostThreadReview(context)
-    expect(buildXPostThreadReplies(disabled)).toEqual([])
+    expect(initialXPostThreadReview({ steps: [], credits: [] }).options.enabled).toBe(false)
 
-    const enabled = { ...disabled, options: { enabled: true } }
-    const replies = buildXPostThreadReplies(enabled)
-    expect(replies.length).toBeGreaterThan(2)
-    expect(replies[0]?.text.startsWith(
-      'How I made this video — Seedance 2.5 via Kie. Prompt:\nword-0 ',
-    )).toBe(true)
-    expect(replies.every((reply) => reply.text.length <= 280)).toBe(true)
-    expect(replies.every((reply) => reply.stepId === 'generation')).toBe(true)
-    expect(replies.every((reply) => reply.imageAssetIds.length <= 4)).toBe(true)
-    expect(replies[0]?.imageAssetIds).toEqual(['image-0', 'image-1', 'image-2', 'image-3'])
-    expect(replies.at(-1)).toMatchObject({
-      text: 'Source images used for this video:',
-      imageAssetIds: ['image-4'],
-    })
+    const review = initialXPostThreadReview(context)
+    expect(review.options.enabled).toBe(true)
+    expect(buildXPostThreadReplies({ ...review, options: { enabled: false } })).toEqual([])
 
-    const edited = { ...enabled, promptOverrides: { generation: 'Edited exact prompt' } }
-    expect(buildXPostThreadReplies(edited).map((reply) => reply.text)).toEqual([
-      'How I made this video — Seedance 2.5 via Kie. Prompt:\nEdited exact prompt',
-      'Source images used for this video:',
-    ])
+    const replies = buildXPostThreadReplies(review)
+    expect(replies).toHaveLength(1)
+    const reply = replies[0]!
+    expect(reply.text.startsWith(`${heading}word-0 word-1 `)).toBe(true)
+    expect(reply.text.endsWith('…')).toBe(true)
+    expect(reply.text).not.toContain('word-89')
+    expect(reply.text.length).toBeLessThan(280)
+    expect(reply.text).toBe(`${heading}${xPostThreadPrompt(review, step)}`)
+    expect(reply.imageAssetIds).toEqual(['image-0', 'image-1', 'image-2', 'image-3'])
+
+    const edited = { ...review, promptOverrides: { generation: 'Edited exact prompt' } }
+    expect(buildXPostThreadReplies(edited)).toEqual([{
+      id: 'step:generation',
+      stepId: 'generation',
+      text: `${heading}Edited exact prompt`,
+      imageAssetIds: ['image-0', 'image-1', 'image-2', 'image-3'],
+      images: step.images.slice(0, 4),
+    }])
     expect(buildXPostThreadReplies({
-      ...enabled,
+      ...review,
+      promptOverrides: { generation: '   ' },
+    })).toMatchObject([{
+      text: 'Input images for this video:',
+      imageAssetIds: ['image-0', 'image-1', 'image-2', 'image-3'],
+    }])
+    expect(buildXPostThreadReplies({
+      ...review,
       context: { steps: [{ ...step, images: [] }], credits: [] },
       promptOverrides: { generation: '   ' },
     })).toEqual([])
@@ -216,18 +226,18 @@ describe('X post thread provenance', () => {
       ],
       credits: [],
     })
-    expect(buildXPostThreadReplies({ ...review, options: { enabled: true } })).toEqual([
+    expect(buildXPostThreadReplies(review)).toEqual([
       {
-        id: 'step:first:prompt:0',
+        id: 'step:first',
         stepId: 'first',
-        text: 'How I made this video (1/2) — prompt:\nfirst prompt',
+        text: 'Prompt (1/2):\nfirst prompt',
         imageAssetIds: [],
         images: [],
       },
       {
-        id: 'step:second:prompt:0',
+        id: 'step:second',
         stepId: 'second',
-        text: 'How I made this video (2/2) — Veo 3.1. Prompt:\nsecond prompt',
+        text: 'Made with Veo 3.1 (2/2). Prompt:\nsecond prompt',
         imageAssetIds: ['image-0'],
         images: [image(0)],
       },
@@ -342,7 +352,7 @@ describe('X post thread provenance', () => {
     })
   })
 
-  it('credits the original video in one editable reply after the steps', () => {
+  it('thanks the original video in one editable reply after the prompt', () => {
     const xCredit = {
       id: 'x',
       label: 'Source',
@@ -360,36 +370,54 @@ describe('X post thread provenance', () => {
       credits: [youtubeCredit, xCredit],
     })
     expect(xPostThreadHasDetails({ steps: [], credits: [xCredit] })).toBe(true)
-    const enabled = { ...review, options: { enabled: true } }
-    expect(buildXPostThreadReplies(enabled).map((reply) => [reply.stepId, reply.text])).toEqual([
-      ['generation', 'How I made this video — prompt:\nexact prompt'],
-      [null, 'Original videos:\n@source https://x.com/source/status/123\nOriginal Channel https://youtu.be/abc'],
+    expect(buildXPostThreadReplies(review).map((reply) => [reply.stepId, reply.text])).toEqual([
+      ['generation', 'Prompt:\nexact prompt'],
+      [null, 'Special thanks to:\n@source: https://x.com/source/status/123\nOriginal Channel: https://youtu.be/abc'],
     ])
     expect(buildXPostThreadReplies({
-      ...enabled,
-      context: { ...enabled.context, credits: [xCredit] },
-    }).at(-1)?.text).toBe('Original video by @source https://x.com/source/status/123')
+      ...review,
+      context: { ...review.context, credits: [xCredit] },
+    }).at(-1)?.text).toBe('Special thanks to @source: https://x.com/source/status/123')
     expect(buildXPostThreadReplies({
-      ...enabled,
+      ...review,
+      context: { ...review.context, credits: [youtubeCredit] },
+    }).at(-1)?.text).toBe('Special thanks to Original Channel: https://youtu.be/abc')
+    expect(buildXPostThreadReplies({
+      ...review,
       creditsOverride: 'Moves borrowed from @source',
     }).at(-1)).toMatchObject({
       id: 'credits',
       text: 'Moves borrowed from @source',
       imageAssetIds: [],
     })
-    expect(buildXPostThreadReplies({ ...enabled, creditsOverride: '  ' })).toHaveLength(1)
+    expect(buildXPostThreadReplies({ ...review, creditsOverride: '  ' })).toHaveLength(1)
   })
 
-  it('never lets a prompt chunk exceed the limit when the cut lands on a space', () => {
-    const prefix = 'How I made this video — prompt:\n'
-    const capacity = 280 - prefix.length
-    const prompt = `${'x'.repeat(capacity)} ${'y'.repeat(40)}`
-    const review = initialXPostThreadReview({
-      steps: [{ id: 'generation', prompt, model: null, images: [] }],
-      credits: [],
-    })
-    const replies = buildXPostThreadReplies({ ...review, options: { enabled: true } })
-    expect(replies.map((reply) => reply.text.length)).toEqual([280, 63])
-    expect(replies[1]?.text).toBe(`Prompt continued (2):\n ${'y'.repeat(40)}`)
+  it('trims a long prompt at a word boundary so the reply fits one post', () => {
+    const capacity = 280 - 'Prompt:\n'.length
+    const step = {
+      id: 'generation',
+      prompt: `${'x'.repeat(200)} ${'y'.repeat(100)}`,
+      model: null,
+      images: [],
+    }
+    const review = initialXPostThreadReview({ steps: [step], credits: [] })
+    expect(xPostThreadPrompt(review, step)).toBe(`${'x'.repeat(200)}…`)
+    expect(buildXPostThreadReplies(review)[0]?.text).toBe(`Prompt:\n${'x'.repeat(200)}…`)
+
+    // Without a usable break the cut is hard, leaving room for X to weigh the ellipsis twice.
+    const solid = { ...step, id: 'solid', prompt: 'z'.repeat(300) }
+    const solidReview = initialXPostThreadReview({ steps: [solid], credits: [] })
+    expect(xPostThreadPrompt(solidReview, solid)).toBe(`${'z'.repeat(capacity - 2)}…`)
+
+    const short = { ...step, id: 'short', prompt: '  short prompt  ' }
+    const shortReview = initialXPostThreadReview({ steps: [short], credits: [] })
+    expect(xPostThreadPrompt(shortReview, short)).toBe('short prompt')
+
+    // An edited prompt posts as typed so the draft validation can flag an overrun.
+    expect(buildXPostThreadReplies({
+      ...solidReview,
+      promptOverrides: { solid: 'a'.repeat(300) },
+    })[0]?.text).toHaveLength(308)
   })
 })

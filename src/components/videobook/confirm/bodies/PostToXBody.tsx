@@ -11,10 +11,12 @@ import {
 import {
   buildXPostThreadReplies,
   X_POST_EMPTY_THREAD_MESSAGE,
+  xPostThreadAttachedImages,
   xPostThreadCreditsText,
   xPostThreadHasDetails,
   xPostThreadPrompt,
   type XPostThreadOptions,
+  type XPostThreadReply,
   type XPostThreadReview,
   type XPostThreadStep,
 } from '@/videobook/x-post-thread'
@@ -64,6 +66,7 @@ export function PostToXBody({
     ? asset.mediaUrl ?? asset.thumbnailUrl
     : null
   const scheduled = draft.scheduledFor !== null
+  const untitled = draft.postText.trim() === ''
   const tooLong = draft.postText.length > X_POST_MAX_CHARACTERS
   const threadReplies = threadReview
     ? buildXPostThreadReplies(threadReview)
@@ -136,18 +139,21 @@ export function PostToXBody({
           )}
         </div>
         <div className="x-post-preview-copy">
-          <label htmlFor="x-post-message">Message</label>
+          <label htmlFor="x-post-title">Title</label>
           <textarea
-            id="x-post-message"
-            aria-invalid={tooLong}
+            id="x-post-title"
+            aria-invalid={untitled || tooLong}
             disabled={busy}
-            placeholder="No message — media only"
+            placeholder="Title (required)"
+            required
             rows={3}
             value={draft.postText}
             onChange={(event) => onChange({ postText: event.target.value })}
           />
-          <small className={tooLong ? 'confirm-field-error' : undefined}>
-            {draft.postText.length}/{X_POST_MAX_CHARACTERS} characters
+          <small className={untitled || tooLong ? 'confirm-field-error' : undefined}>
+            {untitled
+              ? 'A title is required'
+              : `${draft.postText.length}/${X_POST_MAX_CHARACTERS} characters`}
           </small>
         </div>
         <div
@@ -220,7 +226,9 @@ export function PostToXBody({
               />
               <span>
                 <strong>Add how-it-was-made thread</strong>
-                <small>Reply with the model, prompt, input images and credits</small>
+                <small>
+                  Reply with the prompt and input images, then thank the original video
+                </small>
               </span>
             </label>
             {threadReview.loading ? (
@@ -237,8 +245,8 @@ export function PostToXBody({
                     busy={busy}
                     index={index}
                     prompt={xPostThreadPrompt(threadReview, step)}
-                    replyCount={threadReplies.filter((reply) =>
-                      reply.stepId === step.id).length}
+                    reply={threadReplies.find((reply) =>
+                      reply.stepId === step.id) ?? null}
                     step={step}
                     stepCount={threadReview.context.steps.length}
                     onPromptChange={onThreadPromptChange}
@@ -272,12 +280,18 @@ function replyCountLabel(count: number): string {
   return `posts as ${count} ${count === 1 ? 'reply' : 'replies'}`
 }
 
+function attachedImagesLabel(step: XPostThreadStep): string {
+  const attached = xPostThreadAttachedImages(step.images).length
+  if (attached === step.images.length) return 'Input images'
+  return `Input images · first ${attached} of ${step.images.length} attach`
+}
+
 function ThreadStep({
   busy,
   index,
   onPromptChange,
   prompt,
-  replyCount,
+  reply,
   step,
   stepCount,
 }: {
@@ -285,11 +299,13 @@ function ThreadStep({
   index: number
   onPromptChange?: (stepId: string, text: string) => void
   prompt: string
-  replyCount: number
+  reply: XPostThreadReply | null
   step: XPostThreadStep
   stepCount: number
 }) {
   const promptId = `x-post-thread-prompt-${index}`
+  const replyLength = reply?.text.length ?? 0
+  const tooLong = replyLength > X_POST_MAX_CHARACTERS
   return (
     <article
       className="x-post-thread-step"
@@ -312,10 +328,15 @@ function ThreadStep({
       <div className="x-post-thread-field">
         <div className="x-post-thread-field-head">
           <label className="x-post-thread-label" htmlFor={promptId}>Prompt</label>
-          <small>{prompt.length} characters · {replyCountLabel(replyCount)}</small>
+          <small className={tooLong ? 'confirm-field-error' : undefined}>
+            {replyLength}/{X_POST_MAX_CHARACTERS} characters with heading
+            {' · '}
+            {replyCountLabel(reply ? 1 : 0)}
+          </small>
         </div>
         <textarea
           id={promptId}
+          aria-invalid={tooLong}
           disabled={busy}
           rows={4}
           value={prompt}
@@ -324,7 +345,7 @@ function ThreadStep({
       </div>
       {step.images.length > 0 && (
         <div className="x-post-thread-field">
-          <span className="x-post-thread-label">Input images</span>
+          <span className="x-post-thread-label">{attachedImagesLabel(step)}</span>
           <div className="x-post-thread-images">
             {step.images.map((image) => (
               <figure key={image.assetId}>

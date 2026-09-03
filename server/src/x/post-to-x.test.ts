@@ -264,7 +264,7 @@ describe("postToX helper", () => {
     ]);
     const x = createX({ accessToken: "test-token", fetch: stubFetch });
 
-    const result = await postToX({ engine: fs, assetId, bookId, x });
+    const result = await postToX({ engine: fs, assetId, bookId, x, text: "clip" });
     expect(result.tweet_id).toBe("TWEET_VID");
     expect(STATUS_POLL_MIN_INTERVAL_MS).toBe(2_000);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
@@ -284,8 +284,21 @@ describe("postToX helper", () => {
 
     const x = createX({ accessToken: "test-token", fetch: makeStubFetch([]).fetch });
     await expect(
-      postToX({ engine: fs, assetId: created.value.artifactId, bookId, x }),
+      postToX({ engine: fs, assetId: created.value.artifactId, bookId, x, text: "song" }),
     ).rejects.toThrow(/unsupported media file/i);
+  });
+
+  it("requires a title before touching media or the network", async () => {
+    const assetId = await uploadFakeAsset(fs, bookId, "img", ".png");
+    const { fetch: stubFetch, calls } = makeStubFetch([]);
+    const x = createX({ accessToken: "test-token", fetch: stubFetch });
+    await expect(
+      postToX({ engine: fs, assetId, bookId, x }),
+    ).rejects.toThrow(/title is required/i);
+    await expect(
+      postToX({ engine: fs, assetId, bookId, x, text: "   " }),
+    ).rejects.toThrow(/title is required/i);
+    expect(calls).toHaveLength(0);
   });
 
   it("surfaces X API error messages", async () => {
