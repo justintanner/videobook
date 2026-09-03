@@ -8685,6 +8685,115 @@ textarea:focus-visible {
   opacity: 0.6;
 }
 
+.settings-x-connection {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.settings-x-connection .x-connection-card {
+  max-width: 720px;
+  margin-top: 18px;
+}
+
+.x-connection-card {
+  min-height: 0;
+}
+
+.x-connection-card > div p {
+  color: #86a795;
+}
+
+.x-connection-card > div p + p {
+  margin-top: 8px;
+}
+
+.x-connection-card a {
+  color: var(--green);
+}
+
+.x-connection-card .x-connection-error {
+  color: var(--danger);
+}
+
+.x-connection-card button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.x-connection-pending .provider-dot {
+  background: var(--cyan);
+  box-shadow: 0 0 12px rgba(99, 199, 216, 0.5);
+}
+
+.x-connection-disconnected .provider-dot,
+.x-connection-unknown .provider-dot {
+  background: #557764;
+  box-shadow: none;
+}
+
+.x-connection-error .provider-dot,
+.x-connection-missing-credentials .provider-dot {
+  background: var(--danger);
+  box-shadow: 0 0 12px rgba(240, 126, 126, 0.45);
+}
+
+.x-post-connection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(240, 126, 126, 0.08);
+}
+
+.x-post-connection > div {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 3px;
+}
+
+.x-post-connection strong {
+  color: #f0c2c2;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.x-post-connection span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.x-post-connection a {
+  color: var(--green);
+  font-size: 10px;
+}
+
+.x-post-connection-pending {
+  background: rgba(99, 199, 216, 0.08);
+}
+
+.x-post-connection-pending strong {
+  color: #b9e6ee;
+}
+
+.x-post-connection button {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid var(--control-border);
+  color: var(--control-fg);
+  background: var(--control-bg);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.x-post-connection button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .workspace-notice {
   display: block;
   margin-top: 16px;

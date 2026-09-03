@@ -168,6 +168,15 @@ import {
 import { isNotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 import { SplitBody } from '@/components/videobook/confirm/bodies/SplitBody'
 import { PostToXBody } from '@/components/videobook/confirm/bodies/PostToXBody'
+import { XConnectionCard } from '@/components/videobook/XConnectionCard'
+import {
+  fetchXConnectionStatus,
+  initialXConnectionState,
+  startXConnection,
+  waitForXConnection,
+  xConnectionOutcome,
+  type XConnectionState,
+} from '@/videobook/x-connection'
 import { RoutedBody } from '@/components/videobook/confirm/bodies/RoutedBody'
 import { CommandPlanBody } from '@/components/videobook/confirm/bodies/CommandPlanBody'
 import { NotebookActionBody } from '@/components/videobook/confirm/bodies/NotebookActionBody'
@@ -730,6 +739,7 @@ const supportedUiActions = new Set([
   'open_watermark',
   'open_music_video',
   'speak_preview',
+  'x_connect',
 ])
 
 const CLOUD_GENERATION_CONSENT_KEY = 'videobook.cloud-generation-consent'
@@ -3118,6 +3128,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     [generationActions],
   )
   const [providers, setProviders] = useState<ProviderRecord[]>([])
+  const [xConnection, setXConnection] = useState<XConnectionState>(
+    initialXConnectionState,
+  )
   const [storage, setStorage] = useState<unknown>(null)
   const { lastWorkSlot, rememberLastWorkSlot } = useLastWorkSlot(
     bookId,
@@ -7302,11 +7315,61 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     )
   }
 
+  const refreshXConnection = async (): Promise<void> => {
+    try {
+      const status = await fetchXConnectionStatus(call)
+      setXConnection((current) => ({ ...current, status }))
+    } catch (error) {
+      setXConnection((current) => ({
+        ...current,
+        error: error instanceof Error ? error.message : String(error),
+      }))
+    }
+  }
+
+  const connectX = async (): Promise<{ ok: boolean; message: string }> => {
+    if (xConnection.connecting) {
+      return { ok: false, message: 'X authorization is already waiting for approval.' }
+    }
+    setXConnection((current) => ({
+      ...current,
+      connecting: true,
+      authorizeUrl: null,
+      error: null,
+    }))
+    try {
+      const authorizeUrl = await startXConnection(call)
+      setXConnection((current) => ({ ...current, authorizeUrl }))
+      window.open(authorizeUrl, '_blank', 'noopener,noreferrer')
+      const status = await waitForXConnection(call, { sleep: delay })
+      const outcome = xConnectionOutcome(status)
+      setXConnection({
+        status,
+        connecting: false,
+        authorizeUrl: null,
+        error: outcome.ok || status.error ? null : outcome.message,
+      })
+      setNotice(outcome.message, outcome.ok ? 'info' : 'error')
+      return outcome
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setXConnection((current) => ({
+        ...current,
+        connecting: false,
+        authorizeUrl: null,
+        error: message,
+      }))
+      setNotice(message, 'error')
+      return { ok: false, message }
+    }
+  }
+
   const refreshSettings = async () => {
     setBusy(true)
     try {
       const status = await call('provider_key_status', {})
       setProviders(asProviders(status))
+      await refreshXConnection()
       if (bookId) setStorage(await call('storage_status', { book_id: bookId }))
       setNotice('Settings refreshed')
     } catch (error) {
@@ -9078,6 +9141,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const reviewedPlan = xPostReview
       ? { ...plan, params: reviseXPostFollowups(plan.params, []) }
       : plan
+    if (plan.tool === 'post' || plan.routedTool === 'post') void refreshXConnection()
     setPendingCommandPlan(null)
     setPendingChatAction({ kind: 'routed', plan: reviewedPlan, xPostReview })
     return applyReadyOutcome('Action preview ready')
@@ -10020,6 +10084,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (command.uiAction === 'open_notebook') {
         showScreen('notebook')
         return { ok: true, message: 'Notebook opened' }
+      }
+      if (command.uiAction === 'x_connect') {
+        showScreen('settings')
+        void refreshSettings()
+        return await connectX()
       }
       if (command.uiAction === 'open_provider_keys') {
         showScreen('settings')
@@ -11251,7 +11320,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               settings={review?.settings ?? []}
               sourceLabel={pendingXPostPreview.sourceLabel}
               threadReview={pendingChatAction.xPostReview}
+              connection={xConnection}
               onChange={updatePendingXPostDraft}
+              onConnect={() => void connectX()}
               onThreadOptionsChange={updatePendingXPostThreadOptions}
               onThreadCreditsChange={updatePendingXPostThreadCredits}
               onThreadPromptChange={updatePendingXPostThreadPrompt}
@@ -12571,7 +12642,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 <label>Value<input type="password" value={secretValue} onChange={(event) => setSecretValue(event.target.value)} placeholder="Stored locally in .env" /></label>
                 <button type="submit" disabled={busy || !secretValue}>Save key</button>
               </form>
-              <div className="settings-sections"><div className="settings-grid">{providers.map((provider) => <article className="provider-card" key={provider.envKey}><span className={`provider-dot provider-${provider.keyStatus}`} /><div><strong>{provider.label}</strong><p>{provider.keyStatus}{provider.maskedKey ? ` · ${provider.maskedKey}` : ''}</p></div></article>)}</div><div className="settings-diagnostics"><div className="workspace-section-heading"><h2>Selected book storage</h2><p>Catalog and object publication status from videobook-engine {enginePackage.version} schema v{SCHEMA_VERSION}.</p></div><div className="settings-diagnostics-grid"><article className="record-card"><pre>{storage ? JSON.stringify(storage, null, 2) : 'Refresh settings to inspect storage.'}</pre></article></div></div></div>
+              <div className="settings-sections"><div className="settings-grid">{providers.map((provider) => <article className="provider-card" key={provider.envKey}><span className={`provider-dot provider-${provider.keyStatus}`} /><div><strong>{provider.label}</strong><p>{provider.keyStatus}{provider.maskedKey ? ` · ${provider.maskedKey}` : ''}</p></div></article>)}</div><div className="settings-x-connection"><div className="workspace-section-heading"><h2>X account</h2><p>Posting to X needs a one-time browser authorization. Tokens renew automatically afterwards; reconnect if X revokes them.</p></div><XConnectionCard busy={busy} connection={xConnection} onConnect={() => void connectX()} /></div><div className="settings-diagnostics"><div className="workspace-section-heading"><h2>Selected book storage</h2><p>Catalog and object publication status from videobook-engine {enginePackage.version} schema v{SCHEMA_VERSION}.</p></div><div className="settings-diagnostics-grid"><article className="record-card"><pre>{storage ? JSON.stringify(storage, null, 2) : 'Refresh settings to inspect storage.'}</pre></article></div></div></div>
             </section>
           )}
       </>

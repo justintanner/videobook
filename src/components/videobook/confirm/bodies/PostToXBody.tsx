@@ -18,6 +18,10 @@ import {
   type XPostThreadReview,
   type XPostThreadStep,
 } from '@/videobook/x-post-thread'
+import {
+  xConnectionPresentation,
+  type XConnectionState,
+} from '@/videobook/x-connection'
 import { PromptEcho, RoutedSettings } from './RoutedSettings'
 
 type PostToXPreviewAsset = {
@@ -29,8 +33,10 @@ type PostToXPreviewAsset = {
 export function PostToXBody({
   asset,
   busy,
+  connection,
   draft,
   onChange,
+  onConnect,
   onThreadCreditsChange,
   onThreadOptionsChange,
   onThreadPromptChange,
@@ -41,8 +47,10 @@ export function PostToXBody({
 }: {
   asset: PostToXPreviewAsset | null
   busy: boolean
+  connection?: XConnectionState | null
   draft: XPostDraft
   onChange: (patch: XPostDraftPatch) => void
+  onConnect?: () => void
   onThreadCreditsChange?: (text: string) => void
   onThreadOptionsChange?: (patch: Partial<XPostThreadOptions>) => void
   onThreadPromptChange?: (stepId: string, text: string) => void
@@ -63,6 +71,11 @@ export function PostToXBody({
   const threadAvailable = threadReview
     ? xPostThreadHasDetails(threadReview.context)
     : false
+  const connectionNotice = connection?.status
+    ? xConnectionPresentation(connection.status, { connecting: connection.connecting })
+    : null
+  const showConnectionNotice = connectionNotice !== null
+    && connectionNotice.tone !== 'connected'
 
   return (
     <div className="confirm-routed confirm-post">
@@ -78,6 +91,32 @@ export function PostToXBody({
             <small>{sourceLabel}</small>
           </div>
         </header>
+        {showConnectionNotice && connectionNotice && (
+          <div
+            className={`x-post-connection x-post-connection-${connectionNotice.tone}`}
+            role="status"
+            aria-label="X connection"
+          >
+            <div>
+              <strong>{connectionNotice.label}</strong>
+              <span>{connectionNotice.detail}</span>
+              {connection?.connecting && connection.authorizeUrl && (
+                <a href={connection.authorizeUrl} target="_blank" rel="noopener noreferrer">
+                  Open the X authorization page
+                </a>
+              )}
+            </div>
+            {onConnect && (connectionNotice.actionLabel || connection?.connecting) && (
+              <button
+                type="button"
+                disabled={busy || connection?.connecting}
+                onClick={onConnect}
+              >
+                {connection?.connecting ? 'Waiting…' : connectionNotice.actionLabel}
+              </button>
+            )}
+          </div>
+        )}
         <div className="x-post-preview-media">
           {video && asset?.mediaUrl ? (
             <video

@@ -12,6 +12,7 @@ import {
   xPostLocalDateTimeValue,
 } from '../../src/videobook/x-post-review'
 import { initialXPostThreadReview } from '../../src/videobook/x-post-thread'
+import { initialXConnectionState } from '../../src/videobook/x-connection'
 
 const ignoreChange = () => undefined
 
@@ -228,5 +229,59 @@ describe('X post review draft', () => {
     expect(defaultXPostScheduledFor(
       Date.parse('2099-08-25T03:01:00.000Z'),
     )).toBe('2099-08-25T04:05:00.000Z')
+  })
+})
+
+describe('PostToXBody X connection notice', () => {
+  const draft = {
+    postText: 'hello',
+    scheduledFor: null,
+    orientation: null,
+    followups: [],
+  }
+
+  function render(connection: Parameters<typeof PostToXBody>[0]['connection']): string {
+    return renderToStaticMarkup(createElement(PostToXBody, {
+      asset: null,
+      busy: false,
+      connection,
+      draft,
+      onChange: ignoreChange,
+      onConnect: ignoreChange,
+      prompt: 'post @b2 to X',
+      settings: [],
+      sourceLabel: '@b2',
+    }))
+  }
+
+  it('offers to connect when no X account is linked', () => {
+    const html = render({
+      ...initialXConnectionState,
+      status: {
+        connected: false,
+        pending: false,
+        hasCredentials: true,
+        error: null,
+        expiresAt: null,
+      },
+    })
+    expect(html).toContain('aria-label="X connection"')
+    expect(html).toContain('Not connected')
+    expect(html).toContain('Connect X</button>')
+  })
+
+  it('stays quiet when the account is connected or the status is unknown', () => {
+    expect(render({
+      ...initialXConnectionState,
+      status: {
+        connected: true,
+        pending: false,
+        hasCredentials: true,
+        error: null,
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      },
+    })).not.toContain('aria-label="X connection"')
+    expect(render(initialXConnectionState)).not.toContain('aria-label="X connection"')
+    expect(render(undefined)).not.toContain('aria-label="X connection"')
   })
 })
