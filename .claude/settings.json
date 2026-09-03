@@ -2,25 +2,36 @@
   "hooks": {
     "PostToolUse": [
       {
+        "matcher": "Edit|Write",
         "hooks": [
           {
-            "command": "npx eslint . --fix 2\u003e/dev/null || true",
-            "type": "command"
+            "type": "command",
+            "command": "npx eslint . --fix 2>/dev/null || true"
           }
-        ],
-        "matcher": "Edit|Write"
+        ]
       }
     ],
     "SessionStart": [
       {
+        "matcher": "",
         "hooks": [
           {
-            "command": "bd prime --hook-json",
-            "type": "command"
+            "type": "command",
+            "command": "bd prime --hook-json"
           }
-        ],
-        "matcher": ""
+        ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "hey@37signals": true
+  },
+  "extraKnownMarketplaces": {
+    "37signals": {
+      "source": {
+        "source": "github",
+        "repo": "basecamp/claude-plugins"
+      }
+    }
   }
 }
