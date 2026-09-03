@@ -192,6 +192,7 @@ import {
   type XPostDraftPatch,
 } from '@/videobook/x-post-review'
 import {
+  dedupeXPostSourceCredits,
   discoverXPostThreadGraph,
   initialXPostThreadReview,
   readableXPostPrompt,
@@ -199,7 +200,9 @@ import {
   selectXPostGenerationPrompt,
   X_POST_EMPTY_THREAD_MESSAGE,
   xPostFollowupsFromThread,
+  xPostSourceCredit,
   type XPostPromptMention,
+  type XPostSourceCredit,
   type XPostThreadOptions,
   type XPostThreadReview,
   type XPostThreadStep,
@@ -4546,6 +4549,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     })
   }, [])
+  const updatePendingXPostThreadCredits = useCallback((text: string) => {
+    setPendingChatAction((current) => {
+      if (current?.kind !== 'routed' || !current.xPostReview) return current
+      const xPostReview = { ...current.xPostReview, creditsOverride: text }
+      return {
+        ...current,
+        xPostReview,
+        plan: {
+          ...current.plan,
+          params: reviseXPostFollowups(
+            current.plan.params,
+            xPostFollowupsFromThread(xPostReview),
+          ),
+        },
+      }
+    })
+  }, [])
   const updatePendingSplitSelection = useCallback((next: {
     cutPointsSeconds: number[]
     outputMode: NotebookSplitOutputMode
@@ -8810,7 +8830,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       return { id: step.id, prompt, model, images }
     }))
-    return initialXPostThreadReview({ steps })
+
+    const creditValues = await Promise.all(graph.upstreamArtifactIds
+      .filter((upstreamAssetId) => {
+        const upstreamAsset = assetById.get(upstreamAssetId)
+        return upstreamAsset?.origin === 'download'
+          && (upstreamAsset.type === 'video' || upstreamAsset.type === 'final')
+      })
+      .map(async (upstreamAssetId): Promise<XPostSourceCredit | null> => {
+        const metadata = await call('read_asset_metadata', {
+          asset_id: upstreamAssetId,
+          name: 'original',
+          book_id: bookId,
+        }, { background: true }).catch(() => null)
+        const record = recordValue(metadata)
+        return record ? xPostSourceCredit(upstreamAssetId, record) : null
+      }))
+    const credits = dedupeXPostSourceCredits(
+      creditValues.filter((value): value is XPostSourceCredit => value !== null),
+    )
+    return initialXPostThreadReview({ steps, credits })
   }
 
   const previewRoutedChatAction = async (
@@ -11214,6 +11253,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               threadReview={pendingChatAction.xPostReview}
               onChange={updatePendingXPostDraft}
               onThreadOptionsChange={updatePendingXPostThreadOptions}
+              onThreadCreditsChange={updatePendingXPostThreadCredits}
               onThreadPromptChange={updatePendingXPostThreadPrompt}
             />
           </ConfirmSheet>

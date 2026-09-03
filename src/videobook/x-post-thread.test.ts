@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { NotebookCell, NotebookDocument } from 'videobook-engine'
 import {
   buildXPostThreadReplies,
+  dedupeXPostSourceCredits,
   discoverXPostThreadGraph,
   initialXPostThreadReview,
   readableXPostPrompt,
   selectXPostGenerationModel,
   selectXPostGenerationPrompt,
+  xPostSourceCredit,
   xPostThreadHasDetails,
   type XPostThreadImage,
 } from './x-post-thread'
@@ -89,6 +91,12 @@ describe('X post thread provenance', () => {
       producerProvider: 'kie',
       sourceArtifactIds: ['img-source'],
     }])
+    expect(graph.upstreamArtifactIds).toEqual(expect.arrayContaining([
+      'vid-final',
+      'vid-generated',
+      'vid-original',
+      'img-source',
+    ]))
   })
 
   it('prefers the matching completed attempt prompt before stored fallbacks', () => {
@@ -164,9 +172,12 @@ describe('X post thread provenance', () => {
       model: { label: 'Seedance 2.5', provider: 'Kie' },
       images: Array.from({ length: 5 }, (_, index) => image(index)),
     }
-    const context = { steps: [step] }
+    const context = { steps: [step], credits: [] }
     expect(xPostThreadHasDetails(context)).toBe(true)
-    expect(xPostThreadHasDetails({ steps: [{ ...step, prompt: ' ', images: [] }] })).toBe(false)
+    expect(xPostThreadHasDetails({
+      steps: [{ ...step, prompt: ' ', images: [] }],
+      credits: [],
+    })).toBe(false)
     const disabled = initialXPostThreadReview(context)
     expect(buildXPostThreadReplies(disabled)).toEqual([])
 
@@ -192,7 +203,7 @@ describe('X post thread provenance', () => {
     ])
     expect(buildXPostThreadReplies({
       ...enabled,
-      context: { steps: [{ ...step, images: [] }] },
+      context: { steps: [{ ...step, images: [] }], credits: [] },
       promptOverrides: { generation: '   ' },
     })).toEqual([])
   })
@@ -203,6 +214,7 @@ describe('X post thread provenance', () => {
         { id: 'first', prompt: 'first prompt', model: null, images: [] },
         { id: 'second', prompt: 'second prompt', model: { label: 'Veo 3.1', provider: null }, images: [image(0)] },
       ],
+      credits: [],
     })
     expect(buildXPostThreadReplies({ ...review, options: { enabled: true } })).toEqual([
       {
@@ -256,6 +268,14 @@ describe('X post thread provenance', () => {
       producerResolvedPrompt: 'producer resolved prompt',
       sourceArtifactIds: ['img-source'],
     })
+    expect(graph.upstreamArtifactIds).toEqual(expect.arrayContaining([
+      'vid-copy',
+      'vid-trimmed',
+      'vid-duplicate',
+      'vid-generated',
+      'img-source',
+    ]))
+    expect(graph.upstreamArtifactIds).not.toContain('vid-original')
   })
 
   it('rewrites notebook mentions into readable labels for public replies', () => {
@@ -269,12 +289,104 @@ describe('X post thread provenance', () => {
     expect(readableXPostPrompt('no mentions here', [])).toBe('no mentions here')
   })
 
+  it('keeps only YouTube and X originals and derives mentions from status URLs', () => {
+    const youtube = xPostSourceCredit('yt', {
+      webpage_url: 'https://www.youtube.com/watch?v=abc123',
+      uploader: 'Original Filmmaker',
+    })
+    const xStatus = xPostSourceCredit('x', {
+      source_url: 'https://twitter.com/source_owner/status/12345?ref=test',
+      uploader: 'Source Owner',
+    })
+    const xProfile = xPostSourceCredit('profile', {
+      source_url: 'https://x.com/unverified_name',
+      uploader: '@unverified_name',
+    })
+    const unsupported = xPostSourceCredit('site', {
+      source_url: 'https://example.com/video',
+    })
+
+    expect(youtube).toMatchObject({ label: 'Original Filmmaker', xHandle: null })
+    expect(xStatus).toMatchObject({
+      url: 'https://x.com/source_owner/status/12345',
+      xHandle: 'source_owner',
+    })
+    expect(xProfile).toMatchObject({ label: 'unverified_name', xHandle: null })
+    expect(unsupported).toBeNull()
+    expect(dedupeXPostSourceCredits([
+      youtube!,
+      { ...youtube!, id: 'duplicate' },
+      xStatus!,
+    ])).toEqual([youtube, xStatus])
+  })
+
+  it('credits the concrete YouTube video rather than its playlist page', () => {
+    expect(xPostSourceCredit('yt', {
+      webpage_url: 'https://www.youtube.com/playlist?list=PLWxZwASNHB04',
+      source_url: 'https://youtu.be/iZlOQMYjdPg?list=PLWxZwASNHB04',
+      uploader: 'Stephanie Morris',
+    })).toEqual({
+      id: 'yt:https://youtu.be/iZlOQMYjdPg',
+      label: 'Stephanie Morris',
+      url: 'https://youtu.be/iZlOQMYjdPg',
+      xHandle: null,
+    })
+    expect(xPostSourceCredit('shorts', {
+      webpage_url: 'https://www.youtube.com/shorts/abcDEF123?feature=share',
+    })?.url).toBe('https://www.youtube.com/shorts/abcDEF123')
+    expect(xPostSourceCredit('playlist', {
+      webpage_url: 'https://www.youtube.com/playlist?list=PL1#top',
+    })).toMatchObject({
+      label: 'YouTube',
+      url: 'https://www.youtube.com/playlist?list=PL1',
+    })
+  })
+
+  it('credits the original video in one editable reply after the steps', () => {
+    const xCredit = {
+      id: 'x',
+      label: 'Source',
+      url: 'https://x.com/source/status/123',
+      xHandle: 'source',
+    }
+    const youtubeCredit = {
+      id: 'yt',
+      label: 'Original Channel',
+      url: 'https://youtu.be/abc',
+      xHandle: null,
+    }
+    const review = initialXPostThreadReview({
+      steps: [{ id: 'generation', prompt: 'exact prompt', model: null, images: [] }],
+      credits: [youtubeCredit, xCredit],
+    })
+    expect(xPostThreadHasDetails({ steps: [], credits: [xCredit] })).toBe(true)
+    const enabled = { ...review, options: { enabled: true } }
+    expect(buildXPostThreadReplies(enabled).map((reply) => [reply.stepId, reply.text])).toEqual([
+      ['generation', 'How I made this video — prompt:\nexact prompt'],
+      [null, 'Original videos:\n@source https://x.com/source/status/123\nOriginal Channel https://youtu.be/abc'],
+    ])
+    expect(buildXPostThreadReplies({
+      ...enabled,
+      context: { ...enabled.context, credits: [xCredit] },
+    }).at(-1)?.text).toBe('Original video by @source https://x.com/source/status/123')
+    expect(buildXPostThreadReplies({
+      ...enabled,
+      creditsOverride: 'Moves borrowed from @source',
+    }).at(-1)).toMatchObject({
+      id: 'credits',
+      text: 'Moves borrowed from @source',
+      imageAssetIds: [],
+    })
+    expect(buildXPostThreadReplies({ ...enabled, creditsOverride: '  ' })).toHaveLength(1)
+  })
+
   it('never lets a prompt chunk exceed the limit when the cut lands on a space', () => {
     const prefix = 'How I made this video — prompt:\n'
     const capacity = 280 - prefix.length
     const prompt = `${'x'.repeat(capacity)} ${'y'.repeat(40)}`
     const review = initialXPostThreadReview({
       steps: [{ id: 'generation', prompt, model: null, images: [] }],
+      credits: [],
     })
     const replies = buildXPostThreadReplies({ ...review, options: { enabled: true } })
     expect(replies.map((reply) => reply.text.length)).toEqual([280, 63])

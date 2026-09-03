@@ -91,6 +91,12 @@ describe('PostToXBody', () => {
           thumbnailUrl: '/files/source-thumb.jpg',
         }],
       }],
+      credits: [{
+        id: 'source',
+        label: 'Source',
+        url: 'https://x.com/source/status/123',
+        xHandle: 'source',
+      }],
     })
     const html = renderToStaticMarkup(createElement(PostToXBody, {
       asset: {
@@ -106,6 +112,7 @@ describe('PostToXBody', () => {
         followups: [],
       },
       onChange: ignoreChange,
+      onThreadCreditsChange: ignoreChange,
       onThreadOptionsChange: ignoreChange,
       onThreadPromptChange: ignoreChange,
       prompt: 'post @a1 to X',
@@ -124,6 +131,8 @@ describe('PostToXBody', () => {
     expect(html).toContain('Exact final generation prompt')
     expect(html).toContain('posts as 1 reply')
     expect(html).toContain('src="/files/source-thumb.jpg"')
+    expect(html).toContain('aria-label="Credits"')
+    expect(html).toContain('Original video by @source https://x.com/source/status/123')
     expect(html).not.toContain('Thread options')
   })
 })

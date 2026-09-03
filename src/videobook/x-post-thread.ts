@@ -28,6 +28,7 @@ export type XPostThreadGraphStep = {
 
 export type XPostThreadGraph = {
   steps: XPostThreadGraphStep[]
+  upstreamArtifactIds: string[]
 }
 
 export type XPostThreadImage = {
@@ -42,6 +43,13 @@ export type XPostThreadModel = {
   provider: string | null
 }
 
+export type XPostSourceCredit = {
+  id: string
+  label: string
+  url: string
+  xHandle: string | null
+}
+
 export type XPostThreadStep = {
   id: string
   prompt: string
@@ -51,6 +59,7 @@ export type XPostThreadStep = {
 
 export type XPostThreadContext = {
   steps: XPostThreadStep[]
+  credits: XPostSourceCredit[]
 }
 
 export type XPostThreadOptions = {
@@ -59,7 +68,8 @@ export type XPostThreadOptions = {
 
 export type XPostThreadReply = XPostFollowup & {
   id: string
-  stepId: string
+  /** The generation step this reply belongs to; null for the credits reply. */
+  stepId: string | null
   images: XPostThreadImage[]
 }
 
@@ -70,6 +80,8 @@ export type XPostThreadReview = {
   options: XPostThreadOptions
   /** Edited prompt text keyed by step id; unedited steps post their stored prompt. */
   promptOverrides: Record<string, string>
+  /** Edited credits text; null posts the default credit line. */
+  creditsOverride: string | null
 }
 
 type GenerationAttemptPrompt = {
@@ -78,7 +90,7 @@ type GenerationAttemptPrompt = {
   resolvedPrompt: string | null
 }
 
-const EMPTY_CONTEXT: XPostThreadContext = { steps: [] }
+const EMPTY_CONTEXT: XPostThreadContext = { steps: [], credits: [] }
 
 export function initialXPostThreadReview(
   context: XPostThreadContext = EMPTY_CONTEXT,
@@ -89,6 +101,7 @@ export function initialXPostThreadReview(
     context,
     options: { enabled: false },
     promptOverrides: {},
+    creditsOverride: null,
   }
 }
 
@@ -193,8 +206,9 @@ function walkUpstream(
   index: ProvenanceIndex,
   starts: readonly NotebookCell[],
   stopAt: (cell: NotebookCell) => boolean,
-): NotebookCell[] {
+): { visited: NotebookCell[]; stopped: NotebookCell[] } {
   const seen = new Set<string>()
+  const visited: NotebookCell[] = []
   const stopped: NotebookCell[] = []
   const queue = starts.map((cell) => cell.id)
   for (let position = 0; position < queue.length; position += 1) {
@@ -203,6 +217,7 @@ function walkUpstream(
     seen.add(cellId)
     const cell = index.cellsById.get(cellId)
     if (!cell) continue
+    visited.push(cell)
     if (stopAt(cell)) {
       stopped.push(cell)
       continue
@@ -211,7 +226,7 @@ function walkUpstream(
       if (!seen.has(sourceId)) queue.push(sourceId)
     }
   }
-  return stopped
+  return { visited, stopped }
 }
 
 function isGenerateVideoCell(cell: NotebookCell): boolean {
@@ -263,9 +278,12 @@ export function discoverXPostThreadGraph(
   const index = provenanceIndex(document)
   const starts = startingCells(document, artifactId)
   const producers = walkUpstream(document, index, starts, isGenerateVideoCell)
+    .stopped
     .sort(cellOrder)
+  const upstream = walkUpstream(document, index, starts, () => false).visited
   return {
     steps: producers.map((producer) => threadGraphStep(document, index, producer)),
+    upstreamArtifactIds: cellArtifactIds(document, upstream),
   }
 }
 
@@ -383,11 +401,126 @@ export function readableXPostPrompt(
   })
 }
 
+const YOUTUBE_HOSTS = new Set(['youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be'])
+const X_HOSTS = new Set(['x.com', 'mobile.x.com', 'twitter.com', 'mobile.twitter.com'])
+const RESERVED_X_HANDLES = new Set([
+  'explore',
+  'home',
+  'i',
+  'intent',
+  'messages',
+  'notifications',
+  'search',
+  'settings',
+  'share',
+])
+
+type SourceLink =
+  | { kind: 'youtube'; url: string; videoId: string | null }
+  | { kind: 'x'; url: string; handle: string | null; status: boolean }
+
+function youtubeVideoId(url: URL, hostname: string): string | null {
+  if (hostname === 'youtu.be') return url.pathname.split('/')[1] || null
+  const watchId = url.searchParams.get('v')
+  if (watchId) return watchId
+  return url.pathname.match(/^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]+)/)?.[1] ?? null
+}
+
+function youtubeLink(url: URL, hostname: string): SourceLink {
+  const videoId = youtubeVideoId(url, hostname)
+  if (videoId && url.pathname.startsWith('/shorts/')) {
+    return { kind: 'youtube', url: `https://www.youtube.com/shorts/${videoId}`, videoId }
+  }
+  if (videoId) return { kind: 'youtube', url: `https://youtu.be/${videoId}`, videoId }
+  url.hash = ''
+  return { kind: 'youtube', url: url.toString(), videoId: null }
+}
+
+function xLink(url: URL): SourceLink {
+  const match = url.pathname.match(/^\/([A-Za-z0-9_]{1,15})\/status\/(\d+)/)
+  if (!match) {
+    url.hash = ''
+    return { kind: 'x', url: url.toString(), handle: null, status: false }
+  }
+  const matchedHandle = match[1]!
+  const handle = RESERVED_X_HANDLES.has(matchedHandle.toLowerCase()) ? null : matchedHandle
+  return {
+    kind: 'x',
+    url: `https://x.com/${matchedHandle}/status/${match[2]}`,
+    handle,
+    status: true,
+  }
+}
+
+function sourceLink(value: unknown): SourceLink | null {
+  if (typeof value !== 'string') return null
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, '')
+    if (YOUTUBE_HOSTS.has(hostname)) return youtubeLink(url, hostname)
+    if (X_HOSTS.has(hostname)) return xLink(url)
+    return null
+  } catch {
+    return null
+  }
+}
+
+/** A link that names one video or post, rather than a playlist or profile page. */
+function isConcreteLink(link: SourceLink): boolean {
+  return link.kind === 'youtube' ? link.videoId !== null : link.status
+}
+
+function sourceLabel(
+  metadata: Record<string, unknown>,
+  fallback: string,
+): string {
+  if (typeof metadata.uploader !== 'string') return fallback
+  const label = metadata.uploader.replaceAll('@', '').replace(/\s+/g, ' ').trim()
+  return label || fallback
+}
+
+/**
+ * Read a downloaded asset's original page from its metadata. Only YouTube
+ * videos and X posts become credits; X status URLs carry the account to
+ * at-mention.
+ */
+export function xPostSourceCredit(
+  assetId: string,
+  metadata: Record<string, unknown>,
+): XPostSourceCredit | null {
+  const links = [
+    metadata.webpage_url,
+    metadata.webpageUrl,
+    metadata.source_url,
+    metadata.sourceUrl,
+  ].map(sourceLink).filter((link): link is SourceLink => link !== null)
+  const link = links.find(isConcreteLink) ?? links[0]
+  if (!link) return null
+  return {
+    id: `${assetId}:${link.url}`,
+    label: sourceLabel(metadata, link.kind === 'x' ? 'X' : 'YouTube'),
+    url: link.url,
+    xHandle: link.kind === 'x' ? link.handle : null,
+  }
+}
+
+export function dedupeXPostSourceCredits(
+  values: readonly XPostSourceCredit[],
+): XPostSourceCredit[] {
+  const seen = new Set<string>()
+  return values.filter((value) => {
+    if (seen.has(value.url)) return false
+    seen.add(value.url)
+    return true
+  })
+}
+
 export const X_POST_EMPTY_THREAD_MESSAGE =
   'The thread has nothing to post. Add a prompt, or turn the thread off.'
 
 export function xPostThreadHasDetails(context: XPostThreadContext): boolean {
-  return context.steps.some((step) =>
+  return context.credits.length > 0 || context.steps.some((step) =>
     step.prompt.trim() !== '' || step.images.length > 0)
 }
 
@@ -396,6 +529,30 @@ export function xPostThreadPrompt(
   step: XPostThreadStep,
 ): string {
   return review.promptOverrides[step.id] ?? step.prompt
+}
+
+function creditLine(credit: XPostSourceCredit): string {
+  return credit.xHandle
+    ? `@${credit.xHandle} ${credit.url}`
+    : `${credit.label} ${credit.url}`
+}
+
+/** The default credits reply: at-mentions X accounts, names YouTube uploaders. */
+export function defaultXPostThreadCredits(
+  credits: readonly XPostSourceCredit[],
+): string {
+  const ordered = [...credits].sort((left, right) =>
+    Number(left.xHandle === null) - Number(right.xHandle === null))
+  const first = ordered[0]
+  if (!first) return ''
+  if (ordered.length === 1) return `Original video by ${creditLine(first)}`
+  const full = `Original videos:\n${ordered.map(creditLine).join('\n')}`
+  if (full.length <= X_POST_MAX_CHARACTERS) return full
+  return `Original videos:\n${ordered.map((credit) => credit.url).join('\n')}`
+}
+
+export function xPostThreadCreditsText(review: XPostThreadReview): string {
+  return review.creditsOverride ?? defaultXPostThreadCredits(review.context.credits)
 }
 
 function stepOrdinal(ordinal: number, stepCount: number): string {
@@ -442,7 +599,7 @@ function imageBatches(images: readonly XPostThreadImage[]): XPostThreadImage[][]
 
 function threadReply(
   id: string,
-  stepId: string,
+  stepId: string | null,
   text: string,
   images: readonly XPostThreadImage[],
 ): XPostThreadReply {
@@ -494,8 +651,13 @@ export function buildXPostThreadReplies(
 ): XPostThreadReply[] {
   if (!review.options.enabled) return []
   const stepCount = review.context.steps.length
-  return review.context.steps.flatMap((step, ordinal) =>
+  const replies = review.context.steps.flatMap((step, ordinal) =>
     stepReplies(review, step, ordinal, stepCount))
+  const credits = review.context.credits.length > 0
+    ? xPostThreadCreditsText(review).trim()
+    : ''
+  if (credits) replies.push(threadReply('credits', null, credits, []))
+  return replies
 }
 
 export function xPostFollowupsFromThread(

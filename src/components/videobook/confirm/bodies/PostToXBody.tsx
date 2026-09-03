@@ -11,6 +11,7 @@ import {
 import {
   buildXPostThreadReplies,
   X_POST_EMPTY_THREAD_MESSAGE,
+  xPostThreadCreditsText,
   xPostThreadHasDetails,
   xPostThreadPrompt,
   type XPostThreadOptions,
@@ -30,6 +31,7 @@ export function PostToXBody({
   busy,
   draft,
   onChange,
+  onThreadCreditsChange,
   onThreadOptionsChange,
   onThreadPromptChange,
   prompt,
@@ -41,6 +43,7 @@ export function PostToXBody({
   busy: boolean
   draft: XPostDraft
   onChange: (patch: XPostDraftPatch) => void
+  onThreadCreditsChange?: (text: string) => void
   onThreadOptionsChange?: (patch: Partial<XPostThreadOptions>) => void
   onThreadPromptChange?: (stepId: string, text: string) => void
   prompt: string
@@ -178,7 +181,7 @@ export function PostToXBody({
               />
               <span>
                 <strong>Add how-it-was-made thread</strong>
-                <small>Reply with the model, prompt and input images</small>
+                <small>Reply with the model, prompt, input images and credits</small>
               </span>
             </label>
             {threadReview.loading ? (
@@ -202,6 +205,15 @@ export function PostToXBody({
                     onPromptChange={onThreadPromptChange}
                   />
                 ))}
+                {threadReview.context.credits.length > 0 && (
+                  <ThreadCredits
+                    busy={busy}
+                    replyCount={threadReplies.filter((reply) =>
+                      reply.stepId === null).length}
+                    text={xPostThreadCreditsText(threadReview)}
+                    onChange={onThreadCreditsChange}
+                  />
+                )}
                 {threadReplies.length === 0 && (
                   <small className="confirm-field-error">
                     {X_POST_EMPTY_THREAD_MESSAGE}
@@ -287,6 +299,40 @@ function ThreadStep({
           </div>
         </div>
       )}
+    </article>
+  )
+}
+
+function ThreadCredits({
+  busy,
+  onChange,
+  replyCount,
+  text,
+}: {
+  busy: boolean
+  onChange?: (text: string) => void
+  replyCount: number
+  text: string
+}) {
+  const tooLong = text.length > X_POST_MAX_CHARACTERS
+  return (
+    <article className="x-post-thread-step" aria-label="Credits">
+      <div className="x-post-thread-field">
+        <div className="x-post-thread-field-head">
+          <label className="x-post-thread-label" htmlFor="x-post-thread-credits">Credits</label>
+          <small className={tooLong ? 'confirm-field-error' : undefined}>
+            {text.length}/{X_POST_MAX_CHARACTERS} characters · {replyCountLabel(replyCount)}
+          </small>
+        </div>
+        <textarea
+          id="x-post-thread-credits"
+          aria-invalid={tooLong}
+          disabled={busy}
+          rows={2}
+          value={text}
+          onChange={(event) => onChange?.(event.target.value)}
+        />
+      </div>
     </article>
   )
 }
