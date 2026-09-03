@@ -29,7 +29,7 @@
     "benchmark:search": "tsx scripts/run-search-benchmark.ts",
     "extract:videocity-benchmark": "node tools/extract-videocity-benchmark.mjs",
     "install:acestep": "tsx scripts/install-acestep.ts",
-    "mint:x-token": "op run --env-file=.env.tpl -- node scripts/mint-x-token.mjs",
+    "mint:x-token": "op run --no-masking --env-file=.env.tpl -- node scripts/mint-x-token.mjs",
     "test": "vitest run",
     "test:ci": "vitest run --exclude=server/src/jobs/smooth-scene-concat.test.ts --exclude=server/src/tools/smooth-scene-concat.test.ts && vitest run --maxWorkers=1 server/src/jobs/smooth-scene-concat.test.ts server/src/tools/smooth-scene-concat.test.ts",
     "test:coverage": "vitest run --coverage",

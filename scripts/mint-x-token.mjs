@@ -6,7 +6,12 @@
  *
  * Adapted from @apicity/x README. Run once after configuring your X app:
  *
- *   X_CLIENT_ID=... X_CLIENT_SECRET=... node scripts/mint-x-token.mjs
+ *   npm run mint:x-token
+ *   (or X_CLIENT_ID=... X_CLIENT_SECRET=... node scripts/mint-x-token.mjs)
+ *
+ * The npm script runs under `op run --no-masking`: 1Password otherwise
+ * conceals the client id inside the printed authorize URL. The helper also
+ * opens that URL in the default browser, so the printed copy is a fallback.
  *
  * App requirements (see node_modules/@apicity/x/README.md for the full guide):
  *   - Pay-Per-Use project on console.x.com (the legacy Free project is rejected)
@@ -17,6 +22,7 @@
  */
 import http from "node:http";
 import crypto from "node:crypto";
+import { spawn } from "node:child_process";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -74,7 +80,24 @@ authURL.searchParams.set("state", state);
 authURL.searchParams.set("code_challenge", challenge);
 authURL.searchParams.set("code_challenge_method", "S256");
 
-console.log('Open this URL and click "Authorize app":\n' + authURL.toString());
+function openInBrowser(url) {
+  const command = process.platform === "darwin"
+    ? "open"
+    : process.platform === "win32"
+      ? "cmd"
+      : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+  try {
+    const child = spawn(command, args, { detached: true, stdio: "ignore" });
+    child.on("error", () => undefined);
+    child.unref();
+  } catch {
+    // The printed URL below is the fallback.
+  }
+}
+
+console.log('Opening the X authorize page. If no browser tab appears, open this URL and click "Authorize app":\n' + authURL.toString());
+openInBrowser(authURL.toString());
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, REDIRECT);
