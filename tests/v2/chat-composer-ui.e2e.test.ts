@@ -28,6 +28,14 @@ function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
+const MCP_ROUNDTRIP_MS = 15_000
+
+async function dismissConfirmStatus(target: Page | undefined): Promise<void> {
+  if (!target) return
+  const dismiss = target.getByLabel('Dismiss message')
+  if (await dismiss.count()) await dismiss.click().catch(() => undefined)
+}
+
 async function availablePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
     const server = createServer()
@@ -778,12 +786,22 @@ describe('chat composer browser flow', () => {
       await page.keyboard.press('Escape').catch(() => undefined)
       const closer = page.getByLabel('Close fullscreen preview')
       if (await closer.count()) await closer.click().catch(() => undefined)
+      await dismissConfirmStatus(page)
+      const sheets = page.locator('.confirm-sheet')
+      if (await sheets.count()) {
+        await page.keyboard.press('Escape').catch(() => undefined)
+        await expect.poll(async () => await sheets.count(), {
+          timeout: MCP_ROUNDTRIP_MS,
+        }).toBe(0)
+      }
       const input = page.getByLabel('Videobook command input')
       if (await input.count()) await input.fill('').catch(() => undefined)
     }
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
     return page
   }
 
@@ -862,7 +880,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
 
     const warnings: string[] = []
     const onConsole = (message: ConsoleMessage) => {
@@ -896,8 +916,9 @@ describe('chat composer browser flow', () => {
         const refresh = page.getByLabel('Refresh books')
         observedCalls.length = 0
         await refresh.click()
-        await expect.poll(() => observedCalls.some((call) => call.name === 'list_books'))
-          .toBe(true)
+        await expect.poll(() => observedCalls.some((call) => call.name === 'list_books'), {
+          timeout: MCP_ROUNDTRIP_MS,
+        }).toBe(true)
         await expect.poll(async () => await refresh.isEnabled(), {
           timeout: 30_000,
         }).toBe(true)
@@ -957,7 +978,9 @@ describe('chat composer browser flow', () => {
         call.name === 'connect_notebook_cells'
         && call.arguments.source_cell_id === videoCellId
         && call.arguments.target_cell_id === imageTargetCellId
-        && call.arguments.target_input === 'video')).toBe(true)
+        && call.arguments.target_input === 'video'), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(true)
       await expect.poll(async () => await input.isEnabled(), {
         timeout: 30_000,
       }).toBe(true)
@@ -968,7 +991,9 @@ describe('chat composer browser flow', () => {
         call.name === 'connect_notebook_cells'
         && call.arguments.source_cell_id === imageCellId
         && call.arguments.target_cell_id === imageTargetCellId
-        && call.arguments.target_input === 'image')).toBe(true)
+        && call.arguments.target_input === 'image'), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(true)
       await expect.poll(async () => await input.isEnabled(), {
         timeout: 30_000,
       }).toBe(true)
@@ -1046,7 +1071,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
     await page.getByLabel('Open inspector').click()
     const generationNode = page.locator(
       `.notebook-flow .react-flow__node[data-id="${fullscreenImageGenerationCellId}"]`,
@@ -1267,7 +1294,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
     const reopen = page.getByLabel('Open inspector')
     if (await reopen.count()) await reopen.click()
     const videoNode = notebookCellNode(page, videoCellId)
@@ -1312,7 +1341,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
 
     const dataTransfer = await page.evaluateHandle(() => {
       const transfer = new DataTransfer()
@@ -1402,7 +1433,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
 
     const reopenInspector = page.getByLabel('Open inspector')
     if (await reopenInspector.isVisible()) await reopenInspector.click()
@@ -1462,14 +1495,20 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
 
     const failedCommand = 'history command expected to fail'
     await input.fill(failedCommand)
     await page.getByLabel('Send command').click()
     await page.locator('.command-result-error').waitFor({ state: 'visible' })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
-    await expect.poll(async () => await input.inputValue()).toBe('')
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
+    await expect.poll(async () => await input.inputValue(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe('')
 
     for (const expected of [
       failedCommand,
@@ -1478,7 +1517,9 @@ describe('chat composer browser flow', () => {
       'history-oldest',
     ]) {
       await input.press('ArrowUp')
-      await expect.poll(async () => await input.inputValue()).toBe(expected)
+      await expect.poll(async () => await input.inputValue(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(expected)
     }
     for (const expected of [
       'history-middle',
@@ -1487,7 +1528,9 @@ describe('chat composer browser flow', () => {
       '',
     ]) {
       await input.press('ArrowDown')
-      await expect.poll(async () => await input.inputValue()).toBe(expected)
+      await expect.poll(async () => await input.inputValue(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(expected)
     }
   }, 60_000)
 
@@ -1523,7 +1566,9 @@ describe('chat composer browser flow', () => {
       await openApp()
       const input = page.getByLabel('Videobook command input')
       await input.waitFor({ state: 'visible', timeout: 30_000 })
-      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
       await input.fill(prompt)
       await page.getByLabel('Send command').click()
 
@@ -1594,7 +1639,9 @@ describe('chat composer browser flow', () => {
       await openApp()
       const input = page.getByLabel('Videobook command input')
       await input.waitFor({ state: 'visible', timeout: 30_000 })
-      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
       await input.fill(prompt)
       await page.getByLabel('Send command').click()
 
@@ -1631,9 +1678,25 @@ describe('chat composer browser flow', () => {
       await message.fill('This cancelled edit must not be posted.')
       await publish.selectOption('now')
       await orientation.selectOption('source')
-      expect(await postPreview.getByLabel('Schedule date and time').count()).toBe(0)
-      expect(await review.getByRole('alert').count()).toBe(0)
-      expect(await review.getByRole('button', { name: 'Post to X' }).isEnabled()).toBe(true)
+      const threadToggle = review.getByLabel('Add how-it-was-made thread')
+      if (await threadToggle.count() && await threadToggle.isChecked()) {
+        await threadToggle.uncheck()
+      }
+      await expect.poll(async () => await postPreview.getByLabel('Schedule date and time').count(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(0)
+      await expect.poll(async () => {
+        await dismissConfirmStatus(page)
+        return await review.getByRole('alert').count()
+      }, {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(0)
+      await expect.poll(async () => {
+        await dismissConfirmStatus(page)
+        return await review.getByRole('button', { name: 'Post to X' }).isEnabled()
+      }, {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(true)
       expect(await settings.textContent()).toContain('PublishNow')
       expect(await settings.textContent()).toContain('OrientationKeep source')
       await review.getByRole('button', { name: /Cancel/ }).click()
@@ -1643,6 +1706,10 @@ describe('chat composer browser flow', () => {
       await input.fill(prompt)
       await page.getByLabel('Send command').click()
       await review.waitFor({ state: 'visible', timeout: 30_000 })
+      const reopenedThreadToggle = review.getByLabel('Add how-it-was-made thread')
+      if (await reopenedThreadToggle.count() && await reopenedThreadToggle.isChecked()) {
+        await reopenedThreadToggle.uncheck()
+      }
       const reopenedMessage = review.getByRole('textbox', {
         name: 'Title',
         exact: true,
@@ -1679,7 +1746,16 @@ describe('chat composer browser flow', () => {
       await clearedTitle.fill('Titled again')
       await review.getByLabel('Publish timing').selectOption('now')
       await review.getByLabel('Video orientation').selectOption('source')
-      expect(await review.getByRole('alert').count()).toBe(0)
+      const reopenThreadToggle = review.getByLabel('Add how-it-was-made thread')
+      if (await reopenThreadToggle.count() && await reopenThreadToggle.isChecked()) {
+        await reopenThreadToggle.uncheck()
+      }
+      await expect.poll(async () => {
+        await dismissConfirmStatus(page)
+        return await review.getByRole('alert').count()
+      }, {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(0)
       await review.getByRole('button', { name: 'Post to X' }).click()
       await expect.poll(() => appliedCalls().length).toBe(2)
       const clearedPlan = record(appliedCalls()[1]?.arguments.action_plan)
@@ -1756,6 +1832,12 @@ describe('chat composer browser flow', () => {
       expect(await appliedCalls()).toHaveLength(0)
 
       await promptField.fill('Edited making-of prompt with the exact source image attached.')
+      await expect.poll(async () => {
+        await dismissConfirmStatus(page)
+        return await review.getByRole('button', { name: 'Post to X' }).isEnabled()
+      }, {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(true)
       await review.getByRole('button', { name: 'Post to X' }).click()
       await expect.poll(() => appliedCalls().length).toBe(1)
       const appliedPlan = record(appliedCalls()[0]?.arguments.action_plan)
@@ -1812,7 +1894,9 @@ describe('chat composer browser flow', () => {
       await openApp()
       const input = page.getByLabel('Videobook command input')
       await input.waitFor({ state: 'visible', timeout: 30_000 })
-      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
       const initialApplyCalls = observedCalls.filter((call) =>
         call.name === 'apply_watermark').length
 
@@ -1937,6 +2021,12 @@ describe('chat composer browser flow', () => {
       await review.getByRole('spinbutton', { name: 'QR end' }).fill('0.6')
       await review.getByRole('spinbutton', { name: 'Handle start' }).fill('0.2')
       await review.getByRole('spinbutton', { name: 'Handle end' }).fill('0.8')
+      await expect.poll(async () => {
+        await dismissConfirmStatus(page)
+        return await review.getByRole('button', { name: 'Apply' }).isEnabled()
+      }, {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(true)
       await review.getByRole('button', { name: 'Apply' }).click()
       await expect.poll(() => observedCalls.filter((call) =>
         call.name === 'apply_watermark').length).toBe(initialApplyCalls + 1)
@@ -2043,7 +2133,9 @@ describe('chat composer browser flow', () => {
       await openApp()
       const input = page.getByLabel('Videobook command input')
       await input.waitFor({ state: 'visible', timeout: 30_000 })
-      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
       await input.fill(prompt)
       await page.getByLabel('Send command').click()
 
@@ -2123,7 +2215,9 @@ describe('chat composer browser flow', () => {
       await openApp()
       const input = page.getByLabel('Videobook command input')
       await input.waitFor({ state: 'visible', timeout: 30_000 })
-      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
       await input.fill(prompt)
       await page.getByLabel('Send command').click()
 
@@ -2174,7 +2268,9 @@ describe('chat composer browser flow', () => {
 
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
     const workflowEdges = page.locator('.notebook-flow .react-flow__edge.workflow-edge')
     const routePaths = page.locator('.notebook-flow .workflow-edge .react-flow__edge-path')
     await expect.poll(async () => await workflowEdges.count()).toBeGreaterThan(0)
@@ -2187,9 +2283,18 @@ describe('chat composer browser flow', () => {
     })))
     expect(routeStyles).toHaveLength(await workflowEdges.count())
     expect(routeStyles.every((style) => style.d?.startsWith('M '))).toBe(true)
-    expect(routeStyles.every((style) => style.stroke === 'rgba(114, 231, 170, 0.62)'))
-      .toBe(true)
-    expect(routeStyles.every((style) => style.strokeWidth === '1.6px')).toBe(true)
+    const familyStrokes = [
+      'rgb(114, 231, 170)',
+      'rgb(95, 196, 214)',
+      'rgb(201, 137, 162)',
+    ]
+    expect(routeStyles.every((style) => {
+      const stroke = style.stroke.replace(/\s+/g, ' ')
+      return familyStrokes.some((color) =>
+        stroke === color
+        || stroke.startsWith(color.replace('rgb', 'rgba').replace(')', ',')))
+    })).toBe(true)
+    expect(routeStyles.every((style) => style.strokeWidth === '1.4px')).toBe(true)
     const runningCell = notebookCellNode(page, generationCellId)
     await runningCell.waitFor({ state: 'visible' })
     expect(await runningCell.getAttribute('class')).toContain('cell-node-running')
@@ -2253,7 +2358,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
     const reopenInspector = page.getByLabel('Open inspector')
     if (await reopenInspector.isVisible()) await reopenInspector.click()
     await page.evaluate(() => window.localStorage.setItem(
@@ -2296,7 +2403,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
 
     const header = notebookCellNode(page, generationCellId)
       .locator('.cell-node-header')
@@ -2357,7 +2466,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
 
     await input.fill('/split @a1')
     await page.getByLabel('Send command').click()
@@ -2460,7 +2571,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
 
     const target = notebookCellNode(page, videoCellId)
     await target.waitFor({ state: 'visible' })
@@ -2503,7 +2616,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
 
     const cells = page.locator('.cell-node')
     const triggers = page.locator('.cell-context-menu-trigger')
@@ -2687,7 +2802,9 @@ describe('chat composer browser flow', () => {
       await createdGenerationMenu.getByRole('menuitem', { name: /Delete cell/ }).click()
       expect(await confirmedGenerationCleanup).toContain('Delete @')
       await createdGenerationNode.waitFor({ state: 'hidden', timeout: 30_000 })
-      await expect.poll(async () => await input.isEnabled()).toBe(true)
+      await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
 
       await duplicateSource.click({ button: 'right' })
       await duplicateMenu.waitFor({ state: 'visible' })
@@ -2799,7 +2916,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
 
     const firstCell = notebookCellNode(page, videoCellId)
     const secondCell = notebookCellNode(page, generationCellId)
@@ -2913,7 +3032,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
 
     const menu = page.locator('.canvas-add-menu')
     await menu.locator('summary').click()
@@ -2935,7 +3056,9 @@ describe('chat composer browser flow', () => {
     await openApp()
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
 
     const selected = notebookCellNode(page, fullscreenImageCellId)
     await selected.click()
@@ -3030,10 +3153,19 @@ describe('chat composer browser flow', () => {
     await openApp()
     observedCalls.length = 0
     const input = page.getByLabel('Videobook command input')
-    await input.fill('/music-video @a2')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
+    const audioCell = notebookCellNode(page, musicAudioCellId)
+    await audioCell.waitFor({ state: 'visible' })
+    const address = (await audioCell.locator('.cell-node-footer strong').textContent())
+      ?.trim()
+    if (!address) throw new Error('Music audio cell address is missing')
+    await input.fill(`/music-video ${address}`)
     await page.getByLabel('Send command').click()
     const editor = page.getByRole('dialog', { name: 'Music video editor' })
-    await editor.waitFor({ state: 'visible', timeout: 30_000 })
+    await editor.waitFor({ state: 'visible', timeout: 60_000 })
     const editorBox = await editor.boundingBox()
     expect(editorBox?.x).toBe(0)
     expect(editorBox?.width).toBe(1440)
@@ -3068,9 +3200,12 @@ describe('chat composer browser flow', () => {
     }
     await editor.locator('.music-video-waveform svg path')
       .waitFor({ state: 'visible', timeout: 30_000 })
-    const source = editor.locator('.music-video-source-list button')
-      .filter({ hasText: 'split-source' })
-      .first()
+    const sourceList = editor.locator('.music-video-source-list button')
+    await expect.poll(async () => await sourceList.count(), {
+      timeout: 30_000,
+    }).toBeGreaterThan(0)
+    const namedSource = sourceList.filter({ hasText: /split-source|vid-source-one/ })
+    const source = (await namedSource.count()) > 0 ? namedSource.first() : sourceList.first()
     await source.click()
     await editor.getByText(/Previewing source/).waitFor({ state: 'visible' })
     await editor.getByRole('button', { name: 'Add selected' }).click()

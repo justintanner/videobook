@@ -87,6 +87,9 @@ export class BookManager {
   private readonly options: BookManagerOptions;
   private readonly books = new Map<string, ManagedBook>();
   private readonly legacyBooks = new Map<string, LegacyBookSummary>();
+  private readonly knownRoots = new Set<string>();
+  private readonly opening = new Map<string, Promise<void>>();
+  private scanPromise: Promise<void> | null = null;
   private readyPromise: Promise<void> | null = null;
 
   constructor(options: BookManagerOptions) {
@@ -101,6 +104,25 @@ export class BookManager {
   async ready(): Promise<void> {
     if (!this.readyPromise) this.readyPromise = this.load();
     return this.readyPromise;
+  }
+
+  async discover(): Promise<string[]> {
+    await this.scan();
+    return [...this.knownRoots];
+  }
+
+  async ensure(bookId: string): Promise<Result<ManagedBook, EngineError>> {
+    await this.scan();
+    const existing = this.books.get(bookId);
+    if (existing) return ok(existing);
+    if (!this.knownRoots.has(bookId)) {
+      return err(engineError("NOT_FOUND", `Book not found: ${bookId}`));
+    }
+    await this.openRoot(bookId);
+    const opened = this.books.get(bookId);
+    return opened
+      ? ok(opened)
+      : err(engineError("NOT_FOUND", `Book not found: ${bookId}`));
   }
 
   list(options: { sort?: "newest" | "oldest" } = {}): BookSummary[] {
@@ -168,6 +190,7 @@ export class BookManager {
       }
       const managed = this.toManagedBook(engine, finalRoot, book);
       this.assertUnique(managed);
+      this.knownRoots.add(managed.bookId);
       this.books.set(managed.bookId, managed);
       return ok(this.summary(managed));
     } catch (cause) {
@@ -224,6 +247,7 @@ export class BookManager {
       }
       await rm(root, { recursive: true, force: false });
       this.books.delete(book.bookId);
+      this.knownRoots.delete(book.bookId);
       return ok({ bookId: book.bookId, name: book.name });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
@@ -235,6 +259,10 @@ export class BookManager {
     for (const book of this.books.values()) book.engine.close();
     this.books.clear();
     this.legacyBooks.clear();
+    this.knownRoots.clear();
+    this.opening.clear();
+    this.scanPromise = null;
+    this.readyPromise = null;
   }
 
   async migrateLegacy(
@@ -284,6 +312,7 @@ export class BookManager {
       const managed = this.toManagedBook(engine, sourceRoot, engine.book.get());
       this.assertUnique(managed);
       this.legacyBooks.delete(bookId);
+      this.knownRoots.add(bookId);
       this.books.set(bookId, managed);
       return ok({
         book: this.summary(managed),
@@ -302,40 +331,72 @@ export class BookManager {
   }
 
   private async load(): Promise<void> {
+    await this.scan();
+    await Promise.all([...this.knownRoots].map((bookId) => this.openRoot(bookId)));
+  }
+
+  private async scan(): Promise<void> {
+    if (!this.scanPromise) this.scanPromise = this.scanOnce();
+    return this.scanPromise;
+  }
+
+  private async scanOnce(): Promise<void> {
     await mkdir(this.libraryDir, { recursive: true });
     const entries = await readdir(this.libraryDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
       const root = this.bookRoot(entry.name);
       if (!isUuidV7(entry.name) || !isInside(this.libraryDir, root)) continue;
-      let engine: Engine | undefined;
-      try {
-        engine = this.createEngine(root);
-        await engine.ready;
-        const managed = this.toManagedBook(engine, root, engine.book.get());
-        if (managed.bookId !== entry.name) {
-          engine.close();
-          throw new Error(`Book root ${entry.name} has mismatched book identity`);
-        }
-        this.assertUnique(managed);
-        this.books.set(managed.bookId, managed);
-      } catch (cause) {
-        engine?.close();
-        const dryRun = dryRunV4Migration(root);
-        if (dryRun.ok) {
-          const identity = readV4BookIdentity(root);
-          if (!identity.ok) throw cause;
-          this.legacyBooks.set(dryRun.value.sourceBookId, {
-            ...dryRun.value,
-            slug: identity.value.slug,
-          });
-          continue;
-        }
-        if (isSchemaIncompatible(cause)) {
-          continue;
-        }
-        throw cause;
+      this.knownRoots.add(entry.name);
+    }
+  }
+
+  private async openRoot(bookId: string): Promise<void> {
+    if (this.books.has(bookId) || this.legacyBooks.has(bookId)) return;
+    const inflight = this.opening.get(bookId);
+    if (inflight) {
+      await inflight;
+      return;
+    }
+    const pending = this.openRootOnce(bookId);
+    this.opening.set(bookId, pending);
+    try {
+      await pending;
+    } finally {
+      this.opening.delete(bookId);
+    }
+  }
+
+  private async openRootOnce(bookId: string): Promise<void> {
+    if (this.books.has(bookId) || this.legacyBooks.has(bookId)) return;
+    const root = this.bookRoot(bookId);
+    let engine: Engine | undefined;
+    try {
+      engine = this.createEngine(root);
+      await engine.ready;
+      const managed = this.toManagedBook(engine, root, engine.book.get());
+      if (managed.bookId !== bookId) {
+        engine.close();
+        throw new Error(`Book root ${bookId} has mismatched book identity`);
       }
+      this.assertUnique(managed);
+      this.books.set(managed.bookId, managed);
+    } catch (cause) {
+      engine?.close();
+      const dryRun = dryRunV4Migration(root);
+      if (dryRun.ok) {
+        const identity = readV4BookIdentity(root);
+        if (!identity.ok) throw cause;
+        this.legacyBooks.set(dryRun.value.sourceBookId, {
+          ...dryRun.value,
+          slug: identity.value.slug,
+        });
+        return;
+      }
+      if (isSchemaIncompatible(cause)) {
+        return;
+      }
+      throw cause;
     }
   }
 

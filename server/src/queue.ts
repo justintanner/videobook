@@ -315,8 +315,7 @@ function providerHandoffKindFor(jobType: string): ArtifactWorkKind | null {
 export async function resolveBookEngine(bookId: string): Promise<Engine> {
   const testEngine = testEngines.get(bookId);
   if (testEngine) return testEngine;
-  await bookManager.ready();
-  const book = bookManager.get(bookId);
+  const book = await bookManager.ensure(bookId);
   if (!book.ok) throw new Error(book.error.message);
   return book.value.engine;
 }
@@ -673,6 +672,14 @@ export function listActiveBookJobsForTests(): ActiveBookJob[] {
     }
   }
   return jobs;
+}
+
+export async function abortActiveBookJobsForTests(
+  reason = "test cleanup",
+): Promise<void> {
+  await Promise.all(
+    [...runnerByBook.values()].map((info) => abortActiveJobs(info, reason)),
+  );
 }
 
 export async function waitForBookQueuesIdleForTests(options: {

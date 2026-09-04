@@ -6,7 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
-import { queue, waitForJob } from "../queue.js";
+import { abortActiveBookJobsForTests, queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { ArtifactKind, Engine } from "videobook-engine";
 import { isUuidV7 } from "videobook-engine";
@@ -623,7 +623,9 @@ describe("MCP tools e2e", () => {
     expect(parsed.status).toBe("enqueued");
     expect(parsed.asset_id).toBe(vidAssetId);
     expect(parsed.orientations).toEqual(["landscape", "portrait", "square"]);
-    // Don't waitForJob — Remotion rendering not available in test env
+    // Don't waitForJob — Remotion rendering is not available in this env.
+    // Abort the leaked render_project jobs so the suite drain does not hang.
+    await abortActiveBookJobsForTests("e2e enqueue-only render");
   });
 
   // ── Section 10: Render timeline (error — no rendered files) ────

@@ -150,6 +150,19 @@ async function resolveSubtitleSegments(
   }
 }
 
+function abortRace(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    const fail = () => {
+      reject(signal.reason instanceof Error ? signal.reason : new Error("aborted"));
+    };
+    if (signal.aborted) {
+      fail();
+      return;
+    }
+    signal.addEventListener("abort", fail, { once: true });
+  });
+}
+
 export function registerRenderProjectJob(engine: Engine): void {
   registerJobHandler("render_project", async (payload, ctx) => {
     ctx.signal.throwIfAborted();
@@ -186,7 +199,10 @@ export function registerRenderProjectJob(engine: Engine): void {
       shadowOpacity,
     } = payload as RenderProjectPayload;
 
-    const bundleDir = await getSharedBundleLocation();
+    const bundleDir = await Promise.race([
+      getSharedBundleLocation(),
+      abortRace(ctx.signal),
+    ]);
     ctx.signal.throwIfAborted();
 
     const targetWidth = orientation === "portrait" ? PORTRAIT_WIDTH : orientation === "square" ? SQUARE_WIDTH : LANDSCAPE_WIDTH;

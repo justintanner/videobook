@@ -57,7 +57,9 @@ describe("readAssetTranscriptSources", () => {
     for (const write of writes) {
       if (!write.ok) throw new Error(write.error.message);
     }
-    const manifest = await engine.files.manifest(artifactId);
+    const manifest = await engine.files.manifest(artifactId, {
+      includeDotfiles: true,
+    });
     if (!manifest.ok) throw new Error(manifest.error.message);
 
     const sources = await readAssetTranscriptSources(
@@ -117,6 +119,26 @@ describe("readAssetTranscriptSources", () => {
   it("returns null when neither sidecar exists", async () => {
     const { engine, artifactId } = await createVideo();
     expect(await readAssetTranscriptSources(engine, artifactId)).toBeNull();
+  });
+
+  it("skips sidecar reads when the supplied manifest has none", async () => {
+    const { engine, artifactId } = await createVideo();
+    const manifest = await engine.files.manifest(artifactId, {
+      includeDotfiles: true,
+    });
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    const originalRead = engine.files.read.bind(engine.files);
+    let reads = 0;
+    engine.files.read = (async (...args: Parameters<typeof originalRead>) => {
+      reads += 1;
+      return originalRead(...args);
+    }) as typeof engine.files.read;
+    expect(await readAssetTranscriptSources(
+      engine,
+      artifactId,
+      manifest.value.files,
+    )).toBeNull();
+    expect(reads).toBe(0);
   });
 
   it("loads untouched sidecar text on demand", async () => {

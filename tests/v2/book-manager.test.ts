@@ -125,4 +125,45 @@ describe('v2 book manager', () => {
     if (!remaining.ok) return
     expect(remaining.value.engine.book.get().name).toBe('current-schema')
   })
+
+  it('discovers multiple book roots without opening every catalog', async () => {
+    const first = await books.create('alpha-open')
+    const second = await books.create('beta-wait')
+    expect(first.ok && second.ok).toBe(true)
+    if (!first.ok || !second.ok) return
+    const firstId = first.value.bookId
+    const secondId = second.value.bookId
+    await books.close()
+
+    const next = new BookManager({
+      libraryDir: join(rootDir, 'books'),
+      objectPrefix: 'test-objects',
+    })
+    const ids = await next.discover()
+    expect(ids).toEqual(expect.arrayContaining([firstId, secondId]))
+    expect(next.get(firstId).ok).toBe(false)
+    expect(next.get(secondId).ok).toBe(false)
+    expect(next.list()).toEqual([])
+
+    const opened = await next.ensure(firstId)
+    expect(opened.ok).toBe(true)
+    if (!opened.ok) {
+      await next.close()
+      return
+    }
+    expect(opened.value.engine.book.get().name).toBe('alpha-open')
+    expect(next.get(firstId).ok).toBe(true)
+    expect(next.get(secondId).ok).toBe(false)
+    expect(next.list().map((book) => book.bookId)).toEqual([firstId])
+
+    await next.ready()
+    const secondBook = next.get(secondId)
+    expect(secondBook.ok).toBe(true)
+    if (!secondBook.ok) {
+      await next.close()
+      return
+    }
+    expect(secondBook.value.engine.book.get().name).toBe('beta-wait')
+    await next.close()
+  })
 })

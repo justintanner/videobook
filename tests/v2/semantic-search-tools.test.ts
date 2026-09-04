@@ -8,6 +8,7 @@ import {
   type SearchHit,
   type TemporalSearchProvider,
 } from 'videobook-engine'
+import { comparableHitScore } from '../../server/src/search-scoring.js'
 import { commandPlanDefs } from '../../server/src/tools/command-plan.js'
 import { semanticSearchDefs } from '../../server/src/tools/semantic-search.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
@@ -151,6 +152,9 @@ describe('semantic search MCP tools', () => {
       excerpt: 'A red delivery van crosses a sunlit yard',
       signals: expect.arrayContaining([expect.objectContaining({ kind: 'visual' })]),
     })
+    const inBookHit = search.hits[0]!
+    expect(inBookHit.score).toBe(comparableHitScore(inBookHit))
+    expect(inBookHit.score).toBeGreaterThan(0.5)
     expect(search.coverage.state).toBe('ready')
     const reference = searchReferenceStore.put({
       kind: 'image',

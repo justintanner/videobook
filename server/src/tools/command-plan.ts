@@ -4,6 +4,7 @@ import type {
   EditIntent,
   EditOperation,
   Engine,
+  InsertClipOperation,
   Sequence,
   SequenceClip,
   SourceSurface,
@@ -313,7 +314,7 @@ function timedVideoPlacement(
   artifactId: string,
   stream: ReturnType<typeof requiredVideoStream>,
   nativeFrames: number,
-): EditOperation {
+): InsertClipOperation {
   return {
     kind: "insert-clip",
     mode: "overwrite",
@@ -360,13 +361,23 @@ function rebalanceLaneAppend(
     );
   }
   const slots = splitFrames(limit, count);
-  const items = [
+  type LaneSource = {
+    artifactId: string;
+    stream: ReturnType<typeof requiredVideoStream>;
+    nativeFrames: number;
+  };
+  type LaneItem =
+    | { kind: "existing"; clipId: string; durationFrames: number; clip: SequenceClip }
+    | { kind: "source"; clipId: string; durationFrames: number; source: LaneSource };
+  const items: LaneItem[] = [
     ...existing.map((clip, index) => ({
+      kind: "existing" as const,
       clipId: clip.clipId,
       durationFrames: slots[index]!,
-      existing: clip,
+      clip,
     })),
     ...sources.map((source, index) => ({
+      kind: "source" as const,
       clipId: uuidv7(),
       durationFrames: slots[existing.length + index]!,
       source,
@@ -375,8 +386,8 @@ function rebalanceLaneAppend(
   const operations: EditOperation[] = [];
   let temp = limit + 1;
   for (const item of items) {
-    if ("existing" in item && item.existing) {
-      const clip = item.existing;
+    if (item.kind === "existing") {
+      const clip = item.clip;
       operations.push({
         kind: "move-clip",
         clipId: item.clipId,
@@ -388,11 +399,11 @@ function rebalanceLaneAppend(
         clipId: item.clipId,
         timelineStartFrame: temp,
         durationFrames: item.durationFrames,
-        ...(clip.source.kind === "timed"
+        ...(isTimedClip(clip)
           ? { sourceRange: clip.source.range }
           : {}),
       });
-      if (clip.source.kind === "timed") {
+      if (isTimedClip(clip)) {
         operations.push({
           kind: "set-clip-speed",
           clipId: item.clipId,
@@ -407,7 +418,7 @@ function rebalanceLaneAppend(
       temp += Math.max(clip.durationFrames, item.durationFrames) + 1;
       continue;
     }
-    const source = item.source!;
+    const source = item.source;
     operations.push({
       ...timedVideoPlacement(
         trackId,

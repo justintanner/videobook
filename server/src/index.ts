@@ -57,7 +57,6 @@ app.use(cors());
 app.use("/archive-files", express.static(localArchiveDir(), { dotfiles: "allow" }));
 
 app.get("/healthz", async (_req, res) => {
-  await bookManager.ready();
   res.json({
     ok: true,
     service: "videobook",
@@ -69,8 +68,7 @@ app.get("/healthz", async (_req, res) => {
 async function engineForBook(
   bookId: string,
 ): Promise<ReturnType<typeof bookManager.get>> {
-  await bookManager.ready();
-  return bookManager.get(bookId);
+  return bookManager.ensure(bookId);
 }
 
 app.get(/^\/files\/([^/]+)\/([^/]+)\/(.+)$/, async (req, res) => {
@@ -212,9 +210,8 @@ app.all("/mcp", (req, res) => {
   void handleMcpRequest(req, res, req.body);
 });
 
-async function start(): Promise<void> {
+async function hydrateLibrary(): Promise<void> {
   await bookManager.ready();
-  registerAllJobHandlers(scopedBookEngine);
   if (process.env.VIDEOBOOK_DEV_FIXTURES === "1") {
     await ensureDancingWorkflow(bookManager);
   }
@@ -240,10 +237,15 @@ async function start(): Promise<void> {
     );
   }
   await loadAndArmAll();
+}
+
+async function start(): Promise<void> {
+  registerAllJobHandlers(scopedBookEngine);
   const port = process.env.PORT ?? 3001;
   app.listen(port, () => {
     console.log(`MCP server listening on http://127.0.0.1:${port}/mcp`);
   });
+  await hydrateLibrary();
 }
 
 async function shutdown(): Promise<void> {

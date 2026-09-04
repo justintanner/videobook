@@ -6,6 +6,27 @@ import path from 'path'
 const serverTarget = process.env.VIDEOBOOK_SERVER_URL ?? 'http://127.0.0.1:3001'
 
 function clientManualChunk(id: string): string | undefined {
+  if (id.includes('/src/components/videobook/NotebookCellInspector')) {
+    return 'inspector'
+  }
+  if (id.includes('/src/components/videobook/MomentSearch')) {
+    return 'search-ui'
+  }
+  if (id.includes('/src/components/videobook/NotebookMediaFullscreen')) {
+    return 'fullscreen'
+  }
+  if (id.includes('/src/components/videobook/JobsScreen')) {
+    return 'jobs-ui'
+  }
+  if (id.includes('/src/components/videobook/MusicVideoEditor')) {
+    return 'music-video'
+  }
+  if (id.includes('/src/components/')) {
+    return 'ui'
+  }
+  if (id.includes('/src/videobook/')) {
+    return 'videobook'
+  }
   if (!id.includes('/node_modules/')) return undefined
   if (id.includes('/@modelcontextprotocol/') || id.includes('/zod/')) {
     return 'vendor-mcp'
@@ -27,6 +48,9 @@ function clientManualChunk(id: string): string | undefined {
     || id.includes('/scheduler/')
   ) {
     return 'vendor-react'
+  }
+  if (id.includes('/lucide-react/')) {
+    return 'vendor-icons'
   }
   return 'vendor'
 }

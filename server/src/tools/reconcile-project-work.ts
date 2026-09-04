@@ -22,12 +22,15 @@ import {
 import { readAndAssessDialog } from "../dialog-quality.js";
 import {
   hasSpokenAudio,
+  PLAIN_TRANSCRIPT_FILE,
   readAssetTranscriptSources,
+  TIMED_TRANSCRIPT_FILE,
   type AssetTranscriptSources,
 } from "../transcript-projection.js";
 import {
   isAnalyzableVideo,
   readVideoAnalysisSummary,
+  VIDEO_ANALYSIS_FILE,
   type VideoAnalysisSummary,
 } from "../video-analysis-projection.js";
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";
@@ -441,14 +444,14 @@ async function readWaveformOrSchedule(
   bookId: string,
   videoFilename: string | null,
 ): Promise<number[] | null> {
+  if (!videoFilename || !WAVEFORM_SOURCE_RE.test(videoFilename)) {
+    return null;
+  }
   const existing = await engine.metadata.waveforms.read(assetId);
   if (existing.ok) {
     // Empty peaks are a negative-cache marker ("extracted, nothing usable"):
     // surface them as no-waveform so the UI is unchanged, but don't re-extract.
     return existing.value.peaks.length > 0 ? existing.value.peaks : null;
-  }
-  if (!videoFilename || !WAVEFORM_SOURCE_RE.test(videoFilename)) {
-    return null;
   }
   // Waveform extraction shells out to ffmpeg and can take several seconds for
   // long videos, so it must never run inline in list_assets / reconcile_project_work. Hand it to
@@ -636,20 +639,62 @@ function renderedOrientationsFor(
   return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`${o}.mp4`));
 }
 
+function indexByArtifactId<T extends { artifactId: string }>(
+  rows: readonly T[],
+): Map<string, T> {
+  const map = new Map<string, T>();
+  for (const row of rows) map.set(row.artifactId, row);
+  return map;
+}
+
+function groupByArtifactId<T extends { artifactId: string }>(
+  rows: readonly T[],
+): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const row of rows) {
+    const list = map.get(row.artifactId);
+    if (list) list.push(row);
+    else map.set(row.artifactId, [row]);
+  }
+  return map;
+}
+
 export async function buildAssetList(engine: Engine, book_id: string, sort?: "newest" | "oldest"): Promise<ProjectAsset[]> {
   const assets = engine.artifacts.list({ ...(sort ? { sort } : {}) });
+  const pendingAll = engine.jobs.pending.findAll();
+  const failuresAll = engine.jobs.failures.findAll();
+  const workAll = engine.jobs.artifactWork.list();
+  const streamsAll = engine.streams.list();
+  const pendingByArtifact = indexByArtifactId(pendingAll.ok ? pendingAll.value : []);
+  const failuresByArtifact = indexByArtifactId(failuresAll.ok ? failuresAll.value : []);
+  const workByArtifact = indexByArtifactId(workAll.ok ? workAll.value : []);
+  const streamsByArtifact = groupByArtifactId(streamsAll.ok ? streamsAll.value : []);
   const assetRows = await Promise.all(
     assets.map(async (a): Promise<ProjectAsset> => {
-      const [manifestResult, lockData, pendingTask, generationError, metadata, archiveMetadata, assetWorkRow, proxyMetadata] = await Promise.all([
-        engine.files.manifest(a.artifactId),
-        engine.jobs.locks.get(a.path),
-        engine.jobs.pending.read(a.artifactId),
-        engine.jobs.failures.read(a.artifactId),
+      const [manifestResult, metadata, archiveMetadata, proxyMetadata] = await Promise.all([
+        engine.files.manifest(a.artifactId, { includeDotfiles: true }),
         engine.metadata.artifacts.read<Record<string, unknown>>(a.artifactId, "original"),
         engine.metadata.artifacts.read<ArchiveMetadata>(a.artifactId, "archive"),
-        engine.jobs.artifactWork.read(a.artifactId),
-        engine.metadata.artifacts.read<VideoProxyAssessment>(a.artifactId, "proxy"),
+        a.kind === "video"
+          ? engine.metadata.artifacts.read<VideoProxyAssessment>(a.artifactId, "proxy")
+          : Promise.resolve({
+              ok: false as const,
+              error: { code: "NOT_FOUND" as const, message: "not a video" },
+            }),
       ]);
+      const lockData = engine.jobs.locks.get(a.path);
+      const pendingTask = {
+        ok: true as const,
+        value: pendingByArtifact.get(a.artifactId) ?? null,
+      };
+      const generationError = {
+        ok: true as const,
+        value: failuresByArtifact.get(a.artifactId) ?? null,
+      };
+      const assetWorkRow = {
+        ok: true as const,
+        value: workByArtifact.get(a.artifactId) ?? null,
+      };
 
       // If the asset directory disappeared between listAssets and getManifest,
       // surface an empty-but-error placeholder rather than throwing.
@@ -658,13 +703,9 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
 
       const mediaFile = findAssetMediaFile(files, a);
       const meta = metadata.ok ? metadata.value : null;
-      const streams = engine.streams.list(a.artifactId);
-      const videoStream = streams.ok
-        ? streams.value.find((stream) => stream.kind === "video" && stream.video)
-        : undefined;
-      const audioStream = streams.ok
-        ? streams.value.find((stream) => stream.kind === "audio" && stream.audio)
-        : undefined;
+      const streams = streamsByArtifact.get(a.artifactId) ?? [];
+      const videoStream = streams.find((stream) => stream.kind === "video" && stream.video);
+      const audioStream = streams.find((stream) => stream.kind === "audio" && stream.audio);
       const frameRate = videoStream?.video?.averageFrameRate
         ?? videoStream?.video?.nominalFrameRate;
       const streamDuration = videoStream
@@ -694,11 +735,13 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
       // copiable transcript (and offer Transcribe when there is none) without a
       // second round trip. One small sidecar read per eligible asset; word-timed
       // transcripts resolve from the object-hash memo on repeat listings.
+      const hasTranscriptSidecar = files.some((file) =>
+        file.name === TIMED_TRANSCRIPT_FILE || file.name === PLAIN_TRANSCRIPT_FILE);
       const [transcript, vision_analysis] = await Promise.all([
-        hasSpokenAudio(a.kind)
+        hasSpokenAudio(a.kind) && hasTranscriptSidecar
           ? readAssetTranscriptSources(engine, a.artifactId, files)
           : Promise.resolve(null),
-        isAnalyzableVideo(a.kind)
+        isAnalyzableVideo(a.kind) && fileNames.has(VIDEO_ANALYSIS_FILE)
           ? readVideoAnalysisSummary(engine, a.artifactId)
           : Promise.resolve(null),
       ]);
@@ -796,7 +839,7 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
 
       const archiveMeta = archiveMetadata.ok ? archiveMetadata.value : null;
       const analysisInfo = analysisInfoFromMetadata(meta);
-      if (analysisInfo) {
+      if (analysisInfo && fileNames.has("analysis.json")) {
         const output = await analysisOutputProjection(engine, a.artifactId);
         if (output) {
           analysisInfo.output_json = output.outputJson;
@@ -847,7 +890,7 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
 
       // Read script content from its canonical artifact file.
       let prompt = (meta?.prompt as string) ?? null;
-      if (!prompt && a.kind === "script") {
+      if (!prompt && a.kind === "script" && fileNames.has("original.md")) {
         const md = await engine.files.read(a.artifactId, "original.md");
         if (md.ok) prompt = md.value.toString();
       }

@@ -383,7 +383,14 @@ export function semanticSearchDefs(
               preparedSearchOptions(args.reference_range),
             )
           : await engine.temporalSearch.query(query);
-        return result.ok ? json(result.value) : failure(result.error.message);
+        if (!result.ok) return failure(result.error.message);
+        return json({
+          ...result.value,
+          hits: result.value.hits.map((hit) => ({
+            ...hit,
+            score: comparableHitScore(hit),
+          })),
+        });
       },
     },
     {

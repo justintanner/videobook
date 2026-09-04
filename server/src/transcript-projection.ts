@@ -271,13 +271,17 @@ export async function readAssetTranscriptSources(
   assetId: string,
   files?: readonly ArtifactManifestFile[],
 ): Promise<AssetTranscriptSources | null> {
-  const timedHash = files
-    ?.find((file) => file.name === TIMED_TRANSCRIPT_FILE)
-    ?.objectHash ?? null;
-  const elevenlabs = await readTimedSource(engine, assetId, timedHash);
-  const plain = transcriptSourceSummary(
-    await readPlainTranscript(engine, assetId) ?? { kind: "missing" },
-  );
+  const timedFile = files?.find((file) => file.name === TIMED_TRANSCRIPT_FILE);
+  const plainFile = files?.find((file) => file.name === PLAIN_TRANSCRIPT_FILE);
+  if (files && !timedFile && !plainFile) return null;
+  const elevenlabs = !files || timedFile
+    ? await readTimedSource(engine, assetId, timedFile?.objectHash ?? null)
+    : null;
+  const plain = !files || plainFile
+    ? transcriptSourceSummary(
+      await readPlainTranscript(engine, assetId) ?? { kind: "missing" },
+    )
+    : null;
   if (!elevenlabs && !plain) return null;
   return { elevenlabs, plain };
 }

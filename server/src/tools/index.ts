@@ -307,8 +307,7 @@ function scopeTool(
           () => def.handler(args),
         );
       }
-      await books.ready();
-      const book = books.get(bookId);
+      const book = await books.ensure(bookId);
       if (!book.ok) {
         return {
           isError: true,
