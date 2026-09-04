@@ -13,6 +13,7 @@ import {
   xPostMaxCharacters,
 } from "./account.js";
 import type { ApplicationStateStore } from "../app-state.js";
+import { createPublishedPostCell } from "./published-post-cell.js";
 import { appendXPostMetadata } from "./post-metadata.js";
 import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { logger } from "../logger.js";
@@ -460,7 +461,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
       );
     }
 
-    return {
+    const posted: PostToXResult = {
       status,
       tweet_id: tweetId,
       tweet_url: tweetUrl(tweetId),
@@ -469,6 +470,25 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
       replies,
       followup_error: followupError,
     };
+    try {
+      const created = await createPublishedPostCell({
+        engine,
+        assetId,
+        posted,
+      });
+      if (created) {
+        posted.cell_id = created.cellId;
+        posted.cell_address = created.cellAddress;
+      }
+    } catch (err) {
+      posted.cell_error = err instanceof Error ? err.message : String(err);
+      logger.error(
+        `[post_to_x] tweet ${tweetId} succeeded but creating the published notebook cell failed:`,
+        posted.cell_error,
+      );
+    }
+
+    return posted;
   } finally {
     if (rootMedia.tempPath) {
       await unlink(rootMedia.tempPath).catch(() => undefined);

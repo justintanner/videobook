@@ -24,4 +24,7 @@ export interface PostToXResult {
   posted_at: string;
   replies: XPostReplyResult[];
   followup_error: XPostFollowupError | null;
+  cell_id?: string;
+  cell_address?: string;
+  cell_error?: string;
 }

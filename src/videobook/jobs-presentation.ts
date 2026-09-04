@@ -1,6 +1,7 @@
 import type { NotebookCell } from 'videobook-engine'
 import type { CommandPlan } from '@/videobook/command-plan'
 import { notebookGridTag } from '@/videobook/notebook-grid'
+import { isPublishedPostCell } from '@/videobook/notebook-published-post'
 
 export interface JobsScreenJob {
   id: number
@@ -172,7 +173,9 @@ function cellTarget(cell: NotebookCell | undefined): JobsRowTarget {
 
 function jobTarget(job: JobsScreenJob, cells: NotebookCell[]): JobsRowTarget {
   if (!job.artifactId) return { tag: null, label: null }
-  const cell = cells.find((candidate) => candidate.outputArtifactId === job.artifactId)
+  const cell = cells.find((candidate) =>
+    !isPublishedPostCell(candidate)
+    && candidate.outputArtifactId === job.artifactId)
   if (cell) return cellTarget(cell)
   return { tag: null, label: `artifact ${shortArtifactId(job.artifactId)}` }
 }

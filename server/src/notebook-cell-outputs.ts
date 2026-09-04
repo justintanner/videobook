@@ -11,6 +11,7 @@ import {
 } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { nextGenerationOutputSlot } from "./notebook-placement.js";
+import { isPublishedPostCell } from "./notebook-published-post.js";
 
 export const EXTRACT_FRAME_OUTPUT_ROLE = "extract-frame-output";
 export const EXTRACT_AUDIO_OUTPUT_ROLE = "extract-audio-output";
@@ -421,6 +422,7 @@ function listGenerationOutputs(
     if (edge.source !== producerCellId || edge.targetInput !== "media") continue;
     const outputCell = document.cells.find((cell) => cell.id === edge.target);
     if (outputCell?.type !== spec.outputType) continue;
+    if (isPublishedPostCell(outputCell)) continue;
     const role = outputCell.inputs?.mediaRole;
     const producer = outputCell.inputs?.producerCellId;
     if (

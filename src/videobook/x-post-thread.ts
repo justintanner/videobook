@@ -7,6 +7,7 @@ import {
   findGenerateVideoOutputCell,
   resolveNotebookCellArtifactId,
 } from 'videobook-engine/notebook-media-artifact'
+import { isPublishedPostCell } from './notebook-published-post'
 import {
   X_POST_MAX_CHARACTERS,
   X_POST_MAX_IMAGES_PER_FOLLOWUP,
@@ -136,7 +137,8 @@ function startingCells(
   artifactId: string,
 ): NotebookCell[] {
   const direct = document.cells.filter((cell) =>
-    cell.outputArtifactId === artifactId || cell.outputEntityId === artifactId)
+    !isPublishedPostCell(cell)
+    && (cell.outputArtifactId === artifactId || cell.outputEntityId === artifactId))
   if (direct.length > 0) {
     const outputs = direct.filter((cell) => cell.type !== 'generate_video')
     return (outputs.length > 0 ? outputs : direct).sort(cellOrder)
@@ -193,6 +195,7 @@ function provenanceIndex(document: NotebookDocument): ProvenanceIndex {
   const cellsById = new Map(document.cells.map((cell) => [cell.id, cell]))
   const cellsByArtifactId = new Map<string, NotebookCell>()
   for (const cell of [...document.cells].sort(cellOrder)) {
+    if (isPublishedPostCell(cell)) continue
     const artifactId = resolveNotebookCellArtifactId(document, cell)
     if (!artifactId) continue
     const current = cellsByArtifactId.get(artifactId)

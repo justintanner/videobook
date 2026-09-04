@@ -421,4 +421,24 @@ describe('notebook draft conversion', () => {
       edge.className?.includes('workflow-edge-cell-focus'))).toBe(true)
     expect(notebookEdgesWithCellFocus(rendered, null)).toBe(rendered)
   })
+
+  it('labels published-post tiles as X · POSTED', () => {
+    const posted: NotebookDocument = {
+      ...source,
+      cells: [{
+        id: '018f7cf5-0d31-7d96-8c0f-800000000011',
+        type: 'video',
+        slot: { row: 0, column: 1 },
+        outputArtifactId: '018f7cf5-0d31-7d96-8c0f-800000000012',
+        inputs: {
+          sourceOperation: 'post_to_x',
+          tweetId: 'TWEET',
+          tweetUrl: 'https://x.com/i/web/status/TWEET',
+          postedAt: '2026-09-04T00:00:00.000Z',
+          status: 'posted',
+        },
+      }],
+    }
+    expect(notebookNodes(posted)[0]?.data.subtitle).toBe('X · POSTED')
+  })
 })

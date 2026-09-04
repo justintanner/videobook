@@ -86,6 +86,7 @@ import {
 import { isNotebookGenerationCellType } from '@/videobook/notebook-cell-types'
 import { GenerationControlField } from './GenerationControlField'
 import { NotebookMediaMetadata } from './NotebookMediaMetadata'
+import { PublishedPostInspectorDetails } from './PublishedPostChrome'
 import { MediaInsightsPanel } from './MediaInsightsPanel'
 import {
   idleMediaInsightWork,
@@ -1426,6 +1427,7 @@ function MediaCellInspector({
               : undefined}
           />
         )}
+        <PublishedPostInspectorDetails inputs={cell.inputs} />
         <InputSources
           cell={cell}
           cells={cells}

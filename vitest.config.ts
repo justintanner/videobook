@@ -120,6 +120,7 @@ export default defineConfig({
       'server/src/scheduled-posts.test.ts',
       'server/src/screenshot.test.ts',
       'server/src/payload-builders.test.ts',
+      'server/src/notebook-published-post.test.ts',
       'server/src/notebook-reference-resolver.test.ts',
       'server/src/provider-prompt-transform.test.ts',
       'server/src/preview-payload.test.ts',

@@ -104,6 +104,7 @@ import {
 import { CellStateOverlay } from '@/components/videobook/cell-overlays/CellStateOverlay'
 import { AnalysisCellSummary } from '@/components/videobook/AnalysisCellSummary'
 import { NotebookMediaMetadata } from '@/components/videobook/NotebookMediaMetadata'
+import { PublishedPostTileChrome } from '@/components/videobook/PublishedPostChrome'
 import {
   NotebookGridBoard,
 } from '@/components/videobook/NotebookGridBoard'
@@ -3012,6 +3013,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 durationSeconds={playableVideo ? data.asset?.duration ?? null : null}
               />
             )}
+            <PublishedPostTileChrome inputs={data.inputs} />
           </div>
         ) : (
           <div className={`cell-copy ${promptCell ? 'cell-copy-text' : ''}`}>

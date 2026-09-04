@@ -19,6 +19,7 @@ import {
   type ImageSubjectReplacementRegion,
 } from "../jobs/image-subjects.js";
 import { mutateNotebook } from "../notebook-mutations.js";
+import { isPublishedPostCell } from "../notebook-published-post.js";
 import { slotRight } from "../notebook-placement.js";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
@@ -38,6 +39,7 @@ function json(value: unknown) {
 }
 
 function sourceCellAcceptsArtifact(cell: NotebookCell, artifactId: string): boolean {
+  if (isPublishedPostCell(cell)) return false;
   if (cell.outputArtifactId === artifactId) return true;
   return Array.isArray(cell.inputs?.outputVersionArtifactIds)
     && cell.inputs.outputVersionArtifactIds.includes(artifactId);

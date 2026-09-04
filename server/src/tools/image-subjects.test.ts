@@ -1241,6 +1241,47 @@ describe("image subject tools", () => {
     ]));
   });
 
+  it("refuses to treat a published-post tile as the image-subject source cell", async () => {
+    const source = await createSource();
+    const notebook = engine.notebooks.read(source.notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const published = engine.notebooks.createCell({
+      type: "image",
+      slot: { row: 0, column: 1 },
+      outputArtifactId: source.artifactId,
+      inputs: {
+        sourceOperation: "post_to_x",
+        tweetId: "TWEET",
+        tweetUrl: "https://x.com/i/web/status/TWEET",
+        postedAt: "2026-09-04T00:00:00.000Z",
+        status: "posted",
+        sourceCellId: source.sourceCellId,
+      },
+    });
+    const written = await engine.notebooks.write({
+      ...notebook.value,
+      cells: [...notebook.value.cells, published],
+    });
+    if (!written.ok) throw new Error(written.error.message);
+
+    const result = await client.callTool({
+      name: "edit_image_subjects",
+      arguments: {
+        book_id: bookId,
+        notebook_id: source.notebookId,
+        source_cell_id: published.id,
+        artifact_id: source.artifactId,
+        object_hash: source.objectHash,
+        subject_ids: ["person"],
+        operation: "remove",
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0]?.text).toContain(
+      "The pinned source cell does not contain the requested image version",
+    );
+  });
+
   it("builds a Seedream 5 Pro replacement request with the base image first", () => {
     const request = seedreamRegionReplacementRequest({
       imageUrls: [

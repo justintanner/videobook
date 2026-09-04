@@ -2555,4 +2555,56 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="Remove @a1 from media input"')
     expect(html).toContain('Disconnect input')
   })
+
+  it('lists published-post urls and followup errors in the inspector', () => {
+    const published: NotebookCell = {
+      ...cell,
+      inputs: {
+        sourceOperation: 'post_to_x',
+        platform: 'x',
+        tweetId: 'ROOT',
+        tweetUrl: 'https://x.com/i/web/status/ROOT',
+        postedAt: '2026-09-04T12:00:00.000Z',
+        status: 'partially_posted',
+        replies: [
+          { tweetId: 'REPLY_1', tweetUrl: 'https://x.com/i/web/status/REPLY_1' },
+        ],
+        followupError: { replyNumber: 2, message: 'Temporary X error' },
+      },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: published,
+      cells: [published],
+      edges: [],
+      asset: {
+        artifactId: published.outputArtifactId!,
+        id: 'vid-source',
+        type: 'video',
+        mediaUrl: '/files/vid-source/original.mp4',
+        thumbnailUrl: null,
+        width: 1920,
+        height: 1080,
+        duration: 30,
+        audioInfo: null,
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('Posted to X')
+    expect(html).toContain('href="https://x.com/i/web/status/ROOT"')
+    expect(html).toContain('href="https://x.com/i/web/status/REPLY_1"')
+    expect(html).toContain('2026-09-04 12:00:00 UTC')
+    expect(html).toContain('1 reply')
+    expect(html).toContain('Follow-up 2 failed: Temporary X error')
+  })
 })

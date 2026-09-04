@@ -17,6 +17,7 @@ import {
   normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
 import { slotRight } from "../notebook-placement.js";
+import { resolvePublishedPostSourceCell } from "../notebook-published-post.js";
 import {
   notebookCellFingerprint,
   notebookCellMediaType,
@@ -38,8 +39,9 @@ function effectiveVideoSource(
   document: NotebookDocument,
   cell: NotebookCell,
 ): NotebookCell {
-  const output = findGenerationMediaOutput(document, cell);
-  return output?.outputCell ?? cell;
+  const holder = resolvePublishedPostSourceCell(document, cell);
+  const output = findGenerationMediaOutput(document, holder);
+  return output?.outputCell ?? holder;
 }
 
 export function extractNotebookFrameDef(engine: Engine): ToolDef {

@@ -14,6 +14,7 @@ import {
 import { NOTEBOOK_GRID_ADDRESS_SOURCE } from "videobook-engine/notebook-mentions";
 import { z } from "zod";
 import { mutateNotebook } from "../notebook-mutations.js";
+import { sourceCellForPostedArtifact } from "../notebook-published-post.js";
 import type { ToolDef } from "./tool-def.js";
 
 const destinationSchema = z.string()
@@ -32,10 +33,7 @@ function sourceCellForArtifact(
   artifactId: string,
   cellType: NotebookCellType,
 ): NotebookCell | null {
-  return notebook.cells.find((cell) =>
-    cell.outputArtifactId === artifactId && cell.type === cellType)
-    ?? notebook.cells.find((cell) => cell.outputArtifactId === artifactId)
-    ?? null;
+  return sourceCellForPostedArtifact(notebook, artifactId, cellType);
 }
 
 function duplicateDestination(

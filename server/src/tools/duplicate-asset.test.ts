@@ -203,6 +203,50 @@ describe("duplicate_asset tool", () => {
     expect(parsed.address).toBe("@f3");
   });
 
+  it("places a duplicate from the original media cell, not a published-post tile", async () => {
+    const source = await fs.artifacts.create("video", "source video");
+    if (!source.ok) throw new Error(source.error.message);
+    await fs.files.write(source.value.artifactId, "original.mp4", "video-data");
+    const createdNotebook = await fs.notebooks.create("Main");
+    if (!createdNotebook.ok) throw new Error(createdNotebook.error.message);
+    const publishedCell = fs.notebooks.createCell({
+      type: "video",
+      slot: { row: 0, column: 1 },
+      outputArtifactId: source.value.artifactId,
+      inputs: {
+        sourceOperation: "post_to_x",
+        tweetId: "TWEET",
+        tweetUrl: "https://x.com/i/web/status/TWEET",
+        postedAt: "2026-09-04T00:00:00.000Z",
+        status: "posted",
+      },
+    });
+    const sourceCell = fs.notebooks.createCell({
+      type: "video",
+      slot: { row: 0, column: 0 },
+      outputArtifactId: source.value.artifactId,
+    });
+    const written = await fs.notebooks.write({
+      ...createdNotebook.value,
+      cells: [publishedCell, sourceCell],
+    });
+    if (!written.ok) throw new Error(written.error.message);
+
+    const result = await client.callTool({
+      name: "duplicate_asset",
+      arguments: {
+        asset_id: source.value.artifactId,
+        book_id: fs.book.get().bookId,
+        notebook_id: createdNotebook.value.id,
+      },
+    });
+    expect(result.isError).not.toBe(true);
+    const parsed = JSON.parse(
+      (result.content as Array<{ type: string; text: string }>)[0].text,
+    ) as { address: string };
+    expect(parsed.address).toBe("@b1");
+  });
+
   it("rejects an occupied default destination before copying the asset", async () => {
     const source = await fs.artifacts.create("audio", "source audio");
     if (!source.ok) throw new Error(source.error.message);

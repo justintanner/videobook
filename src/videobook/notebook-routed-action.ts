@@ -3,6 +3,7 @@ import {
   nextNotebookHorizontalGenerationSlot,
   nextNotebookVideoGenerationSlot,
 } from './notebook-grid.js'
+import { isPublishedPostCell } from './notebook-published-post.js'
 import { nonBlankStringValue, recordValue } from './value-decoders.js'
 
 interface RoutedMediaCellInput {
@@ -166,7 +167,8 @@ function coverSongSlot(
 ): { row: number; column: number } {
   const sourceArtifactId = nonBlankStringValue(value.source_asset_id)
   const source = sourceArtifactId
-    ? cells.find((cell) => cell.outputArtifactId === sourceArtifactId)
+    ? cells.find((cell) =>
+      !isPublishedPostCell(cell) && cell.outputArtifactId === sourceArtifactId)
     : undefined
   return nextNotebookHorizontalGenerationSlot(
     cells,
@@ -191,7 +193,8 @@ function videoOutputSlots(
   ].filter((artifactId): artifactId is string => artifactId !== null))
   const sourceSlots = cells
     .filter((cell) => cell.outputArtifactId
-      && sourceArtifactIds.has(cell.outputArtifactId))
+      && sourceArtifactIds.has(cell.outputArtifactId)
+      && !isPublishedPostCell(cell))
     .map((cell) => cell.slot)
   const working: Array<{ type: string; slot: NotebookGridSlot }> = [...cells]
   const slots: NotebookGridSlot[] = []
@@ -230,7 +233,7 @@ export function routedMediaCellInputs(
         ? [coverSongOutput(value)]
         : [spliceOutput(tool, value)]
   const unplaced = outputs.filter((output) => !cells.some((cell) =>
-    cell.outputArtifactId === output.artifactId))
+    !isPublishedPostCell(cell) && cell.outputArtifactId === output.artifactId))
   if (unplaced.length === 0) return []
   const slots = tool === 'make_cover_song'
     ? [coverSongSlot(value, cells, lastWorkSlot)]

@@ -6,6 +6,39 @@ import { X_PREMIUM_POST_MAX_CHARACTERS } from "../x/account.js";
 import type { ToolDef } from "./tool-def.js";
 
 const SCHEDULE_LEAD_MS = 5_000;
+
+export function postToolResultMessage(result: PostToXResult): string {
+  const posted = result.status === "partially_posted"
+    ? `Root post published, but follow-up ${result.followup_error?.reply_number ?? ""} failed: ${result.followup_error?.message ?? "unknown error"}`
+    : `Posted to X${result.replies.length > 0 ? ` with ${result.replies.length} follow-up replies` : ""}`;
+  if (result.cell_address) {
+    return result.status === "partially_posted"
+      ? `Root post published as ${result.cell_address}, but follow-up ${result.followup_error?.reply_number ?? ""} failed: ${result.followup_error?.message ?? "unknown error"}`
+      : `${posted} as ${result.cell_address}`;
+  }
+  if (result.cell_error) {
+    return `${posted}; notebook cell could not be created: ${result.cell_error}`;
+  }
+  return posted;
+}
+
+export function postToolResultPayload(
+  result: PostToXResult,
+  platform: "x",
+): Record<string, unknown> {
+  return {
+    status: result.status,
+    platform,
+    tweet_id: result.tweet_id,
+    tweet_url: result.tweet_url,
+    replies: result.replies,
+    followup_error: result.followup_error,
+    ...(result.cell_id ? { cell_id: result.cell_id } : {}),
+    ...(result.cell_address ? { cell_address: result.cell_address } : {}),
+    message: postToolResultMessage(result),
+  };
+}
+
 const followupSchema = z.object({
   text: z.string().max(X_PREMIUM_POST_MAX_CHARACTERS).optional(),
   image_asset_ids: z.array(z.string()).max(4).optional(),
@@ -139,22 +172,11 @@ export function postDef(): ToolDef {
           orientation,
           followups,
         });
-        const message = result.status === "partially_posted"
-          ? `Root post published, but follow-up ${result.followup_error?.reply_number ?? ""} failed: ${result.followup_error?.message ?? "unknown error"}`
-          : `Posted to X${result.replies.length > 0 ? ` with ${result.replies.length} follow-up replies` : ""}`;
         return {
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify({
-                status: result.status,
-                platform,
-                tweet_id: result.tweet_id,
-                tweet_url: result.tweet_url,
-                replies: result.replies,
-                followup_error: result.followup_error,
-                message,
-              }),
+              text: JSON.stringify(postToolResultPayload(result, platform)),
             },
           ],
         };

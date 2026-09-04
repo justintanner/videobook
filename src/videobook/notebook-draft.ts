@@ -6,6 +6,10 @@ import type {
 } from 'videobook-engine'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { notebookCellFamily } from './notebook-cell-types'
+import {
+  isPublishedPostCell,
+  publishedPostSubtitle,
+} from './notebook-published-post'
 import { notebookGridPosition } from './notebook-grid'
 import {
   defaultNotebookBusRiverRoute,
@@ -176,7 +180,9 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
       data: {
         kind: cell.type,
         ...(cell.label === undefined ? {} : { label: cell.label }),
-        subtitle: `${cell.type.toUpperCase()} · CELL`,
+        subtitle: isPublishedPostCell(cell)
+          ? publishedPostSubtitle()
+          : `${cell.type.toUpperCase()} · CELL`,
         slot: cell.slot,
         status: 'ready',
         targetInputs: targetInputs.get(cell.id) ?? defaultTargetInputs(cell.type),

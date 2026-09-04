@@ -22,4 +22,12 @@ describe('notebook cell add menu', () => {
     expect(isNotebookCellAddType('prompt')).toBe(true)
     expect(isNotebookCellAddType('analysis')).toBe(false)
   })
+
+  it('does not add a published-post tile to the add menu', () => {
+    expect(filterNotebookCellAddItems('posted').map((item) => item.type)).toEqual([])
+    expect(filterNotebookCellAddItems('post_to_x')).toEqual([])
+    expect(isNotebookCellAddType('post_to_x')).toBe(false)
+    expect(filterNotebookCellAddItems('').some((item) =>
+      item.label.toLowerCase().includes('posted'))).toBe(false)
+  })
 })

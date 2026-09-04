@@ -18,6 +18,11 @@ import {
   notebookSplitFrameIds,
   notebookSplitRange,
 } from '../../src/videobook/notebook-cell-presentation'
+import {
+  formatPublishedPostTime,
+  publishedPostPresentation,
+  publishedPostSubtitle,
+} from '../../src/videobook/notebook-published-post'
 
 describe('notebook cell presentation', () => {
   it('keeps media cells passive even when obsolete action fields are present', () => {
@@ -270,5 +275,42 @@ describe('notebook cell presentation', () => {
     expect(notebookOutputVersionArtifactIds(undefined, 'audio-current')).toEqual([
       'audio-current',
     ])
+  })
+
+  it('presents published-post chrome data for a posted video cell', () => {
+    const presentation = publishedPostPresentation({
+      sourceOperation: 'post_to_x',
+      tweetId: 'TWEET_99',
+      tweetUrl: 'https://x.com/i/web/status/TWEET_99',
+      postedAt: '2026-09-04T12:00:00.000Z',
+      status: 'posted',
+      replies: [
+        { tweetId: 'REPLY_1', tweetUrl: 'https://x.com/i/web/status/REPLY_1' },
+      ],
+    })
+    expect(presentation).toMatchObject({
+      badge: 'Posted to X',
+      tweetUrl: 'https://x.com/i/web/status/TWEET_99',
+      postedAtLabel: formatPublishedPostTime('2026-09-04T12:00:00.000Z'),
+      replyCount: 1,
+      replyLabel: '1 reply',
+    })
+    expect(publishedPostSubtitle()).toBe('X · POSTED')
+  })
+
+  it('includes followup_error for a partially posted cell', () => {
+    const presentation = publishedPostPresentation({
+      sourceOperation: 'post_to_x',
+      tweetId: 'ROOT',
+      tweetUrl: 'https://x.com/i/web/status/ROOT',
+      postedAt: '2026-09-04T12:00:00.000Z',
+      status: 'partially_posted',
+      replies: [],
+      followupError: { replyNumber: 1, message: 'Temporary X error' },
+    })
+    expect(presentation?.followupError).toEqual({
+      replyNumber: 1,
+      message: 'Temporary X error',
+    })
   })
 })

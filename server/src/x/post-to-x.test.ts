@@ -6,6 +6,7 @@ import { createX } from "@apicity/x";
 import type { Engine } from "videobook-engine";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { configureXStatusPollForTests, postToX, STATUS_POLL_MIN_INTERVAL_MS } from "./post-to-x.js";
+import { isPublishedPostCell } from "../notebook-published-post.js";
 import {
   appendXPostMetadata,
   readXPostMetadata,
@@ -97,6 +98,58 @@ async function uploadFakeAsset(
   );
   if (!writeResult.ok) throw new Error(writeResult.error.message);
   return assetId;
+}
+
+function imagePostPlan(mediaId: string, tweetId: string, extra: StubResponse[] = []): StubResponse[] {
+  return [
+    { status: 200, body: { data: { id: mediaId, media_key: "k", expires_after_secs: 86400, size: 19 } } },
+    { status: 200, body: { data: { expires_at: 1 } } },
+    { status: 200, body: { data: { id: mediaId, media_key: "k", expires_after_secs: 86400, size: 19 } } },
+    { status: 201, body: { data: { id: tweetId, text: "hi" } } },
+    ...extra,
+  ];
+}
+
+function videoPostPlan(mediaId: string, tweetId: string, extra: StubResponse[] = []): StubResponse[] {
+  return [
+    { status: 200, body: { data: { id: mediaId, media_key: "k", expires_after_secs: 86400, size: 19 } } },
+    { status: 200, body: { data: { expires_at: 1 } } },
+    {
+      status: 200,
+      body: {
+        data: {
+          id: mediaId,
+          media_key: "k",
+          expires_after_secs: 86400,
+          size: 19,
+          processing_info: { state: "succeeded" },
+        },
+      },
+    },
+    { status: 201, body: { data: { id: tweetId, text: "clip" } } },
+    ...extra,
+  ];
+}
+
+async function seedSourceCell(
+  engine: Engine,
+  assetId: string,
+  type: "video" | "image" = "video",
+  slot = { row: 0, column: 0 },
+) {
+  const created = await engine.notebooks.create("Main");
+  if (!created.ok) throw new Error(created.error.message);
+  const sourceCell = engine.notebooks.createCell({
+    type,
+    slot,
+    outputArtifactId: assetId,
+  });
+  const written = await engine.notebooks.write({
+    ...created.value,
+    cells: [sourceCell],
+  });
+  if (!written.ok) throw new Error(written.error.message);
+  return { notebookId: created.value.id, sourceCell };
 }
 
 describe("postToX helper", () => {
@@ -496,5 +549,184 @@ describe("postToX helper", () => {
       store: await premiumStore(),
       text: "x".repeat(25_001),
     })).rejects.toThrow(/Post title exceeds 25000 characters$/);
+  });
+
+  it("creates a published notebook cell to the right of the source video on success", async () => {
+    const assetId = await uploadFakeAsset(fs, bookId, "vid", ".mp4");
+    const seeded = await seedSourceCell(fs, assetId);
+    const { fetch: stubFetch } = makeStubFetch(videoPostPlan("VID_CELL", "TWEET_CELL"));
+    const x = createX({ accessToken: "test-token", fetch: stubFetch });
+
+    const result = await postToX({
+      engine: fs,
+      assetId,
+      bookId,
+      text: "clip",
+      x,
+    });
+
+    expect(result.status).toBe("posted");
+    expect(result.cell_id).toEqual(expect.any(String));
+    expect(result.cell_address).toBe("@a2");
+    const notebook = fs.notebooks.read(seeded.notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const published = notebook.value.cells.find((cell) => cell.id === result.cell_id);
+    expect(published).toMatchObject({
+      type: "video",
+      slot: { row: 0, column: 1 },
+      outputArtifactId: assetId,
+      inputs: {
+        sourceOperation: "post_to_x",
+        platform: "x",
+        tweetId: "TWEET_CELL",
+        tweetUrl: "https://x.com/i/web/status/TWEET_CELL",
+        postedAt: result.posted_at,
+        status: "posted",
+        replies: [],
+        sourceCellId: seeded.sourceCell.id,
+      },
+    });
+    expect(isPublishedPostCell(published!)).toBe(true);
+    expect(notebook.value.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source: seeded.sourceCell.id,
+        target: result.cell_id,
+        targetInput: "post",
+      }),
+    ]));
+  });
+
+  it("creates a second published cell when the same video is posted again", async () => {
+    const assetId = await uploadFakeAsset(fs, bookId, "vid", ".mp4");
+    const seeded = await seedSourceCell(fs, assetId);
+    const first = createX({
+      accessToken: "tok",
+      fetch: makeStubFetch(videoPostPlan("V1", "T1")).fetch,
+    });
+    const firstResult = await postToX({
+      engine: fs, assetId, bookId, text: "first", x: first,
+    });
+    const second = createX({
+      accessToken: "tok",
+      fetch: makeStubFetch(videoPostPlan("V2", "T2")).fetch,
+    });
+    const secondResult = await postToX({
+      engine: fs, assetId, bookId, text: "second", x: second,
+    });
+
+    expect(firstResult.cell_id).not.toBe(secondResult.cell_id);
+    expect(secondResult.cell_address).toBe("@a3");
+    const notebook = fs.notebooks.read(seeded.notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const published = notebook.value.cells.filter(isPublishedPostCell);
+    expect(published).toHaveLength(2);
+    expect(published.map((cell) => cell.slot)).toEqual([
+      { row: 0, column: 1 },
+      { row: 0, column: 2 },
+    ]);
+    expect(notebook.value.edges.filter((edge) => edge.targetInput === "post")).toHaveLength(2);
+  });
+
+  it("creates the published cell on the scheduled success path", async () => {
+    const assetId = await uploadFakeAsset(fs, bookId, "vid", ".mp4");
+    await seedSourceCell(fs, assetId);
+    const scheduledFor = new Date(Date.now() - 60_000).toISOString();
+    const x = createX({
+      accessToken: "tok",
+      fetch: makeStubFetch(videoPostPlan("VSCHED", "TSCHED")).fetch,
+    });
+    const result = await postToX({
+      engine: fs,
+      assetId,
+      bookId,
+      text: "scheduled",
+      x,
+      scheduleId: "sched-cell",
+      scheduledFor,
+    });
+    expect(result.cell_id).toEqual(expect.any(String));
+    expect(result.cell_address).toBe("@a2");
+  });
+
+  it("stores follow-up urls and error on a partially posted cell", async () => {
+    const assetId = await uploadFakeAsset(fs, bookId, "vid", ".mp4");
+    const seeded = await seedSourceCell(fs, assetId);
+    const x = createX({
+      accessToken: "tok",
+      fetch: makeStubFetch(videoPostPlan("VPART", "TROOT", [
+        { status: 201, body: { data: { id: "REPLY_OK", text: "ok" } } },
+        { status: 500, body: { title: "Reply failed", detail: "Temporary X error", status: 500 } },
+      ])).fetch,
+    });
+    const result = await postToX({
+      engine: fs,
+      assetId,
+      bookId,
+      text: "root",
+      followups: [{ text: "first reply" }, { text: "must not run" }],
+      x,
+    });
+    expect(result.status).toBe("partially_posted");
+    expect(result.cell_id).toEqual(expect.any(String));
+    const notebook = fs.notebooks.read(seeded.notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const published = notebook.value.cells.find((cell) => cell.id === result.cell_id);
+    expect(published?.inputs).toMatchObject({
+      status: "partially_posted",
+      replies: [{
+        tweetId: "REPLY_OK",
+        tweetUrl: "https://x.com/i/web/status/REPLY_OK",
+      }],
+      followupError: {
+        replyNumber: 2,
+        message: expect.stringContaining("Temporary X error"),
+      },
+    });
+  });
+
+  it("does not create a cell or change asset status when the post fails", async () => {
+    const assetId = await uploadFakeAsset(fs, bookId, "vid", ".mp4");
+    const seeded = await seedSourceCell(fs, assetId);
+    const before = await fs.status.get(assetId);
+    const x = createX({
+      accessToken: "tok",
+      fetch: makeStubFetch([
+        { status: 401, body: { title: "Unauthorized", detail: "Bad token", status: 401 } },
+      ]).fetch,
+    });
+    await expect(postToX({
+      engine: fs, assetId, bookId, x, text: "nope",
+    })).rejects.toThrow(/Bad token/);
+    const after = await fs.status.get(assetId);
+    expect(after).toEqual(before);
+    const notebook = fs.notebooks.read(seeded.notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    expect(notebook.value.cells).toHaveLength(1);
+    expect(notebook.value.cells[0]?.id).toBe(seeded.sourceCell.id);
+  });
+
+  it("keeps a successful post when notebook cell creation fails", async () => {
+    const assetId = await uploadFakeAsset(fs, bookId, "img", ".png");
+    await seedSourceCell(fs, assetId, "image");
+    const originalWrite = fs.notebooks.write.bind(fs.notebooks);
+    fs.notebooks.write = (async () => ({
+      ok: false as const,
+      error: { code: "INTERNAL_ERROR" as const, message: "notebook write failed" },
+    })) as typeof originalWrite;
+    try {
+      const x = createX({
+        accessToken: "tok",
+        fetch: makeStubFetch(imagePostPlan("MFAIL", "TFAIL")).fetch,
+      });
+      const result = await postToX({
+        engine: fs, assetId, bookId, text: "still posted", x,
+      });
+      expect(result.status).toBe("posted");
+      expect(result.tweet_id).toBe("TFAIL");
+      expect(result.cell_id).toBeUndefined();
+      expect(result.cell_error).toMatch(/notebook write failed/);
+    } finally {
+      fs.notebooks.write = originalWrite;
+    }
   });
 });
