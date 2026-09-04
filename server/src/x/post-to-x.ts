@@ -7,6 +7,12 @@ import { tmpdir } from "node:os";
 import { readFile, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { getValidAccessToken } from "./x-tokens.js";
+import {
+  readXAccount,
+  X_POST_MAX_CHARACTERS,
+  xPostMaxCharacters,
+} from "./account.js";
+import type { ApplicationStateStore } from "../app-state.js";
 import { appendXPostMetadata } from "./post-metadata.js";
 import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { logger } from "../logger.js";
@@ -90,6 +96,8 @@ interface PostToXArgs {
   followups?: XPostFollowup[];
   x?: XProvider;
   signal?: AbortSignal;
+  /** Where the connected account's subscription tier is cached. */
+  store?: ApplicationStateStore;
 }
 
 interface OrientationOutput {
@@ -201,9 +209,36 @@ interface PreparedFollowup {
   media: PreparedMedia[];
 }
 
+/**
+ * The post length the connected account allows. Text within the standard 280
+ * needs no lookup; anything longer is checked against the cached tier, since
+ * only X Premium accounts may post up to 25,000 characters.
+ */
+async function postCharacterLimit(
+  text: string,
+  followups: readonly XPostFollowup[],
+  store?: ApplicationStateStore,
+): Promise<number> {
+  const longest = Math.max(
+    text.length,
+    ...followups.map((followup) => followup.text?.length ?? 0),
+  );
+  if (longest <= X_POST_MAX_CHARACTERS) return X_POST_MAX_CHARACTERS;
+  const account = await readXAccount(store);
+  return xPostMaxCharacters(account?.subscription_type ?? null);
+}
+
+function characterLimitError(label: string, maxCharacters: number): Error {
+  const hint = maxCharacters === X_POST_MAX_CHARACTERS
+    ? " (longer posts need an X Premium subscription)"
+    : "";
+  return new Error(`${label} exceeds ${maxCharacters} characters${hint}`);
+}
+
 async function prepareFollowups(
   engine: Engine,
   followups: readonly XPostFollowup[],
+  maxCharacters: number,
 ): Promise<PreparedFollowup[]> {
   if (followups.length > 25) {
     throw new Error("X threads support at most 25 follow-up posts here");
@@ -215,8 +250,8 @@ async function prepareFollowups(
     if (!text && assetIds.length === 0) {
       throw new Error(`Follow-up ${index + 1} needs text or an image`);
     }
-    if ((followup.text?.length ?? 0) > 280) {
-      throw new Error(`Follow-up ${index + 1} exceeds 280 characters`);
+    if ((followup.text?.length ?? 0) > maxCharacters) {
+      throw characterLimitError(`Follow-up ${index + 1}`, maxCharacters);
     }
     if (assetIds.length > 4) {
       throw new Error(`Follow-up ${index + 1} has more than 4 images`);
@@ -330,10 +365,13 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
     signal,
   } = args;
   if (!text?.trim()) throw new Error("A post title is required");
-  if (text.length > 280) throw new Error("Post title exceeds 280 characters");
+  const maxCharacters = await postCharacterLimit(text, followups, args.store);
+  if (text.length > maxCharacters) {
+    throw characterLimitError("Post title", maxCharacters);
+  }
   const rootMedia = await prepareMedia(engine, assetId, orientation);
   try {
-    const preparedFollowups = await prepareFollowups(engine, followups);
+    const preparedFollowups = await prepareFollowups(engine, followups, maxCharacters);
     const x = await getXClient(engine, args.x);
     const mediaId = await uploadMedia(
       x,

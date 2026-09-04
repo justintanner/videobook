@@ -2,7 +2,6 @@ import { Film } from 'lucide-react'
 import type { RoutedActionSetting } from '@/videobook/chat-action-review'
 import {
   defaultXPostScheduledFor,
-  X_POST_MAX_CHARACTERS,
   xPostIsoDateTimeValue,
   xPostLocalDateTimeValue,
   type XPostDraft,
@@ -21,7 +20,9 @@ import {
   type XPostThreadStep,
 } from '@/videobook/x-post-thread'
 import {
+  xConnectionAccountDetail,
   xConnectionPresentation,
+  xPostMaxCharacters,
   type XConnectionState,
 } from '@/videobook/x-connection'
 import { PromptEcho, RoutedSettings } from './RoutedSettings'
@@ -67,7 +68,11 @@ export function PostToXBody({
     : null
   const scheduled = draft.scheduledFor !== null
   const untitled = draft.postText.trim() === ''
-  const tooLong = draft.postText.length > X_POST_MAX_CHARACTERS
+  const maxCharacters = xPostMaxCharacters(connection?.status ?? null)
+  const accountDetail = connection?.status
+    ? xConnectionAccountDetail(connection.status)
+    : null
+  const tooLong = draft.postText.length > maxCharacters
   const threadReplies = threadReview
     ? buildXPostThreadReplies(threadReview)
     : []
@@ -153,8 +158,9 @@ export function PostToXBody({
           <small className={untitled || tooLong ? 'confirm-field-error' : undefined}>
             {untitled
               ? 'A title is required'
-              : `${draft.postText.length}/${X_POST_MAX_CHARACTERS} characters`}
+              : `${draft.postText.length}/${maxCharacters} characters`}
           </small>
+          {accountDetail && <small className="x-post-account">{accountDetail}</small>}
         </div>
         <div
           className="x-post-preview-options"
@@ -244,6 +250,7 @@ export function PostToXBody({
                     key={step.id}
                     busy={busy}
                     index={index}
+                    maxCharacters={maxCharacters}
                     prompt={xPostThreadPrompt(threadReview, step)}
                     reply={threadReplies.find((reply) =>
                       reply.stepId === step.id) ?? null}
@@ -255,6 +262,7 @@ export function PostToXBody({
                 {threadReview.context.credits.length > 0 && (
                   <ThreadCredits
                     busy={busy}
+                    maxCharacters={maxCharacters}
                     replyCount={threadReplies.filter((reply) =>
                       reply.stepId === null).length}
                     text={xPostThreadCreditsText(threadReview)}
@@ -289,6 +297,7 @@ function attachedImagesLabel(step: XPostThreadStep): string {
 function ThreadStep({
   busy,
   index,
+  maxCharacters,
   onPromptChange,
   prompt,
   reply,
@@ -297,6 +306,7 @@ function ThreadStep({
 }: {
   busy: boolean
   index: number
+  maxCharacters: number
   onPromptChange?: (stepId: string, text: string) => void
   prompt: string
   reply: XPostThreadReply | null
@@ -305,7 +315,7 @@ function ThreadStep({
 }) {
   const promptId = `x-post-thread-prompt-${index}`
   const replyLength = reply?.text.length ?? 0
-  const tooLong = replyLength > X_POST_MAX_CHARACTERS
+  const tooLong = replyLength > maxCharacters
   return (
     <article
       className="x-post-thread-step"
@@ -329,7 +339,7 @@ function ThreadStep({
         <div className="x-post-thread-field-head">
           <label className="x-post-thread-label" htmlFor={promptId}>Prompt</label>
           <small className={tooLong ? 'confirm-field-error' : undefined}>
-            {replyLength}/{X_POST_MAX_CHARACTERS} characters with heading
+            {replyLength}/{maxCharacters} characters with heading
             {' · '}
             {replyCountLabel(reply ? 1 : 0)}
           </small>
@@ -365,23 +375,25 @@ function ThreadStep({
 
 function ThreadCredits({
   busy,
+  maxCharacters,
   onChange,
   replyCount,
   text,
 }: {
   busy: boolean
+  maxCharacters: number
   onChange?: (text: string) => void
   replyCount: number
   text: string
 }) {
-  const tooLong = text.length > X_POST_MAX_CHARACTERS
+  const tooLong = text.length > maxCharacters
   return (
     <article className="x-post-thread-step" aria-label="Credits">
       <div className="x-post-thread-field">
         <div className="x-post-thread-field-head">
           <label className="x-post-thread-label" htmlFor="x-post-thread-credits">Credits</label>
           <small className={tooLong ? 'confirm-field-error' : undefined}>
-            {text.length}/{X_POST_MAX_CHARACTERS} characters · {replyCountLabel(replyCount)}
+            {text.length}/{maxCharacters} characters · {replyCountLabel(replyCount)}
           </small>
         </div>
         <textarea

@@ -20,7 +20,7 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "asset_ref", type: "string", required: false, description: "Asset to post (video or image artifact id)" },
-      { name: "text", type: "string", required: false, description: "Post title (max 280 chars; the confirm sheet asks for it when omitted)" },
+      { name: "text", type: "string", required: false, description: "Post title (max 280 chars, or 25,000 with X Premium; the confirm sheet asks for it when omitted)" },
     ],
     uiAction: "open_post_composer",
   },

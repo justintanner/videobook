@@ -85,6 +85,11 @@ export type XPostThreadReview = {
   promptOverrides: Record<string, string>
   /** Edited credits text; null posts the default credit line. */
   creditsOverride: string | null
+  /**
+   * Post length the connected X account allows (280, or 25,000 with X
+   * Premium); sizes the default prompt and credits replies.
+   */
+  maxCharacters: number
 }
 
 type GenerationAttemptPrompt = {
@@ -97,6 +102,7 @@ const EMPTY_CONTEXT: XPostThreadContext = { steps: [], credits: [] }
 
 export function initialXPostThreadReview(
   context: XPostThreadContext = EMPTY_CONTEXT,
+  maxCharacters = X_POST_MAX_CHARACTERS,
 ): XPostThreadReview {
   return {
     loading: false,
@@ -105,7 +111,18 @@ export function initialXPostThreadReview(
     options: { enabled: xPostThreadHasDetails(context) },
     promptOverrides: {},
     creditsOverride: null,
+    maxCharacters,
   }
+}
+
+/** The same review sized for a different post length. */
+export function withXPostThreadLimit(
+  review: XPostThreadReview,
+  maxCharacters: number,
+): XPostThreadReview {
+  return review.maxCharacters === maxCharacters
+    ? review
+    : { ...review, maxCharacters }
 }
 
 function cellOrder(left: NotebookCell, right: NotebookCell): number {
@@ -578,9 +595,10 @@ function defaultXPostThreadPrompt(
   step: XPostThreadStep,
   ordinal: number,
   stepCount: number,
+  maxCharacters: number,
 ): string {
   const prefix = xPostThreadPromptPrefix(step, ordinal, stepCount)
-  return fitPrompt(step.prompt.trim(), X_POST_MAX_CHARACTERS - prefix.length)
+  return fitPrompt(step.prompt.trim(), maxCharacters - prefix.length)
 }
 
 function stepIndex(review: XPostThreadReview, step: XPostThreadStep): number {
@@ -593,7 +611,12 @@ export function xPostThreadPrompt(
   step: XPostThreadStep,
 ): string {
   return review.promptOverrides[step.id]
-    ?? defaultXPostThreadPrompt(step, stepIndex(review, step), review.context.steps.length)
+    ?? defaultXPostThreadPrompt(
+      step,
+      stepIndex(review, step),
+      review.context.steps.length,
+      review.maxCharacters,
+    )
 }
 
 function creditName(credit: XPostSourceCredit): string {
@@ -607,6 +630,7 @@ function creditLine(credit: XPostSourceCredit): string {
 /** The default thanks reply: at-mentions X accounts, names YouTube uploaders. */
 export function defaultXPostThreadCredits(
   credits: readonly XPostSourceCredit[],
+  maxCharacters = X_POST_MAX_CHARACTERS,
 ): string {
   const ordered = [...credits].sort((left, right) =>
     Number(left.xHandle === null) - Number(right.xHandle === null))
@@ -614,12 +638,13 @@ export function defaultXPostThreadCredits(
   if (!first) return ''
   if (ordered.length === 1) return `Special thanks to ${creditLine(first)}`
   const full = `Special thanks to:\n${ordered.map(creditLine).join('\n')}`
-  if (full.length <= X_POST_MAX_CHARACTERS) return full
+  if (full.length <= maxCharacters) return full
   return `Special thanks to:\n${ordered.map((credit) => credit.url).join('\n')}`
 }
 
 export function xPostThreadCreditsText(review: XPostThreadReview): string {
-  return review.creditsOverride ?? defaultXPostThreadCredits(review.context.credits)
+  return review.creditsOverride
+    ?? defaultXPostThreadCredits(review.context.credits, review.maxCharacters)
 }
 
 function threadReply(

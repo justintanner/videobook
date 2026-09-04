@@ -175,7 +175,9 @@ import {
   startXConnection,
   waitForXConnection,
   xConnectionOutcome,
+  xPostMaxCharacters,
   type XConnectionState,
+  type XConnectionStatus,
 } from '@/videobook/x-connection'
 import { RoutedBody } from '@/components/videobook/confirm/bodies/RoutedBody'
 import { CommandPlanBody } from '@/components/videobook/confirm/bodies/CommandPlanBody'
@@ -208,6 +210,7 @@ import {
   selectXPostGenerationModel,
   selectXPostGenerationPrompt,
   X_POST_EMPTY_THREAD_MESSAGE,
+  withXPostThreadLimit,
   xPostFollowupsFromThread,
   xPostSourceCredit,
   type XPostPromptMention,
@@ -3131,6 +3134,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [xConnection, setXConnection] = useState<XConnectionState>(
     initialXConnectionState,
   )
+  // Post length the connected X account allows: 280, or 25,000 with X Premium.
+  const xPostMaxLength = xPostMaxCharacters(xConnection.status)
   const [storage, setStorage] = useState<unknown>(null)
   const { lastWorkSlot, rememberLastWorkSlot } = useLastWorkSlot(
     bookId,
@@ -3373,11 +3378,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           blocking: X_POST_EMPTY_THREAD_MESSAGE,
           notice: null,
         }
-      : xPostValidation(draft)
+      : xPostValidation(draft, undefined, xPostMaxLength)
     return {
       asset,
       draft,
-      error: xPostDraftError(draft),
+      error: xPostDraftError(draft, undefined, xPostMaxLength),
       validation,
       sourceLabel: mention
         ? `@${mention.cellAddress}`
@@ -3387,7 +3392,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             ? `@${reference}`
             : 'Selected media',
     }
-  }, [assetById, commandMentionAssets, pendingChatAction])
+  }, [assetById, commandMentionAssets, pendingChatAction, xPostMaxLength])
   const pendingGenerationConnectedInputs = useMemo(
     () => pendingGenerationDraft && notebook
       ? notebookChatGenerationConnectedInputs(pendingGenerationDraft, notebook)
@@ -4523,6 +4528,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ...current.xPostReview,
         options: { ...current.xPostReview.options, ...patch },
       }
+      return {
+        ...current,
+        xPostReview,
+        plan: {
+          ...current.plan,
+          params: reviseXPostFollowups(
+            current.plan.params,
+            xPostFollowupsFromThread(xPostReview),
+          ),
+        },
+      }
+    })
+  }, [])
+  // Re-derive the thread replies when X reports a different post length, so
+  // an untrimmed prompt appears once a Premium account is confirmed.
+  const syncPendingXPostLimit = useCallback((maxCharacters: number) => {
+    setPendingChatAction((current) => {
+      if (current?.kind !== 'routed' || !current.xPostReview) return current
+      const xPostReview = withXPostThreadLimit(current.xPostReview, maxCharacters)
+      if (xPostReview === current.xPostReview) return current
       return {
         ...current,
         xPostReview,
@@ -7315,15 +7340,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     )
   }
 
-  const refreshXConnection = async (): Promise<void> => {
+  const refreshXConnection = async (
+    options: { refreshAccount?: boolean } = {},
+  ): Promise<XConnectionStatus | null> => {
     try {
-      const status = await fetchXConnectionStatus(call)
+      const status = await fetchXConnectionStatus(call, options)
       setXConnection((current) => ({ ...current, status }))
+      syncPendingXPostLimit(xPostMaxCharacters(status))
+      return status
     } catch (error) {
       setXConnection((current) => ({
         ...current,
         error: error instanceof Error ? error.message : String(error),
       }))
+      return null
     }
   }
 
@@ -7349,6 +7379,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         authorizeUrl: null,
         error: outcome.ok || status.error ? null : outcome.message,
       })
+      syncPendingXPostLimit(xPostMaxCharacters(status))
       setNotice(outcome.message, outcome.ok ? 'info' : 'error')
       return outcome
     } catch (error) {
@@ -7369,7 +7400,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     try {
       const status = await call('provider_key_status', {})
       setProviders(asProviders(status))
-      await refreshXConnection()
+      await refreshXConnection({ refreshAccount: true })
       if (bookId) setStorage(await call('storage_status', { book_id: bookId }))
       setNotice('Settings refreshed')
     } catch (error) {
@@ -8829,6 +8860,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const prepareXPostThreadReview = async (
     plan: ChatActionPlan,
+    maxCharacters: number,
   ): Promise<XPostThreadReview | null> => {
     if (!bookId || !notebook) return null
     if (plan.tool !== 'post' && plan.routedTool !== 'post') return null
@@ -8912,7 +8944,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const credits = dedupeXPostSourceCredits(
       creditValues.filter((value): value is XPostSourceCredit => value !== null),
     )
-    return initialXPostThreadReview({ steps, credits })
+    return initialXPostThreadReview({ steps, credits }, maxCharacters)
   }
 
   const previewRoutedChatAction = async (
@@ -9137,7 +9169,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (plan.confirmation.required === false) {
       return await executeRoutedChatActionNow(plan)
     }
-    const xPostReview = await prepareXPostThreadReview(plan)
+    const postPlan = plan.tool === 'post' || plan.routedTool === 'post'
+    // Learn the account's post length before sizing the thread, so a Premium
+    // account sees its whole prompt instead of a trimmed one.
+    const xConnectionStatus = postPlan ? await refreshXConnection() : null
+    const xPostReview = await prepareXPostThreadReview(
+      plan,
+      xPostMaxCharacters(xConnectionStatus ?? xConnection.status),
+    )
     const reviewedPlan = xPostReview
       ? {
           ...plan,
@@ -9147,7 +9186,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ),
         }
       : plan
-    if (plan.tool === 'post' || plan.routedTool === 'post') void refreshXConnection()
     setPendingCommandPlan(null)
     setPendingChatAction({ kind: 'routed', plan: reviewedPlan, xPostReview })
     return applyReadyOutcome('Action preview ready')
@@ -9421,9 +9459,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       && (pendingChatAction.plan.tool === 'post'
         || pendingChatAction.plan.routedTool === 'post')
     ) {
-      const error = xPostDraftError(xPostDraftFromParams(
-        pendingChatAction.plan.params,
-      ))
+      const error = xPostDraftError(
+        xPostDraftFromParams(pendingChatAction.plan.params),
+        undefined,
+        xPostMaxLength,
+      )
       const threadError = pendingChatAction.xPostReview?.options.enabled
         && xPostFollowupsFromThread(pendingChatAction.xPostReview).length === 0
         ? X_POST_EMPTY_THREAD_MESSAGE

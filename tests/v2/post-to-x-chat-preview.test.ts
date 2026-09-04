@@ -270,6 +270,8 @@ describe('PostToXBody X connection notice', () => {
         hasCredentials: true,
         error: null,
         expiresAt: null,
+        account: null,
+        postMaxCharacters: 280,
       },
     })
     expect(html).toContain('aria-label="X connection"')
@@ -286,9 +288,71 @@ describe('PostToXBody X connection notice', () => {
         hasCredentials: true,
         error: null,
         expiresAt: '2099-01-01T00:00:00.000Z',
+        account: null,
+        postMaxCharacters: 280,
       },
     })).not.toContain('aria-label="X connection"')
     expect(render(initialXConnectionState)).not.toContain('aria-label="X connection"')
     expect(render(undefined)).not.toContain('aria-label="X connection"')
+  })
+
+  it('counts against the Premium post length and keeps the whole prompt', () => {
+    const prompt = `${'p'.repeat(3_000)} ${'q'.repeat(300)}`
+    const review = initialXPostThreadReview({
+      steps: [{
+        id: 'generation',
+        prompt,
+        model: { label: 'Seedance 2.5', provider: 'Kie' },
+        images: [],
+      }],
+      credits: [],
+    }, 25_000)
+    const premium = {
+      ...initialXConnectionState,
+      status: {
+        connected: true,
+        pending: false,
+        hasCredentials: true,
+        error: null,
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        account: { username: 'longposter', subscriptionType: 'Premium' },
+        postMaxCharacters: 25_000,
+      },
+    }
+    const html = renderToStaticMarkup(createElement(PostToXBody, {
+      asset: { type: 'video', mediaUrl: '/files/video.mp4', thumbnailUrl: null },
+      busy: false,
+      connection: premium,
+      draft: { ...draft, postText: 't'.repeat(1_000) },
+      onChange: ignoreChange,
+      onThreadPromptChange: ignoreChange,
+      prompt: 'post @a1 to X',
+      settings: [],
+      sourceLabel: '@a1',
+      threadReview: review,
+    }))
+
+    expect(html).toContain('1000/25000 characters')
+    expect(html).toContain('X Premium: posts up to 25,000 characters.')
+    expect(html).toContain(prompt)
+    expect(html).not.toContain('…')
+    expect(html).toContain(`${'Made with Seedance 2.5 via Kie. Prompt:\n'.length + prompt.length}/25000 characters with heading`)
+    expect(html).not.toContain('confirm-field-error')
+    expect(html).not.toContain('aria-label="X connection"')
+
+    // The same review sized for a free account trims the prompt and flags nothing else.
+    const free = renderToStaticMarkup(createElement(PostToXBody, {
+      asset: { type: 'video', mediaUrl: '/files/video.mp4', thumbnailUrl: null },
+      busy: false,
+      draft,
+      onChange: ignoreChange,
+      prompt: 'post @a1 to X',
+      settings: [],
+      sourceLabel: '@a1',
+      threadReview: initialXPostThreadReview(review.context),
+    }))
+    expect(free).toContain('5/280 characters')
+    expect(free).toContain('…')
+    expect(free).not.toContain(prompt)
   })
 })

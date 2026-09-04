@@ -3,6 +3,13 @@ import crypto from "node:crypto";
 import { createXOAuth, type XOAuthTokenResponse } from "@apicity/x";
 import { appState } from "../app-state.js";
 import { readTokens, writeTokens, type XTokenStore } from "./x-tokens.js";
+import {
+  clearXAccount,
+  fetchXAccount,
+  resolveXAccount,
+  xPostMaxCharacters,
+  type XSubscriptionType,
+} from "./account.js";
 
 const REDIRECT = "http://127.0.0.1:8765/callback";
 const PORT = 8765;
@@ -65,6 +72,19 @@ async function exchangeCodeForTokens(
     redirect_uri: REDIRECT,
     code_verifier: verifier,
   });
+}
+
+/**
+ * Cache which account the fresh tokens belong to and its subscription tier.
+ * A failed lookup clears the cache so a previous account's tier cannot leak
+ * onto the new one; the status call retries the lookup later.
+ */
+async function rememberConnectedAccount(store: XTokenStore): Promise<void> {
+  try {
+    await fetchXAccount({ store });
+  } catch {
+    await clearXAccount(store);
+  }
 }
 
 export async function startOAuthFlow(
@@ -162,6 +182,7 @@ export async function startOAuthFlow(
         },
         store,
       );
+      await rememberConnectedAccount(store);
       flow.status = "succeeded";
       res
         .writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
@@ -198,16 +219,30 @@ export async function startOAuthFlow(
   return { authorize_url: flow.authorizeUrl };
 }
 
+interface OAuthFlowAccount {
+  username: string;
+  subscription_type: XSubscriptionType;
+}
+
 interface OAuthFlowStatus {
   connected: boolean;
   pending: boolean;
   has_credentials: boolean;
   error?: string;
   expires_at?: string;
+  account: OAuthFlowAccount | null;
+  post_max_characters: number;
+}
+
+interface OAuthFlowStatusOptions {
+  /** Re-read the account from X instead of trusting the cached tier. */
+  refreshAccount?: boolean;
+  fetchImpl?: typeof fetch;
 }
 
 export async function getOAuthFlowStatus(
   store: XTokenStore = appState,
+  options: OAuthFlowStatusOptions = {},
 ): Promise<OAuthFlowStatus> {
   const tokens = await readTokens(store);
   const connected = tokens !== null;
@@ -217,11 +252,22 @@ export async function getOAuthFlowStatus(
   const has_credentials = Boolean(
     process.env.X_CLIENT_ID && process.env.X_CLIENT_SECRET,
   );
+  const account = connected && !pending
+    ? await resolveXAccount({
+      store,
+      fetchImpl: options.fetchImpl,
+      refresh: options.refreshAccount,
+    })
+    : null;
   return {
     connected,
     pending,
     has_credentials,
     error,
     expires_at: tokens?.expires_at,
+    account: account
+      ? { username: account.username, subscription_type: account.subscription_type }
+      : null,
+    post_max_characters: xPostMaxCharacters(account?.subscription_type ?? null),
   };
 }

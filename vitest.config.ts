@@ -131,6 +131,7 @@ export default defineConfig({
       'server/src/vision-regions.test.ts',
       'server/src/watermark-badge.test.ts',
       'server/src/watermark-config.test.ts',
+      'server/src/x/account.test.ts',
       'server/src/x/authenticated-handle.test.ts',
       'server/src/x/post-to-x.test.ts',
       'server/src/x/x-tokens.test.ts',

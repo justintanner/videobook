@@ -8,6 +8,7 @@ import {
   readableXPostPrompt,
   selectXPostGenerationModel,
   selectXPostGenerationPrompt,
+  withXPostThreadLimit,
   xPostSourceCredit,
   xPostThreadHasDetails,
   xPostThreadPrompt,
@@ -419,5 +420,36 @@ describe('X post thread provenance', () => {
       ...solidReview,
       promptOverrides: { solid: 'a'.repeat(300) },
     })[0]?.text).toHaveLength(308)
+  })
+
+  it('keeps the whole prompt and credits when the account can post long', () => {
+    const prompt = `${'x'.repeat(2_000)} ${'y'.repeat(1_300)}`
+    const step = { id: 'generation', prompt: `  ${prompt}  `, model: null, images: [] }
+    const credits = Array.from({ length: 8 }, (_, index) => ({
+      id: `credit-${index}`,
+      label: `Uploader number ${index}`,
+      url: `https://youtu.be/source-${index}`,
+      xHandle: null,
+    }))
+    const premium = initialXPostThreadReview({ steps: [step], credits }, 25_000)
+    expect(premium.maxCharacters).toBe(25_000)
+    expect(xPostThreadPrompt(premium, step)).toBe(prompt)
+    const [reply, thanks] = buildXPostThreadReplies(premium)
+    expect(reply?.text).toBe(`Prompt:\n${prompt}`)
+    expect(thanks?.text).toBe(
+      `Special thanks to:\n${credits.map((credit) => `${credit.label}: ${credit.url}`).join('\n')}`,
+    )
+
+    // The standard limit trims the prompt and drops credit names to fit.
+    const standard = withXPostThreadLimit(premium, 280)
+    expect(standard.maxCharacters).toBe(280)
+    expect(xPostThreadPrompt(standard, step).endsWith('…')).toBe(true)
+    expect(buildXPostThreadReplies(standard)[1]?.text)
+      .toBe(`Special thanks to:\n${credits.map((credit) => credit.url).join('\n')}`)
+    expect(withXPostThreadLimit(premium, 25_000)).toBe(premium)
+
+    // Edits survive a limit change.
+    const edited = { ...standard, promptOverrides: { generation: 'typed' } }
+    expect(xPostThreadPrompt(withXPostThreadLimit(edited, 25_000), step)).toBe('typed')
   })
 })

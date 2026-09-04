@@ -1,4 +1,10 @@
 import { nonEmptyStringValue, recordValue } from './value-decoders'
+import { X_POST_MAX_CHARACTERS } from './x-post-review'
+
+export type XConnectionAccount = {
+  username: string
+  subscriptionType: string
+}
 
 export type XConnectionStatus = {
   connected: boolean
@@ -6,6 +12,9 @@ export type XConnectionStatus = {
   hasCredentials: boolean
   error: string | null
   expiresAt: string | null
+  account: XConnectionAccount | null
+  /** Post length the connected account's tier allows. */
+  postMaxCharacters: number
 }
 
 export type XConnectionState = {
@@ -50,6 +59,19 @@ export const initialXConnectionState: XConnectionState = {
   error: null,
 }
 
+function parseXConnectionAccount(value: unknown): XConnectionAccount | null {
+  const payload = recordValue(value)
+  const username = nonEmptyStringValue(payload?.username)
+  const subscriptionType = nonEmptyStringValue(payload?.subscription_type)
+  return username && subscriptionType ? { username, subscriptionType } : null
+}
+
+function parsePostMaxCharacters(value: unknown): number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? value
+    : X_POST_MAX_CHARACTERS
+}
+
 export function parseXConnectionStatus(value: unknown): XConnectionStatus {
   const payload = recordValue(value)
   return {
@@ -58,14 +80,43 @@ export function parseXConnectionStatus(value: unknown): XConnectionStatus {
     hasCredentials: payload?.has_credentials === true,
     error: nonEmptyStringValue(payload?.error),
     expiresAt: nonEmptyStringValue(payload?.expires_at),
+    account: parseXConnectionAccount(payload?.account),
+    postMaxCharacters: parsePostMaxCharacters(payload?.post_max_characters),
   }
+}
+
+/** The post length to enforce; the standard 280 until X reports otherwise. */
+export function xPostMaxCharacters(status: XConnectionStatus | null): number {
+  return status?.postMaxCharacters ?? X_POST_MAX_CHARACTERS
+}
+
+export function xSubscriptionLabel(subscriptionType: string): string {
+  switch (subscriptionType) {
+    case 'Basic': return 'X Premium Basic'
+    case 'Premium': return 'X Premium'
+    case 'PremiumPlus': return 'X Premium+'
+    case 'None': return 'No X Premium'
+    default: return subscriptionType
+  }
+}
+
+/** One line naming the account and what its tier lets it post. */
+export function xConnectionAccountDetail(status: XConnectionStatus): string | null {
+  if (!status.account) return null
+  const limit = xPostMaxCharacters(status).toLocaleString('en-US')
+  return `${xSubscriptionLabel(status.account.subscriptionType)}: posts up to ${limit} characters.`
 }
 
 export async function fetchXConnectionStatus(
   callTool: XConnectionCallTool,
+  options: { refreshAccount?: boolean } = {},
 ): Promise<XConnectionStatus> {
   return parseXConnectionStatus(
-    await callTool('x_connect_status', {}, { background: true }),
+    await callTool(
+      'x_connect_status',
+      options.refreshAccount ? { refresh_account: true } : {},
+      { background: true },
+    ),
   )
 }
 
@@ -176,10 +227,13 @@ export function xConnectionPresentation(
     }
   }
   if (status.connected) {
+    const account = xConnectionAccountDetail(status)
     return {
       tone: 'connected',
-      label: 'Connected',
-      detail: connectedDetail(status.expiresAt, options.now ?? Date.now()),
+      label: status.account ? `Connected as @${status.account.username}` : 'Connected',
+      detail: [account, connectedDetail(status.expiresAt, options.now ?? Date.now())]
+        .filter((part): part is string => part !== null)
+        .join(' '),
       actionLabel: 'Reconnect X',
     }
   }

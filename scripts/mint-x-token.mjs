@@ -58,6 +58,9 @@ async function writeTokens(next) {
     }
   } catch {}
   state.values["x.oauth.tokens"] = next;
+  // The tokens may belong to a different account: drop the cached account
+  // tier so the server looks it up again on the next status check.
+  delete state.values["x.account"];
   await mkdir(dirname(statePath), { recursive: true });
   const temporary = `${statePath}.${crypto.randomUUID()}.tmp`;
   await writeFile(temporary, JSON.stringify(state), "utf8");

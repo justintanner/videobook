@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { getOAuthFlowStatus, startOAuthFlow } from "../x/oauth-flow.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -37,10 +38,18 @@ export function xConnectStatusDef(): ToolDef {
   return {
     name: "x_connect_status",
     description:
-      "Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.",
-    schema: {},
-    handler: async () => {
-      const status = await getOAuthFlowStatus();
+      "Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).",
+    schema: {
+      refresh_account: z
+        .boolean()
+        .optional()
+        .describe("Re-read the connected account's username and subscription tier from X instead of the cached copy."),
+    },
+    handler: async (args) => {
+      const { refresh_account } = args as { refresh_account?: boolean };
+      const status = await getOAuthFlowStatus(undefined, {
+        refreshAccount: refresh_account === true,
+      });
       return {
         content: [
           { type: "text" as const, text: JSON.stringify(status) },

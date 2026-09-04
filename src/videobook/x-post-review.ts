@@ -96,13 +96,18 @@ export function reviseXPostFollowups(
 
 const X_POST_TITLE_REQUIRED_MESSAGE = 'Add a title for the post.'
 
+/**
+ * Why the draft cannot post yet, or null. `maxCharacters` is the post length
+ * the connected X account allows: 280, or 25,000 with an X Premium tier.
+ */
 export function xPostDraftError(
   draft: XPostDraft,
   nowMs = Date.now(),
+  maxCharacters = X_POST_MAX_CHARACTERS,
 ): string | null {
   if (draft.postText.trim() === '') return X_POST_TITLE_REQUIRED_MESSAGE
-  if (draft.postText.length > X_POST_MAX_CHARACTERS) {
-    const overage = draft.postText.length - X_POST_MAX_CHARACTERS
+  if (draft.postText.length > maxCharacters) {
+    const overage = draft.postText.length - maxCharacters
     return `Title is ${overage} character${overage === 1 ? '' : 's'} too long.`
   }
   if (draft.followups.length > X_POST_MAX_FOLLOWUPS) {
@@ -112,8 +117,8 @@ export function xPostDraftError(
     if (!followup.text && followup.imageAssetIds.length === 0) {
       return `Follow-up ${index + 1} needs text or an image.`
     }
-    if (followup.text.length > X_POST_MAX_CHARACTERS) {
-      const overage = followup.text.length - X_POST_MAX_CHARACTERS
+    if (followup.text.length > maxCharacters) {
+      const overage = followup.text.length - maxCharacters
       return `Follow-up ${index + 1} is ${overage} character${overage === 1 ? '' : 's'} too long.`
     }
     if (followup.imageAssetIds.length > X_POST_MAX_IMAGES_PER_FOLLOWUP) {

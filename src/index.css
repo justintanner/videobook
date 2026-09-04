@@ -6955,6 +6955,10 @@ textarea:focus-visible {
   font-size: 9px;
 }
 
+.x-post-preview-copy > .x-post-account {
+  justify-self: start;
+}
+
 .x-post-preview-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

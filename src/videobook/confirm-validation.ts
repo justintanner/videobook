@@ -169,8 +169,12 @@ export function commandPlanValidation(input: CommandPlanValidationInput): Confir
 
 // ---- post to X ----
 
-export function xPostValidation(draft: XPostDraft, nowMs?: number): ConfirmValidation {
-  const error = xPostDraftError(draft, nowMs)
+export function xPostValidation(
+  draft: XPostDraft,
+  nowMs?: number,
+  maxCharacters?: number,
+): ConfirmValidation {
+  const error = xPostDraftError(draft, nowMs, maxCharacters)
   return error ? blocking(error) : VALID_CONFIRMATION
 }
 

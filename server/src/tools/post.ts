@@ -2,11 +2,12 @@ import { z } from "zod";
 import { queue } from "../queue.js";
 import { schedulePost } from "../scheduled-posts.js";
 import type { PostToXResult, XPostFollowup } from "../x/post-contract.js";
+import { X_PREMIUM_POST_MAX_CHARACTERS } from "../x/account.js";
 import type { ToolDef } from "./tool-def.js";
 
 const SCHEDULE_LEAD_MS = 5_000;
 const followupSchema = z.object({
-  text: z.string().max(280).optional(),
+  text: z.string().max(X_PREMIUM_POST_MAX_CHARACTERS).optional(),
   image_asset_ids: z.array(z.string()).max(4).optional(),
 }).refine(
   (value) => Boolean(value.text?.length || value.image_asset_ids?.length),
@@ -25,10 +26,10 @@ export function postDef(): ToolDef {
       text: z
         .string()
         .trim()
-        .max(280)
+        .max(X_PREMIUM_POST_MAX_CHARACTERS)
         .optional()
         .describe(
-          "Title of the root post (X limit 280 chars). Publishing requires one; pass it only when the user supplied it, since the confirm sheet asks for a missing title before applying.",
+          "Title of the root post (X limit 280 chars, or 25000 when the connected account has X Premium; x_connect_status reports post_max_characters). Publishing requires one; pass it only when the user supplied it, since the confirm sheet asks for a missing title before applying.",
         ),
       orientation: z
         .enum(["portrait", "landscape"])

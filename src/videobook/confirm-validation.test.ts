@@ -173,6 +173,21 @@ describe('x post validation', () => {
       followups: [],
     }))
       .toEqual(VALID_CONFIRMATION)
+    // A Premium account's limit is passed through to the draft check.
+    expect(xPostValidation({
+      postText: 'x'.repeat(281),
+      scheduledFor: null,
+      orientation: null,
+      followups: [{ text: 'p'.repeat(3_320), imageAssetIds: [] }],
+    }, undefined, 25_000))
+      .toEqual(VALID_CONFIRMATION)
+    expect(xPostValidation({
+      postText: 'ok',
+      scheduledFor: null,
+      orientation: null,
+      followups: [{ text: 'p'.repeat(25_001), imageAssetIds: [] }],
+    }, undefined, 25_000).blocking)
+      .toBe('Follow-up 1 is 1 character too long.')
   })
 })
 

@@ -11,6 +11,30 @@ import {
   readXPostMetadata,
   POST_METADATA_FILE,
 } from "./post-metadata.js";
+import type { ApplicationStateStore } from "../app-state.js";
+
+function createStore(): ApplicationStateStore {
+  const values = new Map<string, unknown>();
+  return {
+    get<T>(key: string): Promise<T | null> {
+      return Promise.resolve(values.has(key) ? values.get(key) as T : null);
+    },
+    set<T>(key: string, value: T): Promise<void> {
+      values.set(key, value);
+      return Promise.resolve();
+    },
+  };
+}
+
+async function premiumStore(): Promise<ApplicationStateStore> {
+  const store = createStore();
+  await store.set("x.account", {
+    username: "LongPoster",
+    subscription_type: "Premium",
+    fetched_at: new Date().toISOString(),
+  });
+  return store;
+}
 
 interface RecordedRequest {
   url: string;
@@ -413,5 +437,64 @@ describe("postToX helper", () => {
     });
     expect(calls.filter((call) => call.url === "https://api.x.com/2/tweets"))
       .toHaveLength(2);
+  });
+
+  it("refuses long text before uploading when the account has no X Premium tier", async () => {
+    const assetId = await uploadFakeAsset(fs, bookId, "img", ".png");
+    const { fetch: stubFetch, calls } = makeStubFetch([]);
+    const x = createX({ accessToken: "test-token", fetch: stubFetch });
+    const store = createStore();
+
+    await expect(postToX({ engine: fs, assetId, bookId, x, store, text: "t".repeat(281) }))
+      .rejects.toThrow(/Post title exceeds 280 characters \(longer posts need an X Premium subscription\)/);
+    await expect(postToX({
+      engine: fs,
+      assetId,
+      bookId,
+      x,
+      store,
+      text: "root",
+      followups: [{ text: "p".repeat(3_320) }],
+    })).rejects.toThrow(/Follow-up 1 exceeds 280 characters/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("posts long text as-is when the cached account has X Premium", async () => {
+    const assetId = await uploadFakeAsset(fs, bookId, "img", ".png");
+    const longTitle = "T".repeat(1_000);
+    const longPrompt = `Made with Seedance 2.5 via Kie. Prompt:\n${"p".repeat(3_320)}`;
+    const { fetch: stubFetch, calls } = makeStubFetch([
+      { status: 200, body: { data: { id: "MEDIA", media_key: "k", expires_after_secs: 1, size: 19 } } },
+      { status: 200, body: { data: { expires_at: 1 } } },
+      { status: 200, body: { data: { id: "MEDIA", media_key: "k", expires_after_secs: 1, size: 19 } } },
+      { status: 201, body: { data: { id: "ROOT", text: "root" } } },
+      { status: 201, body: { data: { id: "REPLY", text: "prompt" } } },
+    ]);
+    const x = createX({ accessToken: "test-token", fetch: stubFetch });
+
+    const result = await postToX({
+      engine: fs,
+      assetId,
+      bookId,
+      x,
+      store: await premiumStore(),
+      text: longTitle,
+      followups: [{ text: longPrompt }],
+    });
+
+    expect(result.status).toBe("posted");
+    const tweetBodies = calls
+      .filter((call) => call.url === "https://api.x.com/2/tweets")
+      .map((call) => JSON.parse(call.body!) as { text: string });
+    expect(tweetBodies.map((body) => body.text)).toEqual([longTitle, longPrompt]);
+
+    await expect(postToX({
+      engine: fs,
+      assetId,
+      bookId,
+      x,
+      store: await premiumStore(),
+      text: "x".repeat(25_001),
+    })).rejects.toThrow(/Post title exceeds 25000 characters$/);
   });
 });

@@ -5,13 +5,17 @@ import type { ApplicationStateStore } from '../../server/src/app-state.js'
 import { getOAuthFlowStatus } from '../../server/src/x/oauth-flow.js'
 import { XConnectionCard } from '../../src/components/videobook/XConnectionCard'
 import {
+  fetchXConnectionStatus,
   initialXConnectionState,
   parseXConnectionStatus,
   startXConnection,
   waitForXConnection,
   X_CONNECTION_POLL_MS,
+  xConnectionAccountDetail,
   xConnectionOutcome,
   xConnectionPresentation,
+  xPostMaxCharacters,
+  xSubscriptionLabel,
   type XConnectionStatus,
 } from '../../src/videobook/x-connection'
 
@@ -33,6 +37,14 @@ const connectedStatus: XConnectionStatus = {
   hasCredentials: true,
   error: null,
   expiresAt: '2099-01-01T00:00:00.000Z',
+  account: null,
+  postMaxCharacters: 280,
+}
+
+const premiumStatus: XConnectionStatus = {
+  ...connectedStatus,
+  account: { username: 'longposter', subscriptionType: 'Premium' },
+  postMaxCharacters: 25_000,
 }
 
 const disconnectedStatus: XConnectionStatus = {
@@ -41,6 +53,22 @@ const disconnectedStatus: XConnectionStatus = {
   hasCredentials: true,
   error: null,
   expiresAt: null,
+  account: null,
+  postMaxCharacters: 280,
+}
+
+/** A stand-in for X's /2/users/me that reports the given subscription tier. */
+function usersMeFetch(subscriptionType: string): { fetch: typeof fetch; urls: string[] } {
+  const urls: string[] = []
+  const stub: typeof fetch = async (input) => {
+    const url = typeof input === 'string' ? input : (input as URL).toString()
+    urls.push(url)
+    if (!url.includes('/2/users/me')) return new Response('not found', { status: 404 })
+    return new Response(JSON.stringify({
+      data: { id: '1', name: 'Long Poster', username: 'longposter', subscription_type: subscriptionType },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+  return { fetch: stub, urls }
 }
 
 function scriptedCallTool(statuses: Array<Record<string, unknown>>) {
@@ -90,9 +118,11 @@ describe('X connection status', () => {
   })
 
   it('reads the real x_connect_status shape before and after tokens exist', async () => {
-    expect(parseXConnectionStatus(await getOAuthFlowStatus(memoryStore()))).toEqual({
+    const { fetch: fetchImpl, urls } = usersMeFetch('Premium')
+    expect(parseXConnectionStatus(await getOAuthFlowStatus(memoryStore(), { fetchImpl }))).toEqual({
       ...disconnectedStatus,
     })
+    expect(urls).toEqual([])
 
     const withTokens = memoryStore({
       'x.oauth.tokens': {
@@ -101,11 +131,39 @@ describe('X connection status', () => {
         expires_at: '2099-01-01T00:00:00.000Z',
       },
     })
-    expect(parseXConnectionStatus(await getOAuthFlowStatus(withTokens))).toEqual(connectedStatus)
+    // Connecting looks the account up once; later checks reuse the cached tier.
+    expect(parseXConnectionStatus(await getOAuthFlowStatus(withTokens, { fetchImpl })))
+      .toEqual(premiumStatus)
+    expect(parseXConnectionStatus(await getOAuthFlowStatus(withTokens, { fetchImpl })))
+      .toEqual(premiumStatus)
+    expect(urls).toHaveLength(1)
+    expect(decodeURIComponent(urls[0]!)).toContain('user.fields=username,subscription_type')
 
     delete process.env.X_CLIENT_SECRET
-    expect(parseXConnectionStatus(await getOAuthFlowStatus(memoryStore())).hasCredentials)
+    expect(parseXConnectionStatus(await getOAuthFlowStatus(memoryStore(), { fetchImpl })).hasCredentials)
       .toBe(false)
+  })
+
+  it('falls back to the standard post length when the server reports no account', () => {
+    expect(parseXConnectionStatus({ connected: true, pending: false, has_credentials: true }))
+      .toMatchObject({ account: null, postMaxCharacters: 280 })
+    expect(parseXConnectionStatus({ connected: true, post_max_characters: -1 }).postMaxCharacters)
+      .toBe(280)
+    expect(parseXConnectionStatus({ connected: true, account: { username: 'x' } }).account)
+      .toBeNull()
+    expect(xPostMaxCharacters(null)).toBe(280)
+    expect(xPostMaxCharacters(premiumStatus)).toBe(25_000)
+  })
+
+  it('asks the server to re-read the account only when refreshing', async () => {
+    const calls: Array<Record<string, unknown>> = []
+    const callTool = async (_tool: string, args: Record<string, unknown>) => {
+      calls.push(args)
+      return { connected: true, pending: false, has_credentials: true }
+    }
+    await fetchXConnectionStatus(callTool)
+    await fetchXConnectionStatus(callTool, { refreshAccount: true })
+    expect(calls).toEqual([{}, { refresh_account: true }])
   })
 
   it('starts the flow and polls in the background until X reports the connection', async () => {
@@ -196,7 +254,27 @@ describe('X connection status', () => {
       now: Date.parse('2098-12-31T00:00:00.000Z'),
     })
     expect(connected).toMatchObject({ tone: 'connected', label: 'Connected', actionLabel: 'Reconnect X' })
-    expect(connected.detail).toMatch(/renews automatically; the current one expires/)
+    expect(connected.detail).toMatch(/^Access token renews automatically; the current one expires/)
+
+    const premium = xConnectionPresentation(premiumStatus, {
+      now: Date.parse('2098-12-31T00:00:00.000Z'),
+    })
+    expect(premium.label).toBe('Connected as @longposter')
+    expect(premium.detail).toMatch(/^X Premium: posts up to 25,000 characters\. Access token renews/)
+    expect(xConnectionAccountDetail(premiumStatus)).toBe('X Premium: posts up to 25,000 characters.')
+    expect(xConnectionAccountDetail({
+      ...premiumStatus,
+      account: { username: 'reader', subscriptionType: 'None' },
+      postMaxCharacters: 280,
+    })).toBe('No X Premium: posts up to 280 characters.')
+    expect(xConnectionAccountDetail(connectedStatus)).toBeNull()
+    expect(['None', 'Basic', 'Premium', 'PremiumPlus', 'Other'].map(xSubscriptionLabel)).toEqual([
+      'No X Premium',
+      'X Premium Basic',
+      'X Premium',
+      'X Premium+',
+      'Other',
+    ])
     expect(xConnectionPresentation(connectedStatus, {
       now: Date.parse('2099-06-01T00:00:00.000Z'),
     }).detail).toMatch(/expired; it renews automatically/)
@@ -236,5 +314,9 @@ describe('X connection status', () => {
     const connected = renderCard({ status: connectedStatus })
     expect(connected).toContain('x-connection-connected')
     expect(connected).toContain('Reconnect X</button>')
+
+    const premium = renderCard({ status: premiumStatus })
+    expect(premium).toContain('Connected as @longposter')
+    expect(premium).toContain('X Premium: posts up to 25,000 characters.')
   })
 })
