@@ -1,5 +1,6 @@
 import type { Engine, GenerationError, ArtifactView } from "videobook-engine";
 import { z } from "zod";
+import { gcEngineCatalog, type BookCatalogGcReport } from "../catalog-gc.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { queue } from "../queue.js";
 
@@ -36,6 +37,7 @@ interface DoctorReport {
   broken: BrokenAsset[];
   stuck: StuckAsset[];
   hint?: string;
+  catalog_gc?: BookCatalogGcReport;
 }
 
 /**
@@ -121,7 +123,8 @@ export function doctorDef(engine: Engine): ToolDef {
       "in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore " +
       "that one asset to its last usable state before the current error — clears a stale error or " +
       "lease when the media is intact, otherwise restores the asset from Dolt history. A bare " +
-      "fix:true scan never bulk-fixes; it just reports.",
+      "fix:true scan never bulk-fixes; it just reports. Pass gc:true to run catalog GC on this " +
+      "book and include per-book byte/chunk reclamation in the report.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z
@@ -133,12 +136,18 @@ export function doctorDef(engine: Engine): ToolDef {
         .optional()
         .default(false)
         .describe("Restore the given asset_id to its last usable state. Requires asset_id."),
+      gc: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Run catalog GC on this book and report bytes/chunks reclaimed."),
     },
     handler: async (args) => {
-      const { book_id, asset_id, fix } = args as {
+      const { book_id, asset_id, fix, gc } = args as {
         book_id: string;
         asset_id?: string;
         fix?: boolean;
+        gc?: boolean;
       };
       const assetId = asset_id?.replace(/^@/, "");
 
@@ -164,7 +173,9 @@ export function doctorDef(engine: Engine): ToolDef {
         }
       }
 
-      return ok(await diagnose(engine, book_id, assetId));
+      const report = await diagnose(engine, book_id, assetId);
+      if (gc) report.catalog_gc = gcEngineCatalog(engine);
+      return ok(report);
     },
   };
 }

@@ -64,6 +64,7 @@ export default defineConfig({
       'src/videobook/mcp-client.test.ts',
       'src/videobook/music-video-command.test.ts',
       'scripts/search-benchmark-corpus.test.ts',
+      'scripts/benchmark-startup.test.ts',
       'src/videobook/watermark-target.test.ts',
       'src/videobook/x-post-thread.test.ts',
       'server/src/app-state.test.ts',

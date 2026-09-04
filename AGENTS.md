@@ -15,6 +15,7 @@ Guidance for AI coding agents working in the Videobook repository.
 | `npm run test` | Run all vitest integration tests |
 | `npm run test:watch` | Vitest watch mode |
 | `npm run test:e2e` | E2E tests with vitest.e2e.config.ts |
+| `npm run benchmark:startup` | Replicate server `start()` phase by phase (skips `queue.start()`); JSON to argv[2]; `--assert-listen-ms` / `--assert-ready-ms` |
 
 ### Running a Single Test
 - `npx vitest run tests/v2/notebook-domain.test.ts`
@@ -34,7 +35,7 @@ This repository explicitly opts into the Beads **team-maintainer** profile (`age
 
 - **Frontend (`src/`)**: React 19 + TypeScript + Vite 7 SPA. Entry: `main.tsx` → `App.tsx`. Uses `useMcpConnection()` over `@modelcontextprotocol/client` to connect to `/mcp` with MCP `2026-07-28` pinned.
 - **Backend (`server/src/`)**: Express MCP server on port 3001. Entry: `server/src/index.ts`. The modern-only `createMcpHandler` endpoint rejects legacy protocol traffic. Tools in `server/src/tools/*.ts` are registered via `server/src/tools/index.ts`.
-- **Domain/storage (`videobook-engine` 5.3.0, schema 24)**: one isolated UUIDv7 engine root per book, providing Dolt-native artifact, file/CAS, metadata, history, notebook, canonical-sequence, and runtime-job operations. All managed data goes through the scoped book `Engine`. Artifacts and cells carry no slugs — identity is `artifact_id`/`cell_id` plus content-addressed `object_hash`, the user-facing handle is the grid address `@a1`-`@bl8` (lettered rows a-z, aa-az, ba-bl; numbered columns 1-8, so the top row reads `@a1` through `@a8`), and `label` is display-only text that is never parsed or looked up.
+- **Domain/storage (`videobook-engine` 5.3.1, schema 24)**: one isolated UUIDv7 engine root per book, providing Dolt-native artifact, file/CAS, metadata, history, notebook, canonical-sequence, and runtime-job operations. All managed data goes through the scoped book `Engine`. Artifacts and cells carry no slugs — identity is `artifact_id`/`cell_id` plus content-addressed `object_hash`, the user-facing handle is the grid address `@a1`-`@bl8` (lettered rows a-z, aa-az, ba-bl; numbered columns 1-8, so the top row reads `@a1` through `@a8`), and `label` is display-only text that is never parsed or looked up.
 
 ## Code Style
 

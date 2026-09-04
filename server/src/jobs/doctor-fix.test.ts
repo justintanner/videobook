@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createEngineForTest } from "../engine.js";
@@ -53,6 +53,15 @@ interface DoctorReport {
   broken: Array<{ asset_id: string; type: string; error: { message: string } | null }>;
   stuck: Array<{ asset_id: string; type: string; work_status: string; minutes_overdue: number }>;
   hint?: string;
+  catalog_gc?: {
+    bookId: string;
+    name: string;
+    bytesBefore: number;
+    bytesAfter: number;
+    chunksRemoved: number | null;
+    chunksKept: number | null;
+    summary: string;
+  };
 }
 
 interface DoctorFixResult {
@@ -112,6 +121,38 @@ describe("doctor tool", () => {
     expect(report.stuck.map((s) => s.asset_id)).not.toContain(healthy);
     expect(report.hint).toBeTruthy();
   });
+
+  it(
+    "gc reports per-book bytes and shrinks a churned catalog",
+    { timeout: 60_000 },
+    async () => {
+      for (let index = 0; index < 2_000; index += 1) {
+        fs.jobs.queue.enqueue({
+          type: "doctor-gc-churn",
+          payload: { index },
+          maxAttempts: 1,
+        });
+        const leased = fs.jobs.queue.dequeue(1, 30_000);
+        if (leased) fs.jobs.queue.heartbeat(leased.id, leased.fence, 30_000);
+      }
+      const catalog = join(tempDir, "data", "videobook.db");
+      const bytesBefore = (await stat(catalog)).size;
+      const res = await client.callTool({
+        name: "doctor",
+        arguments: { book_id: bookId, gc: true },
+      });
+      expect(res.isError).toBeFalsy();
+      const report = parse<DoctorReport>(res);
+      expect(report.catalog_gc?.bookId).toBe(bookId);
+      expect(report.catalog_gc?.bytesBefore).toBeGreaterThan(0);
+      expect(report.catalog_gc?.bytesAfter).toBeLessThanOrEqual(
+        report.catalog_gc!.bytesBefore,
+      );
+      expect(report.catalog_gc?.summary).toMatch(/chunks/i);
+      expect((await stat(catalog)).size).toBeLessThanOrEqual(bytesBefore);
+      expect(report.catalog_gc!.bytesAfter).toBeLessThan(bytesBefore);
+    },
+  );
 
   it("fix recovers an asset in place when its media is intact (tier 1)", async () => {
     const assetId = await createAsset(fs, "img", "recoverable");

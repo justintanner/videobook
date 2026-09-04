@@ -14,16 +14,9 @@ import { v7 as uuidv7 } from "uuid";
 import { stopAceServer } from "./acestep/process.js";
 import { localArchiveDir } from "./archive-store.js";
 import { bookManager, scopedEngine as scopedBookEngine } from "./engine.js";
-import { ensureDancingWorkflow } from "./dancing-workflow.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
-import { reconcileImageSubjectJobFailures } from "./jobs/image-subjects.js";
-import {
-  abortLeasedNotebookRunsOnStartup,
-  reconcileAwaitingNotebookOutputs,
-  reconcileGenerationMediaOutputs,
-  reconcileQueuedNotebookCells,
-} from "./jobs/run-notebook.js";
 import { uploadLocalStream } from "./local-upload.js";
+import { logger } from "./logger.js";
 import { queue } from "./queue.js";
 import { searchReferenceStore } from "./search-reference-store.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
@@ -213,25 +206,28 @@ app.all("/mcp", (req, res) => {
 async function hydrateLibrary(): Promise<void> {
   await bookManager.ready();
   if (process.env.VIDEOBOOK_DEV_FIXTURES === "1") {
+    const { ensureDancingWorkflow } = await import("./dancing-workflow.js");
     await ensureDancingWorkflow(bookManager);
   }
+  const imageSubjects = await import("./jobs/image-subjects.js");
+  const runNotebook = await import("./jobs/run-notebook.js");
   for (const book of bookManager.list()) {
     const selected = bookManager.get(book.bookId);
     if (!selected.ok) continue;
     await selected.value.engine.jobs.queue.reap();
-    await reconcileImageSubjectJobFailures(
+    await imageSubjects.reconcileImageSubjectJobFailures(
       selected.value.engine,
       selected.value.bookId,
     );
-    await abortLeasedNotebookRunsOnStartup(selected.value.engine);
-    await reconcileGenerationMediaOutputs(selected.value.engine);
-    await reconcileQueuedNotebookCells(selected.value.engine);
+    await runNotebook.abortLeasedNotebookRunsOnStartup(selected.value.engine);
+    await runNotebook.reconcileGenerationMediaOutputs(selected.value.engine);
+    await runNotebook.reconcileQueuedNotebookCells(selected.value.engine);
   }
   await queue.start();
   for (const book of bookManager.list()) {
     const selected = bookManager.get(book.bookId);
     if (!selected.ok) continue;
-    await reconcileAwaitingNotebookOutputs(
+    await runNotebook.reconcileAwaitingNotebookOutputs(
       selected.value.engine,
       selected.value.bookId,
     );
@@ -256,6 +252,7 @@ async function shutdown(): Promise<void> {
     await queue.stop();
     await stopAceServer();
     await bookManager.close();
+    logger.info("[shutdown] queue stopped; catalog GC-at-close completed");
   } catch (error) {
     console.error("[shutdown] cleanup failed:", error);
     exitCode = 1;

@@ -56,8 +56,8 @@ function attachBookAliasShim(
 
 export async function createTestClient(projectsDir?: string): Promise<Client> {
   const fs = projectsDir ? createEngineForTest(projectsDir) : undefined;
+  if (fs) registerAllJobHandlers(fs);
   if (projectsDir) await setEngineRoot(projectsDir, fs);
-  registerAllJobHandlers(fs!);
   const handler = createHttpHandler(fs);
   const client = new Client(
     { name: "videocity-test", version: "0.0.1" },
@@ -101,8 +101,8 @@ export async function createReusableTestClient(
   const root = join(parentDir, randomUUID());
   await mkdir(root, { recursive: true });
   const engine = createEngineForTest(root);
-  await setEngineRoot(root, engine);
   registerAllJobHandlers(engine);
+  await setEngineRoot(root, engine);
   const handler = createHttpHandler(() => engine);
   const client = new Client(
     { name: "videocity-test", version: "0.0.1" },
@@ -146,8 +146,8 @@ export async function createReusableTestClient(
         });
       }
       await writeTimeline(engine, { render: "landscape", slots: [], audio: [] });
-      await setEngineRoot(root, engine);
       registerAllJobHandlers(engine);
+      await setEngineRoot(root, engine);
     },
     async close() {
       if (closed) return;

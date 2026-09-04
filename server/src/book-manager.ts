@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import { performance } from "node:perf_hooks";
+import { logger } from "./logger.js";
 import {
   createEngine,
   dryRunV4Migration,
@@ -372,9 +374,26 @@ export class BookManager {
     const root = this.bookRoot(bookId);
     let engine: Engine | undefined;
     try {
+      const openedAt = performance.now();
       engine = this.createEngine(root);
       await engine.ready;
-      const managed = this.toManagedBook(engine, root, engine.book.get());
+      const openMs = performance.now() - openedAt;
+      const book = engine.book.get();
+      const gc = engine.lastCatalogGc;
+      const tag = `${book.name} [${bookId.slice(0, 8)}]`;
+      if (openMs > 1_000) {
+        logger.warn(
+          `[books] open ${tag} took ${openMs.toFixed(0)} ms — catalog is likely bloated`,
+        );
+      } else {
+        logger.info(`[books] open ${tag} ${openMs.toFixed(1)} ms`);
+      }
+      if (gc) {
+        logger.info(
+          `[books] catalog gc ${tag} ${gc.trigger} ${gc.bytesBefore} → ${gc.bytesAfter} ${gc.summary}`,
+        );
+      }
+      const managed = this.toManagedBook(engine, root, book);
       if (managed.bookId !== bookId) {
         engine.close();
         throw new Error(`Book root ${bookId} has mismatched book identity`);

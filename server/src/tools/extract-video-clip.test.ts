@@ -44,8 +44,8 @@ describe("source-preserving video clip tools", () => {
       sourcePath,
     ]);
     engine = createEngineForTest(root);
-    await setEngineRoot(root, engine);
     registerAllJobHandlers(engine);
+    await setEngineRoot(root, engine);
     bookId = engine.book.get().bookId;
     const source = await engine.artifacts.create({ kind: "video", label: "source" });
     expect(source.ok).toBe(true);

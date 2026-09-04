@@ -12,6 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run lint` — Run ESLint across the project
 - `npm run test` — Run vitest (integration tests with real dependencies)
 - `npm run preview` — Preview the production build locally
+- `npm run benchmark:startup` — Replicate server `start()` phase by phase (skips `queue.start()`), print a per-phase table, write JSON to argv[2]; `--assert-listen-ms` / `--assert-ready-ms` fail when those budgets are exceeded
 
 ## Git Workflow
 
@@ -30,7 +31,7 @@ React 19 + TypeScript + Vite 7 SPA using MCP (Model Context Protocol) as the API
 
 **MCP Server:** `server/src/index.ts` — Express app exposing a modern-only `createMcpHandler` endpoint at `/mcp`. It serves MCP `2026-07-28` per request and rejects legacy protocol traffic. Tools are registered in `server/src/tools/`.
 
-**Domain/storage layer:** `videobook-engine` 5.3.0, schema 24 — each book has an isolated UUIDv7 root under `VIDEOBOOK_LIBRARY_DIR`, with its own Dolt-native catalog, files/CAS, metadata, history, notebooks, canonical primary sequence, and runtime jobs. Artifacts and cells have no slugs: identity is `artifact_id`/`cell_id` (UUIDv7) plus content-addressed `object_hash`, and the only user-facing handle is the grid address `@a1`-`@bl8` (rows are letters a-z, aa-az, ba-bl; columns are numbers 1-8, so the top row reads `@a1` through `@a8`). A free-text `label` column exists for display only — never parsed, never a lookup key. Per-book schedules use engine runtime settings; only application credentials such as X OAuth tokens live at `VIDEOBOOK_APP_STATE_PATH`.
+**Domain/storage layer:** `videobook-engine` 5.3.1, schema 24 — each book has an isolated UUIDv7 root under `VIDEOBOOK_LIBRARY_DIR`, with its own Dolt-native catalog, files/CAS, metadata, history, notebooks, canonical primary sequence, and runtime jobs. Artifacts and cells have no slugs: identity is `artifact_id`/`cell_id` (UUIDv7) plus content-addressed `object_hash`, and the only user-facing handle is the grid address `@a1`-`@bl8` (rows are letters a-z, aa-az, ba-bl; columns are numbers 1-8, so the top row reads `@a1` through `@a8`). A free-text `label` column exists for display only — never parsed, never a lookup key. Per-book schedules use engine runtime settings; only application credentials such as X OAuth tokens live at `VIDEOBOOK_APP_STATE_PATH`.
 
 ## TypeScript
 

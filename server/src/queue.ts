@@ -9,6 +9,7 @@ import {
 } from "videobook-engine";
 import { activeBookEngine, withBookContext } from "./book-context.js";
 import { bookManager } from "./engine.js";
+import { ensureJobHandlersLoaded } from "./jobs/index.js";
 import { runWithJobDeadline } from "./job-deadline.js";
 import { logger } from "./logger.js";
 
@@ -486,6 +487,7 @@ async function dispatchFailure(
 }
 
 async function ensureRunner(bookId: string): Promise<RunnerInfo> {
+  await ensureJobHandlersLoaded();
   const existing = runnerByBook.get(bookId);
   if (existing) return existing;
   const engine = await resolveBookEngine(bookId);
@@ -618,6 +620,7 @@ export const queue: Queue = {
     };
   },
   async start() {
+    await ensureJobHandlersLoaded();
     await reconcileQueueOnStartup();
   },
   async stop() {

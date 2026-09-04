@@ -1,4 +1,4 @@
-import { nonEmptyStringValue, recordValue } from './value-decoders'
+import { nonEmptyStringValue, recordValue } from './value-decoders.js'
 
 export const PUBLISHED_POST_SOURCE_OPERATION = 'post_to_x'
 

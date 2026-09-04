@@ -1,7 +1,8 @@
 import "./load-env.js";
 import { z } from "zod";
 import { stopAceServer } from "./acestep/process.js";
-import { scopedEngine } from "./engine.js";
+import { gcLibraryCatalogs } from "./catalog-gc.js";
+import { bookManager, scopedEngine } from "./engine.js";
 import { queue, waitForJob } from "./queue.js";
 import { getAllToolDefs } from "./tools/index.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
@@ -31,8 +32,17 @@ async function run(): Promise<void> {
   const [toolName, ...rest] = process.argv.slice(2);
   const tools = getAllToolDefs(scopedEngine);
 
+  if (toolName === "gc-books") {
+    const reports = await gcLibraryCatalogs(bookManager);
+    console.log(JSON.stringify({ catalogs: reports }, null, 2));
+    await bookManager.close();
+    return;
+  }
+
   if (!toolName) {
     console.log("Usage: npm run use <tool> [key=value ...]\n");
+    console.log("  gc-books");
+    console.log("    Run catalog GC on every book and print per-book byte/chunk deltas.\n");
     console.log("Available tools:");
     for (const t of tools) {
       const schemaObj = z.object(t.schema);
