@@ -69,7 +69,7 @@ type SemanticIndexResult = {
   observationCount: number;
   manifestId: string;
   generation: string;
-  semanticVisual: "ready" | "deferred";
+  semanticVisual: "ready" | "deferred" | "not-applicable";
   semanticAudio: "ready" | "deferred" | "not-applicable";
 };
 
@@ -95,10 +95,6 @@ export async function runSemanticIndex(
   payload: SemanticIndexPayload,
   ctx: JobHandlerContext,
 ): Promise<SemanticIndexResult> {
-  // Indexing is auxiliary: a failure here must never fail the asset itself.
-  // The generated media is fine — marking the artifact errored would flip a
-  // freshly completed generation into "failed" (awaitNotebookOutput reads
-  // that status). Defer instead, matching the intra-job clip/clap lanes.
   ctx.markAssetFailureHandled();
   try {
     return await withSemanticIndexTurn(
@@ -115,15 +111,20 @@ export async function runSemanticIndex(
             ctx.signal,
           );
         } catch (error) {
-          if (ctx.signal.aborted) throw error;
+          if (ctx.signal.aborted || isModelExecutionFailure(error)) throw error;
           return deferredSemanticIndex(engine, payload.assetId, error);
         }
       },
     );
   } catch (error) {
-    if (ctx.signal.aborted) throw error;
+    if (ctx.signal.aborted || isModelExecutionFailure(error)) throw error;
     return deferredSemanticIndex(engine, payload.assetId, error);
   }
+}
+
+function isModelExecutionFailure(error: unknown): boolean {
+  if (!(error instanceof Error) || !("error" in error) || !error.error || typeof error.error !== "object" || !("code" in error.error)) return false;
+  return ["CANCELLED", "TIMEOUT", "RESOURCE_EXHAUSTED", "MODEL_UNAVAILABLE", "FEATURE_UNAVAILABLE", "INVALID_INPUT", "INVALID_RANGE"].includes(String(error.error.code));
 }
 
 async function waitForArtifactIdle(
@@ -214,6 +215,7 @@ export async function indexArtifact(
   artifactReference: string,
   options: { semanticVisual?: boolean; signal?: AbortSignal } = {},
 ): Promise<SemanticIndexResult> {
+  options.signal?.throwIfAborted();
   // Enqueue sites pass whatever reference they hold (often the slug), but
   // temporalSearch.commitBatch rejects anything except the canonical UUID.
   const artifactResult = engine.artifacts.get(artifactReference);
@@ -262,11 +264,13 @@ export async function indexArtifact(
     signal: options.signal, checkpoint: "periodic",
   });
   if (!prepared.ok) throw new Error(prepared.error.message);
-  let semanticVisual: SemanticIndexResult["semanticVisual"] = "deferred";
+  let semanticVisual: SemanticIndexResult["semanticVisual"] = artifactResult.value.kind === "image"
+    || streams.some((stream) => stream.kind === "video" && stream.objectHash === source.objectHash)
+    ? "deferred" : "not-applicable";
   let semanticAudio: SemanticIndexResult["semanticAudio"] = streams.some(
     (stream) => stream.kind === "audio" && stream.objectHash === source.objectHash,
   ) ? "deferred" : "not-applicable";
-  if (options.semanticVisual) {
+  if (options.semanticVisual && semanticVisual !== "not-applicable") {
     try {
       await indexClipArtifact(
         engine,
@@ -279,31 +283,33 @@ export async function indexArtifact(
       );
       semanticVisual = "ready";
     } catch (error) {
+      if (options.signal?.aborted || isModelExecutionFailure(error)) throw error;
       await engine.logs.append("semantic-index-deferred", {
         artifactId,
         manifestId: LOCAL_CLIP_MANIFEST.manifestId,
         error: error instanceof Error ? error.message : String(error),
       }).catch(() => undefined);
     }
-    if (semanticAudio !== "not-applicable") {
-      try {
-        await indexClapArtifact(
-          engine,
-          artifactId,
-          filesResult.value.path,
-          source.name,
-          source.objectHash,
-          streams,
-          options.signal,
-        );
-        semanticAudio = "ready";
-      } catch (error) {
-        await engine.logs.append("semantic-index-deferred", {
-          artifactId,
-          manifestId: LOCAL_CLAP_MANIFEST.manifestId,
-          error: error instanceof Error ? error.message : String(error),
-        }).catch(() => undefined);
-      }
+  }
+  if (options.semanticVisual && semanticAudio !== "not-applicable") {
+    try {
+      await indexClapArtifact(
+        engine,
+        artifactId,
+        filesResult.value.path,
+        source.name,
+        source.objectHash,
+        streams,
+        options.signal,
+      );
+      semanticAudio = "ready";
+    } catch (error) {
+      if (options.signal?.aborted || isModelExecutionFailure(error)) throw error;
+      await engine.logs.append("semantic-index-deferred", {
+        artifactId,
+        manifestId: LOCAL_CLAP_MANIFEST.manifestId,
+        error: error instanceof Error ? error.message : String(error),
+      }).catch(() => undefined);
     }
   }
   return {
@@ -339,7 +345,7 @@ async function indexClipArtifact(
   const provider = registerLocalClipSearchProvider(engine);
   const registered = engine.temporalSearch.manifests.register(LOCAL_CLIP_MANIFEST);
   if (!registered.ok) throw new Error(registered.error.message);
-  await provider.prepare();
+  await provider.prepare({ signal });
   const video = streams.find((stream) =>
     stream.kind === "video" && stream.objectHash === objectHash);
   const frames = video
@@ -369,7 +375,7 @@ async function indexClipArtifact(
           embeddings: [{
             modality: "visual" as const,
             embeddingSpace: LOCAL_CLIP_MANIFEST.embeddingSpace,
-            vector: [...await provider.embedImage(join(artifactPath, sourcePath))],
+            vector: [...await provider.embedImage(join(artifactPath, sourcePath), { signal })],
             sourceHash: objectHash,
           }],
           fingerprints: [],
@@ -410,7 +416,7 @@ async function indexClapArtifact(
   const provider = registerLocalClapSearchProvider(engine, FFMPEG);
   const registered = engine.temporalSearch.manifests.register(LOCAL_CLAP_MANIFEST);
   if (!registered.ok) throw new Error(registered.error.message);
-  await provider.prepare();
+  await provider.prepare({ signal });
   const windowTicks = Math.max(
     1,
     Math.round(10 * stream.timeBase.denominator / stream.timeBase.numerator),
@@ -490,6 +496,7 @@ async function clapAudioObservationBatch(
           join(artifactPath, sourcePath),
           startSeconds,
           durationSeconds,
+          { signal },
         )],
         sourceHash: hashText(`${objectHash}:${startTick}:${durationTicks}`),
       }],
@@ -550,7 +557,7 @@ async function clipVideoObservationBatch(
       embeddings: [{
         modality: "visual",
         embeddingSpace: LOCAL_CLIP_MANIFEST.embeddingSpace,
-        vector: [...await provider.embedImage(join(artifactPath, framePath))],
+        vector: [...await provider.embedImage(join(artifactPath, framePath), { signal })],
         sourceHash: hashText(`${objectHash}:${framePath}`),
       }],
       fingerprints: [],
@@ -609,6 +616,7 @@ export async function commitDeepBatches(
     options.signal?.throwIfAborted();
     const end = Math.min(options.totalUnits, start + DEEP_BATCH_SIZE);
     const observations = await build(start, end);
+    options.signal?.throwIfAborted();
     coveredRanges = [
       ...coveredRanges,
       ...observations.flatMap((item) => item.range ? [item.range] : []),

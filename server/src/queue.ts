@@ -542,6 +542,7 @@ async function ensureBookReady(
 const ARTIFACT_DETACHED_JOB_TYPES: ReadonlySet<string> = new Set([
   "post_to_x",
   "semantic_index",
+  ...SEARCH_REFERENCE_JOB_TYPES,
 ]);
 
 function isArtifactDetachedJobType(type: string): boolean {

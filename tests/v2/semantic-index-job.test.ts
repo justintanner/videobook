@@ -295,6 +295,24 @@ describe('progressive semantic index job', () => {
         })],
       },
     })
+    const cancelled = new AbortController()
+    await expect(commitDeepBatches(engine, { ...options, signal: cancelled.signal }, async (start, end) => {
+      const observations = observationsForRange(
+        created.value.artifactId,
+        source.objectHash,
+        stream.value.streamId,
+        start,
+        end,
+      )
+      cancelled.abort(new Error('Cancelled before publication'))
+      return observations
+    })).rejects.toThrow('Cancelled before publication')
+    expect(engine.temporalSearch.plan(
+      created.value.artifactId,
+      source.objectHash,
+      resumeManifest.manifestId,
+      options.generation,
+    )).toMatchObject({ ok: true, value: { coverage: [expect.objectContaining({ indexedUnits: 4, nextCursor: '4' })] } })
     const resumedStarts: number[] = []
     await commitDeepBatches(engine, options, async (start, end) => {
       resumedStarts.push(start)

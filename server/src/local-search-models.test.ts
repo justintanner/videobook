@@ -1,14 +1,19 @@
 import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, type Server } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createEngine, type Engine } from "videobook-engine";
+import { createEngine, LOCAL_CLIP_MANIFEST, type Engine } from "videobook-engine";
+import sharp from "sharp";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import {
   registerLocalClapSearchProvider,
   registerLocalClipSearchProvider,
 } from "./local-search-models.js";
-import { indexArtifact } from "./jobs/semantic-index.js";
+import { indexArtifact, registerSemanticIndexJob } from "./jobs/semantic-index.js";
+import { registerPrepareSearchReferenceJob } from "./jobs/prepare-search-reference.js";
+import { queue, setEngineRoot, stopBookQueue } from "./queue.js";
 
 type ModelEnvironmentName =
   | "VIDEOBOOK_MODEL_CACHE_DIR"
@@ -48,6 +53,7 @@ describe("local search provider registration", () => {
   });
 
   afterEach(async () => {
+    for (const engine of engines) await stopBookQueue(engine.book.get().bookId);
     runtime.env.remoteHost = originalHost;
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -100,6 +106,128 @@ describe("local search provider registration", () => {
     expect(engine.artifacts.get(created.value.artifactId)).toMatchObject({ ok: true, value: { artifactId: created.value.artifactId } });
     expect(requests).toEqual([]);
   });
+
+  it("forwards cancellation and deadlines through every provider override", async () => {
+    process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(tempDir, "cancelled-models");
+    const engine = createTestEngine("cancelled-providers");
+    const visual = registerLocalClipSearchProvider(engine);
+    const audio = registerLocalClapSearchProvider(engine, "ffmpeg");
+    const options = { signal: AbortSignal.abort() };
+    for (const call of [
+      () => visual.prepare(options),
+      () => visual.embedText("red bicycle", options),
+      () => visual.embedImage(join(tempDir, "image.png"), options),
+      () => audio.prepare(options),
+      () => audio.embedText("ringing bell", options),
+      () => audio.embedAudio(join(tempDir, "audio.wav"), 0, 1, options),
+    ]) await expect(call()).rejects.toMatchObject({ error: { code: "CANCELLED" } });
+    await expect(visual.prepare({ timeoutMs: 1 })).rejects.toMatchObject({ error: { code: "TIMEOUT" } });
+    await expect(audio.prepare({ timeoutMs: 1 })).rejects.toMatchObject({ error: { code: "TIMEOUT" } });
+    expect(requests).toEqual([]);
+  });
+
+  it.each(["semantic_index", "prepare_search_reference"])("fails model preparation in the actual %s queue without failing media, then retries indexing offline", async (type) => {
+    process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(tempDir, "failed-queue-models");
+    process.env.VIDEOBOOK_MODEL_DOWNLOAD = "enabled";
+    const { engine, artifactId, image, bookId } = await queuedImage("failed-queue");
+    const payload = { type, assetId: artifactId, bookId, mediaKind: "image", name: "Reference" };
+    await expect(queue.enqueueAndWait("failed-model", payload, 10_000)).rejects.toThrow();
+    expect(engine.jobs.queue.list({ states: ["failed"] })).toEqual([
+      expect.objectContaining({ type, artifactId: null, error: expect.objectContaining({ code: "FEATURE_UNAVAILABLE" }) }),
+    ]);
+    expect(engine.jobs.artifactWork.read(artifactId)).toMatchObject({ ok: true, value: { status: "ready", ownerId: null } });
+    expect(await engine.files.read(artifactId, "original.png")).toMatchObject({ ok: true, value: image });
+    process.env.VIDEOBOOK_MODEL_DOWNLOAD = "disabled";
+    await expect(queue.enqueueAndWait("retry-model", { ...payload, type: "semantic_index" }, 10_000)).resolves.toMatchObject({ semanticVisual: "deferred" });
+    expect(requests.length).toBeGreaterThan(0);
+  });
+
+  it.each(["semantic_index", "prepare_search_reference"])("cancels a stalled model worker from the actual %s queue", async (type) => {
+    process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(tempDir, "stalled-queue-models");
+    process.env.VIDEOBOOK_MODEL_DOWNLOAD = "enabled";
+    let activeRequests = 0;
+    server.removeAllListeners("request");
+    server.on("request", (request, response) => {
+      requests.push(request.url ?? "");
+      activeRequests += 1;
+      response.once("close", () => { activeRequests -= 1; });
+    });
+    const { engine, artifactId, image, bookId } = await queuedImage(`stalled-${type}`);
+    const job = await queue.enqueue(`stalled-${type}`, {
+      type, assetId: artifactId, bookId, mediaKind: "image", name: "Reference",
+    });
+    await expect.poll(() => requests.length, { timeout: 10_000 }).toBeGreaterThan(0);
+    const started = Date.now();
+    expect(await engine.jobs.queue.abort(job.id, "Cancel stalled preparation")).toBe(true);
+    await stopBookQueue(bookId);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    await expect.poll(() => activeRequests).toBe(0);
+    expect(engine.jobs.queue.get(job.id)?.state).toBe("aborted");
+    expect(engine.jobs.artifactWork.read(artifactId)).toMatchObject({ ok: true, value: { status: "ready", ownerId: null } });
+    expect(await engine.files.read(artifactId, "original.png")).toMatchObject({ ok: true, value: image });
+  });
+
+  it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === "1")("keeps malformed-image failure job-local and indexes a corrected retry with the cached model", async () => {
+    process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(homedir(), ".cache", "videobook", "models");
+    const { engine, artifactId, image, bookId } = await queuedImage("malformed-queue");
+    expect((await engine.files.write(artifactId, "original.png", Buffer.from("invalid image"))).ok).toBe(true);
+    const payload = { type: "semantic_index", assetId: artifactId, bookId };
+    await expect(queue.enqueueAndWait("malformed-model", payload, 30_000)).rejects.toThrow();
+    expect(engine.jobs.queue.list({ states: ["failed"] })).toEqual([
+      expect.objectContaining({ error: expect.objectContaining({ code: "INVALID_INPUT" }) }),
+    ]);
+    expect(engine.jobs.artifactWork.read(artifactId)).toMatchObject({ ok: true, value: { status: "ready" } });
+    expect((await engine.files.write(artifactId, "original.png", image)).ok).toBe(true);
+    await expect(queue.enqueueAndWait("corrected-model", payload, 30_000)).resolves.toMatchObject({ semanticVisual: "ready" });
+    const manifest = await engine.files.manifest(artifactId);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    const hash = manifest.value.files.find((file) => file.name === "original.png")!.objectHash;
+    expect(engine.temporalSearch.plan(artifactId, hash, LOCAL_CLIP_MANIFEST.manifestId, LOCAL_CLIP_MANIFEST.manifestId)).toMatchObject({
+      ok: true, value: { coverage: expect.arrayContaining([expect.objectContaining({ phase: "visual", state: "ready" })]) },
+    });
+    expect(requests).toEqual([]);
+  });
+
+  it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === "1")("indexes audio in the actual queue without passing its source to the image decoder", async () => {
+    process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(homedir(), ".cache", "videobook", "models");
+    const engine = createTestEngine("audio-queue");
+    await engine.ready;
+    await setEngineRoot(join(tempDir, "audio-queue"), engine);
+    registerSemanticIndexJob(engine);
+    const created = await engine.artifacts.create("audio", "Tone");
+    if (!created.ok) throw new Error(created.error.message);
+    const artifactId = created.value.artifactId;
+    const { stdout: audio } = await promisify(execFile)("ffmpeg", [
+      "-nostdin", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1:sample_rate=48000", "-f", "wav", "pipe:1",
+    ], { encoding: "buffer" });
+    expect((await engine.files.write(artifactId, "original.wav", audio)).ok).toBe(true);
+    const files = await engine.files.manifest(artifactId);
+    if (!files.ok) throw new Error(files.error.message);
+    const source = files.value.files.find((file) => file.name === "original.wav")!;
+    expect((await engine.streams.register({
+      artifactId, sourcePath: source.name, objectHash: source.objectHash, streamIndex: 0,
+      kind: "audio", timeBase: { numerator: 1, denominator: 48_000 }, durationTicks: 48_000,
+      codec: "pcm_s16le", audio: { sampleRateHz: 48_000, channels: 1, channelLayout: "mono" },
+    })).ok).toBe(true);
+    await expect(queue.enqueueAndWait("audio-model", {
+      type: "semantic_index", assetId: artifactId, bookId: engine.book.get().bookId,
+    }, 30_000)).resolves.toMatchObject({ semanticVisual: "not-applicable", semanticAudio: "ready" });
+    expect(engine.jobs.artifactWork.read(artifactId)).toMatchObject({ ok: true, value: { status: "ready" } });
+    expect(requests).toEqual([]);
+  });
+
+  async function queuedImage(name: string) {
+    const engine = createTestEngine(name);
+    await engine.ready;
+    await setEngineRoot(join(tempDir, name), engine);
+    registerSemanticIndexJob(engine);
+    registerPrepareSearchReferenceJob(engine);
+    const created = await engine.artifacts.create("image", name);
+    if (!created.ok) throw new Error(created.error.message);
+    const image = await sharp({ create: { width: 32, height: 32, channels: 3, background: "red" } }).png().toBuffer();
+    expect((await engine.files.write(created.value.artifactId, "original.png", image)).ok).toBe(true);
+    return { engine, artifactId: created.value.artifactId, image, bookId: engine.book.get().bookId };
+  }
 
   function createTestEngine(name: string): Engine {
     const engine = createEngine({

@@ -123,7 +123,9 @@ Use `--models visual` for image/video search or `--models audio` for audio searc
 
 The cache defaults to `~/.cache/videobook/models`; `VIDEOBOOK_MODEL_CACHE_DIR` selects another location. Ordinary operations remain offline after preparation. Administrators who want the server to download missing pinned models during search/indexing can explicitly set `VIDEOBOOK_MODEL_DOWNLOAD=enabled`; unset, `disabled`, and unrecognized values keep downloads disabled. The preparation command requires `--download` even when that server setting is enabled.
 
-When models are missing, reverse-search errors include the preparation command. Semantic indexing stays deferred while preserving the original media and existing coverage. After preparation, retry the search and reindex affected media to populate semantic coverage; preparing models alone does not index the library.
+When models are missing, reverse-search errors include the preparation command. Missing-model semantic indexing stays deferred while preserving the original media and existing coverage. Decoder failures, timeouts and model resource failures fail the auxiliary indexing job while leaving the media itself ready; retry that job after addressing the cause. Cancelling indexing or reference preparation stops active model work. Failed or cancelled reference preparation also preserves the source media's status. Audio-only sources use the audio model without invoking the image decoder.
+
+After preparation, retry the search and reindex affected media to populate semantic coverage; preparing models alone does not index the library.
 
 ## Quality gates
 

@@ -4,6 +4,7 @@ import {
   LocalClapTemporalProvider,
   LocalClipTemporalProvider,
   type Engine,
+  type MediaOperationOptions,
 } from "videobook-engine";
 
 interface LocalModelConfiguration {
@@ -53,16 +54,16 @@ async function withPreparationHint<T>(model: "visual" | "audio", run: () => Prom
 }
 
 class ClipSearchProvider extends LocalClipTemporalProvider {
-  override prepare() { return withPreparationHint("visual", () => super.prepare()); }
-  override embedText(text: string) { return withPreparationHint("visual", () => super.embedText(text)); }
-  override embedImage(path: string) { return withPreparationHint("visual", () => super.embedImage(path)); }
+  override prepare(options: MediaOperationOptions = {}) { return withPreparationHint("visual", () => super.prepare(options)); }
+  override embedText(text: string, options: MediaOperationOptions = {}) { return withPreparationHint("visual", () => super.embedText(text, options)); }
+  override embedImage(path: string, options: MediaOperationOptions = {}) { return withPreparationHint("visual", () => super.embedImage(path, options)); }
 }
 
 class ClapSearchProvider extends LocalClapTemporalProvider {
-  override prepare() { return withPreparationHint("audio", () => super.prepare()); }
-  override embedText(text: string) { return withPreparationHint("audio", () => super.embedText(text)); }
-  override embedAudio(path: string, startSeconds?: number, durationSeconds?: number) {
-    return withPreparationHint("audio", () => super.embedAudio(path, startSeconds, durationSeconds));
+  override prepare(options: MediaOperationOptions = {}) { return withPreparationHint("audio", () => super.prepare(options)); }
+  override embedText(text: string, options: MediaOperationOptions = {}) { return withPreparationHint("audio", () => super.embedText(text, options)); }
+  override embedAudio(path: string, startSeconds?: number, durationSeconds?: number, options: MediaOperationOptions = {}) {
+    return withPreparationHint("audio", () => super.embedAudio(path, startSeconds, durationSeconds, options));
   }
 }
 

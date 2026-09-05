@@ -82,11 +82,11 @@ async function prepareSearchReferenceFile(
   const provider = registerLocalClipSearchProvider(engine);
   const registered = engine.temporalSearch.manifests.register(LOCAL_CLIP_MANIFEST);
   if (!registered.ok) throw new Error(registered.error.message);
-  await provider.prepare();
+  await provider.prepare({ signal: options.signal });
   options.signal?.throwIfAborted();
   const name = options.name?.trim() || basename(sourcePath);
   if (mediaKind === "image") {
-    const vector = await provider.embedImage(sourcePath);
+    const vector = await provider.embedImage(sourcePath, { signal: options.signal });
     options.signal?.throwIfAborted();
     return {
       kind: "image",
@@ -129,7 +129,7 @@ async function prepareSearchReferenceFile(
         "-y",
         framePath,
       ], { signal: options.signal });
-      const vector = await provider.embedImage(framePath);
+      const vector = await provider.embedImage(framePath, { signal: options.signal });
       samples.push({ offsetMs, vector: [...vector] });
     }
     return {
