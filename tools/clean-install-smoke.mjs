@@ -1,9 +1,9 @@
 import { execFile, spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
-import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 
@@ -14,8 +14,12 @@ const temporaryRoot = await mkdtemp(join(tmpdir(), 'videobook-clean-install-'))
 const appRoot = join(temporaryRoot, 'videobook')
 const runtimeRoot = join(temporaryRoot, 'runtime')
 const children = new Set()
+const worktree = process.argv.includes('--worktree')
+if (process.argv.slice(2).some((arg) => arg !== '--worktree')) throw new Error('Usage: clean-install-smoke.mjs [--worktree]')
 
 function isSafeSourcePath(relativePath) {
+  if (relativePath.split('/').some((part) =>
+    part === '.git' || part === '.beads' || part === '.env' || part.startsWith('.env.'))) return false
   if (
     relativePath === '.env'
     || relativePath.startsWith('.env.')
@@ -43,6 +47,23 @@ async function trackedAndUntrackedFiles(repoRoot) {
 }
 
 async function copyRepository(source, destination) {
+  if (!worktree) {
+    const { stdout: head } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: source })
+    const revision = head.trim()
+    const { stdout } = await execFileAsync('git', ['ls-tree', '-rz', '--name-only', revision], {
+      cwd: source, encoding: 'buffer', maxBuffer: 64 * 1024 * 1024,
+    })
+    const files = stdout.toString('utf8').split('\0').filter((name) => name && isSafeSourcePath(name))
+    await mkdir(destination, { recursive: true })
+    const archive = join(temporaryRoot, 'source.tar')
+    for (let offset = 0; offset < files.length; offset += 250) {
+      await execFileAsync('git', ['archive', '--format=tar', `--output=${archive}`, revision, '--', ...files.slice(offset, offset + 250)], { cwd: source })
+      await execFileAsync('tar', ['-xf', archive, '-C', destination])
+    }
+    await rm(archive, { force: true })
+    process.stdout.write(`clean-install: committed source ${revision}\n`)
+    return files.length
+  }
   const files = await trackedAndUntrackedFiles(source)
   for (const relativePath of files) {
     const target = join(destination, relativePath)
@@ -59,15 +80,32 @@ async function copyRepository(source, destination) {
   return files.length
 }
 
+function isolatedEnvironment() {
+  const env = { ...process.env }
+  for (const key of Object.keys(env)) {
+    if (key.startsWith('VIDEOBOOK_') || /(?:TOKEN|PASSWORD|SECRET|API_KEY|ACCESS_KEY|CLIENT_ID)/i.test(key)) delete env[key]
+  }
+  delete env.NODE_OPTIONS
+  delete env.NODE_PATH
+  delete env.npm_config_allow_scripts
+  delete env.NPM_CONFIG_ALLOW_SCRIPTS
+  return {
+    ...env,
+    VIDEOBOOK_LIBRARY_DIR: join(runtimeRoot, 'books'),
+    VIDEOBOOK_APP_STATE_PATH: join(runtimeRoot, 'app-state.json'),
+    VIDEOBOOK_MODEL_DOWNLOAD: 'disabled',
+    VIDEOBOOK_MODEL_CACHE_DIR: join(runtimeRoot, 'models'),
+    VIDEOBOOK_OBJECT_PREFIX: 'clean-install-smoke',
+    npm_config_userconfig: join(runtimeRoot, 'npmrc'),
+  }
+}
+
 async function run(command, args, cwd) {
   process.stdout.write(`clean-install: ${command} ${args.join(' ')}\n`)
   const env = {
-    ...process.env,
+    ...isolatedEnvironment(),
     CI: '1',
-    npm_config_userconfig: join(runtimeRoot, 'npmrc'),
   }
-  delete env.npm_config_allow_scripts
-  delete env.NPM_CONFIG_ALLOW_SCRIPTS
   await new Promise((resolveRun, rejectRun) => {
     const child = spawn(command, args, {
       cwd,
@@ -100,25 +138,10 @@ async function freePort() {
 }
 
 function runtimeEnvironment(port, serverUrl) {
-  const env = { ...process.env }
-  for (const key of Object.keys(env)) {
-    if (
-      key.endsWith('_API_KEY')
-      || key.endsWith('_ACCESS_KEY_ID')
-      || key.endsWith('_SECRET_ACCESS_KEY')
-      || key === 'X_CLIENT_ID'
-      || key === 'X_CLIENT_SECRET'
-    ) {
-      delete env[key]
-    }
-  }
   return {
-    ...env,
+    ...isolatedEnvironment(),
     PORT: String(port),
     VIDEOBOOK_SERVER_URL: serverUrl,
-    VIDEOBOOK_LIBRARY_DIR: join(runtimeRoot, 'books'),
-    VIDEOBOOK_APP_STATE_PATH: join(runtimeRoot, 'app-state.json'),
-    VIDEOBOOK_OBJECT_PREFIX: 'clean-install-smoke',
   }
 }
 
@@ -139,7 +162,7 @@ async function waitFor(url, child, label) {
   const deadline = Date.now() + 30_000
   let lastError = ''
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
+    if (child.exitCode !== null || child.signalCode !== null) {
       throw new Error(`${label} exited before becoming ready`)
     }
     try {
@@ -155,13 +178,20 @@ async function waitFor(url, child, label) {
 }
 
 async function stop(child) {
-  if (child.exitCode !== null) return
+  if (child.exitCode !== null || child.signalCode !== null) return true
   child.kill('SIGTERM')
-  await Promise.race([
-    new Promise((resolveExit) => child.once('exit', resolveExit)),
-    new Promise((resolveTimeout) => setTimeout(resolveTimeout, 5_000)),
-  ])
-  if (child.exitCode === null) child.kill('SIGKILL')
+  let timer
+  try {
+    await Promise.race([
+      new Promise((resolveExit) => child.once('exit', resolveExit)),
+      new Promise((resolveTimeout) => { timer = setTimeout(resolveTimeout, 5_000) }),
+    ])
+  } finally { clearTimeout(timer) }
+  if (child.exitCode !== null || child.signalCode !== null) return true
+  const exited = new Promise((resolveExit) => child.once('exit', resolveExit))
+  child.kill('SIGKILL')
+  await exited
+  return false
 }
 
 async function verifyMcp(serverUrl) {
@@ -190,11 +220,11 @@ async function verifyMcp(serverUrl) {
   try {
     const created = await client.callTool({
       name: 'create_book',
-      arguments: { slug: 'clean-install-smoke' },
+      arguments: { name: 'clean-install-smoke' },
     })
     const createdText = created.content.find((item) => item.type === 'text')?.text
     const book = JSON.parse(createdText ?? '{}')
-    if (typeof book.bookId !== 'string') {
+    if (created.isError || typeof book.bookId !== 'string' || book.name !== 'clean-install-smoke') {
       throw new Error('MCP create_book did not return a book ID')
     }
     const listed = await client.callTool({
@@ -204,10 +234,10 @@ async function verifyMcp(serverUrl) {
     const listedText = listed.content.find((item) => item.type === 'text')?.text
     const books = JSON.parse(listedText ?? '[]')
     if (
-      !Array.isArray(books)
+      listed.isError || !Array.isArray(books)
       || !books.some((candidate) =>
         candidate.bookId === book.bookId
-        && candidate.slug === 'clean-install-smoke')
+        && candidate.name === 'clean-install-smoke')
     ) {
       throw new Error('MCP list_books did not return the created book')
     }
@@ -215,6 +245,27 @@ async function verifyMcp(serverUrl) {
   } finally {
     await client.close()
   }
+}
+
+async function verifyNativeRuntime() {
+  const locations = ['package.json', 'server/package.json', 'node_modules/videobook-engine/package.json']
+  const imports = locations.map((name) => createRequire(join(appRoot, name)))
+  const paths = await Promise.all(imports.map((load) => realpath(load.resolve('sharp'))))
+  const dependencyRoot = await realpath(join(appRoot, 'node_modules'))
+  if (new Set(paths).size !== 1 || !paths[0].startsWith(`${dependencyRoot}${sep}`)) {
+    throw new Error(`Sharp must resolve once inside the isolated application: ${JSON.stringify(paths)}`)
+  }
+  const sharp = imports[0]('sharp')
+  if (!imports.every((load) => load('sharp') === sharp)) throw new Error('Multiple Sharp module instances loaded')
+  const encoded = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#2468ac' } }).png().toBuffer()
+  for (const load of imports) {
+    const metadata = await load('sharp')(encoded).metadata()
+    if (metadata.width !== 8 || metadata.height !== 8) throw new Error('Native image round-trip failed')
+  }
+  const binaries = process.report.getReport().sharedObjects.filter((name) => /sharp[^/]*\.node$/.test(name))
+  const libraries = process.report.getReport().sharedObjects.filter((name) => /libvips[^/]*\.(?:dylib|so(?:\.\d+)*)$/.test(name))
+  if (binaries.length !== 1 || libraries.length > 1) throw new Error(`Duplicate native image runtimes: ${JSON.stringify({ binaries, libraries })}`)
+  process.stdout.write(`clean-install: one Sharp ${sharp.versions.sharp} / libvips ${sharp.versions.vips} runtime; image round-trip passed\n`)
 }
 
 try {
@@ -225,14 +276,16 @@ try {
     `clean-install: copied ${appFiles} app files with no sibling videobook-engine\n`,
   )
   await run('npm', ['ci', '--no-audit', '--no-fund'], appRoot)
-  await run('npm', ['ci', '--no-audit', '--no-fund'], join(appRoot, 'server'))
+  await verifyNativeRuntime()
   await run('npm', ['run', 'build'], appRoot)
   await run('npm', ['run', 'build:server'], appRoot)
   const requireFromEngine = createRequire(join(appRoot, 'package.json'))
   const enginePackageJson = requireFromEngine('videobook-engine/package.json')
   const expectedEngineVersion = enginePackageJson.version
-  if (expectedEngineVersion !== '5.0.0') {
-    throw new Error(`Expected videobook-engine 5.0.0, got ${expectedEngineVersion}`)
+  const lock = JSON.parse(await readFile(join(appRoot, 'package-lock.json'), 'utf8'))
+  const lockedEngine = lock.packages['node_modules/videobook-engine']
+  if (expectedEngineVersion !== lockedEngine.version || !lockedEngine.resolved.startsWith('file:vendor/')) {
+    throw new Error('Installed engine does not match the pinned vendored lockfile')
   }
   const builtEngine = await import(
     pathToFileURL(join(appRoot, 'node_modules/videobook-engine/dist/index.js')).href
@@ -298,7 +351,8 @@ try {
       await stop(client)
     }
   } finally {
-    await stop(server)
+    const graceful = await stop(server)
+    if (!graceful || server.exitCode !== 0) throw new Error('Built server did not shut down gracefully with exit code zero')
   }
   process.stdout.write(
     `clean-install: PASS (${temporaryRoot} removed after verification)\n`,

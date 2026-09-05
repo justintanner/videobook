@@ -21,13 +21,9 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            server/package-lock.json
-      - name: Install client dependencies
+          cache-dependency-path: package-lock.json
+      - name: Install application and server workspace dependencies
         run: npm ci
-      - name: Install server dependencies
-        run: npm ci --prefix server
       - name: Check dead code and dependencies
         run: npm run check:dead-code
       - name: Typecheck test projects

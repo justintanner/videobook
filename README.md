@@ -65,15 +65,11 @@ Requirements:
 - ffmpeg
 - 1Password CLI only when loading cloud-provider credentials from `.env.tpl`
 
-Install both repositories:
+Install the application and server workspace from the repository root. The engine is included as a pinned vendored package; a sibling engine checkout is not required.
 
 ```bash
-cd ~/videobook-engine
-npm install
-
 cd ~/videobook
-npm install
-cd server && npm install
+npm ci
 ```
 
 Run locally without cloud-provider credentials:
@@ -119,6 +115,8 @@ npm run test:e2e
 npm run build
 npm run build:server
 ```
+
+The clean-install gate exports the current commit into a temporary directory, runs one workspace install, builds both surfaces, and checks health, MCP book creation/listing, client delivery, a shared Sharp/libvips image round-trip, and graceful server shutdown. It uses isolated books, app state, and model cache without provider credentials or a sibling engine checkout. Use `npm run test:clean-install -- --worktree` to validate pending changes before committing; the default verifies committed source.
 
 For the engine:
 
