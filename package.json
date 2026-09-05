@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "workspaces": ["server"],
+  "workspaces": [
+    "server"
+  ],
   "engines": {
     "node": ">=22"
   },
@@ -28,6 +30,7 @@
     "seed:dancing": "tsx scripts/seed-dancing.ts",
     "seed:multyculty": "tsx scripts/seed-multyculty.ts",
     "benchmark:search": "tsx scripts/run-search-benchmark.ts",
+    "prepare:search-models": "tsx scripts/prepare-search-models.ts",
     "benchmark:startup": "tsx scripts/benchmark-startup.ts",
     "extract:videocity-benchmark": "node tools/extract-videocity-benchmark.mjs",
     "install:acestep": "tsx scripts/install-acestep.ts",
@@ -68,7 +71,7 @@
     "remotion": "^4.0.467",
     "tailwind-merge": "^3.5.0",
     "uuid": "^14.0.0",
-    "videobook-engine": "file:vendor/videobook-engine-5.3.1-f9aaceb.tgz"
+    "videobook-engine": "file:vendor/videobook-engine-5.3.1-cb6acbf.tgz"
   },
   "overrides": {
     "adm-zip": "^0.6.0",
@@ -115,6 +118,6 @@
     "onnxruntime-node@1.29.0": true,
     "usearch@2.26.0": true,
     "ytdlp-nodejs@3.4.5": true,
-    "file:vendor/videobook-engine-5.3.1-f9aaceb.tgz": true
+    "file:vendor/videobook-engine-5.3.1-cb6acbf.tgz": true
   }
 }

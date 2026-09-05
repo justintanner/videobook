@@ -105,6 +105,26 @@ B2_ENDPOINT
 Provider credentials continue to use the existing `@apicity` integrations.
 See `.env.tpl` for the complete set.
 
+### Local search models
+
+Search and indexing use cached CLIP/CLAP models by default. They do not download missing models. To check readiness without downloading, run:
+
+```bash
+npm run prepare:search-models
+```
+
+To explicitly download and prepare the pinned models from Hugging Face:
+
+```bash
+npm run prepare:search-models -- --download --models all
+```
+
+Use `--models visual` for image/video search or `--models audio` for audio search. The command operates only on the model cache and exits unsuccessfully if a model cannot be prepared. Interrupting the command stops its process; rerun it to reuse completed cache files.
+
+The cache defaults to `~/.cache/videobook/models`; `VIDEOBOOK_MODEL_CACHE_DIR` selects another location. Ordinary operations remain offline after preparation. Administrators who want the server to download missing pinned models during search/indexing can explicitly set `VIDEOBOOK_MODEL_DOWNLOAD=enabled`; unset, `disabled`, and unrecognized values keep downloads disabled. The preparation command requires `--download` even when that server setting is enabled.
+
+When models are missing, reverse-search errors include the preparation command. Semantic indexing stays deferred while preserving the original media and existing coverage. After preparation, retry the search and reindex affected media to populate semantic coverage; preparing models alone does not index the library.
+
 ## Quality gates
 
 ```bash

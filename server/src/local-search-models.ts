@@ -29,14 +29,41 @@ function modelCacheDir(): string {
 }
 
 function allowModelDownload(): boolean {
-  return process.env.VIDEOBOOK_MODEL_DOWNLOAD !== "disabled";
+  return process.env.VIDEOBOOK_MODEL_DOWNLOAD === "enabled";
 }
 
-function localModelConfiguration(): LocalModelConfiguration {
+export function localModelConfiguration(): LocalModelConfiguration {
   return {
     modelCacheDir: modelCacheDir(),
     allowModelDownload: allowModelDownload(),
   };
+}
+
+async function withPreparationHint<T>(model: "visual" | "audio", run: () => Promise<T>): Promise<T> {
+  try { return await run(); }
+  catch (cause) {
+    if (cause instanceof Error && "error" in cause && cause.error && typeof cause.error === "object"
+      && "code" in cause.error && cause.error.code === "OFFLINE" && "message" in cause.error) {
+      const hint = `Local ${model} search is not ready. Run npm run prepare:search-models -- --download --models ${model} on the server, then retry.`;
+      cause.message = `${hint} ${cause.message}`;
+      cause.error.message = cause.message;
+    }
+    throw cause;
+  }
+}
+
+class ClipSearchProvider extends LocalClipTemporalProvider {
+  override prepare() { return withPreparationHint("visual", () => super.prepare()); }
+  override embedText(text: string) { return withPreparationHint("visual", () => super.embedText(text)); }
+  override embedImage(path: string) { return withPreparationHint("visual", () => super.embedImage(path)); }
+}
+
+class ClapSearchProvider extends LocalClapTemporalProvider {
+  override prepare() { return withPreparationHint("audio", () => super.prepare()); }
+  override embedText(text: string) { return withPreparationHint("audio", () => super.embedText(text)); }
+  override embedAudio(path: string, startSeconds?: number, durationSeconds?: number) {
+    return withPreparationHint("audio", () => super.embedAudio(path, startSeconds, durationSeconds));
+  }
 }
 
 function hasMatchingConfiguration(
@@ -56,7 +83,7 @@ export function registerLocalClipSearchProvider(
     engine.temporalSearch.providers.register(cached.provider);
     return cached.provider;
   }
-  const provider = new LocalClipTemporalProvider(configuration);
+  const provider = new ClipSearchProvider(configuration);
   clipProvidersByEngine.set(engine, {
     ...configuration,
     provider,
@@ -79,7 +106,7 @@ export function registerLocalClapSearchProvider(
     engine.temporalSearch.providers.register(cached.provider);
     return cached.provider;
   }
-  const provider = new LocalClapTemporalProvider({
+  const provider = new ClapSearchProvider({
     ...configuration,
     ffmpegPath,
   });
