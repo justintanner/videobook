@@ -937,9 +937,9 @@ function withSplitOutputs(
 
 function promptFor(document: NotebookDocument, cell: NotebookCell): string {
   const upstream = upstreamValues(document, cell)
-    .filter(({ cell: source }) => source.operation === "rewrite_prompt")
+    .filter(({ cell: source }) => source.type === "prompt" || source.operation === "rewrite_prompt")
     .map(({ cell: source }) =>
-      typeof source.inputs?.resolvedPrompt === "string"
+      source.operation === "rewrite_prompt" && typeof source.inputs?.resolvedPrompt === "string"
         ? source.inputs.resolvedPrompt
         : source.prompt ?? "")
     .filter(Boolean);
@@ -958,7 +958,9 @@ function promptFor(document: NotebookDocument, cell: NotebookCell): string {
       ]
     : [
         cell.type === "generate_image" || cell.type === "generate_video"
-          ? resolvedInitialGenerationPrompt(document, cell)
+          ? !cell.prompt?.trim() && upstream.length > 0
+            ? ""
+            : resolvedInitialGenerationPrompt(document, cell)
           : cell.prompt ?? "",
       ];
   return [...new Set([...own, ...upstream].filter(Boolean))]

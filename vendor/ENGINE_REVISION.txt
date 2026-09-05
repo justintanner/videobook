@@ -1,5 +1,5 @@
 videobook-engine 5.3.1
 git: https://github.com/justintanner/videobook-engine.git
-revision: da3507afd6f83a1cbab27c3ab6e7544892359bda
-tarball: vendor/videobook-engine-5.3.1-da3507a.tgz
-sha256: aedb5b9089ebfd81413c85e76de1f39d4cc16ea4be21a733a6f10259e065bb4f
+revision: f9aacebdffaa2a38dd67f6e545d5637cf392f5b7
+tarball: vendor/videobook-engine-5.3.1-f9aaceb.tgz
+sha256: a0a291470dae5b4879f7096677c830fb3db5b4a00c8fffd5480cec3063d5eb27

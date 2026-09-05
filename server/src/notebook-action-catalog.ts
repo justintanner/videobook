@@ -706,8 +706,8 @@ export function selectedCellDetails(
         candidate.id === edge.target) ?? null,
     }));
   const execution = normalizedDocument.execution?.[cellId] ?? null;
-  const action = defaultActionForCell(cell, normalizedDocument);
   const validation = validateCellConfiguration(cell, normalizedDocument);
+  const action = validation.ok ? validation.action : null;
   const generationArtifactIds = generations.flatMap((row) => [
     ...(row.outputArtifactId ? [row.outputArtifactId] : []),
     ...(row.providerArtifactId ? [row.providerArtifactId] : []),
