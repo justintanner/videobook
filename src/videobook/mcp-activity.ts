@@ -16,6 +16,7 @@ export const idleMcpActivity: McpActivity = {
 
 const toolLabels: Readonly<Record<string, string>> = {
   chat: 'Routing chat',
+  chain: 'Running chained actions',
   list_chat_models: 'Loading chat models',
   list_prompt_history: 'Loading prompt history',
   plan_chat_command: 'Planning chat command',

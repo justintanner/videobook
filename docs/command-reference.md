@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (288)
+## MCP endpoints (289)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -22,6 +22,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `audio_mix` — Mix audio from a video or audio layer asset into a video or audio target asset in-place. The layer starts at 0 seconds at the requested 0-100 volume. The target duration is preserved, and video targets retain their original video stream with git versioning.
 - `build_generation_provider_payload` (historical names, not exposed: `translate_payload`) — Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.
 - `cancel_job` — Cancel a queued or running persistent job
+- `chain` — Run a bounded ordered list of existing book actions, passing earlier step outputs through structured {$ref:{step_id,output}} references. Use action=run to start, action=status or action=cancel with chain_id to inspect or stop a run.
 - `change_video_speed` — Change video playback speed (speed up or slow down). Operates in-place with git versioning.
 - `chat` — LLM-backed router for the Videobook app composer. It executes reads and previews mutations or generation for explicit application. ChatGPT and other LLM hosts should call the specific media tools directly instead of calling this nested router.
 - `check_duplicate_bytes` — Find existing book files with the same immutable content hash before import

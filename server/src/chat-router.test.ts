@@ -9,6 +9,7 @@ import {
   NESTED_TIMESTAMP_PARAMS,
   TIMESTAMP_PARAMS,
   applyBytedanceNamedModelRoute,
+  applyStackedChainRoute,
   applyVideoJoinRoute,
   buildChatRoutingPrompt,
   buildChatRoutingUserMessage,
@@ -47,6 +48,8 @@ describe("chat routing catalog", () => {
     expect(new Set(directNames)).toEqual(new Set(expectedNames));
     expect(tools).toHaveLength(expectedNames.length + CHAT_TOOL_ALIASES.length);
     expect(getRoutableTool(tools, "chat")).toBeUndefined();
+    expect(getRoutableTool(tools, "chain")?.actualTool).toBe("chain");
+    expect(getRoutableTool(tools, "chain")?.autoApply).toBe(false);
     expect(getRoutableTool(tools, "splice_video")?.params).toContain(
       "additional_asset_ids",
     );
@@ -178,6 +181,46 @@ describe("chat routing catalog", () => {
     expect(
       getRoutableTool(tools, "generate_kie_minimax_h3_text_to_video")?.autoApply,
     ).toBe(false);
+    expect(getRoutableTool(tools, "chain")?.autoApply).toBe(false);
+  });
+
+  it("rewrites stacked extract-then-replace requests onto chain", () => {
+    const routed = applyStackedChainRoute({
+      query: "extract audio from b2 and use it to replace the audio on the video in c4",
+      tool: "extract_audio",
+      params: { asset_id: "@b2" },
+      message: "Extracting audio.",
+      assetContext: [],
+      notebookContext: {
+        id: "019fcc00-0000-7000-8000-0000000000aa",
+        name: "Main",
+        cells: [],
+      },
+    });
+    expect(routed.tool).toBe("chain");
+    expect(routed.substituted).toBe(true);
+    expect(routed.params.steps).toEqual([
+      { id: "extract", tool: "extract_audio", params: { asset_id: "@b2" } },
+      {
+        id: "replace",
+        tool: "replace_video_audio",
+        params: {
+          asset_id: "@c4",
+          audio_asset_id: {
+            $ref: { step_id: "extract", output: "audio_asset_id" },
+          },
+        },
+      },
+    ]);
+    const single = applyStackedChainRoute({
+      query: "extract audio from @b2",
+      tool: "extract_audio",
+      params: { asset_id: "@b2" },
+      message: "Extracting audio.",
+      assetContext: [],
+    });
+    expect(single.substituted).toBe(false);
+    expect(single.tool).toBe("extract_audio");
   });
 
   it("builds a prompt from the live catalog and conversation history", () => {

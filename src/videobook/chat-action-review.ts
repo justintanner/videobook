@@ -284,6 +284,34 @@ function genericValue(
   return serialized.length > 96 ? `${serialized.slice(0, 93)}…` : serialized
 }
 
+function chainReview(input: RoutedActionReviewInput): RoutedActionReview {
+  const steps = Array.isArray(input.params.steps) ? input.params.steps : []
+  const settings = steps.flatMap((entry, index) => {
+    const step = recordLike(entry)
+    const tool = textValue(step?.tool) ?? `step ${index + 1}`
+    const params = recordLike(step?.params) ?? {}
+    const target = textValue(params.asset_id)
+      ?? textValue(params.audio_asset_id)
+      ?? sourceValue(input.input, params)
+    return [setting(`Step ${index + 1}`, `${humanize(tool)} · ${target}`)]
+  })
+  const mutatesInPlace = steps.some((entry) => {
+    const tool = textValue(recordLike(entry)?.tool)
+    return tool === 'replace_video_audio' || tool === 'trim_video'
+  })
+  return {
+    title: 'Chained actions',
+    settings: settings.length > 0 ? settings : [setting('Tool', 'chain')],
+    effect: mutatesInPlace ? IN_PLACE_EFFECT : null,
+  }
+}
+
+function recordLike(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
 function genericReview(input: RoutedActionReviewInput): RoutedActionReview {
   const settings = Object.entries(input.params)
     .filter(([key]) => key !== 'book_id')
@@ -313,5 +341,6 @@ export function routedActionReview(
   if (input.tool === 'trim_video') return trimReview(input)
   if (input.tool === 'change_video_speed') return changeVideoSpeedReview(input)
   if (input.tool === 'post') return postToXReview(input)
+  if (input.tool === 'chain') return chainReview(input)
   return genericReview(input)
 }

@@ -89,6 +89,8 @@ export default defineConfig({
       'server/src/retired-wan-2x.test.ts',
       'server/src/chat-router.test.ts',
       'server/src/chat-models.test.ts',
+      'server/src/chain-plan.test.ts',
+      'server/src/chain-executor.test.ts',
       'server/src/dialog-quality.test.ts',
       'server/src/downloads-dest.test.ts',
       'server/src/google-flow-cost.test.ts',

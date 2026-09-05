@@ -10,14 +10,19 @@ import {
 } from '../../src/videobook/mcp-activity'
 
 describe('chat model catalog', () => {
-  it('retains only Sol from the server catalog', () => {
+  it('retains only Astra from the server catalog', () => {
     expect(asChatModelCatalog({
       defaultModel: 'gpt-5.6-terra',
       models: [
         {
+          id: 'gpt-6-astra',
+          label: 'Astra',
+          description: 'Deep',
+        },
+        {
           id: 'gpt-5.6-sol',
           label: 'Sol',
-          description: 'Deep',
+          description: 'Historical',
         },
         {
           id: 'gpt-5.6-terra',
@@ -27,9 +32,9 @@ describe('chat model catalog', () => {
         { id: 'broken' },
       ],
     })).toEqual({
-      defaultModel: 'gpt-5.6-sol',
+      defaultModel: 'gpt-6-astra',
       models: [
-        { id: 'gpt-5.6-sol', label: 'Sol', description: 'Deep' },
+        { id: 'gpt-6-astra', label: 'Astra', description: 'Deep' },
       ],
     })
   })
@@ -38,7 +43,21 @@ describe('chat model catalog', () => {
     const catalog = asChatModelCatalog(null)
     expect(catalog).toEqual(fallbackChatModelCatalog)
     expect(resolveChatModelSelection(catalog, 'retired-model'))
-      .toBe('gpt-5.6-sol')
+      .toBe('gpt-6-astra')
+    expect(resolveChatModelSelection(catalog, 'gpt-5.6-sol'))
+      .toBe('gpt-6-astra')
+  })
+
+  it('recovers a persisted Sol selection to Astra', () => {
+    const catalog = asChatModelCatalog({
+      defaultModel: 'gpt-6-astra',
+      models: [{
+        id: 'gpt-6-astra',
+        label: 'Astra',
+        description: 'Routes every composer request and configures its tools',
+      }],
+    })
+    expect(resolveChatModelSelection(catalog, 'gpt-5.6-sol')).toBe('gpt-6-astra')
   })
 })
 

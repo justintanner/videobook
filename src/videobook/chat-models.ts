@@ -11,13 +11,13 @@ export interface ChatModelCatalog {
   models: readonly ChatModelOption[]
 }
 
-const chatModelId = 'gpt-5.6-sol'
+const chatModelId = 'gpt-6-astra'
 
 export const fallbackChatModelCatalog: ChatModelCatalog = {
-  defaultModel: 'gpt-5.6-sol',
+  defaultModel: 'gpt-6-astra',
   models: [{
     id: chatModelId,
-    label: 'Sol',
+    label: 'Astra',
     description: 'Routes every composer request and configures its tools',
   }],
 }

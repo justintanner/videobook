@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { IntelligenceReasoningEffort } from "./openai-intelligence.js";
 import type { ToolDef } from "./tools/tool-def.js";
 
-const CHAT_MODEL_IDS = ["gpt-5.6-sol"] as const;
+const CHAT_MODEL_IDS = ["gpt-6-astra"] as const;
 
 export type ChatModelId = typeof CHAT_MODEL_IDS[number];
 
@@ -13,16 +13,26 @@ type ChatModelOption = {
   reasoningEffort: IntelligenceReasoningEffort;
 };
 
-export const DEFAULT_CHAT_MODEL: ChatModelId = "gpt-5.6-sol";
+export const DEFAULT_CHAT_MODEL: ChatModelId = "gpt-6-astra";
 
 export const CHAT_MODEL_OPTIONS: readonly ChatModelOption[] = [
   {
-    id: "gpt-5.6-sol",
-    label: "Sol",
+    id: "gpt-6-astra",
+    label: "Astra",
     description: "Routes every composer request and configures its tools",
     reasoningEffort: "medium",
   },
 ];
+
+export function chatIntelligenceRequestOptions(
+  model?: ChatModelId,
+): { model: ChatModelId; reasoningEffort: IntelligenceReasoningEffort } {
+  const resolved = resolveChatModel(model);
+  return {
+    model: resolved.id,
+    reasoningEffort: resolved.reasoningEffort,
+  };
+}
 
 export const chatModelSchema = z.enum(CHAT_MODEL_IDS);
 

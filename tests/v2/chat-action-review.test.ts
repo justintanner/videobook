@@ -213,6 +213,32 @@ describe('routedActionReview', () => {
     })
   })
 
+  it('summarizes a combined extract-then-replace chain', () => {
+    expect(routedActionReview({
+      tool: 'chain',
+      params: {
+        action: 'run',
+        version: 1,
+        steps: [
+          { id: 'extract', tool: 'extract_audio', params: { asset_id: '@b2' } },
+          {
+            id: 'replace',
+            tool: 'replace_video_audio',
+            params: { asset_id: '@c4' },
+          },
+        ],
+      },
+      input: 'extract audio from @b2 and use it to replace the audio on the video in @c4',
+    })).toMatchObject({
+      title: 'Chained actions',
+      settings: [
+        { label: 'Step 1', value: 'Extract audio · @b2' },
+        { label: 'Step 2', value: 'Replace video audio · @c4' },
+      ],
+      effect: { label: 'In place · previous version kept', tone: 'warning' },
+    })
+  })
+
   it('labels an immediate media-only X post', () => {
     expect(routedActionReview({
       tool: 'post',

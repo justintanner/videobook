@@ -957,6 +957,39 @@ function messageFor(value: unknown, fallback: string): string {
   return fallback
 }
 
+function asChainRun(value: unknown): {
+  chainId: string
+  status: string
+  error: string | null
+  steps: Array<{ id: string; tool: string; status: string; error: string | null }>
+} | null {
+  const item = recordValue(value)
+  const chainId = asString(item?.chain_id)
+  const status = asString(item?.status)
+  if (asString(item?.kind) !== 'chain-run' || !chainId || !status) return null
+  const steps = Array.isArray(item?.steps)
+    ? item.steps.flatMap((entry) => {
+        const step = recordValue(entry)
+        const id = asString(step?.id)
+        const tool = asString(step?.tool)
+        const stepStatus = asString(step?.status)
+        if (!id || !tool || !stepStatus) return []
+        return [{
+          id,
+          tool,
+          status: stepStatus,
+          error: asString(step?.error),
+        }]
+      })
+    : []
+  return {
+    chainId,
+    status,
+    error: asString(item?.error),
+    steps,
+  }
+}
+
 function isDownloadVideoResult(value: unknown): boolean {
   const item = recordValue(value)
   return asString(item?.artifact_id) !== null
@@ -8798,6 +8831,48 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       applied = true
       setPendingChatAction(null)
+      const acceptedChain = asChainRun(result)
+      const chainResult = acceptedChain
+        && acceptedChain.status !== 'completed'
+        && acceptedChain.status !== 'failed'
+        && acceptedChain.status !== 'cancelled'
+        && acceptedChain.status !== 'interrupted'
+        ? await (async () => {
+            saveValue('videobook.active-chain', JSON.stringify({
+              bookId,
+              chainId: acceptedChain.chainId,
+            }))
+            const deadline = Date.now() + 5 * 60_000
+            let latest = acceptedChain
+            while (Date.now() < deadline) {
+              const snapshot = asChainRun(await call('chain', {
+                action: 'status',
+                book_id: bookId,
+                chain_id: acceptedChain.chainId,
+              }, { background: true }))
+              if (!snapshot) break
+              latest = snapshot
+              const running = snapshot.steps.find((step) => step.status === 'running')
+              if (running) {
+                setNotice(`${running.tool.replaceAll('_', ' ')}…`)
+              }
+              if (
+                snapshot.status === 'completed'
+                || snapshot.status === 'failed'
+                || snapshot.status === 'cancelled'
+                || snapshot.status === 'interrupted'
+              ) {
+                saveValue('videobook.active-chain', '')
+                if (snapshot.status !== 'completed') {
+                  throw new Error(snapshot.error ?? `Chain ${snapshot.status}`)
+                }
+                return snapshot
+              }
+              await new Promise((resolve) => window.setTimeout(resolve, 250))
+            }
+            throw new Error(latest.error ?? 'Chain timed out')
+          })()
+        : acceptedChain
       if (isDownloadVideoResult(result)) {
         const outcome = await completeVideoDownload(
           result,
@@ -8837,7 +8912,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const createdCellId = asString(resultRecord?.cell_id)
       await refreshBookData(bookId, notebook?.id)
       if (createdCellId) selectCanvasCell(createdCellId)
-      const message = messageFor(result, plan.message || 'Action applied')
+      const message = chainResult
+        ? plan.message || 'Chain complete'
+        : messageFor(result, plan.message || 'Action applied')
       setNotice(message)
       return { ok: true, message }
     } catch (error) {
@@ -9059,14 +9136,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (plan.tool === 'extract_audio') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
       if (!sourceReference) {
-        return { ok: false, message: 'Sol did not select a video source.' }
+        return { ok: false, message: 'The chat model did not select a video source.' }
       }
       return await runNotebookAudioCommandNow({ sourceReference })
     }
     if (plan.tool === 'extract_first_frame' || plan.tool === 'extract_last_frame') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
       if (!sourceReference) {
-        return { ok: false, message: 'Sol did not select a video source.' }
+        return { ok: false, message: 'The chat model did not select a video source.' }
       }
       const command: NotebookFrameCommand = {
         frameMode: plan.tool === 'extract_last_frame' ? 'last' : 'first',
@@ -9083,7 +9160,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!sourceReference || timestampSeconds === null || timestampSeconds < 0) {
         return {
           ok: false,
-          message: 'Sol did not select a valid video source and timestamp.',
+          message: 'The chat model did not select a valid video source and timestamp.',
         }
       }
       const command: NotebookFrameCommand = {
@@ -9100,7 +9177,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const sourceReference = routedAssetReference(plan.params.asset_id)
       const splitAtSeconds = asNumber(plan.params.chunk_a_end)
       if (!sourceReference || !splitAtSeconds || splitAtSeconds <= 0) {
-        return { ok: false, message: 'Sol did not select a valid split source and time.' }
+        return { ok: false, message: 'The chat model did not select a valid split source and time.' }
       }
       return await previewNotebookSplitCommand({
         sourceReference,
@@ -9117,7 +9194,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         : [7]
       const targets = rawTargets.map(asNumber)
       if (targets.some((target) => target === null || target <= 0)) {
-        return { ok: false, message: 'Sol did not select valid split durations.' }
+        return { ok: false, message: 'The chat model did not select valid split durations.' }
       }
       if (sourceReference) {
         return await previewNotebookSplitCommand({

@@ -254,9 +254,9 @@ describe('v2 MCP server', () => {
 
     const chatModels = await callTool<ChatModelsPayload>(client, 'list_chat_models', {})
     expect(chatModels).toEqual({
-      defaultModel: 'gpt-5.6-sol',
+      defaultModel: 'gpt-6-astra',
       models: [
-        expect.objectContaining({ id: 'gpt-5.6-sol', label: 'Sol' }),
+        expect.objectContaining({ id: 'gpt-6-astra', label: 'Astra' }),
       ],
     })
 

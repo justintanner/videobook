@@ -37,7 +37,7 @@ describe('CommandComposer controls', () => {
   it('shows the complete selected model identifier', () => {
     const html = renderComposer(true)
 
-    expect(html).toContain('>gpt-5.6-sol</option>')
+    expect(html).toContain('>gpt-6-astra</option>')
   })
 
   it('keeps model selection available while command execution is busy', () => {

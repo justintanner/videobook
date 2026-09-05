@@ -10,14 +10,18 @@ import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import {
   applyBytedanceNamedModelRoute,
+  applyStackedChainRoute,
   applyVideoJoinRoute,
+  AUTO_APPLY_TOOL_NAMES,
   buildChatRoutingPrompt,
   buildChatRoutingUserMessage,
   buildRoutableTools,
+  effectForTool,
   getRoutableTool,
   NESTED_TIMESTAMP_PARAMS,
   TIMESTAMP_PARAMS,
 } from "../chat-router.js";
+import { planStackedChainFromQuery, preflightChainPlan } from "../chain-plan.js";
 import type { ChatRoutingNotebookContext } from "../chat-router.js";
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
@@ -38,8 +42,8 @@ import {
   intelligenceRequest,
 } from "../openai-intelligence.js";
 import {
+  chatIntelligenceRequestOptions,
   chatModelSchema,
-  resolveChatModel,
   type ChatModelId,
 } from "../chat-models.js";
 import {
@@ -507,6 +511,8 @@ function autoApplyReason(tool: string): string {
     ? "Duplication is reversible and only adds a copied asset and cell"
     : tool === "extract_audio"
     ? "Audio extraction is free, local, and only adds derived media"
+    : tool === "chain"
+    ? "This chain only reads or auto-applies existing local actions"
     : "Frame extraction is free and only adds a new image cell";
 }
 
@@ -572,7 +578,7 @@ export function chatDef(engine: Engine): ToolDef {
       };
       if (actionPlan) return await applyChatActionPlan(engine, bookId, actionPlan);
       if (!prompt) return error("A chat prompt is required");
-      const chatModel = resolveChatModel(model);
+      const chatRequest = chatIntelligenceRequestOptions(model);
       const book = engine.book.get();
       let notebookDocument: NotebookDocument | null = null;
       try {
@@ -588,6 +594,68 @@ export function chatDef(engine: Engine): ToolDef {
 
       // 1. Expand @s01 slot refs → the artifact ids they occupy
       const expandedPrompt = expandSlotRefs(prompt, timelineSlotArtifactIds(engine));
+      const stackedPlan = planStackedChainFromQuery(expandedPrompt);
+      if (stackedPlan) {
+        const { getAllToolDefs } = await import("./index.js");
+        const allDefs = getAllToolDefs(engine);
+        const targetDef = allDefs.find((definition) => definition.name === "chain");
+        if (!targetDef) return error("Tool handler not found: chain");
+        const preflight = await preflightChainPlan({
+          action: "run",
+          version: 1,
+          book_id: bookId,
+          ...(notebookId ? { notebook_id: notebookId } : {}),
+          steps: stackedPlan.steps,
+        }, {
+          engine,
+          bookId,
+          notebookId,
+          toolSchemas: new Map(
+            allDefs.map((definition) => [definition.name, definition.schema]),
+          ),
+          autoApplyTools: AUTO_APPLY_TOOL_NAMES,
+          effectForTool: (name) => effectForTool(
+            name,
+            /^(?:generate|extend|upscale)_/u.test(name) ? "generation" : "action",
+          ),
+        });
+        if (!preflight.ok) return error(preflight.error);
+        const params: Record<string, unknown> = {
+          action: "run",
+          version: 1,
+          book_id: bookId,
+          ...(notebookId ? { notebook_id: notebookId } : {}),
+          steps: stackedPlan.steps,
+        };
+        const validated = z.object(targetDef.schema).safeParse(params);
+        if (!validated.success) {
+          return error(
+            `Invalid parameters for chain: ${z.prettifyError(validated.error)}`,
+          );
+        }
+        const effect = preflight.plan.effect === "generation"
+          ? "generation"
+          : "mutation";
+        const autoApply = preflight.plan.autoApply;
+        return json({
+          kind: "chat-action-plan",
+          planId: uuidv7(),
+          bookId,
+          prompt,
+          routedTool: "chain",
+          tool: "chain",
+          params: validated.data,
+          message: stackedPlan.message,
+          summary: stackedPlan.message,
+          effect,
+          confirmation: {
+            required: !autoApply,
+            reason: autoApply
+              ? "This chain only reads or auto-applies existing local actions"
+              : "This request changes the current book",
+          },
+        } satisfies ChatActionPlan);
+      }
       const notebookResolution = notebookDocument
         ? resolveNotebookPromptReferences({
             engine: engine,
@@ -679,8 +747,8 @@ export function chatDef(engine: Engine): ToolDef {
       try {
         const responses = buildIntelligenceResponses(apiKey, {
           timeout: CHAT_ROUTING_TIMEOUT_MS,
-          model: chatModel.id,
-          reasoningEffort: chatModel.reasoningEffort,
+          model: chatRequest.model,
+          reasoningEffort: chatRequest.reasoningEffort,
         });
         let lastError: unknown;
         decision = { tool: "", params: {}, message: "" };
@@ -691,10 +759,7 @@ export function chatDef(engine: Engine): ToolDef {
               input: userMessage,
               text: { format: { type: "json_object" } },
               max_output_tokens: CHAT_ROUTING_MAX_OUTPUT_TOKENS,
-            }, {
-              model: chatModel.id,
-              reasoningEffort: chatModel.reasoningEffort,
-            }), AbortSignal.timeout(CHAT_ROUTING_TIMEOUT_MS));
+            }, chatRequest), AbortSignal.timeout(CHAT_ROUTING_TIMEOUT_MS));
             const outputText = firstResponseText(response);
             decision = parseChatDecision(outputText);
             lastError = null;
@@ -733,10 +798,20 @@ export function chatDef(engine: Engine): ToolDef {
           assetContext,
           notebookContext,
         });
+      const stackedRoute = joinRoute.substituted
+        ? joinRoute
+        : applyStackedChainRoute({
+          query: expandedPrompt,
+          tool: joinRoute.tool,
+          params: joinRoute.params,
+          message: joinRoute.message,
+          assetContext,
+          notebookContext,
+        });
       decision = {
-        tool: joinRoute.tool,
-        params: joinRoute.params,
-        message: joinRoute.message,
+        tool: stackedRoute.tool,
+        params: stackedRoute.params,
+        message: stackedRoute.message,
       };
 
       // 6. Validate tool exists in routable registry
@@ -806,7 +881,29 @@ export function chatDef(engine: Engine): ToolDef {
         const effect = routableTool.effect;
         const summary = decision.message.trim()
           || `${effect === "generation" ? "Generate" : "Apply"} with ${decision.tool}`;
-        const autoApply = routableTool.autoApply;
+        let autoApply = routableTool.autoApply;
+        if (targetDef.name === "chain") {
+          const preflight = await preflightChainPlan({
+            action: "run",
+            version: 1,
+            ...params,
+            book_id: bookId,
+          }, {
+            engine,
+            bookId,
+            notebookId,
+            toolSchemas: new Map(
+              allDefs.map((definition) => [definition.name, definition.schema]),
+            ),
+            autoApplyTools: AUTO_APPLY_TOOL_NAMES,
+            effectForTool: (name) => effectForTool(
+              name,
+              /^(?:generate|extend|upscale)_/u.test(name) ? "generation" : "action",
+            ),
+          });
+          if (!preflight.ok) return error(preflight.error);
+          autoApply = preflight.plan.autoApply;
+        }
         return json({
           kind: "chat-action-plan",
           planId: uuidv7(),

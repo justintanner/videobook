@@ -642,7 +642,16 @@ export const queue: Queue = {
 
 async function reconcileQueueOnStartup(): Promise<void> {
   await bookManager.ready();
-  await Promise.all(bookManager.list().map((book) => ensureRunner(book.bookId)));
+  await Promise.all(bookManager.list().map(async (book) => {
+    const info = await ensureRunner(book.bookId);
+    const { getAllToolDefs } = await import("./tools/index.js");
+    const { resumeOpenChains } = await import("./chain-executor.js");
+    const defs = getAllToolDefs(info.engine);
+    resumeOpenChains(
+      info.engine,
+      (name) => defs.find((definition) => definition.name === name),
+    );
+  }));
 }
 
 type ActiveBookJob = {

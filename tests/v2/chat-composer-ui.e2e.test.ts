@@ -2305,8 +2305,8 @@ describe('chat composer browser flow', () => {
     expect(await runningCell.locator('.cell-target-handle').count()).toBe(2)
     expect(await runningCell.locator('.cell-target-connection-count').count()).toBe(0)
     const selector = page.getByLabel('Chat model')
-    expect(await selector.locator('option').allTextContents()).toEqual(['gpt-5.6-sol'])
-    expect(await selector.inputValue()).toBe('gpt-5.6-sol')
+    expect(await selector.locator('option').allTextContents()).toEqual(['gpt-6-astra'])
+    expect(await selector.inputValue()).toBe('gpt-6-astra')
 
     // @c3 is the only fixture cell with real media output, so it is the grid
     // address the server-side resolver can rewrite to an artifact id.
@@ -2338,7 +2338,7 @@ describe('chat composer browser flow', () => {
       timeout: 20_000,
     }).toBeTruthy()
     const chatCall = observedCalls.find((call) => call.name === 'chat')
-    expect(chatCall?.arguments.model).toBe('gpt-5.6-sol')
+    expect(chatCall?.arguments.model).toBe('gpt-6-astra')
     expect(chatCall?.arguments.notebook_id).toEqual(expect.any(String))
     expect(chatCall?.arguments.prompt).toBe(routedPrompt)
     expect(observedCalls.some((call) => call.name === 'plan_chat_command')).toBe(false)
@@ -2351,6 +2351,67 @@ describe('chat composer browser flow', () => {
     await page.locator('[data-testid="mcp-activity"]').waitFor({ state: 'visible' })
     expect(await shell.evaluate((element) => window.getComputedStyle(element).animationName))
       .toBe('none')
+  }, 60_000)
+
+  it('reviews a stacked extract-then-replace chain as one apply', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    const prompt = 'extract audio from b2 and use it to replace the audio on the video in c4'
+    mockedChatActionPlan = {
+      prompt,
+      value: {
+        kind: 'chat-action-plan',
+        planId: '01900000-0000-7000-8000-000000000301',
+        bookId,
+        prompt,
+        routedTool: 'chain',
+        tool: 'chain',
+        params: {
+          action: 'run',
+          version: 1,
+          book_id: bookId,
+          steps: [
+            { id: 'extract', tool: 'extract_audio', params: { asset_id: '@b2' } },
+            {
+              id: 'replace',
+              tool: 'replace_video_audio',
+              params: {
+                asset_id: '@c4',
+                audio_asset_id: {
+                  $ref: { step_id: 'extract', output: 'audio_asset_id' },
+                },
+              },
+            },
+          ],
+        },
+        message: 'Extracting audio and replacing the target soundtrack.',
+        summary: 'Extracting audio and replacing the target soundtrack.',
+        effect: 'mutation',
+        confirmation: {
+          required: true,
+          reason: 'This request changes the current book',
+        },
+      },
+    }
+    try {
+      await openApp()
+      const selector = page.getByLabel('Chat model')
+      expect(await selector.inputValue()).toBe('gpt-6-astra')
+      const input = page.getByLabel('Videobook command input')
+      await input.waitFor({ state: 'visible', timeout: 30_000 })
+      await expect.poll(async () => await input.isEnabled(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(true)
+      await input.fill(prompt)
+      await page.getByLabel('Send command').click()
+      const review = page.getByLabel('Chat action review')
+      await review.waitFor({ state: 'visible', timeout: 30_000 })
+      expect(await review.getByText('Chained actions').count()).toBeGreaterThan(0)
+      expect(await review.getByText('Extract audio · @b2').count()).toBeGreaterThan(0)
+      expect(await review.getByText('Replace video audio · @c4').count()).toBeGreaterThan(0)
+      expect(await review.getByRole('button', { name: 'Apply' }).count()).toBe(1)
+    } finally {
+      mockedChatActionPlan = null
+    }
   }, 60_000)
 
   it('starts cell-level image and video generation without chat review', async () => {

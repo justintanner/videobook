@@ -1,4 +1,5 @@
 import type { ToolDef } from "./tools/tool-def.js";
+import { planStackedChainFromQuery } from "./chain-plan.js";
 import {
   zodEnumOptionsOrNull,
   zodIsRequired,
@@ -543,6 +544,31 @@ function collectJoinAssetIds(input: VideoJoinRouteInput): string[] {
   return [];
 }
 
+function applyStackedChainRoute(input: VideoJoinRouteInput): BytedanceRouteResult {
+  const planned = planStackedChainFromQuery(input.query);
+  if (!planned) {
+    return {
+      tool: input.tool,
+      params: input.params,
+      message: input.message,
+      substituted: false,
+    };
+  }
+  return {
+    tool: "chain",
+    params: {
+      action: "run",
+      version: 1,
+      steps: planned.steps,
+      ...(input.notebookContext?.id
+        ? { notebook_id: input.notebookContext.id }
+        : {}),
+    },
+    message: planned.message,
+    substituted: true,
+  };
+}
+
 function applyVideoJoinRoute(input: VideoJoinRouteInput): BytedanceRouteResult {
   if (input.tool === "apply_cuts" || input.tool === "smooth_scene_concat") {
     return {
@@ -642,6 +668,7 @@ Parameter guidelines:
 - For speech, voiceover, narration, or text-to-speech requests use generate_elevenlabs_text_to_audio: put the exact words to speak in "text" (write out the words even when the user paraphrases them) and omit voice_id unless the user supplies a specific ElevenLabs voice id
 - For concat_images: use image_refs for the referenced image assets; a single ref leaves the second two-slot cell empty, and null explicitly leaves a slot empty. Use aspect_ratio 16:9 or 9:16; layout is automatic unless overridden
 - For splice_video: join two or more videos into one new asset. Use this for splice, concat, or stitch requests, not plan_chat_command. Pass first_asset_id and second_asset_id in playback order, additional_asset_ids for any further clips in that same order, and overlap 0 to concatenate complete clips
+- For chain: use when one request stacks two or more supported actions in order, including extract audio then replace another clip's soundtrack. Pass action "run", version 1, and ordered steps. Use structured {$ref:{step_id,output}} objects for earlier outputs (never interpolate refs inside strings). Do not nest chain or chat. Leave book_id out of step params
 - plan_chat_command is only for timeline sequence edits such as trim, move, split, insert at a frame, or captions. media_context is an optional single object {notebook_id, cell_id, artifact_id} for one fullscreen clip — never an array of clips
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
 - Do NOT include book_id in params — it is injected automatically
@@ -690,6 +717,7 @@ export {
   TIMESTAMP_PARAMS,
   NESTED_TIMESTAMP_PARAMS,
   applyBytedanceNamedModelRoute,
+  applyStackedChainRoute,
   applyVideoJoinRoute,
   buildRoutableTools,
   buildChatRoutingPrompt,
