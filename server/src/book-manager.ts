@@ -16,6 +16,7 @@ import {
   type EngineError,
   type Result,
   type V4MigrationDryRun,
+  type V4MigrationRequest,
   type V4MigrationResult,
 } from "videobook-engine";
 
@@ -270,6 +271,7 @@ export class BookManager {
   async migrateLegacy(
     bookId: string,
     expectedSourceHead: string,
+    options: Pick<V4MigrationRequest, "expectedMigrationKey" | "signal" | "onProgress" | "ffprobePath"> = {},
   ): Promise<Result<MigratedBook, EngineError>> {
     await this.ready();
     const legacy = this.legacyBooks.get(bookId);
@@ -290,6 +292,8 @@ export class BookManager {
       dryRun: false,
       expectedSourceBookId: bookId,
       expectedSourceHead,
+      ...options,
+      expectedMigrationKey: options.expectedMigrationKey ?? legacy.migrationKey,
     });
     if (!migrated.ok) return migrated;
     if (!("destinationBookId" in migrated.value)) {
@@ -372,6 +376,22 @@ export class BookManager {
   private async openRootOnce(bookId: string): Promise<void> {
     if (this.books.has(bookId) || this.legacyBooks.has(bookId)) return;
     const root = this.bookRoot(bookId);
+    const identity = readV4BookIdentity(root);
+    if (identity.ok) {
+      if (identity.value.bookId !== bookId) {
+        throw new Error(`Book root ${bookId} has mismatched legacy book identity`);
+      }
+      const dryRun = dryRunV4Migration(root);
+      if (!dryRun.ok) throw new Error(dryRun.error.message);
+      if (dryRun.value.sourceBookId !== bookId) {
+        throw new Error(`Book root ${bookId} changed identity during inspection`);
+      }
+      this.legacyBooks.set(bookId, { ...dryRun.value, slug: identity.value.slug });
+      return;
+    }
+    if (identity.error.code !== "SCHEMA_INCOMPATIBLE") {
+      throw new Error(identity.error.message);
+    }
     let engine: Engine | undefined;
     try {
       const openedAt = performance.now();
@@ -402,16 +422,6 @@ export class BookManager {
       this.books.set(managed.bookId, managed);
     } catch (cause) {
       engine?.close();
-      const dryRun = dryRunV4Migration(root);
-      if (dryRun.ok) {
-        const identity = readV4BookIdentity(root);
-        if (!identity.ok) throw cause;
-        this.legacyBooks.set(dryRun.value.sourceBookId, {
-          ...dryRun.value,
-          slug: identity.value.slug,
-        });
-        return;
-      }
       if (isSchemaIncompatible(cause)) {
         return;
       }

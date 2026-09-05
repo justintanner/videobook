@@ -12,6 +12,8 @@ import type {
 import {
   nextHorizontalSlotFrom,
   NOTEBOOK_CELL_TYPES,
+  NOTEBOOK_GRID_ROW_COUNT,
+  NOTEBOOK_GRID_COLUMN_COUNT,
   notebookGridTag,
 } from "videobook-engine";
 import { slotRight } from "../notebook-placement.js";
@@ -76,8 +78,8 @@ import { notebookConnectionWouldCreateCycle } from "../notebook-graph.js";
 const bookSchema = { book_id: z.string().uuid() };
 const cellTypeSchema = z.enum(NOTEBOOK_CELL_TYPES);
 const notebookGridSlotSchema = z.object({
-  row: z.number().int().min(0).max(25),
-  column: z.number().int().min(0).max(12),
+  row: z.number().int().min(0).max(NOTEBOOK_GRID_ROW_COUNT - 1),
+  column: z.number().int().min(0).max(NOTEBOOK_GRID_COLUMN_COUNT - 1),
 });
 
 function notebookConnectionError(

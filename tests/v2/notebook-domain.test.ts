@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
 import {
@@ -32,6 +33,23 @@ describe('v2 notebook domain tools', () => {
   afterEach(async () => {
     await books.close()
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  })
+
+  it('validates creation and preview slots against the full notebook grid', () => {
+    const definitions = videobookDomainDefs(scopedBookEngine, books)
+    const create = definitions.find((definition) => definition.name === 'create_notebook_cell')!
+    const preview = definitions.find((definition) => definition.name === 'preview_notebook_generation')!
+    const id = '019bf918-1e85-7dda-a5c2-c760b8b11367'
+    for (const slot of [{ row: 0, column: 0 }, { row: 26, column: 7 }, { row: 63, column: 7 }]) {
+      expect(z.object(create.schema).safeParse({ book_id: id, notebook_id: id, cell: { type: 'prompt', slot } }).success).toBe(true)
+      expect(z.object(preview.schema).safeParse({ book_id: id, notebook_id: id, cell_id: id,
+        draft: { slot, prompt: '', provider: 'provider', model: 'model', operation: 'operation', tool: 'tool' } }).success).toBe(true)
+    }
+    for (const slot of [{ row: 64, column: 0 }, { row: 0, column: 8 }, { row: 0, column: 12 }, { row: -1, column: 0 }, { row: 0.5, column: 0 }]) {
+      expect(z.object(create.schema).safeParse({ book_id: id, notebook_id: id, cell: { type: 'prompt', slot } }).success).toBe(false)
+      expect(z.object(preview.schema).safeParse({ book_id: id, notebook_id: id, cell_id: id,
+        draft: { slot, prompt: '', provider: 'provider', model: 'model', operation: 'operation', tool: 'tool' } }).success).toBe(false)
+    }
   })
 
   it('persists a graph of real NotebookDocument cells and edges', async () => {
