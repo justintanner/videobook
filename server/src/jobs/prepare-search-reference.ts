@@ -139,6 +139,7 @@ async function prepareSearchReferenceFile(
       reference: {
         kind: "video",
         embeddingSpace: provider.embeddingSpace,
+        durationMs,
         samples,
       },
     };
