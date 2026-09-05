@@ -120,7 +120,7 @@ async function chooseWatermarkPositions(
   return positions as Record<Orientation, OsgPosition>;
 }
 
-export interface OsgPlacementRequest {
+interface OsgPlacementRequest {
   assetId: string;
   fingerprint: string;
   userScale: number;

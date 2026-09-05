@@ -50,7 +50,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `create_watermark_card` — Generate a compact transparent QR plus plain X handle badge and store it as an image artifact. The X icon and handle border are optional, and handle padding X/Y and corner rounding are adjustable. Apply it via apply_watermark or manually through on-screen graphic settings.
 - `crop_image` — Crop an image asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source image (0..1). Replaces original in place with canonical dims (1920x1080 / 1080x1920 / 1080x1080) and regenerates derived crops with git versioning.
 - `crop_video` — Crop a video asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source frame (0..1). Re-renders in place to canonical dims (1920x1080 / 1080x1920 / 1080x1080) with git versioning.
-- `delete_asset` — Delete an artifact and remove its stable timeline references
+- `delete_asset` — Delete an artifact and its owned media records after removing timeline references
 - `delete_book` — Permanently delete a book after typed name confirmation
 - `delete_character_entity` — Delete a reusable character
 - `delete_google_flow_character` — Delete a Google Flow character by its ref.

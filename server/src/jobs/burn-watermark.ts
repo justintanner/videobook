@@ -83,7 +83,7 @@ export type BurnWatermarkResult = {
   placementSource: WatermarkPlacementSource;
 };
 
-export type BurnWatermarkFades = {
+type BurnWatermarkFades = {
   fadeIn: number;
   fadeOut: number;
 };
@@ -153,7 +153,7 @@ export function burnWatermarkFades(
  * timed stream (see `burnWatermarkInputArgs`) for the fade timestamps to
  * line up with the main video.
  */
-export function burnWatermarkFadeFilters(
+function burnWatermarkFadeFilters(
   fades: BurnWatermarkFades,
   startSeconds: number | undefined,
   endSeconds: number | undefined,
@@ -198,7 +198,7 @@ export function burnWatermarkInputArgs(
     : ["-loop", "1", "-framerate", frameRate, "-t", String(loopSeconds), "-i", path];
 }
 
-export function burnWatermarkFrameRate(probe: ProbeResult): string {
+function burnWatermarkFrameRate(probe: ProbeResult): string {
   const nominal = probe.videoStream?.video?.nominalFrameRate;
   if (nominal && nominal.numerator > 0 && nominal.denominator > 0) {
     return `${nominal.numerator}/${nominal.denominator}`;

@@ -2,7 +2,7 @@
 // reduced to this shape by the sheet component, so the rules are testable
 // without a browser.
 
-export type ConfirmSheetKeyAction = 'apply' | 'cancel' | 'none'
+type ConfirmSheetKeyAction = 'apply' | 'cancel' | 'none'
 
 export interface ConfirmSheetKeyTarget {
   tagName: string

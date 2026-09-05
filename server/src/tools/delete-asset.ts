@@ -43,7 +43,7 @@ async function removeFromTimeline(
 export function deleteAssetDef(engine: Engine): ToolDef {
   return {
     name: "delete_asset",
-    description: "Delete an artifact and remove its stable timeline references",
+    description: "Delete an artifact and its owned media records after removing timeline references",
     schema: {
       asset_id: z.string(),
       book_id: z.string().uuid(),
@@ -54,7 +54,7 @@ export function deleteAssetDef(engine: Engine): ToolDef {
       if (!artifact.ok) return timelineFailure(artifact.error.message);
       const timeline = await removeFromTimeline(engine, artifact.value.artifactId);
       if (timeline.error) return timelineFailure(timeline.error);
-      const result = await engine.artifacts.delete(artifact.value.artifactId);
+      const result = await engine.artifacts.delete(artifact.value.artifactId, { deleteOwnedMedia: true });
       if (!result.ok) return timelineFailure(result.error.message);
       return {
         content: [{

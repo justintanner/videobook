@@ -12,7 +12,7 @@ type WatermarkBurnWatchAsset = {
   status: string
 }
 
-export type WatermarkBurnWatchStep =
+type WatermarkBurnWatchStep =
   | { kind: 'missing' }
   | { kind: 'continue' }
   | { kind: 'completed'; result: Record<string, unknown> | null }
@@ -58,7 +58,7 @@ export function watermarkBurnWatchStep(
   return { kind: 'completed', result: job.result }
 }
 
-export interface WatermarkAppliedSummary {
+interface WatermarkAppliedSummary {
   includeQr: boolean
   includeHandle: boolean
   handle: string

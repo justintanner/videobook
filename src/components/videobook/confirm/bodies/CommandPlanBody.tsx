@@ -1,7 +1,7 @@
 import { Ban, TriangleAlert } from 'lucide-react'
 import type { CommandPlan } from '@/videobook/command-plan'
 
-export interface CommandPlanStagePreview {
+interface CommandPlanStagePreview {
   valid: boolean
   diff: {
     changedClipIds: readonly string[]

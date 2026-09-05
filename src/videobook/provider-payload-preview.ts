@@ -52,7 +52,7 @@ export function providerPayloadPreviewReferenceError(
   return `Fix prompt references before generating: ${details}`
 }
 
-export interface GenerationEstimate {
+interface GenerationEstimate {
   usd: number | null
   currency: string
   // The provider reported no usable price (dynamic pricing, missing adapter).

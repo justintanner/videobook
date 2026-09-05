@@ -12,7 +12,7 @@ function keyTarget(target: EventTarget | null): ConfirmSheetKeyTarget | null {
   }
 }
 
-export interface ConfirmSheetKeyHandlers {
+interface ConfirmSheetKeyHandlers {
   sheetRef: RefObject<HTMLElement | null>
   onKeyDown: (event: KeyboardEvent<HTMLElement>) => void
 }

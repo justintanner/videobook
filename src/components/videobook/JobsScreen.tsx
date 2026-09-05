@@ -32,9 +32,9 @@ import {
 
 const FINISHED_PREVIEW_COUNT = 10
 
-export type JobsPlanRevision = 'retry' | 'switch' | 'omit'
+type JobsPlanRevision = 'retry' | 'switch' | 'omit'
 
-export interface JobsScreenProps {
+interface JobsScreenProps {
   bookName: string | null
   jobs: JobsScreenJob[]
   plans: JobsScreenPlan[]

@@ -8,7 +8,7 @@ import { ConfirmSheetFooter } from './ConfirmSheetFooter'
 import { ConfirmSheetHeader, type ConfirmSheetEffect } from './ConfirmSheetHeader'
 import { ConfirmSheetInitialFocus, useConfirmSheetKeys } from './useConfirmSheetKeys'
 
-export interface ConfirmSheetProps {
+interface ConfirmSheetProps {
   address?: string | null
   applyFormId: string
   // Stable accessible name for the dialog ("Watermark review"); the visible

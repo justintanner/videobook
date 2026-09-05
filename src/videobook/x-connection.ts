@@ -1,7 +1,7 @@
 import { nonEmptyStringValue, recordValue } from './value-decoders'
 import { X_POST_MAX_CHARACTERS } from './x-post-review'
 
-export type XConnectionAccount = {
+type XConnectionAccount = {
   username: string
   subscriptionType: string
 }
@@ -24,7 +24,7 @@ export type XConnectionState = {
   error: string | null
 }
 
-export type XConnectionTone =
+type XConnectionTone =
   | 'connected'
   | 'disconnected'
   | 'error'
@@ -32,25 +32,25 @@ export type XConnectionTone =
   | 'pending'
   | 'unknown'
 
-export type XConnectionPresentation = {
+type XConnectionPresentation = {
   actionLabel: string | null
   detail: string
   label: string
   tone: XConnectionTone
 }
 
-export type XConnectionCallTool = (
+type XConnectionCallTool = (
   tool: string,
   args: Record<string, unknown>,
   options?: { background?: boolean },
 ) => Promise<unknown>
 
-export type XConnectionOutcome = { ok: boolean; message: string }
+type XConnectionOutcome = { ok: boolean; message: string }
 
 export const X_CONNECTION_POLL_MS = 2_000
 // The server abandons an unanswered authorization after five minutes; wait a
 // little longer so its own timeout message reaches the card.
-export const X_CONNECTION_TIMEOUT_MS = 6 * 60_000
+const X_CONNECTION_TIMEOUT_MS = 6 * 60_000
 
 export const initialXConnectionState: XConnectionState = {
   status: null,

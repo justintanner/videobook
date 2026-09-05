@@ -38,17 +38,17 @@ export type JobsRowTone =
   | 'cancelled'
   | 'omitted'
 
-export type JobsBandId = 'attention' | 'running' | 'queued' | 'finished'
+type JobsBandId = 'attention' | 'running' | 'queued' | 'finished'
 
 export type JobsRowAction = 'continue' | 'retry' | 'switch' | 'omit' | 'cancel'
 
 export type JobsFilter = 'all' | 'attention' | 'active' | 'finished'
 
-export type JobsRowSource =
+type JobsRowSource =
   | { kind: 'job'; jobId: number }
   | { kind: 'plan'; planId: string }
 
-export interface JobsRowTarget {
+interface JobsRowTarget {
   tag: string | null
   label: string | null
 }
@@ -124,11 +124,11 @@ export function formatDuration(ms: number): string {
   return `${hours}h ${String(minutes % 60).padStart(2, '0')}m`
 }
 
-export function shortArtifactId(artifactId: string): string {
+function shortArtifactId(artifactId: string): string {
   return artifactId.slice(0, 8)
 }
 
-export function jobRowTone(state: string): JobsRowTone {
+function jobRowTone(state: string): JobsRowTone {
   switch (state) {
     case 'queued': return 'queued'
     case 'running':
@@ -139,7 +139,7 @@ export function jobRowTone(state: string): JobsRowTone {
   }
 }
 
-export function planRowTone(status: string): JobsRowTone {
+function planRowTone(status: string): JobsRowTone {
   switch (status) {
     case 'awaiting-output': return 'review'
     case 'failed': return 'failed'
@@ -149,7 +149,7 @@ export function planRowTone(status: string): JobsRowTone {
   }
 }
 
-export function toneBand(tone: JobsRowTone): JobsBandId {
+function toneBand(tone: JobsRowTone): JobsBandId {
   switch (tone) {
     case 'review':
     case 'failed': return 'attention'
@@ -159,7 +159,7 @@ export function toneBand(tone: JobsRowTone): JobsBandId {
   }
 }
 
-export function toneStatusLabel(tone: JobsRowTone): string {
+function toneStatusLabel(tone: JobsRowTone): string {
   return tone.toUpperCase()
 }
 
@@ -371,7 +371,7 @@ function planRow(plan: JobsScreenPlan, cells: NotebookCell[]): JobsRow {
   }
 }
 
-export interface BuildJobsRowsInput {
+interface BuildJobsRowsInput {
   jobs: JobsScreenJob[]
   plans: JobsScreenPlan[]
   cells: NotebookCell[]

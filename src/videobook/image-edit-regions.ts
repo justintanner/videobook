@@ -144,7 +144,7 @@ export function sameImageEditSelection(
     && leftKeys.every((key) => left.replacements[key] === right.replacements[key])
 }
 
-export type ImageReplacementTarget = {
+type ImageReplacementTarget = {
   key: string
   box?: ImageEditBox
   subjectId?: string
@@ -157,7 +157,7 @@ export const MISSING_REGION_REPLACEMENT_ERROR =
 export const REGION_REPLACEMENT_MENTION_COUNT_ERROR =
   'Mention one image for every region, or one image to use for all of them.'
 
-export const MISSING_REGION_REPLACEMENT_TARGET_ERROR =
+const MISSING_REGION_REPLACEMENT_TARGET_ERROR =
   'Draw a region or select a person or object to replace.'
 
 function uniqueTrimmed(values: readonly string[]): string[] {
@@ -225,7 +225,7 @@ export function regionReplacementPayload(
   })
 }
 
-export type MergeRegionReplacementsResult =
+type MergeRegionReplacementsResult =
   | { ok: true; replacements: Record<string, string> }
   | { ok: false; error: string }
 
@@ -261,7 +261,7 @@ export function mergeRegionReplacements(
   return { ok: true, replacements }
 }
 
-export type ComposerImageReplacementMentionsResult =
+type ComposerImageReplacementMentionsResult =
   | { ok: true; artifactIds: string[] }
   | { ok: false; error: string }
 

@@ -2,7 +2,7 @@ import type { RoutedActionSetting } from '@/videobook/chat-action-review'
 import { PromptEcho, RoutedSettings } from './RoutedSettings'
 import { SpeedChangePreview } from './SpeedChangePreview'
 
-export interface RoutedSpeedPreview {
+interface RoutedSpeedPreview {
   effectiveSpeed: number | null
   mediaUrl: string | null
   thumbnailUrl: string | null

@@ -14,7 +14,7 @@ import {
   type XPostFollowup,
 } from './x-post-review'
 
-export type XPostThreadGraphStep = {
+type XPostThreadGraphStep = {
   id: string
   producerCellId: string
   outputCellId: string | null
@@ -27,7 +27,7 @@ export type XPostThreadGraphStep = {
   sourceArtifactIds: string[]
 }
 
-export type XPostThreadGraph = {
+type XPostThreadGraph = {
   steps: XPostThreadGraphStep[]
   upstreamArtifactIds: string[]
 }
@@ -39,7 +39,7 @@ export type XPostThreadImage = {
   thumbnailUrl: string | null
 }
 
-export type XPostThreadModel = {
+type XPostThreadModel = {
   label: string
   provider: string | null
 }
@@ -58,7 +58,7 @@ export type XPostThreadStep = {
   images: XPostThreadImage[]
 }
 
-export type XPostThreadContext = {
+type XPostThreadContext = {
   steps: XPostThreadStep[]
   credits: XPostSourceCredit[]
 }
@@ -631,7 +631,7 @@ function creditLine(credit: XPostSourceCredit): string {
 }
 
 /** The default thanks reply: at-mentions X accounts, names YouTube uploaders. */
-export function defaultXPostThreadCredits(
+function defaultXPostThreadCredits(
   credits: readonly XPostSourceCredit[],
   maxCharacters = X_POST_MAX_CHARACTERS,
 ): string {

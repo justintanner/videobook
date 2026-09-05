@@ -1,11 +1,11 @@
 import { createContext } from 'react'
 
-export interface ComposerOutcomeMessage {
+interface ComposerOutcomeMessage {
   ok: boolean
   message: string
 }
 
-export interface ComposerNoticeMessage {
+interface ComposerNoticeMessage {
   message: string
   tone: 'error' | 'info'
 }

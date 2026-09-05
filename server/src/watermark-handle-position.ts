@@ -13,19 +13,12 @@ export const WATERMARK_HANDLE_PLACEMENTS = [
 
 export type WatermarkHandlePlacement = (typeof WATERMARK_HANDLE_PLACEMENTS)[number];
 
-export function isWatermarkHandlePlacement(
-  value: unknown,
-): value is WatermarkHandlePlacement {
-  return typeof value === "string"
-    && (WATERMARK_HANDLE_PLACEMENTS as readonly string[]).includes(value);
-}
-
 function clampHandleVerticalPercent(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_HANDLE_VERTICAL_PERCENT;
   return Math.min(MAX_HANDLE_VERTICAL_PERCENT, Math.max(MIN_HANDLE_VERTICAL_PERCENT, value));
 }
 
-export function watermarkHandleOverlayY(verticalPercent: number): string {
+function watermarkHandleOverlayY(verticalPercent: number): string {
   const boundedPercent = clampHandleVerticalPercent(verticalPercent);
   return `main_h*${boundedPercent}/100-overlay_h/2`;
 }
@@ -41,7 +34,7 @@ function axisPosition(
   return Math.round((main - overlay) / 2);
 }
 
-export function watermarkQrOverlayPixels(
+function watermarkQrOverlayPixels(
   corner: OsgPosition,
   canvasWidth: number,
   canvasHeight: number,

@@ -16,21 +16,21 @@ import {
 } from "videobook-engine/notebook-mentions";
 import { resolveNotebookArtifactReference } from "./notebook-reference-resolver.js";
 
-export const CHAIN_VERSION = 1;
-export const CHAIN_MIN_STEPS = 1;
-export const CHAIN_MAX_STEPS = 16;
-export const CHAIN_UNSUPPORTED_TOOLS = new Set(["chain", "chat"]);
+const CHAIN_VERSION = 1;
+const CHAIN_MIN_STEPS = 1;
+const CHAIN_MAX_STEPS = 16;
+const CHAIN_UNSUPPORTED_TOOLS = new Set(["chain", "chat"]);
 
-export type ChainOutputType = "artifact" | "string" | "number" | "boolean" | "json";
+type ChainOutputType = "artifact" | "string" | "number" | "boolean" | "json";
 
-export type ChainCompletionKind =
+type ChainCompletionKind =
   | "sync"
   | "extract_audio"
   | "replace_video_audio"
   | "trim_video"
   | "extract_frame";
 
-export type ChainToolSpec = {
+type ChainToolSpec = {
   outputs: Record<string, ChainOutputType>;
   completion: ChainCompletionKind;
   gridFields: readonly string[];
@@ -126,7 +126,7 @@ export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
   },
 };
 
-export type ChainRef = {
+type ChainRef = {
   $ref: {
     step_id: string;
     output: string;
@@ -177,23 +177,23 @@ export type ChainPreflightContext = {
   effectForTool: (name: string) => "read" | "mutation" | "generation";
 };
 
-export type ChainPreflightSuccess = {
+type ChainPreflightSuccess = {
   ok: true;
   plan: ChainPreflightPlan;
 };
 
-export type ChainPreflightFailure = {
+type ChainPreflightFailure = {
   ok: false;
   error: string;
 };
 
-export type ChainPreflightResult = ChainPreflightSuccess | ChainPreflightFailure;
+type ChainPreflightResult = ChainPreflightSuccess | ChainPreflightFailure;
 
 const GRID_TOKEN = NOTEBOOK_GRID_ADDRESS_SOURCE;
 const GRID_PATTERN = new RegExp(`^@?(${GRID_TOKEN})$`, "iu");
 const PLACEHOLDER_ARTIFACT = "01900000-0000-7000-8000-000000000001";
 
-export const chainRefSchema = z.object({
+const chainRefSchema = z.object({
   $ref: z.object({
     step_id: z.string().min(1),
     output: z.string().min(1),
@@ -206,7 +206,7 @@ export const chainStepSchema = z.object({
   params: z.record(z.string(), z.unknown()),
 });
 
-export const chainRunInputSchema = z.object({
+const chainRunInputSchema = z.object({
   action: z.literal("run"),
   version: z.literal(CHAIN_VERSION),
   book_id: z.string().uuid(),
@@ -272,7 +272,7 @@ function walkValues(
   }
 }
 
-export function mapChainParams(
+function mapChainParams(
   value: unknown,
   map: (node: unknown, path: string) => unknown,
   path = "",
@@ -605,7 +605,7 @@ export async function revalidatePinnedTargets(
   return null;
 }
 
-export type StackedChainPlan = {
+type StackedChainPlan = {
   steps: ChainStep[];
   message: string;
 };
@@ -706,8 +706,4 @@ function trimThenExtractPlan(query: string): StackedChainPlan | null {
 
 export function planStackedChainFromQuery(query: string): StackedChainPlan | null {
   return extractAudioReplacePlan(query) ?? trimThenExtractPlan(query);
-}
-
-export function chainReviewSummary(steps: readonly ChainStep[]): string {
-  return steps.map((step) => step.tool.replaceAll("_", " ")).join(" → ");
 }

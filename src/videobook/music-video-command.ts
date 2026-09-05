@@ -1,4 +1,4 @@
-export type MusicVideoCommandAsset = {
+type MusicVideoCommandAsset = {
   id: string
   artifactId: string
   label: string
@@ -8,7 +8,7 @@ export type MusicVideoCommandAsset = {
   audioInfo: unknown | null
 }
 
-export type MusicVideoCommandResolution<Asset extends MusicVideoCommandAsset> =
+type MusicVideoCommandResolution<Asset extends MusicVideoCommandAsset> =
   | { ok: true; asset: Asset }
   | { ok: false; message: string }
 

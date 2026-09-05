@@ -18,7 +18,7 @@ const SETTINGS_KEY = "application.chain-runs.v1";
 const STEP_TIMEOUT_MS = 180_000;
 const POLL_MS = 50;
 
-export type ChainStepStatus =
+type ChainStepStatus =
   | "pending"
   | "running"
   | "completed"
@@ -27,7 +27,7 @@ export type ChainStepStatus =
   | "interrupted"
   | "cancelled";
 
-export type ChainRunStatus =
+type ChainRunStatus =
   | "accepted"
   | "running"
   | "completed"
@@ -35,7 +35,7 @@ export type ChainRunStatus =
   | "cancelled"
   | "interrupted";
 
-export type ChainStepRecord = {
+type ChainStepRecord = {
   id: string;
   tool: string;
   params: Record<string, unknown>;
@@ -122,7 +122,7 @@ export function getChainRun(engine: Engine, chainId: string): ChainRunRecord | n
   return readStore(engine).runs[chainId] ?? null;
 }
 
-export function findChainRunByRequestId(
+function findChainRunByRequestId(
   engine: Engine,
   bookId: string,
   requestId: string,
@@ -530,7 +530,7 @@ async function runChain(
   }
 }
 
-export function acceptChainRun(
+function acceptChainRun(
   engine: Engine,
   plan: ChainPreflightPlan,
   lookup: ToolLookup,

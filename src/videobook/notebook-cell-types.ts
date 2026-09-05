@@ -41,7 +41,7 @@ const mediaPresentationCellTypes = new Set<string>([
 
 const mediaWorkCellTypes = new Set<string>(mediaWorkCellTypeValues)
 
-export type NotebookCellFamily = 'audio' | 'data' | 'gen' | 'image' | 'video'
+type NotebookCellFamily = 'audio' | 'data' | 'gen' | 'image' | 'video'
 
 const cellFamilyByType: Record<NotebookCellType, NotebookCellFamily> = {
   analysis: 'data',

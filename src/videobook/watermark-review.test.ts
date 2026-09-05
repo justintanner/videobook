@@ -18,7 +18,9 @@ describe('watermarkFadeWindow', () => {
   })
 
   it('shrinks fades to half of a short window and honours fade off', () => {
-    expect(watermarkFadeWindow(2, 2.6, 10, 0.5)).toEqual({ fadeIn: 0.3, fadeOut: 0.3 })
+    const short = watermarkFadeWindow(2, 2.6, 10, 0.5)
+    expect(short.fadeIn).toBeCloseTo(0.3, 10)
+    expect(short.fadeOut).toBeCloseTo(0.3, 10)
     expect(watermarkFadeWindow(2, 6, 10, 0)).toEqual({ fadeIn: 0, fadeOut: 0 })
   })
 })

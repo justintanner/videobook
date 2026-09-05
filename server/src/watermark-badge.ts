@@ -66,7 +66,7 @@ export function handlePillHeight(paddingY: number = DEFAULT_HANDLE_PADDING): num
   );
 }
 
-export function watermarkCombinedBadgeHeight(
+function watermarkCombinedBadgeHeight(
   paddingY: number = DEFAULT_HANDLE_PADDING,
 ): number {
   return TILE_SIZE + PILL_GAP + handlePillHeight(paddingY);

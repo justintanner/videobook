@@ -446,7 +446,7 @@ export function notebookBusRiverPoints(
   ]
 }
 
-export const notebookEdgeBendRadius = 8
+const notebookEdgeBendRadius = 8
 
 function lineCommand(
   from: NotebookBusRiverPoint,

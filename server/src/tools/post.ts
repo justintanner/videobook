@@ -7,7 +7,7 @@ import type { ToolDef } from "./tool-def.js";
 
 const SCHEDULE_LEAD_MS = 5_000;
 
-export function postToolResultMessage(result: PostToXResult): string {
+function postToolResultMessage(result: PostToXResult): string {
   const posted = result.status === "partially_posted"
     ? `Root post published, but follow-up ${result.followup_error?.reply_number ?? ""} failed: ${result.followup_error?.message ?? "unknown error"}`
     : `Posted to X${result.replies.length > 0 ? ` with ${result.replies.length} follow-up replies` : ""}`;

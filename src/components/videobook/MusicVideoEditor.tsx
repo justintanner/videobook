@@ -34,7 +34,7 @@ import {
 } from './CanonicalSequencePlayer'
 import './MusicVideoEditor.css'
 
-export type MusicVideoAsset = {
+type MusicVideoAsset = {
   artifactId: string
   label: string
   type: string

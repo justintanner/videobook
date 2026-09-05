@@ -66,6 +66,8 @@ export default defineConfig({
       'scripts/search-benchmark-corpus.test.ts',
       'scripts/benchmark-startup.test.ts',
       'src/videobook/watermark-target.test.ts',
+      'src/videobook/watermark-burn.test.ts',
+      'src/videobook/watermark-review.test.ts',
       'src/videobook/x-post-thread.test.ts',
       'server/src/app-state.test.ts',
       'server/src/engine-rename.test.ts',

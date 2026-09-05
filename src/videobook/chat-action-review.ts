@@ -11,12 +11,12 @@ export interface RoutedActionSetting {
 }
 
 // What applying does to the source, shown as the sheet's effect chip.
-export interface RoutedActionEffect {
+interface RoutedActionEffect {
   label: string
   tone: RoutedActionSettingTone
 }
 
-export interface RoutedActionReview {
+interface RoutedActionReview {
   title: string
   settings: RoutedActionSetting[]
   effect: RoutedActionEffect | null

@@ -1,6 +1,6 @@
 import { nonEmptyStringValue, recordValue } from './value-decoders.js'
 
-export const PUBLISHED_POST_SOURCE_OPERATION = 'post_to_x'
+const PUBLISHED_POST_SOURCE_OPERATION = 'post_to_x'
 
 export function isPublishedPostCell(
   cell: { inputs?: Record<string, unknown> } | null | undefined,
@@ -8,12 +8,12 @@ export function isPublishedPostCell(
   return cell?.inputs?.sourceOperation === PUBLISHED_POST_SOURCE_OPERATION
 }
 
-export type PublishedPostReply = {
+type PublishedPostReply = {
   tweetId: string
   tweetUrl: string
 }
 
-export type PublishedPostFollowupError = {
+type PublishedPostFollowupError = {
   replyNumber: number
   message: string
 }

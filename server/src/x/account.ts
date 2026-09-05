@@ -20,24 +20,24 @@ const SUBSCRIPTION_TYPES = ["None", "Basic", "Premium", "PremiumPlus"] as const;
 
 export type XSubscriptionType = (typeof SUBSCRIPTION_TYPES)[number];
 
-export interface XAccountState {
+interface XAccountState {
   username: string;
   subscription_type: XSubscriptionType;
   fetched_at: string;
 }
 
-export interface XAccountOptions {
+interface XAccountOptions {
   fetchImpl?: typeof fetch;
   store?: ApplicationStateStore;
 }
 
-export function isXSubscriptionType(value: unknown): value is XSubscriptionType {
+function isXSubscriptionType(value: unknown): value is XSubscriptionType {
   return typeof value === "string"
     && (SUBSCRIPTION_TYPES as readonly string[]).includes(value);
 }
 
 /** Whether a tier unlocks long posts. Every paid tier does. */
-export function xAccountHasLongPosts(subscription: XSubscriptionType | null): boolean {
+function xAccountHasLongPosts(subscription: XSubscriptionType | null): boolean {
   return subscription !== null && subscription !== "None";
 }
 

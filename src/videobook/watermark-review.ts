@@ -26,7 +26,7 @@ export const DEFAULT_HANDLE_PADDING = 32
 export const MIN_HANDLE_PADDING = 0
 export const MAX_HANDLE_PADDING = 96
 export const DEFAULT_HANDLE_PILL_HEIGHT = 88
-export const HANDLE_PILL_CONTENT_SIZE = 26
+const HANDLE_PILL_CONTENT_SIZE = 26
 export const HANDLE_BADGE_WIDTH = 480
 export const DEFAULT_HANDLE_ROUNDING = 100
 export const MIN_HANDLE_ROUNDING = 0
@@ -90,7 +90,7 @@ export function clampWatermarkFadeSeconds(value: number): number {
   return Math.round(clamped * 10) / 10
 }
 
-export interface WatermarkFadeWindow {
+interface WatermarkFadeWindow {
   fadeIn: number
   fadeOut: number
 }

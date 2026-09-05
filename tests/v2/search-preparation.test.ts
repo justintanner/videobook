@@ -8,6 +8,7 @@ import { queue, setEngineRoot } from '../../server/src/queue.js'
 import { registerPrepareTemporalSearchJob } from '../../server/src/jobs/prepare-temporal-search.js'
 import { semanticSearchDefs } from '../../server/src/tools/semantic-search.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
+import { deleteAssetDef } from '../../server/src/tools/delete-asset.js'
 import { searchReferenceStore } from '../../server/src/search-reference-store.js'
 import { searchWithPreparation } from '../../src/videobook/search-preparation.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
@@ -126,5 +127,21 @@ it.each(['search_moments', 'search_library_moments'])(
       { modalities: ['visual'] }, searchReferenceStore.get(referenceId).reference,
     ))
     expect(page.hits[0]?.artifactId).toBe(artifactId)
+    await call(deleteAssetDef(reopened), { book_id: summary.bookId, asset_id: artifactId })
+    const counts = reopened.catalogIntegrity().tableRowCounts
+    for (const table of ['runtime_media_segments', 'runtime_segment_embeddings', 'runtime_index_coverage', 'runtime_index_batches']) {
+      expect(counts[table], table).toBe(0)
+    }
+    const empty = value(await reopened.temporalSearch.queryPrepared(
+      { modalities: ['visual'] }, searchReferenceStore.get(referenceId).reference,
+    ))
+    expect(empty.hits).toEqual([])
+    expect(empty.coverage).toMatchObject({ totalArtifactCount: 0, indexedArtifactCount: 0 })
+    const replacementId = await seed(reopened)
+    value(await reopened.temporalSearch.prepare())
+    const replacement = value(await reopened.temporalSearch.queryPrepared(
+      { modalities: ['visual'] }, searchReferenceStore.get(referenceId).reference,
+    ))
+    expect(replacement.hits[0]?.artifactId).toBe(replacementId)
   }, 30_000,
 )

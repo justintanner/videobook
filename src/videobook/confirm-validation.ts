@@ -83,7 +83,7 @@ export function watermarkValidation(input: WatermarkValidationInput): ConfirmVal
 
 // ---- generation ----
 
-export interface GenerationValidationInput {
+interface GenerationValidationInput {
   prompt: string | null | undefined
   previewLoading: boolean
   previewError: string | null
@@ -115,7 +115,7 @@ export function generationValidation(input: GenerationValidationInput): ConfirmV
 
 // ---- split ----
 
-export interface SplitValidationInput {
+interface SplitValidationInput {
   availableEmptyCells: number
   cutPointsSeconds: readonly number[]
   outputMode: NotebookSplitOutputMode
@@ -142,7 +142,7 @@ export function splitValidation(input: SplitValidationInput): ConfirmValidation 
 
 // ---- command plan ----
 
-export interface CommandPlanValidationInput {
+interface CommandPlanValidationInput {
   suggestions: readonly { included: boolean }[] | undefined
   previews: readonly {
     valid: boolean
@@ -180,7 +180,7 @@ export function xPostValidation(
 
 // ---- footer status ----
 
-export type ConfirmSheetStatusState =
+type ConfirmSheetStatusState =
   | 'ready'
   | 'info'
   | 'notice'
@@ -195,7 +195,7 @@ export interface ConfirmSheetStatus {
   dismissible: boolean
 }
 
-export interface ConfirmSheetStatusInput {
+interface ConfirmSheetStatusInput {
   busy: boolean
   busyLabel: string
   validation: ConfirmValidation
