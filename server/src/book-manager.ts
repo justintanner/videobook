@@ -3,12 +3,12 @@ import { lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
 import { logger } from "./logger.js";
+import { LegacyMigrationQueue, migrationFailure, type MigratedBook, type MigrationOptions, type MigrationCheckpoint } from "./legacy-migration.js";
 import {
   createEngine,
   dryRunV4Migration,
   err,
   isUuidV7,
-  migrateV4,
   ok,
   readV4BookIdentity,
   type ContentStore,
@@ -16,8 +16,6 @@ import {
   type EngineError,
   type Result,
   type V4MigrationDryRun,
-  type V4MigrationRequest,
-  type V4MigrationResult,
 } from "videobook-engine";
 
 interface BookSummary {
@@ -37,13 +35,10 @@ interface LegacyBookSummary extends V4MigrationDryRun {
   slug: string;
 }
 
-interface MigratedBook {
-  book: BookSummary;
-  migration: V4MigrationResult;
-  legacyArchiveRoot: string;
-}
-
 interface BookManagerOptions {
+  migrationLeaseMs?: number;
+  onMigrationCheckpoint?: (phase: MigrationCheckpoint) => void | Promise<void>;
+  onMigrationPublished?: (bookId: string) => Promise<void>;
   libraryDir: string;
   remoteObjects?: ContentStore;
   objectPrefix?: string;
@@ -86,6 +81,7 @@ function sortBooks(
 }
 
 export class BookManager {
+  private readonly migrations: LegacyMigrationQueue;
   private readonly libraryDir: string;
   private readonly options: BookManagerOptions;
   private readonly books = new Map<string, ManagedBook>();
@@ -98,6 +94,24 @@ export class BookManager {
   constructor(options: BookManagerOptions) {
     this.libraryDir = resolve(options.libraryDir);
     this.options = { ...options, libraryDir: this.libraryDir };
+    this.migrations = new LegacyMigrationQueue({
+      libraryDir: this.libraryDir,
+      legacy: (bookId) => this.legacyBooks.get(bookId),
+      existing: (bookId) => this.books.get(bookId)?.engine,
+      open: (root) => this.createEngine(root),
+      adopt: (engine, root, bookId) => {
+        const managed = this.toManagedBook(engine, root, engine.book.get());
+        if (managed.bookId !== bookId) throw new Error("Migrated book identity does not match its root");
+        if (!this.books.has(bookId)) this.assertUnique(managed);
+        this.books.set(bookId, managed);
+        this.legacyBooks.delete(bookId);
+        this.knownRoots.add(bookId);
+        return managed;
+      },
+      checkpoint: options.onMigrationCheckpoint,
+      published: options.onMigrationPublished,
+      leaseMs: options.migrationLeaseMs,
+    });
   }
 
   get rootDir(): string {
@@ -259,6 +273,7 @@ export class BookManager {
   }
 
   async close(): Promise<void> {
+    await this.stopMigrations();
     for (const book of this.books.values()) book.engine.close();
     this.books.clear();
     this.legacyBooks.clear();
@@ -268,77 +283,40 @@ export class BookManager {
     this.readyPromise = null;
   }
 
+  async stopMigrations(): Promise<void> {
+    await this.migrations.close();
+  }
+
   async migrateLegacy(
     bookId: string,
     expectedSourceHead: string,
-    options: Pick<V4MigrationRequest, "expectedMigrationKey" | "signal" | "onProgress" | "ffprobePath"> = {},
+    options: MigrationOptions = {},
   ): Promise<Result<MigratedBook, EngineError>> {
-    await this.ready();
-    const legacy = this.legacyBooks.get(bookId);
-    if (!legacy) {
-      return err(engineError("NOT_FOUND", `Legacy book not found: ${bookId}`));
-    }
-    if (legacy.sourceHeadRevision !== expectedSourceHead) {
-      return err(engineError(
-        "STALE_REVISION",
-        "Legacy book changed after migration confirmation",
-      ));
-    }
-    const sourceRoot = this.bookRoot(bookId);
-    const temporaryRoot = join(this.libraryDir, `.migrating-${randomUUID()}`);
-    const migrated = await migrateV4({
-      sourceRoot,
-      destinationRoot: temporaryRoot,
-      dryRun: false,
-      expectedSourceBookId: bookId,
-      expectedSourceHead,
-      ...options,
-      expectedMigrationKey: options.expectedMigrationKey ?? legacy.migrationKey,
-    });
-    if (!migrated.ok) return migrated;
-    if (!("destinationBookId" in migrated.value)) {
-      return err(engineError("INTERNAL_ERROR", "Migration result is incomplete"));
-    }
-    const archiveDir = join(this.libraryDir, ".legacy-v4");
-    const archiveRoot = join(
-      archiveDir,
-      `${bookId}-${expectedSourceHead.slice(0, 12)}`,
-    );
     try {
-      await mkdir(archiveDir, { recursive: true });
-      await rename(sourceRoot, archiveRoot);
-      try {
-        await rename(temporaryRoot, sourceRoot);
-      } catch (cause) {
-        await rename(archiveRoot, sourceRoot);
-        throw cause;
-      }
-      const engine = this.createEngine(sourceRoot);
-      await engine.ready;
-      const managed = this.toManagedBook(engine, sourceRoot, engine.book.get());
-      this.assertUnique(managed);
-      this.legacyBooks.delete(bookId);
-      this.knownRoots.add(bookId);
-      this.books.set(bookId, managed);
-      return ok({
-        book: this.summary(managed),
-        migration: migrated.value,
-        legacyArchiveRoot: archiveRoot,
-      });
-    } catch (cause) {
-      await this.removeTemporaryRoot(temporaryRoot);
-      return err(engineError(
-        "IO_ERROR",
-        `Could not switch to migrated book: ${
-          cause instanceof Error ? cause.message : String(cause)
-        }`,
-      ));
-    }
+      await this.ready();
+      return ok(await this.migrations.perform(bookId, expectedSourceHead, options));
+    } catch (cause) { return err(migrationFailure(cause)); }
+  }
+
+  async enqueueLegacyMigration(bookId: string, sourceHead: string, migrationKey: string) {
+    await this.ready();
+    return this.migrations.enqueue(bookId, sourceHead, migrationKey);
+  }
+
+  async legacyMigrationStatus(bookId: string, migrationKey: string) {
+    await this.ready();
+    return this.migrations.status(bookId, migrationKey);
+  }
+
+  async cancelLegacyMigration(bookId: string, migrationKey: string) {
+    await this.ready();
+    return this.migrations.cancel(bookId, migrationKey);
   }
 
   private async load(): Promise<void> {
     await this.scan();
     await Promise.all([...this.knownRoots].map((bookId) => this.openRoot(bookId)));
+    await this.migrations.startIfPresent();
   }
 
   private async scan(): Promise<void> {
@@ -347,6 +325,7 @@ export class BookManager {
   }
 
   private async scanOnce(): Promise<void> {
+    await this.migrations.restoreInterruptedArchives();
     await mkdir(this.libraryDir, { recursive: true });
     const entries = await readdir(this.libraryDir, { withFileTypes: true });
     for (const entry of entries) {

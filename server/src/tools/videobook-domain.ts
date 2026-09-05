@@ -775,18 +775,38 @@ export function videobookDomainDefs(
     },
     {
       name: "migrate_legacy_book",
-      description: "Copy a confirmed schema-v4 book to v5 and archive the untouched source",
+      description: "Queue a confirmed schema-v4 migration, preserve the legacy archive, and schedule current search indexing",
       scope: "global",
       schema: {
         book_id: z.string().uuid(),
         expected_source_head: z.string().min(1),
+        expected_migration_key: z.string().regex(/^sha256:[a-f0-9]{64}$/),
       },
       handler: async (args) => {
-        const result = await books.migrateLegacy(
-          String(args.book_id),
-          String(args.expected_source_head),
-        );
-        return result.ok ? json(result.value) : failure(result.error.message);
+        try {
+          return json(await books.enqueueLegacyMigration(String(args.book_id),
+            String(args.expected_source_head), String(args.expected_migration_key)));
+        } catch (cause) { return failure(cause instanceof Error ? cause.message : String(cause)); }
+      },
+    },
+    {
+      name: "get_legacy_migration",
+      description: "Read durable migration progress, job state, and the completed source archive link",
+      scope: "global",
+      schema: { ...bookSchema, migration_key: z.string().regex(/^sha256:[a-f0-9]{64}$/) },
+      handler: async (args) => {
+        try { return json(await books.legacyMigrationStatus(String(args.book_id), String(args.migration_key))); }
+        catch (cause) { return failure(cause instanceof Error ? cause.message : String(cause)); }
+      },
+    },
+    {
+      name: "cancel_legacy_migration",
+      description: "Cancel queued or copying migration work before its final archive switch starts",
+      scope: "global",
+      schema: { ...bookSchema, migration_key: z.string().regex(/^sha256:[a-f0-9]{64}$/) },
+      handler: async (args) => {
+        try { return json(await books.cancelLegacyMigration(String(args.book_id), String(args.migration_key))); }
+        catch (cause) { return failure(cause instanceof Error ? cause.message : String(cause)); }
       },
     },
     {

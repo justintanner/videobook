@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (289)
+## MCP endpoints (291)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -22,6 +22,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `audio_mix` — Mix audio from a video or audio layer asset into a video or audio target asset in-place. The layer starts at 0 seconds at the requested 0-100 volume. The target duration is preserved, and video targets retain their original video stream with git versioning.
 - `build_generation_provider_payload` (historical names, not exposed: `translate_payload`) — Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.
 - `cancel_job` — Cancel a queued or running persistent job
+- `cancel_legacy_migration` — Cancel queued or copying migration work before its final archive switch starts
 - `chain` — Run a bounded ordered list of existing book actions, passing earlier step outputs through structured {$ref:{step_id,output}} references. Use action=run to start, action=status or action=cancel with chain_id to inspect or stop a run.
 - `change_video_speed` — Change video playback speed (speed up or slow down). Operates in-place with git versioning.
 - `chat` — LLM-backed router for the Videobook app composer. It executes reads and previews mutations or generation for explicit application. ChatGPT and other LLM hosts should call the specific media tools directly instead of calling this nested router.
@@ -155,6 +156,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `get_google_flow_character` — Retrieve normalized details for a single Google Flow character by ref.
 - `get_history_action` — Read one authored semantic revision
 - `get_image_subject_map` — Read cached automatic image subjects without starting provider work
+- `get_legacy_migration` — Read durable migration progress, job state, and the completed source archive link
 - `get_notebook` — Read a notebook graph
 - `get_notebook_cell_details` — Return selected-cell details including raw Dolt row, edges, and action validation
 - `get_primary_sequence` — Read the canonical primary sequence
@@ -194,7 +196,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `list_sequence_replace_targets` — List clips that a search moment can explicitly replace
 - `make_cover_song` — Create a new drums-and-strings instrumental cover from 10 to 240 seconds of source audio in a video or audio asset, generated locally by the ACE-Step (acestep.cpp) runtime with source-audio conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.
 - `mark_asset_seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.
-- `migrate_legacy_book` — Copy a confirmed schema-v4 book to v5 and archive the untouched source
+- `migrate_legacy_book` — Queue a confirmed schema-v4 migration, preserve the legacy archive, and schedule current search indexing
 - `move_notebook_cells` — Persist notebook cell grid slots
 - `move_timeline_audio` — Move an audio overlay to a frame offset
 - `pad_video` — Append black video frames at the end to make a whole-second video tail. Retains original audio and makes the appended tail silent.

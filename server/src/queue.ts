@@ -59,6 +59,7 @@ interface Queue {
     error?: { message: string };
   } | null>;
   start(): Promise<void>;
+  startBook(bookId: string): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -622,6 +623,9 @@ export const queue: Queue = {
   async start() {
     await ensureJobHandlersLoaded();
     await reconcileQueueOnStartup();
+  },
+  async startBook(bookId: string) {
+    await ensureRunner(bookId);
   },
   async stop() {
     const infos = [...runnerByBook.values()];

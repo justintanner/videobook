@@ -249,6 +249,7 @@ async function shutdown(): Promise<void> {
   try {
     stopScheduler();
     await mcpHandler.close();
+    await bookManager.stopMigrations();
     await queue.stop();
     await stopAceServer();
     await bookManager.close();

@@ -318,8 +318,13 @@ export async function indexArtifact(
 }
 
 export function registerSemanticIndexJob(engine: Engine): void {
-  registerJobHandler("semantic_index", async (payload, ctx) =>
-    runSemanticIndex(engine, payload as SemanticIndexPayload, ctx));
+  registerJobHandler("semantic_index", async (payload, ctx) => {
+    if (payload.migration === true) {
+      const { prepareMigrationFrames } = await import("../migration-media.js");
+      await prepareMigrationFrames(engine, String(payload.assetId), ctx.signal);
+    }
+    return runSemanticIndex(engine, payload as SemanticIndexPayload, ctx);
+  });
 }
 
 async function indexClipArtifact(
