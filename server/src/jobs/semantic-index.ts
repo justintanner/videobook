@@ -257,6 +257,11 @@ export async function indexArtifact(
   }
   const activated = engine.temporalSearch.activate(MANIFEST.manifestId, GENERATION);
   if (!activated.ok) throw new Error(activated.error.message);
+  const prepared = await engine.temporalSearch.prepare({
+    manifestId: MANIFEST.manifestId, generation: GENERATION,
+    signal: options.signal, checkpoint: "periodic",
+  });
+  if (!prepared.ok) throw new Error(prepared.error.message);
   let semanticVisual: SemanticIndexResult["semanticVisual"] = "deferred";
   let semanticAudio: SemanticIndexResult["semanticAudio"] = streams.some(
     (stream) => stream.kind === "audio" && stream.objectHash === source.objectHash,
@@ -572,7 +577,10 @@ export async function commitDeepBatches(
   );
   if (!plan.ok) throw new Error(plan.error.message);
   const existing = plan.value.coverage.find((item) => item.phase === options.phase);
-  if (existing?.state === "ready" && existing.indexedUnits >= options.totalUnits) return;
+  if (existing?.state === "ready" && existing.indexedUnits >= options.totalUnits) {
+    await prepareDeepBatch(engine, options);
+    return;
+  }
   let start = cursorIndex(existing?.nextCursor, existing?.indexedUnits, options.totalUnits);
   let coveredRanges = existing?.coveredRanges ?? [];
   if (options.totalUnits === 0) {
@@ -616,8 +624,21 @@ export async function commitDeepBatches(
       complete,
     });
     if (!committed.ok) throw new Error(committed.error.message);
+    await prepareDeepBatch(engine, options);
     start = end;
   }
+}
+
+async function prepareDeepBatch(engine: Engine, options: DeepBatchOptions): Promise<void> {
+  const activated = engine.temporalSearch.activate(options.manifestId, options.generation);
+  if (!activated.ok) throw new Error(activated.error.message);
+  const prepared = await engine.temporalSearch.prepare({
+    manifestId: options.manifestId,
+    generation: options.generation,
+    signal: options.signal,
+    checkpoint: "periodic",
+  });
+  if (!prepared.ok) throw new Error(prepared.error.message);
 }
 
 function cursorIndex(

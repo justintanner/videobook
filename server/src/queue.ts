@@ -72,7 +72,7 @@ let activeTestBookId: string | null = null;
 const JOB_INDEX_MAX = 2_000;
 const ASSET_REAPER_INTERVAL_MS = 30_000;
 const DEFAULT_PROVIDER_POLL_INTERVAL_MS = 10_000;
-const SEARCH_REFERENCE_JOB_TYPES = ["prepare_search_reference"] as const;
+const SEARCH_REFERENCE_JOB_TYPES = ["prepare_search_reference", "prepare_temporal_search"] as const;
 
 let providerPollIntervalMs = DEFAULT_PROVIDER_POLL_INTERVAL_MS;
 let providerPollTimeoutOverrideMs: number | undefined;

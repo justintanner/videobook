@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -39,6 +40,7 @@ import {
   watchDownloadJob,
 } from '@/videobook/import-then-search'
 import { useSearchReferenceLifecycle } from '@/videobook/useSearchReferenceLifecycle'
+import { searchWithPreparation } from '@/videobook/search-preparation'
 
 interface MomentSearchAsset {
   artifactId: string
@@ -53,7 +55,7 @@ interface MomentSearchProps {
   notebookId?: string
   assets: MomentSearchAsset[]
   disabled: boolean
-  call: (tool: string, args: Record<string, unknown>) => Promise<unknown>
+  call: (tool: string, args: Record<string, unknown>, options?: { background?: boolean }) => Promise<unknown>
   onNotice: (message: string) => void
   onNotebookChanged: () => Promise<void>
   onLibraryChanged: () => Promise<void>
@@ -145,6 +147,9 @@ function MomentSearch({
   const [replaceTargetId, setReplaceTargetId] = useState('')
   const [replacePreview, setReplacePreview] = useState<ReplacePreviewPayload | null>(null)
   const [working, setWorking] = useState(false)
+  const [preparingIndex, setPreparingIndex] = useState(false)
+  const searchRunRef = useRef(0)
+  useEffect(() => () => { searchRunRef.current++ }, [])
   const [importing, setImporting] = useState<{ url: string } | null>(null)
   const [barDragOver, setBarDragOver] = useState(false)
   const importRunRef = useRef(0)
@@ -155,6 +160,9 @@ function MomentSearch({
     nextStartSeconds = startSeconds,
     nextDurationSeconds = durationSeconds,
   ) => {
+    const run = ++searchRunRef.current
+    const isCancelled = () => run !== searchRunRef.current
+      || (nextMode !== 'text' && searchReference.lifecycle.getState().reference !== nextReference)
     setWorking(true)
     try {
       const query: SearchQuery = {
@@ -211,12 +219,22 @@ function MomentSearch({
         ...(nextReference ? { referenceId: nextReference.referenceId } : {}),
         ...(referenceRange ? { referenceRange } : {}),
       }
-      const value = await call(tool, {
-        ...(tool === 'search_moments' ? { book_id: bookId } : {}),
-        query,
-        ...(request.referenceId ? { reference_id: request.referenceId } : {}),
-        ...(request.referenceRange ? { reference_range: request.referenceRange } : {}),
+      const value = await searchWithPreparation({
+        search: () => call(tool, {
+          ...(tool === 'search_moments' ? { book_id: bookId } : {}),
+          query,
+          ...(request.referenceId ? { reference_id: request.referenceId } : {}),
+          ...(request.referenceRange ? { reference_range: request.referenceRange } : {}),
+        }),
+        listJobs: (owningBookId, jobIds) => call('list_jobs', {
+          book_id: owningBookId, job_ids: jobIds,
+        }, { background: true }),
+        onPreparing: (preparing) => {
+          if (run === searchRunRef.current) setPreparingIndex(preparing)
+        },
+        isCancelled,
       })
+      if (isCancelled()) return
       if (!isSearchPage(value)) throw new Error('The server returned an invalid search page')
       if (
         nextMode !== 'text'
@@ -229,9 +247,9 @@ function MomentSearch({
       setRangeOverrides({})
       onNotice(`Found ${value.hits.length} moments · ${value.coverage.state}`)
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : String(error))
+      if (!isCancelled()) onNotice(error instanceof Error ? error.message : String(error))
     } finally {
-      setWorking(false)
+      if (run === searchRunRef.current) setWorking(false)
     }
   }
 
@@ -338,20 +356,26 @@ function MomentSearch({
 
   const loadMore = async () => {
     if (!lastSearchRequest || !page?.nextCursor) return
+    const run = ++searchRunRef.current
+    const isCancelled = () => run !== searchRunRef.current
     setWorking(true)
     try {
-      const value = await call(lastSearchRequest.tool, {
-        ...(lastSearchRequest.tool === 'search_moments'
-          ? { book_id: bookId }
-          : {}),
-        query: { ...lastSearchRequest.query, cursor: page.nextCursor },
-        ...(lastSearchRequest.referenceId
-          ? { reference_id: lastSearchRequest.referenceId }
-          : {}),
-        ...(lastSearchRequest.referenceRange
-          ? { reference_range: lastSearchRequest.referenceRange }
-          : {}),
+      const value = await searchWithPreparation({
+        search: () => call(lastSearchRequest.tool, {
+          ...(lastSearchRequest.tool === 'search_moments' ? { book_id: bookId } : {}),
+          query: { ...lastSearchRequest.query, cursor: page.nextCursor },
+          ...(lastSearchRequest.referenceId ? { reference_id: lastSearchRequest.referenceId } : {}),
+          ...(lastSearchRequest.referenceRange ? { reference_range: lastSearchRequest.referenceRange } : {}),
+        }),
+        listJobs: (owningBookId, jobIds) => call('list_jobs', {
+          book_id: owningBookId, job_ids: jobIds,
+        }, { background: true }),
+        onPreparing: (preparing) => {
+          if (run === searchRunRef.current) setPreparingIndex(preparing)
+        },
+        isCancelled,
       })
+      if (isCancelled()) return
       if (!isSearchPage(value)) throw new Error('The server returned an invalid search page')
       setPage({
         ...value,
@@ -359,9 +383,9 @@ function MomentSearch({
       })
       onNotice(`Loaded ${value.hits.length} more moments`)
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : String(error))
+      if (!isCancelled()) onNotice(error instanceof Error ? error.message : String(error))
     } finally {
-      setWorking(false)
+      if (run === searchRunRef.current) setWorking(false)
     }
   }
 
@@ -624,7 +648,7 @@ function MomentSearch({
             || (!text.trim() && !reference)
           }
         >
-          <Search size={15} />{working ? 'Searching…' : 'Search'}
+          <Search size={15} />{preparingIndex ? 'Preparing search…' : working ? 'Searching…' : 'Search'}
         </button>
         <details className="moment-search-filters">
           <summary>Filters</summary>

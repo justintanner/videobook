@@ -67,7 +67,7 @@
     "remotion": "^4.0.467",
     "tailwind-merge": "^3.5.0",
     "uuid": "^14.0.0",
-    "videobook-engine": "file:vendor/videobook-engine-5.3.1-b01d60c.tgz"
+    "videobook-engine": "file:vendor/videobook-engine-5.3.1-a7c3703.tgz"
   },
   "overrides": {
     "adm-zip": "^0.6.0",
@@ -109,6 +109,6 @@
   "allowScripts": {
     "@dolthub/doltlite@0.11.37": true,
     "esbuild": true,
-    "file:vendor/videobook-engine-5.3.1-0210d0c.tgz": true
+    "file:vendor/videobook-engine-5.3.1-a7c3703.tgz": true
   }
 }

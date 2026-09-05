@@ -26,6 +26,7 @@ import {
 import { FFMPEG } from "../ffmpeg.js";
 import type { BookManager } from "../book-manager.js";
 import { queue } from "../queue.js";
+import { enqueueTemporalSearchPreparation } from "../jobs/prepare-temporal-search.js";
 import { PLAIN_TRANSCRIPT_FILE } from "../transcript-projection.js";
 import { comparableHitScore } from "../search-scoring.js";
 import { searchReferenceStore } from "../search-reference-store.js";
@@ -383,7 +384,16 @@ export function semanticSearchDefs(
               preparedSearchOptions(args.reference_range),
             )
           : await engine.temporalSearch.query(query);
-        if (!result.ok) return failure(result.error.message);
+        if (!result.ok) {
+          if (result.error.code !== "NOT_READY" || !result.error.details?.requiresIndexPreparation) {
+            return failure(result.error.message);
+          }
+          return json({
+            hits: [],
+            coverage: { state: "partial", partialResults: true, indexedArtifactCount: 0, totalArtifactCount: 0 },
+            preparationJobs: [await enqueueTemporalSearchPreparation(String(args.book_id))],
+          });
+        }
         return json({
           ...result.value,
           hits: result.value.hits.map((hit) => ({
@@ -1176,7 +1186,12 @@ function librarySearchDef(books: BookManager): ToolDef {
               preparedOptions,
             )
           : await managed.value.engine.temporalSearch.query(bookQuery);
-        if (!result.ok) return { summary, error: result.error.message };
+        if (!result.ok) {
+          const preparationJob = result.error.code === "NOT_READY" && result.error.details?.requiresIndexPreparation
+            ? await enqueueTemporalSearchPreparation(summary.bookId)
+            : undefined;
+          return { summary, error: result.error.message, preparationJob };
+        }
         const assets = await buildAssetList(
           managed.value.engine,
           summary.bookId,
@@ -1215,6 +1230,7 @@ function librarySearchDef(books: BookManager): ToolDef {
       const limit = Math.min(query.limit ?? 30, 100);
       return json({
         hits: hits.slice(0, limit),
+        preparationJobs: pages.flatMap((entry) => entry.preparationJob ? [entry.preparationJob] : []),
         coverage: {
           state: pages.some((entry) => entry.error || entry.page?.coverage.partialResults)
             ? "partial"

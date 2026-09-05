@@ -2223,10 +2223,14 @@ export function videobookDomainDefs(
       schema: {
         ...bookSchema,
         limit: z.number().int().positive().max(500).optional(),
+        job_ids: z.array(z.number().int().positive()).min(1).max(100).optional(),
       },
-      handler: async (args) => json(engine.jobs.queue.list({
-        limit: Number(args.limit) || 200,
-      })),
+      handler: async (args) => json(Array.isArray(args.job_ids)
+        ? args.job_ids.flatMap((id) => {
+            const job = engine.jobs.queue.get(Number(id));
+            return job ? [job] : [];
+          })
+        : engine.jobs.queue.list({ limit: Number(args.limit) || 200 })),
     },
     {
       name: "cancel_job",
