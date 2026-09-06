@@ -71,7 +71,7 @@
     "remotion": "^4.0.467",
     "tailwind-merge": "^3.5.0",
     "uuid": "^14.0.0",
-    "videobook-engine": "file:vendor/videobook-engine-5.3.1-bf952c5.tgz"
+    "videobook-engine": "file:vendor/videobook-engine-5.3.1-dffaf21.tgz"
   },
   "overrides": {
     "adm-zip": "^0.6.0",
@@ -118,6 +118,6 @@
     "onnxruntime-node@1.29.0": true,
     "usearch@2.26.0": true,
     "ytdlp-nodejs@3.4.5": true,
-    "file:vendor/videobook-engine-5.3.1-bf952c5.tgz": true
+    "file:vendor/videobook-engine-5.3.1-dffaf21.tgz": true
   }
 }
