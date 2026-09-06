@@ -34,13 +34,18 @@ storage health, and provider settings.
 
 ## Storage
 
-Each book owns an isolated `videobook-engine` v5.3.0 schema-v24 root under
+Each book owns an isolated `videobook-engine` v5.3.1 schema-v24 root under
 `VIDEOBOOK_LIBRARY_DIR/<book UUIDv7>/`. That root holds its embedded DoltLite
 catalog, content-addressed objects, managed files, notebook graph, primary sequence,
 history, and runtime tables. Media bytes can be published to B2 under immutable
 keys. Per-book scheduled posts live in ignored engine runtime settings. Only
 application-wide credentials, including X OAuth tokens, live separately at
 `VIDEOBOOK_APP_STATE_PATH`; that file is never part of a public book record.
+
+Remote media downloads are checked against their expected SHA-256 before entering
+the local content store or an artifact workspace. Corrupt downloads return
+`OBJECT_UNAVAILABLE` and leave the book intact; correcting the remote content
+allows a retry. Existing local objects are not retroactively rehashed.
 
 The global clip archive is an application-level rebuildable cache, not book
 semantic state. Its search indexes and topic/person markers are derived from
