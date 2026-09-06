@@ -239,7 +239,7 @@ export function semanticSearchDefs(
         ...bookSchema,
         limit: z.number().int().positive().max(500).optional(),
       },
-      handler: async (args) => {
+      handler: async (args) => engine.withLocalMedia(async () => {
         const limit = Number(args.limit) || 200;
         const artifacts = engine.artifacts.list().slice(-limit).reverse();
         const statuses = await Promise.all(artifacts.map(async (artifact) => {
@@ -303,7 +303,7 @@ export function semanticSearchDefs(
           };
         }));
         return json(statuses);
-      },
+      }),
     },
     {
       name: "retry_ingest",
@@ -313,7 +313,7 @@ export function semanticSearchDefs(
       handler: async (args) => {
         const artifact = engine.artifacts.get(String(args.artifact_id));
         if (!artifact.ok) return failure(artifact.error.message);
-        const manifest = await engine.files.manifest(artifact.value.artifactId);
+        const manifest = await engine.withLocalMedia(() => engine.files.manifest(artifact.value.artifactId));
         if (!manifest.ok) return failure(manifest.error.message);
         const source = artifact.value.kind === "video"
           ? findVideoFile(manifest.value.files)
@@ -1192,11 +1192,11 @@ function librarySearchDef(books: BookManager): ToolDef {
             : undefined;
           return { summary, error: result.error.message, preparationJob };
         }
-        const assets = await buildAssetList(
+        const assets = await managed.value.engine.withLocalMedia(() => buildAssetList(
           managed.value.engine,
           summary.bookId,
           "newest",
-        ).catch(() => []);
+        )).catch(() => []);
         const assetById = new Map(
           assets.map((asset) => [asset.artifact_id, asset]),
         );

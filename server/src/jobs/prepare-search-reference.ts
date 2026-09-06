@@ -150,11 +150,11 @@ async function prepareSearchReferenceFile(
 
 export function registerPrepareSearchReferenceJob(engine: Engine): void {
   registerJobHandler("prepare_search_reference", async (payload, context) =>
-    runPrepareSearchReference(
+    engine.withLocalMedia(() => runPrepareSearchReference(
       engine,
       payload as unknown as PrepareSearchReferencePayload,
       context,
-    ));
+    )));
 }
 
 async function existingAssetSource(
@@ -173,7 +173,7 @@ async function existingAssetSource(
     throw new Error(`The selected asset is not a ${mediaKind}`);
   }
   const manifest = await engine.files.manifest(artifact.value.artifactId);
-  if (!manifest.ok) throw new Error(manifest.error.message);
+  if (!manifest.ok) throw Object.assign(new Error(manifest.error.message), { name: manifest.error.code, error: manifest.error });
   const file = mediaKind === "video"
     ? findVideoFile(manifest.value.files)
       ?? findPrimaryMediaFile(manifest.value.files, artifact.value.kind)

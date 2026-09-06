@@ -37,7 +37,7 @@ export async function prepareMigrationFrames(engine: Engine, artifactId: string,
   const video = streams.value.find((stream) => stream.kind === "video");
   if (!video) return;
   const manifest = await engine.files.manifest(artifactId);
-  if (!manifest.ok) throw new Error(manifest.error.message);
+  if (!manifest.ok) throw Object.assign(new Error(manifest.error.message), { name: manifest.error.code, error: manifest.error });
   const marker = await engine.metadata.artifacts.read<{ objectHash: string; frames: string[] }>(artifactId, "migrationFrames");
   if (!marker.ok && marker.error.code !== "NOT_FOUND") throw new Error(marker.error.message);
   if (marker.ok && marker.value.objectHash !== video.objectHash) throw new Error("Migrated video changed before its frames were prepared");

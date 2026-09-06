@@ -260,11 +260,11 @@ export async function searchLibraryAssets(
       const book = books.get(summary.bookId);
       if (!book.ok) throw new Error(book.error.message);
       const engine = book.value.engine;
-      const builtAssets = await buildAssetList(
+      const builtAssets = await engine.withLocalMedia(() => buildAssetList(
         engine,
         summary.bookId,
         "newest",
-      );
+      ));
       const assets = builtAssets
         .filter((asset) =>
           asset.status === "ready"

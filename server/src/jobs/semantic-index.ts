@@ -112,20 +112,20 @@ export async function runSemanticIndex(
             ctx.signal,
           );
         } catch (error) {
-          if (ctx.signal.aborted || isModelExecutionFailure(error)) throw error;
+          if (ctx.signal.aborted || isTerminalIndexFailure(error)) throw error;
           return deferredSemanticIndex(engine, payload.assetId, error);
         }
       },
     );
   } catch (error) {
-    if (ctx.signal.aborted || isModelExecutionFailure(error)) throw error;
+    if (ctx.signal.aborted || isTerminalIndexFailure(error)) throw error;
     return deferredSemanticIndex(engine, payload.assetId, error);
   }
 }
 
-function isModelExecutionFailure(error: unknown): boolean {
+function isTerminalIndexFailure(error: unknown): boolean {
   if (!(error instanceof Error) || !("error" in error) || !error.error || typeof error.error !== "object" || !("code" in error.error)) return false;
-  return ["CANCELLED", "TIMEOUT", "RESOURCE_EXHAUSTED", "MODEL_UNAVAILABLE", "FEATURE_UNAVAILABLE", "INVALID_INPUT", "INVALID_RANGE"].includes(String(error.error.code));
+  return ["CANCELLED", "TIMEOUT", "RESOURCE_EXHAUSTED", "MODEL_UNAVAILABLE", "MEDIA_MISSING", "FEATURE_UNAVAILABLE", "INVALID_INPUT", "INVALID_RANGE"].includes(String(error.error.code));
 }
 
 async function waitForArtifactIdle(
@@ -211,10 +211,20 @@ async function deferredSemanticIndex(
   };
 }
 
-export async function indexArtifact(
+type IndexArtifactOptions = { semanticVisual?: boolean; signal?: AbortSignal };
+
+export function indexArtifact(
   engine: Engine,
   artifactReference: string,
-  options: { semanticVisual?: boolean; signal?: AbortSignal } = {},
+  options: IndexArtifactOptions = {},
+): Promise<SemanticIndexResult> {
+  return engine.withLocalMedia(() => indexLocalArtifact(engine, artifactReference, options));
+}
+
+async function indexLocalArtifact(
+  engine: Engine,
+  artifactReference: string,
+  options: IndexArtifactOptions = {},
 ): Promise<SemanticIndexResult> {
   options.signal?.throwIfAborted();
   // Enqueue sites pass whatever reference they hold (often the slug), but
@@ -225,7 +235,7 @@ export async function indexArtifact(
   const manifestResult = engine.temporalSearch.manifests.register(MANIFEST);
   if (!manifestResult.ok) throw new Error(manifestResult.error.message);
   const filesResult = await engine.files.manifest(artifactId);
-  if (!filesResult.ok) throw new Error(filesResult.error.message);
+  if (!filesResult.ok) throw Object.assign(new Error(filesResult.error.message), { name: filesResult.error.code, error: filesResult.error });
   const streamsResult = engine.streams.list(artifactId);
   if (!streamsResult.ok) throw new Error(streamsResult.error.message);
   const files = filesResult.value.files;
@@ -284,7 +294,7 @@ export async function indexArtifact(
       );
       semanticVisual = "ready";
     } catch (error) {
-      if (options.signal?.aborted || isModelExecutionFailure(error)) throw error;
+      if (options.signal?.aborted || isTerminalIndexFailure(error)) throw error;
       await appendDiagnostic(engine, "semantic-index-deferred", {
         artifactId,
         modality: "visual",
@@ -305,7 +315,7 @@ export async function indexArtifact(
       );
       semanticAudio = "ready";
     } catch (error) {
-      if (options.signal?.aborted || isModelExecutionFailure(error)) throw error;
+      if (options.signal?.aborted || isTerminalIndexFailure(error)) throw error;
       await appendDiagnostic(engine, "semantic-index-deferred", {
         artifactId,
         modality: "audio",
@@ -325,13 +335,13 @@ export async function indexArtifact(
 }
 
 export function registerSemanticIndexJob(engine: Engine): void {
-  registerJobHandler("semantic_index", async (payload, ctx) => {
+  registerJobHandler("semantic_index", async (payload, ctx) => engine.withLocalMedia(async () => {
     if (payload.migration === true) {
       const { prepareMigrationFrames } = await import("../migration-media.js");
       await prepareMigrationFrames(engine, String(payload.assetId), ctx.signal);
     }
     return runSemanticIndex(engine, payload as SemanticIndexPayload, ctx);
-  });
+  }));
 }
 
 async function indexClipArtifact(
@@ -778,7 +788,7 @@ async function videoObservations(
     : [];
   const scenes = analysisScenes(analysis);
   const manifest = await engine.files.manifest(artifactId);
-  if (!manifest.ok) throw new Error(manifest.error.message);
+  if (!manifest.ok) throw Object.assign(new Error(manifest.error.message), { name: manifest.error.code, error: manifest.error });
   const frameFiles = new Map(
     manifest.value.files.map((file) => [file.name, file]),
   );

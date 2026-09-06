@@ -138,6 +138,8 @@ When models are missing, reverse-search errors include the preparation command. 
 
 After preparation, retry the search and reindex affected media to populate semantic coverage; preparing models alone does not index the library.
 
+Search, index jobs, ingest status, and reverse-reference preparation use local media only, even when remote storage is configured. Missing media fails an auxiliary indexing/reference job with `MEDIA_MISSING` and retrieval instructions; the source asset remains ready. Retrieve the file explicitly before retrying. Library browsing does not download absent files to generate previews. History restores commit the requested metadata and defer unavailable media hydration. Explicit file retrieval, copying, and backup retain their normal storage behavior.
+
 ## Runtime diagnostics
 
 `VIDEOBOOK_LOG_LEVEL` selects `silent`, `error`, `warn`, `info` (default), or
