@@ -115,6 +115,13 @@ is not supported by this local policy; an authenticated deployment requires a
 separate access design. Artifact file and manifest routes resolve only within
 the supplied owning book, including range requests.
 
+Media and archive responses also enforce a sandboxed Content Security Policy
+and disable MIME sniffing. SVG/HTML source files can render static content but
+cannot execute scripts, submit forms, access the local API, or load resources
+from external origins. Images and media may use local or embedded data sources;
+inline styles remain supported. This protects the trusted local origin when
+an imported file is opened directly in a browser.
+
 ## Environment
 
 The storage-specific variables are:

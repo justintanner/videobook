@@ -22,7 +22,7 @@ import { searchReferenceStore } from "./search-reference-store.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
 import { createHttpHandler } from "./server.js";
 import { parseHttpByteRange } from "./http-byte-range.js";
-import { restrictHttpAccess } from "./http-access.js";
+import { restrictHttpAccess, restrictMediaContent } from "./http-access.js";
 
 const require = createRequire(import.meta.url);
 const enginePackage = require("videobook-engine/package.json") as {
@@ -49,6 +49,7 @@ function limitUploadBytes(maxBytes: number): Transform {
 
 app.use(restrictHttpAccess);
 app.use(cors({ origin: true }));
+app.use(["/files", "/archive-files"], restrictMediaContent);
 app.use("/archive-files", express.static(localArchiveDir(), { dotfiles: "allow" }));
 
 app.get("/healthz", async (_req, res) => {

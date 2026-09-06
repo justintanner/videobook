@@ -314,6 +314,63 @@ describe('v2 MCP server', () => {
     } finally { await context.close() }
   })
 
+  it('renders media as data without script, form, or external resource access', async () => {
+    if (!client || !server) throw new Error('MCP client was not initialized')
+    const base = server.url.replace('/mcp', '')
+    const book = await callTool<BookPayload>(client, 'create_book', { name: 'PRIVATE_MEDIA_FIXTURE' })
+    const script = "document.documentElement.setAttribute('data-executed','yes');fetch('/mcp',{method:'POST',body:'{}'})"
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><style>rect { fill: rgb(255, 0, 0); }</style><rect width="20" height="20"/><script><![CDATA[${script}]]></script><image href="https://untrusted.example/track"/></svg>`
+    const upload = await fetch(`${base}/api/books/${book.bookId}/upload?filename=active.svg`, { method: 'POST', body: svg })
+    expect(upload.status).toBe(200)
+    const asset = await upload.json() as { assetId: string }
+    const svgPath = `${base}/files/${book.bookId}/${asset.assetId}/original.svg`
+    await mkdir(join(rootDir, 'archive'), { recursive: true })
+    await writeFile(join(rootDir, 'archive/active.html'), `<h1>Visible content</h1><script>${script}</script><form action="${base}/api/search-references" method="post"><button>Submit</button></form><img src="https://untrusted.example/track" onerror="${script}">`)
+    const browser = await chromium.launch({ headless: true })
+    try {
+      const page = await browser.newPage()
+      const unexpected: string[] = []
+      const violations: string[] = []
+      const externalFailures: string[] = []
+      page.on('requestfailed', (request) => {
+        if (request.url().startsWith('https://untrusted.example')) externalFailures.push(request.failure()?.errorText ?? '')
+      })
+      page.on('request', (request) => {
+        if (request.url().endsWith('/mcp') || request.url().includes('/api/search-references')) unexpected.push(request.url())
+      })
+      page.on('console', (message) => { if (message.type() === 'error') violations.push(message.text()) })
+      const svgResponse = await page.goto(svgPath)
+      expect(svgResponse?.status()).toBe(200)
+      expect(svgResponse?.headers()['content-security-policy']).toContain('sandbox')
+      expect(svgResponse?.headers()['x-content-type-options']).toBe('nosniff')
+      expect(await page.locator('svg').getAttribute('data-executed')).toBeNull()
+      expect(await page.locator('rect').evaluate((element) => getComputedStyle(element).fill)).toBe('rgb(255, 0, 0)')
+      const archiveResponse = await page.goto(`${base}/archive-files/active.html`)
+      expect(archiveResponse?.headers()['content-security-policy']).toContain('sandbox')
+      expect(archiveResponse?.headers()['x-content-type-options']).toBe('nosniff')
+      expect(await page.locator('h1').textContent()).toBe('Visible content')
+      expect(await page.locator('html').getAttribute('data-executed')).toBeNull()
+      await page.getByRole('button', { name: 'Submit' }).click()
+      expect(page.url()).toBe(`${base}/archive-files/active.html`)
+      expect(unexpected).toEqual([])
+      expect(externalFailures).toEqual([expect.stringMatching(/csp/i), expect.stringMatching(/csp/i)])
+      expect(violations.some((message) => /script|sandbox|Content Security Policy/i.test(message))).toBe(true)
+      await page.goto(`${base}/healthz`)
+      await page.setContent(`<img src="${svgPath}">`)
+      await expect.poll(() => page.locator('img').evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(20)
+      const videoPath = join(rootDir, 'safe-playback.mp4')
+      await execFileAsync(FFMPEG, ['-y', '-f', 'lavfi', '-i', 'color=c=red:s=64x64:r=10:d=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', videoPath])
+      const videoUpload = await fetch(`${base}/api/books/${book.bookId}/upload?filename=playback.mp4`, { method: 'POST', body: await readFile(videoPath) })
+      expect(videoUpload.status).toBe(200)
+      const video = await videoUpload.json() as { assetId: string }
+      await page.setContent(`<video muted src="${base}/files/${book.bookId}/${video.assetId}/original.mp4"></video>`)
+      const player = page.locator('video')
+      await expect.poll(() => player.evaluate((element) => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
+      await player.evaluate((element) => (element as HTMLVideoElement).play())
+      await expect.poll(() => player.evaluate((element) => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(0)
+    } finally { await browser.close() }
+  })
+
   it('serves only MCP 2026-07-28 with stateless cache metadata', async () => {
     if (!client || !server) throw new Error('MCP client was not initialized')
 

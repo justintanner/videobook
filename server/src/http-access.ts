@@ -34,3 +34,17 @@ export const restrictHttpAccess: RequestHandler = (req, res, next) => {
   }
   next();
 };
+
+export const restrictMediaContent: RequestHandler = (_req, res, next) => {
+  res.setHeader("Content-Security-Policy", [
+    "sandbox",
+    "default-src 'none'",
+    "img-src 'self' data: blob:",
+    "media-src 'self' data: blob:",
+    "style-src 'unsafe-inline'",
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join("; "));
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  next();
+};
