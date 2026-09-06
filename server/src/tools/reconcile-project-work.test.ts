@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createEngineForTest } from "../engine.js";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
@@ -162,6 +162,7 @@ describe("buildAssetList", () => {
     // buildAssetList can lazily start a waveform queue runner; stop it before
     // removing the temporary Dolt catalog.
     await queue.stop();
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -515,6 +516,8 @@ describe("reconcileProjectWork", () => {
   });
 
   afterEach(async () => {
+    await queue.stop();
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -565,6 +568,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
     // See buildAssetList describe: stop the lazily-started waveform queue
     // runner before removing the temp dir.
     await queue.stop();
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -644,6 +648,7 @@ describe("reconcileProjectWork — auto-transcribe", () => {
       delete process.env.ELEVENLABS_API_KEY;
     }
     await queue.stop();
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
@@ -761,6 +766,7 @@ describe("reconcileProjectWork — OpenAI plain-transcript backfill", () => {
       delete process.env.OPENAI_API_KEY;
     }
     await queue.stop();
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
