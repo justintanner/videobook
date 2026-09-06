@@ -22,6 +22,7 @@ import { searchReferenceStore } from "./search-reference-store.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
 import { createHttpHandler } from "./server.js";
 import { parseHttpByteRange } from "./http-byte-range.js";
+import { restrictHttpAccess } from "./http-access.js";
 
 const require = createRequire(import.meta.url);
 const enginePackage = require("videobook-engine/package.json") as {
@@ -46,7 +47,8 @@ function limitUploadBytes(maxBytes: number): Transform {
   });
 }
 
-app.use(cors());
+app.use(restrictHttpAccess);
+app.use(cors({ origin: true }));
 app.use("/archive-files", express.static(localArchiveDir(), { dotfiles: "allow" }));
 
 app.get("/healthz", async (_req, res) => {
@@ -237,8 +239,8 @@ async function hydrateLibrary(): Promise<void> {
 
 async function start(): Promise<void> {
   registerAllJobHandlers(scopedBookEngine);
-  const port = process.env.PORT ?? 3001;
-  app.listen(port, () => {
+  const port = Number(process.env.PORT ?? 3001);
+  app.listen(port, "127.0.0.1", () => {
     logger.info("server-listening", { port: Number(port) });
   });
   await hydrateLibrary();

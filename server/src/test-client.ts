@@ -68,7 +68,7 @@ export async function createTestClient(projectsDir?: string): Promise<Client> {
     },
   );
   const transport = new StreamableHTTPClientTransport(
-    new URL("http://test.local/mcp"),
+    new URL("http://localhost/mcp"),
     {
       fetch: (url, init) => handler.fetch(new Request(url, init)),
     },
@@ -113,7 +113,7 @@ export async function createReusableTestClient(
     },
   );
   const transport = new StreamableHTTPClientTransport(
-    new URL("http://test.local/mcp"),
+    new URL("http://localhost/mcp"),
     {
       fetch: (url, init) => handler.fetch(new Request(url, init)),
     },

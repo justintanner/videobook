@@ -1,6 +1,9 @@
 import { execFile, spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { request as httpRequest } from 'node:http'
+import { chromium } from 'playwright'
+import { EXTENSION_ORIGIN } from '../../server/src/http-access.js'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -99,6 +102,7 @@ async function startServer(rootDir: string): Promise<StartedServer> {
         PORT: String(port),
         VIDEOBOOK_APP_STATE_PATH: join(rootDir, 'runtime', 'app-state.json'),
         VIDEOBOOK_LIBRARY_DIR: join(rootDir, 'books'),
+        VIDEOBOOK_ARCHIVE_DIR: join(rootDir, 'archive'),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
@@ -177,6 +181,137 @@ describe('v2 MCP server', () => {
     await client?.close()
     await stopServer(server)
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  })
+
+  it('rejects foreign origins and rebinding hosts across all HTTP routes before parsing or mutation', async () => {
+    if (!client || !server) throw new Error('MCP client was not initialized')
+    const base = server.url.replace('/mcp', '')
+    const book = await callTool<BookPayload>(client, 'create_book', { name: 'PRIVATE_HTTP_FIXTURE' })
+    const paths = [
+      ['GET', '/healthz'], ['POST', '/mcp'], ['OPTIONS', '/mcp'],
+      ['GET', `/files/${book.bookId}/missing/original.png`],
+      ['GET', `/api/books/${book.bookId}/artifacts/missing/manifest`],
+      ['POST', `/api/books/${book.bookId}/upload?filename=attack.png`],
+      ['POST', `/api/search-references?bookId=${book.bookId}&kind=image&filename=attack.png`],
+      ['DELETE', '/api/search-references/missing'], ['GET', '/archive-files/private.txt'],
+    ]
+    await mkdir(join(rootDir, 'archive'), { recursive: true })
+    await writeFile(join(rootDir, 'archive/private.txt'), 'PRIVATE_ARCHIVE_BYTES')
+    const before = await callTool<unknown>(client, 'list_assets', { book_id: book.bookId })
+    for (const headers of [
+      { origin: 'https://untrusted.example' }, { origin: 'null' },
+      { host: 'untrusted.example' }, { 'sec-fetch-site': 'cross-site' },
+      { host: 'untrusted.example', 'x-forwarded-host': 'localhost', origin: base },
+    ]) {
+      for (const [method, path] of paths) {
+        const response = await new Promise<{ status: number; body: string; allowOrigin: string | string[] | undefined }>((resolve, reject) => {
+          const request = httpRequest(`${base}${path}`, { method, headers: { ...headers, 'content-type': 'application/json' } }, (response) => {
+            let body = ''
+            response.setEncoding('utf8')
+            response.on('data', (part: string) => { body += part })
+            response.on('end', () => resolve({ status: response.statusCode ?? 0, body, allowOrigin: response.headers['access-control-allow-origin'] }))
+          })
+          request.on('error', reject)
+          request.end(method === 'POST' ? '{invalid-json' : undefined)
+        })
+        expect(response.status, `${method} ${path} ${JSON.stringify(headers)}`).toBe(403)
+        expect(response.allowOrigin).toBeUndefined()
+        expect(response.body).not.toContain('PRIVATE_')
+      }
+    }
+    expect(await callTool<unknown>(client, 'list_assets', { book_id: book.bookId })).toEqual(before)
+    expect(await (await fetch(`${base}/archive-files/private.txt`)).text()).toBe('PRIVATE_ARCHIVE_BYTES')
+    const preflight = await fetch(server.url, { method: 'OPTIONS', headers: {
+      origin: 'http://localhost:5173', 'access-control-request-method': 'POST',
+      'access-control-request-headers': 'content-type',
+    } })
+    expect(preflight.status).toBe(204)
+    expect(preflight.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+    expect(preflight.headers.get('vary')).toContain('Origin')
+  })
+
+  it('enforces owning-book artifact references for actual file, range, and manifest requests', async () => {
+    if (!client || !server) throw new Error('MCP client was not initialized')
+    const base = server.url.replace('/mcp', '')
+    const owner = await callTool<BookPayload>(client, 'create_book', { name: 'HTTP owner' })
+    const foreign = await callTool<BookPayload>(client, 'create_book', { name: 'HTTP foreign' })
+    const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgYPgPAAEDAQBdlO9aAAAAAElFTkSuQmCC', 'base64')
+    const upload = await fetch(`${base}/api/books/${owner.bookId}/upload?filename=private.png`, { method: 'POST', body: bytes })
+    expect(upload.status).toBe(200)
+    const asset = await upload.json() as { assetId: string }
+    const manifestPath = `/api/books/${owner.bookId}/artifacts/${asset.assetId}/manifest`
+    const manifest = await (await fetch(`${base}${manifestPath}`)).json() as { files: Array<{ name: string; objectHash: string }> }
+    const primary = manifest.files.find((file) => file.name === 'original.png')!
+    expect(primary).toBeDefined()
+    const filePath = `/files/${owner.bookId}/${asset.assetId}/${primary.name}`
+    expect(Buffer.from(await (await fetch(`${base}${filePath}`)).arrayBuffer())).toEqual(bytes)
+    const partial = await fetch(`${base}${filePath}`, { headers: { range: 'bytes=1-4' } })
+    expect(partial.status).toBe(206)
+    expect(Buffer.from(await partial.arrayBuffer())).toEqual(bytes.subarray(1, 5))
+    for (const path of [
+      filePath.replace(owner.bookId, foreign.bookId), manifestPath.replace(owner.bookId, foreign.bookId),
+      filePath.replace(asset.assetId, primary.objectHash), manifestPath.replace(asset.assetId, primary.objectHash),
+      `/files/${foreign.bookId}/${asset.assetId}/%2e%2e%2f${primary.name}`,
+    ]) {
+      const response = await fetch(`${base}${path}`, { headers: { range: 'bytes=0-9' } })
+      expect([400, 404]).toContain(response.status)
+      expect(await response.text()).not.toContain(bytes.toString('base64'))
+    }
+    for (const path of [filePath, manifestPath]) {
+      expect((await fetch(`${base}${path}`, { headers: { origin: 'https://untrusted.example' } })).status).toBe(403)
+    }
+  })
+
+  it('rejects a foreign browser page while preserving browser and bundled extension access', async () => {
+    if (!server) throw new Error('MCP server was not initialized')
+    const base = server.url.replace('/mcp', '')
+    await execFileAsync(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'extension/vite.config.ts'])
+    const extensionDir = join(process.cwd(), 'dist-extension')
+    const context = await chromium.launchPersistentContext(join(rootDir, 'browser'), {
+      channel: 'chromium', headless: true,
+      args: [`--disable-extensions-except=${extensionDir}`, `--load-extension=${extensionDir}`,
+        '--disable-features=LocalNetworkAccessChecks,BlockInsecurePrivateNetworkRequests'],
+    })
+    try {
+      const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker')
+      expect(worker.url()).toBe(`${EXTENSION_ORIGIN}/background.js`)
+      const extensionResult = await worker.evaluate(async (url) => {
+        const response = await fetch(`${url}/healthz`)
+        return { status: response.status, origin: response.headers.get('access-control-allow-origin'), body: await response.json() }
+      }, base)
+      expect(extensionResult.status).toBe(200)
+      expect(extensionResult.body).toMatchObject({ ok: true })
+      const extensionClient = new Client({ name: 'extension-http-fixture', version: '1' }, {
+        capabilities: {}, supportedProtocolVersions: ['2026-07-28'],
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+      })
+      try {
+        await extensionClient.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
+          fetch: async (input, init) => {
+            const request = new Request(input, init)
+            const result = await worker.evaluate(async (data) => {
+              const response = await fetch(data.url, { method: data.method, headers: data.headers, ...(data.body ? { body: data.body } : {}) })
+              return { status: response.status, headers: [...response.headers.entries()], body: await response.text() }
+            }, { url: request.url, method: request.method, headers: [...request.headers.entries()], body: await request.text() })
+            return new Response(result.body || null, { status: result.status, headers: result.headers })
+          },
+        }))
+        expect((await extensionClient.callTool({ name: 'list_books', arguments: {} })).isError).not.toBe(true)
+      } finally { await extensionClient.close() }
+      const page = await context.newPage()
+      await page.goto(`${base}/healthz`)
+      expect(await page.evaluate(async (url) => (await fetch(`${url}/healthz`)).status, base)).toBe(200)
+      await page.route('http://untrusted.example/', (route) => route.fulfill({ contentType: 'text/html', body: '<title>Untrusted origin fixture</title>' }))
+      await page.goto('http://untrusted.example/')
+      const network = await context.newCDPSession(page)
+      await network.send('Network.enable')
+      const statuses: number[] = []
+      network.on('Network.responseReceivedExtraInfo', (event) => statuses.push(event.statusCode))
+      expect(await page.evaluate(async (url) => {
+        try { return await (await fetch(`${url}/healthz`)).text() } catch { return 'blocked' }
+      }, base)).toBe('blocked')
+      await expect.poll(() => statuses).toContain(403)
+    } finally { await context.close() }
   })
 
   it('serves only MCP 2026-07-28 with stateless cache metadata', async () => {

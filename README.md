@@ -91,6 +91,30 @@ npm run dev
 
 The frontend is served on port 5173 and the MCP server on port 3001.
 
+The HTTP server binds to `127.0.0.1`. Every route, including MCP, uploads,
+media files, manifests, and archive files, checks the request Host and Origin
+before reading a body or accessing data. Only loopback hosts (`localhost`,
+`127.0.0.1`, `[::1]`) are accepted. Browser origins may use HTTP or HTTPS on
+those hosts at any local port, supporting Vite and preview servers. Foreign,
+opaque (`null`), and malformed origins are rejected with HTTP 403. CORS echoes
+only an accepted origin. Native clients without an Origin remain supported;
+browser requests marked cross-site without an Origin are rejected as well.
+
+The bundled Chrome extension is allowed by its exact stable origin,
+`chrome-extension://cebmihgcglhadjckbebmfahaiiljhgdj`. Run
+`npm run build:extension` and load `dist-extension` as an unpacked extension
+in `chrome://extensions`. Existing unpacked installations must be reloaded
+from that build and show this ID. The manifest public key fixes the development
+ID; it is not a credential or authentication token. Other extension origins
+are rejected.
+
+This is a local single-user service: local processes and accepted local browser
+origins can access all books. The request policy is not user authentication,
+and book IDs and object hashes are not credentials. Remote or shared hosting
+is not supported by this local policy; an authenticated deployment requires a
+separate access design. Artifact file and manifest routes resolve only within
+the supplied owning book, including range requests.
+
 ## Environment
 
 The storage-specific variables are:
