@@ -153,10 +153,7 @@ export function registerSuggestCutsJob(engine: Engine): void {
 
       const { kept, dropped } = filterValidTrims(parsed.trims, candidates, trimBudgetS);
       if (dropped.length > 0) {
-        logger.warn(
-          `[suggest_cuts] ${assetId}: dropped ${dropped.length} trims:\n`
-            + dropped.map((d) => `  - ${d.reason}: ${JSON.stringify(d.trim)}`).join("\n"),
-        );
+        logger.warn("suggest-cuts-dropped", { assetId, count: dropped.length });
       }
 
       const final = {

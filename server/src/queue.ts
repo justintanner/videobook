@@ -1,3 +1,4 @@
+import { appendDiagnostic, registerDiagnosticName } from "./diagnostics.js";
 import {
   type ArtifactWorkKind,
   type Engine,
@@ -145,10 +146,7 @@ async function tickProviderPoll(info: RunnerInfo): Promise<void> {
     );
   } catch (error) {
     if (info.pollAbort.signal.aborted) return;
-    logger.warn(
-      `[provider-poll] book ${info.bookId} tick failed:`,
-      error instanceof Error ? error.message : error,
-    );
+    logger.warn("provider-poll-failed", { bookId: info.bookId, error });
   } finally {
     info.providerPollInFlight = false;
   }
@@ -183,6 +181,7 @@ export function registerJobHandler(
   type: string,
   handler: ServerJobHandler,
 ): void {
+  registerDiagnosticName("jobType", type);
   handlers.set(type, handler);
 }
 
@@ -404,20 +403,20 @@ function makeWrappedResolver(
           }
           return result;
         } catch (cause) {
-          const message = cause instanceof Error ? cause.message : String(cause);
           const detached = isArtifactDetachedJobType(type);
           if (assetId && !assetFailureHandled && !detached) {
-            await dispatchFailure(engine, assetId, lease.current, message, job);
+            await dispatchFailure(engine, assetId, lease.current, cause, job);
           } else {
             // A job that rolled itself back, or one detached from its
             // artifact, owns the artifact's status — it stays clean rather
             // than showing a spurious error. The attempt still belongs in the
             // append-only log, or a failed-then-restored job would leave no
             // record anywhere that it ran.
-            await engine.logs.append("job-error", {
+            await appendDiagnostic(engine, "job-error", {
               jobType: type,
               operationId: job.operationId,
-              error: message,
+              error: cause,
+              jobId: job.id,
               ...(assetId
                 ? { assetId, ...(detached ? { detached: true } : { rolledBack: true }) }
                 : {}),
@@ -470,9 +469,10 @@ async function dispatchFailure(
   engine: Engine,
   assetId: string,
   lease: LeaseToken | null,
-  message: string,
+  cause: unknown,
   job?: Job,
 ): Promise<void> {
+  const message = cause instanceof Error ? cause.message : String(cause);
   if (lease?.kind === "owner") {
     await engine.jobs.artifactWork.fail(assetId, lease.ownerId, { message });
   } else if (lease?.kind === "task") {
@@ -480,10 +480,10 @@ async function dispatchFailure(
   } else {
     await engine.jobs.pending.forceFail(assetId, { message });
   }
-  await engine.logs.append("job-error", {
+  await appendDiagnostic(engine, "job-error", {
     assetId,
-    error: message,
-    ...(job ? { jobType: job.type, operationId: job.operationId } : {}),
+    error: cause,
+    ...(job ? { jobId: job.id, jobType: job.type, operationId: job.operationId } : {}),
   });
 }
 

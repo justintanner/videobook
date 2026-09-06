@@ -78,7 +78,7 @@ describe("advisory cost estimation", () => {
       engine,
       correlation: {
         bookId: engine.book.get().bookId,
-        artifactId: "artifact-transform",
+        artifactId: "01900000-0000-7000-8000-000000000010",
         tool: "kling30_omni_video",
         stage: "submit-kie",
       },
@@ -89,7 +89,7 @@ describe("advisory cost estimation", () => {
     );
     expect(mintKieOtp(klingTransformation, 60)).toEqual(expect.any(String));
     const log = JSON.stringify(engine.logs.read("generation-cost-estimate"));
-    expect(log).toContain("artifact-transform");
+    expect(log).toContain("01900000-0000-7000-8000-000000000010");
     expect(log).not.toContain("watercolor");
     expect(log).not.toContain("https://kie.example/source.mp4");
     expect(log).not.toContain(authorized.otp);
@@ -103,8 +103,8 @@ describe("advisory cost estimation", () => {
         reason: "unbounded",
       },
       correlation: {
-        bookId: "book-1",
-        artifactId: "artifact-1",
+        bookId: "01900000-0000-7000-8000-000000000011",
+        artifactId: "01900000-0000-7000-8000-000000000012",
         runId: "run-1",
         jobId: "job-1",
         tool: "kling30_omni_video",
@@ -119,9 +119,8 @@ describe("advisory cost estimation", () => {
       event: "generation-cost-estimate",
       available: false,
       reason: "unbounded",
-      bookId: "book-1",
-      artifactId: "artifact-1",
-      tool: "kling30_omni_video",
+      bookId: "01900000-0000-7000-8000-000000000011",
+      artifactId: "01900000-0000-7000-8000-000000000012",
       stage: "submit-kie",
     });
     expect(serialized).not.toContain("secret prompt");
@@ -129,6 +128,9 @@ describe("advisory cost estimation", () => {
     expect(serialized).not.toContain("https://");
     expect(line).not.toHaveProperty("prompt");
     expect(line).not.toHaveProperty("payload");
+    expect(line).not.toHaveProperty("model");
+    expect(line).not.toHaveProperty("runId");
+    expect(line).not.toHaveProperty("jobId");
   });
 
   it("still rejects unresolved provider mentions as invalid payloads", () => {

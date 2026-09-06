@@ -475,11 +475,7 @@ function scheduleWaveformExtraction(
       videoFilename,
     })
     .catch((err) => {
-      logger.error(
-        `[reconcile_project_work] failed to enqueue waveform extraction for ${assetId}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
+      logger.error("waveform-enqueue-failed", { assetId, error: err });
     });
 }
 

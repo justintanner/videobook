@@ -133,6 +133,28 @@ When models are missing, reverse-search errors include the preparation command. 
 
 After preparation, retry the search and reindex affected media to populate semantic coverage; preparing models alone does not index the library.
 
+## Runtime diagnostics
+
+`VIDEOBOOK_LOG_LEVEL` selects `silent`, `error`, `warn`, `info` (default), or
+`debug`. All levels use the same privacy policy. Server console logs and
+persistent job diagnostics contain fixed event names, validated UUIDs and queue
+IDs, counts, durations, and allowlisted error codes. Tool and job names are
+accepted only after registration by the application. Unknown error codes become
+`UNKNOWN`; messages, stacks, prompts, transcripts, book names, paths, model
+labels, URLs, and provider response bodies are excluded. Cost diagnostics retain
+availability, reason, warning count, and validated correlation fields.
+
+The shared boundary is [server/src/diagnostics.ts](server/src/diagnostics.ts).
+Runtime callers use `logger` for console events and `appendDiagnostic` for
+persistent events. Register diagnostic operation names only from trusted tool
+and job definitions, never from request values. ACE-Step stdout/stderr and
+unused FFmpeg waveform stderr are drained without being copied into diagnostics.
+To inspect ACE-Step output directly, run the configured server explicitly.
+
+Detailed errors remain in MCP/CLI responses and job/artifact failure state.
+Explicit chat history retains the messages the user asked to save. This policy
+applies to newly written diagnostics; existing log files are not rewritten.
+
 ## Quality gates
 
 ```bash

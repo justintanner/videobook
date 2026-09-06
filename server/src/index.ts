@@ -239,7 +239,7 @@ async function start(): Promise<void> {
   registerAllJobHandlers(scopedBookEngine);
   const port = process.env.PORT ?? 3001;
   app.listen(port, () => {
-    console.log(`MCP server listening on http://127.0.0.1:${port}/mcp`);
+    logger.info("server-listening", { port: Number(port) });
   });
   await hydrateLibrary();
 }
@@ -253,9 +253,9 @@ async function shutdown(): Promise<void> {
     await queue.stop();
     await stopAceServer();
     await bookManager.close();
-    logger.info("[shutdown] queue stopped; catalog GC-at-close completed");
+    logger.info("shutdown-complete");
   } catch (error) {
-    console.error("[shutdown] cleanup failed:", error);
+    logger.error("shutdown-failed", { error });
     exitCode = 1;
   }
   process.exit(exitCode);
@@ -265,6 +265,6 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 start().catch((error) => {
-  console.error("[startup] fatal:", error);
+  logger.error("startup-failed", { error });
   process.exit(1);
 });

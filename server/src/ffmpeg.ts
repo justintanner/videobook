@@ -426,7 +426,6 @@ export async function extractWaveform(videoPath: string, barCount?: number): Pro
       );
 
       let carry = -1; // a single low byte left over when a chunk splits a sample
-      let stderr = "";
       child.stdout.on("data", (chunk: Buffer) => {
         let offset = 0;
         if (carry !== -1 && chunk.length > 0) {
@@ -439,18 +438,14 @@ export async function extractWaveform(videoPath: string, barCount?: number): Pro
         for (let i = offset; i < end; i += 2) addSample(chunk.readInt16LE(i));
         carry = usableBytes & 1 ? chunk[chunk.length - 1] : -1;
       });
-      child.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+      child.stderr.resume();
       child.on("error", reject);
       child.on("close", (code) => {
         // No samples means no decodable audio (no audio stream, or a decode
         // error). Surface it once, but return empty rather than rejecting so a
         // genuinely silent clip caches as "no waveform" instead of churning.
         if (totalSamples === 0 && code !== 0) {
-          logger.warn(
-            `[ffmpeg] no waveform for ${videoPath} (ffmpeg exit ${code}): ${
-              summarizeFfmpegStderr(stderr) || "no audio stream"
-            }`,
-          );
+          logger.warn("waveform-empty", { exitCode: code });
         }
         resolve();
       });
@@ -486,11 +481,7 @@ export async function extractWaveform(videoPath: string, barCount?: number): Pro
   } catch (err) {
     // Only reached if ffmpeg fails to spawn (e.g. binary missing). The stream
     // never buffers, so the old maxBuffer failure mode can't recur here.
-    logger.error(
-      `[ffmpeg] waveform extraction failed for ${videoPath}: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    );
+    logger.error("waveform-failed", { error: err });
     return [];
   }
 }

@@ -178,7 +178,7 @@ export function registerCompleteProviderTaskJob(engine: Engine): void {
       try {
         engine.jobs.artifactWork.renew(assetId, ownerId, 60_000);
       } catch (error) {
-        logger.warn(`[heartbeat] renew failed for ${assetId}:`, error);
+        logger.warn("heartbeat-failed", { assetId, error });
       }
     }, 20_000);
 

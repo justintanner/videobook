@@ -25,11 +25,10 @@ async function uploadPreparedToFal(
         contentType,
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.warn(`[fal-upload] native failed, falling back to free host: ${msg}`);
+      logger.warn("fal-upload-fallback", { error: err });
     }
   } else {
-    logger.warn("[fal-upload] FAL_API_KEY not set, using free host");
+    logger.warn("fal-upload-unconfigured");
   }
 
   return uploadBytesToFreeHost(data, hashedFilename);

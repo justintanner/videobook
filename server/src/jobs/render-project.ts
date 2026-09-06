@@ -138,14 +138,11 @@ async function resolveSubtitleSegments(
     const writeResult = await engine.files.write(assetId, sidecarFilename, JSON.stringify(sidecar, null, 2)
     );
     if (!writeResult.ok) {
-      logger.warn(`[render] failed to cache ${sidecarFilename} for ${assetId}: ${writeResult.error.message}`);
+      logger.warn("subtitle-cache-failed", { assetId, error: writeResult.error });
     }
     return parseSegments(sidecar as unknown as Parameters<typeof parseSegments>[0]);
   } catch (err) {
-    logger.warn(
-      `[render] subtitle translation to ${subtitleLanguage} failed for ${assetId}, falling back to original:`,
-      err instanceof Error ? err.message : err,
-    );
+    logger.warn("subtitle-translation-failed", { assetId, error: err });
     return sourceSegments;
   }
 }
@@ -222,7 +219,7 @@ export function registerRenderProjectJob(engine: Engine): void {
       if (resolved.ok) {
         osgImagePath = resolved.path;
       } else {
-        logger.warn(`[render] OSG asset ${osgAssetId} skipped: ${resolved.error}`);
+        logger.warn("overlay-skipped", { assetId: osgAssetId, error: resolved.error });
       }
     }
 
@@ -260,10 +257,7 @@ export function registerRenderProjectJob(engine: Engine): void {
               engine.jobs.artifactWork.renew(asset.assetId, lease.ownerId, 60_000
               );
             } catch (error) {
-              logger.warn(
-                `[heartbeat] renew failed for ${asset.assetId}:`,
-                error,
-              );
+              logger.warn("heartbeat-failed", { assetId: asset.assetId, error });
             }
           }, 20_000);
           let renderSucceeded = false;

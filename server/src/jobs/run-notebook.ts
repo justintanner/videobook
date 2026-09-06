@@ -1324,17 +1324,12 @@ async function recordGenerationDispatch(
   try {
     const result = await engine.generations.record(args);
     if (!result.ok) {
-      logger.warn(
-        `[generations] record failed for cell ${args.cellId}: ${result.error.message}`,
-      );
+      logger.warn("generation-record-failed", { cellId: args.cellId, error: result.error });
       return null;
     }
     return result.value.generationId;
   } catch (cause) {
-    logger.warn(
-      `[generations] record failed for cell ${args.cellId}:`,
-      cause instanceof Error ? cause.message : cause,
-    );
+    logger.warn("generation-record-failed", { cellId: args.cellId, error: cause });
     return null;
   }
 }
@@ -1348,15 +1343,10 @@ async function patchGeneration(
   try {
     const result = await engine.generations.update(generationId, patch);
     if (!result.ok) {
-      logger.warn(
-        `[generations] update failed for ${generationId}: ${result.error.message}`,
-      );
+      logger.warn("generation-update-failed", { generationId, error: result.error });
     }
   } catch (cause) {
-    logger.warn(
-      `[generations] update failed for ${generationId}:`,
-      cause instanceof Error ? cause.message : cause,
-    );
+    logger.warn("generation-update-failed", { generationId, error: cause });
   }
 }
 
@@ -1370,9 +1360,7 @@ function activeGenerationIdForRun(
   try {
     const listed = engine.generations.listForCell(notebookId, cellId);
     if (!listed.ok) {
-      logger.warn(
-        `[generations] list failed for cell ${cellId}: ${listed.error.message}`,
-      );
+      logger.warn("generation-list-failed", { cellId, error: listed.error });
       return null;
     }
     const match = listed.value.find((generation) =>
@@ -1389,10 +1377,7 @@ function activeGenerationIdForRun(
       ));
     return match?.generationId ?? null;
   } catch (cause) {
-    logger.warn(
-      `[generations] list failed for cell ${cellId}:`,
-      cause instanceof Error ? cause.message : cause,
-    );
+    logger.warn("generation-list-failed", { cellId, error: cause });
     return null;
   }
 }

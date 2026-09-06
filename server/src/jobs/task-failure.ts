@@ -1,3 +1,4 @@
+import { appendDiagnostic } from "../diagnostics.js";
 import type { Engine, FailureInfo } from "videobook-engine";
 
 /**
@@ -14,12 +15,8 @@ export async function failPendingTaskAndLog(
 ): Promise<void> {
   const result = await engine.jobs.pending.fail(assetId, taskId, info);
   if (!result.ok) return;
-  await engine
-    .logs.append("job-error", {
-        assetId,
-        error: info.message,
-        ...(info.failCode !== undefined ? { failCode: info.failCode } : {}),
-      }
-    )
-    .catch(() => {});
+  await appendDiagnostic(engine, "job-error", {
+    assetId,
+    error: info,
+  }).catch(() => {});
 }

@@ -24,11 +24,10 @@ async function uploadPreparedToKie(
       const blob = new Blob([new Uint8Array(data)], { type: contentType });
       return await uploadFile(provider, blob, hashedFilename);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.warn(`[kie-upload] native failed, falling back to free host: ${msg}`);
+      logger.warn("kie-upload-fallback", { error: err });
     }
   } else {
-    logger.warn("[kie-upload] KIE_API_KEY not set, using free host");
+    logger.warn("kie-upload-unconfigured");
   }
 
   return uploadBytesToFreeHost(data, hashedFilename);

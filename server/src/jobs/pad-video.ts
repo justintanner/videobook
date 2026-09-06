@@ -21,8 +21,8 @@ type PadVideoPayload = {
 
 export function registerPadVideoJob(engine: Engine): void {
   registerJobHandler("pad_video", async (payload, ctx) => {
-    logger.debug("pad_video payload:", payload);
     const { sourcePath, assetDir, sourceAssetId, bookId, targetSecs, hasAudio } = payload as PadVideoPayload;
+    logger.debug("pad-video-started", { assetId: sourceAssetId, bookId });
     
     const result = await withLockedLocalLease(
       engine,

@@ -379,18 +379,13 @@ export class BookManager {
       const openMs = performance.now() - openedAt;
       const book = engine.book.get();
       const gc = engine.lastCatalogGc;
-      const tag = `${book.name} [${bookId.slice(0, 8)}]`;
       if (openMs > 1_000) {
-        logger.warn(
-          `[books] open ${tag} took ${openMs.toFixed(0)} ms — catalog is likely bloated`,
-        );
+        logger.warn("book-open-slow", { bookId, durationMs: openMs });
       } else {
-        logger.info(`[books] open ${tag} ${openMs.toFixed(1)} ms`);
+        logger.info("book-open", { bookId, durationMs: openMs });
       }
       if (gc) {
-        logger.info(
-          `[books] catalog gc ${tag} ${gc.trigger} ${gc.bytesBefore} → ${gc.bytesAfter} ${gc.summary}`,
-        );
+        logger.info("book-catalog-gc", { bookId, bytesBefore: gc.bytesBefore, bytesAfter: gc.bytesAfter });
       }
       const managed = this.toManagedBook(engine, root, book);
       if (managed.bookId !== bookId) {

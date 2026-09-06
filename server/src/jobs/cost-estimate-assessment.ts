@@ -3,6 +3,7 @@ import type { MediaGenerationRequest } from "@apicity/kie";
 import type { Engine } from "videobook-engine";
 import { toUpstreamCostHints, type KieCostHints } from "../cost-adapters.js";
 import { logger } from "../logger.js";
+import { appendDiagnostic, diagnosticRecord, type DiagnosticFields } from "../diagnostics.js";
 import { estimateCostDef } from "../tools/estimate-cost.js";
 
 type CostEstimateReason =
@@ -40,23 +41,6 @@ export type CostEstimateLogContext = {
   cellId?: string;
   outputCellId?: string;
 };
-
-const CORRELATION_KEYS = [
-  "bookId",
-  "artifactId",
-  "runId",
-  "jobId",
-  "tool",
-  "provider",
-  "model",
-  "stage",
-  "notebookId",
-  "cellId",
-  "outputCellId",
-] as const;
-
-const SECRET_VALUE = /(?:sk-|otp_|bearer\s|api[_-]?key)/i;
-const MEDIA_URL = /https?:\/\/\S+/gi;
 
 function assessComputedEstimate(estimate: {
   usd: number;
@@ -155,23 +139,13 @@ export async function assessToolCallEstimate(
 export function sanitizedCostEstimateLog(input: {
   assessment: CostEstimateAssessment;
   correlation?: CostEstimateLogContext;
-}): Record<string, unknown> {
-  const correlation: Record<string, unknown> = {};
-  for (const key of CORRELATION_KEYS) {
-    const value = input.correlation?.[key];
-    if (typeof value !== "string" || value.length === 0) continue;
-    if (SECRET_VALUE.test(value) || MEDIA_URL.test(value)) continue;
-    correlation[key] = value;
-  }
-  return {
-    event: "generation-cost-estimate",
+}): DiagnosticFields {
+  return diagnosticRecord("generation-cost-estimate", {
+    ...input.correlation,
     available: input.assessment.available,
-    ...(input.assessment.available
-      ? {}
-      : { reason: input.assessment.reason }),
+    ...(input.assessment.available ? {} : { reason: input.assessment.reason }),
     warningCount: input.assessment.warnings.length,
-    ...correlation,
-  };
+  });
 }
 
 export async function logUnavailableCostEstimate(input: {
@@ -181,9 +155,9 @@ export async function logUnavailableCostEstimate(input: {
 }): Promise<void> {
   if (input.assessment.available) return;
   const line = sanitizedCostEstimateLog(input);
-  logger.warn("[generation-cost-estimate]", JSON.stringify(line));
+  logger.warn("generation-cost-estimate", line);
   if (!input.engine) return;
-  await input.engine.logs.append("generation-cost-estimate", line).catch(() =>
+  await appendDiagnostic(input.engine, "generation-cost-estimate", line).catch(() =>
     undefined);
 }
 

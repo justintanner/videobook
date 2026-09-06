@@ -42,10 +42,10 @@ describe("logger sink", () => {
         debug: (...args) => lines.push(`debug:${args.map(String).join(" ")}`),
       },
     });
-    logger.info("[mcp] upload_file ok 12ms");
-    logger.warn("[heartbeat] renew failed for asset");
-    logger.error("[startup] fatal");
-    expect(lines).toEqual(["error:[startup] fatal"]);
+    logger.info("mcp", { status: "ok", durationMs: 12 });
+    logger.warn("heartbeat-failed");
+    logger.error("startup-failed");
+    expect(lines).toEqual(['error:[startup-failed] {"event":"startup-failed"}']);
   });
 
   it("restores warn and info when the test log flag is on", () => {
@@ -59,11 +59,11 @@ describe("logger sink", () => {
         debug: (...args) => lines.push(`debug:${args.map(String).join(" ")}`),
       },
     });
-    logger.info("[mcp] upload_file ok 12ms");
-    logger.warn("[provider-poll] tick failed");
+    logger.info("mcp", { status: "ok", durationMs: 12 });
+    logger.warn("provider-poll-failed");
     expect(lines).toEqual([
-      "info:[mcp] upload_file ok 12ms",
-      "warn:[provider-poll] tick failed",
+      'info:[mcp] {"event":"mcp","durationMs":12,"status":"ok"}',
+      'warn:[provider-poll-failed] {"event":"provider-poll-failed"}',
     ]);
   });
 });

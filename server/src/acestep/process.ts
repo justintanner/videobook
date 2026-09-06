@@ -1,5 +1,4 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { createInterface } from "node:readline";
 import type { Readable } from "node:stream";
 import { isHealthy } from "./client.js";
 import { aceStepConfig, checkLocalAvailability, type AceStepConfig } from "./config.js";
@@ -37,11 +36,9 @@ async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function pipeLogs(stream: Readable | null): void {
+function drainOutput(stream: Readable | null): void {
   if (stream === null) return;
-  createInterface({ input: stream }).on("line", (line) => {
-    logger.info(`[ace-step] ${line}`);
-  });
+  stream.resume();
 }
 
 // Identity check before adopting a listener on our port: /health must return the
@@ -88,8 +85,8 @@ async function startServer(config: AceStepConfig, signal?: AbortSignal): Promise
   ];
   if (config.keepLoaded) serverArgs.push("--keep-loaded");
   const child = spawn(config.serverPath, serverArgs, { stdio: ["ignore", "pipe", "pipe"] });
-  pipeLogs(child.stdout);
-  pipeLogs(child.stderr);
+  drainOutput(child.stdout);
+  drainOutput(child.stderr);
   state.child = child;
   state.spawnFailure = null;
   child.on("error", (error) => {
@@ -99,7 +96,7 @@ async function startServer(config: AceStepConfig, signal?: AbortSignal): Promise
     );
   });
   child.on("exit", (code, exitSignal) => {
-    logger.error(`[ace-step] ace-server exited (code ${code ?? "null"}, signal ${exitSignal ?? "null"})`);
+    logger.error("ace-server-exited", { exitCode: code, signal: exitSignal });
     if (state.child === child) {
       state.child = null;
       state.handle = null;
@@ -117,7 +114,7 @@ async function startServer(config: AceStepConfig, signal?: AbortSignal): Promise
     if (child.exitCode !== null) {
       throw new AceStepError(
         "spawn_failed",
-        `ace-server exited during startup (code ${child.exitCode}); check [ace-step] logs above`,
+        `ace-server exited during startup (code ${child.exitCode}); run the configured server directly to inspect its output`,
       );
     }
     if (await isHealthy(baseUrl, PROBE_TIMEOUT_MS)) {

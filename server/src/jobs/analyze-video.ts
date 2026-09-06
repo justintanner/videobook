@@ -227,7 +227,7 @@ export function registerAnalyzeVideoJob(engine: Engine): void {
         }), ctx.signal);
         analysis = JSON.parse(firstResponseText(response)) as Record<string, unknown>;
       } catch (e) {
-        logger.error(`[analyze_video] API failed for ${assetId}:`, e instanceof Error ? e.message : e);
+        logger.error("video-analysis-failed", { assetId, error: e });
       }
     }
 

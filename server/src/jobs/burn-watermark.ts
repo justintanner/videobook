@@ -388,10 +388,7 @@ async function resolveBurnCorner(
     return { corner, placementSource: "vision" };
   } catch (err) {
     signal.throwIfAborted();
-    logger.warn(
-      `[burn_watermark] placement failed for ${payload.assetId}, using ${fallback.corner}:`,
-      err instanceof Error ? err.message : err,
-    );
+    logger.warn("watermark-placement-fallback", { assetId: payload.assetId, error: err });
     return fallback;
   }
 }

@@ -328,7 +328,7 @@ export function renderVideoDef(engine: Engine): ToolDef {
       // new jobs can claim the asset.
       const clearResult = await engine.jobs.failures.clear(asset_id);
       if (!clearResult.ok) {
-        logger.warn(`[render] clearing stale generation error for ${asset_id} failed: ${clearResult.error.message}`);
+        logger.warn("generation-error-clear-failed", { assetId: asset_id, error: clearResult.error });
       }
 
       const assetDir = manifest.path;
@@ -370,7 +370,7 @@ export function renderVideoDef(engine: Engine): ToolDef {
           if (!storedOsgPathCache.has(storedOsgAssetId)) {
             const resolved = await resolveOsgImagePath(engine, storedOsgAssetId);
             if (!resolved.ok) {
-              logger.warn(`[render] stored OSG asset ${storedOsgAssetId} skipped: ${resolved.error}`);
+              logger.warn("overlay-skipped", { assetId: storedOsgAssetId, error: resolved.error });
             }
             storedOsgPathCache.set(storedOsgAssetId, resolved.ok ? resolved.path : null);
           }
@@ -454,7 +454,7 @@ export function renderVideoDef(engine: Engine): ToolDef {
           if (!updated.ok) throw new Error(updated.error.message);
           savedOrientation = explicitOrientation;
         } catch (err) {
-          logger.warn("Persisting timeline orientation failed (non-fatal):", err);
+          logger.warn("timeline-orientation-failed", { error: err });
         }
       }
 

@@ -30,11 +30,10 @@ export async function uploadAssetToAlibaba(
         contentType,
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.warn(`[alibaba-upload] native failed, falling back to free host: ${msg}`);
+      logger.warn("alibaba-upload-fallback", { error: err });
     }
   } else {
-    logger.warn("[alibaba-upload] DASHSCOPE_API_KEY not set, using free host");
+    logger.warn("alibaba-upload-unconfigured");
   }
 
   return uploadBytesToFreeHost(data, hashedFilename);

@@ -53,12 +53,15 @@ describe("MCP tool logging", () => {
     }
   });
 
-  it("appends collapsed error text to the mcp error log line", async () => {
+  it.each(["returned", "thrown"])("keeps private %s errors available to callers without logging their content", async (mode) => {
     root = await mkdtemp(join(tmpdir(), "videobook-log-error-"));
     const engine = createEngine({
       rootDir: root,
       initialBookName: "log-error",
     });
+    const privateText = "Private transcript, prompt and /private/book-path?token=credential-value";
+    const result = { isError: true as const, content: [{ type: "text" as const, text: privateText }] };
+    const failure = Object.assign(new Error(privateText), { code: "INVALID_INPUT", cause: result });
     const lines: string[] = [];
     configureLoggerForTests({
       level: "info",
@@ -76,18 +79,25 @@ describe("MCP tool logging", () => {
         name: "failing_tool",
         description: "test",
         schema: { book_id: z.string() },
-        handler: async () => ({
-          isError: true,
-          content: [{ type: "text", text: "line one\nline two" }],
-        }),
+        handler: async () => {
+          if (mode === "thrown") throw failure;
+          return result;
+        },
       }, engine);
-      await wrapped.handler({ book_id: engine.book.get().bookId });
+      const pending = wrapped.handler({ book_id: engine.book.get().bookId, prompt: privateText });
+      if (mode === "thrown") await expect(pending).rejects.toBe(failure);
+      else await expect(pending).resolves.toBe(result);
     } finally {
       resetLoggerForTests();
       engine.close();
     }
-    expect(lines.some((line) =>
-      line.includes("[mcp] failing_tool error")
-      && line.includes("line one line two"))).toBe(true);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^\[mcp\] /);
+    const record = JSON.parse(lines[0].slice("[mcp] ".length));
+    expect(record).toMatchObject({ event: "mcp", tool: "failing_tool", status: "error", durationMs: expect.any(Number) });
+    if (mode === "thrown") expect(record.errorCode).toBe("INVALID_INPUT");
+    expect(lines.join("\n")).not.toContain(privateText);
+    expect(record).not.toHaveProperty("error");
+    expect(record).not.toHaveProperty("content");
   });
 });

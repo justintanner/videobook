@@ -1,3 +1,5 @@
+import { diagnosticRecord, type DiagnosticEvent, type DiagnosticFields } from "./diagnostics.js";
+
 type LogLevelName = "silent" | "error" | "warn" | "info" | "debug";
 
 const LEVEL_RANK: Record<LogLevelName, number> = {
@@ -66,17 +68,19 @@ function enabled(level: LogLevelName): boolean {
   return LEVEL_RANK[currentLevel] >= LEVEL_RANK[level];
 }
 
+function emit(level: Exclude<LogLevelName, "silent">, event: DiagnosticEvent, fields?: DiagnosticFields): void {
+  if (!enabled(level)) return;
+  const record = diagnosticRecord(event, fields);
+  if (record.event === "server-listening" && typeof record.port === "number") {
+    currentSink[level](`MCP server listening on http://127.0.0.1:${record.port}/mcp`);
+    return;
+  }
+  currentSink[level](`[${record.event}] ${JSON.stringify(record)}`);
+}
+
 export const logger = {
-  error(...args: unknown[]): void {
-    if (enabled("error")) currentSink.error(...args);
-  },
-  warn(...args: unknown[]): void {
-    if (enabled("warn")) currentSink.warn(...args);
-  },
-  info(...args: unknown[]): void {
-    if (enabled("info")) currentSink.info(...args);
-  },
-  debug(...args: unknown[]): void {
-    if (enabled("debug")) currentSink.debug(...args);
-  },
+  error: (event: DiagnosticEvent, fields?: DiagnosticFields): void => emit("error", event, fields),
+  warn: (event: DiagnosticEvent, fields?: DiagnosticFields): void => emit("warn", event, fields),
+  info: (event: DiagnosticEvent, fields?: DiagnosticFields): void => emit("info", event, fields),
+  debug: (event: DiagnosticEvent, fields?: DiagnosticFields): void => emit("debug", event, fields),
 };

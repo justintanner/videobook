@@ -1,3 +1,4 @@
+import { appendDiagnostic } from "../diagnostics.js";
 import type { Engine } from "videobook-engine";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -111,8 +112,8 @@ export async function runTranscribeVideoAudio(
       // Returning (instead of throwing) lets withLocalLease complete the
       // lease, so the asset stays claimable for a later retry.
       const reason = err instanceof Error ? err.message : String(err);
-      logger.warn(`[transcribe_video_audio] soft-failed for ${assetId}: ${reason}`);
-      await engine.logs.append("transcribe-soft-fail", { assetId, error: reason }).catch(() => undefined);
+      logger.warn("transcribe-soft-fail", { assetId, error: err });
+      await appendDiagnostic(engine, "transcribe-soft-fail", { assetId, error: err }).catch(() => undefined);
       return { success: false, reason };
     }
   }, { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS });

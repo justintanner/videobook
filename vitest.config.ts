@@ -103,6 +103,7 @@ export default defineConfig({
       'server/src/job-deadline.test.ts',
       'server/src/lazy-render.test.ts',
       'server/src/logger.test.ts',
+      'server/src/diagnostics.test.ts',
       'server/src/local-search-models.test.ts',
       'server/src/jobs/**/*.test.ts',
       'server/src/keyword-placement-cache.test.ts',

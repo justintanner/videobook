@@ -95,7 +95,7 @@ export async function withProviderHandoff<T>(
             HEARTBEAT_EXTEND_MS,
           );
         } catch (error) {
-          logger.warn(`[heartbeat] renew failed for ${assetId}:`, error);
+          logger.warn("heartbeat-failed", { assetId, error });
         }
       }, HEARTBEAT_INTERVAL_MS)
     : null;
@@ -142,7 +142,7 @@ export async function withLocalLease<T>(
         HEARTBEAT_EXTEND_MS,
       );
     } catch (error) {
-      logger.warn(`[heartbeat] renew failed for ${assetId}:`, error);
+      logger.warn("heartbeat-failed", { assetId, error });
     }
   }, HEARTBEAT_INTERVAL_MS);
   try {

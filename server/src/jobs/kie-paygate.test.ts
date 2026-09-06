@@ -530,7 +530,7 @@ describe("kie paygate advisory authorization", () => {
         engine,
         correlation: {
           bookId: engine.book.get().bookId,
-          artifactId: "artifact-kling-omni",
+          artifactId: "01900000-0000-7000-8000-000000000013",
           runId: "run-kling-omni",
           jobId: "job-kling-omni",
           tool: "kling30_omni_video",
@@ -546,7 +546,9 @@ describe("kie paygate advisory authorization", () => {
         ...engine.logs.read("generation-cost-estimate").map((line) => JSON.stringify(line)),
       ].join("\n");
       expect(combined).toContain("generation-cost-estimate");
-      expect(combined).toContain("artifact-kling-omni");
+      expect(combined).toContain("01900000-0000-7000-8000-000000000013");
+      expect(combined).not.toContain("run-kling-omni");
+      expect(combined).not.toContain("job-kling-omni");
       expect(combined).toContain("submit-kie");
       expect(combined).not.toContain(prompt);
       expect(combined).not.toContain(mediaUrl);

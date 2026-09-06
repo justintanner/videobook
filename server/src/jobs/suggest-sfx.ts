@@ -144,10 +144,7 @@ export function registerSuggestSfxJob(engine: Engine): void {
       }
 
       if (droppedSfx.length > 0) {
-        logger.warn(
-          `[suggest_sfx] ${assetId}: dropped ${droppedSfx.length} entries:\n`
-            + droppedSfx.map((d) => `  - ${d.reason}: ${JSON.stringify(d.sfx)}`).join("\n"),
-        );
+        logger.warn("suggest-sfx-dropped", { assetId, count: droppedSfx.length });
       }
 
       const final = {

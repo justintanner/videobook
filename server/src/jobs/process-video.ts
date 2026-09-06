@@ -134,8 +134,7 @@ async function enqueueVideoTranscriptJobs(
     try {
       await queue.enqueue(job.jobId, job.payload as unknown as Record<string, unknown>);
     } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      logger.warn(`[process_video] failed to enqueue ${job.payload.type}: ${reason}`);
+      logger.warn("process-video-enqueue-failed", { jobType: job.payload.type, error: err });
     }
   }
 }
@@ -506,9 +505,7 @@ async function processVideoSnapshot(
       if (waveform.length > 0) {
         const wavResult = await engine.metadata.waveforms.write(assetId, waveform);
         if (!wavResult.ok) {
-          logger.warn(
-            `[process_video] writeAudioWaveform soft-failed for ${assetId}: ${wavResult.error.message}`,
-          );
+          logger.warn("waveform-write-failed", { assetId, error: wavResult.error });
         }
       }
     }

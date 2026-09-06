@@ -367,9 +367,7 @@ export function registerRenderTimelineJob(engine: Engine): void {
       const plan = planTimelineVideo(videoProbes);
 
       if (plan.mode === "reencode") {
-        logger.warn(
-          `[render-timeline] ${bookId}: re-encoding video to ${plan.targetFps}fps CFR (${plan.reasons.join(", ")})`,
-        );
+        logger.warn("timeline-reencode", { bookId, targetFps: plan.targetFps, count: plan.reasons.length });
         await runFfmpeg(
           buildReencodeArgs({
             inputPaths,

@@ -1,3 +1,4 @@
+import { appendDiagnostic } from "../diagnostics.js";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -194,10 +195,10 @@ async function deferredSemanticIndex(
   assetId: string,
   error: unknown,
 ): Promise<SemanticIndexResult> {
-  await engine.logs.append("semantic-index-deferred", {
+  await appendDiagnostic(engine, "semantic-index-deferred", {
     artifactId: assetId,
-    manifestId: MANIFEST.manifestId,
-    error: error instanceof Error ? error.message : String(error),
+    stage: "index-progressive",
+    error,
   }).catch(() => undefined);
   return {
     success: true,
@@ -284,10 +285,10 @@ export async function indexArtifact(
       semanticVisual = "ready";
     } catch (error) {
       if (options.signal?.aborted || isModelExecutionFailure(error)) throw error;
-      await engine.logs.append("semantic-index-deferred", {
+      await appendDiagnostic(engine, "semantic-index-deferred", {
         artifactId,
-        manifestId: LOCAL_CLIP_MANIFEST.manifestId,
-        error: error instanceof Error ? error.message : String(error),
+        modality: "visual",
+        error,
       }).catch(() => undefined);
     }
   }
@@ -305,10 +306,10 @@ export async function indexArtifact(
       semanticAudio = "ready";
     } catch (error) {
       if (options.signal?.aborted || isModelExecutionFailure(error)) throw error;
-      await engine.logs.append("semantic-index-deferred", {
+      await appendDiagnostic(engine, "semantic-index-deferred", {
         artifactId,
-        manifestId: LOCAL_CLAP_MANIFEST.manifestId,
-        error: error instanceof Error ? error.message : String(error),
+        modality: "audio",
+        error,
       }).catch(() => undefined);
     }
   }

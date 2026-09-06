@@ -15,7 +15,7 @@ const MINIMAL_PNG = Buffer.from(
 type JobErrorLogEntry = {
   assetId?: string;
   detached?: boolean;
-  error?: string;
+  errorCode?: string;
   jobType?: string;
   rolledBack?: boolean;
 };
@@ -98,6 +98,6 @@ describe("post_to_x job", () => {
       entry.jobType === "post_to_x"
       && entry.assetId === assetId
       && entry.detached === true
-      && (entry.error ?? "").includes("No X access token is configured"))).toBe(true);
+      && entry.errorCode === "UNKNOWN")).toBe(true);
   });
 });

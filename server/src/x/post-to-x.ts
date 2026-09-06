@@ -455,10 +455,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
         },
       });
     } catch (err) {
-      logger.error(
-        `[post_to_x] tweet ${tweetId} succeeded but writing .post.x.json failed:`,
-        err instanceof Error ? err.message : err,
-      );
+      logger.error("post-record-failed", { error: err });
     }
 
     const posted: PostToXResult = {
@@ -482,10 +479,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
       }
     } catch (err) {
       posted.cell_error = err instanceof Error ? err.message : String(err);
-      logger.error(
-        `[post_to_x] tweet ${tweetId} succeeded but creating the published notebook cell failed:`,
-        posted.cell_error,
-      );
+      logger.error("post-cell-failed", { error: err });
     }
 
     return posted;

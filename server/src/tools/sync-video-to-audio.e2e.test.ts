@@ -288,10 +288,10 @@ describe("sync_video_to_audio end to end", () => {
     // The attempt is still auditable in the append-only action log; without
     // it a failed-then-restored job would leave no record that it ran.
     const jobErrors = fs.logs.read("job-error", { limit: 25 }) as unknown as
-      Array<{ assetId?: string; error?: string; rolledBack?: boolean }>;
+      Array<{ assetId?: string; errorCode?: string; rolledBack?: boolean }>;
     expect(jobErrors.some((entry) =>
       entry.assetId === created.artifactId
       && entry.rolledBack === true
-      && (entry.error ?? "").includes("ffmpeg failed"))).toBe(true);
+      && entry.errorCode === "UNKNOWN")).toBe(true);
   }, 120_000);
 });

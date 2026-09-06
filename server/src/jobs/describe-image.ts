@@ -133,7 +133,7 @@ export async function describeImageBytes(
     throw new Error(`Vision model returned no prompt field. Got keys: ${Object.keys(parsed).join(",")}`);
   }
   if (parsed.prompt.length > PROMPT_CHAR_LIMIT) {
-    logger.warn(`[describe_image] prompt ${parsed.prompt.length} > ${PROMPT_CHAR_LIMIT} chars, truncating`);
+    logger.warn("description-truncated", { count: parsed.prompt.length, limit: PROMPT_CHAR_LIMIT });
     parsed.prompt = parsed.prompt.slice(0, PROMPT_CHAR_LIMIT).trimEnd();
   }
   return parsed;
@@ -169,9 +169,7 @@ export function registerDescribeImageJob(engine: Engine): void {
         if (cacheResult.error.code === "NOT_FOUND") {
           return { success: false, sourceAssetId, scriptAssetId, reason: "source_deleted" };
         }
-        logger.warn(
-          `[describe_image] Failed to cache analysis on source ${sourceAssetId}: ${cacheResult.error.message}`,
-        );
+        logger.warn("description-cache-failed", { assetId: sourceAssetId, error: cacheResult.error });
       }
 
       if (scriptAssetId) {

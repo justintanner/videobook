@@ -213,7 +213,7 @@ async function resolveOverlayPlacement(
       }, PLACEMENT_TIMEOUT_MS);
       return { positions: result.analysis.positions, placementSource: "vision", jobId };
     } catch (err) {
-      logger.warn(`[apply_watermark] placement job failed for ${assetId}, falling back:`, err instanceof Error ? err.message : err);
+      logger.warn("watermark-placement-fallback", { assetId, error: err });
     }
   }
   const recommended = await readRecommendedOsgPosition(engine, assetId);
@@ -234,7 +234,7 @@ async function scoreCachedCorner(
     const probe = await probeVideo(videoPath);
     return scoreWatermarkCornersForCanvas(probe.width, probe.height, analysis.regions, scaling).position;
   } catch (err) {
-    logger.warn(`[apply_watermark] probe failed for ${videoPath}, using ${fallback}:`, err instanceof Error ? err.message : err);
+    logger.warn("watermark-probe-fallback", { error: err });
     return fallback;
   }
 }
