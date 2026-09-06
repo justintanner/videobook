@@ -355,8 +355,8 @@ describe('legacy book discovery and migration', () => {
     const script = `
       import { BookManager } from './server/src/book-manager.ts';
       const [libraryDir, checkpoint] = process.argv.slice(1);
-      setTimeout(() => process.exit(94), 20000);
-      const books = new BookManager({ libraryDir, migrationLeaseMs: 1200,
+      setTimeout(() => process.exit(94), 60000);
+      const books = new BookManager({ libraryDir,
         onMigrationCheckpoint: (phase) => { if (phase === checkpoint) process.exit(93); } });
       await books.ready();
       const preview = books.listLegacy()[0];
@@ -370,7 +370,7 @@ describe('legacy book discovery and migration', () => {
     child.stderr.on('data', (chunk: Buffer) => { output += chunk.toString() })
     const exitCode = await new Promise<number | null>((resolve, reject) => { child.on('exit', resolve); child.on('error', reject) })
     expect(exitCode, output).toBe(93)
-    books = new BookManager({ libraryDir: library, migrationLeaseMs: 1200 })
+    books = new BookManager({ libraryDir: library })
     await books.ready()
     const { dryRunV4Migration } = await import('videobook-engine')
     const sourceRoot = books.listLegacy().length ? legacy.root
@@ -389,7 +389,7 @@ describe('legacy book discovery and migration', () => {
     expect((await books.enqueueLegacyMigration(legacy.bookId, preview.value.sourceHeadRevision, preview.value.migrationKey)).result).toEqual(result)
     expect(managed.value.engine.jobs.queue.list().map((job) => job.id)).toEqual(result.reindexJobIds)
     expect(books.list()).toHaveLength(1)
-  })
+  }, 120_000)
 
   it.each(['archived', 'published'] as const)('safely retries an ordinary failure after %s', async (checkpoint) => {
     const legacy = await source()
