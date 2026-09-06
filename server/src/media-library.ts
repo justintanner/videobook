@@ -10,6 +10,7 @@ import type {
 } from "videobook-engine";
 import type { BookManager, ManagedBook } from "./book-manager.js";
 import { registerLocalClipSearchProvider } from "./local-search-models.js";
+import { enqueueTemporalSearchPreparation } from "./jobs/prepare-temporal-search.js";
 import { markDescendantsStale } from "./notebook-action-catalog.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { searchReferenceStore } from "./search-reference-store.js";
@@ -28,6 +29,7 @@ interface LibraryAsset extends ProjectAsset {
 }
 
 interface LibraryAssetSearchResult {
+  preparationJobs: Array<{ bookId: string; jobId: number }>;
   assets: LibraryAsset[];
   page: {
     offset: number;
@@ -274,6 +276,7 @@ export async function searchLibraryAssets(
         }));
       let hits: SearchHit[] = [];
       let searchError: string | undefined;
+      let preparationJob: { bookId: string; jobId: number } | undefined;
       if (query || prepared) {
         registerLocalClipSearchProvider(engine);
         const searchQuery = {
@@ -293,11 +296,13 @@ export async function searchLibraryAssets(
           : await engine.temporalSearch.query(searchQuery);
         if (result.ok) {
           hits = result.value.hits;
+        } else if (result.error.code === "NOT_READY" && result.error.details?.requiresIndexPreparation) {
+          preparationJob = await enqueueTemporalSearchPreparation(summary.bookId);
         } else {
           searchError = result.error.message;
         }
       }
-      return { assets, hits, searchError };
+      return { assets, hits, searchError, preparationJob };
     }),
   );
   const errors: LibraryAssetSearchResult["books_with_errors"] = [];
@@ -404,6 +409,10 @@ export async function searchLibraryAssets(
   const page = ranked.slice(offset, offset + limit);
   return {
     assets: page,
+    preparationJobs: results.flatMap((result) =>
+      result.status === "fulfilled" && result.value.preparationJob
+        ? [result.value.preparationJob]
+        : []),
     page: {
       offset,
       limit,

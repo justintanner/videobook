@@ -266,6 +266,7 @@ import {
   type SearchReferenceLifecycleState,
   type SearchReferenceMode,
 } from '@/videobook/search-reference-lifecycle'
+import { searchWithPreparation } from '@/videobook/search-preparation'
 import { useSearchReferenceLifecycle } from '@/videobook/useSearchReferenceLifecycle'
 import {
   pathForScreen,
@@ -569,6 +570,7 @@ type LibrarySearchResult = {
 }
 
 type MediaLibraryPickerState = {
+  preparingIndex: boolean
   cellId: string
   query: string
   draftQuery: string
@@ -2595,7 +2597,7 @@ function MediaLibraryDialog({
           )}
           {state.loading && state.assets.length === 0 ? (
             <div className="media-library-loading">
-              <BusyIndicator size={24} />Loading recent media…
+              <BusyIndicator size={24} />{state.preparingIndex ? 'Preparing search…' : 'Loading recent media…'}
             </div>
           ) : state.assets.length === 0 ? (
             <div className="media-library-empty">
@@ -2663,7 +2665,7 @@ function MediaLibraryDialog({
               onClick={onLoadMore}
             >
               {state.loadingMore ? <BusyIndicator size={14} /> : <Plus size={14} />}
-              {state.loadingMore ? 'Loading…' : 'Load more'}
+              {state.preparingIndex ? 'Preparing search…' : state.loadingMore ? 'Loading…' : 'Load more'}
             </button>
           )}
         </footer>
@@ -6415,6 +6417,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         assets: append ? current.assets : [],
         page: append ? current.page : emptyLibraryPage,
         booksWithErrors: append ? current.booksWithErrors : [],
+        preparingIndex: false,
         loading: !append,
         loadingMore: append,
         error: null,
@@ -6438,21 +6441,35 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : error instanceof Error ? error.message : String(error)
         throw new Error(message)
       }
-      const result = asLibrarySearchResult(await call('search_library_assets', {
-        ...(activeCriteria.mode === 'text' && query.trim()
-          ? { query: query.trim() }
-          : {}),
-        ...(activeCriteria.mode !== 'text' && activeCriteria.reference
-          ? { reference_id: activeCriteria.reference.referenceId }
-          : {}),
-        ...(referenceRange
-          ? { reference_range: referenceRange }
-          : {}),
-        kinds: [kind],
-        limit: emptyLibraryPage.limit,
-        offset,
-      }))
-      if (mediaLibraryRequestRef.current !== requestId) return
+      const isCancelled = () => mediaLibraryRequestRef.current !== requestId
+      const response = await searchWithPreparation({
+        search: () => call('search_library_assets', {
+          ...(activeCriteria.mode === 'text' && query.trim()
+            ? { query: query.trim() }
+            : {}),
+          ...(activeCriteria.mode !== 'text' && activeCriteria.reference
+            ? { reference_id: activeCriteria.reference.referenceId }
+            : {}),
+          ...(referenceRange
+            ? { reference_range: referenceRange }
+            : {}),
+          kinds: [kind],
+          limit: emptyLibraryPage.limit,
+          offset,
+        }),
+        listJobs: (owningBookId, jobIds) => call('list_jobs', {
+          book_id: owningBookId, job_ids: jobIds,
+        }, { background: true }),
+        onPreparing: (preparingIndex) => {
+          if (isCancelled()) return
+          setMediaLibraryPicker((current) => current && current.cellId === cellId
+            ? { ...current, preparingIndex }
+            : current)
+        },
+        isCancelled,
+      })
+      if (isCancelled()) return
+      const result = asLibrarySearchResult(response)
       setMediaLibraryPicker((current) => {
         if (!current || current.cellId !== cellId) return current
         const compatible = result.assets.filter((asset) =>
@@ -6503,6 +6520,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     mediaLibraryReference.lifecycle.close()
     setMediaSlotOperation(cellId, null)
     setMediaLibraryPicker({
+      preparingIndex: false,
       cellId,
       query: '',
       draftQuery: '',
@@ -10623,6 +10641,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const changeMediaLibraryMode = (mode: MediaSearchMode) => {
     if (!mediaLibraryPicker || mediaLibraryReference.state.mode === mode) return
     const cellId = mediaLibraryPicker.cellId
+    mediaLibraryRequestRef.current += 1
     mediaLibraryReference.lifecycle.changeMode(mode)
     setMediaLibraryPicker((current) => current && current.cellId === cellId
       ? {
@@ -10634,6 +10653,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 total: current.assets.length,
               },
           error: null,
+          loading: false,
+          loadingMore: false,
+          preparingIndex: false,
         }
       : current)
     if (mode === 'text') {
@@ -10654,9 +10676,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const prepareMediaLibraryFile = async (file: File) => {
     if (!mediaLibraryPicker || mediaLibraryReference.state.mode === 'text' || !bookId) return
     const picker = mediaLibraryPicker
+    mediaLibraryRequestRef.current += 1
     const mode = mediaLibraryReference.state.mode
     setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
-      ? { ...current, error: null }
+      ? { ...current, error: null, loading: false, loadingMore: false, preparingIndex: false }
       : current)
     const result = await mediaLibraryReference.lifecycle.prepare(
       mode,
@@ -10677,6 +10700,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const prepareMediaLibrarySimilar = async (asset: LibraryAssetRecord) => {
     if (!mediaLibraryPicker) return
     const picker = mediaLibraryPicker
+    mediaLibraryRequestRef.current += 1
     const mode: ReverseSearchMode = asset.type === 'image'
       ? 'image-reverse'
       : 'video-reverse'
@@ -10684,6 +10708,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ? {
           ...current,
           error: null,
+          loading: false,
+          loadingMore: false,
+          preparingIndex: false,
         }
       : current)
     const result = await mediaLibraryReference.lifecycle.prepare(
@@ -10711,8 +10738,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
   const clearMediaLibraryReference = () => {
     if (!mediaLibraryPicker) return
+    mediaLibraryRequestRef.current += 1
     mediaLibraryReference.lifecycle.clearReference()
-    setMediaLibraryPicker((current) => current ? { ...current, error: null } : current)
+    setMediaLibraryPicker((current) => current ? { ...current, error: null, loading: false, loadingMore: false, preparingIndex: false } : current)
   }
   const searchMediaLibrary = () => {
     if (!mediaLibraryPicker) return

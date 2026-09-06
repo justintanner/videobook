@@ -6,6 +6,7 @@ import type { Engine, IndexManifest, Result } from 'videobook-engine'
 import { BookManager } from '../../server/src/book-manager.js'
 import { queue, setEngineRoot } from '../../server/src/queue.js'
 import { registerPrepareTemporalSearchJob } from '../../server/src/jobs/prepare-temporal-search.js'
+import { mediaLibraryDefs } from '../../server/src/tools/media-library.js'
 import { semanticSearchDefs } from '../../server/src/tools/semantic-search.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import { deleteAssetDef } from '../../server/src/tools/delete-asset.js'
@@ -45,6 +46,7 @@ async function call(tool: ToolDef, args: Record<string, unknown>): Promise<Recor
 async function seed(engine: Engine): Promise<string> {
   const artifact = value(await engine.artifacts.create('video', 'preparation source'))
   value(await engine.files.write(artifact.artifactId, 'original.mp4', Buffer.from('fixture-video')))
+  value(await engine.metadata.artifacts.write(artifact.artifactId, 'original', { duration: 120 }))
   const objectHash = value(await engine.files.manifest(artifact.artifactId)).files[0]!.objectHash
   const stream = value(await engine.streams.register({
     artifactId: artifact.artifactId, sourcePath: 'original.mp4', objectHash, streamIndex: 0,
@@ -74,7 +76,7 @@ async function seed(engine: Engine): Promise<string> {
   return artifact.artifactId
 }
 
-it.each(['search_moments', 'search_library_moments'])(
+it.each(['search_moments', 'search_library_moments', 'search_library_assets'])(
   '%s returns deduplicated preparation work, then the client retries successfully', async (name) => {
     root = await mkdtemp(join(tmpdir(), 'videobook-preparation-tools-'))
     books = new BookManager({ libraryDir: join(root, 'books') })
@@ -83,9 +85,11 @@ it.each(['search_moments', 'search_library_moments'])(
     const managed = value(books.get(summary.bookId))
     const engine = managed.engine
     const artifactId = await seed(engine)
+    const lease = engine.jobs.artifactWork.begin(artifactId, { kind: 'upload', ownerKind: 'job', durationMs: 60_000 })!
+    expect(engine.jobs.artifactWork.complete(artifactId, lease.ownerId)).toBe(true)
     await setEngineRoot(managed.rootDir, engine)
     registerPrepareTemporalSearchJob(engine)
-    const searchTool = semanticSearchDefs(engine, books).find((tool) => tool.name === name)!
+    const searchTool = [...semanticSearchDefs(engine, books), ...mediaLibraryDefs(books)].find((tool) => tool.name === name)!
     const listTool = videobookDomainDefs(engine, books).find((tool) => tool.name === 'list_jobs')!
     const reference = searchReferenceStore.put({
       kind: 'image', name: 'fixture.png', reference: {
@@ -93,7 +97,7 @@ it.each(['search_moments', 'search_library_moments'])(
       },
     })
     referenceId = reference.reference_id
-    const args = { book_id: summary.bookId, query: { modalities: ['visual'], limit: 10 }, reference_id: referenceId }
+    const args = { book_id: summary.bookId, query: { modalities: ['visual'], limit: 10 }, kinds: ['video'], reference_id: referenceId }
     const started = performance.now()
     const [first, duplicate] = await Promise.all([call(searchTool, args), call(searchTool, args)])
     expect(performance.now() - started).toBeLessThan(2_000)
@@ -110,8 +114,8 @@ it.each(['search_moments', 'search_library_moments'])(
       isCancelled: () => false,
       intervalMs: 5,
       timeoutMs: 10_000,
-    }) as { hits: Array<{ artifactId: string }> }
-    expect(result.hits[0]?.artifactId).toBe(artifactId)
+    }) as { hits?: Array<{ artifactId: string }>; assets?: Array<{ artifact_id: string }> }
+    expect(name === 'search_library_assets' ? result.assets?.[0]?.artifact_id : result.hits?.[0]?.artifactId).toBe(artifactId)
     expect(states).toContain(true)
     expect(states.at(-1)).toBe(false)
     expect(engine.jobs.queue.get(jobs[0]!.jobId)?.state).toBe('done')
