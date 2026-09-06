@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, type Server } from "node:http";
@@ -14,6 +14,8 @@ import {
 import { indexArtifact, registerSemanticIndexJob } from "./jobs/semantic-index.js";
 import { registerPrepareSearchReferenceJob } from "./jobs/prepare-search-reference.js";
 import { queue, setEngineRoot, stopBookQueue } from "./queue.js";
+
+import { searchReferenceStore } from "./search-reference-store.js";
 
 type ModelEnvironmentName =
   | "VIDEOBOOK_MODEL_CACHE_DIR"
@@ -140,6 +142,43 @@ describe("local search provider registration", () => {
     process.env.VIDEOBOOK_MODEL_DOWNLOAD = "disabled";
     await expect(queue.enqueueAndWait("retry-model", { ...payload, type: "semantic_index" }, 10_000)).resolves.toMatchObject({ semanticVisual: "deferred" });
     expect(requests.length).toBeGreaterThan(0);
+  });
+
+  it.each(["semantic_index", "prepare_search_reference"])("rejects corrupted pinned cache files in the actual %s queue without failing source media", async (type) => {
+    const cache = join(tempDir, "corrupted-models");
+    process.env.VIDEOBOOK_MODEL_CACHE_DIR = cache;
+    const model = join(cache, LOCAL_CLIP_MANIFEST.modelId, LOCAL_CLIP_MANIFEST.modelRevision);
+    await mkdir(model, { recursive: true });
+    await writeFile(join(model, "config.json"), '{"model_type":"clip"}');
+    const { engine, artifactId, image, bookId } = await queuedImage(`corrupted-${type}`);
+    await expect(registerLocalClipSearchProvider(engine).prepare()).rejects.toMatchObject({ error: { code: "MODEL_UNAVAILABLE" } });
+    await expect(queue.enqueueAndWait("corrupted-model", {
+      type, assetId: artifactId, bookId, mediaKind: "image", name: "Reference",
+    }, 10_000)).rejects.toThrow("integrity");
+    expect(engine.jobs.queue.list({ states: ["failed"] })).toEqual([
+      expect.objectContaining({ type, artifactId: null, error: expect.objectContaining({ code: "MODEL_UNAVAILABLE" }) }),
+    ]);
+    expect(engine.jobs.artifactWork.read(artifactId)).toMatchObject({ ok: true, value: { status: "ready", ownerId: null } });
+    expect(await engine.files.read(artifactId, "original.png")).toMatchObject({ ok: true, value: image });
+    expect(requests).toEqual([]);
+  });
+
+  it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === "1")("prepares an existing image through the queue and finds its indexed source using cached offline models", async () => {
+    process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(homedir(), ".cache", "videobook", "models");
+    const { engine, artifactId, bookId } = await queuedImage("offline-similar");
+    await expect(queue.enqueueAndWait("index-for-similar", {
+      type: "semantic_index", assetId: artifactId, bookId,
+    }, 30_000)).resolves.toMatchObject({ semanticVisual: "ready" });
+    const descriptor = await queue.enqueueAndWait("prepare-similar", {
+      type: "prepare_search_reference", assetId: artifactId, bookId, mediaKind: "image", name: "Reference",
+    }, 30_000) as { reference_id: string };
+    try {
+      const prepared = searchReferenceStore.get(descriptor.reference_id);
+      const result = await engine.temporalSearch.queryPrepared({ modalities: ["visual"] }, prepared.reference);
+      expect(result).toMatchObject({ ok: true, value: { hits: [expect.objectContaining({ artifactId })] } });
+      expect(engine.jobs.artifactWork.read(artifactId)).toMatchObject({ ok: true, value: { status: "ready" } });
+      expect(requests).toEqual([]);
+    } finally { searchReferenceStore.release(descriptor.reference_id); }
   });
 
   it.each(["semantic_index", "prepare_search_reference"])("cancels a stalled model worker from the actual %s queue", async (type) => {

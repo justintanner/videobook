@@ -81,7 +81,7 @@ export function registerLocalClipSearchProvider(
   const configuration = localModelConfiguration();
   const cached = clipProvidersByEngine.get(engine);
   if (cached && hasMatchingConfiguration(cached, configuration)) {
-    engine.temporalSearch.providers.register(cached.provider);
+    engine.temporalSearch.providers.register(cached.provider, { modelDownloads: configuration.allowModelDownload });
     return cached.provider;
   }
   const provider = new ClipSearchProvider(configuration);
@@ -89,7 +89,7 @@ export function registerLocalClipSearchProvider(
     ...configuration,
     provider,
   });
-  engine.temporalSearch.providers.register(provider);
+  engine.temporalSearch.providers.register(provider, { modelDownloads: configuration.allowModelDownload });
   return provider;
 }
 
@@ -104,7 +104,7 @@ export function registerLocalClapSearchProvider(
     && cached.ffmpegPath === ffmpegPath
     && hasMatchingConfiguration(cached, configuration)
   ) {
-    engine.temporalSearch.providers.register(cached.provider);
+    engine.temporalSearch.providers.register(cached.provider, { modelDownloads: configuration.allowModelDownload });
     return cached.provider;
   }
   const provider = new ClapSearchProvider({
@@ -116,6 +116,6 @@ export function registerLocalClapSearchProvider(
     ffmpegPath,
     provider,
   });
-  engine.temporalSearch.providers.register(provider);
+  engine.temporalSearch.providers.register(provider, { modelDownloads: configuration.allowModelDownload });
   return provider;
 }

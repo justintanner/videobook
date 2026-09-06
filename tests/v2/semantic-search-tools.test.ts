@@ -35,6 +35,7 @@ const manifest: IndexManifest = {
 }
 
 class Provider implements TemporalSearchProvider {
+  readonly networkAccess = { modelDownloads: false, inference: false }
   readonly manifestId = manifest.manifestId
 
   async prepare(): Promise<void> {}
