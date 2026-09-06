@@ -239,6 +239,7 @@ function jobTypeToAssetWorkKind(
     case "process_video":
     case "process_image":
     case "inject_first_frame":
+    case "burn_watermark":
       return { kind: "process" };
     case "analyze_video":
     case "analyze_keyword_placement":

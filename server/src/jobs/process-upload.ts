@@ -88,6 +88,13 @@ export async function findUnprocessedUploads(
         if (status === "error") return null;
         if ((status === "pending" || status === "working") && meta.kind != null) return null;
       }
+      // A queued job owns the asset before it acquires a lease or lock. This
+      // also covers registered job types without an artifact-work classification.
+      if (engine.jobs.queue.list({
+        artifactId: asset.artifactId,
+        states: ["queued", "running", "completing"],
+        limit: 1,
+      }).length > 0) return null;
 
       // Prefer a literal `original.{ext}` first — that's the canonical shape
       // produced by upload-file and processExternalUpload itself. Only fall

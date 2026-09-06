@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { findUnprocessedUploads } from "./process-upload.js";
-import { queue } from "../queue.js";
+import { enqueueOptions, queue } from "../queue.js";
 import type { Engine } from "videobook-engine";
 
 describe("findUnprocessedUploads", () => {
@@ -32,6 +32,22 @@ describe("findUnprocessedUploads", () => {
   it("returns empty array when project has no assets", async () => {
     const result = await findUnprocessedUploads(fs, []);
     expect(result).toEqual([]);
+  });
+
+  it.each(["burn_watermark", "custom_media_job"])("leaves queued %s work to its owner before the worker claims a lock", async (type) => {
+    const created = await fs.artifacts.create("vid", "queued-burn");
+    if (!created.ok) throw new Error(created.error.message);
+    const assetId = created.value.artifactId;
+    await fs.files.write(assetId, "original.mp4", Buffer.from("unprocessed-video"));
+    const queued = fs.jobs.queue.enqueue(enqueueOptions("queued-watermark", {
+      type,
+      bookId: fs.book.get().bookId,
+      assetId,
+    }));
+    expect(queued.job.state).toBe("queued");
+    const asset = fs.artifacts.list().find((entry) => entry.artifactId === assetId)!;
+    expect(await fs.jobs.locks.isLocked(asset.path)).toBe(false);
+    expect(await findUnprocessedUploads(fs, [asset])).toEqual([]);
   });
 
   it("returns empty array when all assets are already processed", async () => {

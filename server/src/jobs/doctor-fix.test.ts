@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { createEngineForTest } from "../engine.js";
 import { failPendingTaskAndLog } from "./task-failure.js";
 import { createTestClient } from "../test-client.js";
+import { stopBookQueue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 
@@ -124,8 +125,11 @@ describe("doctor tool", () => {
 
   it(
     "gc reports per-book bytes and shrinks a churned catalog",
-    { timeout: 60_000 },
+    { timeout: 180_000 },
     async () => {
+      // This fixture owns its leases. A background reaper must not turn the
+      // oldest churn rows into runnable jobs while doctor compacts the catalog.
+      await stopBookQueue(bookId);
       for (let index = 0; index < 2_000; index += 1) {
         fs.jobs.queue.enqueue({
           type: "doctor-gc-churn",

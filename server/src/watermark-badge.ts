@@ -1,5 +1,5 @@
 import type { Engine } from "videobook-engine";
-import sharp from "sharp";
+import sharp, { type OverlayOptions } from "sharp";
 import QRCode from "qrcode";
 import { writeImageVariants } from "./tools/concat-images.js";
 
@@ -7,8 +7,8 @@ export const DEFAULT_HANDLE = "justinwtanner";
 
 // Layout identifier persisted in artifact metadata so apply_watermark can
 // reuse an existing badge and skip regenerating an identical one.
-export const WATERMARK_BADGE_LAYOUT = "badge-v5";
-const WATERMARK_HANDLE_LAYOUT = "handle-v4";
+export const WATERMARK_BADGE_LAYOUT = "badge-v6";
+const WATERMARK_HANDLE_LAYOUT = "handle-v5";
 const WATERMARK_QR_LAYOUT = "qr-v1";
 
 export const BADGE_WIDTH = 480;
@@ -149,14 +149,27 @@ export async function buildWatermarkBadgePng(
     12,
     Math.min(28, Math.floor(availableWidth / (0.6 * Math.max(1, Array.from(label).length)))),
   );
-  const labelWidth = Math.min(availableWidth, fontSize * 0.6 * Array.from(label).length);
+  // Font fallback changes SVG baseline metrics between macOS and Linux.
+  // Place the painted glyph bounds in the pill, independent of those metrics.
+  const labelSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${BADGE_WIDTH}" height="${fontSize * 3}">
+    <text x="${BADGE_WIDTH / 2}" y="${fontSize * 2}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="0.1" fill="#FFFFFF">${escapeXml(label)}</text>
+  </svg>`;
+  const labelPixels = includeHandle && label.trim()
+    ? await sharp(Buffer.from(labelSvg)).trim({ threshold: 1, lineArt: true }).png().toBuffer()
+    : null;
+  const labelImage = labelPixels
+    ? await sharp(labelPixels).resize({
+        width: Math.floor(availableWidth),
+        height: HANDLE_PILL_CONTENT,
+        fit: "inside",
+        withoutEnlargement: true,
+      }).png().toBuffer({ resolveWithObject: true })
+    : null;
+  const labelWidth = labelImage?.info.width ?? 0;
   const contentWidth = iconSpace + labelWidth;
   const contentX = (BADGE_WIDTH - contentWidth) / 2;
   const pillWidth = Math.min(BADGE_WIDTH - 2, Math.ceil(contentWidth + handlePadding * 2));
   const pillX = (BADGE_WIDTH - pillWidth) / 2;
-  const labelX = includeXIcon ? contentX + iconSpace : BADGE_WIDTH / 2;
-  const labelAnchor = includeXIcon ? "start" : "middle";
-  const labelY = pillY + pillHeight / 2 + 1;
   const logoY = pillY + (pillHeight - iconSize) / 2;
   const pillRadius = ((pillHeight - 2) / 2) * (handleRounding / 100);
   const border = includeHandleBorder
@@ -168,8 +181,7 @@ export async function buildWatermarkBadgePng(
     : "";
   const pill = includeHandle
     ? `<rect x="${pillX}" y="${pillY + 1}" width="${pillWidth}" height="${pillHeight - 2}" rx="${pillRadius}" fill="#0B0B0F" fill-opacity="0.92"${border}/>
-  ${includeXIcon ? `<svg x="${contentX}" y="${logoY}" width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24"><path d="${X_LOGO_PATH}" fill="#FFFFFF"/></svg>` : ""}
-  <text x="${labelX}" y="${labelY}" text-anchor="${labelAnchor}" dominant-baseline="central" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="0.1" fill="#FFFFFF">${escapeXml(label)}</text>`
+  ${includeXIcon ? `<svg x="${contentX}" y="${logoY}" width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24"><path d="${X_LOGO_PATH}" fill="#FFFFFF"/></svg>` : ""}`
     : "";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${BADGE_WIDTH}" height="${badgeHeight}" viewBox="0 0 ${BADGE_WIDTH} ${badgeHeight}">
   ${tile}
@@ -177,10 +189,16 @@ export async function buildWatermarkBadgePng(
 </svg>`;
 
   const background = await sharp(Buffer.from(svg)).png().toBuffer();
-  if (!qrBuffer) return background;
-
+  const layers: OverlayOptions[] = [];
+  if (qrBuffer) layers.push({ input: qrBuffer, top: TILE_PAD, left: TILE_PAD });
+  if (labelImage) layers.push({
+    input: labelImage.data,
+    left: Math.round(contentX + iconSpace),
+    top: pillY + Math.round((pillHeight - labelImage.info.height) / 2),
+  });
+  if (layers.length === 0) return background;
   return sharp(background)
-    .composite([{ input: qrBuffer, top: TILE_PAD, left: TILE_PAD }])
+    .composite(layers)
     .png()
     .toBuffer();
 }

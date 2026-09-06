@@ -109,6 +109,27 @@ describe("buildWatermarkBadgePng", () => {
     expect(metadata.height).toBe(BADGE_HEIGHT);
   });
 
+  it.each(["someone", "gypq", "ABC"])("centers the visible glyphs of %s", async (handle) => {
+    const badge = await buildWatermarkBadgePng(URL, handle, {
+      includeQr: false,
+      includeXIcon: false,
+      includeHandleBorder: false,
+    });
+    const { data, info } = await sharp(badge).ensureAlpha().raw()
+      .toBuffer({ resolveWithObject: true });
+    const rows: number[] = [];
+    for (let y = 0; y < info.height; y += 1) {
+      for (let x = 0; x < info.width; x += 1) {
+        const offset = (y * info.width + x) * 4;
+        if (data[offset] > 200 && data[offset + 1] > 200
+          && data[offset + 2] > 200 && data[offset + 3] > 200) rows.push(y);
+      }
+    }
+    expect(rows.length).toBeGreaterThan(0);
+    expect(Math.abs((Math.min(...rows) + Math.max(...rows)) / 2 - info.height / 2))
+      .toBeLessThanOrEqual(1);
+  });
+
   it("renders an X icon followed by a plain centered handle", async () => {
     const badge = await buildWatermarkBadgePng(URL, "someone", { includeQr: false });
     const metadata = await sharp(badge).metadata();

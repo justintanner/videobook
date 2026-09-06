@@ -234,7 +234,7 @@ describe("apply_watermark tool", () => {
       "original",
     );
     if (!cardMeta.ok) throw new Error(cardMeta.error.message);
-    expect(cardMeta.value.layout).toBe("handle-v4");
+    expect(cardMeta.value.layout).toBe("handle-v5");
     expect(cardMeta.value.include_qr).toBe(false);
     expect(cardMeta.value.include_x_icon).toBe(true);
     expect(cardMeta.value.include_handle_border).toBe(true);
@@ -407,7 +407,7 @@ describe("apply_watermark tool", () => {
     if (!handleMeta.ok) throw new Error(handleMeta.error.message);
     expect(qrMeta.value.layout).toBe("qr-v1");
     expect(qrMeta.value.include_handle).toBe(false);
-    expect(handleMeta.value.layout).toBe("handle-v4");
+    expect(handleMeta.value.layout).toBe("handle-v5");
     expect(handleMeta.value.include_qr).toBe(false);
     expect(handleMeta.value.include_x_icon).toBe(false);
     expect(handleMeta.value.include_handle_border).toBe(false);
@@ -534,7 +534,7 @@ describe("apply_watermark tool", () => {
       name: "wait_for_asset_ready",
       arguments: { book_id: bookId, asset_id: assetId, timeout_seconds: 120 },
     });
-    expect(readiness.isError).toBeFalsy();
+    expect(readiness.isError, JSON.stringify(readiness)).toBeFalsy();
 
     const jobs = await client.callTool({
       name: "list_jobs",
