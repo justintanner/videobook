@@ -252,6 +252,16 @@ async function verifyNativeRuntime() {
   const imports = locations.map((name) => createRequire(join(appRoot, name)))
   const paths = await Promise.all(imports.map((load) => realpath(load.resolve('sharp'))))
   const dependencyRoot = await realpath(join(appRoot, 'node_modules'))
+  const nativePaths = await Promise.all(imports.map((load) => realpath(load.resolve('@dolthub/doltlite'))))
+  if (new Set(nativePaths).size !== 1 || !nativePaths[0].startsWith(`${dependencyRoot}${sep}`)) {
+    throw new Error(`DoltLite must resolve once inside the isolated application: ${JSON.stringify(nativePaths)}`)
+  }
+  const { DatabaseSync } = imports[0]('@dolthub/doltlite')
+  const native = new DatabaseSync(':memory:')
+  try {
+    if (native.doltVersion() !== 'b3981dc9ed') throw new Error('Installed DoltLite does not match the tested fork')
+  } finally { native.close() }
+  process.stdout.write('clean-install: one DoltLite runtime from tested fork b3981dc9ed\n')
   if (new Set(paths).size !== 1 || !paths[0].startsWith(`${dependencyRoot}${sep}`)) {
     throw new Error(`Sharp must resolve once inside the isolated application: ${JSON.stringify(paths)}`)
   }

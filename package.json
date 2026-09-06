@@ -71,7 +71,7 @@
     "remotion": "^4.0.467",
     "tailwind-merge": "^3.5.0",
     "uuid": "^14.0.0",
-    "videobook-engine": "file:vendor/videobook-engine-5.3.2-c4f1d89.tgz"
+    "videobook-engine": "file:vendor/videobook-engine-5.3.3-039a4c2.tgz"
   },
   "overrides": {
     "adm-zip": "^0.6.0",
@@ -109,15 +109,15 @@
     "vitest": "^4.1.8",
     "wait-on": "^9.0.4",
     "zod": "^4.4.3",
-    "@dolthub/doltlite": "0.50.6"
+    "@dolthub/doltlite": "https://github.com/justintanner/doltlite/releases/download/videobook-node-v0.50.6-videobook.1/dolthub-doltlite-0.50.6-videobook.1.tgz"
   },
   "allowScripts": {
-    "@dolthub/doltlite@0.50.6": true,
+    "https://github.com/justintanner/doltlite/releases/download/videobook-node-v0.50.6-videobook.1/dolthub-doltlite-0.50.6-videobook.1.tgz": true,
     "esbuild": true,
     "ffmpeg-static@5.3.0": true,
     "onnxruntime-node@1.29.0": true,
     "usearch@2.26.0": true,
     "ytdlp-nodejs@3.4.5": true,
-    "videobook-engine": false
+    "file:vendor/videobook-engine-5.3.3-039a4c2.tgz": false
   }
 }
