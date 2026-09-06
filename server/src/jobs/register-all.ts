@@ -138,6 +138,7 @@ import { registerExtendAudioJob } from "./extend-audio.js";
 import { registerRemoveSoundJob } from "./remove-sound.js";
 import { registerRunNotebookJob } from "./run-notebook.js";
 import { registerRelayoutNotebookJob } from "./relayout-notebook.js";
+import { registerRepairSearchIndexesJob } from "./repair-search-indexes.js";
 import { registerSemanticIndexJob } from "./semantic-index.js";
 import { registerPrepareSearchReferenceJob } from "./prepare-search-reference.js";
 import { registerPrepareTemporalSearchJob } from "./prepare-temporal-search.js";
@@ -283,6 +284,7 @@ export function registerAllJobHandlers(
   registerRunNotebookJob(engine);
   registerRelayoutNotebookJob(engine);
   registerSemanticIndexJob(engine);
+  registerRepairSearchIndexesJob(engine);
   registerPrepareSearchReferenceJob(engine);
   registerPrepareTemporalSearchJob(engine);
   registerImageSubjectJobs(engine);

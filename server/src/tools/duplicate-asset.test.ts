@@ -129,6 +129,9 @@ describe("duplicate_asset tool", () => {
       "original",
     );
     expect(copiedMetadata).toMatchObject({ ok: true, value: sourceMetadata });
+    expect(fs.jobs.queue.list({ type: "semantic_index" })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ artifactId: null, payload: expect.objectContaining({ assetId: parsed.new_asset_id, prepareVisualMedia: true }) }),
+    ]));
   });
 
   it("places a notebook duplicate in an explicit destination cell", async () => {

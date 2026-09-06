@@ -33,6 +33,7 @@ import {
   type ImageSubjectSource,
   type SeedreamLayerInput,
 } from "../image-subject-map.js";
+import { enqueueSearchIndex } from "./enqueue-search-index.js";
 import { cropToFill } from "../image.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { registerJobHandler } from "../queue.js";
@@ -1550,6 +1551,7 @@ export function registerImageSubjectJobs(engine: Engine): void {
         });
         if (!updated.ok) throw new Error(updated.error.message);
       }
+      await enqueueSearchIndex(engine, payload.imageAssetId);
       return { success: true, imageAssetId: payload.imageAssetId };
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);

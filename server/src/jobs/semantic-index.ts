@@ -60,6 +60,8 @@ const PHASES: IndexPhase[] = [
 
 type SemanticIndexPayload = {
   type: "semantic_index";
+  prepareVisualMedia?: boolean;
+  visualOnly?: boolean;
   assetId: string;
   bookId: string;
 };
@@ -103,22 +105,32 @@ export async function runSemanticIndex(
       ctx.signal,
       async () => {
         await waitForArtifactIdle(engine, payload.assetId, ctx.signal);
+        if (payload.prepareVisualMedia) {
+          const artifact = engine.artifacts.get(payload.assetId);
+          if (!artifact.ok) throw new Error(artifact.error.message);
+          if (artifact.value.kind === "video" || artifact.value.kind === "final") {
+            const { prepareSearchVideo } = await import("../search-index-media.js");
+            await prepareSearchVideo(engine, payload.assetId, ctx.signal);
+          }
+        }
         try {
           return await withTransientStorageRetry(
             () => indexArtifact(engine, payload.assetId, {
               semanticVisual: true,
+              semanticAudio: !payload.visualOnly,
+              strictVisual: payload.visualOnly,
               signal: ctx.signal,
             }),
             ctx.signal,
           );
         } catch (error) {
-          if (ctx.signal.aborted || isTerminalIndexFailure(error)) throw error;
+          if (ctx.signal.aborted || payload.visualOnly || isTerminalIndexFailure(error)) throw error;
           return deferredSemanticIndex(engine, payload.assetId, error);
         }
       },
     );
   } catch (error) {
-    if (ctx.signal.aborted || isTerminalIndexFailure(error)) throw error;
+    if (ctx.signal.aborted || payload.visualOnly || isTerminalIndexFailure(error)) throw error;
     return deferredSemanticIndex(engine, payload.assetId, error);
   }
 }
@@ -211,7 +223,7 @@ async function deferredSemanticIndex(
   };
 }
 
-type IndexArtifactOptions = { semanticVisual?: boolean; signal?: AbortSignal };
+type IndexArtifactOptions = { strictVisual?: boolean; semanticVisual?: boolean; semanticAudio?: boolean; signal?: AbortSignal };
 
 export function indexArtifact(
   engine: Engine,
@@ -239,7 +251,8 @@ async function indexLocalArtifact(
   const streamsResult = engine.streams.list(artifactId);
   if (!streamsResult.ok) throw new Error(streamsResult.error.message);
   const files = filesResult.value.files;
-  const streams = streamsResult.value;
+  const streams = streamsResult.value.filter((stream) =>
+    files.some((file) => file.name === stream.sourcePath && file.objectHash === stream.objectHash));
   const source = primarySource(files, streams);
   if (!source) throw new Error(`No indexable source found for ${artifactId}`);
   const observations = await buildObservations(
@@ -294,7 +307,7 @@ async function indexLocalArtifact(
       );
       semanticVisual = "ready";
     } catch (error) {
-      if (options.signal?.aborted || isTerminalIndexFailure(error)) throw error;
+      if (options.strictVisual || options.signal?.aborted || isTerminalIndexFailure(error)) throw error;
       await appendDiagnostic(engine, "semantic-index-deferred", {
         artifactId,
         modality: "visual",
@@ -302,7 +315,7 @@ async function indexLocalArtifact(
       }).catch(() => undefined);
     }
   }
-  if (options.semanticVisual && semanticAudio !== "not-applicable") {
+  if (options.semanticVisual && options.semanticAudio !== false && semanticAudio !== "not-applicable") {
     try {
       await indexClapArtifact(
         engine,

@@ -11,6 +11,8 @@ import type {
 import type { BookManager, ManagedBook } from "./book-manager.js";
 import { registerLocalClipSearchProvider } from "./local-search-models.js";
 import { enqueueTemporalSearchPreparation } from "./jobs/prepare-temporal-search.js";
+import { enqueueSearchIndex } from "./jobs/enqueue-search-index.js";
+import { missingVisualIndexes } from "./search-index-coverage.js";
 import { markDescendantsStale } from "./notebook-action-catalog.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { searchReferenceStore } from "./search-reference-store.js";
@@ -29,6 +31,7 @@ interface LibraryAsset extends ProjectAsset {
 }
 
 interface LibraryAssetSearchResult {
+  unindexed_visual_assets: number;
   preparationJobs: Array<{ bookId: string; jobId: number }>;
   assets: LibraryAsset[];
   page: {
@@ -302,7 +305,7 @@ export async function searchLibraryAssets(
           searchError = result.error.message;
         }
       }
-      return { assets, hits, searchError, preparationJob };
+      return { assets, hits, searchError, preparationJob, unindexed: missingVisualIndexes(engine, assets).length };
     }),
   );
   const errors: LibraryAssetSearchResult["books_with_errors"] = [];
@@ -409,6 +412,8 @@ export async function searchLibraryAssets(
   const page = ranked.slice(offset, offset + limit);
   return {
     assets: page,
+    unindexed_visual_assets: results.reduce((count, result) =>
+      count + (result.status === "fulfilled" ? result.value.unindexed : 0), 0),
     preparationJobs: results.flatMap((result) =>
       result.status === "fulfilled" && result.value.preparationJob
         ? [result.value.preparationJob]
@@ -613,6 +618,7 @@ export async function copyLibraryAsset(
     ) {
       throw new Error("Could not complete the copied Library artifact");
     }
+    await enqueueSearchIndex(targetBook.engine, targetArtifact.artifactId);
     return {
       sourceBookId: sourceBook.bookId,
       sourceArtifactId: sourceArtifact.artifactId,

@@ -13,6 +13,7 @@ import {
 } from "videobook-engine/notebook-grid";
 import { NOTEBOOK_GRID_ADDRESS_SOURCE } from "videobook-engine/notebook-mentions";
 import { z } from "zod";
+import { enqueueSearchIndex } from "../jobs/enqueue-search-index.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { sourceCellForPostedArtifact } from "../notebook-published-post.js";
 import type { ToolDef } from "./tool-def.js";
@@ -218,6 +219,7 @@ export function duplicateAssetDef(engine: Engine): ToolDef {
         }
       }
 
+      await enqueueSearchIndex(engine, newAssetId);
       const createdCell = placement.cell;
       const address = createdCell ? notebookGridTag(createdCell.slot) : null;
 

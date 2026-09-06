@@ -1200,6 +1200,10 @@ describe("image subject tools", () => {
     };
     await waitForJob(parsed.job_id, 30_000);
 
+    expect(engine.jobs.queue.list({ type: "semantic_index" })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ artifactId: null, payload: expect.objectContaining({ assetId: parsed.output_artifact_id, prepareVisualMedia: true }) }),
+    ]));
+
     const outputRead = await engine.files.read(parsed.output_artifact_id, "original.png");
     expect(outputRead.ok).toBe(true);
     if (!outputRead.ok) return;

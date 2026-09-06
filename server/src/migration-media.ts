@@ -34,10 +34,11 @@ export async function prepareMigrationStreams(engine: Engine, signal?: AbortSign
 export async function prepareMigrationFrames(engine: Engine, artifactId: string, signal?: AbortSignal): Promise<void> {
   const streams = engine.streams.list(artifactId);
   if (!streams.ok) throw new Error(streams.error.message);
-  const video = streams.value.find((stream) => stream.kind === "video");
-  if (!video) return;
   const manifest = await engine.files.manifest(artifactId);
   if (!manifest.ok) throw Object.assign(new Error(manifest.error.message), { name: manifest.error.code, error: manifest.error });
+  const video = streams.value.find((stream) => stream.kind === "video"
+    && manifest.value.files.some((file) => file.name === stream.sourcePath && file.objectHash === stream.objectHash));
+  if (!video) return;
   const marker = await engine.metadata.artifacts.read<{ objectHash: string; frames: string[] }>(artifactId, "migrationFrames");
   if (!marker.ok && marker.error.code !== "NOT_FOUND") throw new Error(marker.error.message);
   if (marker.ok && marker.value.objectHash !== video.objectHash) throw new Error("Migrated video changed before its frames were prepared");

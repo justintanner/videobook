@@ -375,6 +375,9 @@ describe('media Library slots', () => {
       cellId: media.id,
       expectedOutputArtifactId: null,
     })
+    expect(targetBook.value.engine.jobs.queue.list({ type: 'semantic_index' })).toEqual([
+      expect.objectContaining({ artifactId: null, payload: expect.objectContaining({ assetId: copied.targetArtifactId, prepareVisualMedia: true }) }),
+    ])
     const targetArtifact = targetBook.value.engine.artifacts.get(
       copied.targetArtifactId,
     )

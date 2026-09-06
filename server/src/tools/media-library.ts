@@ -33,6 +33,24 @@ function failure(cause: unknown): ToolResult {
 export function mediaLibraryDefs(books: BookManager): ToolDef[] {
   return [
     {
+      name: "repair_library_search_indexes",
+      description: "Index ready visual media that is missing Similar-search coverage across books",
+      scope: "global",
+      schema: { kinds: z.array(z.enum(["image", "video"])).min(1).optional() },
+      handler: async (args) => {
+        await books.ready();
+        const kinds = [...new Set((args.kinds as string[] | undefined) ?? ["image", "video"])].sort();
+        const summaries = books.list();
+        const jobs = await Promise.all(summaries.map(async (book) => {
+          const job = await queue.enqueue(`repair-search:${book.bookId}:${kinds.join(",")}`, {
+            type: "repair_search_indexes", bookId: book.bookId, kinds,
+          });
+          return { bookId: book.bookId, jobId: job.id };
+        }));
+        return json({ jobs });
+      },
+    },
+    {
       name: "prepare_search_reference",
       description: "Prepare an existing image or video asset for temporary reverse search",
       scope: "global",

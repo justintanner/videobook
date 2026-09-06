@@ -267,6 +267,7 @@ import {
   type SearchReferenceMode,
 } from '@/videobook/search-reference-lifecycle'
 import { searchWithPreparation } from '@/videobook/search-preparation'
+import { repairSearchIndexes } from '@/videobook/search-index-repair'
 import { useSearchReferenceLifecycle } from '@/videobook/useSearchReferenceLifecycle'
 import {
   pathForScreen,
@@ -564,12 +565,14 @@ type LibrarySearchPage = {
 }
 
 type LibrarySearchResult = {
+  unindexedVisualAssets: number
   assets: LibraryAssetRecord[]
   page: LibrarySearchPage
   booksWithErrors: Array<{ bookId: string; message: string }>
 }
 
 type MediaLibraryPickerState = {
+  unindexedVisualAssets: number
   preparingIndex: boolean
   cellId: string
   query: string
@@ -1453,6 +1456,7 @@ function asLibrarySearchResult(value: unknown): LibrarySearchResult {
     ? container.books_with_errors
     : []
   return {
+    unindexedVisualAssets: Math.max(0, asNumber(container?.unindexed_visual_assets) ?? 0),
     assets: source.flatMap((entry) => {
       const item = recordValue(entry)
       const asset = asAsset(item)
@@ -2445,6 +2449,7 @@ function MediaLibraryDialog({
   onReferenceStart,
   onReferenceDuration,
   onSimilar,
+  onRepairIndexes,
 }: {
   state: MediaLibraryDialogState
   kind: PassiveMediaKind
@@ -2460,6 +2465,7 @@ function MediaLibraryDialog({
   onReferenceStart: (value: string) => void
   onReferenceDuration: (value: string) => void
   onSimilar: (asset: LibraryAssetRecord) => void
+  onRepairIndexes: () => void
 }) {
   const dialogRef = useRef<HTMLElement | null>(null)
   const busy = state.activeArtifactId !== null || state.preparingReference
@@ -2589,6 +2595,15 @@ function MediaLibraryDialog({
         </div>
         <div className="media-library-results" aria-busy={state.loading || state.loadingMore}>
           {state.error && <p className="media-library-error" role="alert">{state.error}</p>}
+          {state.unindexedVisualAssets > 0 && (
+            <div className="media-library-warning" role="status">
+              {state.unindexedVisualAssets} media {state.unindexedVisualAssets === 1 ? 'asset is' : 'assets are'} missing from Similar search.
+              {' '}
+              <button type="button" disabled={busy || state.loading || state.preparingIndex} onClick={onRepairIndexes}>
+                {state.preparingIndex ? 'Indexing…' : 'Index missing media'}
+              </button>
+            </div>
+          )}
           {state.booksWithErrors.length > 0 && (
             <p className="media-library-warning" role="status">
               {state.booksWithErrors.length} book
@@ -6484,6 +6499,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           assets: [...unique.values()],
           page: result.page,
           booksWithErrors: result.booksWithErrors,
+          unindexedVisualAssets: result.unindexedVisualAssets,
           loading: false,
           loadingMore: false,
         }
@@ -6520,6 +6536,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     mediaLibraryReference.lifecycle.close()
     setMediaSlotOperation(cellId, null)
     setMediaLibraryPicker({
+      unindexedVisualAssets: 0,
       preparingIndex: false,
       cellId,
       query: '',
@@ -10742,6 +10759,38 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     mediaLibraryReference.lifecycle.clearReference()
     setMediaLibraryPicker((current) => current ? { ...current, error: null, loading: false, loadingMore: false, preparingIndex: false } : current)
   }
+  const repairMediaLibraryIndexes = async () => {
+    if (!mediaLibraryPicker || !mediaLibraryKind || mediaLibraryKind === 'audio') return
+    const picker = mediaLibraryPicker
+    const requestId = ++mediaLibraryRequestRef.current
+    setMediaLibraryPicker((current) => current ? { ...current, preparingIndex: true, error: null } : current)
+    try {
+      const result = await repairSearchIndexes({
+        start: () => call('repair_library_search_indexes', { kinds: [mediaLibraryKind] }),
+        listJobs: (bookId, jobIds) => call('list_jobs', { book_id: bookId, job_ids: jobIds }),
+        isCancelled: () => mediaLibraryRequestRef.current !== requestId,
+      })
+      if (mediaLibraryRequestRef.current !== requestId) return
+      const reloadId = mediaLibraryRequestRef.current + 1
+      await loadMediaLibrary(picker.cellId, picker.query, 0, false)
+      if (mediaLibraryRequestRef.current !== reloadId) return
+      const failed = asNumber(result?.failed) ?? 0
+      if (failed > 0) {
+        const failures = Array.isArray(result?.failures) ? result.failures : []
+        const detail = asString(recordValue(failures[0])?.message)
+        const message = `Some media could not be indexed.${detail ? ` ${detail}` : ''}`
+        setMediaLibraryPicker((current) => current ? { ...current, error: message } : current)
+        setNotice(message, 'error')
+      } else {
+        setNotice(`Indexed ${asNumber(result?.indexed) ?? 0} media assets for Similar search`)
+      }
+    } catch (error) {
+      if (mediaLibraryRequestRef.current !== requestId) return
+      const message = error instanceof Error ? error.message : String(error)
+      setMediaLibraryPicker((current) => current ? { ...current, preparingIndex: false, error: message } : current)
+      setNotice(message, 'error')
+    }
+  }
   const searchMediaLibrary = () => {
     if (!mediaLibraryPicker) return
     mediaLibraryReference.lifecycle.clearError()
@@ -12845,6 +12894,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onReferenceStart={mediaLibraryReference.lifecycle.setStartSeconds}
           onReferenceDuration={mediaLibraryReference.lifecycle.setDurationSeconds}
           onSimilar={(asset) => void prepareMediaLibrarySimilar(asset)}
+          onRepairIndexes={() => void repairMediaLibraryIndexes()}
         />
       )}
 

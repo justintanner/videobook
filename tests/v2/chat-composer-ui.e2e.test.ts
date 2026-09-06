@@ -2672,6 +2672,46 @@ describe('chat composer browser flow', () => {
     await history.waitFor({ state: 'hidden' })
   }, 60_000)
 
+  it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === '1')('repairs missing Similar coverage through the Library dialog and finds the source', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    const client = new Client({ name: 'search-repair-ui', version: '1.0.0' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'],
+      versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    let assetId = ''
+    try {
+      const uploaded = record(resultValue(await client.callTool({ name: 'upload_file', arguments: {
+        book_id: bookId, filename: 'repair-ui.png',
+        data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgYPgPAAEDAQBdlO9aAAAAAElFTkSuQmCC',
+      } })))
+      assetId = String(uploaded?.assetId)
+    } finally { await client.close() }
+    await openApp()
+    const target = notebookCellNode(page, imageCellId)
+    await target.waitFor({ state: 'visible' })
+    await target.click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Choose media' }).click()
+    const library = page.getByRole('dialog', { name: 'Choose image media' })
+    await library.waitFor({ state: 'visible' })
+    const repair = library.getByRole('button', { name: 'Index missing media' })
+    await repair.waitFor({ state: 'visible', timeout: 30_000 })
+    const before = observedCalls.length
+    await repair.click()
+    await expect.poll(async () => observedCalls.slice(before).some((call) => call.name === 'repair_library_search_indexes'), { timeout: 30_000 }).toBe(true)
+    await library.locator('.media-library-warning').filter({ hasText: 'missing from Similar search' }).waitFor({ state: 'hidden', timeout: 60_000 })
+    expect(observedCalls.slice(before).some((call) => call.name === 'list_jobs')).toBe(true)
+    const source = library.locator('.media-library-asset').filter({ hasText: assetId })
+    await source.getByRole('button', { name: 'Similar', exact: true }).click()
+    await expect.poll(async () => observedCalls.slice(before).some((call) => call.name === 'prepare_search_reference'), { timeout: 30_000 }).toBe(true)
+    await expect.poll(async () => observedCalls.slice(before).some((call) => call.name === 'search_library_assets' && typeof call.arguments.reference_id === 'string'), { timeout: 30_000 }).toBe(true)
+    await expect.poll(async () => await library.locator('.media-library-results').getAttribute('aria-busy'), { timeout: 60_000 }).toBe('false')
+    expect(await library.locator('.media-library-asset').count()).toBeGreaterThan(0)
+    expect(await library.locator('.media-library-asset').first().textContent()).toContain(assetId)
+    if (process.env.VIDEOBOOK_E2E_SCREENSHOT) await page.screenshot({ path: process.env.VIDEOBOOK_E2E_SCREENSHOT, fullPage: true })
+    await page.getByLabel('Close media library').click()
+  })
+
   it('opens a complete context menu from every cell tile with delete last', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()
