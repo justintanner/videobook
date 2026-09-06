@@ -45,6 +45,12 @@ const MANIFEST: IndexManifest = {
 
 const GENERATION = "videobook-progressive-local-v1";
 const DEEP_BATCH_SIZE = 4;
+/**
+ * VE-NFR-003: searchable coverage is committed at least once per 60 seconds
+ * of analyzed source media. Deep model batches stop early when adding the
+ * next unit would cover more than this much source time.
+ */
+export const MAX_BATCH_SOURCE_SECONDS = 60;
 const ARTIFACT_IDLE_POLL_MS = 250;
 const semanticIndexTails = new Map<string, Promise<void>>();
 const PHASES: IndexPhase[] = [
@@ -385,6 +391,7 @@ async function indexClipArtifact(
       generation: LOCAL_CLIP_MANIFEST.manifestId,
       phase: "visual",
       totalUnits,
+      ...(video ? { unitSourceSeconds: frameSourceSeconds(frames, video) } : {}),
       signal,
     },
     async (start, end) => {
@@ -455,6 +462,10 @@ async function indexClapArtifact(
       generation: LOCAL_CLAP_MANIFEST.manifestId,
       phase: "audio",
       totalUnits,
+      unitSourceSeconds: (start, end) => ticksToSeconds(
+        Math.min(end * windowTicks, stream.durationTicks) - start * windowTicks,
+        stream,
+      ),
       signal,
     },
     (start, end) => clapAudioObservationBatch(
@@ -597,8 +608,42 @@ type DeepBatchOptions = {
   generation: string;
   phase: "visual" | "audio";
   totalUnits: number;
+  /**
+   * Source seconds covered by units [start, end). When present, each batch
+   * stops before covering more than MAX_BATCH_SOURCE_SECONDS; a single unit
+   * is always committed on its own even when it alone spans more.
+   */
+  unitSourceSeconds?: (start: number, end: number) => number;
   signal?: AbortSignal;
 };
+
+export function deepBatchEnd(start: number, options: DeepBatchOptions): number {
+  const limit = Math.min(options.totalUnits, start + DEEP_BATCH_SIZE);
+  let end = Math.min(limit, start + 1);
+  while (end < limit) {
+    const covered = options.unitSourceSeconds?.(start, end + 1) ?? 0;
+    if (Number.isFinite(covered) && covered > MAX_BATCH_SOURCE_SECONDS) break;
+    end += 1;
+  }
+  return end;
+}
+
+function frameSourceSeconds(
+  frames: string[],
+  stream: ArtifactStream,
+): (start: number, end: number) => number {
+  const seconds = frames.map((name) => Number.parseFloat(name));
+  const durationSeconds = ticksToSeconds(stream.durationTicks, stream);
+  return (start, end) => {
+    const from = seconds[start];
+    const to = end < seconds.length ? seconds[end] : durationSeconds;
+    return from === undefined || to === undefined ? 0 : to - from;
+  };
+}
+
+function ticksToSeconds(ticks: number, stream: ArtifactStream): number {
+  return ticks * stream.timeBase.numerator / stream.timeBase.denominator;
+}
 
 export async function commitDeepBatches(
   engine: Engine,
@@ -638,7 +683,7 @@ export async function commitDeepBatches(
   }
   while (start < options.totalUnits) {
     options.signal?.throwIfAborted();
-    const end = Math.min(options.totalUnits, start + DEEP_BATCH_SIZE);
+    const end = deepBatchEnd(start, options);
     const observations = await build(start, end);
     options.signal?.throwIfAborted();
     coveredRanges = [
