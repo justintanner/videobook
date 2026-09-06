@@ -72,6 +72,28 @@ describe('search benchmark corpus contract', () => {
     expect(validateSearchBenchmarkCorpus(validCorpus())).toEqual([])
   })
 
+  it.each([undefined, 'unverified', 'pending'])('rejects rights status %s even when an attestor is present', (status) => {
+    const corpus = validCorpus()
+    Object.assign(corpus.rights, { status })
+    expect(validateSearchBenchmarkCorpus(corpus)).toContain('corpus rights must be verified')
+  })
+
+  it.each(['durationHours', 'artifactCount', 'hardNegativeCount', 'multilingualRobustnessCaseCount'])(
+    'rejects malformed %s instead of allowing JavaScript comparison coercion', (field) => {
+      for (const value of [undefined, null, '1000', Number.NaN, Number.POSITIVE_INFINITY]) {
+        const corpus = Object.assign(validCorpus(), { [field]: value })
+        expect(validateSearchBenchmarkCorpus(corpus), `${field}=${String(value)}`).not.toEqual([])
+      }
+    },
+  )
+
+  it.each(['artifactCount', 'hardNegativeCount', 'multilingualRobustnessCaseCount'])(
+    'rejects a fractional %s', (field) => {
+      const corpus = Object.assign(validCorpus(), { [field]: 1000.5 })
+      expect(validateSearchBenchmarkCorpus(corpus)).not.toEqual([])
+    },
+  )
+
   it('rejects an undersized corpus and artifact-only judgments', () => {
     const corpus = validCorpus()
     corpus.durationHours = 1

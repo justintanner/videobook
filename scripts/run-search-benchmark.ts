@@ -33,7 +33,7 @@ type BenchmarkEnvelope = {
   }
   book: {
     bookId: string
-    slug: string
+    name: string
     revision: string
   }
   index: {
@@ -64,8 +64,8 @@ async function main(): Promise<void> {
     rootDir: bookRoot,
     initialBookName: 'benchmark',
   })
-  await engine.ready
   try {
+    await engine.ready
     registerLocalClipSearchProvider(engine)
     registerLocalClapSearchProvider(engine, FFMPEG)
     const manifests = engine.temporalSearch.manifests.list()
@@ -100,7 +100,7 @@ async function main(): Promise<void> {
       },
       book: {
         bookId: engine.book.get().bookId,
-        slug: engine.book.get().slug,
+        name: engine.book.get().name,
         revision: engine.head,
       },
       index: {

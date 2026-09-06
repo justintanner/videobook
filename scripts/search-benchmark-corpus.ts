@@ -124,13 +124,18 @@ export function validateSearchBenchmarkCorpus(
   if (!digestPattern.test(corpus.judgmentsDigest)) {
     failures.push('judgmentsDigest must be a sha256 digest')
   }
+  if (corpus.rights.status !== 'verified') {
+    failures.push('corpus rights must be verified')
+  }
   if (!corpus.rights.attestedBy.trim() || !isIsoDate(corpus.rights.attestedAt)) {
     failures.push('rights verification requires an attestor and ISO timestamp')
   }
-  if (corpus.durationHours < SEARCH_BENCHMARK_MINIMUMS.durationHours) {
+  if (!Number.isFinite(corpus.durationHours)
+    || corpus.durationHours < SEARCH_BENCHMARK_MINIMUMS.durationHours) {
     failures.push('corpus must contain at least 50 hours')
   }
-  if (corpus.artifactCount < SEARCH_BENCHMARK_MINIMUMS.artifactCount) {
+  if (!Number.isSafeInteger(corpus.artifactCount)
+    || corpus.artifactCount < SEARCH_BENCHMARK_MINIMUMS.artifactCount) {
     failures.push('corpus must contain at least 1000 artifacts')
   }
   for (const mediaClass of SEARCH_BENCHMARK_MINIMUMS.requiredMediaClasses) {
@@ -138,11 +143,13 @@ export function validateSearchBenchmarkCorpus(
       failures.push(`missing media class: ${mediaClass}`)
     }
   }
-  if (corpus.hardNegativeCount < SEARCH_BENCHMARK_MINIMUMS.hardNegativeCount) {
+  if (!Number.isSafeInteger(corpus.hardNegativeCount)
+    || corpus.hardNegativeCount < SEARCH_BENCHMARK_MINIMUMS.hardNegativeCount) {
     failures.push('corpus must include hard negatives')
   }
   if (
-    corpus.multilingualRobustnessCaseCount
+    !Number.isSafeInteger(corpus.multilingualRobustnessCaseCount)
+    || corpus.multilingualRobustnessCaseCount
     < SEARCH_BENCHMARK_MINIMUMS.multilingualRobustnessCaseCount
   ) {
     failures.push('corpus must include a multilingual robustness subset')
