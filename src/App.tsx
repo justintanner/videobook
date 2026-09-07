@@ -73,6 +73,14 @@ import type {
   TimedSequenceClip,
 } from 'videobook-engine'
 import { parseAssetTags, type AssetTags } from './videobook/asset-tags'
+import {
+  sameTagFilter,
+  tagFilterArgs,
+  toggleTagFilter,
+  type TagFilterTerm,
+  type TagSuggestion,
+} from './videobook/asset-tag-editing'
+import { AssetTagSummary } from '@/components/videobook/AssetTagSummary'
 import { SCHEMA_VERSION } from 'videobook-engine/catalog-metadata'
 import enginePackage from 'videobook-engine/package.json'
 import {
@@ -587,6 +595,9 @@ type MediaLibraryPickerState = {
   loadingMore: boolean
   error: string | null
   activeArtifactId: string | null
+  /** Exact tag terms narrowing this search; changing them resets paging. */
+  tagFilters: TagFilterTerm[]
+  tagSuggestions: TagSuggestion[]
 }
 
 type MediaLibraryDialogState = MediaLibraryPickerState & {
@@ -2454,6 +2465,9 @@ function MediaLibraryDialog({
   onReferenceDuration,
   onSimilar,
   onRepairIndexes,
+  onToggleTagFilter,
+  onClearTagFilters,
+  onTagQuery,
 }: {
   state: MediaLibraryDialogState
   kind: PassiveMediaKind
@@ -2470,6 +2484,9 @@ function MediaLibraryDialog({
   onReferenceDuration: (value: string) => void
   onSimilar: (asset: LibraryAssetRecord) => void
   onRepairIndexes: () => void
+  onToggleTagFilter: (term: TagFilterTerm) => void
+  onClearTagFilters: () => void
+  onTagQuery: (prefix: string) => void
 }) {
   const dialogRef = useRef<HTMLElement | null>(null)
   const busy = state.activeArtifactId !== null || state.preparingReference
@@ -2597,6 +2614,65 @@ function MediaLibraryDialog({
             </button>
           )}
         </div>
+        <div className="media-library-tag-filters">
+          <label className="media-library-tag-input-label">
+            <span className="sr-only">Filter by tag</span>
+            <input
+              className="media-library-tag-input"
+              list="media-library-tag-suggestions"
+              placeholder="Filter by tag"
+              aria-label="Filter by tag"
+              autoComplete="off"
+              onChange={(event) => onTagQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return
+                event.preventDefault()
+                const typed = event.currentTarget.value.trim()
+                if (!typed) return
+                const match = state.tagSuggestions.find((suggestion) =>
+                  suggestion.label.toLowerCase() === typed.toLowerCase())
+                if (!match) return
+                onToggleTagFilter({
+                  facet: match.facet,
+                  key: match.key,
+                  label: match.label,
+                })
+                event.currentTarget.value = ''
+              }}
+            />
+          </label>
+          <datalist id="media-library-tag-suggestions">
+            {state.tagSuggestions.map((suggestion) => (
+              <option
+                key={`${suggestion.facet}/${suggestion.key}`}
+                value={suggestion.label}
+              >
+                {`${suggestion.facet} · ${suggestion.assets}`}
+              </option>
+            ))}
+          </datalist>
+          {state.tagFilters.map((term) => (
+            <button
+              type="button"
+              key={`${term.facet}/${term.key}`}
+              className="media-library-tag-filter"
+              aria-label={`Remove tag filter ${term.label}`}
+              onClick={() => onToggleTagFilter(term)}
+            >
+              {term.label}
+              <X size={11} />
+            </button>
+          ))}
+          {state.tagFilters.length > 0 && (
+            <button
+              type="button"
+              className="media-library-tag-clear"
+              onClick={onClearTagFilters}
+            >
+              Clear tags
+            </button>
+          )}
+        </div>
         <div className="media-library-results" aria-busy={state.loading || state.loadingMore}>
           {state.error && <p className="media-library-error" role="alert">{state.error}</p>}
           {state.unindexedVisualAssets > 0 && (
@@ -2622,7 +2698,11 @@ function MediaLibraryDialog({
             <div className="media-library-empty">
               <Library size={24} />
               <strong>No compatible media found</strong>
-              <span>Try another search or upload a file directly into the slot.</span>
+              <span>
+                {state.tagFilters.length > 0
+                  ? 'No media carries every selected tag. Clear a tag or try another search.'
+                  : 'Try another search or upload a file directly into the slot.'}
+              </span>
             </div>
           ) : (
             <div className="media-library-grid">
@@ -2634,6 +2714,11 @@ function MediaLibraryDialog({
                     className="media-library-asset"
                   >
                     <MediaLibraryAssetPreview asset={asset} />
+                    <AssetTagSummary
+                      tags={asset.tags}
+                      onFilter={onToggleTagFilter}
+                      activeTerms={state.tagFilters}
+                    />
                     <span className="media-library-asset-copy">
                       <strong>@{asset.id}</strong>
                       <small>
@@ -6413,6 +6498,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     offset: number,
     append: boolean,
     criteria?: MediaLibrarySearchCriteria,
+    tagFilters?: readonly TagFilterTerm[],
   ) => {
     const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
     const kind = cell && passiveMediaKind(cell.type)
@@ -6426,6 +6512,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             referenceStartSeconds: '0',
             referenceDurationSeconds: '',
           })
+    // Terms come in with the call rather than being read from state: a chip
+    // click sets state and searches in the same tick, and state has not
+    // updated yet.
+    const activeTagFilters = tagFilters
+      ?? (mediaLibraryPicker?.cellId === cellId
+        ? mediaLibraryPicker.tagFilters
+        : [])
     const requestId = mediaLibraryRequestRef.current + 1
     mediaLibraryRequestRef.current = requestId
     setMediaLibraryPicker((current) => {
@@ -6433,6 +6526,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return {
         ...current,
         query,
+        tagFilters: [...activeTagFilters],
         assets: append ? current.assets : [],
         page: append ? current.page : emptyLibraryPage,
         booksWithErrors: append ? current.booksWithErrors : [],
@@ -6473,6 +6567,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             ? { reference_range: referenceRange }
             : {}),
           kinds: [kind],
+          ...tagFilterArgs(activeTagFilters),
           limit: emptyLibraryPage.limit,
           offset,
         }),
@@ -6552,6 +6647,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       loadingMore: false,
       error: null,
       activeArtifactId: null,
+      tagFilters: [],
+      tagSuggestions: [],
     })
     void loadMediaLibrary(cellId, '', 0, false, {
       mode: 'text',
@@ -10815,6 +10912,69 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     )
   }
 
+  /**
+   * Applying or lifting a tag term re-runs the search from the first page:
+   * an offset into the previous result set means nothing once the filter that
+   * produced it has changed.
+   */
+  const toggleMediaLibraryTagFilter = (term: TagFilterTerm) => {
+    if (!mediaLibraryPicker) return
+    const next = toggleTagFilter(mediaLibraryPicker.tagFilters, term)
+    if (sameTagFilter(next, mediaLibraryPicker.tagFilters)) return
+    void loadMediaLibrary(
+      mediaLibraryPicker.cellId,
+      mediaLibraryPicker.query,
+      0,
+      false,
+      undefined,
+      next,
+    )
+  }
+
+  const clearMediaLibraryTagFilters = () => {
+    if (!mediaLibraryPicker || mediaLibraryPicker.tagFilters.length === 0) return
+    void loadMediaLibrary(
+      mediaLibraryPicker.cellId,
+      mediaLibraryPicker.query,
+      0,
+      false,
+      undefined,
+      [],
+    )
+  }
+
+  const loadMediaLibraryTagSuggestions = async (prefix: string) => {
+    if (!mediaLibraryPicker || mcp.state !== 'ready') return
+    const cellId = mediaLibraryPicker.cellId
+    try {
+      const response = await call('suggest_asset_tags', {
+        book_id: bookId,
+        ...(prefix.trim() ? { prefix: prefix.trim() } : {}),
+        limit: 20,
+      }, { background: true }) as { suggestions?: unknown }
+      const suggestions = Array.isArray(response?.suggestions)
+        ? response.suggestions.flatMap((entry) => {
+            const row = entry as Record<string, unknown>
+            return typeof row.facet === 'string'
+              && typeof row.key === 'string'
+              && typeof row.label === 'string'
+              ? [{
+                  facet: row.facet as TagFilterTerm['facet'],
+                  key: row.key,
+                  label: row.label,
+                  assets: Number(row.assets) || 0,
+                }]
+              : []
+          })
+        : []
+      setMediaLibraryPicker((current) => current && current.cellId === cellId
+        ? { ...current, tagSuggestions: suggestions }
+        : current)
+    } catch {
+      // Autocomplete never blocks a search someone can still type by hand.
+    }
+  }
+
   const openCellInspector = (cellId: string) => {
     selectCanvasCell(cellId)
     setSourceViewCellId(null)
@@ -12022,6 +12182,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   <NotebookCellInspector
                     key={`${selectedNotebookCell.id}:${selectedNotebookCell.prompt ?? ''}`}
                     notebookId={notebook?.id ?? ''}
+                    bookId={bookId}
+                    tagTools={mcp.state === 'ready' ? call : undefined}
                     cell={selectedNotebookCell}
                     cells={notebook?.cells ?? []}
                     edges={notebook?.edges ?? []}
@@ -12192,6 +12354,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           {asset.type.toUpperCase()} · {asset.status}
                         </span>
                       </div>
+                      <AssetTagSummary tags={asset.tags} />
                       <div className="asset-card-body">
                         <div className="asset-card-text">
                           <strong>{asset.id}</strong>
@@ -12900,6 +13063,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onReferenceDuration={mediaLibraryReference.lifecycle.setDurationSeconds}
           onSimilar={(asset) => void prepareMediaLibrarySimilar(asset)}
           onRepairIndexes={() => void repairMediaLibraryIndexes()}
+          onToggleTagFilter={toggleMediaLibraryTagFilter}
+          onClearTagFilters={clearMediaLibraryTagFilters}
+          onTagQuery={(prefix) => void loadMediaLibraryTagSuggestions(prefix)}
         />
       )}
 

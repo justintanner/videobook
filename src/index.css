@@ -11499,3 +11499,240 @@ textarea:focus-visible {
 .inspector-payload-mention.placeholder code {
   color: #b9e8cc;
 }
+
+/* Screen-reader-only text: present in the accessibility tree, invisible on
+   screen. Used for labels a sighted user reads from context. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.asset-tag-editor {
+  display: grid;
+  gap: 6px;
+  padding: 10px 11px 12px;
+  border: 1px solid var(--line);
+  background: rgba(4, 18, 11, 0.72);
+}
+
+.asset-tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.asset-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 6px;
+  border: 1px solid var(--line);
+  font-size: 10px;
+  line-height: 1.5;
+  color: #cfe6d9;
+  background: rgba(9, 32, 20, 0.7);
+}
+
+/* Origin is a visible affordance, not a hidden detail: a dotted edge marks a
+   tag analysis proposed, a solid one a tag someone chose. */
+.asset-tag-chip-automatic {
+  border-style: dashed;
+  color: #9dc4ae;
+}
+
+.asset-tag-chip-dismissed {
+  color: #7d8f85;
+  border-color: rgba(125, 143, 133, 0.4);
+  background: transparent;
+}
+
+.asset-tag-chip-facet {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6f8f7d;
+}
+
+.asset-tag-chip-remove,
+.asset-tag-chip-restore {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  min-height: 16px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.asset-tag-chip-remove:hover,
+.asset-tag-chip-restore:hover,
+.asset-tag-chip-remove:focus-visible,
+.asset-tag-chip-restore:focus-visible {
+  color: #f0f7f3;
+}
+
+.asset-tag-empty {
+  font-size: 10px;
+  color: #6f8f7d;
+}
+
+.asset-tag-input-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.asset-tag-facet,
+.asset-tag-input {
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  color: #cfe6d9;
+  background: rgba(4, 18, 11, 0.9);
+  font-size: 10px;
+}
+
+.asset-tag-input {
+  flex: 1 1 120px;
+  min-width: 96px;
+}
+
+.asset-tag-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 1px solid var(--line);
+  color: #cfe6d9;
+  background: transparent;
+  cursor: pointer;
+}
+
+.asset-tag-add:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.asset-tag-dismissed {
+  display: grid;
+  gap: 3px;
+}
+
+.asset-tag-dismissed-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6f8f7d;
+}
+
+.asset-tag-error {
+  margin: 0;
+  font-size: 10px;
+  color: #d29b9b;
+}
+
+.asset-tag-retry {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.asset-tag-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 0 6px 4px;
+}
+
+.asset-tag-summary-chip {
+  padding: 1px 5px;
+  border: 1px solid rgba(110, 143, 125, 0.35);
+  font-size: 9px;
+  line-height: 1.5;
+  color: #9dc4ae;
+  background: transparent;
+}
+
+.asset-tag-summary-chip-action {
+  cursor: pointer;
+}
+
+.asset-tag-summary-chip-action[aria-pressed='true'] {
+  color: #04120b;
+  background: #9dc4ae;
+}
+
+.asset-tag-summary-more {
+  font-size: 9px;
+  color: #6f8f7d;
+}
+
+.media-library-tag-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.media-library-tag-input {
+  min-height: 26px;
+  min-width: 140px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  color: #cfe6d9;
+  background: rgba(4, 18, 11, 0.9);
+  font-size: 10px;
+}
+
+.media-library-tag-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid #9dc4ae;
+  color: #04120b;
+  background: #9dc4ae;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.media-library-tag-clear {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  color: #9dc4ae;
+  background: transparent;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .asset-tag-input-row,
+  .media-library-tag-filters {
+    /* Dense layouts: the field takes the row and chips wrap under it rather
+       than shrinking to an untappable width. */
+    align-items: stretch;
+  }
+
+  .asset-tag-input,
+  .media-library-tag-input {
+    flex: 1 1 100%;
+  }
+}

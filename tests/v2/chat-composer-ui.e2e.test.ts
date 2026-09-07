@@ -2627,6 +2627,78 @@ describe('chat composer browser flow', () => {
     notebookDirty = true
   }, 60_000)
 
+  it('adds, removes and restores tags from the inspector', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await openApp()
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
+
+    const target = notebookCellNode(page, videoCellId)
+    await target.waitFor({ state: 'visible' })
+    const address = (await target.locator('.cell-node-footer strong').textContent())?.trim()
+    if (!address) throw new Error('Tag target address is missing')
+    await target.click({ button: 'right' })
+    const menu = page.getByRole('menu', { name: `Cell actions for ${address}` })
+    await menu.waitFor({ state: 'visible' })
+    await menu.getByRole('menuitem', { name: 'Edit cell' }).click()
+
+    const inspector = page.locator('aside.inspector')
+    const tags = inspector.getByRole('region', { name: 'Asset tags' })
+    await tags.waitFor({ state: 'visible' })
+    expect(await tags.getByText('No tags yet').isVisible()).toBe(true)
+
+    observedCalls.length = 0
+    const field = tags.getByLabel('Add a tag')
+    await field.fill('Hero shot')
+    await field.press('Enter')
+
+    // The chip is there before the round trip finishes, and the field keeps
+    // focus so a second tag can be typed straight away.
+    await expect.poll(async () =>
+      await tags.getByRole('listitem').filter({ hasText: 'Hero shot' }).count())
+      .toBeGreaterThan(0)
+    expect(await field.evaluate((node) => node === document.activeElement)).toBe(true)
+    await expect.poll(() => observedCalls.find((call) =>
+      call.name === 'add_asset_tag')).toMatchObject({
+        name: 'add_asset_tag',
+        arguments: {
+          asset_id: videoArtifactId,
+          book_id: bookId,
+          facet: 'custom',
+          label: 'Hero shot',
+        },
+      })
+
+    // The tag survives a reload, which is the difference between a chip and a
+    // stored decision.
+    await openApp()
+    await target.waitFor({ state: 'visible' })
+    await target.click({ button: 'right' })
+    await page.getByRole('menu', { name: `Cell actions for ${address}` })
+      .getByRole('menuitem', { name: 'Edit cell' }).click()
+    const reopened = inspector.getByRole('region', { name: 'Asset tags' })
+    await reopened.waitFor({ state: 'visible' })
+    await expect.poll(async () =>
+      await reopened.getByRole('listitem').filter({ hasText: 'Hero shot' }).count())
+      .toBeGreaterThan(0)
+
+    observedCalls.length = 0
+    await reopened
+      .getByRole('button', { name: 'Remove tag Hero shot (Added by you)' })
+      .click()
+    await expect.poll(async () =>
+      await reopened.getByRole('listitem').filter({ hasText: 'Hero shot' }).count())
+      .toBe(0)
+    await expect.poll(() => observedCalls.find((call) =>
+      call.name === 'remove_asset_tag')).toMatchObject({
+        name: 'remove_asset_tag',
+        arguments: { asset_id: videoArtifactId, book_id: bookId },
+      })
+  }, 120_000)
+
   it('opens asset history from the inspector without a split shortcut', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()

@@ -88,6 +88,11 @@ import { GenerationControlField } from './GenerationControlField'
 import { NotebookMediaMetadata } from './NotebookMediaMetadata'
 import { PublishedPostInspectorDetails } from './PublishedPostChrome'
 import { MediaInsightsPanel } from './MediaInsightsPanel'
+import { AssetTagEditor } from './AssetTagEditor'
+import { useAssetTags } from '@/videobook/use-asset-tags'
+import type { AssetTags } from '@/videobook/asset-tags'
+import type { TagEdit } from '@/videobook/asset-tag-editing'
+import type { TagFacet } from 'videobook-engine/tag-values'
 import {
   idleMediaInsightWork,
   mediaCellHasSpokenAudio,
@@ -373,6 +378,7 @@ export type NotebookCellInspectorAsset = {
   analysisInfo?: NotebookAnalysisInfo | null
   transcript?: MediaTranscriptSources | null
   visionAnalysis?: MediaVisionAnalysis | null
+  tags?: AssetTags | null
 }
 
 type CellGenerationTransition = {
@@ -413,6 +419,18 @@ export type CellAssetRevision = {
 
 type NotebookCellInspectorProps = {
   notebookId: string
+  /** Book that owns the inspected asset; tag edits are scoped to it. */
+  bookId: string
+  /**
+   * Tag tools, or undefined while the MCP connection is not ready. The
+   * inspector talks to them through useAssetTags rather than receiving one
+   * callback per operation.
+   */
+  tagTools?: (
+    tool: string,
+    args: Record<string, unknown>,
+    options?: { background?: boolean },
+  ) => Promise<unknown>
   cell: NotebookCell
   cells: NotebookCell[]
   edges: NotebookEdge[]
@@ -1280,6 +1298,42 @@ function OutputVersionSelector({
   )
 }
 
+/**
+ * Binds the tag editor to whichever asset version the inspector is showing.
+ * Keeping it in its own component means switching versions remounts the
+ * editor's local state instead of carrying one asset's pending edit onto
+ * another.
+ */
+function CellAssetTags({
+  bookId,
+  tagTools,
+  asset,
+}: {
+  bookId: string
+  tagTools: NotebookCellInspectorProps['tagTools']
+  asset: NotebookCellInspectorAsset
+}) {
+  const controller = useAssetTags({
+    call: tagTools ?? null,
+    target: { bookId, assetId: asset.artifactId },
+    tags: asset.tags ?? null,
+  })
+  return (
+    <AssetTagEditor
+      tags={controller.tags}
+      busy={controller.busy}
+      error={controller.error}
+      canEdit={controller.canEdit}
+      suggestions={controller.suggestions}
+      onAdd={(edit: TagEdit) => void controller.addTag(edit)}
+      onRemove={(edit: TagEdit) => void controller.removeTag(edit)}
+      onRestore={(edit: TagEdit) => void controller.restoreTag(edit)}
+      onQueryChange={(prefix: string, facet: TagFacet) =>
+        void controller.loadSuggestions(prefix, facet)}
+    />
+  )
+}
+
 function MediaCellInspector({
   cell,
   cells,
@@ -1296,6 +1350,8 @@ function MediaCellInspector({
   onTranscribeAsset,
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
+  bookId,
+  tagTools,
 }: Pick<
   NotebookCellInspectorProps,
   | 'cell'
@@ -1314,6 +1370,8 @@ function MediaCellInspector({
   | 'onTranscribeAsset'
   | 'onLoadTranscriptJson'
   | 'onDownloadTranscriptSrt'
+  | 'bookId'
+  | 'tagTools'
 >) {
   const versionArtifactIds = cell.type === 'audio'
     || (
@@ -1408,6 +1466,13 @@ function MediaCellInspector({
             <span>Output pending</span>
             <p>Connect a source and rerun its producer to populate this preview.</p>
           </div>
+        )}
+        {previewAsset && (
+          <CellAssetTags
+            bookId={bookId}
+            tagTools={tagTools}
+            asset={previewAsset}
+          />
         )}
         {previewAsset && mediaCellHasSpokenAudio(previewAsset.type) && (
           <MediaInsightsPanel
@@ -3118,6 +3183,8 @@ export function NotebookCellInspector({
   history,
   mentionAssets,
   voiceCatalog,
+  bookId,
+  tagTools,
 }: NotebookCellInspectorProps) {
   const artifactAssets = inspectorArtifactAssets(
     asset,
@@ -3204,6 +3271,8 @@ export function NotebookCellInspector({
         onTranscribeAsset={onTranscribeAsset}
         onLoadTranscriptJson={onLoadTranscriptJson}
         onDownloadTranscriptSrt={onDownloadTranscriptSrt}
+        bookId={bookId}
+        tagTools={tagTools}
       />
     )
   }
