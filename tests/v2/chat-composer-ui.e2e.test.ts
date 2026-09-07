@@ -2650,6 +2650,14 @@ describe('chat composer browser flow', () => {
     await tags.waitFor({ state: 'visible' })
     expect(await tags.getByText('No tags yet').isVisible()).toBe(true)
 
+    // Mark the media element so a remount is detectable: remounting is what
+    // would restart playback under someone who is scrubbing a clip.
+    const media = inspector.locator('video, audio, img').first()
+    await media.waitFor({ state: 'visible' })
+    await media.evaluate((node) => {
+      (node as HTMLElement).dataset.tagProbe = 'before-edit'
+    })
+
     observedCalls.length = 0
     const field = tags.getByLabel('Add a tag')
     await field.fill('Hero shot')
@@ -2671,6 +2679,10 @@ describe('chat composer browser flow', () => {
           label: 'Hero shot',
         },
       })
+
+    // Same element, so nothing about the media restarted for a text edit.
+    expect(await media.evaluate((node) =>
+      (node as HTMLElement).dataset.tagProbe)).toBe('before-edit')
 
     // The tag survives a reload, which is the difference between a chip and a
     // stored decision.

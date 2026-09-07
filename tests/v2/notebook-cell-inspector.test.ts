@@ -239,6 +239,7 @@ function renderAssetHistory(history: {
   error: string | null
 }): string {
   return renderToStaticMarkup(createElement(NotebookCellInspector, {
+    bookId: '01900000-0000-7000-8000-000000000002',
     notebookId: '01900000-0000-7000-8000-000000000003',
     cell,
     cells: [cell],
@@ -323,6 +324,7 @@ describe('NotebookCellInspector', () => {
       inputs: { generationSettings: { voice_id: 'voice-b' } },
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: generationCell,
       cells: [generationCell],
@@ -367,6 +369,7 @@ describe('NotebookCellInspector', () => {
       outputArtifactId: undefined,
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: generationCell,
       cells: [generationCell],
@@ -402,6 +405,7 @@ describe('NotebookCellInspector', () => {
       outputArtifactId: undefined,
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: generationCell,
       cells: [generationCell],
@@ -457,6 +461,7 @@ describe('NotebookCellInspector', () => {
     }
     let previewCalls = 0
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: generationCell,
       cells: [generationCell],
@@ -586,6 +591,7 @@ describe('NotebookCellInspector', () => {
       },
     ]
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: generationCell,
       cells: [generationCell, first, last],
@@ -640,6 +646,7 @@ describe('NotebookCellInspector', () => {
       targetInput: 'video',
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: generationCell,
       cells: [generationCell, videoSource, imageSource],
@@ -705,6 +712,7 @@ describe('NotebookCellInspector', () => {
       },
     ]
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: output,
       cells: [output, currentSource, availableSource, descendantSource],
@@ -753,6 +761,7 @@ describe('NotebookCellInspector', () => {
       slot: { row: 0, column: 2 },
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: generationCell,
       cells: [generationCell, descendant, available],
@@ -809,6 +818,7 @@ describe('NotebookCellInspector', () => {
     }
     let previewCalls = 0
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: generationCell,
       cells: [generationCell, sourceCell],
@@ -851,6 +861,7 @@ describe('NotebookCellInspector', () => {
         type,
       }
       const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+        bookId: '01900000-0000-7000-8000-000000000002',
         notebookId: '01900000-0000-7000-8000-000000000003',
         cell: typedCell,
         cells: [typedCell],
@@ -878,6 +889,7 @@ describe('NotebookCellInspector', () => {
 
   it('renders output media without requiring an open action', () => {
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell,
       cells: [cell],
@@ -948,6 +960,7 @@ describe('NotebookCellInspector', () => {
       slot: { row: 6, column: 4 },
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: imageCell,
       cells: [imageCell],
@@ -1001,6 +1014,7 @@ describe('NotebookCellInspector', () => {
       tool: 'generate_kie_gemini_omni_video',
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: generationCell,
       cells: [generationCell],
@@ -1045,6 +1059,7 @@ describe('NotebookCellInspector', () => {
       },
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: audioCell,
       cells: [audioCell],
@@ -1122,6 +1137,7 @@ describe('NotebookCellInspector', () => {
       },
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: audioCell,
       cells: [audioCell],
@@ -1187,6 +1203,7 @@ describe('NotebookCellInspector', () => {
       audioInfo: null,
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: imageCell,
       cells: [imageCell],
@@ -1236,6 +1253,7 @@ describe('NotebookCellInspector', () => {
       outputArtifactId: 'image-two',
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: imageCell,
       cells: [imageCell],
@@ -1331,6 +1349,7 @@ describe('NotebookCellInspector', () => {
       },
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: analysisCell,
       cells: [analysisCell],
@@ -1399,6 +1418,7 @@ describe('NotebookCellInspector', () => {
       slot: { row: 0, column: 0 },
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: pendingCell,
       cells: [pendingCell, splitter],
@@ -1425,6 +1445,7 @@ describe('NotebookCellInspector', () => {
 
   it('shows passive cell deletion progress', () => {
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell,
       cells: [cell],
@@ -1500,6 +1521,7 @@ describe('NotebookCellInspector', () => {
       audioInfo: null,
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: splitCell,
       cells: [splitCell, videoSource, analysisSource],
@@ -1568,6 +1590,7 @@ describe('NotebookCellInspector', () => {
       },
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: splitCell,
       cells: [splitCell],
@@ -1622,6 +1645,7 @@ describe('NotebookCellInspector', () => {
       targetInput: 'source',
     }]
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: analyzeCell,
       cells: [analyzeCell, sourceCell],
@@ -1679,6 +1703,7 @@ describe('NotebookCellInspector', () => {
       targetInput: 'segment',
     }]
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: frameImageCell,
       cells: [frameImageCell, sourceCell],
@@ -2178,6 +2203,7 @@ describe('NotebookCellInspector', () => {
       outputArtifactId: undefined,
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: promptCell,
       cells: [promptCell],
@@ -2215,6 +2241,7 @@ describe('NotebookCellInspector', () => {
       outputArtifactId: undefined,
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: promptCell,
       cells: [promptCell],
@@ -2293,6 +2320,7 @@ describe('NotebookCellInspector', () => {
       type: input.cellType ?? (input.type === 'audio' ? 'audio' : 'video'),
     }
     return renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: spokenCell,
       cells: [spokenCell],
@@ -2436,6 +2464,7 @@ describe('NotebookCellInspector', () => {
 
   it('hides the dead INPUTS picker on a passive video cell with no candidates', () => {
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell,
       cells: [cell],
@@ -2476,6 +2505,7 @@ describe('NotebookCellInspector', () => {
       slot: { row: 0, column: 0 },
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell,
       cells: [cell, splitter],
@@ -2524,6 +2554,7 @@ describe('NotebookCellInspector', () => {
       targetInput: 'media',
     }]
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell,
       cells: [cell, splitter],
@@ -2573,6 +2604,7 @@ describe('NotebookCellInspector', () => {
       },
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: published,
       cells: [published],

@@ -51,22 +51,11 @@ function canonicalKeyOf(label: string): string {
   return label.trim() ? tagCanonicalKey(label) : ''
 }
 
-export function tagIdentityOf(tag: {
+function tagIdentityOf(tag: {
   facet: TagFacet
   key: string
 }): string {
   return identity(tag.facet, tag.key)
-}
-
-export function editIdentity(edit: TagEdit): string {
-  return identity(edit.facet, canonicalKeyOf(edit.label))
-}
-
-export function sameTagIdentity(
-  left: { facet: TagFacet; key: string },
-  right: { facet: TagFacet; key: string },
-): boolean {
-  return tagIdentityOf(left) === tagIdentityOf(right)
 }
 
 /** "Added by you" or "From analysis" — never a model name or a score. */

@@ -12,7 +12,7 @@ import type { Engine } from "videobook-engine";
 
 const SETTINGS_KEY = "asset-tagging";
 
-export type TaggingSettings = {
+type TaggingSettings = {
   /** Queue tagging when a new asset becomes ready. */
   automaticEnabled: boolean;
   /**
@@ -23,7 +23,7 @@ export type TaggingSettings = {
   analysisOnNewAssets: boolean;
 };
 
-export const DEFAULT_TAGGING_SETTINGS: TaggingSettings = {
+const DEFAULT_TAGGING_SETTINGS: TaggingSettings = {
   automaticEnabled: true,
   analysisOnNewAssets: true,
 };

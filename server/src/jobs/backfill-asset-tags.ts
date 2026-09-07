@@ -26,7 +26,7 @@ import {
 } from "../tag-backfill-state.js";
 import { runAssetTagging } from "./tag-asset.js";
 
-export type BackfillAssetTagsPayload = {
+type BackfillAssetTagsPayload = {
   type: "backfill_asset_tags";
   bookId: string;
   /** Allow the pass to request analysis for assets with no usable cache. */

@@ -22,7 +22,7 @@ import {
   type TagCandidate,
 } from "./tag-vocabulary.js";
 
-export type TagExtractionOutcome =
+type TagExtractionOutcome =
   /** Evidence existed and produced at least one tag. */
   | "tagged"
   /** Evidence existed but supported nothing worth grouping by. */

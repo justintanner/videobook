@@ -26,7 +26,7 @@ import {
   tagCanonicalKey,
 } from "videobook-engine";
 
-export type AssetTagRecord = {
+type AssetTagRecord = {
   facet: TagFacet;
   /** Canonical identity within the facet; never derived from the label. */
   key: string;
@@ -35,13 +35,13 @@ export type AssetTagRecord = {
   entity_id: string | null;
 };
 
-export type DismissedTagRecord = {
+type DismissedTagRecord = {
   facet: TagFacet;
   key: string;
   label: string;
 };
 
-export type AssetTagAnalysis = {
+type AssetTagAnalysis = {
   source_hash: string;
   generator: string;
   model: string | null;
@@ -68,7 +68,7 @@ export type AssetTagSummary = {
 };
 
 /** A filter term: a label, optionally pinned to one facet. */
-export type TagSelector = {
+type TagSelector = {
   facet?: TagFacet;
   label: string;
 };
@@ -174,7 +174,7 @@ export function readAssetTagSummaries(
  * which is what a user typing "kitchen" into a filter box means; a
  * facet-qualified term keeps `people/handheld` and `editing/handheld` apart.
  */
-export function normalizeSelector(selector: TagSelector): NormalizedSelector {
+function normalizeSelector(selector: TagSelector): NormalizedSelector {
   if (selector.facet !== undefined) {
     if (!isTagFacet(selector.facet)) {
       throw new Error(
@@ -202,7 +202,7 @@ function matchesSelector(
 }
 
 /** True when no term was supplied — an absent filter matches everything. */
-export function isEmptyTagFilter(filter: AssetTagFilter | undefined): boolean {
+function isEmptyTagFilter(filter: AssetTagFilter | undefined): boolean {
   return !filter
     || ((filter.all?.length ?? 0) === 0 && (filter.any?.length ?? 0) === 0);
 }
@@ -272,7 +272,7 @@ export function tagFacetCounts(
     .slice(0, limit);
 }
 
-export type TagTransferSummary = {
+type TagTransferSummary = {
   imported_manual: number;
   imported_dismissals: number;
   imported_automatic: number;

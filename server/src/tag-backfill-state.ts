@@ -19,9 +19,9 @@ import type { Engine } from "videobook-engine";
 
 const SETTINGS_KEY = "asset-tag-backfill";
 
-export type BackfillStatus = "idle" | "running" | "paused" | "cancelled" | "completed";
+type BackfillStatus = "idle" | "running" | "paused" | "cancelled" | "completed";
 
-export type BackfillCounts = {
+type BackfillCounts = {
   /** Assets whose snapshot already covers their current content. */
   current: number;
   /** Assets that gained tags in this pass. */
@@ -65,7 +65,7 @@ export const EMPTY_COUNTS: BackfillCounts = {
   failed: 0,
 };
 
-export const IDLE_STATE: BackfillState = {
+const IDLE_STATE: BackfillState = {
   status: "idle",
   cursor: null,
   scanned: 0,

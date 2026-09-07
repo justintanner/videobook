@@ -34,7 +34,7 @@ type ToolCall = (
   options?: { background?: boolean },
 ) => Promise<unknown>
 
-export type AssetTagTarget = {
+type AssetTagTarget = {
   bookId: string
   assetId: string
 }
@@ -47,7 +47,7 @@ type UseAssetTagsInput = {
   tags: AssetTags | null
 }
 
-export type AssetTagsController = {
+type AssetTagsController = {
   tags: AssetTags | null
   /** True while an edit is in flight; chips stay interactive regardless. */
   busy: boolean

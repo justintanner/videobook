@@ -32,6 +32,10 @@ The frontend is a green notebook-first workspace with book and notebook
 pickers, a typed cell canvas, a timeline, an asset library, jobs, history,
 storage health, and provider settings.
 
+Assets carry editable tags across three automatic facets — people, places and
+editing — plus free-form custom tags, with exact filtering in the Library and
+over MCP. See [docs/asset-tags.md](docs/asset-tags.md).
+
 ## Storage
 
 Each book owns an isolated `videobook-engine` v5.4.1 schema-v25 root under

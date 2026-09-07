@@ -51,7 +51,7 @@ const TAGGABLE_KINDS: ReadonlySet<ArtifactKind> = new Set<ArtifactKind>([
   "script",
 ]);
 
-export type TagAssetPayload = {
+type TagAssetPayload = {
   type: "tag_asset";
   bookId: string;
   assetId: string;

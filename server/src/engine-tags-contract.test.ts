@@ -113,10 +113,17 @@ describe("vendored engine tag contract", () => {
     expect(added.effective.map((tag) => tag.key)).toEqual(["interview"]);
     expect(added.manual.map((tag) => tag.origin)).toEqual(["manual"]);
 
-    const matches = value(scoped.tags.query({ facets: ["editing"] }));
+    const matches = value(scoped.tags.query({
+      all: [{ facet: "editing", label: "Interview" }],
+    }));
     expect(matches.artifacts.map((row) => row.artifact.artifactId)).toEqual([
       artifact.artifactId,
     ]);
+    // A filter the asset does not satisfy returns nothing, which is what makes
+    // the assertion above mean something.
+    expect(value(scoped.tags.query({
+      all: [{ facet: "places", label: "Kitchen" }],
+    })).artifacts).toEqual([]);
     expect(
       value(scoped.tags.suggest({ prefix: "int" })).map((row) => row.key),
     ).toEqual(["interview"]);

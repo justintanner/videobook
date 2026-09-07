@@ -8,7 +8,7 @@ import { TAG_FACETS, type TagFacet } from 'videobook-engine/tag-values'
  * simply omits the field, and a UI that shows tags must not break on one.
  */
 
-export type AssetTagOrigin = 'manual' | 'automatic'
+type AssetTagOrigin = 'manual' | 'automatic'
 
 export type AssetTag = {
   facet: TagFacet
@@ -24,7 +24,7 @@ export type DismissedAssetTag = {
   label: string
 }
 
-export type AssetTagAnalysis = {
+type AssetTagAnalysis = {
   sourceHash: string
   generator: string
   model: string | null
