@@ -71,6 +71,7 @@ export default defineConfig({
       'src/videobook/x-post-thread.test.ts',
       'server/src/app-state.test.ts',
       'server/src/engine-rename.test.ts',
+      'server/src/engine-tags-contract.test.ts',
       'server/src/archive-store.test.ts',
       'server/src/test-media-fixtures.test.ts',
       'server/src/test-clock-inventory.test.ts',
