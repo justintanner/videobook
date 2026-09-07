@@ -10,6 +10,11 @@ import { createAlibaba, AlibabaError } from "@apicity/alibaba";
 import { createFal, FalError } from "@apicity/fal";
 import { createGoogleFlow, GoogleFlowError } from "@apicity/googleflow";
 import { describeGoogleFlowJobFailure, googleFlowFetch } from "../jobs/_google-flow.js";
+import {
+  EMPTY_TAG_SUMMARY,
+  readAssetTagSummaries,
+  type AssetTagSummary,
+} from "../asset-tags.js";
 import { logger } from "../logger.js";
 import { queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
@@ -129,6 +134,10 @@ export type ProjectAsset = {
     duration_seconds: number;
   } | null;
   analysis_info: ProjectAssetAnalysis | null;
+  /** Engine-owned tag state: effective tags, provenance and the analysis
+   *  that produced the automatic ones. Null for synthetic notebook rows,
+   *  which are not artifacts and cannot be tagged. */
+  tags: AssetTagSummary | null;
   /** Video/audio assets only: ElevenLabs and gpt-4o sources side by side, or
    *  null when neither sidecar exists. Compact summaries only — no raw JSON. */
   transcript: AssetTranscriptSources | null;
@@ -665,6 +674,10 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
   const failuresByArtifact = indexByArtifactId(failuresAll.ok ? failuresAll.value : []);
   const workByArtifact = indexByArtifactId(workAll.ok ? workAll.value : []);
   const streamsByArtifact = groupByArtifactId(streamsAll.ok ? streamsAll.value : []);
+  const tagsByArtifact = readAssetTagSummaries(
+    engine,
+    assets.map((asset) => asset.artifactId),
+  );
   const assetRows = await Promise.all(
     assets.map(async (a): Promise<ProjectAsset> => {
       const [manifestResult, metadata, archiveMetadata, proxyMetadata] = await Promise.all([
@@ -930,6 +943,7 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
         })(),
         audio_info,
         analysis_info: analysisInfo,
+        tags: tagsByArtifact.get(a.artifactId) ?? EMPTY_TAG_SUMMARY,
         transcript,
         vision_analysis,
         waveform,
@@ -968,6 +982,7 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
       fps: null,
       audio_info: null,
       analysis_info: null,
+      tags: null,
       transcript: null,
       vision_analysis: null,
       waveform: null,

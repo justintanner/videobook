@@ -122,6 +122,7 @@ import { generateSeedreamTextImageDef } from "./generate-seedream-text-image.js"
 import { generateSeedreamImageDef } from "./generate-seedream-image.js";
 import { renderVideoDef } from "./render.js";
 import { reconcileProjectWorkDef } from "./reconcile-project-work.js";
+import { assetTagDefs } from "./asset-tags.js";
 import { listAssetsDef } from "./list-assets.js";
 import { listCellGenerationsDef } from "./list-cell-generations.js";
 import { waitForAssetReadyDef } from "./wait-for-asset-ready.js";
@@ -421,6 +422,7 @@ export function getAllToolDefs(
     generateSeedreamImageDef(engine),
     reconcileProjectWorkDef(engine),
     listAssetsDef(engine),
+    ...assetTagDefs(engine),
     listCellGenerationsDef(engine),
     waitForAssetReadyDef(engine),
     previewVideoGenDef(engine),

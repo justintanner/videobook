@@ -2,8 +2,9 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (292)
+## MCP endpoints (296)
 
+- `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
 - `analyze_image_subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro
@@ -227,6 +228,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `register_search_manifest` — Register an immutable semantic-index model manifest
 - `relayout_notebook` — Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video / generate_image inline artifacts into output cells.
 - `release_search_reference` — Release a temporary reverse-search reference
+- `remove_asset_tag` — Remove a tag from one asset. Removing an automatic tag records a dismissal, so re-analysis cannot bring it back.
 - `remove_sequence_track` — Remove an empty canonical track while preserving required track kinds
 - `remove_sound` — Remove a described sound (e.g. a horse neigh) from a video or audio asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.
 - `remove_timeline_audio` — Remove an audio overlay by its UUIDv7 id
@@ -243,6 +245,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `replace_sequence_clip_with_search_moment` — Preview, then confirm, replacing one explicit sequence clip with a search moment
 - `replace_video_audio` — Replace the audio track of a video asset in-place with audio from an audio asset, or a specific file inside another asset via the `<artifactId>/<filename>` form. Operates on the video asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.
 - `restore_archive_clips` — Restore selected archived video/audio clips into the current Videobook as new assets.
+- `restore_asset_tag` — Restore a dismissed automatic tag so future analysis may surface it again.
 - `restore_asset_version` — Restore an asset from an immutable revision as a new revision
 - `restore_edit_action` — Create a forward revision restoring a prior edit action or revision
 - `retry_generation` — Retry a failed generation by replaying its original request payload. Reads the persisted generation-request metadata for the asset, clears its error record, and re-enqueues the same job. Use this on a failed asset card to re-run the exact inputs without re-resolving references.
@@ -273,6 +276,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `split_video_by_durations` — Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved. When `destination` is provided, chunks are written as files inside an existing asset (one filename per target, no leftover) instead of minting fresh video assets.
 - `storage_status` — Read catalog and object publication status
 - `storage_sync` — Publish a book's pending content-addressed objects and catalog
+- `suggest_asset_tags` — List the tags in use in a book with the number of assets carrying each, optionally narrowed by prefix or facet. Use it for autocomplete and to discover the groups available for filtering.
 - `suggest_cuts` — Analyze a video asset (frames + transcript + metadata) and return structured trim suggestions: dead air, filler words, awkward sections. Runs in the background and persists to .suggest-cuts.json. Requires a transcript — run /transcribe first if missing. Use /apply-cuts to splice the result.
 - `suggest_sequence_coverage` — Rank existing visual moments for a sequence range before offering generation
 - `suggest_sfx` — Analyze a video asset (frames + transcript + metadata) and return structured SFX suggestions: timestamps, slug types, and descriptions. Runs in the background and persists to .suggest-sfx.json. Requires a transcript — run /transcribe first if missing. Use /apply-sfx to mix the result.

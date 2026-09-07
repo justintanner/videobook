@@ -7,6 +7,8 @@ import {
 } from "../media-library.js";
 import { queue } from "../queue.js";
 import { searchReferenceStore } from "../search-reference-store.js";
+import type { AssetTagFilter } from "../asset-tags.js";
+import { tagSelectorSchema } from "./asset-tags.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
 const mediaKinds = ["audio", "image", "video"] as const;
@@ -153,12 +155,20 @@ export function mediaLibraryDefs(books: BookManager): ToolDef[] {
           duration_seconds: z.number().positive().optional(),
         }).optional(),
         kinds: z.array(z.enum(mediaKinds)).min(1),
+        tags_all: z.array(tagSelectorSchema).optional()
+          .describe("Only assets carrying every one of these tags"),
+        tags_any: z.array(tagSelectorSchema).optional()
+          .describe("Only assets carrying at least one of these tags"),
         limit: z.number().int().positive().max(100).optional(),
         offset: z.number().int().nonnegative().optional(),
       },
       handler: async (args) => {
         try {
           const referenceRange = searchReferenceRange(args.reference_range);
+          const tags: AssetTagFilter = {
+            ...(args.tags_all ? { all: args.tags_all as AssetTagFilter["all"] } : {}),
+            ...(args.tags_any ? { any: args.tags_any as AssetTagFilter["any"] } : {}),
+          };
           return json(await searchLibraryAssets(books, {
             ...(typeof args.query === "string" ? { query: args.query } : {}),
             ...(typeof args.reference_id === "string"
@@ -166,6 +176,7 @@ export function mediaLibraryDefs(books: BookManager): ToolDef[] {
               : {}),
             ...(referenceRange ? { referenceRange } : {}),
             kinds: args.kinds as Array<typeof mediaKinds[number]>,
+            tags,
             ...(typeof args.limit === "number" ? { limit: args.limit } : {}),
             ...(typeof args.offset === "number" ? { offset: args.offset } : {}),
           }));

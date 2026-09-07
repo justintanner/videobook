@@ -13,6 +13,7 @@ import {
 } from "videobook-engine/notebook-grid";
 import { NOTEBOOK_GRID_ADDRESS_SOURCE } from "videobook-engine/notebook-mentions";
 import { z } from "zod";
+import { EMPTY_TRANSFER_SUMMARY, transferAssetTags } from "../asset-tags.js";
 import { enqueueSearchIndex } from "../jobs/enqueue-search-index.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { sourceCellForPostedArtifact } from "../notebook-published-post.js";
@@ -169,8 +170,15 @@ export function duplicateAssetDef(engine: Engine): ToolDef {
         }
       }
 
+      // Tags transfer after the bytes: the engine only lets automatic
+      // evidence cross when the copy actually carries the analyzed content.
+      const tagTransfer = { value: EMPTY_TRANSFER_SUMMARY };
       try {
         await copyOriginalMetadata(engine, asset_id, newAssetId);
+        tagTransfer.value = await transferAssetTags(
+          { engine, artifactId: asset_id },
+          { engine, artifactId: newAssetId },
+        );
       } catch (cause) {
         await engine.artifacts.delete(newAssetId);
         return failure(cause instanceof Error ? cause.message : String(cause));
@@ -230,6 +238,7 @@ export function duplicateAssetDef(engine: Engine): ToolDef {
             source_asset_id: asset_id,
             new_asset_id: newAssetId,
             kind: sourceArtifact.value.kind,
+            tags: tagTransfer.value,
             ...(createdCell && notebook_id
               ? {
                   notebook_id,

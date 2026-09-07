@@ -240,6 +240,99 @@ describe('media Library slots', () => {
       })
   })
 
+  it('filters Library search by exact tags without an embedding index', async () => {
+    const alpha = await books.create('tag-alpha')
+    const beta = await books.create('tag-beta')
+    expect(alpha.ok && beta.ok).toBe(true)
+    if (!alpha.ok || !beta.ok) return
+    const alphaBook = books.get(alpha.value.bookId)
+    const betaBook = books.get(beta.value.bookId)
+    expect(alphaBook.ok && betaBook.ok).toBe(true)
+    if (!alphaBook.ok || !betaBook.ok) return
+
+    const kitchen = await readyArtifact(
+      alphaBook.value.engine,
+      'image',
+      'kitchen still',
+      'original.png',
+      'alpha image',
+    )
+    const street = await readyArtifact(
+      betaBook.value.engine,
+      'image',
+      'street still',
+      'original.png',
+      'beta image',
+    )
+    const untagged = await readyArtifact(
+      betaBook.value.engine,
+      'image',
+      'plain still',
+      'original.png',
+      'beta plain',
+    )
+    const tagKitchen = await alphaBook.value.engine.tags.add(
+      kitchen.artifactId,
+      { facet: 'places', label: 'Kitchen' },
+    )
+    expect(tagKitchen.ok).toBe(true)
+    const tagStreet = await betaBook.value.engine.tags.add(
+      street.artifactId,
+      { facet: 'places', label: 'Street' },
+    )
+    expect(tagStreet.ok).toBe(true)
+    const tagWide = await betaBook.value.engine.tags.add(
+      street.artifactId,
+      { facet: 'editing', label: 'Wide shot' },
+    )
+    expect(tagWide.ok).toBe(true)
+
+    // No query and no reference: an exact tag lookup answers immediately,
+    // without waiting on any visual index.
+    const kitchens = await searchLibraryAssets(books, {
+      kinds: ['image'],
+      tags: { all: [{ facet: 'places', label: 'kitchen' }] },
+      limit: 10,
+    })
+    expect(kitchens.assets.map((asset) => asset.artifact_id)).toEqual([
+      kitchen.artifactId,
+    ])
+    expect(kitchens.page.total).toBe(1)
+    expect(kitchens.assets[0]?.tags?.effective.map((tag) => tag.label))
+      .toEqual(['Kitchen'])
+
+    const either = await searchLibraryAssets(books, {
+      kinds: ['image'],
+      tags: {
+        any: [
+          { facet: 'places', label: 'Kitchen' },
+          { facet: 'places', label: 'Street' },
+        ],
+      },
+      limit: 10,
+    })
+    expect(either.assets.map((asset) => asset.artifact_id).sort()).toEqual(
+      [kitchen.artifactId, street.artifactId].sort(),
+    )
+    expect(either.assets.some((asset) => asset.artifact_id === untagged.artifactId))
+      .toBe(false)
+    // Facet counts describe the filtered result, not the whole library.
+    expect(either.tag_facets).toEqual(expect.arrayContaining([
+      { facet: 'places', key: 'kitchen', label: 'Kitchen', assets: 1 },
+      { facet: 'editing', key: 'wide shot', label: 'Wide shot', assets: 1 },
+    ]))
+
+    // Tag filters compose with text search: both must hold.
+    const composed = await searchLibraryAssets(books, {
+      query: 'street',
+      kinds: ['image'],
+      tags: { all: [{ facet: 'places', label: 'Kitchen' }] },
+      limit: 10,
+    })
+    expect(composed.assets).toEqual([])
+    expect(composed.page.total).toBe(0)
+  })
+
   it('searches ready compatible assets across books with owning-book labels', async () => {
     const alpha = await books.create('alpha')
     const beta = await books.create('beta')

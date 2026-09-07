@@ -1,4 +1,5 @@
 import { appendDiagnostic } from "../diagnostics.js";
+import { effectiveTagText } from "../asset-tags.js";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -743,6 +744,7 @@ async function buildObservations(
   streams: ArtifactStream[],
 ): Promise<TemporalIndexObservation[]> {
   const analysis = await readJson<AnalysisDocument>(engine, artifactId, ".original.analysis.json");
+  const tagText = effectiveTagText(engine, artifactId);
   const transcript = await readJson<{ text?: unknown }>(
     engine,
     artifactId,
@@ -753,10 +755,10 @@ async function buildObservations(
   const audio = streams.find((stream) =>
     stream.kind === "audio" && stream.objectHash === objectHash);
   const visual = video
-    ? await videoObservations(engine, artifactId, objectHash, video, analysis)
+    ? await videoObservations(engine, artifactId, objectHash, video, analysis, tagText)
     : audio
       ? []
-      : [stillObservation(artifactId, sourcePath, objectHash, analysis)];
+      : [stillObservation(artifactId, sourcePath, objectHash, analysis, tagText)];
   const observations = [...visual];
   if (audio) observations.push(audioObservation(artifactId, objectHash, audio));
   const typedTranscripts = await engine.transcripts.list(artifactId);
@@ -839,6 +841,7 @@ async function videoObservations(
   objectHash: string,
   stream: ArtifactStream,
   analysis: AnalysisDocument | null,
+  tagText: string,
 ): Promise<TemporalIndexObservation[]> {
   const list = await engine.files.listSubdir(artifactId, "original_frames");
   const frameNames = list.ok
@@ -859,7 +862,7 @@ async function videoObservations(
       kind: "window",
       representativeTick: Math.floor(stream.durationTicks / 2),
       segmentationVersion: "whole-video-v1",
-      texts: analysisTexts(analysis),
+      texts: analysisTexts(analysis, tagText),
       embeddings: [embedding("visual", objectHash)],
       fingerprints: [fingerprint(objectHash)],
     }];
@@ -896,7 +899,7 @@ async function videoObservations(
       segmentationVersion: "sampled-frames-v1",
       texts: [
         ...(nearbyScene ? sceneTexts(nearbyScene) : []),
-        ...(index === 0 ? analysisTexts(analysis) : []),
+        ...(index === 0 ? analysisTexts(analysis, tagText) : []),
       ],
       embeddings: [embedding("visual", frameHash)],
       fingerprints: [fingerprint(frameHash)],
@@ -910,6 +913,7 @@ function stillObservation(
   sourcePath: string,
   objectHash: string,
   analysis: AnalysisDocument | null,
+  tagText: string,
 ): TemporalIndexObservation {
   return {
     artifactId,
@@ -917,7 +921,7 @@ function stillObservation(
     sourcePath,
     kind: "frame",
     segmentationVersion: "still-v1",
-    texts: analysisTexts(analysis),
+    texts: analysisTexts(analysis, tagText),
     embeddings: [embedding("visual", objectHash)],
     fingerprints: [fingerprint(objectHash)],
   };
@@ -991,18 +995,25 @@ function clampTick(tick: number, stream: ArtifactStream): number {
   return Math.min(Math.max(0, tick), Math.max(0, stream.durationTicks - 1));
 }
 
-function analysisTexts(analysis: AnalysisDocument | null): SegmentTextObservation[] {
-  if (!analysis) return [];
-  const fields = [
+/**
+ * Description text for the lexical index: the analysis sidecar's prose plus
+ * the artifact's effective tags, so a tag a user added by hand is findable in
+ * text search and one they dismissed is not.
+ */
+function analysisTexts(
+  analysis: AnalysisDocument | null,
+  tagText: string,
+): SegmentTextObservation[] {
+  const fields = analysis ? [
     analysis.summary,
     analysis.mood,
     analysis.setting,
     analysis.tags,
     analysis.subjects,
     analysis.actions,
-  ];
-  const description = fields.flatMap(strings).join(" ").trim();
-  const ocr = strings(analysis.textOnScreen).join(" ").trim();
+  ] : [];
+  const description = [...fields.flatMap(strings), tagText].join(" ").trim();
+  const ocr = analysis ? strings(analysis.textOnScreen).join(" ").trim() : "";
   return [
     ...(description ? [{ kind: "description" as const, language: "und", text: description }] : []),
     ...(ocr ? [{ kind: "ocr" as const, language: "und", text: ocr }] : []),

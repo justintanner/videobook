@@ -72,6 +72,7 @@ import type {
   Sequence,
   TimedSequenceClip,
 } from 'videobook-engine'
+import { parseAssetTags, type AssetTags } from './videobook/asset-tags'
 import { SCHEMA_VERSION } from 'videobook-engine/catalog-metadata'
 import enginePackage from 'videobook-engine/package.json'
 import {
@@ -512,6 +513,8 @@ type AssetRecord = {
   analysisInfo: NotebookAnalysisInfo | null
   transcript: MediaTranscriptSources | null
   visionAnalysis: MediaVisionAnalysis | null
+  /** Engine-owned tags; null for rows that are not artifacts. */
+  tags: AssetTags | null
 }
 
 type MusicVideoPreparedSetup = Extract<
@@ -1384,6 +1387,7 @@ function asAsset(value: unknown): AssetRecord | null {
     visionAnalysis: asMediaVisionAnalysis(
       item.vision_analysis ?? item.visionAnalysis,
     ),
+    tags: parseAssetTags(item.tags),
   }
 }
 

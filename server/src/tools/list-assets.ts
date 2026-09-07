@@ -2,6 +2,11 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { buildAssetList } from "./reconcile-project-work.js";
+import {
+  matchesTagFilter,
+  type AssetTagFilter,
+} from "../asset-tags.js";
+import { tagSelectorSchema } from "./asset-tags.js";
 
 export function listAssetsDef(engine: Engine): ToolDef {
   return {
@@ -14,19 +19,43 @@ export function listAssetsDef(engine: Engine): ToolDef {
       limit: z.number().int().positive().max(500).optional(),
       offset: z.number().int().nonnegative().optional(),
       include_referenced: z.boolean().optional(),
+      tags_all: z.array(tagSelectorSchema).optional()
+        .describe("Only assets carrying every one of these tags"),
+      tags_any: z.array(tagSelectorSchema).optional()
+        .describe("Only assets carrying at least one of these tags"),
     },
     handler: async (args) => {
-      const { book_id, sort, limit, offset, include_referenced } = args as {
-        book_id: string;
-        sort?: "newest" | "oldest";
-        limit?: number;
-        offset?: number;
-        include_referenced?: boolean;
-      };
+      const { book_id, sort, limit, offset, include_referenced, tags_all, tags_any } =
+        args as {
+          book_id: string;
+          sort?: "newest" | "oldest";
+          limit?: number;
+          offset?: number;
+          include_referenced?: boolean;
+          tags_all?: AssetTagFilter["all"];
+          tags_any?: AssetTagFilter["any"];
+        };
       const allAssets = await buildAssetList(engine, book_id, sort);
+      const tagFilter: AssetTagFilter = {
+        ...(tags_all ? { all: tags_all } : {}),
+        ...(tags_any ? { any: tags_any } : {}),
+      };
+      let matchingAssets: typeof allAssets;
+      try {
+        matchingAssets = allAssets.filter((asset) =>
+          matchesTagFilter(asset.tags ?? undefined, tagFilter));
+      } catch (cause) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: cause instanceof Error ? cause.message : String(cause),
+          }],
+        };
+      }
       const pageOffset = offset ?? 0;
       const pageLimit = limit ?? 200;
-      const pageAssets = allAssets.slice(pageOffset, pageOffset + pageLimit);
+      const pageAssets = matchingAssets.slice(pageOffset, pageOffset + pageLimit);
       const pageArtifactIds = new Set(
         pageAssets.map((asset) => asset.artifact_id),
       );
@@ -59,6 +88,8 @@ export function listAssetsDef(engine: Engine): ToolDef {
                 })),
           )
         : new Set<string>();
+      // Hydration is deliberately unfiltered: a notebook needs the media it
+      // references whether or not that asset carries the filtered tags.
       const referencedAssets = include_referenced
         ? allAssets.filter((asset) =>
             referencedArtifactIds.has(asset.artifact_id)
@@ -73,8 +104,8 @@ export function listAssetsDef(engine: Engine): ToolDef {
             page: {
               offset: pageOffset,
               limit: pageLimit,
-              total: allAssets.length,
-              hasMore: pageOffset + pageAssets.length < allAssets.length,
+              total: matchingAssets.length,
+              hasMore: pageOffset + pageAssets.length < matchingAssets.length,
             },
           }),
         }],

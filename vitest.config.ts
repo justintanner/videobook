@@ -45,6 +45,7 @@ export default defineConfig({
       'extension/src/url-target.test.ts',
       'extension/src/mcp.test.ts',
       'extension/src/x-post-target.test.ts',
+      'src/videobook/asset-tags.test.ts',
       'src/videobook/notebook-draft.test.ts',
       'src/videobook/notebook-grid.test.ts',
       'src/videobook/last-work-slot.test.ts',

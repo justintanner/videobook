@@ -2,6 +2,7 @@ import type { Engine } from "videobook-engine";
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { BookManager } from "../book-manager.js";
+import { transferAssetTags } from "../asset-tags.js";
 import { resolveBookReference } from "../media-library.js";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
@@ -136,6 +137,21 @@ export function exportAssetDef(
             content: [{ type: "text" as const, text: writeResult.error.message }],
           };
         }
+      }
+
+      try {
+        await transferAssetTags(
+          { engine, artifactId: asset_id },
+          { engine, artifactId: newAssetId },
+        );
+      } catch (cause) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: cause instanceof Error ? cause.message : String(cause),
+          }],
+        };
       }
 
       return {

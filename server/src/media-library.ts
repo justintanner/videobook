@@ -18,6 +18,13 @@ import { mutateNotebook } from "./notebook-mutations.js";
 import { searchReferenceStore } from "./search-reference-store.js";
 import { comparableHitScore } from "./search-scoring.js";
 import { buildAssetList, type ProjectAsset } from "./tools/reconcile-project-work.js";
+import {
+  matchesTagFilter,
+  tagFacetCounts,
+  transferAssetTags,
+  type AssetTagFilter,
+  type TagFacetCountRecord,
+} from "./asset-tags.js";
 
 type MediaCellType = "audio" | "image" | "video";
 
@@ -32,6 +39,8 @@ interface LibraryAsset extends ProjectAsset {
 
 interface LibraryAssetSearchResult {
   unindexed_visual_assets: number;
+  /** Tag groups present in the filtered result, with distinct asset counts. */
+  tag_facets: TagFacetCountRecord[];
   preparationJobs: Array<{ bookId: string; jobId: number }>;
   assets: LibraryAsset[];
   page: {
@@ -242,6 +251,7 @@ export async function searchLibraryAssets(
     referenceId?: string;
     referenceRange?: PreparedSearchOptions["range"];
     kinds: MediaCellType[];
+    tags?: AssetTagFilter;
     limit?: number;
     offset?: number;
   },
@@ -271,7 +281,8 @@ export async function searchLibraryAssets(
       const assets = builtAssets
         .filter((asset) =>
           asset.status === "ready"
-          && kindMatches(requested, asset.type))
+          && kindMatches(requested, asset.type)
+          && matchesTagFilter(asset.tags ?? undefined, input.tags))
         .map((asset): LibraryAsset => ({
           ...asset,
           owning_book_id: summary.bookId,
@@ -412,6 +423,7 @@ export async function searchLibraryAssets(
   const page = ranked.slice(offset, offset + limit);
   return {
     assets: page,
+    tag_facets: tagFacetCounts(ranked),
     unindexed_visual_assets: results.reduce((count, result) =>
       count + (result.status === "fulfilled" ? result.value.unindexed : 0), 0),
     preparationJobs: results.flatMap((result) =>
@@ -598,6 +610,12 @@ export async function copyLibraryAsset(
       sourceArtifact,
       targetArtifact,
       sourceBook.bookId,
+    );
+    // After the bytes, so the destination engine can validate the source's
+    // automatic evidence against the content the copy actually carries.
+    await transferAssetTags(
+      { engine: sourceBook.engine, artifactId: sourceArtifact.artifactId },
+      { engine: targetBook.engine, artifactId: targetArtifact.artifactId },
     );
     lease = targetBook.engine.jobs.artifactWork.begin(
       targetArtifact.artifactId,
