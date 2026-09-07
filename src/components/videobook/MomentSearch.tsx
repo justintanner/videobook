@@ -11,12 +11,12 @@ import {
   ExternalLink,
   Film,
   Image,
-  Library,
   Paperclip,
   Pin,
   Replace,
   Search,
   Send,
+  SlidersHorizontal,
   X,
 } from 'lucide-react'
 import type {
@@ -529,203 +529,282 @@ function MomentSearch({
     },
   }))
 
+  const referenceLocked = reference !== null || preparingReference
+  const activeFilterCount = [
+    artifactKind,
+    minimumDuration,
+    maximumDuration,
+    orientation,
+    indexingState,
+    sourceFilter,
+    labels,
+    createdAfter,
+    createdBefore,
+  ].filter((value) => value.trim() !== '').length
+  const clearFilters = () => {
+    setArtifactKind('')
+    setMinimumDuration('')
+    setMaximumDuration('')
+    setOrientation('')
+    setIndexingState('')
+    setSourceFilter('')
+    setLabels('')
+    setCreatedAfter('')
+    setCreatedBefore('')
+  }
+
   return (
     <section className="moment-search">
       <form className="moment-search-form" onSubmit={search}>
-        <span className="moment-search-page-icon" role="img" aria-label="Library">
-          <Library size={18} />
-        </span>
-        <div
-          className={barDragOver ? 'moment-search-bar drag-over' : 'moment-search-bar'}
-          onDragOver={(event) => {
-            if (!dragHasMediaFile(event.dataTransfer)) return
-            event.preventDefault()
-            setBarDragOver(true)
-          }}
-          onDragLeave={() => setBarDragOver(false)}
-          onDrop={(event) => {
-            setBarDragOver(false)
-            const file = [...event.dataTransfer.files]
-              .find((candidate) => searchReferenceKindForFile(candidate))
-            if (!file) return
-            event.preventDefault()
-            event.stopPropagation()
-            void prepareDroppedFile(file)
-          }}
-          onPaste={(event) => {
-            const file = [...event.clipboardData.files]
-              .find((candidate) => searchReferenceKindForFile(candidate))
-            if (!file) return
-            event.preventDefault()
-            event.stopPropagation()
-            void prepareDroppedFile(file)
-          }}
-        >
-          {reference || preparingReference ? (
-            <SearchReferenceChip
-              reference={reference}
-              preparing={preparingReference}
-              disabled={disabled || working}
-              startSeconds={startSeconds}
-              durationSeconds={durationSeconds}
-              onClear={() => searchReference.lifecycle.changeMode('text')}
-              onStartSeconds={searchReference.lifecycle.setStartSeconds}
-              onDurationSeconds={searchReference.lifecycle.setDurationSeconds}
+        <div className="moment-search-row">
+          <span className="moment-search-page-icon" role="img" aria-label="Search">
+            <Search size={18} />
+          </span>
+          <div
+            className={barDragOver ? 'moment-search-bar drag-over' : 'moment-search-bar'}
+            onDragOver={(event) => {
+              if (!dragHasMediaFile(event.dataTransfer)) return
+              event.preventDefault()
+              setBarDragOver(true)
+            }}
+            onDragLeave={() => setBarDragOver(false)}
+            onDrop={(event) => {
+              setBarDragOver(false)
+              const file = [...event.dataTransfer.files]
+                .find((candidate) => searchReferenceKindForFile(candidate))
+              if (!file) return
+              event.preventDefault()
+              event.stopPropagation()
+              void prepareDroppedFile(file)
+            }}
+            onPaste={(event) => {
+              const file = [...event.clipboardData.files]
+                .find((candidate) => searchReferenceKindForFile(candidate))
+              if (!file) return
+              event.preventDefault()
+              event.stopPropagation()
+              void prepareDroppedFile(file)
+            }}
+          >
+            {reference || preparingReference ? (
+              <SearchReferenceChip
+                reference={reference}
+                preparing={preparingReference}
+                disabled={disabled || working}
+                startSeconds={startSeconds}
+                durationSeconds={durationSeconds}
+                onClear={() => searchReference.lifecycle.changeMode('text')}
+                onStartSeconds={searchReference.lifecycle.setStartSeconds}
+                onDurationSeconds={searchReference.lifecycle.setDurationSeconds}
+              />
+            ) : importing ? (
+              <span className="moment-search-importing">
+                <BusyIndicator size={14} />
+                Importing URL…
+                <button
+                  type="button"
+                  aria-label="Stop waiting for the import"
+                  onClick={cancelImportWait}
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ) : null}
+            <input
+              className="moment-search-query"
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              aria-label="Search the library"
+              disabled={disabled || importing !== null}
+              placeholder={reference
+                ? 'Type to switch back to text search, or press Search to re-run'
+                : 'Describe a moment, paste a video URL, or drop an image/video to search by example'}
             />
-          ) : importing ? (
-            <span className="moment-search-importing">
-              <BusyIndicator size={14} />
-              Importing URL…
+            <label className="moment-search-attach" title="Search by example image or video">
+              <Paperclip size={14} />
+              <input
+                type="file"
+                accept="image/*,video/*"
+                disabled={disabled || working || preparingReference || importing !== null}
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  if (file) void prepareDroppedFile(file)
+                }}
+              />
+            </label>
+          </div>
+          <button
+            type="submit"
+            className="moment-search-submit"
+            disabled={
+              disabled
+              || working
+              || preparingReference
+              || importing !== null
+              || (!text.trim() && !reference)
+            }
+          >
+            <Search size={15} />{preparingIndex ? 'Preparing search…' : working ? 'Searching…' : 'Search'}
+          </button>
+        </div>
+        <div className="moment-search-strip">
+          <label className="moment-search-inline">
+            Signal
+            <select
+              value={modality}
+              disabled={referenceLocked}
+              title={referenceLocked ? 'Reverse search uses the visual signal' : undefined}
+              onChange={(event) => setModality(event.target.value as SearchModality)}
+            >
+              <option value="auto">Hybrid</option>
+              <option value="visual">Visual</option>
+              <option value="speech">Speech</option>
+              <option value="ocr">OCR</option>
+              <option value="audio">Audio</option>
+              <option value="metadata">Metadata</option>
+            </select>
+          </label>
+          <div className="moment-search-group" role="group" aria-label="Scope">
+            <span className="moment-search-group-label">Scope</span>
+            <div className={referenceLocked ? 'moment-search-segmented locked' : 'moment-search-segmented'}>
               <button
                 type="button"
-                aria-label="Stop waiting for the import"
-                onClick={cancelImportWait}
+                aria-pressed={referenceLocked || scope === 'library'}
+                disabled={referenceLocked}
+                title={referenceLocked ? 'Reverse search always spans all books' : undefined}
+                onClick={() => setScope('library')}
               >
-                <X size={12} />
+                All books
               </button>
-            </span>
-          ) : null}
-          <input
-            className="moment-search-query"
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            aria-label="Search the library"
-            disabled={disabled || importing !== null}
-            placeholder={reference
-              ? 'Type to switch back to text search, or press Search to re-run'
-              : 'Describe a moment, paste a video URL, or drop an image/video to search by example'}
-          />
-          <label className="moment-search-attach" title="Search by example image or video">
-            <Paperclip size={14} />
-            <input
-              type="file"
-              accept="image/*,video/*"
-              disabled={disabled || working || preparingReference || importing !== null}
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                event.target.value = ''
-                if (file) void prepareDroppedFile(file)
-              }}
-            />
-          </label>
+              <button
+                type="button"
+                aria-pressed={!referenceLocked && scope === 'book'}
+                disabled={referenceLocked}
+                title={referenceLocked ? 'Reverse search always spans all books' : undefined}
+                onClick={() => setScope('book')}
+              >
+                This book
+              </button>
+            </div>
+          </div>
+          {referenceLocked && (
+            <span className="moment-search-lock-hint">locked while searching by example</span>
+          )}
+          <details className="moment-search-filters">
+            <summary>
+              <SlidersHorizontal size={13} />
+              Filters
+              {activeFilterCount > 0 && (
+                <span
+                  className="moment-search-filter-count"
+                  aria-label={`${activeFilterCount} active`}
+                >
+                  {activeFilterCount}
+                </span>
+              )}
+            </summary>
+            <div>
+              <div className="moment-search-filter-fields">
+                <label>
+                  Media type
+                  <select value={artifactKind} onChange={(event) => setArtifactKind(event.target.value)}>
+                    <option value="">Any</option>
+                    <option value="video">Video</option>
+                    <option value="image">Image</option>
+                    <option value="audio">Audio</option>
+                  </select>
+                </label>
+                <label>
+                  Min seconds
+                  <input type="number" min="0" step="0.1" value={minimumDuration} onChange={(event) => setMinimumDuration(event.target.value)} />
+                </label>
+                <label>
+                  Max seconds
+                  <input type="number" min="0" step="0.1" value={maximumDuration} onChange={(event) => setMaximumDuration(event.target.value)} />
+                </label>
+                <label>
+                  Orientation
+                  <select value={orientation} onChange={(event) => setOrientation(event.target.value)}>
+                    <option value="">Any</option>
+                    <option value="landscape">Landscape</option>
+                    <option value="portrait">Portrait</option>
+                    <option value="square">Square</option>
+                  </select>
+                </label>
+                <label>
+                  Index state
+                  <select value={indexingState} onChange={(event) => setIndexingState(event.target.value)}>
+                    <option value="">Any</option>
+                    <option value="ready">Ready</option>
+                    <option value="partial">Partial</option>
+                    <option value="stale">Stale</option>
+                    <option value="failed">Failed</option>
+                    <option value="not-indexed">Not indexed</option>
+                  </select>
+                </label>
+                <label>
+                  Source
+                  <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+                    <option value="">Any source</option>
+                    {assets.map((asset) => (
+                      <option key={asset.artifactId} value={asset.artifactId}>{asset.id}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Labels
+                  <input value={labels} onChange={(event) => setLabels(event.target.value)} placeholder="product, exterior" />
+                </label>
+                <label>
+                  Created after
+                  <input type="date" value={createdAfter} onChange={(event) => setCreatedAfter(event.target.value)} />
+                </label>
+                <label>
+                  Created before
+                  <input type="date" value={createdBefore} onChange={(event) => setCreatedBefore(event.target.value)} />
+                </label>
+              </div>
+              <div className="moment-search-filter-foot">
+                <span>
+                  {activeFilterCount === 0 ? 'No filters set' : `${activeFilterCount} active`}
+                  {' · applied when you search'}
+                </span>
+                <button type="button" disabled={activeFilterCount === 0} onClick={clearFilters}>
+                  Clear all
+                </button>
+              </div>
+            </div>
+          </details>
+          <span className="moment-search-strip-spacer" />
+          {page && (
+            <div className="search-coverage" data-state={page.coverage.state}>
+              <strong>{page.coverage.state}</strong>
+              <progress
+                className="search-coverage-meter"
+                aria-hidden="true"
+                value={page.coverage.indexedArtifactCount}
+                max={Math.max(page.coverage.totalArtifactCount, 1)}
+              />
+              <span
+                title={page.coverage.partialResults
+                  ? 'Partial results update as indexing finishes'
+                  : undefined}
+              >
+                {page.coverage.indexedArtifactCount}/{page.coverage.totalArtifactCount} indexed
+              </span>
+            </div>
+          )}
+          {importControls && (
+            <>
+              <span className="moment-search-strip-divider" aria-hidden="true" />
+              <div className="moment-search-import">
+                <span className="moment-search-group-label">Import</span>
+                <div>{importControls}</div>
+              </div>
+            </>
+          )}
         </div>
-        <label className="moment-search-inline">
-          Signal
-          <select
-            value={modality}
-            disabled={reference !== null || preparingReference}
-            title={reference ? 'Reverse search uses the visual signal' : undefined}
-            onChange={(event) => setModality(event.target.value as SearchModality)}
-          >
-            <option value="auto">Hybrid</option>
-            <option value="visual">Visual</option>
-            <option value="speech">Speech</option>
-            <option value="ocr">OCR</option>
-            <option value="audio">Audio</option>
-            <option value="metadata">Metadata</option>
-          </select>
-        </label>
-        <label className="moment-search-inline">
-          Scope
-          <select
-            value={scope}
-            disabled={reference !== null || preparingReference}
-            title={reference ? 'Reverse search always spans all books' : undefined}
-            onChange={(event) =>
-              setScope(event.target.value as 'book' | 'library')}
-          >
-            <option value="library">All books</option>
-            <option value="book">Current book</option>
-          </select>
-        </label>
-        <button
-          type="submit"
-          disabled={
-            disabled
-            || working
-            || preparingReference
-            || importing !== null
-            || (!text.trim() && !reference)
-          }
-        >
-          <Search size={15} />{preparingIndex ? 'Preparing search…' : working ? 'Searching…' : 'Search'}
-        </button>
-        <details className="moment-search-filters">
-          <summary>Filters</summary>
-          <div>
-            <label>
-              Media type
-              <select value={artifactKind} onChange={(event) => setArtifactKind(event.target.value)}>
-                <option value="">Any</option>
-                <option value="video">Video</option>
-                <option value="image">Image</option>
-                <option value="audio">Audio</option>
-              </select>
-            </label>
-            <label>
-              Min seconds
-              <input type="number" min="0" step="0.1" value={minimumDuration} onChange={(event) => setMinimumDuration(event.target.value)} />
-            </label>
-            <label>
-              Max seconds
-              <input type="number" min="0" step="0.1" value={maximumDuration} onChange={(event) => setMaximumDuration(event.target.value)} />
-            </label>
-            <label>
-              Orientation
-              <select value={orientation} onChange={(event) => setOrientation(event.target.value)}>
-                <option value="">Any</option>
-                <option value="landscape">Landscape</option>
-                <option value="portrait">Portrait</option>
-                <option value="square">Square</option>
-              </select>
-            </label>
-            <label>
-              Index state
-              <select value={indexingState} onChange={(event) => setIndexingState(event.target.value)}>
-                <option value="">Any</option>
-                <option value="ready">Ready</option>
-                <option value="partial">Partial</option>
-                <option value="stale">Stale</option>
-                <option value="failed">Failed</option>
-                <option value="not-indexed">Not indexed</option>
-              </select>
-            </label>
-            <label>
-              Source
-              <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
-                <option value="">Any source</option>
-                {assets.map((asset) => (
-                  <option key={asset.artifactId} value={asset.artifactId}>{asset.id}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Labels
-              <input value={labels} onChange={(event) => setLabels(event.target.value)} placeholder="product, exterior" />
-            </label>
-            <label>
-              Created after
-              <input type="date" value={createdAfter} onChange={(event) => setCreatedAfter(event.target.value)} />
-            </label>
-            <label>
-              Created before
-              <input type="date" value={createdBefore} onChange={(event) => setCreatedBefore(event.target.value)} />
-            </label>
-          </div>
-        </details>
-        {page && (
-          <div className="search-coverage">
-            <strong>{page.coverage.state}</strong>
-            <span
-              title={page.coverage.partialResults
-                ? 'Partial results update as indexing finishes'
-                : undefined}
-            >
-              {page.coverage.indexedArtifactCount}/{page.coverage.totalArtifactCount} indexed
-            </span>
-          </div>
-        )}
-        {importControls}
       </form>
       {replaceHit && (
         <section className="moment-replace-panel" aria-label="Replace sequence clip">

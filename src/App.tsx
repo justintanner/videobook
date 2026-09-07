@@ -11280,6 +11280,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     (subject) => mediaFullscreenEditSelection.subjectIds.includes(subject.id),
   ) ?? []
   const fullscreenRegionCount = mediaFullscreenEditSelection.regions.length
+  const showCommandComposer = screen !== 'library' || Boolean(fullscreenImageEditor)
   const fullscreenComposerContext = fullscreenImageEditor
     ? {
         label: `@${fullscreenImageEditor.address.toUpperCase()} IMAGE EDIT`,
@@ -12959,68 +12960,70 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         />
       )}
 
-      <CommandComposer
-        commands={commands}
-        cells={notebook?.cells ?? []}
-        bookId={bookId}
-        callTool={call}
-        chatModels={chatModelCatalog.models}
-        disabled={
-          busy
-          || mediaFullscreenSidebarEditing
-          || Boolean(musicVideoSession)
-          || !bookId
-          || mcp.state !== 'ready'
-        }
-        modelSelectionDisabled={!bookId || mcp.state !== 'ready'}
-        connectionLabel={mediaFullscreenSidebarEditing
-          ? 'Removing selected subjects…'
-          : mcp.state === 'ready'
-            ? 'Load a book to begin'
-            : 'Connecting to MCP…'}
-        mcpActivity={mcpActivity}
-        selectedModel={chatModel}
-        context={fullscreenComposerContext}
-        mentionAssets={imageEditMentionAssets}
-        inputSession={fullscreenImageEditor
-          ? `image-edit:${fullscreenImageEditor.key}`
-          : 'chat'}
-        placeholder={fullscreenComposerPlaceholder}
-        portalTarget={fullscreenImageEditor
-          ? mediaFullscreenComposerTarget
-          : null}
-        pendingInput={fullscreenImageEditor
-          ? undefined
-          : pendingWatermarkReview
-            ? '/apply'
-            : pendingChatAction?.kind === 'generation'
-            ? '/apply '
-            : pendingCommandPlan || pendingChatAction
+      {showCommandComposer && (
+        <CommandComposer
+          commands={commands}
+          cells={notebook?.cells ?? []}
+          bookId={bookId}
+          callTool={call}
+          chatModels={chatModelCatalog.models}
+          disabled={
+            busy
+            || mediaFullscreenSidebarEditing
+            || Boolean(musicVideoSession)
+            || !bookId
+            || mcp.state !== 'ready'
+          }
+          modelSelectionDisabled={!bookId || mcp.state !== 'ready'}
+          connectionLabel={mediaFullscreenSidebarEditing
+            ? 'Removing selected subjects…'
+            : mcp.state === 'ready'
+              ? 'Load a book to begin'
+              : 'Connecting to MCP…'}
+          mcpActivity={mcpActivity}
+          selectedModel={chatModel}
+          context={fullscreenComposerContext}
+          mentionAssets={imageEditMentionAssets}
+          inputSession={fullscreenImageEditor
+            ? `image-edit:${fullscreenImageEditor.key}`
+            : 'chat'}
+          placeholder={fullscreenComposerPlaceholder}
+          portalTarget={fullscreenImageEditor
+            ? mediaFullscreenComposerTarget
+            : null}
+          pendingInput={fullscreenImageEditor
+            ? undefined
+            : pendingWatermarkReview
               ? '/apply'
-              : undefined}
-        notice={notice
-          ? { message: notice.text, tone: notice.tone }
-          : null}
-        outcomeSlot={confirmSheet ? 'sheet' : 'composer'}
-        onEnsureCatalog={refreshComposerCatalog}
-        onDismissNotice={() => setNoticeState(null)}
-        onDismissPanel={!fullscreenImageEditor && (
-          pendingWatermarkReview
-          || pendingCommandPlan
-          || pendingChatAction
-        )
-          ? dismissPendingCommandPlan
-          : undefined}
-        onExecute={executeComposerCommand}
-        voiceCatalog={elevenLabsVoices}
-        onModelChange={changeChatModel}
-        onSendingChange={fullscreenImageEditor
-          ? setMediaFullscreenComposerSending
-          : undefined}
-        onSuccessfulExecute={revealSuccessfulComposerResult}
-      >
-        {confirmSheet}
-      </CommandComposer>
+              : pendingChatAction?.kind === 'generation'
+              ? '/apply '
+              : pendingCommandPlan || pendingChatAction
+                ? '/apply'
+                : undefined}
+          notice={notice
+            ? { message: notice.text, tone: notice.tone }
+            : null}
+          outcomeSlot={confirmSheet ? 'sheet' : 'composer'}
+          onEnsureCatalog={refreshComposerCatalog}
+          onDismissNotice={() => setNoticeState(null)}
+          onDismissPanel={!fullscreenImageEditor && (
+            pendingWatermarkReview
+            || pendingCommandPlan
+            || pendingChatAction
+          )
+            ? dismissPendingCommandPlan
+            : undefined}
+          onExecute={executeComposerCommand}
+          voiceCatalog={elevenLabsVoices}
+          onModelChange={changeChatModel}
+          onSendingChange={fullscreenImageEditor
+            ? setMediaFullscreenComposerSending
+            : undefined}
+          onSuccessfulExecute={revealSuccessfulComposerResult}
+        >
+          {confirmSheet}
+        </CommandComposer>
+      )}
     </main>
   )
 }
