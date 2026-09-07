@@ -4,8 +4,11 @@ import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import { logger } from "../logger.js";
 import { registerJobHandler } from "../queue.js";
+import { MAX_AUTOMATIC_TAGS, vocabularyFor } from "../tag-vocabulary.js";
+import type { StructuredTagRecord } from "../asset-tag-extraction.js";
 import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
+import { enqueueAssetTagging } from "./tag-asset.js";
 import {
   INTELLIGENCE_MODEL,
   buildIntelligenceResponses,
@@ -29,6 +32,11 @@ export type DescribeImageResult = {
   prompt: string;
   shot?: string;
   pose?: string;
+  /**
+   * Editorial tags for grouping, asked for in the same request as the
+   * reproduction prompt so tagging an image costs no second vision call.
+   */
+  tags?: StructuredTagRecord[];
 };
 
 
@@ -48,9 +56,44 @@ const DESCRIBE_IMAGE_SCHEMA = {
     prompt: { type: "string", maxLength: PROMPT_CHAR_LIMIT },
     shot: { type: "string" },
     pose: { type: "string" },
+    tags: {
+      type: "array",
+      maxItems: MAX_AUTOMATIC_TAGS,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          facet: { type: "string", enum: ["people", "places", "editing"] },
+          label: { type: "string" },
+        },
+        required: ["facet", "label"],
+      },
+    },
   },
-  required: ["prompt", "shot", "pose"],
+  required: ["prompt", "shot", "pose", "tags"],
 };
+
+/**
+ * The tagging half of the instructions. The prompt half describes how to
+ * reproduce the image; this half describes how to file it. Offering the
+ * vocabulary inline is what makes separate clips converge on one spelling —
+ * anything outside it is discarded on the way in, so asking for invented
+ * terms would only waste tokens.
+ */
+function buildTaggingPrompt(): string {
+  return (
+    "\n\nTAGS: also return a \"tags\" array of {facet, label} records that help an editor "
+    + "find and group this image with related footage. Emit a tag only when the image itself "
+    + "supports it, prefer few precise tags over many, and return an empty array when nothing "
+    + "is worth grouping by. Never tag how good or how moody the image looks, and never name a "
+    + "real person or a real place.\n"
+    + `- facet "people" — one of: ${vocabularyFor("people").join(", ")}.\n`
+    + `- facet "places" — the setting, plus interior/exterior and day/night when visible. `
+    + `Common settings: ${vocabularyFor("places").join(", ")}. A concrete unlisted setting is fine.\n`
+    + `- facet "editing" — framing and coverage only: ${vocabularyFor("editing").join(", ")}. `
+    + "A still image cannot show camera movement, so never claim pan, tilt, tracking or handheld."
+  );
+}
 
 function mimeForFilename(filename: string): "image/jpeg" | "image/png" | "image/webp" {
   const ext = extname(filename).replace(/^\./, "").toLowerCase();
@@ -70,6 +113,7 @@ function buildSystemPrompt(guide: string): string {
     "inject editorial film-stock, 'cinematic', 'masterpiece', or pro-film vocabulary into snapshots. " +
     "Default to authentic phone capture when in doubt.\n\n" +
     `--- REPRODUCTION GUIDE ---\n${guide}\n--- END GUIDE ---`
+    + buildTaggingPrompt()
   );
 }
 
@@ -171,6 +215,10 @@ export function registerDescribeImageJob(engine: Engine): void {
         }
         logger.warn("description-cache-failed", { assetId: sourceAssetId, error: cacheResult.error });
       }
+
+      // The structured tags rode along with the prompt, so tagging is now a
+      // read of what this request already returned.
+      await enqueueAssetTagging(engine, sourceAssetId);
 
       if (scriptAssetId) {
         const markdown = formatMarkdown(parsed);

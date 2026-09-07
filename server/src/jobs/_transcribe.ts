@@ -14,6 +14,7 @@ import type {
   TranscriptSegmentKind,
 } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
+import { enqueueAssetTagging } from "./tag-asset.js";
 
 const ELEVENLABS_TIMEOUT_MS = 5 * 60_000;
 
@@ -163,6 +164,9 @@ export async function importElevenLabsTranscript(
   if (!imported.ok) {
     throw new Error(`Failed to import transcript for ${assetId}: ${imported.error.message}`);
   }
+  // Speech is the evidence audio tagging reads, and it can change what a video
+  // is grouped by too.
+  await enqueueAssetTagging(engine, assetId);
   return imported.value;
 }
 

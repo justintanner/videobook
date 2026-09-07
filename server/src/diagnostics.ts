@@ -15,6 +15,7 @@ const EVENTS = [
   "description-cache-failed", "watermark-placement-fallback", "waveform-enqueue-failed",
   "watermark-probe-fallback", "generation-error-clear-failed", "timeline-orientation-failed",
   "generation-cost-estimate", "job-error", "semantic-index-deferred",
+  "tag-asset-failed",
 ] as const;
 export type DiagnosticEvent = typeof EVENTS[number];
 const events = new Set<string>(EVENTS);

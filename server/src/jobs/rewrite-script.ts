@@ -27,7 +27,7 @@ type RewriteScriptPayload = {
   customPrompt?: string | null;
 };
 
-const FIELD_LABEL_TO_KEY: Record<string, Exclude<keyof DescribeImageResult, "prompt">> = {
+const FIELD_LABEL_TO_KEY: Record<string, "shot" | "pose"> = {
   Shot: "shot",
   Pose: "pose",
 };

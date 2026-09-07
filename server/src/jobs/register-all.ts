@@ -140,6 +140,7 @@ import { registerRunNotebookJob } from "./run-notebook.js";
 import { registerRelayoutNotebookJob } from "./relayout-notebook.js";
 import { registerRepairSearchIndexesJob } from "./repair-search-indexes.js";
 import { registerSemanticIndexJob } from "./semantic-index.js";
+import { registerTagAssetJob } from "./tag-asset.js";
 import { registerPrepareSearchReferenceJob } from "./prepare-search-reference.js";
 import { registerPrepareTemporalSearchJob } from "./prepare-temporal-search.js";
 import { registerImageSubjectJobs } from "./image-subjects.js";
@@ -284,6 +285,7 @@ export function registerAllJobHandlers(
   registerRunNotebookJob(engine);
   registerRelayoutNotebookJob(engine);
   registerSemanticIndexJob(engine);
+  registerTagAssetJob(engine);
   registerRepairSearchIndexesJob(engine);
   registerPrepareSearchReferenceJob(engine);
   registerPrepareTemporalSearchJob(engine);

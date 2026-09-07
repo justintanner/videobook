@@ -18,6 +18,7 @@ import { findAudioFile } from "videobook-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
 import { readAssetTranscript } from "../transcript-projection.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
+import { enqueueAssetTagging } from "./tag-asset.js";
 
 type AnalyzeVideoPayload = {
   type: "analyze_video";
@@ -25,6 +26,12 @@ type AnalyzeVideoPayload = {
   assetDir: string;
   bookId: string;
   hasTranscription: boolean;
+  /**
+   * "tagging" means the run exists only to produce evidence for automatic
+   * tags. The analysis is cached as usual, but the downstream tails that
+   * assume a timeline — auto-transcription and lazy rendering — stay put.
+   */
+  purpose?: "tagging";
 };
 
 const MAX_FRAMES = 15;
@@ -148,7 +155,7 @@ function sampleFrames(frames: string[]): string[] {
 export function registerAnalyzeVideoJob(engine: Engine): void {
   registerJobHandler("analyze_video", async (payload, ctx) => {
     const {
-      assetId, assetDir, bookId, hasTranscription,
+      assetId, assetDir, bookId, hasTranscription, purpose,
     } = payload as AnalyzeVideoPayload;
 
     const result = await withLocalLease(engine, assetId, ctx, "analyze", async () => {
@@ -239,19 +246,33 @@ export function registerAnalyzeVideoJob(engine: Engine): void {
       bookId,
     } as unknown as Record<string, unknown>);
 
+    const usedFallback = analysis === FALLBACK_ANALYSIS;
+    // A failed analysis wrote the empty fallback shape; tagging it would fence
+    // the asset against the next successful run, so only a real result is
+    // offered to the tagger.
+    if (!usedFallback) {
+      await enqueueAssetTagging(engine, assetId);
+    }
+
     // Auto-transcribe trigger (replaces the whitelist-tool gate). Run only if
     // the analysis says there's real dialog, ElevenLabs/Kie is configured, no
     // prior failure or in-progress task, and we haven't already transcribed.
-    await maybeEnqueueAutoTranscribe(engine, assetId, assetDir, bookId);
+    if (purpose !== "tagging") {
+      await maybeEnqueueAutoTranscribe(engine, assetId, assetDir, bookId);
+    }
 
-    return { success: true, fallback: analysis === FALLBACK_ANALYSIS, analysis };
+    return { success: true, fallback: usedFallback, analysis };
 
     }
     }, { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS });
-    try {
-      await enqueueLazyTimelineRender(engine, bookId, assetId);
-    } catch (err) {
-      void err;
+    // Rendering follows analysis for assets on a timeline. A run that exists
+    // only to feed the tagger has no timeline behind it, so it renders nothing.
+    if (purpose !== "tagging") {
+      try {
+        await enqueueLazyTimelineRender(engine, bookId, assetId);
+      } catch (err) {
+        void err;
+      }
     }
     return result;
   });

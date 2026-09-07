@@ -1,4 +1,5 @@
 import type { Engine } from "videobook-engine";
+import { enqueueAssetTagging } from "./tag-asset.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { probeImage, cropToFill } from "../image.js";
@@ -70,9 +71,13 @@ export function registerProcessImageJob(engine: Engine): void {
           } as unknown as Record<string, unknown>);
         }
 
-        // Vision analysis (describe_image) is gated to slot drop in
-        // tools/assign-slot.ts so we don't burn Gemini analysis on uploads that never
-        // land in the timeline.
+        // Vision analysis for the reproduction prompt is still gated to slot
+        // drop in tools/assign-slot.ts. Tagging is not: an image that never
+        // reaches a timeline still has to be findable in the Library, and the
+        // tag job asks for the analysis it needs once per content hash.
+        if (process.env.NODE_ENV !== "test") {
+          await enqueueAssetTagging(engine, assetId);
+        }
         return { success: true, width, height };
       }, ctx.signal));
   });

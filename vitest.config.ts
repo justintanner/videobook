@@ -79,6 +79,7 @@ export default defineConfig({
       'server/src/jobs/asset-file-helpers.test.ts',
       'server/src/artifact-label.test.ts',
       'server/src/archive-b2.test.ts',
+      'server/src/asset-tag-extraction.test.ts',
       'server/src/audio-cue.test.ts',
       'server/src/audio-sync.test.ts',
       'server/src/character-name.test.ts',

@@ -1,5 +1,6 @@
 import type { Engine } from "videobook-engine";
 import { extractWaveform, probeVideo } from "../ffmpeg.js";
+import { enqueueAssetTagging } from "./tag-asset.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -71,6 +72,9 @@ export async function processAudioFile(
         bookId: payload.bookId,
       } as unknown as Record<string, unknown>);
     }
+  }
+  if (process.env.NODE_ENV !== "test") {
+    await enqueueAssetTagging(engine, payload.assetId);
   }
   return { success: true, duration };
 }

@@ -9,6 +9,7 @@ import {
   writeFile as fsWriteFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { enqueueAssetTagging } from "./tag-asset.js";
 import { logger } from "../logger.js";
 import { registerJobHandler, queue } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
@@ -561,6 +562,9 @@ async function processVideoSnapshot(
         assetId,
         bookId,
       } as unknown as Record<string, unknown>);
+      // Analysis revival below still respects slotting; tagging does not,
+      // because a Library clip has to be findable without being placed first.
+      await enqueueAssetTagging(engine, assetId);
       if (!skipDownstreamJobs && probe.hasAudio) {
         await enqueueVideoTranscriptJobs(transcriptJobs);
       } else if (!skipDownstreamJobs || reviveVisualAnalysis) {
