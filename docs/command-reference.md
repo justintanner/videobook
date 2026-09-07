@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (296)
+## MCP endpoints (299)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -21,6 +21,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `attach_library_asset` — Copy a foreign Library asset into a book and attach it to a media slot
 - `audio_boost` — Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.
 - `audio_mix` — Mix audio from a video or audio layer asset into a video or audio target asset in-place. The layer starts at 0 seconds at the requested 0-100 volume. The target duration is preserved, and video targets retain their original video stream with git versioning.
+- `backfill_asset_tags` — Tag the assets already in a book. 'start' adopts tags from analysis the book has already paid for; pass allow_analysis to also analyze assets that were never analyzed, which costs provider calls. Pause, resume, cancel and status report the same bounded, resumable pass.
 - `build_generation_provider_payload` (historical names, not exposed: `translate_payload`) — Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.
 - `cancel_job` — Cancel a queued or running persistent job
 - `cancel_legacy_migration` — Cancel queued or copying migration work before its final archive switch starts
@@ -33,6 +34,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `clean_video_audio` — Clean a video artifact's audio in place with ElevenLabs Voice Isolator. Preserves dialogue as the main track, keeps a quiet denoised source bed for important sound effects, suppresses odd start/end sounds with fades, and can add subtle instrumental ElevenLabs music. The video stream is copied unchanged and process_video refreshes derived audio artifacts.
 - `commit_edit_intent` — Commit an unchanged previewed CommandPlan edit stage atomically
 - `concat_images` — Concatenate 1-9 image artifacts into a new image artifact. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.
+- `configure_asset_tagging` — Read or change how new assets are tagged in a book. Manual tagging, filtering and search keep working whatever this is set to.
 - `connect_notebook_cells` — Create a UUIDv7 notebook edge
 - `continue_notebook_generation` — Create a reviewable insertion plan for a completed generation or report a stale destination
 - `continue_queued_insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current
@@ -248,6 +250,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `restore_asset_tag` — Restore a dismissed automatic tag so future analysis may surface it again.
 - `restore_asset_version` — Restore an asset from an immutable revision as a new revision
 - `restore_edit_action` — Create a forward revision restoring a prior edit action or revision
+- `retag_asset` — Re-run tagging for one asset and return its tag state. Manual tags and dismissals are preserved; use it to retry after adding a provider key or to pick up a newer analysis.
 - `retry_generation` — Retry a failed generation by replaying its original request payload. Reads the persisted generation-request metadata for the asset, clears its error record, and re-enqueues the same job. Use this on a failed asset card to re-run the exact inputs without re-resolving references.
 - `retry_ingest` — Retry derivation jobs without uploading source bytes again
 - `retry_job` — Re-enqueue a failed or cancelled persistent job with the same durable payload

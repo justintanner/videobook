@@ -544,6 +544,7 @@ const ARTIFACT_DETACHED_JOB_TYPES: ReadonlySet<string> = new Set([
   "post_to_x",
   "semantic_index",
   "tag_asset",
+  "backfill_asset_tags",
   ...SEARCH_REFERENCE_JOB_TYPES,
 ]);
 

@@ -33,6 +33,7 @@ import {
   type TagExtraction,
   type TranscriptEvidence,
 } from "../asset-tag-extraction.js";
+import { readTaggingSettings } from "../tag-settings.js";
 import { TAG_ANALYZER_VERSION } from "../tag-vocabulary.js";
 
 const ANALYSIS_FILENAME = ".original.analysis.json";
@@ -56,6 +57,12 @@ export type TagAssetPayload = {
   assetId: string;
   /** Re-tag even when the fence says this content is already covered. */
   force?: boolean;
+  /**
+   * Adopt cached analysis only. A backfill pass uses this to sweep an entire
+   * library for free and report what would still need inference, instead of
+   * spending on every untagged asset the moment someone asks for counts.
+   */
+  cacheOnly?: boolean;
 };
 
 export type TagAssetResult = {
@@ -194,6 +201,7 @@ export async function enqueueAssetTagging(
   options: { force?: boolean } = {},
 ): Promise<void> {
   try {
+    if (!options.force && !readTaggingSettings(engine).automaticEnabled) return;
     const bookId = engine.book.get().bookId;
     const artifact = engine.artifacts.get(assetId);
     if (!artifact.ok) return;
@@ -252,6 +260,11 @@ export async function runAssetTagging(
     return { ...base, outcome: extraction.outcome, sourceHash };
   }
   if (extraction.outcome === "no_evidence") {
+    if (payload.cacheOnly) {
+      // Nothing usable is cached. Saying so is the point of a cache-only pass:
+      // the asset is counted as needing analysis rather than claimed current.
+      return { ...base, outcome: "no_evidence", sourceHash };
+    }
     // Analysis is otherwise gated on dropping an asset into a timeline, which
     // would leave everything that stays in the Library untagged. Ask for it
     // here instead; the analysis tail re-queues this job, and the dedupe key
@@ -299,6 +312,7 @@ async function requestAnalysis(
   kind: ArtifactKind,
 ): Promise<"analysis_requested" | "analysis_unavailable" | "no_evidence"> {
   if (kind !== "image" && kind !== "video" && kind !== "final") return "no_evidence";
+  if (!readTaggingSettings(engine).analysisOnNewAssets) return "no_evidence";
   if (!getApiKey("OPENAI_API_KEY")) return "analysis_unavailable";
   const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) return "no_evidence";
