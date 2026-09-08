@@ -14,9 +14,9 @@
  * tagged assets become eligible for a re-run.
  */
 
-import { AUTOMATIC_TAGS_PER_SNAPSHOT_MAX, type TagFacet } from "videobook-engine";
+import { AUTOMATIC_TAGS_PER_SNAPSHOT_MAX, normalizeTagLabel, normalizeTagPrefix, tagCanonicalKey, type TagFacet } from "videobook-engine/tag-values";
 
-export const TAG_ANALYZER_VERSION = "editorial-tags-v1";
+export const TAG_ANALYZER_VERSION = "editorial-tags-v2";
 
 /** The ceiling is a ceiling, never a quota: sparse evidence emits fewer. */
 export const MAX_AUTOMATIC_TAGS = AUTOMATIC_TAGS_PER_SNAPSHOT_MAX;
@@ -42,8 +42,9 @@ const PEOPLE: readonly VocabularyEntry[] = [
   { label: "two people", aliases: ["pair", "couple", "duo", "two subjects"] },
   { label: "small group", aliases: ["group", "three people", "few people", "small gathering"] },
   { label: "crowd", aliases: ["crowded", "many people", "audience", "large group"] },
-  { label: "interviewer", aliases: ["host", "presenter", "questioner"] },
-  { label: "interviewee", aliases: ["guest", "subject being interviewed", "respondent"] },
+  { label: "interviewer", aliases: ["questioner"] },
+  { label: "interviewee", aliases: ["subject being interviewed", "respondent"] },
+  { label: "presenter", aliases: ["host"] },
 ];
 
 /** Settings useful for matching coverage, plus the two axes worth grouping by. */
@@ -54,13 +55,13 @@ const PLACES: readonly VocabularyEntry[] = [
   { label: "night", aliases: ["nighttime", "after dark", "evening"] },
   { label: "kitchen", aliases: ["galley"] },
   { label: "street", aliases: ["sidewalk", "roadside", "city street"] },
-  { label: "studio", aliases: ["soundstage", "set"] },
-  { label: "office", aliases: ["workplace", "desk"] },
+  { label: "studio", aliases: ["soundstage"] },
+  { label: "office", aliases: ["workplace"] },
   { label: "bedroom", aliases: [] },
   { label: "living room", aliases: ["lounge"] },
   { label: "restaurant", aliases: ["cafe", "diner", "bar"] },
   { label: "store", aliases: ["shop", "market", "supermarket"] },
-  { label: "car", aliases: ["vehicle interior", "driving"] },
+  { label: "car", aliases: ["vehicle interior"] },
   { label: "beach", aliases: ["shore", "seaside"] },
   { label: "park", aliases: ["garden"] },
   { label: "forest", aliases: ["woods", "woodland"] },
@@ -87,7 +88,8 @@ const EDITING: readonly VocabularyEntry[] = [
   { label: "tilt", aliases: ["tilting"] },
   { label: "handheld", aliases: ["hand held", "shaky", "run and gun"] },
   { label: "tracking", aliases: ["dolly", "steadicam", "follow shot", "tracking shot"] },
-  { label: "interview", aliases: ["talking head", "sit down interview"] },
+  { label: "interview", aliases: ["sit down interview"] },
+  { label: "talking head", aliases: [] },
   { label: "dialogue", aliases: ["conversation", "speech", "talking"] },
   { label: "ambience", aliases: ["ambient", "room tone", "atmosphere", "background sound"] },
   { label: "music", aliases: ["musical", "score", "soundtrack"] },
@@ -139,6 +141,40 @@ export function vocabularyFor(facet: TagFacet): string[] {
   return VOCABULARY[facet].map((entry) => entry.label);
 }
 
+export function isFrameTag(tag: TagCandidate): boolean {
+  if (tag.facet === "places") return true;
+  if (tag.facet === "people") return PEOPLE.slice(0, 5).some((entry) => entry.label === tag.label);
+  return tag.facet === "editing" && EDITING.slice(0, 7).some((entry) => entry.label === tag.label);
+}
+
+export function frameVocabularyFor(facet: TagFacet): string[] {
+  return vocabularyFor(facet).filter((label) => isFrameTag({ facet, label }));
+}
+
+export function resolveTagInput(
+  input: { facet?: TagFacet; label: string },
+  existing: readonly TagCandidate[] = [],
+): TagCandidate {
+  const label = normalizeTagLabel(input.label);
+  const key = tagCanonicalKey(label);
+  const facets = input.facet ? [input.facet] : ["people", "places", "editing"] as const;
+  for (const facet of facets) {
+    const known = canonicalizeTag(facet, label);
+    if (known) return { ...known, label: tagCanonicalKey(known.label) === key ? label : known.label };
+  }
+  const previous = !input.facet && existing.find((tag) => tagCanonicalKey(tag.label) === key);
+  return { facet: input.facet ?? (previous ? previous.facet : "custom"), label };
+}
+
+export function matchesTagPrefix(tag: TagCandidate, prefix: string): boolean {
+  const normalized = normalizeTagPrefix(prefix);
+  if (tagCanonicalKey(tag.label).startsWith(normalized)) return true;
+  const canonical = canonicalizeTag(tag.facet, tag.label);
+  if (!canonical) return false;
+  return VOCABULARY[tag.facet].some((entry) => entry.label === canonical.label
+    && [entry.label, ...entry.aliases].some((alias) => normalizeTagPrefix(alias).startsWith(normalized)));
+}
+
 /**
  * A place the vocabulary does not list can still be worth keeping — "subway",
  * "rooftop bar" — but only when it reads as a concrete setting rather than an
@@ -149,7 +185,8 @@ function acceptsUnlistedPlace(term: string): boolean {
   const words = term.split(" ");
   if (words.length === 0 || words.length > 2) return false;
   return words.every((word) =>
-    word.length >= 3 && word.length <= 20 && /^[\p{L}-]+$/u.test(word));
+    word.length >= 3 && word.length <= 20 && /^[\p{L}-]+$/u.test(word)
+    && !BANNED_TERMS.has(word) && !["not", "without", "never", "maybe", "possibly"].includes(word));
 }
 
 /**
@@ -190,7 +227,7 @@ export function matchVocabularyTerms(
   phrase: string,
 ): TagCandidate[] {
   const text = normalizeTerm(phrase);
-  if (!text) return [];
+  if (!text || /\b(?:no|not|without|never|isnt|isn't|maybe|possibly)\b/u.test(text)) return [];
   const matches: TagCandidate[] = [];
   for (const entry of VOCABULARY[facet]) {
     for (const term of [entry.label, ...entry.aliases]) {

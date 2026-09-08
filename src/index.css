@@ -11553,13 +11553,6 @@ textarea:focus-visible {
   background: transparent;
 }
 
-.asset-tag-chip-facet {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #6f8f7d;
-}
-
 .asset-tag-chip-remove,
 .asset-tag-chip-restore {
   display: inline-flex;
@@ -11593,7 +11586,6 @@ textarea:focus-visible {
   gap: 4px;
 }
 
-.asset-tag-facet,
 .asset-tag-input {
   min-height: 24px;
   padding: 2px 6px;

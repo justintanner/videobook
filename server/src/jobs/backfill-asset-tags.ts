@@ -15,6 +15,7 @@
  */
 
 import type { Engine } from "videobook-engine";
+import { v7 as uuidv7 } from "uuid";
 import { logger } from "../logger.js";
 import { registerJobHandler, type JobHandlerContext } from "../queue.js";
 import {
@@ -29,6 +30,7 @@ import { runAssetTagging } from "./tag-asset.js";
 type BackfillAssetTagsPayload = {
   type: "backfill_asset_tags";
   bookId: string;
+  runId?: string | null;
   /** Allow the pass to request analysis for assets with no usable cache. */
   allowAnalysis?: boolean;
   /** Re-tag assets whose snapshot already covers their current content. */
@@ -47,11 +49,12 @@ async function mapWithLimit<T, R>(
   items: readonly T[],
   limit: number,
   run: (item: T) => Promise<R>,
+  canRun: () => boolean,
 ): Promise<R[]> {
-  const results: R[] = new Array<R>(items.length);
+  const results: R[] = [];
   let next = 0;
   async function worker(): Promise<void> {
-    for (;;) {
+    while (canRun()) {
       const index = next;
       next += 1;
       const item = items[index];
@@ -89,15 +92,19 @@ export async function runAssetTagBackfill(
   context?: Pick<JobHandlerContext, "signal">,
 ): Promise<BackfillState> {
   let state = readBackfillState(engine);
-  if (state.status !== "running") {
-    // Someone paused or cancelled between this job being queued and run.
+  const runId = payload.runId ?? null;
+  if (state.status !== "running" || state.runId !== runId) {
     return state;
   }
+  const canRun = () => {
+    const latest = readBackfillState(engine);
+    return latest.runId === runId && latest.status === "running" && !context?.signal.aborted;
+  };
 
   for (;;) {
+    state = readBackfillState(engine);
+    if (state.runId !== runId || state.status !== "running") return state;
     if (context?.signal.aborted) {
-      // A shutdown is not a cancellation: the pass stays resumable exactly
-      // where it stopped.
       return writeBackfillState(engine, { ...state, status: "paused" });
     }
     const page = pageAfter(engine, state.cursor);
@@ -117,28 +124,25 @@ export async function runAssetTagBackfill(
           assetId,
           ...(state.force ? { force: true } : {}),
           ...(state.allowAnalysis ? {} : { cacheOnly: true }),
-        });
+        }, { canRequestAnalysis: canRun });
         return result.outcome;
       } catch (cause) {
         logger.warn("tag-asset-failed", { assetId, error: cause });
         return "failed";
       }
-    });
+    }, canRun);
 
-    let counts = state.counts;
+    const latest = readBackfillState(engine);
+    if (latest.runId !== runId) return latest;
+    let counts = latest.counts;
     for (const outcome of outcomes) counts = recordOutcome(counts, outcome);
     state = writeBackfillState(engine, {
-      ...state,
-      cursor: page[page.length - 1] ?? state.cursor,
-      scanned: state.scanned + page.length,
+      ...latest,
+      cursor: page[outcomes.length - 1] ?? latest.cursor,
+      scanned: latest.scanned + outcomes.length,
       counts,
     });
-
-    // Re-read: pause and cancel are writes from a tool handler, and this is
-    // where the pass notices them.
-    const latest = readBackfillState(engine);
-    if (latest.status !== "running") return latest;
-    state = latest;
+    if (state.status !== "running") return state;
   }
 }
 
@@ -147,10 +151,9 @@ export function startedState(
   previous: BackfillState,
   options: { allowAnalysis: boolean; force: boolean; resume: boolean },
 ): BackfillState {
-  const resuming = options.resume
-    && previous.status === "paused"
-    && previous.cursor !== null;
+  const resuming = options.resume && previous.status === "paused";
   return {
+    runId: uuidv7(),
     status: "running",
     cursor: resuming ? previous.cursor : null,
     scanned: resuming ? previous.scanned : 0,

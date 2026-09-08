@@ -18,6 +18,7 @@ import type {
   Engine,
   TagFacet,
 } from "videobook-engine";
+import { resolveTagInput } from "./tag-vocabulary.js";
 import {
   TAG_FACETS,
   TAG_READ_BATCH_MAX,
@@ -95,17 +96,18 @@ export const EMPTY_TAG_SUMMARY: AssetTagSummary = Object.freeze({
 });
 
 function tagRecord(tag: AssetTag): AssetTagRecord {
+  const identity = normalizeTagIdentity(resolveTagInput(tag));
   return {
     facet: tag.facet,
-    key: tag.key,
-    label: tag.label,
+    key: identity.key,
+    label: identity.label,
     origin: tag.origin,
     entity_id: tag.entityId ?? null,
   };
 }
 
 function dismissedRecord(tag: DismissedTag): DismissedTagRecord {
-  return { facet: tag.facet, key: tag.key, label: tag.label };
+  return normalizeTagIdentity(resolveTagInput(tag));
 }
 
 function automaticRecord(tag: AutomaticAssetTag): AssetTagRecord {
@@ -127,11 +129,22 @@ function tagFingerprint(state: ArtifactTagState): string {
 }
 
 export function assetTagSummary(state: ArtifactTagState): AssetTagSummary {
+  const unique = <T extends { facet: TagFacet; key: string }>(tags: T[]): T[] =>
+    [...new Map(tags.map((tag) => [`${tag.facet}/${tag.key}`, tag])).values()];
+  const manual = unique(state.manual.map(tagRecord));
+  const automatic = unique(state.automatic.map(automaticRecord));
+  const dismissed = unique(state.dismissed.map(dismissedRecord));
+  const suppressed = new Set(dismissed.map((tag) => `${tag.facet}/${tag.key}`));
+  const effective = unique([
+    ...state.effective.filter((tag) => tag.origin === "automatic").map(tagRecord)
+      .filter((tag) => !suppressed.has(`${tag.facet}/${tag.key}`)),
+    ...manual,
+  ]).sort((left, right) => left.facet.localeCompare(right.facet) || left.key.localeCompare(right.key));
   return {
-    effective: state.effective.map(tagRecord),
-    manual: state.manual.map(tagRecord),
-    automatic: state.automatic.map(automaticRecord),
-    dismissed: state.dismissed.map(dismissedRecord),
+    effective,
+    manual,
+    automatic,
+    dismissed,
     analysis: state.snapshot
       ? {
         source_hash: state.snapshot.sourceHash,
@@ -181,10 +194,10 @@ function normalizeSelector(selector: TagSelector): NormalizedSelector {
         `Unknown tag facet "${selector.facet}"; expected one of ${TAG_FACETS.join(", ")}`,
       );
     }
-    const identity = normalizeTagIdentity({
+    const identity = normalizeTagIdentity(resolveTagInput({
       facet: selector.facet,
       label: selector.label,
-    });
+    }));
     return { facet: identity.facet, key: identity.key };
   }
   const key = tagCanonicalKey(selector.label);
@@ -197,7 +210,9 @@ function matchesSelector(
   selector: NormalizedSelector,
 ): boolean {
   return tags.some((tag) =>
-    tag.key === selector.key
+    tagCanonicalKey(resolveTagInput(tag).label) === tagCanonicalKey(resolveTagInput({
+      facet: tag.facet, label: selector.key,
+    }).label)
     && (selector.facet === null || tag.facet === selector.facet));
 }
 

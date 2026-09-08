@@ -21,7 +21,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `attach_library_asset` — Copy a foreign Library asset into a book and attach it to a media slot
 - `audio_boost` — Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.
 - `audio_mix` — Mix audio from a video or audio layer asset into a video or audio target asset in-place. The layer starts at 0 seconds at the requested 0-100 volume. The target duration is preserved, and video targets retain their original video stream with git versioning.
-- `backfill_asset_tags` — Tag the assets already in a book. 'start' adopts tags from analysis the book has already paid for; pass allow_analysis to also analyze assets that were never analyzed, which costs provider calls. Pause, resume, cancel and status report the same bounded, resumable pass.
+- `backfill_asset_tags` — Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.
 - `build_generation_provider_payload` (historical names, not exposed: `translate_payload`) — Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.
 - `cancel_job` — Cancel a queued or running persistent job
 - `cancel_legacy_migration` — Cancel queued or copying migration work before its final archive switch starts

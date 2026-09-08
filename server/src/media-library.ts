@@ -299,6 +299,7 @@ export async function searchLibraryAssets(
             ? ["visual" as const, "metadata" as const]
             : ["visual" as const],
           artifactKinds,
+          sourceArtifactIds: assets.map((asset) => asset.artifact_id),
           limit: 100,
         };
         const result = prepared

@@ -73,6 +73,7 @@ describe("asset tag backfill", () => {
     return await runAssetTagBackfill(engine, {
       type: "backfill_asset_tags",
       bookId,
+      runId: readBackfillState(engine).runId,
     });
   }
 
@@ -214,7 +215,7 @@ describe("asset tag backfill", () => {
 
     const state = await runAssetTagBackfill(
       engine,
-      { type: "backfill_asset_tags", bookId },
+      { type: "backfill_asset_tags", bookId, runId: readBackfillState(engine).runId },
       { signal: controller.signal },
     );
     expect(state.status).toBe("paused");
@@ -236,5 +237,39 @@ describe("asset tag backfill", () => {
       skipped: 2,
       failed: 1,
     });
+  });
+
+  it.each(["paused", "cancelled"] as const)("preserves %s during file reads and stops starting assets", async (status) => {
+    for (let index = 0; index < 30; index += 1) await makeVideo(true);
+    const started = start({ allowAnalysis: true });
+    const pending = run();
+    writeBackfillState(engine, { ...started, status });
+    const stopped = await pending;
+    expect(stopped.status).toBe(status);
+    expect(stopped.scanned).toBe(4);
+    expect(stopped.counts.tagged).toBe(4);
+    expect(readBackfillState(engine)).toEqual(stopped);
+    start({ resume: status === "paused" });
+    const finished = await run();
+    expect(finished.status).toBe("completed");
+    expect(finished.scanned).toBe(30);
+  });
+
+  it.each([false, true])("fences an old worker from a new run (resume=%s)", async (resume) => {
+    await makeVideo(true);
+    const original = start();
+    const pending = run();
+    writeBackfillState(engine, { ...original, status: "paused" });
+    const replacement = start({ resume });
+    expect(replacement.runId).not.toBe(original.runId);
+    expect(await pending).toEqual(replacement);
+    expect(readBackfillState(engine)).toEqual(replacement);
+    expect(await runAssetTagBackfill(engine, {
+      type: "backfill_asset_tags", bookId, runId: original.runId,
+    })).toEqual(replacement);
+    expect(await runAssetTagBackfill(engine, {
+      type: "backfill_asset_tags", bookId,
+    })).toEqual(replacement);
+    expect((await run()).scanned).toBe(1);
   });
 });

@@ -19,6 +19,7 @@ import { readAndAssessDialog } from "../dialog-quality.js";
 import { readAssetTranscript } from "../transcript-projection.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
 import { enqueueAssetTagging } from "./tag-asset.js";
+import { frameVocabularyFor, MAX_AUTOMATIC_TAGS } from "../tag-vocabulary.js";
 
 type AnalyzeVideoPayload = {
   type: "analyze_video";
@@ -52,6 +53,7 @@ Return a JSON object with these fields:
 - "summary": A 2-3 sentence description of the video content
 - "scenes": An array of scene descriptions, each with "timestamp" (approximate seconds), "description", and "tags" (array of strings)
 - "tags": Top-level tags for the entire video (array of strings)
+- "editorialTags": Up to ${MAX_AUTOMATIC_TAGS} {facet, label} records for grouping footage. Use only visible evidence: people (${frameVocabularyFor("people").join(", ")}), places (${frameVocabularyFor("places").join(", ")}), editing (${frameVocabularyFor("editing").join(", ")}). Return [] when unsupported. Never infer camera movement, sound, interview roles, names or exact geographic locations from these sparse frames. Never convert a negated claim or an incidental object into a tag.
 - "mood": The overall mood/tone of the video
 - "subjects": Array of main subjects/people/objects featured
 - "subjectPlacement": Horizontal placement of the primary subject across the sampled frames: "left", "center", or "right"
@@ -69,6 +71,7 @@ const ANALYZE_VIDEO_JSON_SCHEMA = {
     "summary",
     "scenes",
     "tags",
+    "editorialTags",
     "mood",
     "subjects",
     "subjectPlacement",
@@ -97,6 +100,13 @@ const ANALYZE_VIDEO_JSON_SCHEMA = {
       },
     },
     tags: { type: "array", items: { type: "string" } },
+    editorialTags: {
+      type: "array", maxItems: MAX_AUTOMATIC_TAGS,
+      items: {
+        type: "object", additionalProperties: false, required: ["facet", "label"],
+        properties: { facet: { type: "string", enum: ["people", "places", "editing"] }, label: { type: "string" } },
+      },
+    },
     mood: { type: "string" },
     subjects: { type: "array", items: { type: "string" } },
     subjectPlacement: { type: "string", enum: ["left", "center", "right"] },

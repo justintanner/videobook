@@ -39,6 +39,7 @@ type BackfillCounts = {
 };
 
 export type BackfillState = {
+  runId: string | null;
   status: BackfillStatus;
   /** Last artifact id visited; resume continues after it. */
   cursor: string | null;
@@ -66,6 +67,7 @@ export const EMPTY_COUNTS: BackfillCounts = {
 };
 
 const IDLE_STATE: BackfillState = {
+  runId: null,
   status: "idle",
   cursor: null,
   scanned: 0,
@@ -113,6 +115,7 @@ export function readBackfillState(engine: Engine): BackfillState {
   const stored = engine.settings.get<Record<string, unknown>>(SETTINGS_KEY);
   if (!stored) return { ...IDLE_STATE };
   return {
+    runId: typeof stored.runId === "string" ? stored.runId : null,
     status: status(stored.status),
     cursor: typeof stored.cursor === "string" ? stored.cursor : null,
     scanned: count(stored.scanned),

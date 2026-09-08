@@ -2702,7 +2702,7 @@ describe('chat composer browser flow', () => {
       .getByRole('button', { name: 'Remove tag Hero shot (Added by you)' })
       .click()
     await expect.poll(async () =>
-      await reopened.getByRole('listitem').filter({ hasText: 'Hero shot' }).count())
+      await reopened.getByRole('button', { name: 'Remove tag Hero shot (Added by you)', exact: true }).count())
       .toBe(0)
     await expect.poll(() => observedCalls.find((call) =>
       call.name === 'remove_asset_tag')).toMatchObject({

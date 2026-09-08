@@ -10,7 +10,6 @@
  */
 
 import type { Engine } from "videobook-engine";
-import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import {
@@ -76,7 +75,7 @@ export function tagBackfillDefs(engine: Engine): ToolDef[] {
     {
       name: "backfill_asset_tags",
       description:
-        "Tag the assets already in a book. 'start' adopts tags from analysis the book has already paid for; pass allow_analysis to also analyze assets that were never analyzed, which costs provider calls. Pause, resume, cancel and status report the same bounded, resumable pass.",
+        "Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.",
       schema: {
         book_id: z.string().describe("Book to backfill"),
         action: z.enum(["start", "resume", "pause", "cancel", "status"])
@@ -99,10 +98,9 @@ export function tagBackfillDefs(engine: Engine): ToolDef[] {
           const previous = readBackfillState(engine);
           if (action === "status") return json(progressPayload(engine, previous));
           if (action === "pause" || action === "cancel") {
-            if (previous.status !== "running") {
+            if (previous.status !== "running" && !(action === "cancel" && previous.status === "paused")) {
               return json(progressPayload(engine, previous));
             }
-            // The running pass reads this between pages and stops there.
             const stopped = writeBackfillState(engine, {
               ...previous,
               status: action === "pause" ? "paused" : "cancelled",
@@ -114,13 +112,14 @@ export function tagBackfillDefs(engine: Engine): ToolDef[] {
             return json(progressPayload(engine, previous));
           }
           const started = writeBackfillState(engine, startedState(previous, {
-            allowAnalysis: allow_analysis === true,
-            force: force === true,
+            allowAnalysis: allow_analysis ?? (action === "resume" && previous.allowAnalysis),
+            force: force ?? (action === "resume" && previous.force),
             resume: action === "resume",
           }));
-          await queue.enqueue(`backfill-asset-tags-${book_id}-${uuidv7()}`, {
+          await queue.enqueue(`backfill-asset-tags-${book_id}-${started.runId}`, {
             type: "backfill_asset_tags",
             bookId: book_id,
+            runId: started.runId,
             ...(allow_analysis ? { allowAnalysis: true } : {}),
             ...(force ? { force: true } : {}),
           } as unknown as Record<string, unknown>);

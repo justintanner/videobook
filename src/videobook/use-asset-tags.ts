@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { TagFacet } from 'videobook-engine/tag-values'
 import { parseAssetTags, type AssetTags } from './asset-tags'
+import { resolveTagInput } from '../../server/src/tag-vocabulary'
 import {
   applyTagEdit,
   visibleSuggestions,
@@ -8,25 +9,6 @@ import {
   type TagEditAction,
   type TagSuggestion,
 } from './asset-tag-editing'
-
-/**
- * Tag editing against the MCP tools.
- *
- * The component that renders chips should not know tool names, argument
- * shapes or how a stale response is recognised, so all three live here. Three
- * rules the hook exists to keep:
- *
- * - An edit is applied locally first and replaced by the server's canonical
- *   state when it lands. A failure rolls the prediction back and surfaces the
- *   message rather than leaving a chip that lies.
- * - Only the newest request may write state. Tag edits arrive faster than
- *   round trips when someone is typing, and an older reply must not resurrect
- *   a tag that was just removed.
- * - Background analysis keeps arriving while someone types. A fresh payload
- *   replaces the local prediction only once it reflects that prediction,
- *   which is what stops a half-typed edit from being undone underneath the
- *   person making it.
- */
 
 type ToolCall = (
   tool: string,
@@ -91,117 +73,113 @@ const TOOL_BY_ACTION: Record<TagEditAction, string> = {
   restore: 'restore_asset_tag',
 }
 
-export function useAssetTags({
-  call,
-  target,
-  tags,
-}: UseAssetTagsInput): AssetTagsController {
-  const [local, setLocal] = useState<{
-    assetId: string
-    tags: AssetTags
-  } | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [rawSuggestions, setRawSuggestions] = useState<TagSuggestion[]>([])
+type PendingEdit = { id: number; edit: TagEdit; action: TagEditAction }
+
+type EditorState = {
+  targetKey: string
+  source: string
+  canonical: AssetTags | null
+  pending: PendingEdit[]
+  error: string | null
+}
+
+export function useAssetTags({ call, target, tags }: UseAssetTagsInput): AssetTagsController {
+  const targetKey = target ? `${target.bookId}/${target.assetId}` : ''
+  const source = JSON.stringify(tags)
+  const [local, setLocal] = useState<EditorState>({
+    targetKey, source, canonical: tags, pending: [], error: null,
+  })
+  const [rawSuggestions, setRawSuggestions] = useState<{ targetKey: string; tags: TagSuggestion[] }>({
+    targetKey, tags: [],
+  })
+  const queueRef = useRef<Promise<void>>(Promise.resolve())
   const editRequestRef = useRef(0)
   const suggestRequestRef = useRef(0)
-
-  // Derived during render rather than synced in an effect: a local prediction
-  // survives only until the payload catches up with it, and never outlives a
-  // switch to another asset.
-  const effective = local && target && local.assetId === target.assetId
-    ? local.tags
-    : tags
-
-  const canEdit = Boolean(call && target)
-
-  const runEdit = useCallback(async (
-    edit: TagEdit,
-    action: TagEditAction,
-  ): Promise<void> => {
-    if (!call || !target) return
-    const assetId = target.assetId
-    const previous = effective
-    const predicted = applyTagEdit(previous, edit, action)
-    const request = editRequestRef.current + 1
-    editRequestRef.current = request
-    setLocal({ assetId, tags: predicted })
-    setBusy(true)
-    setError(null)
-    try {
-      const response = await call(TOOL_BY_ACTION[action], {
-        book_id: target.bookId,
-        asset_id: assetId,
-        facet: edit.facet,
-        label: edit.label,
-      })
-      if (editRequestRef.current !== request) return
-      const canonical = readTags(response)
-      setLocal(canonical ? { assetId, tags: canonical } : null)
-    } catch (cause) {
-      if (editRequestRef.current !== request) return
-      // The prediction was wrong: put the chips back the way they were and
-      // say why, rather than leaving the edit looking applied.
-      setLocal(previous ? { assetId, tags: previous } : null)
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      if (editRequestRef.current === request) setBusy(false)
+  let current = local
+  if (local.targetKey !== targetKey || local.source !== source) {
+    current = {
+      targetKey, source, canonical: tags,
+      pending: local.targetKey === targetKey ? local.pending : [],
+      error: local.targetKey === targetKey ? local.error : null,
     }
-  }, [call, effective, target])
-
-  const addTag = useCallback(
-    (edit: TagEdit) => runEdit(edit, 'add'),
-    [runEdit],
-  )
-  const removeTag = useCallback(
-    (edit: TagEdit) => runEdit(edit, 'remove'),
-    [runEdit],
-  )
-  const restoreTag = useCallback(
-    (edit: TagEdit) => runEdit(edit, 'restore'),
-    [runEdit],
+    setLocal(current)
+  }
+  const effective = current.pending.reduce<AssetTags | null>(
+    (state, pending) => applyTagEdit(state, pending.edit, pending.action),
+    current.canonical,
   )
 
-  const loadSuggestions = useCallback(async (
-    prefix: string,
-    facet?: TagFacet,
-  ): Promise<void> => {
+  const runEdit = useCallback((input: TagEdit, action: TagEditAction): Promise<void> => {
+    if (!call || !target) return Promise.resolve()
+    let edit: TagEdit
+    try {
+      edit = resolveTagInput(input, [
+        ...(effective?.effective ?? []), ...(effective?.dismissed ?? []),
+        ...(rawSuggestions.targetKey === targetKey ? rawSuggestions.tags : []),
+      ])
+    } catch (cause) {
+      setLocal((state) => ({ ...state, error: cause instanceof Error ? cause.message : String(cause) }))
+      return Promise.resolve()
+    }
+    const id = ++editRequestRef.current
+    setLocal((state) => ({ ...state, pending: [...state.pending, { id, edit, action }], error: null }))
+    const operation = queueRef.current.then(async () => {
+      try {
+        const response = await call(TOOL_BY_ACTION[action], {
+          book_id: target.bookId, asset_id: target.assetId, facet: edit.facet, label: edit.label,
+        })
+        const canonical = readTags(response)
+        if (!canonical) throw new Error('The server returned no tag state')
+        setLocal((state) => {
+          if (state.targetKey !== targetKey || !state.pending.some((pending) => pending.id === id)) return state
+          return {
+            ...state,
+            canonical: state.source === source ? canonical : applyTagEdit(state.canonical, edit, action),
+            pending: state.pending.filter((pending) => pending.id !== id),
+          }
+        })
+      } catch (cause) {
+        setLocal((state) => {
+          if (state.targetKey !== targetKey || !state.pending.some((pending) => pending.id === id)) return state
+          return {
+            ...state, pending: state.pending.filter((pending) => pending.id !== id),
+            error: cause instanceof Error ? cause.message : String(cause),
+          }
+        })
+      }
+    })
+    queueRef.current = operation
+    return operation
+  }, [call, effective, rawSuggestions, source, target, targetKey])
+
+  const addTag = useCallback((edit: TagEdit) => runEdit(edit, 'add'), [runEdit])
+  const removeTag = useCallback((edit: TagEdit) => runEdit(edit, 'remove'), [runEdit])
+  const restoreTag = useCallback((edit: TagEdit) => runEdit(edit, 'restore'), [runEdit])
+
+  const loadSuggestions = useCallback(async (prefix: string, facet?: TagFacet): Promise<void> => {
     if (!call || !target) return
-    const request = suggestRequestRef.current + 1
-    suggestRequestRef.current = request
+    const request = ++suggestRequestRef.current
     try {
       const response = await call('suggest_asset_tags', {
         book_id: target.bookId,
         ...(prefix.trim() ? { prefix: prefix.trim() } : {}),
-        ...(facet ? { facet } : {}),
-        limit: 20,
+        ...(facet ? { facet } : {}), limit: 20,
       }, { background: true })
-      if (suggestRequestRef.current !== request) return
-      setRawSuggestions(readSuggestions(response))
+      if (suggestRequestRef.current === request) setRawSuggestions({ targetKey, tags: readSuggestions(response) })
     } catch {
-      // Autocomplete is an aid, not an operation: a failed lookup leaves the
-      // last suggestions in place and never blocks typing.
-      if (suggestRequestRef.current === request) setRawSuggestions([])
+      if (suggestRequestRef.current === request) setRawSuggestions({ targetKey, tags: [] })
     }
-  }, [call, target])
+  }, [call, target, targetKey])
 
   const suggestions = useMemo(
-    () => visibleSuggestions(rawSuggestions, effective?.effective ?? []),
-    [effective, rawSuggestions],
+    () => visibleSuggestions(rawSuggestions.targetKey === targetKey ? rawSuggestions.tags : [], effective?.effective ?? []),
+    [effective, rawSuggestions, targetKey],
   )
-
-  const clearError = useCallback(() => setError(null), [])
+  const clearError = useCallback(() => setLocal((state) => ({ ...state, error: null })), [])
 
   return {
-    tags: effective,
-    busy,
-    error,
-    canEdit,
-    suggestions,
-    addTag,
-    removeTag,
-    restoreTag,
-    loadSuggestions,
-    clearError,
+    tags: effective, busy: current.pending.length > 0, error: current.error,
+    canEdit: Boolean(call && target), suggestions,
+    addTag, removeTag, restoreTag, loadSuggestions, clearError,
   }
 }

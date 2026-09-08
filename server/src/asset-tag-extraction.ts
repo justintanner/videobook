@@ -17,6 +17,7 @@
 import type { TagFacet } from "videobook-engine";
 import {
   canonicalizeTag,
+  isFrameTag,
   matchVocabularyTerms,
   selectEditorialTags,
   type TagCandidate,
@@ -90,8 +91,13 @@ function structuredCandidates(value: unknown): TagCandidate[] {
  */
 export function tagsFromImageAnalysis(analysis: unknown): TagExtraction {
   const document = record(analysis);
-  if (!document) return { tags: [], outcome: "no_evidence" };
-  return result(structuredCandidates(document.tags));
+  if (!document || !Array.isArray(document.tags)
+    || (document.tags.length > 0 && !document.tags.some((entry) => {
+      const tag = record(entry);
+      return typeof tag?.facet === "string" && ["people", "places", "editing"].includes(tag.facet)
+        && typeof tag.label === "string";
+    }))) return { tags: [], outcome: "no_evidence" };
+  return result(structuredCandidates(document.tags).filter(isFrameTag));
 }
 
 /**
@@ -105,6 +111,9 @@ export function tagsFromVideoAnalysis(analysis: unknown): TagExtraction {
   const document = record(analysis);
   if (!document) return { tags: [], outcome: "no_evidence" };
   if (isFallbackAnalysis(document)) return { tags: [], outcome: "no_evidence" };
+  if (Array.isArray(document.editorialTags)) {
+    return result(structuredCandidates(document.editorialTags).filter(isFrameTag));
+  }
 
   const scenes = Array.isArray(document.scenes) ? document.scenes : [];
   const sceneTags = scenes.flatMap((scene) => strings(record(scene)?.tags));
@@ -113,9 +122,7 @@ export function tagsFromVideoAnalysis(analysis: unknown): TagExtraction {
   // own top-level terms, then per-scene detail.
   const settings = strings(document.setting);
   const freeText = [
-    ...strings(document.subjects),
     ...strings(document.tags),
-    ...strings(document.actions),
     ...sceneTags,
   ];
   const candidates = [
@@ -127,17 +134,17 @@ export function tagsFromVideoAnalysis(analysis: unknown): TagExtraction {
       const unlisted = canonicalizeTag("places", phrase, { allowUnlisted: true });
       return unlisted ? [unlisted] : [];
     }),
-    ...settings.flatMap((phrase) => matchVocabularyTerms("editing", phrase)),
-    // Every other field is prose written for search. Only the vocabulary it
-    // contains is trustworthy: which facet a loose word belongs to is exactly
-    // the guess that produces junk tags.
     ...freeText.flatMap((phrase) =>
       (["places", "people", "editing"] as const).flatMap((facet) => {
         const exact = canonicalizeTag(facet, phrase);
-        return exact ? [exact] : matchVocabularyTerms(facet, phrase);
+        return exact ? [exact] : [];
       })),
+    ...strings(document.subjects).flatMap((phrase) => {
+      const exact = canonicalizeTag("people", phrase);
+      return exact ? [exact] : [];
+    }),
   ];
-  return result(candidates);
+  return result(candidates.filter(isFrameTag));
 }
 
 /**
@@ -171,13 +178,6 @@ export function tagsFromTranscript(evidence: TranscriptEvidence | null): TagExtr
   if (!evidence) return { tags: [], outcome: "no_evidence" };
   const candidates: TagCandidate[] = [];
   if (evidence.wordCount > 0) candidates.push({ facet: "editing", label: "dialogue" });
-  if (evidence.speakerCount >= 2) {
-    candidates.push({ facet: "editing", label: "interview" });
-    candidates.push({ facet: "people", label: "two people" });
-  }
-  if (evidence.wordCount === 0) {
-    candidates.push({ facet: "editing", label: "ambience" });
-  }
   return result(candidates);
 }
 

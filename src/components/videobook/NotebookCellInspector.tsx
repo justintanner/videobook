@@ -92,7 +92,6 @@ import { AssetTagEditor } from './AssetTagEditor'
 import { useAssetTags } from '@/videobook/use-asset-tags'
 import type { AssetTags } from '@/videobook/asset-tags'
 import type { TagEdit } from '@/videobook/asset-tag-editing'
-import type { TagFacet } from 'videobook-engine/tag-values'
 import {
   idleMediaInsightWork,
   mediaCellHasSpokenAudio,
@@ -1328,8 +1327,7 @@ function CellAssetTags({
       onAdd={(edit: TagEdit) => void controller.addTag(edit)}
       onRemove={(edit: TagEdit) => void controller.removeTag(edit)}
       onRestore={(edit: TagEdit) => void controller.restoreTag(edit)}
-      onQueryChange={(prefix: string, facet: TagFacet) =>
-        void controller.loadSuggestions(prefix, facet)}
+      onQueryChange={(prefix: string) => void controller.loadSuggestions(prefix)}
     />
   )
 }

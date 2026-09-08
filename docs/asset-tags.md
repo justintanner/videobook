@@ -6,17 +6,23 @@ only if it helps do one of those things.
 
 ## What a tag is
 
-Every tag has a **facet**, a **canonical key** and a **display label**.
-Identity is the pair `(facet, key)`, never the label, so `people/handheld` and
-`editing/handheld` stay distinct while `Close Up`, `closeup` and `tight shot`
-all resolve to one identity.
+Users enter a label. The app infers the category for known tags: `kitchen`
+belongs to places, and `Close Up`, `closeup` and `tight shot` all resolve to
+editing/close-up. Other labels reuse an existing category when available or
+become custom tags. No category selector is required.
+
+Storage retains a **facet** and **canonical key** so explicit categories can
+disambiguate user-defined groups. MCP callers may supply a facet, including
+`custom` to deliberately keep a separate identity. Existing alias assignments
+and dismissals are grouped consistently without discarding their history;
+removing or restoring a tag applies to its stored aliases too.
 
 | Facet | Holds | Examples |
 | --- | --- | --- |
 | `people` | Visible composition and role | solo subject, two people, crowd, interviewer, interviewee |
 | `places` | Setting, plus interior/exterior and day/night | kitchen, street, studio, beach, interior, night |
 | `editing` | Framing, supported movement, coverage, audio character | wide shot, close-up, establishing shot, insert, interview, dialogue, ambience |
-| `custom` | Anything a person types | Hero shot, Client approved |
+| `custom` | Free-form user groups | Hero shot, Client approved |
 
 Automatic tagging emits `people`, `places` and `editing` only. `custom` is the
 user's; nothing automatic writes there.
@@ -25,13 +31,15 @@ user's; nothing automatic writes there.
 
 Automatic tags come from analysis the book already has: an image's structured
 records ride along with the reproduction prompt, video reads its cached
-analysis, audio reads its transcript, and a script reads its sluglines. No
-extra provider call is made to produce a tag when the evidence already exists.
+analysis, audio reads its transcript, and a script reads its sluglines. Video
+analysis returns structured editorial tags alongside its search description.
+Older video caches contribute exact tag terms and supported setting evidence.
+No extra provider call is made to produce a tag when the evidence already exists.
 
 Manual intent always outranks analysis:
 
 - A manual tag survives every re-analysis.
-- Removing an automatic tag **dismisses** it, so re-analysis cannot bring it
+- Removing a tag **dismisses** it, so re-analysis cannot bring it
   back. Dismissed tags stay listed with a restore control.
 - Automatic tags are fenced to the content they described. Replace an asset's
   media and its automatic tags retire immediately, because they describe bytes
@@ -43,6 +51,17 @@ transcript but not identified on screen, a city guessed from scenery, or
 camera movement that evenly spaced frames cannot establish. The ceiling is 12
 tags per analysis and it is a ceiling, never a quota — weak evidence produces
 fewer tags, or none.
+
+Still images and sparse video frames contribute visible composition, settings
+and framing only. They cannot establish interview roles, camera movement or
+sound. A nonempty transcript supports dialogue; multiple speakers do not prove
+an interview or the number of visible people, and an empty transcript does not
+prove ambience. Missing or malformed image tag records count as needing
+analysis; a valid empty tag array counts as analyzed with no useful tags.
+
+The current policy is `editorial-tags-v2`. A cached-only retag or backfill
+rechecks older snapshots without provider calls and reports legacy images that
+need fresh analysis.
 
 ## Costs
 
@@ -59,12 +78,17 @@ analyze media that was never analyzed is not, so the two are separated:
 Manual tagging, filtering and search work whatever these settings say, and
 whether or not a provider key is configured.
 
+Pause and cancel stop starting assets and requesting analysis. Work already
+queued may finish; completed work is checkpointed without changing the saved
+control state. Resume retains progress and options, while starting a new pass
+resets them. Older workers cannot overwrite a replacement pass.
+
 ## MCP tools
 
 | Tool | Purpose |
 | --- | --- |
 | `add_asset_tag` | Add a manual tag to one asset |
-| `remove_asset_tag` | Remove a tag; an automatic one becomes a dismissal |
+| `remove_asset_tag` | Remove and dismiss a tag |
 | `restore_asset_tag` | Restore a dismissed automatic tag |
 | `suggest_asset_tags` | Tags in use with per-asset counts, for autocomplete and discovery |
 | `retag_asset` | Re-run tagging for one asset (`force`, `cached_only`) |
@@ -104,6 +128,7 @@ screen reader; a manual one reads as "added by you". Neither shows a model
 name or a confidence score.
 
 Typing a tag applies it immediately and keeps focus, so several can be entered
-in a row; if the write fails the chip rolls back with the reason. Clicking a
-chip on a Library card filters by it, and changing filters restarts at the
+in a row; edits are saved in order, and a failed edit rolls back with the reason.
+Background analysis and external tag edits continue refreshing the inspector.
+Clicking a chip on a Library card filters by it, and changing filters restarts at the
 first page.

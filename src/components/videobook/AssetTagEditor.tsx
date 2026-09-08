@@ -1,6 +1,6 @@
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Plus, RotateCcw, X } from 'lucide-react'
-import { TAG_FACETS, type TagFacet } from 'videobook-engine/tag-values'
+import type { TagFacet } from 'videobook-engine/tag-values'
 import { orderedTags, type AssetTag, type AssetTags } from '@/videobook/asset-tags'
 import {
   tagOriginLabel,
@@ -26,10 +26,10 @@ type AssetTagEditorProps = {
   error: string | null
   canEdit: boolean
   suggestions: TagSuggestion[]
-  onAdd: (edit: { facet: TagFacet; label: string }) => void
+  onAdd: (edit: { facet?: TagFacet; label: string }) => void
   onRemove: (edit: { facet: TagFacet; label: string }) => void
   onRestore: (edit: { facet: TagFacet; label: string }) => void
-  onQueryChange: (prefix: string, facet: TagFacet) => void
+  onQueryChange: (prefix: string) => void
   /** Shown when automatic tagging has not produced anything for this asset. */
   status?: string | null
   onRetry?: (() => void) | undefined
@@ -56,7 +56,6 @@ export function AssetTagEditor({
   onRetry,
 }: AssetTagEditorProps) {
   const [draft, setDraft] = useState('')
-  const [facet, setFacet] = useState<TagFacet>('custom')
   const inputRef = useRef<HTMLInputElement | null>(null)
   const listId = useId()
 
@@ -69,9 +68,9 @@ export function AssetTagEditor({
   function commitDraft(): void {
     const label = draft.trim()
     if (!label || !canEdit) return
-    onAdd({ facet, label })
+    onAdd({ label })
     setDraft('')
-    onQueryChange('', facet)
+    onQueryChange('')
     // Focus stays in the field so several tags can be typed in a row.
     inputRef.current?.focus()
   }
@@ -85,7 +84,7 @@ export function AssetTagEditor({
     if (event.key === 'Escape' && draft) {
       event.preventDefault()
       setDraft('')
-      onQueryChange('', facet)
+      onQueryChange('')
     }
   }
 
@@ -98,7 +97,6 @@ export function AssetTagEditor({
             key={`${tag.facet}/${tag.key}`}
             role="listitem"
           >
-            <span className="asset-tag-chip-facet">{FACET_LABEL[tag.facet]}</span>
             <span className="asset-tag-chip-label">{tag.label}</span>
             {canEdit
               ? (
@@ -127,22 +125,6 @@ export function AssetTagEditor({
       {canEdit
         ? (
           <div className="asset-tag-input-row">
-            <label className="asset-tag-facet-label">
-              <span className="sr-only">Tag facet</span>
-              <select
-                className="asset-tag-facet"
-                value={facet}
-                onChange={(event) => {
-                  const next = event.target.value as TagFacet
-                  setFacet(next)
-                  onQueryChange(draft, next)
-                }}
-              >
-                {TAG_FACETS.map((entry) => (
-                  <option key={entry} value={entry}>{FACET_LABEL[entry]}</option>
-                ))}
-              </select>
-            </label>
             <input
               ref={inputRef}
               className="asset-tag-input"
@@ -153,7 +135,7 @@ export function AssetTagEditor({
               autoComplete="off"
               onChange={(event) => {
                 setDraft(event.target.value)
-                onQueryChange(event.target.value, facet)
+                onQueryChange(event.target.value)
               }}
               onKeyDown={handleKeyDown}
             />

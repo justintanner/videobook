@@ -9,13 +9,14 @@
  */
 
 import type { Engine, TagFacet } from "videobook-engine";
-import { TAG_FACETS } from "videobook-engine";
+import { TAG_FACETS, tagCanonicalKey } from "videobook-engine";
 import { z } from "zod";
-import { assetTagSummary } from "../asset-tags.js";
+import { assetTagSummary, readAssetTagSummaries, tagFacetCounts } from "../asset-tags.js";
+import { matchesTagPrefix, resolveTagInput } from "../tag-vocabulary.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
 const facetSchema = z.enum(TAG_FACETS).describe(
-  "Tag facet: people, places and editing are the automatic vocabulary; custom holds free-form user tags",
+  "Optional category; inferred from the label when omitted. Use custom for a free-form tag with a separate identity",
 );
 
 const labelSchema = z.string().min(1).describe(
@@ -60,6 +61,19 @@ function tagState(engine: Engine, assetId: string) {
   return assetTagSummary(state.value);
 }
 
+function matchingIdentities(engine: Engine, assetId: string, input: { facet?: TagFacet; label: string }) {
+  const state = engine.tags.read(assetId);
+  if (!state.ok) throw new Error(state.error.message);
+  const existing = [...state.value.manual, ...state.value.automatic, ...state.value.dismissed];
+  const tag = resolveTagInput(input, existing);
+  const key = tagCanonicalKey(tag.label);
+  const aliases = existing.filter((entry) => entry.facet === tag.facet
+    && tagCanonicalKey(resolveTagInput(entry).label) === key);
+  const identities = [...new Map([tag, ...aliases].map((entry) =>
+    [`${entry.facet}/${tagCanonicalKey(entry.label)}`, { facet: entry.facet, label: entry.label }])).values()];
+  return { tag, identities };
+}
+
 export function assetTagDefs(engine: Engine): ToolDef[] {
   return [
     {
@@ -70,7 +84,7 @@ export function assetTagDefs(engine: Engine): ToolDef[] {
       schema: {
         book_id: z.string().describe("Book that owns the asset"),
         asset_id: z.string().describe("Artifact id to tag"),
-        facet: facetSchema,
+        facet: facetSchema.optional(),
         label: labelSchema,
         entity_id: z.string().optional().describe(
           "An already-confirmed entity to reference; never invent one",
@@ -79,21 +93,25 @@ export function assetTagDefs(engine: Engine): ToolDef[] {
       handler: async (args) => {
         const { asset_id, facet, label, entity_id } = args as {
           asset_id: string;
-          facet: TagFacet;
+          facet?: TagFacet;
           label: string;
           entity_id?: string;
         };
         try {
           const artifact = resolveArtifact(engine, asset_id);
+          const { tag, identities } = matchingIdentities(engine, asset_id, { facet, label });
           const result = await engine.tags.add(artifact.artifactId, {
-            facet,
-            label,
+            ...tag,
             ...(entity_id ? { entityId: entity_id } : {}),
           });
           if (!result.ok) return failure(new Error(result.error.message));
+          for (const identity of identities) {
+            const restored = await engine.tags.restore(asset_id, identity);
+            if (!restored.ok) return failure(new Error(restored.error.message));
+          }
           return json({
             asset_id: artifact.artifactId,
-            tags: assetTagSummary(result.value),
+            tags: tagState(engine, asset_id),
           });
         } catch (cause) {
           return failure(cause);
@@ -108,25 +126,25 @@ export function assetTagDefs(engine: Engine): ToolDef[] {
       schema: {
         book_id: z.string().describe("Book that owns the asset"),
         asset_id: z.string().describe("Artifact id to edit"),
-        facet: facetSchema,
+        facet: facetSchema.optional(),
         label: labelSchema,
       },
       handler: async (args) => {
         const { asset_id, facet, label } = args as {
           asset_id: string;
-          facet: TagFacet;
+          facet?: TagFacet;
           label: string;
         };
         try {
           const artifact = resolveArtifact(engine, asset_id);
-          const result = await engine.tags.remove(artifact.artifactId, {
-            facet,
-            label,
-          });
-          if (!result.ok) return failure(new Error(result.error.message));
+          const { identities } = matchingIdentities(engine, asset_id, { facet, label });
+          for (const identity of identities) {
+            const result = await engine.tags.remove(asset_id, identity);
+            if (!result.ok) return failure(new Error(result.error.message));
+          }
           return json({
             asset_id: artifact.artifactId,
-            tags: assetTagSummary(result.value),
+            tags: tagState(engine, asset_id),
           });
         } catch (cause) {
           return failure(cause);
@@ -141,25 +159,25 @@ export function assetTagDefs(engine: Engine): ToolDef[] {
       schema: {
         book_id: z.string().describe("Book that owns the asset"),
         asset_id: z.string().describe("Artifact id to edit"),
-        facet: facetSchema,
+        facet: facetSchema.optional(),
         label: labelSchema,
       },
       handler: async (args) => {
         const { asset_id, facet, label } = args as {
           asset_id: string;
-          facet: TagFacet;
+          facet?: TagFacet;
           label: string;
         };
         try {
           const artifact = resolveArtifact(engine, asset_id);
-          const result = await engine.tags.restore(artifact.artifactId, {
-            facet,
-            label,
-          });
-          if (!result.ok) return failure(new Error(result.error.message));
+          const { identities } = matchingIdentities(engine, asset_id, { facet, label });
+          for (const identity of identities) {
+            const result = await engine.tags.restore(asset_id, identity);
+            if (!result.ok) return failure(new Error(result.error.message));
+          }
           return json({
             asset_id: artifact.artifactId,
-            tags: assetTagSummary(result.value),
+            tags: tagState(engine, asset_id),
           });
         } catch (cause) {
           return failure(cause);
@@ -193,25 +211,22 @@ export function assetTagDefs(engine: Engine): ToolDef[] {
           asset_id?: string;
         };
         try {
-          const suggestions = engine.tags.suggest({
-            ...(prefix !== undefined ? { prefix } : {}),
-            ...(facet ? { facet } : {}),
-            ...(kinds ? { kinds } : {}),
-            ...(limit ? { limit } : {}),
-          });
-          if (!suggestions.ok) {
-            return failure(new Error(suggestions.error.message));
-          }
+          const ids = engine.artifacts.list().filter((artifact) => !kinds
+            || kinds.some((kind) => kind === artifact.kind)).map((artifact) => artifact.artifactId);
+          const summaries = [...readAssetTagSummaries(engine, ids).values()];
+          const suggestions = tagFacetCounts(summaries.map((tags) => ({ tags })), Infinity)
+            .filter((tag) => (!facet || tag.facet === facet) && matchesTagPrefix(tag, prefix ?? ""))
+            .slice(0, limit ?? 50);
           const asset = asset_id
             ? tagState(engine, resolveArtifact(engine, asset_id).artifactId)
             : null;
           return json({
             facets: TAG_FACETS,
-            suggestions: suggestions.value.map((row) => ({
+            suggestions: suggestions.map((row) => ({
               facet: row.facet,
               key: row.key,
               label: row.label,
-              assets: row.artifacts,
+              assets: row.assets,
             })),
             ...(asset ? { asset_id, tags: asset } : {}),
           });

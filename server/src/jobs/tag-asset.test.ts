@@ -152,9 +152,6 @@ describe("asset tagging coordinator", () => {
       "people/solo subject",
       "places/night",
       "places/street",
-      // "tracking" is in the editing vocabulary, so the model may return it;
-      // what the image cannot support is filtered by the prompt, not here.
-      "editing/tracking",
     ].sort());
   });
 
@@ -168,6 +165,26 @@ describe("asset tagging coordinator", () => {
 
     const snapshot = engine.tags.automatic.snapshot(assetId);
     expect(snapshot.ok && snapshot.value?.extractorVersion).toBe(TAG_ANALYZER_VERSION);
+  });
+
+  it("keeps pre-tag image caches eligible even after an older empty snapshot", async () => {
+    const assetId = await makeAsset("image", "original.png");
+    await writeAnalysis(assetId, { prompt: "a kitchen counter", shot: "medium", pose: "none" });
+    const files = await engine.files.manifest(assetId);
+    if (!files.ok) throw new Error(files.error.message);
+    const sourceHash = files.value.files.find((file) => file.name === "original.png")!.objectHash;
+    expect((await engine.tags.automatic.replace({
+      artifactId: assetId, sourceHash, generator: "videobook-editorial-tagger",
+      extractorVersion: "editorial-tags-v1", tags: [],
+    })).ok).toBe(true);
+    const payload = { type: "tag_asset" as const, bookId: engine.book.get().bookId, assetId, cacheOnly: true };
+    for (const force of [false, true, false]) {
+      expect((await runAssetTagging(engine, { ...payload, force })).outcome).toBe("no_evidence");
+    }
+    expect((await tag(assetId, true)).outcome).toBe("analysis_unavailable");
+    await writeAnalysis(assetId, { prompt: "abstract", tags: [] });
+    expect((await runAssetTagging(engine, payload)).outcome).toBe("no_useful_evidence");
+    expect((await runAssetTagging(engine, payload)).outcome).toBe("already_current");
   });
 
   it("fences tags to the content that was analyzed", async () => {

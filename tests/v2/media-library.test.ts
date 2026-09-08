@@ -86,6 +86,7 @@ async function writeNotebook(
 async function indexReadyArtifact(
   engine: Engine,
   artifact: Artifact,
+  vector = [1, 0, 0],
 ): Promise<void> {
   const files = await engine.files.manifest(artifact.artifactId)
   if (!files.ok) throw new Error(files.error.message)
@@ -111,7 +112,7 @@ async function indexReadyArtifact(
       embeddings: [{
         modality: 'visual',
         embeddingSpace: reverseSearchManifest.embeddingSpace,
-        vector: [1, 0, 0],
+        vector,
         sourceHash: source.objectHash,
       }],
       fingerprints: [],
@@ -425,6 +426,40 @@ describe('media Library slots', () => {
       indexed.artifactId,
     ])
     expect(result.assets[0]?.search_match?.score).toBeGreaterThan(0)
+  })
+
+  it('finds a tagged reference match beyond the global first hundred hits', async () => {
+    const created = await books.create('many-tagged-candidates')
+    if (!created.ok) throw new Error(created.error.message)
+    const managed = books.get(created.value.bookId)
+    if (!managed.ok) throw new Error(managed.error.message)
+    const engine = managed.value.engine
+    let selected = ''
+    for (let index = 0; index < 102; index += 1) {
+      const artifact = await readyArtifact(engine, 'image', `candidate-${index}`, 'original.png', `image-${index}`)
+      await indexReadyArtifact(engine, artifact, [1, index / 100, 0])
+      selected = artifact.artifactId
+    }
+    expect((await engine.tags.add(selected, { facet: 'editing', label: 'close-up' })).ok).toBe(true)
+    const reference = searchReferenceStore.put({
+      kind: 'image', name: 'reference.png',
+      reference: { kind: 'image', embeddingSpace: reverseSearchManifest.embeddingSpace, vector: [1, 0, 0] },
+    })
+    try {
+      const global = await searchLibraryAssets(books, { referenceId: reference.reference_id, kinds: ['image'], limit: 100 })
+      expect(global.assets).toHaveLength(100)
+      expect(global.assets.some((asset) => asset.artifact_id === selected)).toBe(false)
+      const filtered = await searchLibraryAssets(books, {
+        referenceId: reference.reference_id, kinds: ['image'],
+        tags: { all: [{ label: 'closeup' }] }, limit: 10,
+      })
+      expect(filtered.assets.map((asset) => asset.artifact_id)).toEqual([selected])
+      expect(filtered.page.total).toBe(1)
+      expect(filtered.tag_facets).toEqual([{ facet: 'editing', key: 'close-up', label: 'close-up', assets: 1 }])
+      expect((await searchLibraryAssets(books, {
+        referenceId: reference.reference_id, kinds: ['image'], tags: { all: [{ label: 'missing' }] },
+      })).assets).toEqual([])
+    } finally { searchReferenceStore.release(reference.reference_id) }
   })
 
   it('copies a foreign asset through Engine files and attaches its canonical target UUID', async () => {

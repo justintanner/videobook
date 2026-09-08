@@ -1,4 +1,5 @@
 import { tagCanonicalKey, type TagFacet } from 'videobook-engine/tag-values'
+import { resolveTagInput } from '../../server/src/tag-vocabulary'
 import {
   EMPTY_ASSET_TAGS,
   orderedTags,
@@ -28,7 +29,7 @@ import {
 export type TagEditAction = 'add' | 'remove' | 'restore'
 
 export type TagEdit = {
-  facet: TagFacet
+  facet?: TagFacet
   label: string
 }
 
@@ -80,16 +81,19 @@ export function applyTagEdit(
   action: TagEditAction,
 ): AssetTags {
   const current = tags ?? EMPTY_ASSET_TAGS
+  if (!edit.label.trim()) return current
+  edit = resolveTagInput(edit, [...current.effective, ...current.dismissed])
   const key = canonicalKeyOf(edit.label)
   if (!key) return current
-  const target = identity(edit.facet, key)
+  const facet = edit.facet ?? 'custom'
+  const target = identity(facet, key)
 
   if (action === 'add') {
-    if (current.effective.some((tag) => tagIdentityOf(tag) === target)) {
+    if (current.manual.some((tag) => tagIdentityOf(tag) === target)) {
       return current
     }
     const added: AssetTag = {
-      facet: edit.facet,
+      facet,
       key,
       label: edit.label.trim(),
       origin: 'manual',
@@ -100,7 +104,7 @@ export function applyTagEdit(
       // A tag someone adds back is no longer dismissed.
       dismissed: withoutIdentity(current.dismissed, target),
       manual: orderedTags([...current.manual, added]),
-      effective: orderedTags([...current.effective, added]),
+      effective: orderedTags([...withoutIdentity(current.effective, target), added]),
     }
   }
 
@@ -109,11 +113,7 @@ export function applyTagEdit(
       (tag) => tagIdentityOf(tag) === target,
     )
     if (!removed) return current
-    // Removing an automatic tag records the user's intent so re-analysis
-    // cannot bring it back; removing a manual one simply deletes it.
-    const dismissal: DismissedAssetTag[] = removed.origin === 'automatic'
-      ? [{ facet: removed.facet, key: removed.key, label: removed.label }]
-      : []
+    const dismissal: DismissedAssetTag[] = [{ facet: removed.facet, key: removed.key, label: removed.label }]
     return {
       ...current,
       effective: withoutIdentity(current.effective, target),

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import { logger } from "../logger.js";
 import { registerJobHandler } from "../queue.js";
-import { MAX_AUTOMATIC_TAGS, vocabularyFor } from "../tag-vocabulary.js";
+import { MAX_AUTOMATIC_TAGS, frameVocabularyFor } from "../tag-vocabulary.js";
 import type { StructuredTagRecord } from "../asset-tag-extraction.js";
 import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -87,10 +87,10 @@ function buildTaggingPrompt(): string {
     + "supports it, prefer few precise tags over many, and return an empty array when nothing "
     + "is worth grouping by. Never tag how good or how moody the image looks, and never name a "
     + "real person or a real place.\n"
-    + `- facet "people" — one of: ${vocabularyFor("people").join(", ")}.\n`
+    + `- facet "people" — one of: ${frameVocabularyFor("people").join(", ")}.\n`
     + `- facet "places" — the setting, plus interior/exterior and day/night when visible. `
-    + `Common settings: ${vocabularyFor("places").join(", ")}. A concrete unlisted setting is fine.\n`
-    + `- facet "editing" — framing and coverage only: ${vocabularyFor("editing").join(", ")}. `
+    + `Common settings: ${frameVocabularyFor("places").join(", ")}. A concrete unlisted setting is fine.\n`
+    + `- facet "editing" — framing and coverage only: ${frameVocabularyFor("editing").join(", ")}. `
     + "A still image cannot show camera movement, so never claim pan, tilt, tracking or handheld."
   );
 }

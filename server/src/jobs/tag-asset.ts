@@ -225,6 +225,7 @@ export async function enqueueAssetTagging(
 export async function runAssetTagging(
   engine: Engine,
   payload: TagAssetPayload,
+  control?: { canRequestAnalysis: () => boolean },
 ): Promise<TagAssetResult> {
   const { assetId, force } = payload;
   const base = { assetId, tagCount: 0, analyzerVersion: TAG_ANALYZER_VERSION };
@@ -269,7 +270,7 @@ export async function runAssetTagging(
     // would leave everything that stays in the Library untagged. Ask for it
     // here instead; the analysis tail re-queues this job, and the dedupe key
     // is free again by then because this run has finished.
-    const requested = await requestAnalysis(engine, payload.bookId, assetId, artifact.value.kind);
+    const requested = await requestAnalysis(engine, payload.bookId, assetId, artifact.value.kind, control);
     return { ...base, outcome: requested, sourceHash };
   }
 
@@ -310,12 +311,15 @@ async function requestAnalysis(
   bookId: string,
   assetId: string,
   kind: ArtifactKind,
+  control?: { canRequestAnalysis: () => boolean },
 ): Promise<"analysis_requested" | "analysis_unavailable" | "no_evidence"> {
+  if (control && !control.canRequestAnalysis()) return "no_evidence";
   if (kind !== "image" && kind !== "video" && kind !== "final") return "no_evidence";
   if (!readTaggingSettings(engine).analysisOnNewAssets) return "no_evidence";
   if (!getApiKey("OPENAI_API_KEY")) return "analysis_unavailable";
   const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) return "no_evidence";
+  if (control && !control.canRequestAnalysis()) return "no_evidence";
   if (kind === "image") {
     const original = manifest.value.files.find((file) =>
       /^original\.(jpe?g|png|webp)$/iu.test(file.name));

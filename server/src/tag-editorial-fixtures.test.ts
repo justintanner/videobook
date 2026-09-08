@@ -52,9 +52,8 @@ const FIXTURES: readonly Fixture[] = [
       "places/interior",
       "people/two people",
       "editing/wide shot",
-      "editing/interview",
     ],
-    rejected: ["professional", "high quality"],
+    rejected: ["professional", "high quality", "interview"],
   },
   {
     // Same interview, tighter. Shot scale differs; the group does not.
@@ -71,11 +70,9 @@ const FIXTURES: readonly Fixture[] = [
     expected: [
       "places/studio",
       "places/interior",
-      "people/interviewee",
       "editing/close-up",
-      "editing/interview",
     ],
-    rejected: ["emotional", "dramatic"],
+    rejected: ["emotional", "dramatic", "interview"],
   },
   {
     // A different person in a similar room: shares the setting, not the people.
@@ -154,7 +151,7 @@ const FIXTURES: readonly Fixture[] = [
     expected: ["places/street", "places/exterior"],
     // A person named in speech, a city guessed from scenery, and camera
     // movement no frame sample can support.
-    rejected: ["Dana", "Lisbon"],
+    rejected: ["Dana", "Lisbon", "tracking", "dolly"],
   },
   {
     name: "product still",
@@ -203,7 +200,7 @@ describe("editorial tag fixtures", () => {
 
     // Filtering on either shared term retrieves both angles.
     expect(shared(wide, close)).toEqual(
-      expect.arrayContaining(["places/studio", "editing/interview"]),
+      expect.arrayContaining(["places/studio", "places/interior"]),
     );
     // Shot scale is what distinguishes them, which is what makes the pair
     // useful for cutting rather than merely similar.

@@ -45,8 +45,8 @@ describe('optimistic tag edits', () => {
       { facet: 'editing', label: '  Close   Up  ' },
       'add',
     )
-    expect(next.effective[0]?.key).toBe('close up')
-    expect(next.effective[0]?.label).toBe('Close   Up')
+    expect(next.effective[0]?.key).toBe('close-up')
+    expect(next.effective[0]?.label).toBe('close-up')
   })
 
   it('adding a tag back lifts its dismissal', () => {
@@ -58,7 +58,7 @@ describe('optimistic tag edits', () => {
     expect(next.effective.map((entry) => entry.key)).toEqual(['kitchen'])
   })
 
-  it('removing an automatic tag dismisses it, removing a manual one deletes it', () => {
+  it('removing either origin records a dismissal', () => {
     const automatic = tag('places', 'Kitchen', 'automatic')
     const manual = tag('custom', 'Hero shot')
     const current = state({
@@ -81,7 +81,7 @@ describe('optimistic tag edits', () => {
       'remove',
     )
     expect(withoutManual.effective.map((entry) => entry.key)).toEqual(['kitchen'])
-    expect(withoutManual.dismissed).toEqual([])
+    expect(withoutManual.dismissed.map((entry) => entry.key)).toEqual(['hero shot'])
   })
 
   it('restores a dismissed tag only when the analysis still carries it', () => {
@@ -109,7 +109,7 @@ describe('optimistic tag edits', () => {
   })
 
   it('returns the same object when an edit changes nothing', () => {
-    const current = state({ effective: [tag('places', 'Kitchen')] })
+    const current = state({ effective: [tag('places', 'Kitchen')], manual: [tag('places', 'Kitchen')] })
     expect(applyTagEdit(current, { facet: 'places', label: 'Kitchen' }, 'add'))
       .toBe(current)
     expect(applyTagEdit(current, { facet: 'people', label: 'Crowd' }, 'remove'))

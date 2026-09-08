@@ -82,6 +82,28 @@ describe("editorial vocabulary", () => {
 });
 
 describe("evidence extractors", () => {
+  it("does not turn negation, incidental objects, or sparse frames into editing claims", () => {
+    const extracted = tagsFromVideoAnalysis({
+      summary: "A presenter gives a solo tutorial.", setting: "Kitchen with a frying pan",
+      subjects: ["one person"], tags: ["not an interview", "panning", "handheld", "music"],
+      actions: ["tilting a pan"], scenes: [{ tags: ["not a close-up", "tracking shot"] }],
+    });
+    expect(identities(extracted.tags).sort()).toEqual(["people/solo subject", "places/kitchen"]);
+    expect(tagsFromVideoAnalysis({ summary: "A blank wall", setting: "not kitchen" }).tags).toEqual([]);
+    expect(tagsFromVideoAnalysis({
+      summary: "A close-up", setting: "Kitchen with a pan", tags: ["interview"],
+      editorialTags: [{ facet: "editing", label: "closeup" }, { facet: "editing", label: "pan" }],
+    }).tags).toEqual([{ facet: "editing", label: "close-up" }]);
+    expect(tagsFromImageAnalysis({ tags: [{ facet: "editing", label: "tracking" }] }).tags).toEqual([]);
+  });
+
+  it("distinguishes missing and malformed image tag evidence from a valid empty result", () => {
+    for (const tags of [undefined, null, "closeup", {}, ["closeup"], [{ facet: "vibes", label: "good" }]]) {
+      expect(tagsFromImageAnalysis({ prompt: "legacy", tags }).outcome).toBe("no_evidence");
+    }
+    expect(tagsFromImageAnalysis({ prompt: "abstract", tags: [] }).outcome).toBe("no_useful_evidence");
+  });
+
   it("reads only the vocabulary out of a video analysis", () => {
     const extraction = tagsFromVideoAnalysis({
       summary: "Someone talks to camera.",
@@ -96,7 +118,7 @@ describe("evidence extractors", () => {
     expect(labels).toContain("places/street");
     expect(labels).toContain("places/night");
     expect(labels).toContain("people/solo subject");
-    expect(labels).toContain("editing/handheld");
+    expect(labels).not.toContain("editing/handheld");
     expect(labels.join(" ")).not.toContain("vlog");
     expect(labels.join(" ")).not.toContain("beautiful");
   });
@@ -142,7 +164,7 @@ describe("evidence extractors", () => {
     // An analysis cached before tags existed yields nothing rather than
     // mining the reproduction prompt for words.
     expect(tagsFromImageAnalysis({ prompt: "a kitchen counter" }).outcome)
-      .toBe("no_useful_evidence");
+      .toBe("no_evidence");
   });
 
   it("claims only what a transcript can support", () => {
@@ -150,9 +172,9 @@ describe("evidence extractors", () => {
     expect(identities(tagsFromTranscript({ wordCount: 120, speakerCount: 1 }).tags))
       .toEqual(["editing/dialogue"]);
     expect(identities(tagsFromTranscript({ wordCount: 400, speakerCount: 3 }).tags))
-      .toEqual(["editing/dialogue", "editing/interview", "people/two people"]);
+      .toEqual(["editing/dialogue"]);
     expect(identities(tagsFromTranscript({ wordCount: 0, speakerCount: 0 }).tags))
-      .toEqual(["editing/ambience"]);
+      .toEqual([]);
   });
 
   it("reads a script's sluglines and nothing else", () => {

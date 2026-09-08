@@ -139,7 +139,7 @@ describe("asset tag tools", () => {
       label: "close up",
     }));
     const tags = second.tags as TagSummary;
-    expect(tags.effective.map((tag) => tag.key)).toEqual(["close up"]);
+    expect(tags.effective.map((tag) => tag.key)).toEqual(["close-up"]);
   });
 
   it("keeps the same identity distinct across facets", async () => {
