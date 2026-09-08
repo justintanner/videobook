@@ -141,6 +141,7 @@ import { registerRelayoutNotebookJob } from "./relayout-notebook.js";
 import { registerRepairSearchIndexesJob } from "./repair-search-indexes.js";
 import { registerSemanticIndexJob } from "./semantic-index.js";
 import { registerBackfillAssetTagsJob } from "./backfill-asset-tags.js";
+import { registerForgetAssetJob } from "./forget-asset.js";
 import { registerTagAssetJob } from "./tag-asset.js";
 import { registerPrepareSearchReferenceJob } from "./prepare-search-reference.js";
 import { registerPrepareTemporalSearchJob } from "./prepare-temporal-search.js";
@@ -288,6 +289,7 @@ export function registerAllJobHandlers(
   registerSemanticIndexJob(engine);
   registerTagAssetJob(engine);
   registerBackfillAssetTagsJob(engine);
+  registerForgetAssetJob(engine);
   registerRepairSearchIndexesJob(engine);
   registerPrepareSearchReferenceJob(engine);
   registerPrepareTemporalSearchJob(engine);

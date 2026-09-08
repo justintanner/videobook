@@ -8,7 +8,8 @@ import {
 } from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 
-async function removeFromTimeline(
+/** Drops every primary-sequence clip and audio clip that plays the artifact. */
+export async function removeArtifactFromTimeline(
   engine: Engine,
   artifactId: string,
 ): Promise<{ updated: boolean; error?: string }> {
@@ -52,7 +53,7 @@ export function deleteAssetDef(engine: Engine): ToolDef {
       const assetId = String(args.asset_id);
       const artifact = engine.artifacts.get(assetId);
       if (!artifact.ok) return timelineFailure(artifact.error.message);
-      const timeline = await removeFromTimeline(engine, artifact.value.artifactId);
+      const timeline = await removeArtifactFromTimeline(engine, artifact.value.artifactId);
       if (timeline.error) return timelineFailure(timeline.error);
       const result = await engine.artifacts.delete(artifact.value.artifactId, { deleteOwnedMedia: true });
       if (!result.ok) return timelineFailure(result.error.message);

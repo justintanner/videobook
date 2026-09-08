@@ -75,6 +75,13 @@ import type {
 } from 'videobook-engine'
 import { parseAssetTags, type AssetTags } from './videobook/asset-tags'
 import {
+  clearReferencesConfirmation,
+  forgetConfirmation,
+  forgottenNotice,
+  type ForgetAssetOutcome,
+  type ForgetAssetReference,
+} from './videobook/forget-asset'
+import {
   libraryGridAssets,
   libraryGridHeading,
   libraryScopeFromValue,
@@ -1549,6 +1556,27 @@ function asLibrarySearchResult(value: unknown): LibrarySearchResult {
       const message = item && asString(item.message)
       return errorBookId && message ? [{ bookId: errorBookId, message }] : []
     }),
+  }
+}
+
+function asForgetAssetOutcome(value: unknown): ForgetAssetOutcome {
+  const item = recordValue(value)
+  const status = asString(item?.status) === 'in_use' ? 'in_use' : 'forgotten'
+  const references = Array.isArray(item?.references) ? item.references : []
+  return {
+    status,
+    artifactId: asString(item?.artifact_id) ?? '',
+    label: asString(item?.label),
+    references: references.flatMap((entry): ForgetAssetReference[] => {
+      const row = recordValue(entry)
+      const kind = row && asString(row.kind)
+      const id = row && asString(row.id)
+      return kind && id ? [{ kind, id }] : []
+    }),
+    clearedCells: asNumber(item?.cleared_cells) ?? 0,
+    forgottenObjects: asNumber(item?.forgotten_objects) ?? 0,
+    sharedObjects: asNumber(item?.shared_objects) ?? 0,
+    reclaimedBytes: asNumber(item?.reclaimed_bytes) ?? 0,
   }
 }
 
@@ -5935,6 +5963,60 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setBooks(nextBooks)
     return nextBooks
   }, [call])
+
+  /**
+   * Forget: delete the asset and destroy its stored bytes. Irreversible, so it
+   * confirms first, and again when the engine reports what still holds it.
+   */
+  const forgetAsset = useCallback(async (asset: LibraryAssetRecord) => {
+    const name = `@${asset.id}`
+    if (asset.owningBookId !== bookId) {
+      setNotice(`Open ${asset.owningBookName} to forget ${name}`, 'error')
+      return
+    }
+    if (!window.confirm(forgetConfirmation(name))) return
+    setBusy(true)
+    try {
+      let outcome = asForgetAssetOutcome(await call('forget_asset', {
+        book_id: bookId,
+        asset_id: asset.artifactId,
+      }))
+      if (outcome.status === 'in_use') {
+        if (!window.confirm(clearReferencesConfirmation(name, outcome.references))) {
+          return
+        }
+        outcome = asForgetAssetOutcome(await call('forget_asset', {
+          book_id: bookId,
+          asset_id: asset.artifactId,
+          clear_references: true,
+        }))
+      }
+      if (outcome.status === 'in_use') {
+        setNotice(
+          clearReferencesConfirmation(name, outcome.references).split('\n')[0],
+          'error',
+        )
+        return
+      }
+      setNotice(forgottenNotice(name, outcome))
+      await refreshBookData(bookId, notebook?.id)
+      await refreshBookList()
+      refreshLibraryBrowse()
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }, [
+    bookId,
+    call,
+    notebook?.id,
+    refreshBookData,
+    refreshBookList,
+    refreshLibraryBrowse,
+    setNotice,
+  ])
+
 
   const refreshBookCommands = useCallback(async () => {
     const value = await call('slash_commands', {})
@@ -12611,6 +12693,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 </h2>
                 <span className="library-drop-hint">drop or paste files anywhere to import</span>
               </div>
+              {!showCommandComposer && notice && (
+                <p
+                  className={notice.tone === 'error'
+                    ? 'library-scope-error'
+                    : 'library-scope-notice'}
+                  role={notice.tone === 'error' ? 'alert' : 'status'}
+                >
+                  {notice.text}
+                </p>
+              )}
               {(libraryScope === 'library' ? libraryBrowse.error : bookBrowse.error) && (
                 <p className="library-scope-error">
                   {libraryScope === 'library' ? libraryBrowse.error : bookBrowse.error}
@@ -12686,6 +12778,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                             onClick={() => momentSearchRef.current?.searchSimilar(asset)}
                           >
                             <Search size={13} />
+                          </button>
+                        )}
+                        {ownedHere && (
+                          <button
+                            type="button"
+                            className="asset-forget-button"
+                            disabled={busy}
+                            title={`Forget @${asset.id} and destroy its content`}
+                            aria-label={`Forget @${asset.id}`}
+                            onClick={() => void forgetAsset(asset)}
+                          >
+                            <Trash2 size={13} />
                           </button>
                         )}
                         {showRetry && (

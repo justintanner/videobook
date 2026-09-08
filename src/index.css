@@ -408,6 +408,12 @@ textarea:focus-visible {
   font-size: 11px;
 }
 
+.library-scope-notice {
+  margin: 0 0 10px;
+  color: #9ad9b4;
+  font-size: 11px;
+}
+
 .library-scope-footer {
   display: flex;
   justify-content: center;
@@ -429,6 +435,16 @@ textarea:focus-visible {
   border-color: var(--line);
   color: #94c8aa;
   background: rgba(36, 112, 73, 0.14);
+}
+
+.asset-card .asset-forget-button {
+  flex: 0 0 auto;
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-color: var(--danger-border-hover);
+  color: var(--danger-fg-hover);
+  background: var(--danger-bg-hover);
 }
 
 .asset-card .retry-ingest-button {
