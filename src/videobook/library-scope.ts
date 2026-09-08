@@ -21,6 +21,7 @@ export type OwningBook = {
 type ScopedAsset = {
   artifactId: string
   status: string
+  createdAt: string
 }
 
 function assetsOwnedBy<Asset extends ScopedAsset>(
@@ -28,6 +29,28 @@ function assetsOwnedBy<Asset extends ScopedAsset>(
   book: OwningBook,
 ): Array<Asset & OwningBook> {
   return assets.map((asset) => ({ ...asset, ...book }))
+}
+
+function newestFirst(left: ScopedAsset, right: ScopedAsset): number {
+  const created = Date.parse(right.createdAt) - Date.parse(left.createdAt)
+  if (created !== 0 && Number.isFinite(created)) return created
+  return left.artifactId < right.artifactId ? 1 : -1
+}
+
+/**
+ * Book scope reads two lists: the live one the rest of the app shares (newest
+ * page, plus whatever the notebook references) and the older pages the grid
+ * asked for on its own. The live row wins on overlap — it carries the current
+ * status — and the result is one newest-first list.
+ */
+export function mergeBookGridAssets<Asset extends ScopedAsset>(
+  live: readonly Asset[],
+  browsed: readonly Asset[],
+): Asset[] {
+  const rows = new Map(
+    [...browsed, ...live].map((asset) => [asset.artifactId, asset]),
+  )
+  return [...rows.values()].sort(newestFirst)
 }
 
 /**
@@ -41,10 +64,14 @@ export function libraryGridAssets<Asset extends ScopedAsset>(input: {
   scope: LibraryScope
   activeBook: OwningBook
   bookAssets: readonly Asset[]
+  browsedBookAssets: readonly Asset[]
   libraryAssets: ReadonlyArray<Asset & OwningBook>
 }): Array<Asset & OwningBook> {
   if (input.scope === 'book') {
-    return assetsOwnedBy(input.bookAssets, input.activeBook)
+    return assetsOwnedBy(
+      mergeBookGridAssets(input.bookAssets, input.browsedBookAssets),
+      input.activeBook,
+    )
   }
   const pending = assetsOwnedBy(
     input.bookAssets.filter((asset) => asset.status !== 'ready'),
@@ -59,21 +86,27 @@ export function libraryGridAssets<Asset extends ScopedAsset>(input: {
   return [...rows.values()]
 }
 
-/** Heading under SOURCE ARTIFACTS: how much of the scope is on screen. */
+/**
+ * Heading under SOURCE ARTIFACTS: how much of the scope is on screen.
+ *
+ * `more` comes from the server's page envelope rather than a count comparison:
+ * a book total includes artifacts the grid never lists (notebooks), so
+ * `shown < total` would leave the heading claiming a remainder forever.
+ */
 export function libraryGridHeading(input: {
   scope: LibraryScope
   shown: number
   total: number
   bookCount: number
+  more: boolean
 }): string {
   if (input.scope === 'book') {
-    const label = `local artifact${input.total === 1 ? '' : 's'}`
-    return input.shown < input.total
-      ? `${input.shown} of ${input.total} ${label}`
-      : `${input.shown} ${label}`
+    return input.more
+      ? `${input.shown} of ${input.total} local artifacts`
+      : `${input.shown} local artifact${input.shown === 1 ? '' : 's'}`
   }
   const books = `${input.bookCount} book${input.bookCount === 1 ? '' : 's'}`
-  return input.shown < input.total
+  return input.more
     ? `${input.shown} of ${input.total} artifacts across ${books}`
-    : `${input.total} artifact${input.total === 1 ? '' : 's'} across ${books}`
+    : `${input.shown} artifact${input.shown === 1 ? '' : 's'} across ${books}`
 }

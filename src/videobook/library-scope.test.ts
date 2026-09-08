@@ -3,12 +3,14 @@ import {
   libraryGridAssets,
   libraryGridHeading,
   libraryScopeFromValue,
+  mergeBookGridAssets,
   type OwningBook,
 } from './library-scope'
 
 type TestAsset = {
   artifactId: string
   status: string
+  createdAt: string
 }
 
 const activeBook: OwningBook = {
@@ -16,13 +18,13 @@ const activeBook: OwningBook = {
   owningBookName: 'catdance',
 }
 
-function asset(artifactId: string, status = 'ready'): TestAsset {
-  return { artifactId, status }
+function asset(artifactId: string, createdAt: string, status = 'ready'): TestAsset {
+  return { artifactId, status, createdAt }
 }
 
-function foreign(artifactId: string, bookId: string, bookName: string) {
+function foreign(artifactId: string, createdAt: string, bookId: string, bookName: string) {
   return {
-    ...asset(artifactId),
+    ...asset(artifactId, createdAt),
     owningBookId: bookId,
     owningBookName: bookName,
   }
@@ -38,17 +40,42 @@ describe('libraryScopeFromValue', () => {
   })
 })
 
+describe('mergeBookGridAssets', () => {
+  it('orders the live page and the browsed pages newest first', () => {
+    const rows = mergeBookGridAssets(
+      [asset('c', '2026-09-03T00:00:00.000Z'), asset('a', '2026-09-01T00:00:00.000Z')],
+      [asset('b', '2026-09-02T00:00:00.000Z'), asset('z', '2026-08-01T00:00:00.000Z')],
+    )
+    expect(rows.map((row) => row.artifactId)).toEqual(['c', 'b', 'a', 'z'])
+  })
+
+  it('prefers the live row, which carries the current status', () => {
+    const rows = mergeBookGridAssets(
+      [asset('a', '2026-09-01T00:00:00.000Z', 'processing')],
+      [asset('a', '2026-09-01T00:00:00.000Z', 'ready')],
+    )
+    expect(rows).toEqual([asset('a', '2026-09-01T00:00:00.000Z', 'processing')])
+  })
+
+  it('breaks timestamp ties on artifact id', () => {
+    const stamp = '2026-09-01T00:00:00.000Z'
+    const rows = mergeBookGridAssets([asset('b', stamp), asset('a', stamp)], [])
+    expect(rows.map((row) => row.artifactId)).toEqual(['b', 'a'])
+  })
+})
+
 describe('libraryGridAssets', () => {
   it('stamps the active book on every row in book scope', () => {
     const rows = libraryGridAssets({
       scope: 'book',
       activeBook,
-      bookAssets: [asset('a'), asset('b', 'processing')],
-      libraryAssets: [foreign('z', 'book-other', 'dancing')],
+      bookAssets: [asset('a', '2026-09-02T00:00:00.000Z')],
+      browsedBookAssets: [asset('b', '2026-09-01T00:00:00.000Z')],
+      libraryAssets: [foreign('z', '2026-09-03T00:00:00.000Z', 'book-other', 'dancing')],
     })
     expect(rows).toEqual([
-      { artifactId: 'a', status: 'ready', ...activeBook },
-      { artifactId: 'b', status: 'processing', ...activeBook },
+      { ...asset('a', '2026-09-02T00:00:00.000Z'), ...activeBook },
+      { ...asset('b', '2026-09-01T00:00:00.000Z'), ...activeBook },
     ])
   })
 
@@ -56,10 +83,15 @@ describe('libraryGridAssets', () => {
     const rows = libraryGridAssets({
       scope: 'library',
       activeBook,
-      bookAssets: [asset('a'), asset('b', 'processing'), asset('c', 'error')],
+      bookAssets: [
+        asset('a', '2026-09-03T00:00:00.000Z'),
+        asset('b', '2026-09-02T00:00:00.000Z', 'processing'),
+        asset('c', '2026-09-01T00:00:00.000Z', 'error'),
+      ],
+      browsedBookAssets: [],
       libraryAssets: [
-        foreign('z', 'book-other', 'dancing'),
-        { ...asset('a'), ...activeBook },
+        foreign('z', '2026-09-04T00:00:00.000Z', 'book-other', 'dancing'),
+        { ...asset('a', '2026-09-03T00:00:00.000Z'), ...activeBook },
       ],
     })
     expect(rows.map((row) => row.artifactId)).toEqual(['b', 'c', 'z', 'a'])
@@ -71,10 +103,11 @@ describe('libraryGridAssets', () => {
     const rows = libraryGridAssets({
       scope: 'library',
       activeBook,
-      bookAssets: [asset('a', 'processing')],
-      libraryAssets: [{ ...asset('a'), ...activeBook }],
+      bookAssets: [asset('a', '2026-09-01T00:00:00.000Z', 'processing')],
+      browsedBookAssets: [],
+      libraryAssets: [{ ...asset('a', '2026-09-01T00:00:00.000Z'), ...activeBook }],
     })
-    expect(rows).toEqual([{ artifactId: 'a', status: 'ready', ...activeBook }])
+    expect(rows).toEqual([{ ...asset('a', '2026-09-01T00:00:00.000Z'), ...activeBook }])
   })
 
   it('keeps same-id artifacts from different books apart', () => {
@@ -82,9 +115,10 @@ describe('libraryGridAssets', () => {
       scope: 'library',
       activeBook,
       bookAssets: [],
+      browsedBookAssets: [],
       libraryAssets: [
-        foreign('shared', 'book-one', 'one'),
-        foreign('shared', 'book-two', 'two'),
+        foreign('shared', '2026-09-01T00:00:00.000Z', 'book-one', 'one'),
+        foreign('shared', '2026-09-01T00:00:00.000Z', 'book-two', 'two'),
       ],
     })
     expect(rows).toHaveLength(2)
@@ -93,23 +127,30 @@ describe('libraryGridAssets', () => {
 
 describe('libraryGridHeading', () => {
   it('counts one book in book scope', () => {
-    expect(libraryGridHeading({ scope: 'book', shown: 4, total: 4, bookCount: 11 }))
+    expect(libraryGridHeading({ scope: 'book', shown: 4, total: 4, bookCount: 11, more: false }))
       .toBe('4 local artifacts')
-    expect(libraryGridHeading({ scope: 'book', shown: 1, total: 1, bookCount: 11 }))
+    expect(libraryGridHeading({ scope: 'book', shown: 1, total: 1, bookCount: 11, more: false }))
       .toBe('1 local artifact')
   })
 
-  it('says so when the book page is truncated', () => {
-    expect(libraryGridHeading({ scope: 'book', shown: 202, total: 538, bookCount: 11 }))
-      .toBe('202 of 538 local artifacts')
+  it('says so while a book page is truncated', () => {
+    expect(libraryGridHeading({ scope: 'book', shown: 202, total: 539, bookCount: 11, more: true }))
+      .toBe('202 of 539 local artifacts')
+  })
+
+  it('drops the remainder once the last page lands', () => {
+    // A book total counts notebooks the grid never lists, so the envelope —
+    // not shown < total — decides whether a remainder is still out there.
+    expect(libraryGridHeading({ scope: 'book', shown: 538, total: 539, bookCount: 11, more: false }))
+      .toBe('538 local artifacts')
   })
 
   it('reports the loaded page against the library total', () => {
-    expect(libraryGridHeading({ scope: 'library', shown: 100, total: 807, bookCount: 11 }))
+    expect(libraryGridHeading({ scope: 'library', shown: 100, total: 807, bookCount: 11, more: true }))
       .toBe('100 of 807 artifacts across 11 books')
-    expect(libraryGridHeading({ scope: 'library', shown: 807, total: 807, bookCount: 11 }))
+    expect(libraryGridHeading({ scope: 'library', shown: 807, total: 807, bookCount: 11, more: false }))
       .toBe('807 artifacts across 11 books')
-    expect(libraryGridHeading({ scope: 'library', shown: 1, total: 1, bookCount: 1 }))
+    expect(libraryGridHeading({ scope: 'library', shown: 1, total: 1, bookCount: 1, more: false }))
       .toBe('1 artifact across 1 book')
   })
 })
