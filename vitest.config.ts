@@ -50,6 +50,7 @@ export default defineConfig({
       'src/videobook/notebook-draft.test.ts',
       'src/videobook/notebook-grid.test.ts',
       'src/videobook/last-work-slot.test.ts',
+      'src/videobook/library-scope.test.ts',
       'src/videobook/notebook-routing.test.ts',
       'src/videobook/notebook-run-watch.test.ts',
       'src/videobook/media-insight-watch.test.ts',

@@ -384,6 +384,43 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+.asset-card-book {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  min-height: 0;
+  margin-top: 2px;
+  padding: 2px 6px;
+  max-width: 100%;
+  overflow: hidden;
+  border-color: var(--line);
+  color: #94c8aa;
+  background: rgba(36, 112, 73, 0.14);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-scope-error {
+  margin: 0 0 10px;
+  color: var(--danger-fg-hover);
+  font-size: 11px;
+}
+
+.library-scope-footer {
+  display: flex;
+  justify-content: center;
+  padding: 14px 0 4px;
+}
+
+.library-scope-footer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
 .asset-card .asset-similar-button {
   flex: 0 0 auto;
   width: 28px;

@@ -39,6 +39,7 @@ import {
   searchReferenceKindForFile,
   watchDownloadJob,
 } from '@/videobook/import-then-search'
+import type { LibraryScope } from '@/videobook/library-scope'
 import { useSearchReferenceLifecycle } from '@/videobook/useSearchReferenceLifecycle'
 import { searchWithPreparation } from '@/videobook/search-preparation'
 
@@ -48,6 +49,8 @@ interface MomentSearchAsset {
   type: string
   mediaUrl: string | null
   thumbnailUrl: string | null
+  /** Set when the asset comes from another book in library scope. */
+  owningBookId?: string
 }
 
 interface MomentSearchProps {
@@ -60,6 +63,9 @@ interface MomentSearchProps {
   onNotebookChanged: () => Promise<void>
   onLibraryChanged: () => Promise<void>
   importControls: ReactNode
+  /** Shared with the Library grid so both sides of the screen agree. */
+  scope: LibraryScope
+  onScopeChange: (scope: LibraryScope) => void
 }
 
 export interface MomentSearchHandle {
@@ -116,6 +122,8 @@ function MomentSearch({
   onNotebookChanged,
   onLibraryChanged,
   importControls,
+  scope,
+  onScopeChange,
 }: MomentSearchProps, ref) {
   const searchReference = useSearchReferenceLifecycle()
   const {
@@ -125,7 +133,6 @@ function MomentSearch({
     durationSeconds,
     preparing: preparingReference,
   } = searchReference.state
-  const [scope, setScope] = useState<'book' | 'library'>('library')
   const [text, setText] = useState('')
   const [modality, setModality] = useState<SearchModality>('auto')
   const [artifactKind, setArtifactKind] = useState('')
@@ -520,7 +527,7 @@ function MomentSearch({
         : 'video-reverse'
       void prepareExistingReference(
         searchMode,
-        bookId,
+        asset.owningBookId ?? bookId,
         asset.artifactId,
         searchMode === 'image-reverse'
           ? asset.thumbnailUrl ?? asset.mediaUrl
@@ -673,7 +680,7 @@ function MomentSearch({
                 aria-pressed={referenceLocked || scope === 'library'}
                 disabled={referenceLocked}
                 title={referenceLocked ? 'Reverse search always spans all books' : undefined}
-                onClick={() => setScope('library')}
+                onClick={() => onScopeChange('library')}
               >
                 All books
               </button>
@@ -682,7 +689,7 @@ function MomentSearch({
                 aria-pressed={!referenceLocked && scope === 'book'}
                 disabled={referenceLocked}
                 title={referenceLocked ? 'Reverse search always spans all books' : undefined}
-                onClick={() => setScope('book')}
+                onClick={() => onScopeChange('book')}
               >
                 This book
               </button>
