@@ -55,10 +55,12 @@ type ChatRoutingUserMessageContext = {
 
 type ZodConstraintSchema = { _def?: unknown; unwrap?: () => unknown };
 
+const SEEDANCE_VIDEO_TOOL = "generate_kie_seedance_2_5_video";
+
 const CHAT_TOOL_ALIASES: ChatToolAlias[] = [
   {
     name: "generate_video",
-    actualTool: "prepare_video_generation",
+    actualTool: SEEDANCE_VIDEO_TOOL,
     description: "Generate a video from a text prompt or image references",
   },
   {
@@ -194,7 +196,6 @@ function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
 }
 
 const SEEDREAM_IMAGE_I2I_TOOL = "generate_kie_seedream_v5_lite_image_to_image";
-const SEEDANCE_VIDEO_TOOL = "generate_kie_seedance_2_5_video";
 const SEEDANCE_SUBSTITUTION_NOTE =
   "Using Seedream for this image edit (Seedance is video).";
 

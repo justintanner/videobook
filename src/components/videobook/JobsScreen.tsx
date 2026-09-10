@@ -28,6 +28,7 @@ import {
   type JobsRowTone,
   type JobsScreenJob,
   type JobsScreenPlan,
+  type JobsScreenAsset,
 } from '@/videobook/jobs-presentation'
 
 const FINISHED_PREVIEW_COUNT = 10
@@ -38,6 +39,7 @@ interface JobsScreenProps {
   bookName: string | null
   jobs: JobsScreenJob[]
   plans: JobsScreenPlan[]
+  assets: JobsScreenAsset[]
   cells: NotebookCell[]
   now: number
   busy: boolean
@@ -257,6 +259,7 @@ export function JobsScreen({
   bookName,
   jobs,
   plans,
+  assets,
   cells,
   now,
   busy,
@@ -271,8 +274,8 @@ export function JobsScreen({
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(() => new Set())
 
   const bands = useMemo(
-    () => groupJobsRows(buildJobsRows({ jobs, plans, cells, now })),
-    [cells, jobs, now, plans],
+    () => groupJobsRows(buildJobsRows({ jobs, plans, cells, assets, now })),
+    [assets, cells, jobs, now, plans],
   )
   const counts = useMemo(() => countJobsBands(bands), [bands])
   const visibleBands = useMemo(() => filterJobsBands(bands, filter), [bands, filter])

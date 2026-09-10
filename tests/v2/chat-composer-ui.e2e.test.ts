@@ -1074,7 +1074,8 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await input.isEnabled(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
-    await page.getByLabel('Open inspector').click()
+    const reopenInspector = page.getByLabel('Open inspector')
+    if (await reopenInspector.count()) await reopenInspector.click()
     const generationNode = page.locator(
       `.notebook-flow .react-flow__node[data-id="${fullscreenImageGenerationCellId}"]`,
     )

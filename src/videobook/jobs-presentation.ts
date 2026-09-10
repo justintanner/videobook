@@ -29,6 +29,12 @@ export interface JobsScreenPlan {
   updatedAt: string
 }
 
+export interface JobsScreenAsset {
+  artifactId: string
+  status: string
+  mediaUrl: string | null
+}
+
 export type JobsRowTone =
   | 'review'
   | 'failed'
@@ -139,9 +145,9 @@ function jobRowTone(state: string): JobsRowTone {
   }
 }
 
-function planRowTone(status: string): JobsRowTone {
+function planRowTone(status: string, outputReady: boolean): JobsRowTone {
   switch (status) {
-    case 'awaiting-output': return 'review'
+    case 'awaiting-output': return outputReady ? 'review' : 'running'
     case 'failed': return 'failed'
     case 'queued': return 'queued'
     case 'omitted': return 'omitted'
@@ -288,12 +294,12 @@ function planStage(plan: JobsScreenPlan) {
   return stage?.kind === 'queued' ? stage : null
 }
 
-function planActions(plan: JobsScreenPlan): JobsRowAction[] {
+function planActions(plan: JobsScreenPlan, outputReady: boolean): JobsRowAction[] {
   const actions: JobsRowAction[] = []
-  if (plan.outputArtifactId && plan.status !== 'continued' && plan.status !== 'omitted') {
+  if (outputReady && plan.status !== 'continued' && plan.status !== 'omitted') {
     actions.push('continue')
   }
-  if (plan.status === 'failed' || plan.status === 'awaiting-output') {
+  if (plan.status === 'failed' || (plan.status === 'awaiting-output' && outputReady)) {
     actions.push('retry', 'switch', 'omit')
   }
   return actions
@@ -307,17 +313,22 @@ function planCostNote(plan: JobsScreenPlan): string | null {
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
-function planSummary(plan: JobsScreenPlan): Pick<JobsRow, 'summary' | 'note'> {
+function planSummary(plan: JobsScreenPlan, outputReady: boolean): Pick<JobsRow, 'summary' | 'note'> {
   const note = planCostNote(plan)
   switch (plan.status) {
     case 'awaiting-output':
-      return { summary: 'Output ready — review before inserting', note }
+      return {
+        summary: outputReady
+          ? 'Output ready — review before inserting'
+          : 'Waiting for generated media',
+        note,
+      }
     case 'failed':
       return { summary: plan.error ?? 'Generation failed', note }
     case 'queued':
       return { summary: 'Generation queued', note }
     case 'continued':
-      return { summary: 'Inserted into the sequence', note }
+      return { summary: 'Generation complete', note }
     case 'omitted':
       return {
         summary: 'Left out of the sequence',
@@ -343,8 +354,16 @@ function planTitle(
   return plan.plan.summary
 }
 
-function planRow(plan: JobsScreenPlan, cells: NotebookCell[]): JobsRow {
-  const tone = planRowTone(plan.status)
+function planRow(
+  plan: JobsScreenPlan,
+  cells: NotebookCell[],
+  assets: JobsScreenAsset[],
+): JobsRow {
+  const outputReady = assets.some((asset) =>
+    asset.artifactId === plan.outputArtifactId
+    && asset.status === 'ready'
+    && Boolean(asset.mediaUrl))
+  const tone = planRowTone(plan.status, outputReady)
   const stage = planStage(plan)
   const cell = cells.find((candidate) => candidate.id === plan.cellId)
   const detail = stage
@@ -359,15 +378,15 @@ function planRow(plan: JobsScreenPlan, cells: NotebookCell[]): JobsRow {
     title: planTitle(plan, cell, stage),
     detail: detail && detail.length > 0 ? detail : null,
     target: cellTarget(cell),
-    ...planSummary(plan),
+    ...planSummary(plan, outputReady),
     errorCode: null,
     errorDetail: plan.error,
     attempt: '1/1',
     timestamp: parsePlanTime(plan.createdAt),
     sortAt: parsePlanTime(plan.updatedAt) || parsePlanTime(plan.createdAt),
     duration: null,
-    live: false,
-    actions: planActions(plan),
+    live: tone === 'running',
+    actions: planActions(plan, outputReady),
   }
 }
 
@@ -375,12 +394,13 @@ interface BuildJobsRowsInput {
   jobs: JobsScreenJob[]
   plans: JobsScreenPlan[]
   cells: NotebookCell[]
+  assets?: JobsScreenAsset[]
   now: number
 }
 
-export function buildJobsRows({ jobs, plans, cells, now }: BuildJobsRowsInput): JobsRow[] {
+export function buildJobsRows({ jobs, plans, cells, assets = [], now }: BuildJobsRowsInput): JobsRow[] {
   return [
-    ...plans.map((plan) => planRow(plan, cells)),
+    ...plans.map((plan) => planRow(plan, cells, assets)),
     ...jobs.map((job) => jobRow(job, cells, now)),
   ]
 }

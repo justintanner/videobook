@@ -14,6 +14,11 @@ import {
 import { parseNotebookGridAddress } from './notebook-grid'
 
 const NOW = Date.parse('2026-08-29T09:12:03Z')
+const READY_ASSETS = [{
+  artifactId: '01a04918-a21b-72aa-abd1-dcada9eb903e',
+  status: 'ready',
+  mediaUrl: '/files/book-1/01a04918-a21b-72aa-abd1-dcada9eb903e/proxy.mp4',
+}]
 
 function cell(address: string, overrides: Partial<NotebookCell>): NotebookCell {
   const slot = parseNotebookGridAddress(address)
@@ -168,7 +173,7 @@ describe('buildJobsRows', () => {
   })
 
   it('turns an awaiting-output plan into a review row with all four actions', () => {
-    const [row] = buildJobsRows({ jobs: [], plans: [plan({})], cells, now: NOW })
+    const [row] = buildJobsRows({ jobs: [], plans: [plan({})], cells, assets: READY_ASSETS, now: NOW })
     expect(row).toMatchObject({
       tone: 'review',
       band: 'attention',
@@ -182,6 +187,37 @@ describe('buildJobsRows', () => {
     })
   })
 
+  it.each([
+    { assets: [] },
+    { assets: [{ ...READY_ASSETS[0], status: 'generating', mediaUrl: null }] },
+    { assets: [{ ...READY_ASSETS[0], status: 'processing' }] },
+    { assets: [{ ...READY_ASSETS[0], mediaUrl: null }] },
+  ])('keeps unfinished media in progress without offering another paid attempt: %j', ({ assets }) => {
+    const [row] = buildJobsRows({ jobs: [], plans: [plan({})], cells, assets, now: NOW })
+    expect(row).toMatchObject({
+      tone: 'running',
+      band: 'running',
+      statusLabel: 'RUNNING',
+      summary: 'Waiting for generated media',
+      live: true,
+      actions: [],
+    })
+  })
+
+  it('keeps retry actions available after a failed generation without offering an unavailable output', () => {
+    const [row] = buildJobsRows({
+      jobs: [],
+      plans: [plan({ status: 'failed', error: 'Provider failed' })],
+      cells,
+      now: NOW,
+    })
+    expect(row).toMatchObject({
+      tone: 'failed',
+      summary: 'Provider failed',
+      actions: ['retry', 'switch', 'omit'],
+    })
+  })
+
   it('files continued and omitted plans under finished with no retry actions', () => {
     const rows = buildJobsRows({
       jobs: [],
@@ -190,7 +226,7 @@ describe('buildJobsRows', () => {
       now: NOW,
     })
     expect(rows.map((row) => [row.tone, row.band, row.summary, row.actions])).toEqual([
-      ['done', 'finished', 'Inserted into the sequence', []],
+      ['done', 'finished', 'Generation complete', []],
       ['omitted', 'finished', 'Left out of the sequence', []],
     ])
   })
@@ -207,6 +243,7 @@ describe('groupJobsRows', () => {
       job({ id: 6, state: 'failed', error: { code: 'TIMEOUT', message: 'took too long' }, finishedAt: NOW - 1_000 }),
     ],
     plans: [plan({})],
+    assets: READY_ASSETS,
     cells: [],
     now: NOW,
   })

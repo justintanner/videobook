@@ -2,8 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { BookManager } from '../../server/src/book-manager.js'
+import { buildRoutableTools, getRoutableTool } from '../../server/src/chat-router.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
+import { getAllToolDefs } from '../../server/src/tools/index.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 import { asNotebookGenerationActions } from '../../src/videobook/notebook-generation-actions'
@@ -50,6 +53,89 @@ describe('notebook chat generation', () => {
   afterEach(async () => {
     await books.close()
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  })
+
+  it('preserves generic video routing settings through notebook provider preview', async () => {
+    const created = await books.create('cat-video-routing')
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+    const { bookId } = created.value
+    const managed = books.get(bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const { engine } = managed.value
+    const definitions = getAllToolDefs(engine)
+    const route = getRoutableTool(buildRoutableTools(definitions), 'generate_video')
+    const target = definitions.find((definition) => definition.name === route?.actualTool)
+    if (!route || !target) throw new Error('Missing generic video route')
+    const prompt = 'Fluffy orange cat bats a blue yarn ball across a sunlit floor'
+    const params = z.object(target.schema).parse({
+      book_id: bookId,
+      prompt,
+      duration: '5',
+      aspect_ratio: '16:9',
+      resolution: '720p',
+    })
+    const notebookId = engine.notebooks.list()[0]!.id
+    const current = engine.notebooks.read(notebookId)
+    expect(current.ok).toBe(true)
+    if (!current.ok) return
+    const byName = new Map(videobookDomainDefs(scopedBookEngine, books)
+      .map((definition) => [definition.name, definition]))
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const definition = byName.get(name)
+      if (!definition) throw new Error(`Missing ${name}`)
+      return resultJson(await withBookContext(
+        { bookId, engine },
+        () => definition.handler({ book_id: bookId, ...args }),
+      ))
+    }
+    const actions = asNotebookGenerationActions(
+      await invoke('list_notebook_actions', { cell_type: 'generate_video' }),
+    )
+    const draft = planNotebookChatGeneration({
+      actions,
+      cellId: '01900000-0000-7000-8000-000000000030',
+      command: {
+        cellType: 'generate_video',
+        mediaKind: 'video',
+        prompt,
+        sourceReferences: [],
+      },
+      document: current.value,
+      fallbackSlot: { row: 0, column: 0 },
+      preferredTool: route.actualTool,
+      routedParams: params,
+    })
+    expect(draft.cell.tool).toBe('generate_kie_seedance_2_5_video')
+    expect(notebookChatGenerationSettings(draft)).toMatchObject({
+      duration: '5',
+      aspect_ratio: '16:9',
+      resolution: '720p',
+    })
+    const preview = await invoke('preview_notebook_generation', {
+      notebook_id: notebookId,
+      cell_id: draft.cell.id,
+      draft: draft.cell,
+      connections: [],
+    })
+    expect(preview).toMatchObject({
+      payload: {
+        model: 'bytedance/seedance-2-5',
+        input: {
+          prompt,
+          duration: 5,
+          aspect_ratio: '16:9',
+          resolution: '720p',
+        },
+      },
+    })
+    expect(engine.notebooks.read(notebookId)).toMatchObject({
+      ok: true,
+      value: { cells: [] },
+    })
+    expect(engine.artifacts.list().filter((artifact) => artifact.kind === 'video'))
+      .toEqual([])
   })
 
   it('creates a configured book cell, connects its image source, and produces a canonical plan', async () => {

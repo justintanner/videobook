@@ -13436,6 +13436,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               bookName={activeBook?.name ?? null}
               jobs={jobs}
               plans={generationPlans}
+              assets={assets}
               cells={notebook?.cells ?? EMPTY_NOTEBOOK_CELLS}
               now={jobSnapshotAt}
               busy={busy}

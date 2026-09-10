@@ -127,9 +127,14 @@ describe("chat routing catalog", () => {
   it("keeps generic generation aliases", () => {
     const tools = buildRoutableTools(definitions);
     expect(getRoutableTool(tools, "generate_video")).toMatchObject({
-      actualTool: "prepare_video_generation",
+      actualTool: "generate_kie_seedance_2_5_video",
       category: "generation",
+      effect: "generation",
+      autoApply: false,
     });
+    expect(getRoutableTool(tools, "generate_video")?.params).toEqual(
+      expect.arrayContaining(["prompt", "duration", "aspect_ratio", "resolution"]),
+    );
     expect(getRoutableTool(tools, "generate_image")).toMatchObject({
       actualTool: "generate_kie_nano_banana_pro_text_to_image",
       category: "generation",
