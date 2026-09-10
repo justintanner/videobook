@@ -35,9 +35,10 @@ export const restrictHttpAccess: RequestHandler = (req, res, next) => {
   next();
 };
 
-export const restrictMediaContent: RequestHandler = (_req, res, next) => {
+export const restrictMediaContent: RequestHandler = (req, res, next) => {
+  const nativeMedia = /\.(?:mp4|m4v|mov|webm|ogv|mp3|m4a|aac|wav|flac|ogg|oga|opus)$/iu.test(req.path);
   res.setHeader("Content-Security-Policy", [
-    "sandbox",
+    nativeMedia ? "sandbox allow-same-origin" : "sandbox",
     "default-src 'none'",
     "img-src 'self' data: blob:",
     "media-src 'self' data: blob:",

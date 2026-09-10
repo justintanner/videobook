@@ -342,11 +342,13 @@ describe('v2 MCP server', () => {
       const svgResponse = await page.goto(svgPath)
       expect(svgResponse?.status()).toBe(200)
       expect(svgResponse?.headers()['content-security-policy']).toContain('sandbox')
+      expect(svgResponse?.headers()['content-security-policy']).not.toContain('allow-same-origin')
       expect(svgResponse?.headers()['x-content-type-options']).toBe('nosniff')
       expect(await page.locator('svg').getAttribute('data-executed')).toBeNull()
       expect(await page.locator('rect').evaluate((element) => getComputedStyle(element).fill)).toBe('rgb(255, 0, 0)')
       const archiveResponse = await page.goto(`${base}/archive-files/active.html`)
       expect(archiveResponse?.headers()['content-security-policy']).toContain('sandbox')
+      expect(archiveResponse?.headers()['content-security-policy']).not.toContain('allow-same-origin')
       expect(archiveResponse?.headers()['x-content-type-options']).toBe('nosniff')
       expect(await page.locator('h1').textContent()).toBe('Visible content')
       expect(await page.locator('html').getAttribute('data-executed')).toBeNull()
@@ -368,6 +370,47 @@ describe('v2 MCP server', () => {
       await expect.poll(() => player.evaluate((element) => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
       await player.evaluate((element) => (element as HTMLVideoElement).play())
       await expect.poll(() => player.evaluate((element) => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(0)
+      const directVideoUrl = `${base}/files/${book.bookId}/${video.assetId}/original.mp4`
+      await writeFile(join(rootDir, 'archive/playback.mp4'), await readFile(videoPath))
+      const audioPath = join(rootDir, 'safe-playback.wav')
+      await execFileAsync(FFMPEG, ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', audioPath])
+      const audioBytes = await readFile(audioPath)
+      const audioUpload = await fetch(`${base}/api/books/${book.bookId}/upload?filename=playback.wav`, { method: 'POST', body: audioBytes })
+      expect(audioUpload.status).toBe(200)
+      const audio = await audioUpload.json() as { assetId: string }
+      await writeFile(join(rootDir, 'archive/playback.wav'), audioBytes)
+      for (const url of [
+        `${directVideoUrl}?playback=direct`,
+        `${base}/archive-files/playback.mp4`,
+        `${base}/files/${book.bookId}/${audio.assetId}/original.wav`,
+        `${base}/archive-files/playback.wav`,
+      ]) {
+        const response = await page.goto(url)
+        expect(response?.headers()['content-security-policy']).toContain('sandbox allow-same-origin')
+        expect(response?.headers()['x-content-type-options']).toBe('nosniff')
+        const directPlayer = page.locator('video, audio')
+        await expect.poll(() => directPlayer.evaluate((element) =>
+          (element as HTMLVideoElement).duration)).toBeCloseTo(1, 1)
+        await directPlayer.evaluate(async (element) => {
+          const video = element as HTMLVideoElement
+          video.muted = true
+          video.currentTime = 0
+          await video.play()
+        })
+        await expect.poll(() => directPlayer.evaluate((element) =>
+          (element as HTMLVideoElement).currentTime)).toBeGreaterThan(0)
+        expect(await directPlayer.evaluate((element) =>
+          (element as HTMLVideoElement).error)).toBeNull()
+        await directPlayer.evaluate((element) => {
+          const media = element as HTMLMediaElement
+          media.pause()
+          media.currentTime = 0.5
+        })
+        await expect.poll(() => directPlayer.evaluate((element) =>
+          (element as HTMLMediaElement).seeking)).toBe(false)
+        expect(await directPlayer.evaluate((element) =>
+          (element as HTMLMediaElement).currentTime)).toBeCloseTo(0.5, 1)
+      }
     } finally { await browser.close() }
   })
 
