@@ -262,6 +262,105 @@ describe('v2 MCP server', () => {
     }
   })
 
+  it('keeps media validators consistent for conditional downloads, ranges, and HEAD', async () => {
+    if (!client || !server) throw new Error('MCP client was not initialized')
+    const base = server.url.replace('/mcp', '')
+    const book = await callTool<BookPayload>(client, 'create_book', { name: 'HTTP range validation' })
+    const bytes = Buffer.from('# HTTP range fixture\nA stable document for download validation.\n')
+    const upload = await fetch(`${base}/api/books/${book.bookId}/upload?filename=ranges.md`, { method: 'POST', body: bytes })
+    expect(upload.status).toBe(200)
+    const asset = await upload.json() as { assetId: string }
+    const url = `${base}/files/${book.bookId}/${asset.assetId}/original.md`
+    const requestFile = (method: string, headers: Record<string, string> = {}) => new Promise<{
+      status: number
+      body: Buffer
+      etag: string | undefined
+      length: string | undefined
+      range: string | undefined
+    }>((resolve, reject) => {
+      const request = httpRequest(url, { method, headers }, (response) => {
+        const chunks: Buffer[] = []
+        response.on('data', (chunk: Buffer) => chunks.push(chunk))
+        response.on('error', reject)
+        response.on('end', () => resolve({
+          status: response.statusCode ?? 0,
+          body: Buffer.concat(chunks),
+          etag: response.headers.etag,
+          length: response.headers['content-length'],
+          range: response.headers['content-range'],
+        }))
+      })
+      request.on('error', reject)
+      request.end()
+    })
+    const full = await requestFile('GET')
+    expect(full.status).toBe(200)
+    expect(full.body).toEqual(bytes)
+    expect(full.etag).toMatch(/^"[^"]+"$/u)
+    const etag = full.etag!
+    for (const range of ['bytes=0-9', 'bytes=-10']) {
+      const partial = await requestFile('GET', { range, 'if-range': etag })
+      expect(partial.status).toBe(206)
+      expect(partial.etag).toBe(etag)
+      expect(partial.body).toEqual(range === 'bytes=0-9' ? bytes.subarray(0, 10) : bytes.subarray(-10))
+    }
+    for (const range of ['bytes=0-9', 'bytes=99999-']) {
+      const head = await requestFile('HEAD', { range })
+      expect(head).toMatchObject({ status: 200, etag, length: String(bytes.length), range: undefined })
+      expect(head.body.length).toBe(0)
+      for (const validator of [etag, `W/${etag}`, '*']) {
+        const cached = await requestFile('GET', { range, 'if-none-match': validator })
+        expect(cached).toMatchObject({ status: 304, etag, range: undefined })
+        expect(cached.body.length).toBe(0)
+      }
+    }
+    for (const validator of ['"outdated-file"', `W/${etag}`, 'Wed, 01 Jan 2020 00:00:00 GMT']) {
+      const stale = await requestFile('GET', { range: 'bytes=0-9', 'if-range': validator })
+      expect(stale).toMatchObject({ status: 200, etag, range: undefined })
+      expect(stale.body).toEqual(bytes)
+    }
+    const unsatisfied = await requestFile('GET', { range: 'bytes=99999-', 'if-range': etag })
+    expect(unsatisfied).toMatchObject({ status: 416, range: `bytes */${bytes.length}` })
+    const refreshed = await requestFile('GET', { range: 'bytes=0-9', 'if-none-match': '"outdated-file"' })
+    expect(refreshed).toMatchObject({ status: 206, etag, range: `bytes 0-9/${bytes.length}` })
+  })
+
+  it('normalizes character uploads before collision checks and rejects invalid paths without mutation', async () => {
+    if (!client || !server) throw new Error('MCP client was not initialized')
+    const base = server.url.replace('/mcp', '')
+    const book = await callTool<BookPayload>(client, 'create_book', { name: 'HTTP character uploads' })
+    const character = await callTool<{ asset_id: string }>(client, 'create_character', {
+      book_id: book.bookId, args: ['Upload fixture'],
+    })
+    const upload = (filename: string, body: string, targetAssetId = character.asset_id) => fetch(
+      `${base}/api/books/${book.bookId}/upload?${new URLSearchParams({ filename, targetAssetId })}`,
+      { method: 'POST', body },
+    )
+    const first = await upload('notes.txt', 'Original character notes')
+    expect(first.status).toBe(200)
+    expect(await first.json()).toMatchObject({ assetId: character.asset_id, filename: 'notes.txt' })
+    for (const [filename, expected] of [
+      ['notes.txt', 'notes-1.txt'], ['./notes.txt', 'notes-2.txt'],
+      ['caps.TXT', 'caps.TXT'], ['caps.TXT', 'caps-1.TXT'],
+    ]) {
+      const duplicate = await upload(filename, expected)
+      expect(duplicate.status).toBe(200)
+      expect(await duplicate.json()).toMatchObject({ assetId: character.asset_id, filename: expected })
+      expect(await (await fetch(`${base}/files/${book.bookId}/${character.asset_id}/${expected}`)).text()).toBe(expected)
+    }
+    const manifestUrl = `${base}/api/books/${book.bookId}/artifacts/${character.asset_id}/manifest`
+    const before = await (await fetch(manifestUrl)).json()
+    for (const filename of ['../escaped.txt', '..\\escaped.txt', '/absolute.txt', 'bad\0name.txt']) {
+      const invalid = await upload(filename, 'Rejected bytes')
+      expect(invalid.status, filename).toBe(400)
+      expect(await invalid.json()).toMatchObject({ error: expect.stringContaining('Invalid artifact file path') })
+    }
+    expect(await (await fetch(manifestUrl)).json()).toEqual(before)
+    expect(await (await fetch(`${base}/files/${book.bookId}/${character.asset_id}/notes.txt`)).text()).toBe('Original character notes')
+    const missing = await upload('notes.txt', 'Rejected bytes', 'missing-character')
+    expect(missing.status).toBe(404)
+  })
+
   it('rejects a foreign browser page while preserving browser and bundled extension access', async () => {
     if (!server) throw new Error('MCP server was not initialized')
     const base = server.url.replace('/mcp', '')
@@ -379,11 +478,22 @@ describe('v2 MCP server', () => {
       expect(audioUpload.status).toBe(200)
       const audio = await audioUpload.json() as { assetId: string }
       await writeFile(join(rootDir, 'archive/playback.wav'), audioBytes)
+      const webAudioPath = join(rootDir, 'safe-playback.weba')
+      await execFileAsync(FFMPEG, ['-y', '-i', audioPath, '-c:a', 'libopus', '-f', 'webm', webAudioPath])
+      const webAudioBytes = await readFile(webAudioPath)
+      const webAudioUpload = await fetch(`${base}/api/books/${book.bookId}/upload?filename=playback.weba`, { method: 'POST', body: webAudioBytes })
+      expect(webAudioUpload.status).toBe(200)
+      const webAudio = await webAudioUpload.json() as { assetId: string }
+      await writeFile(join(rootDir, 'archive/playback.weba'), webAudioBytes)
       for (const url of [
         `${directVideoUrl}?playback=direct`,
         `${base}/archive-files/playback.mp4`,
         `${base}/files/${book.bookId}/${audio.assetId}/original.wav`,
         `${base}/archive-files/playback.wav`,
+        `${base}/files/${book.bookId}/${webAudio.assetId}/original.weba`,
+        `${base}/archive-files/playback.weba`,
+        directVideoUrl.replace('original.mp4', 'original%2Emp4'),
+        `${base}/archive-files/playback%2Emp4`,
       ]) {
         const response = await page.goto(url)
         expect(response?.headers()['content-security-policy']).toContain('sandbox allow-same-origin')

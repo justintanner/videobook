@@ -35,8 +35,18 @@ export const restrictHttpAccess: RequestHandler = (req, res, next) => {
   next();
 };
 
+function isNativeMediaPath(path: string): boolean {
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(path);
+  } catch {
+    return false;
+  }
+  return /\.(?:mp4|m4v|mov|webm|ogv|mp3|m4a|aac|wav|flac|ogg|oga|opus|weba)$/iu.test(decodedPath);
+}
+
 export const restrictMediaContent: RequestHandler = (req, res, next) => {
-  const nativeMedia = /\.(?:mp4|m4v|mov|webm|ogv|mp3|m4a|aac|wav|flac|ogg|oga|opus)$/iu.test(req.path);
+  const nativeMedia = isNativeMediaPath(req.path);
   res.setHeader("Content-Security-Policy", [
     nativeMedia ? "sandbox allow-same-origin" : "sandbox",
     "default-src 'none'",

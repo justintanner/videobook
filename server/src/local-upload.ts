@@ -1,4 +1,5 @@
 import type { Engine, EngineError } from "videobook-engine";
+import { normalizeFilePath } from "videobook-engine";
 import { createWriteStream } from "node:fs";
 import { unlink } from "node:fs/promises";
 import * as path from "node:path";
@@ -175,6 +176,18 @@ async function uploadLocal(
       message: `Unsupported file extension: ${ext}`,
     };
   }
+  let filename = args.filename;
+  if (args.targetAssetId) {
+    try {
+      filename = normalizeFilePath(filename);
+    } catch (error) {
+      return {
+        ok: false,
+        statusCode: 400,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
 
   let assetId: string;
   let artifactId: string;
@@ -219,16 +232,16 @@ async function uploadLocal(
     isNewAsset = true;
   }
 
-  let writtenFilename = isNewAsset ? `original${ext}` : args.filename;
+  let writtenFilename = isNewAsset ? `original${ext}` : filename;
   if (!isNewAsset) {
-    const baseName = path.basename(args.filename, ext);
+    const { dir, name, ext: filenameExtension } = path.posix.parse(filename);
     let counter = 1;
     while (true) {
       const checkResult = await engine.files.manifest(assetId);
       if (!checkResult.ok) break;
       const exists = checkResult.value.files.some((f) => f.name === writtenFilename);
       if (!exists) break;
-      writtenFilename = `${baseName}-${counter}${ext}`;
+      writtenFilename = path.posix.join(dir, `${name}-${counter}${filenameExtension}`);
       counter++;
     }
   }
@@ -243,7 +256,7 @@ async function uploadLocal(
     data: { state: "uploading" },
   });
   if (!lockResult.ok) {
-    await engine.artifacts.delete(assetId).catch(() => {});
+    if (isNewAsset) await engine.artifacts.delete(assetId).catch(() => {});
     return {
       ok: false,
       statusCode: statusCodeForFsError(lockResult.error),

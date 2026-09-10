@@ -1922,7 +1922,7 @@ function buildModelOption(
   }
   if (historical) {
     for (const [k, v] of Object.entries(historical)) {
-      if (allowedParams.has(k)) {
+      if (allowedParams.has(k) && (k !== "prompt" || !Object.hasOwn(params, k))) {
         params[k] = v;
       }
     }

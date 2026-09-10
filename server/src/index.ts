@@ -1,6 +1,7 @@
 import "./load-env.js";
 import cors from "cors";
 import express from "express";
+import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -83,8 +84,15 @@ app.get(/^\/files\/([^/]+)\/([^/]+)\/(.+)$/, async (req, res) => {
   }
   res.type(filename);
   res.setHeader("Accept-Ranges", "bytes");
+  const etag = `"${createHash("sha256").update(result.value).digest("hex")}"`;
+  res.setHeader("ETag", etag);
+  if (req.fresh) {
+    res.status(304).end();
+    return;
+  }
   const rangeHeader = req.headers.range;
-  if (!rangeHeader) {
+  const ifRange = req.get("If-Range");
+  if (req.method === "HEAD" || !rangeHeader || (ifRange !== undefined && ifRange !== etag)) {
     res.send(result.value);
     return;
   }

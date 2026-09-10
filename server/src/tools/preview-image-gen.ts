@@ -89,8 +89,11 @@ export function previewImageGenDef(engine: Engine): ToolDef {
       // 4. Build model options for all image models
       // Strip @asset tags from prompt to get the user's text input
       const cleanPrompt = stripNotebookMentions(
-        prompt,
-        scanNotebookMentions(prompt).map((mention) => mention.reference),
+        expandedPrompt,
+        [
+          ...parseArtifactIdTags(expandedPrompt),
+          ...scanNotebookMentions(expandedPrompt).map((mention) => mention.reference),
+        ],
       ).trim();
       const baseParams: Record<string, unknown> = { prompt: cleanPrompt };
 

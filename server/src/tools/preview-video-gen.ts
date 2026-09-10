@@ -5,6 +5,7 @@
  */
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
+import { scanNotebookMentions, stripNotebookMentions } from "videobook-engine/notebook-mentions";
 import {
   DEFAULT_VIDEO_MODEL_KEY,
   VIDEO_MODELS,
@@ -162,14 +163,17 @@ Determine which video generation tool to use and what parameters to pass.`;
       const allProjectAssets = engine.artifacts.list();
       const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.artifactId}`));
 
-      // 5. Build model options for all 5 video models
-      // Only pass router params to the model that was actually routed to;
-      // other models get empty base params so shared param names (mode, duration)
-      // don't bleed across models with different allowed values.
+      const cleanPrompt = stripNotebookMentions(
+        expandedPrompt,
+        [
+          ...parseArtifactIdTags(expandedPrompt),
+          ...scanNotebookMentions(expandedPrompt).map((mention) => mention.reference),
+        ],
+      ).trim();
       const modelOptions = Object.entries(VIDEO_MODELS).map(([key, info]) =>
         buildModelOption(
           key, info,
-          info.tool_name === routedToolName ? routedParams : {},
+          { ...(info.tool_name === routedToolName ? routedParams : {}), prompt: cleanPrompt },
           resolvedAssets, historyEntries, providerOverride, projectAssetTags,
         ),
       );

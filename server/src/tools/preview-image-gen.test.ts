@@ -61,6 +61,7 @@ describe("preview_image tool", () => {
     expect(parsed.resolved_assets.length).toBeGreaterThanOrEqual(1);
     expect(parsed.resolved_assets[0].ref).toBe(`@${uploaded.artifactId}`);
     expect(parsed.resolved_assets[0].type).toBe("image");
+    expect(parsed.prefilled_values.prompt).toBe("edit to be colorful");
   });
 
   it("returns preview with empty resolved_assets when prompt has no @tags", async () => {

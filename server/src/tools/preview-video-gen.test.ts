@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
+import { createEngineForTest } from "../engine.js";
 import type { Client } from "@modelcontextprotocol/client";
 import { selectPreviewVideoModel } from "./preview-video-gen.js";
 
@@ -87,6 +88,7 @@ describe("preview_video tool", () => {
     expect(parsed.resolved_assets.length).toBeGreaterThanOrEqual(1);
     expect(parsed.resolved_assets[0].ref).toBe(`@${uploaded.artifactId}`);
     expect(parsed.resolved_assets[0].type).toBe("image");
+    expect(parsed.prefilled_values.prompt).toBe("animate into a video");
   });
 
   it("returns preview with empty resolved_assets when prompt has no @tags and model selection skips routing", async () => {
@@ -103,6 +105,44 @@ describe("preview_video tool", () => {
     expect(parsed.resolved_assets).toEqual([]);
     expect(parsed.selected_model).toBe("kling30");
     expect(parsed.model_options.length).toBeGreaterThanOrEqual(5);
+    expect(parsed.prefilled_values.prompt).toBe("create an epic sunrise video");
+    expect(parsed.validation.missing_required).not.toContain("prompt");
+  });
+
+  it.each(["seedance25", "wan30", "kling30"])("keeps the current prompt in %s and alternate model previews", async (selectedModel) => {
+    const prompt = "An orange cat pounces on a blue yarn ball";
+    const engine = createEngineForTest(tempDir);
+    const history = await engine.history.logAction("tool-generate-kie-seedance-2-5-video", {
+      prompt: "An old prompt that must not replace the current request",
+      duration: "8",
+      resolution: "1080p",
+    });
+    expect(history.ok).toBe(true);
+    const result = await client.callTool({
+      name: "prepare_video_generation",
+      arguments: {
+        prompt,
+        book_id: "test-proj",
+        selected_model: selectedModel,
+        selected_provider: "kie",
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text) as {
+      selected_model: string;
+      prefilled_values: { prompt?: string };
+      validation: { missing_required: string[] };
+      model_options: Array<{ key: string; prefilled_values: { prompt?: string } }>;
+    };
+    expect(parsed.selected_model).toBe(selectedModel);
+    expect(parsed.prefilled_values.prompt).toBe(prompt);
+    expect(parsed.validation.missing_required).not.toContain("prompt");
+    for (const key of ["seedance25", "wan30", "kling30"]) {
+      expect(parsed.model_options.find((option) => option.key === key)?.prefilled_values.prompt).toBe(prompt);
+    }
+    expect(parsed.model_options.find((option) => option.key === "seedance25")?.prefilled_values).toMatchObject({
+      duration: "8", resolution: "1080p",
+    });
   });
 
   it("includes unresolved @tag warnings in the preview", async () => {
