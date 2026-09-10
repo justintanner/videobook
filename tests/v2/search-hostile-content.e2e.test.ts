@@ -347,7 +347,8 @@ describe("hostile search content across browser surfaces", () => {
       await card.locator(".moment-card-media img").getAttribute("alt"),
     ).toBe(LABEL);
     expect(
-      await page.locator(".command-result span").first().textContent(),
+      await page.getByRole("status")
+        .filter({ hasText: "Found 1 moments · ready" }).textContent(),
     ).toBe("Found 1 moments · ready");
     expect(await executedMarkers(page)).toEqual([]);
     expect(await activeInjectedElements(page)).toBe(0);
@@ -367,15 +368,12 @@ describe("hostile search content across browser surfaces", () => {
     expect(await chip.textContent()).toBe("metadata");
     interception = "error";
     await search(page, "hostile-excerpt-marker");
-    const notice = page.locator(".command-result span").first();
+    const notice = page.getByRole("status").filter({ hasText: ERROR_TEXT });
     await expect
       .poll(async () => await notice.textContent(), {
         timeout: MCP_ROUNDTRIP_MS,
       })
       .toContain(ERROR_TEXT);
-    expect(await page.locator(".command-result").getAttribute("role")).toBe(
-      "status",
-    );
     interception = "none";
     expect(await executedMarkers(page)).toEqual([]);
     expect(await activeInjectedElements(page)).toBe(0);

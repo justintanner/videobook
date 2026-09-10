@@ -1,5 +1,6 @@
 videobook-engine 5.4.2
 git: https://github.com/justintanner/videobook-engine.git
-revision: 842d36b48c9396d2fc1c1e5cdddd569da79ed0f3
-tarball: vendor/videobook-engine-5.4.2-842d36b.tgz
-sha256: 4635e22cf983c3b98e4350884cde2803ae3e3489db16fafbe0720b145c997fa1
+revision: 5c8ca51bd456d0b8bf93b892cf6339c5460b42f1
+tarball: vendor/videobook-engine-5.4.2-5c8ca51.tgz
+sha256: 598eebb483f1d209a38170972934b47bf00e936c1eed938368ea9c6bbe47c76b
+registry: https://registry.npmjs.org/videobook-engine/-/videobook-engine-5.4.2.tgz

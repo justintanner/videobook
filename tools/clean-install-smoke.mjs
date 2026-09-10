@@ -256,12 +256,17 @@ async function verifyNativeRuntime() {
   if (new Set(nativePaths).size !== 1 || !nativePaths[0].startsWith(`${dependencyRoot}${sep}`)) {
     throw new Error(`DoltLite must resolve once inside the isolated application: ${JSON.stringify(nativePaths)}`)
   }
+  const nativeVersion = imports[0]('@dolthub/doltlite/package.json').version
+  const expectedNativeVersion = imports[2]('./package.json').dependencies['@dolthub/doltlite']
+  if (nativeVersion !== expectedNativeVersion
+    || imports[0]('./package.json').devDependencies['@dolthub/doltlite'] !== expectedNativeVersion) {
+    throw new Error('Installed DoltLite must match the application and engine pins')
+  }
   const { DatabaseSync } = imports[0]('@dolthub/doltlite')
   const native = new DatabaseSync(':memory:')
   try {
-    if (native.doltVersion() !== 'b3981dc9ed') throw new Error('Installed DoltLite does not match the tested fork')
+    process.stdout.write(`clean-install: one DoltLite ${nativeVersion} runtime (${native.doltVersion()})\n`)
   } finally { native.close() }
-  process.stdout.write('clean-install: one DoltLite runtime from tested fork b3981dc9ed\n')
   if (new Set(paths).size !== 1 || !paths[0].startsWith(`${dependencyRoot}${sep}`)) {
     throw new Error(`Sharp must resolve once inside the isolated application: ${JSON.stringify(paths)}`)
   }
