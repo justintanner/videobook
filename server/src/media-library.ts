@@ -535,7 +535,11 @@ async function copyArtifactMetadata(
   }
   const streams = source.streams.list(sourceArtifact.artifactId);
   if (!streams.ok) throw new Error(streams.error.message);
+  const manifest = await target.files.manifest(targetArtifact.artifactId);
+  if (!manifest.ok) throw new Error(manifest.error.message);
+  const copiedHashes = new Map(manifest.value.files.map((file) => [file.name, file.objectHash]));
   for (const stream of streams.value) {
+    if (copiedHashes.get(stream.sourcePath) !== stream.objectHash) continue;
     const registered = await target.streams.register({
       artifactId: targetArtifact.artifactId,
       sourcePath: stream.sourcePath,
@@ -556,7 +560,7 @@ async function deleteCopiedArtifact(
   engine: Engine,
   artifactId: string,
 ): Promise<string | null> {
-  const deleted = await engine.artifacts.delete(artifactId);
+  const deleted = await engine.artifacts.delete(artifactId, { deleteOwnedMedia: true });
   return deleted.ok ? null : deleted.error.message;
 }
 
