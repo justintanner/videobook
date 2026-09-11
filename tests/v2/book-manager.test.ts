@@ -99,6 +99,39 @@ describe('v2 book manager', () => {
     expect(reopened.value.engine.book.get().name).toBe('restart-recovery')
   })
 
+  it('reserves duplicate names before concurrent creates publish any roots', async () => {
+    const results = await Promise.all(Array.from({ length: 8 }, (_, index) => books.create(index % 2 ? ' Shared book ' : 'SHARED BOOK')))
+    const winners = results.filter((result) => result.ok)
+    expect(winners).toHaveLength(1)
+    for (const result of results) {
+      if (!result.ok) expect(result.error.code).toBe('ALREADY_EXISTS')
+    }
+    const ids = books.list().map((book) => book.bookId)
+    await books.close()
+    expect(await books.discover()).toEqual(ids)
+    await books.ready()
+    expect(books.list().map((book) => book.bookId)).toEqual(ids)
+  })
+
+  it.each(['create', 'rename'] as const)('reserves names across create and rename when %s starts first', async (firstOperation) => {
+    const existing = await books.create('Existing book')
+    expect(existing.ok).toBe(true)
+    if (!existing.ok) return
+    const create = () => books.create('Shared target')
+    const rename = () => books.rename(existing.value.bookId, ' SHARED TARGET ')
+    const operations = firstOperation === 'create' ? [create, rename] : [rename, create]
+    const results = await Promise.all(operations.map((operation) => operation()))
+    expect(results.filter((result) => result.ok)).toHaveLength(1)
+    expect(results[0]!.ok).toBe(true)
+    const loser = results[1]!
+    if (!loser.ok) expect(loser.error.code).toBe('ALREADY_EXISTS')
+    const expected = books.list().map((book) => ({ bookId: book.bookId, name: book.name }))
+    await books.close()
+    await books.ready()
+    expect(books.list().map((book) => ({ bookId: book.bookId, name: book.name }))).toEqual(expected)
+    expect(expected.filter((book) => book.name.toLowerCase() === 'shared target')).toHaveLength(1)
+  })
+
   it('skips books whose catalog schema the engine no longer supports', async () => {
     const current = await books.create('current-schema')
     const stale = await books.create('stale-schema')

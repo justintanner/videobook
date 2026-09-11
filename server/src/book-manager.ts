@@ -88,6 +88,7 @@ export class BookManager {
   private readonly legacyBooks = new Map<string, LegacyBookSummary>();
   private readonly knownRoots = new Set<string>();
   private readonly opening = new Map<string, Promise<void>>();
+  private readonly reservedNames = new Set<string>();
   private scanPromise: Promise<void> | null = null;
   private readyPromise: Promise<void> | null = null;
 
@@ -178,6 +179,7 @@ export class BookManager {
     }
     if (
       this.getByName(trimmed).ok
+      || this.reservedNames.has(trimmed.toLowerCase())
       || [...this.legacyBooks.values()].some(
         (book) => book.slug.toLowerCase() === trimmed.toLowerCase(),
       )
@@ -185,23 +187,30 @@ export class BookManager {
       return err(engineError("ALREADY_EXISTS", `Book name already exists: ${trimmed}`));
     }
 
+    const nameKey = trimmed.toLowerCase();
+    this.reservedNames.add(nameKey);
     const temporaryRoot = join(this.libraryDir, `.creating-${randomUUID()}`);
-    await mkdir(temporaryRoot, { recursive: false });
     let temporaryEngine: Engine | null = null;
+    let finalEngine: Engine | null = null;
+    let finalRoot: string | null = null;
     try {
+      await mkdir(temporaryRoot, { recursive: false });
       temporaryEngine = this.createEngine(temporaryRoot, trimmed);
       await temporaryEngine.ready;
       const created = temporaryEngine.book.get();
       temporaryEngine.close();
       temporaryEngine = null;
-      const finalRoot = this.bookRoot(created.bookId);
-      await rename(temporaryRoot, finalRoot);
+      const destination = this.bookRoot(created.bookId);
+      await rename(temporaryRoot, destination);
+      finalRoot = destination;
       const engine = this.createEngine(finalRoot);
+      finalEngine = engine;
       await engine.ready;
       const book = engine.book.get();
       const notebook = await engine.notebooks.create("Main");
       if (!notebook.ok) {
         engine.close();
+        finalEngine = null;
         await rm(finalRoot, { recursive: true, force: true });
         return err(notebook.error);
       }
@@ -212,9 +221,13 @@ export class BookManager {
       return ok(this.summary(managed));
     } catch (cause) {
       temporaryEngine?.close();
+      finalEngine?.close();
       await this.removeTemporaryRoot(temporaryRoot);
+      if (finalRoot) await this.removeTemporaryRoot(finalRoot);
       const message = cause instanceof Error ? cause.message : String(cause);
       return err(engineError("IO_ERROR", `Could not create book: ${message}`));
+    } finally {
+      this.reservedNames.delete(nameKey);
     }
   }
 
@@ -230,18 +243,28 @@ export class BookManager {
       return err(engineError("INVALID_INPUT", "Book name must be non-empty"));
     }
     const conflict = this.getByName(trimmed);
-    if (conflict.ok && conflict.value.bookId !== bookId) {
+    const nameKey = trimmed.toLowerCase();
+    if (
+      (conflict.ok && conflict.value.bookId !== bookId)
+      || this.reservedNames.has(nameKey)
+      || [...this.legacyBooks.values()].some((book) => book.slug.toLowerCase() === nameKey)
+    ) {
       return err(engineError("ALREADY_EXISTS", `Book name already exists: ${trimmed}`));
     }
-    const renamed = await existing.value.engine.book.rename(trimmed);
-    if (!renamed.ok) return renamed;
-    const managed = this.toManagedBook(
-      existing.value.engine,
-      existing.value.rootDir,
-      renamed.value,
-    );
-    this.books.set(bookId, managed);
-    return ok(this.summary(managed));
+    this.reservedNames.add(nameKey);
+    try {
+      const renamed = await existing.value.engine.book.rename(trimmed);
+      if (!renamed.ok) return renamed;
+      const managed = this.toManagedBook(
+        existing.value.engine,
+        existing.value.rootDir,
+        renamed.value,
+      );
+      this.books.set(bookId, managed);
+      return ok(this.summary(managed));
+    } finally {
+      this.reservedNames.delete(nameKey);
+    }
   }
 
   async delete(
