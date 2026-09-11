@@ -3,6 +3,14 @@ import { z } from "zod";
 import { uploadLocalBytes } from "../local-upload.js";
 import type { ToolDef } from "./tool-def.js";
 
+function isBase64Upload(value: string): boolean {
+  const normalized = value.replace(/\s/gu, "");
+  const match = /^([A-Za-z0-9+/_-]*)(={0,2})$/u.exec(normalized);
+  return match !== null
+    && match[1].length % 4 !== 1
+    && (match[2].length === 0 || normalized.length % 4 === 0);
+}
+
 export function uploadFileDef(engine: Engine): ToolDef {
   return {
     name: "upload_file",
@@ -10,7 +18,7 @@ export function uploadFileDef(engine: Engine): ToolDef {
     schema: {
       book_id: z.string().describe("Book id to upload into"),
       filename: z.string().describe("Original filename with extension"),
-      data: z.string().describe("Base64-encoded file contents"),
+      data: z.string().refine(isBase64Upload, "File contents must be valid base64").describe("Base64-encoded file contents"),
     },
     handler: async (args) => {
       const { book_id, filename, data } = args as { book_id: string; filename: string; data: string };

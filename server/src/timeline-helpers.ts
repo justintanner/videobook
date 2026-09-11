@@ -249,11 +249,6 @@ async function requiredTimedStream(
   artifact: Artifact,
   kind: "video" | "audio",
 ): Promise<ArtifactStream> {
-  const existing = engine.streams.list(artifact.artifactId);
-  if (!existing.ok) throw new Error(existing.error.message);
-  const registered = existing.value.find((stream) => stream.kind === kind);
-  if (registered) return registered;
-
   const manifest = await engine.files.manifest(artifact.artifactId);
   if (!manifest.ok) throw new Error(manifest.error.message);
   const file = kind === "video"
@@ -263,6 +258,13 @@ async function requiredTimedStream(
   if (!file) {
     throw new Error(`${artifact.label ?? artifact.artifactId} has no ${kind} source file`);
   }
+  const existing = engine.streams.list(artifact.artifactId);
+  if (!existing.ok) throw new Error(existing.error.message);
+  const registered = existing.value.find((stream) => stream.kind === kind
+    && stream.sourcePath === file.name
+    && stream.objectHash === file.objectHash);
+  if (registered) return registered;
+
   const probe = await probeVideo(join(manifest.value.path, file.name));
   const stream = kind === "video" ? probe.videoStream : probe.audioStream;
   if (!stream) throw new Error(`${artifact.label ?? artifact.artifactId} has no ${kind} stream`);

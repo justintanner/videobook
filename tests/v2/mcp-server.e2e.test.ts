@@ -361,6 +361,214 @@ describe('v2 MCP server', () => {
     expect(missing.status).toBe(404)
   })
 
+  it('preserves character files across portable filename collisions and nested uploads', async () => {
+    if (!client || !server) throw new Error('MCP client was not initialized')
+    const base = server.url.replace('/mcp', '')
+    const book = await callTool<BookPayload>(client, 'create_book', { name: 'HTTP portable uploads' })
+    const character = await callTool<{ asset_id: string }>(client, 'create_character', {
+      book_id: book.bookId, args: ['Portable files'],
+    })
+    const names = [
+      ['Notes.txt', 'Notes.txt'],
+      ['notes.TXT', 'notes-1.TXT'],
+      ['café.txt', 'café.txt'],
+      ['cafe\u0301.txt', 'cafe\u0301-1.txt'],
+      ['references/source.txt', 'references/source.txt'],
+      ['references/source.txt', 'references/source-1.txt'],
+      ['references', 'references-1'],
+      ['notes.TXT/source.txt', 'notes-2.TXT/source.txt'],
+    ]
+    for (const [filename, expected] of names) {
+      const uploaded = await fetch(`${base}/api/books/${book.bookId}/upload?${new URLSearchParams({
+        filename, targetAssetId: character.asset_id,
+      })}`, { method: 'POST', body: `Contents of ${expected}` })
+      expect(uploaded.status, filename).toBe(200)
+      expect(await uploaded.json()).toMatchObject({ filename: expected, assetId: character.asset_id })
+    }
+    for (const [, filename] of names) {
+      const response = await fetch(`${base}/files/${book.bookId}/${character.asset_id}/${encodeURI(filename)}`)
+      expect(response.status, filename).toBe(200)
+      expect(await response.text()).toBe(`Contents of ${filename}`)
+    }
+  })
+
+  it('releases an interrupted character upload without changing files or blocking a retry', async () => {
+    if (!client || !server) throw new Error('MCP client was not initialized')
+    const activeClient = client
+    const base = server.url.replace('/mcp', '')
+    const book = await callTool<BookPayload>(client, 'create_book', { name: 'HTTP interrupted uploads' })
+    const character = await callTool<{ asset_id: string }>(client, 'create_character', {
+      book_id: book.bookId, args: ['Interrupted upload'],
+    })
+    const uploadUrl = `${base}/api/books/${book.bookId}/upload?${new URLSearchParams({
+      filename: 'notes.txt', targetAssetId: character.asset_id,
+    })}`
+    expect((await fetch(uploadUrl, { method: 'POST', body: 'Original notes' })).status).toBe(200)
+    const manifestUrl = `${base}/api/books/${book.bookId}/artifacts/${character.asset_id}/manifest`
+    const before = await (await fetch(manifestUrl)).json()
+    const status = async () => (await callTool<{ assets: Array<{ id: string; status: string }> }>(
+      activeClient, 'list_assets', { book_id: book.bookId },
+    )).assets.find((asset) => asset.id === character.asset_id)?.status
+    const request = httpRequest(uploadUrl, { method: 'POST' })
+    request.on('error', () => {})
+    request.on('response', (response) => response.resume())
+    request.write('Unfinished replacement')
+    try {
+      await expect.poll(status).toMatch(/^(loading|uploading)$/u)
+      const concurrent = await fetch(uploadUrl, { method: 'POST', body: 'Overlapping write' })
+      expect(concurrent.status).toBe(423)
+      expect(await (await fetch(manifestUrl)).json()).toEqual(before)
+      request.destroy()
+      await expect.poll(status).toBe('ready')
+      expect(await (await fetch(manifestUrl)).json()).toEqual(before)
+      expect(await (await fetch(`${base}/files/${book.bookId}/${character.asset_id}/notes.txt`)).text()).toBe('Original notes')
+      const retry = await fetch(uploadUrl, { method: 'POST', body: 'Completed retry' })
+      expect(retry.status).toBe(200)
+      expect(await retry.json()).toMatchObject({ filename: 'notes-1.txt' })
+      expect(await (await fetch(`${base}/files/${book.bookId}/${character.asset_id}/notes-1.txt`)).text()).toBe('Completed retry')
+    } finally { request.destroy() }
+  })
+
+  it('removes a newly created asset after an interrupted upload and accepts the retry', async () => {
+    if (!client || !server) throw new Error('MCP client was not initialized')
+    const activeClient = client
+    const base = server.url.replace('/mcp', '')
+    const book = await callTool<BookPayload>(client, 'create_book', { name: 'HTTP aborted new upload' })
+    const list = async () => (await callTool<{ assets: Array<{ id: string; label?: string; status: string }> }>(
+      activeClient, 'list_assets', { book_id: book.bookId },
+    )).assets
+    const before = await list()
+    const uploadUrl = `${base}/api/books/${book.bookId}/upload?filename=interrupted.md`
+    const request = httpRequest(uploadUrl, { method: 'POST' })
+    request.on('error', () => {})
+    request.on('response', (response) => response.resume())
+    request.write('# Partial upload')
+    try {
+      await expect.poll(async () => (await list()).find((asset) => asset.label === 'interrupted')?.status)
+        .toMatch(/^(loading|uploading)$/u)
+      request.destroy()
+      await expect.poll(list).toEqual(before)
+      const response = await fetch(uploadUrl, { method: 'POST', body: '# Complete upload' })
+      expect(response.status).toBe(200)
+      const uploaded = await response.json() as { assetId: string }
+      expect(await (await fetch(`${base}/files/${book.bookId}/${uploaded.assetId}/original.md`)).text()).toBe('# Complete upload')
+      expect((await list()).find((asset) => asset.id === uploaded.assetId)?.status).toBe('ready')
+    } finally { request.destroy() }
+  })
+
+  it('rejects malformed MCP upload encoding without creating artifacts', async () => {
+    if (!client || !server) throw new Error('MCP client was not initialized')
+    const base = server.url.replace('/mcp', '')
+    const book = await callTool<BookPayload>(client, 'create_book', { name: 'MCP malformed uploads' })
+    const before = await callTool(client, 'list_assets', { book_id: book.bookId })
+    for (const data of ['%%%', 'a', 'YQ===', 'YQ==!', 'YWJj=garbage', 'data:text/plain;base64,YQ==']) {
+      const result = await client.callTool({ name: 'upload_file', arguments: {
+        book_id: book.bookId, filename: 'invalid.md', data,
+      } })
+      expect(result.isError, data).toBe(true)
+      expect(result.content).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: 'text', text: expect.stringMatching(/base64/iu) }),
+      ]))
+    }
+    expect(await callTool(client, 'list_assets', { book_id: book.bookId })).toEqual(before)
+    const bytes = Buffer.from([251, 255, 239, 250])
+    for (const data of [bytes.toString('base64'), bytes.toString('base64url'), ` \n${bytes.toString('base64')}\t`]) {
+      const uploaded = await callTool<{ assetId: string }>(client, 'upload_file', {
+        book_id: book.bookId, filename: 'valid.md', data,
+      })
+      const response = await fetch(`${base}/files/${book.bookId}/${uploaded.assetId}/original.md`)
+      expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes)
+    }
+  })
+
+  it('restores edited and deleted media with correct playback after restarting the server', async () => {
+    if (!client || !server) throw new Error('MCP client was not initialized')
+    const book = await callTool<BookPayload>(client, 'create_book', { name: 'HTTP media recovery' })
+    const videoPath = join(rootDir, 'recovery-source.mp4')
+    await execFileAsync(FFMPEG, [
+      '-y', '-f', 'lavfi', '-i', 'testsrc2=s=160x96:r=24:d=3',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', videoPath,
+    ])
+    const bytes = await readFile(videoPath)
+    const uploaded = await callTool<{ assetId: string }>(client, 'upload_file', {
+      book_id: book.bookId, filename: 'recovery.mp4', data: bytes.toString('base64'),
+    })
+    const assetId = uploaded.assetId
+    const activeClient = client
+    await expect.poll(async () => (await callTool<Array<{ state: string }>>(activeClient, 'list_jobs', {
+      book_id: book.bookId,
+    })).every((job) => ['done', 'failed', 'aborted'].includes(job.state)), { timeout: 30_000 }).toBe(true)
+    const history = await callTool<Array<{ hash: string }>>(client, 'asset_history', {
+      book_id: book.bookId, asset_id: assetId,
+    })
+    const revision = history[0]!.hash
+    const filePath = `/files/${book.bookId}/${assetId}/original.mp4`
+    const base = server.url.replace('/mcp', '')
+    const verifyTimeline = async (durationFrames: number, objectHash: string) => {
+      await callTool(activeClient, 'set_timeline', {
+        book_id: book.bookId, render: 'landscape',
+        slots: [{ artifact_id: assetId }],
+        audio: [{ artifact_id: assetId, startFrame: 0, durationFrames }],
+      })
+      const settings = { book_id: book.bookId, sequence_revision: 'current', orientation: 'landscape', captions: 'omit' }
+      const preview = await callTool<{ revision: string }>(activeClient, 'validate_sequence_export', settings)
+      const validation = await callTool(activeClient, 'validate_sequence_export', { ...settings, sequence_revision: preview.revision })
+      const manifest = await (await fetch(`${base}/api/books/${book.bookId}/artifacts/${assetId}/manifest`)).json() as {
+        files: Array<{ name: string; objectHash: string }>
+      }
+      const audio = manifest.files.find((file) => file.name === 'audio_original.mp3')
+        ?? manifest.files.find((file) => file.name === 'original.mp3')
+      expect(audio).toBeDefined()
+      expect(validation).toMatchObject({ valid: true, durationFrames, inputObjectHashes: [objectHash, audio!.objectHash].sort() })
+    }
+    const initial = await fetch(`${base}${filePath}`)
+    const etag = initial.headers.get('etag')!
+    expect(Buffer.from(await initial.arrayBuffer())).toEqual(bytes)
+    await callTool(client, 'trim_video', {
+      book_id: book.bookId, asset_id: assetId, trim_start: 0.5, trim_end: 2,
+    })
+    const trimmed = await fetch(`${base}${filePath}`, { headers: { range: 'bytes=0-31', 'if-range': etag } })
+    expect(trimmed.status).toBe(200)
+    expect(trimmed.headers.get('etag')).not.toBe(etag)
+    const trimmedHash = trimmed.headers.get('etag')!.slice(1, -1)
+    expect(Buffer.from(await trimmed.arrayBuffer())).not.toEqual(bytes)
+    const browser = await chromium.launch({ headless: true })
+    try {
+      const page = await browser.newPage()
+      await page.goto(`${base}${filePath}?stage=trimmed`)
+      await expect.poll(() => page.locator('video').evaluate((video) => (video as HTMLVideoElement).duration)).toBeCloseTo(1.5, 1)
+      await verifyTimeline(45, trimmedHash)
+      await callTool(client, 'restore_asset_version', { book_id: book.bookId, asset_id: assetId, commit_hash: revision })
+      const restored = await fetch(`${base}${filePath}`)
+      expect(restored.headers.get('etag')).toBe(etag)
+      expect(Buffer.from(await restored.arrayBuffer())).toEqual(bytes)
+      await verifyTimeline(90, etag.slice(1, -1))
+      await callTool(client, 'delete_asset', { book_id: book.bookId, asset_id: assetId })
+      expect((await fetch(`${base}${filePath}`)).status).toBe(404)
+      await callTool(client, 'restore_asset_version', { book_id: book.bookId, asset_id: assetId, commit_hash: revision })
+      await verifyTimeline(90, etag.slice(1, -1))
+      await client.close()
+      client = undefined
+      await stopServer(server)
+      server = await startServer(rootDir)
+      const restartedBase = server.url.replace('/mcp', '')
+      const recovered = await fetch(`${restartedBase}${filePath}`)
+      expect(recovered.headers.get('etag')).toBe(etag)
+      expect(Buffer.from(await recovered.arrayBuffer())).toEqual(bytes)
+      await page.goto(`${restartedBase}${filePath}?stage=recovered`)
+      const player = page.locator('video')
+      await expect.poll(() => player.evaluate((video) => (video as HTMLVideoElement).duration)).toBeCloseTo(3, 1)
+      await player.evaluate(async (video) => {
+        const media = video as HTMLVideoElement
+        media.muted = true
+        await media.play()
+      })
+      await expect.poll(() => player.evaluate((video) => (video as HTMLVideoElement).currentTime)).toBeGreaterThan(0)
+      expect(await player.evaluate((video) => (video as HTMLVideoElement).error)).toBeNull()
+    } finally { await browser.close() }
+  })
+
   it('rejects a foreign browser page while preserving browser and bundled extension access', async () => {
     if (!server) throw new Error('MCP server was not initialized')
     const base = server.url.replace('/mcp', '')

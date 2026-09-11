@@ -1,7 +1,8 @@
 import type { Engine, EngineError } from "videobook-engine";
 import { normalizeFilePath } from "videobook-engine";
 import { createWriteStream } from "node:fs";
-import { unlink } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import * as path from "node:path";
 import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -68,6 +69,32 @@ function statusCodeForFsError(error: EngineError): number {
   return 500;
 }
 
+function availableUploadFilename(filename: string, existing: string[]): string {
+  const files = new Set(existing.map((name) => name.normalize("NFC").toLowerCase()));
+  const directories = new Set<string>();
+  for (const file of files) {
+    const parts = file.split("/");
+    for (let index = 1; index < parts.length; index += 1) {
+      directories.add(parts.slice(0, index).join("/"));
+    }
+  }
+  const parts = filename.split("/");
+  const selected: string[] = [];
+  for (const [index, part] of parts.entries()) {
+    const { name, ext } = path.posix.parse(part);
+    let candidate = part;
+    let counter = 1;
+    while (true) {
+      const candidatePath = [...selected, candidate].join("/").normalize("NFC").toLowerCase();
+      if (!files.has(candidatePath) && (index < parts.length - 1 || !directories.has(candidatePath))) break;
+      candidate = `${name}-${counter}${ext}`;
+      counter += 1;
+    }
+    selected.push(candidate);
+  }
+  return selected.join("/");
+}
+
 export async function uploadLocalBytes(
   engine: Engine,
   args: UploadLocalBytesArgs,
@@ -103,25 +130,29 @@ export async function uploadLocalStream(
     origin: args.origin,
     waitForProcessing: args.waitForProcessing,
     targetAssetId: args.targetAssetId,
-    write: async (assetId, writtenFilename, assetPath) => {
-      const filePath = path.join(assetPath, writtenFilename);
+    write: async (assetId, writtenFilename) => {
+      let uploadRoot: string | undefined;
       try {
-        await pipeline(args.stream, createWriteStream(filePath, { flags: "wx" }));
-        const ingested = await engine.files.ingestWorkspace(
-          assetId,
-          [writtenFilename],
-          "upload_stream",
-          { file: writtenFilename },
-        );
-        if (!ingested.ok) throw new Error(ingested.error.message);
+        uploadRoot = await mkdtemp(path.join(tmpdir(), "videobook-media-upload-"));
+        const uploadPath = path.join(uploadRoot, "input");
+        await pipeline(args.stream, createWriteStream(uploadPath, { flags: "wx" }));
+        const written = await engine.files.writeFromPath(assetId, writtenFilename, uploadPath);
+        if (!written.ok) {
+          return {
+            ok: false,
+            statusCode: statusCodeForFsError(written.error),
+            message: written.error.message,
+          };
+        }
         return { ok: true };
       } catch (error) {
-        await unlink(filePath).catch(() => {});
         return {
           ok: false,
           statusCode: 500,
           message: error instanceof Error ? error.message : String(error),
         };
+      } finally {
+        if (uploadRoot) await rm(uploadRoot, { recursive: true, force: true, maxRetries: 3 });
       }
     },
   });
@@ -137,7 +168,7 @@ interface UploadLocalArgs {
   origin?: string;
   waitForProcessing?: boolean;
   targetAssetId?: string;
-  write: (assetId: string, writtenFilename: string, assetPath: string) => Promise<UploadWriteResult>;
+  write: (assetId: string, writtenFilename: string) => Promise<UploadWriteResult>;
 }
 
 // Long enough to cover slow streaming writes for large videos plus the
@@ -232,20 +263,6 @@ async function uploadLocal(
     isNewAsset = true;
   }
 
-  let writtenFilename = isNewAsset ? `original${ext}` : filename;
-  if (!isNewAsset) {
-    const { dir, name, ext: filenameExtension } = path.posix.parse(filename);
-    let counter = 1;
-    while (true) {
-      const checkResult = await engine.files.manifest(assetId);
-      if (!checkResult.ok) break;
-      const exists = checkResult.value.files.some((f) => f.name === writtenFilename);
-      if (!exists) break;
-      writtenFilename = path.posix.join(dir, `${name}-${counter}${filenameExtension}`);
-      counter++;
-    }
-  }
-
   // Hold an fs lock from before the bytes hit disk through the process_*
   // enqueue. Without it, sync's findUnprocessedUploads sweep races the
   // streaming write — sees `original.{ext}` with no metadata and no lock —
@@ -266,7 +283,19 @@ async function uploadLocal(
 
   let outcome: LocalUploadOutcome;
   try {
-    const writeResult = await args.write(assetId, writtenFilename, assetPath);
+    let writtenFilename = isNewAsset ? `original${ext}` : filename;
+    if (!isNewAsset) {
+      const manifest = await engine.files.manifest(assetId);
+      if (!manifest.ok) {
+        return {
+          ok: false,
+          statusCode: statusCodeForFsError(manifest.error),
+          message: manifest.error.message,
+        };
+      }
+      writtenFilename = availableUploadFilename(filename, manifest.value.files.map((file) => file.name));
+    }
+    const writeResult = await args.write(assetId, writtenFilename);
     if (!writeResult.ok) {
       outcome = {
         ok: false,

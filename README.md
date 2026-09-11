@@ -38,7 +38,7 @@ over MCP. See [docs/asset-tags.md](docs/asset-tags.md).
 
 ## Storage
 
-Each book owns an isolated `videobook-engine` v5.4.2 schema-v25 root under
+Each book owns an isolated `videobook-engine` v5.4.3 schema-v25 root under
 `VIDEOBOOK_LIBRARY_DIR/<book UUIDv7>/`. That root holds its embedded DoltLite
 catalog, content-addressed objects, managed files, notebook graph, primary sequence,
 history, and runtime tables. Media bytes can be published to B2 under immutable
