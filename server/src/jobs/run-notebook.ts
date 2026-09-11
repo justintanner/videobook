@@ -2111,7 +2111,21 @@ async function executeLocalOrGeneration(
     || cell.inputs?.mediaRole === "extract-audio-output"
   ) {
     const sourceId = requiredVideoInputArtifact(document, cell);
-    const result = await extractSourceAudio(engine, sourceId, notebookGridTag(cell.slot));
+    const previous = cell.outputArtifactId && cell.inputs?.audioRange === undefined
+      ? await engine.metadata.artifacts.read<Record<string, unknown>>(cell.outputArtifactId, "original")
+      : undefined;
+    const previousRange = previous?.ok && previous.value.origin === "extract_audio"
+      && previous.value.sourceArtifactId === sourceId && typeof previous.value.startSeconds === "number"
+      ? previous.value : undefined;
+    const savedRange = cell.inputs?.audioRange ?? previousRange;
+    const rangeInputs = savedRange && typeof savedRange === "object" && !Array.isArray(savedRange)
+      ? savedRange as Record<string, unknown>
+      : undefined;
+    const range = rangeInputs === undefined ? undefined : {
+      startSeconds: Number(rangeInputs.startSeconds ?? 0),
+      ...(rangeInputs.durationSeconds === undefined ? {} : { durationSeconds: Number(rangeInputs.durationSeconds) }),
+    };
+    const result = await extractSourceAudio(engine, sourceId, notebookGridTag(cell.slot), range);
     return {
       artifactId: result.artifactId,
       tool: "ffmpeg",

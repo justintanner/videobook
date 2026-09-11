@@ -1,12 +1,14 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import type { Engine } from "videobook-engine";
-import { extractWaveform, probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { extractWaveform, probeVideo, runFfmpeg, type ProbeResult } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
 import type { AudioMixAssetKind } from "../tools/audio-mix.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { audioOnlyOutputOptions, videoAudioOutputOptions } from "../audio-encoding.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
+import { registerMediaStreams } from "./process-video.js";
 
 const LOCK_DURATION_MS = 30 * 60_000;
 
@@ -70,7 +72,7 @@ export async function mixAudioMedia(
   targetKind: AudioMixAssetKind,
   layerVolumePercent: number,
   signal?: AbortSignal,
-): Promise<void> {
+): Promise<ProbeResult> {
   const [targetProbe, layerProbe] = await Promise.all([
     probeVideo(targetPath, { signal }),
     probeVideo(layerPath, { signal }),
@@ -126,13 +128,14 @@ export async function mixAudioMedia(
     if (Math.abs(outputProbe.videoDuration - targetDuration) > 0.5) {
       throw new Error(`Audio mix changed video duration from ${targetDuration.toFixed(3)}s to ${outputProbe.videoDuration.toFixed(3)}s`);
     }
-    return;
+    return outputProbe;
   }
 
   const outputDuration = outputProbe.audioDuration ?? outputProbe.duration;
   if (Math.abs(outputDuration - targetDuration) > 0.5) {
     throw new Error(`Audio mix changed audio duration from ${targetDuration.toFixed(3)}s to ${outputDuration.toFixed(3)}s`);
   }
+  return outputProbe;
 }
 
 async function deleteIfPresent(
@@ -143,19 +146,6 @@ async function deleteIfPresent(
   const result = await engine.files.delete(assetId, filename);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
     throw new Error(`Failed to delete ${filename}: ${result.error.message}`);
-  }
-}
-
-async function replaceMixedMedia(
-  engine: Engine,
-  assetId: string,
-  targetFilename: string,
-  outputPath: string,
-): Promise<void> {
-  const output = await readFile(outputPath);
-  const writeResult = await engine.files.write(assetId, targetFilename, output);
-  if (!writeResult.ok) {
-    throw new Error(`Failed to replace ${targetFilename}: ${writeResult.error.message}`);
   }
 }
 
@@ -185,7 +175,7 @@ export function registerAudioMixJob(engine: Engine): void {
         const extension = extname(targetFilename) || (targetKind === "video" ? ".mp4" : ".mp3");
         const outputPath = join(tempDir, `mixed${extension}`);
         try {
-          await mixAudioMedia(
+          const outputProbe = await mixAudioMedia(
             targetPath,
             layerPath,
             outputPath,
@@ -193,7 +183,19 @@ export function registerAudioMixJob(engine: Engine): void {
             volume,
             ctx.signal,
           );
-          await replaceMixedMedia(engine, assetId, targetFilename, outputPath);
+          await replaceArtifactFileFromPath(engine, assetId, targetFilename, outputPath);
+          if (targetKind === "audio") {
+            await registerMediaStreams(engine, assetId, targetFilename, outputProbe);
+            const previous = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
+            const metadata = await engine.metadata.artifacts.write(assetId, "original", {
+              ...(previous.ok ? previous.value : {}),
+              origin: "audio_mix",
+              source_audio_asset: layerAssetId,
+              layer_volume: volume,
+              duration: outputProbe.audioDuration ?? outputProbe.duration,
+            });
+            if (!metadata.ok) throw new Error(metadata.error.message);
+          }
         } finally {
           await rm(tempDir, { recursive: true, force: true });
         }

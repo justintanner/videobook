@@ -6,6 +6,7 @@ import { H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
+import { registerMediaStreams } from "./process-video.js";
 
 const LOCK_DURATION_MS = 900_000;
 
@@ -207,6 +208,7 @@ export function registerInjectFirstFrameJob(engine: Engine): void {
           await replaceAssetFile(engine, assetId, targetFilename, outputPath);
 
           if (isFinalAsset) {
+            await registerMediaStreams(engine, assetId, targetFilename, await probeVideo(join(assetDir, targetFilename), { signal: ctx.signal }));
             await refreshFinalThumbnail(
               engine,
               assetId,

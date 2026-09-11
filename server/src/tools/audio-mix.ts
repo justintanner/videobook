@@ -7,6 +7,8 @@ import {
   type Engine,
 } from "videobook-engine";
 import { z } from "zod";
+import { audioOnlyOutputOptions, videoAudioOutputOptions } from "../audio-encoding.js";
+import { probeVideo } from "../ffmpeg.js";
 import { queue } from "../queue.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
@@ -28,7 +30,7 @@ function toolError(message: string): ToolResult {
 }
 
 function normalizeAssetId(assetId: string): string {
-  return assetId.replace(/^@/, "");
+  return assetId.trim().replace(/^@/, "");
 }
 
 function findMediaFile(
@@ -97,6 +99,24 @@ export function audioMixDef(engine: Engine): ToolDef {
           resolveAudioMixAsset(engine, target_asset_id),
           resolveAudioMixAsset(engine, layer_asset_id),
         ]);
+        const [targetProbe, layerProbe] = await Promise.all([
+          probeVideo(target.path),
+          probeVideo(layer.path),
+        ]);
+        if (!layerProbe.hasAudio || (layerProbe.audioDuration ?? layerProbe.duration) <= 0) {
+          throw new Error("Layer asset has no playable audio stream");
+        }
+        if (target.kind === "video") {
+          if (!targetProbe.videoStream || targetProbe.videoDuration <= 0) {
+            throw new Error("Video target has no playable video stream");
+          }
+          videoAudioOutputOptions(target.filename);
+        } else {
+          if (!targetProbe.hasAudio || (targetProbe.audioDuration ?? targetProbe.duration) <= 0) {
+            throw new Error("Audio target has no playable audio stream");
+          }
+          audioOnlyOutputOptions(target.filename);
+        }
       } catch (error) {
         return toolError(error instanceof Error ? error.message : String(error));
       }

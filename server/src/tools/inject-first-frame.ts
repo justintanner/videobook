@@ -46,8 +46,16 @@ function timelineOrientation(engine: Engine): Orientation {
 async function findFinalVideo(
   engine: Engine,
   files: ArtifactManifestFile[],
+  assetDir: string,
   requested?: Orientation,
 ): Promise<{ file: ArtifactManifestFile; orientation: Orientation } | null> {
+  const canonical = findCanonicalVideo(files);
+  if (canonical) {
+    const probe = await probeVideo(join(assetDir, canonical.name));
+    if (!probe.videoStream || probe.width <= 0 || probe.height <= 0) return null;
+    const orientation = orientationForDimensions(probe.width, probe.height);
+    return requested && requested !== orientation ? null : { file: canonical, orientation };
+  }
   const preferred = requested ?? timelineOrientation(engine);
   const candidates: Orientation[] = [
     ...(preferred ? [preferred] : []),
@@ -121,6 +129,7 @@ export function injectFirstFrameDef(engine: Engine): ToolDef {
         const resolved = await findFinalVideo(
           engine,
           targetManifest.value.files,
+          targetManifest.value.path,
           orientation,
         );
         if (!resolved) {

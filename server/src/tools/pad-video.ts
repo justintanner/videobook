@@ -54,7 +54,8 @@ export function padVideoDef(engine: Engine): ToolDef {
       let hasAudio: boolean;
       try {
         const probe = await probeVideo(sourcePath);
-        sourceDurationSec = probe.duration;
+        if (!probe.videoStream || probe.videoDuration <= 0) throw new Error("Source has no playable video stream");
+        sourceDurationSec = probe.videoDuration;
         hasAudio = probe.hasAudio;
       } catch (err) {
         return {

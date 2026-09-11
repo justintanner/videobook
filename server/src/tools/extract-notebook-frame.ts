@@ -115,6 +115,9 @@ export function extractNotebookFrameDef(engine: Engine): ToolDef {
         notebookId,
         "extract_notebook_frame",
         (notebook) => {
+          if (typeof args.expected_revision === "string" && args.expected_revision !== engine.head) {
+            throw new Error(`Stale notebook revision: expected ${args.expected_revision}`);
+          }
           const anchor = notebook.cells.find((cell) => cell.id === source.id);
           if (!anchor) throw new Error(`Source cell not found: ${source.id}`);
           const occupied = notebook.cells.map((cell) => cell.slot);

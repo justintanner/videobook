@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { rm } from "node:fs/promises";
 import { logger } from "../logger.js";
 import { registerJobHandler, queue } from "../queue.js";
-import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { join, basename } from "node:path";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
@@ -36,11 +36,15 @@ export function registerPadVideoJob(engine: Engine): void {
         const outputPath = join(assetDir, outName);
 
         try {
+          const source = await probeVideo(sourcePath, { signal: ctx.signal });
+          if (!source.videoStream || source.videoDuration <= 0 || targetSecs <= source.videoDuration) {
+            throw new Error("Padding must extend a playable video stream");
+          }
           const args = ["-y", "-i", sourcePath];
           
           if (hasAudio) {
             args.push(
-              "-filter_complex", "[0:v]tpad=stop=-1:color=black[v];[0:a]apad[a]",
+              "-filter_complex", `[0:v]tpad=stop=-1:color=black[v];[0:a]atrim=duration=${source.videoDuration},asetpts=PTS-STARTPTS,apad[a]`,
               "-map", "[v]",
               "-map", "[a]",
               "-t", targetSecs.toString(),
@@ -58,7 +62,12 @@ export function registerPadVideoJob(engine: Engine): void {
             );
           }
 
-          await runFfmpeg(args);
+          await runFfmpeg(args, { signal: ctx.signal });
+          const output = await probeVideo(outputPath, { signal: ctx.signal });
+          if (!output.videoStream || Math.abs(output.videoDuration - targetSecs) > 1 / source.fps
+            || output.hasAudio !== hasAudio) {
+            throw new Error("Padding produced an invalid video duration or audio stream");
+          }
 
           const splitAtIso = new Date().toISOString();
           const provenance = {
@@ -104,6 +113,7 @@ export function registerPadVideoJob(engine: Engine): void {
       assetDir: assetDir,
       bookId,
       skipDownstreamJobs: true,
+      force: true,
       provenance: result.provenance,
     } as unknown as Record<string, unknown>);
 

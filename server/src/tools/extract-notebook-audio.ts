@@ -4,13 +4,17 @@ import type {
   NotebookDocument,
 } from "videobook-engine";
 import {
+  findVideoFile,
   nextHorizontalSlotFrom,
   notebookGridTag,
   resolveNotebookCellArtifactId,
 } from "videobook-engine";
+import { join } from "node:path";
 import { z } from "zod";
 import { v7 as uuidv7 } from "uuid";
 import { mutateNotebook } from "../notebook-mutations.js";
+import { resolveAudioExtractionRange } from "../notebook-media-ops.js";
+import { probeVideo } from "../ffmpeg.js";
 import {
   EXTRACT_AUDIO_OUTPUT_ROLE,
   findGenerationMediaOutput,
@@ -96,6 +100,19 @@ export function extractNotebookAudioDef(engine: Engine): ToolDef {
         );
       }
 
+      const audioRange = startSeconds === undefined && durationSeconds === undefined
+        ? undefined
+        : { startSeconds: startSeconds ?? 0, ...(durationSeconds === undefined ? {} : { durationSeconds }) };
+      try {
+        const manifest = await engine.files.manifest(sourceArtifactId);
+        if (!manifest.ok) throw new Error(manifest.error.message);
+        const file = findVideoFile(manifest.value.files);
+        if (!file) throw new Error("Source has no video file");
+        resolveAudioExtractionRange(await probeVideo(join(manifest.value.path, file.name)), audioRange);
+      } catch (error) {
+        return toolError(error instanceof Error ? error.message : String(error));
+      }
+
       const runId = uuidv7();
       const label = typeof args.label === "string" && args.label.length > 0
         ? args.label
@@ -108,6 +125,9 @@ export function extractNotebookAudioDef(engine: Engine): ToolDef {
         notebookId,
         "extract_notebook_audio",
         (notebook) => {
+          if (typeof args.expected_revision === "string" && args.expected_revision !== engine.head) {
+            throw new Error(`Stale notebook revision: expected ${args.expected_revision}`);
+          }
           const anchor = notebook.cells.find((cell) => cell.id === source.id);
           if (!anchor) throw new Error(`Source cell not found: ${source.id}`);
           const occupied = notebook.cells.map((cell) => cell.slot);
@@ -121,6 +141,7 @@ export function extractNotebookAudioDef(engine: Engine): ToolDef {
               sourceCellId: anchor.id,
               ...(startSeconds === undefined ? {} : { startSeconds }),
               ...(durationSeconds === undefined ? {} : { durationSeconds }),
+              ...(audioRange === undefined ? {} : { audioRange }),
               state: "queued",
             },
           });

@@ -386,6 +386,25 @@ export async function splitSourceRange(
   ))[0]!;
 }
 
+export function resolveAudioExtractionRange(
+  probe: ProbeResult,
+  range?: { startSeconds: number; durationSeconds?: number },
+): { startSeconds: number; durationSeconds: number } {
+  const sourceDuration = probe.audioDuration ?? probe.duration;
+  if (!probe.hasAudio || !Number.isFinite(sourceDuration) || sourceDuration <= 0) {
+    throw new Error("Source has no playable audio stream");
+  }
+  const startSeconds = range?.startSeconds ?? 0;
+  if (!Number.isFinite(startSeconds) || startSeconds < 0 || startSeconds >= sourceDuration) {
+    throw new Error("Audio range must start before the source audio ends");
+  }
+  const durationSeconds = range?.durationSeconds ?? sourceDuration - startSeconds;
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    throw new Error("Audio range duration must be positive and finite");
+  }
+  return { startSeconds, durationSeconds: Math.min(durationSeconds, sourceDuration - startSeconds) };
+}
+
 export async function extractSourceAudio(
   engine: Engine,
   sourceArtifactId: string,
@@ -401,17 +420,15 @@ export async function extractSourceAudio(
   const outDir = await mkdtemp(join(tmpdir(), "vb-audio-"));
   const outPath = join(outDir, "audio.m4a");
   try {
-    const args = ["-y"];
-    if (range && Number.isFinite(range.startSeconds) && range.startSeconds > 0) {
-      args.push("-ss", String(range.startSeconds));
-    }
-    args.push("-i", source.path, "-vn");
-    if (range && range.durationSeconds && range.durationSeconds > 0) {
-      args.push("-t", String(range.durationSeconds));
-    }
-    args.push(...AUDIO_OPTS, outPath);
+    const resolvedRange = resolveAudioExtractionRange(await probeVideo(source.path), range);
+    const args = ["-y", "-ss", String(resolvedRange.startSeconds), "-i", source.path,
+      "-map", "0:a:0", "-vn", "-t", String(resolvedRange.durationSeconds), ...AUDIO_OPTS, outPath];
     await runFfmpeg(args);
     const probe = await probeVideo(outPath);
+    const durationSeconds = probe.audioDuration ?? probe.duration;
+    if (!probe.hasAudio || durationSeconds <= 0 || Math.abs(durationSeconds - resolvedRange.durationSeconds) > 0.15) {
+      throw new Error("Audio extraction produced an invalid duration");
+    }
     const artifactId = await ingestOutput(
       engine,
       "audio",
@@ -449,7 +466,7 @@ export async function extractSourceAudio(
     if (!metadata.ok) throw new Error(metadata.error.message);
     return {
       artifactId,
-      durationSeconds: probe.duration || probe.audioDuration || 0,
+      durationSeconds,
     };
   } finally {
     await source.cleanup();
