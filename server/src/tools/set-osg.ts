@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import type { Orientation, OsgPosition } from "../remotion/subtitles/types.js";
 import { writeOsgSettings } from "../osg-settings.js";
+import { resolveOsgImagePath } from "../osg-assets.js";
+import { requireArtifactKind, toolError } from "./_shared.js";
 
 const OSG_POSITIONS = [
   "top-left", "top-center", "top-right",
@@ -101,6 +103,14 @@ export function setVideoOverlayDef(engine: Engine): ToolDef {
       };
 
       const clearing = osg_asset_id == null;
+      const targetGate = await requireArtifactKind(engine, asset_id, ["video"], "set_video_overlay");
+      if (targetGate) return targetGate;
+      if (!clearing) {
+        const imageGate = await requireArtifactKind(engine, osg_asset_id, ["image"], "osg_asset_id");
+        if (imageGate) return imageGate;
+        const image = await resolveOsgImagePath(engine, osg_asset_id);
+        if (!image.ok) return toolError(image.error);
+      }
 
       const written = await writeOsgSettings(engine, asset_id, (orientation, base) => {
         const merged: Record<string, unknown> = {
@@ -132,6 +142,11 @@ export function setVideoOverlayDef(engine: Engine): ToolDef {
         } else if (clearing || windowProvided) {
           merged.osgTailSeconds = null;
         }
+        const resolved = { ...base, ...merged };
+        const start = typeof resolved.osgStartSeconds === "number" ? resolved.osgStartSeconds : 0;
+        if (!clearing && typeof resolved.osgEndSeconds === "number" && resolved.osgEndSeconds <= start) {
+          throw new Error(`osg_end_seconds must be greater than osg_start_seconds for ${orientation}`);
+        }
         return merged;
       });
       if (!written.ok) {
@@ -154,8 +169,8 @@ export function setVideoOverlayDef(engine: Engine): ToolDef {
                     position: osg_position,
                     positions: osg_positions ?? null,
                     size: osg_size,
-                    scale: osg_scale ?? 1,
-                    opacity: osg_opacity ?? 1,
+                    scale: written.settings.landscape.osgScale,
+                    opacity: written.settings.landscape.osgOpacity,
                   },
             }),
           },

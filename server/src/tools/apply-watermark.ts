@@ -49,7 +49,8 @@ import {
   watermarkBadgeAspect,
 } from "../watermark-badge.js";
 import type { WatermarkBadgeVariant } from "../watermark-badge.js";
-import { readWatermarkConfig, recordHandle } from "../watermark-config.js";
+import { normalizeHandle, readWatermarkConfig, recordHandle } from "../watermark-config.js";
+import { effectiveWatermarkTiming } from "../watermark-timing.js";
 import {
   DEFAULT_HANDLE_VERTICAL_PERCENT,
   MAX_HANDLE_VERTICAL_PERCENT,
@@ -506,11 +507,35 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       const kindGate = await requireArtifactKind(engine, asset_id, ["video"], "apply_watermark");
       if (kindGate) return kindGate;
 
+      const manifestResult = await engine.files.manifest(asset_id);
+      if (!manifestResult.ok) {
+        return { isError: true, content: [{ type: "text", text: manifestResult.error.message }] };
+      }
+      const videoFile = findVideoFile(manifestResult.value.files);
+      if (!videoFile) {
+        return { isError: true, content: [{ type: "text", text: `No video file found in asset ${asset_id}` }] };
+      }
+      const assetDir = manifestResult.value.path;
+      const videoPath = join(assetDir, videoFile.name);
+      try {
+        const video = await probeVideo(videoPath);
+        if (include_qr) effectiveWatermarkTiming("QR watermark", video.videoDuration, resolvedQrStartSeconds, resolvedQrEndSeconds);
+        if (include_handle) effectiveWatermarkTiming("Handle watermark", video.videoDuration, resolvedHandleStartSeconds, resolvedHandleEndSeconds);
+        if (mode === "overlay" && include_qr && include_handle && (
+          (resolvedQrStartSeconds ?? 0) !== (resolvedHandleStartSeconds ?? 0)
+          || Math.min(resolvedQrEndSeconds ?? video.videoDuration, video.videoDuration)
+            !== Math.min(resolvedHandleEndSeconds ?? video.videoDuration, video.videoDuration)
+          || resolvedQrOpacity !== resolvedHandleOpacity
+        )) {
+          throw new Error("Independent QR and handle timing or opacity requires mode=burn");
+        }
+      } catch (error) {
+        return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };
+      }
+
       const config = await readWatermarkConfig(engine);
       const fallbackHandle = config.savedHandle ?? config.authenticatedHandle ?? DEFAULT_HANDLE;
-      const resolvedHandle = (handle ?? (include_handle || url === undefined ? fallbackHandle : ""))
-        .replace(/^@/, "")
-        .trim();
+      const resolvedHandle = normalizeHandle(handle ?? (include_handle || url === undefined ? fallbackHandle : "")) ?? "";
       if (include_handle && !resolvedHandle) {
         return {
           isError: true as const,
@@ -581,23 +606,6 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         handleAssetId = resolved.assetId;
       }
 
-      const manifestResult = await engine.files.manifest(asset_id);
-      if (!manifestResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: manifestResult.error.message }],
-        };
-      }
-      const videoFile = findVideoFile(manifestResult.value.files);
-      if (!videoFile) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `No video file found in asset ${asset_id}` }],
-        };
-      }
-      const assetDir = manifestResult.value.path;
-      const videoPath = join(assetDir, videoFile.name);
-
       const badgeAspect = variant === "qr"
         ? QR_ONLY_BADGE_ASPECT
         : watermarkBadgeAspect(include_qr, handle_padding_y);
@@ -632,6 +640,9 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       };
 
       if (mode === "overlay") {
+        const overlayOpacity = include_qr ? resolvedQrOpacity : resolvedHandleOpacity;
+        const overlayStartSeconds = include_qr ? resolvedQrStartSeconds : resolvedHandleStartSeconds;
+        const overlayEndSeconds = include_qr ? resolvedQrEndSeconds : resolvedHandleEndSeconds;
         const placement = await resolveOverlayPlacement(
           engine, book_id, asset_id, assetDir, videoFile, position, scaling,
         );
@@ -641,9 +652,9 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           osgPosition: placement.positions[orientation],
           osgSize: WATERMARK_OSG_SIZE,
           osgScale: watermarkOsgScale(orientation, scale),
-          osgOpacity: opacity,
-          osgStartSeconds: start_seconds ?? null,
-          osgEndSeconds: end_seconds ?? null,
+          osgOpacity: overlayOpacity,
+          osgStartSeconds: overlayStartSeconds ?? null,
+          osgEndSeconds: overlayEndSeconds ?? null,
           osgTailSeconds: null,
         }));
         if (!written.ok) {
@@ -660,6 +671,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
               ...summary,
               ...(placement.jobId !== undefined ? { job_id: placement.jobId } : {}),
               mode: "overlay",
+              opacity: overlayOpacity,
               positions: placement.positions,
               placement_source: placement.placementSource,
             }),

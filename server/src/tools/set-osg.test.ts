@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { createEngineForTest } from "../engine.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -15,12 +16,19 @@ describe("set_osg tool", () => {
   let client: Client;
   let fs: Engine;
   let tempDir: string;
+  let badgeId: string;
   const bookId = "test-proj";
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-set-osg-test-"));
     client = await createTestClient(tempDir);
     fs = createEngineForTest(tempDir);
+    const badge = await fs.artifacts.create("image", "badge");
+    if (!badge.ok) throw new Error(badge.error.message);
+    badgeId = badge.value.artifactId;
+    const image = await sharp({ create: { width: 32, height: 32, channels: 4, background: "white" } }).png().toBuffer();
+    const written = await fs.files.write(badgeId, "original.png", image);
+    if (!written.ok) throw new Error(written.error.message);
     await client.callTool({
       name: "create_project",
       arguments: { book_id: bookId },
@@ -48,7 +56,7 @@ describe("set_osg tool", () => {
       arguments: {
         asset_id: assetId,
         book_id: bookId,
-        osg_asset_id: "img-logo",
+        osg_asset_id: badgeId,
         osg_position: "bottom-right",
         osg_size: "large",
         osg_scale: 1.5,
@@ -58,7 +66,7 @@ describe("set_osg tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.osg).toEqual({
-      assetId: "img-logo",
+      assetId: badgeId,
       position: "bottom-right",
       positions: null,
       size: "large",
@@ -69,7 +77,7 @@ describe("set_osg tool", () => {
     for (const orient of ORIENTATIONS) {
       const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
       if (!meta.ok) throw new Error(`missing ${orient}.render`);
-      expect(meta.value.osgAssetId).toBe("img-logo");
+      expect(meta.value.osgAssetId).toBe(badgeId);
       expect(meta.value.osgPosition).toBe("bottom-right");
       expect(meta.value.osgSize).toBe("large");
       expect(meta.value.osgScale).toBe(1.5);
@@ -87,7 +95,7 @@ describe("set_osg tool", () => {
       arguments: {
         asset_id: assetId,
         book_id: bookId,
-        osg_asset_id: "img-badge",
+        osg_asset_id: badgeId,
         osg_position: "top-right",
         osg_positions: { portrait: "bottom-left", square: "top-left" },
         osg_size: "medium",
@@ -112,7 +120,7 @@ describe("set_osg tool", () => {
       arguments: {
         asset_id: assetId,
         book_id: bookId,
-        osg_asset_id: "img-logo",
+        osg_asset_id: badgeId,
         osg_position: "top-right",
         osg_size: "medium",
         osg_opacity: 0.4,
@@ -147,7 +155,7 @@ describe("set_osg tool", () => {
       arguments: {
         asset_id: assetId,
         book_id: bookId,
-        osg_asset_id: "img-badge",
+        osg_asset_id: badgeId,
         osg_position: "top-left",
         osg_size: "small",
       },
@@ -157,7 +165,7 @@ describe("set_osg tool", () => {
     if (!meta.ok) throw new Error("missing landscape.render");
     expect(meta.value.subtitlesEnabled).toBe(false);
     expect(meta.value.textColor).toBe("#ABCDEF");
-    expect(meta.value.osgAssetId).toBe("img-badge");
+    expect(meta.value.osgAssetId).toBe(badgeId);
     expect(meta.value.osgPosition).toBe("top-left");
     expect(meta.value.osgSize).toBe("small");
     expect(meta.value.osgScale).toBe(1);
@@ -175,7 +183,7 @@ describe("set_osg tool", () => {
       arguments: {
         asset_id: assetId,
         book_id: bookId,
-        osg_asset_id: "img-logo",
+        osg_asset_id: badgeId,
         osg_position: "top-right",
         osg_size: "medium",
         osg_start_seconds: 10,
@@ -201,7 +209,7 @@ describe("set_osg tool", () => {
       arguments: {
         asset_id: assetId,
         book_id: bookId,
-        osg_asset_id: "img-logo",
+        osg_asset_id: badgeId,
         osg_position: "top-right",
         osg_size: "medium",
         osg_start_seconds: 5,
@@ -235,7 +243,7 @@ describe("set_osg tool", () => {
       arguments: {
         asset_id: assetId,
         book_id: bookId,
-        osg_asset_id: "img-logo",
+        osg_asset_id: badgeId,
         osg_position: "bottom-right",
         osg_size: "medium",
       },
@@ -262,5 +270,25 @@ describe("set_osg tool", () => {
       expect(meta.value.osgAssetId).toBeNull();
       expect(meta.value.osgTailSeconds).toBeNull();
     }
+  });
+
+  it("validates every merged orientation before writing any overlay changes", async () => {
+    const assetId = await createVideoAsset();
+    for (const orientation of ORIENTATIONS) {
+      const written = await fs.metadata.artifacts.write(assetId, `${orientation}.render`, {
+        osgAssetId: badgeId,
+        osgStartSeconds: orientation === "portrait" ? 1.5 : 0.25,
+        osgEndSeconds: 2,
+      });
+      if (!written.ok) throw new Error(written.error.message);
+    }
+    const before = await Promise.all(ORIENTATIONS.map((orientation) => fs.metadata.artifacts.read(assetId, `${orientation}.render`)));
+    const result = await client.callTool({
+      name: "set_video_overlay",
+      arguments: { book_id: bookId, asset_id: assetId, osg_asset_id: badgeId, osg_position: "top-right", osg_size: "small", osg_end_seconds: 1 },
+    });
+    expect(result.isError).toBe(true);
+    const after = await Promise.all(ORIENTATIONS.map((orientation) => fs.metadata.artifacts.read(assetId, `${orientation}.render`)));
+    expect(after).toEqual(before);
   });
 });

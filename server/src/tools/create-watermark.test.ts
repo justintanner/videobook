@@ -167,7 +167,7 @@ describe("create_watermark tool", () => {
     // get_watermark_config exposes the same state to the client.
     const cfgResult = await client!.callTool({
       name: "get_watermark_config",
-      arguments: {},
+      arguments: { book_id: PROJECT },
     });
     expect(cfgResult.isError).not.toBe(true);
     const exposed = JSON.parse(resultText(cfgResult)) as { savedHandle: string | null; recent: string[]; authenticatedHandle: string | null };

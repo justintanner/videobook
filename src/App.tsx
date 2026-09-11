@@ -7251,7 +7251,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     })
     void (async () => {
       try {
-        const config = recordValue(await call('get_watermark_config', {}, { background: true }))
+        const config = recordValue(await call('get_watermark_config', { book_id: bookId }, { background: true }))
         const savedHandle = asString(config?.savedHandle)
         const authenticatedHandle = asString(config?.authenticatedHandle)
         const recent = Array.isArray(config?.recent)

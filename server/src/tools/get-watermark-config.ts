@@ -1,4 +1,5 @@
 import type { Engine } from "videobook-engine";
+import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { readWatermarkConfig, setAuthenticatedHandle } from "../watermark-config.js";
 import { fetchAuthenticatedXHandle } from "../x/authenticated-handle.js";
@@ -16,7 +17,7 @@ export function getWatermarkConfigDef(engine: Engine): ToolDef {
     name: "get_watermark_config",
     description:
       "Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the chat watermark review.",
-    schema: {},
+    schema: { book_id: z.string().describe("Book UUID") },
     handler: async () => {
       const cached = await readWatermarkConfig(engine);
       const live = await fetchAuthenticatedXHandle();

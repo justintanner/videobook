@@ -1,7 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
-import { recordHandle } from "../watermark-config.js";
+import { normalizeHandle, recordHandle } from "../watermark-config.js";
 import {
   createWatermarkAsset,
   DEFAULT_HANDLE_PADDING,
@@ -79,7 +79,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         handle_rounding?: number;
       };
 
-      const resolvedHandle = (handle ?? DEFAULT_HANDLE).replace(/^@/, "").trim();
+      const resolvedHandle = normalizeHandle(handle ?? DEFAULT_HANDLE);
       if (!resolvedHandle) {
         return {
           isError: true as const,

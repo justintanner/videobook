@@ -12,6 +12,7 @@ import {
 import { registerJobHandler, queue } from "../queue.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { ingestWorkspaceOutputs } from "./_persist-output.js";
+import { fixedTransitionSeconds, MIN_TRANSITION_SECONDS } from "../scene-transition.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,8 +21,6 @@ const PCM_SAMPLE_RATE = 8_000;
 const MIN_AUDIO_OVERLAP_SECONDS = 0.08;
 const MAX_AUDIO_OVERLAP_SECONDS = 3;
 const AUDIO_MATCH_THRESHOLD = 0.8;
-const DEFAULT_TRANSITION_SECONDS = 0.35;
-const MIN_TRANSITION_SECONDS = 0.05;
 
 type SmoothSceneConcatPayload = {
   type: "smooth_scene_concat";
@@ -189,22 +188,6 @@ async function detectSharedAudioOverlap(
   return bestAudioOverlap(first, second);
 }
 
-function fixedTransitionSeconds(
-  first: ProbeResult,
-  second: ProbeResult,
-  requested: number | undefined,
-): number {
-  const available = Math.min(first.videoDuration, second.videoDuration);
-  const transition = requested ?? Math.min(DEFAULT_TRANSITION_SECONDS, available / 2);
-  if (!Number.isFinite(transition) || transition < MIN_TRANSITION_SECONDS) {
-    throw new Error(`Transition must be at least ${MIN_TRANSITION_SECONDS} seconds`);
-  }
-  if (transition >= available) {
-    throw new Error("Transition must be shorter than both video clips");
-  }
-  return transition;
-}
-
 async function resolveTransitionTiming(
   firstPath: string,
   secondPath: string,
@@ -247,7 +230,7 @@ async function resolveTransitionTiming(
     }
   }
 
-  const transitionSeconds = fixedTransitionSeconds(first, second, requested);
+  const transitionSeconds = fixedTransitionSeconds(first.videoDuration, second.videoDuration, requested);
   return {
     mode: "fixed",
     transitionSeconds,
@@ -266,7 +249,7 @@ function normalizedVideoFilter(
 ): string {
   // Keep fps last: some Linux FFmpeg builds report a 1/0 frame rate after
   // setpts, which xfade correctly rejects as variable-frame-rate input.
-  return `[${input}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS,fps=${mediaNumber(fps)}[${label}]`;
+  return `[${input}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration=${mediaNumber(1 / fps)},fps=${mediaNumber(fps)}[${label}]`;
 }
 
 function fixedAudioFilter(
@@ -302,7 +285,7 @@ async function renderSmoothConcat(
   const filters = [
     normalizedVideoFilter(0, "v0", width, height, fps),
     normalizedVideoFilter(1, "v1", width, height, fps),
-    `[v0][v1]xfade=transition=fade:duration=${mediaNumber(timing.transitionSeconds)}:offset=${mediaNumber(timing.secondStartSeconds)},format=yuv420p[v]`,
+    `[v0][v1]xfade=transition=fade:duration=${mediaNumber(timing.transitionSeconds)}:offset=${mediaNumber(timing.secondStartSeconds)},trim=duration=${mediaNumber(outputDuration)},format=yuv420p[v]`,
   ];
 
   const withAudio = first.hasAudio || second.hasAudio;
@@ -363,6 +346,15 @@ export async function smoothSceneConcatFiles(
     options.signal,
   );
   const outputDuration = await renderSmoothConcat(options, first, second, timing);
+  const output = await probeVideo(options.outputPath, { signal: options.signal });
+  validateProbe("Output", output);
+  if (Math.abs(output.videoDuration - outputDuration) > 1 / first.fps + 0.01) {
+    throw new Error(`Scene concat produced ${output.videoDuration.toFixed(3)}s of video instead of ${outputDuration.toFixed(3)}s`);
+  }
+  if ((first.hasAudio || second.hasAudio) && (!output.hasAudio
+    || Math.abs((output.audioDuration ?? output.duration) - outputDuration) > 0.15)) {
+    throw new Error("Scene concat output has missing or incomplete audio");
+  }
   return { ...timing, outputDuration };
 }
 

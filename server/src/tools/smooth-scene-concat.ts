@@ -5,6 +5,7 @@ import { probeVideo, type ProbeResult } from "../ffmpeg.js";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 import { derivedLabel } from "../artifact-label.js";
+import { fixedTransitionSeconds } from "../scene-transition.js";
 
 function error(text: string) {
   return {
@@ -90,11 +91,10 @@ export function smoothSceneConcatDef(engine: Engine): ToolDef {
       }
       if (!validVideoProbe(firstProbe)) return error(`Invalid video in asset ${first_asset_id}`);
       if (!validVideoProbe(secondProbe)) return error(`Invalid video in asset ${second_asset_id}`);
-      if (
-        transition_seconds !== undefined &&
-        transition_seconds >= Math.min(firstProbe.videoDuration, secondProbe.videoDuration)
-      ) {
-        return error("transition_seconds must be shorter than both video clips");
+      try {
+        fixedTransitionSeconds(firstProbe.videoDuration, secondProbe.videoDuration, transition_seconds);
+      } catch (cause) {
+        return error(cause instanceof Error ? cause.message : String(cause));
       }
 
       const assetResult = await engine.artifacts.create(

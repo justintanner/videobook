@@ -25,6 +25,7 @@ import type { WatermarkHandlePlacement } from "../watermark-handle-position.js";
 import { analyzeOsgPlacement } from "./osg-placement.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { effectiveWatermarkTiming } from "../watermark-timing.js";
 
 const LOCK_DURATION_MS = 600_000;
 
@@ -307,50 +308,23 @@ export function buildBurnWatermarkFilter(options: {
   return filters.join(";");
 }
 
-type EffectiveWatermarkTiming = {
-  startSeconds?: number;
-  endSeconds?: number;
-};
-
-function effectiveWatermarkTiming(
-  label: string,
-  duration: number,
-  startSeconds?: number,
-  endSeconds?: number,
-): EffectiveWatermarkTiming {
-  const effectiveStart = startSeconds ?? 0;
-  if (effectiveStart < 0 || effectiveStart >= duration) {
-    throw new Error(`${label} start must be before the ${duration.toFixed(2)}s clip end`);
-  }
-  const effectiveEnd = endSeconds === undefined
-    ? undefined
-    : Math.min(endSeconds, duration);
-  if (effectiveEnd !== undefined && effectiveEnd <= effectiveStart) {
-    throw new Error(`${label} end must be after its start`);
-  }
-  return {
-    ...(startSeconds !== undefined ? { startSeconds } : {}),
-    ...(effectiveEnd !== undefined ? { endSeconds: effectiveEnd } : {}),
-  };
-}
-
 function badgeInputArgs(
   path: string,
-  timing: EffectiveWatermarkTiming,
+  timing: ReturnType<typeof effectiveWatermarkTiming>,
   probe: ProbeResult,
   fadeSeconds: number,
 ): string[] {
   const fades = burnWatermarkFades(
     timing.startSeconds,
     timing.endSeconds,
-    probe.duration,
+    probe.videoDuration,
     fadeSeconds,
   );
   const loopSeconds = burnWatermarkLoopSeconds(
     fades,
     timing.startSeconds,
     timing.endSeconds,
-    probe.duration,
+    probe.videoDuration,
   );
   return burnWatermarkInputArgs(path, loopSeconds, burnWatermarkFrameRate(probe));
 }
@@ -424,7 +398,7 @@ export function registerBurnWatermarkJob(engine: Engine): void {
         const handleTiming = handlePath
           ? effectiveWatermarkTiming(
               "Handle watermark",
-              probe.duration,
+              probe.videoDuration,
               handleStartSeconds ?? startSeconds,
               handleEndSeconds ?? endSeconds,
             )
@@ -432,7 +406,7 @@ export function registerBurnWatermarkJob(engine: Engine): void {
         const qrTiming = qrPath
           ? effectiveWatermarkTiming(
               "QR watermark",
-              probe.duration,
+              probe.videoDuration,
               qrStartSeconds ?? startSeconds,
               qrEndSeconds ?? endSeconds,
             )
@@ -453,7 +427,7 @@ export function registerBurnWatermarkJob(engine: Engine): void {
           handleVerticalPercent,
           handlePlacement,
           handlePaddingY,
-          durationSeconds: probe.duration,
+          durationSeconds: probe.videoDuration,
           fadeSeconds,
           ...(qrTiming.startSeconds !== undefined
             ? { qrStartSeconds: qrTiming.startSeconds }

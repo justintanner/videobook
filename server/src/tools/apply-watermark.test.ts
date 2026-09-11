@@ -130,14 +130,6 @@ describe("apply_watermark tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  async function createVideoAsset(): Promise<string> {
-    const created = await fs.artifacts.create("vid", "clip");
-    if (!created.ok) throw new Error(created.error.message);
-    const write = await fs.files.write(created.value.artifactId, "original.mp4", Buffer.from("fake-video"));
-    if (!write.ok) throw new Error(write.error.message);
-    return created.value.artifactId;
-  }
-
   async function createRealVideoAsset(): Promise<string> {
     const created = await fs.artifacts.create("vid", "real-clip");
     if (!created.ok) throw new Error(created.error.message);
@@ -158,7 +150,7 @@ describe("apply_watermark tool", () => {
   }
 
   it("falls back to the analyze-video corner and stores faint whole-clip settings", async () => {
-    const assetId = await createVideoAsset();
+    const assetId = await createRealVideoAsset();
     const analysisWrite = await fs.files.write(
       assetId,
       ".original.analysis.json",
@@ -200,14 +192,14 @@ describe("apply_watermark tool", () => {
   });
 
   it("defaults to bottom-right when no analysis exists", async () => {
-    const assetId = await createVideoAsset();
+    const assetId = await createRealVideoAsset();
     const parsed = await apply({ asset_id: assetId, handle: "someone", mode: "overlay" });
     expect(parsed.placement_source).toBe("default");
     expect(parsed.positions?.landscape).toBe("bottom-right");
   });
 
   it("stores explicit placement, timing, and a handle-only badge", async () => {
-    const assetId = await createVideoAsset();
+    const assetId = await createRealVideoAsset();
     const parsed = await apply({
       asset_id: assetId,
       handle: "someone",
@@ -253,7 +245,7 @@ describe("apply_watermark tool", () => {
   });
 
   it("stores a QR-only overlay without requiring a handle", async () => {
-    const assetId = await createVideoAsset();
+    const assetId = await createRealVideoAsset();
     const parsed = await apply({
       asset_id: assetId,
       handle: "",
@@ -288,8 +280,8 @@ describe("apply_watermark tool", () => {
   });
 
   it("reuses the badge asset across applies and honors custom opacity/scale", async () => {
-    const firstAsset = await createVideoAsset();
-    const secondAsset = await createVideoAsset();
+    const firstAsset = await createRealVideoAsset();
+    const secondAsset = await createRealVideoAsset();
 
     const first = await apply({ asset_id: firstAsset, handle: "someone", mode: "overlay" });
     const second = await apply({
@@ -331,7 +323,7 @@ describe("apply_watermark tool", () => {
   });
 
   it("records handles and defaults to the saved handle", async () => {
-    const assetId = await createVideoAsset();
+    const assetId = await createRealVideoAsset();
     await apply({ asset_id: assetId, handle: "alice", save_default: true, mode: "overlay" });
 
     const config = await readWatermarkConfig(fs);
@@ -559,7 +551,7 @@ describe("apply_watermark tool", () => {
   }, 120_000);
 
   it("records handle placement and vertical padding on overlay cards", async () => {
-    const assetId = await createVideoAsset();
+    const assetId = await createRealVideoAsset();
     const parsed = await apply({
       asset_id: assetId,
       handle: "someone",
@@ -589,7 +581,7 @@ describe("apply_watermark tool", () => {
   });
 
   it("rejects an empty QR timing window independently", async () => {
-    const assetId = await createVideoAsset();
+    const assetId = await createRealVideoAsset();
     const result = await client.callTool({
       name: "apply_watermark",
       arguments: {
@@ -604,7 +596,7 @@ describe("apply_watermark tool", () => {
   });
 
   it("rejects a watermark with neither QR nor handle", async () => {
-    const assetId = await createVideoAsset();
+    const assetId = await createRealVideoAsset();
     const result = await client.callTool({
       name: "apply_watermark",
       arguments: {
