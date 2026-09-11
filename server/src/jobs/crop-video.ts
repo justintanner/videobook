@@ -5,48 +5,14 @@ import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
+import { cropGeometry, type CropRect, type CropRatio } from "../crop-geometry.js";
 
 const LOCK_DURATION_MS = 300_000;
-const ASPECT_TOLERANCE = 0.02;
-
-type Ratio = "16:9" | "9:16" | "1:1";
-
-const CANONICAL_DIMS: Record<Ratio, [number, number]> = {
-  "16:9": [1920, 1080],
-  "9:16": [1080, 1920],
-  "1:1": [1080, 1080],
-};
-
-interface CropRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-interface PixelBox {
-  cropX: number;
-  cropY: number;
-  cropW: number;
-  cropH: number;
-}
-
-function toEvenPixelBox(rect: CropRect, srcW: number, srcH: number): PixelBox {
-  const cropW = Math.max(2, Math.round((rect.w * srcW) / 2) * 2);
-  const cropH = Math.max(2, Math.round((rect.h * srcH) / 2) * 2);
-  // Round origin down to even, then clamp so origin + size stays inside the frame.
-  let cropX = Math.max(0, Math.floor((rect.x * srcW) / 2) * 2);
-  let cropY = Math.max(0, Math.floor((rect.y * srcH) / 2) * 2);
-  if (cropX + cropW > srcW) cropX = Math.max(0, srcW - cropW);
-  if (cropY + cropH > srcH) cropY = Math.max(0, srcH - cropH);
-  return { cropX, cropY, cropW, cropH };
-}
-
 type CropVideoPayload = {
   type: "crop_video";
   inputPath: string;
   outputPath: string;
-  ratio: Ratio;
+  ratio: CropRatio;
   rect: CropRect;
   assetId: string;
   assetDir: string;
@@ -73,19 +39,7 @@ export function registerCropVideoJob(engine: Engine): void {
           throw new Error(`Could not probe source dimensions for ${inputPath}`);
         }
 
-        const { cropX, cropY, cropW, cropH } = toEvenPixelBox(rect, src.width, src.height);
-        const [outW, outH] = CANONICAL_DIMS[ratio];
-
-        const cropAspect = cropW / cropH;
-        const targetAspect = outW / outH;
-        const aspectErr = Math.abs(cropAspect - targetAspect) / targetAspect;
-        if (aspectErr > ASPECT_TOLERANCE) {
-          throw new Error(
-            `Crop rectangle aspect ${cropAspect.toFixed(4)} (${cropW}x${cropH}) ` +
-            `does not match target ratio ${ratio} (${targetAspect.toFixed(4)}); ` +
-            `error ${(aspectErr * 100).toFixed(1)}% > ${(ASPECT_TOLERANCE * 100).toFixed(0)}%`,
-          );
-        }
+        const { cropX, cropY, cropW, cropH, outW, outH } = cropGeometry(rect, src.width, src.height, ratio, 2);
 
         const vf =
           `crop=${cropW}:${cropH}:${cropX}:${cropY},` +

@@ -2,29 +2,13 @@ import type { Engine } from "videobook-engine";
 import { registerJobHandler, queue } from "../queue.js";
 import { cropRegion, probeImage } from "../image.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { cropGeometry, type CropRect, type CropRatio } from "../crop-geometry.js";
 
 const LOCK_DURATION_MS = 300_000;
-const ASPECT_TOLERANCE = 0.02;
-
-type Ratio = "16:9" | "9:16" | "1:1";
-
-const CANONICAL_DIMS: Record<Ratio, [number, number]> = {
-  "16:9": [1920, 1080],
-  "9:16": [1080, 1920],
-  "1:1": [1080, 1080],
-};
-
-interface CropRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
 type CropImagePayload = {
   type: "crop_image";
   inputFilename: string;
-  ratio: Ratio;
+  ratio: CropRatio;
   rect: CropRect;
   assetId: string;
   assetDir: string;
@@ -59,19 +43,7 @@ export function registerCropImageJob(engine: Engine): void {
           throw new Error(`Could not probe source dimensions for ${inputFilename}`);
         }
 
-        const cropW = Math.max(1, Math.round(rect.w * src.width));
-        const cropH = Math.max(1, Math.round(rect.h * src.height));
-        const [outW, outH] = CANONICAL_DIMS[ratio];
-        const cropAspect = cropW / cropH;
-        const targetAspect = outW / outH;
-        const aspectErr = Math.abs(cropAspect - targetAspect) / targetAspect;
-        if (aspectErr > ASPECT_TOLERANCE) {
-          throw new Error(
-            `Crop rectangle aspect ${cropAspect.toFixed(4)} (${cropW}x${cropH}) ` +
-            `does not match target ratio ${ratio} (${targetAspect.toFixed(4)}); ` +
-            `error ${(aspectErr * 100).toFixed(1)}% > ${(ASPECT_TOLERANCE * 100).toFixed(0)}%`,
-          );
-        }
+        const { outW, outH } = cropGeometry(rect, src.width, src.height, ratio, 1);
 
         const cropped = await cropRegion(buffer, rect, outW, outH);
         const out = await probeImage(cropped);

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "videobook-engine";
+import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 
 export function replaceVideoAudioDef(engine: Engine): ToolDef {
@@ -101,6 +102,13 @@ export function replaceVideoAudioDef(engine: Engine): ToolDef {
       const assetDir = videoManifest.value.path;
       const videoPath = join(assetDir, videoFile.name);
       const audioPath = join(audioManifest.value.path, audioFileName);
+      try {
+        const [video, audio] = await Promise.all([probeVideo(videoPath), probeVideo(audioPath)]);
+        if (!video.videoStream || video.videoDuration <= 0) throw new Error("Video source has no playable video stream");
+        if (!audio.hasAudio || (audio.audioDuration ?? audio.duration) <= 0) throw new Error("Replacement source has no playable audio stream");
+      } catch (error) {
+        return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };
+      }
       const tempPath = join(assetDir, "original_audio_replaced.mp4");
       const jobId = `replace-audio-${asset_id}-${Date.now()}`;
 
@@ -132,4 +140,3 @@ export function replaceVideoAudioDef(engine: Engine): ToolDef {
     },
   };
 }
-

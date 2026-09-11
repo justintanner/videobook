@@ -3,6 +3,8 @@ import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
+import { cropGeometry } from "../crop-geometry.js";
+import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 
 const RECT_EPSILON = 0.001;
@@ -70,6 +72,12 @@ export function cropVideoDef(engine: Engine): ToolDef {
 
       const assetDir = manifest.path;
       const videoPath = join(assetDir, videoFile.name);
+      try {
+        const source = await probeVideo(videoPath);
+        cropGeometry({ x, y, w, h }, source.width, source.height, ratio, 2);
+      } catch (error) {
+        return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };
+      }
       const tempPath = join(assetDir, "original_cropped.mp4");
       const jobId = `crop-${asset_id}-${Date.now()}`;
 
@@ -105,4 +113,3 @@ export function cropVideoDef(engine: Engine): ToolDef {
     },
   };
 }
-

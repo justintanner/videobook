@@ -3,6 +3,8 @@ import { z } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { SKIP_CROP_EXTENSIONS } from "../jobs/process-image.js";
+import { cropGeometry } from "../crop-geometry.js";
+import { probeImage } from "../image.js";
 import type { ToolDef } from "./tool-def.js";
 
 const RECT_EPSILON = 0.001;
@@ -97,6 +99,14 @@ export function cropImageDef(engine: Engine): ToolDef {
       }
 
       const assetDir = manifest.path;
+      try {
+        const original = await engine.files.read(asset_id, imageFile.name);
+        if (!original.ok) throw new Error(original.error.message);
+        const source = await probeImage(original.value);
+        cropGeometry({ x, y, w, h }, source.width, source.height, ratio, 1);
+      } catch (error) {
+        return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };
+      }
       const jobId = `crop-${asset_id}-${Date.now()}`;
 
       const jobPayload: Record<string, unknown> = {

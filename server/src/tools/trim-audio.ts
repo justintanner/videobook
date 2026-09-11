@@ -3,6 +3,8 @@ import { z } from "zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile } from "videobook-engine";
+import { probeVideo } from "../ffmpeg.js";
+import { validateAudioTrimRange } from "../audio-trim-range.js";
 import type { ToolDef } from "./tool-def.js";
 
 type ValidatedParams =
@@ -111,6 +113,13 @@ export function trimAudioDef(engine: Engine): ToolDef {
 
       const assetDir = manifest.path;
       const mediaPath = join(assetDir, mediaFile.name);
+      try {
+        const source = await probeVideo(mediaPath);
+        if (!source.hasAudio) throw new Error("Audio file has no usable audio stream");
+        validateAudioTrimRange(source.audioDuration ?? source.duration, validated.mode, trim_start, trim_end, cut_start, cut_end);
+      } catch (error) {
+        return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };
+      }
       const ext = extname(mediaFile.name);
       const jobId = `trim-audio-${assetId}-${Date.now()}`;
       const tempPath = join(assetDir, `${jobId}${ext}`);

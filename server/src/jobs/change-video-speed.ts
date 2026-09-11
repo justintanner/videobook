@@ -37,18 +37,11 @@ function buildAtempoChain(speed: number): string[] {
   return filters;
 }
 
-// setpts + fps_mode passthrough keeps every source frame on scaled
-// timestamps. Plain setpts under the default cfr mode resamples the stream
-// back onto the source's nominal frame grid, dropping ~1-1/speed of the
-// frames and drifting past the expected duration. settb=AVTB lifts the pts
-// off the coarse input timebase first, so rounding cannot shift frames onto
-// a trim boundary. Exact-duration mode trims inside the filter graph: an
-// output -t cap drops a frame whose end lands on the cap (the tail frame),
-// while trim/atrim keep every frame whose pts precedes the target.
 function buildSpeedOutputOptions(
   speed: number,
   hasAudio: boolean,
   targetDuration?: number,
+  outputFrameRate?: number,
 ): string[] {
   const videoChain = [`settb=AVTB`, `setpts=(PTS-STARTPTS)/${speed}`];
   const audioChain = ["asetpts=PTS-STARTPTS", ...buildAtempoChain(speed)];
@@ -58,7 +51,8 @@ function buildSpeedOutputOptions(
     audioChain.push(`atrim=end=${cap}`);
   }
   const opts = [
-    "-fps_mode:v", "passthrough",
+    "-fps_mode:v", outputFrameRate === undefined ? "passthrough" : "cfr",
+    ...(outputFrameRate === undefined ? [] : ["-r", String(outputFrameRate)]),
     "-filter:v", videoChain.join(","),
   ];
   if (hasAudio) {
@@ -84,6 +78,28 @@ async function probeVideoFrameCount(filePath: string): Promise<number | null> {
     return Number.isSafeInteger(count) && count > 0 ? count : null;
   } catch {
     return null;
+  }
+}
+
+async function hasConstantFrameSpacing(filePath: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync(FFPROBE, [
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries", "packet=pts",
+      "-of", "json",
+      filePath,
+    ], { maxBuffer: 16 * 1024 * 1024 });
+    const data = JSON.parse(stdout) as { packets?: Array<{ pts?: unknown }> };
+    const times = data.packets?.map((packet) => Number(packet.pts)) ?? [];
+    if (times.length < 2 || times.some((time) => !Number.isSafeInteger(time))) return false;
+    times.sort((a, b) => a - b);
+    const interval = (times[times.length - 1] - times[0]) / (times.length - 1);
+    return interval > 0 && times.slice(1).every((time, index) => (
+      time > times[index] && Math.abs(time - times[index] - interval) <= 1
+    ));
+  } catch {
+    return false;
   }
 }
 
@@ -156,7 +172,11 @@ export function registerChangeVideoSpeedJob(engine: Engine): void {
       const inputProbe = await probeVideo(inputPath);
       const sourceFrameCount = await probeVideoFrameCount(inputPath);
 
-      const outputOptions = buildSpeedOutputOptions(speed, hasAudio, targetDuration);
+      const outputFrameRate = sourceFrameCount !== null && inputProbe.videoDuration > 0
+        && await hasConstantFrameSpacing(inputPath)
+        ? sourceFrameCount / (targetDuration ?? inputProbe.videoDuration / speed)
+        : undefined;
+      const outputOptions = buildSpeedOutputOptions(speed, hasAudio, targetDuration, outputFrameRate);
       const FFmpeggy = await getFFmpeggy();
       const ff = new FFmpeggy({
         input: inputPath,

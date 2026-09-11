@@ -1,7 +1,9 @@
 import type { Engine } from "videobook-engine";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
-import { runFfmpeg } from "../ffmpeg.js";
+import { AUDIO_OPTS, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
@@ -31,7 +33,7 @@ type ReplaceVideoAudioPayload = {
 export function registerReplaceVideoAudioJob(engine: Engine): void {
   registerJobHandler("replace_video_audio", async (payload, ctx) => {
     const {
-      inputPath, audioPath, outputPath,
+      inputPath, audioPath,
       assetId, assetDir, audioAssetId, bookId,
       extraProvenance,
     } = payload as ReplaceVideoAudioPayload;
@@ -44,26 +46,28 @@ export function registerReplaceVideoAudioJob(engine: Engine): void {
       "replace_audio",
       { durationMs: LOCK_DURATION_MS, data: { state: "replacing-audio" } },
       async () => {
-      await runFfmpeg([
-        "-y",
-        "-i", inputPath,
-        "-i", audioPath,
-        "-map", "0:v:0",
-        "-map", "1:a:0",
-        "-c:v", "copy",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-shortest",
-        outputPath,
-      ]);
-
       const inputFilename = basename(inputPath);
-      await replaceArtifactFileFromPath(
-        engine,
-        assetId,
-        inputFilename,
-        outputPath,
-      );
+      const source = await probeVideo(inputPath, { signal: ctx.signal });
+      if (!source.videoStream || source.videoDuration <= 0) throw new Error("Video source has no playable video stream");
+      const workspace = await mkdtemp(join(tmpdir(), "videobook-replace-audio-"));
+      const outputPath = join(workspace, "output.mp4");
+      try {
+        await runFfmpeg([
+          "-y", "-i", inputPath, "-i", audioPath,
+          "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+          "-af", `apad,atrim=duration=${source.videoDuration},asetpts=PTS-STARTPTS`,
+          ...AUDIO_OPTS, "-movflags", "+faststart", outputPath,
+        ], { signal: ctx.signal });
+        const output = await probeVideo(outputPath, { signal: ctx.signal });
+        const tolerance = Math.max(1 / (source.fps || 30), 0.05);
+        if (!output.hasAudio || Math.abs(output.videoDuration - source.videoDuration) > tolerance
+          || Math.abs((output.audioDuration ?? output.duration) - source.videoDuration) > tolerance) {
+          throw new Error("Replacement audio output does not preserve the video duration");
+        }
+        await replaceArtifactFileFromPath(engine, assetId, inputFilename, outputPath);
+      } finally {
+        await rm(workspace, { recursive: true, force: true });
+      }
 
       for (const stale of STALE_ANALYSIS_FILES) {
         await engine.files.delete(assetId, stale);

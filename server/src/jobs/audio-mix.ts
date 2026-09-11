@@ -2,10 +2,11 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import type { Engine } from "videobook-engine";
-import { AUDIO_OPTS, extractWaveform, probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { extractWaveform, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
 import type { AudioMixAssetKind } from "../tools/audio-mix.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { audioOnlyOutputOptions, videoAudioOutputOptions } from "../audio-encoding.js";
 
 const LOCK_DURATION_MS = 30 * 60_000;
 
@@ -31,31 +32,6 @@ type AudioMixPayload = {
 
 function decimal(value: number): string {
   return value.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
-}
-
-function audioOnlyOutputOptions(outputPath: string): string[] {
-  switch (extname(outputPath).toLowerCase()) {
-    case ".mp3":
-      return ["-c:a", "libmp3lame", "-q:a", "2", "-ac", "2"];
-    case ".wav":
-      return ["-c:a", "pcm_s16le", "-ac", "2"];
-    case ".ogg":
-      return ["-c:a", "libvorbis", "-q:a", "5", "-ac", "2"];
-    case ".flac":
-      return ["-c:a", "flac", "-compression_level", "5", "-ac", "2"];
-    case ".aac":
-    case ".m4a":
-      return AUDIO_OPTS;
-    default:
-      throw new Error(`Unsupported target audio format: ${extname(outputPath) || "unknown"}`);
-  }
-}
-
-function videoAudioOutputOptions(outputPath: string): string[] {
-  const extension = extname(outputPath).toLowerCase();
-  if (extension === ".webm") return ["-c:a", "libopus", "-b:a", "160k", "-ac", "2"];
-  if (extension === ".avi") return ["-c:a", "libmp3lame", "-b:a", "192k", "-ac", "2"];
-  return AUDIO_OPTS;
 }
 
 function outputContainerOptions(outputPath: string): string[] {

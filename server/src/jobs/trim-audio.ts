@@ -7,10 +7,10 @@ import { registerJobHandler } from "../queue.js";
 import { FFPROBE, runFfmpeg } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
+import { AUDIO_TRIM_EPSILON_SECONDS, validateAudioTrimRange } from "../audio-trim-range.js";
 
 const execFileAsync = promisify(execFile);
 const LOCK_DURATION_MS = 300_000;
-const DURATION_EPSILON_SECONDS = 0.05;
 
 async function probeAudioDuration(filePath: string): Promise<number> {
   const { stdout } = await execFileAsync(FFPROBE, [
@@ -47,37 +47,6 @@ function audioCodecArgs(inputPath: string): string[] {
   return ["-c:a", "aac", "-b:a", "192k"];
 }
 
-function expectedOutputDuration(
-  sourceDuration: number,
-  mode: "keep" | "cut",
-  trimStart?: number,
-  trimEnd?: number,
-  cutStart?: number,
-  cutEnd?: number,
-): number {
-  if (mode === "keep") {
-    const start = trimStart ?? 0;
-    const end = trimEnd ?? sourceDuration;
-    if (start >= sourceDuration - DURATION_EPSILON_SECONDS) {
-      throw new Error(`trim_start ${start} must be before audio duration ${sourceDuration.toFixed(3)}`);
-    }
-    if (end > sourceDuration + DURATION_EPSILON_SECONDS) {
-      throw new Error(`trim_end ${end} exceeds audio duration ${sourceDuration.toFixed(3)}`);
-    }
-    return Math.min(end, sourceDuration) - start;
-  }
-
-  const start = cutStart ?? 0;
-  const end = cutEnd ?? sourceDuration;
-  if (start >= sourceDuration - DURATION_EPSILON_SECONDS) {
-    throw new Error(`cut_start ${start} must be before audio duration ${sourceDuration.toFixed(3)}`);
-  }
-  if (end > sourceDuration + DURATION_EPSILON_SECONDS) {
-    throw new Error(`cut_end ${end} exceeds audio duration ${sourceDuration.toFixed(3)}`);
-  }
-  return sourceDuration - (Math.min(end, sourceDuration) - start);
-}
-
 function buildKeepArgs(
   inputPath: string,
   outputPath: string,
@@ -107,7 +76,7 @@ function buildTrimAudioArgs(
   cutStart?: number,
   cutEnd?: number,
 ): { args: string[]; expectedDuration: number } {
-  const expectedDuration = expectedOutputDuration(
+  const expectedDuration = validateAudioTrimRange(
     sourceDuration,
     mode,
     trimStart,
@@ -115,9 +84,6 @@ function buildTrimAudioArgs(
     cutStart,
     cutEnd,
   );
-  if (expectedDuration <= DURATION_EPSILON_SECONDS) {
-    throw new Error("Trim would produce an empty audio file");
-  }
 
   if (mode === "keep") {
     return {
@@ -128,13 +94,13 @@ function buildTrimAudioArgs(
 
   const start = cutStart ?? 0;
   const end = Math.min(cutEnd ?? sourceDuration, sourceDuration);
-  if (start <= DURATION_EPSILON_SECONDS) {
+  if (start <= AUDIO_TRIM_EPSILON_SECONDS) {
     return {
       args: buildKeepArgs(inputPath, outputPath, end, expectedDuration),
       expectedDuration,
     };
   }
-  if (end >= sourceDuration - DURATION_EPSILON_SECONDS) {
+  if (end >= sourceDuration - AUDIO_TRIM_EPSILON_SECONDS) {
     return {
       args: buildKeepArgs(inputPath, outputPath, 0, expectedDuration),
       expectedDuration,

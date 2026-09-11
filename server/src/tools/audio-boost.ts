@@ -3,6 +3,8 @@ import { z } from "zod";
 import { extname, join } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "videobook-engine";
+import { probeVideo } from "../ffmpeg.js";
+import { audioOnlyOutputOptions, videoAudioOutputOptions } from "../audio-encoding.js";
 import type { ToolDef } from "./tool-def.js";
 
 const BOOST_MIN = 1.0;
@@ -83,6 +85,14 @@ export function audioBoostDef(engine: Engine): ToolDef {
 
       const assetDir = manifest.path;
       const inputPath = join(assetDir, file.name);
+      try {
+        const source = await probeVideo(inputPath);
+        if (!source.hasAudio) throw new Error("Source has no playable audio stream");
+        if (isVideo) videoAudioOutputOptions(inputPath);
+        else audioOnlyOutputOptions(inputPath);
+      } catch (error) {
+        return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };
+      }
       const ext = extname(file.name) || (isVideo ? ".mp4" : ".mp3");
       const tempPath = join(assetDir, `boost_pending${ext}`);
       const jobId = `boost-${asset_id}-${Date.now()}`;
@@ -107,4 +117,3 @@ export function audioBoostDef(engine: Engine): ToolDef {
     },
   };
 }
-
