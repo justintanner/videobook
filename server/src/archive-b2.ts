@@ -282,6 +282,8 @@ export function contentTypeForFilename(filename: string): string {
       return "video/quicktime";
     case ".webm":
       return "video/webm";
+    case ".weba":
+      return "audio/webm";
     case ".mkv":
       return "video/x-matroska";
     case ".mp3":

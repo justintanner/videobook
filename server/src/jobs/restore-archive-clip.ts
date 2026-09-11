@@ -64,13 +64,17 @@ export function registerRestoreArchiveClipJob(engine: Engine): void {
           return { success: true, archive_id: p.archiveId, asset_id: p.assetId, job_id: processJobId };
         }
 
-        const writeMeta = await engine.metadata.artifacts.write(p.assetId, "original", {
-          ...meta,
-          content_type: p.contentType,
-          duration: typeof p.duration === "number" ? p.duration : null,
+        const processJobId = `process-audio-${p.assetId}-${Date.now()}`;
+        await queue.enqueue(processJobId, {
+          type: "process_audio",
+          audioPath: join(p.assetDir, p.filename),
+          sourceFilename: p.filename,
+          assetId: p.assetId,
+          assetDir: p.assetDir,
+          bookId: p.bookId,
+          provenance: { ...meta, content_type: p.contentType },
         });
-        if (!writeMeta.ok) throw new Error(writeMeta.error.message);
-        return { success: true, archive_id: p.archiveId, asset_id: p.assetId };
+        return { success: true, archive_id: p.archiveId, asset_id: p.assetId, job_id: processJobId };
       },
       { durationMs: LOCK_DURATION_MS },
     );

@@ -30,6 +30,7 @@ const EXTENSION_TARGETS = new Map<string, Omit<ArchiveMediaTarget, "filename">>(
   [".aac", { kind: "audio" }],
   [".flac", { kind: "audio" }],
   [".ogg", { kind: "audio" }],
+  [".weba", { kind: "audio" }],
 ]);
 
 const CONTENT_TYPE_EXTENSIONS = new Map<string, string>([
@@ -43,6 +44,7 @@ const CONTENT_TYPE_EXTENSIONS = new Map<string, string>([
   ["audio/aac", ".aac"],
   ["audio/flac", ".flac"],
   ["audio/ogg", ".ogg"],
+  ["audio/webm", ".weba"],
 ]);
 
 function toolError(message: string) {
@@ -68,7 +70,9 @@ function archiveMediaTarget(index: ArchiveIndex): ArchiveMediaTarget | null {
   const filenameExtension = extname(index.media.filename).toLowerCase();
   const contentType = index.media.content_type.toLowerCase().split(";")[0]?.trim() ?? "";
   const contentTypeExtension = CONTENT_TYPE_EXTENSIONS.get(contentType) || "";
-  const extension = EXTENSION_TARGETS.has(filenameExtension) ? filenameExtension : contentTypeExtension;
+  const extension = filenameExtension === ".webm" && contentTypeExtension === ".weba"
+    ? ".weba"
+    : EXTENSION_TARGETS.has(filenameExtension) ? filenameExtension : contentTypeExtension;
   const target = EXTENSION_TARGETS.get(extension);
   if (!target) return null;
   return {
@@ -157,6 +161,13 @@ export function restoreArchiveClipsDef(engine: Engine): ToolDef {
       const existing = skip_existing
         ? await existingArchiveAssets(engine, indices.map((index) => index.archive_id))
         : new Map<string, string>();
+      const targets = new Map<string, ArchiveMediaTarget>();
+      for (const index of indices) {
+        if (existing.has(index.archive_id)) continue;
+        const target = archiveMediaTarget(index);
+        if (!target) return toolError(`Archive media type is not supported: ${index.media.filename}`);
+        targets.set(index.archive_id, target);
+      }
       const restored: Array<{ archive_id: string; asset_id: string; job_id: string }> = [];
       const skipped: Array<{ archive_id: string; asset_id: string; reason: string }> = [];
 
@@ -167,8 +178,7 @@ export function restoreArchiveClipsDef(engine: Engine): ToolDef {
           continue;
         }
 
-        const target = archiveMediaTarget(index);
-        if (!target) return toolError(`Archive media type is not supported: ${index.media.filename}`);
+        const target = targets.get(index.archive_id)!;
 
         const created = await engine.artifacts.create(target.kind, archiveAssetName(index));
         if (!created.ok) return toolError(created.error.message);
