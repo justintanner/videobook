@@ -4,9 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import sharp from 'sharp'
-import { createEngine, type Engine } from 'videobook-engine'
+import { createEngine, MVP_CONTRACT_VERSION, type Engine, type EditIntent } from 'videobook-engine'
+import { v7 as uuidv7 } from 'uuid'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
+import { forgetAsset } from '../../server/src/forget-asset.js'
 import { readTimeline, timelineInput, writeTimeline } from '../../server/src/timeline-helpers.js'
 
 const execFileAsync = promisify(execFile)
@@ -80,5 +82,38 @@ describe('canonical track settings through compatibility edits', () => {
     input.audio![0]!.volume = 40
     expect(await writeTimeline(engine, input)).toMatchObject({ ok: true })
     expect(engine.sequences.getPrimary()).toMatchObject({ width: 1280, height: 720 })
+  })
+
+  it('does not detach notebook cells when locked timeline clips block forgetting', async () => {
+    const created = await engine.notebooks.create('References')
+    if (!created.ok) throw new Error(created.error.message)
+    const cell = engine.notebooks.createCell({ type: 'image', slot: { row: 0, column: 0 }, outputArtifactId: imageId })
+    expect((await engine.notebooks.write({ ...created.value, cells: [cell] })).ok).toBe(true)
+    const track = engine.sequences.getPrimary().tracks.find((item) => item.kind === 'video')!
+    expect((await engine.sequences.updateTrack(track.trackId, { locked: true })).ok).toBe(true)
+    const before = engine.sequences.getPrimary()
+    const graph = engine.notebooks.read(created.value.id)
+    await expect(forgetAsset(engine, { assetId: imageId, clearReferences: true })).rejects.toThrow(/locked/i)
+    expect(engine.sequences.getPrimary()).toEqual(before)
+    expect(engine.notebooks.read(created.value.id)).toEqual(graph)
+  })
+
+  it('leaves all references intact when another sequence blocks forgetting', async () => {
+    const source = engine.sequences.getPrimary().clips.find((clip) => clip.source.artifactId === imageId)!.source
+    const created = await engine.sequences.create({ name: 'Other sequence', width: 640, height: 480, frameRate: { numerator: 30, denominator: 1 } })
+    if (!created.ok) throw new Error(created.error.message)
+    const intent: EditIntent = { intentVersion: MVP_CONTRACT_VERSION, commandId: uuidv7(), sequenceId: created.value.sequenceId,
+      baseRevision: created.value.revision, actor: 'test', sourceSurface: 'ui', confirmationPolicy: 'always',
+      operations: [{ kind: 'insert-clip', mode: 'overwrite', placement: { source, durationFrames: 90, timelineStartFrame: 0,
+        trackId: created.value.tracks.find((track) => track.kind === 'video')!.trackId } }],
+    }
+    const preview = engine.edits.preview(intent)
+    if (!preview.ok) throw new Error(preview.error.message)
+    expect((await engine.edits.commit(intent, preview.value.previewHash)).ok).toBe(true)
+    const before = engine.sequences.getPrimary()
+    const references = engine.artifacts.deletionReferences(imageId, { deleteOwnedMedia: true })
+    expect(await forgetAsset(engine, { assetId: imageId, clearReferences: true })).toMatchObject({ status: 'in_use', clearedCells: 0 })
+    expect(engine.sequences.getPrimary()).toEqual(before)
+    expect(engine.artifacts.deletionReferences(imageId, { deleteOwnedMedia: true })).toEqual(references)
   })
 })

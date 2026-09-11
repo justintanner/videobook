@@ -593,7 +593,11 @@ function previewTimeline(engine: Engine, operations: EditOperation[]): { intent:
   return { intent, previewHash: preview.value.previewHash };
 }
 
-export async function writeTimeline(engine: Engine, input: TimelineInput): Promise<TimelineWriteResult> {
+export async function writeTimeline(
+  engine: Engine,
+  input: TimelineInput,
+  options: { removeArtifactId?: string; dryRun?: boolean } = {},
+): Promise<TimelineWriteResult> {
   try {
     let sequence = engine.sequences.getPrimary();
     const videoTrack = sequence.tracks.filter((track) => track.kind === "video").sort((left, right) => left.ordinal - right.ordinal)[0];
@@ -602,9 +606,14 @@ export async function writeTimeline(engine: Engine, input: TimelineInput): Promi
     validateTimelineInput(engine, sequence, input, managedTracks);
     const slots = await planSlots(engine, sequence, input.slots ?? [], videoTrack.trackId);
     const audio = await planAudio(engine, sequence, input.audio ?? []);
+    const extraTracks = new Set(sequence.clips.filter((clip) => options.removeArtifactId
+      && clip.source.artifactId === options.removeArtifactId && !managedTracks.has(clip.trackId)).map((clip) => clip.trackId));
+    const extraClips = sequence.clips.filter((clip) => extraTracks.has(clip.trackId) && clip.source.artifactId !== options.removeArtifactId)
+      .map((clip) => ({ clipId: clip.clipId, existing: clip, placement: placementFromClip(clip) }));
+    for (const trackId of extraTracks) managedTracks.add(trackId);
     const pendingLanes = allocateAudioLanes(sequence, audio);
     const pendingLaneIds = new Set(pendingLanes.map((lane) => lane.trackId));
-    let planned = [...slots, ...audio];
+    let planned = [...slots, ...audio, ...extraClips];
     if (pendingLanes.length > 0) {
       const validationTrack = sequence.tracks.find((track) => track.kind === "audio" && !track.locked);
       if (!validationTrack) throw new Error("Primary sequence has no unlocked audio track");
@@ -616,6 +625,7 @@ export async function writeTimeline(engine: Engine, input: TimelineInput): Promi
         return { ...clip, placement };
       });
       previewTimeline(engine, timelineOperations(sequence, validationPlan, managedTracks));
+      if (options.dryRun) return timelineSuccessResult(readTimeline(engine));
       const laneIds = new Map<string, string>();
       for (const pending of pendingLanes) {
         const added = await engine.sequences.addTrack(sequence.sequenceId, { kind: "audio" });
@@ -634,6 +644,7 @@ export async function writeTimeline(engine: Engine, input: TimelineInput): Promi
       planned = planned.map((clip) => ({ ...clip, placement: { ...clip.placement, trackId: laneIds.get(clip.placement.trackId) ?? clip.placement.trackId } }));
     }
     const preview = previewTimeline(engine, timelineOperations(sequence, planned, managedTracks));
+    if (options.dryRun) return timelineSuccessResult(readTimeline(engine));
     if (preview) {
       const committed = await engine.edits.commit(preview.intent, preview.previewHash);
       if (!committed.ok) return timelineError(committed.error.message);

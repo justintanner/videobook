@@ -167,6 +167,31 @@ function referencesOf(details: Record<string, unknown> | undefined): ForgetAsset
   });
 }
 
+function remainingForgetReferences(engine: Engine, artifactId: string): ForgetAssetReference[] {
+  const references = engine.artifacts.deletionReferences(artifactId, { deleteOwnedMedia: true });
+  if (!references.ok) throw new Error(references.error.message);
+  const clearable = new Set(engine.sequences.getPrimary().clips
+    .filter((clip) => clip.source.artifactId === artifactId).map((clip) => `sequenceClip:${clip.clipId}`));
+  for (const notebook of engine.notebooks.list()) {
+    for (const cell of notebook.cells) {
+      const cellId = `${notebook.id}/${cell.id}`;
+      if (cell.outputArtifactId === artifactId) clearable.add(`cell.outputArtifact:${cellId}`);
+      for (const reference of cell.references ?? []) {
+        if (reference.targetId === artifactId) clearable.add(`cell.reference:${cellId}/${reference.id}`);
+      }
+      for (const result of cell.pinnedResults ?? []) {
+        if (result.artifactId === artifactId) clearable.add(`pinnedSearchResult:${cellId}/${result.id}`);
+      }
+    }
+  }
+  return references.value.filter((reference) => !clearable.has(`${reference.kind}:${reference.id}`));
+}
+
+function inUseOutcome(artifactId: string, label: string | null, references: ForgetAssetReference[], clearedCells = 0): ForgetAssetOutcome {
+  return { status: "in_use", artifactId, label, references, clearedCells,
+    forgottenObjects: 0, sharedObjects: 0, reclaimedBytes: 0 };
+}
+
 /**
  * Deletes an artifact and destroys the bytes behind it.
  *
@@ -185,6 +210,12 @@ export async function forgetAsset(
   if (!artifact.ok) throw new Error(artifact.error.message);
   const artifactId = artifact.value.artifactId;
   const label = artifact.value.label ?? null;
+  if (input.clearReferences) {
+    const blockers = remainingForgetReferences(engine, artifactId);
+    if (blockers.length > 0) return inUseOutcome(artifactId, label, blockers);
+    const timeline = await removeArtifactFromTimeline(engine, artifactId, { dryRun: true });
+    if (timeline.error) throw new Error(timeline.error);
+  }
   const manifest = await engine.files.manifest(artifactId, { includeDotfiles: true });
   const hashes = [...new Set(
     manifest.ok ? manifest.value.files.map((file) => file.objectHash) : [],
@@ -201,16 +232,7 @@ export async function forgetAsset(
   });
   if (!deleted.ok) {
     if (deleted.error.code !== "IN_USE") throw new Error(deleted.error.message);
-    return {
-      status: "in_use",
-      artifactId,
-      label,
-      references: referencesOf(deleted.error.details),
-      clearedCells,
-      forgottenObjects: 0,
-      sharedObjects: 0,
-      reclaimedBytes: 0,
-    };
+    return inUseOutcome(artifactId, label, referencesOf(deleted.error.details), clearedCells);
   }
   let forgottenObjects = 0;
   let sharedObjects = 0;

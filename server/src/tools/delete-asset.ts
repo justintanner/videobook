@@ -12,11 +12,12 @@ import type { ToolDef } from "./tool-def.js";
 export async function removeArtifactFromTimeline(
   engine: Engine,
   artifactId: string,
+  options: { dryRun?: boolean } = {},
 ): Promise<{ updated: boolean; error?: string }> {
   const timeline = readTimeline(engine);
   const slots = timeline.slots.filter((slot) => slot.artifactId !== artifactId);
   const audio = timeline.audio.filter((clip) => clip.artifactId !== artifactId);
-  if (slots.length === timeline.slots.length && audio.length === timeline.audio.length) {
+  if (!engine.sequences.getPrimary().clips.some((clip) => clip.source.artifactId === artifactId)) {
     return { updated: false };
   }
   const result = await writeTimeline(engine, {
@@ -37,7 +38,7 @@ export async function removeArtifactFromTimeline(
       ...(clip.fadeIn === undefined ? {} : { fadeIn: clip.fadeIn }),
       ...(clip.fadeOut === undefined ? {} : { fadeOut: clip.fadeOut }),
     })),
-  });
+  }, { removeArtifactId: artifactId, ...options });
   return result.ok ? { updated: true } : { updated: false, error: result.error.message };
 }
 
@@ -53,6 +54,14 @@ export function deleteAssetDef(engine: Engine): ToolDef {
       const assetId = String(args.asset_id);
       const artifact = engine.artifacts.get(assetId);
       if (!artifact.ok) return timelineFailure(artifact.error.message);
+      const references = engine.artifacts.deletionReferences(assetId, { deleteOwnedMedia: true });
+      if (!references.ok) return timelineFailure(references.error.message);
+      const removable = new Set(engine.sequences.getPrimary().clips
+        .filter((clip) => clip.source.artifactId === assetId).map((clip) => clip.clipId));
+      const blockers = references.value.filter((reference) => reference.kind !== "sequenceClip" || !removable.has(reference.id));
+      if (blockers.length > 0) {
+        return timelineFailure(`Artifact is still referenced: ${assetId} (${blockers.map((reference) => reference.kind).join(", ")})`);
+      }
       const timeline = await removeArtifactFromTimeline(engine, artifact.value.artifactId);
       if (timeline.error) return timelineFailure(timeline.error);
       const result = await engine.artifacts.delete(artifact.value.artifactId, { deleteOwnedMedia: true });
