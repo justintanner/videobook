@@ -317,7 +317,7 @@ describe("estimate_cost tool", () => {
           input: {
             mode: "1080p",
             motion_video_refs: [motionAssetId],
-            book_id: "est-proj",
+            book_id: fs.book.get().bookId,
           },
         }],
       },
@@ -351,7 +351,7 @@ describe("estimate_cost tool", () => {
           input: {
             mode: "1080p",
             motion_video_refs: [`@${motionAssetId}`],
-            book_id: "est-at-proj",
+            book_id: fs.book.get().bookId,
           },
         }],
       },
@@ -398,7 +398,7 @@ describe("estimate_cost tool", () => {
           input: {
             resolution: "1080p",
             video_ref: `@${sourceAssetId}`,
-            book_id: "est-hh-proj",
+            book_id: fs.book.get().bookId,
           },
         }],
       },
@@ -426,7 +426,7 @@ describe("estimate_cost tool", () => {
           input: {
             resolution: "1080p",
             video_ref: assetResult.value.artifactId,
-            book_id: "est-hh-fallback",
+            book_id: fs.book.get().bookId,
           },
         }],
       },
@@ -453,7 +453,7 @@ describe("estimate_cost tool", () => {
         calls: [{
           tool_name: "extend_grok_imagine_video",
           input: {
-            book_id: "grok-extend-estimate",
+            book_id: fs.book.get().bookId,
             video_ref: `@${assetResult.value.artifactId}`,
             extend_times: "10",
           },

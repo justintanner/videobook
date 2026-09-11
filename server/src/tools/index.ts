@@ -361,7 +361,7 @@ export function getAllToolDefs(
     replaceGoogleFlowCharacterDef(engine),
     listGoogleFlowCharactersDef(),
     deleteGoogleFlowCharacterDef(),
-    estimateCostDef(engine),
+    estimateCostDef(engine, books),
     createCharacterDef(engine),
     setCharacterMetadataDef(engine),
     reorderCharacterImagesDef(engine),

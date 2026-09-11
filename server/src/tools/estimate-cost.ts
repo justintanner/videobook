@@ -7,6 +7,7 @@ import { getCostProvider } from "../cost.js";
 import { getCostAdapter } from "../cost-adapters.js";
 import { estimateGoogleFlowCost } from "../google-flow-cost.js";
 import { getCanonicalName } from "../generation-registry.js";
+import type { BookManager } from "../book-manager.js";
 
 const callItem = z.object({
   tool_name: z.string().describe("Name of the generation tool whose cost to estimate"),
@@ -184,7 +185,25 @@ function sumEstimates(estimates: CostEstimate[]): CostEstimate {
   };
 }
 
-export function estimateCostDef(engine: Engine): ToolDef {
+export function estimateCostDef(engine: Engine, books?: BookManager): ToolDef {
+  let injectedBookId: string | null = null;
+  try {
+    injectedBookId = engine.book.get().bookId;
+  } catch {
+    injectedBookId = null;
+  }
+
+  const estimateCall = async (call: { tool_name: string; input: Record<string, unknown> }) => {
+    const bookId = call.input.book_id;
+    if (typeof bookId !== "string" || !bookId || bookId === injectedBookId) {
+      return estimateOne(engine, call.tool_name, call.input);
+    }
+    if (!books) throw new Error(`Book not found: ${bookId}`);
+    const book = await books.ensure(bookId);
+    if (!book.ok) throw new Error(book.error.message);
+    return estimateOne(book.value.engine, call.tool_name, call.input);
+  };
+
   return {
     name: "estimate_cost",
     description:
@@ -195,7 +214,15 @@ export function estimateCostDef(engine: Engine): ToolDef {
     schema,
     handler: async (args): Promise<ToolResult> => {
       const calls = args.calls as Array<{ tool_name: string; input: Record<string, unknown> }>;
-      const estimates = await Promise.all(calls.map((c) => estimateOne(engine, c.tool_name, c.input)));
+      let estimates: CostEstimate[];
+      try {
+        estimates = await Promise.all(calls.map(estimateCall));
+      } catch (cause) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: cause instanceof Error ? cause.message : String(cause) }],
+        };
+      }
       const total = sumEstimates(estimates);
       return {
         content: [{
