@@ -1,9 +1,8 @@
-import { copyFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { findPrimaryMediaFile } from "videobook-engine";
-import { resolveDownloadDestination } from "../downloads-dest.js";
+import { copyToDownloads } from "../downloads-dest.js";
 import type { ToolDef } from "./tool-def.js";
 
 export function exportToDownloadsDef(engine: Engine): ToolDef {
@@ -42,13 +41,9 @@ export function exportToDownloadsDef(engine: Engine): ToolDef {
 
       const source = join(manifest.path, file.name);
       const ext = extname(file.name);
-      const dest = await resolveDownloadDestination(
-        artifactResult.value.label ?? asset_id,
-        ext,
-      );
-
+      let dest: string;
       try {
-        await copyFile(source, dest);
+        dest = await copyToDownloads(source, artifactResult.value.label ?? asset_id, ext);
       } catch (err) {
         return {
           isError: true as const,

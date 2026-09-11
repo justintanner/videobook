@@ -1,9 +1,9 @@
-import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { resolveDownloadDestination } from "../downloads-dest.js";
+import { copyToDownloads } from "../downloads-dest.js";
 import {
   PLAIN_TRANSCRIPT_FILE,
   TIMED_TRANSCRIPT_FILE,
@@ -72,21 +72,17 @@ export function exportTranscriptSrtDef(engine: Engine): ToolDef {
 
       let srt: string;
       try {
-        srt = transcriptToSrt(raw);
+        srt = transcriptToSrt({ words: timed.words });
       } catch (err) {
         return errorResult((err as Error).message);
       }
 
-      const dest = await resolveDownloadDestination(
-        artifactResult.value.label ?? asset_id,
-        ".srt",
-        downloads_dir,
-      );
       const tempDir = await mkdtemp(join(tmpdir(), "videobook-srt-"));
+      let dest: string;
       try {
         const tempPath = join(tempDir, "captions.srt");
         await writeFile(tempPath, srt, "utf8");
-        await copyFile(tempPath, dest);
+        dest = await copyToDownloads(tempPath, artifactResult.value.label ?? asset_id, ".srt", downloads_dir);
       } catch (err) {
         return errorResult(`Failed to save SRT: ${(err as Error).message}`);
       } finally {

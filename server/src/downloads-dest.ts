@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { copyFile, lstat } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -38,9 +38,28 @@ export async function resolveDownloadDestination(
 
 async function fileExists(path: string): Promise<boolean> {
   try {
-    await access(path, fsConstants.F_OK);
+    await lstat(path);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+export async function copyToDownloads(
+  sourcePath: string,
+  baseName: string,
+  ext: string,
+  downloadsDir?: string,
+): Promise<string> {
+  while (true) {
+    const destination = await resolveDownloadDestination(baseName, ext, downloadsDir);
+    try {
+      await copyFile(sourcePath, destination, fsConstants.COPYFILE_EXCL);
+      return destination;
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST") continue;
+      throw error;
+    }
   }
 }

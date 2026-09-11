@@ -90,10 +90,14 @@ export function timedTranscriptFrom(raw: unknown): AssetTranscript | null {
   if (!transcript || !Array.isArray(transcript.words)) return null;
   const speech = transcript.words.filter(isTimedWord).filter(isSpeech);
   if (speech.length === 0) return { kind: "silence" };
+  const textEntries = transcript.words.filter(isTimedWord).filter((word) => word.type !== "audio_event");
+  const reconstructedText = textEntries.some((word) => word.type === "spacing")
+    ? textEntries.map((word) => word.text).join("").replace(/\s+/gu, " ").trim()
+    : speech.map((word) => word.text.trim()).join(" ");
   return {
     kind: "timed",
     languageCode: transcript.language_code ?? null,
-    text: transcript.text ?? speech.map((word) => word.text).join(""),
+    text: transcript.text ?? reconstructedText,
     words: speech.map((word) => ({
       text: word.text,
       start: word.start,

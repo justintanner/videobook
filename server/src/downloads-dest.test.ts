@@ -1,9 +1,9 @@
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { generationLabel } from "./artifact-label.js";
-import { resolveDownloadDestination } from "./downloads-dest.js";
+import { copyToDownloads, resolveDownloadDestination } from "./downloads-dest.js";
 
 describe("resolveDownloadDestination", () => {
   let downloads: string | undefined;
@@ -43,5 +43,32 @@ describe("resolveDownloadDestination", () => {
     expect(dirname(dest)).toBe(dir);
     expect(basename(dest)).toBe("secret - file.srt");
     expect(dest.includes("..")).toBe(false);
+  });
+
+  it("copies concurrent media downloads without overwriting another export", async () => {
+    const dir = await downloadsDir();
+    const sources = await Promise.all(["first", "second"].map(async (value) => {
+      const path = join(dir, `${value}.wav`);
+      await writeFile(path, value);
+      return path;
+    }));
+    const outputs = await Promise.all(Array.from({ length: 12 }, (_, index) =>
+      copyToDownloads(sources[index % 2]!, "same label", ".wav", dir)));
+    expect(new Set(outputs).size).toBe(12);
+    for (const [index, output] of outputs.entries()) {
+      expect(await readFile(output, "utf8")).toBe(index % 2 === 0 ? "first" : "second");
+    }
+  });
+
+  it("preserves symlinks even when their targets do not exist", async () => {
+    const dir = await downloadsDir();
+    const source = join(dir, "source.wav");
+    const target = join(dir, "missing.wav");
+    await writeFile(source, "audio bytes");
+    await symlink(target, join(dir, "output.wav"));
+    const output = await copyToDownloads(source, "output", ".wav", dir);
+    expect(output).toBe(join(dir, "output (2).wav"));
+    expect(await readFile(output, "utf8")).toBe("audio bytes");
+    await expect(readFile(target)).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
