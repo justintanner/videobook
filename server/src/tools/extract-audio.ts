@@ -1,30 +1,11 @@
 import type { Artifact, Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
+import { probeVideo, type ProbeResult } from "../ffmpeg.js";
+import { validateMediaOutputPaths } from "../media-output-path.js";
 import type { ToolDef } from "./tool-def.js";
-
-const execFileAsync = promisify(execFile);
-
-const require = createRequire(import.meta.url);
-const FFPROBE: string = require("ffprobe-static").path;
-
-async function hasAudioStream(filePath: string): Promise<boolean> {
-  const { stdout } = await execFileAsync(FFPROBE, [
-    "-v", "quiet",
-    "-print_format", "json",
-    "-show_streams",
-    filePath,
-  ]);
-  const data = JSON.parse(stdout);
-  return (data.streams as Array<Record<string, unknown>>)?.some(
-    (s) => s.codec_type === "audio",
-  ) ?? false;
-}
 
 function deriveAudioName(source: Artifact): string {
   return `ext-${source.label ?? source.artifactId}`;
@@ -89,9 +70,9 @@ export function extractAudioDef(engine: Engine): ToolDef {
 
       const videoPath = join(manifest.path, videoFile.name);
 
-      let audioPresent: boolean;
+      let probe: ProbeResult;
       try {
-        audioPresent = await hasAudioStream(videoPath);
+        probe = await probeVideo(videoPath);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         return {
@@ -100,10 +81,17 @@ export function extractAudioDef(engine: Engine): ToolDef {
         };
       }
 
-      if (!audioPresent) {
+      if (!probe.hasAudio) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: `Video has no audio stream: ${asset_id}` }],
+        };
+      }
+      const audioDuration = probe.audioDuration ?? probe.duration;
+      if (range && (!Number.isFinite(audioDuration) || range.start_s >= audioDuration)) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "Audio range must start before the source audio ends." }],
         };
       }
 
@@ -113,21 +101,19 @@ export function extractAudioDef(engine: Engine): ToolDef {
       const destinationMode = destination !== undefined;
 
       if (destination !== undefined) {
+        try {
+          [destination.filename] = await validateMediaOutputPaths(engine, destination.asset_id, [destination.filename], ".mp3");
+        } catch (error) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+          };
+        }
         const destManifest = await engine.files.manifest(destination.asset_id);
         if (!destManifest.ok) {
           return {
             isError: true as const,
             content: [{ type: "text" as const, text: `Destination asset ${destination.asset_id} not found: ${destManifest.error.message}` }],
-          };
-        }
-        const exists = destManifest.value.files.some((f) => f.name === destination.filename);
-        if (exists) {
-          return {
-            isError: true as const,
-            content: [{
-              type: "text" as const,
-              text: `Destination already contains ${destination.filename}. Refusing silent overwrite.`,
-            }],
           };
         }
         audioAssetId = destination.asset_id;

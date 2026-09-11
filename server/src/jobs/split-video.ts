@@ -1,8 +1,10 @@
 import type { Engine } from "videobook-engine";
-import { rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
-import { trimRange, assertSaneTrimOutput } from "./trim-video.js";
-import { ingestWorkspaceOutputs } from "./_persist-output.js";
+import { assertSaneTrimOutput } from "./trim-video.js";
+import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 
 type SplitVideoPayload = {
   type: "split_video";
@@ -31,21 +33,27 @@ async function buildChunk(
   },
 ): Promise<void> {
   const { sourcePath, outputPath, start, end, assetId, provenance } = args;
+  const workspace = await mkdtemp(join(tmpdir(), "videobook-split-video-"));
+  const tempPath = join(workspace, "output.mp4");
   try {
-    await trimRange(sourcePath, outputPath, start, end);
-    await assertSaneTrimOutput(sourcePath, outputPath);
-  } catch (err) {
-    await rm(outputPath, { force: true });
-    throw err;
+    const startTime = start ?? 0;
+    const endTime = end ?? (await probeVideo(sourcePath)).videoDuration;
+    await runFfmpeg([
+      "-y", "-ss", String(startTime), "-i", sourcePath,
+      "-t", String(endTime - startTime),
+      "-map", "0:v:0", "-map", "0:a:0?",
+      ...H264_MEDIUM, ...AUDIO_OPTS, "-movflags", "+faststart", tempPath,
+    ]);
+    await assertSaneTrimOutput(sourcePath, tempPath);
+    const written = await engine.files.writeFromPath(assetId, outputPath.split("/").pop()!, tempPath);
+    if (!written.ok) throw new Error(written.error.message);
+    const recorded = await engine.history.recordOperation("split_video", assetId, provenance);
+    if (!recorded.ok) throw new Error(recorded.error.message);
+    const metadata = await engine.metadata.artifacts.write(assetId, "original", provenance);
+    if (!metadata.ok) throw new Error(metadata.error.message);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
   }
-  await ingestWorkspaceOutputs(
-    engine,
-    assetId,
-    [outputPath.split("/").pop()!],
-    "split_video",
-    provenance,
-  );
-  await engine.metadata.artifacts.write(assetId, "original", provenance);
 }
 
 export function registerSplitVideoJob(engine: Engine): void {

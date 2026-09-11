@@ -38,7 +38,7 @@ function json(value: unknown): ToolResult {
   return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
 
-function dimensions(orientation: ExportOrientation): [number, number] {
+export function sequenceExportDimensions(orientation: ExportOrientation): [number, number] {
   if (orientation === "portrait") return [1080, 1920];
   if (orientation === "square") return [1080, 1080];
   return [1920, 1080];
@@ -62,7 +62,7 @@ export async function validateSequenceExport(
   const errors: ExportIssue[] = [];
   const warnings: ExportIssue[] = [];
   const objectHashes = new Set<string>();
-  const [width, height] = dimensions(settings.orientation);
+  const [width, height] = sequenceExportDimensions(settings.orientation);
   const durationFrames = sequenceDuration(sequence);
   if (
     settings.sequence_revision !== sequence.revision

@@ -125,7 +125,8 @@ export function splitVideoDef(engine: Engine): ToolDef {
 
       let sourceDurationSec: number;
       try {
-        sourceDurationSec = (await probeVideo(sourcePath)).duration;
+        const probe = await probeVideo(sourcePath);
+        sourceDurationSec = probe.videoDuration || probe.duration;
       } catch (err) {
         return {
           isError: true as const,

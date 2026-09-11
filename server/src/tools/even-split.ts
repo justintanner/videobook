@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
 import { probeVideo } from "../ffmpeg.js";
+import { validateMediaOutputPaths } from "../media-output-path.js";
 import type { ToolDef } from "./tool-def.js";
 
 // Default first-chunk target for no-arg ad-hoc slicing. Caller can override
@@ -244,22 +245,19 @@ export function splitVideoByDurationsDef(engine: Engine): ToolDef {
 
       if (destination !== undefined) {
         destinationMode = true;
+        try {
+          destination.filenames = await validateMediaOutputPaths(engine, destination.asset_id, destination.filenames, ".mp4");
+        } catch (error) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+          };
+        }
         const destManifest = await engine.files.manifest(destination.asset_id);
         if (!destManifest.ok) {
           return {
             isError: true as const,
             content: [{ type: "text" as const, text: `Destination asset ${destination.asset_id} not found: ${destManifest.error.message}` }],
-          };
-        }
-        const existingNames = new Set(destManifest.value.files.map((f) => f.name));
-        const collisions = destination.filenames.filter((n) => existingNames.has(n));
-        if (collisions.length > 0) {
-          return {
-            isError: true as const,
-            content: [{
-              type: "text" as const,
-              text: `Destination already contains: ${collisions.join(", ")}. Refusing silent overwrite.`,
-            }],
           };
         }
         // In destination mode `plan.chunks` has exactly N entries (no leftover);

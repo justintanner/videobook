@@ -1,8 +1,11 @@
 import type { Engine } from "videobook-engine";
-import { rm } from "node:fs/promises";
-import { registerJobHandler, queue } from "../queue.js";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, relative } from "node:path";
+import { registerJobHandler, queue, type JobHandlerContext } from "../queue.js";
 import { trimRange, trimRangeExact, assertSaneTrimOutput } from "./trim-video.js";
 import { ingestWorkspaceOutputs } from "./_persist-output.js";
+import { validateMediaOutputPaths, withMediaOutputLock } from "../media-output-path.js";
 
 type EvenSplitChunkPayload = {
   assetId: string;
@@ -77,11 +80,56 @@ async function buildChunk(
   }
 }
 
+async function splitIntoDestination(
+  engine: Engine,
+  payload: EvenSplitPayload,
+  ctx: JobHandlerContext,
+) {
+  const assetId = payload.destination!.assetId;
+  const manifest = await engine.files.manifest(assetId);
+  if (!manifest.ok) throw new Error(manifest.error.message);
+  const assetDir = manifest.value.path;
+  return withMediaOutputLock(engine, assetDir, ctx.signal, async () => {
+    const filenames = await validateMediaOutputPaths(engine, assetId, payload.chunks.map((chunk) => relative(assetDir, chunk.outputPath)), ".mp4");
+    const workspace = await mkdtemp(join(tmpdir(), "videobook-split-destination-"));
+    try {
+      const outputs = payload.chunks.map((_, index) => join(workspace, `${index}.mp4`));
+      const built = await Promise.allSettled(payload.chunks.map((chunk, index) => buildChunk(engine, {
+        sourcePath: payload.sourcePath,
+        outputPath: outputs[index],
+        start: chunk.start,
+        end: chunk.end,
+        assetId,
+        provenance: {},
+        exact: chunk.exact,
+        skipMetadata: true,
+      })));
+      const failed = built.find((result) => result.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+      ctx.signal?.throwIfAborted();
+      for (const [index, filename] of filenames.entries()) {
+        const written = await engine.files.writeFromPath(assetId, filename, outputs[index]);
+        if (!written.ok) throw new Error(written.error.message);
+      }
+      const recorded = await engine.history.recordOperation("even_split", assetId, {
+        source_asset_id: payload.sourceAssetId,
+        filenames,
+        chunk_count: payload.chunks.length,
+        split_at_iso: new Date().toISOString(),
+      });
+      if (!recorded.ok) throw new Error(recorded.error.message);
+      return { success: true, destination_asset_id: assetId, filenames };
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+}
+
 export function registerEvenSplitJob(engine: Engine): void {
-  registerJobHandler("even_split", async (payload) => {
+  registerJobHandler("even_split", async (payload, ctx) => {
     const { sourcePath, sourceAssetId, chunks, bookId, destination } = payload as EvenSplitPayload;
+    if (destination) return splitIntoDestination(engine, payload as EvenSplitPayload, ctx);
     const splitAtIso = new Date().toISOString();
-    const destinationMode = destination !== undefined;
 
     const buildPromises = chunks.map((chunk, i) => {
       const provenance: Record<string, unknown> = {
@@ -104,35 +152,9 @@ export function registerEvenSplitJob(engine: Engine): void {
         assetId: chunk.assetId,
         provenance,
         exact: chunk.exact,
-        skipMetadata: destinationMode,
       });
     });
     await Promise.all(buildPromises);
-
-    if (destinationMode) {
-      // All chunks landed inside the same destination asset as sibling files.
-      // One commit captures the whole batch; no process_video pass (those exist
-      // to extract per-asset waveform/metadata for standalone vid-* assets,
-      // not for scratch siblings inside a shared asset like plan/).
-      const filenames = chunks.map((chunk) => chunk.outputPath.split("/").pop()!);
-      await ingestWorkspaceOutputs(
-        engine,
-        destination.assetId,
-        filenames,
-        "even_split",
-        {
-          source_asset_id: sourceAssetId,
-          filenames,
-          chunk_count: chunks.length,
-          split_at_iso: splitAtIso,
-        },
-      );
-      return {
-        success: true,
-        destination_asset_id: destination.assetId,
-        filenames,
-      };
-    }
 
     await Promise.all(chunks.map((chunk, i) =>
       queue.enqueueAndWait(`process-video-${chunk.assetId}-${Date.now() + i}`, {

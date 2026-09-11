@@ -186,6 +186,33 @@ describe("extract_audio tool", () => {
   });
 
   describe("destination mode", () => {
+    it("preserves an existing destination lease when another extraction owns its lock", async () => {
+      const uploaded = await uploadVideo(client, "audio-proj", videoPath);
+      await expect.poll(() => fs.jobs.queue.list().every((job) => ["done", "failed", "aborted"].includes(job.state))).toBe(true);
+      const manifest = await fs.files.manifest(uploaded.assetId);
+      expect(manifest.ok).toBe(true);
+      if (!manifest.ok) return;
+      const original = await fs.files.read(uploaded.assetId, "original.mp4");
+      const owner = fs.jobs.artifactWork.begin(uploaded.assetId, { kind: "extract", ownerKind: "job", durationMs: 120_000 });
+      expect(owner).toBeTruthy();
+      if (!owner) return;
+      expect((await fs.jobs.locks.acquire(manifest.value.path, { durationMs: 120_000 })).ok).toBe(true);
+      const before = fs.jobs.artifactWork.read(uploaded.assetId);
+      try {
+        const result = await client.callTool({ name: "extract_audio", arguments: {
+          asset_id: uploaded.assetId, book_id: "audio-proj",
+          destination: { asset_id: uploaded.assetId, filename: "locked.mp3" },
+        } });
+        expect(result.isError).toBe(true);
+        expect((result.content as TextContent)[0].text).toContain("locked");
+        expect(fs.jobs.artifactWork.read(uploaded.assetId)).toEqual(before);
+        expect(await fs.files.read(uploaded.assetId, "original.mp4")).toEqual(original);
+      } finally {
+        fs.jobs.locks.release(manifest.value.path);
+        fs.jobs.artifactWork.complete(uploaded.assetId, owner.ownerId);
+      }
+    });
+
     it("writes mp3 as a sibling file inside an existing asset", async () => {
       const uploaded = await uploadVideo(client, "audio-proj", videoPath);
       // Use the source asset itself as destination — `original.mp4` is a

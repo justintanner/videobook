@@ -404,7 +404,7 @@ function makeWrappedResolver(
           }
           return result;
         } catch (cause) {
-          const detached = isArtifactDetachedJobType(type);
+          const detached = isArtifactDetachedJob(type, job.payload);
           if (assetId && !assetFailureHandled && !detached) {
             await dispatchFailure(engine, assetId, lease.current, cause, job);
           } else {
@@ -548,8 +548,9 @@ const ARTIFACT_DETACHED_JOB_TYPES: ReadonlySet<string> = new Set([
   ...SEARCH_REFERENCE_JOB_TYPES,
 ]);
 
-function isArtifactDetachedJobType(type: string): boolean {
-  return ARTIFACT_DETACHED_JOB_TYPES.has(type);
+function isArtifactDetachedJob(type: string, payload: JobPayload): boolean {
+  return ARTIFACT_DETACHED_JOB_TYPES.has(type)
+    || (type === "extract_audio" && payload.destination != null);
 }
 
 export function enqueueOptions(jobId: string, payload: JobPayload) {
@@ -561,7 +562,7 @@ export function enqueueOptions(jobId: string, payload: JobPayload) {
     : 1;
   return {
     type,
-    artifactId: isArtifactDetachedJobType(type) ? null : assetId,
+    artifactId: isArtifactDetachedJob(type, payload) ? null : assetId,
     payload,
     dedupeKey: jobId,
     maxAttempts,

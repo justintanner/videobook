@@ -13,6 +13,7 @@ import { v7 as uuidv7 } from 'uuid'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
 import { registerExportSequenceJob } from '../../server/src/jobs/export-sequence.js'
 import { queue, setEngineRoot } from '../../server/src/queue.js'
+import { validateSequenceExport } from '../../server/src/tools/export-sequence.js'
 
 const execFileAsync = promisify(execFile)
 describe('canonical sequence export renderer', () => {
@@ -24,7 +25,7 @@ describe('canonical sequence export renderer', () => {
     if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
-  it('renders a revision-pinned MP4 offline and records immutable provenance', async () => {
+  it('renders the confirmed revision after source replacement and records immutable provenance', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-export-render-'))
     const sourcePath = join(rootDir, 'fixture.mp4')
     await execFileAsync(FFMPEG, [
@@ -218,6 +219,11 @@ describe('canonical sequence export renderer', () => {
     expect(transitionCommit.ok).toBe(true)
     if (!transitionCommit.ok) return
     const sequenceRevision = transitionCommit.value.revision
+    const settings = { sequence_revision: sequenceRevision, orientation: 'square', captions: 'omit' } as const
+    expect((await validateSequenceExport(engine, settings)).valid).toBe(true)
+    const replacement = Buffer.from('Replacement source must not reach the confirmed render')
+    expect((await engine.files.write(artifact.value.artifactId, 'original.mp4', replacement)).ok).toBe(true)
+    expect((await validateSequenceExport(engine, settings)).errors.map((issue) => issue.code)).toContain('STALE_REVISION')
     vi.stubGlobal('fetch', vi.fn(async () => {
       throw new Error('Network disabled')
     }))
@@ -231,7 +237,7 @@ describe('canonical sequence export renderer', () => {
     }>('canonical-export-render', {
       type: 'export_sequence',
       bookId: engine.book.get().bookId,
-      sequenceRevision: engine.head,
+      sequenceRevision,
       orientation: 'square',
       captions: 'omit',
     }, 60_000)
@@ -280,7 +286,7 @@ describe('canonical sequence export renderer', () => {
     }>('canonical-export-sidecar', {
       type: 'export_sequence',
       bookId: engine.book.get().bookId,
-      sequenceRevision: engine.head,
+      sequenceRevision,
       orientation: 'square',
       captions: 'sidecar',
     }, 60_000)
@@ -297,7 +303,7 @@ describe('canonical sequence export renderer', () => {
     }>('canonical-export-burned', {
       type: 'export_sequence',
       bookId: engine.book.get().bookId,
-      sequenceRevision: engine.head,
+      sequenceRevision,
       orientation: 'square',
       captions: 'burn-in',
     }, 60_000)
@@ -311,6 +317,8 @@ describe('canonical sequence export renderer', () => {
         'captions.vtt',
       )
     }
+    const currentSource = await engine.files.read(artifact.value.artifactId, 'original.mp4')
+    expect(currentSource.ok && currentSource.value.equals(replacement)).toBe(true)
     engine.close()
   }, 90_000)
 })

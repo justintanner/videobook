@@ -1,46 +1,10 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
+import { probeVideo, type ProbeResult } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
-
-const execFileAsync = promisify(execFile);
-
-const require = createRequire(import.meta.url);
-const FFPROBE: string = require("ffprobe-static").path;
-
-interface ProbeResult {
-  width: number;
-  height: number;
-  duration: number;
-}
-
-async function probeVideo(filePath: string): Promise<ProbeResult> {
-  const { stdout } = await execFileAsync(FFPROBE, [
-    "-v", "quiet",
-    "-print_format", "json",
-    "-show_streams",
-    "-show_format",
-    filePath,
-  ]);
-  const data = JSON.parse(stdout);
-  const videoStream = (data.streams as Array<Record<string, unknown>>)?.find(
-    (s) => s.codec_type === "video",
-  );
-  const width = Number(videoStream?.width ?? 0);
-  const height = Number(videoStream?.height ?? 0);
-  // Use the video stream's own duration so "last frame" never seeks past the
-  // last decodable video PTS — the format/container duration can include a
-  // longer audio tail and produce an empty output.
-  const streamDuration = Number(videoStream?.duration ?? 0);
-  const formatDuration = Number(data.format?.duration ?? 0);
-  const duration = streamDuration > 0 ? streamDuration : formatDuration;
-  return { width, height, duration };
-}
 
 async function extractFrame(
   videoAssetId: string,
@@ -86,13 +50,22 @@ async function extractFrame(
     };
   }
 
-  const timestamp = mode === "custom"
-    ? Math.max(0, Math.min(customTimestamp ?? 0, probe.duration))
-    : mode === "first" ? 0.1 : Math.max(0, probe.duration - 0.1);
+  if (!Number.isFinite(probe.videoDuration) || probe.videoDuration <= 0 || probe.width <= 0 || probe.height <= 0) {
+    return {
+      isError: true,
+      content: [{ type: "text", text: "Source has no decodable video duration" }],
+    };
+  }
+  const frameSeconds = probe.fps > 0 ? 1 / probe.fps : 0.1;
+  const lastTimestamp = Math.max(0, probe.videoDuration - frameSeconds - 0.000001);
+  const requestedTimestamp = mode === "custom"
+    ? customTimestamp ?? 0
+    : mode === "first" ? 0.1 : probe.videoDuration - 0.1;
+  const timestamp = Math.max(0, Math.min(requestedTimestamp, lastTimestamp));
 
   const baseName = sourceArtifact.value.label ?? sourceArtifact.value.artifactId;
   const imageName = mode === "custom"
-    ? `${baseName}-frame-${String(Math.round((customTimestamp ?? 0) * 100) / 100).replace(".", "-")}s`
+    ? `${baseName}-frame-${String(Math.round(timestamp * 100) / 100).replace(".", "-")}s`
     : `${baseName}-${mode}-frame`;
 
   const assetResult = await engine.artifacts.create("image", imageName);
@@ -172,4 +145,3 @@ export function extractFrameDefs(engine: Engine): ToolDef[] {
     },
   ];
 }
-

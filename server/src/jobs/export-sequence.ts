@@ -1,5 +1,6 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { extname, join } from "node:path";
 import { tmpdir } from "node:os";
 import type {
   Engine,
@@ -11,7 +12,7 @@ import type {
 import { runFfmpeg, probeVideo, AUDIO_OPTS, H264_MEDIUM } from "../ffmpeg.js";
 import { registerJobHandler } from "../queue.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
-import { validateSequenceExport } from "../tools/export-sequence.js";
+import { sequenceExportDimensions } from "../tools/export-sequence.js";
 
 interface ExportSequencePayload {
   type: "export_sequence";
@@ -77,32 +78,44 @@ function webVtt(sequence: Sequence): string {
 async function resolveClips(
   engine: Engine,
   sequence: Sequence,
+  workspace: string,
+  signal: AbortSignal,
 ): Promise<ResolvedClip[]> {
   const tracks = new Map(sequence.tracks.map((track) => [track.trackId, track]));
   const resolved: ResolvedClip[] = [];
   for (const clip of sequence.clips.filter((candidate) => candidate.enabled)) {
     const track = tracks.get(clip.trackId);
     if (!track || !track.enabled || track.kind === "caption") continue;
-    const artifact = engine.artifacts.get(clip.source.artifactId);
-    if (!artifact.ok) throw new Error(artifact.error.message);
-    const manifest = await engine.files.manifest(artifact.value.artifactId);
-    if (!manifest.ok) throw new Error(manifest.error.message);
-    const streams = engine.streams.list(artifact.value.artifactId);
-    if (!streams.ok) throw new Error(streams.error.message);
+    signal.throwIfAborted();
     const expectedHash = clip.source.kind === "timed"
       ? clip.source.range.objectHash
       : clip.source.objectHash;
-    const file = manifest.value.files.find((candidate) =>
-      candidate.objectHash === expectedHash);
-    if (!file) throw new Error(`Source object missing for clip ${clip.clipId}`);
+    let sourcePath: string;
+    if (clip.source.kind === "timed") {
+      const stream = engine.streams.getAtRevision(clip.source.range.streamId, sequence.revision);
+      if (!stream.ok) throw new Error(stream.error.message);
+      if (stream.value.artifactId !== clip.source.artifactId || stream.value.objectHash !== expectedHash) {
+        throw new Error(`Source stream does not match the confirmed clip ${clip.clipId}`);
+      }
+      sourcePath = stream.value.sourcePath;
+    } else {
+      sourcePath = clip.source.sourcePath;
+    }
+    const snapshot = await engine.files.readAtRevision(clip.source.artifactId, sourcePath, sequence.revision);
+    if (!snapshot.ok) throw new Error(snapshot.error.message);
+    if (createHash("sha256").update(snapshot.value).digest("hex") !== expectedHash) {
+      throw new Error(`Source object does not match the confirmed clip ${clip.clipId}`);
+    }
+    const path = join(workspace, `input-${resolved.length}${extname(sourcePath)}`);
+    await writeFile(path, snapshot.value, { signal });
+    const probe = await probeVideo(path, { signal });
     resolved.push({
       clip,
       track,
-      path: join(manifest.value.path, file.name),
+      path,
       inputIndex: resolved.length + 1,
-      hasVideo: clip.source.kind === "still"
-        || streams.value.some((stream) => stream.kind === "video"),
-      hasAudio: streams.value.some((stream) => stream.kind === "audio"),
+      hasVideo: probe.videoStream !== null,
+      hasAudio: probe.hasAudio,
     });
   }
   return resolved;
@@ -335,29 +348,24 @@ function buildSequenceFfmpegArgs(
 export function registerExportSequenceJob(engine: Engine): void {
   registerJobHandler("export_sequence", async (payload, context) => {
     const request = payload as unknown as ExportSequencePayload;
-    const validation = await validateSequenceExport(engine, {
-      sequence_revision: request.sequenceRevision,
-      orientation: request.orientation,
-      captions: request.captions,
-    });
-    if (!validation.valid) {
-      throw new Error(validation.errors.map((issue) => issue.message).join("; "));
-    }
-    const sequence = engine.sequences.getPrimary();
-    const resolved = await resolveClips(engine, sequence);
+    const snapshot = engine.sequences.getAtRevision(engine.sequences.getPrimary().sequenceId, request.sequenceRevision);
+    if (!snapshot.ok) throw new Error(snapshot.error.message);
+    const sequence = snapshot.value;
+    const [width, height] = sequenceExportDimensions(request.orientation);
     const workspace = await mkdtemp(join(tmpdir(), "videobook-export-"));
     const outputFilename = "original.mp4";
     const outputPath = join(workspace, outputFilename);
     const captionPath = join(workspace, "captions.vtt");
     try {
+      const resolved = await resolveClips(engine, sequence, workspace, context.signal);
       if (request.captions !== "omit") {
         await writeFile(captionPath, webVtt(sequence), "utf8");
       }
       await runFfmpeg(buildSequenceFfmpegArgs(
         sequence,
         resolved,
-        validation.width,
-        validation.height,
+        width,
+        height,
         outputPath,
         request.captions === "burn-in" ? captionPath : undefined,
       ), { signal: context.signal });
@@ -435,13 +443,13 @@ export function registerExportSequenceJob(engine: Engine): void {
         settings: {
           orientation: request.orientation,
           captions: request.captions,
-          width: validation.width,
-          height: validation.height,
+          width,
+          height,
           frameRate: sequence.frameRate,
           videoCodec: "h264",
           audioCodec: "aac",
         },
-        inputObjectHashes: validation.inputObjectHashes,
+        inputObjectHashes: [...new Set(resolved.map(({ clip }) => clip.source.kind === "timed" ? clip.source.range.objectHash : clip.source.objectHash))].sort(),
         outputObjectHash: output.objectHash,
         renderedAt: new Date().toISOString(),
       };
