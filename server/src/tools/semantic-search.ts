@@ -14,6 +14,8 @@ import {
   findVideoFile,
   isNotebookGridSlot,
   MVP_CONTRACT_VERSION,
+  NOTEBOOK_GRID_ROW_COUNT,
+  NOTEBOOK_GRID_COLUMN_COUNT,
   sourceTicksToSequenceFrames,
 } from "videobook-engine";
 import { v7 as uuidv7 } from "uuid";
@@ -832,8 +834,8 @@ export function semanticSearchDefs(
         cell_label: z.string().min(1).optional()
           .describe("Optional free-text display label for a newly created cell"),
         slot: z.object({
-          row: z.number().int().min(0).max(25),
-          column: z.number().int().min(0).max(12),
+          row: z.number().int().min(0).max(NOTEBOOK_GRID_ROW_COUNT - 1),
+          column: z.number().int().min(0).max(NOTEBOOK_GRID_COLUMN_COUNT - 1),
         }).optional(),
         query: searchQuerySchema,
         hit: searchHitSchema,

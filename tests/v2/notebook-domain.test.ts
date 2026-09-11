@@ -12,6 +12,7 @@ import {
   writeGenerationPlanProvenance,
 } from '../../server/src/jobs/run-notebook.js'
 import { setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
+import { executeRelayoutNotebook } from '../../server/src/jobs/relayout-notebook.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 
@@ -50,6 +51,61 @@ describe('v2 notebook domain tools', () => {
       expect(z.object(preview.schema).safeParse({ book_id: id, notebook_id: id, cell_id: id,
         draft: { slot, prompt: '', provider: 'provider', model: 'model', operation: 'operation', tool: 'tool' } }).success).toBe(false)
     }
+  })
+
+  it.each(['update_notebook_cell', 'set_notebook_cell_input', 'delete_notebook_cell'] as const)('checks queued %s revisions at mutation time', async (name) => {
+    const created = await books.create('queued-revision')
+    if (!created.ok) throw new Error(created.error.message)
+    const managed = books.get(created.value.bookId)
+    if (!managed.ok) throw new Error(managed.error.message)
+    const engine = managed.value.engine
+    const notebookId = engine.notebooks.list()[0]!.id
+    const defs = new Map(videobookDomainDefs(engine, books).map((def) => [def.name, def]))
+    const invoke = (tool: string, args: Record<string, unknown>) => defs.get(tool)!.handler({ book_id: created.value.bookId, notebook_id: notebookId, ...args })
+    const cells: Array<{ id: string }> = []
+    for (const [column, type] of [[0, 'prompt'], [1, 'prompt'], [2, 'generate_image']] as const) {
+      cells.push(resultJson(await invoke('create_notebook_cell', { cell: { type, slot: { row: 0, column }, prompt: 'A cat' } })) as { id: string })
+    }
+    const expected_revision = engine.head
+    const results = await Promise.all(cells.slice(0, 2).map((cell, index) => invoke(name, {
+      expected_revision,
+      ...(name === 'update_notebook_cell' ? { cell_id: cell.id, cell: { label: `Changed ${index}` } } : {}),
+      ...(name === 'delete_notebook_cell' ? { cell_id: cell.id } : {}),
+      ...(name === 'set_notebook_cell_input' ? { target_cell_id: cells[2]!.id, target_input: 'prompt', source_cell_id: cell.id } : {}),
+    })))
+    expect(results.filter((result) => !result.isError)).toHaveLength(1)
+    expect(results.filter((result) => result.isError)).toHaveLength(1)
+  })
+
+  it.each([false, true])('retains a queued cell creation during relayout with a revision guard: %s', async (guarded) => {
+    const created = await books.create('queued-relayout')
+    if (!created.ok) throw new Error(created.error.message)
+    const managed = books.get(created.value.bookId)
+    if (!managed.ok) throw new Error(managed.error.message)
+    const engine = managed.value.engine
+    const notebookId = engine.notebooks.list()[0]!.id
+    const create = videobookDomainDefs(engine, books).find((def) => def.name === 'create_notebook_cell')!
+    const invoke = (row: number) => create.handler({ book_id: created.value.bookId, notebook_id: notebookId, cell: { type: 'prompt', prompt: 'A cat', slot: { row, column: 6 } } })
+    resultJson(await invoke(12))
+    const expectedRevision = engine.head
+    const pending = invoke(24)
+    const layout = executeRelayoutNotebook(engine, {
+      type: 'relayout_notebook', bookId: created.value.bookId, notebookId,
+      ...(guarded ? { expectedRevision } : {}),
+    }).catch((error: unknown) => error)
+    const [added, arranged] = await Promise.all([pending, layout])
+    if (guarded) expect(arranged).toEqual(new Error(`Stale notebook revision: expected ${expectedRevision}`))
+    else expect(arranged).toMatchObject({ changed: true, cell_count: 2 })
+    const cell = resultJson(added) as { id: string }
+    const graph = engine.notebooks.read(notebookId)
+    if (!graph.ok) throw new Error(graph.error.message)
+    expect(graph.value.cells).toHaveLength(2)
+    expect(graph.value.cells.map((item) => item.id)).toContain(cell.id)
+    await executeRelayoutNotebook(engine, { type: 'relayout_notebook', bookId: created.value.bookId, notebookId })
+    const beforeNoop = engine.head
+    expect(await executeRelayoutNotebook(engine, { type: 'relayout_notebook', bookId: created.value.bookId, notebookId, expectedRevision: beforeNoop }))
+      .toMatchObject({ changed: false, revision: beforeNoop, cell_count: 2 })
+    expect(engine.head).toBe(beforeNoop)
   })
 
   it('persists a graph of real NotebookDocument cells and edges', async () => {

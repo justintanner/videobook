@@ -24,7 +24,7 @@ import {
   ensureGenerateAudioOutput,
   normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
-import { mutateNotebook } from "../notebook-mutations.js";
+import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
 import { queue, stopBookQueue } from "../queue.js";
 import {
   claimNotebookGenerationPlan,
@@ -1501,6 +1501,12 @@ export function videobookDomainDefs(
             String(args.notebook_id),
             "update_notebook_cell",
             (notebook) => {
+              if (
+                typeof args.expected_revision === "string"
+                && args.expected_revision !== engine.head
+              ) {
+                throw new Error(`Stale notebook revision: expected ${args.expected_revision}`);
+              }
               const document = notebook;
               let found = false;
               const cells = notebook.cells.map((cell) => {
@@ -1609,6 +1615,7 @@ export function videobookDomainDefs(
             type: "relayout_notebook",
             bookId: String(args.book_id),
             notebookId,
+            expectedRevision: args.expected_revision,
           });
           return json(result);
         } catch (cause) {
@@ -1624,10 +1631,8 @@ export function videobookDomainDefs(
       schema: {
         ...bookSchema,
         notebook_id: z.string().uuid(),
-        slots: z.array(z.object({
+        slots: z.array(notebookGridSlotSchema.extend({
           id: z.string().uuid(),
-          row: z.number().int().min(0).max(25),
-          column: z.number().int().min(0).max(12),
         })).min(1),
         expected_revision: z.string().min(1).optional(),
       },
@@ -1739,8 +1744,20 @@ export function videobookDomainDefs(
         }
         const notebookId = String(args.notebook_id);
         const cellId = String(args.cell_id);
-        const result = await engine.notebooks.removeCell(notebookId, cellId);
-        return result.ok ? json({ cell_id: cellId, revision: result.value.hash }) : failure(result.error.message);
+        try {
+          const result = await withNotebookMutation(notebookId, async () => {
+            if (
+              typeof args.expected_revision === "string"
+              && args.expected_revision !== engine.head
+            ) {
+              throw new Error(`Stale notebook revision: expected ${args.expected_revision}`);
+            }
+            return await engine.notebooks.removeCell(notebookId, cellId);
+          });
+          return result.ok ? json({ cell_id: cellId, revision: result.value.hash }) : failure(result.error.message);
+        } catch (cause) {
+          return failure(cause instanceof Error ? cause.message : String(cause));
+        }
       },
     },
     {
@@ -1852,6 +1869,12 @@ export function videobookDomainDefs(
             String(args.notebook_id),
             "set_notebook_cell_input",
             (notebook) => {
+              if (
+                typeof args.expected_revision === "string"
+                && args.expected_revision !== engine.head
+              ) {
+                throw new Error(`Stale notebook revision: expected ${args.expected_revision}`);
+              }
               const target = notebook.cells.find((cell) =>
                 cell.id === targetCellId);
               if (!target) {

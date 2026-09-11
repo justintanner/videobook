@@ -5,6 +5,16 @@ type NotebookMutationResult = Awaited<ReturnType<Engine["notebooks"]["write"]>>;
 
 const writeChains = new Map<string, Promise<unknown>>();
 
+export async function withNotebookMutation<T>(
+  notebookId: string,
+  mutate: () => Promise<T>,
+): Promise<T> {
+  const current = writeChains.get(notebookId) ?? Promise.resolve();
+  const next = current.then(mutate);
+  writeChains.set(notebookId, next.catch(() => {}));
+  return await next;
+}
+
 export async function mutateNotebook(
   engine: Engine,
   notebookId: string,
@@ -13,8 +23,7 @@ export async function mutateNotebook(
   details: Record<string, unknown> = {},
   options: { artifactId?: string } = {},
 ): Promise<NotebookMutationResult> {
-  const current = writeChains.get(notebookId) ?? Promise.resolve();
-  const next = current.then(async () => {
+  return await withNotebookMutation(notebookId, async () => {
     const read = engine.notebooks.read(notebookId);
     if (!read.ok) return read;
     return await engine.notebooks.write(
@@ -27,6 +36,4 @@ export async function mutateNotebook(
       ...(options.artifactId ? { artifactId: options.artifactId } : {}),
     });
   });
-  writeChains.set(notebookId, next.catch(() => {}));
-  return await next;
 }

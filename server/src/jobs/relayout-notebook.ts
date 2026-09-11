@@ -4,16 +4,29 @@ import {
   notebookDocumentsEqual,
   relayoutNotebookDocument,
 } from "../notebook-relayout.js";
-import { mutateNotebook } from "../notebook-mutations.js";
+import { withNotebookMutation } from "../notebook-mutations.js";
 import { registerJobHandler, resolveBookEngine } from "../queue.js";
 
 interface RelayoutNotebookPayload {
   type: "relayout_notebook";
   bookId: string;
   notebookId: string;
+  expectedRevision?: string;
 }
 
 export async function executeRelayoutNotebook(
+  engine: Engine,
+  payload: RelayoutNotebookPayload,
+) {
+  return await withNotebookMutation(payload.notebookId, async () => {
+    if (payload.expectedRevision && payload.expectedRevision !== engine.head) {
+      throw new Error(`Stale notebook revision: expected ${payload.expectedRevision}`);
+    }
+    return await relayoutNotebook(engine, payload);
+  });
+}
+
+async function relayoutNotebook(
   engine: Engine,
   payload: RelayoutNotebookPayload,
 ) {
@@ -36,13 +49,10 @@ export async function executeRelayoutNotebook(
       })),
     };
   }
-  const write = await mutateNotebook(
-    engine,
-    payload.notebookId,
-    "relayout_notebook",
-    () => next,
-    { notebookId: payload.notebookId },
-  );
+  const write = await engine.notebooks.write(next, {
+    operation: "relayout_notebook",
+    details: { notebookId: payload.notebookId },
+  });
   if (!write.ok) throw new Error(write.error.message);
   const after = engine.notebooks.read(payload.notebookId);
   if (!after.ok) throw new Error(after.error.message);
@@ -75,6 +85,9 @@ export function registerRelayoutNotebookJob(_fs: Engine): void {
       type: "relayout_notebook",
       bookId,
       notebookId,
+      ...(typeof payload.expectedRevision === "string"
+        ? { expectedRevision: payload.expectedRevision }
+        : {}),
     });
   });
 }
