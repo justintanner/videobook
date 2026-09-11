@@ -24,13 +24,8 @@ import { resolveArtifactRefs } from "../artifact-refs.js";
 const bookSchema = { book_id: z.string().uuid() };
 
 function sequenceContinuationRevision(sequence: Sequence): string {
-  return createHash("sha256").update(JSON.stringify({
-    sequenceId: sequence.sequenceId,
-    frameRate: sequence.frameRate,
-    tracks: sequence.tracks,
-    clips: sequence.clips,
-    captions: sequence.captions,
-  })).digest("hex");
+  const { revision: _revision, ...content } = sequence;
+  return createHash("sha256").update(JSON.stringify(content)).digest("hex");
 }
 const intentSchema = z.record(z.string(), z.unknown());
 const editRequestSchema = z.discriminatedUnion("kind", [

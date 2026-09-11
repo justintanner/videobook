@@ -74,6 +74,7 @@ import type {
   TimedSequenceClip,
 } from 'videobook-engine'
 import { parseAssetTags, type AssetTags } from './videobook/asset-tags'
+import { sequenceContentRevision } from './videobook/sequence-revision'
 import {
   clearReferencesConfirmation,
   forgetConfirmation,
@@ -1661,22 +1662,6 @@ function musicVideoSoundtrackTrack(
   })
   return existing ?? candidates.find((track) =>
     !sequence.clips.some((clip) => clip.trackId === track.trackId)) ?? null
-}
-
-async function musicVideoSequenceFingerprint(sequence: Sequence): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(JSON.stringify({
-      sequenceId: sequence.sequenceId,
-      frameRate: sequence.frameRate,
-      tracks: sequence.tracks,
-      clips: sequence.clips,
-      captions: sequence.captions,
-    })),
-  )
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')
 }
 
 function musicVideoSoundtrackApplied(
@@ -8433,7 +8418,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         book_id: bookId,
         source_surface: 'ui',
         actor: 'videobook-user',
-        expected_revision: await musicVideoSequenceFingerprint(targetSequence),
+        expected_revision: await sequenceContentRevision(targetSequence),
         request: {
           kind: 'music_video_setup',
           audio_artifact_id: audioArtifactId,
@@ -8562,7 +8547,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       book_id: bookId,
       source_surface: 'ui',
       actor: 'videobook-user',
-      expected_revision: await musicVideoSequenceFingerprint(expectedSequence),
+      expected_revision: await sequenceContentRevision(expectedSequence),
       request,
     }))
     const stage = plan.stages.find(
