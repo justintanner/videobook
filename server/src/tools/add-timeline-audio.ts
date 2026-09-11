@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type { Engine } from "videobook-engine";
 import { findAudioFile } from "videobook-engine";
+import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import { probeVideo } from "../ffmpeg.js";
 import {
@@ -12,8 +13,6 @@ import {
   writeTimeline,
 } from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
-
-const TIMELINE_FPS = 30;
 
 export function addTimelineAudioDef(engine: Engine): ToolDef {
   return {
@@ -40,12 +39,17 @@ export function addTimelineAudioDef(engine: Engine): ToolDef {
       let durationFrames = args.duration_frames as number | undefined;
       if (durationFrames === undefined) {
         try {
-          durationFrames = Math.max(1, Math.round((await probeVideo(join(manifest.value.path, audioFile.name))).duration * TIMELINE_FPS));
+          const probe = await probeVideo(join(manifest.value.path, audioFile.name));
+          const { frameRate } = engine.sequences.getPrimary();
+          durationFrames = Math.max(1, Math.round(
+            (probe.audioDuration ?? probe.duration) * frameRate.numerator / frameRate.denominator,
+          ));
         } catch (error) {
           return timelineFailure(error instanceof Error ? error.message : String(error));
         }
       }
       const timeline = readTimeline(engine);
+      const clipId = uuidv7();
       const audio = [
         ...timeline.audio.map((clip) => ({
           id: clip.id,
@@ -57,6 +61,7 @@ export function addTimelineAudioDef(engine: Engine): ToolDef {
           ...(clip.fadeOut === undefined ? {} : { fadeOut: clip.fadeOut }),
         })),
         {
+          id: clipId,
           artifactId: asset.artifactId,
           startFrame: args.start_frame as number,
           durationFrames,
@@ -67,7 +72,7 @@ export function addTimelineAudioDef(engine: Engine): ToolDef {
       ];
       const result = await writeTimeline(engine, { ...timelineInput(timeline), audio });
       if (!result.ok) return timelineFailure(result.error.message);
-      const clip = result.value.audio.at(-1);
+      const clip = result.value.audio.find((item) => item.id === clipId);
       return {
         content: [{ type: "text", text: JSON.stringify({ ...timelinePayload(result.value), clip }) }],
       };
