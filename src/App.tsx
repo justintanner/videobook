@@ -44,7 +44,6 @@ import {
   Layers2,
   Library,
   Mic,
-  Network,
   PanelRightClose,
   PanelRightOpen,
   Plus,
@@ -58,8 +57,6 @@ import {
   Upload,
   Video,
   X,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-react'
 import { v7 as uuidv7 } from 'uuid'
 import type {
@@ -188,9 +185,7 @@ import {
   type NotebookCellContextAction,
 } from '@/components/videobook/NotebookCellContextMenu'
 import { BookProjectMenu } from '@/components/videobook/BookProjectMenu'
-import {
-  NotebookCellAddMenu,
-} from '@/components/videobook/NotebookCellAddMenu'
+import { NotebookToolbar } from '@/components/videobook/NotebookToolbar'
 import { isNotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 import { SplitBody } from '@/components/videobook/confirm/bodies/SplitBody'
 import { PostToXBody } from '@/components/videobook/confirm/bodies/PostToXBody'
@@ -12134,86 +12129,38 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               />
             </div>
           </div>
-          {screen === 'notebook' && notebook && (
-            <div className="canvas-toolbar" aria-label="Notebook canvas controls">
-              <div className="canvas-zoom-panel" aria-label="Notebook zoom controls">
-                <button
-                  type="button"
-                  aria-label="Zoom out"
-                  disabled={notebookView.zoom <= notebookGrid.minimumZoom}
-                  onClick={() => adjustNotebookZoom(-notebookGrid.zoomStep)}
-                >
-                  <ZoomOut size={15} />
-                </button>
-                <button
-                  type="button"
-                  className="canvas-zoom-level"
-                  aria-label="Reset zoom"
-                  onClick={resetNotebookZoom}
-                >
-                  {Math.round(notebookView.zoom * 100)}%
-                </button>
-                <button
-                  type="button"
-                  aria-label="Zoom in"
-                  disabled={notebookView.zoom >= notebookGrid.maximumZoom}
-                  onClick={() => adjustNotebookZoom(notebookGrid.zoomStep)}
-                >
-                  <ZoomIn size={15} />
-                </button>
-              </div>
-              <NotebookCellAddMenu
-                disabled={busy}
-                onAdd={createCell}
-                onDragEnd={() => setPreviewSlot(null)}
-              />
-              <button
-                type="button"
-                className="canvas-auto-arrange"
-                title="Auto-arrange notebook"
-                aria-label="Auto-arrange notebook"
-                disabled={busy || mcp.state !== 'ready' || notebook.cells.length === 0}
-                onClick={() => void autoArrangeNotebook()}
-              >
-                <Network size={15} />
-              </button>
-              {selectedNotebookCells.length > 0 && (
-                <div
-                  className="canvas-selection-actions"
-                  aria-label="Notebook selection actions"
-                  title="Drag across the canvas or Shift, Command, or Control-click to select more cells"
-                >
-                  <span>
-                    <strong>{selectedNotebookCells.length}</strong> selected
-                  </span>
-                  {selectedNotebookCells.length > 1 && selectedNotebookCell && (
-                    <code>{notebookGridTag(selectedNotebookCell.slot)} active</code>
-                  )}
-                  <button
-                    type="button"
-                    className="canvas-delete-selection"
-                    aria-label={`Delete ${selectedNotebookCells.length} selected ${selectedNotebookCells.length === 1 ? 'cell' : 'cells'}`}
-                    aria-keyshortcuts="Delete Backspace"
-                    disabled={busy}
-                    onClick={() => void deleteSelectedCells()}
-                  >
-                    <Trash2 size={13} />
-                    <span>Delete</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
+        {screen === 'notebook' && notebook && (
+          <NotebookToolbar
+            zoom={notebookView.zoom}
+            busy={busy}
+            arrangeDisabled={busy || mcp.state !== 'ready' || notebook.cells.length === 0}
+            selectedCount={selectedNotebookCells.length}
+            activeAddress={selectedNotebookCell ? notebookGridTag(selectedNotebookCell.slot) : null}
+            onAdd={createCell}
+            onAddDragEnd={() => setPreviewSlot(null)}
+            onArrange={autoArrangeNotebook}
+            onAdjustZoom={adjustNotebookZoom}
+            onResetZoom={resetNotebookZoom}
+            onDeleteSelection={deleteSelectedCells}
+            onClearSelection={() => {
+              selectCanvasCell(null)
+              setSourceViewCellId(null)
+              notebookScrollRef.current?.focus()
+            }}
+          />
+        )}
         <nav className="header-navigation" aria-label="Workspace navigation">
           <button type="button" title="Refresh books" aria-label="Refresh books" disabled={busy || mcp.state !== 'ready'} onClick={() => { refreshLibraryBrowse(); setBookBrowse(emptyBookBrowse); void loadBooks(bookId) }}>
             {busy ? <BusyIndicator size={17} /> : <RefreshCw size={17} />}
+            <span>Refresh</span>
           </button>
           {screenNavigation.map((item) => {
             const Icon = item.icon
             return (
-              <button key={item.id} type="button" className={screen === item.id ? 'active' : ''} title={item.label} aria-label={`Open ${item.label}`} onClick={() => navigate(item.id)}>
+              <button key={item.id} type="button" className={screen === item.id ? 'active' : ''} title={item.label} aria-label={`Open ${item.label}`} aria-current={screen === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}>
                 <Icon size={17} />
+                <span>{item.label}</span>
               </button>
             )
           })}

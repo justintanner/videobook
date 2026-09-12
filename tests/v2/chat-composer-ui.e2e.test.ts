@@ -839,7 +839,7 @@ describe('chat composer browser flow', () => {
 
     const addCell = page.locator('.canvas-add-menu > summary')
     expect(await addCell.getAttribute('aria-label')).toBe('Add cell')
-    expect((await addCell.textContent())?.trim()).toBe('')
+    expect((await addCell.textContent())?.trim()).toBe('Add cell')
     await addCell.click()
     const addCellSearch = page.getByLabel('Search cell types')
     await addCellSearch.waitFor({ state: 'visible' })
@@ -873,15 +873,24 @@ describe('chat composer browser flow', () => {
     expect(detailInspectorBox.width).toBeLessThanOrEqual(440)
     expect(Math.abs(scrollBox.x + scrollBox.width - detailInspectorBox.x))
       .toBeLessThanOrEqual(1)
-    for (const width of [1024, 600, 390, 320]) {
+    for (const width of [1280, 1024, 720, 600, 390, 320]) {
       await page.setViewportSize({ width, height: 800 })
-      await expect.poll(async () => await navigation.locator('button').evaluateAll((buttons) =>
+      await expect.poll(async () => await topbar.locator('button, summary').evaluateAll((buttons) =>
         buttons.every((button) => {
+          if (button.closest('details:not([open])') && button.tagName !== 'SUMMARY') return true
           const box = button.getBoundingClientRect()
+          if (box.width === 0 || box.height === 0) return true
+          if (button instanceof HTMLButtonElement && button.disabled) return true
           const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
-          return box.left >= 0 && box.right <= innerWidth && hit !== null && button.contains(hit)
+          return box.width >= 44 && box.height >= 44
+            && box.left >= 0 && box.right <= innerWidth
+            && hit !== null && button.contains(hit)
         })),
       ).toBe(true)
+      const headerBounds = await topbar.boundingBox()
+      const inspectorBounds = await page.locator('.inspector').boundingBox()
+      if (!headerBounds || !inspectorBounds) throw new Error('Header or inspector is missing')
+      expect(inspectorBounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height)
     }
     await addCell.click()
     const menuBox = await page.locator('.canvas-add-popover').boundingBox()
@@ -3200,6 +3209,16 @@ describe('chat composer browser flow', () => {
     await secondCell.click({ modifiers: ['Shift'] })
     await expect.poll(async () => await actions.textContent()).toContain('2 selected')
 
+    await page.getByLabel('Clear selection').click()
+    await actions.waitFor({ state: 'hidden' })
+    expect(await firstCell.getAttribute('data-selection')).toBeNull()
+    expect(await secondCell.getAttribute('data-selection')).toBeNull()
+    expect(await page.getByLabel('Notebook canvas', { exact: true })
+      .evaluate((element) => document.activeElement === element)).toBe(true)
+    await firstCell.click()
+    await secondCell.click({ modifiers: ['Shift'] })
+    await expect.poll(async () => await actions.textContent()).toContain('2 selected')
+
     observedCalls.length = 0
     const deleteSelection = page.getByLabel('Delete 2 selected cells')
     const cancelledDialog = new Promise<string>((resolve) => {
@@ -3275,7 +3294,7 @@ describe('chat composer browser flow', () => {
 
     const autoArrange = page.getByLabel('Auto-arrange notebook')
     await autoArrange.waitFor({ state: 'visible' })
-    expect(await autoArrange.getAttribute('title')).toBe('Auto-arrange notebook')
+    expect(await autoArrange.getAttribute('title')).toBe('Arrange cells by media type')
     observedCalls.length = 0
     await autoArrange.click()
     await expect.poll(() => observedCalls.filter((call) =>

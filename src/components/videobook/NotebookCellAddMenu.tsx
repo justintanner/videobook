@@ -3,6 +3,7 @@ import {
   Activity,
   AudioWaveform,
   BookOpen,
+  ChevronDown,
   CircleDot,
   Film,
   Image,
@@ -85,7 +86,9 @@ export function NotebookCellAddMenu({
   return (
     <details ref={detailsRef} className="canvas-add-menu" onToggle={handleToggle}>
       <summary ref={summaryRef} aria-label="Add cell" title="Add cell">
-        <Plus size={15} />
+        <Plus size={17} />
+        <span>Add cell</span>
+        <ChevronDown size={13} />
       </summary>
       <div className="canvas-add-popover">
         <label className="canvas-add-search">

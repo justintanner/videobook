@@ -162,8 +162,9 @@ textarea:focus-visible {
   --inspector-width: clamp(280px, 20vw, 320px);
   --app-gap: 10px;
   --app-gutter: calc(var(--app-gap) * 2);
+  position: relative;
   display: grid;
-  grid-template: 72px minmax(0, 1fr) / minmax(0, 1fr) var(--inspector-width);
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) var(--inspector-width);
   width: 100%;
   height: 100%;
   background:
@@ -184,7 +185,8 @@ textarea:focus-visible {
   z-index: 30;
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-rows: 72px;
   align-items: center;
   min-width: 0;
   border: 1px solid var(--line);
@@ -193,9 +195,11 @@ textarea:focus-visible {
 }
 
 .offline-banner {
-  position: fixed;
+  position: absolute;
+  grid-row: 2;
+  grid-column: 1 / -1;
   z-index: 29;
-  top: 72px;
+  top: 0;
   right: 0;
   left: 0;
   padding: 7px 16px;
@@ -208,6 +212,8 @@ textarea:focus-visible {
 }
 
 .topbar-book-controls {
+  grid-row: 1;
+  grid-column: 1;
   display: flex;
   align-items: stretch;
   min-width: 0;
@@ -548,6 +554,7 @@ textarea:focus-visible {
 
 .brand-project-home {
   flex: 0 0 auto;
+  min-width: 44px;
   gap: 10px;
   padding: 0 10px 0 var(--app-gutter);
 }
@@ -937,6 +944,8 @@ textarea:focus-visible {
 }
 
 .header-navigation {
+  grid-row: 1;
+  grid-column: 3;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -946,15 +955,25 @@ textarea:focus-visible {
 
 .header-navigation button {
   position: relative;
-  display: grid;
-  place-items: center;
-  width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 52px;
   height: 44px;
   padding: 0;
   border: 1px solid transparent;
-  color: var(--muted);
+  color: var(--ink);
   background: transparent;
   cursor: pointer;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.header-navigation button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .header-navigation button:hover,
@@ -968,6 +987,12 @@ textarea:focus-visible {
   border-color: var(--control-border-active);
   color: var(--control-fg-hover);
   background: var(--control-bg-active);
+}
+
+.topbar button:focus-visible,
+.topbar summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
 }
 
 .section-label {
@@ -990,33 +1015,38 @@ textarea:focus-visible {
 .canvas-toolbar {
   position: relative;
   z-index: 1;
+  grid-row: 1;
+  grid-column: 2;
   display: flex;
-  flex: 0 0 auto;
+  flex-wrap: wrap;
   align-self: center;
-  height: 32px;
   min-width: 0;
   align-items: center;
-  gap: 6px;
-  margin-left: 18px;
-  padding-left: 18px;
+  gap: 12px;
+  margin: 0 16px;
+  padding-left: 16px;
   border-left: 1px solid rgba(114, 231, 170, 0.14);
-  pointer-events: none;
 }
 
 .canvas-toolbar > * {
   flex-shrink: 0;
-  pointer-events: auto;
+}
+
+.canvas-primary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .canvas-zoom-panel {
   display: flex;
-  height: 32px;
+  height: 44px;
 }
 
 .canvas-zoom-panel button {
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   place-items: center;
   border: 1px solid var(--control-border);
@@ -1044,8 +1074,8 @@ textarea:focus-visible {
 }
 
 .canvas-zoom-panel .canvas-zoom-level {
-  width: 46px;
-  font-size: 9px;
+  width: 52px;
+  font-size: 11px;
   font-weight: 650;
   line-height: 1;
   letter-spacing: 0.06em;
@@ -1057,16 +1087,19 @@ textarea:focus-visible {
 }
 
 .canvas-auto-arrange {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  place-items: center;
+  display: flex;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
   border: 1px solid var(--control-border);
   color: var(--control-fg);
   background: var(--control-bg);
   cursor: pointer;
   pointer-events: auto;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .canvas-auto-arrange:hover:not(:disabled),
@@ -1099,26 +1132,33 @@ textarea:focus-visible {
 }
 
 .canvas-add-menu summary {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid var(--control-border);
-  color: var(--control-fg);
-  background: var(--control-bg);
+  display: flex;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--line-bright);
+  color: var(--green);
+  background: rgba(40, 121, 73, 0.25);
   cursor: pointer;
   list-style: none;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .canvas-add-menu summary::-webkit-details-marker {
   display: none;
 }
 
+.canvas-add-menu[open] > summary > svg:last-child {
+  transform: rotate(180deg);
+}
+
 .canvas-add-menu > .canvas-add-popover {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  left: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   width: 220px;
@@ -1213,52 +1253,69 @@ textarea:focus-visible {
 
 .canvas-selection-actions {
   display: flex;
-  height: 32px;
-  align-items: stretch;
-  border: 1px solid rgba(114, 231, 170, 0.42);
+  height: 44px;
+  align-items: center;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(114, 231, 170, 0.24);
   color: #a9d5ba;
-  background: rgba(4, 19, 12, 0.96);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
 }
 
 .canvas-selection-actions > span,
 .canvas-selection-actions > code {
   display: flex;
   align-items: center;
-  padding: 0 9px;
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  padding: 0 8px;
+  font-size: 10px;
   white-space: nowrap;
 }
 
 .canvas-selection-actions > span strong {
-  margin-right: 5px;
   color: #d0f6df;
   font-size: 11px;
 }
 
 .canvas-selection-actions > code {
-  border-left: 1px solid rgba(114, 231, 170, 0.18);
   color: #6f9f81;
   font-family: inherit;
 }
 
 .canvas-delete-selection {
   display: flex;
-  min-width: 74px;
+  min-width: 44px;
+  height: 44px;
   align-items: center;
   justify-content: center;
   gap: 6px;
   padding: 0 10px;
-  border: 0;
-  border-left: 1px solid rgba(196, 117, 117, 0.34);
+  border: 1px solid rgba(196, 117, 117, 0.25);
   color: #c48d8d;
   background: rgba(96, 39, 39, 0.18);
   cursor: pointer;
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.canvas-selection-count > span {
+  margin-left: 5px;
+}
+
+.canvas-clear-selection {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid transparent;
+  color: var(--ink);
+  background: transparent;
+  cursor: pointer;
+}
+
+.canvas-clear-selection:hover,
+.canvas-clear-selection:focus-visible {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
+  background: var(--control-bg-hover);
 }
 
 .canvas-delete-selection:hover:not(:disabled),
@@ -9975,6 +10032,33 @@ textarea:focus-visible {
   }
 }
 
+@media (max-width: 1440px) {
+  .canvas-selection-actions > code {
+    display: none;
+  }
+}
+
+@media (max-width: 1280px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 62px auto;
+  }
+
+  .header-navigation {
+    grid-column: 2;
+  }
+
+  .canvas-toolbar {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    align-self: stretch;
+    margin: 0;
+    padding: 8px var(--app-gutter);
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+}
+
 @media (min-width: 1101px) {
   .app-screen-notebook.inspector-visible .notebook-horizontal-scroll {
     margin-right: 0;
@@ -9987,8 +10071,9 @@ textarea:focus-visible {
   }
 
   .inspector {
-    position: fixed;
-    top: 72px;
+    position: absolute;
+    grid-column: 1;
+    top: 0;
     right: 0;
     bottom: 0;
     width: min(var(--inspector-width), 90vw);
@@ -10025,12 +10110,7 @@ textarea:focus-visible {
 @media (max-width: 720px) {
   .app-shell {
     --app-gutter: 10px;
-    grid-template: 62px minmax(0, 1fr) / minmax(0, 1fr);
-  }
-
-  .topbar {
-    grid-template-columns: minmax(0, 1fr) auto;
-    height: 62px;
+    grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
   }
 
   .brand-project-home {
@@ -10053,36 +10133,7 @@ textarea:focus-visible {
   }
 
   .header-navigation button {
-    width: 36px;
-    height: 40px;
-  }
-
-  .canvas-toolbar {
-    gap: 4px;
-    margin-left: 6px;
-    padding-left: 6px;
-  }
-
-  .canvas-toolbar .canvas-selection-actions > code {
-    display: none;
-  }
-
-  .canvas-toolbar .canvas-selection-actions > span {
-    display: none;
-  }
-
-  .canvas-toolbar .canvas-selection-actions > span {
-    padding: 0 7px;
-  }
-
-  .canvas-toolbar .canvas-delete-selection {
-    width: 32px;
-    min-width: 32px;
-    padding: 0;
-  }
-
-  .canvas-toolbar .canvas-delete-selection span {
-    display: none;
+    width: 48px;
   }
 
   .book-project-menu {
@@ -10136,13 +10187,8 @@ textarea:focus-visible {
 }
 
 @media (max-width: 560px) {
-  .app-shell {
-    grid-template: 108px minmax(0, 1fr) / minmax(0, 1fr);
-  }
-
   .topbar {
-    grid-template: 62px 46px / minmax(0, 1fr);
-    height: 108px;
+    grid-template: 56px 52px auto / minmax(0, 1fr);
   }
 
   .topbar-book-controls {
@@ -10152,25 +10198,7 @@ textarea:focus-visible {
   }
 
   .canvas-toolbar {
-    flex: 1 1 auto;
-    justify-content: flex-end;
-    margin-right: 6px;
-  }
-
-  .canvas-toolbar .canvas-selection-actions > span {
-    display: none;
-  }
-
-  .canvas-toolbar .canvas-zoom-panel button {
-    width: 28px;
-  }
-
-  .canvas-toolbar .canvas-zoom-panel .canvas-zoom-level {
-    width: 38px;
-  }
-
-  .canvas-toolbar .canvas-auto-arrange {
-    width: 28px;
+    grid-row: 3;
   }
 
   .brand-project {
@@ -10184,10 +10212,11 @@ textarea:focus-visible {
 
   .brand-project-menu-toggle {
     min-width: 0;
+    max-width: none;
   }
 
   .brand-project-menu-toggle strong {
-    max-width: 25vw;
+    max-width: none;
   }
 
   .book-project-menu {
@@ -10197,9 +10226,10 @@ textarea:focus-visible {
 
   .header-navigation {
     grid-row: 2;
+    grid-column: 1;
     justify-content: space-around;
     width: 100%;
-    height: 46px;
+    height: 52px;
     margin: 0;
     border-top: 1px solid var(--line);
   }
@@ -10207,11 +10237,7 @@ textarea:focus-visible {
   .header-navigation button {
     flex: 1 1 0;
     width: auto;
-    height: 45px;
-  }
-
-  .inspector {
-    top: 108px;
+    height: 44px;
   }
 
   .canvas,
@@ -10257,6 +10283,22 @@ textarea:focus-visible {
     min-width: 108px;
     padding: 0 6px;
     font-size: 8px;
+  }
+}
+
+@media (max-width: 360px) {
+  .canvas-selection-count > span,
+  .canvas-delete-selection > span {
+    display: none;
+  }
+
+  .canvas-selection-actions > span {
+    padding: 0 4px;
+  }
+
+  .canvas-delete-selection {
+    width: 44px;
+    padding: 0;
   }
 }
 
