@@ -240,10 +240,6 @@ import {
   type XPostThreadReview,
   type XPostThreadStep,
 } from '@/videobook/x-post-thread'
-import {
-  CanonicalSequencePlayer,
-  type TimelineKeyboardAction,
-} from '@/components/videobook/CanonicalSequencePlayer'
 import type {
   MusicVideoCommitResult,
   MusicVideoSetupState,
@@ -912,7 +908,6 @@ const screenNavigation: Array<{
   icon: typeof BookOpen
 }> = [
   { id: 'library', label: 'Library', icon: Library },
-  { id: 'timeline', label: 'Timeline', icon: Film },
   { id: 'jobs', label: 'Jobs', icon: Activity },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
@@ -3444,24 +3439,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [bookMenuError, setBookMenuError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [recording, setRecording] = useState(false)
-  const [timelineSelectionStart, setTimelineSelectionStart] = useState('0')
-  const [timelineSelectionDuration, setTimelineSelectionDuration] = useState('30')
-  const [selectedSequenceClipId, setSelectedSequenceClipId] = useState('')
-  const [timelineTargetTrackId, setTimelineTargetTrackId] = useState('')
-  const [timelineInsertAssetId, setTimelineInsertAssetId] = useState('')
-  const [timelineTrackKind, setTimelineTrackKind] = useState<'video' | 'audio' | 'caption'>('video')
-  const [timelineTrackName, setTimelineTrackName] = useState('')
-  const [timelineGainDb, setTimelineGainDb] = useState('0')
-  const [timelineFadeIn, setTimelineFadeIn] = useState('0')
-  const [timelineFadeOut, setTimelineFadeOut] = useState('0')
-  const [timelineMuted, setTimelineMuted] = useState(false)
-  const [selectedCaptionCueId, setSelectedCaptionCueId] = useState('')
-  const [captionText, setCaptionText] = useState('')
-  const [captionStyle, setCaptionStyle] = useState<'clean' | 'bold' | 'high-contrast'>('clean')
-  const [timelinePlayheadFrame, setTimelinePlayheadFrame] = useState(0)
-  const [timelineZoom, setTimelineZoom] = useState(1)
-  const [exportOrientation, setExportOrientation] = useState<'landscape' | 'portrait' | 'square'>('landscape')
-  const [exportCaptions, setExportCaptions] = useState<'burn-in' | 'sidecar' | 'omit'>('burn-in')
   const [pendingCommandPlan, setPendingCommandPlan] = useState<PendingCommandPlan | null>(null)
   const [pendingChatAction, setPendingChatAction] = useState<PendingChatAction | null>(null)
   const [lastEditActionId, setLastEditActionId] = useState('')
@@ -3734,44 +3711,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : [],
     [assetById, notebook, pendingGenerationDraft],
   )
-  const playbackAssets = useMemo(
-    () => assets.flatMap((asset) =>
-      asset.mediaUrl
-        ? [{ artifactId: asset.artifactId, mediaUrl: asset.mediaUrl }]
-        : []),
-    [assets],
-  )
   const generationPlans = useMemo(
     () => asGenerationPlans(notebook?.generationPlans),
     [notebook],
   )
-  const activeSequenceRange = useMemo(() => {
-    const startFrame = Number(timelineSelectionStart)
-    const durationFrames = Number(timelineSelectionDuration)
-    return Number.isSafeInteger(startFrame)
-      && startFrame >= 0
-      && Number.isSafeInteger(durationFrames)
-      && durationFrames > 0
-      ? { startFrame, durationFrames }
-      : null
-  }, [timelineSelectionDuration, timelineSelectionStart])
-  const selectedSequenceClip = useMemo(() => {
-    if (selectedSequenceClipId) {
-      return sequence?.clips.find((clip) =>
-        clip.clipId === selectedSequenceClipId) ?? null
-    }
-    const startFrame = Number(timelineSelectionStart)
-    const durationFrames = Number(timelineSelectionDuration)
-    return sequence?.clips.find((clip) =>
-      clip.timelineStartFrame === startFrame
-      && clip.durationFrames === durationFrames) ?? null
-  }, [
-    selectedSequenceClipId,
-    sequence,
-    timelineSelectionDuration,
-    timelineSelectionStart,
-  ])
-
   const call = useCallback(async (
     tool: string,
     args: Record<string, unknown>,
@@ -3937,28 +3880,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook) {
       throw new Error('Load a notebook first.')
     }
-    const startFrame = Number(timelineSelectionStart)
-    const durationFrames = Number(timelineSelectionDuration)
     return asCommandPlan(await call('plan_notebook_generation', {
       book_id: bookId,
       notebook_id: notebook.id,
       cell_id: cellId,
       source_surface: sourceSurface,
       actor: 'videobook-user',
-      timeline_start_frame: Number.isSafeInteger(startFrame) && startFrame >= 0
-        ? startFrame
-        : 0,
-      ...(Number.isSafeInteger(durationFrames) && durationFrames > 0
-        ? { duration_frames: durationFrames }
-        : {}),
+      timeline_start_frame: 0,
     }))
-  }, [
-    bookId,
-    call,
-    notebook,
-    timelineSelectionDuration,
-    timelineSelectionStart,
-  ])
+  }, [bookId, call, notebook])
 
   const prepareGenerationPlan = useCallback(async (
     cellId: string,
@@ -7858,31 +7788,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const selectTimelineRange = (
-    startOverride?: number,
-    durationOverride?: number,
-  ) => {
-    const startFrame = startOverride ?? Number(timelineSelectionStart)
-    const durationFrames = durationOverride ?? Number(timelineSelectionDuration)
-    if (
-      !Number.isSafeInteger(startFrame)
-      || startFrame < 0
-      || !Number.isSafeInteger(durationFrames)
-      || durationFrames < 1
-    ) {
-      setNotice(
-        'Timeline selection requires whole, non-negative frame values',
-        'error',
-      )
-      return
-    }
-    setTimelineSelectionStart(String(startFrame))
-    setTimelineSelectionDuration(String(durationFrames))
-    setNotice(
-      `Selected ${durationFrames} frames from frame ${startFrame}`,
-    )
-  }
-
   const refreshXConnection = async (
     options: { refreshAccount?: boolean } = {},
   ): Promise<XConnectionStatus | null> => {
@@ -8385,7 +8290,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }))
       if (!nextSequence) throw new Error('The server returned an invalid sequence')
       setSequence(nextSequence)
-      setTimelineTrackName('')
       return { ok: true, message: `Added ${kind} track` }
     } catch (error) {
       return {
@@ -8656,62 +8560,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setMusicVideoSession(null)
     window.setTimeout(focusCommandComposer, 0)
   }, [focusCommandComposer])
-
-  const handleTimelineKeyboard = (
-    action: TimelineKeyboardAction,
-    frame: number,
-  ) => {
-    if (action === 'mark-in') {
-      setTimelineSelectionStart(String(frame))
-      setNotice(`Marked in at frame ${frame}`)
-      return
-    }
-    if (action === 'mark-out') {
-      const start = Number(timelineSelectionStart)
-      const duration = Math.max(1, frame - start)
-      setTimelineSelectionDuration(String(duration))
-      selectTimelineRange(start, duration)
-      return
-    }
-    if (action === 'search') {
-      focusCommandComposer()
-      return
-    }
-    if (action === 'zoom-in' || action === 'zoom-out') {
-      setTimelineZoom((current) => Math.min(
-        3,
-        Math.max(0.5, current + (action === 'zoom-in' ? 0.25 : -0.25)),
-      ))
-      return
-    }
-    if (action === 'undo' || action === 'redo') {
-      void restoreLastCommandPlan()
-      return
-    }
-    const clip = selectedSequenceClip
-      ?? sequence?.clips.find((candidate) =>
-        frame >= candidate.timelineStartFrame
-        && frame < candidate.timelineStartFrame + candidate.durationFrames)
-    if (!clip) {
-      setNotice('No clip is selected at the playhead', 'error')
-      return
-    }
-    if (action === 'split') {
-      void prepareSequenceEdit({
-        kind: 'split',
-        clip_id: clip.clipId,
-        split_frame: frame,
-      }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-      return
-    }
-    if (action === 'delete') {
-      void prepareSequenceEdit({
-        kind: 'delete',
-        clip_id: clip.clipId,
-        ripple: true,
-      }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-    }
-  }
 
   const completeVideoDownload = async (
     result: unknown,
@@ -11095,7 +10943,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     closeCellContextMenu()
     showScreen(next)
     if (next === 'settings') void refreshSettings()
-    if ((next === 'library' || next === 'timeline' || next === 'jobs') && bookId) {
+    if ((next === 'library' || next === 'jobs') && bookId) {
       void refreshBookData(bookId, notebook?.id).catch((error: unknown) => {
         setNotice(error instanceof Error ? error.message : String(error), 'error')
       })
@@ -12822,578 +12670,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   </button>
                 </div>
               )}
-            </section>
-          )}
-
-          {screen === 'timeline' && (
-            <section className="workspace-screen">
-              <header>
-                <div>
-                  <span className="section-label">CANONICAL V5 SEQUENCE</span>
-                  <h1>{sequence?.name ?? 'Primary sequence'}</h1>
-                  <p>
-                    {sequence
-                      ? `${sequence.tracks.length} tracks · ${sequence.clips.length} clips · revision ${sequence.revision.slice(0, 10)}`
-                      : 'Load the primary engine sequence.'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  disabled={busy || !bookId}
-                  onClick={() => bookId && void refreshBookData(bookId, notebook?.id)}
-                >
-                  <RefreshCw size={15} />Refresh sequence
-                </button>
-              </header>
-              {sequence && sequence.clips.length > 0 && (
-                <CanonicalSequencePlayer
-                  sequence={sequence}
-                  assets={playbackAssets}
-                  onFrameUpdate={setTimelinePlayheadFrame}
-                  onKeyboardAction={handleTimelineKeyboard}
-                />
-              )}
-              <form className="project-create entity-create" onSubmit={(event) => {
-                event.preventDefault()
-                selectTimelineRange()
-              }}>
-                <label>
-                  Selection start frame
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={timelineSelectionStart}
-                    onChange={(event) => setTimelineSelectionStart(event.target.value)}
-                  />
-                </label>
-                <label>
-                  Selection duration
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={timelineSelectionDuration}
-                    onChange={(event) => setTimelineSelectionDuration(event.target.value)}
-                  />
-                </label>
-                <button type="submit" disabled={busy || !sequence}>
-                  Set selection
-                </button>
-              </form>
-              <form className="timeline-track-controls" onSubmit={(event) => {
-                event.preventDefault()
-                void addSequenceTrack(timelineTrackKind, timelineTrackName)
-                  .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-              }}>
-                <select
-                  aria-label="New track kind"
-                  value={timelineTrackKind}
-                  onChange={(event) => setTimelineTrackKind(
-                    event.target.value as typeof timelineTrackKind,
-                  )}
-                >
-                  <option value="video">Video track</option>
-                  <option value="audio">Audio track</option>
-                  <option value="caption">Caption track</option>
-                </select>
-                <input
-                  aria-label="New track name"
-                  value={timelineTrackName}
-                  onChange={(event) => setTimelineTrackName(event.target.value)}
-                  placeholder="Optional name"
-                />
-                <button type="submit" disabled={busy || !sequence}>
-                  <Plus size={14} />Add track
-                </button>
-              </form>
-              <div className="timeline-edit-controls">
-                <form onSubmit={(event) => {
-                  event.preventDefault()
-                  const startFrame = Number(timelineSelectionStart)
-                  const durationFrames = Number(timelineSelectionDuration)
-                  if (!timelineInsertAssetId || !Number.isSafeInteger(startFrame) || startFrame < 0) {
-                    setNotice('Choose a source and a valid insertion frame', 'error')
-                    return
-                  }
-                  void prepareSequenceEdit({
-                    kind: 'insert',
-                    artifact_id: timelineInsertAssetId,
-                    timeline_start_frame: startFrame,
-                    ...(Number.isSafeInteger(durationFrames) && durationFrames > 0
-                      ? { duration_frames: durationFrames }
-                      : {}),
-                  }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                }}>
-                  <label>
-                    Source
-                    <select
-                      value={timelineInsertAssetId}
-                      onChange={(event) => setTimelineInsertAssetId(event.target.value)}
-                    >
-                      <option value="">Choose asset</option>
-                      {sourceAssets.map((asset) => (
-                        <option value={asset.artifactId} key={asset.artifactId}>
-                          {asset.id}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button type="submit" disabled={busy || !timelineInsertAssetId}>
-                    Preview insert
-                  </button>
-                </form>
-                <form onSubmit={(event) => {
-                  event.preventDefault()
-                  if (!selectedSequenceClip) {
-                    setNotice('Select a sequence clip first', 'error')
-                    return
-                  }
-                  void prepareSequenceEdit({
-                    kind: 'trim',
-                    clip_id: selectedSequenceClip.clipId,
-                    timeline_start_frame: Number(timelineSelectionStart),
-                    duration_frames: Number(timelineSelectionDuration),
-                  }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                }}>
-                  <span>Selected clip</span>
-                  <strong>{selectedSequenceClip?.clipId.slice(0, 10) ?? 'None'}</strong>
-                  <button type="submit" disabled={busy || !selectedSequenceClip}>
-                    Preview trim
-                  </button>
-                </form>
-                <form onSubmit={(event) => {
-                  event.preventDefault()
-                  const gainDb = Number(timelineGainDb)
-                  if (!selectedSequenceClip || !Number.isFinite(gainDb)) {
-                    setNotice('Select an audio clip and enter a valid gain', 'error')
-                    return
-                  }
-                  void prepareSequenceEdit({
-                    kind: 'volume',
-                    clip_id: selectedSequenceClip.clipId,
-                    gain_db: gainDb,
-                    muted: timelineMuted,
-                    fade_in_frames: Number(timelineFadeIn),
-                    fade_out_frames: Number(timelineFadeOut),
-                  }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                }}>
-                  <label>
-                    Gain dB
-                    <input
-                      type="number"
-                      min="-96"
-                      max="24"
-                      step="0.5"
-                      value={timelineGainDb}
-                      onChange={(event) => setTimelineGainDb(event.target.value)}
-                    />
-                  </label>
-                  <div className="timeline-inline-fields">
-                    <label>
-                      Fade in
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={timelineFadeIn}
-                        onChange={(event) => setTimelineFadeIn(event.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Fade out
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={timelineFadeOut}
-                        onChange={(event) => setTimelineFadeOut(event.target.value)}
-                      />
-                    </label>
-                  </div>
-                  <label className="timeline-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={timelineMuted}
-                      onChange={(event) => setTimelineMuted(event.target.checked)}
-                    />
-                    Mute
-                  </label>
-                  <button type="submit" disabled={busy || !selectedSequenceClip}>
-                    Preview volume
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy || !selectedSequenceClip}
-                    onClick={() => {
-                      if (!selectedSequenceClip) return
-                      void prepareSequenceEdit({
-                        kind: 'duck',
-                        narration_clip_id: selectedSequenceClip.clipId,
-                        reduction_db: -12,
-                      }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                    }}
-                  >
-                    Duck overlaps −12 dB
-                  </button>
-                </form>
-                <form onSubmit={(event) => {
-                  event.preventDefault()
-                  if (!selectedSequenceClip || !timelineTargetTrackId) return
-                  void prepareSequenceEdit({
-                    kind: 'move',
-                    clip_id: selectedSequenceClip.clipId,
-                    track_id: timelineTargetTrackId,
-                    timeline_start_frame: Number(timelineSelectionStart),
-                  }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                }}>
-                  <label>
-                    Move to track
-                    <select
-                      value={timelineTargetTrackId}
-                      onChange={(event) => setTimelineTargetTrackId(event.target.value)}
-                    >
-                      <option value="">Choose track</option>
-                      {sequence?.tracks.filter((track) => {
-                        const selectedTrack = sequence.tracks.find((candidate) =>
-                          candidate.trackId === selectedSequenceClip?.trackId)
-                        return selectedTrack?.kind === track.kind && track.kind !== 'caption'
-                      }).map((track) => (
-                        <option value={track.trackId} key={track.trackId}>
-                          {track.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button type="submit" disabled={busy || !selectedSequenceClip || !timelineTargetTrackId}>
-                    Preview move
-                  </button>
-                </form>
-                <div className="timeline-quick-actions">
-                  <span>Selected clip actions</span>
-                  <div>
-                    <button
-                      type="button"
-                      disabled={busy || !selectedSequenceClip}
-                      onClick={() => {
-                        if (!selectedSequenceClip) return
-                        void prepareSequenceEdit({
-                          kind: 'split',
-                          clip_id: selectedSequenceClip.clipId,
-                          split_frame: selectedSequenceClip.timelineStartFrame
-                            + Math.floor(selectedSequenceClip.durationFrames / 2),
-                        }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                      }}
-                    >
-                      Split midpoint
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || !selectedSequenceClip}
-                      onClick={() => {
-                        if (!selectedSequenceClip) return
-                        void prepareSequenceEdit({
-                          kind: 'delete',
-                          clip_id: selectedSequenceClip.clipId,
-                          ripple: true,
-                        }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                      }}
-                    >
-                      Ripple delete
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || !selectedSequenceClip}
-                      onClick={() => {
-                        if (!selectedSequenceClip) return
-                        void prepareSequenceEdit({
-                          kind: 'gap',
-                          timeline_start_frame: selectedSequenceClip.timelineStartFrame,
-                          duration_frames: Number(timelineSelectionDuration),
-                          track_ids: [selectedSequenceClip.trackId],
-                        }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                      }}
-                    >
-                      Insert gap
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || !selectedSequenceClip}
-                      onClick={() => {
-                        if (!selectedSequenceClip) return
-                        void prepareSequenceEdit({
-                          kind: 'transform',
-                          clip_id: selectedSequenceClip.clipId,
-                          fit: 'fit',
-                        }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                      }}
-                    >
-                      Fit
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || !selectedSequenceClip}
-                      onClick={() => {
-                        if (!selectedSequenceClip) return
-                        void prepareSequenceEdit({
-                          kind: 'reframe',
-                          clip_id: selectedSequenceClip.clipId,
-                        }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                      }}
-                    >
-                      Auto reframe
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || selectedSequenceClip?.source.kind !== 'timed'}
-                      onClick={() => {
-                        if (!selectedSequenceClip || selectedSequenceClip.source.kind !== 'timed') return
-                        const timedClip = selectedSequenceClip as TimedSequenceClip
-                        void prepareSequenceEdit({
-                          kind: 'speed',
-                          clip_id: timedClip.clipId,
-                          numerator: timedClip.speed.numerator,
-                          denominator: timedClip.speed.denominator,
-                          reverse: !timedClip.reverse,
-                          audio_policy: timedClip.audioPolicy,
-                        }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                      }}
-                    >
-                      Reverse
-                    </button>
-                  </div>
-                </div>
-                <form onSubmit={(event) => {
-                  event.preventDefault()
-                  if (!captionText.trim()) return
-                  void prepareSequenceEdit({
-                    kind: 'caption',
-                    ...(selectedCaptionCueId ? { cue_id: selectedCaptionCueId } : {}),
-                    timeline_start_frame: Number(timelineSelectionStart),
-                    duration_frames: Number(timelineSelectionDuration),
-                    text: captionText.trim(),
-                    style_id: captionStyle,
-                  }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                }}>
-                  <label>
-                    Caption text
-                    <input
-                      value={captionText}
-                      onChange={(event) => setCaptionText(event.target.value)}
-                      placeholder="Caption at selection"
-                    />
-                  </label>
-                  <select
-                    aria-label="Caption style"
-                    value={captionStyle}
-                    onChange={(event) => setCaptionStyle(
-                      event.target.value as typeof captionStyle,
-                    )}
-                  >
-                    <option value="clean">Clean</option>
-                    <option value="bold">Bold</option>
-                    <option value="high-contrast">High contrast</option>
-                  </select>
-                  <button type="submit" disabled={busy || !captionText.trim()}>
-                    Preview caption
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy || !sequence || sequence.captions.length === 0}
-                    onClick={() => void prepareRoughCut('ui')
-                      .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))}
-                  >
-                    Suggest rough cut
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy || !sequence || sequence.captions.length === 0}
-                    onClick={() => void prepareSoundEffects('ui')
-                      .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))}
-                  >
-                    Suggest sound effects
-                  </button>
-                </form>
-                <form onSubmit={(event) => {
-                  event.preventDefault()
-                  if (!sequence) return
-                  void call('plan_sequence_export', {
-                    book_id: bookId,
-                    source_surface: 'ui',
-                    actor: 'videobook-user',
-                    sequence_revision: sequence.revision,
-                    orientation: exportOrientation,
-                    captions: exportCaptions,
-                  }).then((value) => {
-                    const result = recordValue(value)
-                    if (result?.kind === 'invalid-export') {
-                      const validation = recordValue(result.validation)
-                      const errors = Array.isArray(validation?.errors)
-                        ? validation.errors.map((entry) =>
-                            asString(recordValue(entry)?.message)).filter(Boolean)
-                        : []
-                      setNotice(
-                        errors.join(' · ') || 'Export validation failed',
-                        'error',
-                      )
-                      return
-                    }
-                    return previewCommandPlan(asCommandPlan(value))
-                      .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
-                  }).catch((error: unknown) => {
-                    setNotice(error instanceof Error ? error.message : String(error), 'error')
-                  })
-                }}>
-                  <label>
-                    Export
-                    <select
-                      value={exportOrientation}
-                      onChange={(event) => setExportOrientation(
-                        event.target.value as typeof exportOrientation,
-                      )}
-                    >
-                      <option value="landscape">16:9 · 1080p</option>
-                      <option value="portrait">9:16 · 1080p</option>
-                      <option value="square">1:1 · 1080p</option>
-                    </select>
-                  </label>
-                  <select
-                    aria-label="Export captions"
-                    value={exportCaptions}
-                    onChange={(event) => setExportCaptions(
-                      event.target.value as typeof exportCaptions,
-                    )}
-                  >
-                    <option value="burn-in">Burn captions</option>
-                    <option value="sidecar">WebVTT sidecar</option>
-                    <option value="omit">No captions</option>
-                  </select>
-                  <button type="submit" disabled={busy || !sequence}>
-                    Preview export
-                  </button>
-                </form>
-              </div>
-              <div className="sequence-track-list">
-                <div className="timeline-scale-readout">
-                  <span>PLAYHEAD F{timelinePlayheadFrame}</span>
-                  <span>ZOOM {timelineZoom.toFixed(2)}×</span>
-                </div>
-                <div
-                  className="timeline-zoom-surface"
-                  style={{ width: `${timelineZoom * 100}%` }}
-                >
-                {sequence?.tracks.map((track) => {
-                  const clips = sequence.clips
-                    .filter((clip) => clip.trackId === track.trackId)
-                    .sort((left, right) =>
-                      left.timelineStartFrame - right.timelineStartFrame)
-                  const cues = track.kind === 'caption'
-                    ? sequence.captions
-                      .filter((cue) => cue.trackId === track.trackId)
-                      .sort((left, right) =>
-                        left.timelineStartFrame - right.timelineStartFrame)
-                    : []
-                  const kindTrackCount = sequence.tracks
-                    .filter((candidate) => candidate.kind === track.kind)
-                    .length
-                  const canRemoveTrack = clips.length === 0
-                    && cues.length === 0
-                    && kindTrackCount > 1
-                  return (
-                    <section className="sequence-track" key={track.trackId}>
-                      <header>
-                        <span>{track.kind.toUpperCase()} {track.ordinal + 1}</span>
-                        <strong>{track.name}</strong>
-                        <small>{track.kind === 'caption' ? `${cues.length} cues` : `${clips.length} clips`}</small>
-                        {canRemoveTrack && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void removeSequenceTrack(track.trackId)
-                              .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))}
-                          >
-                            <Trash2 size={13} />Remove
-                          </button>
-                        )}
-                      </header>
-                      <div className="record-grid">
-                        {clips.map((clip) => {
-                          const asset = assetById.get(clip.source.artifactId)
-                          const selected = selectedSequenceClip?.clipId === clip.clipId
-                            || (
-                              activeSequenceRange?.startFrame === clip.timelineStartFrame
-                              && activeSequenceRange.durationFrames === clip.durationFrames
-                            )
-                          return (
-                            <button
-                              type="button"
-                              className={`record-card sequence-clip ${selected ? 'selected' : ''}`}
-                              key={clip.clipId}
-                              onClick={() => {
-                                setSelectedSequenceClipId(clip.clipId)
-                                setTimelineSelectionStart(String(clip.timelineStartFrame))
-                                setTimelineSelectionDuration(String(clip.durationFrames))
-                                setTimelineTargetTrackId(clip.trackId)
-                                setTimelineGainDb(String(clip.audio?.gainDb ?? 0))
-                                setTimelineFadeIn(String(clip.audio?.fadeInFrames ?? 0))
-                                setTimelineFadeOut(String(clip.audio?.fadeOutFrames ?? 0))
-                                setTimelineMuted(clip.audio?.muted ?? false)
-                              }}
-                            >
-                              <span>
-                                F{clip.timelineStartFrame}–{clip.timelineStartFrame + clip.durationFrames}
-                              </span>
-                              <strong>{asset?.id ?? clip.source.artifactId}</strong>
-                              <small>
-                                {clip.source.kind === 'timed'
-                                  ? `${clip.source.range.startTick}+${clip.source.range.durationTicks} ticks`
-                                  : clip.source.sourcePath}
-                              </small>
-                            </button>
-                          )
-                        })}
-                        {cues.map((cue) => (
-                          <button
-                            type="button"
-                            className={`record-card sequence-clip ${selectedCaptionCueId === cue.cueId ? 'selected' : ''}`}
-                            key={cue.cueId}
-                            onClick={() => {
-                              setSelectedCaptionCueId(cue.cueId)
-                              setCaptionText(cue.text)
-                              setCaptionStyle(
-                                cue.styleId === 'bold' || cue.styleId === 'high-contrast'
-                                  ? cue.styleId
-                                  : 'clean',
-                              )
-                              setTimelineSelectionStart(String(cue.timelineStartFrame))
-                              setTimelineSelectionDuration(String(cue.durationFrames))
-                            }}
-                          >
-                            <span>
-                              F{cue.timelineStartFrame}–{cue.timelineStartFrame + cue.durationFrames}
-                            </span>
-                            <strong>{cue.text}</strong>
-                            <small>{cue.styleId}{cue.speaker ? ` · ${cue.speaker}` : ''}</small>
-                          </button>
-                        ))}
-                        {clips.length === 0 && cues.length === 0 && (
-                          <div className="empty-record compact">
-                            <strong>Empty track</strong>
-                          </div>
-                        )}
-                      </div>
-                    </section>
-                  )
-                })}
-                </div>
-                {!sequence && (
-                  <div className="empty-record">
-                    <Film size={25} />
-                    <strong>Primary sequence unavailable</strong>
-                    <p>Refresh the selected book to load its engine sequence.</p>
-                  </div>
-                )}
-              </div>
             </section>
           )}
 

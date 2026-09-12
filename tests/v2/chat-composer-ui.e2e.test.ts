@@ -3558,7 +3558,7 @@ describe('chat composer browser flow', () => {
     notebookDirty = true
   }, 60_000)
 
-  it('deep-links the library screen at /library and restores it via history', async () => {
+  it('restores workspace navigation history and falls back for removed Timeline links', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     delayedBootstrap = false
     await page.goto(`${appUrl}/library`, { waitUntil: 'commit' })
@@ -3567,16 +3567,23 @@ describe('chat composer browser flow', () => {
       .waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await page!.title()).toBe('Library · VIDEOBOOK')
 
-    await page.getByLabel('Open Timeline').click()
+    expect(await page.getByLabel('Open Timeline').count()).toBe(0)
+    await page.getByLabel('Open Jobs').click()
     await expect.poll(async () =>
-      await page!.evaluate(() => window.location.pathname)).toBe('/timeline')
-    await expect.poll(async () => await page!.title()).toBe('Timeline · VIDEOBOOK')
+      await page!.evaluate(() => window.location.pathname)).toBe('/jobs')
+    await expect.poll(async () => await page!.title()).toBe('Jobs · VIDEOBOOK')
 
     await page.goBack()
     await expect.poll(async () =>
       await page!.evaluate(() => window.location.pathname)).toBe('/library')
     await page.getByLabel('Search the library')
       .waitFor({ state: 'visible', timeout: 10_000 })
+
+    await page.goto(`${appUrl}/timeline`, { waitUntil: 'commit' })
+    await page.getByLabel('Add cell').waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await page!.title()).toBe('VIDEOBOOK')
+    expect(await page.getByLabel('Open Timeline').count()).toBe(0)
+    expect(await page.getByRole('button', { name: 'Refresh sequence' }).count()).toBe(0)
     notebookDirty = true
   }, 60_000)
 

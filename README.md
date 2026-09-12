@@ -29,7 +29,7 @@ their cell order and resulting asset/entity references are recorded. New books
 begin with a `Main` notebook.
 
 The frontend is a green notebook-first workspace with book and notebook
-pickers, a typed cell canvas, a timeline, an asset library, jobs, history,
+pickers, a typed cell canvas, a music video editor, an asset library, jobs, history,
 storage health, and provider settings.
 
 Assets carry editable tags across three automatic facets — people, places and
