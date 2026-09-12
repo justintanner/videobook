@@ -873,6 +873,23 @@ describe('chat composer browser flow', () => {
     expect(detailInspectorBox.width).toBeLessThanOrEqual(440)
     expect(Math.abs(scrollBox.x + scrollBox.width - detailInspectorBox.x))
       .toBeLessThanOrEqual(1)
+    for (const width of [1024, 600, 390, 320]) {
+      await page.setViewportSize({ width, height: 800 })
+      await expect.poll(async () => await navigation.locator('button').evaluateAll((buttons) =>
+        buttons.every((button) => {
+          const box = button.getBoundingClientRect()
+          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+          return box.left >= 0 && box.right <= innerWidth && hit !== null && button.contains(hit)
+        })),
+      ).toBe(true)
+    }
+    await addCell.click()
+    const menuBox = await page.locator('.canvas-add-popover').boundingBox()
+    if (!menuBox) throw new Error('Could not measure the compact Add cell menu')
+    expect(menuBox.x).toBeGreaterThanOrEqual(0)
+    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(320)
+    await addCellSearch.press('Escape')
+    await page.setViewportSize({ width: 1440, height: 1000 })
   }, 60_000)
 
   it('renders edges whose target handles are added after mount', async () => {
@@ -1270,13 +1287,16 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await modalInput.isEnabled(), {
       timeout: 5_000,
     }).toBe(true)
-    await page.setViewportSize({ width: 420, height: 800 })
-    const composerBox = await dialog.locator('.command-composer').boundingBox()
-    const subjectPanelBox = await dialog.locator('.notebook-subject-panel').boundingBox()
-    if (!composerBox || !subjectPanelBox) {
-      throw new Error('Could not measure the mobile image editor layout')
+    for (const viewport of [{ width: 420, height: 800 }, { width: 667, height: 375 }]) {
+      await page.setViewportSize(viewport)
+      const composerBox = await dialog.locator('.command-composer').boundingBox()
+      const subjectPanelBox = await dialog.locator('.notebook-subject-panel').boundingBox()
+      if (!composerBox || !subjectPanelBox) {
+        throw new Error('Could not measure the mobile image editor layout')
+      }
+      expect(composerBox.y).toBeGreaterThanOrEqual(subjectPanelBox.y + subjectPanelBox.height)
+      expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(viewport.height)
     }
-    expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(subjectPanelBox.y)
     await modalInput.fill('Unsent image edit draft')
     const send = dialog.getByLabel('Send command')
     await send.focus()
@@ -3486,6 +3506,16 @@ describe('chat composer browser flow', () => {
     const sourcePanelBox = await editor.locator('.music-video-source-panel').boundingBox()
     const timelinePanelBox = await editor.locator('.music-video-timeline-panel').boundingBox()
     expect(Math.abs((sourcePanelBox?.x ?? 0) - (timelinePanelBox?.x ?? 1))).toBeLessThan(2)
+    for (const viewport of [{ width: 390, height: 844 }, { width: 1024, height: 500 }]) {
+      await page.setViewportSize(viewport)
+      const closeBox = await editor.getByLabel('Close music video editor').boundingBox()
+      if (!closeBox) throw new Error('Could not measure the music editor Close button')
+      expect(closeBox.x).toBeGreaterThanOrEqual(0)
+      expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(viewport.width)
+      await editor.getByLabel('Zoom timeline in').click()
+      const main = editor.locator('.music-video-editor-main')
+      expect(await main.evaluate((element) => element.scrollLeft)).toBe(0)
+    }
     await page.keyboard.press('Escape')
     await editor.waitFor({ state: 'detached' })
     await expect.poll(async () => await page!.evaluate(() =>

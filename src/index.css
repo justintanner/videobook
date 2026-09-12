@@ -520,12 +520,14 @@ textarea:focus-visible {
 
 .brand-project {
   position: relative;
+  flex: 0 1 auto;
   min-width: 0;
   height: 100%;
 }
 
 .brand-project-trigger {
   display: flex;
+  min-width: 0;
   align-items: center;
   height: 100%;
   color: var(--green);
@@ -545,6 +547,7 @@ textarea:focus-visible {
 }
 
 .brand-project-home {
+  flex: 0 0 auto;
   gap: 10px;
   padding: 0 10px 0 var(--app-gutter);
 }
@@ -552,7 +555,7 @@ textarea:focus-visible {
 .brand-project-menu-toggle {
   gap: 7px;
   justify-content: center;
-  min-width: 34px;
+  min-width: 0;
   max-width: 320px;
   padding: 0 8px;
   color: var(--muted);
@@ -574,6 +577,7 @@ textarea:focus-visible {
 
 .book-project-selector {
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   height: 100%;
 }
@@ -987,7 +991,7 @@ textarea:focus-visible {
   position: relative;
   z-index: 1;
   display: flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   align-self: center;
   height: 32px;
   min-width: 0;
@@ -1000,6 +1004,7 @@ textarea:focus-visible {
 }
 
 .canvas-toolbar > * {
+  flex-shrink: 0;
   pointer-events: auto;
 }
 
@@ -1113,7 +1118,7 @@ textarea:focus-visible {
 .canvas-add-menu > .canvas-add-popover {
   position: absolute;
   top: calc(100% + 6px);
-  left: 0;
+  right: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   width: 220px;
@@ -5409,6 +5414,7 @@ textarea:focus-visible {
 
 .project-create {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 14px;
   margin-top: 30px;
@@ -5419,7 +5425,9 @@ textarea:focus-visible {
 
 .project-create label {
   display: grid;
-  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1 1 220px;
+  min-width: 0;
   gap: 8px;
   color: #6d937d;
   font-size: 10px;
@@ -5429,6 +5437,8 @@ textarea:focus-visible {
 
 .project-create input,
 .project-create select {
+  width: 100%;
+  min-width: 0;
   min-height: 40px;
   padding: 0 12px;
   border: 1px solid var(--line);
@@ -8341,6 +8351,8 @@ textarea:focus-visible {
 
 .jobs-header-title {
   display: flex;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
   align-items: center;
   gap: 14px;
   min-width: 0;
@@ -8356,14 +8368,14 @@ textarea:focus-visible {
 .jobs-header-meta {
   color: var(--muted);
   font-size: 11px;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .jobs-filters {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  margin-left: 6px;
 }
 
 .jobs-screen > header .jobs-filter {
@@ -8441,6 +8453,12 @@ textarea:focus-visible {
 
 /* One grid for the whole list so every band's columns line up and the
    actions column sizes to its widest button group. */
+.jobs-list-scroll {
+  min-height: 0;
+  flex: 0 0 auto;
+  overflow-x: auto;
+}
+
 .jobs-list {
   display: grid;
   grid-template-columns: 116px minmax(0, 1.25fr) 170px minmax(0, 1.45fr) 40px 76px auto;
@@ -10050,6 +10068,10 @@ textarea:focus-visible {
   }
 
   .canvas-toolbar .canvas-selection-actions > span {
+    display: none;
+  }
+
+  .canvas-toolbar .canvas-selection-actions > span {
     padding: 0 7px;
   }
 
@@ -11236,7 +11258,7 @@ textarea:focus-visible {
 
   .notebook-media-fullscreen.subject-editor {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(220px, 1fr) minmax(260px, 48vh);
+    grid-template-rows: minmax(120px, 1fr) minmax(0, 1fr) auto;
   }
 
   .notebook-media-fullscreen.playback-only {
@@ -11248,18 +11270,23 @@ textarea:focus-visible {
   }
 
   .notebook-media-fullscreen.subject-editor .notebook-subject-stage-label {
-    bottom: 82px;
+    bottom: 12px;
     left: 9px;
   }
 
   .notebook-media-composer-host {
-    right: 12px;
-    bottom: calc(max(260px, 48vh) + 10px);
-    left: 12px;
+    position: relative;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    margin: 10px 12px;
   }
 
   .notebook-subject-panel {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    align-content: start;
+    overflow: auto;
     border-top: 1px solid rgba(92, 145, 114, 0.3);
     border-left: 0;
     box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.42);
@@ -11298,14 +11325,9 @@ textarea:focus-visible {
 }
 
 @media (max-width: 460px) {
-  .notebook-media-fullscreen.subject-editor {
-    grid-template-rows: minmax(180px, 1fr) minmax(320px, 55vh);
-  }
-
   .notebook-media-composer-host {
-    right: 8px;
-    bottom: calc(max(320px, 55vh) + 8px);
-    left: 8px;
+    margin-right: 8px;
+    margin-left: 8px;
   }
 
   .notebook-subject-toolbar {

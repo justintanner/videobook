@@ -335,40 +335,42 @@ export function JobsScreen({
       )}
 
       {visibleBands.length > 0 && (
-        <div className="jobs-list">
-          <div className="jobs-columns" aria-hidden="true">
-            <span>Status</span>
-            <span>Job</span>
-            <span>Target</span>
-            <span>Progress / result</span>
-            <span className="jobs-columns-attempt">Try</span>
-            <span>Enqueued</span>
-            <span>Actions</span>
-          </div>
-          {visibleBands.map((band) => {
-            const collapsed = band.id === 'finished' && !showAllFinished
-            const rows = collapsed ? band.rows.slice(0, FINISHED_PREVIEW_COUNT) : band.rows
-            return (
-              <div className="jobs-band" key={band.id}>
-                <JobsBandHeader
-                  band={band}
-                  hidden={band.rows.length - rows.length}
-                  showAll={band.id === 'finished' && showAllFinished}
-                  onToggleShowAll={() => setShowAllFinished((value) => !value)}
-                />
-                {rows.map((row) => (
-                  <JobsRowView
-                    key={row.key}
-                    row={row}
-                    busy={busy}
-                    expanded={expandedKeys.has(row.key)}
-                    onAction={handleAction}
-                    onToggleDetails={handleToggleDetails}
+        <div className="jobs-list-scroll">
+          <div className="jobs-list">
+            <div className="jobs-columns" aria-hidden="true">
+              <span>Status</span>
+              <span>Job</span>
+              <span>Target</span>
+              <span>Progress / result</span>
+              <span className="jobs-columns-attempt">Try</span>
+              <span>Enqueued</span>
+              <span>Actions</span>
+            </div>
+            {visibleBands.map((band) => {
+              const collapsed = band.id === 'finished' && !showAllFinished
+              const rows = collapsed ? band.rows.slice(0, FINISHED_PREVIEW_COUNT) : band.rows
+              return (
+                <div className="jobs-band" key={band.id}>
+                  <JobsBandHeader
+                    band={band}
+                    hidden={band.rows.length - rows.length}
+                    showAll={band.id === 'finished' && showAllFinished}
+                    onToggleShowAll={() => setShowAllFinished((value) => !value)}
                   />
-                ))}
-              </div>
-            )
-          })}
+                  {rows.map((row) => (
+                    <JobsRowView
+                      key={row.key}
+                      row={row}
+                      busy={busy}
+                      expanded={expandedKeys.has(row.key)}
+                      onAction={handleAction}
+                      onToggleDetails={handleToggleDetails}
+                    />
+                  ))}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </section>
