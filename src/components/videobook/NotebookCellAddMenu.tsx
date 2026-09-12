@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
 import {
   Activity,
   AudioWaveform,
@@ -51,25 +51,42 @@ export function NotebookCellAddMenu({
   const summaryRef = useRef<HTMLElement>(null)
   const visibleItems = filterNotebookCellAddItems(search)
 
-  const closeMenu = (restoreFocus: boolean) => {
+  const closeMenu = useCallback((restoreFocus: boolean) => {
     if (detailsRef.current) detailsRef.current.open = false
     setSearch('')
     if (restoreFocus) {
       window.requestAnimationFrame(() => summaryRef.current?.focus())
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent | FocusEvent) => {
+      const menu = detailsRef.current
+      if (!menu?.open || !(event.target instanceof Node) || menu.contains(event.target)) return
+      closeMenu(false)
+    }
+    document.addEventListener('pointerdown', closeOutside, true)
+    document.addEventListener('focusin', closeOutside)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside, true)
+      document.removeEventListener('focusin', closeOutside)
+    }
+  }, [closeMenu])
 
   const handleToggle = (event: SyntheticEvent<HTMLDetailsElement>) => {
     if (!event.currentTarget.open) {
       setSearch('')
       return
     }
-    window.requestAnimationFrame(() => searchRef.current?.focus())
+    const focused = document.activeElement
+    if (focused !== summaryRef.current && event.currentTarget.contains(focused)) return
+    searchRef.current?.focus()
   }
 
-  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== 'Escape') return
+  const handleMenuKeyDown = (event: KeyboardEvent<HTMLDetailsElement>) => {
+    if (event.key !== 'Escape' || !detailsRef.current?.open) return
     event.preventDefault()
+    event.stopPropagation()
     closeMenu(true)
   }
 
@@ -84,7 +101,12 @@ export function NotebookCellAddMenu({
   }
 
   return (
-    <details ref={detailsRef} className="canvas-add-menu" onToggle={handleToggle}>
+    <details
+      ref={detailsRef}
+      className="canvas-add-menu"
+      onToggle={handleToggle}
+      onKeyDown={handleMenuKeyDown}
+    >
       <summary ref={summaryRef} aria-label="Add cell" title="Add cell">
         <Plus size={15} />
         <span>Add cell</span>
@@ -100,7 +122,6 @@ export function NotebookCellAddMenu({
             aria-label="Search cell types"
             placeholder="Search cell types"
             onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={handleSearchKeyDown}
           />
         </label>
         <div className="canvas-add-results" aria-live="polite">

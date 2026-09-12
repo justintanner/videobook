@@ -1362,9 +1362,34 @@ describe('chat composer browser flow', () => {
     await wait(700)
     expect(await sidebarPlaybackState()).toEqual(pausedAtOpen)
 
+    const fullscreenVideo = dialog.locator('video')
+    await page.getByLabel('Close fullscreen preview').press('Tab')
+    expect(await fullscreenVideo.evaluate((element) => document.activeElement === element))
+      .toBe(true)
+    await page.keyboard.press('Space')
+    expect(await fullscreenVideo.evaluate((element) =>
+      element instanceof HTMLVideoElement && element.paused)).toBe(true)
+    await page.keyboard.press('Space')
+    await expect.poll(async () => await fullscreenVideo.evaluate((element) =>
+      element instanceof HTMLVideoElement && !element.paused)).toBe(true)
+
+    const capture = dialog.getByLabel('Extract frame', { exact: true })
+    for (let step = 0; step < 12; step += 1) {
+      await page.keyboard.press('Tab')
+      expect(await dialog.evaluate((element) => element.contains(document.activeElement)))
+        .toBe(true)
+      if (await capture.evaluate((element) => document.activeElement === element)) break
+    }
+    expect(await capture.evaluate((element) => document.activeElement === element)).toBe(true)
+    await page.keyboard.press('Shift+Tab')
+    expect(await fullscreenVideo.evaluate((element) => document.activeElement === element))
+      .toBe(true)
+
     await page.keyboard.press('Escape')
     await dialog.waitFor({ state: 'hidden' })
     expect(await sidebarPlaybackState()).toEqual(pausedAtOpen)
+    expect(await page.getByLabel(`Open ${videoAddress} fullscreen`)
+      .evaluate((element) => document.activeElement === element)).toBe(true)
   }, 60_000)
 
   it('turns every open notebook square into a media file dropzone', async () => {
@@ -3251,6 +3276,42 @@ describe('chat composer browser flow', () => {
       call.name === 'delete_notebook_cell')
     expect(deleteCalls).toHaveLength(2)
     notebookDirty = true
+  }, 60_000)
+
+  it('dismisses the header add menu with Escape and outside interactions', async () => {
+    const page = await openApp()
+    const menu = page.locator('.canvas-add-menu')
+    const trigger = menu.locator('summary')
+    const search = page.getByLabel('Search cell types')
+    await trigger.click()
+    await search.fill('split')
+    await search.press('Tab')
+    const option = menu.getByRole('button', { name: 'Split video' })
+    expect(await option.evaluate((element) => ({
+      focused: document.activeElement === element,
+      disabled: element instanceof HTMLButtonElement && element.disabled,
+      activeLabel: document.activeElement?.getAttribute('aria-label')
+        ?? document.activeElement?.textContent,
+    }))).toEqual({ focused: true, disabled: false, activeLabel: 'Split video' })
+    await page.keyboard.press('Escape')
+    await expect.poll(async () => await menu.getAttribute('open')).toBeNull()
+    await expect.poll(async () => await trigger.evaluate((element) =>
+      document.activeElement === element)).toBe(true)
+
+    await trigger.click()
+    expect(await search.inputValue()).toBe('')
+    await page.getByLabel('Reset zoom', { exact: true }).click()
+    await expect.poll(async () => await menu.getAttribute('open')).toBeNull()
+    expect(await page.getByLabel('Reset zoom', { exact: true })
+      .evaluate((element) => document.activeElement === element)).toBe(true)
+
+    await trigger.click()
+    await search.fill('split')
+    await search.press('Tab')
+    await page.keyboard.press('Tab')
+    await expect.poll(async () => await menu.getAttribute('open')).toBeNull()
+    expect(await page.getByLabel('Auto-arrange notebook')
+      .evaluate((element) => document.activeElement === element)).toBe(true)
   }, 60_000)
 
   it('searches the header add menu and closes it after adding a cell', async () => {

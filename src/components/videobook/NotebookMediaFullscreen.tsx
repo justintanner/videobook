@@ -13,6 +13,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import type { ImageSubject, ImageSubjectMap } from '@/videobook/image-subject-map'
+import { focusableModalDialogElements } from '@/videobook/modal-dialog-interactions'
 import {
   bestSubjectSnap,
   canSubmitRegionReplacements,
@@ -64,12 +65,6 @@ type NotebookMediaFullscreenProps = {
 }
 
 const REGION_COLOR = '#f5d76e'
-
-function focusableElements(dialog: HTMLElement): HTMLElement[] {
-  return [...dialog.querySelectorAll<HTMLElement>(
-    'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-  )].filter((element) => !element.hidden)
-}
 
 function subjectBox(subject: ImageSubject, width: number, height: number) {
   if (!subject.box) return null
@@ -406,7 +401,7 @@ export function NotebookMediaFullscreen({
   onSelectionChange,
   onClose,
 }: NotebookMediaFullscreenProps) {
-  const dialogRef = useRef<HTMLElement>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
@@ -484,6 +479,8 @@ export function NotebookMediaFullscreen({
 
   useEffect(() => {
     if (!hasMedia) return
+    const dialog = dialogRef.current
+    if (!dialog) return
     restoreFocusRef.current = returnFocus
       ?? (document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -497,33 +494,10 @@ export function NotebookMediaFullscreen({
       appShell.setAttribute('aria-hidden', 'true')
     }
     document.body.style.overflow = 'hidden'
+    dialog.showModal()
     closeRef.current?.focus()
-    const handleDialogKeys = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onClose()
-        return
-      }
-      if (event.key !== 'Tab' || !dialogRef.current) return
-      const focusable = focusableElements(dialogRef.current)
-      if (focusable.length === 0) {
-        event.preventDefault()
-        dialogRef.current.focus()
-        return
-      }
-      const first = focusable[0]
-      const last = focusable.at(-1) ?? first
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    window.addEventListener('keydown', handleDialogKeys)
     return () => {
-      window.removeEventListener('keydown', handleDialogKeys)
+      dialog.close()
       if (appShell) {
         appShell.inert = shellWasInert
         if (shellAriaHidden === null) appShell.removeAttribute('aria-hidden')
@@ -532,9 +506,16 @@ export function NotebookMediaFullscreen({
       document.body.style.overflow = bodyOverflow
       if (restoreFocusRef.current?.isConnected) restoreFocusRef.current.focus()
     }
-  }, [hasMedia, onClose, returnFocus])
+  }, [hasMedia, returnFocus])
 
   if (!isVideo && !mediaUrl) return null
+
+  const focusDialogEdge = (edge: 'first' | 'last') => {
+    if (!dialogRef.current) return
+    const elements = focusableModalDialogElements(dialogRef.current)
+    const target = edge === 'first' ? elements[0] : elements.at(-1)
+    target?.focus({ preventScroll: true })
+  }
 
   const toggleSubject = (subjectId: string) => {
     setSelectedIds((current) => {
@@ -726,14 +707,23 @@ export function NotebookMediaFullscreen({
   const analysisFailed = subjectMap?.status === 'failed'
 
   const dialog = (
-    <section
+    <dialog
       ref={dialogRef}
       className={`notebook-media-fullscreen${isVideo ? ' playback-only' : ' subject-editor'}`}
       role="dialog"
       aria-modal="true"
       aria-label={`Fullscreen preview for @${address}`}
-      tabIndex={-1}
+      onCancel={(event) => {
+        event.preventDefault()
+        onClose()
+      }}
     >
+      <span
+        className="sr-only"
+        tabIndex={0}
+        aria-hidden="true"
+        onFocus={() => focusDialogEdge('last')}
+      />
       <div className="notebook-media-fullscreen-actions">
         {isVideo && playbackUrl && onCaptureFrame && (
           <button
@@ -776,6 +766,7 @@ export function NotebookMediaFullscreen({
               src={playbackUrl}
               poster={posterUrl ?? undefined}
               controls
+              tabIndex={0}
               controlsList="nofullscreen nodownload noremoteplayback"
               disablePictureInPicture
               playsInline
@@ -1182,7 +1173,13 @@ export function NotebookMediaFullscreen({
           />
         </>
       )}
-    </section>
+      <span
+        className="sr-only"
+        tabIndex={0}
+        aria-hidden="true"
+        onFocus={() => focusDialogEdge('first')}
+      />
+    </dialog>
   )
 
   return typeof document === 'undefined'

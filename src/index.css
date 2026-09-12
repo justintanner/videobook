@@ -10311,9 +10311,20 @@ textarea:focus-visible {
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
   grid-template-rows: minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
   overflow: hidden;
   color: #b9ddc9;
   background: #000704;
+}
+
+.notebook-media-fullscreen:not([open]) {
+  display: none;
 }
 
 .notebook-media-fullscreen.playback-only {
