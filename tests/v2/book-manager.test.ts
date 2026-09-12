@@ -129,7 +129,78 @@ describe('v2 book manager', () => {
     await books.close()
     await books.ready()
     expect(books.list().map((book) => ({ bookId: book.bookId, name: book.name }))).toEqual(expected)
-    expect(expected.filter((book) => book.name.toLowerCase() === 'shared target')).toHaveLength(1)
+    expect(expected.filter((book) => book.name === 'shared-target')).toHaveLength(1)
+  })
+
+  it('normalizes project names before creation, rename, and collision checks', async () => {
+    const created = await books.create('  My Café__Project!  ')
+    expect(created).toMatchObject({ ok: true, value: { name: 'my-cafe-project' } })
+    if (!created.ok) return
+    expect(books.getByName('MY CAFÉ PROJECT')).toMatchObject({ ok: true, value: { bookId: created.value.bookId } })
+    expect(await books.create('my-cafe---project')).toMatchObject({ ok: false, error: { code: 'ALREADY_EXISTS' } })
+    const other = await books.create('Other project')
+    if (!other.ok) throw new Error(other.error.message)
+    expect(await books.rename(other.value.bookId, 'My Café Project')).toMatchObject({ ok: false, error: { code: 'ALREADY_EXISTS' } })
+    for (const name of ['', '  ', '---___!!!', '猫🐈']) {
+      expect(await books.create(name)).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } })
+      expect(await books.rename(created.value.bookId, name)).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } })
+    }
+    expect(books.list()).toHaveLength(2)
+    const renamed = await books.rename(created.value.bookId, '  RENAMED__Story 2! ')
+    expect(renamed).toMatchObject({ ok: true, value: { bookId: created.value.bookId, name: 'renamed-story-2' } })
+    await books.close()
+    await books.ready()
+    expect(books.get(created.value.bookId)).toMatchObject({ ok: true, value: { name: 'renamed-story-2' } })
+  })
+
+  it('converts existing names without taking existing slugs or changing media identities', async () => {
+    const originalNames = ['My Project', 'MY__Project', 'my-project', 'my-project-2', '猫🐈', 'project']
+    const entries = []
+    for (let index = 0; index < originalNames.length; index++) {
+      const created = await books.create(`fixture-${index}`)
+      if (!created.ok) throw new Error(created.error.message)
+      const book = books.get(created.value.bookId)
+      if (!book.ok) throw new Error(book.error.message)
+      entries.push(book.value)
+    }
+    const first = entries[0]!
+    const image = await first.engine.artifacts.create('image', 'Free text image label')
+    if (!image.ok) throw new Error(image.error.message)
+    expect((await first.engine.files.write(image.value.artifactId, 'original.png', Buffer.from('preserved media'))).ok).toBe(true)
+    const notebookIds = entries.map((book) => book.engine.notebooks.list()[0]!.id)
+    await books.close()
+    for (const [index, book] of entries.entries()) {
+      const catalog = new DatabaseSync(join(book.rootDir, 'data', 'videobook.db'))
+      try {
+        catalog.prepare('UPDATE book SET name=?').run(originalNames[index]!)
+        catalog.prepare("SELECT dolt_add('book')").get()
+        catalog.prepare("SELECT dolt_commit('-m', 'Legacy free-text project name')").get()
+      } finally { catalog.close() }
+    }
+    const ensured = await books.ensure(first.bookId)
+    expect(ensured).toMatchObject({ ok: true, value: { name: 'my-project-3' } })
+    const expectedNames = ['my-project-3', 'my-project-4', 'my-project', 'my-project-2', 'project-2', 'project']
+    const revisions = []
+    for (const [index, entry] of entries.entries()) {
+      const book = books.get(entry.bookId)
+      if (!book.ok) throw new Error(book.error.message)
+      expect(book.value.name).toBe(expectedNames[index])
+      expect(book.value.engine.book.get()).toMatchObject({ bookId: entry.bookId, name: expectedNames[index], createdAt: entry.createdAt })
+      expect(book.value.engine.notebooks.list()[0]!.id).toBe(notebookIds[index])
+      revisions.push(book.value.engine.history.revisions())
+    }
+    if (!ensured.ok) throw new Error(ensured.error.message)
+    const read = await ensured.value.engine.files.read(image.value.artifactId, 'original.png')
+    expect(read).toMatchObject({ ok: true, value: Buffer.from('preserved media') })
+    expect(ensured.value.engine.artifacts.get(image.value.artifactId)).toMatchObject({ ok: true, value: { label: 'Free text image label' } })
+    await books.close()
+    await books.ready()
+    for (const [index, entry] of entries.entries()) {
+      const book = books.get(entry.bookId)
+      if (!book.ok) throw new Error(book.error.message)
+      expect(book.value.name).toBe(expectedNames[index])
+      expect(book.value.engine.history.revisions()).toEqual(revisions[index])
+    }
   })
 
   it('skips books whose catalog schema the engine no longer supports', async () => {

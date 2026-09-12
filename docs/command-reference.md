@@ -39,7 +39,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `continue_notebook_generation` — Create a reviewable insertion plan for a completed generation or report a stale destination
 - `continue_queued_insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current
 - `copy_file_to_clipboard` — Copy an asset's original media file to the macOS pasteboard as a file reference
-- `create_book` — Create a book with a Main notebook
+- `create_book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.
 - `create_character` — Create a new character artifact, optionally seeded from existing image artifacts
 - `create_character_entity` — Create a reusable character
 - `create_google_flow_character` — Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref for the character_refs parameter of generate_google_flow_omni_flash_video (character_1..7). Consumes plan credits.
@@ -238,7 +238,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `remove_timeline_slot` — Remove a typed timeline slot and shift later slots left
 - `rename_all` — Bulk-relabel video and image assets with an explicit dry run. Dry run proposes descriptive display labels via GPT-5.6 Sol over stored analysis/transcript/prompt context; re-run dry_run with edited `renames` to revalidate; set dry_run=false to apply. Labels are display-only — artifact ids and references never change.
 - `rename_asset` — Set an asset's display label. Labels are display-only — the artifact id and all references stay unchanged.
-- `rename_book` — Rename a book
+- `rename_book` — Rename a book. Project names are normalized to lowercase slugs with hyphens.
 - `rename_notebook` — Rename a notebook
 - `render_timeline` — Render the selected book's typed v2 timeline
 - `render_video` — Render a video artifact into landscape.mp4, portrait.mp4, or square.mp4. Renders all 3 orientations when orientation is omitted.

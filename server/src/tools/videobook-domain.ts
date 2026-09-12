@@ -755,9 +755,9 @@ export function videobookDomainDefs(
     },
     {
       name: "create_book",
-      description: "Create a book with a Main notebook",
+      description: "Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.",
       scope: "global",
-      schema: { name: z.string().min(1) },
+      schema: { name: z.string().min(1).describe("Project slug, such as my-project. Input is normalized to lowercase with hyphens.") },
       handler: async (args) => {
         const result = await books.create(String(args.name));
         return result.ok ? json(result.value) : failure(result.error.message);
@@ -811,9 +811,9 @@ export function videobookDomainDefs(
     },
     {
       name: "rename_book",
-      description: "Rename a book",
+      description: "Rename a book. Project names are normalized to lowercase slugs with hyphens.",
       scope: "global",
-      schema: { ...bookSchema, name: z.string().min(1) },
+      schema: { ...bookSchema, name: z.string().min(1).describe("Project slug, such as my-project. Input is normalized to lowercase with hyphens.") },
       handler: async (args) => {
         const result = await books.rename(String(args.book_id), String(args.name));
         return result.ok ? json(result.value) : failure(result.error.message);

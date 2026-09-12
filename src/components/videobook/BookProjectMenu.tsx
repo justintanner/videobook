@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
+import { BOOK_SLUG_ERROR, normalizeBookSlug } from 'videobook-engine/book-slug'
 import {
   formatArtifactCount,
   formatNotebookCount,
@@ -199,10 +200,10 @@ export function BookProjectMenu({
   const submitRename = async (event?: FormEvent) => {
     event?.preventDefault()
     if (!editingBookId || pending) return
-    const name = editValue.trim()
+    const name = normalizeBookSlug(editValue)
     const current = books.find((book) => book.bookId === editingBookId)
     if (!name) {
-      setOperationError('Enter a project name')
+      setOperationError(BOOK_SLUG_ERROR)
       return
     }
     if (name === current?.name) {
@@ -223,9 +224,9 @@ export function BookProjectMenu({
   const submitCreate = async (event?: FormEvent) => {
     event?.preventDefault()
     if (pending) return
-    const name = createValue.trim()
+    const name = normalizeBookSlug(createValue)
     if (!name) {
-      setOperationError('Enter a project name')
+      setOperationError(BOOK_SLUG_ERROR)
       return
     }
     setOperationError(null)
@@ -345,6 +346,9 @@ export function BookProjectMenu({
                     <input
                       autoFocus
                       aria-label={`New name for ${book.name}`}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       disabled={pending !== null}
                       value={editValue}
                       onChange={(event) => setEditValue(event.target.value)}
@@ -370,6 +374,11 @@ export function BookProjectMenu({
                         <X size={14} />
                       </button>
                     </div>
+                    {editValue && normalizeBookSlug(editValue) !== editValue && (
+                      <small className="book-project-form-hint">
+                        Slug: {normalizeBookSlug(editValue) || 'Enter letters or numbers'}
+                      </small>
+                    )}
                     {operationError && (
                       <span className="book-project-form-error" role="alert">
                         {operationError}
@@ -487,9 +496,12 @@ export function BookProjectMenu({
               <form className="book-project-form" onSubmit={submitCreate}>
                 <input
                   autoFocus
-                  aria-label="New project name"
+                  aria-label="New project slug"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   disabled={pending !== null}
-                  placeholder="project-name"
+                  placeholder="my-project"
                   value={createValue}
                   onChange={(event) => setCreateValue(event.target.value)}
                 />
@@ -514,6 +526,11 @@ export function BookProjectMenu({
                     <X size={14} />
                   </button>
                 </div>
+                {createValue && normalizeBookSlug(createValue) !== createValue && (
+                  <small className="book-project-form-hint">
+                    Slug: {normalizeBookSlug(createValue) || 'Enter letters or numbers'}
+                  </small>
+                )}
                 {operationError && (
                   <span className="book-project-form-error" role="alert">
                     {operationError}

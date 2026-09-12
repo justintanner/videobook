@@ -114,6 +114,7 @@ describe('v2 MCP server', () => {
         expect(response.status, `${method} ${path} ${JSON.stringify(headers)}`).toBe(403)
         expect(response.allowOrigin).toBeUndefined()
         expect(response.body).not.toContain('PRIVATE_')
+        expect(response.body).not.toContain(book.name)
       }
     }
     expect(await callTool<unknown>(client, 'list_assets', { book_id: book.bookId })).toEqual(before)

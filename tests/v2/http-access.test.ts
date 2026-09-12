@@ -52,7 +52,7 @@ it.each([
   })
   const response = await handler.fetch(request)
   expect(response.status).toBe(403)
-  expect(await response.text()).not.toContain('PRIVATE_HTTP_FIXTURE')
+  expect(await response.text()).not.toContain('private-http-fixture')
 })
 
 it.each([
@@ -73,7 +73,7 @@ it.each([
     }))
     const result = await client.callTool({ name: 'list_books', arguments: {} })
     expect(result.isError).not.toBe(true)
-    expect(JSON.stringify(result.content)).toContain('PRIVATE_HTTP_FIXTURE')
+    expect(JSON.stringify(result.content)).toContain('private-http-fixture')
   } finally { await client.close() }
 })
 

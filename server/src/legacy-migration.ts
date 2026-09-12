@@ -45,7 +45,7 @@ interface MigrationHost {
   legacy(bookId: string): V4MigrationDryRun | undefined;
   existing(bookId: string): Engine | undefined;
   open(root: string): Engine;
-  adopt(engine: Engine, root: string, bookId: string): ManagedBook;
+  adopt(engine: Engine, root: string, bookId: string): Promise<ManagedBook>;
   checkpoint?: (phase: MigrationCheckpoint) => void | Promise<void>;
   published?: (bookId: string) => Promise<void>;
   leaseMs?: number;
@@ -392,7 +392,7 @@ export class LegacyMigrationQueue {
       await this.verifyDestination(engine, record);
       record = { ...record, phase: "indexing" };
       await this.write(record);
-      const managed = this.host.adopt(engine, roots.source, bookId);
+      const managed = await this.host.adopt(engine, roots.source, bookId);
       adopted = true;
       const reindexJobIds: number[] = [];
       for (const artifact of engine.artifacts.list()) {

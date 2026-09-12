@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
+import { BOOK_SLUG_ERROR, normalizeBookSlug } from "videobook-engine/book-slug";
 import { logger } from "./logger.js";
 import { LegacyMigrationQueue, migrationFailure, type MigratedBook, type MigrationOptions, type MigrationCheckpoint } from "./legacy-migration.js";
 import {
@@ -100,9 +101,10 @@ export class BookManager {
       legacy: (bookId) => this.legacyBooks.get(bookId),
       existing: (bookId) => this.books.get(bookId)?.engine,
       open: (root) => this.createEngine(root),
-      adopt: (engine, root, bookId) => {
-        const managed = this.toManagedBook(engine, root, engine.book.get());
+      adopt: async (engine, root, bookId) => {
+        let managed = this.toManagedBook(engine, root, engine.book.get());
         if (managed.bookId !== bookId) throw new Error("Migrated book identity does not match its root");
+        managed = await this.normalizeStoredBookName(managed);
         if (!this.books.has(bookId)) this.assertUnique(managed);
         this.books.set(bookId, managed);
         this.legacyBooks.delete(bookId);
@@ -132,12 +134,20 @@ export class BookManager {
   async ensure(bookId: string): Promise<Result<ManagedBook, EngineError>> {
     await this.scan();
     const existing = this.books.get(bookId);
-    if (existing) return ok(existing);
+    if (existing) {
+      if (normalizeBookSlug(existing.name) === existing.name) return ok(existing);
+      await this.ready();
+      return this.get(bookId);
+    }
     if (!this.knownRoots.has(bookId)) {
       return err(engineError("NOT_FOUND", `Book not found: ${bookId}`));
     }
     await this.openRoot(bookId);
     const opened = this.books.get(bookId);
+    if (opened && normalizeBookSlug(opened.name) !== opened.name) {
+      await this.ready();
+      return this.get(bookId);
+    }
     return opened
       ? ok(opened)
       : err(engineError("NOT_FOUND", `Book not found: ${bookId}`));
@@ -162,9 +172,9 @@ export class BookManager {
   }
 
   getByName(name: string): Result<ManagedBook, EngineError> {
-    const wanted = name.trim().toLowerCase();
+    const wanted = normalizeBookSlug(name);
     const book = [...this.books.values()].find(
-      (item) => item.name.toLowerCase() === wanted,
+      (item) => item.name === wanted,
     );
     return book
       ? ok(book)
@@ -173,29 +183,28 @@ export class BookManager {
 
   async create(name: string): Promise<Result<BookSummary, EngineError>> {
     await this.ready();
-    const trimmed = name.trim();
-    if (!trimmed) {
-      return err(engineError("INVALID_INPUT", "Book name must be non-empty"));
+    const slug = normalizeBookSlug(name);
+    if (!slug) {
+      return err(engineError("INVALID_INPUT", BOOK_SLUG_ERROR));
     }
     if (
-      this.getByName(trimmed).ok
-      || this.reservedNames.has(trimmed.toLowerCase())
+      this.getByName(slug).ok
+      || this.reservedNames.has(slug)
       || [...this.legacyBooks.values()].some(
-        (book) => book.slug.toLowerCase() === trimmed.toLowerCase(),
+        (book) => normalizeBookSlug(book.slug) === slug,
       )
     ) {
-      return err(engineError("ALREADY_EXISTS", `Book name already exists: ${trimmed}`));
+      return err(engineError("ALREADY_EXISTS", `Book name already exists: ${slug}`));
     }
 
-    const nameKey = trimmed.toLowerCase();
-    this.reservedNames.add(nameKey);
+    this.reservedNames.add(slug);
     const temporaryRoot = join(this.libraryDir, `.creating-${randomUUID()}`);
     let temporaryEngine: Engine | null = null;
     let finalEngine: Engine | null = null;
     let finalRoot: string | null = null;
     try {
       await mkdir(temporaryRoot, { recursive: false });
-      temporaryEngine = this.createEngine(temporaryRoot, trimmed);
+      temporaryEngine = this.createEngine(temporaryRoot, slug);
       await temporaryEngine.ready;
       const created = temporaryEngine.book.get();
       temporaryEngine.close();
@@ -227,7 +236,7 @@ export class BookManager {
       const message = cause instanceof Error ? cause.message : String(cause);
       return err(engineError("IO_ERROR", `Could not create book: ${message}`));
     } finally {
-      this.reservedNames.delete(nameKey);
+      this.reservedNames.delete(slug);
     }
   }
 
@@ -238,22 +247,21 @@ export class BookManager {
     await this.ready();
     const existing = this.get(bookId);
     if (!existing.ok) return existing;
-    const trimmed = name.trim();
-    if (!trimmed) {
-      return err(engineError("INVALID_INPUT", "Book name must be non-empty"));
+    const slug = normalizeBookSlug(name);
+    if (!slug) {
+      return err(engineError("INVALID_INPUT", BOOK_SLUG_ERROR));
     }
-    const conflict = this.getByName(trimmed);
-    const nameKey = trimmed.toLowerCase();
+    const conflict = this.getByName(slug);
     if (
       (conflict.ok && conflict.value.bookId !== bookId)
-      || this.reservedNames.has(nameKey)
-      || [...this.legacyBooks.values()].some((book) => book.slug.toLowerCase() === nameKey)
+      || this.reservedNames.has(slug)
+      || [...this.legacyBooks.values()].some((book) => normalizeBookSlug(book.slug) === slug)
     ) {
-      return err(engineError("ALREADY_EXISTS", `Book name already exists: ${trimmed}`));
+      return err(engineError("ALREADY_EXISTS", `Book name already exists: ${slug}`));
     }
-    this.reservedNames.add(nameKey);
+    this.reservedNames.add(slug);
     try {
-      const renamed = await existing.value.engine.book.rename(trimmed);
+      const renamed = await existing.value.engine.book.rename(slug);
       if (!renamed.ok) return renamed;
       const managed = this.toManagedBook(
         existing.value.engine,
@@ -263,7 +271,7 @@ export class BookManager {
       this.books.set(bookId, managed);
       return ok(this.summary(managed));
     } finally {
-      this.reservedNames.delete(nameKey);
+      this.reservedNames.delete(slug);
     }
   }
 
@@ -339,7 +347,35 @@ export class BookManager {
   private async load(): Promise<void> {
     await this.scan();
     await Promise.all([...this.knownRoots].map((bookId) => this.openRoot(bookId)));
+    for (const book of [...this.books.values()].sort((left, right) => left.bookId.localeCompare(right.bookId))) {
+      this.assertUnique(await this.normalizeStoredBookName(book));
+    }
     await this.migrations.startIfPresent();
+  }
+
+  private async normalizeStoredBookName(book: ManagedBook): Promise<ManagedBook> {
+    const base = normalizeBookSlug(book.name) || "project";
+    if (base === book.name) return book;
+    let name = base;
+    let suffix = 2;
+    while (
+      this.getByName(name).ok
+      || this.reservedNames.has(name)
+      || [...this.legacyBooks.values()].some((legacy) =>
+        legacy.sourceBookId !== book.bookId && normalizeBookSlug(legacy.slug) === name)
+    ) {
+      name = `${base}-${suffix++}`;
+    }
+    this.reservedNames.add(name);
+    try {
+      const renamed = await book.engine.book.rename(name);
+      if (!renamed.ok) throw new Error(renamed.error.message);
+      const managed = this.toManagedBook(book.engine, book.rootDir, renamed.value);
+      this.books.set(book.bookId, managed);
+      return managed;
+    } finally {
+      this.reservedNames.delete(name);
+    }
   }
 
   private async scan(): Promise<void> {
@@ -415,7 +451,6 @@ export class BookManager {
         engine.close();
         throw new Error(`Book root ${bookId} has mismatched book identity`);
       }
-      this.assertUnique(managed);
       this.books.set(managed.bookId, managed);
     } catch (cause) {
       engine?.close();

@@ -58,13 +58,13 @@ describe('book lifecycle endpoints over HTTP MCP', () => {
 
   it('renames a book while preserving notebook and media identities across restart', async () => {
     const book = await create('  Original book  ')
-    expect(book.name).toBe('Original book')
+    expect(book.name).toBe('original-book')
     const graph = await call<Notebook>('create_notebook', { book_id: book.bookId, name: 'Working board' })
     const image = await picture(book.bookId)
     await call('rename_book', { book_id: book.bookId, name: '  Renamed 猫  ' })
-    expect(await call('get_book', { book_id: book.bookId })).toMatchObject({ bookId: book.bookId, name: 'Renamed 猫' })
+    expect(await call('get_book', { book_id: book.bookId })).toMatchObject({ bookId: book.bookId, name: 'renamed' })
     await restart()
-    expect(await call('get_book', { book_id: book.bookId })).toMatchObject({ bookId: book.bookId, name: 'Renamed 猫' })
+    expect(await call('get_book', { book_id: book.bookId })).toMatchObject({ bookId: book.bookId, name: 'renamed' })
     expect(await notebook(book.bookId, graph.id)).toMatchObject({ id: graph.id, name: 'Working board' })
     expect(await bytes(book.bookId, image.id)).toEqual(image.data)
   })
@@ -72,12 +72,12 @@ describe('book lifecycle endpoints over HTTP MCP', () => {
   it('rejects blank and duplicate names without changing either book', async () => {
     const first = await create('First')
     const second = await create('Second')
-    for (const name of [' first ', 'FIRST', '   ']) {
+    for (const name of [' first ', 'FIRST', '   ', '___', '猫🐈']) {
       const result = await client.callTool({ name: 'rename_book', arguments: { book_id: second.bookId, name } })
       expect(result.isError).toBe(true)
     }
-    expect(await call('get_book', { book_id: first.bookId })).toMatchObject({ name: 'First' })
-    expect(await call('get_book', { book_id: second.bookId })).toMatchObject({ name: 'Second' })
+    expect(await call('get_book', { book_id: first.bookId })).toMatchObject({ name: 'first' })
+    expect(await call('get_book', { book_id: second.bookId })).toMatchObject({ name: 'second' })
     const duplicate = await client.callTool({ name: 'create_book', arguments: { name: ' FIRST ' } })
     expect(duplicate.isError).toBe(true)
     expect(await books()).toHaveLength(2)
@@ -92,7 +92,7 @@ describe('book lifecycle endpoints over HTTP MCP', () => {
     await restart()
     const listed = await books()
     expect(listed).toHaveLength(2)
-    expect(listed.filter((book) => book.name === 'Shared name')).toHaveLength(1)
+    expect(listed.filter((book) => book.name === 'shared-name')).toHaveLength(1)
   })
 
   it('does not leave abandoned book roots after concurrent duplicate creates', async () => {
@@ -116,7 +116,7 @@ describe('book lifecycle endpoints over HTTP MCP', () => {
     const rejected = await client.callTool({ name: 'delete_book', arguments: { book_id: first.bookId, confirm_name: 'wrong' } })
     expect(rejected.isError).toBe(true)
     expect(await books()).toHaveLength(2)
-    await call('delete_book', { book_id: first.bookId, confirm_name: 'Delete fixture' })
+    await call('delete_book', { book_id: first.bookId, confirm_name: first.name })
     expect(await books()).toEqual(expect.arrayContaining([expect.objectContaining({ bookId: second.bookId })]))
     expect((await client.callTool({ name: 'get_book', arguments: { book_id: first.bookId } })).isError).toBe(true)
     expect(await bytes(second.bookId, image.id)).toEqual(image.data)

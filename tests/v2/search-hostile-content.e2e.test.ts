@@ -31,6 +31,7 @@ import {
  * of it.
  */
 const BOOK = '<img src=x onerror="window.__xssBook=1"><i>hostile book</i>';
+const BOOK_SLUG = "img-src-x-onerror-window-xssbook-1-i-hostile-book-i";
 const LABEL =
   '<img src=x onerror="window.__xssLabel=1"><b>hostile label</b> hostile-label-marker';
 const EXCERPT =
@@ -215,7 +216,7 @@ describe("hostile search content across browser surfaces", () => {
     const listedBook = (Array.isArray(listedBooks) ? listedBooks : [])
       .map(record)
       .find((entry) => entry?.bookId === bookId);
-    expect(listedBook?.name).toBe(BOOK);
+    expect(listedBook?.name).toBe(BOOK_SLUG);
     const notebooks = resultValue(
       await client.callTool({
         name: "list_notebooks",
@@ -327,7 +328,7 @@ describe("hostile search content across browser surfaces", () => {
     await input.press("Enter");
   }
 
-  it("renders hostile book names, labels and indexed excerpts as literal text without executing them", async () => {
+  it("normalizes hostile project names and renders labels and indexed excerpts without executing them", async () => {
     if (!page) throw new Error("Browser page was not initialized");
     await page.goto(`${appUrl}/library`, { waitUntil: "commit" });
     await search(page, "hostile-excerpt-marker");
@@ -335,7 +336,7 @@ describe("hostile search content across browser surfaces", () => {
     await card.first().waitFor({ state: "visible", timeout: MCP_ROUNDTRIP_MS });
     expect(await card.count()).toBe(1);
     expect(await card.locator("header strong").textContent()).toBe(
-      `${BOOK} · ${LABEL}`,
+      `${BOOK_SLUG} · ${LABEL}`,
     );
     expect(await card.locator(".moment-card-body > p").textContent()).toBe(
       EXCERPT,
@@ -380,7 +381,7 @@ describe("hostile search content across browser surfaces", () => {
     expect(pageErrors).toEqual([]);
   }, 60_000);
 
-  it("renders the hostile owning book name literally in the media library dialog", async () => {
+  it("renders the owning project slug in the media library dialog", async () => {
     if (!page) throw new Error("Browser page was not initialized");
     await page.goto(appUrl, { waitUntil: "commit" });
     const opener = page.locator(".cell-media-slot-library").first();
@@ -391,14 +392,14 @@ describe("hostile search content across browser surfaces", () => {
     const asset = dialog.locator(".media-library-asset").first();
     await asset.waitFor({ state: "visible", timeout: MCP_ROUNDTRIP_MS });
     expect(await asset.locator("small").textContent()).toBe(
-      `${BOOK} · this book`,
+      `${BOOK_SLUG} · this book`,
     );
     expect(
       await asset
         .locator("button[aria-label]")
         .last()
         .getAttribute("aria-label"),
-    ).toContain(`from ${BOOK}`);
+    ).toContain(`from ${BOOK_SLUG}`);
     expect(artifactId).toBeTruthy();
     expect(await executedMarkers(page)).toEqual([]);
     expect(await activeInjectedElements(page)).toBe(0);

@@ -28,6 +28,12 @@ Connections carry outputs into named inputs. Runs are explicit and queued, and
 their cell order and resulting asset/entity references are recorded. New books
 begin with a `Main` notebook.
 
+Project names are lowercase slugs with hyphens: `My Café Project` becomes
+`my-cafe-project`. Creation and rename use the same normalization in the UI,
+MCP API, and engine. Existing names are converted when the library opens;
+collisions receive numeric suffixes while existing slugs keep their names.
+Book IDs, notebooks, and media stay attached to the same project.
+
 The frontend is a green notebook-first workspace with book and notebook
 pickers, a typed cell canvas, a music video editor, an asset library, jobs, history,
 storage health, and provider settings.
@@ -38,7 +44,7 @@ over MCP. See [docs/asset-tags.md](docs/asset-tags.md).
 
 ## Storage
 
-Each book owns an isolated `videobook-engine` v5.4.3 schema-v25 root under
+Each book owns an isolated `videobook-engine` v5.4.5 schema-v25 root under
 `VIDEOBOOK_LIBRARY_DIR/<book UUIDv7>/`. That root holds its embedded DoltLite
 catalog, content-addressed objects, managed files, notebook graph, primary sequence,
 history, and runtime tables. Media bytes can be published to B2 under immutable

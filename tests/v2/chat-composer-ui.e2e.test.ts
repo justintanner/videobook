@@ -805,6 +805,59 @@ describe('chat composer browser flow', () => {
     return page
   }
 
+  it('creates and renames projects as slugs in the main dropdown', async () => {
+    const page = await openApp()
+    const toggle = page.locator('.brand-project-menu-toggle')
+    const selectedName = toggle.locator('strong')
+    const client = new Client({ name: 'project-slug-browser-e2e', version: '1' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    let createdId = ''
+    let createdName = 'my-cafe-project'
+    try {
+      await toggle.click()
+      await page.getByRole('button', { name: 'New project', exact: true }).click()
+      const input = page.getByLabel('New project slug', { exact: true })
+      await input.fill('___!!!')
+      await page.getByRole('button', { name: 'Create project', exact: true }).click()
+      expect(await page.locator('.book-project-menu [role="alert"]').textContent()).toContain('Project slugs must contain')
+      await input.fill(' My Café__Project! ')
+      expect(await page.locator('.book-project-form-hint').textContent()).toContain('Slug: my-cafe-project')
+      await page.getByRole('button', { name: 'Create project', exact: true }).click()
+      await expect.poll(() => selectedName.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe(createdName)
+      const listed = resultValue(await client.callTool({ name: 'list_books', arguments: {} }))
+      const created = (Array.isArray(listed) ? listed : []).map(record).find((book) => book?.name === createdName)
+      createdId = typeof created?.bookId === 'string' ? created.bookId : ''
+      expect(createdId).not.toBe('')
+      await toggle.click()
+      await page.getByRole('button', { name: `Rename ${createdName}`, exact: true }).click()
+      const rename = page.getByLabel(`New name for ${createdName}`, { exact: true })
+      await rename.fill('CHAT UI E2E')
+      await page.getByRole('button', { name: 'Save project name', exact: true }).click()
+      await expect.poll(() => page.locator('.book-project-menu [role="alert"]').textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('already exists')
+      expect(await selectedName.textContent()).toBe(createdName)
+      await rename.fill('Renamed Project 2')
+      await page.screenshot({ path: '/tmp/videobook-project-slug-preview.png' })
+      await page.getByRole('button', { name: 'Save project name', exact: true }).click()
+      createdName = 'renamed-project-2'
+      await expect.poll(() => selectedName.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe(createdName)
+      expect(resultValue(await client.callTool({ name: 'get_book', arguments: { book_id: createdId } }))).toMatchObject({ bookId: createdId, name: createdName })
+      await page.reload({ waitUntil: 'commit' })
+      await expect.poll(() => selectedName.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe(createdName)
+      await toggle.click()
+      const names = await page.locator('.book-project-copy strong').allTextContents()
+      expect(names).toEqual(expect.arrayContaining(['chat-ui-e2e', createdName]))
+      expect(names.every((name) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name))).toBe(true)
+      await page.getByRole('menuitem', { name: /chat-ui-e2e/ }).click()
+      await expect.poll(() => selectedName.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe('chat-ui-e2e')
+    } finally {
+      if (createdId) await client.callTool({ name: 'delete_book', arguments: { book_id: createdId, confirm_name: createdName } })
+      await client.close()
+      notebookDirty = true
+    }
+  }, 60_000)
+
   it('cold-starts the MCP-backed app and keeps canvas controls clear', async () => {
     const page = await openApp({ cold: true })
 
