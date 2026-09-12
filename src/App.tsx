@@ -12042,7 +12042,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             return (
               <button key={item.id} type="button" className={screen === item.id ? 'active' : ''} title={item.label} aria-label={`Open ${item.label}`} aria-current={screen === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}>
                 <Icon size={17} />
-                <span>{item.label}</span>
               </button>
             )
           })}
