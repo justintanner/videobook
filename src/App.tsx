@@ -442,6 +442,7 @@ import {
   type McpActivity,
 } from '@/videobook/mcp-activity'
 import { useMcpConnection } from '@/videobook/useMcpConnection'
+import { useNotebookAutoRefresh } from '@/videobook/useNotebookAutoRefresh'
 import type {
   BookProjectMutationResult,
   BookProjectSummary,
@@ -4038,6 +4039,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     nextAssets: AssetRecord[],
     nextJobs: JobRecord[],
   ) => {
+    watchSnapshotClockRef.current = performance.now()
     setNotebook((current) => jsonEqual(current, next) ? current : next)
     const cellIds = new Set(next.cells.map((cell) => cell.id))
     setQueuedCellIds((current) => {
@@ -4048,12 +4050,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const retained = new Set([...current].filter((cellId) => cellIds.has(cellId)))
       return retained.size === current.size ? current : retained
     })
-    setMediaSlotStates((current) => Object.fromEntries(
-      Object.entries(current).filter(([cellId]) => cellIds.has(cellId)),
-    ))
-    setCellRunErrors((current) => Object.fromEntries(
-      Object.entries(current).filter(([cellId]) => cellIds.has(cellId)),
-    ))
+    setMediaSlotStates((current) => Object.keys(current).every((cellId) => cellIds.has(cellId))
+      ? current
+      : Object.fromEntries(Object.entries(current).filter(([cellId]) => cellIds.has(cellId))))
+    setCellRunErrors((current) => Object.keys(current).every((cellId) => cellIds.has(cellId))
+      ? current
+      : Object.fromEntries(Object.entries(current).filter(([cellId]) => cellIds.has(cellId))))
     updateSelectedCellIds(new Set(
       [...selectedCellIdsRef.current].filter((cellId) => cellIds.has(cellId)),
     ))
@@ -4073,6 +4075,42 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setSourceViewCellId((current) =>
       current && cellIds.has(current) ? current : null)
   }, [updateSelectedCellIds])
+
+  useNotebookAutoRefresh({
+    bookId,
+    notebookId: notebook?.id ?? null,
+    enabled: mcp.state === 'ready' && screen === 'notebook' && !busy
+      && !nodes.some((node) => node.dragging),
+    refresh: async (isCurrent) => {
+      if (mcp.state !== 'ready' || !notebook || activeMcpCallsRef.current.size > 0) return
+      const fetchedAt = performance.now()
+      const [notebookResult, assetResult, jobResult] = await Promise.allSettled([
+        call('get_notebook', {
+          book_id: bookId,
+          notebook_id: notebook.id,
+        }, { background: true }),
+        call('list_assets', {
+          book_id: bookId,
+          sort: 'newest',
+          limit: 200,
+          include_referenced: true,
+        }, { background: true }),
+        call('list_jobs', { book_id: bookId, limit: 200 }, { background: true }),
+      ])
+      if (!isCurrent() || activeMcpCallsRef.current.size > 0
+        || fetchedAt < watchSnapshotClockRef.current) return
+      if (notebookResult.status !== 'fulfilled'
+        || assetResult.status !== 'fulfilled'
+        || jobResult.status !== 'fulfilled') return
+      const nextNotebook = asNotebook(notebookResult.value)
+      if (!nextNotebook) return
+      const nextAssets = asAssets(assetResult.value)
+      const nextJobs = asJobs(jobResult.value)
+      setAssets((current) => jsonEqual(current, nextAssets) ? current : nextAssets)
+      applyJobsSnapshot(nextJobs)
+      applyNotebook(nextNotebook, nextAssets, nextJobs)
+    },
+  })
 
   const watchNotebookRun = useCallback(async (params: {
     bookId: string
@@ -12151,10 +12189,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           />
         )}
         <nav className="header-navigation" aria-label="Workspace navigation">
-          <button type="button" title="Refresh books" aria-label="Refresh books" disabled={busy || mcp.state !== 'ready'} onClick={() => { refreshLibraryBrowse(); setBookBrowse(emptyBookBrowse); void loadBooks(bookId) }}>
-            {busy ? <BusyIndicator size={17} /> : <RefreshCw size={17} />}
-            <span>Refresh</span>
-          </button>
           {screenNavigation.map((item) => {
             const Icon = item.icon
             return (

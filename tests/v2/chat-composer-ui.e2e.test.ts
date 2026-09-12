@@ -815,6 +815,7 @@ describe('chat composer browser flow', () => {
     const firstCell = notebookCellNode(page, videoCellId)
     await toolbar.waitFor({ state: 'visible' })
     await firstCell.waitFor({ state: 'visible' })
+    expect(await page.getByLabel('Refresh books', { exact: true }).count()).toBe(0)
     const topbarBox = await topbar.boundingBox()
     const brandBox = await brand.boundingBox()
     const navigationBox = await navigation.boundingBox()
@@ -902,7 +903,7 @@ describe('chat composer browser flow', () => {
     await page.setViewportSize({ width: 1440, height: 1000 })
   }, 60_000)
 
-  it('renders edges whose target handles are added after mount', async () => {
+  it('automatically refreshes external notebook changes and dynamic edge handles', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()
     const input = page.getByLabel('Videobook command input')
@@ -938,19 +939,6 @@ describe('chat composer browser flow', () => {
         if (!id) throw new Error('Could not create dynamic handle fixture cell')
         return id
       }
-      const refreshNotebook = async (): Promise<void> => {
-        if (!page) throw new Error('Browser page was not initialized')
-        const refresh = page.getByLabel('Refresh books')
-        observedCalls.length = 0
-        await refresh.click()
-        await expect.poll(() => observedCalls.some((call) => call.name === 'list_books'), {
-          timeout: MCP_ROUNDTRIP_MS,
-        }).toBe(true)
-        await expect.poll(async () => await refresh.isEnabled(), {
-          timeout: 30_000,
-        }).toBe(true)
-        expect(await input.isEnabled()).toBe(true)
-      }
       const connect = async (
         sourceCellId: string,
         targetCellId: string,
@@ -975,7 +963,7 @@ describe('chat composer browser flow', () => {
         const path = page.locator(
           `.notebook-flow .react-flow__edge[data-id="${edgeId}"] .react-flow__edge-path`,
         )
-        await expect.poll(async () => await path.count()).toBe(1)
+        await expect.poll(async () => await path.count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(1)
         expect(await path.getAttribute('d')).toMatch(/^M /)
       }
 
@@ -992,7 +980,6 @@ describe('chat composer browser flow', () => {
         prompt: 'Dynamic image target',
       })
       dynamicCellIds.push(imageTargetCellId)
-      await refreshNotebook()
       const imageTargetNode = page.locator(
         `.notebook-flow .react-flow__node[data-id="${imageTargetCellId}"]`,
       )
@@ -1053,7 +1040,6 @@ describe('chat composer browser flow', () => {
         tool: 'generate_kie_seedance_2_5_video',
       })
       dynamicCellIds.push(videoTargetCellId)
-      await refreshNotebook()
       const videoTargetNode = page.locator(
         `.notebook-flow .react-flow__node[data-id="${videoTargetCellId}"]`,
       )
@@ -1061,12 +1047,10 @@ describe('chat composer browser flow', () => {
       expect(await videoTargetNode.locator('.cell-target-handle').count()).toBe(1)
 
       const firstVideoEdgeId = await connect(imageCellId, videoTargetCellId, 'image')
-      await refreshNotebook()
       await assertEdge(firstVideoEdgeId)
       const secondVideoEdgeId = await connect(secondImageCellId, videoTargetCellId, 'image_2')
-      await refreshNotebook()
-      expect(await videoTargetNode.locator('.cell-target-handle').count()).toBe(2)
       for (const edgeId of [firstVideoEdgeId, secondVideoEdgeId]) await assertEdge(edgeId)
+      expect(await videoTargetNode.locator('.cell-target-handle').count()).toBe(2)
 
       const notebookValue = record(resultValue(await client.callTool({
         name: 'get_notebook',
@@ -1088,6 +1072,169 @@ describe('chat composer browser flow', () => {
           arguments: { book_id: bookId, notebook_id: notebookId, cell_id: cellId },
         }))
       }
+      await client.close()
+      notebookDirty = true
+    }
+  }, 60_000)
+
+  it('preserves selection, zoom, scroll, and drafts while external cells update', async () => {
+    const page = await openApp()
+    const selected = notebookCellNode(page, videoCellId)
+    await selected.click()
+    await page.getByLabel('Reset zoom', { exact: true }).click()
+    await page.getByLabel('Zoom out', { exact: true }).click()
+    const input = page.getByLabel('Videobook command input')
+    const draft = 'Keep this draft while other clients edit the notebook'
+    await input.fill(draft)
+    const scroll = page.locator('.notebook-horizontal-scroll')
+    const scrollPosition = await scroll.evaluate((element) => ({
+      left: element.scrollLeft,
+      top: element.scrollTop,
+    }))
+    const client = new Client(
+      { name: 'videobook-auto-refresh-e2e', version: '1.0.0' },
+      {
+        capabilities: {},
+        supportedProtocolVersions: ['2026-07-28'],
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+      },
+    )
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    const tool = async (name: string, args: Record<string, unknown>) =>
+      resultValue(await client.callTool({
+        name,
+        arguments: { book_id: bookId, notebook_id: notebookId, ...args },
+      }))
+    let cellId = ''
+    try {
+      const created = record(await tool('create_notebook_cell', {
+        cell: { type: 'prompt', slot: { row: 7, column: 7 }, prompt: 'External prompt' },
+      }))
+      cellId = typeof created?.id === 'string' ? created.id : ''
+      if (!cellId) throw new Error('Could not create the auto-refresh fixture')
+      const added = notebookCellNode(page, cellId)
+      await added.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      await tool('update_notebook_cell', { cell_id: cellId, cell: { prompt: 'Updated outside the browser' } })
+      await expect.poll(async () => await added.locator('.cell-copy-text p').textContent(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe('Updated outside the browser')
+      await tool('move_notebook_cells', { slots: [{ id: cellId, row: 8, column: 7 }] })
+      await expect.poll(async () => await added.locator('.cell-node-footer strong').textContent(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe('@i8')
+      await tool('delete_notebook_cell', { cell_id: cellId })
+      await expect.poll(async () => await added.count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
+      cellId = ''
+      expect(await selected.getAttribute('data-selection')).toBe('primary')
+      expect(await page.getByLabel('Reset zoom', { exact: true }).textContent()).toContain('75%')
+      expect(await input.inputValue()).toBe(draft)
+      expect(await input.evaluate((element) => document.activeElement === element)).toBe(true)
+      expect(await input.isEnabled()).toBe(true)
+      expect(await scroll.evaluate((element) => ({ left: element.scrollLeft, top: element.scrollTop })))
+        .toEqual(scrollPosition)
+    } finally {
+      if (cellId) await tool('delete_notebook_cell', { cell_id: cellId })
+      await client.close()
+      await input.fill('')
+      await page.getByLabel('Reset zoom', { exact: true }).click()
+      notebookDirty = true
+    }
+  }, 60_000)
+
+  it('serializes refreshes, rejects old book responses, and retries after a network failure', async () => {
+    const page = await openApp()
+    const client = new Client(
+      { name: 'videobook-refresh-scope-e2e', version: '1.0.0' },
+      {
+        capabilities: {},
+        supportedProtocolVersions: ['2026-07-28'],
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+      },
+    )
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    const tool = async (name: string, args: Record<string, unknown>) =>
+      resultValue(await client.callTool({ name, arguments: args }))
+    const otherBookName = 'auto-refresh-other-book'
+    let otherBookId = ''
+    let releaseSnapshot = () => {}
+    const released = new Promise<void>((resolve) => { releaseSnapshot = resolve })
+    let held = false
+    let snapshotReady = false
+    let delivered = false
+    let oldBookReads = 0
+    let failOtherRead = false
+    let failedRead = false
+    const delaySnapshot = async (route: Route) => {
+      const calls = toolCalls(await requestBody(route))
+      if (calls.some((call) => call.name === 'get_notebook' && call.arguments.book_id === bookId)) {
+        oldBookReads += 1
+        if (!held) {
+          held = true
+          const response = await route.fetch()
+          snapshotReady = true
+          await released
+          await route.fulfill({ response })
+          delivered = true
+          return
+        }
+      }
+      if (failOtherRead && calls.some((call) =>
+        call.name === 'get_notebook' && call.arguments.book_id === otherBookId)) {
+        failOtherRead = false
+        failedRead = true
+        await route.abort('failed')
+        return
+      }
+      await route.fallback()
+    }
+    try {
+      await tool('create_book', { name: otherBookName })
+      const books = await tool('list_books', { sort: 'newest' })
+      const otherBook = (Array.isArray(books) ? books : []).map(record)
+        .find((entry) => entry?.name === otherBookName)
+      otherBookId = typeof otherBook?.bookId === 'string' ? otherBook.bookId : ''
+      const notebooks = await tool('list_notebooks', { book_id: otherBookId })
+      const otherNotebook = (Array.isArray(notebooks) ? notebooks : []).map(record).find(Boolean)
+      const otherNotebookId = typeof otherNotebook?.id === 'string' ? otherNotebook.id : ''
+      if (!otherBookId || !otherNotebookId) throw new Error('Could not create the second book')
+      const cell = record(await tool('create_notebook_cell', {
+        book_id: otherBookId,
+        notebook_id: otherNotebookId,
+        cell: { type: 'prompt', slot: { row: 0, column: 0 }, prompt: 'Second book prompt' },
+      }))
+      const otherCellId = typeof cell?.id === 'string' ? cell.id : ''
+      if (!otherCellId) throw new Error('Could not create the second book cell')
+      await page.route('**/mcp', delaySnapshot)
+      await expect.poll(() => snapshotReady, { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      await wait(2_200)
+      expect(oldBookReads).toBe(1)
+      await page.locator('.brand-project-menu-toggle').click()
+      await page.getByRole('menuitem', { name: new RegExp(otherBookName) }).click()
+      const otherNode = notebookCellNode(page, otherCellId)
+      await otherNode.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      releaseSnapshot()
+      await expect.poll(() => delivered).toBe(true)
+      await wait(250)
+      expect(await notebookCellNode(page, videoCellId).count()).toBe(0)
+      expect(await otherNode.count()).toBe(1)
+      failOtherRead = true
+      await tool('update_notebook_cell', {
+        book_id: otherBookId,
+        notebook_id: otherNotebookId,
+        cell_id: otherCellId,
+        cell: { prompt: 'Refreshed after a network failure' },
+      })
+      await expect.poll(() => failedRead, { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      await expect.poll(async () => await otherNode.locator('.cell-copy-text p').textContent(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe('Refreshed after a network failure')
+    } finally {
+      releaseSnapshot()
+      await page.unroute('**/mcp', delaySnapshot)
+      await page.locator('.brand-project-menu-toggle').click()
+      await page.getByRole('menuitem', { name: /chat-ui-e2e/ }).click()
+      await notebookCellNode(page, videoCellId).waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      if (otherBookId) await tool('delete_book', { book_id: otherBookId, confirm_name: otherBookName })
       await client.close()
       notebookDirty = true
     }
