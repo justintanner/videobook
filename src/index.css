@@ -185,7 +185,7 @@ textarea:focus-visible {
   z-index: 30;
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, max-content) minmax(max-content, 1fr) auto;
   grid-template-rows: 72px;
   align-items: center;
   min-width: 0;
@@ -1022,9 +1022,10 @@ textarea:focus-visible {
   align-self: center;
   min-width: 0;
   align-items: center;
-  gap: 12px;
-  margin: 0 16px;
-  padding-left: 16px;
+  justify-content: flex-start;
+  gap: 8px;
+  margin: 0 8px;
+  padding-left: 8px;
   border-left: 1px solid rgba(114, 231, 170, 0.14);
 }
 
@@ -1035,18 +1036,18 @@ textarea:focus-visible {
 .canvas-primary-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .canvas-zoom-panel {
   display: flex;
-  height: 44px;
+  height: 32px;
 }
 
 .canvas-zoom-panel button {
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   place-items: center;
   border: 1px solid var(--control-border);
@@ -1074,8 +1075,8 @@ textarea:focus-visible {
 }
 
 .canvas-zoom-panel .canvas-zoom-level {
-  width: 52px;
-  font-size: 11px;
+  width: 44px;
+  font-size: 10px;
   font-weight: 650;
   line-height: 1;
   letter-spacing: 0.06em;
@@ -1088,17 +1089,17 @@ textarea:focus-visible {
 
 .canvas-auto-arrange {
   display: flex;
-  height: 44px;
+  height: 32px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 0 10px;
+  gap: 5px;
+  padding: 0 7px;
   border: 1px solid var(--control-border);
   color: var(--control-fg);
   background: var(--control-bg);
   cursor: pointer;
   pointer-events: auto;
-  font-size: 11px;
+  font-size: 10px;
   white-space: nowrap;
 }
 
@@ -1133,17 +1134,17 @@ textarea:focus-visible {
 
 .canvas-add-menu summary {
   display: flex;
-  height: 44px;
+  height: 32px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 0 8px;
+  gap: 5px;
+  padding: 0 6px;
   border: 1px solid var(--line-bright);
   color: var(--green);
   background: rgba(40, 121, 73, 0.25);
   cursor: pointer;
   list-style: none;
-  font-size: 11px;
+  font-size: 10px;
   white-space: nowrap;
 }
 
@@ -1253,10 +1254,10 @@ textarea:focus-visible {
 
 .canvas-selection-actions {
   display: flex;
-  height: 44px;
+  height: 32px;
   align-items: center;
   gap: 4px;
-  padding-left: 12px;
+  padding-left: 8px;
   border-left: 1px solid rgba(114, 231, 170, 0.24);
   color: #a9d5ba;
 }
@@ -1265,7 +1266,7 @@ textarea:focus-visible {
 .canvas-selection-actions > code {
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 6px;
   font-size: 10px;
   white-space: nowrap;
 }
@@ -1282,17 +1283,17 @@ textarea:focus-visible {
 
 .canvas-delete-selection {
   display: flex;
-  min-width: 44px;
-  height: 44px;
+  min-width: 32px;
+  height: 32px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 0 10px;
+  gap: 5px;
+  padding: 0 7px;
   border: 1px solid rgba(196, 117, 117, 0.25);
   color: #c48d8d;
   background: rgba(96, 39, 39, 0.18);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .canvas-selection-count > span {
@@ -1301,8 +1302,8 @@ textarea:focus-visible {
 
 .canvas-clear-selection {
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   place-items: center;
   border: 1px solid transparent;
@@ -10297,7 +10298,7 @@ textarea:focus-visible {
   }
 
   .canvas-delete-selection {
-    width: 44px;
+    width: 32px;
     padding: 0;
   }
 }

@@ -86,7 +86,7 @@ export function NotebookCellAddMenu({
   return (
     <details ref={detailsRef} className="canvas-add-menu" onToggle={handleToggle}>
       <summary ref={summaryRef} aria-label="Add cell" title="Add cell">
-        <Plus size={17} />
+        <Plus size={15} />
         <span>Add cell</span>
         <ChevronDown size={13} />
       </summary>

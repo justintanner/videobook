@@ -46,7 +46,7 @@ export function NotebookToolbar({
           disabled={arrangeDisabled}
           onClick={() => void onArrange()}
         >
-          <LayoutGrid size={17} />
+          <LayoutGrid size={15} />
           <span>Arrange</span>
         </button>
       </div>
@@ -58,7 +58,7 @@ export function NotebookToolbar({
           disabled={zoom <= notebookGrid.minimumZoom}
           onClick={() => onAdjustZoom(-notebookGrid.zoomStep)}
         >
-          <ZoomOut size={17} />
+          <ZoomOut size={15} />
         </button>
         <button
           type="button"
@@ -76,7 +76,7 @@ export function NotebookToolbar({
           disabled={zoom >= notebookGrid.maximumZoom}
           onClick={() => onAdjustZoom(notebookGrid.zoomStep)}
         >
-          <ZoomIn size={17} />
+          <ZoomIn size={15} />
         </button>
       </div>
       {selectedCount > 0 && (
@@ -97,7 +97,7 @@ export function NotebookToolbar({
             disabled={busy}
             onClick={() => void onDeleteSelection()}
           >
-            <Trash2 size={16} />
+            <Trash2 size={14} />
             <span>Delete</span>
           </button>
           <button
@@ -107,7 +107,7 @@ export function NotebookToolbar({
             aria-label="Clear selection"
             onClick={onClearSelection}
           >
-            <X size={16} />
+            <X size={14} />
           </button>
         </div>
       )}

@@ -830,6 +830,7 @@ describe('chat composer browser flow', () => {
       throw new Error('Could not measure notebook layout')
     }
     expect(toolbarBox.x).toBeGreaterThanOrEqual(brandBox.x + brandBox.width)
+    expect(toolbarBox.x - brandBox.x - brandBox.width).toBeLessThanOrEqual(12)
     expect(toolbarBox.x + toolbarBox.width).toBeLessThanOrEqual(navigationBox.x)
     expect(Math.abs(
       toolbarBox.y + toolbarBox.height / 2
@@ -882,7 +883,7 @@ describe('chat composer browser flow', () => {
           if (box.width === 0 || box.height === 0) return true
           if (button instanceof HTMLButtonElement && button.disabled) return true
           const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
-          return box.width >= 44 && box.height >= 44
+          return box.width >= 32 && box.height >= 32
             && box.left >= 0 && box.right <= innerWidth
             && hit !== null && button.contains(hit)
         })),
