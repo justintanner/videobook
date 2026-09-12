@@ -734,15 +734,39 @@ export function NotebookMediaFullscreen({
       aria-label={`Fullscreen preview for @${address}`}
       tabIndex={-1}
     >
-      <button
-        ref={closeRef}
-        type="button"
-        className="notebook-media-fullscreen-close"
-        onClick={onClose}
-        aria-label="Close fullscreen preview"
-      >
-        <X size={20} />
-      </button>
+      <div className="notebook-media-fullscreen-actions">
+        {isVideo && playbackUrl && onCaptureFrame && (
+          <button
+            type="button"
+            className="notebook-media-capture-button"
+            disabled={capturePending}
+            onClick={() => void captureCurrentFrame()}
+            aria-label="Extract frame"
+            title="Extract frame"
+          >
+            {capturePending
+              ? <BusyIndicator size={20} />
+              : <Camera size={20} />}
+          </button>
+        )}
+        <button
+          ref={closeRef}
+          type="button"
+          className="notebook-media-fullscreen-close"
+          onClick={onClose}
+          aria-label="Close fullscreen preview"
+        >
+          <X size={20} />
+        </button>
+        {isVideo && (captureError || captureMessage) && (
+          <p
+            className={`notebook-media-capture-status ${captureError ? 'error' : 'success'}`}
+            role="status"
+          >
+            {captureError ?? captureMessage}
+          </p>
+        )}
+      </div>
       {isVideo ? (
         <div className="notebook-media-playback-stage">
           {playbackUrl ? (
@@ -765,29 +789,6 @@ export function NotebookMediaFullscreen({
               ) : null}
               <strong>Playback unavailable</strong>
               <p>This video has a preview image but no playable media yet.</p>
-            </div>
-          )}
-          {playbackUrl && onCaptureFrame && (
-            <div className="notebook-media-capture-bar">
-              <button
-                type="button"
-                className="notebook-media-capture-button"
-                disabled={capturePending}
-                onClick={() => void captureCurrentFrame()}
-              >
-                {capturePending
-                  ? <BusyIndicator size={14} />
-                  : <Camera size={14} />}
-                Extract frame
-              </button>
-              {(captureError || captureMessage) && (
-                <p
-                  className={captureError ? 'error' : 'success'}
-                  role="status"
-                >
-                  {captureError ?? captureMessage}
-                </p>
-              )}
             </div>
           )}
         </div>

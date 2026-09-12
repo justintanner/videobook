@@ -10285,8 +10285,6 @@ textarea:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  grid-auto-rows: max-content;
-  gap: 12px;
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -10294,48 +10292,31 @@ textarea:focus-visible {
   place-items: center;
 }
 
-.notebook-media-capture-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-self: stretch;
-  gap: 10px;
-}
-
-.notebook-media-capture-button {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 14px;
-  gap: 6px;
-  border: 1px solid rgba(79, 139, 103, 0.42);
-  color: #a9d8bd;
-  background: rgba(11, 26, 17, 0.82);
-  cursor: pointer;
-  font-size: 9px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
 .notebook-media-capture-button:disabled {
   cursor: default;
   opacity: 0.6;
 }
 
-.notebook-media-capture-bar p {
+.notebook-media-capture-status {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 40px));
   margin: 0;
   padding: 4px 8px;
   font-size: 9px;
   line-height: 1.4;
+  overflow-wrap: anywhere;
   background: rgba(11, 26, 17, 0.82);
 }
 
-.notebook-media-capture-bar p.error {
+.notebook-media-capture-status.error {
   color: #d69b9b;
 }
 
-.notebook-media-capture-bar p.success {
+.notebook-media-capture-status.success {
   color: #79c99a;
 }
 
@@ -11192,11 +11173,17 @@ textarea:focus-visible {
   font-size: 9px;
 }
 
-.notebook-media-fullscreen-close {
+.notebook-media-fullscreen-actions {
   position: fixed;
   top: 20px;
   right: 20px;
   z-index: 440;
+  display: flex;
+  gap: 8px;
+}
+
+.notebook-media-fullscreen-close,
+.notebook-media-capture-button {
   display: grid;
   width: 42px;
   height: 42px;
@@ -11209,7 +11196,9 @@ textarea:focus-visible {
 }
 
 .notebook-media-fullscreen-close:hover,
-.notebook-media-fullscreen-close:focus-visible {
+.notebook-media-fullscreen-close:focus-visible,
+.notebook-media-capture-button:hover:not(:disabled),
+.notebook-media-capture-button:focus-visible {
   border-color: var(--control-border-hover);
   color: var(--control-fg-hover);
   background: var(--control-bg-hover);
@@ -11318,7 +11307,7 @@ textarea:focus-visible {
     grid-column: 1 / -1;
   }
 
-  .notebook-media-fullscreen-close {
+  .notebook-media-fullscreen-actions {
     top: 10px;
     right: 10px;
   }
