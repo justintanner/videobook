@@ -6,6 +6,11 @@ import {
   NOTEBOOK_GRID_COLUMN_COUNT,
   NOTEBOOK_GRID_ROW_COUNT,
 } from 'videobook-engine/notebook-grid'
+import {
+  NOTEBOOK_LANE_FAMILY_ORDER,
+  notebookLaneFamily,
+  type NotebookLaneFamily,
+} from './notebook-lane-policy'
 
 interface NotebookAutoArrangeAssignment {
   id: string
@@ -35,34 +40,11 @@ interface NotebookAutoArrangeScrollTarget {
 
 type FrameScheduler = (callback: FrameRequestCallback) => number
 
-type ArrangeBand = 'image' | 'other' | 'video'
-
-const IMAGE_ROW = 0
-const OTHER_ROW = 1
-const VIDEO_ROW = 2
-const OVERFLOW_ROW = 3
-
 function failure(
   code: NotebookAutoArrangeFailureCode,
   message: string,
 ): NotebookAutoArrangeResult {
   return { ok: false, code, message }
-}
-
-function slotKey(row: number, column: number): string {
-  return `${row}:${column}`
-}
-
-function arrangeBand(type: NotebookCell['type']): ArrangeBand {
-  if (type === 'image') return 'image'
-  if (type === 'video') return 'video'
-  return 'other'
-}
-
-function primaryRow(band: ArrangeBand): number {
-  if (band === 'image') return IMAGE_ROW
-  if (band === 'video') return VIDEO_ROW
-  return OTHER_ROW
 }
 
 function readingOrder(cells: readonly NotebookCell[]): NotebookCell[] {
@@ -72,45 +54,9 @@ function readingOrder(cells: readonly NotebookCell[]): NotebookCell[] {
     || left.id.localeCompare(right.id))
 }
 
-function nextFreeSlot(
-  bandRow: number,
-  occupied: ReadonlySet<string>,
-): { row: number; column: number } | null {
-  for (let column = 0; column < NOTEBOOK_GRID_COLUMN_COUNT; column += 1) {
-    if (!occupied.has(slotKey(bandRow, column))) {
-      return { row: bandRow, column }
-    }
-  }
-  for (let row = OVERFLOW_ROW; row < NOTEBOOK_GRID_ROW_COUNT; row += 1) {
-    for (let column = 0; column < NOTEBOOK_GRID_COLUMN_COUNT; column += 1) {
-      if (!occupied.has(slotKey(row, column))) {
-        return { row, column }
-      }
-    }
-  }
-  return null
-}
-
-function packBand(
-  ids: readonly string[],
-  bandRow: number,
-  occupied: Set<string>,
-): NotebookAutoArrangeAssignment[] | NotebookAutoArrangeResult {
-  const slots: NotebookAutoArrangeAssignment[] = []
-  for (const [index, id] of ids.entries()) {
-    const slot = nextFreeSlot(bandRow, occupied)
-    if (!slot) {
-      const remaining = ids.length - index
-      const extraRows = Math.max(1, Math.ceil(remaining / NOTEBOOK_GRID_COLUMN_COUNT))
-      return failure(
-        'capacity',
-        `Cannot auto-arrange because the layout needs ${NOTEBOOK_GRID_ROW_COUNT + extraRows} rows, but the grid supports ${NOTEBOOK_GRID_ROW_COUNT}.`,
-      )
-    }
-    occupied.add(slotKey(slot.row, slot.column))
-    slots.push({ id, ...slot })
-  }
-  return slots
+function familyRowCount(cellCount: number): number {
+  if (cellCount <= 0) return 0
+  return Math.ceil(cellCount / NOTEBOOK_GRID_COLUMN_COUNT)
 }
 
 export function planNotebookArrangement(
@@ -124,26 +70,46 @@ export function planNotebookArrangement(
     )
   }
 
-  const idsByBand: Record<ArrangeBand, string[]> = {
+  const idsByFamily: Record<NotebookLaneFamily, string[]> = {
+    audio: [],
+    gen: [],
     image: [],
     video: [],
-    other: [],
+    work: [],
   }
   for (const cell of readingOrder(document.cells)) {
-    idsByBand[arrangeBand(cell.type)].push(cell.id)
+    idsByFamily[notebookLaneFamily(cell.type)].push(cell.id)
   }
 
-  const occupied = new Set<string>()
+  const requiredRows = NOTEBOOK_LANE_FAMILY_ORDER.reduce(
+    (total, family) => total + familyRowCount(idsByFamily[family].length),
+    0,
+  )
+  if (requiredRows > NOTEBOOK_GRID_ROW_COUNT) {
+    return failure(
+      'capacity',
+      `Cannot auto-arrange because the layout needs ${requiredRows} rows, but the grid supports ${NOTEBOOK_GRID_ROW_COUNT}.`,
+    )
+  }
+
   const slots: NotebookAutoArrangeAssignment[] = []
-  for (const band of ['image', 'video', 'other'] as const) {
-    const packed = packBand(idsByBand[band], primaryRow(band), occupied)
-    if (!Array.isArray(packed)) return packed
-    slots.push(...packed)
+  let nextRow = 0
+  for (const family of NOTEBOOK_LANE_FAMILY_ORDER) {
+    const ids = idsByFamily[family]
+    if (ids.length === 0) continue
+    for (const [index, id] of ids.entries()) {
+      slots.push({
+        id,
+        row: nextRow + Math.floor(index / NOTEBOOK_GRID_COLUMN_COUNT),
+        column: index % NOTEBOOK_GRID_COLUMN_COUNT,
+      })
+    }
+    nextRow += familyRowCount(ids.length)
   }
 
   return {
     ok: true,
-    rowCount: slots.reduce((maxRow, slot) => Math.max(maxRow, slot.row + 1), 0),
+    rowCount: requiredRows,
     slots,
   }
 }

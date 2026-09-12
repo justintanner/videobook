@@ -411,6 +411,7 @@ import {
   isNotebookGenerationCellType,
   notebookCellFamily,
 } from '@/videobook/notebook-cell-types'
+import { notebookLaneFamily } from '@/videobook/notebook-lane-policy'
 import {
   mediaFileAccept,
   mediaKindForFile,
@@ -3045,6 +3046,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         data.revealing ? 'cell-node-created' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
+      data-lane-family={notebookLaneFamily(data.kind)}
       data-selection={primarySelected ? 'primary' : selected ? 'selected' : undefined}
       data-version-count={outputVersions.length}
       data-cell-status={data.status}
@@ -4659,6 +4661,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const notebookOccupiedSlots = useMemo(
     () => nodes.map((node) => node.data.slot),
+    [nodes],
+  )
+  const notebookLaneCells = useMemo(
+    () => nodes.map((node) => ({
+      type: node.data.kind,
+      slot: node.data.slot,
+    })),
     [nodes],
   )
   const notebookBaseMetrics = useMemo(
@@ -12216,6 +12225,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       proOptions={flowProOptions}
                     >
                             <NotebookGridBoard
+                              cells={notebookLaneCells}
                               metrics={notebookMetrics}
                               occupiedSlots={notebookOccupiedSlots}
                               previewSlot={previewSlot}
@@ -12236,7 +12246,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     <div className="canvas-welcome-mark"><Sparkles size={22} /></div>
                     <span>EMPTY NOTEBOOK</span>
                     <strong>Build your first notebook path.</strong>
-                    <p>Connect media, analysis, generation, and edit cells as the story takes shape.</p>
+                    <p>Stack Images, Gen, and Videos as lanes, then connect the story as it takes shape.</p>
                     <button type="button" disabled={busy} onClick={() => void createCell('prompt')}>
                       <Plus size={15} />Add first prompt
                     </button>

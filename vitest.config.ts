@@ -49,6 +49,7 @@ export default defineConfig({
       'src/videobook/asset-tag-editing.test.ts',
       'src/videobook/notebook-draft.test.ts',
       'src/videobook/notebook-grid.test.ts',
+      'src/videobook/notebook-lane-policy.test.ts',
       'src/videobook/last-work-slot.test.ts',
       'src/videobook/library-scope.test.ts',
       'src/videobook/forget-asset.test.ts',

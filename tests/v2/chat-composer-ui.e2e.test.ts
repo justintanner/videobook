@@ -3604,7 +3604,9 @@ describe('chat composer browser flow', () => {
 
     const autoArrange = page.getByLabel('Auto-arrange notebook')
     await autoArrange.waitFor({ state: 'visible' })
-    expect(await autoArrange.getAttribute('title')).toBe('Arrange cells by media type')
+    expect(await autoArrange.getAttribute('title')).toBe(
+      'Arrange cells into Images, Gen, Videos, Audio, and Work lanes',
+    )
     observedCalls.length = 0
     await autoArrange.click()
     await expect.poll(() => observedCalls.filter((call) =>
@@ -3634,6 +3636,8 @@ describe('chat composer browser flow', () => {
     expect(Number(sourceImageSlot?.row)).toBe(0)
     expect(Number(generationSlot?.row)).toBe(1)
     expect(Number(outputVideoSlot?.row)).toBe(2)
+    expect(Number(imageSlot?.row)).toBeLessThan(Number(generationSlot?.row))
+    expect(Number(generationSlot?.row)).toBeLessThan(Number(outputVideoSlot?.row))
     await page.getByText(/^Auto-arranged \d+ tiles?$/u).waitFor({
       state: 'visible',
       timeout: 30_000,
@@ -3648,6 +3652,26 @@ describe('chat composer browser flow', () => {
       .evaluate((element) => element.scrollLeft)).toBe(0)
     expect(await zoomLevel.textContent()).toContain('75%')
     expect(await selected.getAttribute('data-selection')).toBe('primary')
+
+    await expect.poll(async () => await page!.locator('.notebook-lane-caption').count())
+      .toBeGreaterThan(0)
+    const lanes = await page.locator('.notebook-lane').evaluateAll((elements) =>
+      elements.map((element) => ({
+        caption: element.getAttribute('data-lane-caption'),
+        family: element.getAttribute('data-lane-family'),
+        rowCount: Number(element.getAttribute('data-lane-row-count')),
+        startRow: Number(element.getAttribute('data-lane-start-row')),
+      })))
+    const laneForRow = (row: number) => lanes.find((lane) =>
+      row >= lane.startRow && row < lane.startRow + lane.rowCount)
+    expect(laneForRow(Number(imageSlot?.row))?.caption).toBe('Images')
+    expect(laneForRow(Number(sourceImageSlot?.row))?.caption).toBe('Images')
+    expect(laneForRow(Number(generationSlot?.row))?.caption).toBe('Gen')
+    expect(laneForRow(Number(outputVideoSlot?.row))?.caption).toBe('Videos')
+    expect(await selected.getAttribute('data-lane-family')).toBe('image')
+    if (process.env.LANES_SCREENSHOT) {
+      await page.screenshot({ path: process.env.LANES_SCREENSHOT })
+    }
 
     observedCalls.length = 0
     await autoArrange.click()
