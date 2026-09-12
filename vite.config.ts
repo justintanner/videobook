@@ -57,6 +57,7 @@ function clientManualChunk(id: string): string | undefined {
 
 // https://vite.dev/config/
 export default defineConfig({
+  cacheDir: process.env.VIDEOBOOK_VITE_CACHE_DIR || 'node_modules/.vite',
   plugins: [
     react({
       babel: {

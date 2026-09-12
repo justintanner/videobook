@@ -286,16 +286,16 @@ export class BookManager {
     if (options.confirmName.trim().toLowerCase() !== book.name.toLowerCase()) {
       return err(engineError("INVALID_INPUT", "Confirmation must match the current book name"));
     }
+    const root = this.bookRoot(book.bookId);
+    if (root !== book.rootDir || !isInside(this.libraryDir, root)) {
+      return err(engineError("INVALID_INPUT", "Invalid book root"));
+    }
     try {
       await options.beforeDelete?.(book);
-      book.engine.close();
-      const root = this.bookRoot(book.bookId);
-      if (root !== book.rootDir || !isInside(this.libraryDir, root)) {
-        return err(engineError("INVALID_INPUT", "Invalid book root"));
-      }
-      await rm(root, { recursive: true, force: false });
       this.books.delete(book.bookId);
       this.knownRoots.delete(book.bookId);
+      book.engine.close();
+      await rm(root, { recursive: true, force: false });
       return ok({ bookId: book.bookId, name: book.name });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);

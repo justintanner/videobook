@@ -68,6 +68,7 @@ export function BookProjectMenu({
   onSelect,
 }: BookProjectMenuProps) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const toggleRef = useRef<HTMLButtonElement>(null)
   const [mode, setMode] = useState<BookProjectMenuMode>({ kind: 'idle' })
   const [editValue, setEditValue] = useState('')
   const [createValue, setCreateValue] = useState('')
@@ -77,28 +78,29 @@ export function BookProjectMenu({
   const creating = mode.kind === 'create'
   const deletingBookId = mode.kind === 'delete' ? mode.bookId : null
 
-  const resetModes = useCallback(() => {
+  const resetModes = useCallback((restoreFocus = false) => {
+    if (restoreFocus) toggleRef.current?.focus()
     setMode({ kind: 'idle' })
     setEditValue('')
     setCreateValue('')
     setOperationError(null)
   }, [])
 
-  const closeMenu = useCallback(() => {
+  const closeMenu = useCallback((restoreFocus = false) => {
     const transition = transitionBookProjectMenuMode(
       mode,
       { kind: 'close' },
       pending !== null,
     )
     if (!transition.closeMenu) return
-    resetModes()
+    resetModes(restoreFocus)
     onOpenChange(false)
   }, [mode, onOpenChange, pending, resetModes])
 
   useEffect(() => {
     if (!open) return
 
-    const handlePointerDown = (event: PointerEvent) => {
+    const handleOutside = (event: PointerEvent | FocusEvent) => {
       if (rootRef.current?.contains(event.target as Node)) return
       closeMenu()
     }
@@ -110,17 +112,23 @@ export function BookProjectMenu({
         pending !== null,
       )
       if (transition.closeMenu) {
-        resetModes()
+        event.preventDefault()
+        resetModes(true)
         onOpenChange(false)
         return
       }
-      if (transition.mode !== mode) resetModes()
+      if (transition.mode !== mode) {
+        event.preventDefault()
+        resetModes(true)
+      }
     }
 
-    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('pointerdown', handleOutside)
+    document.addEventListener('focusin', handleOutside)
     document.addEventListener('keydown', handleKeyDown)
     return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('pointerdown', handleOutside)
+      document.removeEventListener('focusin', handleOutside)
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [
@@ -178,12 +186,12 @@ export function BookProjectMenu({
       pending !== null,
     )
     if (transition.mode === mode) return
-    resetModes()
+    resetModes(true)
   }
 
   const selectBook = async (bookId: string) => {
     if (disabled || pending || bookId === activeBook?.bookId) {
-      if (bookId === activeBook?.bookId) closeMenu()
+      if (bookId === activeBook?.bookId) closeMenu(true)
       return
     }
     setOperationError(null)
@@ -194,7 +202,7 @@ export function BookProjectMenu({
       setOperationError(result.error)
       return
     }
-    closeMenu()
+    closeMenu(true)
   }
 
   const submitRename = async (event?: FormEvent) => {
@@ -237,7 +245,7 @@ export function BookProjectMenu({
       setOperationError(result.error)
       return
     }
-    resetModes()
+    resetModes(true)
     onOpenChange(false)
   }
 
@@ -251,7 +259,7 @@ export function BookProjectMenu({
       setOperationError(result.error)
       return
     }
-    resetModes()
+    resetModes(true)
   }
 
   const toggleMenu = () => {
@@ -270,6 +278,7 @@ export function BookProjectMenu({
   return (
     <div className="book-project-selector" ref={rootRef}>
       <button
+        ref={toggleRef}
         type="button"
         className="brand-project-menu-toggle"
         aria-controls="book-project-menu"

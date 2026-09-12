@@ -252,7 +252,7 @@ describe("hostile search content across browser surfaces", () => {
         "--port",
         String(vitePort),
       ],
-      { ...process.env, VIDEOBOOK_SERVER_URL: mcpOrigin },
+      { ...process.env, VIDEOBOOK_SERVER_URL: mcpOrigin, VIDEOBOOK_VITE_CACHE_DIR: join(rootDir, "vite-cache") },
     );
     await waitForHttp(appUrl, viteProcess, 200);
     browser = await chromium.launch({ headless: true });

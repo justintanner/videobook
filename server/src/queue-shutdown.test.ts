@@ -59,12 +59,12 @@ describe("queue and server stop abort in-flight provider polls", () => {
   it("aborts an in-flight poll on queue.stop without corrupting durable tasks", async () => {
     configureProviderPollDriverForTests({ intervalMs: 20 });
     await stopBookQueue(bookId);
-    await setEngineRoot(tempDir, fs);
+    await Promise.all(Array.from({ length: 4 }, () => queue.startBook(bookId)));
     const artifactId = await seedPendingTask(fs);
 
-    let started = false;
+    let started = 0;
     setProviderPollWorkHookForTests(async (signal) => {
-      started = true;
+      started += 1;
       await new Promise<void>((resolve) => {
         if (signal.aborted) {
           resolve();
@@ -78,11 +78,13 @@ describe("queue and server stop abort in-flight provider polls", () => {
     while (!started && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    expect(started).toBe(true);
+    expect(started).toBe(1);
     expect(isProviderPollDriverActive(bookId)).toBe(true);
 
     const stopStarted = Date.now();
-    await queue.stop();
+    const stopping = queue.stop();
+    await expect(queue.startBook(bookId)).rejects.toThrow("Book queue is stopping");
+    await stopping;
     expect(Date.now() - stopStarted).toBeLessThan(1_000);
     expect(isProviderPollDriverActive(bookId)).toBe(false);
 
@@ -90,6 +92,14 @@ describe("queue and server stop abort in-flight provider polls", () => {
     expect(pending.ok).toBe(true);
     if (!pending.ok) return;
     expect(pending.value.some((task) => task.artifactId === artifactId)).toBe(true);
+
+    started = 0;
+    await queue.startBook(bookId);
+    await expect.poll(() => started).toBe(1);
+    const stoppingBook = stopBookQueue(bookId);
+    await expect(queue.startBook(bookId)).rejects.toThrow("Book queue is stopping");
+    await stoppingBook;
+    expect(isProviderPollDriverActive(bookId)).toBe(false);
   });
 
   it("restarts polling after queue.stop and can terminalize leftover work", async () => {

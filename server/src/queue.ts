@@ -66,6 +66,9 @@ interface Queue {
 
 const handlers = new Map<string, ServerJobHandler>();
 const runnerByBook = new Map<string, RunnerInfo>();
+const startingRunnerByBook = new Map<string, Promise<RunnerInfo>>();
+const stoppingRunnerByBook = new Map<string, Promise<void>>();
+let stoppingQueue: Promise<void> | null = null;
 const jobIdIndex = new Map<string, QueueIndexEntry>();
 const testEngines = new Map<string, Engine>();
 let activeTestRoot: string | null = null;
@@ -490,11 +493,35 @@ async function dispatchFailure(
 
 async function ensureRunner(bookId: string): Promise<RunnerInfo> {
   await ensureJobHandlersLoaded();
+  assertQueueAcceptingWork(bookId);
   const existing = runnerByBook.get(bookId);
   if (existing) return existing;
+  const starting = startingRunnerByBook.get(bookId);
+  if (starting) return starting;
+  const pending = createBookRunner(bookId);
+  startingRunnerByBook.set(bookId, pending);
+  try {
+    return await pending;
+  } finally {
+    startingRunnerByBook.delete(bookId);
+  }
+}
+
+function assertQueueAcceptingWork(bookId: string, runner?: QueueRunner): void {
+  if (
+    stoppingQueue
+    || stoppingRunnerByBook.has(bookId)
+    || (runner && runnerByBook.get(bookId)?.runner !== runner)
+  ) {
+    throw new Error(`Book queue is stopping: ${bookId}`);
+  }
+}
+
+async function createBookRunner(bookId: string): Promise<RunnerInfo> {
   const engine = await resolveBookEngine(bookId);
   await engine.ready;
   await engine.jobs.queue.reap();
+  assertQueueAcceptingWork(bookId);
   const runner = engine.jobs.queue.createRunner({
     concurrency: 5,
     pollIntervalMs: 250,
@@ -597,7 +624,8 @@ function mapState(state: JobState): "queued" | "running" | "completed" | "failed
 
 export const queue: Queue = {
   async enqueue(jobId: string, payload: JobPayload) {
-    const { bookId, engine } = await ensureBookReady(payload);
+    const { bookId, engine, runner } = await ensureBookReady(payload);
+    assertQueueAcceptingWork(bookId, runner);
     const result = engine.jobs.queue.enqueue(enqueueOptions(jobId, payload));
     rememberJob(jobId, { bookId, internalId: result.job.id });
     return result.job;
@@ -608,6 +636,7 @@ export const queue: Queue = {
     timeoutMs = 300_000,
   ): Promise<T> {
     const { bookId, engine, runner } = await ensureBookReady(payload);
+    assertQueueAcceptingWork(bookId, runner);
     const result = engine.jobs.queue.enqueue(enqueueOptions(jobId, payload));
     rememberJob(jobId, { bookId, internalId: result.job.id });
     return await runner.waitFor(result.job.id, timeoutMs) as T;
@@ -633,21 +662,35 @@ export const queue: Queue = {
     await ensureRunner(bookId);
   },
   async stop() {
-    const infos = [...runnerByBook.values()];
-    runnerByBook.clear();
-    jobIdIndex.clear();
-    for (const info of infos) {
-      stopProviderPollDriver(info);
-      info.reaper.stop();
+    if (stoppingQueue) return stoppingQueue;
+    const pending = stopQueueRunners();
+    stoppingQueue = pending;
+    try {
+      await pending;
+    } finally {
+      stoppingQueue = null;
     }
-    await Promise.all(infos.map((info) => abortActiveJobs(info, "Queue stopped")));
-    await Promise.all([
-      ...infos.map((info) => info.runner.stop()),
-      ...infos.map((info) => info.searchRunner.stop()),
-      ...infos.map((info) => awaitProviderPollIdle(info)),
-    ]);
   },
 };
+
+async function stopQueueRunners(): Promise<void> {
+  await Promise.all([...startingRunnerByBook.values()].map((starting) =>
+    starting.catch(() => undefined)));
+  await Promise.all(stoppingRunnerByBook.values());
+  const infos = [...runnerByBook.values()];
+  runnerByBook.clear();
+  jobIdIndex.clear();
+  for (const info of infos) {
+    stopProviderPollDriver(info);
+    info.reaper.stop();
+  }
+  await Promise.all(infos.map((info) => abortActiveJobs(info, "Queue stopped")));
+  await Promise.all([
+    ...infos.map((info) => info.runner.stop()),
+    ...infos.map((info) => info.searchRunner.stop()),
+    ...infos.map((info) => awaitProviderPollIdle(info)),
+  ]);
+}
 
 async function reconcileQueueOnStartup(): Promise<void> {
   await bookManager.ready();
@@ -756,6 +799,19 @@ async function abortActiveJobs(info: RunnerInfo, reason: string): Promise<void> 
 }
 
 export async function stopBookQueue(bookId: string): Promise<void> {
+  const stopping = stoppingRunnerByBook.get(bookId);
+  if (stopping) return stopping;
+  const pending = stopBookRunner(bookId);
+  stoppingRunnerByBook.set(bookId, pending);
+  try {
+    await pending;
+  } finally {
+    stoppingRunnerByBook.delete(bookId);
+  }
+}
+
+async function stopBookRunner(bookId: string): Promise<void> {
+  await startingRunnerByBook.get(bookId)?.catch(() => undefined);
   const info = runnerByBook.get(bookId);
   if (!info) return;
   runnerByBook.delete(bookId);

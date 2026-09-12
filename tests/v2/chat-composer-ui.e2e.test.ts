@@ -605,6 +605,7 @@ describe('chat composer browser flow', () => {
       {
         ...process.env,
         VIDEOBOOK_SERVER_URL: mcpOrigin,
+        VIDEOBOOK_VITE_CACHE_DIR: join(rootDir, 'vite-cache'),
       },
     )
     await waitForHttp(appUrl, viteProcess, 200)
@@ -816,6 +817,22 @@ describe('chat composer browser flow', () => {
     let createdId = ''
     let createdName = 'my-cafe-project'
     try {
+      for (const action of ['New project', 'Rename chat-ui-e2e']) {
+        await toggle.click()
+        await page.getByRole('button', { name: action, exact: true }).click()
+        await page.keyboard.press('Escape')
+        expect(await toggle.getAttribute('aria-expanded')).toBe('true')
+        expect(await toggle.evaluate((element) => document.activeElement === element)).toBe(true)
+        await page.keyboard.press('Escape')
+        expect(await toggle.getAttribute('aria-expanded')).toBe('false')
+        expect(await toggle.evaluate((element) => document.activeElement === element)).toBe(true)
+      }
+      await toggle.click()
+      await page.getByRole('button', { name: 'New project', exact: true }).focus()
+      await page.keyboard.press('Tab')
+      expect(await toggle.getAttribute('aria-expanded')).toBe('false')
+      expect(await page.getByLabel('Add cell', { exact: true })
+        .evaluate((element) => document.activeElement === element)).toBe(true)
       await toggle.click()
       await page.getByRole('button', { name: 'New project', exact: true }).click()
       const input = page.getByLabel('New project slug', { exact: true })
@@ -826,6 +843,8 @@ describe('chat composer browser flow', () => {
       expect(await page.locator('.book-project-form-hint').textContent()).toContain('Slug: my-cafe-project')
       await page.getByRole('button', { name: 'Create project', exact: true }).click()
       await expect.poll(() => selectedName.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe(createdName)
+      await expect.poll(() => toggle.getAttribute('aria-expanded')).toBe('false')
+      expect(await toggle.evaluate((element) => document.activeElement === element)).toBe(true)
       const listed = resultValue(await client.callTool({ name: 'list_books', arguments: {} }))
       const created = (Array.isArray(listed) ? listed : []).map(record).find((book) => book?.name === createdName)
       createdId = typeof created?.bookId === 'string' ? created.bookId : ''
@@ -842,6 +861,8 @@ describe('chat composer browser flow', () => {
       await page.getByRole('button', { name: 'Save project name', exact: true }).click()
       createdName = 'renamed-project-2'
       await expect.poll(() => selectedName.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe(createdName)
+      await expect.poll(() => page.locator('.book-project-form').count()).toBe(0)
+      expect(await toggle.evaluate((element) => document.activeElement === element)).toBe(true)
       expect(resultValue(await client.callTool({ name: 'get_book', arguments: { book_id: createdId } }))).toMatchObject({ bookId: createdId, name: createdName })
       await page.reload({ waitUntil: 'commit' })
       await expect.poll(() => selectedName.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe(createdName)
@@ -849,8 +870,24 @@ describe('chat composer browser flow', () => {
       const names = await page.locator('.book-project-copy strong').allTextContents()
       expect(names).toEqual(expect.arrayContaining(['chat-ui-e2e', createdName]))
       expect(names.every((name) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name))).toBe(true)
+      await page.setViewportSize({ width: 667, height: 280 })
+      await page.getByRole('button', { name: 'New project', exact: true }).click()
+      expect(await page.getByLabel('New project slug', { exact: true }).isVisible()).toBe(true)
+      await page.getByLabel('New project slug', { exact: true }).fill('Long Project '.repeat(24))
+      expect(await page.locator('.book-project-menu').evaluate((element) =>
+        element.getBoundingClientRect().bottom <= window.innerHeight)).toBe(true)
+      await page.keyboard.press('Escape')
+      await page.setViewportSize({ width: 1440, height: 1000 })
       await page.getByRole('menuitem', { name: /chat-ui-e2e/ }).click()
       await expect.poll(() => selectedName.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe('chat-ui-e2e')
+      await expect.poll(() => toggle.getAttribute('aria-expanded')).toBe('false')
+      expect(await toggle.evaluate((element) => document.activeElement === element)).toBe(true)
+      await toggle.click()
+      await page.getByRole('button', { name: `Delete ${createdName}`, exact: true }).click()
+      await page.getByRole('button', { name: `Confirm deletion of ${createdName}`, exact: true }).click()
+      await expect.poll(() => page.locator('.book-project-delete').count()).toBe(0)
+      await expect.poll(() => toggle.evaluate((element) => document.activeElement === element)).toBe(true)
+      createdId = ''
     } finally {
       if (createdId) await client.callTool({ name: 'delete_book', arguments: { book_id: createdId, confirm_name: createdName } })
       await client.close()
@@ -3497,6 +3534,17 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await menu.getAttribute('open')).toBeNull()
     await expect.poll(async () => await trigger.evaluate((element) =>
       document.activeElement === element)).toBe(true)
+
+    await trigger.click()
+    await search.fill('split')
+    await search.press('Tab')
+    expect(await option.evaluate((element) => {
+      element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      return document.activeElement?.getAttribute('aria-label')
+    })).toBe('Add cell')
+    await page.keyboard.press('Tab')
+    expect(await page.getByLabel('Auto-arrange notebook')
+      .evaluate((element) => document.activeElement === element)).toBe(true)
 
     await trigger.click()
     expect(await search.inputValue()).toBe('')

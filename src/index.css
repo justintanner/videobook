@@ -194,6 +194,10 @@ textarea:focus-visible {
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
 }
 
+.topbar:has(.book-project-menu, .canvas-add-menu[open]) {
+  z-index: 80;
+}
+
 .offline-banner {
   position: absolute;
   grid-row: 2;
@@ -623,7 +627,9 @@ textarea:focus-visible {
   left: var(--app-gutter);
   z-index: 100;
   width: min(340px, calc(100vw - 36px));
+  max-height: calc(100dvh - 100% - 24px);
   overflow: hidden;
+  overflow-y: auto;
   border: 1px solid var(--line-bright);
   background: rgba(3, 14, 9, 0.99);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.58);

@@ -75,7 +75,14 @@ describe('v2 book manager', () => {
     expect(rejected.ok).toBe(false)
     expect(books.get(created.value.bookId).ok).toBe(true)
 
-    const deleted = await books.delete(created.value.bookId, { confirmName: 'discard-me' })
+    let settled = false
+    const deletion = books.delete(created.value.bookId, { confirmName: 'discard-me' })
+      .finally(() => { settled = true })
+    while (!settled) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(() => books.list()).not.toThrow()
+    }
+    const deleted = await deletion
     expect(deleted.ok).toBe(true)
     await expect(access(managed.value.rootDir)).rejects.toThrow()
     expect(books.get(created.value.bookId).ok).toBe(false)

@@ -55,7 +55,7 @@ export function NotebookCellAddMenu({
     if (detailsRef.current) detailsRef.current.open = false
     setSearch('')
     if (restoreFocus) {
-      window.requestAnimationFrame(() => summaryRef.current?.focus())
+      summaryRef.current?.focus()
     }
   }, [])
 
