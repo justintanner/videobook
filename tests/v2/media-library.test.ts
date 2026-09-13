@@ -16,6 +16,7 @@ import {
   setNotebookMediaSlot,
 } from '../../server/src/media-library.js'
 import { searchReferenceStore } from '../../server/src/search-reference-store.js'
+import { nextLibraryBrowseOffset } from '../../src/videobook/library-scope'
 import { seedMixedStatusCatalog } from './library-browse-fixture.js'
 
 const reverseSearchManifest: IndexManifest = {
@@ -686,5 +687,40 @@ describe('media Library slots', () => {
     })
     expect(queryReadyOnly.assets).toEqual([])
     expect(queryReadyOnly.page.total).toBe(0)
+  })
+
+  it('walks three All-books Ready pages using the Library Load more offset', async () => {
+    const created = await books.create('ready-pages')
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+    const managed = books.get(created.value.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const catalog = await seedMixedStatusCatalog(managed.value.engine, {
+      ready: 250,
+      error: 0,
+      processing: 0,
+    })
+    const loaded: string[] = []
+    const offsets: number[] = []
+    let hasMore = true
+    while (hasMore) {
+      const offset = nextLibraryBrowseOffset(loaded.length)
+      offsets.push(offset)
+      const page = await searchLibraryAssets(books, {
+        kinds: ['image'],
+        browseStatus: 'ready',
+        limit: 100,
+        offset,
+      })
+      loaded.push(...page.assets.map((asset) => asset.artifact_id))
+      hasMore = page.page.hasMore
+      if (page.assets.length === 0) break
+    }
+    expect(offsets).toEqual([0, 100, 200])
+    expect(offsets[2]).not.toBe(300)
+    expect(new Set(loaded).size).toBe(loaded.length)
+    expect(loaded).toHaveLength(catalog.ready.length)
+    expect([...loaded].sort()).toEqual([...catalog.ready].sort())
   })
 })

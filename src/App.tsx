@@ -85,6 +85,7 @@ import {
   libraryGridAssets,
   libraryGridHeading,
   libraryScopeFromValue,
+  nextLibraryBrowseOffset,
   type LibraryBrowseStatus,
   type LibraryScope,
 } from './videobook/library-scope'
@@ -12632,7 +12633,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     type="button"
                     disabled={busy || libraryBrowse.loadingMore || libraryBrowseLoading}
                     onClick={() => {
-                      void loadLibraryBrowse(libraryBrowse.page.offset + libraryBrowse.assets.length)
+                      void loadLibraryBrowse(nextLibraryBrowseOffset(libraryBrowse.assets.length))
                     }}
                   >
                     {libraryBrowse.loadingMore

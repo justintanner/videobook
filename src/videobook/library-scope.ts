@@ -185,3 +185,12 @@ function libraryStatusHeadingNoun(
 function bookCountLabel(bookCount: number): string {
   return `${bookCount} book${bookCount === 1 ? '' : 's'}`
 }
+
+/**
+ * Next Library browse offset is the unique loaded server-row count.
+ * Do not add the latest page.offset on top of the accumulated length —
+ * after two pages of 100 that would request 300 and skip 200–299.
+ */
+export function nextLibraryBrowseOffset(loadedCount: number): number {
+  return Math.max(0, loadedCount)
+}

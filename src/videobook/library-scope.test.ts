@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   libraryBrowseStatusFromValue,
@@ -6,6 +7,7 @@ import {
   libraryScopeFromValue,
   matchesLibraryBrowseStatus,
   mergeBookGridAssets,
+  nextLibraryBrowseOffset,
   overlayLiveLibraryAssets,
   type OwningBook,
 } from './library-scope'
@@ -222,5 +224,24 @@ describe('libraryGridHeading', () => {
       status: 'ready',
       booksFailed: 1,
     })).toBe('100 loaded ready items · 8 books')
+  })
+})
+
+describe('nextLibraryBrowseOffset', () => {
+  it('uses the unique loaded row count, not page.offset plus that count', () => {
+    let loaded = 0
+    const offsets = [nextLibraryBrowseOffset(loaded)]
+    loaded += 100
+    offsets.push(nextLibraryBrowseOffset(loaded))
+    loaded += 100
+    offsets.push(nextLibraryBrowseOffset(loaded))
+    expect(offsets).toEqual([0, 100, 200])
+    expect(nextLibraryBrowseOffset(200)).not.toBe(100 + 200)
+  })
+
+  it('is the Load more argument in App', () => {
+    const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
+    expect(app).toContain('nextLibraryBrowseOffset(libraryBrowse.assets.length)')
+    expect(app).not.toContain('page.offset + libraryBrowse.assets.length')
   })
 })

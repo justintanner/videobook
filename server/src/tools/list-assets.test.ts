@@ -6,6 +6,7 @@ import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/client";
 import { isUuidV7 } from "videobook-engine";
 import { seedMixedStatusCatalog } from "../../../tests/v2/library-browse-fixture.js";
+import { nextLibraryBrowseOffset } from "../../../src/videobook/library-scope.js";
 
 const MINIMAL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
@@ -520,6 +521,56 @@ describe("list_assets tool", () => {
       const ids = data.assets.map((asset) => asset.artifact_id);
       expect(ids).toContain(catalog.ready[0]);
       expect(ids).toContain(catalog.error[0]);
+    } finally {
+      closeEngineForTest(root, engine);
+      await rm(root, { recursive: true, force: true, maxRetries: 3 });
+    }
+  });
+
+  it("walks three Ready pages using the Library Load more offset", async () => {
+    const { createEngineForTest, closeEngineForTest } = await import("../engine.js");
+    const { listAssetsDef } = await import("./list-assets.js");
+    const root = await mkdtemp(join(tmpdir(), "list-assets-ready-pages-"));
+    const engine = createEngineForTest(root);
+    try {
+      const bookId = engine.book.get().bookId;
+      const catalog = await seedMixedStatusCatalog(engine, {
+        ready: 250,
+        error: 0,
+        processing: 0,
+      });
+      const handler = listAssetsDef(engine).handler;
+      const parse = async (offset: number) => {
+        const result = await handler({
+          book_id: bookId,
+          sort: "newest",
+          limit: 100,
+          offset,
+          browse_status: "ready",
+        });
+        return JSON.parse(
+          (result.content as Array<{ type: string; text: string }>)[0]!.text,
+        ) as {
+          assets: Array<{ artifact_id: string; status: string }>;
+          page: { offset: number; hasMore: boolean; total: number };
+        };
+      };
+      const loaded: string[] = [];
+      const offsets: number[] = [];
+      let hasMore = true;
+      while (hasMore) {
+        const offset = nextLibraryBrowseOffset(loaded.length);
+        offsets.push(offset);
+        const page = await parse(offset);
+        loaded.push(...page.assets.map((asset) => asset.artifact_id));
+        hasMore = page.page.hasMore;
+        if (page.assets.length === 0) break;
+      }
+      expect(offsets).toEqual([0, 100, 200]);
+      expect(offsets[2]).not.toBe(300);
+      expect(new Set(loaded).size).toBe(loaded.length);
+      expect(loaded).toHaveLength(catalog.ready.length);
+      expect([...loaded].sort()).toEqual([...catalog.ready].sort());
     } finally {
       closeEngineForTest(root, engine);
       await rm(root, { recursive: true, force: true, maxRetries: 3 });
