@@ -16,6 +16,7 @@ import {
   setNotebookMediaSlot,
 } from '../../server/src/media-library.js'
 import { searchReferenceStore } from '../../server/src/search-reference-store.js'
+import { seedMixedStatusCatalog } from './library-browse-fixture.js'
 
 const reverseSearchManifest: IndexManifest = {
   manifestId: 'media-library-reverse-v1',
@@ -583,5 +584,107 @@ describe('media Library slots', () => {
       expectedOutputArtifactId: null,
     })).rejects.toThrow('cannot use')
     expect(targetBook.value.engine.artifacts.list()).toEqual([])
+  })
+
+  it('filters all-books Library browse by status before paging mixed catalogs', async () => {
+    const alpha = await books.create('browse-alpha')
+    const beta = await books.create('browse-beta')
+    expect(alpha.ok && beta.ok).toBe(true)
+    if (!alpha.ok || !beta.ok) return
+    const alphaBook = books.get(alpha.value.bookId)
+    const betaBook = books.get(beta.value.bookId)
+    expect(alphaBook.ok && betaBook.ok).toBe(true)
+    if (!alphaBook.ok || !betaBook.ok) return
+
+    const alphaCatalog = await seedMixedStatusCatalog(alphaBook.value.engine, {
+      ready: 18,
+      error: 80,
+      processing: 70,
+    })
+    const betaCatalog = await seedMixedStatusCatalog(betaBook.value.engine, {
+      ready: 12,
+      error: 60,
+      processing: 50,
+    })
+    const readyIds = [...alphaCatalog.ready, ...betaCatalog.ready]
+    const errorIds = [...alphaCatalog.error, ...betaCatalog.error]
+    const processingIds = [...alphaCatalog.processing, ...betaCatalog.processing]
+
+    const defaultBrowse = await searchLibraryAssets(books, {
+      kinds: ['audio', 'image', 'video'],
+      limit: 50,
+      offset: 0,
+    })
+    expect(defaultBrowse.assets.length).toBeGreaterThan(0)
+    expect(defaultBrowse.assets.every((asset) => asset.status === 'ready')).toBe(true)
+    expect(defaultBrowse.page.total).toBe(readyIds.length)
+    expect(defaultBrowse.status_counts).toEqual({
+      ready: readyIds.length,
+      processing: processingIds.length,
+      error: errorIds.length,
+    })
+
+    const firstReady = await searchLibraryAssets(books, {
+      kinds: ['image'],
+      browseStatus: 'ready',
+      limit: 10,
+      offset: 0,
+    })
+    expect(firstReady.assets.every((asset) => asset.status === 'ready')).toBe(true)
+    expect(firstReady.page).toEqual({
+      offset: 0,
+      limit: 10,
+      total: readyIds.length,
+      hasMore: true,
+    })
+
+    const collected: string[] = []
+    let offset = 0
+    let hasMore = true
+    while (hasMore) {
+      const page = await searchLibraryAssets(books, {
+        kinds: ['image'],
+        browseStatus: 'ready',
+        limit: 10,
+        offset,
+      })
+      collected.push(...page.assets.map((asset) => asset.artifact_id))
+      hasMore = page.page.hasMore
+      offset += page.assets.length
+      if (page.assets.length === 0) break
+    }
+    expect(new Set(collected).size).toBe(collected.length)
+    expect([...collected].sort()).toEqual([...readyIds].sort())
+
+    const errors = await searchLibraryAssets(books, {
+      kinds: ['image'],
+      browseStatus: 'error',
+      limit: 100,
+    })
+    expect(errors.page.total).toBe(errorIds.length)
+    expect(errors.assets.every((asset) => asset.status === 'error')).toBe(true)
+    expect(errors.assets.every((asset) => (
+      asset.owning_book_id === alpha.value.bookId
+      || asset.owning_book_id === beta.value.bookId
+    ))).toBe(true)
+
+    const processing = await searchLibraryAssets(books, {
+      kinds: ['image'],
+      browseStatus: 'processing',
+      limit: 100,
+    })
+    expect(processing.page.total).toBe(processingIds.length)
+    expect(processing.assets.every((asset) => (
+      asset.status !== 'ready' && asset.status !== 'error'
+    ))).toBe(true)
+
+    const queryReadyOnly = await searchLibraryAssets(books, {
+      query: 'failed still',
+      kinds: ['image'],
+      browseStatus: 'error',
+      limit: 50,
+    })
+    expect(queryReadyOnly.assets).toEqual([])
+    expect(queryReadyOnly.page.total).toBe(0)
   })
 })

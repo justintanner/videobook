@@ -622,11 +622,15 @@ function MomentSearch({
               value={text}
               onChange={(event) => setText(event.target.value)}
               aria-label="Search the library"
+              aria-describedby="moment-search-example-help"
               disabled={disabled || importing !== null}
               placeholder={reference
                 ? 'Type to switch back to text search, or press Search to re-run'
-                : 'Describe a moment, paste a video URL, or drop an image/video to search by example'}
+                : 'Search moments or paste a video URL'}
             />
+            <span id="moment-search-example-help" className="sr-only">
+              Attach an image or video to search by example. Files dropped in this field become search examples; files dropped on the page import into the library.
+            </span>
             <label className="moment-search-attach" title="Search by example image or video">
               <Paperclip size={14} />
               <input

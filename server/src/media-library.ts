@@ -25,6 +25,15 @@ import {
   type AssetTagFilter,
   type TagFacetCountRecord,
 } from "./asset-tags.js";
+import {
+  addStatusCounts,
+  countBrowseStatuses,
+  emptyStatusCounts,
+  matchesBrowseStatus,
+  pageLibraryAssets,
+  type LibraryBrowseStatus,
+  type LibraryStatusCounts,
+} from "./library-browse.js";
 
 type MediaCellType = "audio" | "image" | "video";
 
@@ -49,6 +58,7 @@ interface LibraryAssetSearchResult {
     total: number;
     hasMore: boolean;
   };
+  status_counts: LibraryStatusCounts;
   books_with_errors: Array<{
     book_id: string;
     message: string;
@@ -254,6 +264,7 @@ export async function searchLibraryAssets(
     tags?: AssetTagFilter;
     limit?: number;
     offset?: number;
+    browseStatus?: LibraryBrowseStatus;
   },
 ): Promise<LibraryAssetSearchResult> {
   await books.ready();
@@ -262,6 +273,10 @@ export async function searchLibraryAssets(
   const prepared = input.referenceId
     ? searchReferenceStore.get(input.referenceId).reference
     : undefined;
+  const searching = Boolean(query || prepared);
+  const browseStatus: LibraryBrowseStatus = searching
+    ? "ready"
+    : (input.browseStatus ?? "ready");
   const artifactKinds = [
     ...(requested.has("audio") ? ["audio" as const] : []),
     ...(requested.has("image") ? ["image" as const] : []),
@@ -278,20 +293,24 @@ export async function searchLibraryAssets(
         summary.bookId,
         "newest",
       ));
-      const assets = builtAssets
+      const eligible = builtAssets
         .filter((asset) =>
-          asset.status === "ready"
-          && kindMatches(requested, asset.type)
+          kindMatches(requested, asset.type)
           && matchesTagFilter(asset.tags ?? undefined, input.tags))
         .map((asset): LibraryAsset => ({
           ...asset,
           owning_book_id: summary.bookId,
           owning_book_name: summary.name,
         }));
+      const statusCounts = countBrowseStatuses(eligible);
+      const readyAssets = eligible.filter((asset) => asset.status === "ready");
+      const assets = searching
+        ? readyAssets
+        : eligible.filter((asset) => matchesBrowseStatus(asset.status, browseStatus));
       let hits: SearchHit[] = [];
       let searchError: string | undefined;
       let preparationJob: { bookId: string; jobId: number } | undefined;
-      if (query || prepared) {
+      if (searching) {
         registerLocalClipSearchProvider(engine);
         const searchQuery = {
           ...(query ? { text: query } : {}),
@@ -299,7 +318,7 @@ export async function searchLibraryAssets(
             ? ["visual" as const, "metadata" as const]
             : ["visual" as const],
           artifactKinds,
-          sourceArtifactIds: assets.map((asset) => asset.artifact_id),
+          sourceArtifactIds: readyAssets.map((asset) => asset.artifact_id),
           limit: 100,
         };
         const result = prepared
@@ -317,11 +336,19 @@ export async function searchLibraryAssets(
           searchError = result.error.message;
         }
       }
-      return { assets, hits, searchError, preparationJob, unindexed: missingVisualIndexes(engine, assets).length };
+      return {
+        assets,
+        statusCounts,
+        hits,
+        searchError,
+        preparationJob,
+        unindexed: missingVisualIndexes(engine, readyAssets).length,
+      };
     }),
   );
   const errors: LibraryAssetSearchResult["books_with_errors"] = [];
   const assets: LibraryAsset[] = [];
+  let statusCounts = emptyStatusCounts();
   const semanticHits: Array<{
     key: string;
     hit: SearchHit;
@@ -329,6 +356,7 @@ export async function searchLibraryAssets(
   results.forEach((result, index) => {
     if (result.status === "fulfilled") {
       assets.push(...result.value.assets);
+      statusCounts = addStatusCounts(statusCounts, result.value.statusCounts);
       semanticHits.push(
         ...result.value.hits.map((hit) => ({
           key: `${summaries[index]?.bookId ?? "unknown"}:${hit.artifactId}`,
@@ -419,11 +447,12 @@ export async function searchLibraryAssets(
         : left.artifact_id.localeCompare(right.artifact_id);
     });
   }
-  const offset = input.offset ?? 0;
-  const limit = input.limit ?? 50;
-  const page = ranked.slice(offset, offset + limit);
+  const paged = pageLibraryAssets(ranked, {
+    offset: input.offset ?? 0,
+    limit: input.limit ?? 50,
+  });
   return {
-    assets: page,
+    assets: paged.pageAssets,
     tag_facets: tagFacetCounts(ranked),
     unindexed_visual_assets: results.reduce((count, result) =>
       count + (result.status === "fulfilled" ? result.value.unindexed : 0), 0),
@@ -431,12 +460,8 @@ export async function searchLibraryAssets(
       result.status === "fulfilled" && result.value.preparationJob
         ? [result.value.preparationJob]
         : []),
-    page: {
-      offset,
-      limit,
-      total: ranked.length,
-      hasMore: offset + page.length < ranked.length,
-    },
+    page: paged.page,
+    status_counts: statusCounts,
     books_with_errors: errors,
   };
 }

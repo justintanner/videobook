@@ -7,7 +7,9 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { v7 as uuidv7 } from 'uuid'
 import { type Sequence } from 'videobook-engine'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { BookManager } from '../../server/src/book-manager.js'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
+import { seedMixedStatusCatalog } from './library-browse-fixture.js'
 import { callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
 
 const execFileAsync = promisify(execFile)
@@ -158,5 +160,149 @@ describe('library endpoints over HTTP MCP', () => {
     expect((await notebook()).cells[0]!.output_artifact_id).toBe(winner)
     expect((await assets()).filter((asset) => asset.type === 'video').map((asset) => asset.artifact_id)).toEqual([winner])
     expect(await bytes(targetBook, winner, 'original.mp4')).toEqual(await bytes(sourceBook, source, 'original.mp4'))
+  })
+})
+
+describe('library browse status over HTTP MCP', () => {
+  let rootDir: string
+  let server: StartedServer | undefined
+  let client: Client
+  let thisBook: string
+  let otherBook: string
+  let thisCatalog: Awaited<ReturnType<typeof seedMixedStatusCatalog>>
+  let otherCatalog: Awaited<ReturnType<typeof seedMixedStatusCatalog>>
+
+  beforeEach(async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-library-browse-'))
+    const books = new BookManager({
+      libraryDir: join(rootDir, 'books'),
+      objectPrefix: 'test-objects',
+    })
+    await books.ready()
+    const createdThis = await books.create('this-book')
+    const createdOther = await books.create('other-book')
+    if (!createdThis.ok || !createdOther.ok) {
+      throw new Error('Could not seed browse books')
+    }
+    const thisManaged = books.get(createdThis.value.bookId)
+    const otherManaged = books.get(createdOther.value.bookId)
+    if (!thisManaged.ok || !otherManaged.ok) {
+      throw new Error('Could not open seeded browse books')
+    }
+    thisBook = createdThis.value.bookId
+    otherBook = createdOther.value.bookId
+    thisCatalog = await seedMixedStatusCatalog(thisManaged.value.engine, {
+      ready: 16,
+      error: 110,
+      processing: 110,
+    })
+    otherCatalog = await seedMixedStatusCatalog(otherManaged.value.engine, {
+      ready: 10,
+      error: 70,
+      processing: 60,
+    })
+    await books.close()
+    server = await startServer(rootDir)
+    client = new Client({ name: 'library-browse-e2e', version: '1' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(server.url)))
+  })
+
+  afterEach(async () => {
+    await client?.close()
+    await stopServer(server)
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3 })
+  })
+
+  const call = <T>(book: string, name: string, args: Record<string, unknown> = {}) =>
+    callTool<T>(client, name, { book_id: book, ...args })
+
+  it('pages Ready media across books and scopes Errors to the selected book', async () => {
+    type Listed = {
+      assets: Array<{ artifact_id: string; status: string; type: string; owning_book_id?: string }>
+      page: { offset: number; limit: number; total: number; hasMore: boolean }
+      status_counts: { ready: number; processing: number; error: number }
+    }
+
+    const unfiltered = await call<Listed>(thisBook, 'list_assets', {
+      sort: 'newest',
+      limit: 200,
+    })
+    expect(unfiltered.page.hasMore).toBe(true)
+    expect(unfiltered.assets.filter((asset) => thisCatalog.ready.includes(asset.artifact_id)))
+      .toEqual([])
+    expect(unfiltered.status_counts).toEqual({
+      ready: thisCatalog.ready.length,
+      processing: thisCatalog.processing.length,
+      error: thisCatalog.error.length,
+    })
+
+    const readyPage = await call<Listed>(thisBook, 'list_assets', {
+      sort: 'newest',
+      limit: 10,
+      browse_status: 'ready',
+    })
+    expect(readyPage.assets.length).toBeGreaterThan(0)
+    expect(readyPage.assets.every((asset) => asset.status === 'ready')).toBe(true)
+    expect(readyPage.assets.every((asset) => asset.type !== 'notebook')).toBe(true)
+    expect(readyPage.page.total).toBe(thisCatalog.ready.length)
+    expect(readyPage.page.hasMore).toBe(true)
+
+    const readyIds: string[] = []
+    let offset = 0
+    let hasMore = true
+    while (hasMore) {
+      const page = await call<Listed>(thisBook, 'list_assets', {
+        sort: 'newest',
+        limit: 10,
+        offset,
+        browse_status: 'ready',
+      })
+      readyIds.push(...page.assets.map((asset) => asset.artifact_id))
+      hasMore = page.page.hasMore
+      offset += page.assets.length
+      if (page.assets.length === 0) break
+    }
+    expect(new Set(readyIds).size).toBe(readyIds.length)
+    expect([...readyIds].sort()).toEqual([...thisCatalog.ready].sort())
+
+    const thisErrors = await call<Listed>(thisBook, 'list_assets', {
+      browse_status: 'error',
+      limit: 500,
+    })
+    expect(thisErrors.page.total).toBe(thisCatalog.error.length)
+    expect(thisErrors.assets.map((asset) => asset.artifact_id).sort())
+      .toEqual([...thisCatalog.error].sort())
+
+    const libraryErrors = await call<Listed>(thisBook, 'search_library_assets', {
+      kinds: ['image'],
+      browse_status: 'error',
+      limit: 100,
+    })
+    expect(libraryErrors.page.total).toBe(thisCatalog.error.length + otherCatalog.error.length)
+    expect(libraryErrors.assets.some((asset) => asset.owning_book_id === thisBook)).toBe(true)
+    expect(libraryErrors.assets.some((asset) => asset.owning_book_id === otherBook)).toBe(true)
+    expect(libraryErrors.status_counts).toEqual({
+      ready: thisCatalog.ready.length + otherCatalog.ready.length,
+      processing: thisCatalog.processing.length + otherCatalog.processing.length,
+      error: thisCatalog.error.length + otherCatalog.error.length,
+    })
+
+    const libraryReady = await call<Listed>(thisBook, 'search_library_assets', {
+      kinds: ['image'],
+      browse_status: 'ready',
+      limit: 10,
+    })
+    expect(libraryReady.assets.every((asset) => asset.status === 'ready')).toBe(true)
+    expect(libraryReady.page.total).toBe(thisCatalog.ready.length + otherCatalog.ready.length)
+    expect(libraryReady.page.hasMore).toBe(true)
+
+    const defaultSearch = await call<Listed>(thisBook, 'search_library_assets', {
+      kinds: ['image'],
+      limit: 50,
+    })
+    expect(defaultSearch.assets.every((asset) => asset.status === 'ready')).toBe(true)
+    expect(defaultSearch.page.total).toBe(thisCatalog.ready.length + otherCatalog.ready.length)
   })
 })

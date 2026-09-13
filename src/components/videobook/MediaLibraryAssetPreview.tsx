@@ -23,6 +23,14 @@ export function MediaLibraryAssetPreview({
   const video = asset.type === 'video' || asset.type === 'final'
   const imageUrl = asset.thumbnailUrl
     ?? (asset.type === 'image' ? asset.mediaUrl : null)
+  const previewKey = `${imageUrl ?? ''}:${asset.mediaUrl ?? ''}:${asset.type}:${eager}`
+  const [activePreviewKey, setActivePreviewKey] = useState(previewKey)
+  if (activePreviewKey !== previewKey) {
+    setActivePreviewKey(previewKey)
+    setImageFailed(false)
+    setVideoFailed(false)
+    setVideoActive(eager)
+  }
   const hasImagePreview = Boolean(imageUrl && !imageFailed)
   const shouldLoadVideo = video && Boolean(asset.mediaUrl) && !hasImagePreview
 

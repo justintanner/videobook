@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/client";
 import { isUuidV7 } from "videobook-engine";
+import { seedMixedStatusCatalog } from "../../../tests/v2/library-browse-fixture.js";
 
 const MINIMAL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
@@ -344,6 +345,181 @@ describe("list_assets tool", () => {
       expect(ids.has(current.artifactId)).toBe(true);
       expect(ids.has(historical.artifactId)).toBe(true);
       expect(ids.has(provider.artifactId)).toBe(true);
+    } finally {
+      closeEngineForTest(root, engine);
+      await rm(root, { recursive: true, force: true, maxRetries: 3 });
+    }
+  });
+
+  it("filters Library browse status before paging a mixed catalog larger than one page", async () => {
+    const { createEngineForTest, closeEngineForTest } = await import("../engine.js");
+    const { listAssetsDef } = await import("./list-assets.js");
+    const root = await mkdtemp(join(tmpdir(), "list-assets-browse-status-"));
+    const engine = createEngineForTest(root);
+    try {
+      const bookId = engine.book.get().bookId;
+      const catalog = await seedMixedStatusCatalog(engine, {
+        ready: 24,
+        error: 120,
+        processing: 110,
+      });
+      const listedNotebook = await engine.notebooks.create("Browse notes");
+      if (!listedNotebook.ok) throw new Error(listedNotebook.error.message);
+
+      const handler = listAssetsDef(engine).handler;
+      const parse = async (args: Record<string, unknown>) => {
+        const result = await handler({ book_id: bookId, ...args });
+        return JSON.parse(
+          (result.content as Array<{ type: string; text: string }>)[0]!.text,
+        ) as {
+          assets: Array<{ artifact_id: string; status: string; type: string }>;
+          page: {
+            offset: number;
+            limit: number;
+            total: number;
+            hasMore: boolean;
+          };
+          status_counts: {
+            ready: number;
+            processing: number;
+            error: number;
+          };
+        };
+      };
+
+      const unfiltered = await parse({ sort: "newest", limit: 200, offset: 0 });
+      const unfilteredIds = unfiltered.assets.map((asset) => asset.artifact_id);
+      expect(unfiltered.page).toEqual({
+        offset: 0,
+        limit: 200,
+        total: unfiltered.page.total,
+        hasMore: true,
+      });
+      expect(unfiltered.page.total).toBeGreaterThan(200);
+      expect(unfiltered.assets.some((asset) => asset.type === "notebook")).toBe(true);
+      expect(unfilteredIds.filter((id) => catalog.ready.includes(id))).toEqual([]);
+      expect(unfiltered.status_counts).toEqual({
+        ready: catalog.ready.length,
+        processing: catalog.processing.length,
+        error: catalog.error.length,
+      });
+
+      const readyPage = await parse({
+        sort: "newest",
+        limit: 10,
+        offset: 0,
+        browse_status: "ready",
+      });
+      expect(readyPage.assets.length).toBeGreaterThan(0);
+      expect(readyPage.assets.every((asset) => asset.status === "ready")).toBe(true);
+      expect(readyPage.assets.every((asset) => asset.type !== "notebook")).toBe(true);
+      expect(readyPage.page).toEqual({
+        offset: 0,
+        limit: 10,
+        total: catalog.ready.length,
+        hasMore: true,
+      });
+      expect(readyPage.status_counts).toEqual(unfiltered.status_counts);
+
+      const readyIds: string[] = [];
+      let offset = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const page = await parse({
+          sort: "newest",
+          limit: 10,
+          offset,
+          browse_status: "ready",
+        });
+        readyIds.push(...page.assets.map((asset) => asset.artifact_id));
+        hasMore = page.page.hasMore;
+        offset += page.assets.length;
+        if (page.assets.length === 0) break;
+      }
+      expect(new Set(readyIds).size).toBe(readyIds.length);
+      expect([...readyIds].sort()).toEqual([...catalog.ready].sort());
+      expect(offset).toBe(catalog.ready.length);
+
+      const errors = await parse({ browse_status: "error", limit: 500 });
+      expect(errors.page.total).toBe(catalog.error.length);
+      expect(errors.assets.every((asset) => asset.status === "error")).toBe(true);
+      expect(errors.assets.map((asset) => asset.artifact_id).sort())
+        .toEqual([...catalog.error].sort());
+
+      const processing = await parse({ browse_status: "processing", limit: 500 });
+      expect(processing.page.total).toBe(catalog.processing.length);
+      expect(processing.assets.every((asset) => (
+        asset.status !== "ready" && asset.status !== "error"
+      ))).toBe(true);
+
+      const allMedia = await parse({ browse_status: "all", limit: 500 });
+      expect(allMedia.page.total).toBe(
+        catalog.ready.length + catalog.error.length + catalog.processing.length,
+      );
+      expect(allMedia.assets.every((asset) => asset.type !== "notebook")).toBe(true);
+
+      const emptyPage = await parse({
+        browse_status: "ready",
+        limit: 10,
+        offset: catalog.ready.length,
+      });
+      expect(emptyPage.assets).toEqual([]);
+      expect(emptyPage.page).toEqual({
+        offset: catalog.ready.length,
+        limit: 10,
+        total: catalog.ready.length,
+        hasMore: false,
+      });
+    } finally {
+      closeEngineForTest(root, engine);
+      await rm(root, { recursive: true, force: true, maxRetries: 3 });
+    }
+  });
+
+  it("keeps referenced hydration when Library browse filters the page", async () => {
+    const { createEngineForTest, closeEngineForTest } = await import("../engine.js");
+    const { listAssetsDef } = await import("./list-assets.js");
+    const root = await mkdtemp(join(tmpdir(), "list-assets-browse-refs-"));
+    const engine = createEngineForTest(root);
+    try {
+      const bookId = engine.book.get().bookId;
+      const catalog = await seedMixedStatusCatalog(engine, {
+        ready: 1,
+        error: 1,
+        processing: 0,
+      });
+      const notebookCreated = await engine.notebooks.create("Ready page refs");
+      if (!notebookCreated.ok) throw new Error(notebookCreated.error.message);
+      const cell = engine.notebooks.createCell({
+        type: "image",
+        slot: { row: 0, column: 0 },
+        outputArtifactId: catalog.error[0],
+      });
+      const writtenNotebook = await engine.notebooks.write({
+        ...notebookCreated.value,
+        cells: [cell],
+        edges: [],
+      });
+      if (!writtenNotebook.ok) throw new Error(writtenNotebook.error.message);
+
+      const result = await listAssetsDef(engine).handler({
+        book_id: bookId,
+        sort: "newest",
+        limit: 10,
+        browse_status: "ready",
+        include_referenced: true,
+      });
+      const data = JSON.parse(
+        (result.content as Array<{ type: string; text: string }>)[0]!.text,
+      ) as {
+        assets: Array<{ artifact_id: string; status: string }>;
+        page: { total: number; hasMore: boolean };
+      };
+      expect(data.page.total).toBe(1);
+      expect(data.page.hasMore).toBe(false);
+      const ids = data.assets.map((asset) => asset.artifact_id);
+      expect(ids).toContain(catalog.ready[0]);
+      expect(ids).toContain(catalog.error[0]);
     } finally {
       closeEngineForTest(root, engine);
       await rm(root, { recursive: true, force: true, maxRetries: 3 });

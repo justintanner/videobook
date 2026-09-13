@@ -7,6 +7,11 @@ import {
   type AssetTagFilter,
 } from "../asset-tags.js";
 import { tagSelectorSchema } from "./asset-tags.js";
+import {
+  isLibraryBrowseStatus,
+  pageLibraryAssets,
+  type LibraryBrowseStatus,
+} from "../library-browse.js";
 
 export function listAssetsDef(engine: Engine): ToolDef {
   return {
@@ -19,30 +24,43 @@ export function listAssetsDef(engine: Engine): ToolDef {
       limit: z.number().int().positive().max(500).optional(),
       offset: z.number().int().nonnegative().optional(),
       include_referenced: z.boolean().optional(),
+      browse_status: z.enum(["ready", "processing", "error", "all"]).optional()
+        .describe(
+          "Filter Library browse by artifact status before paging. Omit to keep the unfiltered page, including notebooks.",
+        ),
       tags_all: z.array(tagSelectorSchema).optional()
         .describe("Only assets carrying every one of these tags"),
       tags_any: z.array(tagSelectorSchema).optional()
         .describe("Only assets carrying at least one of these tags"),
     },
     handler: async (args) => {
-      const { book_id, sort, limit, offset, include_referenced, tags_all, tags_any } =
-        args as {
-          book_id: string;
-          sort?: "newest" | "oldest";
-          limit?: number;
-          offset?: number;
-          include_referenced?: boolean;
-          tags_all?: AssetTagFilter["all"];
-          tags_any?: AssetTagFilter["any"];
-        };
+      const {
+        book_id,
+        sort,
+        limit,
+        offset,
+        include_referenced,
+        browse_status,
+        tags_all,
+        tags_any,
+      } = args as {
+        book_id: string;
+        sort?: "newest" | "oldest";
+        limit?: number;
+        offset?: number;
+        include_referenced?: boolean;
+        browse_status?: LibraryBrowseStatus;
+        tags_all?: AssetTagFilter["all"];
+        tags_any?: AssetTagFilter["any"];
+      };
       const allAssets = await buildAssetList(engine, book_id, sort);
       const tagFilter: AssetTagFilter = {
         ...(tags_all ? { all: tags_all } : {}),
         ...(tags_any ? { any: tags_any } : {}),
       };
-      let matchingAssets: typeof allAssets;
+      let taggedAssets: typeof allAssets;
       try {
-        matchingAssets = allAssets.filter((asset) =>
+        taggedAssets = allAssets.filter((asset) =>
           matchesTagFilter(asset.tags ?? undefined, tagFilter));
       } catch (cause) {
         return {
@@ -53,11 +71,16 @@ export function listAssetsDef(engine: Engine): ToolDef {
           }],
         };
       }
-      const pageOffset = offset ?? 0;
-      const pageLimit = limit ?? 200;
-      const pageAssets = matchingAssets.slice(pageOffset, pageOffset + pageLimit);
+      const browseStatus = isLibraryBrowseStatus(browse_status)
+        ? browse_status
+        : undefined;
+      const paged = pageLibraryAssets(taggedAssets, {
+        ...(browseStatus ? { browseStatus } : {}),
+        offset: offset ?? 0,
+        limit: limit ?? 200,
+      });
       const pageArtifactIds = new Set(
-        pageAssets.map((asset) => asset.artifact_id),
+        paged.pageAssets.map((asset) => asset.artifact_id),
       );
       const referencedArtifactIds = include_referenced
         ? new Set(
@@ -95,18 +118,14 @@ export function listAssetsDef(engine: Engine): ToolDef {
             referencedArtifactIds.has(asset.artifact_id)
             && !pageArtifactIds.has(asset.artifact_id))
         : [];
-      const assets = [...pageAssets, ...referencedAssets];
+      const assets = [...paged.pageAssets, ...referencedAssets];
       return {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
             assets,
-            page: {
-              offset: pageOffset,
-              limit: pageLimit,
-              total: matchingAssets.length,
-              hasMore: pageOffset + pageAssets.length < matchingAssets.length,
-            },
+            page: paged.page,
+            status_counts: paged.statusCounts,
           }),
         }],
       };
