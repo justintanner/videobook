@@ -148,6 +148,47 @@ function notebookCellNode(page: Page, cellId: string) {
   )
 }
 
+async function expectLaneCaptionsOutsideGrid(page: Page): Promise<void> {
+  const captions = await page.locator('.notebook-lane-caption').evaluateAll((elements) =>
+    elements.map((element) => {
+      const frame = element.closest('.notebook-flow-frame')
+      const flow = frame?.querySelector('.notebook-flow')
+      const band = frame?.querySelector(
+        `.notebook-lane[data-lane-start-row="${element.getAttribute('data-lane-start-row')}"]`,
+      )
+      const text = element.querySelector('.notebook-lane-caption-text')
+      if (!flow || !band || !text) throw new Error('Missing lane presentation')
+      const bounds = element.getBoundingClientRect()
+      const flowBounds = flow.getBoundingClientRect()
+      const bandBounds = band.getBoundingClientRect()
+      const textBounds = text.getBoundingClientRect()
+      return {
+        caption: element.getAttribute('data-lane-caption'),
+        accessibleLabel: element.getAttribute('aria-label'),
+        title: element.getAttribute('title'),
+        mixed: element.getAttribute('data-lane-kind') === 'mixed',
+        text: text.textContent,
+        outsideGrid: bounds.right < flowBounds.left,
+        insideBand: bounds.top >= bandBounds.top
+          && bounds.bottom <= bandBounds.bottom,
+        vertical: textBounds.height > textBounds.width,
+        upright: getComputedStyle(text).textOrientation === 'upright',
+      }
+    }))
+  expect(captions.length).toBeGreaterThan(0)
+  for (const caption of captions) {
+    expect(caption, caption.caption ?? 'Lane caption').toMatchObject({
+      accessibleLabel: `${caption.caption} lane`,
+      title: caption.caption,
+      text: caption.mixed ? 'Mixed' : caption.caption,
+      outsideGrid: true,
+      insideBand: true,
+      vertical: true,
+      upright: true,
+    })
+  }
+}
+
 async function dragNotebookConnection(
   page: Page,
   sourceCellId: string,
@@ -3586,6 +3627,106 @@ describe('chat composer browser flow', () => {
     notebookDirty = true
   }, 60_000)
 
+  it('keeps vertical lane captions outside full and mixed rows', async () => {
+    const page = await openApp()
+    const client = new Client(
+      { name: 'videobook-lane-captions-e2e', version: '1.0.0' },
+      {
+        capabilities: {},
+        supportedProtocolVersions: ['2026-07-28'],
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+      },
+    )
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    const tool = async (name: string, args: Record<string, unknown>) =>
+      resultValue(await client.callTool({ name, arguments: args }))
+    const name = 'lane-caption-check'
+    let fixtureBookId = ''
+    let switched = false
+    try {
+      const book = record(await tool('create_book', { name }))
+      fixtureBookId = typeof book?.bookId === 'string' ? book.bookId : ''
+      const notebooks = await tool('list_notebooks', { book_id: fixtureBookId })
+      const notebook = (Array.isArray(notebooks) ? notebooks : []).map(record).find(Boolean)
+      const fixtureNotebookId = typeof notebook?.id === 'string' ? notebook.id : ''
+      if (!fixtureBookId || !fixtureNotebookId) throw new Error('Missing lane fixture book')
+      const scope = { book_id: fixtureBookId, notebook_id: fixtureNotebookId }
+      await page.locator('.brand-project-menu-toggle').click()
+      await page.getByRole('menuitem', { name: new RegExp(name) }).click()
+      switched = true
+      await expect.poll(async () => await page.locator('.notebook-lane-starter').count(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(3)
+      await expectLaneCaptionsOutsideGrid(page)
+
+      const cells = [
+        ...Array.from({ length: 8 }, (_, column) => ({
+          type: 'image', slot: { row: 0, column },
+        })),
+        ...['image', 'prompt', 'video', 'audio', 'analysis'].map((type, column) => ({
+          type, slot: { row: 1, column },
+        })),
+        { type: 'video', slot: { row: 63, column: 7 } },
+      ]
+      const createdIds: string[] = []
+      for (const cell of cells) {
+        const created = record(await tool('create_notebook_cell', { ...scope, cell }))
+        if (typeof created?.id !== 'string') throw new Error('Missing lane fixture cell')
+        createdIds.push(created.id)
+      }
+      await expect.poll(async () => await page.locator('.cell-node').count(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(cells.length)
+      const mixed = page.locator('.notebook-lane-caption[data-lane-kind="mixed"]')
+      expect(await mixed.getAttribute('title')).toBe('Images · Gen · Videos · Audio · Work')
+      await expectLaneCaptionsOutsideGrid(page)
+      const imageCaption = page.locator('.notebook-lane-caption[data-lane-start-row="0"]')
+      const fullRowPosition = await imageCaption.boundingBox()
+      await tool('delete_notebook_cell', { ...scope, cell_id: createdIds[7] })
+      await expect.poll(async () => await page.locator('.cell-node').count(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(cells.length - 1)
+      expect(await imageCaption.boundingBox()).toEqual(fullRowPosition)
+
+      const before = record(await tool('get_notebook', scope))
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 800 })
+        await page.getByLabel('Reset zoom').click()
+        await expectLaneCaptionsOutsideGrid(page)
+        await page.getByLabel('Zoom out').click()
+        await expect.poll(async () => await page.getByLabel('Reset zoom').textContent())
+          .toContain('75%')
+        await expectLaneCaptionsOutsideGrid(page)
+        await page.locator('.notebook-horizontal-scroll').evaluate((element) =>
+          element.scrollTo({ left: 200, top: 110 }))
+        await expectLaneCaptionsOutsideGrid(page)
+      }
+      const lastSlot = page.locator('.notebook-grid-square-label').filter({ hasText: /^@bl8$/u })
+      await lastSlot.scrollIntoViewIfNeeded()
+      const lastBounds = await lastSlot.boundingBox()
+      expect(lastBounds).not.toBeNull()
+      expect(lastBounds!.x).toBeGreaterThanOrEqual(0)
+      expect(lastBounds!.y).toBeGreaterThanOrEqual(0)
+      expect(lastBounds!.x + lastBounds!.width).toBeLessThanOrEqual(390)
+      expect(lastBounds!.y + lastBounds!.height).toBeLessThanOrEqual(800)
+      await expectLaneCaptionsOutsideGrid(page)
+      const after = record(await tool('get_notebook', scope))
+      expect(after?.cells).toEqual(before?.cells)
+      expect(after?.edges).toEqual(before?.edges)
+    } finally {
+      if (switched) {
+        await page.locator('.brand-project-menu-toggle').click()
+        await page.getByRole('menuitem', { name: /chat-ui-e2e/ }).click()
+        await expect.poll(async () => await page.locator('.brand-project-menu-toggle').textContent(), {
+          timeout: MCP_ROUNDTRIP_MS,
+        }).toContain('chat-ui-e2e')
+      }
+      if (fixtureBookId) await tool('delete_book', { book_id: fixtureBookId, confirm_name: name })
+      await client.close()
+      notebookDirty = true
+    }
+  }, 90_000)
+
   it('auto-arranges images on the top row and videos on the third row', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()
@@ -3669,6 +3810,7 @@ describe('chat composer browser flow', () => {
     expect(laneForRow(Number(generationSlot?.row))?.caption).toBe('Gen')
     expect(laneForRow(Number(outputVideoSlot?.row))?.caption).toBe('Videos')
     expect(await selected.getAttribute('data-lane-family')).toBe('image')
+    await expectLaneCaptionsOutsideGrid(page)
     if (process.env.LANES_SCREENSHOT) {
       await page.screenshot({ path: process.env.LANES_SCREENSHOT })
     }

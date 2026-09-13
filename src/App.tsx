@@ -129,6 +129,7 @@ import { NotebookMediaMetadata } from '@/components/videobook/NotebookMediaMetad
 import { PublishedPostTileChrome } from '@/components/videobook/PublishedPostChrome'
 import {
   NotebookGridBoard,
+  NotebookLaneCaptions,
 } from '@/components/videobook/NotebookGridBoard'
 import {
   MomentSearch,
@@ -411,7 +412,11 @@ import {
   isNotebookGenerationCellType,
   notebookCellFamily,
 } from '@/videobook/notebook-cell-types'
-import { notebookLaneFamily } from '@/videobook/notebook-lane-policy'
+import {
+  groupNotebookLaneSections,
+  notebookLaneFamily,
+  summarizeNotebookLaneRows,
+} from '@/videobook/notebook-lane-policy'
 import {
   mediaFileAccept,
   mediaKindForFile,
@@ -4711,9 +4716,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => notebookGridFrameSize(notebookMetrics, notebookView.zoom),
     [notebookMetrics, notebookView.zoom],
   )
+  const notebookLaneSections = useMemo(
+    () => groupNotebookLaneSections(
+      summarizeNotebookLaneRows(notebookLaneCells, notebookMetrics.rowCount),
+    ),
+    [notebookLaneCells, notebookMetrics.rowCount],
+  )
   const notebookFlowStyle = useMemo<CSSProperties>(
     () => ({
-      width: notebookFrameSize.width,
+      width: `calc(${notebookFrameSize.width}px + var(--notebook-lane-caption-width))`,
       height: notebookFrameSize.height,
     }),
     [notebookFrameSize.height, notebookFrameSize.width],
@@ -12082,6 +12093,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       className="notebook-flow-frame"
                       style={notebookFlowStyle}
                     >
+                      <NotebookLaneCaptions
+                        sections={notebookLaneSections}
+                        viewport={notebookViewport}
+                      />
                       <MediaSlotContext.Provider value={mediaSlotContextValue}>
                         <CellRunContext.Provider value={runCell}>
                           <PrimaryCellContext.Provider value={selectedCellId}>
@@ -12225,7 +12240,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       proOptions={flowProOptions}
                     >
                             <NotebookGridBoard
-                              cells={notebookLaneCells}
+                              sections={notebookLaneSections}
                               metrics={notebookMetrics}
                               occupiedSlots={notebookOccupiedSlots}
                               previewSlot={previewSlot}

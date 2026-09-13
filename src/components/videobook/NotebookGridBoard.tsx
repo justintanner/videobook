@@ -1,5 +1,5 @@
 import { AudioWaveform, Braces, Image, Sparkles, Video } from 'lucide-react'
-import { ViewportPortal } from '@xyflow/react'
+import { ViewportPortal, type Viewport } from '@xyflow/react'
 import {
   notebookGrid,
   notebookGridTag,
@@ -8,21 +8,23 @@ import {
   type NotebookGridMetrics,
   type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
-import {
-  groupNotebookLaneSections,
-  summarizeNotebookLaneRows,
-  type NotebookLaneCell,
-  type NotebookLaneFamily,
-  type NotebookLaneSection,
+import type {
+  NotebookLaneFamily,
+  NotebookLaneSection,
 } from '@/videobook/notebook-lane-policy'
 
 interface NotebookGridBoardProps {
-  cells: readonly NotebookLaneCell[]
+  sections: readonly NotebookLaneSection[]
   metrics: NotebookGridMetrics
   occupiedSlots: readonly NotebookGridSlot[]
   previewSlot: NotebookGridSlot | null
   mediaDropActive: boolean
   mediaDropSlot: NotebookGridSlot | null
+}
+
+interface NotebookLaneCaptionsProps {
+  sections: readonly NotebookLaneSection[]
+  viewport: Viewport
 }
 
 function laneIcon(family: NotebookLaneFamily | null) {
@@ -44,39 +46,51 @@ function laneBandStyle(section: NotebookLaneSection) {
   }
 }
 
-function firstEmptySlotInSection(
-  section: NotebookLaneSection,
-  occupiedSlotKeys: ReadonlySet<string>,
-): NotebookGridSlot | null {
-  for (let row = section.startRow; row < section.startRow + section.rowCount; row += 1) {
-    for (let column = 0; column < notebookGrid.columnCount; column += 1) {
-      const slot = { row, column }
-      if (!occupiedSlotKeys.has(notebookGridSlotKey(slot))) return slot
-    }
-  }
-  return null
-}
-
 function laneCaptionStyle(
   section: NotebookLaneSection,
-  occupiedSlotKeys: ReadonlySet<string>,
+  viewport: Viewport,
 ) {
-  const empty = firstEmptySlotInSection(section, occupiedSlotKeys)
-  if (empty && (section.startRow === 0 || empty.column <= 4)) {
-    return {
-      transform: `translate(${notebookGrid.originX + empty.column * notebookGrid.columnPitch + 10}px, ${notebookGrid.originY + empty.row * notebookGrid.rowPitch + 28}px)`,
-    }
-  }
-  const top = section.startRow === 0
-    ? notebookGrid.originY + notebookGrid.squareSize + 8
-    : notebookGrid.originY + section.startRow * notebookGrid.rowPitch - 22
   return {
-    transform: `translate(${notebookGrid.originX + 10}px, ${top}px)`,
+    top: (notebookGrid.originY + section.startRow * notebookGrid.rowPitch)
+      * viewport.zoom + viewport.y + 8,
   }
+}
+
+export function NotebookLaneCaptions({
+  sections,
+  viewport,
+}: NotebookLaneCaptionsProps) {
+  return (
+    <div className="notebook-lane-captions">
+      {sections.map((section) => {
+        const family = section.family ?? 'mixed'
+        return (
+          <span
+            className={`notebook-lane-caption notebook-lane-caption-${family}`}
+            data-lane-caption={section.caption}
+            data-lane-family={family}
+            data-lane-kind={section.kind}
+            data-lane-start-row={section.startRow}
+            key={`caption-${section.startRow}-${family}`}
+            role="heading"
+            aria-level={2}
+            aria-label={`${section.caption} lane`}
+            title={section.caption}
+            style={laneCaptionStyle(section, viewport)}
+          >
+            {laneIcon(section.family)}
+            <span className="notebook-lane-caption-text" aria-hidden="true">
+              {section.kind === 'mixed' ? 'Mixed' : section.caption}
+            </span>
+          </span>
+        )
+      })}
+    </div>
+  )
 }
 
 export function NotebookGridBoard({
-  cells,
+  sections,
   metrics,
   occupiedSlots,
   previewSlot,
@@ -88,10 +102,6 @@ export function NotebookGridBoard({
   const mediaDropSlotKey = mediaDropSlot
     ? notebookGridSlotKey(mediaDropSlot)
     : null
-  const laneSections = groupNotebookLaneSections(
-    summarizeNotebookLaneRows(cells, metrics.rowCount),
-  )
-
   return (
     <ViewportPortal>
       <div
@@ -101,7 +111,7 @@ export function NotebookGridBoard({
           height: metrics.height,
         }}
       >
-        {laneSections.map((section) => {
+        {sections.map((section) => {
           const family = section.family ?? 'mixed'
           return (
             <div
@@ -114,23 +124,6 @@ export function NotebookGridBoard({
               key={`lane-${section.startRow}-${family}`}
               style={laneBandStyle(section)}
             />
-          )
-        })}
-        {laneSections.map((section) => {
-          const family = section.family ?? 'mixed'
-          return (
-            <span
-              className={`notebook-lane-caption notebook-lane-caption-${family}`}
-              data-lane-caption={section.caption}
-              data-lane-family={family}
-              data-lane-kind={section.kind}
-              data-lane-start-row={section.startRow}
-              key={`caption-${section.startRow}-${family}`}
-              style={laneCaptionStyle(section, occupiedSlotKeys)}
-            >
-              {laneIcon(section.family)}
-              <span>{section.caption}</span>
-            </span>
           )
         })}
         {Array.from({ length: metrics.rowCount }, (_, row) => (

@@ -1341,12 +1341,6 @@ textarea:focus-visible {
 }
 
 .canvas {
-  /* The scroll container carries the full 20px chrome inset on its left,
-     right, and top edges, so at rest the first cell column and the
-     horizontal scrollbar track both start on the same --app-gutter line as
-     the header logo and the composer. originX/originY in
-     src/videobook/notebook-grid.ts are 0: all breathing room is chrome, and
-     both scrollbar tracks begin 20px from their window edge. */
   --notebook-chrome-inset: var(--app-gutter);
   --notebook-chrome-gap: var(--app-gap);
   --notebook-scrollbar-size: 10px;
@@ -1537,8 +1531,10 @@ textarea:focus-visible {
 }
 
 .notebook-flow-frame {
+  --notebook-lane-caption-width: 28px;
   position: relative;
   margin-inline: auto;
+  padding-left: var(--notebook-lane-caption-width);
 }
 
 .notebook-flow {
@@ -1622,28 +1618,42 @@ textarea:focus-visible {
   opacity: 0.72;
 }
 
+.notebook-lane-captions {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--notebook-lane-caption-width);
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .notebook-lane-caption {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 3;
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 6px;
-  min-height: 18px;
-  padding: 0 7px 0 5px;
+  width: calc(var(--notebook-lane-caption-width) - 8px);
+  padding: 7px 2px;
   border: 1px solid rgba(126, 207, 159, 0.16);
-  border-radius: 999px;
+  border-radius: 3px;
   color: #8fb89e;
   background: rgba(4, 14, 9, 0.78);
   font-family: var(--mono);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.04em;
   line-height: 1;
   text-transform: uppercase;
-  pointer-events: none;
+  pointer-events: auto;
   white-space: nowrap;
+}
+
+.notebook-lane-caption-text {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
 }
 
 .notebook-lane-caption svg {
