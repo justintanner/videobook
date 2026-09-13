@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
+import sharp from 'sharp'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { availablePort, record, resultValue, startProcess, stopProcess, waitForHttp } from './e2e-harness.js'
 import type { StartedProcess } from './e2e-harness.js'
@@ -40,6 +41,20 @@ describe('workspace action launcher with real endpoints', () => {
 
   async function call(name: string, args: Record<string, unknown> = {}): Promise<unknown> {
     return resultValue(await client.callTool({ name, arguments: { book_id: bookId, ...args } }))
+  }
+
+  async function originalImageFile(): Promise<string> {
+    const manifest = record(await call('asset_manifest', { asset_id: imageId }))!
+    const filename = (manifest.files as Record<string, unknown>[]).find(file => /^original\.(?:png|jpe?g)$/u.test(String(file.name)))?.name
+    expect(typeof filename).toBe('string')
+    return String(filename)
+  }
+
+  async function originalImageBytes(): Promise<Buffer> {
+    const response = await fetch(`${origin}/files/${bookId}/${imageId}/${await originalImageFile()}`)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toMatch(/^image\//u)
+    return Buffer.from(await response.arrayBuffer())
   }
 
   async function openActions(command?: string): Promise<void> {
@@ -102,7 +117,7 @@ describe('workspace action launcher with real endpoints', () => {
       if (!request.url().endsWith('/mcp') || request.method() !== 'POST') return
       const payload = record(request.postDataJSON())
       const params = record(payload?.params)
-      if (!['plan_sequence_export', 'enqueue_sequence_export', 'preview_edit_intent', 'apply_command_plan'].includes(String(params?.name))) return
+      if (!['plan_sequence_export', 'enqueue_sequence_export', 'preview_edit_intent', 'apply_command_plan', 'search_library_assets'].includes(String(params?.name))) return
       commandResponses.push({ request: payload, response: await response.text().catch(() => 'unavailable') })
     })
     await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
@@ -115,6 +130,7 @@ describe('workspace action launcher with real endpoints', () => {
       const evidencePath = `/tmp/videobook-actions-${task.name.replace(/[^a-z0-9]+/giu, '-').slice(0, 90)}`
       await page.screenshot({ path: `${evidencePath}.png` })
       await writeFile(`${evidencePath}.txt`, await page.locator('body').innerText())
+      await writeFile(`${evidencePath}.aria.txt`, await page.locator('body').ariaSnapshot())
       await writeFile(`${evidencePath}.json`, JSON.stringify({ browserErrors, commandResponses, navigations }, null, 2))
     }
     await page?.close()
@@ -292,7 +308,7 @@ describe('workspace action launcher with real endpoints', () => {
     await expect.poll(async () => (await readdir(join(rootDir, 'downloads'))).length).toBe(1)
     const [filename] = await readdir(join(rootDir, 'downloads'))
     const exported = await readFile(join(rootDir, 'downloads', filename!))
-    const original = Buffer.from(await (await fetch(`${origin}/files/${bookId}/${imageId}/original.png`)).arrayBuffer())
+    const original = await originalImageBytes()
     expect(exported.equals(original)).toBe(true)
     expect(await page.getByRole('dialog', { name: 'Workspace actions' }).count()).toBe(0)
   })
@@ -317,7 +333,7 @@ describe('workspace action launcher with real endpoints', () => {
   })
 
   it('crops an image through visible controls and persists a square result', async () => {
-    const original = Buffer.from(await (await fetch(`${origin}/files/${bookId}/${imageId}/original.png`)).arrayBuffer())
+    const original = await originalImageBytes()
     await sendCommand('/crop @a2')
     await page.getByRole('button', { name: 'Square 1:1', exact: true }).click()
     expect(await page.getByRole('spinbutton', { name: /^W\b/u }).inputValue()).toBe('0.75')
@@ -327,8 +343,9 @@ describe('workspace action launcher with real endpoints', () => {
       const asset = (Array.isArray(payload?.assets) ? payload.assets : []).map(record).find(entry => entry?.artifact_id === imageId)
       return [asset?.width, asset?.height]
     }, { timeout: 30_000 }).toEqual([1080, 1080])
-    const cropped = Buffer.from(await (await fetch(`${origin}/files/${bookId}/${imageId}/original.png`)).arrayBuffer())
+    const cropped = await originalImageBytes()
     expect(cropped.equals(original)).toBe(false)
+    expect(await sharp(cropped).metadata()).toMatchObject({ width: 1080, height: 1080 })
     await page.screenshot({ path: '/tmp/videobook-actions-crop-result.png' })
   })
 
@@ -414,6 +431,241 @@ describe('workspace action launcher with real endpoints', () => {
     await page.getByText(/The sequence changed after review\. Review the current cut before exporting\./u).first().waitFor()
     expect(commandResponses.some(entry => record(record(record(entry)?.request)?.params)?.name === 'enqueue_sequence_export')).toBe(false)
     await sendCommand('/cancel')
+  })
+
+  it('previews a book revision directly from its named history entry', async () => {
+    await expect.poll(async () => {
+      const value = record(await call('list_jobs'))
+      return (value?.jobs as Record<string, unknown>[] ?? []).every(job => ['completed', 'succeeded', 'failed', 'cancelled', 'aborted'].includes(String(job.status)))
+    }, { timeout: 30_000 }).toBe(true)
+    const history = record(await call('list_book_actions'))!
+    const revisions = history.actions as Record<string, unknown>[]
+    const revision = revisions[0]!
+    const action = catalog.actions.find(entry => entry.handler.kind === 'tool' && entry.handler.tool === 'list_book_actions')!
+    await openActions(action.command)
+    await page.locator('.workspace-action-linked-results > li').first().getByRole('button', { name: 'Preview revision', exact: true }).click()
+    await page.locator('form[data-action-id="tool.get_history_action"]').waitFor()
+    const target = page.getByRole('combobox', { name: 'Action id', exact: true })
+    await expect.poll(() => target.inputValue()).toBe(String(revision.hash))
+    await page.getByRole('button', { name: 'Run action', exact: true }).click()
+    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent()).toContain(String(revision.operationId))
+    expect(browserErrors).toEqual([])
+  })
+
+  it('updates advanced fields when switching between saved items', async () => {
+    const first = record(await call('create_prompt_entity', { name: 'First structured prompt', prompt: 'First prompt', data: { lens: '35mm' } }))!
+    const second = record(await call('create_prompt_entity', { name: 'Second structured prompt', prompt: 'Second prompt', data: { lens: '85mm' } }))!
+    const action = catalog.actions.find(entry => entry.handler.kind === 'tool' && entry.handler.tool === 'update_prompt_entity')!
+    await openActions(action.command)
+    const picker = page.getByLabel('Saved item', { exact: true })
+    await picker.selectOption(String(first.id))
+    const data = page.getByLabel('Data', { exact: true })
+    await expect.poll(() => data.inputValue()).toContain('35mm')
+    await data.fill('{')
+    await page.getByLabel('Prompt', { exact: true }).fill('An unfinished first edit')
+    expect(await data.inputValue()).toBe('{')
+    expect(await data.evaluate(element => (element as HTMLTextAreaElement).validity.valid)).toBe(false)
+    await picker.selectOption(String(second.id))
+    await expect.poll(() => data.inputValue()).toContain('85mm')
+    expect(await data.evaluate(element => (element as HTMLTextAreaElement).validity.valid)).toBe(true)
+    await page.getByLabel('Prompt', { exact: true }).fill('Second prompt revised')
+    await page.getByRole('button', { name: 'Run action', exact: true }).click()
+    await expect.poll(async () => record(await call('get_prompt_entity', { entity_id: second.id }))?.prompt).toBe('Second prompt revised')
+    expect(record(await call('get_prompt_entity', { entity_id: first.id }))?.data).toEqual({ lens: '35mm' })
+    expect(record(await call('get_prompt_entity', { entity_id: second.id }))?.data).toEqual({ lens: '85mm' })
+  })
+
+  it('previews and restores a script revision from its history controls', async () => {
+    const firstContent = '# Original scene\n\nThe first version.'
+    const nextContent = '# Revised scene\n\nThe second version.'
+    const script = record(await call('upload_file', { filename: 'history-draft.md', data: Buffer.from(firstContent).toString('base64') }))!
+    const scriptId = String(script.assetId)
+    const initialHistory = await call('asset_history', { asset_id: scriptId }) as Record<string, unknown>[]
+    const originalHash = String(initialHistory[0]!.hash)
+    await call('update_script', { asset_id: scriptId, content: nextContent })
+    const history = await call('asset_history', { asset_id: scriptId }) as Record<string, unknown>[]
+    const revisionIndex = history.findIndex(revision => revision.hash === originalHash)
+    expect(revisionIndex).toBeGreaterThan(0)
+    await page.reload()
+    await openActions('/asset-history')
+    await page.getByRole('combobox', { name: 'Media', exact: true }).selectOption(scriptId)
+    await page.getByRole('button', { name: 'Run action', exact: true }).click()
+    await page.locator('.workspace-action-linked-results > li').nth(revisionIndex).getByRole('button', { name: 'Preview revision', exact: true }).click()
+    const hashPicker = page.getByRole('combobox', { name: 'Commit hash', exact: true })
+    await expect.poll(() => hashPicker.inputValue()).toBe(originalHash)
+    await page.getByRole('combobox', { name: 'Filename', exact: true }).selectOption('original.md')
+    await page.getByRole('button', { name: 'Run action', exact: true }).click()
+    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent()).toContain(firstContent)
+    expect(await (await fetch(`${origin}/files/${bookId}/${scriptId}/original.md`)).text()).toBe(nextContent)
+    await page.keyboard.press('Escape')
+    await openActions('/asset-history')
+    await page.getByRole('combobox', { name: 'Media', exact: true }).selectOption(scriptId)
+    await page.getByRole('button', { name: 'Run action', exact: true }).click()
+    await page.locator('.workspace-action-linked-results > li').nth(revisionIndex).getByRole('button', { name: 'Restore revision', exact: true }).click()
+    await expect.poll(() => hashPicker.inputValue()).toBe(originalHash)
+    await page.getByRole('button', { name: 'Review action', exact: true }).click()
+    expect(await (await fetch(`${origin}/files/${bookId}/${scriptId}/original.md`)).text()).toBe(nextContent)
+    await page.getByRole('button', { name: 'Confirm and run', exact: true }).click()
+    await expect.poll(async () => (await fetch(`${origin}/files/${bookId}/${scriptId}/original.md`)).text()).toBe(firstContent)
+    const restoredHistory = await call('asset_history', { asset_id: scriptId }) as Record<string, unknown>[]
+    expect(restoredHistory[0]!.hash).not.toBe(originalHash)
+    expect(restoredHistory.some(revision => revision.hash === originalHash)).toBe(true)
+    expect(browserErrors).toEqual([])
+  })
+
+  it('loads a committed edit audit using the edit action identity', async () => {
+    await call('set_timeline', { render: 'landscape', slots: [{ artifact_id: videoId }] })
+    await page.reload()
+    const sequence = record(await call('get_primary_sequence'))!
+    const clip = (sequence.clips as Record<string, unknown>[])[0]!
+    await sendCommand(`/clip-reverse @${String(clip.clipId)}`)
+    await sendCommand('/apply')
+    let actionId = ''
+    await expect.poll(async () => {
+      const history = record(await call('list_book_actions'))!
+      const revision = (history.actions as Record<string, unknown>[]).find(entry => entry.operation === 'commit_edit')
+      actionId = String(record(revision?.details)?.actionId ?? '')
+      return actionId
+    }).not.toBe('')
+    const action = catalog.actions.find(entry => entry.handler.kind === 'tool' && entry.handler.tool === 'get_edit_action')!
+    await openActions(action.command)
+    await page.getByRole('combobox', { name: 'Action id', exact: true }).selectOption(actionId)
+    await page.getByRole('button', { name: 'Run action', exact: true }).click()
+    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent()).toContain(actionId)
+    expect(record(await call('get_edit_action', { action_id: actionId }))?.actionId).toBe(actionId)
+  })
+
+  it('previews a historical file that is absent from the current version', async () => {
+    const character = record(await call('create_character', { args: ['Historical notes'] }))!
+    const characterId = String(character.asset_id)
+    const originalHistory = await call('asset_history', { asset_id: characterId }) as Record<string, unknown>[]
+    const content = 'Notes preserved only in the older revision.'
+    const upload = await fetch(`${origin}/api/books/${bookId}/upload?${new URLSearchParams({ filename: 'notes.txt', targetAssetId: characterId })}`, { method: 'POST', body: content })
+    expect(upload.status).toBe(200)
+    const writtenHistory = await call('asset_history', { asset_id: characterId }) as Record<string, unknown>[]
+    const writtenHash = String(writtenHistory[0]!.hash)
+    await call('restore_asset_version', { asset_id: characterId, commit_hash: originalHistory[0]!.hash })
+    expect((await fetch(`${origin}/files/${bookId}/${characterId}/notes.txt`)).status).toBe(404)
+    const history = await call('asset_history', { asset_id: characterId }) as Record<string, unknown>[]
+    await page.reload()
+    await openActions('/asset-history')
+    await page.getByRole('combobox', { name: 'Media', exact: true }).selectOption(characterId)
+    await page.getByRole('button', { name: 'Run action', exact: true }).click()
+    await page.locator('.workspace-action-linked-results > li').nth(history.findIndex(revision => revision.hash === writtenHash))
+      .getByRole('button', { name: 'Preview revision', exact: true }).click()
+    await expect.poll(() => page.getByRole('combobox', { name: 'Commit hash', exact: true }).inputValue()).toBe(writtenHash)
+    await page.getByRole('combobox', { name: 'Filename', exact: true }).selectOption('notes.txt', { timeout: 5000 })
+    await page.getByRole('button', { name: 'Run action', exact: true }).click()
+    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent()).toContain(content)
+    expect((await fetch(`${origin}/files/${bookId}/${characterId}/notes.txt`)).status).toBe(404)
+    await page.screenshot({ path: '/tmp/videobook-e2e-hour-historical-preview.png' })
+    await page.keyboard.press('Escape')
+    await expect.poll(() => page.getByLabel('Open actions', { exact: true }).evaluate(element => element === document.activeElement)).toBe(true)
+    await openActions()
+    await page.getByRole('button', { name: 'Close actions', exact: true }).click()
+    await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).evaluate(element => element === document.activeElement)).toBe(true)
+    expect(browserErrors).toEqual([])
+  })
+
+  it('keeps a preview accessible while opening and dismissing its media actions', async () => {
+    await openActions('/open')
+    await page.getByRole('combobox', { name: 'Media', exact: true }).selectOption(imageId)
+    await page.getByRole('button', { name: 'Run action', exact: true }).click()
+    const preview = page.locator('.workspace-preview-dialog')
+    await preview.waitFor()
+    await expect.poll(() => preview.locator('img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    await preview.getByRole('combobox', { name: 'Version or file', exact: true }).selectOption(await originalImageFile())
+    await expect.poll(() => preview.locator('img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    await preview.getByRole('button', { name: 'More actions', exact: true }).click()
+    const action = catalog.actions.find(entry => entry.handler.kind === 'tool' && entry.handler.tool === 'asset_manifest')!
+    await page.getByLabel('Search actions', { exact: true }).fill(action.command)
+    await page.locator(`.workspace-actions-list [data-action-id="${action.id}"]`).click()
+    await expect.poll(() => page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: 'Media', exact: true }).inputValue()).toBe(imageId)
+    await page.keyboard.press('Escape')
+    await expect.poll(() => preview.evaluate(element => element.contains(document.activeElement))).toBe(true)
+    await preview.getByRole('button', { name: 'Close preview', exact: true }).click()
+    await expect.poll(() => page.locator('dialog[open]').count()).toBe(0)
+    await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).evaluate(element => element === document.activeElement)).toBe(true)
+    expect(browserErrors).toEqual([])
+  })
+
+  it('keeps chat and Escape usable after dismissing a review message', async () => {
+    await call('set_timeline', { render: 'landscape', slots: [{ artifact_id: videoId }] })
+    await page.reload()
+    const sequence = record(await call('get_primary_sequence'))!
+    const clip = (sequence.clips as Record<string, unknown>[])[0]!
+    await sendCommand(`/clip-reverse @${String(clip.clipId)}`)
+    const sheet = page.getByLabel('Command plan review', { exact: true })
+    await sheet.waitFor()
+    await sheet.getByLabel('Dismiss message', { exact: true }).click()
+    const input = page.getByLabel('Videobook command input', { exact: true })
+    await expect.poll(() => input.evaluate(element => element === document.activeElement)).toBe(true)
+    await input.press('Tab')
+    await page.keyboard.press('Tab')
+    await expect.poll(() => page.getByLabel('Send command', { exact: true }).evaluate(element => element === document.activeElement)).toBe(true)
+    await page.keyboard.press('Escape')
+    await expect.poll(() => sheet.count()).toBe(0)
+    expect((record(await call('get_primary_sequence'))?.clips as Record<string, unknown>[])[0]?.reverse).toBe(false)
+    await sendCommand(`/clip-reverse @${String(clip.clipId)}`)
+    await sheet.waitFor()
+    await openActions()
+    await page.keyboard.press('Escape')
+    expect(await sheet.count()).toBe(1)
+    await input.focus()
+    await input.dispatchEvent('compositionstart')
+    await input.dispatchEvent('keydown', { key: 'Escape', isComposing: true })
+    expect(await sheet.count()).toBe(1)
+    await input.dispatchEvent('compositionend')
+    await input.evaluate(element => (element as HTMLInputElement).blur())
+    await page.keyboard.press('Escape')
+    await expect.poll(() => sheet.count()).toBe(0)
+  })
+
+  it('opens the media picker after repeated navigation with delayed real requests', async () => {
+    const cell = record(await call('create_notebook_cell', { notebook_id: notebookId, cell: { type: 'image', slot: { row: 1, column: 1 } } }))!
+    await page.route('**/mcp', async route => {
+      await new Promise(resolve => setTimeout(resolve, 40))
+      await route.continue()
+    })
+    for (let cycle = 0; cycle < 8; cycle += 1) {
+      await page.goto(appUrl, { waitUntil: 'commit' })
+      const node = page.locator(`.react-flow__node[data-id="${String(cell.id)}"]`)
+      await node.locator('.cell-media-slot-library').click()
+      const dialog = page.getByRole('dialog', { name: 'Choose image media', exact: true })
+      await dialog.waitFor()
+      await expect.poll(() => dialog.locator('.media-library-asset').count(), { timeout: 15_000 }).toBeGreaterThan(0)
+      expect(await dialog.locator('.media-library-asset').filter({ hasText: 'action-image' }).count(), `cycle ${cycle}`).toBe(1)
+      await page.keyboard.press('Escape')
+      await expect.poll(() => dialog.count()).toBe(0)
+      await page.getByLabel('Open Library', { exact: true }).click()
+    }
+    expect(browserErrors).toEqual([])
+  }, 120_000)
+
+  it('keeps library actions scoped to the owning project when labels match', async () => {
+    const foreignBook = record(await call('create_book', { name: 'foreign-action-project' }))!
+    const foreignBookId = String(foreignBook.bookId)
+    const foreign = record(await call('upload_file', { book_id: foreignBookId, filename: 'foreign.png', data: (await readFile(join(rootDir, 'image.png'))).toString('base64') }))!
+    const foreignId = String(foreign.assetId)
+    await call('rename_asset', { asset_id: imageId, new_name: 'Matching media label' })
+    await call('rename_asset', { book_id: foreignBookId, asset_id: foreignId, new_name: 'Matching media label' })
+    await page.getByLabel('Open Library', { exact: true }).click()
+    await page.getByRole('button', { name: 'All books', exact: true }).click()
+    const foreignCard = page.locator('.library-asset-card').filter({ hasText: 'foreign-action-project' })
+    await foreignCard.getByRole('button', { name: 'More actions for Matching media label', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'All media actions', exact: true }).click()
+    await page.getByLabel('Search actions', { exact: true }).fill('/rename')
+    await page.locator('[data-action-id="tool.rename_asset"]').click()
+    await expect.poll(() => page.getByRole('combobox', { name: 'Media', exact: true }).inputValue()).toBe(foreignId)
+    await page.getByRole('textbox', { name: 'New name', exact: true }).fill('Foreign media renamed')
+    await page.getByRole('button', { name: 'Run action', exact: true }).click()
+    await expect.poll(async () => {
+      const value = record(await call('list_assets', { book_id: foreignBookId }))!
+      return (value.assets as Record<string, unknown>[]).find(asset => asset.artifact_id === foreignId)?.label
+    }).toBe('Foreign media renamed')
+    const original = record(await call('list_assets'))!
+    expect((original.assets as Record<string, unknown>[]).find(asset => asset.artifact_id === imageId)?.label).toBe('Matching media label')
+    expect(browserErrors).toEqual([])
   })
 
   it('keeps media edits separate from clip edits and exports the reviewed sequence', async () => {

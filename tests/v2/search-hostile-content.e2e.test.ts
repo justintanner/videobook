@@ -391,6 +391,7 @@ describe("hostile search content across browser surfaces", () => {
     await dialog.waitFor({ state: "visible", timeout: MCP_ROUNDTRIP_MS });
     const asset = dialog.locator(".media-library-asset").first();
     await asset.waitFor({ state: "visible", timeout: MCP_ROUNDTRIP_MS });
+    expect(await asset.locator("strong").textContent()).toBe(LABEL);
     expect(await asset.locator("small").textContent()).toBe(
       `${BOOK_SLUG} · this book`,
     );
@@ -399,7 +400,7 @@ describe("hostile search content across browser surfaces", () => {
         .locator("button[aria-label]")
         .last()
         .getAttribute("aria-label"),
-    ).toContain(`from ${BOOK_SLUG}`);
+    ).toBe(`Use ${LABEL} from ${BOOK_SLUG}`);
     expect(artifactId).toBeTruthy();
     expect(await executedMarkers(page)).toEqual([]);
     expect(await activeInjectedElements(page)).toBe(0);

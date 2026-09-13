@@ -651,6 +651,7 @@ function mediaLibrarySearchCriteria(
 }
 
 type MediaSlotContextValue = {
+  ready: boolean
   states: Record<string, MediaSlotState>
   onFile: (cellId: string, file: File) => void
   onFileError: (cellId: string, message: string) => void
@@ -833,6 +834,7 @@ type CellContextMenuContextValue = {
 }
 
 const MediaSlotContext = createContext<MediaSlotContextValue>({
+  ready: false,
   states: {},
   onFile: () => undefined,
   onFileError: () => undefined,
@@ -2391,6 +2393,7 @@ function AudioCellSummary({ data }: { data: CanvasCellData }) {
 function MediaSlotTile({
   cellId,
   kind,
+  ready,
   state,
   onFile,
   onFileError,
@@ -2398,6 +2401,7 @@ function MediaSlotTile({
 }: {
   cellId: string
   kind: PassiveMediaKind
+  ready: boolean
   state: MediaSlotState | undefined
   onFile: (cellId: string, file: File) => void
   onFileError: (cellId: string, message: string) => void
@@ -2408,6 +2412,7 @@ function MediaSlotTile({
   const busy = state?.operation !== null && state?.operation !== undefined
 
   const acceptFiles = (files: FileList | null) => {
+    if (busy || !ready) return
     const selected = files ? [...files] : []
     if (selected.length !== 1) {
       onFileError(cellId, 'Choose one file for this media slot.')
@@ -2436,7 +2441,7 @@ function MediaSlotTile({
         if (!dataTransferHasFiles(event.dataTransfer)) return
         event.preventDefault()
         event.stopPropagation()
-        event.dataTransfer.dropEffect = 'copy'
+        event.dataTransfer.dropEffect = ready && !busy ? 'copy' : 'none'
       }}
       onDrop={(event) => {
         if (!dataTransferHasFiles(event.dataTransfer)) return
@@ -2449,7 +2454,7 @@ function MediaSlotTile({
       <button
         type="button"
         className="cell-media-slot-upload"
-        disabled={busy}
+        disabled={busy || !ready}
         onClick={(event) => {
           event.stopPropagation()
           inputRef.current?.click()
@@ -2462,7 +2467,7 @@ function MediaSlotTile({
       <button
         type="button"
         className="cell-media-slot-library"
-        disabled={busy}
+        disabled={busy || !ready}
         onClick={(event) => {
           event.stopPropagation()
           onOpenLibrary(cellId)
@@ -2475,7 +2480,7 @@ function MediaSlotTile({
         className="cell-media-slot-input"
         type="file"
         accept={mediaFileAccept[kind]}
-        disabled={busy}
+        disabled={busy || !ready}
         onChange={(event) => {
           acceptFiles(event.target.files)
           event.target.value = ''
@@ -2746,6 +2751,7 @@ function MediaLibraryDialog({
             <div className="media-library-grid">
               {state.assets.map((asset) => {
                 const active = state.activeArtifactId === asset.artifactId
+                const label = asset.label.trim() || 'Untitled media'
                 return (
                   <article
                     key={`${asset.owningBookId}:${asset.artifactId}`}
@@ -2758,7 +2764,7 @@ function MediaLibraryDialog({
                       activeTerms={state.tagFilters}
                     />
                     <span className="media-library-asset-copy">
-                      <strong>@{asset.id}</strong>
+                      <strong>{label}</strong>
                       <small>
                         {asset.owningBookName}
                         {asset.owningBookId === targetBookId ? ' · this book' : ' · copy'}
@@ -2784,7 +2790,7 @@ function MediaLibraryDialog({
                       <button
                         type="button"
                         disabled={busy}
-                        aria-label={`Use @${asset.id} from ${asset.owningBookName}`}
+                        aria-label={`Use ${label} from ${asset.owningBookName}`}
                         onClick={() => onAttach(asset)}
                       >
                         Use
@@ -3139,6 +3145,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <MediaSlotTile
             cellId={id}
             kind={slotKind}
+            ready={slotContext.ready}
             state={slotContext.states[id]}
             onFile={slotContext.onFile}
             onFileError={slotContext.onFileError}
@@ -6550,7 +6557,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const uploadMediaSlotFile = async (cellId: string, file: File) => {
-    if (!bookId || !notebook) return
+    if (!bookId || !notebook || mcp.state !== 'ready') return
     const restoreFocus = capturePointerComposerFocus()
     const cell = notebook.cells.find((candidate) => candidate.id === cellId)
     const kind = cell && passiveMediaKind(cell.type)
@@ -6815,7 +6822,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const openMediaLibrary = (cellId: string) => {
-    if (!notebook) return
+    if (!notebook || mcp.state !== 'ready') return
     const cell = notebook.cells.find((candidate) => candidate.id === cellId)
     const kind = cell && passiveMediaKind(cell.type)
     if (
@@ -11109,6 +11116,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const mediaSlotContextValue: MediaSlotContextValue = {
+    ready: mcp.state === 'ready',
     states: mediaSlotStates,
     onFile: (cellId, file) => void uploadMediaSlotFile(cellId, file),
     onFileError: setMediaSlotError,

@@ -43,6 +43,21 @@ export function useConfirmSheetKeys(options: {
   onCancel: () => void
 }): ConfirmSheetKeyHandlers {
   const sheetRef = useRef<HTMLElement | null>(null)
+  const { busy, onCancel } = options
+
+  useLayoutEffect(() => {
+    const dismissFromComposer = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || busy) return
+      const target = event.target
+      if (target !== document.body && (!(target instanceof Element) || !target.closest('.command-composer'))) return
+      if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (document.querySelector('dialog[open], [aria-modal="true"], [role="menu"], details.canvas-add-menu[open]')) return
+      event.preventDefault()
+      onCancel()
+    }
+    document.addEventListener('keydown', dismissFromComposer)
+    return () => document.removeEventListener('keydown', dismissFromComposer)
+  }, [busy, onCancel])
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     const action = confirmSheetKeyAction({

@@ -124,7 +124,7 @@ function ActionForm({ action, context, initialValues, initialResult, variants, o
         onChange={(event) => { setValues((current) => ({ ...current, entity: structuredClone(context.entities?.[event.target.value]) })); setResult(null); setReview(null) }}>
         <option value="">Choose a saved item</option>{(context.choices.entity_id ?? []).map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
       </select></label>}
-      {fields.map(([name, schema]) => <WorkspaceActionField key={name} name={name} schema={entityEditor && name === 'entity' ? {
+      {fields.map(([name, schema]) => <WorkspaceActionField key={entityEditor && name === 'entity' ? `${name}:${entityId}` : name} name={name} schema={entityEditor && name === 'entity' ? {
         type: 'object', required: ['name'], properties: {
           name: { type: 'string', minLength: 1 }, description: { type: 'string' }, prompt: { type: 'string' },
           data: { type: 'object', description: 'Optional advanced saved-item data', additionalProperties: true },

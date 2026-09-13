@@ -34,6 +34,7 @@ export async function loadWorkspaceActionResources(
   const fields = action.inputSchema.properties ?? {}
   const tool = action.handler.kind === 'tool' ? action.handler.tool : ''
   const result: WorkspaceActionResources = { choices: {}, entities: {}, values: {} }
+  let historicalFiles: ActionChoice[] = []
   const requests: Promise<void>[] = []
   if (fields.notebook_id) requests.push((async () => {
     result.choices.notebook_id = choices(rows(await call('list_notebooks', {}), 'notebooks'), ['id'], ['name'])
@@ -60,8 +61,18 @@ export async function loadWorkspaceActionResources(
     const revisions = choices(history, ['hash', 'revision'], ['message', 'operation'])
     result.choices.commit_hash = revisions
     result.choices.target_revision = revisions
-    result.choices.action_id = choices(history, ['operationId', 'actionId', 'id', 'hash'], ['operation', 'message'])
-    result.choices.target_action_id = choices(history, ['operationId', 'actionId', 'id'], ['operation', 'message'])
+    const edits = history.flatMap((entry) => {
+      const actionId = record(entry.details)?.actionId
+      return typeof actionId === 'string' ? [{ ...entry, actionId }] : []
+    })
+    const editActions = choices(edits, ['actionId'], ['operation', 'message'])
+    result.choices.action_id = tool === 'get_history_action'
+      ? choices(history, ['hash', 'revision'], ['operation', 'message']) : editActions
+    result.choices.target_action_id = editActions
+    if (tool === 'read_file_at_commit') historicalFiles = choices(history.flatMap((entry) => {
+      const path = record(entry.details)?.path
+      return typeof path === 'string' ? [{ name: path }] : []
+    }), ['name'], ['name'])
   })())
   if (fields.filename && assetId && ['read_file_at_commit', 'copy_file_to_clipboard', 'export_to_downloads'].includes(tool)) requests.push((async () => {
     result.choices.filename = choices(rows(await call('asset_manifest', { asset_id: assetId }), 'files'), ['name'], ['name'])
@@ -91,5 +102,10 @@ export async function loadWorkspaceActionResources(
   const settled = await Promise.allSettled(requests)
   const errors = settled.flatMap((entry) => entry.status === 'rejected' ? [entry.reason instanceof Error ? entry.reason.message : String(entry.reason)] : [])
   if (errors.length) throw new Error(`Could not load action choices: ${errors.join(' · ')}`)
+  if (historicalFiles.length) {
+    const files = new Map((result.choices.filename ?? []).map((file) => [file.value, file]))
+    for (const file of historicalFiles) if (!files.has(file.value)) files.set(file.value, { ...file, detail: 'Historical file' })
+    result.choices.filename = [...files.values()]
+  }
   return result
 }
