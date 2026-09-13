@@ -79,6 +79,7 @@ export default defineConfig({
     },
   },
   server: {
+    hmr: process.env.VIDEOBOOK_VITE_HMR === '0' ? false : undefined,
     proxy: {
       '/mcp': {
         target: serverTarget,

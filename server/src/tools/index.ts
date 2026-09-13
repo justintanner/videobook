@@ -162,7 +162,9 @@ import { addTimelineAudioDef } from "./add-timeline-audio.js";
 import { removeTimelineAudioDef } from "./remove-timeline-audio.js";
 import { moveTimelineAudioDef } from "./move-timeline-audio.js";
 import { updateTimelineAudioDef } from "./update-timeline-audio.js";
-import { commandsDef } from "./commands.js";
+import { commandsDef, getCanonicalCommands } from "./commands.js";
+import { buildWorkspaceActionCatalog } from "../workspace-action-catalog.js";
+import { workspaceActionsDef } from "./workspace-actions.js";
 import { getRenderSettingsDef } from "./render-settings.js";
 import { translatePayloadDef } from "./translate-payload.js";
 import { updateScriptDef } from "./update-script.js";
@@ -452,7 +454,7 @@ export function getAllToolDefs(
     rewritePromptDef(engine),
     describeImageDef(engine),
     rewriteScriptDef(engine),
-    commandsDef(books),
+    commandsDef(books, () => buildWorkspaceActionCatalog(rawDefs, getCanonicalCommands()).actions.flatMap((action) => [action.command, ...action.aliases])),
     translatePayloadDef(),
     updateScriptDef(engine),
 
@@ -501,6 +503,7 @@ export function getAllToolDefs(
     ...semanticSearchDefs(engine, books),
     ...mediaLibraryDefs(books),
     ...videobookDomainDefs(engine, books),
+    workspaceActionsDef(() => rawDefs),
   ];
 
   return rawDefs;

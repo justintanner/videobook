@@ -1,4 +1,4 @@
-import { LayoutGrid, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Ellipsis, LayoutGrid, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { NotebookCellAddMenu } from '@/components/videobook/NotebookCellAddMenu'
 import type { NotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 import { notebookGrid } from '@/videobook/notebook-grid'
@@ -16,6 +16,7 @@ type NotebookToolbarProps = {
   onResetZoom: () => void
   onDeleteSelection: () => void | Promise<void>
   onClearSelection: () => void
+  onSelectionActions?: () => void
 }
 
 export function NotebookToolbar({
@@ -31,6 +32,7 @@ export function NotebookToolbar({
   onResetZoom,
   onDeleteSelection,
   onClearSelection,
+  onSelectionActions,
 }: NotebookToolbarProps) {
   const deleteLabel = `Delete ${selectedCount} selected ${selectedCount === 1 ? 'cell' : 'cells'}`
 
@@ -88,6 +90,7 @@ export function NotebookToolbar({
             <strong>{selectedCount}</strong><span> selected</span>
           </span>
           {selectedCount > 1 && activeAddress && <code>{activeAddress} active</code>}
+          {onSelectionActions && <button type="button" className="canvas-clear-selection" title="Selection actions" aria-label="Selection actions" data-workspace-action-surface="selection-menu" onClick={onSelectionActions}><Ellipsis size={14} /></button>}
           <button
             type="button"
             className="canvas-delete-selection"

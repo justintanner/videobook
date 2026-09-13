@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 function defaultDownloadsDir(): string {
-  return join(homedir(), "Downloads");
+  return process.env.VIDEOBOOK_DOWNLOADS_DIR || join(homedir(), "Downloads");
 }
 
 /** Flatten a display label into a single Downloads filename stem.

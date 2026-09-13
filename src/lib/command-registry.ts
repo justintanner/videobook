@@ -46,6 +46,7 @@ type CommandToolArgValue =
 export type CommandToolArgs = Record<string, CommandToolArgValue>;
 
 export interface ServerCommand {
+  workspaceActionId?: string;
   command: string;
   description: string;
   example?: string;
@@ -658,10 +659,11 @@ export function parseCommandArgs(rest: string, params: CommandParam[]): Record<s
 }
 
 export function selectCommandForInput(commands: ServerCommand[], commandStr: string, rest: string): ServerCommand | undefined {
-  const exactMatches = commands.filter((command) => command.command === commandStr);
+  const normalized = commandStr.toLowerCase();
+  const exactMatches = commands.filter((command) => command.command.toLowerCase() === normalized);
   const matches = exactMatches.length > 0
     ? exactMatches
-    : commands.filter((command) => command.aliases?.includes(commandStr));
+    : commands.filter((command) => command.aliases?.some((alias) => alias.toLowerCase() === normalized));
   if (matches.length <= 1) return matches[0];
 
   const firstToken = rest.split(/\s+/).find(Boolean) ?? '';

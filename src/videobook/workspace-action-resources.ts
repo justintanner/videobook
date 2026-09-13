@@ -1,0 +1,95 @@
+import type { WorkspaceAction } from '../../server/src/workspace-action-contract'
+import type { ActionChoice } from './workspace-actions'
+
+export type WorkspaceActionResources = {
+  choices: Record<string, readonly ActionChoice[]>
+  entities: Record<string, Record<string, unknown>>
+  values: Record<string, unknown>
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+}
+
+function rows(value: unknown, key: string): Record<string, unknown>[] {
+  const entries = Array.isArray(value) ? value : record(value)?.[key]
+  return Array.isArray(entries) ? entries.flatMap((entry) => { const item = record(entry); return item ? [item] : [] }) : []
+}
+
+function choices(entries: Record<string, unknown>[], idKeys: string[], labelKeys: string[]): ActionChoice[] {
+  return entries.flatMap((entry) => {
+    const id = idKeys.map((key) => entry[key]).find((value): value is string => typeof value === 'string' && Boolean(value))
+    if (!id) return []
+    const label = labelKeys.map((key) => entry[key]).find((value): value is string => typeof value === 'string' && Boolean(value)) ?? id
+    const detail = [entry.type, entry.status, entry.createdAt ?? entry.date].filter((value) => typeof value === 'string').join(' · ')
+    return [{ value: id, label, ...(detail ? { detail } : {}) }]
+  })
+}
+
+export async function loadWorkspaceActionResources(
+  action: WorkspaceAction,
+  values: Record<string, unknown>,
+  call: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+): Promise<WorkspaceActionResources> {
+  const fields = action.inputSchema.properties ?? {}
+  const tool = action.handler.kind === 'tool' ? action.handler.tool : ''
+  const result: WorkspaceActionResources = { choices: {}, entities: {}, values: {} }
+  const requests: Promise<void>[] = []
+  if (fields.notebook_id) requests.push((async () => {
+    result.choices.notebook_id = choices(rows(await call('list_notebooks', {}), 'notebooks'), ['id'], ['name'])
+  })())
+  const entityType = /^(?:get|update|delete)_(prompt|scene|character)_entity$/u.exec(tool)?.[1]
+  if (entityType) requests.push((async () => {
+    const entries = rows(await call(`list_${entityType}s`, {}), 'entities')
+    result.choices.entity_id = choices(entries, ['id'], ['name'])
+    result.entities = Object.fromEntries(entries.filter((entry) => typeof entry.id === 'string').map((entry) => [String(entry.id), entry]))
+    if (tool.startsWith('update_') && typeof values.entity_id === 'string' && result.entities[values.entity_id]) result.values.entity = result.entities[values.entity_id]
+  })())
+  if (fields.job_id) requests.push((async () => {
+    result.choices.job_id = choices(rows(await call('list_jobs', { limit: 200 }), 'jobs'), ['id', 'jobId'], ['name', 'type', 'tool'])
+  })())
+  if (fields.archive_ids) requests.push((async () => {
+    result.choices.archive_ids = choices(rows(await call('search_archive', { limit: 100, presign_media: false }), 'results'), ['archive_id'], ['title', 'filename'])
+  })())
+  const reference = values.asset_id ?? values.artifact_id
+  const assetId = typeof reference === 'string' ? reference : undefined
+  if (fields.commit_hash || fields.target_revision || fields.action_id || fields.target_action_id) requests.push((async () => {
+    const history = assetId && fields.commit_hash
+      ? rows(await call('asset_history', { asset_id: assetId, limit: 200 }), 'commits')
+      : rows(await call('list_book_actions', { limit: 200 }), 'actions')
+    const revisions = choices(history, ['hash', 'revision'], ['message', 'operation'])
+    result.choices.commit_hash = revisions
+    result.choices.target_revision = revisions
+    result.choices.action_id = choices(history, ['operationId', 'actionId', 'id', 'hash'], ['operation', 'message'])
+    result.choices.target_action_id = choices(history, ['operationId', 'actionId', 'id'], ['operation', 'message'])
+  })())
+  if (fields.filename && assetId && ['read_file_at_commit', 'copy_file_to_clipboard', 'export_to_downloads'].includes(tool)) requests.push((async () => {
+    result.choices.filename = choices(rows(await call('asset_manifest', { asset_id: assetId }), 'files'), ['name'], ['name'])
+  })())
+  if (fields.plan_id && typeof values.notebook_id === 'string') requests.push((async () => {
+    const plans = rows(await call(tool.includes('generation') || tool === 'continue_notebook_generation' ? 'list_notebook_generation_plans' : 'list_notebook_run_plans', { notebook_id: values.notebook_id }), 'plans')
+    result.choices.plan_id = choices(plans, ['planId', 'plan_id'], ['prompt', 'status'])
+  })())
+  if (fields.voice_id) requests.push((async () => {
+    result.choices.voice_id = choices(rows(await call('list_elevenlabs_voices', {}), 'voices'), ['voice_id', 'id'], ['name'])
+  })())
+  if (fields.character_refs || (fields.ref && tool.includes('google_flow_character'))) requests.push((async () => {
+    const characters = choices(rows(await call('list_google_flow_characters', { include_previews: false }), 'characters'), ['ref'], ['displayName', 'name'])
+    result.choices.character_refs = characters
+    if (fields.ref) result.choices.ref = characters
+  })())
+  if (fields.voice_refs || (fields.ref && tool.includes('google_flow_voice'))) requests.push((async () => {
+    const voices = choices(rows(await call('list_google_flow_voices', {}), 'voices'), ['ref'], ['displayName', 'name'])
+    result.choices.voice_refs = voices
+    if (fields.ref) result.choices.ref = voices
+  })())
+  if ((fields.subject_ids || fields.subject_id) && assetId && typeof values.object_hash === 'string') requests.push((async () => {
+    const subjects = rows(await call('get_image_subject_map', { artifact_id: assetId, object_hash: values.object_hash }), 'subjects')
+    result.choices.subject_id = choices(subjects, ['id', 'subjectId'], ['label', 'name'])
+    result.choices.subject_ids = result.choices.subject_id
+  })())
+  const settled = await Promise.allSettled(requests)
+  const errors = settled.flatMap((entry) => entry.status === 'rejected' ? [entry.reason instanceof Error ? entry.reason.message : String(entry.reason)] : [])
+  if (errors.length) throw new Error(`Could not load action choices: ${errors.join(' · ')}`)
+  return result
+}

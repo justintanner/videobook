@@ -1,8 +1,14 @@
 # Command Reference
 
-Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
+Every current MCP endpoint and discoverable action is listed once. Use the Actions button on any screen, press Ctrl+Shift+K / Cmd+Shift+K, or type a slash in chat to browse the complete catalog. Search includes aliases and descriptions. A command with missing arguments opens its form; media, notebook, entity, track and clip selectors provide targets. Advanced provider alternatives retain shared input fields and show a cost review before generation.
 
-## MCP endpoints (300)
+Media commands `/export`, `/delete`, `/reverse` and `/trim` target media. Sequence operations use `/export-sequence`, `/clip-delete`, `/clip-reverse` and `/clip-trim`; clip timing uses frames and media trimming uses seconds. Explicit legacy clip IDs and `/export @sequence-main` remain accepted. Use grid addresses such as `/crop @a1`, `/trim @a1 0 2` or `/insert @a1 0 60`.
+
+Historical MCP names remain lookup-only compatibility keys. Slash aliases match their canonical action in search. The legacy `/skeleton` shortcut opens a reviewed AI pose-guide request. Import owns upload transport and duplicate-byte checks; it uses a native file picker. Set `VIDEOBOOK_DOWNLOADS_DIR` to override the server's default Downloads directory.
+
+Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
+
+## MCP endpoints (301)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -198,6 +204,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `list_prompts` — List reusable prompts
 - `list_scenes` — List reusable scenes
 - `list_sequence_replace_targets` — List clips that a search moment can explicitly replace
+- `list_workspace_actions` — List discoverable workspace actions, typed inputs, supported surfaces, and the visible workflow for each endpoint.
 - `make_cover_song` — Create a new drums-and-strings instrumental cover from 10 to 240 seconds of source audio in a video or audio asset, generated locally by the ACE-Step (acestep.cpp) runtime with source-audio conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.
 - `mark_asset_seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.
 - `migrate_legacy_book` — Queue a confirmed schema-v4 migration, preserve the legacy archive, and schedule current search indexing
@@ -305,18 +312,28 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash commands (125 static commands)
+## Slash actions (371; 143 dedicated command routes)
 
+- `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
+- `/add-asset-tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.; MCP: `add_asset_tag`
+- `/add-sequence-track` — Append a canonical video, audio, or caption track; MCP: `add_sequence_track`
+- `/add-timeline-audio` — Add a typed audio overlay to the selected book timeline; MCP: `add_timeline_audio`
+- `/analyze-image-subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro; MCP: `analyze_image_subjects`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
+- `/analyze-video` — Analyze a video asset with vision: samples frames, folds in the transcript when one exists, and writes .original.analysis.json (summary, scenes, tags, subjects, burned-in subtitle and watermark detection). Returns as soon as the job is enqueued; the analysis appears on the asset once the job completes.; MCP: `analyze_video`
 - `/apply-cuts` — Apply trim cuts to a video clip in place; MCP: `apply_cuts`
 - `/apply-sfx` — Generate an ElevenLabs sound effect and mix it into a video in place; MCP: `apply_sfx`
+- `/apply-watermark` — Previewed watermark apply for video: burns an optional positioned QR and optional X handle. The handle can stay horizontally centered or sit above, on, or below the QR. At least one must be included. Burn mode supports optional X icon and handle border, independent handle padding X/Y and corner rounding, independent QR/handle opacity, independent visibility windows that fade in/out at any edge inside the clip, and adjustable handle height. Pass wait=false to return once the burn is queued (poll list_jobs or wait_for_asset_ready). Pass mode=overlay to store a legacy single-card render-time overlay instead.; MCP: `apply_watermark`
 - `/archive` — Archive a full video or audio asset to the global clip archive and transcribe it; MCP: `archive_clip`
 - `/archive-browse` — Open the clip archive browser, optionally with an initial search; UI: `open_archive`
 - `/archive-restore` — Restore archived clips into the current project by archive ID; MCP: `restore_archive_clips`
-- `/arrange-videos-column` — Stack all video cells into the current column starting at the selected cell; cells in the way move to free slots
-- `/arrange-videos-row` — Line up all video cells across the current row starting at the selected cell; cells in the way move to free slots
+- `/arrange-videos-column` — Stack all video cells into the current column starting at the selected cell; cells in the way move to free slots; preview or workspace operation
+- `/arrange-videos-row` — Line up all video cells across the current row starting at the selected cell; cells in the way move to free slots; preview or workspace operation
+- `/asset-history` — Get immutable Dolt revision history for an asset; MCP: `asset_history`
+- `/asset-manifest` — List all files in an asset directory; MCP: `asset_manifest`
 - `/assign` — Assign asset to timeline slot; MCP: `assign_slot`
+- `/attach-library-asset` — Copy a foreign Library asset into a book and attach it to a media slot; MCP: `attach_library_asset`
 - `/audio-add` — Add an audio asset to the timeline audio lane (times in seconds); UI: `timeline_audio_add`
 - `/audio-boost` — Boost audio volume of a video or audio asset (linear multiplier, 1.0–4.0). In-place with git versioning.; MCP: `audio_boost`
 - `/audio-mix` — Mix a video or audio asset onto another at a lower volume, editing the target in-place.; MCP: `audio_mix`
@@ -324,52 +341,212 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/audio-remove` — Remove an audio clip from the timeline audio lane; UI: `timeline_audio_remove`
 - `/audio-set` — Update a timeline audio clip: volume (0-100), fade-in or fade-out (ms); UI: `timeline_audio_update`
 - `/audio-settings` (aliases: `/audio`) — Audio viewer settings for volume and fades; UI: `settings_audio`
+- `/backfill-asset-tags` — Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.; MCP: `backfill_asset_tags`
 - `/bg` — Background mode; UI: `settings_bg`
 - `/books` — Open the book selector dropdown; UI: `open_projects`
+- `/build-generation-provider-payload` — Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.; MCP: `build_generation_provider_payload`
+- `/cancel-job` — Cancel a queued or running persistent job; MCP: `cancel_job`
+- `/cancel-legacy-migration` — Cancel queued or copying migration work before its final archive switch starts; MCP: `cancel_legacy_migration`
+- `/caption` — Preview a sequence caption with timing and style; preview or workspace operation
+- `/chain` — Run a bounded ordered list of existing book actions, passing earlier step outputs through structured {$ref:{step_id,output}} references. Use action=run to start, action=status or action=cancel with chain_id to inspect or stop a run.; MCP: `chain`
 - `/character` — Create a character folder; MCP: `create_character`
 - `/character-new` — Create a reusable Videobook character entity; MCP: `create_character_entity`
+- `/chat` — LLM-backed router for the Videobook app composer. It executes reads and previews mutations or generation for explicit application. ChatGPT and other LLM hosts should call the specific media tools directly instead of calling this nested router.; MCP: `chat`
+- `/check-kimi-coding-api` — Check whether the Kimi Coding API is reachable and its configured API key is valid; MCP: `check_kimi_coding_api`
 - `/clean-audio` — Clean a video's audio in place with ElevenLabs while preserving vocals and key sound effects; MCP: `clean_video_audio`
 - `/clear-failed` — Clean up failed work: delete failed-generation husks and clear error badges from assets that already have media; MCP: `clean_failed_assets`
+- `/clip-delete` — Preview deleting a sequence clip while retaining its source media; preview or workspace operation
+- `/clip-reverse` — Preview reversing a sequence clip while retaining its source media; preview or workspace operation
+- `/clip-trim` — Preview trimming a sequence clip in frames; preview or workspace operation
 - `/close` — Close the active viewer, panel, or browser and return to the idle screen; UI: `close_viewer`
-- `/collapse` — Collapse the asset/clip sidebars; UI: `sidebar_collapse`
+- `/collapse` — Close the project selector (left), inspector (right), or both; UI: `sidebar_collapse`
+- `/commit-edit-intent` — Commit an unchanged previewed CommandPlan edit stage atomically; MCP: `commit_edit_intent`
 - `/concat` — Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell; MCP: `concat_images`
+- `/configure-asset-tagging` — Read or change how new assets are tagged in a book. Manual tagging, filtering and search keep working whatever this is set to.; MCP: `configure_asset_tagging`
+- `/connect-notebook-cells` — Create a UUIDv7 notebook edge; MCP: `connect_notebook_cells`
 - `/connect-x` — Connect your X (Twitter) account via browser OAuth; UI: `x_connect`
+- `/continue-notebook-generation` — Create a reviewable insertion plan for a completed generation or report a stale destination; MCP: `continue_notebook_generation`
+- `/continue-queued-insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current; MCP: `continue_queued_insert`
 - `/copy` — Copy asset name; UI: `copy_clipboard`
 - `/copy-media` (aliases: `/copy-video`) — Copy an asset's primary media file to the clipboard; MCP: `copy_file_to_clipboard`
+- `/create-book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.; MCP: `create_book`
+- `/create-google-flow-character` — Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref for the character_refs parameter of generate_google_flow_omni_flash_video (character_1..7). Consumes plan credits.; MCP: `create_google_flow_character`
+- `/create-google-flow-voice` — Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref for the voice_refs parameter of generate_google_flow_omni_flash_video.; MCP: `create_google_flow_voice`
+- `/create-notebook` — Create an empty notebook; MCP: `create_notebook`
+- `/create-notebook-cell` — Create a UUIDv7 notebook cell; MCP: `create_notebook_cell`
+- `/create-watermark-card` — Generate a compact transparent QR plus plain X handle badge and store it as an image artifact. The X icon and handle border are optional, and handle padding X/Y and corner rounding are adjustable. Apply it via apply_watermark or manually through on-screen graphic settings.; MCP: `create_watermark_card`
 - `/crop` — Crop video or image to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render); UI: `open_crop`
+- `/crop-image` — Crop an image asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source image (0..1). Replaces original in place with canonical dims (1920x1080 / 1080x1920 / 1080x1080) and regenerates derived crops with git versioning.; MCP: `crop_image`
+- `/crop-video` — Crop a video asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source frame (0..1). Re-renders in place to canonical dims (1920x1080 / 1080x1920 / 1080x1080) with git versioning.; MCP: `crop_video`
 - `/delete` — Delete an asset; MCP: `delete_asset`
+- `/delete-book` — Permanently delete a book after typed name confirmation; MCP: `delete_book`
+- `/delete-character-entity` — Delete a reusable character; MCP: `delete_character_entity`
+- `/delete-google-flow-character` — Delete a Google Flow character by its ref.; MCP: `delete_google_flow_character`
+- `/delete-google-flow-voice` — Delete a Google Flow custom voice by its ref.; MCP: `delete_google_flow_voice`
+- `/delete-notebook` — Delete a notebook and its cells, edges, and runs; MCP: `delete_notebook`
+- `/delete-notebook-cell` — Delete one notebook cell and incident edges; MCP: `delete_notebook_cell`
+- `/delete-prompt-entity` — Delete a reusable prompt; MCP: `delete_prompt_entity`
+- `/delete-scene-entity` — Delete a reusable scene; MCP: `delete_scene_entity`
 - `/describe` — Describe image into a reproduction-ready prompt; MCP: `describe_image`
 - `/detect-scenes` — Run ffmpeg scdet over a video asset and report natural visual break candidates (camera cuts + motion-settle points).; MCP: `detect_scenes`
 - `/diagnostics` — Open MCP, catalog, CAS, and publication diagnostics; UI: `open_diagnostics`
+- `/disconnect-notebook-cells` — Delete a notebook edge; MCP: `disconnect_notebook_cells`
 - `/doctor` — Diagnose project health across all asset types (broken + stuck assets). Add an asset and 'fix' to restore that asset to its last usable state.; MCP: `doctor`
 - `/download` — Download video from URL; MCP: `download_video`
+- `/duck` — Lower background audio beneath a narration clip; preview or workspace operation
 - `/duplicate` — Duplicate an asset into an optional notebook destination; MCP: `duplicate_asset`
+- `/edit-image-subjects` — Remove, semantically edit, or replace selected cached image subjects and user-drawn regions into a new connected notebook image; MCP: `edit_image_subjects`
+- `/enqueue-notebook-run` — Revalidate and enqueue a persisted aggregate workbook plan; MCP: `enqueue_notebook_run`
+- `/enqueue-sequence-export` — Queue a confirmed canonical sequence export after revalidating its exact revision; MCP: `enqueue_sequence_export`
+- `/ensure-notebook-workflow-scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists; MCP: `ensure_notebook_workflow_scaffold`
 - `/entities` — Open the reusable entity library; UI: `open_entities`
-- `/expand` — Expand the asset/clip sidebars; UI: `sidebar_expand`
+- `/estimate-cost` — Estimate the USD cost of a generation tool call before invoking it. Accepts one or more {tool_name, input} pairs and returns a single CostEstimate summed across all calls. Token-based providers (openai/anthropic/xai) use a chars/4 heuristic and price via a bundled local rate table. Tools without a registered cost adapter return a $0 estimate with a warning.; MCP: `estimate_cost`
+- `/expand` — Open the project selector (left), inspector (right), or both; UI: `sidebar_expand`
 - `/export` — Export asset to Downloads folder; MCP: `export_to_downloads`
+- `/export-sequence` — Review and export the current sequence; preview or workspace operation
 - `/export-to` — Export an asset into a different project; MCP: `export_asset_to_project`
+- `/export-transcript-srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.; MCP: `export_transcript_srt`
 - `/extend-audio` — Extend an audio asset to a longer total duration with a matching ElevenLabs continuation, creating a new audio asset; MCP: `extend_audio_asset`
+- `/extend-fal-grok-imagine-video` — Extend a video via fal.ai using xAI Grok Imagine Video extend-video. Creates a new video artifact and enqueues a background job.; MCP: `extend_fal_grok_imagine_video`
+- `/extend-kie-grok-imagine-video` — Extend an existing video asset using Kie's grok-imagine/extend. Creates a new video artifact and enqueues a background job. Requires at least one of asset_id or video_ref.; MCP: `extend_kie_grok_imagine_video`
 - `/extract-audio` — Extract audio track from video as audio asset (MP3); MCP: `extract_audio`
 - `/extract-first-frame` — Extract first frame from video as image asset; MCP: `extract_first_frame`
 - `/extract-frame` — Extract a frame at a specific timestamp from a video as an image asset; MCP: `extract_frame`
 - `/extract-last-frame` — Extract last frame from video as image asset; MCP: `extract_last_frame`
+- `/extract-notebook-audio` — Extract audio from a video cell into a new audio cell wired to its source, recording the source cell and optional time range; MCP: `extract_notebook_audio`
+- `/extract-notebook-frame` — Extract a frame from a video cell into a new image cell wired to its source, recording the source cell and timestamp; MCP: `extract_notebook_frame`
+- `/extract-video-clip` — Cut or extract a new video clip from a source time range while preserving the original. Use when the user says 'create a new clip from @a1 from 15s to 44s'. start_time and end_time accept seconds or timestamps such as 15s, 1:30, or 2m20s.; MCP: `extract_video_clip`
 - `/files` — Focus file by position; UI: `viewer_focus_file`
 - `/final` — Finalize and export the project timeline; MCP: `render_timeline`
+- `/fit` — Fit, fill or crop a visual sequence clip; preview or workspace operation
 - `/folder` — Show asset folder; MCP: `show_folder`
+- `/forget-asset` — Delete an asset and permanently destroy its stored content; bytes shared with another asset are kept; MCP: `forget_asset`
+- `/gap` — Preview removing a gap from the sequence; preview or workspace operation
+- `/generate-alibaba-qwen-2-0-edit-image` — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.; MCP: `generate_alibaba_qwen_2_0_edit_image`
+- `/generate-alibaba-qwen-2-0-text-to-image` — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.; MCP: `generate_alibaba_qwen_2_0_text_to_image`
+- `/generate-cell` — Review generation for a configured notebook cell; preview or workspace operation
+- `/generate-fal-grok-imagine-edit-image` — Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_edit_image`
+- `/generate-fal-grok-imagine-text-to-image` — Generate an image via fal.ai using xAI Grok Imagine Image from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_text_to_image`
+- `/generate-fal-grok-imagine-video-edit-video` — Edit a video via fal.ai using xAI Grok Imagine Video edit-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_video_edit_video`
+- `/generate-fal-grok-imagine-video-image-to-video` — Generate a video via fal.ai using xAI Grok Imagine Video image-to-video. Requires a first-frame image. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_video_image_to_video`
+- `/generate-fal-grok-imagine-video-reference-to-video` — Generate a video via fal.ai using xAI Grok Imagine Video reference-to-video guided by 1-7 reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_video_reference_to_video`
+- `/generate-fal-nano-banana-2-edit-image` — Edit images via fal.ai using Google Nano Banana 2 with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_edit_image`
+- `/generate-fal-nano-banana-2-lite-edit-image` — Edit images via fal.ai using Google Nano Banana 2 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_lite_edit_image`
+- `/generate-fal-nano-banana-2-lite-text-to-image` — Generate an image via fal.ai using Google Nano Banana 2 Lite from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_lite_text_to_image`
+- `/generate-fal-nano-banana-2-text-to-image` — Generate an image via fal.ai using Google Nano Banana 2 from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_text_to_image`
+- `/generate-fal-nano-banana-edit-image` — Edit images via fal.ai using Google Nano Banana (v1) with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_edit_image`
+- `/generate-fal-nano-banana-pro-edit-image` — Edit or compose images via fal.ai using Google Nano Banana Pro with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_pro_edit_image`
+- `/generate-fal-nano-banana-pro-text-to-image` — Generate an image via fal.ai using Google Nano Banana Pro from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_pro_text_to_image`
+- `/generate-fal-nano-banana-text-to-image` — Generate an image via fal.ai using Google Nano Banana (v1) from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_text_to_image`
+- `/generate-fal-qwen-2-0-edit-image` — Edit an image via fal.ai using Alibaba Qwen Image edit with one image artifact reference input. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_qwen_2_0_edit_image`
+- `/generate-fal-qwen-2-0-text-to-image` — Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_qwen_2_0_text_to_image`
+- `/generate-fal-qwen-3-0-edit-image` — Edit images via fal.ai using Alibaba Qwen Image 3 with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_qwen_3_0_edit_image`
+- `/generate-fal-seedream-v5-lite-edit-image` — Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_seedream_v5_lite_edit_image`
+- `/generate-fal-seedream-v5-lite-text-to-image` — Generate an image via fal.ai using ByteDance Seedream V5 Lite from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_seedream_v5_lite_text_to_image`
+- `/generate-fal-wan-3-0-image-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 from a first-frame image (optional end frame and prompt). Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_wan_3_0_image_to_video`
+- `/generate-fal-wan-3-0-prime-image-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 Prime (higher quality tier) from a first-frame image (optional end frame and prompt). Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_wan_3_0_prime_image_to_video`
+- `/generate-fal-wan-3-0-prime-reference-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 Prime (higher quality tier) Reference-to-Video guided by reference images, videos, audio, a file URL, a web URL, and/or a prompt. Creates a new video artifact and enqueues a background job. Requires at least one of prompt, image_refs, video_refs, audio_refs, file_url, or web_url.; MCP: `generate_fal_wan_3_0_prime_reference_to_video`
+- `/generate-fal-wan-3-0-prime-text-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 Prime (higher quality tier) from a text prompt only. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_wan_3_0_prime_text_to_video`
+- `/generate-fal-wan-3-0-reference-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 Reference-to-Video guided by reference images, videos, audio, a file URL, a web URL, and/or a prompt. Creates a new video artifact and enqueues a background job. Requires at least one of prompt, image_refs, video_refs, audio_refs, file_url, or web_url.; MCP: `generate_fal_wan_3_0_reference_to_video`
+- `/generate-fal-wan-3-0-text-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 from a text prompt only. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_wan_3_0_text_to_video`
+- `/generate-google-flow-nano-banana-pro-image` — Generate an image using Google Nano Banana Pro via Google Flow. Text-to-image or image-to-image from up to 10 reference images. Creates a new image artifact and enqueues a background job.; MCP: `generate_google_flow_nano_banana_pro_image`
+- `/generate-google-flow-omni-flash-video` — Generate a video using Google Gemini Omni via Google Flow. Multimodal: a text prompt plus optional first frame, reference images (0-7), or one reference video clip with in/out timecodes. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_omni_flash_video`
+- `/generate-google-flow-veo-3-1-fast-video` — Generate a video using Google Veo 3.1 Fast (Google Flow). Text-to-video, image-to-video from start/end frames, or reference-to-video from up to 3 reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_fast_video`
+- `/generate-google-flow-veo-3-1-lite-low-priority-video` — Generate a video using Google Veo 3.1 Lite Lower Priority (Google Flow, Ultra $199 only, 0 credits). Same modes as Lite (T2V / start-end I2V / up to 3 refs) with lower queue priority. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_lite_low_priority_video`
+- `/generate-google-flow-veo-3-1-lite-video` — Generate a video using Google Veo 3.1 Lite (Google Flow). Cheapest Veo 3.1 tier: text-to-video, start/end frames, or up to 3 reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_lite_video`
+- `/generate-google-flow-veo-3-1-quality-video` — Generate a video using Google Veo 3.1 quality tier (Google Flow). Text-to-video or image-to-video from start/end frames; 8s output. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_quality_video`
+- `/generate-image-model-comparison` — Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Seedream v5 Lite, Grok Imagine). Creates one image artifact per model and enqueues background jobs.; MCP: `generate_image_model_comparison`
+- `/generate-kie-gemini-omni-video` — Generate a video using Google Gemini Omni (KIE). Multimodal: a text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_gemini_omni_video`
+- `/generate-kie-gpt-image-2-image-to-image` — Generate an image using GPT Image 2.0 editing with 1-16 reference images. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_gpt_image_2_image_to_image`
+- `/generate-kie-gpt-image-2-text-to-image` — Generate an image using GPT Image 2.0 text-to-image. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_gpt_image_2_text_to_image`
+- `/generate-kie-grok-imagine-image-to-image` — Generate an image from an image asset using Grok Imagine image-to-image. Creates a new image artifact and enqueues a background job. Requires at least one of asset_id or image_refs.; MCP: `generate_kie_grok_imagine_image_to_image`
+- `/generate-kie-grok-imagine-image-to-video` — Generate a video from image asset(s) using Kie Grok Imagine Video 1.5. Creates a new video artifact and enqueues a background job. Requires at least one of image_refs or asset_id.; MCP: `generate_kie_grok_imagine_image_to_video`
+- `/generate-kie-grok-imagine-text-to-image` — Generate an image from a text prompt using Grok Imagine. Creates a new image artifact and enqueues a background job. No reference images needed.; MCP: `generate_kie_grok_imagine_text_to_image`
+- `/generate-kie-grok-imagine-text-to-video` — Generate a video from a text prompt using Grok Imagine text-to-video (no images). Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_grok_imagine_text_to_video`
+- `/generate-kie-happyhorse-1-1-edit-video` — Edit a source video using HappyHorse video-edit with optional reference images for character/style. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_happyhorse_1_1_edit_video`
+- `/generate-kie-happyhorse-1-1-image-to-video` — Generate a video from a single first-frame image using HappyHorse image-to-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_happyhorse_1_1_image_to_video`
+- `/generate-kie-happyhorse-1-1-reference-to-video` — Generate a multi-character video using HappyHorse reference-to-video (1-9 reference images, order defines character1/character2/...). Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_happyhorse_1_1_reference_to_video`
+- `/generate-kie-happyhorse-1-1-text-to-video` — Generate a video from a prompt using HappyHorse text-to-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_happyhorse_1_1_text_to_video`
+- `/generate-kie-kling-3-0-motion-control` — Apply motion from reference videos to character images using Kling 3.0 motion-control. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_kling_3_0_motion_control`
+- `/generate-kie-kling-3-0-omni-image-to-video` — Generate a video using Kling 3.0 Omni image-to-video (KIE). Requires one first-frame image, or first and last frames. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_kling_3_0_omni_image_to_video`
+- `/generate-kie-kling-3-0-omni-reference-to-video` — Generate a video using Kling 3.0 Omni reference-to-video (KIE). Requires at least one reference image or one reference video. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_kling_3_0_omni_reference_to_video`
+- `/generate-kie-kling-3-0-omni-text-to-video` — Generate a video using Kling 3.0 Omni text-to-video (KIE). Prompt-only generation at 720p, 1080p, or 4k with optional native audio and multi-shot controls. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_kling_3_0_omni_text_to_video`
+- `/generate-kie-kling-3-0-omni-transformation` — Generate a video using Kling 3.0 Omni transformation (KIE). Transfers motion from a source video onto optional character images. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_kling_3_0_omni_transformation`
+- `/generate-kie-minimax-h3-image-to-video` — Generate a video from a first and/or last frame image using MiniMax H3 image-to-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_minimax_h3_image_to_video`
+- `/generate-kie-minimax-h3-reference-to-video` — Generate a video from reference images, videos, and/or audio using MiniMax H3 reference-to-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_minimax_h3_reference_to_video`
+- `/generate-kie-minimax-h3-text-to-video` — Generate a video from a prompt using MiniMax H3 text-to-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_minimax_h3_text_to_video`
+- `/generate-kie-nano-banana-pro-text-to-image` — Generate an image using the nano-banana-pro model. Creates a new image artifact and enqueues a background job. Prompt is required; reference images are optional.; MCP: `generate_kie_nano_banana_pro_text_to_image`
+- `/generate-kie-omnihuman-1-5-video` — Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_omnihuman_1_5_video`
+- `/generate-kie-qwen-2-0-edit-image` — Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_qwen_2_0_edit_image`
+- `/generate-kie-qwen-3-0-edit-image` — Edit or compose images using Qwen Image 3 via Kie with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_qwen_3_0_edit_image`
+- `/generate-kie-seedance-2-5-video` — Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.10.2 generation option including 1080p. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_seedance_2_5_video`
+- `/generate-kie-seedream-v5-lite-image-to-image` — Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_seedream_v5_lite_image_to_image`
+- `/generate-kie-seedream-v5-lite-text-to-image` — Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_seedream_v5_lite_text_to_image`
+- `/generate-kie-veo-3-0-fast-video` — Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_veo_3_0_fast_video`
+- `/generate-kie-veo-3-0-video` — Generate a video using Google Veo 3 (KIE). Text-to-video or image-to-video from reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_veo_3_0_video`
+- `/generate-kie-volcengine-video-to-video-lip-sync` — Lip-sync a source video to driving audio using Volcengine video-to-video lip-sync (kie). Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_volcengine_video_to_video_lip_sync`
+- `/generate-kie-wan-3-0-prime-video` — Generate a video using Wan 3.0 Prime (KIE), the high-speed tier. One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_wan_3_0_prime_video`
+- `/generate-kie-wan-3-0-video` — Generate a video using Wan 3.0 (KIE). One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_wan_3_0_video`
+- `/generate-xai-grok-imagine-video` — Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new video artifact and enqueues a background job.; MCP: `generate_xai_grok_imagine_video`
+- `/get-book` — Read the current book identity; MCP: `get_book`
+- `/get-character-entity` — Read a reusable character; MCP: `get_character_entity`
+- `/get-edit-action` — Read the immutable audit record for a committed CommandPlan edit stage; MCP: `get_edit_action`
+- `/get-google-flow-character` — Retrieve normalized details for a single Google Flow character by ref.; MCP: `get_google_flow_character`
+- `/get-history-action` — Read one authored semantic revision; MCP: `get_history_action`
+- `/get-image-subject-map` — Read cached automatic image subjects without starting provider work; MCP: `get_image_subject_map`
+- `/get-legacy-migration` — Read durable migration progress, job state, and the completed source archive link; MCP: `get_legacy_migration`
+- `/get-notebook` — Read a notebook graph; MCP: `get_notebook`
+- `/get-notebook-cell-details` — Return selected-cell details including raw Dolt row, edges, and action validation; MCP: `get_notebook_cell_details`
+- `/get-primary-sequence` — Read the canonical primary sequence; MCP: `get_primary_sequence`
+- `/get-prompt-entity` — Read a reusable prompt; MCP: `get_prompt_entity`
+- `/get-render-settings` — Fetch stored render settings for a single asset across all orientations, plus transcript language info (detected source language and cached subtitle translations); MCP: `get_render_settings`
+- `/get-scene-entity` — Read a reusable scene; MCP: `get_scene_entity`
+- `/get-search-coverage` — Read progressive semantic-index coverage for a book or artifact; MCP: `get_search_coverage`
+- `/get-search-index-status` — Read temporal search manifests, providers, and index statistics; MCP: `get_search_index_status`
+- `/get-timeline` — Get the selected book's typed v2 timeline; MCP: `get_timeline`
+- `/get-watermark-config` — Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the chat watermark review.; MCP: `get_watermark_config`
 - `/gf-characters` — Manage Google Flow characters; UI: `open_gf_characters`
 - `/grok-upscale` — Upscale a Grok-Imagine video via Kie; MCP: `upscale_kie_grok_imagine_video`
-- `/group-images` — Gather all image cells into horizontal lines starting at the selected cell, wrapping onto the next row at the grid edge; cells in the way move to free slots
+- `/group-images` — Gather all image cells into horizontal lines starting at the selected cell, wrapping onto the next row at the grid edge; cells in the way move to free slots; preview or workspace operation
 - `/history` — View asset version history; UI: `show_history`
 - `/inbox` — View generations inbox; UI: `open_inbox`
 - `/info` — Show asset metadata; UI: `viewer_toggle_info`
 - `/inject-first-frame` — Replace frame zero of a video or final output with an image while preserving audio and timing; MCP: `inject_first_frame`
+- `/insert` — Preview inserting media into the sequence; preview or workspace operation
 - `/insert-slot` — Insert an empty timeline slot before or after another slot; MCP: `insert_timeline_slot`
+- `/inspect-generation-request` — Read the persisted Kie request payload, task meta, and failure info for a single asset. Used by the /inbox hover inspector to show what was sent to the provider.; MCP: `inspect_generation_request`
 - `/invert` — In-place inverts an image asset (negates colors); MCP: `invert_image`
 - `/jobs` — Open persistent jobs for the current project; UI: `open_jobs`
 - `/keys` — Open the provider API keys / settings screen; UI: `open_provider_keys`
 - `/keywords` — Animate transcript keywords in face-safe open space, or omit words for automatic selection; MCP: `animate_keywords`
 - `/landscape` — Show landscape crop (1920x1080); UI: `viewer_set_landscape`
+- `/list-assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook-referenced assets outside the page.; MCP: `list_assets`
+- `/list-book-actions` — List authored semantic revisions for a book; MCP: `list_book_actions`
+- `/list-books` — List all Videobook books; MCP: `list_books`
+- `/list-cell-generations` — List recorded generation attempts for a notebook cell: one attempt per dispatch, each with its per-attempt transition timeline.; MCP: `list_cell_generations`
+- `/list-characters` — List reusable characters; MCP: `list_characters`
+- `/list-chat-history` — List recent chat input history entries.; MCP: `list_chat_history`
+- `/list-chat-models` — List supported chat routing models and the default selection; MCP: `list_chat_models`
+- `/list-elevenlabs-voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them; MCP: `list_elevenlabs_voices`
+- `/list-google-flow-characters` — List Google Flow characters for an account (display names + optional signed thumbnail previews).; MCP: `list_google_flow_characters`
+- `/list-google-flow-voices` — List Google Flow voices (custom 'user' voices and/or the 'system' presets) for an account.; MCP: `list_google_flow_voices`
+- `/list-ingest-status` — List independent ingest and search-index phase states; MCP: `list_ingest_status`
+- `/list-jobs` — List persistent jobs for a book; MCP: `list_jobs`
+- `/list-legacy-books` — List schema-v4 books awaiting an explicit copy-forward migration; MCP: `list_legacy_books`
+- `/list-media-streams` — List typed media streams for a source artifact; MCP: `list_media_streams`
+- `/list-notebook-actions` — List the deterministic notebook action catalog for runnable cells; MCP: `list_notebook_actions`
+- `/list-notebook-generation-plans` — List durable generation plans and their retryable lifecycle state; MCP: `list_notebook_generation_plans`
+- `/list-notebook-run-plans` — List durable aggregate workbook run plans and their lifecycle state; MCP: `list_notebook_run_plans`
+- `/list-prompt-history` — List recent prompts for a given surface in the current project, newest-first.; MCP: `list_prompt_history`
+- `/list-prompts` — List reusable prompts; MCP: `list_prompts`
+- `/list-scenes` — List reusable scenes; MCP: `list_scenes`
+- `/list-sequence-replace-targets` — List clips that a search moment can explicitly replace; MCP: `list_sequence_replace_targets`
 - `/make-cover-song` (aliases: `/replicate-song`) — Generate a rhythm-and-style-guided drums-and-strings cover with the source media's exact duration; MCP: `make_cover_song`
+- `/mark-asset-seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.; MCP: `mark_asset_seen`
+- `/migrate-legacy-book` — Queue a confirmed schema-v4 migration, preserve the legacy archive, and schedule current search indexing; MCP: `migrate_legacy_book`
+- `/move` — Preview moving a sequence clip to a track and frame; preview or workspace operation
+- `/move-notebook-cells` — Persist notebook cell grid slots; MCP: `move_notebook_cells`
+- `/move-timeline-audio` — Move an audio overlay to a frame offset; MCP: `move_timeline_audio`
 - `/music-video` — Open the full-screen music-video editor with a required master soundtrack; UI: `open_music_video`
 - `/notebook` — Open a project Notebook — a workflow of prompt, image, and video steps. Opens the existing notebook when present; creates 'scratch' by default.; UI: `open_notebook`
 - `/notebooks` — List first-class notebooks in the current project; MCP: `list_notebooks`
@@ -377,59 +554,135 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/original` — Show original uncropped image; UI: `viewer_set_original`
 - `/outroqr` — Generate a 10-second animated QR outro with bundled impact sound; MCP: `create_qr_outro`
 - `/overlay` (aliases: `/osg`) — Place an on-screen graphic overlay on a video; UI: `open_osg`
+- `/overwrite` — Preview overwriting sequence content with media; preview or workspace operation
 - `/pad` — Add a whole-second video tail with black frames and silence; MCP: `pad_video`
+- `/pin-search-moment` — Pin a revision-stable search moment into a notebook media selection cell; MCP: `pin_search_moment`
+- `/plan-chat-command` — Parse a natural-language sequence edit into a typed CommandPlan without executing tools; MCP: `plan_chat_command`
+- `/plan-generation-insert` — Plan a paid queued generation with provider, model, cost, and a revision-pinned insertion; MCP: `plan_generation_insert`
+- `/plan-notebook-generation` — Plan a notebook prompt, image, or video generation with provider, model, cost, and revision-pinned execution; MCP: `plan_notebook_generation`
+- `/plan-notebook-rough-cut` — Map narration beats to non-repeating indexed visuals as a reviewable CommandPlan; MCP: `plan_notebook_rough_cut`
+- `/plan-notebook-run` — Plan every missing or stale notebook cell with aggregate provider cost and media disclosure; MCP: `plan_notebook_run`
+- `/plan-notebook-subgraph` — Plan the selected cell plus required stale ancestors, with paid-stage fingerprints, cost, and confirmation; MCP: `plan_notebook_subgraph`
+- `/plan-sequence-edit` — Compile a UI, slash, or chat insert, trim, or volume request into one CommandPlan; MCP: `plan_sequence_edit`
+- `/plan-sequence-export` — Create a queued export CommandPlan for a validated canonical sequence revision; MCP: `plan_sequence_export`
+- `/plan-sequence-sound-effects` — Suggest existing indexed audio moments for timed story beats as a selectable CommandPlan; MCP: `plan_sequence_sound_effects`
 - `/play` — Open the timeline player at a slot (default: first filled slot); UI: `open_slot_player`
 - `/portrait` — Show portrait crop (1080x1920); UI: `viewer_set_portrait`
 - `/post` — Post a video or image asset to X (Twitter), now or scheduled; UI: `open_post_composer`
+- `/prepare-image-generation` — Return a preview with schema, prefilled parameters, validation, and model options for all available image models.; MCP: `prepare_image_generation`
+- `/prepare-search-reference` — Prepare an existing image or video asset for temporary reverse search; MCP: `prepare_search_reference`
+- `/prepare-video-generation` — Route a natural language prompt to the best video generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available video models.; MCP: `prepare_video_generation`
+- `/preview-edit-intent` — Preview one CommandPlan edit stage through the canonical engine diff; MCP: `preview_edit_intent`
+- `/preview-notebook-generation` — Preview the exact provider payload a generation cell would submit, without running it; MCP: `preview_notebook_generation`
 - `/prompt-new` — Create a reusable prompt entity; MCP: `create_prompt_entity`
+- `/provider-key-status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.; MCP: `provider_key_status`
 - `/providers` — Open provider credentials and routing settings; UI: `open_provider_keys`
 - `/qart` — Create scan-safe color and monochrome QR mosaics from an image source; MCP: `create_qart`
 - `/qrbtf` — Generate a parametric QR code in an artistic style (normal, line, dsj, bubble, func); MCP: `create_qrbtf`
+- `/read-asset-metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.; MCP: `read_asset_metadata`
+- `/read-file-at-commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it.; MCP: `read_file_at_commit`
+- `/reconcile-project-work` — Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.; MCP: `reconcile_project_work`
 - `/recover` — Recover an asset stuck in the failed state (clears the error, keeps the media); MCP: `recover_asset`
+- `/reframe` — Preview a crop transform for a visual sequence clip; preview or workspace operation
+- `/register-search-manifest` — Register an immutable semantic-index model manifest; MCP: `register_search_manifest`
+- `/relayout-notebook` — Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video / generate_image inline artifacts into output cells.; MCP: `relayout_notebook`
+- `/release-search-reference` — Release a temporary reverse-search reference; MCP: `release_search_reference`
+- `/remove-asset-tag` — Remove a tag from one asset. Removing an automatic tag records a dismissal, so re-analysis cannot bring it back.; MCP: `remove_asset_tag`
+- `/remove-sequence-track` — Remove an empty canonical track while preserving required track kinds; MCP: `remove_sequence_track`
 - `/remove-slot` — Remove a timeline slot, shift later slots left, and clean up trailing empty slots; MCP: `remove_timeline_slot`
 - `/remove-sound` — Remove a described sound from a video or audio asset in place by silencing its Scribe-tagged audio events; MCP: `remove_sound`
+- `/remove-timeline-audio` — Remove an audio overlay by its UUIDv7 id; MCP: `remove_timeline_audio`
 - `/rename` — Rename an asset; MCP: `rename_asset`
 - `/rename-all` — Bulk-rename video/image assets with an explicit dry run: GPT-5.5 proposes descriptive names from each asset's stored context, you edit them in a side-by-side preview, then confirm to apply (updates timeline slots, OSG metadata, and plan/.plan.json references).; UI: `open_rename_all`
+- `/rename-book` — Rename a book. Project names are normalized to lowercase slugs with hyphens.; MCP: `rename_book`
+- `/rename-notebook` — Rename a notebook; MCP: `rename_notebook`
 - `/render-video` (aliases: `/render`) — Render a video asset; MCP: `render_video`
+- `/reorder-character-images` — Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).; MCP: `reorder_character_images`
+- `/repair-library-search-indexes` — Index ready visual media that is missing Similar-search coverage across books; MCP: `repair_library_search_indexes`
 - `/replace-audio` — Replace the audio track of a video asset with an audio asset's audio; MCP: `replace_video_audio`
+- `/replace-google-flow-character` — Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.; MCP: `replace_google_flow_character`
+- `/replace-sequence-clip-with-search-moment` — Preview, then confirm, replacing one explicit sequence clip with a search moment; MCP: `replace_sequence_clip_with_search_moment`
+- `/restore-asset-tag` — Restore a dismissed automatic tag so future analysis may surface it again.; MCP: `restore_asset_tag`
+- `/restore-asset-version` — Restore an asset from an immutable revision as a new revision; MCP: `restore_asset_version`
+- `/restore-edit-action` — Create a forward revision restoring a prior edit action or revision; MCP: `restore_edit_action`
+- `/retag-asset` — Re-run tagging for one asset and return its tag state. Manual tags and dismissals are preserved; use it to retry after adding a provider key or to pick up a newer analysis.; MCP: `retag_asset`
+- `/retry-generation` — Retry a failed generation by replaying its original request payload. Reads the persisted generation-request metadata for the asset, clears its error record, and re-enqueues the same job. Use this on a failed asset card to re-run the exact inputs without re-resolving references.; MCP: `retry_generation`
+- `/retry-ingest` — Retry derivation jobs without uploading source bytes again; MCP: `retry_ingest`
+- `/retry-job` — Re-enqueue a failed or cancelled persistent job with the same durable payload; MCP: `retry_job`
 - `/reverse` — Reverse video playback (play backwards); MCP: `reverse_video`
+- `/revise-notebook-generation-plan` — Retry, switch the allowed generation model, or omit a preserved notebook generation plan; MCP: `revise_notebook_generation_plan`
 - `/revisions` — Open forward-only project revision history; UI: `open_revisions`
 - `/rewind` — Rewind the project to a previous commit (no hash opens the activity log to pick one); UI: `rewind_activity`
 - `/rewrite` — Optimize a prompt; MCP: `rewrite_prompt`
 - `/rewrite-script` — Rewrite a script asset in place with the full describe model; MCP: `rewrite_script`
+- `/rough-cut` — Review a rough cut built from notebook media; preview or workspace operation
 - `/run` — Save and run the active notebook; UI: `run_notebook`
+- `/run-notebook` — Run missing, stale, or explicitly selected notebook cells topologically; MCP: `run_notebook`
+- `/run-notebook-cell` — Run one selected notebook cell using saved upstream media; MCP: `run_notebook_cell`
 - `/save` — Save the active notebook as a new revision; UI: `save_notebook`
 - `/say` — Generate speech audio from text using an ElevenLabs voice ID; MCP: `generate_elevenlabs_text_to_audio`
 - `/scene-concat` — Smoothly join two video scenes, automatically aligning shared boundary audio; MCP: `smooth_scene_concat`
 - `/scene-new` — Create a reusable scene entity; MCP: `create_scene_entity`
+- `/search-archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.; MCP: `search_archive`
+- `/search-library-assets` — Search ready audio, image, and video assets across all books; MCP: `search_library_assets`
+- `/search-library-moments` — Federate a moment search across every current-schema book; MCP: `search_library_moments`
+- `/search-moments` — Search indexed book moments with text, media references, and filters; MCP: `search_moments`
+- `/send-search-moment-to-sequence` — Append one search moment to the primary sequence as a reversible edit; MCP: `send_search_moment_to_sequence`
+- `/set-character-metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).; MCP: `set_character_metadata`
+- `/set-env-secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.; MCP: `set_env_secret`
+- `/set-notebook-cell-input` — Atomically replace or clear one named notebook cell input; MCP: `set_notebook_cell_input`
+- `/set-notebook-media-slot` — Attach or clear a passive notebook media slot; MCP: `set_notebook_media_slot`
+- `/set-timeline` — Replace a book's typed v2 timeline using stable artifact UUIDs; MCP: `set_timeline`
+- `/set-video-overlay` — Set or clear the on-screen graphic overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.; MCP: `set_video_overlay`
 - `/settings` — Show render settings; UI: `viewer_show_settings`
 - `/settings-landscape` — Settings for landscape orientation; UI: `settings_landscape`
 - `/settings-portrait` — Settings for portrait orientation; UI: `settings_portrait`
 - `/settings-square` — Settings for square orientation; UI: `settings_square`
-- `/skeleton` — Extract a pose skeleton image from an image asset; UI: `extract_skeleton`
-- `/sort` — Set sidebar sort order (no value toggles); UI: `sidebar_sort`
+- `/skeleton` — Review an AI pose skeleton guide generated from a reference image; UI: `extract_skeleton`
+- `/sort` — Browse project media by creation date; UI: `sidebar_sort`
+- `/sound-effects` — Review suggested sound effects for the sequence; preview or workspace operation
 - `/speak` — Generate ElevenLabs speech into the notebook from the inline voice preview; UI: `speak_preview`
 - `/speed` — Change video playback speed (0.25-4.0x) or exact duration (e.g. 8.32s); MCP: `change_video_speed`
 - `/splice` — Splice videos with an overlap window; use 0 to concatenate complete clips; MCP: `splice_video`
-- `/split` — Open the interactive splitter for a notebook video, optionally seeded with cut times
+- `/split` — Open the interactive splitter for a notebook video, optionally seeded with cut times; preview or workspace operation
 - `/split-chunks` (aliases: `/even-split`) — Split a video into targeted chunks plus a leftover while preserving the source; MCP: `split_video_by_durations`
-- `/split-clip` — Split a canonical-sequence clip at an exact sequence frame
+- `/split-clip` — Split a canonical-sequence clip at an exact sequence frame; preview or workspace operation
+- `/split-video` — Create two new clips from one video while preserving the source. Use for requests such as 'trim @a1 15s and remaining'. chunk_a_end accepts seconds or timestamps such as 15s or 1:30; omit chunk_b_start for a clean split.; MCP: `split_video`
 - `/storage` — Open DoltLite and content-store diagnostics; UI: `open_diagnostics`
+- `/storage-status` — Read catalog and object publication status; MCP: `storage_status`
 - `/subs` — Subtitle settings; UI: `settings_subs`
+- `/suggest-asset-tags` — List the tags in use in a book with the number of assets carrying each, optionally narrowed by prefix or facet. Use it for autocomplete and to discover the groups available for filtering.; MCP: `suggest_asset_tags`
 - `/suggest-cuts` — Suggest trim cuts for a video (dead air, fillers, awkward sections); MCP: `suggest_cuts`
+- `/suggest-sequence-coverage` — Rank existing visual moments for a sequence range before offering generation; MCP: `suggest_sequence_coverage`
 - `/suggest-sfx` — Suggest sound-effect placements for a video; MCP: `suggest_sfx`
 - `/sync` — Publish pending content-addressed objects; MCP: `storage_sync`
 - `/sync-audio` — Smoothly retime video action to match fixed original-audio cues at multiple anchors; MCP: `sync_video_to_audio`
 - `/timewarp` — Retime one scene while compensating the rest of the picture and preserving the original audio and duration; MCP: `timewarp_video`
 - `/tldr` — Rewrite a script asset in place as a 1–2 sentence TLDR; MCP: `rewrite_script`
+- `/tool-post` — Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.; MCP: `post`
+- `/tool-rename-all` — Bulk-relabel video and image assets with an explicit dry run. Dry run proposes descriptive display labels via GPT-5.6 Sol over stored analysis/transcript/prompt context; re-run dry_run with edited `renames` to revalidate; set dry_run=false to apply. Labels are display-only — artifact ids and references never change.; MCP: `rename_all`
+- `/track-add` — Add a video, audio or caption track; preview or workspace operation
+- `/track-remove` — Remove an empty sequence track; preview or workspace operation
 - `/transcribe` — Transcribe audio using ElevenLabs; MCP: `transcribe`
 - `/transcript` — Read transcript of a video or audio asset; MCP: `read_transcript`
 - `/translate-subs` — Translate video subtitles to a target language; MCP: `translate_subtitles`
 - `/trim-audio` — Trim audio clip; MCP: `trim_audio`
 - `/trim-video` (aliases: `/trim`) — Trim video clip; MCP: `trim_video`
 - `/unassign` — Clear asset from timeline slot; MCP: `unassign_slot`
+- `/update-character-entity` — Update a reusable character; MCP: `update_character_entity`
+- `/update-notebook-cell` — Update one notebook cell; MCP: `update_notebook_cell`
+- `/update-prompt-entity` — Update a reusable prompt; MCP: `update_prompt_entity`
+- `/update-scene-entity` — Update a reusable scene; MCP: `update_scene_entity`
+- `/update-script` — Update a script asset's markdown content (original.md).; MCP: `update_script`
+- `/update-timeline-audio` — Update an audio overlay's volume or fades; MCP: `update_timeline_audio`
 - `/upload` — Upload a file; UI: `open_upload`
+- `/validate-sequence-export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs; MCP: `validate_sequence_export`
+- `/verify-x-mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.; MCP: `verify_x_mentions`
 - `/vocals` — Isolate vocals from audio; MCP: `isolate_vocals`
 - `/voices` — Browse ElevenLabs voices in the speak preview; UI: `speak_preview`
+- `/volume` — Preview a sequence clip's audio gain; preview or workspace operation
+- `/wait-for-asset-ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.; MCP: `wait_for_asset_ready`
 - `/watermark` — Open the chat watermark review with a positioned QR plus a centered floating handle, live preview, and timing controls; UI: `open_watermark`
+- `/x-connect-start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.; MCP: `x_connect_start`
+- `/x-connect-status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).; MCP: `x_connect_status`
 - `/<project-name>` — Switch to that project; generated dynamically for each project whose name does not conflict with a command or alias.

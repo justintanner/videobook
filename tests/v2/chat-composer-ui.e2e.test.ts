@@ -1644,6 +1644,8 @@ describe('chat composer browser flow', () => {
 
     const fullscreenVideo = dialog.locator('video')
     await page.getByLabel('Close fullscreen preview').press('Tab')
+    expect(await dialog.getByLabel('More media actions').evaluate((element) => document.activeElement === element)).toBe(true)
+    await page.keyboard.press('Tab')
     expect(await fullscreenVideo.evaluate((element) => document.activeElement === element))
       .toBe(true)
     await page.keyboard.press('Space')
@@ -3161,6 +3163,7 @@ describe('chat composer browser flow', () => {
       'Generate',
       'View generations',
       'View source',
+      'More actions',
       'Delete cell',
     ]
     expect(itemLabels.filter((label) => requiredLabels.includes(label)))
@@ -3178,6 +3181,7 @@ describe('chat composer browser flow', () => {
         'Arrange videos in column',
         'Arrange videos in row',
         'Group images',
+        'More actions',
       ].includes(label))).toBe(true)
     expect(await menu.locator('.cell-context-menu-danger').evaluate((element) =>
       getComputedStyle(element).borderTopStyle)).toBe('solid')
@@ -3242,6 +3246,7 @@ describe('chat composer browser flow', () => {
       'Split video',
       'View generations',
       'View source',
+      'More actions',
       'Delete cell',
     ])
     expect(await videoMenu.getByRole('menuitem', { name: 'Duplicate' }).isDisabled())
@@ -3275,6 +3280,7 @@ describe('chat composer browser flow', () => {
       'Group images',
       'View generations',
       'View source',
+      'More actions',
       'Delete cell',
     ])
     for (const generation of [
@@ -3378,6 +3384,7 @@ describe('chat composer browser flow', () => {
       'Group images',
       'View generations',
       'View source',
+      'More actions',
       'Delete cell',
     ])
     await emptyMediaMenu.getByRole('menuitem', { name: 'Choose media' }).click()
@@ -3426,7 +3433,7 @@ describe('chat composer browser flow', () => {
     })
     await slotMenu.waitFor({ state: 'visible' })
     expect((await slotMenu.getByRole('menuitem').allTextContents())
-      .map((label) => label.trim())).toEqual(['Group images here'])
+      .map((label) => label.trim())).toEqual(['More actions', 'Group images here'])
     expect(await slotMenu.locator('.cell-context-menu-danger').count()).toBe(0)
     await page.keyboard.press('Escape')
     await slotMenu.waitFor({ state: 'hidden' })

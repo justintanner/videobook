@@ -191,6 +191,16 @@ import {
   type NotebookCellContextAction,
 } from '@/components/videobook/NotebookCellContextMenu'
 import { BookProjectMenu } from '@/components/videobook/BookProjectMenu'
+import { WorkspaceActionsDialog } from '@/components/videobook/WorkspaceActionsDialog'
+import type { WorkspaceActionReview, WorkspaceActionResult } from '@/components/videobook/WorkspaceActionsDialog'
+import { asWorkspaceActionCatalog, initialActionValues, pendingWorkspaceCommands, workspaceActionCommands } from '@/videobook/workspace-actions'
+import { loadWorkspaceActionResources } from '@/videobook/workspace-action-resources'
+import type { WorkspaceActionResources } from '@/videobook/workspace-action-resources'
+import { WORKSPACE_UI_ROUTES, workspaceUiFormValues } from '@/videobook/workspace-ui-routes'
+import { WorkspacePreviewDialog } from '@/components/videobook/WorkspacePreviewDialog'
+import type { WorkspaceMediaPreview } from '@/components/videobook/WorkspacePreviewDialog'
+import type { ActionChoice, WorkspaceActionContext } from '@/videobook/workspace-actions'
+import type { WorkspaceAction } from '../server/src/workspace-action-contract'
 import { NotebookToolbar } from '@/components/videobook/NotebookToolbar'
 import { isNotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 import { SplitBody } from '@/components/videobook/confirm/bodies/SplitBody'
@@ -767,17 +777,6 @@ type InitialWorkspace = {
   chatModelCatalog: ChatModelCatalog
   generationActions: NotebookGenerationAction[]
 }
-
-const supportedUiActions = new Set([
-  'switch_book',
-  'open_notebook',
-  'open_projects',
-  'open_provider_keys',
-  'open_watermark',
-  'open_music_video',
-  'speak_preview',
-  'x_connect',
-])
 
 const CLOUD_GENERATION_CONSENT_KEY = 'videobook.cloud-generation-consent'
 
@@ -1878,11 +1877,9 @@ function asCommands(value: unknown): ServerCommand[] {
   return Array.isArray(value)
     ? value.filter((entry): entry is ServerCommand => {
       const item = recordValue(entry)
-      const uiAction = item && asString(item.uiAction)
       return item !== null
         && typeof item.command === 'string'
         && typeof item.description === 'string'
-        && (!uiAction || supportedUiActions.has(uiAction))
     })
     : []
 }
@@ -3303,6 +3300,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [commands, setCommands] = useState<ServerCommand[]>(
     () => initialWorkspace?.commands ?? [],
   )
+  const [workspaceActions, setWorkspaceActions] = useState<WorkspaceAction[]>([])
+  const [actionCatalogStatus, setActionCatalogStatus] = useState<{ loading: boolean; error: string | null }>({ loading: false, error: null })
+  const [actionDialog, setActionDialog] = useState<{
+    key: number
+    actionId?: string
+    values?: Record<string, unknown>
+    query?: string
+    opener: HTMLElement | null
+    resources?: WorkspaceActionResources
+    result?: WorkspaceActionResult
+  } | null>(null)
+  const actionCatalogRequestRef = useRef(0)
+  const [workspacePreview, setWorkspacePreview] = useState<{ media?: WorkspaceMediaPreview; initialFrame?: number; opener: HTMLElement | null } | null>(null)
+  const actionUploadRef = useRef<HTMLInputElement>(null)
   const [chatModelCatalog, setChatModelCatalog] = useState<ChatModelCatalog>(
     () => initialWorkspace?.chatModelCatalog ?? fallbackChatModelCatalog,
   )
@@ -5752,13 +5763,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
    * Forget: delete the asset and destroy its stored bytes. Irreversible, so it
    * confirms first, and again when the engine reports what still holds it.
    */
-  const forgetAsset = useCallback(async (asset: LibraryAssetRecord) => {
+  const forgetAsset = useCallback(async (asset: LibraryAssetRecord, confirmed = false): Promise<ComposerOutcome> => {
     const name = `@${asset.id}`
     if (asset.owningBookId !== bookId) {
       setNotice(`Open ${asset.owningBookName} to forget ${name}`, 'error')
-      return
+      return { ok: false, message: `Open ${asset.owningBookName} first` }
     }
-    if (!window.confirm(forgetConfirmation(name))) return
+    if (!confirmed && !window.confirm(forgetConfirmation(name))) return { ok: false, message: 'Forget cancelled' }
     setBusy(true)
     try {
       let outcome = asForgetAssetOutcome(await call('forget_asset', {
@@ -5767,7 +5778,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }))
       if (outcome.status === 'in_use') {
         if (!window.confirm(clearReferencesConfirmation(name, outcome.references))) {
-          return
+          return { ok: false, message: 'Forget cancelled; media is still in use' }
         }
         outcome = asForgetAssetOutcome(await call('forget_asset', {
           book_id: bookId,
@@ -5780,14 +5791,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           clearReferencesConfirmation(name, outcome.references).split('\n')[0],
           'error',
         )
-        return
+        return { ok: false, message: clearReferencesConfirmation(name, outcome.references).split('\n')[0]! }
       }
       setNotice(forgottenNotice(name, outcome))
       await refreshBookData(bookId, notebook?.id)
       await refreshBookList()
       refreshLibraryBrowse()
+      return { ok: true, message: forgottenNotice(name, outcome) }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
     } finally {
       setBusy(false)
     }
@@ -5803,9 +5816,45 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
 
   const refreshBookCommands = useCallback(async () => {
-    const value = await call('slash_commands', {})
-    setCommands(asCommands(value))
+    const [value, catalogValue] = await Promise.all([call('slash_commands', {}), call('list_workspace_actions', {})])
+    const catalog = asWorkspaceActionCatalog(catalogValue)
+    setWorkspaceActions(catalog.actions)
+    setCommands(workspaceActionCommands(catalog.actions, asCommands(value)))
   }, [call])
+
+  const openWorkspaceActions = async (actionId?: string, values?: Record<string, unknown>, query?: string, returnFocus?: HTMLElement | null) => {
+    if (mcp.state !== 'ready') return
+    const opener = returnFocus ?? actionDialog?.opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
+    const request = ++actionCatalogRequestRef.current
+    setActionDialog({ key: request, actionId, values, query, opener })
+    setActionCatalogStatus({ loading: true, error: null })
+    try {
+      const catalog = actionId && workspaceActions.length ? { actions: workspaceActions }
+        : asWorkspaceActionCatalog(await call('list_workspace_actions', {}))
+      if (request !== actionCatalogRequestRef.current) return
+      setWorkspaceActions(catalog.actions)
+      const action = catalog.actions.find((entry) => entry.id === actionId)
+      if (action) {
+        const reference = values?.asset_id ?? values?.artifact_id
+        const seededValues = { ...initialActionValues(action, { ...workspaceActionContext, assetId: typeof reference === 'string' ? reference : workspaceActionContext.assetId }), ...values }
+        if (action.handler.kind === 'tool' && action.handler.tool === 'create_notebook_cell' && values?.slot) {
+          seededValues.cell = { ...recordValue(seededValues.cell), slot: values.slot }
+        }
+        const resources = await loadWorkspaceActionResources(action, seededValues, (name, args) => call(name, { book_id: seededValues.book_id ?? bookId, ...args }))
+        if (request !== actionCatalogRequestRef.current) return
+        const browse = action.handler.kind === 'tool' && ['list_notebooks', 'list_prompts', 'list_scenes', 'list_characters', 'list_book_actions', 'search_archive'].includes(action.handler.tool)
+        const result = browse && action.handler.kind === 'tool' ? {
+          message: `${action.title} loaded`, value: await call(action.handler.tool, seededValues),
+        } : undefined
+        if (request !== actionCatalogRequestRef.current) return
+        setActionDialog((current) => current?.key === request ? { ...current, values: { ...seededValues, ...resources.values }, resources, result } : current)
+      }
+      setActionCatalogStatus({ loading: false, error: null })
+    } catch (cause) {
+      if (request !== actionCatalogRequestRef.current) return
+      setActionCatalogStatus({ loading: false, error: cause instanceof Error ? cause.message : String(cause) })
+    }
+  }
 
   const refreshChatModels = useCallback(async () => {
     const catalog = asChatModelCatalog(await call('list_chat_models', {}))
@@ -7867,13 +7916,24 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           && stage.jobType === 'export'
           && stage.tool === 'export_sequence'
         ) {
-          await call('enqueue_sequence_export', {
+          const currentSequence = asSequence(await call('get_primary_sequence', { book_id: bookId }))
+          if (!currentSequence) throw new Error('The sequence is no longer available.')
+          const reviewedContent = stage.input.sequence_content_revision
+          if (typeof reviewedContent === 'string' && await sequenceContentRevision(currentSequence) !== reviewedContent) {
+            throw new Error('The sequence changed after review. Review the current cut before exporting.')
+          }
+          const queued = recordValue(await call('enqueue_sequence_export', {
             book_id: bookId,
             confirm: true,
-            sequence_revision: stage.input.sequence_revision,
+            sequence_revision: typeof reviewedContent === 'string' ? currentSequence.revision : stage.input.sequence_revision,
             orientation: stage.input.orientation,
             captions: stage.input.captions,
-          })
+          }))
+          if (queued?.kind === 'invalid-export') {
+            const validation = recordValue(queued.validation)
+            const errors = Array.isArray(validation?.errors) ? validation.errors.map((entry) => asString(recordValue(entry)?.message)).filter(Boolean) : []
+            throw new Error(errors.join(' · ') || 'Export validation failed. Review the current sequence again.')
+          }
           queuedCount += 1
           continue
         }
@@ -7970,7 +8030,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice(message, 'error')
       const hasGeneration = pending.plan.stages.some((stage) =>
         stage.kind === 'queued' && stage.jobType === 'generation')
-      if (!hasGeneration) {
+      const hasExport = pending.plan.stages.some((stage) => stage.kind === 'export')
+      if (!hasGeneration && !hasExport) {
         try {
           const refreshed = await prepareSequenceEdit(
             requestFromEditStage(pending.plan.stages),
@@ -9934,6 +9995,180 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return await executeRoutedChatActionNow(pendingChatAction.plan)
   }
 
+  const completeWorkspaceToolResult = async (tool: string, result: unknown, args: Record<string, unknown>, title: string): Promise<ComposerOutcome> => {
+    if (tool === 'download_video' && notebook) {
+      return await completeVideoDownload(result, asString(args.url) ?? '')
+    }
+    const routedCells = notebook
+      ? routedMediaCellInputs(tool, result, notebook.cells, lastWorkSlot)
+      : []
+    if (notebook && routedCells.length > 0) {
+      const placements: string[] = []
+      let firstCellId: string | null = null
+      for (const cell of routedCells) {
+        const created = recordValue(await call('create_notebook_cell', {
+          book_id: bookId,
+          notebook_id: notebook.id,
+          cell,
+        }))
+        const cellId = asString(created?.id)
+        if (!cellId) {
+          throw new Error('The server did not return the new notebook cell')
+        }
+        firstCellId ??= cellId
+        placements.push(notebookGridTag(cell.slot))
+      }
+      if (watchScopeRef.current.bookId === bookId) {
+        selectCanvasCell(firstCellId)
+        await refreshBookData(bookId, notebook.id)
+      }
+      const message = `Created ${placements.join(' and ')}`
+      setNotice(message)
+      return { ok: true, message }
+    }
+    if (watchScopeRef.current.bookId === bookId) await refreshBookData(bookId, notebook?.id)
+    if (tool === 'rename_asset') {
+      const renamed = recordValue(result)
+      const newLabel = asString(renamed?.label)
+      return {
+        ok: true,
+        message: newLabel ? `Renamed asset to ${newLabel}` : 'Asset renamed',
+      }
+    }
+    return { ok: true, message: messageFor(result, `${title} complete`) }
+  }
+
+  const openWorkspaceMedia = async (asset: AssetRecord, orientation?: string, position?: number) => {
+    const targetBookId = bookId
+    const manifest = recordValue(await call('asset_manifest', { book_id: targetBookId, asset_id: asset.artifactId }))
+    if (watchScopeRef.current.bookId !== targetBookId) return
+    const files = (Array.isArray(manifest?.files) ? manifest.files : []).flatMap((entry) => {
+      const name = asString(recordValue(entry)?.name)
+      return name ? [{ name, url: `/files/${encodeURIComponent(targetBookId)}/${encodeURIComponent(asset.artifactId)}/${name.split('/').map(encodeURIComponent).join('/')}` }] : []
+    })
+    const selected = orientation === 'original' ? files.find((file) => file.name.startsWith('original.'))
+      : orientation ? files.find((file) => file.name.startsWith(`${orientation}.`))
+        : position ? files[position - 1] : undefined
+    if ((orientation || position) && !selected) throw new Error(orientation ? `No ${orientation} file exists yet. Use render video to create it.` : 'That file position does not exist.')
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setWorkspacePreview({ media: {
+      label: asset.label, assetId: asset.artifactId, type: asset.type, url: asset.mediaUrl,
+      thumbnailUrl: asset.thumbnailUrl, files, initialFile: selected?.name, opener,
+    }, opener })
+  }
+
+  const executeWorkspaceUiRoute = async (action: WorkspaceAction, values: Record<string, unknown>): Promise<ComposerOutcome | null> => {
+    if (action.handler.kind !== 'ui') return null
+    const uiAction = action.handler.action
+    const route = WORKSPACE_UI_ROUTES[uiAction]
+    if (route.kind === 'existing') return null
+    if (route.kind === 'screen') {
+      navigate(route.screen)
+      return { ok: true, message: `${route.screen === 'library' ? 'Library' : route.screen === 'jobs' ? 'Jobs' : 'Settings'} opened` }
+    }
+    const reference = asString(values.asset_id ?? values.asset_ref ?? values.artifact_id)
+      ?? workspacePreview?.media?.assetId ?? mediaFullscreen?.asset.artifactId ?? selectedNotebookCell?.outputArtifactId
+    const asset = assets.find((entry) => entry.artifactId === reference)
+      ?? assets.find((entry) => commandMentionAssets.some((mention) => mention.artifactId === entry.artifactId && mention.cellAddress.toLowerCase() === reference?.replace(/^@/u, '').toLowerCase()))
+    if (route.kind === 'search') {
+      await openWorkspaceActions(undefined, undefined, route.query)
+      return { ok: true, message: 'Actions opened' }
+    }
+    if (route.kind === 'form') {
+      const tool = uiAction === 'open_crop' && asset?.type === 'image' ? 'crop_image'
+        : action.command === '/storage' ? 'storage_status' : route.tool
+      const frameRate = sequence ? sequence.frameRate.numerator / sequence.frameRate.denominator : 30
+      const formValues = workspaceUiFormValues(uiAction, values, frameRate)
+      if (asset) formValues.asset_id = asset.artifactId
+      if (uiAction.startsWith('timeline_audio_') && values.audio_ref) {
+        const clip = sequenceClipReference(sequence, String(values.audio_ref))
+          ?? sequence?.clips.find((entry) => entry.source.kind === 'timed' && entry.source.artifactId === values.audio_ref)
+        if (clip) formValues.audio_id = clip.clipId
+      }
+      if (uiAction === 'viewer_focus_file' && asset) {
+        await openWorkspaceMedia(asset, undefined, Number(values.position ?? 1))
+      } else {
+        await openWorkspaceActions(`tool.${tool}`, formValues)
+      }
+      return { ok: true, message: `${action.title} options opened` }
+    }
+    if (route.action === 'upload') {
+      actionUploadRef.current?.click()
+      return { ok: true, message: 'Choose files to import' }
+    }
+    if (route.action === 'notebook') {
+      const name = asString(values.name)?.trim()
+      if (name) {
+        const entries = asNotebooks(await call('list_notebooks', { book_id: bookId }))
+        const target = entries.find((entry) => entry.name === name || entry.id === name)
+        if (!target) {
+          await openWorkspaceActions('tool.create_notebook', { name })
+          return { ok: true, message: 'Create notebook options opened' }
+        }
+        await refreshBookData(bookId, target.id)
+      } else if (!notebook) {
+        await openWorkspaceActions('tool.create_notebook', { name: 'scratch' })
+        return { ok: true, message: 'Create notebook options opened' }
+      }
+      navigate('notebook')
+      return { ok: true, message: 'Notebook opened' }
+    }
+    if (route.action === 'save') {
+      if (!notebook) throw new Error('Open a notebook first.')
+      await refreshNotebook(bookId, notebook.id)
+      return { ok: true, message: 'Notebook changes are saved automatically. Saved state verified.' }
+    }
+    if (route.action === 'collapse' || route.action === 'expand') {
+      const expand = route.action === 'expand'
+      const side = asString(values.side) ?? 'both'
+      if (!['left', 'right', 'both'].includes(side)) throw new Error('Choose left, right or both.')
+      if (side !== 'left') setInspectorOpen(expand)
+      if (side !== 'right') {
+        if (expand) await openBookMenu()
+        else setBookMenuOpen(false)
+      }
+      return { ok: true, message: expand ? 'Workspace panels opened' : 'Workspace panels closed' }
+    }
+    if (route.action === 'close') {
+      closeMediaFullscreen()
+      setWorkspacePreview(null)
+      setInspectorOpen(false)
+      return { ok: true, message: 'Viewer closed' }
+    }
+    if (route.action === 'play') {
+      if (!sequence) throw new Error('Open a project with a sequence first.')
+      const slot = asString(values.slot)?.replace(/^@s/iu, '')
+      const clip = slot ? [...sequence.clips].sort((left, right) => left.timelineStartFrame - right.timelineStartFrame)[Number(slot) - 1] : undefined
+      if (slot && !clip) throw new Error('Choose an existing sequence slot.')
+      setWorkspacePreview({ initialFrame: clip?.timelineStartFrame ?? 0, opener: document.activeElement instanceof HTMLElement ? document.activeElement : null })
+      return { ok: true, message: 'Sequence preview opened' }
+    }
+    if (!asset) {
+      await openWorkspaceActions(action.id, values)
+      return { ok: true, message: 'Choose media for this action' }
+    }
+    if (route.action === 'copy') {
+      await navigator.clipboard.writeText(asset.label)
+      return { ok: true, message: 'Media label copied' }
+    }
+    if (route.action === 'history') {
+      const cell = notebook?.cells.find((entry) => entry.outputArtifactId === asset.artifactId)
+      if (cell) openCellHistory(cell.id, asset.artifactId)
+      else await openWorkspaceActions('tool.asset_history', { asset_id: asset.artifactId })
+      return { ok: true, message: 'Media history opened' }
+    }
+    if (route.action === 'skeleton') {
+      if (asset.type !== 'image') throw new Error('Choose an image for a pose guide.')
+      await openWorkspaceActions('tool.generate_kie_qwen_3_0_edit_image', {
+        image_refs: [asset.artifactId],
+        prompt: 'Create a pose skeleton guide from this reference image. Preserve the visible body poses, joint positions and framing. Show only clearly connected colored skeleton joints and limbs on a black background, without clothing, faces, scenery or text.',
+      })
+      return { ok: true, message: 'AI pose guide options opened. Review the provider and cost before generating.' }
+    }
+    await openWorkspaceMedia(asset, route.action === 'open' ? undefined : route.action)
+    return { ok: true, message: 'Media preview opened' }
+  }
+
   const executeCommand = async (
     input: string,
     context?: { speakVoiceId?: string },
@@ -9970,7 +10205,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return { ok: true, message: 'Pending action cancelled' }
       }
       if (pendingWatermarkReview) setPendingWatermarkReview(null)
-      if (!bookId) return { ok: false, message: 'Load or create a book first.' }
+      if (!bookId && !input.startsWith('/')) return { ok: false, message: 'Load or create a book first.' }
       if (!input.startsWith('/')) {
         const routed = await call('chat', {
           book_id: bookId,
@@ -9996,8 +10231,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           message: messageFor(routed, 'Command complete'),
         }
       }
-      const [commandToken, ...restParts] = input.trim().split(/\s+/)
+      const [rawCommandToken, ...restParts] = input.trim().split(/\s+/)
+      const commandToken = rawCommandToken.toLowerCase()
       const rest = restParts.join(' ')
+      if (commandToken.toLowerCase() === '/actions') {
+        await openWorkspaceActions(undefined, undefined, rest)
+        return { ok: true, message: 'Actions opened' }
+      }
       const resolvedRest = commandToken.toLowerCase() === '/duplicate'
         ? [
             resolveNotebookMentionAliases(
@@ -10010,6 +10250,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             rest,
             commandMentionAssets,
           )
+      const availableActions = workspaceActions.length ? workspaceActions : asWorkspaceActionCatalog(await call('list_workspace_actions', {})).actions
+      if (!workspaceActions.length) setWorkspaceActions(availableActions)
+      const advertisedCommand = selectCommandForInput(workspaceActionCommands(availableActions, commands), commandToken, resolvedRest)
+      const advertisedAction = availableActions.find((action) => [action.command, ...action.aliases].includes(commandToken))
+      if (advertisedCommand?.workspaceActionId || (advertisedAction && !rest && (advertisedAction.inputSchema.required ?? []).some((name) => !['book_id', 'notebook_id', 'sequence_id'].includes(name)))) {
+        const values = advertisedCommand ? parseCommandArgs(resolvedRest, advertisedCommand.params) : {}
+        await openWorkspaceActions(advertisedAction?.id ?? advertisedCommand?.workspaceActionId, values)
+        return { ok: true, message: 'Action options opened' }
+      }
       if (commandToken === '/extract-audio') {
         if (!notebook || restParts.length !== 1) {
           return { ok: false, message: 'Usage: /extract-audio @video' }
@@ -10053,7 +10302,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
         const token = normalizeNotebookReference(restParts[0])
         const cell = notebook.cells.find((candidate) =>
-          candidate.id.toLowerCase().startsWith(token))
+          candidate.id.toLowerCase() === token || notebookGridTag(candidate.slot).slice(1).toLowerCase() === token)
         if (
           !cell
           || !notebookCellSupportsGenerateCellCommand(cell)
@@ -10103,7 +10352,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
         return await removeSequenceTrack(track.trackId)
       }
-      if (commandToken === '/export') {
+      if (commandToken === '/export-sequence' || (commandToken === '/export' && restParts.some((value) => value === '@sequence-main' || value.startsWith('--') || value === `@${sequence?.sequenceId}`))) {
         if (!sequence) return { ok: false, message: 'Load the primary sequence first.' }
         const aspectIndex = restParts.indexOf('--aspect')
         const captionsIndex = restParts.indexOf('--captions')
@@ -10134,14 +10383,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ) {
           return {
             ok: false,
-            message: 'Usage: /export @sequence-main --aspect 16:9|9:16|1:1 --captions burned|sidecar|omit',
+            message: 'Usage: /export-sequence --aspect 16:9|9:16|1:1 --captions burned|sidecar|omit',
           }
         }
+        const currentSequence = asSequence(await call('get_primary_sequence', { book_id: bookId }))
+        if (!currentSequence) return { ok: false, message: 'Load the primary sequence first.' }
+        setSequence(currentSequence)
         const value = await call('plan_sequence_export', {
           book_id: bookId,
           source_surface: 'slash',
           actor: 'videobook-user',
-          sequence_revision: sequence.revision,
+          sequence_revision: currentSequence.revision,
           orientation,
           captions,
         })
@@ -10218,7 +10470,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           split_frame: splitFrame,
         }, 'slash')
       }
-      if (commandToken === '/delete') {
+      if (commandToken === '/clip-delete' || (commandToken === '/delete' && sequenceClipReference(sequence, restParts[0]))) {
         const clip = sequenceClipReference(sequence, restParts[0])
         const unknown = restParts.slice(1).filter((value) => value !== '--ripple')
         if (!clip || unknown.length > 0) {
@@ -10275,7 +10527,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           clip_id: clip.clipId,
         }, 'slash')
       }
-      if (commandToken === '/reverse') {
+      if (commandToken === '/clip-reverse' || (commandToken === '/reverse' && sequenceClipReference(sequence, restParts[0]))) {
         const clip = sequenceClipReference(sequence, restParts[0])
         if (!clip || clip.source.kind !== 'timed') {
           return { ok: false, message: 'Usage: /reverse @timed-clip-id' }
@@ -10315,7 +10567,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (
         commandToken === '/insert'
         || commandToken === '/overwrite'
-        || commandToken === '/trim'
+        || commandToken === '/clip-trim'
+        || (commandToken === '/trim' && sequenceClipReference(sequence, restParts[0]))
         || commandToken === '/volume'
       ) {
         const values = restParts.map((value) =>
@@ -10352,7 +10605,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             ...(durationFrames === undefined ? {} : { duration_frames: durationFrames }),
           }, 'slash')
         }
-        if (commandToken === '/trim') {
+        if (commandToken === '/clip-trim' || commandToken === '/trim') {
           const [clipValue, startValue, durationValue] = values
           const clip = sequenceClipReference(sequence, clipValue)
           const startFrame = Number(startValue)
@@ -10393,6 +10646,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       const command = selectCommandForInput(commands, commandToken, resolvedRest)
       if (!command) return { ok: false, message: `Unknown command: ${commandToken}` }
+      if (advertisedAction?.handler.kind === 'ui') {
+        const outcome = await executeWorkspaceUiRoute(advertisedAction, parseCommandArgs(resolvedRest, command.params))
+        if (outcome) return outcome
+      }
       if (command.uiAction === 'switch_book') {
         const name = command.command.slice(1)
         const target = books.find((book) =>
@@ -10497,48 +10754,99 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (command.mcpTool.autoInject?.includes('notebook_id') && notebook) {
         args.notebook_id = notebook.id
       }
+      if (advertisedAction && advertisedAction.confirmation !== 'none') {
+        await openWorkspaceActions(advertisedAction.id, args)
+        return { ok: true, message: 'Review the action before running it' }
+      }
       const result = await call(command.mcpTool.tool, args)
-      if (command.mcpTool.tool === 'download_video' && notebook) {
-        return await completeVideoDownload(result, asString(args.url) ?? '')
-      }
-      const routedCells = notebook
-        ? routedMediaCellInputs(command.mcpTool.tool, result, notebook.cells, lastWorkSlot)
-        : []
-      if (notebook && routedCells.length > 0) {
-        const placements: string[] = []
-        let firstCellId: string | null = null
-        for (const cell of routedCells) {
-          const created = recordValue(await call('create_notebook_cell', {
-            book_id: bookId,
-            notebook_id: notebook.id,
-            cell,
-          }))
-          const cellId = asString(created?.id)
-          if (!cellId) {
-            throw new Error('The server did not return the new notebook cell')
-          }
-          firstCellId ??= cellId
-          placements.push(notebookGridTag(cell.slot))
-        }
-        selectCanvasCell(firstCellId)
-        await refreshBookData(bookId, notebook.id)
-        const message = `Created ${placements.join(' and ')}`
-        setNotice(message)
-        return { ok: true, message }
-      }
-      await refreshBookData(bookId, notebook?.id)
-      if (command.mcpTool.tool === 'rename_asset') {
-        const renamed = recordValue(result)
-        const newLabel = asString(renamed?.label)
-        return {
-          ok: true,
-          message: newLabel ? `Renamed asset to ${newLabel}` : 'Asset renamed',
-        }
-      }
-      return { ok: true, message: messageFor(result, `${command.command} complete`) }
+      return await completeWorkspaceToolResult(command.mcpTool.tool, result, args, command.command)
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }
+  }
+
+  const executeWorkspaceAction = async (action: WorkspaceAction, values: Record<string, unknown>): Promise<WorkspaceActionResult> => {
+    const openedDialog = actionDialog
+    if (action.handler.kind !== 'tool') {
+      if (action.handler.kind === 'ui' && action.handler.action === 'open_actions') {
+        await openWorkspaceActions()
+        return { message: 'Actions opened' }
+      }
+      const uiResult = await executeWorkspaceUiRoute(action, values)
+      if (uiResult) {
+        if (!uiResult.ok) throw new Error(uiResult.message)
+        setActionDialog((current) => current === openedDialog ? null : current)
+        return { message: uiResult.message }
+      }
+      const args = Object.keys(action.inputSchema.properties ?? {}).map((name) => values[name])
+        .filter((value) => value !== undefined && value !== null)
+        .map((value) => Array.isArray(value) ? value.join(' ') : String(value)).join(' ')
+      const input = action.command === '/export-sequence'
+        ? `/export-sequence --aspect ${String(values.aspect ?? '16:9')} --captions ${String(values.captions ?? 'burned')}`
+        : `${action.command}${args ? ` ${args}` : ''}`
+      const result = await executeCommand(input)
+      if (!result.ok) throw new Error(result.message)
+      setActionDialog((current) => current === openedDialog ? null : current)
+      return { message: result.message }
+    }
+    const tool = action.handler.tool
+    if (tool === 'forget_asset') {
+      const target = assets.find((asset) => asset.artifactId === values.asset_id)
+      if (!target) throw new Error('Choose media from the current project.')
+      const result = await forgetAsset({ ...target, errorMessage: null, owningBookId: bookId, owningBookName: activeBook?.name ?? bookId }, true)
+      if (!result.ok) throw new Error(result.message)
+      setActionDialog(null)
+      return { message: result.message }
+    }
+    if (tool === 'create_book' || tool === 'rename_book' || tool === 'delete_book') {
+      const result = tool === 'create_book'
+        ? await createBookProject(String(values.name ?? ''))
+        : tool === 'rename_book'
+          ? await renameBookProject(String(values.book_id ?? bookId), String(values.name ?? ''))
+          : await deleteBookProject(String(values.book_id ?? bookId), String(values.confirm_name ?? ''))
+      if (!result.ok) throw new Error(result.error)
+      return { message: `${action.title} complete` }
+    }
+    const targetBookId = bookId
+    const value = await call(tool, values)
+    if (recordValue(value)?.kind === 'chat-action-plan') {
+      const result = await previewRoutedChatAction(asChatActionPlan(value), String(values.prompt ?? ''))
+      if (!result.ok) throw new Error(result.message)
+      setActionDialog(null)
+      return { message: result.message }
+    }
+    if (tool === 'get_notebook' && typeof values.notebook_id === 'string') {
+      await refreshBookData(String(values.book_id ?? bookId), values.notebook_id)
+      navigate('notebook')
+      setActionDialog(null)
+      return { message: 'Notebook opened' }
+    }
+    if (recordValue(value)?.planVersion === 1 && Array.isArray(recordValue(value)?.stages)) {
+      const result = await previewCommandPlan(asCommandPlan(value))
+      if (!result.ok) throw new Error(result.message)
+      setActionDialog(null)
+      return { message: result.message }
+    }
+    const completed = await completeWorkspaceToolResult(tool, value, values, action.title)
+    if (targetBookId && watchScopeRef.current.bookId === targetBookId) refreshLibraryBrowse()
+    if (!completed.ok) throw new Error(completed.message)
+    return { message: completed.message, value }
+  }
+
+  const reviewWorkspaceAction = async (action: WorkspaceAction, values: Record<string, unknown>): Promise<WorkspaceActionReview> => {
+    if (action.confirmation === 'generation' && action.handler.kind === 'tool') {
+      const result = recordValue(await call('estimate_cost', { calls: [{ tool_name: action.handler.tool, input: values }] }))
+      const estimate = recordValue(result?.estimate)
+      const warnings = Array.isArray(estimate?.warnings) ? estimate.warnings.filter((value): value is string => typeof value === 'string') : []
+      const usd = typeof estimate?.usd === 'number' ? estimate.usd : null
+      return {
+        cost: warnings.length || usd === null ? 'Cost estimate unavailable' : `Estimated cost: $${usd.toFixed(4)}`,
+        message: `This action may send your prompt and selected media to a generation provider and incur charges.${warnings.length ? ` ${warnings.join(' ')}` : ''} Confirm to start.`,
+      }
+    }
+    return { message: action.confirmation === 'external'
+      ? `${action.title} sends the selected content outside this workspace. Review the destination and content before confirming.`
+      : `${action.title} changes or removes the selected content. Review the target and values before confirming.` }
   }
 
   const executeComposerCommand = async (
@@ -11348,11 +11656,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         label: 'View source',
         icon: 'source',
       },
+      { id: 'more', label: 'More actions', icon: 'more' },
     )
   }
   /* Board-wide layout actions an empty square can anchor. Kept separate from
      contextMenuActions because none of the cell actions apply without a cell. */
   const slotContextMenuActions: NotebookCellContextAction[] = []
+  slotContextMenuActions.push({ id: 'more', label: 'More actions', icon: 'more' })
   if (notebookImageCellIds.size > 0) {
     slotContextMenuActions.push({
       id: 'group_images',
@@ -11363,6 +11673,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
   const handleSlotContextAction = (actionId: string) => {
     if (!contextMenuSlot) return
+    if (actionId === 'more') void openWorkspaceActions(undefined, { slot: contextMenuSlot }, 'Notebook', cellContextMenu?.returnFocus)
     if (actionId === 'group_images') void groupImageCells(contextMenuSlot)
   }
   const duplicateContextMenuAsset = async () => {
@@ -11434,6 +11745,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
   const handleCellContextAction = (actionId: string) => {
     if (!contextMenuCell) return
+    if (actionId === 'more') {
+      void openWorkspaceActions(undefined, { asset_id: contextMenuCell.outputArtifactId, cell_id: contextMenuCell.id }, undefined, cellContextMenu?.returnFocus)
+      return
+    }
     if (actionId === 'inspect') {
       openCellInspector(contextMenuCell.id)
       return
@@ -11828,6 +12143,65 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     )
   })()
 
+  const workspaceActionContext = useMemo(() => {
+    const mediaChoices: ActionChoice[] = assets.map((asset) => {
+      const cell = notebook?.cells.find((entry) => entry.outputArtifactId === asset.artifactId)
+      return {
+        value: asset.artifactId,
+        label: cell ? `${notebookGridTag(cell.slot)} · ${asset.label}` : asset.label,
+        detail: asset.type,
+      }
+    })
+    const cellChoices: ActionChoice[] = notebook?.cells.map((cell) => ({
+      value: cell.id, label: `${notebookGridTag(cell.slot)} · ${cell.label ?? cell.type}`,
+    })) ?? []
+    const trackChoices: ActionChoice[] = sequence?.tracks.map((track) => ({ value: track.trackId, label: track.name, detail: track.kind })) ?? []
+    const clipChoices: ActionChoice[] = sequence?.clips.map((clip) => ({
+      value: clip.clipId,
+      label: `${clip.source.kind} · frame ${clip.timelineStartFrame}`,
+      detail: sequence.tracks.find((track) => track.trackId === clip.trackId)?.name,
+    })) ?? []
+    const choices: Record<string, readonly ActionChoice[]> = {
+      book_id: books.map((book) => ({ value: book.bookId, label: book.name })),
+      notebook_id: notebook ? [{ value: notebook.id, label: notebook.name }] : [],
+      cell_id: cellChoices, cell: cellChoices, source_cell_id: cellChoices, target_cell_id: cellChoices,
+      clip_id: clipChoices, clip_ids: clipChoices, narration_clip_id: clipChoices,
+      track_id: trackChoices, track_ids: trackChoices, audio_track_id: trackChoices,
+      artifact_id: mediaChoices, artifact_ids: mediaChoices, artifact_ref: mediaChoices,
+      asset_id: mediaChoices, asset_ref: mediaChoices, source_artifact_id: mediaChoices,
+    }
+    for (const kind of ['image', 'audio', 'video'] as const) {
+      const selected = mediaChoices.filter((choice) => choice.detail === kind || (kind === 'video' && choice.detail === 'final'))
+      choices[`${kind}_ref`] = selected
+      choices[`${kind}_refs`] = selected
+      choices[`${kind}_artifact_id`] = selected
+      choices[`${kind}_asset_id`] = selected
+      choices[`${kind}_asset_ids`] = selected
+    }
+    for (const name of ['source_asset_id', 'target_asset_id', 'first_asset_id', 'second_asset_id', 'additional_asset_ids', 'output_artifact_id', 'replacement_artifact_id', 'expected_output_artifact_id', 'exclude_artifact_ids']) choices[name] = mediaChoices
+    for (const name of ['osg_asset_id', 'card_asset_id', 'qr_image_refs', 'character_image_refs', 'first_frame_ref', 'last_frame_ref', 'end_frame_ref']) choices[name] = choices.image_ref!
+    choices.motion_video_refs = choices.video_ref!
+    choices.layer_asset_id = choices.audio_ref!
+    choices.sound_effect_ref = choices.audio_ref!
+    choices.source_script_id = mediaChoices.filter((choice) => choice.detail === 'script')
+    choices.cell_ids = cellChoices
+    choices.audio_id = clipChoices
+    choices.outgoing_clip_id = clipChoices
+    choices.incoming_clip_id = clipChoices
+    choices.source_book_id = choices.book_id!
+    choices.target_book_id = choices.book_id!
+    choices.edge_id = notebook?.edges.map((edge) => ({ value: edge.id, label: `${cellChoices.find((cell) => cell.value === edge.source)?.label ?? edge.source} → ${cellChoices.find((cell) => cell.value === edge.target)?.label ?? edge.target} · ${edge.targetInput}` })) ?? []
+    const context: WorkspaceActionContext = {
+      bookId, notebookId: notebook?.id, sequenceId: sequence?.sequenceId, sequenceRevision: sequence?.revision,
+      cellId: selectedNotebookCell?.id, assetId: selectedNotebookCell?.outputArtifactId, choices,
+      cellIds: selectedNotebookCells.map((cell) => cell.id),
+      assetIds: selectedNotebookCells.flatMap((cell) => cell.outputArtifactId ? [cell.outputArtifactId] : []),
+      media: Object.fromEntries(assets.map((asset) => [asset.artifactId, { url: asset.mediaUrl, type: asset.type, width: asset.width, height: asset.height, objectHash: asset.objectHash }])),
+    }
+    return context
+  }, [assets, bookId, books, notebook, selectedNotebookCell, selectedNotebookCells, sequence])
+  const composerCommands = useMemo(() => pendingWorkspaceCommands(commands, Boolean(pendingCommandPlan || pendingChatAction || pendingWatermarkReview)), [commands, pendingCommandPlan, pendingChatAction, pendingWatermarkReview])
+
   return (
     <main
       className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} ${selectedCell ? 'inspector-detail' : 'inspector-overview'} ${mediaFullscreen ? 'media-fullscreen-open' : ''}`}
@@ -11836,6 +12210,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       onDragOver={handleAppFileDragOver}
       onDropCapture={handleAppFileDropCapture}
       onDrop={handleAppFileDrop}
+      onKeyDownCapture={(event) => {
+        if (event.defaultPrevented) return
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'k' && !event.nativeEvent.isComposing) {
+          event.preventDefault()
+          event.stopPropagation()
+          void openWorkspaceActions()
+        }
+      }}
     >
       <header className="topbar">
         <div className="topbar-book-controls">
@@ -11881,6 +12263,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             onAdjustZoom={adjustNotebookZoom}
             onResetZoom={resetNotebookZoom}
             onDeleteSelection={deleteSelectedCells}
+            onSelectionActions={() => void openWorkspaceActions(undefined, {
+              cell_id: selectedNotebookCell?.id,
+              cell_ids: selectedNotebookCells.map((cell) => cell.id),
+              artifact_ids: selectedNotebookCells.flatMap((cell) => cell.outputArtifactId ? [cell.outputArtifactId] : []),
+            })}
             onClearSelection={() => {
               selectCanvasCell(null)
               setSourceViewCellId(null)
@@ -11889,6 +12276,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           />
         )}
         <nav className="header-navigation" aria-label="Workspace navigation">
+          <button type="button" title="Actions (⌘⇧K / Ctrl+Shift+K)" aria-label="Open actions" data-workspace-action-surface="button" aria-keyshortcuts="Control+Shift+K Meta+Shift+K" disabled={mcp.state !== 'ready'} onClick={() => void openWorkspaceActions()}><Search size={17} /></button>
           {screenNavigation.map((item) => {
             const Icon = item.icon
             return (
@@ -12140,6 +12528,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     <span>INSPECTOR</span>
                   )}
                   <div className="inspector-header-actions">
+                    <button type="button" aria-label="Inspector actions" data-workspace-action-surface="inspector" title="More actions" onClick={() => void openWorkspaceActions(undefined, {
+                      asset_id: selectedNotebookCell?.outputArtifactId, cell_id: selectedNotebookCell?.id,
+                    })}><Ellipsis size={15} /></button>
                     {selectedCell && (
                       <>
                         {selectedNotebookCell?.outputArtifactId && (
@@ -12305,6 +12696,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               onOpenBook={(nextBookId) => void openLibraryBook(nextBookId)}
               onSearchSimilar={(asset) => momentSearchRef.current?.searchSimilar(asset)}
               onForget={(asset) => void forgetAsset(asset)}
+              onActions={(asset) => {
+                void (async () => {
+                  if (asset.owningBookId !== bookId) {
+                    const result = await chooseBook(asset.owningBookId)
+                    if (!result.ok) { setNotice(result.error, 'error'); return }
+                  }
+                  await openWorkspaceActions(undefined, { asset_id: asset.artifactId, book_id: asset.owningBookId })
+                })()
+              }}
               onRetry={(artifactId) => void retryIngest(artifactId)}
             >
               <MomentSearch
@@ -12503,12 +12903,33 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             editFullscreenSubjects(mediaFullscreen, input)}
           onSelectionChange={updateMediaFullscreenSelection}
           onClose={closeMediaFullscreen}
+          onMoreActions={() => void openWorkspaceActions(undefined, { asset_id: mediaFullscreen.asset.artifactId, cell_id: mediaFullscreen.cellId })}
         />
       )}
 
+      <input ref={actionUploadRef} type="file" multiple hidden aria-label="Import files from actions" onChange={upload} />
+      {workspacePreview && <WorkspacePreviewDialog media={workspacePreview.media}
+        sequence={workspacePreview.media ? undefined : sequence ?? undefined}
+        assets={assets.flatMap((asset) => asset.mediaUrl ? [{ artifactId: asset.artifactId, mediaUrl: asset.mediaUrl }] : [])}
+        opener={workspacePreview.opener} initialFrame={workspacePreview.initialFrame}
+        onClose={() => setWorkspacePreview(null)}
+        onActions={() => void openWorkspaceActions(undefined, workspacePreview.media ? { asset_id: workspacePreview.media.assetId } : undefined)} />}
+      {actionDialog && <WorkspaceActionsDialog key={actionDialog.key} actions={workspaceActions} context={{
+        ...workspaceActionContext,
+        entities: actionDialog.resources?.entities,
+        choices: { ...workspaceActionContext.choices, ...actionDialog.resources?.choices },
+      }}
+        initialActionId={actionDialog.actionId} initialValues={actionDialog.values} initialQuery={actionDialog.query}
+        initialResult={actionDialog.result}
+        returnFocus={actionDialog.opener} loading={actionCatalogStatus.loading} error={actionCatalogStatus.error}
+        onClose={() => { actionCatalogRequestRef.current += 1; setActionDialog(null) }}
+        onSelect={(action) => void openWorkspaceActions(action.id, actionDialog.values)}
+        onOpenAction={(actionId, values) => void openWorkspaceActions(actionId, { ...actionDialog.values, ...values })}
+        onExecute={executeWorkspaceAction} onReview={reviewWorkspaceAction} />}
+
       <CommandComposer
         hidden={!showCommandComposer}
-        commands={commands}
+        commands={composerCommands}
         cells={notebook?.cells ?? []}
         bookId={bookId}
         callTool={call}

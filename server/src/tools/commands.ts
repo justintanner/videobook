@@ -1,6 +1,7 @@
 import { bookManager } from "../engine.js";
 import type { BookManager } from "../book-manager.js";
 import type { ToolDef } from "./tool-def.js";
+import { APPLICATION_COMMANDS } from "./application-commands.js";
 import {
   VIDEO_EDITING_COMMANDS,
   canonicalizeCommands,
@@ -1253,7 +1254,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/collapse",
-    description: "Collapse the asset/clip sidebars",
+    description: "Close the project selector (left), inspector (right), or both",
     example: "/collapse left",
     category: "action",
     icon: "PanelLeftClose",
@@ -1267,7 +1268,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/expand",
-    description: "Expand the asset/clip sidebars",
+    description: "Open the project selector (left), inspector (right), or both",
     example: "/expand right",
     category: "action",
     icon: "PanelLeftOpen",
@@ -1281,7 +1282,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/sort",
-    description: "Set sidebar sort order (no value toggles)",
+    description: "Browse project media by creation date",
     example: "/sort oldest",
     category: "action",
     icon: "ArrowUpDown",
@@ -1289,7 +1290,7 @@ const CANONICAL_COMMANDS: Command[] = [
     variant: "zinc",
     chevron: "right",
     params: [
-      { name: "order", type: "string", required: false, description: "newest | oldest (omit to toggle)" },
+      { name: "order", type: "string", required: false, description: "newest | oldest (default newest)" },
     ],
     uiAction: "sidebar_sort",
   },
@@ -1490,7 +1491,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/skeleton",
-    description: "Extract a pose skeleton image from an image asset",
+    description: "Review an AI pose skeleton guide generated from a reference image",
     example: "/skeleton @a1",
     category: "context_menu",
     icon: "PersonStanding",
@@ -1616,19 +1617,19 @@ const CANONICAL_COMMANDS: Command[] = [
 ];
 
 export function getCanonicalCommands(): Command[] {
-  return canonicalizeCommands(CANONICAL_COMMANDS);
+  return canonicalizeCommands([...CANONICAL_COMMANDS, ...APPLICATION_COMMANDS]);
 }
 
-export function commandsDef(books: BookManager = bookManager): ToolDef {
+export function commandsDef(books: BookManager = bookManager, reservedActionNames: () => readonly string[] = () => []): ToolDef {
   return {
     name: "slash_commands",
     description: "List all available UI commands with scope metadata",
     scope: "global",
     schema: {},
     handler: async () => {
-      const commands: Command[] = [...CANONICAL_COMMANDS];
+      const commands: Command[] = [...CANONICAL_COMMANDS, ...APPLICATION_COMMANDS];
       const reserved = new Set(
-        commands.flatMap((command) => [command.command, ...(command.aliases ?? [])])
+        [...commands.flatMap((command) => [command.command, ...(command.aliases ?? [])]), ...reservedActionNames()]
           .map((name) => name.toLowerCase()),
       );
       await books.ready();

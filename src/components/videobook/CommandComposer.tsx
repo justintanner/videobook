@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -115,6 +116,7 @@ interface CommandSuggestion {
   value: string
   label: string
   description: string
+  aliases?: readonly string[]
   type: 'command'
 }
 
@@ -169,6 +171,7 @@ export function CommandComposer({
     () => new Map(),
   )
   const inputRef = useRef<HTMLInputElement>(null)
+  const suggestionId = useId()
   const inputSessionRef = useRef(inputSession)
   const killBufferRef = useRef('')
   const historyRef = useRef<string[]>([])
@@ -267,6 +270,7 @@ export function CommandComposer({
           value: `${command.command} `,
           label: command.command,
           description: command.description,
+          aliases: command.aliases,
           type: 'command',
         }))
     }
@@ -347,11 +351,11 @@ export function CommandComposer({
     if (speakPreviewOpen) ensureVoiceCatalog()
   }
 
-  const recordHistory = (message: string) => {
+  const recordHistory = async (message: string) => {
     historyRef.current = [...historyRef.current, message]
     historyCursorRef.current = -1
     if (!bookId) return
-    void callTool('record_prompt', {
+    await callTool('record_prompt', {
       book_id: bookId,
       surface: 'chat',
       prompt: message,
@@ -374,7 +378,7 @@ export function CommandComposer({
       if (!context) {
         await ensureHistory()
         if (inputSessionRef.current !== executionSession) return
-        recordHistory(message)
+        await recordHistory(message)
       }
       if (inputSessionRef.current !== executionSession) return
       setInput('')
@@ -576,10 +580,13 @@ export function CommandComposer({
           />
         )}
         {!speakPreviewOpen && suggestions.length > 0 && (
-          <div className="command-suggestions">
+          <div className="command-suggestions" id={`${suggestionId}-list`} role="listbox" aria-label="Command suggestions">
             {suggestions.map((suggestion, index) => (
               <button
                 type="button"
+                role="option"
+                id={`${suggestionId}-option-${index}`}
+                aria-selected={index === selectedIndex}
                 key={`${suggestion.type}:${suggestion.label}`}
                 className={`${index === selectedIndex ? 'active ' : ''}command-command-suggestion`}
                 onMouseDown={(event) => event.preventDefault()}
@@ -604,6 +611,12 @@ export function CommandComposer({
             ? connectionLabel
             : placeholder ?? 'Type a message or /command…'}
           aria-label="Videobook command input"
+          data-workspace-action-surface="slash"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={!speakPreviewOpen && suggestions.length > 0}
+          aria-controls={!speakPreviewOpen && suggestions.length > 0 ? `${suggestionId}-list` : undefined}
+          aria-activedescendant={!speakPreviewOpen && suggestions[selectedIndex] ? `${suggestionId}-option-${selectedIndex}` : undefined}
           onFocus={focusAndLoad}
           onCompositionStart={() => { composingRef.current = true }}
           onCompositionEnd={() => { composingRef.current = false }}
@@ -638,16 +651,12 @@ export function CommandComposer({
               }
             }
             if (suggestions.length > 0) {
-              if (event.key === 'ArrowDown') {
+              if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
                 event.preventDefault()
-                setSelectedIndex((index) => (index + 1) % suggestions.length)
-                return
-              }
-              if (event.key === 'ArrowUp') {
-                event.preventDefault()
-                setSelectedIndex((index) => (
-                  index - 1 + suggestions.length
-                ) % suggestions.length)
+                const next = event.key === 'Home' ? 0 : event.key === 'End' ? suggestions.length - 1
+                  : (selectedIndex + (event.key === 'ArrowDown' ? 1 : -1) + suggestions.length) % suggestions.length
+                setSelectedIndex(next)
+                document.getElementById(`${suggestionId}-option-${next}`)?.scrollIntoView({ block: 'nearest' })
                 return
               }
               if (event.key === 'Tab') {

@@ -36,6 +36,7 @@ export function LibraryScreen<Asset extends LibraryAssetCardAsset>({
   onOpenBook,
   onSearchSimilar,
   onForget,
+  onActions,
   onRetry,
 }: {
   children: ReactNode
@@ -56,6 +57,7 @@ export function LibraryScreen<Asset extends LibraryAssetCardAsset>({
   onOpenBook: (bookId: string) => void
   onSearchSimilar: (asset: Asset) => void
   onForget: (asset: Asset) => void
+  onActions?: (asset: Asset) => void
   onRetry: (artifactId: string) => void
 }) {
   const [selectedPreview, setSelectedPreview] = useState<string | null>(null)
@@ -178,6 +180,7 @@ export function LibraryScreen<Asset extends LibraryAssetCardAsset>({
                 onOpenBook={onOpenBook}
                 onSearchSimilar={() => onSearchSimilar(asset)}
                 onForget={() => onForget(asset)}
+                onActions={onActions ? () => onActions(asset) : undefined}
                 onRetry={() => onRetry(asset.artifactId)}
               />
             )

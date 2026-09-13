@@ -128,12 +128,15 @@ async function openLibrary(page: Page, appUrl: string): Promise<void> {
 async function expectReadyGrid(page: Page): Promise<void> {
   await expect.poll(async () =>
     page.getByRole('button', { name: /^Ready/ }).getAttribute('aria-pressed')).toBe('true')
-  await page.getByText('Kitchen still').first().waitFor({ state: 'visible' })
+  await page.locator('.library-asset-copy strong', { hasText: 'Kitchen still' }).first().waitFor({ state: 'visible' })
   expect(await page.locator('.library-asset-card-error').count()).toBe(0)
   expect(await page.getByRole('button', { name: /^Retry/ }).count()).toBe(0)
   expect(await page.locator('.library-asset-card-grid video').count()).toBe(0)
-  const titles = await page.locator('.library-asset-copy strong').allTextContents()
-  expect(titles.some((title) => title.includes('Kitchen still'))).toBe(true)
+  let titles: string[] = []
+  await expect.poll(async () => {
+    titles = await page.locator('.library-asset-copy strong').allTextContents()
+    return titles.some((title) => title.includes('Kitchen still'))
+  }).toBe(true)
   expect(titles.every((title) => !/^[0-9a-f-]{8,}$/i.test(title.trim()))).toBe(true)
   const dates = await page.locator('.library-asset-copy small').allTextContents()
   expect(dates.every((value) => !value.includes('T') && !/^\d{4}-\d{2}-\d{2}/.test(value.trim())))
@@ -404,6 +407,9 @@ describe('Library Ready-by-default browser flow', () => {
     const trigger = kitchen.getByRole('button', { name: 'More actions for Kitchen still', exact: true })
     await trigger.focus()
     await page.keyboard.press('Enter')
+    const allActions = kitchen.getByRole('menuitem', { name: 'All media actions', exact: true })
+    await expect.poll(async () => allActions.evaluate((button) => button === document.activeElement)).toBe(true)
+    await page.keyboard.press('ArrowDown')
     const forget = kitchen.getByRole('menuitem', { name: 'Forget', exact: true })
     await expect.poll(async () => forget.evaluate((button) => button === document.activeElement)).toBe(true)
     await page.keyboard.press('Escape')

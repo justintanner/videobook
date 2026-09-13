@@ -3,6 +3,7 @@ import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
+import { sequenceContinuationRevision } from "./command-plan.js";
 
 type ExportOrientation = "landscape" | "portrait" | "square";
 type CaptionMode = "burn-in" | "sidecar" | "omit";
@@ -242,6 +243,7 @@ export function exportSequenceDefs(engine: Engine): ToolDef[] {
               tool: "export_sequence",
               input: {
                 sequence_revision: validation.revision,
+                sequence_content_revision: sequenceContinuationRevision(engine.sequences.getPrimary()),
                 orientation: validation.orientation,
                 captions: validation.captions,
                 width: validation.width,

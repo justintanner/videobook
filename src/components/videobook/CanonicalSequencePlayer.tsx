@@ -31,6 +31,7 @@ interface CanonicalSequencePlayerProps {
   assets: CanonicalPlaybackAsset[]
   onFrameUpdate: (frame: number) => void
   onKeyboardAction: (action: TimelineKeyboardAction, frame: number) => void
+  editingEnabled?: boolean
 }
 
 export interface CanonicalSequencePlayerHandle {
@@ -74,6 +75,7 @@ export const CanonicalSequencePlayer = forwardRef<
   assets,
   onFrameUpdate,
   onKeyboardAction,
+  editingEnabled = true,
 }, ref) {
   const playerRef = useRef<PlayerRef>(null)
   const sectionRef = useRef<HTMLElement>(null)
@@ -112,11 +114,12 @@ export const CanonicalSequencePlayer = forwardRef<
       ))
       return
     }
+    if (!editingEnabled) return
     const action = keyboardAction(event)
     if (!action) return
     event.preventDefault()
     onKeyboardAction(action, current)
-  }, [durationInFrames, fps, onKeyboardAction])
+  }, [durationInFrames, editingEnabled, fps, onKeyboardAction])
 
   useImperativeHandle(ref, () => ({
     seekTo: (nextFrame) => {
@@ -163,7 +166,7 @@ export const CanonicalSequencePlayer = forwardRef<
       <footer>
         <span>F{frame}</span>
         <span>{(frame / fps).toFixed(2)}s</span>
-        <span>Space/K play · J/L shuttle · ←/→ frame · I/O marks · S split · Delete ripple · ⌘Z/⇧⌘Z restore</span>
+        <span>{editingEnabled ? 'Space/K play · J/L shuttle · ←/→ frame · I/O marks · S split · Delete ripple · ⌘Z/⇧⌘Z restore' : 'Space/K play · J/L shuttle · ←/→ frame'}</span>
       </footer>
     </section>
   )

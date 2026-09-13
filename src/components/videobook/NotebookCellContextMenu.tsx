@@ -3,6 +3,7 @@ import {
   Camera,
   Columns3,
   Copy,
+  Ellipsis,
   History,
   Image,
   Images,
@@ -39,6 +40,7 @@ type NotebookCellContextActionIcon =
   | 'run'
   | 'source'
   | 'split'
+  | 'more'
 
 export type NotebookCellContextAction = {
   id: string
@@ -79,6 +81,7 @@ const actionIcons: Record<NotebookCellContextActionIcon, LucideIcon> = {
   run: Play,
   source: Braces,
   split: Scissors,
+  more: Ellipsis,
 }
 
 function enabledItems(menu: HTMLElement): HTMLButtonElement[] {
@@ -218,6 +221,7 @@ export function NotebookCellContextMenu({
               type="button"
               role="menuitem"
               data-cell-action={action.id}
+              data-workspace-action-surface={action.id === 'more' ? 'cell-menu' : undefined}
               disabled={action.disabled}
               onClick={() => selectAction(action.id)}
             >

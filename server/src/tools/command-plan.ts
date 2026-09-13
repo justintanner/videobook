@@ -23,7 +23,7 @@ import { resolveArtifactRefs } from "../artifact-refs.js";
 
 const bookSchema = { book_id: z.string().uuid() };
 
-function sequenceContinuationRevision(sequence: Sequence): string {
+export function sequenceContinuationRevision(sequence: Sequence): string {
   const { revision: _revision, ...content } = sequence;
   return createHash("sha256").update(JSON.stringify(content)).digest("hex");
 }

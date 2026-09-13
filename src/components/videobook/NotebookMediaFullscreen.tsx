@@ -3,6 +3,7 @@ import {
   Eraser,
   Eye,
   EyeOff,
+  Ellipsis,
   Layers2,
   RotateCw,
   SquareDashed,
@@ -62,6 +63,7 @@ type NotebookMediaFullscreenProps = {
   onSelectedSubjectIdsChange?: (subjectIds: readonly string[]) => void
   onSelectionChange?: (selection: ImageEditSelection) => void
   onClose: () => void
+  onMoreActions?: () => void
 }
 
 const REGION_COLOR = '#f5d76e'
@@ -400,6 +402,7 @@ export function NotebookMediaFullscreen({
   onSelectedSubjectIdsChange,
   onSelectionChange,
   onClose,
+  onMoreActions,
 }: NotebookMediaFullscreenProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -749,6 +752,7 @@ export function NotebookMediaFullscreen({
         >
           <X size={20} />
         </button>
+        {onMoreActions && <button type="button" className="notebook-media-more-actions" aria-label="More media actions" data-workspace-action-surface="fullscreen" onClick={onMoreActions}><Ellipsis size={20} /></button>}
         {isVideo && (captureError || captureMessage) && (
           <p
             className={`notebook-media-capture-status ${captureError ? 'error' : 'success'}`}

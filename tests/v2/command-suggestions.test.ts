@@ -17,7 +17,7 @@ describe('command suggestions', () => {
     expect(hasExactCommandSuggestion('/book', suggestions)).toBe(false)
   })
 
-  it('keeps download visible in the capped bare-slash menu', () => {
+  it('keeps every command reachable and download first in the bare-slash menu', () => {
     const commands = Array.from({ length: 18 }, (_, index) => ({
       command: `/command-${index + 1}`,
     }))
@@ -25,7 +25,7 @@ describe('command suggestions', () => {
 
     const suggestions = commandSuggestionCandidates(commands, '')
 
-    expect(suggestions).toHaveLength(12)
+    expect(suggestions).toHaveLength(19)
     expect(suggestions[0]?.command).toBe('/download')
   })
 

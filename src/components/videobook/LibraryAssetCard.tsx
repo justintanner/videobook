@@ -61,6 +61,7 @@ type LibraryAssetCardProps = {
   onOpenBook: (bookId: string) => void
   onSearchSimilar: () => void
   onForget: () => void
+  onActions?: () => void
   onRetry: () => void
 }
 
@@ -179,6 +180,7 @@ export function LibraryAssetCard({
   onOpenBook,
   onSearchSimilar,
   onForget,
+  onActions,
   onRetry,
 }: LibraryAssetCardProps) {
   const title = libraryAssetTitle(asset)
@@ -223,6 +225,17 @@ export function LibraryAssetCard({
 
   return (
     <article
+      onContextMenu={(event) => {
+        if (!onActions && !ownedHere) return
+        event.preventDefault()
+        setMenuOpen(true)
+      }}
+      onKeyDown={(event) => {
+        if ((event.shiftKey && event.key === 'F10') || event.key === 'ContextMenu') {
+          event.preventDefault()
+          setMenuOpen(true)
+        }
+      }}
       className={(asset.status === 'error'
         ? `record-card library-asset-card library-asset-card-${layout} library-asset-card-error`
         : `record-card library-asset-card library-asset-card-${layout}`)
@@ -291,11 +304,15 @@ export function LibraryAssetCard({
               {retryBusy ? 'Processing…' : 'Retry'}
             </button>
           )}
-          {ownedHere && (
+          {(ownedHere || onActions) && (
             <div
               className="library-asset-overflow"
               ref={menuRef}
               onKeyDown={(event) => {
+                if (event.key === 'Tab' && menuOpen) {
+                  setMenuOpen(false)
+                  menuButtonRef.current?.focus()
+                }
                 if (event.key === 'Escape' && menuOpen) {
                   event.preventDefault()
                   event.stopPropagation()
@@ -304,8 +321,12 @@ export function LibraryAssetCard({
                 }
                 if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
                   event.preventDefault()
+                  const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])].filter((item) => !item.disabled)
+                  const current = items.findIndex((item) => item === document.activeElement)
+                  const index = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+                    : (current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % Math.max(1, items.length)
                   setMenuOpen(true)
-                  menuItemRef.current?.focus()
+                  items[index]?.focus()
                 }
               }}
             >
@@ -325,10 +346,17 @@ export function LibraryAssetCard({
               </button>
               {menuOpen && (
                 <div className="library-asset-menu" role="menu" id={menuId}>
+                  {onActions && <button ref={menuItemRef} type="button" role="menuitem" tabIndex={-1} data-workspace-action-surface="library-menu" onClick={() => {
+                    setMenuOpen(false)
+                    menuButtonRef.current?.focus()
+                    onActions()
+                  }}><Ellipsis size={13} />All media actions</button>}
+                  {ownedHere && (
                   <button
-                    ref={menuItemRef}
+                    ref={onActions ? undefined : menuItemRef}
                     type="button"
                     role="menuitem"
+                    tabIndex={-1}
                     className="library-asset-forget"
                     disabled={busy}
                     onClick={() => {
@@ -340,6 +368,7 @@ export function LibraryAssetCard({
                     <Trash2 size={13} />
                     Forget
                   </button>
+                  )}
                 </div>
               )}
             </div>
