@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react'
@@ -30,6 +31,7 @@ export type LibraryAssetCardAsset = {
   label: string
   type: string
   status: string
+  errorMessage: string | null
   createdAt: string
   prompt: string | null
   duration: number | null
@@ -45,7 +47,7 @@ export type LibraryAssetCardIngest = {
   phases: Record<string, string>
 }
 
-export type LibraryAssetCardProps = {
+type LibraryAssetCardProps = {
   asset: LibraryAssetCardAsset
   layout: 'grid' | 'row'
   ownedHere: boolean
@@ -54,6 +56,8 @@ export type LibraryAssetCardProps = {
   retryBusy: boolean
   ingestStatus?: LibraryAssetCardIngest
   busy: boolean
+  previewActive: boolean
+  onPreview: () => void
   onOpenBook: (bookId: string) => void
   onSearchSimilar: () => void
   onForget: () => void
@@ -73,39 +77,58 @@ function PreviewFallback({ type, duration }: { type: string; duration: number | 
 function LibraryAssetPreview({
   asset,
   title,
+  active,
+  onPlay,
 }: {
   asset: LibraryAssetCardAsset
   title: string
+  active: boolean
+  onPlay: () => void
 }) {
   const [imageFailed, setImageFailed] = useState(false)
   const [mediaFailed, setMediaFailed] = useState(false)
-  const [playing, setPlaying] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const video = asset.type === 'video' || asset.type === 'final'
   const imageUrl = asset.thumbnailUrl
     ?? (asset.type === 'image' ? asset.mediaUrl : null)
-  const previewKey = `${asset.artifactId}:${imageUrl ?? ''}:${asset.mediaUrl ?? ''}`
-  const [activePreviewKey, setActivePreviewKey] = useState(previewKey)
-  if (activePreviewKey !== previewKey) {
-    setActivePreviewKey(previewKey)
-    setImageFailed(false)
-    setMediaFailed(false)
-    setPlaying(false)
-  }
-
   useEffect(() => {
-    if (playing) return
-    videoRef.current?.pause()
-    audioRef.current?.pause()
-  }, [playing])
+    const media = videoRef.current ?? audioRef.current
+    return () => media?.pause()
+  }, [active])
 
   const showImage = Boolean(imageUrl && !imageFailed)
   const canPlay = Boolean(asset.mediaUrl && (video || asset.type === 'audio') && !mediaFailed)
 
   return (
     <div className="library-asset-preview">
-      {showImage && imageUrl ? (
+      {active && canPlay && asset.mediaUrl && video ? (
+        <video
+          ref={videoRef}
+          src={asset.mediaUrl}
+          poster={showImage ? imageUrl ?? undefined : undefined}
+          aria-label={title}
+          controls
+          playsInline
+          autoPlay
+          preload="metadata"
+          onError={() => {
+            setMediaFailed(true)
+          }}
+        />
+      ) : active && canPlay && asset.mediaUrl && asset.type === 'audio' ? (
+        <audio
+          ref={audioRef}
+          src={asset.mediaUrl}
+          aria-label={title}
+          controls
+          autoPlay
+          preload="metadata"
+          onError={() => {
+            setMediaFailed(true)
+          }}
+        />
+      ) : showImage && imageUrl ? (
         <img
           src={imageUrl}
           alt=""
@@ -113,44 +136,31 @@ function LibraryAssetPreview({
           decoding="async"
           onError={() => setImageFailed(true)}
         />
-      ) : playing && canPlay && asset.mediaUrl && video ? (
-        <video
-          ref={videoRef}
-          src={asset.mediaUrl}
-          controls
-          playsInline
-          autoPlay
-          preload="metadata"
-          onError={() => {
-            setMediaFailed(true)
-            setPlaying(false)
-          }}
-        />
-      ) : playing && canPlay && asset.mediaUrl && asset.type === 'audio' ? (
-        <audio
-          ref={audioRef}
-          src={asset.mediaUrl}
-          controls
-          autoPlay
-          preload="metadata"
-          onError={() => {
-            setMediaFailed(true)
-            setPlaying(false)
-          }}
-        />
       ) : (
         <PreviewFallback type={asset.type} duration={asset.duration} />
       )}
-      {canPlay && !playing && (
+      {canPlay && !active && (
         <button
           type="button"
           className="library-asset-play"
           aria-label={`Play ${title}`}
-          onClick={() => setPlaying(true)}
+          onClick={onPlay}
         >
           Play
         </button>
       )}
+      {asset.type === 'image' && asset.mediaUrl && (
+        <a
+          className="library-asset-play"
+          href={asset.mediaUrl}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Open ${title}`}
+        >
+          Open image
+        </a>
+      )}
+      {mediaFailed && <span className="library-preview-error" role="status">Preview unavailable</span>}
     </div>
   )
 }
@@ -164,6 +174,8 @@ export function LibraryAssetCard({
   retryBusy,
   ingestStatus,
   busy,
+  previewActive,
+  onPreview,
   onOpenBook,
   onSearchSimilar,
   onForget,
@@ -180,25 +192,28 @@ export function LibraryAssetCard({
   const [detailsOpen, setDetailsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
+  const menuItemRef = useRef<HTMLButtonElement | null>(null)
   const menuId = useId()
+  const detailsId = useId()
   const compact = layout === 'row'
+
+  useLayoutEffect(() => {
+    if (menuOpen) menuItemRef.current?.focus()
+  }, [menuOpen])
 
   useEffect(() => {
     if (!menuOpen) return
     const onPointer = (event: PointerEvent) => {
       if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false)
     }
-    const onKey = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setMenuOpen(false)
-        menuButtonRef.current?.focus()
-      }
+    const onFocus = (event: FocusEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false)
     }
     document.addEventListener('pointerdown', onPointer)
-    document.addEventListener('keydown', onKey)
+    document.addEventListener('focusin', onFocus)
     return () => {
       document.removeEventListener('pointerdown', onPointer)
-      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('focusin', onFocus)
     }
   }, [menuOpen])
 
@@ -208,12 +223,19 @@ export function LibraryAssetCard({
 
   return (
     <article
-      className={asset.status === 'error'
+      className={(asset.status === 'error'
         ? `record-card library-asset-card library-asset-card-${layout} library-asset-card-error`
-        : `record-card library-asset-card library-asset-card-${layout}`}
+        : `record-card library-asset-card library-asset-card-${layout}`)
+        + (menuOpen ? ' library-asset-menu-open' : '')}
     >
       {!compact && (
-        <LibraryAssetPreview asset={asset} title={title} />
+        <LibraryAssetPreview
+          key={`${asset.owningBookId}:${asset.artifactId}:${asset.thumbnailUrl}:${asset.mediaUrl}`}
+          asset={asset}
+          title={title}
+          active={previewActive}
+          onPlay={onPreview}
+        />
       )}
       <span
         className={asset.status === 'error'
@@ -225,7 +247,7 @@ export function LibraryAssetCard({
       <AssetTagSummary tags={asset.tags} />
       <div className="library-asset-body">
         <div className="library-asset-copy">
-          <strong title={asset.id}>{title}</strong>
+          <strong title={title}>{title}</strong>
           <small title={fullTimestamp || undefined}>
             {date}
             {asset.duration !== null ? ` · ${formatMediaTime(asset.duration)}` : ''}
@@ -262,7 +284,7 @@ export function LibraryAssetCard({
             <button
               type="button"
               className="library-asset-retry"
-              disabled={busy}
+              disabled={busy || retryBusy}
               onClick={onRetry}
             >
               <RefreshCw size={13} />
@@ -270,7 +292,23 @@ export function LibraryAssetCard({
             </button>
           )}
           {ownedHere && (
-            <div className="library-asset-overflow" ref={menuRef}>
+            <div
+              className="library-asset-overflow"
+              ref={menuRef}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && menuOpen) {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setMenuOpen(false)
+                  menuButtonRef.current?.focus()
+                }
+                if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+                  event.preventDefault()
+                  setMenuOpen(true)
+                  menuItemRef.current?.focus()
+                }
+              }}
+            >
               <button
                 ref={menuButtonRef}
                 type="button"
@@ -288,12 +326,14 @@ export function LibraryAssetCard({
               {menuOpen && (
                 <div className="library-asset-menu" role="menu" id={menuId}>
                   <button
+                    ref={menuItemRef}
                     type="button"
                     role="menuitem"
                     className="library-asset-forget"
                     disabled={busy}
                     onClick={() => {
                       setMenuOpen(false)
+                      menuButtonRef.current?.focus()
                       onForget()
                     }}
                   >
@@ -306,39 +346,39 @@ export function LibraryAssetCard({
           )}
         </div>
       </div>
-      {(asset.prompt || ingestStatus || compact) && (
-        <div className="library-asset-details">
-          <button
-            type="button"
-            className="library-asset-details-toggle"
-            aria-expanded={detailsOpen}
-            onClick={() => setDetailsOpen((open) => !open)}
-          >
-            {detailsOpen ? 'Hide details' : 'Details'}
-          </button>
-          {detailsOpen && (
-            <div className="library-asset-details-body">
-              <p title={asset.id}>{asset.id}</p>
-              {fullTimestamp && <p>{fullTimestamp}</p>}
-              {asset.prompt && <p>{asset.prompt}</p>}
-              {ingestStatus && (
-                <div className="library-asset-ingest">
-                  <span className={`ingest-phase ingest-phase-${ingestStatus.state}`}>
-                    ingest · {ingestStatus.state}
-                  </span>
-                  <div className="ingest-phase-grid">
-                    {Object.entries(ingestStatus.phases).map(([phase, state]) => (
-                      <span className={`ingest-phase ingest-phase-${state}`} key={phase}>
-                        {phase} · {state}
-                      </span>
-                    ))}
-                  </div>
+      <div className="library-asset-details">
+        <button
+          type="button"
+          className="library-asset-details-toggle"
+          aria-expanded={detailsOpen}
+          aria-controls={detailsId}
+          onClick={() => setDetailsOpen((open) => !open)}
+        >
+          {detailsOpen ? 'Hide details' : 'Details'}
+        </button>
+        {detailsOpen && (
+          <div className="library-asset-details-body" id={detailsId}>
+            <p>{asset.artifactId}</p>
+            {fullTimestamp && <p>{fullTimestamp}</p>}
+            {asset.errorMessage && <p>{asset.errorMessage}</p>}
+            {asset.prompt && <p>{asset.prompt}</p>}
+            {ingestStatus && (
+              <div className="library-asset-ingest">
+                <span className={`ingest-phase ingest-phase-${ingestStatus.state}`}>
+                  ingest · {ingestStatus.state}
+                </span>
+                <div className="ingest-phase-grid">
+                  {Object.entries(ingestStatus.phases).map(([phase, state]) => (
+                    <span className={`ingest-phase ingest-phase-${state}`} key={phase}>
+                      {phase} · {state}
+                    </span>
+                  ))}
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </article>
   )
 }

@@ -8,9 +8,9 @@ export type NotebookLaneCell = {
   slot: { row: number; column: number }
 }
 
-export type NotebookLaneRowKind = 'empty' | 'homogeneous' | 'mixed' | 'starter'
+type NotebookLaneRowKind = 'empty' | 'homogeneous' | 'mixed' | 'starter'
 
-export type NotebookLaneRowSummary = {
+type NotebookLaneRowSummary = {
   caption: string
   continuation: boolean
   families: readonly NotebookLaneFamily[]
@@ -44,7 +44,7 @@ export const NOTEBOOK_LANE_FAMILY_LABELS: Record<NotebookLaneFamily, string> = {
   work: 'Work',
 }
 
-export const NOTEBOOK_STARTER_LANE_FAMILIES = [
+const NOTEBOOK_STARTER_LANE_FAMILIES = [
   'image',
   'gen',
   'video',
@@ -59,7 +59,7 @@ export function notebookLaneFamilyLabel(family: NotebookLaneFamily): string {
   return NOTEBOOK_LANE_FAMILY_LABELS[family]
 }
 
-export function notebookLaneCaption(
+function notebookLaneCaption(
   families: readonly NotebookLaneFamily[],
 ): string {
   return families.map(notebookLaneFamilyLabel).join(' · ')

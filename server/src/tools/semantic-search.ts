@@ -324,6 +324,15 @@ export function semanticSearchDefs(
             : manifest.value.files.find((file) =>
                 /^original\.(?:jpe?g|png|webp|gif|svg)$/i.test(file.name));
         if (!source) return failure("No source file is available for retry");
+        const activeTask = await engine.jobs.pending.read(artifact.value.artifactId);
+        if (!activeTask.ok) return failure(activeTask.error.message);
+        const work = engine.jobs.artifactWork.read(artifact.value.artifactId);
+        if (!work.ok) return failure(work.error.message);
+        if (activeTask.value || work.value?.status === "pending" || work.value?.status === "working") {
+          return failure("This asset already has work in progress");
+        }
+        const cleared = await engine.jobs.failures.clear(artifact.value.artifactId);
+        if (!cleared.ok) return failure(cleared.error.message);
         const jobId = `retry-ingest-${artifact.value.artifactId}-${Date.now()}`;
         const common = {
           assetId: artifact.value.artifactId,

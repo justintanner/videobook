@@ -8,6 +8,7 @@ import {
 } from "../asset-tags.js";
 import { tagSelectorSchema } from "./asset-tags.js";
 import {
+  LIBRARY_BROWSE_STATUSES,
   isLibraryBrowseStatus,
   pageLibraryAssets,
   type LibraryBrowseStatus,
@@ -24,9 +25,9 @@ export function listAssetsDef(engine: Engine): ToolDef {
       limit: z.number().int().positive().max(500).optional(),
       offset: z.number().int().nonnegative().optional(),
       include_referenced: z.boolean().optional(),
-      browse_status: z.enum(["ready", "processing", "error", "all"]).optional()
+      browse_status: z.enum(LIBRARY_BROWSE_STATUSES).optional()
         .describe(
-          "Filter Library browse by artifact status before paging. Omit to keep the unfiltered page, including notebooks.",
+          "Filter Library media by artifact status before paging. Omit to keep the unfiltered page, including notebooks and other non-media artifacts.",
         ),
       tags_all: z.array(tagSelectorSchema).optional()
         .describe("Only assets carrying every one of these tags"),

@@ -8,7 +8,7 @@ import {
 import { queue } from "../queue.js";
 import { searchReferenceStore } from "../search-reference-store.js";
 import type { AssetTagFilter } from "../asset-tags.js";
-import { isLibraryBrowseStatus } from "../library-browse.js";
+import { isLibraryBrowseStatus, LIBRARY_BROWSE_STATUSES } from "../library-browse.js";
 import { tagSelectorSchema } from "./asset-tags.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
@@ -160,7 +160,7 @@ export function mediaLibraryDefs(books: BookManager): ToolDef[] {
           .describe("Only assets carrying every one of these tags"),
         tags_any: z.array(tagSelectorSchema).optional()
           .describe("Only assets carrying at least one of these tags"),
-        browse_status: z.enum(["ready", "processing", "error", "all"]).optional()
+        browse_status: z.enum(LIBRARY_BROWSE_STATUSES).optional()
           .describe(
             "Browse ready, processing, error, or all media when there is no text or reverse-search query. Semantic and reverse search stay ready-only.",
           ),

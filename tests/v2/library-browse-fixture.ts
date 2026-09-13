@@ -1,11 +1,11 @@
 import type { Engine } from "videobook-engine";
 
 const MINIMAL_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchIwAAAABJRU5ErkJggg==",
+  "iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAIAAAC0SDtlAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFUlEQVQYlWMomiNNEmIY1TBnMIQSACBhpxH2SYbTAAAAAElFTkSuQmCC",
   "base64",
 );
 
-export type MixedStatusCatalog = {
+type MixedStatusCatalog = {
   ready: string[];
   error: string[];
   processing: string[];
@@ -75,10 +75,6 @@ export async function seedMixedStatusCatalog(
   }
 
   return { ready, error, processing };
-}
-
-export function uniqueIds(ids: readonly string[]): string[] {
-  return [...new Set(ids)];
 }
 
 export async function seedRetryableFailedImage(

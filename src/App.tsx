@@ -35,7 +35,6 @@ import {
   BookOpen,
   Braces,
   Check,
-  ChevronDown,
   CircleDot,
   Ellipsis,
   Film,
@@ -79,22 +78,18 @@ import {
   type ForgetAssetReference,
 } from './videobook/forget-asset'
 import {
-  LIBRARY_BROWSE_STATUSES,
   LIBRARY_SCOPE_STORAGE_KEY,
-  libraryBrowseStatusFromValue,
-  libraryGridAssets,
-  libraryGridHeading,
   libraryScopeFromValue,
-  nextLibraryBrowseOffset,
   type LibraryBrowseStatus,
   type LibraryScope,
 } from './videobook/library-scope'
 import {
-  libraryCardLayout,
-  libraryEmptyCopy,
-  libraryLoadingCopy,
-  libraryStatusLabel,
-} from './videobook/library-presentation'
+  useLibraryBrowse,
+  type LibraryBrowsePage as LibrarySearchPage,
+  type LibraryBrowseRequest,
+  type LibraryBrowseResult,
+  type LibraryStatusCounts,
+} from './videobook/useLibraryBrowse'
 import {
   sameTagFilter,
   tagFilterArgs,
@@ -103,7 +98,7 @@ import {
   type TagSuggestion,
 } from './videobook/asset-tag-editing'
 import { AssetTagSummary } from '@/components/videobook/AssetTagSummary'
-import { LibraryAssetCard } from '@/components/videobook/LibraryAssetCard'
+import { LibraryScreen } from '@/components/videobook/LibraryScreen'
 import { SCHEMA_VERSION } from 'videobook-engine/catalog-metadata'
 import enginePackage from 'videobook-engine/package.json'
 import {
@@ -588,41 +583,13 @@ type MediaSlotState = {
 }
 
 type LibraryAssetRecord = AssetRecord & {
+  errorMessage: string | null
   owningBookId: string
   owningBookName: string
 }
 
-type LibrarySearchPage = {
-  offset: number
-  limit: number
-  total: number
-  hasMore: boolean
-}
-
-type LibraryStatusCounts = {
-  ready: number
-  processing: number
-  error: number
-}
-
-type LibrarySearchResult = {
+type LibrarySearchResult = LibraryBrowseResult<LibraryAssetRecord> & {
   unindexedVisualAssets: number
-  assets: LibraryAssetRecord[]
-  page: LibrarySearchPage
-  statusCounts: LibraryStatusCounts
-  booksWithErrors: Array<{ bookId: string; message: string }>
-}
-
-/** Media rows for the current Library browse key (scope + book + status). */
-type LibraryBrowseState = {
-  key: string
-  assets: LibraryAssetRecord[]
-  page: LibrarySearchPage
-  statusCounts: LibraryStatusCounts
-  booksWithErrors: Array<{ bookId: string; message: string }>
-  loading: boolean
-  loadingMore: boolean
-  error: string | null
 }
 
 type MediaLibraryPickerState = {
@@ -1526,6 +1493,7 @@ function asLibrarySearchResult(
     : []
   return {
     unindexedVisualAssets: Math.max(0, asNumber(container?.unindexed_visual_assets) ?? 0),
+    receivedCount: source.length,
     assets: source.flatMap((entry) => {
       const item = recordValue(entry)
       const asset = asAsset(item)
@@ -1534,8 +1502,11 @@ function asLibrarySearchResult(
         ?? fallbackBook?.owningBookId
       const owningBookName = (item && asString(item.owning_book_name))
         ?? fallbackBook?.owningBookName
+      const work = recordValue(item?.assetWork)
+      const workMeta = recordValue(work?.meta)
+      const errorMessage = asString(recordValue(workMeta?.error)?.message)
       return owningBookId && owningBookName
-        ? [{ ...asset, owningBookId, owningBookName }]
+        ? [{ ...asset, owningBookId, owningBookName, errorMessage }]
         : []
     }),
     page: {
@@ -1952,28 +1923,6 @@ const emptyLibraryPage: LibrarySearchPage = {
   limit: 24,
   total: 0,
   hasMore: false,
-}
-
-const emptyStatusCounts: LibraryStatusCounts = {
-  ready: 0,
-  processing: 0,
-  error: 0,
-}
-
-/** One request covers a mid-sized library; bigger ones page with Load more. */
-const libraryBrowsePageSize = 100
-
-const bookBrowsePageSize = 200
-
-const emptyLibraryBrowse: LibraryBrowseState = {
-  key: '',
-  assets: [],
-  page: { ...emptyLibraryPage, limit: libraryBrowsePageSize },
-  statusCounts: emptyStatusCounts,
-  booksWithErrors: [],
-  loading: false,
-  loadingMore: false,
-  error: null,
 }
 
 function passiveMediaKind(kind: NotebookCellType): PassiveMediaKind | null {
@@ -3337,8 +3286,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [libraryScope, setLibraryScope] = useState<LibraryScope>(
     () => libraryScopeFromValue(savedValue(LIBRARY_SCOPE_STORAGE_KEY)))
   const [libraryBrowseStatus, setLibraryBrowseStatus] = useState<LibraryBrowseStatus>(
-    () => libraryBrowseStatusFromValue(null))
-  const [libraryBrowse, setLibraryBrowse] = useState<LibraryBrowseState>(emptyLibraryBrowse)
+    'ready')
   const [ingestStatuses, setIngestStatuses] = useState<IngestStatus[]>(
     () => initialWorkspace?.ingestStatuses ?? [],
   )
@@ -3473,10 +3421,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const activeWatchesRef = useRef(new Map<string, string>())
   const activeMcpCallsRef = useRef(new Map<number, { tool: string; startedAt: number }>())
   const mcpActivitySequenceRef = useRef(0)
-  const libraryBrowseRequestRef = useRef(0)
-  // One automatic library-wide listing per scope entry; explicit refreshes
-  // (imports, deletions, the header refresh) clear it to fetch again.
-  const libraryBrowseLoadedRef = useRef(false)
   const mcpActivityTimerRef = useRef(0)
   const selectedCellIdsRef = useRef<ReadonlySet<string>>(new Set())
   const watchScopeRef = useRef<{
@@ -3535,32 +3479,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => assets.filter((asset) => asset.type !== 'notebook'),
     [assets],
   )
-  // The Library grid follows the Scope control: this book, or a page of every
-  // book with the active book's in-flight imports kept in view.
-  const libraryGridRows = useMemo(
-    () => libraryGridAssets<AssetRecord>({
-      scope: libraryScope,
-      status: libraryBrowseStatus,
-      activeBook: {
-        owningBookId: bookId,
-        owningBookName: activeBook?.name ?? 'this book',
-      },
-      bookAssets: sourceAssets,
-      browsedBookAssets: libraryScope === 'book' ? libraryBrowse.assets : [],
-      libraryAssets: libraryBrowse.assets,
-    }),
-    [
-      activeBook,
-      bookId,
-      libraryBrowse.assets,
-      libraryBrowseStatus,
-      libraryScope,
-      sourceAssets,
-    ],
-  )
-  const libraryGridTotal = libraryBrowse.page.total
-  const libraryGridHasMore = libraryBrowse.page.hasMore
-  const libraryBrowseLoading = libraryBrowse.loading
   const commandMentionAssets = useMemo(
     () => notebookMentionAssets(notebook?.cells ?? [], assets),
     [assets, notebook],
@@ -5486,121 +5404,39 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     resumeMediaProcessingWatches(targetBookId, nextNotebook, nextAssets)
   }, [applyNotebook, call, resumeMediaProcessingWatches])
 
-  const libraryBrowseKey = `${libraryScope}:${bookId}:${libraryBrowseStatus}`
+  const loadLibraryPage = useCallback(async (request: LibraryBrowseRequest) => {
+    const { scope, status, owningBookId, offset, limit } = request
+    const result = await call(scope === 'library' ? 'search_library_assets' : 'list_assets', {
+      ...(scope === 'library'
+        ? { kinds: ['audio', 'image', 'video'] }
+        : { book_id: owningBookId, sort: 'newest', include_referenced: false }),
+      browse_status: status,
+      limit,
+      offset,
+    }, { background: true })
+    return asLibrarySearchResult(result, request)
+  }, [call])
 
-  // Isolated by scope, book, and status so a stale page cannot land on another
-  // view. Offset counts server rows only; live overlays never shift it.
-  const loadLibraryBrowse = useCallback(async (offset: number) => {
-    const targetBookId = bookId
-    const scope = libraryScope
-    const status = libraryBrowseStatus
-    const key = `${scope}:${targetBookId}:${status}`
-    if (!targetBookId) return
-    const requestId = libraryBrowseRequestRef.current + 1
-    libraryBrowseRequestRef.current = requestId
-    libraryBrowseLoadedRef.current = true
-    const append = offset > 0
-    const owningBook = {
-      owningBookId: targetBookId,
-      owningBookName: books.find((book) => book.bookId === targetBookId)?.name
-        ?? 'this book',
-    }
-    setLibraryBrowse((current) => ({
-      key,
-      assets: append && current.key === key ? current.assets : [],
-      page: append && current.key === key ? current.page : {
-        ...emptyLibraryBrowse.page,
-        limit: scope === 'library' ? libraryBrowsePageSize : bookBrowsePageSize,
-      },
-      statusCounts: append && current.key === key
-        ? current.statusCounts
-        : emptyStatusCounts,
-      booksWithErrors: append && current.key === key ? current.booksWithErrors : [],
-      loading: !append,
-      loadingMore: append,
-      error: null,
-    }))
-    try {
-      const result = scope === 'library'
-        ? asLibrarySearchResult(await call('search_library_assets', {
-          kinds: ['audio', 'image', 'video'],
-          browse_status: status,
-          limit: libraryBrowsePageSize,
-          offset,
-        }))
-        : asLibrarySearchResult(await call('list_assets', {
-          book_id: targetBookId,
-          sort: 'newest',
-          browse_status: status,
-          limit: bookBrowsePageSize,
-          offset,
-          include_referenced: false,
-        }), owningBook)
-      if (libraryBrowseRequestRef.current !== requestId) return
-      setLibraryBrowse((current) => {
-        const combined = append && current.key === key
-          ? [...current.assets, ...result.assets]
-          : result.assets
-        const unique = new Map(combined.map((asset) => [
-          `${asset.owningBookId}:${asset.artifactId}`,
-          asset,
-        ]))
-        return {
-          key,
-          assets: [...unique.values()],
-          page: result.page,
-          statusCounts: result.statusCounts,
-          booksWithErrors: result.booksWithErrors,
-          loading: false,
-          loadingMore: false,
-          error: null,
-        }
-      })
-    } catch (error) {
-      if (libraryBrowseRequestRef.current !== requestId) return
-      const message = error instanceof Error ? error.message : String(error)
-      setLibraryBrowse((current) => current.key === key
-        ? {
-            ...current,
-            loading: false,
-            loadingMore: false,
-            error: message,
-          }
-        : current)
-      setNotice(message, 'error')
-    }
-  }, [bookId, books, call, libraryBrowseStatus, libraryScope, setNotice])
-
-  const refreshLibraryBrowse = useCallback(() => {
-    libraryBrowseLoadedRef.current = false
-    if (screenRef.current !== 'library') return
-    if (mcp.state !== 'ready') return
-    void loadLibraryBrowse(0)
-  }, [loadLibraryBrowse, mcp.state])
+  const {
+    browse: libraryBrowse,
+    refresh: refreshLibraryBrowse,
+    loadMore: loadMoreLibraryBrowse,
+  } = useLibraryBrowse({
+    active: screen === 'library',
+    ready: mcp.state === 'ready',
+    connectionError: mcp.error?.message ?? null,
+    bookId,
+    bookName: activeBook?.name ?? 'this book',
+    scope: libraryScope,
+    status: libraryBrowseStatus,
+    revision: sourceAssets,
+    loadPage: loadLibraryPage,
+  })
 
   const changeLibraryScope = useCallback((next: LibraryScope) => {
     setLibraryScope(next)
     saveValue(LIBRARY_SCOPE_STORAGE_KEY, next)
   }, [])
-
-  const changeLibraryBrowseStatus = useCallback((next: LibraryBrowseStatus) => {
-    setLibraryBrowseStatus(next)
-  }, [])
-
-  useEffect(() => {
-    if (screen !== 'library' || mcp.state !== 'ready' || !bookId) return
-    if (libraryBrowseLoadedRef.current && libraryBrowse.key === libraryBrowseKey) {
-      return
-    }
-    void loadLibraryBrowse(0)
-  }, [
-    bookId,
-    libraryBrowse.key,
-    libraryBrowseKey,
-    loadLibraryBrowse,
-    mcp.state,
-    screen,
-  ])
 
   /** Book badge on a library-scope tile: open that book and narrow the grid. */
   const openLibraryBook = useCallback(async (nextBookId: string) => {
@@ -6066,7 +5902,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const showScreen = useCallback((next: Screen) => {
     if (next !== 'library') {
       setLibraryBrowseStatus('ready')
-      libraryBrowseLoadedRef.current = false
     }
     setScreen(next)
     const path = pathForScreen(next)
@@ -6084,7 +5919,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const next = screenFromPath(window.location.pathname)
       if (next !== 'library') {
         setLibraryBrowseStatus('ready')
-        libraryBrowseLoadedRef.current = false
       }
       setScreen(next)
     }
@@ -12439,22 +12273,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           )}
 
           {screen === 'library' && (
-            <section
-              className="workspace-screen library-drop-zone"
-              onDragOver={(event) => {
-                if (event.dataTransfer.types.includes('Files')) event.preventDefault()
-              }}
-              onDrop={(event) => {
-                if (!event.dataTransfer.files.length) return
-                event.preventDefault()
-                void uploadFiles([...event.dataTransfer.files])
-              }}
-              onPaste={(event) => {
-                const files = [...event.clipboardData.files]
-                if (files.length === 0) return
-                event.preventDefault()
-                void uploadFiles(files)
-              }}
+            <LibraryScreen
+              bookId={bookId}
+              bookCount={books.length}
+              scope={libraryScope}
+              status={libraryBrowseStatus}
+              browse={libraryBrowse}
+              busy={busy}
+              ready={mcp.state === 'ready'}
+              notice={notice}
+              processingArtifactId={processingArtifactId}
+              ingestStatuses={ingestStatusById}
+              onStatusChange={setLibraryBrowseStatus}
+              onImport={(files) => void uploadFiles(files)}
+              onRefresh={refreshLibraryBrowse}
+              onLoadMore={loadMoreLibraryBrowse}
+              onOpenBook={(nextBookId) => void openLibraryBook(nextBookId)}
+              onSearchSimilar={(asset) => momentSearchRef.current?.searchSimilar(asset)}
+              onForget={(asset) => void forgetAsset(asset)}
+              onRetry={(artifactId) => void retryIngest(artifactId)}
             >
               <MomentSearch
                 ref={momentSearchRef}
@@ -12503,147 +12340,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   </>
                 }
               />
-              <div className="library-heading-row">
-                <div className="library-heading-copy">
-                  <span className="section-label">Media</span>
-                  <h2>
-                    {libraryGridHeading({
-                      scope: libraryScope,
-                      shown: libraryGridRows.length,
-                      total: libraryGridTotal,
-                      bookCount: books.length,
-                      more: libraryGridHasMore,
-                      status: libraryBrowseStatus,
-                      booksFailed: libraryBrowse.booksWithErrors.length,
-                    })}
-                  </h2>
-                  <span className="library-drop-hint">Drop or paste files anywhere to import</span>
-                </div>
-                <div className="library-status-control" role="group" aria-label="Browse status">
-                  {LIBRARY_BROWSE_STATUSES.map((status) => {
-                    const count = status === 'all'
-                      ? libraryBrowse.statusCounts.ready
-                        + libraryBrowse.statusCounts.processing
-                        + libraryBrowse.statusCounts.error
-                      : libraryBrowse.statusCounts[status]
-                    return (
-                      <button
-                        type="button"
-                        key={status}
-                        aria-pressed={libraryBrowseStatus === status}
-                        onClick={() => changeLibraryBrowseStatus(status)}
-                      >
-                        {libraryStatusLabel(status)}
-                        {count > 0 ? ` ${count}` : ''}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-              {!showCommandComposer && notice && (
-                <p
-                  className={notice.tone === 'error'
-                    ? 'library-scope-error'
-                    : 'library-scope-notice'}
-                  role={notice.tone === 'error' ? 'alert' : 'status'}
-                >
-                  {notice.text}
-                </p>
-              )}
-              {libraryBrowse.error && (
-                <p className="library-scope-error">{libraryBrowse.error}</p>
-              )}
-              {libraryScope === 'library' && libraryBrowse.booksWithErrors.length > 0 && (
-                <p className="library-scope-error">
-                  {libraryBrowse.booksWithErrors.length} book
-                  {libraryBrowse.booksWithErrors.length === 1 ? '' : 's'} could not be listed.
-                </p>
-              )}
-              {libraryBrowseLoading && libraryGridRows.length === 0 ? (
-                <div className="library-loading" role="status">
-                  <BusyIndicator size={24} />
-                  <strong>{libraryLoadingCopy(libraryBrowseStatus, libraryScope, false)}</strong>
-                </div>
-              ) : libraryGridRows.length === 0 ? (
-                <div className="library-empty">
-                  <Library size={25} />
-                  <strong>{libraryEmptyCopy(libraryBrowseStatus).title}</strong>
-                  <p>{libraryEmptyCopy(libraryBrowseStatus).body}</p>
-                  {libraryBrowseStatus === 'ready' && (
-                    <div className="library-empty-actions">
-                      <button
-                        type="button"
-                        onClick={() => changeLibraryBrowseStatus('processing')}
-                      >
-                        View processing
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => changeLibraryBrowseStatus('error')}
-                      >
-                        View errors
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className={libraryCardLayout(libraryBrowseStatus) === 'row'
-                  ? 'library-status-list'
-                  : 'record-grid'}
-                >
-                  {libraryGridRows.map((asset) => {
-                    const ownedHere = asset.owningBookId === bookId
-                    const ingestStatus = ownedHere
-                      ? ingestStatusById.get(asset.artifactId)
-                      : undefined
-                    const showRetry = ownedHere
-                      && (libraryBrowseStatus === 'error' || libraryBrowseStatus === 'all')
-                      && (asset.status === 'error'
-                        || ingestStatus?.state === 'failed'
-                        || processingArtifactId === asset.artifactId)
-                    return (
-                      <LibraryAssetCard
-                        key={`${asset.owningBookId}:${asset.artifactId}`}
-                        asset={asset}
-                        layout={libraryCardLayout(libraryBrowseStatus)}
-                        ownedHere={ownedHere}
-                        showBook={libraryScope === 'library'}
-                        showRetry={showRetry}
-                        retryBusy={processingArtifactId === asset.artifactId}
-                        ingestStatus={ingestStatus}
-                        busy={busy}
-                        onOpenBook={(nextBookId) => void openLibraryBook(nextBookId)}
-                        onSearchSimilar={() => momentSearchRef.current?.searchSimilar(asset)}
-                        onForget={() => void forgetAsset(asset)}
-                        onRetry={() => void retryIngest(asset.artifactId)}
-                      />
-                    )
-                  })}
-                </div>
-              )}
-              {libraryBrowse.loadingMore && (
-                <div className="library-loading" role="status">
-                  <BusyIndicator size={24} />
-                  <strong>{libraryLoadingCopy(libraryBrowseStatus, libraryScope, true)}</strong>
-                </div>
-              )}
-              {libraryGridHasMore && (
-                <div className="library-scope-footer">
-                  <button
-                    type="button"
-                    disabled={busy || libraryBrowse.loadingMore || libraryBrowseLoading}
-                    onClick={() => {
-                      void loadLibraryBrowse(nextLibraryBrowseOffset(libraryBrowse.assets.length))
-                    }}
-                  >
-                    {libraryBrowse.loadingMore
-                      ? <BusyIndicator size={14} />
-                      : <ChevronDown size={14} />}
-                    Load more
-                  </button>
-                </div>
-              )}
-            </section>
+            </LibraryScreen>
           )}
 
           {screen === 'jobs' && (

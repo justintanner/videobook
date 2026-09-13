@@ -17,8 +17,10 @@ describe('libraryAssetTitle', () => {
 
   it('does not use a truncated UUID as the title', () => {
     const id = '0193abcd-1234-7000-8000-000000000001'
-    expect(libraryAssetTitle({ id, label: id, type: 'video' })).toBe('Video · 0193abcd')
-    expect(libraryAssetTitle({ id, label: '', type: 'video' })).toBe('Video · 0193abcd')
+    expect(libraryAssetTitle({ id, label: id, type: 'video' })).toBe('Video · 00000001')
+    expect(libraryAssetTitle({ id, label: '', type: 'video' })).toBe('Video · 00000001')
+    expect(libraryAssetTitle({ id: id.slice(0, -1) + '2', label: '', type: 'video' }))
+      .toBe('Video · 00000002')
     expect(libraryAssetTitle({ id, label: id, type: 'video' })).not.toBe(id)
     expect(libraryAssetTitle({ id, label: id, type: 'video' })).not.toBe(id.slice(0, 12))
   })

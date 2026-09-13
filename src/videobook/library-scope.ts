@@ -22,119 +22,9 @@ export function libraryScopeFromValue(value: string | null | undefined): Library
   return value === 'book' ? 'book' : 'library'
 }
 
-export function libraryBrowseStatusFromValue(
-  value: string | null | undefined,
-): LibraryBrowseStatus {
-  return value === 'processing' || value === 'error' || value === 'all'
-    ? value
-    : 'ready'
-}
-
 export type OwningBook = {
   owningBookId: string
   owningBookName: string
-}
-
-type ScopedAsset = {
-  artifactId: string
-  status: string
-  createdAt: string
-}
-
-function assetsOwnedBy<Asset extends ScopedAsset>(
-  assets: readonly Asset[],
-  book: OwningBook,
-): Array<Asset & OwningBook> {
-  return assets.map((asset) => ({ ...asset, ...book }))
-}
-
-function newestFirst(left: ScopedAsset, right: ScopedAsset): number {
-  const created = Date.parse(right.createdAt) - Date.parse(left.createdAt)
-  if (created !== 0 && Number.isFinite(created)) return created
-  return left.artifactId < right.artifactId ? 1 : -1
-}
-
-export function matchesLibraryBrowseStatus(
-  status: string,
-  browseStatus: LibraryBrowseStatus,
-): boolean {
-  if (browseStatus === 'all') return true
-  if (browseStatus === 'ready') return status === 'ready'
-  if (browseStatus === 'error') return status === 'error'
-  return status !== 'ready' && status !== 'error'
-}
-
-/**
- * Book scope reads two lists: the live one the rest of the app shares (newest
- * page, plus whatever the notebook references) and the older pages the grid
- * asked for on its own. The live row wins on overlap — it carries the current
- * status — and the result is one newest-first list.
- */
-export function mergeBookGridAssets<Asset extends ScopedAsset>(
-  live: readonly Asset[],
-  browsed: readonly Asset[],
-): Asset[] {
-  const rows = new Map(
-    [...browsed, ...live].map((asset) => [asset.artifactId, asset]),
-  )
-  return [...rows.values()].sort(newestFirst)
-}
-
-/**
- * Overlay the active book's live rows onto a status-filtered browse page.
- * Matching live rows replace or join the page; rows that no longer match the
- * selected status drop out. Switching views never mutates stored artifacts.
- */
-export function overlayLiveLibraryAssets<Asset extends ScopedAsset>(input: {
-  rows: ReadonlyArray<Asset & OwningBook>
-  live: readonly Asset[]
-  status: LibraryBrowseStatus
-  activeBook: OwningBook
-}): Array<Asset & OwningBook> {
-  const rows = new Map(
-    input.rows.map((asset) => [
-      `${asset.owningBookId}:${asset.artifactId}`,
-      asset,
-    ]),
-  )
-  for (const asset of input.live) {
-    const key = `${input.activeBook.owningBookId}:${asset.artifactId}`
-    if (matchesLibraryBrowseStatus(asset.status, input.status)) {
-      rows.set(key, { ...asset, ...input.activeBook })
-    } else {
-      rows.delete(key)
-    }
-  }
-  return [...rows.values()].sort(newestFirst)
-}
-
-/**
- * Rows for the Library grid.
- *
- * Browse pages are already status-filtered on the server. Live notebook
- * assets overlay only when they still match the selected status, so Ready
- * never prepends in-flight or failed imports.
- */
-export function libraryGridAssets<Asset extends ScopedAsset>(input: {
-  scope: LibraryScope
-  status: LibraryBrowseStatus
-  activeBook: OwningBook
-  bookAssets: readonly Asset[]
-  browsedBookAssets: readonly Asset[]
-  libraryAssets: ReadonlyArray<Asset & OwningBook>
-}): Array<Asset & OwningBook> {
-  const browsed = input.scope === 'book'
-    ? assetsOwnedBy(
-      mergeBookGridAssets([], input.browsedBookAssets),
-      input.activeBook,
-    )
-    : [...input.libraryAssets]
-  return overlayLiveLibraryAssets({
-    rows: browsed,
-    live: input.bookAssets,
-    status: input.status,
-    activeBook: input.activeBook,
-  })
 }
 
 /**
@@ -184,13 +74,4 @@ function libraryStatusHeadingNoun(
 
 function bookCountLabel(bookCount: number): string {
   return `${bookCount} book${bookCount === 1 ? '' : 's'}`
-}
-
-/**
- * Next Library browse offset is the unique loaded server-row count.
- * Do not add the latest page.offset on top of the accumulated length —
- * after two pages of 100 that would request 300 and skip 200–299.
- */
-export function nextLibraryBrowseOffset(loadedCount: number): number {
-  return Math.max(0, loadedCount)
 }

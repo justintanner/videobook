@@ -11,8 +11,8 @@ export function libraryAssetKindLabel(type: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1)
 }
 
-export function libraryAssetShortId(id: string): string {
-  return id.replace(/-/g, '').slice(0, 8)
+function libraryAssetShortId(id: string): string {
+  return id.replace(/-/g, '').slice(-8)
 }
 
 export function libraryAssetTitle(asset: {
@@ -50,7 +50,7 @@ export function formatLibraryAssetDateTime(
   }).format(date)
 }
 
-export function libraryStatusNoun(
+function libraryStatusNoun(
   status: LibraryBrowseStatus,
   count: number,
 ): string {
@@ -69,7 +69,7 @@ export function libraryEmptyCopy(status: LibraryBrowseStatus): {
   if (status === 'ready') {
     return {
       title: 'No ready media',
-      body: 'Import files or generate from the notebook. Processing and errors stay behind the Status control.',
+      body: 'Import files or generate from the notebook. Check the other statuses for unfinished imports.',
     }
   }
   if (status === 'processing') {

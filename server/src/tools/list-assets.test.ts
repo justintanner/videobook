@@ -6,7 +6,6 @@ import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/client";
 import { isUuidV7 } from "videobook-engine";
 import { seedMixedStatusCatalog } from "../../../tests/v2/library-browse-fixture.js";
-import { nextLibraryBrowseOffset } from "../../../src/videobook/library-scope.js";
 
 const MINIMAL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
@@ -366,6 +365,8 @@ describe("list_assets tool", () => {
       });
       const listedNotebook = await engine.notebooks.create("Browse notes");
       if (!listedNotebook.ok) throw new Error(listedNotebook.error.message);
+      const prompt = await engine.artifacts.create({ kind: "prompt", label: "Notebook text" });
+      if (!prompt.ok) throw new Error(prompt.error.message);
 
       const handler = listAssetsDef(engine).handler;
       const parse = async (args: Record<string, unknown>) => {
@@ -398,6 +399,7 @@ describe("list_assets tool", () => {
       });
       expect(unfiltered.page.total).toBeGreaterThan(200);
       expect(unfiltered.assets.some((asset) => asset.type === "notebook")).toBe(true);
+      expect(unfilteredIds).toContain(prompt.value.artifactId);
       expect(unfilteredIds.filter((id) => catalog.ready.includes(id))).toEqual([]);
       expect(unfiltered.status_counts).toEqual({
         ready: catalog.ready.length,
@@ -458,6 +460,7 @@ describe("list_assets tool", () => {
         catalog.ready.length + catalog.error.length + catalog.processing.length,
       );
       expect(allMedia.assets.every((asset) => asset.type !== "notebook")).toBe(true);
+      expect(allMedia.assets.some((asset) => asset.artifact_id === prompt.value.artifactId)).toBe(false);
 
       const emptyPage = await parse({
         browse_status: "ready",
@@ -559,7 +562,7 @@ describe("list_assets tool", () => {
       const offsets: number[] = [];
       let hasMore = true;
       while (hasMore) {
-        const offset = nextLibraryBrowseOffset(loaded.length);
+        const offset = loaded.length;
         offsets.push(offset);
         const page = await parse(offset);
         loaded.push(...page.assets.map((asset) => asset.artifact_id));

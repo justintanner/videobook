@@ -16,7 +16,6 @@ import {
   setNotebookMediaSlot,
 } from '../../server/src/media-library.js'
 import { searchReferenceStore } from '../../server/src/search-reference-store.js'
-import { nextLibraryBrowseOffset } from '../../src/videobook/library-scope'
 import { seedMixedStatusCatalog } from './library-browse-fixture.js'
 
 const reverseSearchManifest: IndexManifest = {
@@ -705,7 +704,7 @@ describe('media Library slots', () => {
     const offsets: number[] = []
     let hasMore = true
     while (hasMore) {
-      const offset = nextLibraryBrowseOffset(loaded.length)
+      const offset = loaded.length
       offsets.push(offset)
       const page = await searchLibraryAssets(books, {
         kinds: ['image'],

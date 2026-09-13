@@ -2836,7 +2836,7 @@ describe('chat composer browser flow', () => {
     expect(layout).toMatchObject({
       accessibleLabel: 'GEN VIDEO',
       chipLabels: ['10s', '9:16'],
-      headerHeight: 38,
+      headerHeight: 34,
       labelClipped: false,
       renderedLabel: 'GEN VID',
       whiteSpace: 'nowrap',

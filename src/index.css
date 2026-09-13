@@ -528,14 +528,22 @@ textarea:focus-visible {
   color: var(--muted);
 }
 
-.library-asset-card {
+.record-card.library-asset-card {
   position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.library-asset-menu-open {
+  z-index: 2;
+}
+
+.record-card.library-asset-card button {
+  margin-top: 0;
 }
 
 .library-asset-card-error {
@@ -568,6 +576,10 @@ textarea:focus-visible {
   height: 40px;
 }
 
+.library-asset-preview video {
+  object-fit: contain;
+}
+
 .library-asset-fallback {
   display: grid;
   place-items: center;
@@ -575,7 +587,9 @@ textarea:focus-visible {
   color: #7eaa91;
 }
 
-.library-asset-play {
+.library-asset-card .library-asset-play {
+  display: inline-flex;
+  align-items: center;
   position: absolute;
   right: 8px;
   bottom: 8px;
@@ -585,9 +599,19 @@ textarea:focus-visible {
   color: #bce6cf;
   background: rgba(1, 8, 4, 0.86);
   font-size: 11px;
+  text-decoration: none;
 }
 
-.library-asset-status {
+.library-preview-error {
+  position: absolute;
+  bottom: 8px;
+  padding: 4px 8px;
+  color: #bce6cf;
+  background: #031009;
+  font-size: 11px;
+}
+
+.library-asset-card .library-asset-status {
   position: absolute;
   top: 8px;
   left: 8px;
@@ -606,13 +630,13 @@ textarea:focus-visible {
   margin: 8px 10px 0;
 }
 
-.library-asset-status-error {
+.library-asset-card .library-asset-status-error {
   color: var(--danger);
 }
 
 .library-asset-body {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   padding: 10px;
   min-width: 0;
@@ -643,7 +667,7 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.library-asset-book {
+.library-asset-card .library-asset-book {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -680,11 +704,12 @@ textarea:focus-visible {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
 }
 
-.library-asset-similar,
-.library-asset-overflow-trigger {
+.library-asset-card .library-asset-similar,
+.library-asset-card .library-asset-overflow-trigger {
   flex: 0 0 auto;
   width: 28px;
   min-height: 28px;
@@ -694,7 +719,7 @@ textarea:focus-visible {
   background: rgba(36, 112, 73, 0.14);
 }
 
-.library-asset-retry {
+.library-asset-card .library-asset-retry {
   flex: 0 0 auto;
   min-height: 28px;
   padding: 0 8px;
@@ -710,7 +735,7 @@ textarea:focus-visible {
 
 .library-asset-menu {
   position: absolute;
-  top: 100%;
+  bottom: calc(100% + 4px);
   right: 0;
   z-index: 3;
   min-width: 132px;
@@ -719,7 +744,7 @@ textarea:focus-visible {
   background: #04150c;
 }
 
-.library-asset-forget {
+.library-asset-card .library-asset-forget {
   display: flex;
   width: 100%;
   align-items: center;
@@ -738,7 +763,7 @@ textarea:focus-visible {
   padding: 0 10px 10px;
 }
 
-.library-asset-details-toggle {
+.library-asset-card .library-asset-details-toggle {
   justify-self: start;
   min-height: 24px;
   padding: 0 6px;
@@ -794,6 +819,35 @@ textarea:focus-visible {
   margin-left: auto;
   border: 1px solid var(--line);
   background: #031009;
+}
+
+.library-status-label {
+  padding: 0 10px;
+  color: #a0c9b1;
+  font-size: 11px;
+}
+
+.library-load-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 16px;
+  color: var(--danger-fg-hover);
+  overflow-wrap: anywhere;
+}
+
+.library-drop-zone :is(button, a):focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .record-card.library-asset-card :is(button, a),
+  .library-drop-zone .library-status-control button {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 .library-status-control button {
@@ -5908,7 +5962,7 @@ textarea:focus-visible {
 
 .library-drop-zone .record-grid,
 .library-status-list {
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr));
   gap: 16px;
   margin-top: 20px;
 }

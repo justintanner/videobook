@@ -13,7 +13,7 @@ export type LibraryStatusCounts = {
   error: number;
 };
 
-export type LibraryBrowsePage = {
+type LibraryBrowsePage = {
   offset: number;
   limit: number;
   total: number;
@@ -32,11 +32,14 @@ export function isLibraryBrowseStatus(
     || value === "all";
 }
 
-export function isLibraryBrowseRow(asset: { type: string }): boolean {
-  return asset.type !== "notebook";
+function isLibraryBrowseRow(asset: { type: string }): boolean {
+  return asset.type === "image"
+    || asset.type === "video"
+    || asset.type === "audio"
+    || asset.type === "final";
 }
 
-export function isProcessingStatus(status: string): boolean {
+function isProcessingStatus(status: string): boolean {
   return status !== READY_STATUS && status !== ERROR_STATUS;
 }
 

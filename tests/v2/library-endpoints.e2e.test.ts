@@ -201,6 +201,16 @@ describe('library browse status over HTTP MCP', () => {
       error: 70,
       processing: 60,
     })
+    const source = await thisManaged.value.engine.files.read(thisCatalog.ready[0]!, 'original.png')
+    if (!source.ok) throw new Error(source.error.message)
+    for (const id of [thisCatalog.error[0]!, thisCatalog.processing[0]!]) {
+      const written = await thisManaged.value.engine.files.write(id, 'original.png', source.value)
+      if (!written.ok) throw new Error(written.error.message)
+    }
+    const activeLease = thisManaged.value.engine.jobs.artifactWork.begin(thisCatalog.processing[0]!, {
+      kind: 'upload', ownerKind: 'job', durationMs: 60 * 60_000,
+    })
+    if (!activeLease) throw new Error('Could not restore processing fixture after writing its source')
     await books.close()
     server = await startServer(rootDir)
     client = new Client({ name: 'library-browse-e2e', version: '1' }, {
@@ -217,6 +227,41 @@ describe('library browse status over HTTP MCP', () => {
 
   const call = <T>(book: string, name: string, args: Record<string, unknown> = {}) =>
     callTool<T>(client, name, { book_id: book, ...args })
+
+  it('returns a failed import to Ready after retry and preserves its source across restart', async () => {
+    const id = thisCatalog.error[0]!
+    const sourceUrl = () => `${server!.url.replace('/mcp', '')}/files/${thisBook}/${id}/original.png`
+    const original = Buffer.from(await (await fetch(sourceUrl())).arrayBuffer())
+    const queued = await call<{ jobId: number }>(thisBook, 'retry_ingest', { artifact_id: id })
+    await expect.poll(async () => {
+      const jobs = await call<Array<{ id: number; state: string }>>(thisBook, 'list_jobs')
+      return jobs.find((job) => job.id === queued.jobId)?.state
+    }, { timeout: 30_000 }).toBe('done')
+    const readReady = () => call<{ assets: Array<{ artifact_id: string; status: string }> }>(thisBook,
+      'list_assets', { browse_status: 'ready', limit: 500 })
+    expect((await readReady()).assets.find((asset) => asset.artifact_id === id)?.status).toBe('ready')
+    await client.close()
+    await stopServer(server)
+    server = await startServer(rootDir)
+    client = new Client({ name: 'library-retry-restart', version: '1' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(server.url)))
+    expect((await readReady()).assets.find((asset) => asset.artifact_id === id)?.status).toBe('ready')
+    const restored = Buffer.from(await (await fetch(sourceUrl())).arrayBuffer())
+    expect(restored.equals(original)).toBe(true)
+  })
+
+  it('keeps active work and missing-source failures intact when retry is unavailable', async () => {
+    await expect(call(thisBook, 'retry_ingest', { artifact_id: thisCatalog.processing[0] }))
+      .rejects.toThrow('already has work in progress')
+    await expect(call(thisBook, 'retry_ingest', { artifact_id: thisCatalog.error[1] }))
+      .rejects.toThrow('No source file is available')
+    const assets = await call<{ assets: Array<{ artifact_id: string; status: string }> }>(thisBook,
+      'list_assets', { browse_status: 'all', limit: 500 })
+    expect(assets.assets.find((asset) => asset.artifact_id === thisCatalog.processing[0])?.status).toBe('uploading')
+    expect(assets.assets.find((asset) => asset.artifact_id === thisCatalog.error[1])?.status).toBe('error')
+  })
 
   it('pages Ready media across books and scopes Errors to the selected book', async () => {
     type Listed = {
