@@ -9626,6 +9626,10 @@ textarea:focus-visible {
   color: #ffc0c0;
 }
 
+.command-composer[hidden] {
+  display: none;
+}
+
 .command-composer {
   position: fixed;
   right: var(--app-gutter);

@@ -922,7 +922,8 @@ describe('chat composer browser flow', () => {
       await page.getByRole('menuitem', { name: /chat-ui-e2e/ }).click()
       await expect.poll(() => selectedName.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe('chat-ui-e2e')
       await expect.poll(() => toggle.getAttribute('aria-expanded')).toBe('false')
-      expect(await toggle.evaluate((element) => document.activeElement === element)).toBe(true)
+      await expect.poll(() => page!.getByLabel('Videobook command input', { exact: true })
+        .evaluate((element) => document.activeElement === element)).toBe(true)
       await toggle.click()
       await page.getByRole('button', { name: `Delete ${createdName}`, exact: true }).click()
       await page.getByRole('button', { name: `Confirm deletion of ${createdName}`, exact: true }).click()
@@ -1594,7 +1595,8 @@ describe('chat composer browser flow', () => {
     await close.click()
     await dialog.waitFor({ state: 'hidden' })
     expect(await input.inputValue()).toBe(ordinaryDraft)
-    expect(await editTrigger.evaluate((element) => document.activeElement === element)).toBe(true)
+    await expect.poll(async () => await input.evaluate((element) =>
+      document.activeElement === element)).toBe(true)
     mockedFullscreenSubjectEditor = false
   }, 60_000)
 
@@ -3517,7 +3519,7 @@ describe('chat composer browser flow', () => {
     await actions.waitFor({ state: 'hidden' })
     expect(await firstCell.getAttribute('data-selection')).toBeNull()
     expect(await secondCell.getAttribute('data-selection')).toBeNull()
-    expect(await page.getByLabel('Notebook canvas', { exact: true })
+    await expect.poll(() => page!.getByLabel('Videobook command input', { exact: true })
       .evaluate((element) => document.activeElement === element)).toBe(true)
     await firstCell.click()
     await secondCell.click({ modifiers: ['Shift'] })
@@ -3591,7 +3593,7 @@ describe('chat composer browser flow', () => {
     expect(await search.inputValue()).toBe('')
     await page.getByLabel('Reset zoom', { exact: true }).click()
     await expect.poll(async () => await menu.getAttribute('open')).toBeNull()
-    expect(await page.getByLabel('Reset zoom', { exact: true })
+    await expect.poll(async () => await page.getByLabel('Videobook command input')
       .evaluate((element) => document.activeElement === element)).toBe(true)
 
     await trigger.click()

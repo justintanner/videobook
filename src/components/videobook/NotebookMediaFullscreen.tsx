@@ -745,6 +745,7 @@ export function NotebookMediaFullscreen({
           className="notebook-media-fullscreen-close"
           onClick={onClose}
           aria-label="Close fullscreen preview"
+          data-composer-focus="return"
         >
           <X size={20} />
         </button>

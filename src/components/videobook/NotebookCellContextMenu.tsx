@@ -116,14 +116,10 @@ export function NotebookCellContextMenu({
     )
     menu.style.left = `${left}px`
     menu.style.top = `${top}px`
+    enabledItems(menu)[0]?.focus({ preventScroll: true })
   }, [position.x, position.y])
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const menu = menuRef.current
-      if (!menu) return
-      enabledItems(menu)[0]?.focus({ preventScroll: true })
-    })
     const closeOutside = (event: PointerEvent) => {
       const target = event.target
       if (!(target instanceof Node) || menuRef.current?.contains(target)) return
@@ -134,7 +130,6 @@ export function NotebookCellContextMenu({
     window.addEventListener('blur', closeForViewport)
     window.addEventListener('resize', closeForViewport)
     return () => {
-      window.cancelAnimationFrame(frame)
       document.removeEventListener('pointerdown', closeOutside, true)
       window.removeEventListener('blur', closeForViewport)
       window.removeEventListener('resize', closeForViewport)
@@ -144,7 +139,7 @@ export function NotebookCellContextMenu({
   const restoreFocus = () => {
     onClose()
     if (returnFocus?.isConnected) {
-      window.requestAnimationFrame(() => returnFocus.focus({ preventScroll: true }))
+      returnFocus.focus({ preventScroll: true })
     }
   }
 
@@ -203,6 +198,7 @@ export function NotebookCellContextMenu({
       ref={menuRef}
       id={menuId}
       className="cell-context-menu"
+      data-composer-focus="return"
       role="menu"
       aria-label={menuLabel ?? `Cell actions for ${address}`}
       style={{ left: position.x, top: position.y }}

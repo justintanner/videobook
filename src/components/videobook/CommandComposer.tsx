@@ -31,6 +31,7 @@ import {
   hasExactCommandSuggestion,
 } from '@/videobook/command-suggestions'
 import { composerInputAfterOutcome } from '@/videobook/command-composer-outcome'
+import { captureCommandComposerFocus } from '@/videobook/command-composer-focus'
 import {
   commandHistoryPage,
   navigateCommandHistory,
@@ -79,6 +80,7 @@ interface CommandComposerProps {
   callTool: (tool: string, args: Record<string, unknown>) => Promise<unknown>
   chatModels: readonly ChatModelOption[]
   disabled: boolean
+  hidden?: boolean
   modelSelectionDisabled: boolean
   connectionLabel: string
   mcpActivity: McpActivity
@@ -128,6 +130,7 @@ export function CommandComposer({
   callTool,
   chatModels,
   disabled,
+  hidden = false,
   modelSelectionDisabled,
   connectionLabel,
   mcpActivity,
@@ -172,6 +175,8 @@ export function CommandComposer({
   const historyCursorRef = useRef(-1)
   const historyDraftRef = useRef('')
   const loadedHistoryProjectRef = useRef('')
+  const loadedCatalogProjectRef = useRef<string | null>(null)
+  const composingRef = useRef(false)
   const historyLoadRef = useRef<{
     bookId: string
     promise: Promise<void>
@@ -230,12 +235,10 @@ export function CommandComposer({
   }
 
   const focusInput = (select = false) => {
-    requestAnimationFrame(() => {
-      // A confirm sheet that opened on an invalid field keeps that focus.
-      if (document.activeElement?.matches('.confirm-sheet [aria-invalid="true"]')) return
-      inputRef.current?.focus({ preventScroll: true })
-      if (select) inputRef.current?.select()
-    })
+    captureCommandComposerFocus(
+      () => inputRef.current,
+      () => { if (select) inputRef.current?.select() },
+    )()
   }
 
   const outcomeSlotValue = useMemo<ComposerOutcomeSlot>(() => ({
@@ -333,7 +336,12 @@ export function CommandComposer({
 
   const focusAndLoad = () => {
     if (!context) {
-      void onEnsureCatalog().catch(() => undefined)
+      if (loadedCatalogProjectRef.current !== bookId) {
+        loadedCatalogProjectRef.current = bookId
+        void onEnsureCatalog().catch(() => {
+          if (loadedCatalogProjectRef.current === bookId) loadedCatalogProjectRef.current = null
+        })
+      }
       void ensureHistory()
     }
     if (speakPreviewOpen) ensureVoiceCatalog()
@@ -353,11 +361,15 @@ export function CommandComposer({
 
   const execute = async () => {
     const message = input.trim()
-    if (!message || sending || disabled) return
+    if (!message || sending || disabled || composingRef.current) return
     const executionSession = inputSession
     setSending(true)
     onSendingChange?.(true)
     let selectInput = false
+    const restoreFocus = captureCommandComposerFocus(
+      () => inputRef.current,
+      () => { if (selectInput) inputRef.current?.select() },
+    )
     try {
       if (!context) {
         await ensureHistory()
@@ -402,7 +414,7 @@ export function CommandComposer({
     } finally {
       setSending(false)
       onSendingChange?.(false)
-      if (inputSessionRef.current === executionSession) focusInput(selectInput)
+      if (inputSessionRef.current === executionSession) restoreFocus()
     }
   }
 
@@ -477,8 +489,8 @@ export function CommandComposer({
 
   const composer = (
     <ComposerOutcomeContext.Provider value={outcomeSlotValue}>
-    <section className="command-composer">
-      {outcomeSlot === 'composer' && notice && (
+    <section className="command-composer" data-composer-focus="return" hidden={hidden}>
+      {!hidden && outcomeSlot === 'composer' && notice && (
         <div
           className={`command-result ${notice.tone === 'error' ? 'command-result-error' : 'command-result-ok'}`}
           role={notice.tone === 'error' ? 'alert' : 'status'}
@@ -494,7 +506,7 @@ export function CommandComposer({
         </div>
       )}
 
-      {outcomeSlot === 'composer' && outcome && outcome.message !== notice?.message && (
+      {!hidden && outcomeSlot === 'composer' && outcome && outcome.message !== notice?.message && (
         <div
           className={`command-result ${outcome.ok ? 'command-result-ok' : 'command-result-error'}`}
           role="status"
@@ -510,9 +522,9 @@ export function CommandComposer({
         </div>
       )}
 
-      {!context && children}
+      {!hidden && !context && children}
 
-      {mcpActivity.phase !== 'idle' && (
+      {!hidden && mcpActivity.phase !== 'idle' && (
         <div
           className={`mcp-activity mcp-activity-${mcpActivity.phase}`}
           data-testid="mcp-activity"
@@ -593,6 +605,8 @@ export function CommandComposer({
             : placeholder ?? 'Type a message or /command…'}
           aria-label="Videobook command input"
           onFocus={focusAndLoad}
+          onCompositionStart={() => { composingRef.current = true }}
+          onCompositionEnd={() => { composingRef.current = false }}
           onChange={(event) => {
             const value = event.target.value
             setInput(value)
@@ -602,6 +616,10 @@ export function CommandComposer({
             ensureVoicesForInput(value)
           }}
           onKeyDown={(event) => {
+            if (composingRef.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
+              if (event.key === 'Enter') event.preventDefault()
+              return
+            }
             if (speakPreviewOpen) {
               const action = handleSpeakPreviewKey(event, catalogVoices, activeVoiceId)
               if (action.type !== 'ignore') event.preventDefault()

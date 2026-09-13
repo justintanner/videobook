@@ -35,7 +35,7 @@ export function NotebookToolbar({
   const deleteLabel = `Delete ${selectedCount} selected ${selectedCount === 1 ? 'cell' : 'cells'}`
 
   return (
-    <div className="canvas-toolbar" role="group" aria-label="Notebook canvas controls">
+    <div className="canvas-toolbar" data-composer-focus="return" role="group" aria-label="Notebook canvas controls">
       <div className="canvas-primary-actions" role="group" aria-label="Notebook editing tools">
         <NotebookCellAddMenu disabled={busy} onAdd={onAdd} onDragEnd={onAddDragEnd} />
         <button

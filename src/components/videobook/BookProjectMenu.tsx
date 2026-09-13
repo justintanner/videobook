@@ -276,7 +276,7 @@ export function BookProjectMenu({
   const mutationDisabled = disabled || pending !== null
 
   return (
-    <div className="book-project-selector" ref={rootRef}>
+    <div className="book-project-selector" data-composer-focus="return" ref={rootRef}>
       <button
         ref={toggleRef}
         type="button"

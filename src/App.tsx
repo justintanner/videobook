@@ -440,7 +440,6 @@ import {
 import { routedActionReview } from '@/videobook/chat-action-review'
 import {
   handleModalDialogKeyDown,
-  scheduleModalDialogFocusRestoration,
   shouldDismissModalDialogFromBackdrop,
 } from '@/videobook/modal-dialog-interactions'
 import {
@@ -460,7 +459,12 @@ import {
   restoreNotebookMentionAliases,
   restoreSelectedNotebookMentionAliases,
 } from '@/videobook/mention-suggestions'
-import { restoreCommandComposerFocus } from '@/videobook/command-composer-focus'
+import {
+  captureDismissedComposerFocus,
+  capturePointerComposerFocus,
+  restoreCommandComposerFocus,
+  useCommandComposerFocus,
+} from '@/videobook/command-composer-focus'
 import { parsePendingApplyCommand } from '@/videobook/command-composer-outcome'
 import { revealNotebookResult } from '@/videobook/notebook-result-reveal'
 import {
@@ -2572,6 +2576,7 @@ function MediaLibraryDialog({
             type="button"
             className="media-library-close"
             aria-label="Close media library"
+            data-composer-focus="return"
             disabled={busy}
             onClick={onClose}
           >
@@ -6497,6 +6502,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const uploadMediaSlotFile = async (cellId: string, file: File) => {
     if (!bookId || !notebook) return
+    const restoreFocus = capturePointerComposerFocus()
     const cell = notebook.cells.find((candidate) => candidate.id === cellId)
     const kind = cell && passiveMediaKind(cell.type)
     if (!cell || !kind) return
@@ -6538,6 +6544,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const message = error instanceof Error ? error.message : String(error)
       setMediaSlotError(cellId, message)
       setNotice(message, 'error')
+    } finally {
+      restoreFocus()
     }
   }
 
@@ -6546,6 +6554,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     file: File,
   ) => {
     if (!bookId || !notebook) return
+    const restoreFocus = capturePointerComposerFocus()
     if (busy) {
       setNotice('Wait for the current operation to finish', 'error')
       return
@@ -6616,19 +6625,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice(message, 'error')
     } finally {
       setBusy(false)
+      restoreFocus()
     }
   }
 
   const closeMediaLibrary = () => {
+    const restoreFocus = captureDismissedComposerFocus(mediaLibraryOpenerRef.current)
     mediaLibraryRequestRef.current += 1
     mediaLibraryReference.lifecycle.close()
     setMediaLibraryPicker(null)
-    const opener = mediaLibraryOpenerRef.current
     mediaLibraryOpenerRef.current = null
-    scheduleModalDialogFocusRestoration(
-      opener,
-      (callback) => window.setTimeout(callback, 0),
-    )
+    restoreFocus()
   }
 
   const loadMediaLibrary = async (
@@ -8396,9 +8403,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const closeMusicVideoEditor = useCallback(() => {
+    const restoreFocus = capturePointerComposerFocus()
     setMusicVideoSession(null)
-    window.setTimeout(focusCommandComposer, 0)
-  }, [focusCommandComposer])
+    restoreFocus()
+  }, [])
 
   const completeVideoDownload = async (
     result: unknown,
@@ -10425,9 +10433,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (!resolved.ok) return resolved
         const audioAsset = resolved.asset
         const sessionKey = uuidv7()
-        const returnFocus = document.activeElement instanceof HTMLElement
+        const returnFocus = document.activeElement instanceof HTMLElement && document.activeElement !== document.body
           ? document.activeElement
-          : null
+          : document.querySelector<HTMLInputElement>('input[aria-label="Videobook command input"]')
         setMediaFullscreen(null)
         setMusicVideoSession({
           key: sessionKey,
@@ -11507,6 +11515,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   ) ?? []
   const fullscreenRegionCount = mediaFullscreenEditSelection.regions.length
   const showCommandComposer = screen !== 'library' || Boolean(fullscreenImageEditor)
+  useCommandComposerFocus(
+    `${screen}:${bookId}:${notebook?.id ?? ''}`,
+    showCommandComposer && mcp.state === 'ready' && !busy && Boolean(bookId),
+  )
   const fullscreenComposerContext = fullscreenImageEditor
     ? {
         label: `@${fullscreenImageEditor.address.toUpperCase()} IMAGE EDIT`,
@@ -11832,6 +11844,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               <button
                 type="button"
                 className="brand-project-home"
+                data-composer-focus="return"
                 title="Open notebook"
                 onClick={() => navigate('notebook')}
               >
@@ -11903,6 +11916,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 ) : (
                   <div
                     className="notebook-horizontal-scroll"
+                    data-composer-focus="return"
                     ref={notebookScrollRef}
                     tabIndex={0}
                     aria-label="Notebook canvas"
@@ -12179,7 +12193,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         </button>
                       </>
                     )}
-                    <button type="button" aria-label="Close inspector" onClick={() => setInspectorOpen(false)}>
+                    <button type="button" data-composer-focus="return" aria-label="Close inspector" onClick={() => setInspectorOpen(false)}>
                       <PanelRightClose size={16} />
                     </button>
                   </div>
@@ -12492,70 +12506,69 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         />
       )}
 
-      {showCommandComposer && (
-        <CommandComposer
-          commands={commands}
-          cells={notebook?.cells ?? []}
-          bookId={bookId}
-          callTool={call}
-          chatModels={chatModelCatalog.models}
-          disabled={
-            busy
-            || mediaFullscreenSidebarEditing
-            || Boolean(musicVideoSession)
-            || !bookId
-            || mcp.state !== 'ready'
-          }
-          modelSelectionDisabled={!bookId || mcp.state !== 'ready'}
-          connectionLabel={mediaFullscreenSidebarEditing
-            ? 'Removing selected subjects…'
-            : mcp.state === 'ready'
-              ? 'Load a book to begin'
-              : 'Connecting to MCP…'}
-          mcpActivity={mcpActivity}
-          selectedModel={chatModel}
-          context={fullscreenComposerContext}
-          mentionAssets={imageEditMentionAssets}
-          inputSession={fullscreenImageEditor
-            ? `image-edit:${fullscreenImageEditor.key}`
-            : 'chat'}
-          placeholder={fullscreenComposerPlaceholder}
-          portalTarget={fullscreenImageEditor
-            ? mediaFullscreenComposerTarget
-            : null}
-          pendingInput={fullscreenImageEditor
-            ? undefined
-            : pendingWatermarkReview
+      <CommandComposer
+        hidden={!showCommandComposer}
+        commands={commands}
+        cells={notebook?.cells ?? []}
+        bookId={bookId}
+        callTool={call}
+        chatModels={chatModelCatalog.models}
+        disabled={
+          busy
+          || mediaFullscreenSidebarEditing
+          || Boolean(musicVideoSession)
+          || !bookId
+          || mcp.state !== 'ready'
+        }
+        modelSelectionDisabled={!bookId || mcp.state !== 'ready'}
+        connectionLabel={mediaFullscreenSidebarEditing
+          ? 'Removing selected subjects…'
+          : mcp.state === 'ready'
+            ? 'Load a book to begin'
+            : 'Connecting to MCP…'}
+        mcpActivity={mcpActivity}
+        selectedModel={chatModel}
+        context={fullscreenComposerContext}
+        mentionAssets={imageEditMentionAssets}
+        inputSession={fullscreenImageEditor
+          ? `image-edit:${fullscreenImageEditor.key}`
+          : `chat:${bookId}`}
+        placeholder={fullscreenComposerPlaceholder}
+        portalTarget={fullscreenImageEditor
+          ? mediaFullscreenComposerTarget
+          : null}
+        pendingInput={fullscreenImageEditor
+          ? undefined
+          : pendingWatermarkReview
+            ? '/apply'
+            : pendingChatAction?.kind === 'generation'
+            ? '/apply '
+            : pendingCommandPlan || pendingChatAction
               ? '/apply'
-              : pendingChatAction?.kind === 'generation'
-              ? '/apply '
-              : pendingCommandPlan || pendingChatAction
-                ? '/apply'
-                : undefined}
-          notice={notice
-            ? { message: notice.text, tone: notice.tone }
-            : null}
-          outcomeSlot={confirmSheet ? 'sheet' : 'composer'}
-          onEnsureCatalog={refreshComposerCatalog}
-          onDismissNotice={() => setNoticeState(null)}
-          onDismissPanel={!fullscreenImageEditor && (
-            pendingWatermarkReview
-            || pendingCommandPlan
-            || pendingChatAction
-          )
-            ? dismissPendingCommandPlan
-            : undefined}
-          onExecute={executeComposerCommand}
-          voiceCatalog={elevenLabsVoices}
-          onModelChange={changeChatModel}
-          onSendingChange={fullscreenImageEditor
-            ? setMediaFullscreenComposerSending
-            : undefined}
-          onSuccessfulExecute={revealSuccessfulComposerResult}
-        >
-          {confirmSheet}
-        </CommandComposer>
-      )}
+              : undefined}
+        notice={notice
+          ? { message: notice.text, tone: notice.tone }
+          : null}
+        outcomeSlot={confirmSheet ? 'sheet' : 'composer'}
+        onEnsureCatalog={refreshComposerCatalog}
+        onDismissNotice={() => setNoticeState(null)}
+        onDismissPanel={!fullscreenImageEditor && (
+          pendingWatermarkReview
+          || pendingCommandPlan
+          || pendingChatAction
+        )
+          ? dismissPendingCommandPlan
+          : undefined}
+        onExecute={executeComposerCommand}
+        voiceCatalog={elevenLabsVoices}
+        onModelChange={changeChatModel}
+        onSendingChange={fullscreenImageEditor
+          ? setMediaFullscreenComposerSending
+          : undefined}
+        onSuccessfulExecute={revealSuccessfulComposerResult}
+      >
+        {confirmSheet}
+      </CommandComposer>
     </main>
   )
 }
