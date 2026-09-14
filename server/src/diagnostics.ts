@@ -15,7 +15,7 @@ const EVENTS = [
   "description-cache-failed", "watermark-placement-fallback", "waveform-enqueue-failed",
   "watermark-probe-fallback", "generation-error-clear-failed", "timeline-orientation-failed",
   "generation-cost-estimate", "job-error", "semantic-index-deferred",
-  "tag-asset-failed",
+  "tag-asset-failed", "voice-session-closed",
 ] as const;
 export type DiagnosticEvent = typeof EVENTS[number];
 const events = new Set<string>(EVENTS);
@@ -64,6 +64,9 @@ export interface DiagnosticFields {
   reason?: string;
   provider?: string;
   stage?: string;
+  voiceModel?: string;
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 function ownValue(value: unknown, key: string): unknown {
@@ -82,8 +85,9 @@ export function diagnosticErrorCode(error: unknown): string {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UUID_FIELDS = ["bookId", "assetId", "artifactId", "notebookId", "cellId", "outputCellId",
   "generationId", "scheduleId", "operationId", "runId"] as const;
-const NUMBER_FIELDS = ["durationMs", "bytesBefore", "bytesAfter", "count", "limit", "warningCount", "targetFps"] as const;
+const NUMBER_FIELDS = ["durationMs", "bytesBefore", "bytesAfter", "count", "limit", "warningCount", "targetFps", "inputTokens", "outputTokens"] as const;
 const ENUM_FIELDS = {
+  voiceModel: ["gpt-realtime-2.1-mini", "gpt-realtime-2.1", "gpt-realtime-mini", "gpt-realtime"],
   status: ["ok", "error"],
   modality: ["visual", "audio", "metadata"],
   reason: ["unbounded", "zero", "missing-adapter", "missing-rates", "missing-selector", "estimator-threw", "estimate-error"],

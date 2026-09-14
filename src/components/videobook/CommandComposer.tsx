@@ -60,6 +60,8 @@ import {
   type ComposerOutcomeSlot,
 } from '@/components/videobook/composer-outcome-context'
 import { SpeakCommandPreview } from '@/components/videobook/SpeakCommandPreview'
+import { VoiceComms, VoiceToggle } from './VoiceComms'
+import type { VoiceConversation } from '@/videobook/use-voice-conversation'
 
 export interface ComposerOutcome {
   ok: boolean
@@ -131,6 +133,7 @@ interface CommandComposerProps {
   onSendingChange?: (sending: boolean) => void
   onSuccessfulExecute: () => void
   voiceCatalog?: ElevenLabsVoicesState
+  voice?: VoiceConversation
 }
 
 interface CommandSuggestion {
@@ -188,6 +191,7 @@ export function CommandComposer({
   onSendingChange,
   onSuccessfulExecute,
   voiceCatalog,
+  voice,
 }: CommandComposerProps) {
   const [input, setInput] = useState(pendingInput ?? '')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -201,6 +205,7 @@ export function CommandComposer({
   const [sending, setSending] = useState(false)
   const [outcome, setOutcome] = useState<ComposerOutcome | null>(null)
   const [renderedPendingInput, setRenderedPendingInput] = useState(pendingInput)
+  const [voiceReviewDraft, setVoiceReviewDraft] = useState(false)
   const [renderedInputSession, setRenderedInputSession] = useState(inputSession)
   const [inputDrafts, setInputDrafts] = useState<ReadonlyMap<string | null, string>>(
     () => new Map(),
@@ -219,6 +224,7 @@ export function CommandComposer({
   const historyCursorRef = useRef(-1)
   const historyDraftRef = useRef('')
   const loadedHistoryProjectRef = useRef('')
+  const latestVoiceTurn = voice?.captions.filter(caption => caption.role === 'user' && caption.final).at(-1)?.id
   const loadedCatalogProjectRef = useRef<string | null>(null)
   const composingRef = useRef(false)
   const historyLoadRef = useRef<{
@@ -236,6 +242,8 @@ export function CommandComposer({
     inputSessionRef.current = inputSession
   }, [inputSession])
 
+  useLayoutEffect(() => { if (latestVoiceTurn) loadedHistoryProjectRef.current = '' }, [latestVoiceTurn])
+
   useEffect(() => {
     window.clearTimeout(successTimerRef.current)
   }, [inputSession])
@@ -246,13 +254,16 @@ export function CommandComposer({
     setInputDrafts(nextDrafts)
     setRenderedInputSession(inputSession)
     setRenderedPendingInput(pendingInput)
+    setVoiceReviewDraft(false)
     setInput(pendingInput ?? nextDrafts.get(inputSession) ?? '')
     setOutcome(null)
     setPreparedAction(null)
     setDismissed(pendingInput !== undefined && !isSpeakCommandPreview(pendingInput))
   } else if (pendingInput !== renderedPendingInput) {
     setRenderedPendingInput(pendingInput)
-    setInput(pendingInput ?? '')
+    if (voice?.pendingReview || voiceReviewDraft) {
+      setVoiceReviewDraft(pendingInput !== undefined)
+    } else setInput(pendingInput ?? '')
     setDismissed(pendingInput !== undefined && !isSpeakCommandPreview(pendingInput))
   }
 
@@ -424,9 +435,11 @@ export function CommandComposer({
     }).catch(() => undefined)
   }
 
-  const execute = async () => {
-    const message = input.trim()
+  const execute = async (reviewCommand?: string) => {
+    const preserveDraft = reviewCommand !== undefined
+    const message = (reviewCommand ?? input).trim()
     if (!message || sending || inputDisabled || actionDiscovery || composingRef.current) return
+    if (!preserveDraft) setVoiceReviewDraft(false)
     const chosenAction = preparedAction?.action.command === message.split(/\s/u)[0] ? preparedAction : null
     const executionSession = inputSession
     setSending(true)
@@ -443,7 +456,7 @@ export function CommandComposer({
         await recordHistory(message)
       }
       if (inputSessionRef.current !== executionSession) return
-      setInput('')
+      if (!preserveDraft) setInput('')
       setDismissed(false)
       const loadedVoiceCatalog = !context && isSpeakCommandPreview(message)
         ? await voiceCatalog?.ensureLoaded()
@@ -463,7 +476,7 @@ export function CommandComposer({
       setPreparedAction(null)
       showOutcome(nextOutcome)
       const inputDecision = composerInputAfterOutcome(nextOutcome, pendingInput)
-      if (inputDecision) {
+      if (inputDecision && !preserveDraft) {
         setInput(inputDecision.value)
         setDismissed(!isSpeakCommandPreview(inputDecision.value))
         ensureVoicesForInput(inputDecision.value)
@@ -476,7 +489,7 @@ export function CommandComposer({
         ok: false,
         message: error instanceof Error ? error.message : String(error),
       })
-      if (pendingInput !== undefined) {
+      if (pendingInput !== undefined && !preserveDraft) {
         setInput(pendingInput)
         setDismissed(true)
         selectInput = true
@@ -738,6 +751,8 @@ export function CommandComposer({
         </div>
       )}
 
+      {!hidden && voice && <VoiceComms voice={voice} />}
+
       <form
         id={COMMAND_COMPOSER_FORM_ID}
         className={`command-line-shell ${transmitting ? 'command-line-shell-transmitting' : ''} ${mcpSucceeded ? 'command-line-shell-success' : ''} ${mcpFailed ? 'command-line-shell-error' : ''}`}
@@ -751,7 +766,12 @@ export function CommandComposer({
         onSubmit={(event) => {
           event.preventDefault()
           if (actionDiscovery && actionMatches[activeActionIndex]) acceptAction(actionMatches[activeActionIndex]!)
-          else void execute()
+          else {
+            const submitter = (event.nativeEvent as SubmitEvent).submitter
+            const reviewSubmit = submitter?.getAttribute('form') === COMMAND_COMPOSER_FORM_ID || (!submitter && document.activeElement?.closest('.confirm-sheet'))
+            const reviewingVoice = (voice?.pendingReview || voiceReviewDraft) && pendingInput !== undefined && reviewSubmit
+            void execute(reviewingVoice ? pendingInput : undefined)
+          }
         }}
       >
         {actionDiscovery && <ComposerActionsPanel
@@ -769,7 +789,7 @@ export function CommandComposer({
             loading={voiceCatalog?.loading ?? false}
             error={voiceCatalog?.error ?? null}
             onSelect={selectVoice}
-            onTogglePreview={previewPlayer.toggle}
+            onTogglePreview={(voiceId, previewUrl) => { voice?.stop(); previewPlayer.toggle(voiceId, previewUrl) }}
             onRefresh={refreshVoiceCatalog}
           />
         )}
@@ -858,6 +878,7 @@ export function CommandComposer({
             <ChevronDown size={12} aria-hidden="true" />
           </label>
         )}
+        {voice && <VoiceToggle voice={voice} onToggle={() => { previewPlayer.stop(); voice.toggle() }} />}
         <button
           type="submit"
           className="command-send"

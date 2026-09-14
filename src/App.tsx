@@ -14,6 +14,8 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from 'react'
+import { useVoiceConversation } from './videobook/use-voice-conversation'
+import type { VoiceOutcome } from '../server/src/voice-contract'
 import {
   Handle,
   Position,
@@ -3394,6 +3396,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [recording, setRecording] = useState(false)
   const [pendingCommandPlan, setPendingCommandPlan] = useState<PendingCommandPlan | null>(null)
   const [pendingChatAction, setPendingChatAction] = useState<PendingChatAction | null>(null)
+  const voiceOutcomeRef = useRef<((outcome: VoiceOutcome) => void) | null>(null)
+  const voiceTypedTurnRef = useRef<((input: string, message: string) => void) | null>(null)
   const [lastEditActionId, setLastEditActionId] = useState('')
   const [busy, setBusy] = useState(false)
   const [mcpActivity, setMcpActivity] = useState<McpActivity>(idleMcpActivity)
@@ -4670,6 +4674,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     revealNotebookResult(() => notebookScrollRef.current)
   }, [screen])
   const dismissPendingCommandPlan = useCallback(() => {
+    voiceOutcomeRef.current?.({ status: 'cancelled', message: 'Pending action cancelled on screen.' })
     setPendingCommandPlan(null)
     setPendingChatAction(null)
     setPendingWatermarkReview(null)
@@ -5352,7 +5357,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return next
   }, [applyNotebook, assets, call, jobs])
 
-  const refreshBookData = useCallback(async (targetBookId: string, preferredNotebookId?: string) => {
+  const refreshBookData = useCallback(async (targetBookId: string, preferredNotebookId?: string, isCurrent?: () => boolean) => {
+    if (isCurrent?.() === false) return
     const requestId = bookDataRequestRef.current + 1
     bookDataRequestRef.current = requestId
     const response = await guardedAsyncResult(
@@ -5369,7 +5375,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         call('list_ingest_status', { book_id: targetBookId, limit: 200 }),
         call('list_notebook_actions', { book_id: targetBookId }),
       ]),
-      () => bookDataRequestRef.current === requestId,
+      () => bookDataRequestRef.current === requestId && isCurrent?.() !== false,
     )
     if (response.kind === 'stale') return
     if (response.kind === 'error') throw response.error
@@ -8500,9 +8506,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const completeVideoDownload = async (
     result: unknown,
     sourceUrl: string,
+    isCurrent?: () => boolean,
   ): Promise<ComposerOutcome> => {
     if (!notebook) {
-      await refreshBookData(bookId)
+      await refreshBookData(bookId, undefined, isCurrent)
       return { ok: true, message: messageFor(result, 'Download queued') }
     }
     const cell = downloadVideoCellInput(
@@ -8522,16 +8529,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         throw new Error('The server did not return the new notebook cell')
       }
       createdCellId = nextCellId
+      if (isCurrent?.() === false) return { ok: true, message: 'Download queued in the previous workspace.' }
       selectCanvasCell(nextCellId)
     } catch (error) {
-      await refreshBookData(bookId, notebook.id)
+      await refreshBookData(bookId, notebook.id, isCurrent)
       const message = error instanceof Error ? error.message : String(error)
       return {
         ok: false,
         message: `Download queued in Library, but board placement failed: ${message}`,
       }
     }
-    await refreshBookData(bookId, notebook.id)
+    await refreshBookData(bookId, notebook.id, isCurrent)
     void watchDownloadedAsset({
       bookId,
       notebookId: notebook.id,
@@ -8677,6 +8685,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const executeNotebookFrameCommand = async (
     command: NotebookFrameCommand,
     currentNotebook: NotebookSnapshot,
+    isCurrent?: () => boolean,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before extracting a frame.' }
@@ -8700,6 +8709,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : {}),
       })
       actionCellId = run.actionCellId
+      if (isCurrent?.() === false) return { ok: true, message: 'Frame extraction queued in the previous workspace.' }
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
       selectCanvasCell(run.outputCellId ?? actionCellId)
@@ -8715,6 +8725,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         timeoutMs: notebookRunPollTimeoutMs,
         maxPollFailures: notebookRunMaxPollFailures,
       })
+      if (isCurrent?.() === false) return { ok: true, message: 'Check the previous workspace for the accepted frame extraction.' }
       if (outcome.kind === 'failed') {
         throw new Error(outcome.message ?? `Frame extraction for ${sourceAddress} failed`)
       }
@@ -8734,11 +8745,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      if (actionCellId) setCellRunError(actionCellId, message)
-      setNotice(message, 'error')
+      if (isCurrent?.() !== false) {
+        if (actionCellId) setCellRunError(actionCellId, message)
+        setNotice(message, 'error')
+      }
       return { ok: false, message }
     } finally {
-      if (actionCellId) setCellQueued(actionCellId, false)
+      if (actionCellId && isCurrent?.() !== false) setCellQueued(actionCellId, false)
       setBusy(false)
     }
   }
@@ -8746,6 +8759,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const executeNotebookAudioCommand = async (
     command: NotebookAudioCommand,
     currentNotebook: NotebookSnapshot,
+    isCurrent?: () => boolean,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before extracting audio.' }
@@ -8769,6 +8783,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : {}),
       })
       actionCellId = run.actionCellId
+      if (isCurrent?.() === false) return { ok: true, message: 'Audio extraction queued in the previous workspace.' }
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
       selectCanvasCell(run.outputCellId ?? actionCellId)
@@ -8784,6 +8799,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         timeoutMs: notebookRunPollTimeoutMs,
         maxPollFailures: notebookRunMaxPollFailures,
       })
+      if (isCurrent?.() === false) return { ok: true, message: 'Check the previous workspace for the accepted audio extraction.' }
       if (outcome.kind === 'failed') {
         throw new Error(outcome.message ?? `Audio extraction for ${sourceAddress} failed`)
       }
@@ -8800,17 +8816,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      if (actionCellId) setCellRunError(actionCellId, message)
-      setNotice(message, 'error')
+      if (isCurrent?.() !== false) {
+        if (actionCellId) setCellRunError(actionCellId, message)
+        setNotice(message, 'error')
+      }
       return { ok: false, message }
     } finally {
-      if (actionCellId) setCellQueued(actionCellId, false)
+      if (actionCellId && isCurrent?.() !== false) setCellQueued(actionCellId, false)
       setBusy(false)
     }
   }
 
   const runNotebookAudioCommandNow = async (
     command: NotebookAudioCommand,
+    isCurrent?: () => boolean,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before extracting audio.' }
@@ -8820,6 +8839,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         book_id: bookId,
         notebook_id: notebook.id,
       }))
+      if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
@@ -8829,7 +8849,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       )
       setPendingCommandPlan(null)
       setPendingChatAction(null)
-      return await executeNotebookAudioCommand(command, currentNotebook)
+      return await executeNotebookAudioCommand(command, currentNotebook, isCurrent)
     } catch (error) {
       return {
         ok: false,
@@ -8840,6 +8860,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const runNotebookFrameCommandNow = async (
     command: NotebookFrameCommand,
+    isCurrent?: () => boolean,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before extracting a frame.' }
@@ -8849,6 +8870,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         book_id: bookId,
         notebook_id: notebook.id,
       }))
+      if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
@@ -8858,7 +8880,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       )
       setPendingCommandPlan(null)
       setPendingChatAction(null)
-      return await executeNotebookFrameCommand(command, currentNotebook)
+      return await executeNotebookFrameCommand(command, currentNotebook, isCurrent)
     } catch (error) {
       return {
         ok: false,
@@ -8869,6 +8891,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const previewNotebookFrameCommand = async (
     command: NotebookFrameCommand,
+    isCurrent?: () => boolean,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before extracting a frame.' }
@@ -8878,6 +8901,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         book_id: bookId,
         notebook_id: notebook.id,
       }))
+      if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
@@ -8911,6 +8935,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const previewNotebookSplitCommand = async (
     command: NotebookSplitCommand,
+    isCurrent?: () => boolean,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before splitting a video.' }
@@ -8920,6 +8945,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         book_id: bookId,
         notebook_id: notebook.id,
       }))
+      if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
@@ -9004,6 +9030,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       reason?: string
       routedParams?: Record<string, unknown>
       summary?: string
+      isCurrent?: () => boolean
     },
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
@@ -9014,6 +9041,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         book_id: bookId,
         notebook_id: notebook.id,
       }))
+      if (options?.isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
@@ -9111,6 +9139,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const executeRoutedChatActionNow = async (
     plan: ChatActionPlan,
+    isCurrent?: () => boolean,
   ): Promise<ComposerOutcome> => {
     if (!bookId) return { ok: false, message: 'Load or create a book first.' }
     setPendingCommandPlan(null)
@@ -9122,6 +9151,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         action_plan: plan,
       })
       applied = true
+      if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Check the previous project for the accepted action.' }
       setPendingChatAction(null)
       const acceptedChain = asChainRun(result)
       const chainResult = acceptedChain
@@ -9142,6 +9172,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 book_id: bookId,
                 chain_id: acceptedChain.chainId,
               }, { background: true }))
+              if (isCurrent?.() === false) throw new Error('Workspace changed. Check the previous project for the accepted action.')
               if (!snapshot) break
               latest = snapshot
               const running = snapshot.steps.find((step) => step.status === 'running')
@@ -9165,11 +9196,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             throw new Error(latest.error ?? 'Chain timed out')
           })()
         : acceptedChain
+      if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
       if (isDownloadVideoResult(result)) {
         const outcome = await completeVideoDownload(
           result,
           urlFromText(plan.prompt),
+          isCurrent,
         )
+        if (isCurrent?.() === false) return outcome
         setNotice(outcome.message, outcome.ok ? 'info' : 'error')
         return outcome.ok
           ? outcome
@@ -9182,6 +9216,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const placements: string[] = []
         let firstCellId: string | null = null
         for (const cell of routedCells) {
+          if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
           const created = recordValue(await call('create_notebook_cell', {
             book_id: bookId,
             notebook_id: notebook.id,
@@ -9194,15 +9229,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           firstCellId ??= cellId
           placements.push(notebookGridTag(cell.slot))
         }
+        if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
         selectCanvasCell(firstCellId)
-        await refreshBookData(bookId, notebook.id)
+        await refreshBookData(bookId, notebook.id, isCurrent)
         const message = `Created ${placements.join(' and ')}`
-        setNotice(message)
+        if (isCurrent?.() !== false) setNotice(message)
         return { ok: true, message }
       }
       const resultRecord = recordValue(result)
       const createdCellId = asString(resultRecord?.cell_id)
-      await refreshBookData(bookId, notebook?.id)
+      await refreshBookData(bookId, notebook?.id, isCurrent)
+      if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
       if (createdCellId) selectCanvasCell(createdCellId)
       const message = chainResult
         ? plan.message || 'Chain complete'
@@ -9211,11 +9248,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { ok: true, message }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
+      if (isCurrent?.() === false) return { ok: false, message: detail }
       const message = applied
         ? `Action completed, but its notebook result could not be shown: ${detail}`
         : detail
       if (applied) {
-        await refreshBookData(bookId, notebook?.id).catch(() => undefined)
+        await refreshBookData(bookId, notebook?.id, isCurrent).catch(() => undefined)
       }
       setNotice(message, 'error')
       return {
@@ -9321,6 +9359,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const previewRoutedChatAction = async (
     plan: ChatActionPlan,
     originalInput: string,
+    isCurrent?: () => boolean,
   ): Promise<ComposerOutcome> => {
     const routedAssetReference = (value: unknown): string | null => {
       const assetId = asString(value)
@@ -9430,7 +9469,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!sourceReference) {
         return { ok: false, message: 'The chat model did not select a video source.' }
       }
-      return await runNotebookAudioCommandNow({ sourceReference })
+      return await runNotebookAudioCommandNow({ sourceReference }, isCurrent)
     }
     if (plan.tool === 'extract_first_frame' || plan.tool === 'extract_last_frame') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
@@ -9442,9 +9481,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         sourceReference,
       }
       if (plan.confirmation.required === false) {
-        return await runNotebookFrameCommandNow(command)
+        return await runNotebookFrameCommandNow(command, isCurrent)
       }
-      return await previewNotebookFrameCommand(command)
+      return await previewNotebookFrameCommand(command, isCurrent)
     }
     if (plan.tool === 'extract_frame') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
@@ -9461,9 +9500,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         timestampSeconds,
       }
       if (plan.confirmation.required === false) {
-        return await runNotebookFrameCommandNow(command)
+        return await runNotebookFrameCommandNow(command, isCurrent)
       }
-      return await previewNotebookFrameCommand(command)
+      return await previewNotebookFrameCommand(command, isCurrent)
     }
     if (plan.tool === 'split_video') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
@@ -9474,7 +9513,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return await previewNotebookSplitCommand({
         sourceReference,
         cutPointsSeconds: [splitAtSeconds],
-      })
+      }, isCurrent)
     }
     if (
       plan.tool === 'split_video_by_durations'
@@ -9492,7 +9531,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return await previewNotebookSplitCommand({
           sourceReference,
           cutPointsSeconds: durationTargetsToCutPoints(targets as number[]),
-        })
+        }, isCurrent)
       }
     }
     if (plan.effect === 'generation') {
@@ -9531,6 +9570,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             : notebookChatGenerationReferences(originalInput),
       }
       return await previewNotebookGenerationCommand(command, {
+        isCurrent,
         preferredTool: plan.tool,
         reason: plan.confirmation.reason,
         routedParams: plan.params,
@@ -9538,7 +9578,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
     }
     if (plan.confirmation.required === false) {
-      return await executeRoutedChatActionNow(plan)
+      return await executeRoutedChatActionNow(plan, isCurrent)
     }
     const postPlan = plan.tool === 'post' || plan.routedTool === 'post'
     // Learn the account's post length before sizing the thread, so a Premium
@@ -9557,6 +9597,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ),
         }
       : plan
+    if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
     setPendingCommandPlan(null)
     setPendingChatAction({ kind: 'routed', plan: reviewedPlan, xPostReview })
     return applyReadyOutcome('Action preview ready')
@@ -10892,7 +10933,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const session = mediaFullscreen?.asset.type === 'image'
       ? mediaFullscreen
       : null
-    if (!session) return await executeCommand(input, context)
+    if (!session) {
+      const outcome = await executeCommand(input, context)
+      const pendingCommand = input.trim().toLowerCase()
+      if (parsePendingApplyCommand(input) || pendingCommand === '/cancel') {
+        voiceOutcomeRef.current?.({
+          status: !outcome.ok ? 'review' : pendingCommand === '/cancel' ? 'cancelled' : /queued|started|running|processing/i.test(outcome.message) ? 'queued' : 'completed',
+          message: outcome.message,
+        })
+      } else voiceTypedTurnRef.current?.(input, outcome.message)
+      return outcome
+    }
     if (input.startsWith('/')) {
       return {
         ok: false,
@@ -11873,6 +11924,29 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const currentActionDiscovery = actionDiscovery?.bookId === bookId && actionDiscovery.session === composerSession ? actionDiscovery : null
   const temporaryActionComposer = Boolean(currentActionComposer && (screen === 'library' || workspacePreview || (mediaFullscreen && !fullscreenImageEditor)))
   const showCommandComposer = screen !== 'library' || Boolean(fullscreenImageEditor) || Boolean(currentActionComposer)
+  const voice = useVoiceConversation({
+    bookId,
+    notebookId: notebook?.id,
+    scope: composerSession,
+    available: showCommandComposer && mcp.state === 'ready' && Boolean(bookId) && !mediaFullscreen && !workspacePreview && !musicVideoSession,
+    disabled: busy || Boolean(pendingWatermarkReview || pendingCommandPlan || pendingChatAction),
+    onAction: async (event, isCurrent) => {
+      if (busy || pendingChatAction || pendingCommandPlan || pendingWatermarkReview) return { status: 'failed', message: 'Finish the current command or use Apply or Cancel on screen first.' }
+      const plan = asChatActionPlan(event.plan)
+      if (plan.bookId !== bookId) return { status: 'cancelled', message: 'The project changed. Repeat the command here.' }
+      const outcome = await previewRoutedChatAction(plan, event.prompt, isCurrent)
+      if (!isCurrent()) return { status: 'cancelled', message: 'Workspace changed. Check the previous project for accepted work.' }
+      setNotice(outcome.message, outcome.ok ? 'info' : 'error')
+      return {
+        status: !outcome.ok ? 'failed' : outcome.nextInput?.startsWith('/apply') ? 'review' : /queued|started|running|processing/i.test(outcome.message) ? 'queued' : 'completed',
+        message: outcome.message,
+      }
+    },
+  })
+  useLayoutEffect(() => {
+    voiceOutcomeRef.current = voice.reportOutcome
+    voiceTypedTurnRef.current = voice.shareTypedTurn
+  }, [voice.reportOutcome, voice.shareTypedTurn])
   useCommandComposerFocus(
     `${screen}:${bookId}:${notebook?.id ?? ''}`,
     showCommandComposer && mcp.state === 'ready' && !busy && (Boolean(bookId) || Boolean(currentActionComposer)),
@@ -13041,6 +13115,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : undefined}
         onExecute={executeComposerCommand}
         voiceCatalog={elevenLabsVoices}
+        voice={voice}
         onModelChange={changeChatModel}
         onSendingChange={fullscreenImageEditor
           ? setMediaFullscreenComposerSending

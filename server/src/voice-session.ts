@@ -1,0 +1,428 @@
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createOpenAi, OpenAiError } from "@apicity/openai";
+import type { OpenAiRealtimeCallResponse } from "@apicity/openai";
+import { connectOpenAiRealtime } from "@apicity/openai/realtime";
+import type { OpenAiRealtimeConnection, OpenAiRealtimeServerEvent } from "@apicity/openai/realtime";
+import type { Engine } from "videobook-engine";
+import { z } from "zod";
+import type { BookManager } from "./book-manager.js";
+import { getApiKey } from "./api-key.js";
+import { withBookContext } from "./book-context.js";
+import { discoverVoiceActions, voiceWorkspaceContext } from "./voice-actions.js";
+import { DEFAULT_VOICE_MODEL, voiceSessionConfig } from "./voice-config.js";
+import { chatActionPlanSchema, prepareVoiceChatAction } from "./tools/chat.js";
+import { appendVoiceHistory } from "./tools/chat-history.js";
+import { appendDiagnostic } from "./diagnostics.js";
+import type { VoiceCaption, VoiceOutcome, VoiceSessionDescriptor, VoiceSessionEvent } from "./voice-contract.js";
+
+class VoiceError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+
+export function voiceError(error: unknown): VoiceError {
+  if (error instanceof VoiceError) return error;
+  if (error instanceof OpenAiError) {
+    if (error.status === 401 || error.status === 403) return new VoiceError("OpenAI voice access was denied. Check OPENAI_API_KEY and model access on the server.", 503);
+    if (error.status === 429) return new VoiceError("OpenAI voice is at its limit. Wait a moment, then start voice again.", 429);
+    return new VoiceError("OpenAI voice could not connect. Check the voice model and network, then try again.", 502);
+  }
+  return new VoiceError("Voice disconnected. Start voice again to reconnect.", 502);
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+interface VoiceTurn {
+  text: string;
+  saved: ReturnType<typeof deferred<boolean>>;
+  final: boolean;
+}
+
+const actionSchema = z.object({ tool: z.string().min(1).max(120), params: z.record(z.string(), z.unknown()) }).strict();
+const discoverySchema = z.object({ query: z.string().min(1).max(160) }).strict();
+
+export class VoiceSession {
+  readonly id = randomUUID();
+  readonly token = randomBytes(32).toString("hex");
+  readonly model: string;
+  private provider: ReturnType<typeof createOpenAi>;
+  private control: OpenAiRealtimeConnection | null = null;
+  private callId: string | null = null;
+  private negotiation: Promise<OpenAiRealtimeCallResponse> | null = null;
+  private abort = new AbortController();
+  private stopped = false;
+  private closing: Promise<void> | null = null;
+  private listener: ((event: VoiceSessionEvent) => void) | null = null;
+  private backlog: VoiceSessionEvent[] = [];
+  private seen = new Set<string>();
+  private captions = new Map<string, VoiceCaption>();
+  private turns = new Map<string, VoiceTurn>();
+  private currentTurn = "";
+  private responseTurns = new Map<string, string>();
+  private responseItems = new Map<string, Set<string>>();
+  private interruptedResponses = new Set<string>();
+  private pendingAssistantHistory = new Map<string, VoiceCaption[]>();
+  private activeResponse = false;
+  private needsResponse = false;
+  private speaking = false;
+  private waitingAction: { callId: string; done: ReturnType<typeof deferred<VoiceOutcome>> } | null = null;
+  private reviewCall: string | null = null;
+  private toolChain: Promise<void> = Promise.resolve();
+  private writes: Promise<void> = Promise.resolve();
+  private lastActivity = Date.now();
+  private startedAt = Date.now();
+  private usage = { responses: 0, inputTokens: 0, outputTokens: 0 };
+  private timer: ReturnType<typeof setInterval>;
+
+  constructor(
+    private books: BookManager,
+    readonly bookId: string,
+    readonly notebookId: string | undefined,
+    private engine: Engine,
+    apiKey: string,
+    readonly idleTimeoutMs: number,
+    private onClose: () => void,
+  ) {
+    this.model = process.env.VIDEOBOOK_VOICE_MODEL?.trim() || DEFAULT_VOICE_MODEL;
+    this.provider = createOpenAi({ apiKey, timeout: 20_000 });
+    this.apiKey = apiKey;
+    this.timer = setInterval(() => {
+      if (!this.scopeAlive()) void this.close("Workspace closed. Start voice in the current project.");
+      else if (Date.now() - this.lastActivity > this.idleTimeoutMs) void this.close("Comms idle. Start voice to resume.");
+      else if (Date.now() - this.startedAt > 30 * 60_000) void this.close("Comms session ended. Start voice to resume.");
+    }, Math.min(1000, idleTimeoutMs));
+    this.timer.unref();
+  }
+
+  private apiKey: string;
+
+  owns(token: string): boolean {
+    const candidate = Buffer.from(token);
+    const expected = Buffer.from(this.token);
+    return candidate.length === expected.length && timingSafeEqual(candidate, expected);
+  }
+
+  private scopeAlive(): boolean {
+    const book = this.books.get(this.bookId);
+    if (!book.ok || book.value.engine !== this.engine) return false;
+    return !this.notebookId || this.engine.notebooks.read(this.notebookId).ok;
+  }
+
+  async start(sdp: string, signal: AbortSignal): Promise<VoiceSessionDescriptor> {
+    const onAbort = () => { void this.close("Voice start cancelled."); };
+    signal.addEventListener("abort", onAbort, { once: true });
+    try {
+      if (signal.aborted || this.stopped) throw new VoiceError("Voice start cancelled.", 499);
+      this.negotiation = this.provider.post.v1.realtime.calls({
+        sdp, session: voiceSessionConfig(voiceWorkspaceContext(this.engine, this.notebookId), this.model),
+      });
+      const call = await this.negotiation;
+      this.callId = call.callId;
+      if (this.stopped) {
+        await this.provider.post.v1.realtime.calls.hangup(call.callId).catch(() => undefined);
+        throw new VoiceError("Voice start cancelled.", 499);
+      }
+      this.control = await connectOpenAiRealtime({
+        apiKey: this.apiKey, callId: call.callId, signal: this.abort.signal, timeout: 10_000,
+        onEvent: (event) => { try { this.receive(event); } catch { this.fail("Voice could not process an event. Start voice to reconnect."); } },
+        onError: (error) => { this.fail(voiceError(error).message); },
+        onClose: () => { if (!this.stopped) this.fail("Voice connection lost. Start voice to reconnect."); },
+      });
+      if (this.stopped) throw new VoiceError("Voice start cancelled.", 499);
+      return { id: this.id, token: this.token, sdp: call.sdp, model: this.model, idleTimeoutMs: this.idleTimeoutMs };
+    } finally {
+      signal.removeEventListener("abort", onAbort);
+    }
+  }
+
+  subscribe(listener: (event: VoiceSessionEvent) => void): void {
+    if (this.listener || this.stopped) throw new VoiceError("Voice session is already connected or closed.", 409);
+    this.listener = listener;
+    this.backlog.splice(0).forEach(listener);
+  }
+
+  private emit(event: VoiceSessionEvent): void {
+    if (this.listener) this.listener(event);
+    else {
+      this.backlog.push(event);
+      if (this.backlog.length > 256) this.fail("Voice event connection was not established. Start voice again.");
+    }
+  }
+
+  private turn(id: string): VoiceTurn {
+    let turn = this.turns.get(id);
+    if (!turn) {
+      turn = { text: "", saved: deferred<boolean>(), final: false };
+      this.turns.set(id, turn);
+    }
+    return turn;
+  }
+
+  private save(operation: () => Promise<void>): void {
+    this.writes = this.writes.then(async () => {
+      if (!this.scopeAlive()) return;
+      await operation();
+    }).catch(() => { this.fail("Could not save voice history. Voice stopped; your typed draft is safe."); });
+  }
+
+  private caption(id: string, role: VoiceCaption["role"], text: string, final: boolean, userTurnId?: string): void {
+    if (this.captions.get(id)?.final) return;
+    const value: VoiceCaption = { id, role, text: text.slice(0, 16_000), final };
+    this.captions.set(id, value);
+    this.emit({ type: "caption", caption: value });
+    if (!final) return;
+    if (role === "assistant" && userTurnId && !this.turn(userTurnId).final) {
+      const waiting = this.pendingAssistantHistory.get(userTurnId) ?? [];
+      waiting.push(value);
+      this.pendingAssistantHistory.set(userTurnId, waiting);
+      return;
+    }
+    const turn = role === "user" ? this.turn(id) : null;
+    if (turn) { turn.final = true; turn.text = value.text; }
+    this.save(async () => {
+      if (turn && value.text.trim()) {
+        const result = await this.engine.prompts.record({ surface: "chat", prompt: value.text, context: { source: "voice", sessionId: this.id, turnId: id, model: this.model, notebookId: this.notebookId } });
+        if (!result.ok) { turn.saved.resolve(false); throw new Error(result.error.message); }
+      }
+      await appendVoiceHistory(this.engine, { ...value, sessionId: this.id, notebookId: this.notebookId, model: this.model });
+      if (turn) {
+        for (const pending of this.pendingAssistantHistory.get(id) ?? []) {
+          const latest = this.captions.get(pending.id) ?? pending;
+          await appendVoiceHistory(this.engine, { ...latest, text: latest.interrupted ? "" : latest.text, sessionId: this.id, notebookId: this.notebookId, model: this.model });
+        }
+        this.pendingAssistantHistory.delete(id);
+      }
+      turn?.saved.resolve(true);
+    });
+  }
+
+  receive(event: OpenAiRealtimeServerEvent): void {
+    if (this.stopped) return;
+    if (event.event_id && this.seen.has(event.event_id)) return;
+    if (event.event_id) this.seen.add(event.event_id);
+    if (this.seen.size > 20_000) { void this.close("Comms session limit reached. Start voice to resume."); return; }
+    if (!this.scopeAlive()) { void this.close("Workspace closed."); return; }
+    const id = event.item_id ?? "";
+    if (event.type.startsWith("response.output_audio_transcript.") && event.response_id) {
+      const items = this.responseItems.get(event.response_id) ?? new Set<string>();
+      items.add(id);
+      this.responseItems.set(event.response_id, items);
+      if (this.interruptedResponses.has(event.response_id)) return;
+    }
+    if (event.type === "input_audio_buffer.speech_started") {
+      this.lastActivity = Date.now();
+      this.currentTurn = id;
+      this.turn(id);
+      this.caption(id, "user", "", false);
+      this.speaking = true;
+      this.needsResponse = false;
+      this.emit({ type: "activity", phase: "listening" });
+    } else if (event.type === "input_audio_buffer.speech_stopped") {
+      this.speaking = false;
+      this.lastActivity = Date.now();
+      this.emit({ type: "activity", phase: "thinking" });
+    } else if (event.type === "conversation.item.input_audio_transcription.delta") {
+      this.caption(id, "user", (this.captions.get(id)?.text ?? "") + (event.delta ?? ""), false);
+    } else if (event.type === "conversation.item.input_audio_transcription.completed") {
+      this.caption(id, "user", event.transcript ?? "", true);
+    } else if (event.type === "conversation.item.input_audio_transcription.failed") {
+      this.fail("Could not transcribe this turn. Start voice and try again.");
+    } else if (event.type === "response.output_audio_transcript.delta") {
+      this.caption(id, "assistant", (this.captions.get(id)?.text ?? "") + (event.delta ?? ""), false);
+    } else if (event.type === "response.output_audio_transcript.done") {
+      this.caption(id, "assistant", event.transcript ?? this.captions.get(id)?.text ?? "", true, event.response_id ? this.responseTurns.get(event.response_id) : undefined);
+    } else if (event.type === "conversation.item.truncated") {
+      const caption = this.captions.get(id);
+      if (caption && !caption.interrupted) {
+        const interrupted = { ...caption, final: true, interrupted: true };
+        this.captions.set(id, interrupted);
+        this.emit({ type: "caption", caption: interrupted });
+        this.save(() => appendVoiceHistory(this.engine, { ...interrupted, text: "", sessionId: this.id, notebookId: this.notebookId, model: this.model }));
+      }
+    } else if (event.type === "response.created") {
+      this.activeResponse = true;
+      if (typeof event.response?.id === "string") this.responseTurns.set(event.response.id, this.currentTurn);
+    } else if (event.type === "response.done") {
+      this.activeResponse = false;
+      const usage = event.response?.usage as Record<string, unknown> | undefined;
+      this.usage.responses += 1;
+      this.usage.inputTokens += typeof usage?.input_tokens === "number" ? usage.input_tokens : 0;
+      this.usage.outputTokens += typeof usage?.output_tokens === "number" ? usage.output_tokens : 0;
+      if (event.response?.status === "failed") this.fail("The voice reply failed. Start voice to retry.");
+      else this.continueResponse();
+    } else if (event.type === "response.function_call_arguments.done" && event.call_id) {
+      const key = `call:${event.call_id}`;
+      if (this.seen.has(key)) return;
+      this.seen.add(key);
+      const turnId = (event.response_id && this.responseTurns.get(event.response_id)) || this.currentTurn;
+      this.toolChain = this.toolChain.then(() => this.runTool(event, turnId)).catch(() => { this.fail("Voice action failed. Check the command and try again."); });
+    } else if (event.type === "error") {
+      if (event.error?.code === "response_cancel_not_active") return;
+      this.fail("Voice service reported an error. Start voice again; check model access if it repeats.");
+    }
+  }
+
+  private continueResponse(): void {
+    if (!this.needsResponse || this.activeResponse || this.speaking || this.stopped) return;
+    this.needsResponse = false;
+    this.activeResponse = true;
+    this.control?.send({ type: "response.create" });
+  }
+
+  private output(callId: string, result: unknown, turnId: string): void {
+    if (this.stopped) return;
+    const serialized = JSON.stringify(result);
+    const output = serialized.length <= 40_000 ? serialized : JSON.stringify({ truncated: true, resultText: serialized.slice(0, 36_000) });
+    this.control?.send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output } });
+    if (turnId === this.currentTurn) { this.needsResponse = true; this.continueResponse(); }
+  }
+
+  private async runTool(event: OpenAiRealtimeServerEvent, turnId: string): Promise<void> {
+    const callId = event.call_id!;
+    if (this.stopped || turnId !== this.currentTurn) return;
+    try {
+      if (!this.control || !turnId) throw new Error("Wait for a spoken user request.");
+      const args: unknown = JSON.parse(event.arguments ?? "{}");
+      if (event.name === "find_workspace_actions") {
+        const { query } = discoverySchema.parse(args);
+        this.output(callId, { actions: discoverVoiceActions(this.engine, query), workspace: voiceWorkspaceContext(this.engine, this.notebookId) }, turnId);
+        return;
+      }
+      if (event.name !== "prepare_workspace_action") throw new Error("Unknown voice action.");
+      if (this.reviewCall || this.waitingAction) throw new Error("Use Apply or Cancel on screen for the pending review before requesting another workspace action.");
+      const turn = this.turn(turnId);
+      const timeout = setTimeout(() => turn.saved.resolve(false), 10_000);
+      const saved = await turn.saved.promise.finally(() => clearTimeout(timeout));
+      if (!saved || !turn.text.trim()) throw new Error("The user transcript could not be saved. Ask the user to repeat the request.");
+      if (this.stopped || turnId !== this.currentTurn || !this.scopeAlive()) return;
+      const decision = actionSchema.parse(args);
+      if (decision.params.book_id !== undefined && decision.params.book_id !== this.bookId) throw new Error("Voice actions must stay in the current project.");
+      if (decision.params.notebook_id !== undefined && decision.params.notebook_id !== this.notebookId) throw new Error("Voice actions must stay in the current notebook.");
+      const result = await withBookContext({ bookId: this.bookId, engine: this.engine }, () => prepareVoiceChatAction(
+        this.engine, { book_id: this.bookId, notebook_id: this.notebookId, prompt: turn.text }, { ...decision, message: turn.text },
+      ));
+      if (this.stopped || turnId !== this.currentTurn) return;
+      const raw = result.content[0]?.text ?? "null";
+      if (result.isError) { this.output(callId, { status: "failed", message: raw }, turnId); return; }
+      const value: unknown = JSON.parse(raw);
+      const plan = chatActionPlanSchema.safeParse(value);
+      if (!plan.success) { this.output(callId, { status: "completed", result: value }, turnId); return; }
+      const done = deferred<VoiceOutcome>();
+      this.waitingAction = { callId, done };
+      this.emit({ type: "action", callId, prompt: turn.text, plan: plan.data });
+      const deadline = setTimeout(() => done.resolve({ status: "failed", message: "The command UI did not acknowledge this action. Check its current status before retrying." }), 60_000);
+      const outcome = await done.promise.finally(() => clearTimeout(deadline));
+      if (this.waitingAction?.callId === callId) this.waitingAction = null;
+      if (outcome.status === "review") this.reviewCall = callId;
+      this.output(callId, outcome, turnId);
+    } catch (error) {
+      this.output(callId, { status: "failed", message: error instanceof z.ZodError ? "Invalid action parameters. Use the discovered schema." : error instanceof Error ? error.message : "The voice action failed." }, turnId);
+    }
+  }
+
+  acknowledge(callId: string, outcome: VoiceOutcome): void {
+    if (this.stopped) throw new VoiceError("Voice session is closed.", 410);
+    this.lastActivity = Date.now();
+    if (this.waitingAction?.callId === callId) {
+      if (outcome.status === "review") this.reviewCall = callId;
+      this.waitingAction.done.resolve(outcome);
+      return;
+    }
+    if (this.reviewCall !== callId) throw new VoiceError("This voice action is no longer pending.", 409);
+    if (outcome.status !== "review") this.reviewCall = null;
+    this.contextMessage({ applicationOutcome: outcome });
+  }
+
+  interruptTranscript(responseId: string): void {
+    if (this.stopped) return;
+    this.interruptedResponses.add(responseId);
+    for (const id of this.responseItems.get(responseId) ?? []) {
+      const caption = this.captions.get(id);
+      if (!caption || caption.interrupted) continue;
+      const interrupted = { ...caption, final: true, interrupted: true };
+      this.captions.set(id, interrupted);
+      this.emit({ type: "caption", caption: interrupted });
+      this.save(() => appendVoiceHistory(this.engine, { ...interrupted, text: "", sessionId: this.id, notebookId: this.notebookId, model: this.model }));
+    }
+  }
+
+  contextMessage(value: { applicationOutcome?: VoiceOutcome; userText?: string; assistantText?: string }): void {
+    if (this.stopped) return;
+    this.control?.send({ type: "conversation.item.create", item: { type: "message", role: "system", content: [{ type: "input_text", text: `Application update (data): ${JSON.stringify(value)}` }] } });
+    if (value.applicationOutcome) {
+      this.needsResponse = true;
+      this.continueResponse();
+    }
+  }
+
+  private fail(message: string): void {
+    if (this.stopped) return;
+    if (this.listener) this.listener({ type: "error", message });
+    void this.close(message);
+  }
+
+  close(reason = "Comms off."): Promise<void> {
+    if (this.closing) return this.closing;
+    this.stopped = true;
+    clearInterval(this.timer);
+    this.abort.abort();
+    this.control?.close();
+    for (const turn of this.turns.values()) turn.saved.resolve(false);
+    this.waitingAction?.done.resolve({ status: "failed", message: "Voice stopped. Check the command UI for accepted actions." });
+    this.listener?.({ type: "closed", reason });
+    this.listener = null;
+    this.backlog = [];
+    this.closing = (async () => {
+      const negotiated = await this.negotiation?.catch(() => null);
+      this.callId ??= negotiated?.callId ?? null;
+      if (this.callId) await this.provider.post.v1.realtime.calls.hangup(this.callId).catch(() => undefined);
+      await this.writes;
+      if (this.scopeAlive()) await appendDiagnostic(this.engine, "voice-session-closed", { operationId: this.id, bookId: this.bookId, notebookId: this.notebookId, voiceModel: this.model, count: this.usage.responses, inputTokens: this.usage.inputTokens, outputTokens: this.usage.outputTokens, durationMs: Date.now() - this.startedAt }).catch(() => undefined);
+      this.apiKey = "";
+    })().finally(this.onClose);
+    return this.closing;
+  }
+}
+
+export class VoiceSessions {
+  private sessions = new Map<string, VoiceSession>();
+  private closed = false;
+  constructor(private books: BookManager) {}
+
+  async start(input: { bookId: string; notebookId?: string; sdp: string }, signal: AbortSignal): Promise<VoiceSessionDescriptor> {
+    if (this.closed) throw new VoiceError("Voice service is shutting down.", 503);
+    const apiKey = getApiKey("OPENAI_API_KEY");
+    if (!apiKey) throw new VoiceError("Voice needs OPENAI_API_KEY on the server. Configure it, then start voice again.", 503);
+    if (this.sessions.size >= 4) throw new VoiceError("Four voice sessions are already active. Stop another session first.", 429);
+    const book = this.books.get(input.bookId);
+    if (!book.ok) throw new VoiceError("Open an available project before starting voice.", 404);
+    if (input.notebookId && !book.value.engine.notebooks.read(input.notebookId).ok) throw new VoiceError("This notebook is no longer available.", 404);
+    const configured = Number(process.env.VIDEOBOOK_VOICE_IDLE_TIMEOUT_MS ?? 120_000);
+    const idle = Number.isFinite(configured) ? Math.min(600_000, Math.max(10_000, configured)) : 120_000;
+    const session = new VoiceSession(this.books, input.bookId, input.notebookId, book.value.engine, apiKey, idle, () => this.sessions.delete(session.id));
+    this.sessions.set(session.id, session);
+    try { return await session.start(input.sdp, signal); }
+    catch (error) { await session.close(); throw voiceError(error); }
+  }
+
+  get(id: string, token: string): VoiceSession {
+    const session = this.sessions.get(id);
+    if (!session || !session.owns(token)) throw new VoiceError("Voice session was not found. Start voice again.", 404);
+    return session;
+  }
+
+  async stop(id: string, token: string, interruptedResponseId?: string | null): Promise<void> {
+    if (!this.sessions.has(id)) return;
+    const session = this.get(id, token);
+    if (interruptedResponseId) session.interruptTranscript(interruptedResponseId);
+    await session.close();
+  }
+
+  async close(): Promise<void> {
+    this.closed = true;
+    await Promise.all([...this.sessions.values()].map((session) => session.close("Server is shutting down.")));
+  }
+}

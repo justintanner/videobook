@@ -55,7 +55,7 @@ import {
 } from "videobook-engine/notebook-mentions";
 import { resolveNotebookPromptReferences } from "../notebook-reference-resolver.js";
 
-type ChatDecision = {
+export type ChatDecision = {
   tool: string;
   params: Record<string, unknown>;
   message: string;
@@ -568,386 +568,403 @@ export function chatDef(engine: Engine): ToolDef {
       model: chatModelSchema.optional().describe("Chat routing model"),
       action_plan: chatActionPlanSchema.optional().describe("Previously previewed action to apply"),
     },
-    handler: async (args) => {
-      const { prompt, book_id: bookId, notebook_id: notebookId, model, action_plan: actionPlan } = args as {
-        prompt?: string;
-        book_id: string;
-        notebook_id?: string;
-        model?: ChatModelId;
-        action_plan?: ChatActionPlan;
-      };
-      if (actionPlan) return await applyChatActionPlan(engine, bookId, actionPlan);
-      if (!prompt) return error("A chat prompt is required");
-      const chatRequest = chatIntelligenceRequestOptions(model);
-      const book = engine.book.get();
-      let notebookDocument: NotebookDocument | null = null;
-      try {
-        if (notebookId) {
-          const notebook = engine.notebooks.read(notebookId);
-          if (!notebook.ok) throw new Error(notebook.error.message);
-          notebookDocument = notebook.value;
-        }
-      } catch (cause) {
-        return error(cause instanceof Error ? cause.message : String(cause));
-      }
-      const notebookContext = buildChatNotebookContext(engine, notebookDocument);
-
-      // 1. Expand @s01 slot refs → the artifact ids they occupy
-      const expandedPrompt = expandSlotRefs(prompt, timelineSlotArtifactIds(engine));
-      const stackedPlan = planStackedChainFromQuery(expandedPrompt);
-      if (stackedPlan) {
-        const { getAllToolDefs } = await import("./index.js");
-        const allDefs = getAllToolDefs(engine);
-        const targetDef = allDefs.find((definition) => definition.name === "chain");
-        if (!targetDef) return error("Tool handler not found: chain");
-        const preflight = await preflightChainPlan({
-          action: "run",
-          version: 1,
-          book_id: bookId,
-          ...(notebookId ? { notebook_id: notebookId } : {}),
-          steps: stackedPlan.steps,
-        }, {
-          engine,
-          bookId,
-          notebookId,
-          toolSchemas: new Map(
-            allDefs.map((definition) => [definition.name, definition.schema]),
-          ),
-          autoApplyTools: AUTO_APPLY_TOOL_NAMES,
-          effectForTool: (name) => effectForTool(
-            name,
-            /^(?:generate|extend|upscale)_/u.test(name) ? "generation" : "action",
-          ),
-        });
-        if (!preflight.ok) return error(preflight.error);
-        const params: Record<string, unknown> = {
-          action: "run",
-          version: 1,
-          book_id: bookId,
-          ...(notebookId ? { notebook_id: notebookId } : {}),
-          steps: stackedPlan.steps,
-        };
-        const validated = z.object(targetDef.schema).safeParse(params);
-        if (!validated.success) {
-          return error(
-            `Invalid parameters for chain: ${z.prettifyError(validated.error)}`,
-          );
-        }
-        const effect = preflight.plan.effect === "generation"
-          ? "generation"
-          : "mutation";
-        const autoApply = preflight.plan.autoApply;
-        return json({
-          kind: "chat-action-plan",
-          planId: uuidv7(),
-          bookId,
-          prompt,
-          routedTool: "chain",
-          tool: "chain",
-          params: validated.data,
-          message: stackedPlan.message,
-          summary: stackedPlan.message,
-          effect,
-          confirmation: {
-            required: !autoApply,
-            reason: autoApply
-              ? "This chain only reads or auto-applies existing local actions"
-              : "This request changes the current book",
-          },
-        } satisfies ChatActionPlan);
-      }
-      const notebookResolution = notebookDocument
-        ? resolveNotebookPromptReferences({
-            engine: engine,
-            document: notebookDocument,
-            prompt: expandedPrompt,
-            requireMedia: false,
-          })
-        : null;
-      const duplicateDestination = duplicateDestinationReference(expandedPrompt);
-      const resolutionPrompt = notebookResolution && duplicateDestination
-        ? replaceNotebookMentions(
-            expandedPrompt,
-            notebookResolution.resolved
-              .filter((item) => item.reference !== duplicateDestination)
-              .map((item) => ({
-                reference: item.reference,
-                replacement: `@${item.artifactId}`,
-              })),
-          )
-        : notebookResolution?.prompt ?? expandedPrompt;
-      const unresolvedNotebookReferences = notebookResolution?.unresolved
-        .filter((issue) => issue.reference !== duplicateDestination)
-        ?? [];
-
-      if (unresolvedNotebookReferences.length > 0) {
-        return error(`Asset not found: ${
-          unresolvedNotebookReferences
-            .map((issue) => `${issue.mention} (${issue.code})`)
-            .join(", ")
-        }`);
-      }
-
-      // 2. Resolve @<artifact-id> tags
-      const { resolved: resolvedAssets, unresolved } = await resolveArtifactRefs(
-        engine,
-        parseArtifactIdTags(resolutionPrompt),
-      );
-
-      if (unresolved.length > 0) {
-        return error(`Asset not found: ${unresolved.join(", ")}`);
-      }
-
-      // 3. Build asset context for the LLM (include source_url when known)
-      const assetContext = attachNotebookReferences(
-        await enrichAssetContext(engine, resolvedAssets),
-        notebookContext,
-      );
-
-      const imageFiles = resolvedAssets
-        .filter((asset) => asset.artifactType === "image")
-        .map((asset) => asset.filePath)
-        .filter((path): path is string => path !== null);
-      const videoFiles = resolvedAssets
-        .filter((asset) => asset.artifactType === "video")
-        .map((asset) => asset.filePath)
-        .filter((path): path is string => path !== null);
-
-      const scriptContents = await loadScriptContentsForChat(engine, resolvedAssets);
-
-      // 4. Read recent history for context
-      const historyLines = engine.logs.read("chat", {
-        limit: 10,
-      }) as unknown as ChatLogEntry[];
-      const historyContext = formatHistoryForPrompt(historyLines);
-
-      const apiKey = getApiKey("OPENAI_API_KEY");
-      if (!apiKey) {
-        return error("OPENAI_API_KEY environment variable is not set");
-      }
-
-      const { getAllToolDefs } = await import("./index.js");
-      const allDefs = getAllToolDefs(engine);
-      const routableTools = buildRoutableTools(allDefs);
-      const systemPrompt = buildChatRoutingPrompt(
-        book.name,
-        routableTools,
-        historyContext || undefined,
-      );
-      const userMessage = buildChatRoutingUserMessage({
-        query: expandedPrompt,
-        assetContext,
-        imageFiles,
-        videoFiles,
-        scriptContents,
-        notebookContext,
-      });
-
-      let decision: ChatDecision;
-      try {
-        const responses = buildIntelligenceResponses(apiKey, {
-          timeout: CHAT_ROUTING_TIMEOUT_MS,
-          model: chatRequest.model,
-          reasoningEffort: chatRequest.reasoningEffort,
-        });
-        let lastError: unknown;
-        decision = { tool: "", params: {}, message: "" };
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            const response = await responses(intelligenceRequest({
-              instructions: systemPrompt,
-              input: userMessage,
-              text: { format: { type: "json_object" } },
-              max_output_tokens: CHAT_ROUTING_MAX_OUTPUT_TOKENS,
-            }, chatRequest), AbortSignal.timeout(CHAT_ROUTING_TIMEOUT_MS));
-            const outputText = firstResponseText(response);
-            decision = parseChatDecision(outputText);
-            lastError = null;
-            break;
-          } catch (e) {
-            lastError = e;
-          }
-        }
-        if (lastError) {
-          const msg = lastError instanceof Error ? lastError.message : String(lastError);
-          return error(`Routing failed: ${msg}`);
-        }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return error(`Routing failed: ${msg}`);
-      }
-
-      if (!decision.tool) {
-        return error("Could not determine which tool to use. Please rephrase.");
-      }
-
-      const bytedanceRoute = applyBytedanceNamedModelRoute({
-        query: expandedPrompt,
-        tool: decision.tool,
-        params: decision.params ?? {},
-        message: decision.message,
-        assetContext,
-      });
-      const joinRoute = bytedanceRoute.substituted
-        ? bytedanceRoute
-        : applyVideoJoinRoute({
-          query: expandedPrompt,
-          tool: bytedanceRoute.tool,
-          params: bytedanceRoute.params,
-          message: bytedanceRoute.message,
-          assetContext,
-          notebookContext,
-        });
-      const stackedRoute = joinRoute.substituted
-        ? joinRoute
-        : applyStackedChainRoute({
-          query: expandedPrompt,
-          tool: joinRoute.tool,
-          params: joinRoute.params,
-          message: joinRoute.message,
-          assetContext,
-          notebookContext,
-        });
-      decision = {
-        tool: stackedRoute.tool,
-        params: stackedRoute.params,
-        message: stackedRoute.message,
-      };
-
-      // 6. Validate tool exists in routable registry
-      const routableTool = getRoutableTool(routableTools, decision.tool);
-      if (!routableTool) {
-        return error(`Unknown tool: ${decision.tool}. Please rephrase.`);
-      }
-
-      // 7. Apply fixups (spread to avoid mutating decision.params for logging)
-      const params = normalizeChatRoutedParams(
-        decision.tool,
-        normalizeChatTimestampParams(decision.tool, decision.params ?? {}),
-      );
-
-      // Inject book_id
-      params.book_id = bookId;
-      if (
-        notebookId
-        && routableTool.params.includes("notebook_id")
-        && params.notebook_id === undefined
-      ) {
-        params.notebook_id = notebookId;
-      }
-
-      // generate_image only accepts @img-* refs; models often put @vid-* in
-      // image_refs for "from the source of @vid-…". Drop non-image slugs and
-      // fold them into the text prompt so generation still has the intent.
-      if (decision.tool === "generate_image") {
-        Object.assign(params, sanitizeGenerateImageParams(params));
-      }
-
-      // create_watermark_card needs a URL; if the model omitted it, take source_url
-      // from a referenced asset (e.g. "QR from the url in @vid-og").
-      if (decision.tool === "create_watermark_card" && (params.url === undefined || params.url === "")) {
-        const fromAsset = assetContext.find((a) => typeof a.source_url === "string");
-        if (fromAsset) params.url = fromAsset.source_url;
-      }
-
-      // Inject script content as prompt for generation tools
-      if (scriptContents.length > 0 && routableTool.category === "generation") {
-        const combinedScript = scriptContents.map((s) => s.content).join("\n\n");
-        params.prompt = combinedScript;
-      }
-
-      // Speech requests: fold prompt into text and default the voice, since
-      // the router model cannot know ElevenLabs voice ids. Runs after the
-      // script injection above so script content reaches the spoken text.
-      if (decision.tool === "generate_elevenlabs_text_to_audio") {
-        Object.assign(params, await applySpeechRoutingDefaults(decision.tool, params));
-      }
-
-      // 8. Look up handler from tool defs
-      const targetDef = allDefs.find((d) => d.name === routableTool.actualTool);
-
-      if (!targetDef) {
-        return error(`Tool handler not found: ${routableTool.actualTool}`);
-      }
-
-      const validated = z.object(targetDef.schema).safeParse(params);
-      if (!validated.success) {
-        return error(
-          `Invalid parameters for ${decision.tool}: ${z.prettifyError(validated.error)}`,
-        );
-      }
-
-      if (routableTool.effect !== "read") {
-        const effect = routableTool.effect;
-        const summary = decision.message.trim()
-          || `${effect === "generation" ? "Generate" : "Apply"} with ${decision.tool}`;
-        let autoApply = routableTool.autoApply;
-        if (targetDef.name === "chain") {
-          const preflight = await preflightChainPlan({
-            action: "run",
-            version: 1,
-            ...params,
-            book_id: bookId,
-          }, {
-            engine,
-            bookId,
-            notebookId,
-            toolSchemas: new Map(
-              allDefs.map((definition) => [definition.name, definition.schema]),
-            ),
-            autoApplyTools: AUTO_APPLY_TOOL_NAMES,
-            effectForTool: (name) => effectForTool(
-              name,
-              /^(?:generate|extend|upscale)_/u.test(name) ? "generation" : "action",
-            ),
-          });
-          if (!preflight.ok) return error(preflight.error);
-          autoApply = preflight.plan.autoApply;
-        }
-        return json({
-          kind: "chat-action-plan",
-          planId: uuidv7(),
-          bookId,
-          prompt,
-          routedTool: decision.tool,
-          tool: targetDef.name,
-          params: validated.data,
-          message: decision.message,
-          summary,
-          effect,
-          confirmation: {
-            required: !autoApply,
-            reason: autoApply
-              ? autoApplyReason(targetDef.name)
-              : effect === "generation"
-              ? "This request creates generated media and may incur provider spend"
-              : "This request changes the current book",
-          },
-        } satisfies ChatActionPlan);
-      }
-
-      // 9. Execute (wrapped so the routed tool writes its own action log entry)
-      const wrappedDef = withLogging(targetDef, engine);
-      let handlerResult: ToolResult;
-      try {
-        handlerResult = await wrappedDef.handler(validated.data);
-      } catch (cause) {
-        const message = cause instanceof Error ? cause.message : String(cause);
-        return error(`${decision.tool} failed: ${message}`);
-      }
-
-      appendChatHistory(engine, {
-        prompt,
-        tool: decision.tool,
-        params: decision.params,
-        message: decision.message,
-        failed: Boolean(handlerResult.isError),
-      });
-
-      return handlerResult;
-    },
+    handler: (args) => handleChatRequest(engine, args),
   };
 }
+
+export function prepareVoiceChatAction(
+  engine: Engine,
+  input: { book_id: string; notebook_id?: string; prompt: string },
+  decision: ChatDecision,
+): Promise<ToolResult> {
+  return handleChatRequest(engine, input, decision);
+}
+
+async function handleChatRequest(
+  engine: Engine,
+  args: Record<string, unknown>,
+  proposedDecision?: ChatDecision,
+): Promise<ToolResult> {
+  const { prompt, book_id: bookId, notebook_id: notebookId, model, action_plan: actionPlan } = args as {
+    prompt?: string;
+    book_id: string;
+    notebook_id?: string;
+    model?: ChatModelId;
+    action_plan?: ChatActionPlan;
+  };
+  if (actionPlan) return await applyChatActionPlan(engine, bookId, actionPlan);
+  if (!prompt) return error("A chat prompt is required");
+  const chatRequest = chatIntelligenceRequestOptions(model);
+  const book = engine.book.get();
+  let notebookDocument: NotebookDocument | null = null;
+  try {
+    if (notebookId) {
+      const notebook = engine.notebooks.read(notebookId);
+      if (!notebook.ok) throw new Error(notebook.error.message);
+      notebookDocument = notebook.value;
+    }
+  } catch (cause) {
+    return error(cause instanceof Error ? cause.message : String(cause));
+  }
+  const notebookContext = buildChatNotebookContext(engine, notebookDocument);
+
+  // 1. Expand @s01 slot refs → the artifact ids they occupy
+  const expandedPrompt = expandSlotRefs(prompt, timelineSlotArtifactIds(engine));
+  const stackedPlan = planStackedChainFromQuery(expandedPrompt);
+  if (stackedPlan) {
+    const { getAllToolDefs } = await import("./index.js");
+    const allDefs = getAllToolDefs(engine);
+    const targetDef = allDefs.find((definition) => definition.name === "chain");
+    if (!targetDef) return error("Tool handler not found: chain");
+    const preflight = await preflightChainPlan({
+      action: "run",
+      version: 1,
+      book_id: bookId,
+      ...(notebookId ? { notebook_id: notebookId } : {}),
+      steps: stackedPlan.steps,
+    }, {
+      engine,
+      bookId,
+      notebookId,
+      toolSchemas: new Map(
+        allDefs.map((definition) => [definition.name, definition.schema]),
+      ),
+      autoApplyTools: AUTO_APPLY_TOOL_NAMES,
+      effectForTool: (name) => effectForTool(
+        name,
+        /^(?:generate|extend|upscale)_/u.test(name) ? "generation" : "action",
+      ),
+    });
+    if (!preflight.ok) return error(preflight.error);
+    const params: Record<string, unknown> = {
+      action: "run",
+      version: 1,
+      book_id: bookId,
+      ...(notebookId ? { notebook_id: notebookId } : {}),
+      steps: stackedPlan.steps,
+    };
+    const validated = z.object(targetDef.schema).safeParse(params);
+    if (!validated.success) {
+      return error(
+        `Invalid parameters for chain: ${z.prettifyError(validated.error)}`,
+      );
+    }
+    const effect = preflight.plan.effect === "generation"
+      ? "generation"
+      : "mutation";
+    const autoApply = preflight.plan.autoApply;
+    return json({
+      kind: "chat-action-plan",
+      planId: uuidv7(),
+      bookId,
+      prompt,
+      routedTool: "chain",
+      tool: "chain",
+      params: validated.data,
+      message: stackedPlan.message,
+      summary: stackedPlan.message,
+      effect,
+      confirmation: {
+        required: !autoApply,
+        reason: autoApply
+          ? "This chain only reads or auto-applies existing local actions"
+          : "This request changes the current book",
+      },
+    } satisfies ChatActionPlan);
+  }
+  const notebookResolution = notebookDocument
+    ? resolveNotebookPromptReferences({
+        engine: engine,
+        document: notebookDocument,
+        prompt: expandedPrompt,
+        requireMedia: false,
+      })
+    : null;
+  const duplicateDestination = duplicateDestinationReference(expandedPrompt);
+  const resolutionPrompt = notebookResolution && duplicateDestination
+    ? replaceNotebookMentions(
+        expandedPrompt,
+        notebookResolution.resolved
+          .filter((item) => item.reference !== duplicateDestination)
+          .map((item) => ({
+            reference: item.reference,
+            replacement: `@${item.artifactId}`,
+          })),
+      )
+    : notebookResolution?.prompt ?? expandedPrompt;
+  const unresolvedNotebookReferences = notebookResolution?.unresolved
+    .filter((issue) => issue.reference !== duplicateDestination)
+    ?? [];
+
+  if (unresolvedNotebookReferences.length > 0) {
+    return error(`Asset not found: ${
+      unresolvedNotebookReferences
+        .map((issue) => `${issue.mention} (${issue.code})`)
+        .join(", ")
+    }`);
+  }
+
+  // 2. Resolve @<artifact-id> tags
+  const { resolved: resolvedAssets, unresolved } = await resolveArtifactRefs(
+    engine,
+    parseArtifactIdTags(resolutionPrompt),
+  );
+
+  if (unresolved.length > 0) {
+    return error(`Asset not found: ${unresolved.join(", ")}`);
+  }
+
+  // 3. Build asset context for the LLM (include source_url when known)
+  const assetContext = attachNotebookReferences(
+    await enrichAssetContext(engine, resolvedAssets),
+    notebookContext,
+  );
+
+  const imageFiles = resolvedAssets
+    .filter((asset) => asset.artifactType === "image")
+    .map((asset) => asset.filePath)
+    .filter((path): path is string => path !== null);
+  const videoFiles = resolvedAssets
+    .filter((asset) => asset.artifactType === "video")
+    .map((asset) => asset.filePath)
+    .filter((path): path is string => path !== null);
+
+  const scriptContents = await loadScriptContentsForChat(engine, resolvedAssets);
+
+  // 4. Read recent history for context
+  const historyLines = engine.logs.read("chat", {
+    limit: 10,
+  }) as unknown as ChatLogEntry[];
+  const historyContext = formatHistoryForPrompt(historyLines);
+
+  const apiKey = getApiKey("OPENAI_API_KEY");
+  if (!apiKey && !proposedDecision) {
+    return error("OPENAI_API_KEY environment variable is not set");
+  }
+
+  const { getAllToolDefs } = await import("./index.js");
+  const allDefs = getAllToolDefs(engine);
+  const routableTools = buildRoutableTools(allDefs);
+  const systemPrompt = buildChatRoutingPrompt(
+    book.name,
+    routableTools,
+    historyContext || undefined,
+  );
+  const userMessage = buildChatRoutingUserMessage({
+    query: expandedPrompt,
+    assetContext,
+    imageFiles,
+    videoFiles,
+    scriptContents,
+    notebookContext,
+  });
+
+  let decision: ChatDecision;
+  if (proposedDecision) {
+    decision = proposedDecision;
+  } else try {
+    const responses = buildIntelligenceResponses(apiKey ?? undefined, {
+      timeout: CHAT_ROUTING_TIMEOUT_MS,
+      model: chatRequest.model,
+      reasoningEffort: chatRequest.reasoningEffort,
+    });
+    let lastError: unknown;
+    decision = { tool: "", params: {}, message: "" };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await responses(intelligenceRequest({
+          instructions: systemPrompt,
+          input: userMessage,
+          text: { format: { type: "json_object" } },
+          max_output_tokens: CHAT_ROUTING_MAX_OUTPUT_TOKENS,
+        }, chatRequest), AbortSignal.timeout(CHAT_ROUTING_TIMEOUT_MS));
+        const outputText = firstResponseText(response);
+        decision = parseChatDecision(outputText);
+        lastError = null;
+        break;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (lastError) {
+      const msg = lastError instanceof Error ? lastError.message : String(lastError);
+      return error(`Routing failed: ${msg}`);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return error(`Routing failed: ${msg}`);
+  }
+
+  if (!decision.tool) {
+    return error("Could not determine which tool to use. Please rephrase.");
+  }
+
+  const bytedanceRoute = applyBytedanceNamedModelRoute({
+    query: expandedPrompt,
+    tool: decision.tool,
+    params: decision.params ?? {},
+    message: decision.message,
+    assetContext,
+  });
+  const joinRoute = bytedanceRoute.substituted
+    ? bytedanceRoute
+    : applyVideoJoinRoute({
+      query: expandedPrompt,
+      tool: bytedanceRoute.tool,
+      params: bytedanceRoute.params,
+      message: bytedanceRoute.message,
+      assetContext,
+      notebookContext,
+    });
+  const stackedRoute = joinRoute.substituted
+    ? joinRoute
+    : applyStackedChainRoute({
+      query: expandedPrompt,
+      tool: joinRoute.tool,
+      params: joinRoute.params,
+      message: joinRoute.message,
+      assetContext,
+      notebookContext,
+    });
+  decision = {
+    tool: stackedRoute.tool,
+    params: stackedRoute.params,
+    message: stackedRoute.message,
+  };
+
+  // 6. Validate tool exists in routable registry
+  const routableTool = getRoutableTool(routableTools, decision.tool);
+  if (!routableTool) {
+    return error(`Unknown tool: ${decision.tool}. Please rephrase.`);
+  }
+
+  // 7. Apply fixups (spread to avoid mutating decision.params for logging)
+  const params = normalizeChatRoutedParams(
+    decision.tool,
+    normalizeChatTimestampParams(decision.tool, decision.params ?? {}),
+  );
+
+  // Inject book_id
+  params.book_id = bookId;
+  if (
+    notebookId
+    && routableTool.params.includes("notebook_id")
+    && params.notebook_id === undefined
+  ) {
+    params.notebook_id = notebookId;
+  }
+
+  // generate_image only accepts @img-* refs; models often put @vid-* in
+  // image_refs for "from the source of @vid-…". Drop non-image slugs and
+  // fold them into the text prompt so generation still has the intent.
+  if (decision.tool === "generate_image") {
+    Object.assign(params, sanitizeGenerateImageParams(params));
+  }
+
+  // create_watermark_card needs a URL; if the model omitted it, take source_url
+  // from a referenced asset (e.g. "QR from the url in @vid-og").
+  if (decision.tool === "create_watermark_card" && (params.url === undefined || params.url === "")) {
+    const fromAsset = assetContext.find((a) => typeof a.source_url === "string");
+    if (fromAsset) params.url = fromAsset.source_url;
+  }
+
+  // Inject script content as prompt for generation tools
+  if (scriptContents.length > 0 && routableTool.category === "generation") {
+    const combinedScript = scriptContents.map((s) => s.content).join("\n\n");
+    params.prompt = combinedScript;
+  }
+
+  // Speech requests: fold prompt into text and default the voice, since
+  // the router model cannot know ElevenLabs voice ids. Runs after the
+  // script injection above so script content reaches the spoken text.
+  if (decision.tool === "generate_elevenlabs_text_to_audio") {
+    Object.assign(params, await applySpeechRoutingDefaults(decision.tool, params));
+  }
+
+  // 8. Look up handler from tool defs
+  const targetDef = allDefs.find((d) => d.name === routableTool.actualTool);
+
+  if (!targetDef) {
+    return error(`Tool handler not found: ${routableTool.actualTool}`);
+  }
+
+  const validated = z.object(targetDef.schema).safeParse(params);
+  if (!validated.success) {
+    return error(
+      `Invalid parameters for ${decision.tool}: ${z.prettifyError(validated.error)}`,
+    );
+  }
+
+  if (routableTool.effect !== "read") {
+    const effect = routableTool.effect;
+    const summary = decision.message.trim()
+      || `${effect === "generation" ? "Generate" : "Apply"} with ${decision.tool}`;
+    let autoApply = routableTool.autoApply;
+    if (targetDef.name === "chain") {
+      const preflight = await preflightChainPlan({
+        action: "run",
+        version: 1,
+        ...params,
+        book_id: bookId,
+      }, {
+        engine,
+        bookId,
+        notebookId,
+        toolSchemas: new Map(
+          allDefs.map((definition) => [definition.name, definition.schema]),
+        ),
+        autoApplyTools: AUTO_APPLY_TOOL_NAMES,
+        effectForTool: (name) => effectForTool(
+          name,
+          /^(?:generate|extend|upscale)_/u.test(name) ? "generation" : "action",
+        ),
+      });
+      if (!preflight.ok) return error(preflight.error);
+      autoApply = preflight.plan.autoApply;
+    }
+    return json({
+      kind: "chat-action-plan",
+      planId: uuidv7(),
+      bookId,
+      prompt,
+      routedTool: decision.tool,
+      tool: targetDef.name,
+      params: validated.data,
+      message: decision.message,
+      summary,
+      effect,
+      confirmation: {
+        required: !autoApply,
+        reason: autoApply
+          ? autoApplyReason(targetDef.name)
+          : effect === "generation"
+          ? "This request creates generated media and may incur provider spend"
+          : "This request changes the current book",
+      },
+    } satisfies ChatActionPlan);
+  }
+
+  // 9. Execute (wrapped so the routed tool writes its own action log entry)
+  const wrappedDef = withLogging(targetDef, engine);
+  let handlerResult: ToolResult;
+  try {
+    handlerResult = await wrappedDef.handler(validated.data);
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    return error(`${decision.tool} failed: ${message}`);
+  }
+
+  if (!proposedDecision) appendChatHistory(engine, {
+    prompt,
+    tool: decision.tool,
+    params: decision.params,
+    message: decision.message,
+    failed: Boolean(handlerResult.isError),
+  });
+
+  return handlerResult;
+}
+
 
 function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };

@@ -153,6 +153,34 @@ See `.env.tpl` for the complete set.
 `VIDEOBOOK_ENV_PATH` selects the local environment file used by Settings;
 it defaults to the repository's `.env`. This also allows isolated application fixtures.
 
+### Voice chat
+
+The microphone beside Send enables voice input and spoken replies. Voice starts off.
+Click once to allow microphone access and open the COMMS panel; click Stop to release
+the microphone and audio immediately. The ring follows actual sound levels, and
+expandable captions keep the conversation visible while you type. Speak over a reply
+to interrupt it. Reviewed actions still require Apply or Cancel on screen, including
+generation that can incur provider spend. Turning voice off preserves a pending review
+and your typed draft.
+
+Voice requires `OPENAI_API_KEY`, microphone permission, and WebRTC/Web Audio support
+on HTTPS or localhost. The default is `gpt-realtime-2.1`, selected by a local comparison
+with `gpt-realtime-2.1-mini`. Set `VIDEOBOOK_VOICE_MODEL` on the server to select another
+compatible Realtime model; the text chat model selector is independent. Idle sessions
+end after 120 seconds (`VIDEOBOOK_VOICE_IDLE_TIMEOUT_MS`, bounded to 10–600 seconds).
+Sessions also end after 30 minutes, with at most four active sessions per server.
+
+Voice stops when you leave its project/notebook, hide the page or composer, open a
+fullscreen preview, start other media playback, lose capture, or disconnect. Restart
+explicitly after returning. If playback is blocked, use **Enable spoken replies**.
+Permission and configuration errors appear in COMMS with recovery instructions.
+Videobook saves finalized transcripts through the book engine; it does not save raw
+microphone audio. Audio is sent to OpenAI for the live conversation. Existing
+ElevenLabs `/speak` media generation keeps its separate preview workflow.
+
+See [voice transport and validation](docs/voice-chat.md) for configuration, measured
+latency, provider provenance, and the opt-in live browser checks.
+
 ### Local search models
 
 Search and indexing use cached CLIP/CLAP models by default. They do not download missing models. To check readiness without downloading, run:

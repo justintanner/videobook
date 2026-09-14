@@ -1,0 +1,5 @@
+version: 0.11.0
+git: https://github.com/justintanner/apicity.git
+revision: 828e37730593c8fd069c2302c7ecab772906b4e6
+tarball: vendor/apicity-openai-0.11.0-828e3773.tgz
+sha256: a0a4647526277ba830816684a84cda67b74554fba55214f199135b721b5ce080

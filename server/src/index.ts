@@ -24,12 +24,15 @@ import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
 import { createHttpHandler } from "./server.js";
 import { parseHttpByteRange } from "./http-byte-range.js";
 import { restrictHttpAccess, restrictMediaContent } from "./http-access.js";
+import { VoiceSessions } from "./voice-session.js";
+import { voiceRouter } from "./voice-http.js";
 
 const require = createRequire(import.meta.url);
 const enginePackage = require("videobook-engine/package.json") as {
   version: string;
 };
 const app = express();
+const voiceSessions = new VoiceSessions(bookManager);
 const SEARCH_REFERENCE_LIMIT_BYTES = 500 * 1024 * 1024;
 const mcpHandler = createHttpHandler(scopedBookEngine, bookManager);
 const handleMcpRequest = toNodeHandler(mcpHandler);
@@ -192,6 +195,7 @@ app.delete("/api/search-references/:referenceId", (req, res) => {
   });
 });
 
+app.use("/api/voice", voiceRouter(voiceSessions));
 app.use(express.json({ limit: "500mb" }));
 
 app.get("/api/books/:bookId/artifacts/:artifactId/manifest", async (req, res) => {
@@ -259,6 +263,7 @@ async function shutdown(): Promise<void> {
   let exitCode = 0;
   try {
     stopScheduler();
+    await voiceSessions.close();
     await mcpHandler.close();
     await bookManager.stopMigrations();
     await queue.stop();

@@ -1,0 +1,136 @@
+# Voice chat
+
+Voice is an optional input/output mode in the existing command composer. Its COMMS
+control has a 44px target, keyboard activation, visible focus, `aria-pressed`, and
+text states for connecting, listening, thinking, speaking, review, off, and error.
+The segmented ring follows measured microphone or decoded playback energy. Reduced
+motion removes scaling and glow; captions remain selectable and expandable. The
+ordinary command editor retains its draft and rich references during voice turns.
+
+## Transport and configuration
+
+The browser captures audio only after the user starts voice. It sends an SDP offer
+to the same-origin Videobook server. `@apicity/openai` creates the Realtime call and
+owns its authenticated server sideband. Browser WebRTC carries media, while typed
+application events carry captions and action proposals. The server returns a random
+session owner token; the permanent OpenAI key stays on the server.
+
+The vendored provider is `@apicity/openai` 0.11.0 built from Apicity commit
+`828e37730593c8fd069c2302c7ecab772906b4e6`. The package contains the Realtime call,
+hangup, and server control APIs missing from the prior dependency. Its provenance is
+recorded in [`vendor/OPENAI_REVISION.txt`](../vendor/OPENAI_REVISION.txt). No application
+HTTP or WebSocket wrapper bypasses the provider.
+
+| Setting | Value |
+| --- | --- |
+| Voice model | `gpt-realtime-2.1`; override with `VIDEOBOOK_VOICE_MODEL` |
+| Reasoning | `minimal` |
+| Turn detection | Server VAD, threshold 0.5, 350 ms silence, 300 ms prefix |
+| Input | Near-field noise reduction; native speech-to-speech |
+| Display transcription | `gpt-4o-mini-transcribe` |
+| Output | `marin`, speed 1.05, concise replies, maximum 512 output tokens |
+| Idle limit | 120 seconds; `VIDEOBOOK_VOICE_IDLE_TIMEOUT_MS` clamps to 10–600 seconds |
+| Lifetime/concurrency | 30 minutes; four sessions per server |
+
+Input transcription supplies captions and durable prompt history. It is not a
+separate speech-to-text/chat/text-to-speech response pipeline. Workspace actions wait
+for the finalized user prompt to be saved before execution. Text routing continues
+to use the existing text model catalog.
+
+## Command behavior and lifetime
+
+Realtime discovers the registered action schemas and proposes a tool with parameters.
+Discovery prioritizes the requested operation over generic media/cell words, so a
+query such as “rename cell” keeps `rename_asset` visible. Media actions use the cell's
+artifact ID; bulk actions require an explicit bulk request.
+`prepareVoiceChatAction` reuses the text chat service's reference resolution, routing,
+schema validation and action-plan policy without another chat model request. Reads
+return their actual result. Auto-apply, reviewed mutations, generation consent,
+canonical revisions and queued domain work use the existing application handlers.
+Only Apply or Cancel on screen resolves a pending review. A spoken yes cannot approve
+an operation, and turning voice off leaves the review available. Spoken feedback
+distinguishes an action awaiting review, a queued job, completion, cancellation and
+failure.
+
+Sessions are bound to their book, notebook and owner. Turn, response and function IDs
+deduplicate events; old-scope proposals cannot enter the current workspace. Finalized
+user/assistant text is stored through engine prompt history and logs. Interrupted
+assistant history is amended so unheard text is omitted from the next conversation's
+context. Raw microphone recordings and owner tokens are not persisted by Videobook.
+Session diagnostics contain duration and observed response token totals, not audio
+or transcript content.
+
+Stop immediately disconnects local playback and ends microphone tracks. Barge-in
+silences local decoded output while Realtime cancels/truncates its response. Hiding
+the page or composer, changing workspace, opening fullscreen, playing other media,
+capture loss, disconnect and server shutdown also end voice. An explicit click is
+required to resume. Missing credentials, denied permission and connection failures
+leave text chat usable. Browser autoplay recovery is exposed as **Enable spoken
+replies**.
+
+## Reproducible validation
+
+Normal integration tests use real book engines and local HTTP servers. Browser tests
+use real Chromium capture, WebRTC and decoded audio with synthesized WAV microphone
+input. They do not stub the provider or replace browser media APIs. Chromium's native
+permission controls exercise denial and capture revocation. Real OpenAI calls are
+opt-in and run separately from the normal suite's credential/network restrictions.
+
+```bash
+npx vitest run server/src/tools/voice-chat-action.test.ts server/src/tools/voice-session.test.ts
+npx vitest run --config vitest.e2e.config.ts tests/v2/voice-chat.e2e.test.ts
+op run --env-file=.env.tpl -- npm run test:voice:live
+VIDEOBOOK_VOICE_BENCHMARK_TURNS=20 op run --env-file=.env.tpl -- npm run test:voice:live -- -t 'captures real'
+VIDEOBOOK_VOICE_MODEL=gpt-realtime-2.1-mini VIDEOBOOK_VOICE_BENCHMARK_TURNS=20 op run --env-file=.env.tpl -- npm run test:voice:live -- -t 'captures real'
+```
+
+The browser fixture defaults to installed Chrome. `PLAYWRIGHT_CHANNEL` selects a
+different installed Chromium channel. Artifacts go to ignored `test-results/voice/`;
+benchmark filenames include the model and turn count so a smoke run does not replace
+a longer measurement. The committed [measurement record](voice-latency.json) contains
+numeric measurements and conditions without conversation text or session credentials.
+
+The comparison used Chrome 152.0.7977.83, a local Videobook/Vite server, unthrottled
+WebRTC and four prerecorded ordinary requests repeated five times per model. These
+are development-machine observations, not a provider latency guarantee or an
+exhaustive ranking of OpenAI models.
+
+| Model | Turns | Median detected-turn-end to decoded output | p95 | Cold connect |
+| --- | ---: | ---: | ---: | ---: |
+| `gpt-realtime-2.1-mini` | 20 | 881 ms | 1,169 ms | 2,940 ms |
+| `gpt-realtime-2.1` | 20 | 661 ms | 902 ms | 2,649 ms |
+
+The full model was faster in this same-fixture comparison and correctly handled the
+tested grid reference and review command, so it is the default. The table starts at
+receipt of the provider's `speech_stopped` event. It excludes VAD silence and uplink
+time. The fixture also measures from the last microphone sample above the signal
+threshold to decoded assistant output, separately from the provider event metric.
+Neither measure treats a tool acknowledgement as completed domain work.
+The output measurement detects nonzero PCM in the browser playback graph. It does
+not include physical speaker latency or an external microphone loopback.
+
+A second 20-turn run of the selected model measured 1,367 ms median and 1,550 ms
+p95 from the last microphone sample above the signal threshold to decoded output.
+The p95 missed the initial 1,500 ms target by 50 ms. The 350 ms VAD silence setting
+is retained to allow short pauses within a request. Detected-turn-end to output in
+that run was 650/837 ms median/p95, with a 2,484 ms cold connection. First assistant
+caption latency from detected turn end was 308/483 ms across 20 turns. Final caption
+latency was 1,573/2,782 ms across 19 completed captions; the last response was stopped
+after its first decoded audio was measured.
+
+A representative barge-in silenced the decoded output in 25 ms, within the 250 ms
+target. A spoken rename reached the ordinary review sheet in 2,759 ms from detected
+turn end, including tool discovery and validation. Those are single interaction
+samples, separate from the ordinary-turn distribution. Live cases also covered a
+grid reference with pink noise, an intentional pause, explicit Apply, spoken approval
+refusal, Cancel after voice off, reads, duplication, generation preview without a paid
+job, microphone revocation, offline/project/fullscreen teardown, and 320px/short-screen
+review layouts. Physical microphone hot-unplug and hardware speaker latency were not
+measured; native capture loss was exercised with Chromium permission revocation.
+
+Official references checked on 2026-09-14:
+[GPT Realtime 2.1](https://developers.openai.com/api/docs/models/gpt-realtime-2.1),
+[GPT Realtime 2.1 mini](https://developers.openai.com/api/docs/models/gpt-realtime-2.1-mini),
+[Realtime](https://developers.openai.com/api/docs/guides/realtime),
+[server controls](https://developers.openai.com/api/docs/guides/voice-server-controls?api=realtime),
+and [VAD](https://developers.openai.com/api/docs/guides/realtime-vad).

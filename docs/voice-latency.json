@@ -1,0 +1,177 @@
+{
+  "metric": "Browser receipt of server VAD speech_stopped to first nonzero decoded output; excludes VAD silence, uplink and physical speaker latency",
+  "selectedModel": "gpt-realtime-2.1",
+  "conditions": "Local development machine, unthrottled WebRTC, four prerecorded requests repeated five times; local checks may share CPU; no provider guarantee",
+  "comparisons": [
+    {
+      "model": "gpt-realtime-2.1-mini",
+      "measuredAt": "2026-09-14T13:14:31.405Z",
+      "browser": "152.0.7977.83",
+      "transport": "WebRTC through local Videobook server; unthrottled connection; synthesized microphone recordings",
+      "vad": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "silenceMs": 350,
+        "prefixMs": 300
+      },
+      "reasoning": "minimal",
+      "sampleCount": 20,
+      "p50Ms": 881.4000000059605,
+      "p95Ms": 1169.300000011921,
+      "connectMs": 2939.800000011921,
+      "latenciesMs": [
+        969.6000000238419,
+        1024.800000011921,
+        881.4000000059605,
+        1169.300000011921,
+        766,
+        896.4000000059605,
+        956.0999999940395,
+        874.8000000119209,
+        874.5,
+        845.6999999880791,
+        993.2000000178814,
+        726,
+        882.5999999940395,
+        863.5,
+        1185.300000011921,
+        871.5999999940395,
+        873.6000000238419,
+        849.7000000178814,
+        994.4000000059605,
+        853.9000000059605
+      ]
+    },
+    {
+      "model": "gpt-realtime-2.1",
+      "measuredAt": "2026-09-14T13:18:29.394Z",
+      "browser": "152.0.7977.83",
+      "transport": "WebRTC through local Videobook server; unthrottled connection; synthesized microphone recordings",
+      "vad": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "silenceMs": 350,
+        "prefixMs": 300
+      },
+      "reasoning": "minimal",
+      "sampleCount": 20,
+      "p50Ms": 660.5999999940395,
+      "p95Ms": 901.5999999940395,
+      "connectMs": 2648.5999999940395,
+      "latenciesMs": [
+        653.3999999761581,
+        504.60000002384186,
+        592.4000000059605,
+        620.0999999940395,
+        901.5999999940395,
+        642.2999999821186,
+        657.9000000059605,
+        594.5,
+        680.9000000059605,
+        667,
+        695.5999999940395,
+        638.6000000238419,
+        672.2999999821186,
+        660.5999999940395,
+        700.8000000119209,
+        643.9000000059605,
+        673.4000000059605,
+        640.9000000059605,
+        946.5999999940395,
+        729.1999999880791
+      ]
+    }
+  ],
+  "outputMeasurement": "RMS in the Web Audio playback graph; no physical speaker/microphone loopback",
+  "selectedModelRepeat": {
+    "model": "gpt-realtime-2.1",
+    "measuredAt": "2026-09-14T13:50:56.997Z",
+    "browser": "152.0.7977.83",
+    "transport": "WebRTC through local Videobook server; unthrottled connection; synthesized microphone recordings",
+    "vad": {
+      "type": "server_vad",
+      "threshold": 0.5,
+      "silenceMs": 350,
+      "prefixMs": 300
+    },
+    "reasoning": "minimal",
+    "sampleCount": 20,
+    "p50Ms": 650.1000000238419,
+    "p95Ms": 836.6999999880791,
+    "connectMs": 2483.800000011921,
+    "latenciesMs": [
+      682.5,
+      645,
+      596.5999999940395,
+      638.5,
+      720,
+      728.4000000059605,
+      661.5999999940395,
+      591.9000000059605,
+      836.6999999880791,
+      638.1999999880791,
+      650.0999999940395,
+      650.1000000238419,
+      763.6999999880791,
+      844.7999999821186,
+      608.5,
+      666.6999999880791,
+      632.5999999940395,
+      613.3999999761581,
+      623.5999999940395,
+      709.5999999940395
+    ],
+    "microphoneLatenciesMs": [
+      1352.300000011921,
+      1349.0999999940395,
+      1266.7000000178814,
+      1283.300000011921,
+      1440.7999999821186,
+      1448.0999999940395,
+      1366.5999999940395,
+      1334,
+      1550,
+      1366.699999988079,
+      1433.4000000059605,
+      1302.2000000178814,
+      1449.5999999940395,
+      1553.7999999821186,
+      1315.2999999821186,
+      1416.699999988079,
+      1350.2000000178814,
+      1316.5999999940395,
+      1367,
+      1400.0999999940395
+    ],
+    "microphoneToAudio": {
+      "samples": 20,
+      "p50Ms": 1366.699999988079,
+      "p95Ms": 1550
+    },
+    "firstCaption": {
+      "samples": 20,
+      "p50Ms": 307.7999999821186,
+      "p95Ms": 482.5
+    },
+    "finalCaption": {
+      "samples": 19,
+      "p50Ms": 1572.5,
+      "p95Ms": 2782.0999999940395
+    },
+    "finalCaptionNote": "19 completed captions; the final response was stopped after its first decoded audio was measured"
+  },
+  "targetAssessment": {
+    "speechEndToOutputP95TargetMs": 1500,
+    "observedMs": 1550,
+    "met": false,
+    "missMs": 50,
+    "vadDecision": "Retain 350 ms silence to avoid splitting ordinary within-sentence pauses; this is a measured target miss, not a provider guarantee"
+  },
+  "interactionSamples": {
+    "bargeInToDecodedSilenceMs": 24.80000001192093,
+    "bargeInSamples": 1,
+    "detectedTurnToReviewMs": 2759.199999988079,
+    "reviewSamples": 1,
+    "note": "Representative live command and interruption checks, separate from ordinary-turn latency"
+  }
+}

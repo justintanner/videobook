@@ -1,0 +1,58 @@
+.command-line-shell > .voice-toggle {
+  --voice-level: 0;
+  grid-area: voice;
+  display: grid;
+  place-items: center;
+  position: relative;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #a2bbaa;
+  background: transparent;
+  cursor: pointer;
+  isolation: isolate;
+}
+.voice-toggle .voice-ring { position: absolute; inset: 0; width: 44px; height: 44px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-dasharray: 8 3; opacity: .4; pointer-events: none; }
+.voice-toggle[aria-pressed='true'] { color: #8fffb8; background: #0b2b1b; }
+.voice-toggle[aria-pressed='true'] .voice-ring { opacity: calc(.55 + var(--voice-level) * .45); stroke-width: calc(1.5px + var(--voice-level) * 1.5px); filter: drop-shadow(0 0 calc(var(--voice-level) * 5px) #55ff9c); transform: scale(calc(.91 + var(--voice-level) * .09)); }
+.voice-toggle.voice-review { color: #ffe0a2; }
+.voice-toggle.voice-error { color: #ffae9f; }
+.voice-toggle:focus-visible { outline: 2px solid #d5ffe4; outline-offset: 3px; }
+.voice-toggle:disabled { opacity: .45; cursor: default; }
+.command-composer:has(> .voice-comms) { display: flex; flex-direction: column; max-height: calc(100dvh - var(--app-gutter) * 2); }
+.command-composer:has(> .voice-comms) > * { flex: 0 0 auto; }
+.command-composer:has(> .voice-comms) > .confirm-sheet { flex: 0 1 auto; min-height: 150px; }
+.command-composer > .voice-comms { flex: 0 1 auto; min-height: 40px; overflow-y: auto; scrollbar-width: thin; }
+.voice-comms { position: relative; min-width: 0; border: 1px solid #315c42; border-left: 3px solid #77eda2; border-radius: 8px 8px 2px 2px; background: linear-gradient(110deg, #10291d 0%, #081910 75%); color: #c9e4d2; margin-bottom: 5px; padding: 9px 11px 7px; box-shadow: inset 0 1px #b3ffc712; }
+.voice-comms-header { display: flex; align-items: center; gap: 7px; min-width: 0; color: #97e9b3; }
+.voice-comms-header > strong { font-size: 10px; letter-spacing: .14em; }
+.voice-comms-status { font-size: 11px; }
+.voice-comms-header > button { margin-left: auto; display: flex; align-items: center; gap: 4px; min-height: 28px; padding: 3px; border: none; background: transparent; color: #c4ddcc; font: inherit; font-size: 10px; cursor: pointer; }
+.voice-comms-header > button[aria-expanded='true'] > svg { transform: rotate(180deg); }
+.voice-comms button:focus-visible { outline: 2px solid #d5ffe4; outline-offset: 2px; }
+.voice-comms-message, .voice-comms-review { margin: 4px 0; font-size: 12px; line-height: 1.4; }
+.voice-comms-review { color: #ffe0a2; }
+.voice-comms.voice-review { border-left-color: #ffe0a2; }
+.voice-comms.voice-off { border-left-color: #557663; }
+.voice-comms.voice-error { border-left-color: #ffae9f; }
+.voice-comms.voice-error .voice-comms-message { color: #ffd5cc; }
+.voice-captions { max-height: 90px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.voice-captions.expanded { max-height: min(260px, 30dvh); }
+.voice-captions > p { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 8px; margin: 5px 0; font-size: 12px; line-height: 1.5; }
+.voice-captions > p > strong { padding-top: 2px; font-size: 9px; letter-spacing: .07em; color: #87b198; }
+.voice-captions > p > span { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.voice-captions em { color: #96ae9e; font-size: 10px; font-style: normal; }
+.voice-disclosure { display: block; margin-top: 4px; color: #8cae97; font-size: 9px; }
+.voice-resume { display: flex; align-items: center; gap: 5px; margin: 5px 0; padding: 7px; color: #e0ffea; border: 1px solid #548768; background: #173c26; cursor: pointer; }
+@media (max-width: 380px) {
+  .voice-comms { padding: 6px 8px; }
+  .voice-comms-header { gap: 5px; }
+  .voice-comms-header > button > span { display: none; }
+  .voice-captions > p { grid-template-columns: 48px minmax(0, 1fr); gap: 5px; }
+}
+@media (max-height: 500px) { .voice-captions { max-height: 44px; } .voice-captions.expanded { max-height: 22dvh; } .voice-disclosure { display: none; } }
+@media (max-height: 500px) { .command-composer:has(> .voice-comms) .confirm-sheet-foot { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; } }
+@media (prefers-reduced-motion: reduce) { .voice-toggle[aria-pressed='true'] .voice-ring { transform: none; filter: none; } }

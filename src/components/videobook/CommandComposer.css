@@ -1,5 +1,6 @@
 .command-line-shell {
-  grid-template-areas: 'actions editor model send';
+  grid-template-areas: 'actions editor model voice send';
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
 }
 
 .command-actions-controls {
@@ -94,8 +95,8 @@
 
 @media (max-width: 600px) {
   .command-line-shell {
-    grid-template-areas: 'editor editor editor' 'actions model send';
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'editor editor editor editor' 'actions model voice send';
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
     padding-top: 5px;
     padding-bottom: 6px;
   }
