@@ -68,6 +68,26 @@ required to resume. Missing credentials, denied permission and connection failur
 leave text chat usable. Browser autoplay recovery is exposed as **Enable spoken
 replies**.
 
+## Connection limits and billing
+
+OpenAI can return HTTP 429 for both temporary rate limits and exhausted credits or
+account limits. Voice reads the provider error code before choosing recovery text,
+including errors received during replies or transcription. Provider messages and
+raw error payloads are not sent to the browser.
+
+| Error | Recovery |
+| --- | --- |
+| `credit_balance_exhausted` | Add API credits in [OpenAI billing](https://platform.openai.com/settings/organization/billing/), then start voice again. |
+| `project_spend_limit_exceeded` | Review the project's spend limit in OpenAI settings. |
+| `organization_spend_limit_exceeded` | Review the organization's spend limit in OpenAI settings. |
+| `organization_usage_limit_exceeded` | Review the organization's approved usage limit. |
+| `insufficient_quota` | Check API credits and usage limits. |
+| `rate_limit_exceeded` / `slow_down` | Wait before explicitly starting voice again. |
+
+Waiting alone does not resolve exhausted credits or account limits. An unclassified
+429 asks the user to check billing and usage limits without promising a temporary
+failure. See the [official OpenAI error guide](https://developers.openai.com/api/docs/guides/error-codes).
+
 ## Reproducible validation
 
 Normal integration tests use real book engines and local HTTP servers. Browser tests

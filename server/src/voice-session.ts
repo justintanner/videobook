@@ -19,11 +19,37 @@ class VoiceError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
+const providerErrorSchema = z.object({ code: z.string().nullish(), type: z.string().nullish() });
+const quotaMessage = "OpenAI API quota is exhausted. Check credits and usage limits in OpenAI settings before restarting voice.";
+const rateLimitMessage = "OpenAI is temporarily rate limiting voice. Wait before starting voice again.";
+const providerMessages = new Map([
+  ["credit_balance_exhausted", "OpenAI API credits are exhausted. Add credits in OpenAI billing, then start voice again."],
+  ["organization_spend_limit_exceeded", "The OpenAI organization spend limit has been reached. Review the limit in OpenAI settings before restarting voice."],
+  ["project_spend_limit_exceeded", "The OpenAI project spend limit has been reached. Review the project limit in OpenAI settings before restarting voice."],
+  ["organization_usage_limit_exceeded", "The OpenAI organization usage limit has been reached. Review usage limits in OpenAI settings before restarting voice."],
+  ["insufficient_quota", quotaMessage],
+  ["rate_limit_exceeded", rateLimitMessage],
+  ["slow_down", rateLimitMessage],
+]);
+
+function providerErrorMessage(details: unknown, fallbackCode?: string): string | undefined {
+  const parsed = providerErrorSchema.safeParse(details);
+  const code = (parsed.success ? parsed.data.code : undefined) ?? fallbackCode;
+  const message = code ? providerMessages.get(code) : undefined;
+  if (message) return message;
+  if (parsed.success && parsed.data.type === "insufficient_quota") return quotaMessage;
+  if (parsed.success && parsed.data.type === "rate_limit_error") return rateLimitMessage;
+  return undefined;
+}
+
 export function voiceError(error: unknown): VoiceError {
   if (error instanceof VoiceError) return error;
   if (error instanceof OpenAiError) {
+    const body = z.object({ error: z.unknown() }).safeParse(error.body);
+    const message = providerErrorMessage(body.success ? body.data.error : undefined, error.code);
+    if (message) return new VoiceError(message, error.status);
     if (error.status === 401 || error.status === 403) return new VoiceError("OpenAI voice access was denied. Check OPENAI_API_KEY and model access on the server.", 503);
-    if (error.status === 429) return new VoiceError("OpenAI voice is at its limit. Wait a moment, then start voice again.", 429);
+    if (error.status === 429) return new VoiceError("OpenAI rejected voice because of an account limit. Check OpenAI billing and usage limits before retrying.", 429);
     return new VoiceError("OpenAI voice could not connect. Check the voice model and network, then try again.", 502);
   }
   return new VoiceError("Voice disconnected. Start voice again to reconnect.", 502);
@@ -229,7 +255,7 @@ export class VoiceSession {
     } else if (event.type === "conversation.item.input_audio_transcription.completed") {
       this.caption(id, "user", event.transcript ?? "", true);
     } else if (event.type === "conversation.item.input_audio_transcription.failed") {
-      this.fail("Could not transcribe this turn. Start voice and try again.");
+      this.fail(providerErrorMessage(event.error) ?? "Could not transcribe this turn. Start voice and try again.");
     } else if (event.type === "response.output_audio_transcript.delta") {
       this.caption(id, "assistant", (this.captions.get(id)?.text ?? "") + (event.delta ?? ""), false);
     } else if (event.type === "response.output_audio_transcript.done") {
@@ -251,7 +277,10 @@ export class VoiceSession {
       this.usage.responses += 1;
       this.usage.inputTokens += typeof usage?.input_tokens === "number" ? usage.input_tokens : 0;
       this.usage.outputTokens += typeof usage?.output_tokens === "number" ? usage.output_tokens : 0;
-      if (event.response?.status === "failed") this.fail("The voice reply failed. Start voice to retry.");
+      if (event.response?.status === "failed") {
+        const details = z.object({ error: z.unknown().optional() }).safeParse(event.response.status_details);
+        this.fail(providerErrorMessage(details.success ? details.data.error : undefined) ?? "The voice reply failed. Start voice to retry.");
+      }
       else this.continueResponse();
     } else if (event.type === "response.function_call_arguments.done" && event.call_id) {
       const key = `call:${event.call_id}`;
@@ -261,7 +290,7 @@ export class VoiceSession {
       this.toolChain = this.toolChain.then(() => this.runTool(event, turnId)).catch(() => { this.fail("Voice action failed. Check the command and try again."); });
     } else if (event.type === "error") {
       if (event.error?.code === "response_cancel_not_active") return;
-      this.fail("Voice service reported an error. Start voice again; check model access if it repeats.");
+      this.fail(providerErrorMessage(event.error) ?? "Voice service reported an error. Start voice again; check model access if it repeats.");
     }
   }
 

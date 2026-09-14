@@ -4,9 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
 import express from "express";
+import { OpenAiError } from "@apicity/openai";
 import { OpenAiRealtimeCallRequestSchema } from "@apicity/openai/zod";
 import { BookManager } from "../book-manager.js";
-import { VoiceSession, VoiceSessions } from "../voice-session.js";
+import { VoiceSession, VoiceSessions, voiceError } from "../voice-session.js";
 import { voiceRouter } from "../voice-http.js";
 import { restrictHttpAccess } from "../http-access.js";
 import { voiceSessionConfig } from "../voice-config.js";
@@ -79,6 +80,48 @@ describe("voice session boundaries", () => {
     expect(await response.json()).toMatchObject({ error: expect.stringContaining("OPENAI_API_KEY") });
     expect((await fetch(`${origin}/api/voice/unknown/events`)).status).toBe(404);
     expect((await fetch(`${origin}/api/voice/unknown`, { method: "DELETE" })).status).toBe(204);
+  });
+
+  it.each([
+    ["credit_balance_exhausted", "Add credits in OpenAI billing"],
+    ["organization_spend_limit_exceeded", "organization spend limit"],
+    ["project_spend_limit_exceeded", "project spend limit"],
+    ["organization_usage_limit_exceeded", "organization usage limit"],
+    ["insufficient_quota", "Check credits and usage limits"],
+  ])("gives actionable recovery for %s without treating it as temporary throttling", (code, recovery) => {
+    const failure = voiceError(new OpenAiError("Private provider details", 429, { error: { code, type: "insufficient_quota", message: "Private provider details" } }));
+    expect(failure.status).toBe(429);
+    expect(failure.message).toContain(recovery);
+    expect(failure.message).not.toMatch(/wait|temporar|Private provider details/iu);
+    expect(voiceError(failure)).toBe(failure);
+  });
+
+  it("separates temporary throttling, quota types and unclassified 429 responses", () => {
+    for (const code of ["rate_limit_exceeded", "slow_down"]) {
+      expect(voiceError(new OpenAiError("Private details", 429, { error: { code, type: "rate_limit_error" } })).message).toContain("temporarily rate limiting");
+    }
+    expect(voiceError(new OpenAiError("Private details", 429, { error: { type: "insufficient_quota" } })).message).toContain("Check credits");
+    expect(voiceError(new OpenAiError("Private details", 429, { error: { code: "unknown_code", type: "rate_limit_error" } })).message).toContain("temporarily rate limiting");
+    expect(voiceError(new OpenAiError("Private details", 429, null, "credit_balance_exhausted")).message).toContain("Add credits");
+    for (const body of [null, "Private details", { error: null }, { error: { code: "unknown_code" } }]) {
+      const failure = voiceError(new OpenAiError("Private details", 429, body));
+      expect(failure.status).toBe(429);
+      expect(failure.message).toContain("Check OpenAI billing and usage limits");
+      expect(failure.message).not.toMatch(/wait|temporar|Private details/iu);
+    }
+  });
+
+  it.each(["error", "response.done", "conversation.item.input_audio_transcription.failed"])("stops voice with billing guidance when credits run out during %s", async (type) => {
+    const session = new VoiceSession(books, bookId, notebookId, engine, "unused-without-start", 120_000, () => undefined);
+    const events: VoiceSessionEvent[] = [];
+    session.subscribe(event => events.push(event));
+    const error = { code: "credit_balance_exhausted", type: "insufficient_quota", message: "Private provider details" };
+    session.receive({ type, error, response: { status: "failed", status_details: { type: "failed", error } } });
+    await session.close();
+    expect(events.filter(event => event.type === "error")).toEqual([{ type: "error", message: "OpenAI API credits are exhausted. Add credits in OpenAI billing, then start voice again." }]);
+    expect(events.filter(event => event.type === "closed")).toHaveLength(1);
+    expect(JSON.stringify(events)).not.toContain("Private provider details");
+    await expect(session.start("v=0", new AbortController().signal)).rejects.toThrow("cancelled");
   });
 
   it("owns each session token, fences aborted starts and closes exactly once", async () => {
