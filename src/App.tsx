@@ -12,7 +12,6 @@ import {
   type CSSProperties,
   type ChangeEvent,
   type DragEvent,
-  type FormEvent,
   type KeyboardEvent,
 } from 'react'
 import {
@@ -46,7 +45,6 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Plus,
-  RefreshCw,
   Search,
   Settings,
   Sparkles,
@@ -99,8 +97,6 @@ import {
 } from './videobook/asset-tag-editing'
 import { AssetTagSummary } from '@/components/videobook/AssetTagSummary'
 import { LibraryScreen } from '@/components/videobook/LibraryScreen'
-import { SCHEMA_VERSION } from 'videobook-engine/catalog-metadata'
-import enginePackage from 'videobook-engine/package.json'
 import {
   NOTEBOOK_GRID_ADDRESS_SOURCE,
   normalizeNotebookReference,
@@ -205,7 +201,8 @@ import { NotebookToolbar } from '@/components/videobook/NotebookToolbar'
 import { isNotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 import { SplitBody } from '@/components/videobook/confirm/bodies/SplitBody'
 import { PostToXBody } from '@/components/videobook/confirm/bodies/PostToXBody'
-import { XConnectionCard } from '@/components/videobook/XConnectionCard'
+import { SettingsScreen } from '@/components/videobook/SettingsScreen'
+import { parseSettingsProviders, parseSettingsStorage, type SettingsProvider, type SettingsStorageSnapshot } from '@/videobook/settings'
 import {
   fetchXConnectionStatus,
   initialXConnectionState,
@@ -756,14 +753,6 @@ type GenerationPlanRecord = {
   error: string | null
   createdAt: string
   updatedAt: string
-}
-
-type ProviderRecord = {
-  envKey: string
-  provider: string
-  label: string
-  keyStatus: string
-  maskedKey: string | null
 }
 
 type InitialWorkspace = {
@@ -1884,25 +1873,6 @@ function asCommands(value: unknown): ServerCommand[] {
         && typeof item.description === 'string'
     })
     : []
-}
-
-function asProviders(value: unknown): ProviderRecord[] {
-  const item = recordValue(value)
-  if (!Array.isArray(item?.providers)) return []
-  return item.providers.flatMap((entry) => {
-    const provider = recordValue(entry)
-    const envKey = provider && asString(provider.envKey)
-    const label = provider && asString(provider.label)
-    const group = provider && asString(provider.provider)
-    if (!provider || !envKey || !label || !group) return []
-    return [{
-      envKey,
-      provider: group,
-      label,
-      keyStatus: asString(provider.keyStatus) ?? 'missing',
-      maskedKey: asString(provider.maskedKey),
-    }]
-  })
 }
 
 function savedValue(key: string): string {
@@ -3335,13 +3305,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => new Map(generationActions.map((action) => [action.tool, action.title])),
     [generationActions],
   )
-  const [providers, setProviders] = useState<ProviderRecord[]>([])
+  const [providers, setProviders] = useState<SettingsProvider[]>([])
   const [xConnection, setXConnection] = useState<XConnectionState>(
     initialXConnectionState,
   )
   // Post length the connected X account allows: 280, or 25,000 with X Premium.
   const xPostMaxLength = xPostMaxCharacters(xConnection.status)
-  const [storage, setStorage] = useState<unknown>(null)
+  const [storage, setStorage] = useState<SettingsStorageSnapshot | null>(null)
+  const [settingsLoading, setSettingsLoading] = useState(false)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [settingsRefreshed, setSettingsRefreshed] = useState(false)
+  const settingsRequestRef = useRef(0)
   const { lastWorkSlot, rememberLastWorkSlot } = useLastWorkSlot(
     bookId,
     notebook?.id ?? null,
@@ -3415,8 +3389,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [pendingCommandPlan, setPendingCommandPlan] = useState<PendingCommandPlan | null>(null)
   const [pendingChatAction, setPendingChatAction] = useState<PendingChatAction | null>(null)
   const [lastEditActionId, setLastEditActionId] = useState('')
-  const [secretKey, setSecretKey] = useState('KIE_API_KEY')
-  const [secretValue, setSecretValue] = useState('')
   const [busy, setBusy] = useState(false)
   const [mcpActivity, setMcpActivity] = useState<McpActivity>(idleMcpActivity)
   const [processingArtifactId, setProcessingArtifactId] = useState<string | null>(null)
@@ -7695,7 +7667,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   ): Promise<XConnectionStatus | null> => {
     try {
       const status = await fetchXConnectionStatus(call, options)
-      setXConnection((current) => ({ ...current, status }))
+      setXConnection((current) => ({ ...current, status, error: null }))
       syncPendingXPostLimit(xPostMaxCharacters(status))
       return status
     } catch (error) {
@@ -7746,30 +7718,48 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const refreshSettings = async () => {
-    setBusy(true)
+    if (mcp.state !== 'ready') return
+    const request = ++settingsRequestRef.current
+    const targetBookId = bookId
+    setSettingsLoading(true)
+    setSettingsError(null)
+    setNoticeState(null)
+    setSettingsRefreshed(false)
+    setStorage(targetBookId ? { bookId: targetBookId, status: 'loading' } : null)
+    const [providerResult, storageResult, xResult] = await Promise.allSettled([
+      call('provider_key_status', {}),
+      targetBookId ? call('storage_status', { book_id: targetBookId }) : Promise.resolve(null),
+      refreshXConnection({ refreshAccount: true }),
+    ])
+    if (request !== settingsRequestRef.current) return
+    let refreshed = true
     try {
-      const status = await call('provider_key_status', {})
-      setProviders(asProviders(status))
-      await refreshXConnection({ refreshAccount: true })
-      if (bookId) setStorage(await call('storage_status', { book_id: bookId }))
-      setNotice('Settings refreshed')
+      if (providerResult.status === 'rejected') throw providerResult.reason
+      setProviders(parseSettingsProviders(providerResult.value))
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
-    } finally {
-      setBusy(false)
+      refreshed = false
+      setSettingsError(error instanceof Error ? error.message : String(error))
     }
+    if (targetBookId) {
+      try {
+        if (storageResult.status === 'rejected') throw storageResult.reason
+        setStorage({ bookId: targetBookId, status: 'ready', value: parseSettingsStorage(storageResult.value) })
+      } catch (error) {
+        refreshed = false
+        setStorage({ bookId: targetBookId, status: 'error', error: error instanceof Error ? error.message : String(error) })
+      }
+    }
+    setSettingsRefreshed(refreshed && xResult.status === 'fulfilled' && xResult.value !== null)
+    setSettingsLoading(false)
   }
 
-  const storeSecret = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!secretValue) return
+  const storeSecret = async (key: string, value: string) => {
+    if (mcp.state !== 'ready') throw new Error('Connect to save settings')
+    if (!value.trim()) throw new Error('Enter a value to save')
     setBusy(true)
     try {
-      await call('set_env_secret', { key: secretKey, value: secretValue })
-      setSecretValue('')
+      await call('set_env_secret', { key, value })
       await refreshSettings()
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -12789,15 +12779,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           )}
 
           {screen === 'settings' && (
-            <section className="workspace-screen">
-              <header><div><span className="section-label">APPLICATION SETTINGS</span><h1>Provider and storage state</h1><p>Provider keys and X OAuth are application-level; object publication state is scoped to the selected book.</p></div><button type="button" disabled={busy} onClick={() => void refreshSettings()}><RefreshCw size={15} />Refresh</button></header>
-              <form className="project-create" onSubmit={storeSecret}>
-                <label>Provider key<select value={secretKey} onChange={(event) => setSecretKey(event.target.value)}>{['KIE_API_KEY', 'OPENAI_API_KEY', 'XAI_API_KEY', 'ELEVENLABS_API_KEY', 'FAL_API_KEY', 'GOOGLE_FLOW_API_KEY', 'X_CLIENT_ID', 'X_CLIENT_SECRET'].map((key) => <option key={key} value={key}>{key}</option>)}</select></label>
-                <label>Value<input type="password" value={secretValue} onChange={(event) => setSecretValue(event.target.value)} placeholder="Stored locally in .env" /></label>
-                <button type="submit" disabled={busy || !secretValue}>Save key</button>
-              </form>
-              <div className="settings-sections"><div className="settings-grid">{providers.map((provider) => <article className="provider-card" key={provider.envKey}><span className={`provider-dot provider-${provider.keyStatus}`} /><div><strong>{provider.label}</strong><p>{provider.keyStatus}{provider.maskedKey ? ` · ${provider.maskedKey}` : ''}</p></div></article>)}</div><div className="settings-x-connection"><div className="workspace-section-heading"><h2>X account</h2><p>Posting to X needs a one-time browser authorization. Tokens renew automatically afterwards; reconnect if X revokes them.</p></div><XConnectionCard busy={busy} connection={xConnection} onConnect={() => void connectX()} /></div><div className="settings-diagnostics"><div className="workspace-section-heading"><h2>Selected book storage</h2><p>Catalog and object publication status from videobook-engine {enginePackage.version} schema v{SCHEMA_VERSION}.</p></div><div className="settings-diagnostics-grid"><article className="record-card"><pre>{storage ? JSON.stringify(storage, null, 2) : 'Refresh settings to inspect storage.'}</pre></article></div></div></div>
-            </section>
+            <SettingsScreen
+              providers={providers}
+              loading={settingsLoading}
+              error={settingsError}
+              refreshed={settingsRefreshed}
+              storage={storage}
+              bookId={bookId}
+              bookName={activeBook?.name ?? null}
+              connection={xConnection}
+              busy={busy || mcp.state !== 'ready'}
+              onRefresh={refreshSettings}
+              onSave={storeSecret}
+              onConnect={() => void connectX()}
+            />
           )}
       </>
 

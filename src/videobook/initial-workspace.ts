@@ -75,7 +75,19 @@ async function loadInitialWorkspaceFromClient(
     savedValue('videobook.active-book'),
   )
   const bookId = typeof selected?.bookId === 'string' ? selected.bookId : ''
-  if (!bookId) return null
+  if (!bookId) return {
+    bookValue,
+    commandValue,
+    chatModelValue,
+    bookId: '',
+    notebookId: '',
+    notebookValue: [],
+    assetValue: [],
+    sequenceValue: null,
+    jobValue: [],
+    ingestStatusValue: [],
+    actionValue: [],
+  }
   const [
     notebookValue,
     assetValue,

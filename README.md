@@ -150,6 +150,8 @@ B2_ENDPOINT
 
 Provider credentials continue to use the existing `@apicity` integrations.
 See `.env.tpl` for the complete set.
+`VIDEOBOOK_ENV_PATH` selects the local environment file used by Settings;
+it defaults to the repository's `.env`. This also allows isolated application fixtures.
 
 ### Local search models
 

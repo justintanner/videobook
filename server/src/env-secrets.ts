@@ -117,8 +117,8 @@ function upsertEnvLine(raw: string, key: ManagedEnvKey, newLine: string): string
 }
 
 function defaultEnvPath(): string {
-  // Repo root, both from server/src (tsx) and server/dist (compiled).
-  return resolve(dirname(fileURLToPath(import.meta.url)), "../../.env");
+  return process.env.VIDEOBOOK_ENV_PATH
+    ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../.env");
 }
 
 export function createSecretStore(options: SecretStoreOptions = {}): SecretStore {

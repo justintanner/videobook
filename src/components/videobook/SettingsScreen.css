@@ -1,0 +1,266 @@
+.app-shell.app-screen-settings {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.app-screen-settings > .command-composer {
+  position: relative;
+  inset: auto;
+  grid-row: 3;
+  grid-column: 1 / -1;
+  margin: 12px var(--app-gutter);
+  transform: none;
+}
+
+.workspace-screen.settings-screen {
+  padding: 20px 24px;
+  scroll-padding: 16px;
+  font-family: system-ui, sans-serif;
+}
+
+.settings-screen > header {
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 16px;
+}
+
+.settings-screen h1 {
+  margin: 0 0 4px;
+  font-size: 28px;
+  letter-spacing: -0.03em;
+}
+
+.settings-screen header p {
+  font-size: 13px;
+  color: #86a795;
+}
+
+.settings-refresh {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: #86a795;
+  font-size: 12px;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(340px, 1fr);
+  align-items: start;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.settings-panel,
+.settings-secondary,
+.settings-credentials,
+.settings-credential-copy {
+  min-width: 0;
+}
+
+.settings-secondary {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-panel {
+  border: 1px solid var(--line);
+  padding: 16px;
+  background: rgba(5, 18, 12, 0.88);
+  color: #a6c5b3;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.settings-panel-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-panel-heading h2 {
+  margin: 0;
+  color: #c4ead5;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.settings-panel-heading > span,
+.settings-section-summary,
+.settings-details summary > span,
+.settings-key-editor small {
+  color: #86a795;
+  font-size: 12px;
+}
+
+.settings-section-summary {
+  margin: 6px 0 14px;
+}
+
+.settings-credentials {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-providers .settings-credentials {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.settings-credential {
+  min-width: 0;
+  border: 1px solid var(--line);
+  padding: 12px;
+}
+
+.settings-credential-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-key-status {
+  flex: 0 0 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #81958a;
+}
+
+.settings-key-configured { background: var(--green); }
+.settings-key-placeholder { background: #e3b869; }
+
+.settings-credential-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  flex: 1;
+  gap: 4px 8px;
+}
+
+.settings-credential-copy strong {
+  flex: 1 1 100%;
+  font-size: 13px;
+  font-weight: 500;
+  color: #c4ead5;
+}
+
+.settings-key-caption,
+.settings-key-source,
+.settings-key-value {
+  color: #86a795;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.settings-key-value { max-width: 100%; font-family: monospace; }
+.settings-key-source { flex: 1 1 100%; }
+
+.settings-screen button {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  color: #bce6cf;
+  background: rgba(36, 112, 73, 0.12);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.settings-screen button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.settings-screen :is(button, input, summary, a):focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+
+.settings-key-editor {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settings-key-editor input {
+  min-height: 40px;
+  min-width: 0;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--line);
+  color: #c4ead5;
+  background: #031009;
+  font-size: 14px;
+}
+
+.settings-key-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-key-actions > button[type='submit'] { border-color: var(--green); }
+
+.settings-screen .x-connection-card {
+  min-width: 0;
+  padding: 12px 0;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  flex-wrap: wrap;
+}
+
+.settings-screen .x-connection-card > div {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.settings-screen .x-connection-card :is(strong, p) { font-size: 12px; }
+
+.settings-details {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 4px;
+}
+
+.settings-details summary {
+  padding: 10px 0;
+  cursor: pointer;
+  color: #b6dfc8;
+}
+
+.settings-details summary > span {
+  display: inline-block;
+  margin-left: 8px;
+}
+
+.settings-storage-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.settings-storage-summary dt { color: #86a795; font-size: 12px; }
+.settings-storage-summary dd { margin: 4px 0 0; color: #c4ead5; text-transform: capitalize; }
+
+.settings-details pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+.settings-error { color: #ffb8b8; font-size: 13px; overflow-wrap: anywhere; }
+.settings-feedback { color: #bce6cf; font-size: 12px; }
+
+@media (max-width: 1000px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .workspace-screen.settings-screen { padding: 16px 12px; }
+  .settings-screen > header { align-items: flex-start; }
+  .settings-providers .settings-credentials { grid-template-columns: minmax(0, 1fr); }
+  .settings-screen button { min-height: 44px; }
+}
