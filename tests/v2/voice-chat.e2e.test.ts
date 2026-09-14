@@ -7,6 +7,8 @@ import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
+import { WebSocket } from 'ws'
+import { once } from 'node:events'
 import sharp from 'sharp'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -14,6 +16,7 @@ import { FFMPEG } from '../../server/src/ffmpeg.js'
 
 const execFileAsync = promisify(execFile)
 const live = process.env.VIDEOBOOK_RUN_VOICE_LIVE === '1'
+const voiceMode = process.env.VIDEOBOOK_VOICE_TEST_MODE === 'xai' ? 'xai' : process.env.VIDEOBOOK_VOICE_TEST_MODE === 'openai' ? 'openai' : 'auto'
 const benchmarkTurns = Math.max(1, Number(process.env.VIDEOBOOK_VOICE_BENCHMARK_TURNS ?? 1))
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -72,6 +75,7 @@ describe('voice chat in the real browser', () => {
     await page.goto(appUrl)
     await page.getByLabel('Start voice conversation').waitFor({ state: 'visible', timeout: 30_000 })
     await waitFor(() => page.getByLabel('Start voice conversation').isEnabled())
+    await page.getByLabel('Voice provider', { exact: true }).selectOption(voiceMode)
   }
 
   async function ensureImage() {
@@ -87,21 +91,21 @@ describe('voice chat in the real browser', () => {
   }
 
   beforeAll(async () => {
-    if (live && !process.env.OPENAI_API_KEY) throw new Error('Live voice checks require OPENAI_API_KEY and vitest.voice.config.ts')
+    if (live && !process.env.OPENAI_API_KEY && !process.env.XAI_API_KEY) throw new Error('Live voice checks require an OpenAI or xAI API key and vitest.voice.config.ts')
     root = await mkdtemp(join(tmpdir(), 'videobook-voice-ui-'))
     await mkdir('test-results/voice', { recursive: true })
     const serverPort = await port()
     const appPort = await port()
     serverUrl = `http://127.0.0.1:${serverPort}`
     appUrl = `http://127.0.0.1:${appPort}`
-    start(['--import', 'tsx', 'server/src/index.ts'], { ...process.env, OPENAI_API_KEY: live ? process.env.OPENAI_API_KEY : '', PORT: String(serverPort), VIDEOBOOK_LIBRARY_DIR: join(root, 'books'), VIDEOBOOK_APP_STATE_PATH: join(root, 'app-state.json') })
+    start(['--import', 'tsx', 'server/src/index.ts'], { ...process.env, OPENAI_API_KEY: live && process.env.VIDEOBOOK_VOICE_TEST_OPENAI_UNAVAILABLE !== '1' ? process.env.OPENAI_API_KEY : '', XAI_API_KEY: live ? process.env.XAI_API_KEY : '', PORT: String(serverPort), VIDEOBOOK_LIBRARY_DIR: join(root, 'books'), VIDEOBOOK_APP_STATE_PATH: join(root, 'app-state.json') })
     await waitFor(async () => (await fetch(`${serverUrl}/healthz`)).status === 200)
     client = new Client({ name: 'voice-browser-test', version: '1' }, { capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } } })
     await client.connect(new StreamableHTTPClientTransport(new URL(`${serverUrl}/mcp`)))
     result(await client.callTool({ name: 'create_book', arguments: { name: 'voice-comms' } }))
     const books = result(await client.callTool({ name: 'list_books', arguments: {} })) as Array<{ bookId: string }>
     bookId = books[0]!.bookId
-    start(['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(appPort), '--strictPort'], { ...process.env, VIDEOBOOK_SERVER_URL: serverUrl, VIDEOBOOK_VITE_CACHE_DIR: join(root, 'vite-cache'), VIDEOBOOK_VITE_HMR: '0' })
+    start(['node_modules/vite/bin/vite.js', ...(process.env.VIDEOBOOK_VOICE_TEST_PREVIEW === '1' ? ['preview'] : []), '--host', '127.0.0.1', '--port', String(appPort), '--strictPort'], { ...process.env, VIDEOBOOK_SERVER_URL: serverUrl, VIDEOBOOK_VITE_CACHE_DIR: join(root, 'vite-cache'), VIDEOBOOK_VITE_HMR: '0' })
     await waitFor(async () => (await fetch(appUrl)).status === 200)
     const speechPath = join(root, 'microphone.wav')
     if (benchmarkTurns > 1) {
@@ -114,6 +118,7 @@ describe('voice chat in the real browser', () => {
     await page.goto(appUrl)
     await page.getByLabel('Videobook command input').waitFor({ state: 'visible', timeout: 30_000 })
     await waitFor(() => page.getByLabel('Start voice conversation').isEnabled())
+    await page.getByLabel('Voice provider', { exact: true }).selectOption(voiceMode)
   }, 90_000)
 
   afterAll(async () => {
@@ -141,6 +146,9 @@ describe('voice chat in the real browser', () => {
     const input = page.getByLabel('Videobook command input')
     await input.fill('Keep this typed draft')
     const toggle = page.getByLabel('Start voice conversation')
+    const provider = page.getByLabel('Voice provider', { exact: true })
+    await provider.focus()
+    await expect.poll(() => provider.evaluate(el => el === document.activeElement)).toBe(true)
     await toggle.focus()
     await expect.poll(() => toggle.evaluate(el => el === document.activeElement)).toBe(true)
     expect(await toggle.getAttribute('aria-pressed')).toBe('false')
@@ -153,6 +161,20 @@ describe('voice chat in the real browser', () => {
       expect(bounds!.x).toBeGreaterThanOrEqual(0)
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width)
       expect(await page.getByLabel('Send command').isVisible()).toBe(true)
+      const providerBounds = await provider.boundingBox()
+      expect(providerBounds!.height).toBeGreaterThanOrEqual(44)
+      expect(providerBounds!.x).toBeGreaterThanOrEqual(0)
+      expect(providerBounds!.x + providerBounds!.width).toBeLessThanOrEqual(bounds!.x)
+      const controls = await page.locator('.command-actions-controls, .command-model-selector, .voice-controls, .command-send').evaluateAll(elements => elements.map(element => {
+        const box = element.getBoundingClientRect()
+        return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }
+      }))
+      for (const [index, box] of controls.entries()) {
+        expect(box.left).toBeGreaterThanOrEqual(0)
+        expect(box.right).toBeLessThanOrEqual(viewport.width)
+        for (const other of controls.slice(index + 1)) expect(box.right <= other.left + 1 || other.right <= box.left + 1 || box.bottom <= other.top + 1 || other.bottom <= box.top + 1).toBe(true)
+      }
+      await page.screenshot({ path: `test-results/voice/off-${viewport.width}.png` })
     }
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width: 1440, height: 1000 })
@@ -161,10 +183,30 @@ describe('voice chat in the real browser', () => {
     expect(await input.innerText()).toBe('Keep this typed draft')
   })
 
+  it('remembers the provider selection without starting the microphone', async () => {
+    const provider = page.getByLabel('Voice provider', { exact: true })
+    await provider.selectOption('xai')
+    expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
+    await page.reload()
+    await waitFor(() => page.getByLabel('Start voice conversation').isEnabled())
+    expect(await provider.inputValue()).toBe('xai')
+    expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
+    expect(await page.locator('.voice-comms').count()).toBe(0)
+    await provider.selectOption(voiceMode)
+  })
+
   it.skipIf(live)('recovers from a missing key without changing the draft and never restarts on reload', async () => {
     await page.getByLabel('Videobook command input').fill('Keep this typed draft')
-    await page.getByLabel('Start voice conversation').click()
-    await expect.poll(() => page.getByLabel('Voice comms').innerText(), { timeout: 15_000 }).toContain('OPENAI_API_KEY')
+    for (const mode of ['openai', 'xai', 'auto']) {
+      await page.getByLabel('Voice provider', { exact: true }).selectOption(mode)
+      await page.getByLabel('Start voice conversation').click()
+      await page.getByRole('alert').waitFor({ state: 'visible', timeout: 15_000 })
+      const failure = await page.getByLabel('Voice comms').innerText()
+      if (mode !== 'xai') expect(failure).toContain('OPENAI_API_KEY')
+      if (mode !== 'openai') expect(failure).toContain('XAI_API_KEY')
+      if (mode === 'openai') expect(failure).not.toContain('XAI_API_KEY')
+      if (mode === 'xai') expect(failure).not.toContain('OPENAI_API_KEY')
+    }
     expect(await page.getByLabel('Videobook command input').innerText()).toBe('Keep this typed draft')
     expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
     await page.screenshot({ path: 'test-results/voice/error.png' })
@@ -197,7 +239,19 @@ describe('voice chat in the real browser', () => {
     await page.evaluate(() => performance.clearMarks('videobook-voice'))
     await page.getByLabel('Videobook command input').fill('Keep this typed draft')
     await page.emulateMedia({ reducedMotion: 'no-preference' })
+    const negotiation = page.waitForResponse(response => response.url().endsWith('/api/voice') && response.request().method() === 'POST')
     await page.getByLabel('Start voice conversation').click()
+    const response = await negotiation
+    const sent = response.request().postDataJSON() as { mode?: string; sampleRate?: number; bookId?: string; notebookId?: string; sdp?: string }
+    expect(sent.sampleRate).toBe(48_000)
+    expect(response.status(), JSON.stringify({ mode: sent.mode, sampleRate: sent.sampleRate, bookId: sent.bookId, notebookId: sent.notebookId, sdpLength: sent.sdp?.length, sdpPrefix: sent.sdp?.slice(0, 8) })).toBe(201)
+    const connected = await response.json() as { provider: string; fallbackReason?: string }
+    if (voiceMode !== 'auto') expect(connected.provider).toBe(voiceMode)
+    if (voiceMode === 'auto' && connected.provider === 'xai') {
+      expect(connected.fallbackReason).toBeTruthy()
+      await page.locator('.voice-fallback').waitFor({ state: 'visible' })
+    } else expect(connected.fallbackReason).toBeUndefined()
+    await expect.poll(() => page.locator('.voice-provider-badge').innerText()).toBe(connected.provider === 'xai' ? 'xAI' : 'OpenAI')
     await expect.poll(async () => await page.locator('.voice-comms').innerText(), { timeout: 35_000 }).toContain('COPILOT')
     const timing = () => page.evaluate(() => performance.getEntriesByName('videobook-voice').map(entry => ({ at: entry.startTime, ...((entry as PerformanceMark).detail as { stage: string; model?: string; role?: string; microphoneSignalEndedAt?: number }) })))
     try {
@@ -239,8 +293,8 @@ describe('voice chat in the real browser', () => {
     const model = marks.find(mark => mark.model)?.model ?? 'unknown'
     const report = {
       model, measuredAt: new Date().toISOString(), browser: await browser.version(),
-      transport: 'WebRTC through local Videobook server; unthrottled connection; synthesized microphone recordings',
-      vad: { type: 'server_vad', threshold: .5, silenceMs: 350, prefixMs: 300 }, reasoning: 'minimal',
+      transport: `${model.startsWith('grok-') ? 'PCM over local WebSocket and HTTP stream' : 'WebRTC'} through local Videobook server; unthrottled connection; synthesized microphone recordings`,
+      vad: { type: 'server_vad', threshold: .5, silenceMs: 350, prefixMs: 300 }, reasoning: model.startsWith('grok-') ? 'none' : 'minimal',
       sampleCount: latencies.length, p50Ms: sorted[Math.floor(sorted.length * .5)], p95Ms: sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * .95) - 1)],
       connectMs: marks.find(mark => mark.stage === 'connected')!.at - marks.find(mark => mark.stage === 'connect-start')!.at,
       microphoneToAudio: distribution(microphoneLatencies), firstCaption: distribution(firstCaptionLatencies), finalCaption: distribution(finalCaptionLatencies),
@@ -252,6 +306,39 @@ describe('voice chat in the real browser', () => {
     expect((await timing()).some(entry => entry.stage === 'stopped')).toBe(true)
     const output = startupOutput.join('')
     expect(output).not.toContain('Unhandled')
+  })
+
+  it.skipIf(!live || process.env.VIDEOBOOK_VOICE_TEST_OPENAI_UNAVAILABLE !== '1')('cancels Auto during xAI fallback without reviving capture or retaining a session', async () => {
+    await useRecording('ready')
+    await page.getByLabel('Voice provider', { exact: true }).selectOption('auto')
+    await page.getByLabel('Videobook command input').fill('Keep the cancelled connection draft')
+    await page.evaluate(() => performance.clearMarks('videobook-voice'))
+    const starts: string[] = []
+    page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/api/voice')) starts.push(request.url()) })
+    for (let cycle = 0; cycle < 5; cycle += 1) {
+      const requested = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith('/api/voice'))
+      await page.getByLabel('Start voice conversation').click()
+      await requested
+      await delay(100)
+      await page.getByLabel('Stop voice conversation').click()
+      await delay(300)
+    }
+    await delay(1000)
+    expect(starts).toHaveLength(5)
+    expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
+    const releases = await page.evaluate(() => performance.getEntriesByName('videobook-voice').filter(entry => (entry as PerformanceMark).detail.stage === 'microphone-released').map(entry => (entry as PerformanceMark).detail.ended))
+    expect(releases).toHaveLength(5)
+    expect(releases.every(Boolean)).toBe(true)
+    const negotiation = page.waitForResponse(response => response.url().endsWith('/api/voice') && response.request().method() === 'POST')
+    await page.getByLabel('Start voice conversation').click()
+    const response = await negotiation
+    expect(response.status()).toBe(201)
+    const session = await response.json() as { provider: string; fallbackReason: string }
+    expect(session.provider).toBe('xai')
+    expect(session.fallbackReason).toContain('OPENAI_API_KEY')
+    await expect.poll(() => page.locator('.voice-comms-status').innerText(), { timeout: 15_000 }).toBe('Listening')
+    await page.getByLabel('Stop voice conversation').click()
+    expect(await page.getByLabel('Videobook command input').innerText()).toBe('Keep the cancelled connection draft')
   })
 
   it.skipIf(!live)('routes a spoken mutation through Apply, preserves the draft and speaks the actual outcome', async () => {
@@ -267,11 +354,21 @@ describe('voice chat in the real browser', () => {
     await input.fill('Keep my unfinished @a1 note')
     const negotiated = page.waitForResponse(response => response.url().endsWith('/api/voice') && response.request().method() === 'POST')
     await page.getByLabel('Start voice conversation').click()
-    const session = await (await negotiated).json() as { id: string; token: string }
+    const session = await (await negotiated).json() as { id: string; token: string; provider: string }
     expect((await page.request.get(`${serverUrl}/api/voice/${session.id}/events`, { headers: { Authorization: 'Bearer wrong-owner' } })).status()).toBe(404)
     expect((await page.request.delete(`${serverUrl}/api/voice/${session.id}`, { headers: { Authorization: 'Bearer wrong-owner' } })).status()).toBe(404)
     expect((await page.request.post(`${serverUrl}/api/voice/${session.id}/outcome`, { headers: { Authorization: `Bearer ${session.token}` }, data: { callId: 'unknown-action', outcome: { status: 'completed', message: 'Unknown action' } } })).status()).toBe(409)
     await page.locator('.confirm-sheet').waitFor({ state: 'visible', timeout: 45_000 })
+    if (session.provider === 'xai') {
+      for (const token of ['x'.repeat(64), session.token]) {
+        const socket = new WebSocket(`${serverUrl.replace('http:', 'ws:')}/api/voice/${session.id}/audio`, { origin: appUrl })
+        const closed = once(socket, 'close')
+        await once(socket, 'open')
+        socket.send(JSON.stringify({ type: 'authenticate', token }))
+        expect((await closed)[0]).toBe(1008)
+      }
+      expect(await page.getByLabel('Stop voice conversation').count()).toBe(1)
+    }
     expect(await input.textContent()).toBe('Keep my unfinished @a1 note')
     expect(chatCalls).toHaveLength(0)
     const before = result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } }))
@@ -282,7 +379,9 @@ describe('voice chat in the real browser', () => {
     const stop = reviewMarks.find(mark => mark.stage === 'speech-stop')
     await writeFile('test-results/voice/review-timing.json', JSON.stringify({ detectedTurnToReviewMs: review && stop ? review.at - stop.at : null }, null, 2))
     const captionCount = await page.locator('.voice-captions p').count()
+    const completion = page.waitForResponse(response => response.url().endsWith(`/api/voice/${session.id}/outcome`) && (response.request().postDataJSON() as { outcome?: { status?: string } }).outcome?.status === 'completed')
     await page.locator('.confirm-sheet-apply').click()
+    expect((await completion).status()).toBe(204)
     await expect.poll(async () => JSON.stringify(result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } }))), { timeout: 15_000 }).toContain('cover')
     expect(await input.textContent()).toBe('Keep my unfinished @a1 note')
     expect(chatCalls).toHaveLength(1)
@@ -292,7 +391,7 @@ describe('voice chat in the real browser', () => {
     await page.getByLabel('Stop voice conversation').click()
   })
 
-  it.skipIf(!live)('keeps spoken approval behind review and retains Cancel after voice stops', async () => {
+  it.skipIf(!live)('keeps spoken approval behind review and retains Cancel after switching provider', async () => {
     await ensureImage()
     await useRecording('review')
     const before = result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } }))
@@ -316,8 +415,12 @@ describe('voice chat in the real browser', () => {
     }
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await expect.poll(() => page.locator('.voice-ring').evaluate(element => getComputedStyle(element).transform)).toBe('none')
-    await page.getByLabel('Stop voice conversation').focus()
-    await page.keyboard.press('Space')
+    const requests: string[] = []
+    page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/api/voice')) requests.push(request.url()) })
+    await page.getByLabel('Voice provider', { exact: true }).selectOption(voiceMode === 'openai' ? 'xai' : 'openai')
+    await expect.poll(() => page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
+    await delay(500)
+    expect(requests).toHaveLength(0)
     expect(await page.locator('.confirm-sheet').isVisible()).toBe(true)
     await page.locator('.confirm-sheet').getByRole('button', { name: /Cancel/ }).click()
     await page.locator('.confirm-sheet').waitFor({ state: 'hidden' })

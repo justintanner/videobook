@@ -1,4 +1,6 @@
 export type VoicePhase = "off" | "connecting" | "listening" | "thinking" | "speaking" | "review" | "error";
+export type VoiceProvider = "openai" | "xai";
+export type VoiceMode = "auto" | VoiceProvider;
 
 export interface VoiceCaption {
   id: string;
@@ -15,15 +17,22 @@ export interface VoiceOutcome {
 
 export type VoiceSessionEvent =
   | { type: "caption"; caption: VoiceCaption }
-  | { type: "activity"; phase: "listening" | "thinking" }
+  | { type: "activity"; phase: "listening" | "thinking"; interrupt?: boolean }
+  | { type: "audio"; audio: string; responseId: string; itemId: string }
+  | { type: "audio-done"; responseId: string }
   | { type: "action"; callId: string; prompt: string; plan: unknown }
   | { type: "closed"; reason: string }
   | { type: "error"; message: string };
 
-export interface VoiceSessionDescriptor {
+interface VoiceSessionBase {
   id: string;
   token: string;
-  sdp: string;
   model: string;
   idleTimeoutMs: number;
+  fallbackReason?: string;
 }
+
+export type VoiceSessionDescriptor = VoiceSessionBase & (
+  | { provider: "openai"; transport: "webrtc"; sdp: string }
+  | { provider: "xai"; transport: "pcm"; sampleRate: number }
+);

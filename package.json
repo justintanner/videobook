@@ -56,7 +56,7 @@
     "@apicity/kimicoding": "^0.11.0",
     "@apicity/openai": "file:vendor/apicity-openai-0.11.0-828e3773.tgz",
     "@apicity/x": "^0.11.0",
-    "@apicity/xai": "^0.11.0",
+    "@apicity/xai": "file:vendor/apicity-xai-0.11.0-7c5e2e56.tgz",
     "@modelcontextprotocol/client": "^2.0.0",
     "@remotion/bundler": "^4.0.494",
     "@remotion/google-fonts": "^4.0.467",
@@ -78,7 +78,8 @@
     "remotion": "^4.0.467",
     "tailwind-merge": "^3.5.0",
     "uuid": "^14.0.0",
-    "videobook-engine": "file:vendor/videobook-engine-5.4.5-038749d.tgz"
+    "videobook-engine": "file:vendor/videobook-engine-5.4.5-038749d.tgz",
+    "ws": "^8.21.0"
   },
   "overrides": {
     "adm-zip": "^0.6.0",
@@ -100,6 +101,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/coverage-v8": "^4.1.11",
     "babel-plugin-react-compiler": "1.0.0",

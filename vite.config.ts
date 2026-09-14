@@ -96,6 +96,7 @@ export default defineConfig({
       '/api': {
         target: serverTarget,
         changeOrigin: true,
+        ws: true,
       },
     },
   },
@@ -116,6 +117,7 @@ export default defineConfig({
       '/api': {
         target: serverTarget,
         changeOrigin: true,
+        ws: true,
       },
       '/healthz': {
         target: serverTarget,

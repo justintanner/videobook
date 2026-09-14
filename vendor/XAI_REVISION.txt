@@ -1,0 +1,5 @@
+version: 0.11.0
+git: https://github.com/justintanner/apicity.git
+revision: 7c5e2e56e386e5f7c9afda36d086d6103ab8f057
+tarball: vendor/apicity-xai-0.11.0-7c5e2e56.tgz
+sha256: b1eb7d9cd478ce1ab8d8d579e043425b49d44fd760c47398ee49be6dff41a627

@@ -87,7 +87,7 @@ const UUID_FIELDS = ["bookId", "assetId", "artifactId", "notebookId", "cellId", 
   "generationId", "scheduleId", "operationId", "runId"] as const;
 const NUMBER_FIELDS = ["durationMs", "bytesBefore", "bytesAfter", "count", "limit", "warningCount", "targetFps", "inputTokens", "outputTokens"] as const;
 const ENUM_FIELDS = {
-  voiceModel: ["gpt-realtime-2.1-mini", "gpt-realtime-2.1", "gpt-realtime-mini", "gpt-realtime"],
+  voiceModel: ["gpt-realtime-2.1-mini", "gpt-realtime-2.1", "gpt-realtime-mini", "gpt-realtime", "grok-voice-think-fast-2.0", "grok-voice-latest"],
   status: ["ok", "error"],
   modality: ["visual", "audio", "metadata"],
   reason: ["unbounded", "zero", "missing-adapter", "missing-rates", "missing-selector", "estimator-threw", "estimate-error"],

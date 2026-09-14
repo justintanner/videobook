@@ -7,19 +7,41 @@ The segmented ring follows measured microphone or decoded playback energy. Reduc
 motion removes scaling and glow; captions remain selectable and expandable. The
 ordinary command editor retains its draft and rich references during voice turns.
 
+Choose **Auto**, **OpenAI**, or **xAI** beside the microphone. Auto is the default:
+it tries OpenAI, then xAI once if startup fails because of provider access, credits,
+rate limits, or availability. The COMMS badge shows the connected provider; the
+fallback notice expands to show why OpenAI was unavailable. Explicit provider
+choices stay pinned. The browser remembers the choice but never restores microphone
+access on reload. Changing provider stops the current channel and keeps any pending
+action review; press Start to connect again. An established conversation never
+switches providers or replays its audio or actions automatically.
+
 ## Transport and configuration
 
 The browser captures audio only after the user starts voice. It sends an SDP offer
 to the same-origin Videobook server. `@apicity/openai` creates the Realtime call and
 owns its authenticated server sideband. Browser WebRTC carries media, while typed
 application events carry captions and action proposals. The server returns a random
-session owner token; the permanent OpenAI key stays on the server.
+session owner token; permanent provider keys stay on the server.
+
+For xAI, `@apicity/xai/realtime` owns the authenticated provider WebSocket. The browser
+uses a same-origin WebSocket authenticated with the session owner token in its first
+message to send 48 kHz mono PCM16 captured by an AudioWorklet. An explicit 48 kHz
+AudioContext resamples hardware capture, including devices running at 96 kHz.
+The existing authenticated HTTP event stream carries xAI's 24 kHz PCM replies,
+captions, and actions. Browser audio transport never contacts xAI directly. Both
+directions have bounded buffers; disconnect closes capture, playback, and the
+provider connection. `XAI_API_KEY` enables xAI; `OPENAI_API_KEY` enables OpenAI.
 
 The vendored provider is `@apicity/openai` 0.11.0 built from Apicity commit
 `828e37730593c8fd069c2302c7ecab772906b4e6`. The package contains the Realtime call,
 hangup, and server control APIs missing from the prior dependency. Its provenance is
 recorded in [`vendor/OPENAI_REVISION.txt`](../vendor/OPENAI_REVISION.txt). No application
 HTTP or WebSocket wrapper bypasses the provider.
+
+The vendored `@apicity/xai` 0.11.0 package includes the server Realtime transport from
+Apicity commit `7c5e2e56`. Its revision and checksum are recorded in
+[`vendor/XAI_REVISION.txt`](../vendor/XAI_REVISION.txt).
 
 | Setting | Value |
 | --- | --- |
@@ -31,6 +53,13 @@ HTTP or WebSocket wrapper bypasses the provider.
 | Output | `marin`, speed 1.05, concise replies, maximum 512 output tokens |
 | Idle limit | 120 seconds; `VIDEOBOOK_VOICE_IDLE_TIMEOUT_MS` clamps to 10–600 seconds |
 | Lifetime/concurrency | 30 minutes; four sessions per server |
+| Startup deadline | 30 seconds for a pinned provider; 80 seconds for Auto, including failed-call cleanup and fallback |
+
+xAI uses `grok-voice-think-fast-2.0`, Eve's voice, reasoning effort `none`, and the
+same 350 ms VAD silence setting. `VIDEOBOOK_XAI_VOICE_MODEL` overrides the xAI model.
+Its native speech model supplies input captions. These settings follow the current
+[xAI voice API](https://docs.x.ai/developers/rest-api-reference/inference/voice);
+they do not establish a latency ranking against other providers.
 
 Input transcription supplies captions and durable prompt history. It is not a
 separate speech-to-text/chat/text-to-speech response pipeline. Workspace actions wait
@@ -93,15 +122,18 @@ failure. See the [official OpenAI error guide](https://developers.openai.com/api
 Normal integration tests use real book engines and local HTTP servers. Browser tests
 use real Chromium capture, WebRTC and decoded audio with synthesized WAV microphone
 input. They do not stub the provider or replace browser media APIs. Chromium's native
-permission controls exercise denial and capture revocation. Real OpenAI calls are
+permission controls exercise denial and capture revocation. Real provider calls are
 opt-in and run separately from the normal suite's credential/network restrictions.
 
 ```bash
 npx vitest run server/src/tools/voice-chat-action.test.ts server/src/tools/voice-session.test.ts
 npx vitest run --config vitest.e2e.config.ts tests/v2/voice-chat.e2e.test.ts
 op run --env-file=.env.tpl -- npm run test:voice:live
-VIDEOBOOK_VOICE_BENCHMARK_TURNS=20 op run --env-file=.env.tpl -- npm run test:voice:live -- -t 'captures real'
-VIDEOBOOK_VOICE_MODEL=gpt-realtime-2.1-mini VIDEOBOOK_VOICE_BENCHMARK_TURNS=20 op run --env-file=.env.tpl -- npm run test:voice:live -- -t 'captures real'
+VIDEOBOOK_VOICE_TEST_MODE=xai op run --env-file=.env.tpl -- npm run test:voice:live
+VIDEOBOOK_VOICE_TEST_MODE=xai VIDEOBOOK_VOICE_TEST_PREVIEW=1 op run --env-file=.env.tpl -- npm run test:voice:live -- -t 'captures real'
+VIDEOBOOK_VOICE_TEST_OPENAI_UNAVAILABLE=1 op run --env-file=.env.tpl -- npm run test:voice:live -- -t 'captures real|cancels Auto'
+VIDEOBOOK_VOICE_TEST_MODE=openai VIDEOBOOK_VOICE_BENCHMARK_TURNS=20 op run --env-file=.env.tpl -- npm run test:voice:live -- -t 'captures real'
+VIDEOBOOK_VOICE_TEST_MODE=openai VIDEOBOOK_VOICE_MODEL=gpt-realtime-2.1-mini VIDEOBOOK_VOICE_BENCHMARK_TURNS=20 op run --env-file=.env.tpl -- npm run test:voice:live -- -t 'captures real'
 ```
 
 The browser fixture defaults to installed Chrome. `PLAYWRIGHT_CHANNEL` selects a

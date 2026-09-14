@@ -26,6 +26,7 @@ import { parseHttpByteRange } from "./http-byte-range.js";
 import { restrictHttpAccess, restrictMediaContent } from "./http-access.js";
 import { VoiceSessions } from "./voice-session.js";
 import { voiceRouter } from "./voice-http.js";
+import { attachVoiceAudio } from "./voice-audio.js";
 
 const require = createRequire(import.meta.url);
 const enginePackage = require("videobook-engine/package.json") as {
@@ -253,9 +254,10 @@ async function hydrateLibrary(): Promise<void> {
 async function start(): Promise<void> {
   registerAllJobHandlers(scopedBookEngine);
   const port = Number(process.env.PORT ?? 3001);
-  app.listen(port, "127.0.0.1", () => {
+  const server = app.listen(port, "127.0.0.1", () => {
     logger.info("server-listening", { port: Number(port) });
   });
+  attachVoiceAudio(server, voiceSessions);
   await hydrateLibrary();
 }
 

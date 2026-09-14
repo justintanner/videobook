@@ -1,4 +1,7 @@
-.command-line-shell > .voice-toggle {
+.voice-controls { grid-area: voice; display: flex; align-items: center; gap: 2px; min-width: 0; }
+.voice-provider-select { width: 65px; min-height: 44px; padding: 3px 0 3px 5px; border: 1px solid #315c42; border-radius: 4px; color: #a8d9ba; background: #0a1c11; font: inherit; font-size: 10px; cursor: pointer; }
+.voice-provider-select:focus-visible { outline: 2px solid #d5ffe4; outline-offset: 2px; }
+.voice-controls > .voice-toggle {
   --voice-level: 0;
   grid-area: voice;
   display: grid;
@@ -30,6 +33,10 @@
 .voice-comms-header { display: flex; align-items: center; gap: 7px; min-width: 0; color: #97e9b3; }
 .voice-comms-header > strong { font-size: 10px; letter-spacing: .14em; }
 .voice-comms-status { font-size: 11px; }
+.voice-provider-badge { padding: 2px 4px; border: 1px solid #386349; border-radius: 3px; font-size: 9px; color: #ceeed9; }
+.voice-fallback { margin: 5px 0; color: #dfd3a1; font-size: 10px; }
+.voice-fallback > summary { cursor: pointer; }
+.voice-fallback > p { margin: 4px 0; overflow-wrap: anywhere; }
 .voice-comms-header > button { margin-left: auto; display: flex; align-items: center; gap: 4px; min-height: 28px; padding: 3px; border: none; background: transparent; color: #c4ddcc; font: inherit; font-size: 10px; cursor: pointer; }
 .voice-comms-header > button[aria-expanded='true'] > svg { transform: rotate(180deg); }
 .voice-comms button:focus-visible { outline: 2px solid #d5ffe4; outline-offset: 2px; }

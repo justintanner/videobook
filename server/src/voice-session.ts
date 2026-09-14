@@ -2,18 +2,28 @@ import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createOpenAi, OpenAiError } from "@apicity/openai";
 import type { OpenAiRealtimeCallResponse } from "@apicity/openai";
 import { connectOpenAiRealtime } from "@apicity/openai/realtime";
-import type { OpenAiRealtimeConnection, OpenAiRealtimeServerEvent } from "@apicity/openai/realtime";
+import type { OpenAiRealtimeClientEvent, OpenAiRealtimeServerEvent } from "@apicity/openai/realtime";
+import { XaiError } from "@apicity/xai";
+import { connectXaiRealtime } from "@apicity/xai/realtime";
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { BookManager } from "./book-manager.js";
 import { getApiKey } from "./api-key.js";
 import { withBookContext } from "./book-context.js";
 import { discoverVoiceActions, voiceWorkspaceContext } from "./voice-actions.js";
-import { DEFAULT_VOICE_MODEL, voiceSessionConfig } from "./voice-config.js";
+import { DEFAULT_VOICE_MODEL, DEFAULT_XAI_VOICE_MODEL, VOICE_PCM_RATE, voiceSessionConfig, xaiVoiceSessionConfig } from "./voice-config.js";
 import { chatActionPlanSchema, prepareVoiceChatAction } from "./tools/chat.js";
 import { appendVoiceHistory } from "./tools/chat-history.js";
 import { appendDiagnostic } from "./diagnostics.js";
-import type { VoiceCaption, VoiceOutcome, VoiceSessionDescriptor, VoiceSessionEvent } from "./voice-contract.js";
+import type { VoiceCaption, VoiceMode, VoiceOutcome, VoiceProvider, VoiceSessionDescriptor, VoiceSessionEvent } from "./voice-contract.js";
+
+type VoiceControlEvent = Exclude<OpenAiRealtimeClientEvent, { type: "session.update" }>;
+interface VoiceControl {
+  send(event: VoiceControlEvent): void;
+  close(): void;
+  readonly closed: Promise<void>;
+}
+export type VoiceInputRate = 8000 | 16000 | 22050 | 24000 | 32000 | 44100 | 48000;
 
 class VoiceError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
@@ -32,18 +42,25 @@ const providerMessages = new Map([
   ["slow_down", rateLimitMessage],
 ]);
 
-function providerErrorMessage(details: unknown, fallbackCode?: string): string | undefined {
+function providerErrorMessage(details: unknown, fallbackCode?: string, provider: VoiceProvider = "openai"): string | undefined {
   const parsed = providerErrorSchema.safeParse(details);
   const code = (parsed.success ? parsed.data.code : undefined) ?? fallbackCode;
-  const message = code ? providerMessages.get(code) : undefined;
-  if (message) return message;
-  if (parsed.success && parsed.data.type === "insufficient_quota") return quotaMessage;
-  if (parsed.success && parsed.data.type === "rate_limit_error") return rateLimitMessage;
-  return undefined;
+  const message = (code ? providerMessages.get(code) : undefined)
+    ?? (parsed.success && parsed.data.type === "insufficient_quota" ? quotaMessage : undefined)
+    ?? (parsed.success && parsed.data.type === "rate_limit_error" ? rateLimitMessage : undefined);
+  return message?.replaceAll("OpenAI", provider === "xai" ? "xAI" : "OpenAI");
 }
 
 export function voiceError(error: unknown): VoiceError {
   if (error instanceof VoiceError) return error;
+  if (error instanceof XaiError) {
+    const body = z.object({ error: z.unknown() }).safeParse(error.body);
+    const message = providerErrorMessage(body.success ? body.data.error : undefined, error.code, "xai");
+    if (message) return new VoiceError(message, error.status);
+    if (error.status === 401 || error.status === 403) return new VoiceError("xAI voice access was denied. Check XAI_API_KEY and voice model access on the server.", 503);
+    if (error.status === 429) return new VoiceError("xAI voice reached an account limit. Check xAI credits and usage limits before retrying.", 429);
+    return new VoiceError("xAI voice could not connect. Check the voice model and network, then try again.", 502);
+  }
   if (error instanceof OpenAiError) {
     const body = z.object({ error: z.unknown() }).safeParse(error.body);
     const message = providerErrorMessage(body.success ? body.data.error : undefined, error.code);
@@ -75,7 +92,7 @@ export class VoiceSession {
   readonly token = randomBytes(32).toString("hex");
   readonly model: string;
   private provider: ReturnType<typeof createOpenAi>;
-  private control: OpenAiRealtimeConnection | null = null;
+  private control: VoiceControl | null = null;
   private callId: string | null = null;
   private negotiation: Promise<OpenAiRealtimeCallResponse> | null = null;
   private abort = new AbortController();
@@ -97,6 +114,9 @@ export class VoiceSession {
   private waitingAction: { callId: string; done: ReturnType<typeof deferred<VoiceOutcome>> } | null = null;
   private reviewCall: string | null = null;
   private toolChain: Promise<void> = Promise.resolve();
+  private pendingTools = 0;
+  private audioAttached = false;
+  private audioClose: (() => void) | undefined;
   private writes: Promise<void> = Promise.resolve();
   private lastActivity = Date.now();
   private startedAt = Date.now();
@@ -111,8 +131,10 @@ export class VoiceSession {
     apiKey: string,
     readonly idleTimeoutMs: number,
     private onClose: () => void,
+    readonly providerName: VoiceProvider = "openai",
+    readonly inputRate: VoiceInputRate = VOICE_PCM_RATE,
   ) {
-    this.model = process.env.VIDEOBOOK_VOICE_MODEL?.trim() || DEFAULT_VOICE_MODEL;
+    this.model = providerName === "xai" ? process.env.VIDEOBOOK_XAI_VOICE_MODEL?.trim() || DEFAULT_XAI_VOICE_MODEL : process.env.VIDEOBOOK_VOICE_MODEL?.trim() || DEFAULT_VOICE_MODEL;
     this.provider = createOpenAi({ apiKey, timeout: 20_000 });
     this.apiKey = apiKey;
     this.timer = setInterval(() => {
@@ -142,6 +164,7 @@ export class VoiceSession {
     signal.addEventListener("abort", onAbort, { once: true });
     try {
       if (signal.aborted || this.stopped) throw new VoiceError("Voice start cancelled.", 499);
+      if (this.providerName === "xai") return await this.startXai();
       this.negotiation = this.provider.post.v1.realtime.calls({
         sdp, session: voiceSessionConfig(voiceWorkspaceContext(this.engine, this.notebookId), this.model),
       });
@@ -158,10 +181,58 @@ export class VoiceSession {
         onClose: () => { if (!this.stopped) this.fail("Voice connection lost. Start voice to reconnect."); },
       });
       if (this.stopped) throw new VoiceError("Voice start cancelled.", 499);
-      return { id: this.id, token: this.token, sdp: call.sdp, model: this.model, idleTimeoutMs: this.idleTimeoutMs };
+      return { id: this.id, token: this.token, provider: "openai", transport: "webrtc", sdp: call.sdp, model: this.model, idleTimeoutMs: this.idleTimeoutMs };
     } finally {
       signal.removeEventListener("abort", onAbort);
     }
+  }
+
+  private async startXai(): Promise<VoiceSessionDescriptor> {
+    const configured = deferred<void>();
+    let setupError: Error | undefined;
+    const connection = await connectXaiRealtime({
+      apiKey: this.apiKey, model: this.model, signal: this.abort.signal, timeout: 10_000,
+      onEvent: event => {
+        if (event.type === "session.updated") configured.resolve();
+        if (event.type === "error") {
+          setupError = new XaiError("xAI voice configuration failed", 502, { error: event.error });
+          configured.resolve();
+        }
+        try { this.receive(event); } catch { this.fail("Voice could not process an event. Start voice to reconnect."); }
+      },
+      onError: error => { setupError = error; configured.resolve(); if (this.control) this.fail(voiceError(error).message); },
+      onClose: () => { configured.resolve(); if (!this.stopped) this.fail("xAI voice connection lost. Start voice to reconnect."); },
+    });
+    this.control = connection;
+    if (this.stopped) { connection.close(); throw new VoiceError("Voice start cancelled.", 499); }
+    connection.send({ type: "session.update", session: xaiVoiceSessionConfig(voiceWorkspaceContext(this.engine, this.notebookId), this.inputRate) });
+    const deadline = setTimeout(() => { setupError = new XaiError("xAI voice setup timed out", 504); configured.resolve(); }, 10_000);
+    const aborted = () => configured.resolve();
+    this.abort.signal.addEventListener("abort", aborted, { once: true });
+    try {
+      await configured.promise;
+      if (setupError) throw setupError;
+      if (this.stopped) throw new VoiceError("Voice start cancelled.", 499);
+      return { id: this.id, token: this.token, provider: "xai", transport: "pcm", sampleRate: VOICE_PCM_RATE, model: this.model, idleTimeoutMs: this.idleTimeoutMs };
+    } finally { clearTimeout(deadline); this.abort.signal.removeEventListener("abort", aborted); }
+  }
+
+  attachAudio(close: () => void): void {
+    if (this.stopped || this.providerName !== "xai" || this.audioAttached) throw new VoiceError("Voice audio is unavailable or already connected.", 409);
+    this.audioAttached = true;
+    this.audioClose = close;
+  }
+
+  appendAudio(audio: Buffer): void {
+    if (this.stopped || !this.audioAttached || this.providerName !== "xai") throw new VoiceError("Voice audio is closed.", 409);
+    if (audio.length === 0 || audio.length > 16_000 || audio.length % 2 !== 0) throw new VoiceError("Invalid voice audio frame.", 400);
+    this.control?.send({ type: "input_audio_buffer.append", audio: audio.toString("base64") });
+  }
+
+  interruptPlayback(responseId: string, itemId?: string, audioEndMs?: number): void {
+    this.interruptTranscript(responseId);
+    if (this.stopped || this.providerName !== "xai" || !itemId || audioEndMs === undefined || !this.responseItems.get(responseId)?.has(itemId)) return;
+    this.control?.send({ type: "conversation.item.truncate", item_id: itemId, content_index: 0, audio_end_ms: audioEndMs });
   }
 
   subscribe(listener: (event: VoiceSessionEvent) => void): void {
@@ -232,7 +303,7 @@ export class VoiceSession {
     if (this.seen.size > 20_000) { void this.close("Comms session limit reached. Start voice to resume."); return; }
     if (!this.scopeAlive()) { void this.close("Workspace closed."); return; }
     const id = event.item_id ?? "";
-    if (event.type.startsWith("response.output_audio_transcript.") && event.response_id) {
+    if (id && event.response_id && (event.type.startsWith("response.output_audio") || event.type.startsWith("response.audio."))) {
       const items = this.responseItems.get(event.response_id) ?? new Set<string>();
       items.add(id);
       this.responseItems.set(event.response_id, items);
@@ -245,17 +316,25 @@ export class VoiceSession {
       this.caption(id, "user", "", false);
       this.speaking = true;
       this.needsResponse = false;
-      this.emit({ type: "activity", phase: "listening" });
+      this.emit({ type: "activity", phase: "listening", interrupt: this.providerName === "xai" });
     } else if (event.type === "input_audio_buffer.speech_stopped") {
       this.speaking = false;
       this.lastActivity = Date.now();
       this.emit({ type: "activity", phase: "thinking" });
     } else if (event.type === "conversation.item.input_audio_transcription.delta") {
       this.caption(id, "user", (this.captions.get(id)?.text ?? "") + (event.delta ?? ""), false);
+    } else if (event.type === "conversation.item.input_audio_transcription.updated") {
+      this.caption(id, "user", event.transcript ?? "", false);
     } else if (event.type === "conversation.item.input_audio_transcription.completed") {
       this.caption(id, "user", event.transcript ?? "", true);
     } else if (event.type === "conversation.item.input_audio_transcription.failed") {
-      this.fail(providerErrorMessage(event.error) ?? "Could not transcribe this turn. Start voice and try again.");
+      this.fail(providerErrorMessage(event.error, undefined, this.providerName) ?? "Could not transcribe this turn. Start voice and try again.");
+    } else if (this.providerName === "xai" && (event.type === "response.output_audio.delta" || event.type === "response.audio.delta")) {
+      if (event.response_id && event.item_id && event.delta && !this.interruptedResponses.has(event.response_id)) {
+        this.emit({ type: "audio", audio: event.delta, responseId: event.response_id, itemId: event.item_id });
+      }
+    } else if (this.providerName === "xai" && (event.type === "response.output_audio.done" || event.type === "response.audio.done")) {
+      if (event.response_id) this.emit({ type: "audio-done", responseId: event.response_id });
     } else if (event.type === "response.output_audio_transcript.delta") {
       this.caption(id, "assistant", (this.captions.get(id)?.text ?? "") + (event.delta ?? ""), false);
     } else if (event.type === "response.output_audio_transcript.done") {
@@ -279,7 +358,7 @@ export class VoiceSession {
       this.usage.outputTokens += typeof usage?.output_tokens === "number" ? usage.output_tokens : 0;
       if (event.response?.status === "failed") {
         const details = z.object({ error: z.unknown().optional() }).safeParse(event.response.status_details);
-        this.fail(providerErrorMessage(details.success ? details.data.error : undefined) ?? "The voice reply failed. Start voice to retry.");
+        this.fail(providerErrorMessage(details.success ? details.data.error : undefined, undefined, this.providerName) ?? "The voice reply failed. Start voice to retry.");
       }
       else this.continueResponse();
     } else if (event.type === "response.function_call_arguments.done" && event.call_id) {
@@ -287,15 +366,16 @@ export class VoiceSession {
       if (this.seen.has(key)) return;
       this.seen.add(key);
       const turnId = (event.response_id && this.responseTurns.get(event.response_id)) || this.currentTurn;
-      this.toolChain = this.toolChain.then(() => this.runTool(event, turnId)).catch(() => { this.fail("Voice action failed. Check the command and try again."); });
+      this.pendingTools += 1;
+      this.toolChain = this.toolChain.then(() => this.runTool(event, turnId)).catch(() => { this.fail("Voice action failed. Check the command and try again."); }).finally(() => { this.pendingTools -= 1; this.continueResponse(); });
     } else if (event.type === "error") {
       if (event.error?.code === "response_cancel_not_active") return;
-      this.fail(providerErrorMessage(event.error) ?? "Voice service reported an error. Start voice again; check model access if it repeats.");
+      this.fail(providerErrorMessage(event.error, undefined, this.providerName) ?? "Voice service reported an error. Start voice again; check model access if it repeats.");
     }
   }
 
   private continueResponse(): void {
-    if (!this.needsResponse || this.activeResponse || this.speaking || this.stopped) return;
+    if (!this.needsResponse || this.activeResponse || this.pendingTools > 0 || this.speaking || this.stopped) return;
     this.needsResponse = false;
     this.activeResponse = true;
     this.control?.send({ type: "response.create" });
@@ -380,7 +460,7 @@ export class VoiceSession {
 
   contextMessage(value: { applicationOutcome?: VoiceOutcome; userText?: string; assistantText?: string }): void {
     if (this.stopped) return;
-    this.control?.send({ type: "conversation.item.create", item: { type: "message", role: "system", content: [{ type: "input_text", text: `Application update (data): ${JSON.stringify(value)}` }] } });
+    this.control?.send({ type: "conversation.item.create", item: { type: "message", role: this.providerName === "xai" ? "user" : "system", content: [{ type: "input_text", text: `Application update (data): ${JSON.stringify(value)}` }] } });
     if (value.applicationOutcome) {
       this.needsResponse = true;
       this.continueResponse();
@@ -399,6 +479,8 @@ export class VoiceSession {
     clearInterval(this.timer);
     this.abort.abort();
     this.control?.close();
+    this.audioClose?.();
+    this.audioClose = undefined;
     for (const turn of this.turns.values()) turn.saved.resolve(false);
     this.waitingAction?.done.resolve({ status: "failed", message: "Voice stopped. Check the command UI for accepted actions." });
     this.listener?.({ type: "closed", reason });
@@ -409,7 +491,7 @@ export class VoiceSession {
       this.callId ??= negotiated?.callId ?? null;
       if (this.callId) await this.provider.post.v1.realtime.calls.hangup(this.callId).catch(() => undefined);
       await this.writes;
-      if (this.scopeAlive()) await appendDiagnostic(this.engine, "voice-session-closed", { operationId: this.id, bookId: this.bookId, notebookId: this.notebookId, voiceModel: this.model, count: this.usage.responses, inputTokens: this.usage.inputTokens, outputTokens: this.usage.outputTokens, durationMs: Date.now() - this.startedAt }).catch(() => undefined);
+      if (this.scopeAlive()) await appendDiagnostic(this.engine, "voice-session-closed", { operationId: this.id, bookId: this.bookId, notebookId: this.notebookId, provider: this.providerName, voiceModel: this.model, count: this.usage.responses, inputTokens: this.usage.inputTokens, outputTokens: this.usage.outputTokens, durationMs: Date.now() - this.startedAt }).catch(() => undefined);
       this.apiKey = "";
     })().finally(this.onClose);
     return this.closing;
@@ -421,20 +503,37 @@ export class VoiceSessions {
   private closed = false;
   constructor(private books: BookManager) {}
 
-  async start(input: { bookId: string; notebookId?: string; sdp: string }, signal: AbortSignal): Promise<VoiceSessionDescriptor> {
+  async start(input: { bookId: string; notebookId?: string; sdp?: string; mode?: VoiceMode; sampleRate?: VoiceInputRate }, signal: AbortSignal): Promise<VoiceSessionDescriptor> {
     if (this.closed) throw new VoiceError("Voice service is shutting down.", 503);
-    const apiKey = getApiKey("OPENAI_API_KEY");
-    if (!apiKey) throw new VoiceError("Voice needs OPENAI_API_KEY on the server. Configure it, then start voice again.", 503);
     if (this.sessions.size >= 4) throw new VoiceError("Four voice sessions are already active. Stop another session first.", 429);
     const book = this.books.get(input.bookId);
     if (!book.ok) throw new VoiceError("Open an available project before starting voice.", 404);
     if (input.notebookId && !book.value.engine.notebooks.read(input.notebookId).ok) throw new VoiceError("This notebook is no longer available.", 404);
     const configured = Number(process.env.VIDEOBOOK_VOICE_IDLE_TIMEOUT_MS ?? 120_000);
     const idle = Number.isFinite(configured) ? Math.min(600_000, Math.max(10_000, configured)) : 120_000;
-    const session = new VoiceSession(this.books, input.bookId, input.notebookId, book.value.engine, apiKey, idle, () => this.sessions.delete(session.id));
-    this.sessions.set(session.id, session);
-    try { return await session.start(input.sdp, signal); }
-    catch (error) { await session.close(); throw voiceError(error); }
+    const attempt = async (provider: VoiceProvider) => {
+      if (signal.aborted || this.closed) throw new VoiceError("Voice start cancelled.", 499);
+      if (this.sessions.size >= 4) throw new VoiceError("Four voice sessions are already active. Stop another session first.", 429);
+      const keyName = provider === "xai" ? "XAI_API_KEY" : "OPENAI_API_KEY";
+      const apiKey = getApiKey(keyName);
+      if (!apiKey) throw new VoiceError(`Voice needs ${keyName} on the server. Configure it, then start voice again.`, 503);
+      const session = new VoiceSession(this.books, input.bookId, input.notebookId, book.value.engine, apiKey, idle, () => this.sessions.delete(session.id), provider, input.sampleRate);
+      this.sessions.set(session.id, session);
+      try { return await session.start(input.sdp ?? "", signal); }
+      catch (error) { await session.close(); throw voiceError(error); }
+    };
+    if (input.mode !== "auto") return await attempt(input.mode ?? "openai");
+    try { return await attempt("openai"); }
+    catch (error) {
+      const first = voiceError(error);
+      if (signal.aborted || this.closed || !(first.status >= 500 || [401, 403, 404, 408, 429].includes(first.status))) throw first;
+      try { return { ...await attempt("xai"), fallbackReason: first.message }; }
+      catch (failure) {
+        const last = voiceError(failure);
+        if (signal.aborted || this.closed) throw last;
+        throw new VoiceError(`OpenAI: ${first.message} xAI: ${last.message}`, last.status);
+      }
+    }
   }
 
   get(id: string, token: string): VoiceSession {

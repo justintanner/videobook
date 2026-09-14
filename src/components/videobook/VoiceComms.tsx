@@ -10,19 +10,26 @@ const labels: Record<VoicePhase, string> = {
 
 export function VoiceToggle({ voice, onToggle }: { voice: VoiceConversation; onToggle: () => void }) {
   const { meterRef, phase, active, disabled } = voice
-  return <button
-    ref={meterRef}
-    type="button"
-    className={`voice-toggle voice-${phase}`}
-    aria-label={active ? 'Stop voice conversation' : 'Start voice conversation'}
-    aria-pressed={active}
-    disabled={!active && disabled}
-    title={active ? 'Stop microphone and spoken replies' : 'Voice input + spoken replies'}
-    onClick={onToggle}
-  >
-    <svg className="voice-ring" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="19" /></svg>
-    {active ? <Square size={13} fill="currentColor" aria-hidden="true" /> : <Mic size={17} aria-hidden="true" />}
-  </button>
+  return <div className="voice-controls">
+    <select className="voice-provider-select" aria-label="Voice provider" value={voice.mode} title="Auto tries OpenAI, then xAI if it cannot connect" onChange={event => voice.selectMode(event.target.value === 'openai' ? 'openai' : event.target.value === 'xai' ? 'xai' : 'auto')}>
+      <option value="auto">Auto</option>
+      <option value="openai">OpenAI</option>
+      <option value="xai">xAI</option>
+    </select>
+    <button
+      ref={meterRef}
+      type="button"
+      className={`voice-toggle voice-${phase}`}
+      aria-label={active ? 'Stop voice conversation' : 'Start voice conversation'}
+      aria-pressed={active}
+      disabled={!active && disabled}
+      title={active ? 'Stop microphone and spoken replies' : 'Voice input + spoken replies'}
+      onClick={onToggle}
+    >
+      <svg className="voice-ring" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="19" /></svg>
+      {active ? <Square size={13} fill="currentColor" aria-hidden="true" /> : <Mic size={17} aria-hidden="true" />}
+    </button>
+  </div>
 }
 
 export function VoiceComms({ voice }: { voice: VoiceConversation }) {
@@ -34,11 +41,13 @@ export function VoiceComms({ voice }: { voice: VoiceConversation }) {
     <div className="voice-comms-header">
       <Radio size={14} aria-hidden="true" />
       <strong>COMMS</strong>
+      {voice.provider && <span className="voice-provider-badge">{voice.provider === 'xai' ? 'xAI' : 'OpenAI'}</span>}
       <span className="voice-comms-status" role="status">{labels[voice.phase]}</span>
       <button type="button" aria-controls={captionId} aria-expanded={expanded} aria-label={expanded ? 'Collapse voice captions' : 'Expand voice captions'} onClick={() => setExpanded(!expanded)}>
         <span>Captions</span><ChevronDown size={13} aria-hidden="true" />
       </button>
     </div>
+    {voice.fallbackReason && <details className="voice-fallback"><summary>Using xAI · OpenAI unavailable</summary><p>{voice.fallbackReason}</p></details>}
     {voice.phase === 'error' || voice.phase === 'off'
       ? <p className="voice-comms-message" role={voice.phase === 'error' ? 'alert' : undefined}>{voice.message}</p>
       : visible.length === 0 ? <p className="voice-comms-message">{voice.phase === 'connecting' ? 'Opening your voice channel…' : 'Speak naturally. Interrupt anytime.'}</p> : null}

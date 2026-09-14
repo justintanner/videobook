@@ -1,8 +1,11 @@
-import type { VoiceCaption, VoiceOutcome, VoicePhase, VoiceSessionDescriptor, VoiceSessionEvent } from '../../server/src/voice-contract'
+import type { VoiceCaption, VoiceMode, VoiceOutcome, VoicePhase, VoiceProvider, VoiceSessionDescriptor, VoiceSessionEvent } from '../../server/src/voice-contract'
+import { VoicePcm } from './voice-pcm'
 
 interface VoiceConnectionOptions {
   bookId: string
   notebookId?: string
+  mode: VoiceMode
+  onProvider: (provider: VoiceProvider, fallbackReason?: string) => void
   onPhase: (phase: VoicePhase, message?: string) => void
   onCaption: (caption: VoiceCaption) => void
   onAction: (event: Extract<VoiceSessionEvent, { type: 'action' }>) => Promise<VoiceOutcome>
@@ -22,6 +25,7 @@ function microphoneError(error: unknown): string {
 export class VoiceConnection {
   private abort = new AbortController()
   private peer: RTCPeerConnection | null = null
+  private pcm: VoicePcm | null = null
   private microphone: MediaStream | null = null
   private channel: RTCDataChannel | null = null
   private context: AudioContext | null = null
@@ -71,8 +75,8 @@ export class VoiceConnection {
       }
       this.updatePhase('connecting')
       this.mark('connect-start')
-      this.deadline = window.setTimeout(() => this.stop('Voice connection timed out. Start voice to retry.', true), 30_000)
-      this.context = new AudioContext({ latencyHint: 'interactive' })
+      this.deadline = window.setTimeout(() => this.stop('Voice connection timed out. Start voice to retry.', true), this.options.mode === 'auto' ? 80_000 : 30_000)
+      this.context = new AudioContext({ latencyHint: 'interactive', sampleRate: 48_000 })
       void this.context.resume().then(() => { if (!this.stopped) this.mark('audio-context-running') }).catch(() => { if (!this.stopped) this.options.onPlaybackBlocked(true) })
       this.output = this.context.createGain()
       this.outputMeter = this.context.createAnalyser()
@@ -131,13 +135,36 @@ export class VoiceConnection {
       if (this.stopped) return
       const response = await fetch('/api/voice', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId: this.options.bookId, notebookId: this.options.notebookId, sdp: peer.localDescription?.sdp }),
+        body: JSON.stringify({ bookId: this.options.bookId, notebookId: this.options.notebookId, mode: this.options.mode, sampleRate: this.context.sampleRate, sdp: peer.localDescription?.sdp }),
         signal: this.abort.signal,
       })
       const result = await response.json() as VoiceSessionDescriptor & { error?: string }
       if (!response.ok) throw new Error(result.error ?? 'Voice could not connect. Try again.')
       this.descriptor = result
       if (this.stopped) { this.releaseSession(); return }
+      this.options.onProvider(result.provider, result.fallbackReason)
+      if (result.transport === 'pcm') {
+        this.cleanupListeners.splice(0).forEach(cleanup => cleanup())
+        this.channel?.close()
+        this.peer?.close()
+        this.channel = null
+        this.peer = null
+        this.listen(document, 'play', () => this.stop('Comms paused for media playback. Start voice to resume.'), true)
+        this.listen(document, 'visibilitychange', () => { if (document.hidden) this.stop('Comms off while the page is hidden.') })
+        this.listen(window, 'pagehide', () => this.stop())
+        this.listen(window, 'offline', () => this.stop('You are offline. Start voice after reconnecting.', true))
+        for (const track of microphone.getAudioTracks()) this.listen(track, 'ended', () => this.stop('Microphone disconnected. Check the device and start voice again.', true))
+        this.pcm = new VoicePcm({
+          context: this.context, microphone, output: this.output!, sampleRate: result.sampleRate,
+          onStarted: responseId => this.mediaEvent({ type: 'output_audio_buffer.started', response_id: responseId }),
+          onFinished: responseId => this.mediaEvent({ type: 'output_audio_buffer.stopped', response_id: responseId }),
+          onError: message => this.stop(message, true),
+        })
+        void this.readEvents(result)
+        await this.pcm.start(result, this.abort.signal)
+        if (!this.stopped) { window.clearTimeout(this.deadline); this.mark('connected'); this.updatePhase('listening') }
+        return
+      }
       void this.readEvents(result)
       await peer.setRemoteDescription({ type: 'answer', sdp: result.sdp })
     } catch (error) {
@@ -148,10 +175,12 @@ export class VoiceConnection {
   private mediaEvent(event: Record<string, unknown>) {
     if (typeof event.type === 'string' && /audio_buffer\.(started|stopped|cleared)|speech_(started|stopped)/u.test(event.type)) this.mark(event.type)
     if (event.type === 'input_audio_buffer.speech_started') {
+      const heard = this.pcm?.interrupt()
+      if (heard) void this.post('interrupt', heard)
       if (this.playing) {
         this.mark('barge-in')
         this.awaitingSilence = true
-        if (this.outputResponseId) void this.post('interrupt', { responseId: this.outputResponseId })
+        if (this.outputResponseId && !heard) void this.post('interrupt', { responseId: this.outputResponseId })
       }
       this.playing = false
       this.awaitingAudio = false
@@ -228,7 +257,13 @@ export class VoiceConnection {
     }
     else if (event.type === 'error') this.stop(event.message, true)
     else if (event.type === 'closed') this.stop(event.reason)
-    else if (event.type === 'activity' && !this.playing) this.updatePhase(this.review ? 'review' : event.phase)
+    else if (event.type === 'audio') this.pcm?.enqueue(event.audio, event.responseId, event.itemId)
+    else if (event.type === 'audio-done') this.pcm?.finish(event.responseId)
+    else if (event.type === 'activity') {
+      if (event.interrupt) this.mediaEvent({ type: 'input_audio_buffer.speech_started' })
+      else if (this.pcm && event.phase === 'thinking') this.mediaEvent({ type: 'input_audio_buffer.speech_stopped' })
+      if (!this.playing) this.updatePhase(this.review ? 'review' : event.phase)
+    }
     else if (event.type === 'action' && !this.actions.has(event.callId)) {
       this.actions.add(event.callId)
       void this.action(event)
@@ -306,6 +341,7 @@ export class VoiceConnection {
     this.cleanupListeners.splice(0).forEach(cleanup => cleanup())
     this.abort.abort()
     this.channel?.close()
+    this.pcm?.stop()
     this.peer?.getReceivers().forEach(receiver => receiver.track.stop())
     this.peer?.close()
     void this.context?.close().catch(() => undefined)

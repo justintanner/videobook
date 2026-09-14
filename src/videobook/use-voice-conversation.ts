@@ -1,6 +1,15 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { VoiceConnection } from './voice-connection'
-import type { VoiceCaption, VoiceOutcome, VoicePhase, VoiceSessionEvent } from '../../server/src/voice-contract'
+import type { VoiceCaption, VoiceMode, VoiceOutcome, VoicePhase, VoiceProvider, VoiceSessionEvent } from '../../server/src/voice-contract'
+
+const voiceModeKey = 'videobook.voice-provider'
+
+function savedVoiceMode(): VoiceMode {
+  try {
+    const value = localStorage.getItem(voiceModeKey)
+    return value === 'openai' || value === 'xai' ? value : 'auto'
+  } catch { return 'auto' }
+}
 
 interface VoiceConversationOptions {
   bookId: string
@@ -17,6 +26,9 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
   const [captions, setCaptions] = useState<VoiceCaption[]>([])
   const [playbackBlocked, setPlaybackBlocked] = useState(false)
   const [pendingReview, setPendingReview] = useState(false)
+  const [mode, setMode] = useState<VoiceMode>(savedVoiceMode)
+  const [provider, setProvider] = useState<VoiceProvider | null>(null)
+  const [fallbackReason, setFallbackReason] = useState<string | undefined>()
   const meterRef = useRef<HTMLButtonElement>(null)
   const connectionRef = useRef<VoiceConnection | null>(null)
   const latest = useRef(options)
@@ -27,6 +39,8 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
     connectionRef.current = null
     connection?.stop('Workspace changed. Start voice to resume.')
     setCaptions([])
+    setProvider(null)
+    setFallbackReason(undefined)
     setPendingReview(false)
   }, [options.bookId, options.notebookId, options.scope, options.available])
 
@@ -36,9 +50,17 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
     const current = latest.current
     if (!current.available || current.disabled) return
     setCaptions([])
+    setProvider(null)
+    setFallbackReason(undefined)
     setMessage('Speak naturally. Interrupt anytime.')
     const connection = new VoiceConnection({
       bookId: current.bookId, notebookId: current.notebookId,
+      mode,
+      onProvider: (next, reason) => {
+        if (connectionRef.current !== connection) return
+        setProvider(next)
+        setFallbackReason(reason)
+      },
       onPhase: (next, detail) => {
         if (connectionRef.current !== connection && next !== 'off') return
         setPhase(next)
@@ -70,7 +92,15 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
   }
 
   return {
-    phase, message, captions, playbackBlocked, pendingReview, meterRef, toggle, stop,
+    phase, message, captions, playbackBlocked, pendingReview, meterRef, toggle, stop, mode, provider, fallbackReason,
+    selectMode: (next: VoiceMode) => {
+      if (next === mode) return
+      connectionRef.current?.stop('Voice provider changed. Start voice to connect.')
+      setMode(next)
+      setProvider(null)
+      setFallbackReason(undefined)
+      try { localStorage.setItem(voiceModeKey, next) } catch { return }
+    },
     disabled: options.disabled || !options.available,
     active: phase !== 'off' && phase !== 'error',
     resumePlayback: () => { void connectionRef.current?.resumePlayback() },

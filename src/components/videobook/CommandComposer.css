@@ -109,6 +109,13 @@
   .notebook-media-composer-host.actions-only { right: 12px; left: 12px; bottom: 12px; }
 }
 
+@media (max-width: 420px) {
+  .command-line-shell:has(> .voice-controls) {
+    grid-template-areas: 'editor editor editor' 'actions model model' 'voice voice send';
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+}
+
 @media (max-height: 500px) {
   .command-line-shell > .composer-actions-panel { max-height: min(280px, 48dvh); }
   .composer-actions-panel .composer-actions-help { display: none; }

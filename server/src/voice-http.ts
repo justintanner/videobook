@@ -3,7 +3,12 @@ import { z } from "zod";
 import type { VoiceSessions } from "./voice-session.js";
 import { voiceError } from "./voice-session.js";
 
-const startSchema = z.object({ bookId: z.string().uuid(), notebookId: z.string().uuid().optional(), sdp: z.string().min(20).max(64_000).startsWith("v=0") }).strict();
+const startSchema = z.object({
+  bookId: z.string().uuid(), notebookId: z.string().uuid().optional(),
+  mode: z.enum(["auto", "openai", "xai"]).default("openai"),
+  sampleRate: z.union([z.literal(8000), z.literal(16000), z.literal(22050), z.literal(24000), z.literal(32000), z.literal(44100), z.literal(48000)]).optional(),
+  sdp: z.string().min(20).max(64_000).startsWith("v=0").optional(),
+}).strict().refine(value => value.mode === "xai" || value.sdp !== undefined);
 const outcomeSchema = z.object({ callId: z.string().min(1).max(200), outcome: z.object({ status: z.enum(["review", "completed", "queued", "failed", "cancelled"]), message: z.string().min(1).max(4000) }).strict() }).strict();
 const contextSchema = z.object({ userText: z.string().max(8000), assistantText: z.string().max(4000) }).strict();
 
@@ -42,10 +47,10 @@ export function voiceRouter(sessions: VoiceSessions) {
     catch (error) { const failure = voiceError(error); res.status(failure.status).json({ error: failure.message }); }
   });
   router.post("/:id/interrupt", (req, res) => {
-    const parsed = z.object({ responseId: z.string().min(1).max(200) }).strict().safeParse(req.body);
+    const parsed = z.object({ responseId: z.string().min(1).max(200), itemId: z.string().min(1).max(200).optional(), audioEndMs: z.number().int().min(0).max(1_800_000).optional() }).strict().safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "Invalid voice interruption." }); return; }
     try {
-      sessions.get(req.params.id, req.get("authorization")?.replace(/^Bearer /u, "") ?? "").interruptTranscript(parsed.data.responseId);
+      sessions.get(req.params.id, req.get("authorization")?.replace(/^Bearer /u, "") ?? "").interruptPlayback(parsed.data.responseId, parsed.data.itemId, parsed.data.audioEndMs);
       res.sendStatus(204);
     } catch (error) { const failure = voiceError(error); res.status(failure.status).json({ error: failure.message }); }
   });

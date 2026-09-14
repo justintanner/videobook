@@ -3,12 +3,16 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
+import { once } from "node:events";
+import { WebSocket } from "ws";
 import express from "express";
 import { OpenAiError } from "@apicity/openai";
+import { XaiError } from "@apicity/xai";
 import { OpenAiRealtimeCallRequestSchema } from "@apicity/openai/zod";
 import { BookManager } from "../book-manager.js";
 import { VoiceSession, VoiceSessions, voiceError } from "../voice-session.js";
 import { voiceRouter } from "../voice-http.js";
+import { attachVoiceAudio } from "../voice-audio.js";
 import { restrictHttpAccess } from "../http-access.js";
 import { voiceSessionConfig } from "../voice-config.js";
 import type { Engine } from "videobook-engine";
@@ -26,6 +30,7 @@ describe("voice session boundaries", () => {
   const server = createServer();
   let origin: string;
   const originalKey = process.env.OPENAI_API_KEY;
+  const originalXaiKey = process.env.XAI_API_KEY;
 
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), "videobook-voice-session-"));
@@ -43,16 +48,20 @@ describe("voice session boundaries", () => {
     app.use(restrictHttpAccess);
     app.use("/api/voice", voiceRouter(sessions));
     server.on("request", app);
+    attachVoiceAudio(server, sessions);
     await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("No HTTP address");
     origin = `http://127.0.0.1:${address.port}`;
     delete process.env.OPENAI_API_KEY;
+    delete process.env.XAI_API_KEY;
   });
 
   afterAll(async () => {
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalKey;
+    if (originalXaiKey === undefined) delete process.env.XAI_API_KEY;
+    else process.env.XAI_API_KEY = originalXaiKey;
     await sessions?.close();
     await new Promise<void>(resolve => server.close(() => resolve()));
     await books?.close();
@@ -80,6 +89,71 @@ describe("voice session boundaries", () => {
     expect(await response.json()).toMatchObject({ error: expect.stringContaining("OPENAI_API_KEY") });
     expect((await fetch(`${origin}/api/voice/unknown/events`)).status).toBe(404);
     expect((await fetch(`${origin}/api/voice/unknown`, { method: "DELETE" })).status).toBe(204);
+  });
+
+  it("rejects hostile audio upgrades and credentials in audio URLs", async () => {
+    for (const request of [{ path: "", headers: { Origin: "https://untrusted.example" } }, { path: "", headers: { Host: "untrusted.example" } }, { path: "?token=never-in-url", headers: { Origin: origin } }]) {
+      const status = await new Promise<number>(resolve => {
+        const socket = new WebSocket(`${origin.replace("http:", "ws:")}/api/voice/${bookId}/audio${request.path}`, { headers: request.headers });
+        socket.on("error", () => undefined);
+        socket.once("unexpected-response", (_request, response) => { response.resume(); socket.terminate(); resolve(response.statusCode ?? 0); });
+        socket.once("open", () => { socket.close(); resolve(101); });
+      });
+      expect(status).toBe(403);
+    }
+  });
+
+  it("requires bounded authentication before accepting PCM frames", async () => {
+    for (const payload of [Buffer.alloc(20), "invalid", JSON.stringify({ type: "authenticate", token: "x".repeat(64) }), Buffer.alloc(16_002)]) {
+      const socket = new WebSocket(`${origin.replace("http:", "ws:")}/api/voice/${bookId}/audio`, { origin });
+      const closed = once(socket, "close");
+      await once(socket, "open");
+      socket.send(payload);
+      const [code] = await closed;
+      expect(code).toBe(Buffer.isBuffer(payload) && payload.length > 16_000 ? 1009 : 1008);
+    }
+  });
+
+  it("pins explicit providers and reports both failures only in Auto mode", async () => {
+    for (const mode of ["openai", "xai", "auto"]) {
+      const response = await fetch(`${origin}/api/voice`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bookId, notebookId, mode, sampleRate: 48000, ...(mode === "xai" ? {} : { sdp: "v=0\r\ns=voice-session\r\n" }) }) });
+      expect(response.status).toBe(503);
+      const failure = await response.json() as { error: string };
+      if (mode !== "xai") expect(failure.error).toContain("OPENAI_API_KEY");
+      if (mode !== "openai") expect(failure.error).toContain("XAI_API_KEY");
+      if (mode === "openai") expect(failure.error).not.toContain("XAI_API_KEY");
+      if (mode === "xai") expect(failure.error).not.toContain("OPENAI_API_KEY");
+    }
+    await expect(sessions.start({ bookId, notebookId, mode: "auto" }, AbortSignal.abort())).rejects.toMatchObject({ status: 499 });
+  });
+
+  it("rejects unsupported providers and capture rates before opening a channel", async () => {
+    for (const input of [{ mode: "other", sampleRate: 48000 }, { mode: "xai", sampleRate: 12345 }, { mode: "auto", sampleRate: 48000 }]) {
+      const response = await fetch(`${origin}/api/voice`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bookId, notebookId, ...input }) });
+      expect(response.status).toBe(400);
+    }
+    expect(voiceError(new XaiError("Private details", 401)).message).toContain("XAI_API_KEY");
+    expect(voiceError(new XaiError("Private details", 429, { error: { code: "credit_balance_exhausted" } })).message).toContain("xAI API credits");
+  });
+
+  it("limits PCM to one owned channel and discards interrupted xAI audio", async () => {
+    const session = new VoiceSession(books, bookId, notebookId, engine, "unused-without-start", 120_000, () => undefined, "xai", 48000);
+    const events: VoiceSessionEvent[] = [];
+    let audioClosed = 0;
+    session.subscribe(event => events.push(event));
+    session.attachAudio(() => { audioClosed += 1; });
+    expect(() => session.attachAudio(() => undefined)).toThrow("already connected");
+    expect(() => session.appendAudio(Buffer.alloc(3))).toThrow("Invalid voice audio");
+    expect(() => session.appendAudio(Buffer.alloc(16_002))).toThrow("Invalid voice audio");
+    session.receive({ type: "response.output_audio.delta", response_id: "pcm-response", item_id: "pcm-item", event_id: "audio-first", delta: "AAAAAA==" });
+    session.interruptPlayback("pcm-response", "pcm-item", 0);
+    session.receive({ type: "response.output_audio.delta", response_id: "pcm-response", item_id: "pcm-item", event_id: "audio-late", delta: "AAAAAA==" });
+    expect(events.filter(event => event.type === "audio")).toHaveLength(1);
+    await session.close();
+    await session.close();
+    expect(audioClosed).toBe(1);
+    expect(() => session.appendAudio(Buffer.alloc(20))).toThrow("closed");
+    expect(engine.logs.read("voice-session-closed").find(entry => entry.operationId === session.id)).toMatchObject({ provider: "xai", voiceModel: "grok-voice-think-fast-2.0" });
   });
 
   it.each([
