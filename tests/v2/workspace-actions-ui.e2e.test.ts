@@ -58,11 +58,14 @@ describe('workspace action launcher with real endpoints', () => {
   }
 
   async function openActions(command?: string): Promise<void> {
-    await page.getByLabel('Open actions', { exact: true }).click()
+    const libraryActions = page.getByLabel('Open library actions', { exact: true })
+    if (await libraryActions.isVisible()) await libraryActions.click()
+    else await page.getByRole('button', { name: 'Open actions', exact: true }).click()
     await expect.poll(() => page.getByRole('option').count()).toBeGreaterThan(100)
     if (!command) return
-    await page.getByLabel('Search actions', { exact: true }).fill(command)
+    await page.getByLabel('Videobook command input', { exact: true }).fill(command)
     await page.locator(`[data-command="${command}"]`).click()
+    await page.getByRole('button', { name: 'Send command', exact: true }).click()
     await page.getByRole('heading', { level: 3 }).waitFor()
   }
 
@@ -131,7 +134,7 @@ describe('workspace action launcher with real endpoints', () => {
       await page.screenshot({ path: `${evidencePath}.png` })
       await writeFile(`${evidencePath}.txt`, await page.locator('body').innerText())
       await writeFile(`${evidencePath}.aria.txt`, await page.locator('body').ariaSnapshot())
-      await writeFile(`${evidencePath}.json`, JSON.stringify({ browserErrors, commandResponses, navigations }, null, 2))
+      await writeFile(`${evidencePath}.json`, JSON.stringify({ browserErrors, commandResponses, navigations, focus: await page.evaluate(() => document.activeElement?.outerHTML) }, null, 2))
     }
     await page?.close()
   })
@@ -149,7 +152,7 @@ describe('workspace action launcher with real endpoints', () => {
     expect(await options.count()).toBe(catalog.actions.length)
     expect((await options.evaluateAll(elements => elements.map(element => element.getAttribute('data-action-id')))).sort())
       .toEqual(catalog.actions.map(action => action.id).sort())
-    const search = page.getByLabel('Search actions', { exact: true })
+    const search = page.getByLabel('Videobook command input', { exact: true })
     await search.focus()
     const visited = new Set<string>()
     for (let index = 0; index < 30; index += 1) {
@@ -178,8 +181,9 @@ describe('workspace action launcher with real endpoints', () => {
     await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent()).toContain('action-ui-project')
     await page.getByRole('button', { name: 'All actions', exact: true }).click()
     const createPrompt = catalog.actions.find(action => action.handler.kind === 'tool' && action.handler.tool === 'create_prompt_entity')!
-    await page.getByLabel('Search actions', { exact: true }).fill(createPrompt.command)
+    await page.getByLabel('Videobook command input', { exact: true }).fill(createPrompt.command)
     await page.locator(`[data-action-id="${createPrompt.id}"]`).click()
+    await page.getByRole('button', { name: 'Send command', exact: true }).click()
     await page.getByLabel('Name', { exact: false }).fill('A reusable shot')
     await page.getByLabel('Prompt', { exact: true }).fill('A slow pan across a quiet lake')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
@@ -191,9 +195,10 @@ describe('workspace action launcher with real endpoints', () => {
   it('opens a typed form for every catalog action without starting mutations', async () => {
     await openActions()
     for (const action of catalog.actions) {
-      const search = page.getByLabel('Search actions', { exact: true })
+      const search = page.getByLabel('Videobook command input', { exact: true })
       await search.fill(action.command)
       await page.locator(`.workspace-actions-list [data-action-id="${action.id}"]`).click()
+      await page.getByRole('button', { name: 'Send command', exact: true }).click()
       await page.locator(`form.workspace-action-form[data-action-id="${action.id}"]`).waitFor()
       expect(await page.getByRole('button', { name: /^(?:Run action|Review action)$/u }).count(), action.id).toBe(1)
       await page.getByRole('button', { name: 'All actions', exact: true }).click()
@@ -201,16 +206,16 @@ describe('workspace action launcher with real endpoints', () => {
     expect(browserErrors).toEqual([])
   }, 300_000)
 
-  it('opens from Library at phone widths and keeps the dialog inside the viewport', async () => {
+  it('opens from Library at phone widths and keeps shared action search inside the viewport', async () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.getByLabel('Open Library', { exact: true }).click()
     await openActions()
-    const dialog = page.getByRole('dialog', { name: 'Workspace actions' })
+    const dialog = page.locator('.composer-actions-panel')
     expect(await dialog.evaluate(element => {
       const rect = element.getBoundingClientRect()
       return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight
     })).toBe(true)
-    await page.getByLabel('Search actions', { exact: true }).fill('generate fal')
+    await page.getByLabel('Videobook command input', { exact: true }).fill('generate fal')
     await page.screenshot({ path: '/tmp/videobook-actions-mobile.png' })
     expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
     await page.setViewportSize({ width: 320, height: 844 })
@@ -220,7 +225,7 @@ describe('workspace action launcher with real endpoints', () => {
     })).toBe(true)
     await page.keyboard.press('Escape')
     await dialog.waitFor({ state: 'hidden' })
-    await expect.poll(() => page.getByLabel('Open actions', { exact: true }).evaluate(element => document.activeElement === element)).toBe(true)
+    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe('Open library actions')
   })
 
   it('traverses the entire slash list and invokes exact aliases and sequence commands', async () => {
@@ -266,23 +271,26 @@ describe('workspace action launcher with real endpoints', () => {
     const menu = page.getByRole('menu')
     expect((await menu.getByRole('menuitem').allTextContents()).at(-1)).toContain('Delete')
     await menu.getByRole('menuitem', { name: 'More actions', exact: true }).click()
-    await page.getByLabel('Search actions', { exact: true }).fill('/crop-image')
+    await page.getByLabel('Videobook command input', { exact: true }).fill('/crop-image')
     await page.locator('[data-action-id="tool.crop_image"]').click()
+    await page.getByRole('button', { name: 'Send command', exact: true }).click()
     expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: /^Media/u }).inputValue()).toBe(imageId)
     await page.keyboard.press('Escape')
     await page.getByLabel('Open @a2 cell menu', { exact: true }).click()
     await page.getByRole('menuitem', { name: 'Edit cell', exact: true }).click()
     await page.getByLabel('Inspector actions', { exact: true }).click()
-    await page.getByLabel('Search actions', { exact: true }).fill('/asset-manifest')
+    await page.getByLabel('Videobook command input', { exact: true }).fill('/asset-manifest')
     await page.locator('[data-action-id="tool.asset_manifest"]').click()
+    await page.getByRole('button', { name: 'Send command', exact: true }).click()
     expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: /^Media/u }).inputValue()).toBe(imageId)
     await page.keyboard.press('Escape')
     await page.getByLabel('Open Library', { exact: true }).click()
     const imageCard = page.locator('.library-asset-card').filter({ hasText: 'action-image' }).first()
     await imageCard.getByRole('button', { name: /^More actions for/u }).click()
     await page.getByRole('menuitem', { name: 'All media actions', exact: true }).click()
-    await page.getByLabel('Search actions', { exact: true }).fill('/rename')
+    await page.getByLabel('Videobook command input', { exact: true }).fill('/rename')
     await page.locator('[data-action-id="tool.rename_asset"]').click()
+    await page.getByRole('button', { name: 'Send command', exact: true }).click()
     expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: /^Media/u }).inputValue()).toBe(imageId)
   })
 
@@ -354,8 +362,9 @@ describe('workspace action launcher with real endpoints', () => {
     if (!square) throw new Error('The empty @a3 slot is missing')
     await page.mouse.click(square.x + square.width / 2, square.y + square.height / 2, { button: 'right' })
     await page.getByRole('menuitem', { name: 'More actions', exact: true }).click()
-    await page.getByLabel('Search actions', { exact: true }).fill('/create-notebook-cell')
+    await page.getByLabel('Videobook command input', { exact: true }).fill('/create-notebook-cell')
     await page.locator('.workspace-actions-list [data-action-id="tool.create_notebook_cell"]').click()
+    await page.getByRole('button', { name: 'Send command', exact: true }).click()
     expect(await page.getByRole('spinbutton', { name: 'Row', exact: true }).inputValue()).toBe('0')
     expect(await page.getByRole('spinbutton', { name: 'Column', exact: true }).inputValue()).toBe('2')
     await page.getByRole('combobox', { name: 'Type', exact: true }).selectOption({ label: 'image' })
@@ -373,8 +382,9 @@ describe('workspace action launcher with real endpoints', () => {
     await page.locator(`[data-id="${selectedIds[1]}"] .cell-node-footer strong`).click({ modifiers: ['Shift'] })
     await page.getByLabel('Selection actions', { exact: true }).click()
     const run = catalog.actions.find(action => action.id === 'tool.run_notebook')!
-    await page.getByLabel('Search actions', { exact: true }).fill(run.command)
+    await page.getByLabel('Videobook command input', { exact: true }).fill(run.command)
     await page.locator('.workspace-actions-list [data-action-id="tool.run_notebook"]').click()
+    await page.getByRole('button', { name: 'Send command', exact: true }).click()
     const targets = page.getByRole('group', { name: 'Cell ids', exact: true }).locator('select')
     await expect.poll(() => targets.count()).toBe(2)
     const selected = await targets.evaluateAll(elements => elements.map(element => (element as HTMLSelectElement).value))
@@ -383,8 +393,9 @@ describe('workspace action launcher with real endpoints', () => {
     await page.getByLabel('Open @a1 cell menu', { exact: true }).click()
     await page.getByRole('menuitem', { name: 'Open media', exact: true }).click()
     await page.getByLabel('More media actions', { exact: true }).click()
-    await page.getByLabel('Search actions', { exact: true }).fill('/asset-manifest')
+    await page.getByLabel('Videobook command input', { exact: true }).fill('/asset-manifest')
     await page.locator('.workspace-actions-list [data-action-id="tool.asset_manifest"]').click()
+    await page.getByRole('button', { name: 'Send command', exact: true }).click()
     expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: 'Media', exact: true }).inputValue()).toBe(videoId)
     await page.keyboard.press('Escape')
     await page.keyboard.press('Escape')
@@ -394,8 +405,9 @@ describe('workspace action launcher with real endpoints', () => {
 
   it('creates, opens, renames and deletes a notebook through the action controls', async () => {
     await page.keyboard.press('Control+Shift+K')
-    await page.getByLabel('Search actions', { exact: true }).fill('/create-notebook')
+    await page.getByLabel('Videobook command input', { exact: true }).fill('/create-notebook')
     await page.locator('.workspace-actions-list [data-action-id="tool.create_notebook"]').click()
+    await page.getByRole('button', { name: 'Send command', exact: true }).click()
     await page.getByRole('textbox', { name: 'Name', exact: true }).fill('A managed notebook')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
     await expect.poll(async () => JSON.stringify(await call('list_notebooks'))).toContain('A managed notebook')
@@ -425,7 +437,7 @@ describe('workspace action launcher with real endpoints', () => {
     await call('set_timeline', { render: 'landscape', slots: [{ artifact_id: videoId }] })
     await page.reload()
     await sendCommand('/export-sequence --captions omit')
-    await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).inputValue()).toBe('/apply')
+    await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).textContent()).toBe('/apply')
     await call('add_sequence_track', { kind: 'audio', name: 'Changed after review' })
     await sendCommand('/apply')
     await page.getByText(/The sequence changed after review\. Review the current cut before exporting\./u).first().waitFor()
@@ -443,7 +455,10 @@ describe('workspace action launcher with real endpoints', () => {
     const revision = revisions[0]!
     const action = catalog.actions.find(entry => entry.handler.kind === 'tool' && entry.handler.tool === 'list_book_actions')!
     await openActions(action.command)
-    await page.locator('.workspace-action-linked-results > li').first().getByRole('button', { name: 'Preview revision', exact: true }).click()
+    const currentHistory = record(await call('list_book_actions'))!
+    const revisionIndex = (currentHistory.actions as Record<string, unknown>[]).findIndex(entry => entry.hash === revision.hash)
+    expect(revisionIndex).toBeGreaterThanOrEqual(0)
+    await page.locator('.workspace-action-linked-results > li').nth(revisionIndex).getByRole('button', { name: 'Preview revision', exact: true }).click()
     await page.locator('form[data-action-id="tool.get_history_action"]').waitFor()
     const target = page.getByRole('combobox', { name: 'Action id', exact: true })
     await expect.poll(() => target.inputValue()).toBe(String(revision.hash))
@@ -560,9 +575,9 @@ describe('workspace action launcher with real endpoints', () => {
     expect((await fetch(`${origin}/files/${bookId}/${characterId}/notes.txt`)).status).toBe(404)
     await page.screenshot({ path: '/tmp/videobook-e2e-hour-historical-preview.png' })
     await page.keyboard.press('Escape')
-    await expect.poll(() => page.getByLabel('Open actions', { exact: true }).evaluate(element => element === document.activeElement)).toBe(true)
+    await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).evaluate(element => element === document.activeElement)).toBe(true)
     await openActions()
-    await page.getByRole('button', { name: 'Close actions', exact: true }).click()
+    await page.getByRole('button', { name: 'Close action search', exact: true }).click()
     await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).evaluate(element => element === document.activeElement)).toBe(true)
     expect(browserErrors).toEqual([])
   })
@@ -578,8 +593,9 @@ describe('workspace action launcher with real endpoints', () => {
     await expect.poll(() => preview.locator('img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
     await preview.getByRole('button', { name: 'More actions', exact: true }).click()
     const action = catalog.actions.find(entry => entry.handler.kind === 'tool' && entry.handler.tool === 'asset_manifest')!
-    await page.getByLabel('Search actions', { exact: true }).fill(action.command)
+    await page.getByLabel('Videobook command input', { exact: true }).fill(action.command)
     await page.locator(`.workspace-actions-list [data-action-id="${action.id}"]`).click()
+    await page.getByRole('button', { name: 'Send command', exact: true }).click()
     await expect.poll(() => page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: 'Media', exact: true }).inputValue()).toBe(imageId)
     await page.keyboard.press('Escape')
     await expect.poll(() => preview.evaluate(element => element.contains(document.activeElement))).toBe(true)
@@ -609,6 +625,7 @@ describe('workspace action launcher with real endpoints', () => {
     await sendCommand(`/clip-reverse @${String(clip.clipId)}`)
     await sheet.waitFor()
     await openActions()
+    await page.getByRole('combobox', { name: 'Action category', exact: true }).focus()
     await page.keyboard.press('Escape')
     expect(await sheet.count()).toBe(1)
     await input.focus()
@@ -616,7 +633,7 @@ describe('workspace action launcher with real endpoints', () => {
     await input.dispatchEvent('keydown', { key: 'Escape', isComposing: true })
     expect(await sheet.count()).toBe(1)
     await input.dispatchEvent('compositionend')
-    await input.evaluate(element => (element as HTMLInputElement).blur())
+    await input.evaluate(element => (element as HTMLElement).blur())
     await page.keyboard.press('Escape')
     await expect.poll(() => sheet.count()).toBe(0)
   })
@@ -654,8 +671,9 @@ describe('workspace action launcher with real endpoints', () => {
     const foreignCard = page.locator('.library-asset-card').filter({ hasText: 'foreign-action-project' })
     await foreignCard.getByRole('button', { name: 'More actions for Matching media label', exact: true }).click()
     await page.getByRole('menuitem', { name: 'All media actions', exact: true }).click()
-    await page.getByLabel('Search actions', { exact: true }).fill('/rename')
+    await page.getByLabel('Videobook command input', { exact: true }).fill('/rename')
     await page.locator('[data-action-id="tool.rename_asset"]').click()
+    await page.getByRole('button', { name: 'Send command', exact: true }).click()
     await expect.poll(() => page.getByRole('combobox', { name: 'Media', exact: true }).inputValue()).toBe(foreignId)
     await page.getByRole('textbox', { name: 'New name', exact: true }).fill('Foreign media renamed')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
@@ -676,7 +694,7 @@ describe('workspace action launcher with real endpoints', () => {
     const clipsBefore = sequenceBefore.clips as Record<string, unknown>[]
     const clipId = String(clipsBefore[0]!.clipId)
     await sendCommand('/export-sequence --captions omit')
-    await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).inputValue()).toBe('/apply')
+    await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).textContent()).toBe('/apply')
     await sendCommand('/apply')
     await expect.poll(async () => {
       const payload = record(await call('list_assets'))

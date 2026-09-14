@@ -43,14 +43,14 @@ interface AssetMentionSuggestion {
   type: 'asset'
 }
 
-export interface NotebookAddressSuggestion {
+interface NotebookAddressSuggestion {
   value: string
   label: string
   description: string
   type: 'cell'
 }
 
-export interface NotebookAddressCell {
+interface NotebookAddressCell {
   slot: NotebookGridSlot
   type: string
 }

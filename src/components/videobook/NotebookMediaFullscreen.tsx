@@ -53,6 +53,7 @@ type NotebookMediaFullscreenProps = {
   analysisUnavailableReason?: string | null
   composerEditing?: boolean
   composerPortalRef?: (element: HTMLDivElement | null) => void
+  actionsOpen?: boolean
   returnFocus?: HTMLElement | null
   initialRegions?: readonly ImageEditRegion[]
   replacementCandidates?: readonly ImageReplacementCandidate[]
@@ -392,6 +393,7 @@ export function NotebookMediaFullscreen({
   analysisUnavailableReason = null,
   composerEditing = false,
   composerPortalRef,
+  actionsOpen = false,
   returnFocus = null,
   initialRegions,
   replacementCandidates = [],
@@ -721,6 +723,7 @@ export function NotebookMediaFullscreen({
         onClose()
       }}
     >
+      {isVideo && actionsOpen && <div ref={composerPortalRef} className="notebook-media-composer-host actions-only" aria-label="Media actions input" />}
       <span
         className="sr-only"
         tabIndex={0}

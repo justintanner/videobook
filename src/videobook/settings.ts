@@ -9,7 +9,7 @@ export interface SettingsProvider {
   source: string
 }
 
-export interface SettingsStorageValue {
+interface SettingsStorageValue {
   state: string
   head: string
   pendingObjects: number

@@ -1,0 +1,114 @@
+.command-line-shell {
+  grid-template-areas: 'actions editor model send';
+}
+
+.command-actions-controls {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.command-actions-toggle,
+.command-actions-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  color: #bce6cf;
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.command-actions-toggle[aria-expanded='true'] {
+  border-color: var(--green);
+  background: #103421;
+}
+
+.command-actions-toggle:disabled { opacity: 0.5; cursor: default; }
+.command-actions-toggle[hidden] { display: none; }
+.command-actions-toggle:focus-visible,
+.command-actions-close:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.command-editor-mount { grid-area: editor; }
+.command-line-shell > .command-model-selector,
+.command-line-shell > .command-context { grid-area: model; }
+.command-send { grid-area: send; }
+
+.command-line-shell > .composer-actions-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: min(420px, 52dvh);
+  overflow: hidden;
+  padding: 8px;
+}
+
+.composer-actions-panel > header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 0 2px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.composer-actions-panel > header > strong { font-size: 13px; }
+.composer-actions-panel > header label { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11px; }
+.composer-actions-panel > header select { max-width: 150px; min-width: 0; min-height: 32px; background: #071a10; color: #bce6cf; border: 1px solid var(--line); }
+.composer-actions-panel > header > span { margin-left: auto; }
+.command-line-shell > .command-suggestions.composer-actions-panel > header > button { display: grid; grid-template-columns: none; width: 32px; min-height: 32px; padding: 6px; }
+.composer-actions-panel .workspace-actions-list { min-height: 0; overflow-y: auto; margin-top: 5px; }
+.command-line-shell > .composer-actions-panel .workspace-actions-list > button { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: start; }
+.command-line-shell > .composer-actions-panel .workspace-actions-list > button.active { color: var(--control-fg-hover); background: var(--control-bg-active); }
+.command-line-shell > .composer-actions-panel .workspace-actions-list > button > span { display: grid; gap: 3px; white-space: normal; }
+.command-line-shell > .composer-actions-panel .workspace-actions-list > button strong { color: #c4ead5; font-size: 12px; }
+.composer-actions-panel .workspace-actions-list small { font-size: 11px; overflow-wrap: anywhere; }
+.composer-actions-panel .workspace-actions-list code { font-size: 10px; overflow-wrap: anywhere; }
+.composer-actions-panel .composer-action-unavailable { grid-column: 1 / -1; color: #e3b869; }
+.composer-actions-panel p { font-size: 11px; margin: 8px 4px; color: #a6c5b3; }
+.composer-actions-panel .composer-actions-help { flex: 0 0 auto; margin: 8px 4px 0; }
+
+.command-composer .command-line-shell > .command-suggestions button.composer-reference-suggestion {
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+}
+
+.composer-reference-suggestion .inspector-source-thumb { width: 40px; height: 40px; }
+.command-suggestions .composer-reference-copy { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; white-space: normal; }
+.composer-reference-copy > small { flex: 1 1 100%; font-size: 10px; }
+.command-suggestions .composer-reference-copy > span { white-space: normal; overflow-wrap: anywhere; }
+
+.workspace-preview-composer-host > .command-composer,
+.notebook-media-composer-host > .command-composer {
+  position: relative;
+  inset: auto;
+  margin: 0;
+}
+
+.workspace-preview-composer-host { min-width: 0; padding: 12px; }
+.notebook-media-composer-host.actions-only { right: 28px; }
+
+@media (max-width: 600px) {
+  .command-line-shell {
+    grid-template-areas: 'editor editor editor' 'actions model send';
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding-top: 5px;
+    padding-bottom: 6px;
+  }
+
+  .command-actions-toggle { min-height: 40px; }
+  .command-model-selector { justify-self: end; }
+  .command-line-shell > .composer-actions-panel .workspace-actions-list > button { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .composer-actions-panel > header label { font-size: 0; }
+  .composer-actions-panel > header select { max-width: 110px; font-size: 11px; }
+  .notebook-media-composer-host.actions-only { right: 12px; left: 12px; bottom: 12px; }
+}
+
+@media (max-height: 500px) {
+  .command-line-shell > .composer-actions-panel { max-height: min(280px, 48dvh); }
+  .composer-actions-panel .composer-actions-help { display: none; }
+}

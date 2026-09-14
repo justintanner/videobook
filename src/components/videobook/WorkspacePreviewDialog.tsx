@@ -26,9 +26,11 @@ type Props = {
   initialFrame?: number
   onActions: () => void
   onClose: () => void
+  composerPortalRef?: (element: HTMLDivElement | null) => void
+  actionsOpen?: boolean
 }
 
-export function WorkspacePreviewDialog({ media, sequence, assets, opener, initialFrame = 0, onActions, onClose }: Props) {
+export function WorkspacePreviewDialog({ media, sequence, assets, opener, initialFrame = 0, onActions, onClose, composerPortalRef, actionsOpen = false }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const playerRef = useRef<CanonicalSequencePlayerHandle>(null)
   const [filename, setFilename] = useState(media?.initialFile ?? '')
@@ -59,5 +61,6 @@ export function WorkspacePreviewDialog({ media, sequence, assets, opener, initia
       {url && <a href={url} target="_blank" rel="noreferrer">Open current file</a>}
       <button type="button" onClick={onActions}>More actions</button>
     </div>
+    {actionsOpen && <div className="workspace-preview-composer-host" ref={composerPortalRef} />}
   </dialog>, document.body)
 }

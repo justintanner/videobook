@@ -24,7 +24,7 @@ type ComposerFocusState = {
 }
 
 const documentStates = new WeakMap<Document, ComposerFocusState>()
-const composerSelector = '.command-composer input[aria-label="Videobook command input"]'
+const composerSelector = '.command-composer [aria-label="Videobook command input"]'
 const editingSelector = 'input:not([type="file"]), textarea, select, [contenteditable="true"], video[controls], audio[controls]'
 const overlaySelector = 'dialog[open], [aria-modal="true"], [role="menu"], details.canvas-add-menu[open]'
 
@@ -53,11 +53,11 @@ function flushFocus(owner: Document, state: ComposerFocusState): void {
   if (pending.epoch !== state.epoch || pending.scope !== state.scope) return
   if (!target || owner.visibilityState === 'hidden') return
   if (target instanceof HTMLElement) {
-    if (!target.isConnected || target.matches(':disabled') || target.closest('[inert], [hidden]')) return
-    const overlay = owner.querySelector(overlaySelector)
+    if (!target.isConnected || target.matches(':disabled, [aria-disabled="true"]') || target.closest('[inert], [hidden]')) return
+    const overlay = [...owner.querySelectorAll(overlaySelector)].at(-1)
     if (overlay && !overlay.contains(target)) return
     const active = owner.activeElement
-    if (active && active !== target && active.matches(editingSelector)) return
+    if (active && active !== target && active.matches(editingSelector) && !active.closest('[hidden], [inert]')) return
   }
   target.focus({ preventScroll: true })
   pending.afterFocus?.()
@@ -75,14 +75,14 @@ function queueFocus(owner: Document, state: ComposerFocusState): void {
   state.pending = {
     epoch: state.epoch,
     scope: state.scope,
-    resolve: () => owner.querySelector<HTMLInputElement>(composerSelector),
+    resolve: () => owner.querySelector<HTMLElement>(composerSelector),
   }
   scheduleFocus(owner, state)
 }
 
 export function captureCommandComposerFocus(
   resolveTarget: () => CommandComposerFocusTarget | null = () =>
-    document.querySelector<HTMLInputElement>(composerSelector),
+    document.querySelector<HTMLElement>(composerSelector),
   afterFocus?: () => void,
 ): () => void {
   const owner = document
@@ -107,12 +107,15 @@ export function capturePointerComposerFocus(): () => void {
 }
 
 export function captureDismissedComposerFocus(opener: HTMLElement | null): () => void {
-  const composer = document.querySelector<HTMLInputElement>(composerSelector)
   const pointer = focusState(document).modality === 'pointer'
-  return captureCommandComposerFocus(() =>
-    pointer && composer && !composer.closest('[hidden]')
-      ? composer
-      : opener)
+  const fromComposer = Boolean(opener?.closest('.command-composer'))
+  return captureCommandComposerFocus(() => {
+    const composer = document.querySelector<HTMLElement>(composerSelector)
+    if (!(pointer || fromComposer || opener === document.body || !opener?.isConnected) || !composer || composer.closest('[hidden]')) return opener
+    return composer.matches('[aria-disabled="true"]')
+      ? composer.closest('.command-composer')?.querySelector<HTMLElement>('button[aria-label="Open actions"]:not(:disabled)') ?? null
+      : composer
+  })
 }
 
 export function useCommandComposerFocus(scope: string, enabled: boolean): void {

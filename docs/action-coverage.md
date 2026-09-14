@@ -8,9 +8,9 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 
 | Surface | Component | Entry point |
 | --- | --- | --- |
-| slash | [src/components/videobook/CommandComposer.tsx](../src/components/videobook/CommandComposer.tsx) | Type / in chat; choose a command or alias |
-| launcher | [src/components/videobook/WorkspaceActionsDialog.tsx](../src/components/videobook/WorkspaceActionsDialog.tsx) | Search the Actions dialog |
-| button | [src/App.tsx](../src/App.tsx) | Actions in the header; Ctrl+Shift+K / Cmd+Shift+K |
+| slash | [src/components/videobook/RichComposerEditor.tsx](../src/components/videobook/RichComposerEditor.tsx) | Type / in chat; choose a command or alias |
+| launcher | [src/components/videobook/ComposerActionsPanel.tsx](../src/components/videobook/ComposerActionsPanel.tsx) | Search Actions in the main chat input; choose a command, then submit to continue |
+| button | [src/components/videobook/CommandComposer.tsx](../src/components/videobook/CommandComposer.tsx) | Actions beside the chat input; Ctrl+Shift+K / Cmd+Shift+K; on-demand Actions in Library |
 | cell-menu | [src/components/videobook/NotebookCellContextMenu.tsx](../src/components/videobook/NotebookCellContextMenu.tsx) | Cell or empty-slot menu → More actions |
 | library-menu | [src/components/videobook/LibraryAssetCard.tsx](../src/components/videobook/LibraryAssetCard.tsx) | Media overflow → All media actions |
 | selection-menu | [src/components/videobook/NotebookToolbar.tsx](../src/components/videobook/NotebookToolbar.tsx) | Selection actions in the notebook toolbar |

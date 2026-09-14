@@ -1,13 +1,12 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowLeft, Play, Search, X } from 'lucide-react'
+import { ArrowLeft, Play, X } from 'lucide-react'
 import type { WorkspaceAction } from '../../../server/src/workspace-action-contract'
 import {
   actionFieldLabel,
   actionUnavailableReason,
   initialActionValues,
   hasWorkspaceActionResultLinks,
-  searchWorkspaceActions,
   workspaceCropPreset,
 } from '@/videobook/workspace-actions'
 import type { WorkspaceActionContext } from '@/videobook/workspace-actions'
@@ -24,15 +23,14 @@ export type WorkspaceActionReview = { message: string; cost?: string }
 type WorkspaceActionsDialogProps = {
   actions: readonly WorkspaceAction[]
   context: WorkspaceActionContext
-  initialActionId?: string
+  initialActionId: string
   initialValues?: Record<string, unknown>
   initialResult?: WorkspaceActionResult
-  initialQuery?: string
   returnFocus: HTMLElement | null
   loading?: boolean
   error?: string | null
   onClose: () => void
-  onSelect?: (action: WorkspaceAction) => void
+  onBack: () => void
   onOpenAction: (actionId: string | undefined, values: Record<string, unknown>) => void
   onExecute: (action: WorkspaceAction, values: Record<string, unknown>) => Promise<WorkspaceActionResult>
   onReview: (action: WorkspaceAction, values: Record<string, unknown>) => Promise<WorkspaceActionReview>
@@ -163,30 +161,19 @@ export function WorkspaceActionsDialog({
   initialActionId,
   initialValues,
   initialResult,
-  initialQuery = '',
   returnFocus,
   loading = false,
   error,
   onClose,
-  onSelect,
+  onBack,
   onOpenAction,
   onExecute,
   onReview,
 }: WorkspaceActionsDialogProps) {
-  const id = useId()
   const dialogRef = useRef<HTMLDialogElement>(null)
-  const searchRef = useRef<HTMLInputElement>(null)
-  const [query, setQuery] = useState(initialQuery)
-  const [group, setGroup] = useState('')
-  const [activeIndex, setActiveIndex] = useState(0)
-  const [actionId, setActionId] = useState(initialActionId)
-  const selected = actions.find((action) => action.id === actionId)
+  const selected = actions.find(action => action.id === initialActionId)
   const activeActionId = selected?.id
-  const filtered = useMemo(() => searchWorkspaceActions(actions, query)
-    .filter((action) => !group || action.group === group), [actions, group, query])
-  const groups = useMemo(() => [...new Set(actions.map((action) => action.group))].sort(), [actions])
-  const selectedIndex = Math.min(activeIndex, Math.max(0, filtered.length - 1))
-  const variants = useMemo(() => selected?.generation ? actions.filter((action) => action.generation?.operation === selected.generation?.operation && action.generation?.mediaType === selected.generation?.mediaType) : [], [actions, selected])
+  const variants = useMemo(() => selected?.generation ? actions.filter(action => action.generation?.operation === selected.generation?.operation && action.generation?.mediaType === selected.generation?.mediaType) : [], [actions, selected])
 
   useLayoutEffect(() => {
     const dialog = dialogRef.current
@@ -197,8 +184,7 @@ export function WorkspaceActionsDialog({
 
   useLayoutEffect(() => {
     if (loading) return
-    if (activeActionId) dialogRef.current?.querySelector<HTMLElement>('.workspace-action-fields input, .workspace-action-fields textarea, .workspace-action-fields select')?.focus()
-    else searchRef.current?.focus()
+    dialogRef.current?.querySelector<HTMLElement>('.workspace-action-fields input, .workspace-action-fields textarea, .workspace-action-fields select')?.focus()
   }, [activeActionId, loading])
 
   const close = () => {
@@ -207,57 +193,20 @@ export function WorkspaceActionsDialog({
     restoreFocus()
   }
 
-  const select = (action: WorkspaceAction) => { if (onSelect) onSelect(action); else setActionId(action.id) }
-  const move = (index: number) => {
-    const next = (index + filtered.length) % Math.max(1, filtered.length)
-    setActiveIndex(next)
-    document.getElementById(`${id}-option-${next}`)?.scrollIntoView({ block: 'nearest' })
-  }
-
-  return createPortal(<dialog ref={dialogRef} className="workspace-actions-dialog" aria-label="Workspace actions" data-workspace-action-surface="launcher"
-    onKeyDown={(event) => {
+  return createPortal(<dialog ref={dialogRef} className="workspace-actions-dialog" aria-label="Workspace actions"
+    onKeyDown={event => {
       if (event.key !== 'Escape' || event.nativeEvent.isComposing) return
       event.preventDefault()
       event.stopPropagation()
       close()
     }}
-    onCancel={(event) => { event.preventDefault(); close() }}>
+    onCancel={event => { event.preventDefault(); close() }}>
     <header><h2>Actions</h2><button type="button" aria-label="Close actions" onClick={close}><X size={18} /></button></header>
-    {loading && <p role="status">Loading actions…</p>}
+    {loading && <p role="status">Loading action…</p>}
     {error && <p role="alert" className="workspace-action-error">{error}</p>}
-    {selected && !loading
-      ? <ActionForm key={selected.id} action={selected} context={context}
-          initialValues={initialValues}
-          initialResult={selected.id === initialActionId ? initialResult : undefined}
-          variants={variants}
-          onExecute={onExecute} onReview={onReview} onBack={() => setActionId(undefined)} onOpenAction={onOpenAction} />
-      : <>
-          <div className="workspace-actions-search"><Search size={17} /><input ref={searchRef} autoFocus type="search" role="combobox"
-            aria-label="Search actions" aria-autocomplete="list" aria-expanded="true" aria-controls={`${id}-list`}
-            aria-activedescendant={filtered.length ? `${id}-option-${selectedIndex}` : undefined}
-            placeholder="Search commands, descriptions or aliases" value={query}
-            onChange={(event) => { setQuery(event.target.value); setActiveIndex(0) }}
-            onKeyDown={(event) => {
-              if (event.nativeEvent.isComposing) return
-              if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
-                event.preventDefault()
-                move(event.key === 'Home' ? 0 : event.key === 'End' ? filtered.length - 1 : selectedIndex + (event.key === 'ArrowDown' ? 1 : -1))
-              } else if (event.key === 'Enter' && filtered[selectedIndex]) {
-                event.preventDefault()
-                select(filtered[selectedIndex]!)
-              }
-            }} /></div>
-          <div className="workspace-actions-filter"><label>Category<select value={group} onChange={(event) => { setGroup(event.target.value); setActiveIndex(0) }}>
-            <option value="">All categories</option>{groups.map((name) => <option key={name}>{name}</option>)}
-          </select></label><span role="status">{filtered.length} actions</span></div>
-          <div id={`${id}-list`} role="listbox" aria-label="Available actions" className="workspace-actions-list">
-            {filtered.map((action, index) => <button key={action.id} type="button" role="option" id={`${id}-option-${index}`}
-              aria-selected={index === selectedIndex} data-action-id={action.id} data-command={action.command}
-              onClick={() => select(action)}>
-              <span><strong>{action.title}</strong><code>{action.command}</code></span><small>{action.description}</small>
-            </button>)}
-            {!filtered.length && <p>No matching actions. Try a media type, operation or command alias.</p>}
-          </div>
-        </>}
+    {selected && !loading && <ActionForm key={selected.id} action={selected} context={context}
+      initialValues={initialValues} initialResult={initialResult} variants={variants}
+      onExecute={onExecute} onReview={onReview} onBack={onBack} onOpenAction={onOpenAction} />}
+    {!selected && !loading && <p role="alert">This action is no longer available. <button type="button" onClick={onBack}>All actions</button></p>}
   </dialog>, document.body)
 }

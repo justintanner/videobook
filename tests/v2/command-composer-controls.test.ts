@@ -11,7 +11,14 @@ function renderComposer(
 ): string {
   return renderToStaticMarkup(createElement(CommandComposer, {
     commands: [],
-    cells: [],
+    references: new Map(),
+    actions: [],
+    actionContext: { bookId: 'book-1', choices: {} },
+    actionDiscovery: null,
+    actionStatus: { loading: false, error: null },
+    actionsDisabled: false,
+    onOpenActions: () => undefined,
+    onCloseActionSearch: () => undefined,
     bookId: 'book-1',
     callTool: async () => ({}),
     chatModels: fallbackChatModelCatalog.models,

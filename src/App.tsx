@@ -117,8 +117,11 @@ import {
 import {
   COMMAND_COMPOSER_FORM_ID,
   CommandComposer,
+  type ComposerActionDiscovery,
+  type ComposerExecuteContext,
   type ComposerOutcome,
 } from '@/components/videobook/CommandComposer'
+import { composerReferences } from '@/videobook/composer-references'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import { JobsScreen } from '@/components/videobook/JobsScreen'
 import {
@@ -3289,6 +3292,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     result?: WorkspaceActionResult
   } | null>(null)
   const actionCatalogRequestRef = useRef(0)
+  const [actionDiscovery, setActionDiscovery] = useState<(ComposerActionDiscovery & { bookId: string; session: string }) | null>(null)
+  const [actionComposer, setActionComposer] = useState<{ bookId: string; session: string; opener: HTMLElement | null } | null>(null)
+  const [previewComposerTarget, setPreviewComposerTarget] = useState<HTMLDivElement | null>(null)
   const [workspacePreview, setWorkspacePreview] = useState<{ media?: WorkspaceMediaPreview; initialFrame?: number; opener: HTMLElement | null } | null>(null)
   const actionUploadRef = useRef<HTMLInputElement>(null)
   const [chatModelCatalog, setChatModelCatalog] = useState<ChatModelCatalog>(
@@ -3478,6 +3484,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => notebookMentionAssets(notebook?.cells ?? [], assets),
     [assets, notebook],
   )
+  const composerReferenceMap = useMemo(() => composerReferences(notebook?.cells ?? [], assets), [assets, notebook])
+  const gridMentionAssets = useMemo(() => [...composerReferenceMap.values()].flatMap(reference => reference.asset
+    ? [{ ...reference.asset, cellAddress: reference.token.slice(1) }] : []), [composerReferenceMap])
   const pendingGenerationDraft = pendingChatAction?.kind === 'generation'
     ? pendingChatAction.draft
     : null
@@ -3762,8 +3771,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const focusCommandComposer = useCallback(() => {
     restoreCommandComposerFocus(() =>
-      document.querySelector<HTMLInputElement>(
-        '.command-composer input[aria-label="Videobook command input"]',
+      document.querySelector<HTMLElement>(
+        '.command-composer [aria-label="Videobook command input"]',
       ))
   }, [])
 
@@ -5553,6 +5562,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [bookId, call, notebook, updateFullscreenSubjectMap, watchImageSubjectMap])
 
   const closeMediaFullscreen = useCallback(() => {
+    actionCatalogRequestRef.current += 1
+    setActionDiscovery(null)
+    setActionComposer(null)
     imageSubjectMapRequestRef.current += 1
     setMediaFullscreenComposerTarget(null)
     setMediaFullscreenEditSelection({
@@ -5803,9 +5815,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const openWorkspaceActions = async (actionId?: string, values?: Record<string, unknown>, query?: string, returnFocus?: HTMLElement | null) => {
     if (mcp.state !== 'ready') return
-    const opener = returnFocus ?? actionDialog?.opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
+    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const opener = returnFocus ?? actionDialog?.opener ?? (active === document.body || active?.closest('.command-composer')
+      ? document.querySelector<HTMLElement>('[aria-label="Videobook command input"]') : active)
+    const targetBookId = typeof values?.book_id === 'string' ? values.book_id : bookId
     const request = ++actionCatalogRequestRef.current
-    setActionDialog({ key: request, actionId, values, query, opener })
+    if (actionId) {
+      setActionDiscovery(null)
+      setActionDialog({ key: request, actionId, values, query, opener })
+    } else {
+      const session = targetBookId === bookId && mediaFullscreen?.asset.type === 'image' ? `image-edit:${mediaFullscreen.key}` : `chat:${targetBookId}`
+      setActionDialog(null)
+      setActionDiscovery({ key: request, query: query ?? '', values, bookId: targetBookId, session })
+      setActionComposer({ bookId: targetBookId, session, opener })
+    }
     setActionCatalogStatus({ loading: true, error: null })
     try {
       const catalog = actionId && workspaceActions.length ? { actions: workspaceActions }
@@ -5833,6 +5856,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (request !== actionCatalogRequestRef.current) return
       setActionCatalogStatus({ loading: false, error: cause instanceof Error ? cause.message : String(cause) })
     }
+  }
+
+  const dismissActionComposer = () => {
+    actionCatalogRequestRef.current += 1
+    const opener = actionComposer?.opener
+    setActionDiscovery(null)
+    setActionComposer(null)
+    restoreCommandComposerFocus(() => opener?.isConnected ? opener : null)
   }
 
   const refreshChatModels = useCallback(async () => {
@@ -10239,13 +10270,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? [
             resolveNotebookMentionAliases(
               restParts[0] ?? '',
-              commandMentionAssets,
+              gridMentionAssets,
             ),
             ...restParts.slice(1),
           ].filter(Boolean).join(' ')
         : resolveNotebookMentionAliases(
             rest,
-            commandMentionAssets,
+            gridMentionAssets,
           )
       const availableActions = workspaceActions.length ? workspaceActions : asWorkspaceActionCatalog(await call('list_workspace_actions', {})).actions
       if (!workspaceActions.length) setWorkspaceActions(availableActions)
@@ -10689,7 +10720,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const sessionKey = uuidv7()
         const returnFocus = document.activeElement instanceof HTMLElement && document.activeElement !== document.body
           ? document.activeElement
-          : document.querySelector<HTMLInputElement>('input[aria-label="Videobook command input"]')
+          : document.querySelector<HTMLElement>('[aria-label="Videobook command input"]')
         setMediaFullscreen(null)
         setMusicVideoSession({
           key: sessionKey,
@@ -10848,8 +10879,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const executeComposerCommand = async (
     input: string,
-    context?: { speakVoiceId?: string },
+    context?: ComposerExecuteContext,
   ): Promise<ComposerOutcome> => {
+    if (context?.action) {
+      const action = workspaceActions.find(entry => entry.id === context.action?.id)
+      if (!action) return { ok: false, message: 'Reload Actions and choose the command again.', nextInput: input }
+      const command = workspaceActionCommands([action], []).find(entry => entry.command === action.command)!
+      const rest = resolveNotebookMentionAliases(input.trim().slice(action.command.length).trim(), gridMentionAssets)
+      await openWorkspaceActions(action.id, { ...context.action.values, ...parseCommandArgs(rest, command.params) })
+      return { ok: true, message: 'Action options opened' }
+    }
     const session = mediaFullscreen?.asset.type === 'image'
       ? mediaFullscreen
       : null
@@ -10868,7 +10907,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const references = notebookReferences(input)
     const mentionResult = composerImageReplacementMentions(
       references,
-      commandMentionAssets,
+      gridMentionAssets,
     )
     if (!mentionResult.ok) {
       return {
@@ -11092,6 +11131,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const navigate = (next: Screen) => {
+    setActionDiscovery(null)
+    setActionComposer(null)
     closeCellContextMenu()
     showScreen(next)
     if (next === 'settings') void refreshSettings()
@@ -11827,10 +11868,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     (subject) => mediaFullscreenEditSelection.subjectIds.includes(subject.id),
   ) ?? []
   const fullscreenRegionCount = mediaFullscreenEditSelection.regions.length
-  const showCommandComposer = screen !== 'library' || Boolean(fullscreenImageEditor)
+  const composerSession = fullscreenImageEditor ? `image-edit:${fullscreenImageEditor.key}` : `chat:${bookId}`
+  const currentActionComposer = actionComposer?.bookId === bookId && actionComposer.session === composerSession ? actionComposer : null
+  const currentActionDiscovery = actionDiscovery?.bookId === bookId && actionDiscovery.session === composerSession ? actionDiscovery : null
+  const temporaryActionComposer = Boolean(currentActionComposer && (screen === 'library' || workspacePreview || (mediaFullscreen && !fullscreenImageEditor)))
+  const showCommandComposer = screen !== 'library' || Boolean(fullscreenImageEditor) || Boolean(currentActionComposer)
   useCommandComposerFocus(
     `${screen}:${bookId}:${notebook?.id ?? ''}`,
-    showCommandComposer && mcp.state === 'ready' && !busy && Boolean(bookId),
+    showCommandComposer && mcp.state === 'ready' && !busy && (Boolean(bookId) || Boolean(currentActionComposer)),
   )
   const fullscreenComposerContext = fullscreenImageEditor
     ? {
@@ -12274,7 +12319,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           />
         )}
         <nav className="header-navigation" aria-label="Workspace navigation">
-          <button type="button" title="Actions (⌘⇧K / Ctrl+Shift+K)" aria-label="Open actions" data-workspace-action-surface="button" aria-keyshortcuts="Control+Shift+K Meta+Shift+K" disabled={mcp.state !== 'ready'} onClick={() => void openWorkspaceActions()}><Search size={17} /></button>
           {screenNavigation.map((item) => {
             const Icon = item.icon
             return (
@@ -12684,6 +12728,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               browse={libraryBrowse}
               busy={busy}
               ready={mcp.state === 'ready'}
+              actionsOpen={Boolean(currentActionComposer)}
+              onOpenActions={() => void openWorkspaceActions()}
               notice={notice}
               processingArtifactId={processingArtifactId}
               ingestStatuses={ingestStatusById}
@@ -12882,6 +12928,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           address={mediaFullscreen.address}
           composerEditing={mediaFullscreenComposerSending}
           composerPortalRef={setMediaFullscreenComposerTarget}
+          actionsOpen={Boolean(currentActionComposer)}
           subjectMap={mediaFullscreen.subjectMap}
           subjectMapLoading={mediaFullscreen.subjectMapLoading}
           returnFocus={mediaFullscreen.returnFocus}
@@ -12915,25 +12962,37 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         sequence={workspacePreview.media ? undefined : sequence ?? undefined}
         assets={assets.flatMap((asset) => asset.mediaUrl ? [{ artifactId: asset.artifactId, mediaUrl: asset.mediaUrl }] : [])}
         opener={workspacePreview.opener} initialFrame={workspacePreview.initialFrame}
-        onClose={() => setWorkspacePreview(null)}
+        composerPortalRef={setPreviewComposerTarget} actionsOpen={Boolean(currentActionComposer)}
+        onClose={() => { setWorkspacePreview(null); setActionDiscovery(null); setActionComposer(null) }}
         onActions={() => void openWorkspaceActions(undefined, workspacePreview.media ? { asset_id: workspacePreview.media.assetId } : undefined)} />}
-      {actionDialog && <WorkspaceActionsDialog key={actionDialog.key} actions={workspaceActions} context={{
+      {actionDialog?.actionId && <WorkspaceActionsDialog key={actionDialog.key} actions={workspaceActions} context={{
         ...workspaceActionContext,
         entities: actionDialog.resources?.entities,
         choices: { ...workspaceActionContext.choices, ...actionDialog.resources?.choices },
       }}
-        initialActionId={actionDialog.actionId} initialValues={actionDialog.values} initialQuery={actionDialog.query}
+        initialActionId={actionDialog.actionId} initialValues={actionDialog.values}
         initialResult={actionDialog.result}
         returnFocus={actionDialog.opener} loading={actionCatalogStatus.loading} error={actionCatalogStatus.error}
         onClose={() => { actionCatalogRequestRef.current += 1; setActionDialog(null) }}
-        onSelect={(action) => void openWorkspaceActions(action.id, actionDialog.values)}
+        onBack={() => void openWorkspaceActions(undefined, actionDialog.values, actionDialog.query, actionDialog.opener)}
         onOpenAction={(actionId, values) => void openWorkspaceActions(actionId, { ...actionDialog.values, ...values })}
         onExecute={executeWorkspaceAction} onReview={reviewWorkspaceAction} />}
 
       <CommandComposer
         hidden={!showCommandComposer}
         commands={composerCommands}
-        cells={notebook?.cells ?? []}
+        references={composerReferenceMap}
+        actions={workspaceActions}
+        actionContext={workspaceActionContext}
+        actionDiscovery={currentActionDiscovery}
+        actionStatus={actionCatalogStatus}
+        actionsDisabled={busy || mcp.state !== 'ready'}
+        onOpenActions={() => void openWorkspaceActions()}
+        onCloseActionSearch={prepared => {
+          setActionDiscovery(null)
+          if (!prepared && temporaryActionComposer) dismissActionComposer()
+        }}
+        onDismissComposer={temporaryActionComposer ? dismissActionComposer : undefined}
         bookId={bookId}
         callTool={call}
         chatModels={chatModelCatalog.models}
@@ -12954,13 +13013,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         selectedModel={chatModel}
         context={fullscreenComposerContext}
         mentionAssets={imageEditMentionAssets}
-        inputSession={fullscreenImageEditor
-          ? `image-edit:${fullscreenImageEditor.key}`
-          : `chat:${bookId}`}
+        inputSession={composerSession}
         placeholder={fullscreenComposerPlaceholder}
-        portalTarget={fullscreenImageEditor
-          ? mediaFullscreenComposerTarget
-          : null}
+        portalTarget={workspacePreview && currentActionComposer ? previewComposerTarget
+          : fullscreenImageEditor || (mediaFullscreen && currentActionComposer) ? mediaFullscreenComposerTarget : null}
         pendingInput={fullscreenImageEditor
           ? undefined
           : pendingWatermarkReview

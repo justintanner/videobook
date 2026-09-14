@@ -4,6 +4,7 @@ import {
   Film,
   Image as ImageIcon,
 } from 'lucide-react'
+import { useState } from 'react'
 
 export type ArtifactThumbAsset = {
   artifactId: string
@@ -15,10 +16,13 @@ export type ArtifactThumbAsset = {
 export function ArtifactThumb({
   asset,
   kindHint,
+  thumbnailOnly = false,
 }: {
   asset?: ArtifactThumbAsset | null
   kindHint?: string
+  thumbnailOnly?: boolean
 }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const thumbnailUrl = asset?.thumbnailUrl
     ?? (asset?.type === 'image' ? asset.mediaUrl : null)
   const kind = asset?.type ?? kindHint ?? 'unknown'
@@ -33,14 +37,14 @@ export function ArtifactThumb({
     || kindHint === 'splice'
   const image = kind === 'image'
     || kindHint === 'generate_image'
-  const videoUrl = !thumbnailUrl && (kind === 'video' || kind === 'final')
+  const videoUrl = !thumbnailOnly && !thumbnailUrl && (kind === 'video' || kind === 'final')
     ? asset?.mediaUrl
     : null
 
   return (
     <span className="inspector-source-thumb" aria-hidden="true">
-      {thumbnailUrl ? (
-        <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" />
+      {thumbnailUrl && thumbnailUrl !== failedUrl ? (
+        <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" onError={() => setFailedUrl(thumbnailUrl)} />
       ) : videoUrl ? (
         <video src={videoUrl} muted playsInline preload="metadata" />
       ) : audio ? (

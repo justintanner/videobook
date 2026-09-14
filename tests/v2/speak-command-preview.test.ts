@@ -203,7 +203,14 @@ describe('CommandComposer /voices prefill', () => {
         params: [],
         uiAction: 'speak_preview',
       }],
-      cells: [],
+      references: new Map(),
+      actions: [],
+      actionContext: { bookId: 'book-1', choices: {} },
+      actionDiscovery: null,
+      actionStatus: { loading: false, error: null },
+      actionsDisabled: false,
+      onOpenActions: () => undefined,
+      onCloseActionSearch: () => undefined,
       bookId: 'book-1',
       callTool: async () => ({}),
       chatModels: fallbackChatModelCatalog.models,
@@ -239,7 +246,7 @@ describe('CommandComposer /voices prefill', () => {
     expect(html).toContain('data-testid="speak-command-preview"')
     expect(html).toContain('Ada')
     expect(html).toContain('Refresh voices')
-    expect(html).toContain('value="/speak "')
+    expect(html).toContain('>/speak </div>')
     expect(html).not.toContain('speak-backdrop')
     expect(html).not.toContain('Speak dialog')
   })

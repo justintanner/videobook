@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { ChevronDown, Library, RefreshCw } from 'lucide-react'
+import { ChevronDown, Library, ListFilter, RefreshCw } from 'lucide-react'
 import { BusyIndicator } from './BusyIndicator'
 import { LibraryAssetCard } from './LibraryAssetCard'
 import type { LibraryAssetCardAsset, LibraryAssetCardIngest } from './LibraryAssetCard'
@@ -37,6 +37,8 @@ export function LibraryScreen<Asset extends LibraryAssetCardAsset>({
   onSearchSimilar,
   onForget,
   onActions,
+  onOpenActions,
+  actionsOpen = false,
   onRetry,
 }: {
   children: ReactNode
@@ -58,6 +60,8 @@ export function LibraryScreen<Asset extends LibraryAssetCardAsset>({
   onSearchSimilar: (asset: Asset) => void
   onForget: (asset: Asset) => void
   onActions?: (asset: Asset) => void
+  onOpenActions?: () => void
+  actionsOpen?: boolean
   onRetry: (artifactId: string) => void
 }) {
   const [selectedPreview, setSelectedPreview] = useState<string | null>(null)
@@ -87,6 +91,10 @@ export function LibraryScreen<Asset extends LibraryAssetCardAsset>({
     >
       {children}
       <div className="library-heading-row">
+        {onOpenActions && <button type="button" className="command-actions-toggle" hidden={actionsOpen}
+          aria-label="Open library actions" disabled={!ready || busy} onClick={onOpenActions}>
+          <ListFilter size={15} aria-hidden="true" />Actions
+        </button>}
         <div className="library-heading-copy">
           <span className="section-label">Media</span>
           <h2>

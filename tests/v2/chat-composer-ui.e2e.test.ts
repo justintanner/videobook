@@ -1259,7 +1259,7 @@ describe('chat composer browser flow', () => {
       cellId = ''
       expect(await selected.getAttribute('data-selection')).toBe('primary')
       expect(await page.getByLabel('Reset zoom', { exact: true }).textContent()).toContain('75%')
-      expect(await input.inputValue()).toBe(draft)
+      expect(await input.textContent()).toBe(draft)
       expect(await input.evaluate((element) => document.activeElement === element)).toBe(true)
       expect(await input.isEnabled()).toBe(true)
       expect(await scroll.evaluate((element) => ({ left: element.scrollLeft, top: element.scrollTop })))
@@ -1452,7 +1452,7 @@ describe('chat composer browser flow', () => {
     await dialog.waitFor({ state: 'visible' })
     const modalInput = dialog.getByLabel('Videobook command input')
     await modalInput.waitFor({ state: 'visible' })
-    expect(await modalInput.inputValue()).toBe('')
+    expect(await modalInput.textContent()).toBe('')
     expect(await dialog.getByText('@C3 IMAGE EDIT').isVisible()).toBe(true)
     expect(await dialog.getByLabel('Chat model').count()).toBe(0)
     expect(await dialog.locator('.command-suggestions').count()).toBe(0)
@@ -1492,7 +1492,7 @@ describe('chat composer browser flow', () => {
 
     await page.keyboard.press('Escape')
     await dialog.waitFor({ state: 'hidden' })
-    expect(await input.inputValue()).toBe(ordinaryDraft)
+    expect(await input.textContent()).toBe(ordinaryDraft)
     expect(await trigger.evaluate((element) => document.activeElement === element)).toBe(true)
     expect(await page.locator('.app-shell').evaluate((element) => ({
       ariaHidden: element.getAttribute('aria-hidden'),
@@ -1505,10 +1505,10 @@ describe('chat composer browser flow', () => {
     await dialog.locator('.notebook-subject-row strong', {
       hasText: 'Foreground person',
     }).waitFor({ state: 'visible' })
-    expect(await modalInput.inputValue()).toBe('')
+    expect(await modalInput.textContent()).toBe('')
     const subjectCheckbox = dialog.locator('.notebook-subject-row input[type="checkbox"]')
     await subjectCheckbox.check()
-    await expect.poll(async () => await modalInput.getAttribute('placeholder'))
+    await expect.poll(async () => await modalInput.getAttribute('data-placeholder'))
       .toContain('Foreground person')
     await page.evaluate(() => window.localStorage.setItem(
       'videobook.cloud-generation-consent',
@@ -1594,7 +1594,7 @@ describe('chat composer browser flow', () => {
     await page.setViewportSize({ width: 1440, height: 1000 })
     await close.click()
     await dialog.waitFor({ state: 'hidden' })
-    expect(await input.inputValue()).toBe(ordinaryDraft)
+    expect(await input.textContent()).toBe(ordinaryDraft)
     await expect.poll(async () => await input.evaluate((element) =>
       document.activeElement === element)).toBe(true)
     mockedFullscreenSubjectEditor = false
@@ -1844,7 +1844,7 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await input.isEnabled(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
-    await expect.poll(async () => await input.inputValue(), {
+    await expect.poll(async () => await input.textContent(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe('')
 
@@ -1855,7 +1855,7 @@ describe('chat composer browser flow', () => {
       'history-oldest',
     ]) {
       await input.press('ArrowUp')
-      await expect.poll(async () => await input.inputValue(), {
+      await expect.poll(async () => await input.textContent(), {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe(expected)
     }
@@ -1866,7 +1866,7 @@ describe('chat composer browser flow', () => {
       '',
     ]) {
       await input.press('ArrowDown')
-      await expect.poll(async () => await input.inputValue(), {
+      await expect.poll(async () => await input.textContent(), {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe(expected)
     }
@@ -2312,7 +2312,7 @@ describe('chat composer browser flow', () => {
       expect(await review.getByRole('button', { name: 'On QR' }).count()).toBe(1)
       expect(await review.getByRole('slider', { name: 'Corner rounding' }).inputValue()).toBe('41')
       expect(await review.locator('input[type="number"]').count()).toBe(4)
-      await expect.poll(async () => await input.inputValue()).toBe('/apply')
+      await expect.poll(async () => await input.textContent()).toBe('/apply')
 
       await review.getByRole('button', { name: 'Bottom left' }).click()
       expect(await review.getByRole('button', { name: 'Bottom left' })
@@ -2785,7 +2785,7 @@ describe('chat composer browser flow', () => {
         timeout: 20_000,
       }).toBe(true)
       expect(await page!.getByLabel('Command plan review').count()).toBe(0)
-      expect(await input.inputValue()).toBe('')
+      expect(await input.textContent()).toBe('')
       const runCall = observedCalls.find((call) =>
         call.name === 'run_notebook_cell'
         && call.arguments.cell_id === cellId)

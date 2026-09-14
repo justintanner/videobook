@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -50,18 +50,22 @@ describe('composer focus through real workspace interactions', () => {
   }
 
   async function focused(target: Locator): Promise<void> {
-    await expect.poll(async () => await target.evaluate(element =>
-      document.activeElement === element), { timeout: 15_000 }).toBe(true)
+    await expect.poll(() => target.evaluate(element => ({
+      focused: document.activeElement === element,
+      active: document.activeElement?.tagName,
+      label: document.activeElement?.getAttribute('aria-label'),
+    })), { timeout: 15_000 }).toMatchObject({ focused: true })
   }
 
   async function ready(): Promise<void> {
     await input().waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input().isEnabled()).toBe(true)
+    await expect.poll(() => input().isEnabled(), { timeout: 15_000 }).toBe(true)
   }
 
   async function selectProject(name: string): Promise<void> {
     await page.locator('.brand-project-menu-toggle').click()
     await page.locator('.book-project-select').filter({ hasText: name }).click()
+    await expect.poll(() => page.locator('.book-project-menu').count(), { timeout: 15_000 }).toBe(0)
     await ready()
     await focused(input())
   }
@@ -147,7 +151,12 @@ describe('composer focus through real workspace interactions', () => {
     await ready()
   })
 
-  afterEach(async () => {
+  afterEach(async ({ task }) => {
+    if (task.result?.state === 'fail') {
+      const path = `/tmp/videobook-focus-${task.name.replace(/[^a-z0-9]+/giu, '-').slice(0, 90)}`
+      await page.screenshot({ path: `${path}.png` })
+      await writeFile(`${path}.json`, JSON.stringify({ failures: task.result.errors, body: await page.locator('body').innerText() }, null, 2))
+    }
     await page?.close()
     const notebook = record(await call('get_notebook'))
     for (const value of Array.isArray(notebook?.cells) ? notebook.cells : []) {
@@ -169,7 +178,7 @@ describe('composer focus through real workspace interactions', () => {
   it('starts in chat and preserves separate drafts through screen and project navigation', async () => {
     await focused(input())
     await page.keyboard.type('primary draft')
-    expect(await input().inputValue()).toBe('primary draft')
+    expect(await input().textContent()).toBe('primary draft')
     for (const screen of ['Library', 'Jobs']) {
       await page.getByLabel(`Open ${screen}`, { exact: true }).click()
       if (screen === 'Library') {
@@ -180,15 +189,15 @@ describe('composer focus through real workspace interactions', () => {
       }
       await page.getByTitle('Open notebook', { exact: true }).click()
       await focused(input())
-      expect(await input().inputValue()).toBe('primary draft')
+      expect(await input().textContent()).toBe('primary draft')
     }
     await selectProject('focus-secondary')
-    expect(await input().inputValue()).toBe('')
+    expect(await input().textContent()).toBe('')
     await page.keyboard.type('secondary draft')
     await selectProject('focus-primary')
-    expect(await input().inputValue()).toBe('primary draft')
+    expect(await input().textContent()).toBe('primary draft')
     await selectProject('focus-secondary')
-    expect(await input().inputValue()).toBe('secondary draft')
+    expect(await input().textContent()).toBe('secondary draft')
   })
 
   it('returns pointer canvas and toolbar actions to chat without losing selection or flooding catalogs', async () => {
@@ -199,7 +208,7 @@ describe('composer focus through real workspace interactions', () => {
     await focused(input())
     expect(await cell(videoCellId).getAttribute('data-selection')).toBe('primary')
     await page.keyboard.press('Backspace')
-    expect(await input().inputValue()).toBe('draf')
+    expect(await input().textContent()).toBe('draf')
     expect(await cell(videoCellId).count()).toBe(1)
     for (const label of ['Zoom out', 'Reset zoom', 'Close inspector', 'Clear selection']) {
       await page.getByLabel(label, { exact: true }).click()
@@ -207,7 +216,7 @@ describe('composer focus through real workspace interactions', () => {
     }
     await page.locator('.react-flow__pane').click({ position: { x: 850, y: 450 } })
     await focused(input())
-    expect(await input().inputValue()).toBe('draf')
+    expect(await input().textContent()).toBe('draf')
     expect(catalogRequests).toBe(initialCatalogRequests)
   })
 
@@ -276,7 +285,7 @@ describe('composer focus through real workspace interactions', () => {
     await chooser.setFiles(imagePath)
     await slot.waitFor({ state: 'hidden' })
     await focused(input())
-    expect(await input().inputValue()).toBe('Continue after upload')
+    expect(await input().textContent()).toBe('Continue after upload')
     const notebook = record(await call('get_notebook'))
     const image = (Array.isArray(notebook?.cells) ? notebook.cells : [])
       .map(record).find(value => value?.type === 'image')
@@ -315,7 +324,7 @@ describe('composer focus through real workspace interactions', () => {
     await ready()
     await focused(input())
     await page.keyboard.type('Try again')
-    expect(await input().inputValue()).toBe('Try again')
+    expect(await input().textContent()).toBe('Try again')
   })
 
   it('does not submit chat while native IME composition is active', async () => {
@@ -327,10 +336,10 @@ describe('composer focus through real workspace interactions', () => {
     })
     const session = await page.context().newCDPSession(page)
     await session.send('Input.imeSetComposition', { text: '測試', selectionStart: 2, selectionEnd: 2 })
-    expect(await input().inputValue()).toBe('/notebooks 測試')
+    expect(await input().textContent()).toBe('/notebooks 測試')
     await page.keyboard.press('Enter')
     await page.waitForTimeout(150)
-    expect(await input().inputValue()).toBe('/notebooks 測試')
+    expect(await input().textContent()).toBe('/notebooks 測試')
     expect(notebookReads).toBe(0)
     await focused(input())
     await session.detach()
@@ -373,16 +382,20 @@ describe('composer focus through real workspace interactions', () => {
   it('preserves chat draft and caret while a real external notebook update arrives', async () => {
     await input().fill('Draft remains intact')
     await input().evaluate(element => {
-      if (element instanceof HTMLInputElement) element.setSelectionRange(4, 4)
+      const range = document.createRange()
+      range.setStart(element.firstChild!, 4)
+      range.collapse(true)
+      window.getSelection()?.removeAllRanges()
+      window.getSelection()?.addRange(range)
     })
     const created = record(await call('create_notebook_cell', {
       cell: { type: 'prompt', slot: { row: 7, column: 7 }, prompt: 'External update' },
     }))
     await cell(String(created?.id)).waitFor({ timeout: 15_000 })
     await focused(input())
-    expect(await input().inputValue()).toBe('Draft remains intact')
+    expect(await input().textContent()).toBe('Draft remains intact')
     expect(await input().evaluate(element =>
-      element instanceof HTMLInputElement ? element.selectionStart : null)).toBe(4)
+      element.contains(window.getSelection()?.anchorNode ?? null) ? window.getSelection()?.anchorOffset : null)).toBe(4)
   })
 
   it('does not force chat focus after a touch action', async () => {

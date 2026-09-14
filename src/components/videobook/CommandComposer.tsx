@@ -11,21 +11,23 @@ import {
   Bot,
   Check,
   ChevronDown,
+  ListFilter,
   Send,
   WandSparkles,
   X,
 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import type { ServerCommand } from '@/lib/command-registry'
-import {
-  applyNotebookMentionSuggestion,
-  assetMentionMetadata,
-  assetMentionSuggestions,
-  notebookAddressSuggestions,
-  type AssetMentionCandidate,
-  type NotebookAddressCell,
-  type NotebookAddressSuggestion,
-} from '@/videobook/mention-suggestions'
+import type { AssetMentionCandidate } from '@/videobook/mention-suggestions'
+import { composerReferenceDescription, composerReferenceSuggestions, replaceComposerMention, type ComposerReference } from '@/videobook/composer-references'
+import type { ComposerSelection } from '@/videobook/composer-editor-model'
+import type { EditorState } from 'prosemirror-state'
+import type { WorkspaceAction } from '../../../server/src/workspace-action-contract'
+import { searchWorkspaceActions, type WorkspaceActionContext } from '@/videobook/workspace-actions'
+import { RichComposerEditor, type ComposerEditorHandle } from './RichComposerEditor'
+import { ComposerActionsPanel } from './ComposerActionsPanel'
+import { ArtifactThumb } from './ArtifactThumb'
+import './CommandComposer.css'
 import { applyReadlineEdit } from '@/videobook/readline'
 import {
   commandSuggestionCandidates,
@@ -73,10 +75,29 @@ interface ComposerNotice {
 
 export const COMMAND_COMPOSER_FORM_ID = 'videobook-command-composer-form'
 
+export interface ComposerActionDiscovery {
+  key: number
+  query: string
+  values?: Record<string, unknown>
+}
+
+export interface ComposerExecuteContext {
+  speakVoiceId?: string
+  action?: { id: string; values?: Record<string, unknown> }
+}
+
 interface CommandComposerProps {
   children?: ReactNode
   commands: ServerCommand[]
-  cells: readonly NotebookAddressCell[]
+  references: ReadonlyMap<string, ComposerReference>
+  actions: readonly WorkspaceAction[]
+  actionContext: WorkspaceActionContext
+  actionDiscovery: ComposerActionDiscovery | null
+  actionStatus: { loading: boolean; error: string | null }
+  actionsDisabled: boolean
+  onOpenActions: () => void
+  onCloseActionSearch: (prepared: boolean) => void
+  onDismissComposer?: () => void
   bookId: string
   callTool: (tool: string, args: Record<string, unknown>) => Promise<unknown>
   chatModels: readonly ChatModelOption[]
@@ -104,7 +125,7 @@ interface CommandComposerProps {
   onDismissPanel?: () => void
   onExecute: (
     input: string,
-    context?: { speakVoiceId?: string },
+    context?: ComposerExecuteContext,
   ) => Promise<ComposerOutcome>
   onModelChange: (model: string) => void
   onSendingChange?: (sending: boolean) => void
@@ -120,14 +141,28 @@ interface CommandSuggestion {
   type: 'command'
 }
 
-type Suggestion = CommandSuggestion | NotebookAddressSuggestion
+type Suggestion = CommandSuggestion | {
+  value: string
+  label: string
+  description: string
+  type: 'cell'
+  reference: ComposerReference
+}
 
 const COMMAND_HISTORY_PAGE_SIZE = 250
 
 export function CommandComposer({
   children,
   commands,
-  cells,
+  references,
+  actions,
+  actionContext,
+  actionDiscovery,
+  actionStatus,
+  actionsDisabled,
+  onOpenActions,
+  onCloseActionSearch,
+  onDismissComposer,
   bookId,
   callTool,
   chatModels,
@@ -170,7 +205,13 @@ export function CommandComposer({
   const [inputDrafts, setInputDrafts] = useState<ReadonlyMap<string | null, string>>(
     () => new Map(),
   )
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<ComposerEditorHandle>(null)
+  const [editorSessions] = useState(() => new Map<string, EditorState>())
+  const [selection, setSelection] = useState<ComposerSelection>({ start: input.length, end: input.length })
+  const [actionQuery, setActionQuery] = useState(actionDiscovery?.query ?? '')
+  const [actionGroup, setActionGroup] = useState('')
+  const [renderedActionKey, setRenderedActionKey] = useState(actionDiscovery?.key)
+  const [preparedAction, setPreparedAction] = useState<{ action: WorkspaceAction; values?: Record<string, unknown> } | null>(null)
   const suggestionId = useId()
   const inputSessionRef = useRef(inputSession)
   const killBufferRef = useRef('')
@@ -207,6 +248,7 @@ export function CommandComposer({
     setRenderedPendingInput(pendingInput)
     setInput(pendingInput ?? nextDrafts.get(inputSession) ?? '')
     setOutcome(null)
+    setPreparedAction(null)
     setDismissed(pendingInput !== undefined && !isSpeakCommandPreview(pendingInput))
   } else if (pendingInput !== renderedPendingInput) {
     setRenderedPendingInput(pendingInput)
@@ -214,7 +256,14 @@ export function CommandComposer({
     setDismissed(pendingInput !== undefined && !isSpeakCommandPreview(pendingInput))
   }
 
-  const speakPreviewOpen = !context && !dismissed && isSpeakCommandPreview(input)
+  if (actionDiscovery?.key !== renderedActionKey) {
+    setRenderedActionKey(actionDiscovery?.key)
+    setActionQuery(actionDiscovery?.query ?? '')
+    setActionGroup('')
+    setSelectedIndex(0)
+  }
+
+  const speakPreviewOpen = !actionDiscovery && !context && !dismissed && isSpeakCommandPreview(input)
   const catalogVoices = voiceCatalog?.voices ?? []
   const activeVoiceId = resolveSpeakVoiceId(catalogVoices, selectedVoiceId)
   const stopPreview = previewPlayer.stop
@@ -239,7 +288,7 @@ export function CommandComposer({
 
   const focusInput = (select = false) => {
     captureCommandComposerFocus(
-      () => inputRef.current,
+      () => inputRef.current?.element() ?? null,
       () => { if (select) inputRef.current?.select() },
     )()
   }
@@ -252,18 +301,10 @@ export function CommandComposer({
   }), [notice, onDismissNotice, outcome])
 
   const suggestions = useMemo<Suggestion[]>(() => {
-    if (dismissed || isSpeakCommandPreview(input)) return []
-    if (context) {
-      return assetMentionSuggestions(mentionAssets, input).map((suggestion) => ({
-        value: suggestion.value,
-        label: suggestion.label,
-        description: assetMentionMetadata(suggestion.asset).join(' · '),
-        type: 'cell' as const,
-      }))
-    }
+    if (actionDiscovery || dismissed || isSpeakCommandPreview(input)) return []
     if (pendingInput && /^\/(?:apply|cancel)(?:\s|$)/iu.test(input)) return []
     const commandMatch = input.match(/^\/([\w-]*)$/)
-    if (commandMatch) {
+    if (commandMatch && !context) {
       const filter = commandMatch[1].toLowerCase()
       return commandSuggestionCandidates(commands, filter)
         .map((command) => ({
@@ -274,8 +315,28 @@ export function CommandComposer({
           type: 'command',
         }))
     }
-    return notebookAddressSuggestions(cells, input)
-  }, [cells, commands, context, dismissed, input, mentionAssets, pendingInput])
+    const allowed = context ? new Set(mentionAssets.map(asset => asset.artifactId)) : undefined
+    return composerReferenceSuggestions(references, input, selection.start, selection.end, allowed).map(reference => ({
+      value: reference.token,
+      label: reference.token,
+      description: composerReferenceDescription(reference),
+      type: 'cell',
+      reference,
+    }))
+  }, [actionDiscovery, commands, context, dismissed, input, mentionAssets, pendingInput, references, selection])
+
+  const actionMatches = useMemo(() => searchWorkspaceActions(actions, actionQuery)
+    .filter(action => !actionGroup || action.group === actionGroup), [actionGroup, actionQuery, actions])
+  const actionGroups = useMemo(() => [...new Set(actions.map(action => action.group))].sort(), [actions])
+  const activeActionIndex = Math.min(selectedIndex, Math.max(0, actionMatches.length - 1))
+  const actionListId = `${suggestionId}-actions`
+  const preparedCommandMatches = preparedAction?.action.command === input.trim().split(/\s/u)[0]
+  const inputDisabled = preparedCommandMatches && preparedAction?.action.scope === 'global' ? actionsDisabled : disabled
+
+  useLayoutEffect(() => {
+    if (!actionDiscovery) return
+    captureCommandComposerFocus(() => inputRef.current?.element() ?? null)()
+  }, [actionDiscovery, portalTarget])
 
   const showOutcome = (next: ComposerOutcome) => {
     window.clearTimeout(successTimerRef.current)
@@ -365,17 +426,18 @@ export function CommandComposer({
 
   const execute = async () => {
     const message = input.trim()
-    if (!message || sending || disabled || composingRef.current) return
+    if (!message || sending || inputDisabled || actionDiscovery || composingRef.current) return
+    const chosenAction = preparedAction?.action.command === message.split(/\s/u)[0] ? preparedAction : null
     const executionSession = inputSession
     setSending(true)
     onSendingChange?.(true)
     let selectInput = false
     const restoreFocus = captureCommandComposerFocus(
-      () => inputRef.current,
+      () => inputRef.current?.element() ?? null,
       () => { if (selectInput) inputRef.current?.select() },
     )
     try {
-      if (!context) {
+      if (!context || chosenAction) {
         await ensureHistory()
         if (inputSessionRef.current !== executionSession) return
         await recordHistory(message)
@@ -393,8 +455,12 @@ export function CommandComposer({
       )
       const voiceContext = speakExecuteContext(message, voiceId)
       if (voiceContext?.speakVoiceId) persistSpeakVoiceId(voiceContext.speakVoiceId)
-      const nextOutcome = await onExecute(message, voiceContext)
+      const nextOutcome = await onExecute(message, {
+        ...voiceContext,
+        ...(chosenAction ? { action: { id: chosenAction.action.id, values: chosenAction.values } } : {}),
+      })
       if (inputSessionRef.current !== executionSession) return
+      setPreparedAction(null)
       showOutcome(nextOutcome)
       const inputDecision = composerInputAfterOutcome(nextOutcome, pendingInput)
       if (inputDecision) {
@@ -424,16 +490,32 @@ export function CommandComposer({
 
   const acceptSuggestion = (suggestion: Suggestion) => {
     if (suggestion.type === 'command') {
-      setInput(suggestion.value)
+      inputRef.current?.replace(suggestion.value)
       setDismissed(!isSpeakCommandPreview(suggestion.value))
       ensureVoicesForInput(suggestion.value)
     } else {
-      setInput((current) =>
-        `${applyNotebookMentionSuggestion(current, suggestion.value)} `)
+      const current = inputRef.current?.selection() ?? selection
+      const replacement = replaceComposerMention(input, suggestion.value, current.start, current.end)
+      if (!replacement) return
+      inputRef.current?.replace(replacement.value, { start: replacement.caret, end: replacement.caret })
       setDismissed(true)
     }
     historyCursorRef.current = -1
     focusInput()
+  }
+
+  const acceptAction = (action: WorkspaceAction) => {
+    setPreparedAction({ action, values: actionDiscovery?.values })
+    setInput(`${action.command} `)
+    setDismissed(true)
+    setSelectedIndex(0)
+    onCloseActionSearch(true)
+    focusInput()
+  }
+
+  const closeActionSearch = () => {
+    onCloseActionSearch(false)
+    if (!onDismissComposer) focusInput()
   }
 
   const selectVoice = (voiceId: string) => {
@@ -451,7 +533,9 @@ export function CommandComposer({
   }
 
   const navigateHistory = async (direction: -1 | 1) => {
+    const session = inputSession
     await ensureHistory()
+    if (session !== inputSessionRef.current) return
     const next = navigateCommandHistory({
       values: historyRef.current,
       cursor: historyCursorRef.current,
@@ -467,12 +551,12 @@ export function CommandComposer({
     ensureVoicesForInput(next.value)
   }
 
-  const applyInputReadline = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    const target = event.currentTarget
+  const applyInputReadline = (event: KeyboardEvent, value = input) => {
+    const current = inputRef.current?.selection() ?? selection
     const edit = applyReadlineEdit({
-      value: input,
-      selectionStart: target.selectionStart ?? input.length,
-      selectionEnd: target.selectionEnd ?? input.length,
+      value,
+      selectionStart: current.start,
+      selectionEnd: current.end,
       key: event.key,
       ctrlKey: event.ctrlKey,
       altKey: event.altKey,
@@ -481,14 +565,112 @@ export function CommandComposer({
     })
     if (!edit) return false
     event.preventDefault()
-    setInput(edit.value)
+    if (edit.value === value) inputRef.current?.setSelection({ start: edit.selectionStart, end: edit.selectionEnd })
+    else inputRef.current?.replace(edit.value, { start: edit.selectionStart, end: edit.selectionEnd })
     ensureVoicesForInput(edit.value)
     if (edit.killedText !== undefined) killBufferRef.current = edit.killedText
-    requestAnimationFrame(() => target.setSelectionRange(
-      edit.selectionStart,
-      edit.selectionEnd,
-    ))
     return true
+  }
+
+  const handleInputKey = (event: KeyboardEvent) => {
+
+    if (composingRef.current || event.isComposing || event.keyCode === 229) {
+      if (event.key === 'Enter') event.preventDefault()
+      return
+    }
+    if (actionDiscovery) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        closeActionSearch()
+      } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+        event.preventDefault()
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? actionMatches.length - 1
+          : (activeActionIndex + (event.key === 'ArrowDown' ? 1 : -1) + actionMatches.length) % Math.max(1, actionMatches.length)
+        setSelectedIndex(Math.max(0, next))
+        document.getElementById(`${actionListId}-option-${next}`)?.scrollIntoView({ block: 'nearest' })
+      } else if ((event.key === 'Enter' || (event.key === 'Tab' && !event.shiftKey)) && actionMatches[activeActionIndex]) {
+        event.preventDefault()
+        acceptAction(actionMatches[activeActionIndex]!)
+      } else applyInputReadline(event, actionQuery)
+      return
+    }
+    if (speakPreviewOpen) {
+      const action = handleSpeakPreviewKey(event, catalogVoices, activeVoiceId)
+      if (action.type !== 'ignore') event.preventDefault()
+      if (action.type === 'select') {
+        selectVoice(action.voiceId)
+        return
+      }
+      if (action.type === 'toggle') {
+        toggleSelectedPreview()
+        return
+      }
+      if (action.type === 'dismiss') {
+        previewPlayer.stop()
+        setDismissed(true)
+        return
+      }
+    }
+    if (suggestions.length > 0) {
+      if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+        event.preventDefault()
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? suggestions.length - 1
+          : (selectedIndex + (event.key === 'ArrowDown' ? 1 : -1) + suggestions.length) % suggestions.length
+        setSelectedIndex(next)
+        document.getElementById(`${suggestionId}-option-${next}`)?.scrollIntoView({ block: 'nearest' })
+        return
+      }
+      if (event.key === 'Tab' && !event.shiftKey) {
+        event.preventDefault()
+        acceptSuggestion(suggestions[Math.min(selectedIndex, suggestions.length - 1)]!)
+        return
+      }
+      if (event.key === 'Enter') {
+        const exact = hasExactCommandSuggestion(input, suggestions)
+        if (!exact) {
+          event.preventDefault()
+          acceptSuggestion(suggestions[Math.min(selectedIndex, suggestions.length - 1)]!)
+          return
+        }
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setDismissed(true)
+        return
+      }
+    }
+    if (event.key === 'Escape' && (onDismissPanel || onDismissComposer)) {
+      event.preventDefault()
+      if (onDismissPanel) onDismissPanel()
+      else onDismissComposer?.()
+      return
+    }
+    if (!context && event.ctrlKey && event.key.toLowerCase() === 'p') {
+      event.preventDefault()
+      void navigateHistory(-1)
+      return
+    }
+    if (!context && event.ctrlKey && event.key.toLowerCase() === 'n') {
+      event.preventDefault()
+      void navigateHistory(1)
+      return
+    }
+    if (!context && event.key === 'ArrowUp') {
+      event.preventDefault()
+      void navigateHistory(-1)
+      return
+    }
+    if (!context && event.key === 'ArrowDown') {
+      event.preventDefault()
+      void navigateHistory(1)
+      return
+    }
+    if (applyInputReadline(event)) return
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      void execute()
+    }
   }
 
   const composer = (
@@ -560,11 +742,23 @@ export function CommandComposer({
         id={COMMAND_COMPOSER_FORM_ID}
         className={`command-line-shell ${transmitting ? 'command-line-shell-transmitting' : ''} ${mcpSucceeded ? 'command-line-shell-success' : ''} ${mcpFailed ? 'command-line-shell-error' : ''}`}
         aria-busy={transmitting}
+        onKeyDown={event => {
+          if (!actionDiscovery || event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return
+          event.preventDefault()
+          event.stopPropagation()
+          closeActionSearch()
+        }}
         onSubmit={(event) => {
           event.preventDefault()
-          void execute()
+          if (actionDiscovery && actionMatches[activeActionIndex]) acceptAction(actionMatches[activeActionIndex]!)
+          else void execute()
         }}
       >
+        {actionDiscovery && <ComposerActionsPanel
+          actions={actionMatches} groups={actionGroups} group={actionGroup} context={actionContext}
+          loading={actionStatus.loading} error={actionStatus.error} listId={actionListId} selectedIndex={activeActionIndex}
+          onGroupChange={group => { setActionGroup(group); setSelectedIndex(0); focusInput() }}
+          onClose={closeActionSearch} onSelect={acceptAction} />}
         {speakPreviewOpen && (
           <SpeakCommandPreview
             voices={catalogVoices}
@@ -588,127 +782,56 @@ export function CommandComposer({
                 id={`${suggestionId}-option-${index}`}
                 aria-selected={index === selectedIndex}
                 key={`${suggestion.type}:${suggestion.label}`}
-                className={`${index === selectedIndex ? 'active ' : ''}command-command-suggestion`}
+                className={`${index === selectedIndex ? 'active ' : ''}${suggestion.type === 'cell' ? 'composer-reference-suggestion' : 'command-command-suggestion'}`}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => acceptSuggestion(suggestion)}
               >
-                <strong>{suggestion.label}</strong>
-                <span>{suggestion.description}</span>
+                {suggestion.type === 'cell' ? <>
+                  <ArtifactThumb asset={suggestion.reference.asset} kindHint={suggestion.reference.type} thumbnailOnly />
+                  <span className="composer-reference-copy"><strong>{suggestion.label}</strong>
+                    {suggestion.reference.label && <span>{suggestion.reference.label}</span>}
+                    <small>{suggestion.description}</small></span>
+                </> : <><strong>{suggestion.label}</strong><span>{suggestion.description}</span></>}
               </button>
             ))}
           </div>
         )}
-        <span className="command-chevron">›</span>
-        <input
+        <div className="command-actions-controls">
+          <button type="button" className="command-actions-toggle" aria-label="Open actions" aria-expanded={Boolean(actionDiscovery)}
+            data-workspace-action-surface="button" aria-keyshortcuts="Control+Shift+K Meta+Shift+K"
+            disabled={actionsDisabled || sending} onClick={actionDiscovery ? closeActionSearch : onOpenActions}>
+            <ListFilter size={15} aria-hidden="true" />Actions
+          </button>
+          {onDismissComposer && !actionDiscovery && <button type="button" className="command-actions-close"
+            aria-label="Close actions input" onClick={onDismissComposer}><X size={15} /></button>}
+        </div>
+        <RichComposerEditor
           ref={inputRef}
-          value={input}
-          disabled={disabled || sending}
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          placeholder={disabled
-            ? connectionLabel
-            : placeholder ?? 'Type a message or /command…'}
-          aria-label="Videobook command input"
-          data-workspace-action-surface="slash"
-          role="combobox"
-          aria-autocomplete="list"
-          aria-expanded={!speakPreviewOpen && suggestions.length > 0}
-          aria-controls={!speakPreviewOpen && suggestions.length > 0 ? `${suggestionId}-list` : undefined}
-          aria-activedescendant={!speakPreviewOpen && suggestions[selectedIndex] ? `${suggestionId}-option-${selectedIndex}` : undefined}
+          value={actionDiscovery ? actionQuery : input}
+          session={`${inputSession ?? 'chat'}:${actionDiscovery ? `actions-${actionDiscovery.key}` : 'draft'}`}
+          sessions={editorSessions}
+          references={references}
+          disabled={actionDiscovery ? actionsDisabled : inputDisabled || sending}
+          rich={!actionDiscovery}
+          placeholder={actionDiscovery ? 'Search actions by name, operation or alias…' : disabled
+            ? connectionLabel : placeholder ?? 'Type a message or /command…'}
+          expanded={Boolean(actionDiscovery) || (!speakPreviewOpen && suggestions.length > 0)}
+          controls={actionDiscovery ? actionListId : !speakPreviewOpen && suggestions.length > 0 ? `${suggestionId}-list` : undefined}
+          activeDescendant={actionDiscovery && actionMatches[activeActionIndex] ? `${actionListId}-option-${activeActionIndex}`
+            : !speakPreviewOpen && suggestions[selectedIndex] ? `${suggestionId}-option-${selectedIndex}` : undefined}
           onFocus={focusAndLoad}
-          onCompositionStart={() => { composingRef.current = true }}
-          onCompositionEnd={() => { composingRef.current = false }}
-          onChange={(event) => {
-            const value = event.target.value
+          onCompositionChange={composing => { composingRef.current = composing }}
+          onSelectionChange={setSelection}
+          onChange={(value, nextSelection) => {
+            setSelection(nextSelection)
+            setSelectedIndex(0)
+            if (actionDiscovery) { setActionQuery(value); return }
             setInput(value)
             setDismissed(false)
-            setSelectedIndex(0)
             historyCursorRef.current = -1
             ensureVoicesForInput(value)
           }}
-          onKeyDown={(event) => {
-            if (composingRef.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
-              if (event.key === 'Enter') event.preventDefault()
-              return
-            }
-            if (speakPreviewOpen) {
-              const action = handleSpeakPreviewKey(event, catalogVoices, activeVoiceId)
-              if (action.type !== 'ignore') event.preventDefault()
-              if (action.type === 'select') {
-                selectVoice(action.voiceId)
-                return
-              }
-              if (action.type === 'toggle') {
-                toggleSelectedPreview()
-                return
-              }
-              if (action.type === 'dismiss') {
-                previewPlayer.stop()
-                setDismissed(true)
-                return
-              }
-            }
-            if (suggestions.length > 0) {
-              if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-                event.preventDefault()
-                const next = event.key === 'Home' ? 0 : event.key === 'End' ? suggestions.length - 1
-                  : (selectedIndex + (event.key === 'ArrowDown' ? 1 : -1) + suggestions.length) % suggestions.length
-                setSelectedIndex(next)
-                document.getElementById(`${suggestionId}-option-${next}`)?.scrollIntoView({ block: 'nearest' })
-                return
-              }
-              if (event.key === 'Tab') {
-                event.preventDefault()
-                acceptSuggestion(suggestions[selectedIndex]!)
-                return
-              }
-              if (event.key === 'Enter') {
-                const exact = hasExactCommandSuggestion(input, suggestions)
-                if (!exact) {
-                  event.preventDefault()
-                  acceptSuggestion(suggestions[selectedIndex]!)
-                  return
-                }
-              }
-              if (event.key === 'Escape') {
-                event.preventDefault()
-                setDismissed(true)
-                return
-              }
-            }
-            if (event.key === 'Escape' && onDismissPanel) {
-              event.preventDefault()
-              onDismissPanel()
-              return
-            }
-            if (!context && event.ctrlKey && event.key.toLowerCase() === 'p') {
-              event.preventDefault()
-              void navigateHistory(-1)
-              return
-            }
-            if (!context && event.ctrlKey && event.key.toLowerCase() === 'n') {
-              event.preventDefault()
-              void navigateHistory(1)
-              return
-            }
-            if (!context && event.key === 'ArrowUp') {
-              event.preventDefault()
-              void navigateHistory(-1)
-              return
-            }
-            if (!context && event.key === 'ArrowDown') {
-              event.preventDefault()
-              void navigateHistory(1)
-              return
-            }
-            if (applyInputReadline(event)) return
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              void execute()
-            }
-          }}
+          onKeyDown={handleInputKey}
         />
         {context ? (
           <span className="command-context" title={context.description}>
@@ -738,8 +861,8 @@ export function CommandComposer({
         <button
           type="submit"
           className="command-send"
-          disabled={disabled || sending || !input.trim()}
-          aria-label="Send command"
+          disabled={actionDiscovery ? actionsDisabled || actionMatches.length === 0 || actionStatus.loading : inputDisabled || sending || !input.trim()}
+          aria-label={actionDiscovery ? 'Prepare action' : 'Send command'}
         >
           {sending ? <BusyIndicator size={16} /> : <Send size={16} />}
         </button>
