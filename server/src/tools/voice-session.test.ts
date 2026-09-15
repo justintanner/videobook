@@ -18,7 +18,74 @@ import { voiceSessionConfig } from "../voice-config.js";
 import type { Engine } from "videobook-engine";
 import { appendVoiceHistory } from "./chat-history.js";
 import { voiceWorkspaceContext } from "../voice-actions.js";
+import { VoiceReplyProgress } from "../voice-reply-progress.js";
 import type { VoiceSessionEvent } from "../voice-contract.js";
+
+describe("voice reply progress", () => {
+  it("retries a missing response once and bounds the second wait", () => {
+    const progress = new VoiceReplyProgress();
+    progress.beginTurn();
+    progress.expect(0);
+    expect(progress.check(14_999)).toBeNull();
+    expect(progress.check(15_000)).toEqual({ type: "retry", responseId: null });
+    expect(progress.check(29_999)).toBeNull();
+    expect(progress.check(30_000)).toEqual({ type: "failed" });
+    expect(progress.check(60_000)).toBeNull();
+  });
+
+  it("recovers a stalled partial reply only after cancellation and ignores late response events", () => {
+    const progress = new VoiceReplyProgress();
+    progress.beginTurn();
+    progress.started("stalled", 0);
+    progress.expect(10);
+    progress.progress("stalled", 500);
+    expect(progress.check(15_000)).toBeNull();
+    expect(progress.check(15_500)).toEqual({ type: "retry", responseId: "stalled" });
+    progress.progress("stalled", 16_000);
+    expect(progress.finished("older", 16_100)).toBe("stale");
+    expect(progress.finished("stalled", 16_200)).toBe("retry");
+    progress.started("replacement", 16_300);
+    expect(progress.finished("stalled", 16_400)).toBe("stale");
+    progress.progress("stalled", 30_000);
+    expect(progress.check(31_300)).toEqual({ type: "failed" });
+    progress.beginTurn();
+    progress.expect(32_000);
+    expect(progress.check(47_000)).toEqual({ type: "retry", responseId: null });
+  });
+
+  it("bounds cancellation acknowledgement and tolerates a response already cancelled by the provider", () => {
+    for (const acknowledged of [true, false]) {
+      const progress = new VoiceReplyProgress();
+      progress.started("stalled", 0);
+      expect(progress.check(15_000)).toEqual({ type: "retry", responseId: "stalled" });
+      if (acknowledged) {
+        expect(progress.cancelled(16_000)).toBe(true);
+        expect(progress.cancelled(16_001)).toBe(false);
+        expect(progress.check(20_000)).toBeNull();
+      } else {
+        progress.progress("stalled", 19_000);
+        expect(progress.check(20_000)).toEqual({ type: "failed" });
+      }
+    }
+  });
+
+  it("keeps streaming replies alive, finishes tool rounds, and clears recovery on a new spoken turn", () => {
+    const progress = new VoiceReplyProgress();
+    progress.started("streaming", 0);
+    for (const now of [10_000, 20_000, 30_000]) {
+      progress.progress("streaming", now);
+      expect(progress.check(now + 1000)).toBeNull();
+    }
+    expect(progress.finished("streaming", 31_000)).toBe("done");
+    expect(progress.check(60_000)).toBeNull();
+    progress.expect(61_000);
+    progress.beginTurn();
+    expect(progress.check(90_000)).toBeNull();
+    progress.started("next", 91_000);
+    expect(progress.finished("streaming", 91_100)).toBe("stale");
+    expect(progress.finished("next", 91_200)).toBe("done");
+  });
+});
 
 describe("voice session boundaries", () => {
   let root: string;

@@ -15,6 +15,7 @@ import { DEFAULT_VOICE_MODEL, DEFAULT_XAI_VOICE_MODEL, VOICE_PCM_RATE, voiceSess
 import { chatActionPlanSchema, prepareVoiceChatAction } from "./tools/chat.js";
 import { appendVoiceHistory } from "./tools/chat-history.js";
 import { appendDiagnostic } from "./diagnostics.js";
+import { VoiceReplyProgress } from "./voice-reply-progress.js";
 import type { VoiceCaption, VoiceMode, VoiceOutcome, VoiceProvider, VoiceSessionDescriptor, VoiceSessionEvent } from "./voice-contract.js";
 
 type VoiceControlEvent = Exclude<OpenAiRealtimeClientEvent, { type: "session.update" }>;
@@ -109,6 +110,10 @@ export class VoiceSession {
   private interruptedResponses = new Set<string>();
   private pendingAssistantHistory = new Map<string, VoiceCaption[]>();
   private activeResponse = false;
+  private replyProgress = new VoiceReplyProgress();
+  private abandonedResponses = new Set<string>();
+  private recoveringTurn: string | null = null;
+  private lastAction: { turnId: string; callId: string; outcome: VoiceOutcome } | null = null;
   private needsResponse = false;
   private speaking = false;
   private waitingAction: { callId: string; done: ReturnType<typeof deferred<VoiceOutcome>> } | null = null;
@@ -141,6 +146,9 @@ export class VoiceSession {
       if (!this.scopeAlive()) void this.close("Workspace closed. Start voice in the current project.");
       else if (Date.now() - this.lastActivity > this.idleTimeoutMs) void this.close("Comms idle. Start voice to resume.");
       else if (Date.now() - this.startedAt > 30 * 60_000) void this.close("Comms session ended. Start voice to resume.");
+      else {
+        try { this.recoverReply(); } catch (error) { this.fail(voiceError(error).message); }
+      }
     }, Math.min(1000, idleTimeoutMs));
     this.timer.unref();
   }
@@ -231,7 +239,7 @@ export class VoiceSession {
 
   interruptPlayback(responseId: string, itemId?: string, audioEndMs?: number): void {
     this.interruptTranscript(responseId);
-    if (this.stopped || this.providerName !== "xai" || !itemId || audioEndMs === undefined || !this.responseItems.get(responseId)?.has(itemId)) return;
+    if (this.stopped || this.providerName !== "xai" || this.abandonedResponses.has(responseId) || !itemId || audioEndMs === undefined || !this.responseItems.get(responseId)?.has(itemId)) return;
     this.control?.send({ type: "conversation.item.truncate", item_id: itemId, content_index: 0, audio_end_ms: audioEndMs });
   }
 
@@ -302,6 +310,9 @@ export class VoiceSession {
     if (event.event_id) this.seen.add(event.event_id);
     if (this.seen.size > 20_000) { void this.close("Comms session limit reached. Start voice to resume."); return; }
     if (!this.scopeAlive()) { void this.close("Workspace closed."); return; }
+    const responseId = event.response_id ?? (typeof event.response?.id === "string" ? event.response.id : undefined);
+    if (responseId && this.abandonedResponses.has(responseId) && event.type !== "response.done") return;
+    if (responseId) this.replyProgress.progress(responseId, Date.now());
     const id = event.item_id ?? "";
     if (id && event.response_id && (event.type.startsWith("response.output_audio") || event.type.startsWith("response.audio."))) {
       const items = this.responseItems.get(event.response_id) ?? new Set<string>();
@@ -312,6 +323,8 @@ export class VoiceSession {
     if (event.type === "input_audio_buffer.speech_started") {
       this.lastActivity = Date.now();
       this.currentTurn = id;
+      this.replyProgress.beginTurn();
+      this.recoveringTurn = null;
       this.turn(id);
       this.caption(id, "user", "", false);
       this.speaking = true;
@@ -320,6 +333,7 @@ export class VoiceSession {
     } else if (event.type === "input_audio_buffer.speech_stopped") {
       this.speaking = false;
       this.lastActivity = Date.now();
+      this.replyProgress.expect(this.lastActivity);
       this.emit({ type: "activity", phase: "thinking" });
     } else if (event.type === "conversation.item.input_audio_transcription.delta") {
       this.caption(id, "user", (this.captions.get(id)?.text ?? "") + (event.delta ?? ""), false);
@@ -349,13 +363,19 @@ export class VoiceSession {
       }
     } else if (event.type === "response.created") {
       this.activeResponse = true;
-      if (typeof event.response?.id === "string") this.responseTurns.set(event.response.id, this.currentTurn);
+      if (responseId) {
+        this.responseTurns.set(responseId, this.currentTurn);
+        this.replyProgress.started(responseId, Date.now());
+      }
     } else if (event.type === "response.done") {
-      this.activeResponse = false;
+      const completion = this.replyProgress.finished(responseId, Date.now());
       const usage = event.response?.usage as Record<string, unknown> | undefined;
       this.usage.responses += 1;
       this.usage.inputTokens += typeof usage?.input_tokens === "number" ? usage.input_tokens : 0;
       this.usage.outputTokens += typeof usage?.output_tokens === "number" ? usage.output_tokens : 0;
+      if (completion === "stale") return;
+      this.activeResponse = false;
+      if (completion === "retry") this.needsResponse = true;
       if (event.response?.status === "failed") {
         const details = z.object({ error: z.unknown().optional() }).safeParse(event.response.status_details);
         this.fail(providerErrorMessage(details.success ? details.data.error : undefined, undefined, this.providerName) ?? "The voice reply failed. Start voice to retry.");
@@ -369,7 +389,14 @@ export class VoiceSession {
       this.pendingTools += 1;
       this.toolChain = this.toolChain.then(() => this.runTool(event, turnId)).catch(() => { this.fail("Voice action failed. Check the command and try again."); }).finally(() => { this.pendingTools -= 1; this.continueResponse(); });
     } else if (event.type === "error") {
-      if (event.error?.code === "response_cancel_not_active") return;
+      if (event.error?.code === "response_cancel_not_active") {
+        if (this.replyProgress.cancelled(Date.now())) {
+          this.activeResponse = false;
+          this.needsResponse = true;
+          this.continueResponse();
+        }
+        return;
+      }
       this.fail(providerErrorMessage(event.error, undefined, this.providerName) ?? "Voice service reported an error. Start voice again; check model access if it repeats.");
     }
   }
@@ -378,7 +405,29 @@ export class VoiceSession {
     if (!this.needsResponse || this.activeResponse || this.pendingTools > 0 || this.speaking || this.stopped) return;
     this.needsResponse = false;
     this.activeResponse = true;
+    this.replyProgress.expect(Date.now());
     this.control?.send({ type: "response.create" });
+  }
+
+  private recoverReply(): void {
+    if (this.stopped || !this.control || !this.currentTurn || this.speaking || this.pendingTools > 0) return;
+    const recovery = this.replyProgress.check(Date.now());
+    if (!recovery) return;
+    if (recovery.type === "failed") {
+      this.fail("The voice service stopped responding. Start voice to try again.");
+      return;
+    }
+    this.emit({ type: "activity", phase: "thinking", interrupt: this.providerName === "xai" });
+    this.recoveringTurn = this.currentTurn;
+    if (recovery.responseId) {
+      this.abandonedResponses.add(recovery.responseId);
+      this.interruptTranscript(recovery.responseId);
+      this.control.send({ type: "response.cancel", response_id: recovery.responseId });
+      return;
+    }
+    this.activeResponse = false;
+    this.needsResponse = true;
+    this.continueResponse();
   }
 
   private output(callId: string, result: unknown, turnId: string): void {
@@ -401,6 +450,10 @@ export class VoiceSession {
         return;
       }
       if (event.name !== "prepare_workspace_action") throw new Error("Unknown voice action.");
+      if (this.recoveringTurn === turnId && this.lastAction?.turnId === turnId) {
+        this.output(callId, this.lastAction.outcome, turnId);
+        return;
+      }
       if (this.reviewCall || this.waitingAction) throw new Error("Use Apply or Cancel on screen for the pending review before requesting another workspace action.");
       const turn = this.turn(turnId);
       const timeout = setTimeout(() => turn.saved.resolve(false), 10_000);
@@ -424,6 +477,7 @@ export class VoiceSession {
       this.emit({ type: "action", callId, prompt: turn.text, plan: plan.data });
       const deadline = setTimeout(() => done.resolve({ status: "failed", message: "The command UI did not acknowledge this action. Check its current status before retrying." }), 60_000);
       const outcome = await done.promise.finally(() => clearTimeout(deadline));
+      this.lastAction = { turnId, callId, outcome };
       if (this.waitingAction?.callId === callId) this.waitingAction = null;
       if (outcome.status === "review") this.reviewCall = callId;
       this.output(callId, outcome, turnId);
@@ -442,6 +496,7 @@ export class VoiceSession {
     }
     if (this.reviewCall !== callId) throw new VoiceError("This voice action is no longer pending.", 409);
     if (outcome.status !== "review") this.reviewCall = null;
+    if (this.lastAction?.callId === callId) this.lastAction.outcome = outcome;
     this.contextMessage({ applicationOutcome: outcome });
   }
 

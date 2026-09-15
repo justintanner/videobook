@@ -62,9 +62,15 @@ describe("voice chat action policy", () => {
     const actions = discoverVoiceActions(engine, "generate video");
     expect(actions.length).toBeLessThanOrEqual(8);
     expect(actions[0]?.name).toBe("generate_video");
+    expect(actions).toHaveLength(1);
     expect(actions[0]?.requiresReview).toBe(true);
     expect(actions[0]?.parameters.properties).not.toHaveProperty("book_id");
     expect(voiceWorkspaceContext(engine, notebookId)).toMatchObject({ book: "voice-actions", notebookId });
+  });
+
+  it("keeps specific model discovery available alongside exact action lookup", () => {
+    expect(discoverVoiceActions(engine, "generate wan video").some(action => action.name.includes("wan"))).toBe(true);
+    expect(discoverVoiceActions(engine, "rename asset").map(action => action.name)).toEqual(["rename_asset"]);
   });
 
   it("keeps the requested operation visible when media and cell words match many actions", () => {

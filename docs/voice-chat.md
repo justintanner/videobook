@@ -16,6 +16,12 @@ access on reload. Changing provider stops the current channel and keeps any pend
 action review; press Start to connect again. An established conversation never
 switches providers or replays its audio or actions automatically.
 
+If a reply makes no progress for 15 seconds, the session cancels that response and
+retries once on the same connection. It waits up to five seconds for cancellation
+before continuing, ignores late events from the abandoned response, and reuses any
+accepted action outcome. A second stall shows a connection error and releases the
+microphone. This recovery does not execute an accepted action again.
+
 ## Transport and configuration
 
 The browser captures audio only after the user starts voice. It sends an SDP offer
@@ -80,6 +86,12 @@ Only Apply or Cancel on screen resolves a pending review. A spoken yes cannot ap
 an operation, and turning voice off leaves the review available. Spoken feedback
 distinguishes an action awaiting review, a queued job, completion, cancellation and
 failure.
+
+Spoken addresses such as “A1” or “A one” refer to `@a1`. Generic generation requests
+use the same default actions as typed chat and retain the address in the generation
+prompt. Exact action discovery returns that action's schema; broader searches still
+return up to eight matches. Voice completes discovery and preparation before
+speaking the actual result or asking for a missing detail.
 
 Sessions are bound to their book, notebook and owner. Turn, response and function IDs
 deduplicate events; old-scope proposals cannot enter the current workspace. Finalized

@@ -62,9 +62,9 @@ describe('voice chat in the real browser', () => {
     children.push(child)
   }
 
-  async function useRecording(name: string) {
+  async function useRecording(name: string, leadingSilenceMs = 4000) {
     const speechPath = join(root, `${name}-microphone.wav`)
-    await execFileAsync(FFMPEG, ['-y', '-i', resolve(`tests/fixtures/voice/${name}.wav`), '-af', 'adelay=4000:all=1,apad=pad_dur=30', '-ar', '48000', '-ac', '1', speechPath])
+    await execFileAsync(FFMPEG, ['-y', '-i', resolve(`tests/fixtures/voice/${name}.wav`), '-af', `adelay=${leadingSilenceMs}:all=1,apad=pad_dur=60`, '-ar', '48000', '-ac', '1', speechPath])
     await openMicrophone(speechPath)
   }
 
@@ -140,6 +140,7 @@ describe('voice chat in the real browser', () => {
     const name = task.name.replaceAll(/[^a-z0-9]+/giu, '-').slice(0, 100)
     await page.screenshot({ path: `test-results/voice/failure-${name}.png` })
     await writeFile(`test-results/voice/failure-${name}.txt`, await page.locator('body').innerText())
+    await writeFile(`test-results/voice/failure-${name}-timing.json`, JSON.stringify(await page.evaluate(() => performance.getEntriesByName('videobook-voice').map(entry => ({ at: entry.startTime, ...(entry as PerformanceMark).detail }))), null, 2))
   })
 
   it('keeps the toggle keyboard accessible and fits desktop, phone and short landscape', async () => {
@@ -451,6 +452,31 @@ describe('voice chat in the real browser', () => {
     await page.locator('.confirm-sheet').waitFor({ state: 'visible', timeout: 45_000 })
     expect(await page.locator('.confirm-sheet').innerText()).toMatch(/generat|cost|provider/i)
     expect(result(await client.callTool({ name: 'list_jobs', arguments: { book_id: bookId } }))).toEqual(before)
+    await page.locator('.confirm-sheet').getByRole('button', { name: /Cancel/ }).click()
+    await page.getByLabel('Stop voice conversation').click()
+  })
+
+  it.skipIf(!live)('answers a spoken video request using A1 with audio and a generation review', async () => {
+    await ensureImage()
+    await useRecording('generate-video', 10_000)
+    const before = result(await client.callTool({ name: 'list_jobs', arguments: { book_id: bookId } }))
+    await page.getByLabel('Start voice conversation').click()
+    await expect.poll(() => page.locator('.voice-captions p[data-final="true"]').first().innerText(), { timeout: 30_000 }).toMatch(/YOU[\s\S]*Make me a video with A\s?(?:1|one)/i)
+    await expect.poll(() => page.locator('.voice-captions').innerText(), { timeout: 30_000 }).toMatch(/COPILOT/)
+    await expect.poll(() => page.evaluate(() => performance.getEntriesByName('videobook-voice').filter(entry => (entry as PerformanceMark).detail.stage === 'first-audio').length), { timeout: 15_000 }).toBeGreaterThan(0)
+    await page.locator('.confirm-sheet').waitFor({ state: 'visible', timeout: 30_000 })
+    expect(await page.locator('.confirm-sheet').innerText()).toMatch(/generat|cost|provider/i)
+    await expect.poll(() => page.locator('.voice-captions p[data-final="true"]').last().innerText(), { timeout: 30_000 }).toMatch(/COPILOT[\s\S]*(apply|review|cancel)/i)
+    await expect.poll(() => page.evaluate(() => {
+      const marks = performance.getEntriesByName('videobook-voice') as PerformanceMark[]
+      const review = marks.find(entry => entry.detail.stage === 'action-review')
+      return marks.some(entry => entry.detail.stage === 'first-audio' && review && entry.startTime > review.startTime)
+    }), { timeout: 15_000 }).toBe(true)
+    expect(await page.locator('.confirm-sheet').innerText()).toContain('@a1')
+    expect(await page.locator('.confirm-sheet .generation-review-source').allTextContents()).toEqual([expect.stringContaining('@a1')])
+    expect(await page.locator('.confirm-sheet').innerText()).toMatch(/seedance/i)
+    expect(result(await client.callTool({ name: 'list_jobs', arguments: { book_id: bookId } }))).toEqual(before)
+    await page.screenshot({ path: 'test-results/voice/video-request-review.png' })
     await page.locator('.confirm-sheet').getByRole('button', { name: /Cancel/ }).click()
     await page.getByLabel('Stop voice conversation').click()
   })

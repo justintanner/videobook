@@ -13,7 +13,8 @@ export function discoverVoiceActions(engine: Engine, query: string) {
   const subjects = new Set(["audio", "image", "video", "notebook", "asset", "book", "cell", "text", "script", "project", "media", "voice", "model", "frame"]);
   const operations = new Set(actions.map((action) => action.name.split("_")[0]!).filter((word) => !subjects.has(word)));
   const operation = tokens.find((token) => operations.has(token));
-  return actions.map((action) => {
+  const exact = actions.find(action => action.name.replaceAll("_", " ") === words);
+  return (exact ? [exact] : actions).map((action) => {
     const name = action.name.replaceAll("_", " ");
     const haystack = `${name} ${action.description}`.toLowerCase();
     const score = (name === words ? 100 : 0)

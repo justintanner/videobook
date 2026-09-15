@@ -12,6 +12,9 @@ for a slow count, pauses 2.5 seconds, then says “Stop. Say ready.” The brows
 adds leading silence for negotiation and trailing silence to avoid accidental
 overlapping repetitions during an individual case.
 
+`generate-video` says “Make me a video with A1” to verify that a spoken address
+reaches the video generation review with the source image and a spoken outcome.
+
 `duplicate` includes deterministic pink noise mixed with FFmpeg's `anoisesrc`
 (`amplitude=0.008`, `seed=42`) to exercise a grid-reference command with background
 noise. OpenAI replies are obtained live rather than stored in this fixture directory.
