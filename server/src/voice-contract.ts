@@ -10,6 +10,12 @@ export interface VoiceCaption {
   interrupted?: boolean;
 }
 
+/** What the speaker asked for about the review already on screen. */
+export interface VoiceReviewCommand {
+  decision: "apply" | "cancel" | "revise";
+  prompt?: string;
+}
+
 export interface VoiceOutcome {
   status: "review" | "completed" | "queued" | "failed" | "cancelled";
   message: string;
@@ -21,6 +27,7 @@ export type VoiceSessionEvent =
   | { type: "audio"; audio: string; responseId: string; itemId: string }
   | { type: "audio-done"; responseId: string }
   | { type: "action"; callId: string; prompt: string; plan: unknown }
+  | { type: "review"; callId: string; command: VoiceReviewCommand }
   | { type: "closed"; reason: string }
   | { type: "error"; message: string };
 

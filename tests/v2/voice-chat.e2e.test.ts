@@ -461,16 +461,52 @@ describe('voice chat in the real browser', () => {
     await page.getByLabel('Stop voice conversation').click()
   })
 
-  it.skipIf(!live)('keeps spoken approval behind review and retains Cancel after switching provider', async () => {
+  it.skipIf(!live)('applies the review on screen when the speaker approves it, without touching the draft', async () => {
     await ensureImage()
     await useRecording('review')
-    const before = result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } }))
     const input = page.getByLabel('Videobook command input')
     await input.fill('Retain this @a1 draft')
+    const negotiated = page.waitForResponse(response => response.url().endsWith('/api/voice') && response.request().method() === 'POST')
+    await page.getByLabel('Start voice conversation').click()
+    const session = await (await negotiated).json() as { id: string }
+    await page.locator('.confirm-sheet').waitFor({ state: 'visible', timeout: 45_000 })
+    // The recording asks for the rename, waits, then says "Yes, apply that
+    // change". Approval reaches the same command the on-screen button runs.
+    const applied = page.waitForResponse(response => response.url().endsWith(`/api/voice/${session.id}/outcome`)
+      && ['completed', 'queued'].includes((response.request().postDataJSON() as { outcome?: { status?: string } }).outcome?.status ?? ''), { timeout: 60_000 })
+    await expect.poll(() => page.locator('.voice-captions').innerText(), { timeout: 40_000 }).toMatch(/yes.*apply/i)
+    expect((await applied).status()).toBe(204)
+    await page.locator('.confirm-sheet').waitFor({ state: 'hidden', timeout: 20_000 })
+    expect(await input.textContent()).toBe('Retain this @a1 draft')
+    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').last().innerText(), { timeout: 20_000 }).toMatch(/renamed|updated|changed|labeled|labelled|applied|done/i)
+    await page.getByLabel('Stop voice conversation').click()
+  })
+
+  it.skipIf(!live)('reads real assets and auto-applies a spoken duplicate through the existing command route', async () => {
+    await ensureImage()
+    await useRecording('assets')
+    await page.getByLabel('Start voice conversation').click()
+    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').last().innerText(), { timeout: 40_000 }).toMatch(/image|asset/i)
+    expect(await page.locator('.confirm-sheet').count()).toBe(0)
+    await page.getByLabel('Stop voice conversation').click()
+    const before = result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } })) as { assets: unknown[] }
+    await useRecording('duplicate')
+    await page.getByLabel('Start voice conversation').click()
+    await expect.poll(async () => (result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } })) as { assets: unknown[] }).assets.length, { timeout: 45_000 }).toBe(before.assets.length + 1)
+    expect(await page.locator('.confirm-sheet').count()).toBe(0)
+    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').last().innerText(), { timeout: 15_000 }).toMatch(/duplicat|copied|created|done/i)
+    await page.getByLabel('Stop voice conversation').click()
+  })
+
+  it.skipIf(!live)('opens the normal paid generation review, keeps it reachable at every width, and retains Cancel after switching provider', async () => {
+    await useRecording('generate')
+    const before = result(await client.callTool({ name: 'list_jobs', arguments: { book_id: bookId } }))
     await page.getByLabel('Start voice conversation').click()
     await page.locator('.confirm-sheet').waitFor({ state: 'visible', timeout: 45_000 })
-    await expect.poll(() => page.locator('.voice-captions').innerText(), { timeout: 30_000 }).toMatch(/yes.*apply/i)
-    expect(result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } }))).toEqual(before)
+    expect(await page.locator('.confirm-sheet').innerText()).toMatch(/generat|cost|provider/i)
+    expect(result(await client.callTool({ name: 'list_jobs', arguments: { book_id: bookId } }))).toEqual(before)
+    // A generation review parks until someone decides, so it is where the
+    // sheet's own reachability is worth measuring.
     for (const viewport of [{ width: 320, height: 640 }, { width: 390, height: 844 }, { width: 640, height: 320 }, { width: 1440, height: 1000 }]) {
       await page.setViewportSize(viewport)
       const toggle = page.getByLabel('Stop voice conversation')
@@ -498,35 +534,7 @@ describe('voice chat in the real browser', () => {
     expect(await page.locator('.confirm-sheet').isVisible()).toBe(true)
     await page.locator('.confirm-sheet').getByRole('button', { name: /Cancel/ }).click()
     await page.locator('.confirm-sheet').waitFor({ state: 'hidden' })
-    expect(await input.textContent()).toBe('Retain this @a1 draft')
-    expect(result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } }))).toEqual(before)
-  })
-
-  it.skipIf(!live)('reads real assets and auto-applies a spoken duplicate through the existing command route', async () => {
-    await ensureImage()
-    await useRecording('assets')
-    await page.getByLabel('Start voice conversation').click()
-    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').last().innerText(), { timeout: 40_000 }).toMatch(/image|asset/i)
-    expect(await page.locator('.confirm-sheet').count()).toBe(0)
-    await page.getByLabel('Stop voice conversation').click()
-    const before = result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } })) as { assets: unknown[] }
-    await useRecording('duplicate')
-    await page.getByLabel('Start voice conversation').click()
-    await expect.poll(async () => (result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } })) as { assets: unknown[] }).assets.length, { timeout: 45_000 }).toBe(before.assets.length + 1)
-    expect(await page.locator('.confirm-sheet').count()).toBe(0)
-    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').last().innerText(), { timeout: 15_000 }).toMatch(/duplicat|copied|created|done/i)
-    await page.getByLabel('Stop voice conversation').click()
-  })
-
-  it.skipIf(!live)('opens the normal paid generation review without starting a generation job', async () => {
-    await useRecording('generate')
-    const before = result(await client.callTool({ name: 'list_jobs', arguments: { book_id: bookId } }))
-    await page.getByLabel('Start voice conversation').click()
-    await page.locator('.confirm-sheet').waitFor({ state: 'visible', timeout: 45_000 })
-    expect(await page.locator('.confirm-sheet').innerText()).toMatch(/generat|cost|provider/i)
     expect(result(await client.callTool({ name: 'list_jobs', arguments: { book_id: bookId } }))).toEqual(before)
-    await page.locator('.confirm-sheet').getByRole('button', { name: /Cancel/ }).click()
-    await page.getByLabel('Stop voice conversation').click()
   })
 
   it.skipIf(!live)('answers a spoken video request using A1 with audio and a generation review', async () => {

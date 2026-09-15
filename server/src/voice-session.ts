@@ -16,7 +16,7 @@ import { chatActionPlanSchema, prepareVoiceChatAction } from "./tools/chat.js";
 import { appendVoiceHistory } from "./tools/chat-history.js";
 import { appendDiagnostic } from "./diagnostics.js";
 import { VoiceReplyProgress } from "./voice-reply-progress.js";
-import type { VoiceCaption, VoiceMode, VoiceOutcome, VoiceProvider, VoiceSessionDescriptor, VoiceSessionEvent } from "./voice-contract.js";
+import type { VoiceCaption, VoiceMode, VoiceOutcome, VoiceProvider, VoiceReviewCommand, VoiceSessionDescriptor, VoiceSessionEvent } from "./voice-contract.js";
 
 type VoiceControlEvent = Exclude<OpenAiRealtimeClientEvent, { type: "session.update" }>;
 interface VoiceControl {
@@ -87,6 +87,7 @@ interface VoiceTurn {
 
 const actionSchema = z.object({ tool: z.string().min(1).max(120), params: z.record(z.string(), z.unknown()) }).strict();
 const discoverySchema = z.object({ query: z.string().min(1).max(160) }).strict();
+const reviewSchema = z.object({ decision: z.enum(["apply", "cancel", "revise"]), prompt: z.string().max(8000).optional() }).strict();
 
 export class VoiceSession {
   readonly id = randomUUID();
@@ -449,12 +450,16 @@ export class VoiceSession {
         this.output(callId, { actions: discoverVoiceActions(this.engine, query), workspace: voiceWorkspaceContext(this.engine, this.notebookId) }, turnId);
         return;
       }
+      if (event.name === "resolve_pending_review") {
+        this.output(callId, await this.resolveReview(callId, reviewSchema.parse(args)), turnId);
+        return;
+      }
       if (event.name !== "prepare_workspace_action") throw new Error("Unknown voice action.");
       if (this.recoveringTurn === turnId && this.lastAction?.turnId === turnId) {
         this.output(callId, this.lastAction.outcome, turnId);
         return;
       }
-      if (this.reviewCall || this.waitingAction) throw new Error("Use Apply or Cancel on screen for the pending review before requesting another workspace action.");
+      if (this.reviewCall || this.waitingAction) throw new Error("A review is already on screen. Use resolve_pending_review to apply, cancel, or revise it before requesting another workspace action.");
       const turn = this.turn(turnId);
       const timeout = setTimeout(() => turn.saved.resolve(false), 10_000);
       const saved = await turn.saved.promise.finally(() => clearTimeout(timeout));
@@ -486,6 +491,25 @@ export class VoiceSession {
     }
   }
 
+  /**
+   * Hand a spoken decision about the on-screen review to the command UI and
+   * wait for what actually happened. The review stays open on a revise, so the
+   * speaker can keep changing it before spending anything.
+   */
+  private async resolveReview(callId: string, command: VoiceReviewCommand): Promise<VoiceOutcome> {
+    if (!this.reviewCall) throw new Error("There is no review on screen to act on.");
+    if (this.waitingAction) throw new Error("The command UI is still working on the last spoken decision.");
+    if (command.decision === "revise" && !command.prompt?.trim()) throw new Error("Revise needs the whole replacement prompt.");
+    const done = deferred<VoiceOutcome>();
+    this.waitingAction = { callId, done };
+    this.emit({ type: "review", callId, command });
+    const deadline = setTimeout(() => done.resolve({ status: "failed", message: "The command UI did not act on that. Check the review on screen." }), 60_000);
+    const outcome = await done.promise.finally(() => clearTimeout(deadline));
+    if (this.waitingAction?.callId === callId) this.waitingAction = null;
+    if (outcome.status !== "review") this.reviewCall = null;
+    return outcome;
+  }
+
   acknowledge(callId: string, outcome: VoiceOutcome): void {
     if (this.stopped) throw new VoiceError("Voice session is closed.", 410);
     this.lastActivity = Date.now();
@@ -497,6 +521,9 @@ export class VoiceSession {
     if (this.reviewCall !== callId) throw new VoiceError("This voice action is no longer pending.", 409);
     if (outcome.status !== "review") this.reviewCall = null;
     if (this.lastAction?.callId === callId) this.lastAction.outcome = outcome;
+    // A spoken decision reports this outcome and then returns it as the tool
+    // result. Telling the model twice would make it answer twice.
+    if (this.waitingAction) return;
     this.contextMessage({ applicationOutcome: outcome });
   }
 

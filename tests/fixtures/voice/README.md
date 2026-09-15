@@ -7,7 +7,8 @@ inputs, not recordings of a user or samples of OpenAI output.
 `ready`, `colors`, `storyboard` and `moon` are ordinary short requests for the repeated
 latency comparison. `assets`, `rename`, `duplicate` and `generate` exercise workspace
 tools. `review` combines the rename request, nine seconds of silence, and “Yes, apply
-that change” to verify that speech cannot bypass on-screen review. `interrupt` asks
+that change” to verify that a spoken approval reaches the review already on
+screen and runs the same command its Apply button does. `interrupt` asks
 for a slow count, pauses 2.5 seconds, then says “Stop. Say ready.” The browser fixture
 adds leading silence for negotiation and trailing silence to avoid accidental
 overlapping repetitions during an individual case.

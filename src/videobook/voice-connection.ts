@@ -1,4 +1,4 @@
-import type { VoiceCaption, VoiceMode, VoiceOutcome, VoicePhase, VoiceProvider, VoiceSessionDescriptor, VoiceSessionEvent } from '../../server/src/voice-contract'
+import type { VoiceCaption, VoiceMode, VoiceOutcome, VoicePhase, VoiceProvider, VoiceReviewCommand, VoiceSessionDescriptor, VoiceSessionEvent } from '../../server/src/voice-contract'
 import { VoicePcm } from './voice-pcm'
 import { VoiceTimeline } from './voice-timeline'
 
@@ -10,6 +10,7 @@ interface VoiceConnectionOptions {
   onPhase: (phase: VoicePhase, message?: string) => void
   onCaption: (caption: VoiceCaption) => void
   onAction: (event: Extract<VoiceSessionEvent, { type: 'action' }>) => Promise<VoiceOutcome>
+  onReviewCommand: (command: VoiceReviewCommand) => Promise<VoiceOutcome>
   onLevel: (level: number) => void
   onPlaybackBlocked: (blocked: boolean) => void
 }
@@ -290,6 +291,23 @@ export class VoiceConnection {
       this.actions.add(event.callId)
       void this.action(event)
     }
+    else if (event.type === 'review' && !this.actions.has(event.callId)) {
+      this.actions.add(event.callId)
+      void this.reviewCommand(event)
+    }
+  }
+
+  // A spoken decision about the review already on screen. Applying or
+  // cancelling also reports the outcome for the original action, so the phase
+  // follows whether the review survived rather than this call's own id.
+  private async reviewCommand(event: Extract<VoiceSessionEvent, { type: 'review' }>) {
+    let outcome: VoiceOutcome
+    try { outcome = await this.options.onReviewCommand(event.command) }
+    catch (error) { outcome = { status: 'failed', message: error instanceof Error ? error.message : 'The review command failed.' } }
+    if (this.stopped) return
+    if (outcome.status !== 'review') this.review = null
+    this.updatePhase(this.review ? 'review' : this.playing ? 'speaking' : 'listening')
+    await this.acknowledge(event.callId, outcome)
   }
 
   private async action(event: Extract<VoiceSessionEvent, { type: 'action' }>) {

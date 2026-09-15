@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { VoiceConnection } from './voice-connection'
-import type { VoiceCaption, VoiceMode, VoiceOutcome, VoicePhase, VoiceProvider, VoiceSessionEvent } from '../../server/src/voice-contract'
+import type { VoiceCaption, VoiceMode, VoiceOutcome, VoicePhase, VoiceProvider, VoiceReviewCommand, VoiceSessionEvent } from '../../server/src/voice-contract'
 
 const voiceModeKey = 'videobook.voice-provider'
 
@@ -18,6 +18,7 @@ interface VoiceConversationOptions {
   available: boolean
   disabled: boolean
   onAction: (event: Extract<VoiceSessionEvent, { type: 'action' }>, isCurrent: () => boolean) => Promise<VoiceOutcome>
+  onReviewCommand: (command: VoiceReviewCommand) => Promise<VoiceOutcome>
 }
 
 export function useVoiceConversation(options: VoiceConversationOptions) {
@@ -81,6 +82,14 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
         setPendingReview(true)
         const isCurrent = () => connectionRef.current === connection && connection.active && latest.current.bookId === current.bookId && latest.current.notebookId === current.notebookId && latest.current.scope === current.scope && latest.current.available
         const outcome = await latest.current.onAction(event, isCurrent).catch((error: unknown): VoiceOutcome => ({ status: 'failed', message: error instanceof Error ? error.message : 'Voice action failed.' }))
+        if (connectionRef.current === connection) setPendingReview(outcome.status === 'review')
+        return outcome
+      },
+      onReviewCommand: async command => {
+        if (connectionRef.current !== connection) {
+          return { status: 'cancelled', message: 'Workspace changed. The review is no longer on screen.' }
+        }
+        const outcome = await latest.current.onReviewCommand(command).catch((error: unknown): VoiceOutcome => ({ status: 'failed', message: error instanceof Error ? error.message : 'The review command failed.' }))
         if (connectionRef.current === connection) setPendingReview(outcome.status === 'review')
         return outcome
       },

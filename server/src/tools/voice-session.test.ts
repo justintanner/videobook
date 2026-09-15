@@ -138,7 +138,24 @@ describe("voice session boundaries", () => {
   it("validates the native audio model, lowest reasoning and interruption configuration against the provider", () => {
     const request = OpenAiRealtimeCallRequestSchema.parse({ sdp: "v=0\r\n", session: voiceSessionConfig({ book: "voice-session" }) });
     expect(request.session).toMatchObject({ model: "gpt-realtime-2.1", reasoning: { effort: "minimal" }, audio: { input: { turn_detection: { interrupt_response: true, silence_duration_ms: 350 } } } });
-    expect(request.session?.tools?.map(tool => "name" in tool ? tool.name : "")).toEqual(["find_workspace_actions", "prepare_workspace_action"]);
+    expect(request.session?.tools?.map(tool => "name" in tool ? tool.name : "")).toEqual(["find_workspace_actions", "prepare_workspace_action", "resolve_pending_review"]);
+  });
+
+  it("offers the on-screen review the three decisions a speaker can make about it", () => {
+    const session = voiceSessionConfig({ book: "voice-session" });
+    const review = session.tools?.find(tool => "name" in tool && tool.name === "resolve_pending_review");
+    expect(review).toMatchObject({
+      parameters: {
+        properties: { decision: { enum: ["apply", "cancel", "revise"] } },
+        required: ["decision"],
+        additionalProperties: false,
+      },
+    });
+    // Applying spends money, so the instructions have to say both that voice
+    // can do it and that ambiguous speech is not approval.
+    expect(session.instructions).toContain("resolve_pending_review is the only action available");
+    expect(session.instructions).toMatch(/Apply or cancel only on a clear instruction/u);
+    expect(session.instructions).toMatch(/Applying spends money/u);
   });
 
   it("rejects hostile origins and bounded malformed offers before provider access", async () => {

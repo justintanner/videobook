@@ -15,7 +15,7 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { useVoiceConversation } from './videobook/use-voice-conversation'
-import type { VoiceOutcome } from '../server/src/voice-contract'
+import type { VoiceOutcome, VoiceReviewCommand } from '../server/src/voice-contract'
 import {
   Handle,
   Position,
@@ -477,7 +477,11 @@ import {
   restoreCommandComposerFocus,
   useCommandComposerFocus,
 } from '@/videobook/command-composer-focus'
-import { parsePendingApplyCommand } from '@/videobook/command-composer-outcome'
+import {
+  parsePendingApplyCommand,
+  pendingCommandVoiceOutcome,
+} from '@/videobook/command-composer-outcome'
+import { planVoiceReviewCommand } from '@/videobook/voice-review-command'
 import { revealNotebookResult } from '@/videobook/notebook-result-reveal'
 import {
   notebookAddressExpectationsAreStale,
@@ -10935,12 +10939,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : null
     if (!session) {
       const outcome = await executeCommand(input, context)
-      const pendingCommand = input.trim().toLowerCase()
-      if (parsePendingApplyCommand(input) || pendingCommand === '/cancel') {
-        voiceOutcomeRef.current?.({
-          status: !outcome.ok ? 'review' : pendingCommand === '/cancel' ? 'cancelled' : /queued|started|running|processing/i.test(outcome.message) ? 'queued' : 'completed',
-          message: outcome.message,
-        })
+      if (parsePendingApplyCommand(input) || input.trim().toLowerCase() === '/cancel') {
+        voiceOutcomeRef.current?.(pendingCommandVoiceOutcome(input, outcome))
       } else voiceTypedTurnRef.current?.(input, outcome.message)
       return outcome
     }
@@ -11924,6 +11924,36 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const currentActionDiscovery = actionDiscovery?.bookId === bookId && actionDiscovery.session === composerSession ? actionDiscovery : null
   const temporaryActionComposer = Boolean(currentActionComposer && (screen === 'library' || workspacePreview || (mediaFullscreen && !fullscreenImageEditor)))
   const showCommandComposer = screen !== 'library' || Boolean(fullscreenImageEditor) || Boolean(currentActionComposer)
+  // A spoken decision about the review already on screen. Apply and cancel run
+  // the same composer commands the sheet's own buttons do, so the two routes
+  // cannot drift; revise changes the prompt and leaves the review open, which
+  // is what lets someone shape a generation by voice before paying for it.
+  const runVoiceReviewCommand = async (
+    command: VoiceReviewCommand,
+  ): Promise<VoiceOutcome> => {
+    const plan = planVoiceReviewCommand(
+      command,
+      pendingChatAction?.kind === 'generation'
+        ? 'generation'
+        : pendingChatAction || pendingCommandPlan || pendingWatermarkReview
+          ? 'other'
+          : 'none',
+    )
+    if (plan.kind === 'refused') return plan.outcome
+    if (plan.kind === 'revise') {
+      updatePendingGenerationPrompt(plan.prompt)
+      // The sheet shows the new wording, so the outcome stays short rather than
+      // handing the model a long prompt to read back.
+      return {
+        status: 'review',
+        message: 'The prompt on screen is updated. The review is still waiting for apply or cancel.',
+      }
+    }
+    return pendingCommandVoiceOutcome(
+      plan.input,
+      await executeComposerCommand(plan.input),
+    )
+  }
   const voice = useVoiceConversation({
     bookId,
     notebookId: notebook?.id,
@@ -11942,6 +11972,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         message: outcome.message,
       }
     },
+    onReviewCommand: runVoiceReviewCommand,
   })
   useLayoutEffect(() => {
     voiceOutcomeRef.current = voice.reportOutcome
