@@ -2752,6 +2752,107 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
+  it('keeps captions, composer and review reachable at desktop, phone and short heights', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    const prompt = 'extract audio from b2 and use it to replace the audio on the video in c4'
+    mockedChatActionPlan = {
+      prompt,
+      value: {
+        kind: 'chat-action-plan',
+        planId: '01900000-0000-7000-8000-000000000302',
+        bookId,
+        prompt,
+        routedTool: 'chain',
+        tool: 'chain',
+        params: {
+          action: 'run',
+          version: 1,
+          book_id: bookId,
+          steps: [
+            { id: 'extract', tool: 'extract_audio', params: { asset_id: '@b2' } },
+            {
+              id: 'replace',
+              tool: 'replace_video_audio',
+              params: {
+                asset_id: '@c4',
+                audio_asset_id: {
+                  $ref: { step_id: 'extract', output: 'audio_asset_id' },
+                },
+              },
+            },
+          ],
+        },
+        message: 'Extracting audio and replacing the target soundtrack.',
+        summary: 'Extracting audio and replacing the target soundtrack.',
+        effect: 'mutation',
+        confirmation: {
+          required: true,
+          reason: 'This request changes the current book',
+        },
+      },
+    }
+    try {
+      await openApp()
+      const input = page.getByLabel('Videobook command input')
+      await input.waitFor({ state: 'visible', timeout: 30_000 })
+      await expect.poll(async () => await input.isEnabled(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(true)
+      await expect.poll(async () => await page.getByLabel('Start voice conversation').isEnabled(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(true)
+      await page.getByLabel('Start voice conversation').click()
+      await page.getByLabel('Voice comms').waitFor({ state: 'visible', timeout: 15_000 })
+      await input.fill(prompt)
+      await page.getByLabel('Send command').click()
+      const review = page.getByLabel('Chat action review')
+      await review.waitFor({ state: 'visible', timeout: 30_000 })
+      expect(await page.locator('.command-control-kind', { hasText: 'Chat' }).count())
+        .toBeGreaterThan(0)
+      expect(await page.locator('.command-control-kind', { hasText: 'Voice' }).count())
+        .toBeGreaterThan(0)
+      const captions = page.locator('.voice-captions')
+      expect(await page.getByLabel('Hide captions').isVisible()).toBe(true)
+      expect(await captions.isVisible()).toBe(true)
+      await page.getByLabel('Hide captions').click()
+      expect(await captions.isVisible()).toBe(false)
+      expect(await review.getByRole('button', { name: 'Apply' }).count()).toBe(1)
+      await page.getByLabel('Show captions').click()
+      expect(await captions.isVisible()).toBe(true)
+      for (const viewport of [
+        { width: 1440, height: 1000 },
+        { width: 390, height: 844 },
+        { width: 320, height: 640 },
+        { width: 640, height: 320 },
+      ]) {
+        await page.setViewportSize(viewport)
+        expect(await page.evaluate(() =>
+          document.documentElement.scrollWidth - document.documentElement.clientWidth))
+          .toBeLessThanOrEqual(1)
+        const apply = review.getByRole('button', { name: 'Apply' })
+        const cancel = review.getByRole('button', { name: /Cancel/ })
+        expect(await apply.isVisible()).toBe(true)
+        expect(await cancel.isVisible()).toBe(true)
+        expect(await page.getByLabel('Send command').isVisible()).toBe(true)
+        expect(await page.getByLabel('Start voice conversation').or(page.getByLabel('Stop voice conversation')).isVisible()).toBe(true)
+        const applyBox = await apply.boundingBox()
+        expect(applyBox).not.toBeNull()
+        expect(applyBox!.y).toBeGreaterThanOrEqual(0)
+        expect(applyBox!.y + applyBox!.height).toBeLessThanOrEqual(viewport.height)
+        expect(applyBox!.x + applyBox!.width).toBeLessThanOrEqual(viewport.width)
+        if (viewport.width === 1440 || viewport.width === 390) {
+          await page.screenshot({ path: `test-results/voice/review-layout-${viewport.width}.png` })
+        }
+      }
+      expect(await review.getByRole('button', { name: 'Apply' }).count()).toBe(1)
+      expect((await input.innerText()).length).toBeGreaterThan(0)
+      await page.setViewportSize({ width: 1440, height: 1000 })
+    } finally {
+      mockedChatActionPlan = null
+      await page?.setViewportSize({ width: 1440, height: 1000 }).catch(() => undefined)
+    }
+  }, 60_000)
+
   it('starts cell-level image and video generation without chat review', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()

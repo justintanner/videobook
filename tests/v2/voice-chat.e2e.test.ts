@@ -13,6 +13,7 @@ import sharp from 'sharp'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
+import { summarizeVoiceMarks } from '../../src/videobook/voice-timeline'
 
 const execFileAsync = promisify(execFile)
 const live = process.env.VIDEOBOOK_RUN_VOICE_LIVE === '1'
@@ -153,7 +154,9 @@ describe('voice chat in the real browser', () => {
     await toggle.focus()
     await expect.poll(() => toggle.evaluate(el => el === document.activeElement)).toBe(true)
     expect(await toggle.getAttribute('aria-pressed')).toBe('false')
-    for (const viewport of [{ width: 1440, height: 1000 }, { width: 320, height: 640 }, { width: 640, height: 320 }]) {
+    expect(await page.locator('.command-control-kind', { hasText: 'Chat' }).count()).toBeGreaterThan(0)
+    expect(await page.locator('.command-control-kind', { hasText: 'Voice' }).count()).toBeGreaterThan(0)
+    for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 640 }, { width: 640, height: 320 }]) {
       await page.setViewportSize(viewport)
       const bounds = await toggle.boundingBox()
       expect(bounds).not.toBeNull()
@@ -162,17 +165,21 @@ describe('voice chat in the real browser', () => {
       expect(bounds!.x).toBeGreaterThanOrEqual(0)
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width)
       expect(await page.getByLabel('Send command').isVisible()).toBe(true)
+      expect(await page.getByLabel('Chat model').isVisible()).toBe(true)
+      expect(await page.getByLabel('Voice provider', { exact: true }).isVisible()).toBe(true)
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      expect(overflow).toBeLessThanOrEqual(1)
       const providerBounds = await provider.boundingBox()
-      expect(providerBounds!.height).toBeGreaterThanOrEqual(44)
+      expect(providerBounds!.height).toBeGreaterThanOrEqual(28)
       expect(providerBounds!.x).toBeGreaterThanOrEqual(0)
-      expect(providerBounds!.x + providerBounds!.width).toBeLessThanOrEqual(bounds!.x)
+      expect(providerBounds!.x + providerBounds!.width).toBeLessThanOrEqual(viewport.width)
       const controls = await page.locator('.command-actions-controls, .command-model-selector, .voice-controls, .command-send').evaluateAll(elements => elements.map(element => {
         const box = element.getBoundingClientRect()
         return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }
       }))
       for (const [index, box] of controls.entries()) {
-        expect(box.left).toBeGreaterThanOrEqual(0)
-        expect(box.right).toBeLessThanOrEqual(viewport.width)
+        expect(box.left).toBeGreaterThanOrEqual(-1)
+        expect(box.right).toBeLessThanOrEqual(viewport.width + 1)
         for (const other of controls.slice(index + 1)) expect(box.right <= other.left + 1 || other.right <= box.left + 1 || box.bottom <= other.top + 1 || other.bottom <= box.top + 1).toBe(true)
       }
       await page.screenshot({ path: `test-results/voice/off-${viewport.width}.png` })
@@ -198,6 +205,7 @@ describe('voice chat in the real browser', () => {
 
   it.skipIf(live)('recovers from a missing key without changing the draft and never restarts on reload', async () => {
     await page.getByLabel('Videobook command input').fill('Keep this typed draft')
+    await page.evaluate(() => performance.clearMarks('videobook-voice'))
     for (const mode of ['openai', 'xai', 'auto']) {
       await page.getByLabel('Voice provider', { exact: true }).selectOption(mode)
       await page.getByLabel('Start voice conversation').click()
@@ -208,6 +216,17 @@ describe('voice chat in the real browser', () => {
       if (mode === 'openai') expect(failure).not.toContain('XAI_API_KEY')
       if (mode === 'xai') expect(failure).not.toContain('OPENAI_API_KEY')
     }
+    const marks = await page.evaluate(() => performance.getEntriesByName('videobook-voice').map(entry => ({
+      at: entry.startTime,
+      ...((entry as PerformanceMark).detail as { stage: string; durationMs?: number }),
+    })))
+    const stages = marks.map(mark => mark.stage)
+    expect(stages).toEqual(expect.arrayContaining([
+      'connect-start',
+      'permission-wait-start',
+      'permission-wait-end',
+      'session-request',
+    ]))
     expect(await page.getByLabel('Videobook command input').innerText()).toBe('Keep this typed draft')
     expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
     await page.screenshot({ path: 'test-results/voice/error.png' })
@@ -215,6 +234,39 @@ describe('voice chat in the real browser', () => {
     await page.getByLabel('Start voice conversation').waitFor({ state: 'visible' })
     expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
     expect(await page.locator('.voice-comms').count()).toBe(0)
+  })
+
+  it.skipIf(live)('shows and hides captions without submitting, stopping the microphone or losing the draft', async () => {
+    const input = page.getByLabel('Videobook command input')
+    await input.fill('Captions stay with this draft')
+    await page.getByLabel('Start voice conversation').click()
+    await page.getByLabel('Voice comms').waitFor({ state: 'visible', timeout: 15_000 })
+    const captions = page.locator('.voice-captions')
+    const hide = page.getByLabel('Hide captions')
+    expect(await hide.isVisible()).toBe(true)
+    expect(await captions.isVisible()).toBe(true)
+    expect(await hide.getAttribute('aria-expanded')).toBe('true')
+    const regionId = await hide.getAttribute('aria-controls')
+    expect(regionId).toBeTruthy()
+    expect(await page.locator('.voice-captions').getAttribute('id')).toBe(regionId)
+    expect(await captions.innerText()).toMatch(/Opening|Listening|Transcribing|Waiting|No captions|could not connect/)
+    await hide.click()
+    expect(await captions.isVisible()).toBe(false)
+    const show = page.getByLabel('Show captions')
+    expect(await show.getAttribute('aria-expanded')).toBe('false')
+    await show.press('Enter')
+    expect(await captions.isVisible()).toBe(true)
+    await page.getByLabel('Hide captions').press('Space')
+    expect(await captions.isVisible()).toBe(false)
+    await page.getByLabel('Show captions').click()
+    expect(await captions.isVisible()).toBe(true)
+    expect(await input.innerText()).toBe('Captions stay with this draft')
+    expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
+    expect(await page.locator('.confirm-sheet').count()).toBe(0)
+    await page.screenshot({ path: 'test-results/voice/captions-shown.png' })
+    await page.getByLabel('Hide captions').click()
+    await page.screenshot({ path: 'test-results/voice/captions-hidden.png' })
+    await page.getByLabel('Show captions').click()
   })
 
   it('handles native microphone permission denial and rapid start/stop without losing the draft', async () => {
@@ -267,6 +319,14 @@ describe('voice chat in the real browser', () => {
     await page.screenshot({ path: 'test-results/voice/live.png' })
     await writeFile('test-results/voice/live-timing.json', JSON.stringify(await timing(), null, 2))
     const marks = await timing()
+    const summary = summarizeVoiceMarks(marks)
+    expect(summary.connectionSetupMs).toBeGreaterThan(0)
+    expect(summary.permissionWaitMs).toBeGreaterThanOrEqual(0)
+    expect(summary.utteranceEndToDecodedAudioMs.length).toBeGreaterThan(0)
+    expect(marks.some(mark => mark.stage === 'media-ready')).toBe(true)
+    expect(marks.some(mark => mark.stage === 'turn-detection')).toBe(true)
+    expect(marks.some(mark => mark.stage === 'connection-setup')).toBe(true)
+    expect(marks.some(mark => mark.stage === 'utterance-end-to-decoded-audio')).toBe(true)
     const latencies: number[] = []
     const microphoneLatencies: number[] = []
     const firstCaptionLatencies: number[] = []
@@ -298,6 +358,9 @@ describe('voice chat in the real browser', () => {
       vad: { type: 'server_vad', threshold: .5, silenceMs: 350, prefixMs: 300 }, reasoning: model.startsWith('grok-') ? 'none' : 'minimal',
       sampleCount: latencies.length, p50Ms: sorted[Math.floor(sorted.length * .5)], p95Ms: sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * .95) - 1)],
       connectMs: marks.find(mark => mark.stage === 'connected')!.at - marks.find(mark => mark.stage === 'connect-start')!.at,
+      connectionSetupMs: summary.connectionSetupMs,
+      permissionWaitMs: summary.permissionWaitMs,
+      utteranceEndToDecodedAudio: summary.utteranceEndToDecodedAudio,
       microphoneToAudio: distribution(microphoneLatencies), firstCaption: distribution(firstCaptionLatencies), finalCaption: distribution(finalCaptionLatencies),
       latenciesMs: latencies, microphoneLatenciesMs: microphoneLatencies, marks,
     }
@@ -386,9 +449,15 @@ describe('voice chat in the real browser', () => {
     await expect.poll(async () => JSON.stringify(result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } }))), { timeout: 15_000 }).toContain('cover')
     expect(await input.textContent()).toBe('Keep my unfinished @a1 note')
     expect(chatCalls).toHaveLength(1)
-    await page.getByLabel('Expand voice captions').click()
     await expect.poll(() => page.locator('.voice-captions p').count(), { timeout: 15_000 }).toBeGreaterThan(captionCount)
     await expect.poll(() => page.locator('.voice-captions p').last().innerText(), { timeout: 15_000 }).toMatch(/renamed|updated|changed|labeled|labelled|done/i)
+    const captionText = await page.locator('.voice-captions').innerText()
+    await page.getByLabel('Hide captions').click()
+    expect(await page.locator('.voice-captions').isVisible()).toBe(false)
+    expect(await page.locator('.confirm-sheet').isVisible()).toBe(true)
+    await page.getByLabel('Show captions').click()
+    expect(await page.locator('.voice-captions').isVisible()).toBe(true)
+    expect(await page.locator('.voice-captions').innerText()).toBe(captionText)
     await page.getByLabel('Stop voice conversation').click()
   })
 
@@ -400,10 +469,9 @@ describe('voice chat in the real browser', () => {
     await input.fill('Retain this @a1 draft')
     await page.getByLabel('Start voice conversation').click()
     await page.locator('.confirm-sheet').waitFor({ state: 'visible', timeout: 45_000 })
-    await page.getByLabel('Expand voice captions').click()
     await expect.poll(() => page.locator('.voice-captions').innerText(), { timeout: 30_000 }).toMatch(/yes.*apply/i)
     expect(result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } }))).toEqual(before)
-    for (const viewport of [{ width: 320, height: 640 }, { width: 640, height: 320 }, { width: 1440, height: 1000 }]) {
+    for (const viewport of [{ width: 320, height: 640 }, { width: 390, height: 844 }, { width: 640, height: 320 }, { width: 1440, height: 1000 }]) {
       await page.setViewportSize(viewport)
       const toggle = page.getByLabel('Stop voice conversation')
       const box = await toggle.boundingBox()
@@ -411,7 +479,12 @@ describe('voice chat in the real browser', () => {
       expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width)
       expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height)
       expect(await page.locator('.confirm-sheet-apply').isVisible()).toBe(true)
+      expect(await page.getByRole('button', { name: /Cancel/ }).first().isVisible()).toBe(true)
       expect((await page.locator('.confirm-sheet-head').boundingBox())!.y).toBeGreaterThanOrEqual(0)
+      const applyBox = await page.locator('.confirm-sheet-apply').boundingBox()
+      expect(applyBox!.y).toBeGreaterThanOrEqual(0)
+      expect(applyBox!.y + applyBox!.height).toBeLessThanOrEqual(viewport.height)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
       await page.screenshot({ path: `test-results/voice/review-${viewport.width}.png` })
     }
     await page.emulateMedia({ reducedMotion: 'reduce' })

@@ -863,6 +863,7 @@ export function CommandComposer({
             className="command-model-selector"
             title={selectedModelOption?.description}
           >
+            <span className="command-control-kind">Chat</span>
             <Bot size={13} aria-hidden="true" />
             <select
               value={selectedModel}

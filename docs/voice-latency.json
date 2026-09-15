@@ -1,4 +1,46 @@
 {
+  "primaryMetrics": {
+    "connectionSetup": {
+      "metric": "Start click to genuinely usable capture/media transport (performance mark connection-setup). Microphone permission wait is itemized separately as permission-wait-end.durationMs and is not the transport budget.",
+      "before": {
+        "source": "selectedModelRepeat connect-start to connected, 2026-09-14 Chrome 152 local Vite",
+        "sampleCount": 20,
+        "p50Ms": 2483.800000011921,
+        "note": "Historical connectMs includes permission wait; live re-measurement of the split metrics is unverified in this session."
+      },
+      "afterTargetMs": { "p95": 2000 },
+      "liveThisSession": "unverified"
+    },
+    "utteranceEndToDecodedAudio": {
+      "metric": "Last in-graph microphone sample above the signal threshold to first decoded assistant audio (performance mark utterance-end-to-decoded-audio). No physical speaker or loopback latency is claimed.",
+      "before": {
+        "source": "selectedModelRepeat microphoneToAudio, 2026-09-14 Chrome 152 local Vite",
+        "sampleCount": 20,
+        "p50Ms": 1366.699999988079,
+        "p95Ms": 1550
+      },
+      "afterTargetMs": { "p95": 1500 },
+      "localAcknowledgementTargetMs": 100,
+      "liveThisSession": "unverified"
+    }
+  },
+  "stages": [
+    "connect-start",
+    "permission-wait-start",
+    "permission-wait-end",
+    "session-request",
+    "provider-ready",
+    "fallback",
+    "media-ready",
+    "connection-setup",
+    "turn-detection",
+    "caption-first",
+    "caption-final",
+    "first-audio",
+    "utterance-end-to-decoded-audio",
+    "action-review",
+    "acknowledgement"
+  ],
   "metric": "Browser receipt of server VAD speech_stopped to first nonzero decoded output; excludes VAD silence, uplink and physical speaker latency",
   "selectedModel": "gpt-realtime-2.1",
   "conditions": "Local development machine, unthrottled WebRTC, four prerecorded requests repeated five times; local checks may share CPU; no provider guarantee",

@@ -9857,10 +9857,10 @@ textarea:focus-visible {
 
 .command-model-selector {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 5px;
-  min-width: 126px;
+  min-width: 138px;
   height: 32px;
   padding: 0 7px;
   border: 1px solid rgba(99, 199, 216, 0.24);
@@ -10648,12 +10648,12 @@ textarea:focus-visible {
   }
 
   .command-model-selector {
-    grid-template-columns: auto auto;
-    min-width: 96px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-width: 108px;
     padding: 0 5px;
   }
 
-  .command-model-selector > svg:first-child,
+  .command-model-selector > svg:first-of-type,
   .mcp-activity-state {
     display: none;
   }

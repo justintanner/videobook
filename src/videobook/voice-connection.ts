@@ -1,5 +1,6 @@
 import type { VoiceCaption, VoiceMode, VoiceOutcome, VoicePhase, VoiceProvider, VoiceSessionDescriptor, VoiceSessionEvent } from '../../server/src/voice-contract'
 import { VoicePcm } from './voice-pcm'
+import { VoiceTimeline } from './voice-timeline'
 
 interface VoiceConnectionOptions {
   bookId: string
@@ -48,6 +49,7 @@ export class VoiceConnection {
   private outcomes = Promise.resolve()
   private phase: VoicePhase = 'connecting'
   private cleanupListeners: Array<() => void> = []
+  private timeline = new VoiceTimeline()
 
   private options: VoiceConnectionOptions
 
@@ -59,7 +61,7 @@ export class VoiceConnection {
   }
 
   private mark(stage: string, fields?: Record<string, unknown>) {
-    performance.mark('videobook-voice', { detail: { stage, model: this.descriptor?.model, ...fields } })
+    this.timeline.mark(stage, { model: this.descriptor?.model, ...fields })
   }
 
   private listen(target: EventTarget, name: string, listener: EventListener, capture = false) {
@@ -74,7 +76,7 @@ export class VoiceConnection {
         throw new Error('Voice needs a browser with microphone support on HTTPS or localhost.')
       }
       this.updatePhase('connecting')
-      this.mark('connect-start')
+      this.timeline.connectStart()
       this.deadline = window.setTimeout(() => this.stop('Voice connection timed out. Start voice to retry.', true), this.options.mode === 'auto' ? 80_000 : 30_000)
       this.context = new AudioContext({ latencyHint: 'interactive', sampleRate: 48_000 })
       void this.context.resume().then(() => { if (!this.stopped) this.mark('audio-context-running') }).catch(() => { if (!this.stopped) this.options.onPlaybackBlocked(true) })
@@ -88,7 +90,10 @@ export class VoiceConnection {
       this.listen(document, 'visibilitychange', () => { if (document.hidden) this.stop('Comms off while the page is hidden.') })
       this.listen(window, 'pagehide', () => this.stop())
       this.listen(window, 'offline', () => this.stop('You are offline. Start voice after reconnecting.', true))
-      const microphone = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
+      this.timeline.permissionWaitStart()
+      const microphone = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false }).finally(() => {
+        this.timeline.permissionWaitEnd()
+      })
       if (this.stopped) { microphone.getTracks().forEach(track => track.stop()); this.mark('microphone-released', { ended: microphone.getTracks().every(track => track.readyState === 'ended') }); return }
       this.microphone = microphone
       const peer = new RTCPeerConnection()
@@ -127,12 +132,14 @@ export class VoiceConnection {
         if (this.stopped) return
         window.clearTimeout(this.deadline)
         this.mark('connected')
+        this.timeline.mediaReady()
         this.updatePhase('listening')
       })
       this.listen(this.channel, 'close', () => { if (!this.stopped) this.stop('Voice channel closed. Start voice again.', true) })
       this.measure()
       await peer.setLocalDescription(await peer.createOffer())
       if (this.stopped) return
+      this.timeline.sessionRequest()
       const response = await fetch('/api/voice', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookId: this.options.bookId, notebookId: this.options.notebookId, mode: this.options.mode, sampleRate: this.context.sampleRate, sdp: peer.localDescription?.sdp }),
@@ -141,6 +148,12 @@ export class VoiceConnection {
       const result = await response.json() as VoiceSessionDescriptor & { error?: string }
       if (!response.ok) throw new Error(result.error ?? 'Voice could not connect. Try again.')
       this.descriptor = result
+      this.timeline.providerReady({
+        provider: result.provider,
+        transport: result.transport,
+        model: result.model,
+        fallbackReason: result.fallbackReason,
+      })
       if (this.stopped) { this.releaseSession(); return }
       this.options.onProvider(result.provider, result.fallbackReason)
       if (result.transport === 'pcm') {
@@ -162,7 +175,12 @@ export class VoiceConnection {
         })
         void this.readEvents(result)
         await this.pcm.start(result, this.abort.signal)
-        if (!this.stopped) { window.clearTimeout(this.deadline); this.mark('connected'); this.updatePhase('listening') }
+        if (!this.stopped) {
+          window.clearTimeout(this.deadline)
+          this.mark('connected')
+          this.timeline.mediaReady()
+          this.updatePhase('listening')
+        }
         return
       }
       void this.readEvents(result)
@@ -188,6 +206,7 @@ export class VoiceConnection {
       this.updatePhase(this.review ? 'review' : 'listening')
     } else if (event.type === 'input_audio_buffer.speech_stopped') {
       this.mark('speech-stop', { microphoneSignalEndedAt: this.lastMicrophoneSignalAt })
+      this.timeline.turnDetection(this.lastMicrophoneSignalAt)
       this.updatePhase(this.review ? 'review' : 'thinking')
     } else if (event.type === 'output_audio_buffer.started') {
       this.outputResponseId = typeof event.response_id === 'string' ? event.response_id : null
@@ -213,7 +232,10 @@ export class VoiceConnection {
       this.outputMeter?.getFloatTimeDomainData(output)
       if (rms(input) > .008) this.lastMicrophoneSignalAt = performance.now()
       const level = Math.min(1, Math.max(rms(input), this.playing ? rms(output) : 0) * 5)
-      if (this.awaitingAudio && rms(output) > .002 && this.context?.state === 'running') { this.mark('first-audio'); this.awaitingAudio = false }
+      if (this.awaitingAudio && rms(output) > .002 && this.context?.state === 'running') {
+        this.timeline.firstDecodedAudio(this.lastMicrophoneSignalAt)
+        this.awaitingAudio = false
+      }
       if (this.awaitingSilence && rms(output) < .002) { this.mark('local-silence'); this.awaitingSilence = false }
       this.options.onLevel(level)
       this.frame = requestAnimationFrame(sample)
@@ -303,6 +325,7 @@ export class VoiceConnection {
   }
 
   private acknowledge(callId: string, outcome: VoiceOutcome) {
+    this.timeline.acknowledgement(outcome.status)
     this.outcomes = this.outcomes.then(() => this.post('outcome', { callId, outcome }))
     return this.outcomes
   }
