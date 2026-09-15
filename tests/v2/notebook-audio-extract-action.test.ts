@@ -2,12 +2,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createEngine, type Engine, type NotebookDocument } from "videobook-engine";
+import { createEngine, type Engine } from "videobook-engine";
 import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../../server/src/test-media-fixtures.js";
 import { registerExtractNotebookAudioJob } from "../../server/src/jobs/extract-notebook-audio.js";
 import { setEngineRoot, stopBookQueue, waitForJob } from "../../server/src/queue.js";
 import { extractNotebookAudioDef } from "../../server/src/tools/extract-notebook-audio.js";
-import { migrateLegacyExtractAudioCells } from "../../server/src/notebook-cell-outputs.js";
 import type { ToolDef } from "../../server/src/tools/tool-def.js";
 
 function resultJson(result: Awaited<ReturnType<ToolDef["handler"]>>): Record<string, unknown> {
@@ -15,7 +14,17 @@ function resultJson(result: Awaited<ReturnType<ToolDef["handler"]>>): Record<str
   return JSON.parse(result.content[0]!.text) as Record<string, unknown>;
 }
 
-describe("extract_audio action and alias", () => {
+/**
+ * The half of extract_audio that has to be real: the tool enqueues a job, and
+ * the audio it produces carries where it came from and which slice it took.
+ * Reading a legacy extract_audio cell back as audio is a pure document rewrite
+ * and lives in notebook-extract-audio-alias.test.ts.
+ *
+ * Runs FFmpeg through the book queue, so it takes the 60s budget its siblings
+ * use (notebook-audio-command.test.ts) rather than the 30s default — under a
+ * full-suite run another worker's encoders can starve it well past 30s.
+ */
+describe("extract_audio action", () => {
   let rootDir: string | undefined;
   let engine: Engine | undefined;
   let bookId: string | undefined;
@@ -28,7 +37,7 @@ describe("extract_audio action and alias", () => {
     }
   });
 
-  it("aliases extract_audio cells to audio on read and records source+range provenance", async () => {
+  it("records source and range provenance on the audio it extracts", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-extract-audio-action-"));
     engine = createEngine({ rootDir, initialBookName: "extract-audio" });
     await engine.ready;
@@ -57,35 +66,12 @@ describe("extract_audio action and alias", () => {
       slot: { row: 0, column: 0 },
       outputArtifactId: video.value.artifactId,
     });
-    const extract = engine.notebooks.createCell({
-      type: "extract_audio",
-      label: "Legacy extract",
-      slot: { row: 1, column: 0 },
-      operation: "extract_audio",
-      tool: "ffmpeg",
-    });
-    const document: NotebookDocument = {
+    const written = await engine.notebooks.write({
       ...notebook.value,
-      cells: [source, extract],
-      edges: [
-        engine.notebooks.createEdge({
-          source: source.id,
-          target: extract.id,
-          targetInput: "video",
-        }),
-      ],
-    };
-    const written = await engine.notebooks.write(document);
-    expect(written.ok).toBe(true);
-    const aliased = migrateLegacyExtractAudioCells(document);
-    const audioCell = aliased.cells.find((cell) => cell.id === extract.id);
-    expect(audioCell).toMatchObject({
-      type: "audio",
-      inputs: expect.objectContaining({
-        mediaRole: "extract-audio-output",
-        sourceCellId: source.id,
-      }),
+      cells: [source],
+      edges: [],
     });
+    expect(written.ok).toBe(true);
 
     const tool = extractNotebookAudioDef(engine);
     const created = resultJson(await tool.handler({
@@ -98,6 +84,7 @@ describe("extract_audio action and alias", () => {
     expect(typeof created.cell_id).toBe("string");
     expect(typeof created.job_id).toBe("string");
     await waitForJob(String(created.job_id));
+
     const after = engine.notebooks.read(notebook.value.id);
     expect(after.ok).toBe(true);
     if (!after.ok) return;
@@ -121,5 +108,5 @@ describe("extract_audio action and alias", () => {
         sourceArtifactId: video.value.artifactId,
       }));
     }
-  });
+  }, 60_000);
 });
