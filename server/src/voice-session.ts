@@ -87,7 +87,7 @@ interface VoiceTurn {
 
 const actionSchema = z.object({ tool: z.string().min(1).max(120), params: z.record(z.string(), z.unknown()) }).strict();
 const discoverySchema = z.object({ query: z.string().min(1).max(160) }).strict();
-const reviewSchema = z.object({ decision: z.enum(["apply", "cancel", "revise"]), prompt: z.string().max(8000).optional() }).strict();
+const reviewSchema = z.object({ decision: z.enum(["apply", "cancel", "revise"]), prompt: z.string().max(8000).optional(), model: z.string().max(200).optional(), settings: z.record(z.string().max(120), z.union([z.string().max(400), z.number(), z.boolean()])).optional() }).strict();
 
 export class VoiceSession {
   readonly id = randomUUID();

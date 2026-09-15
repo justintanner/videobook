@@ -481,7 +481,11 @@ import {
   parsePendingApplyCommand,
   pendingCommandVoiceOutcome,
 } from '@/videobook/command-composer-outcome'
-import { planVoiceReviewCommand } from '@/videobook/voice-review-command'
+import {
+  planVoiceReviewCommand,
+  type PendingReview,
+  type VoiceReviewEdit,
+} from '@/videobook/voice-review-command'
 import { revealNotebookResult } from '@/videobook/notebook-result-reveal'
 import {
   notebookAddressExpectationsAreStale,
@@ -11928,25 +11932,57 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   // the same composer commands the sheet's own buttons do, so the two routes
   // cannot drift; revise changes the prompt and leaves the review open, which
   // is what lets someone shape a generation by voice before paying for it.
+  // Every edit lands on one draft and one state write: two settings revised in
+  // the same breath would otherwise each start from the draft as it was before
+  // the call, and the second would drop the first.
+  const applyVoiceReviewEdits = (edits: readonly VoiceReviewEdit[]) => {
+    if (!pendingGenerationDraft) return
+    let draft = pendingGenerationDraft
+    let refreshPreview = false
+    for (const edit of edits) {
+      if (edit.kind === 'prompt') {
+        draft = reviseNotebookChatGenerationPrompt(draft, edit.prompt)
+        continue
+      }
+      if (edit.kind === 'model') {
+        const action = pendingGenerationActionOptions.find((candidate) =>
+          candidate.id === edit.actionId)
+        if (!action) continue
+        draft = reviseNotebookChatGenerationAction(
+          draft,
+          action,
+          pendingGenerationConnectedInputs,
+        )
+        refreshPreview = true
+        continue
+      }
+      draft = reviseNotebookChatGenerationSetting(draft, edit.name, edit.value)
+      refreshPreview = true
+    }
+    setPendingGenerationDraft(draft, refreshPreview)
+  }
   const runVoiceReviewCommand = async (
     command: VoiceReviewCommand,
   ): Promise<VoiceOutcome> => {
-    const plan = planVoiceReviewCommand(
-      command,
-      pendingChatAction?.kind === 'generation'
-        ? 'generation'
-        : pendingChatAction || pendingCommandPlan || pendingWatermarkReview
-          ? 'other'
-          : 'none',
-    )
+    const pending: PendingReview = pendingChatAction?.kind === 'generation'
+      && pendingGenerationDraft
+      ? {
+          kind: 'generation',
+          action: pendingGenerationDraft.action,
+          models: pendingGenerationActionOptions,
+        }
+      : pendingChatAction || pendingCommandPlan || pendingWatermarkReview
+        ? { kind: 'other' }
+        : { kind: 'none' }
+    const plan = planVoiceReviewCommand(command, pending)
     if (plan.kind === 'refused') return plan.outcome
     if (plan.kind === 'revise') {
-      updatePendingGenerationPrompt(plan.prompt)
-      // The sheet shows the new wording, so the outcome stays short rather than
-      // handing the model a long prompt to read back.
+      applyVoiceReviewEdits(plan.edits)
+      // The sheet shows every change, so the outcome stays short rather than
+      // handing the model its own edit to read back.
       return {
         status: 'review',
-        message: 'The prompt on screen is updated. The review is still waiting for apply or cancel.',
+        message: 'The review on screen is updated. It is still waiting for apply or cancel.',
       }
     }
     return pendingCommandVoiceOutcome(

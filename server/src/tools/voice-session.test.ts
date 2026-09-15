@@ -146,14 +146,22 @@ describe("voice session boundaries", () => {
     const review = session.tools?.find(tool => "name" in tool && tool.name === "resolve_pending_review");
     expect(review).toMatchObject({
       parameters: {
-        properties: { decision: { enum: ["apply", "cancel", "revise"] } },
+        properties: {
+          decision: { enum: ["apply", "cancel", "revise"] },
+          prompt: { type: "string" },
+          model: { type: "string" },
+          settings: { type: "object", additionalProperties: { type: ["string", "number", "boolean"] } },
+        },
         required: ["decision"],
         additionalProperties: false,
       },
     });
+    // A setting written into the prompt reads fine and changes nothing, so the
+    // instructions have to separate the two explicitly.
+    expect(session.instructions).toContain("resolve_pending_review is the only action available");
+    expect(session.instructions).toMatch(/put those in settings, never in prompt text/u);
     // Applying spends money, so the instructions have to say both that voice
     // can do it and that ambiguous speech is not approval.
-    expect(session.instructions).toContain("resolve_pending_review is the only action available");
     expect(session.instructions).toMatch(/Apply or cancel only on a clear instruction/u);
     expect(session.instructions).toMatch(/Applying spends money/u);
   });

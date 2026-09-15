@@ -10,10 +10,16 @@ export interface VoiceCaption {
   interrupted?: boolean;
 }
 
-/** What the speaker asked for about the review already on screen. */
+/**
+ * What the speaker asked for about the review already on screen. A revise may
+ * change the prompt, the model, any of the review's own settings, or several
+ * at once; apply and cancel resolve it.
+ */
 export interface VoiceReviewCommand {
   decision: "apply" | "cancel" | "revise";
   prompt?: string;
+  model?: string;
+  settings?: Record<string, string | number | boolean>;
 }
 
 export interface VoiceOutcome {
