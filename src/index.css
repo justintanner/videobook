@@ -9801,83 +9801,218 @@ textarea:focus-visible {
   color: #ffaaaa;
 }
 
-.mcp-activity {
+/* The MCP call log. One row per call, sitting on the panel's 20px spine with no
+   border, radius or background of its own -- like the transcript and the command
+   line, this is a section of the panel, not a box on it. A collapsed row is 32px:
+   the panel's secondary tier, and the height the old transient strip used, so
+   nothing below it shifts as calls arrive and settle. */
+.mcp-calls {
   order: 2;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  min-height: 0;
+  max-height: min(232px, 28dvh);
+  padding: 0 19px 0 17px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  animation: mcp-activity-enter 180ms ease-out both;
+}
+
+/* The row negates the spine and re-applies it as padding, so its hover reaches
+   the panel's edges the way a list row should. */
+.mcp-call-head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
+  width: calc(100% + 36px);
   min-height: 32px;
+  margin: 0 -19px 0 -17px;
   padding: 0 19px 0 17px;
   border: 0;
-  color: #8fcbd3;
+  color: #789d8b;
   background: transparent;
+  font: inherit;
   font-size: 11px;
-  animation: mcp-activity-enter 180ms ease-out both;
+  text-align: left;
+  cursor: pointer;
 }
 
-.mcp-activity-success {
-  color: #8edeb3;
+.mcp-call-head:hover {
+  background: var(--row-bg-hover);
 }
 
-.mcp-activity-error {
-  color: #f3a0a0;
+.mcp-call-head:hover .mcp-call-name {
+  color: var(--row-fg-hover);
 }
 
-.mcp-activity-signal {
+.mcp-call-head:hover .mcp-call-chevron {
+  color: #9ee0ba;
+}
+
+.mcp-call-head:focus-visible {
+  outline: 1px solid var(--green);
+  outline-offset: -2px;
+}
+
+.mcp-call-signal {
   display: inline-flex;
   align-items: end;
   gap: 2px;
   width: 16px;
   height: 12px;
+  color: #4e6c5b;
 }
 
-.mcp-activity-signal i {
+.mcp-call-signal i {
   width: 3px;
-  height: 35%;
+  height: 70%;
   background: currentColor;
   box-shadow: 0 0 7px currentColor;
+}
+
+/* In flight is the only row that animates, and one of only two that carry any
+   colour at all. A finished row is quiet: the elapsed time is its whole report. */
+.mcp-call-running .mcp-call-signal {
+  color: #8fcbd3;
+}
+
+.mcp-call-running .mcp-call-signal i {
+  height: 35%;
   animation: mcp-signal-rise 720ms ease-in-out infinite alternate;
 }
 
-.mcp-activity-signal i:nth-child(2) {
+.mcp-call-running .mcp-call-signal i:nth-child(2) {
   animation-delay: 120ms;
 }
 
-.mcp-activity-signal i:nth-child(3) {
+.mcp-call-running .mcp-call-signal i:nth-child(3) {
   animation-delay: 240ms;
 }
 
-.mcp-activity-success .mcp-activity-signal i,
-.mcp-activity-error .mcp-activity-signal i {
-  height: 70%;
-  animation: none;
+.mcp-call-failed .mcp-call-signal {
+  color: #f3a0a0;
 }
 
-.mcp-activity-copy {
+/* The strip read MCP bright and the tool name dim, which was right while it was
+   a status message. A row that stays is content, so the emphasis inverts: the
+   tool name is what you scan, MCP recedes to the channel it arrived on. */
+.mcp-call-copy {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 9px;
 }
 
-.mcp-activity-copy strong {
+.mcp-call-channel {
   flex: 0 0 auto;
-  color: currentColor;
+  color: var(--muted);
   font-size: 11px;
   letter-spacing: 0.14em;
 }
 
-.mcp-activity-copy span {
+.mcp-call-name {
+  min-width: 0;
   overflow: hidden;
-  color: #789d8b;
+  color: #bce6cf;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.mcp-activity-state {
-  color: currentColor;
+.mcp-call-trail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mcp-call-state {
+  color: #789d8b;
   font-size: 11px;
+  white-space: nowrap;
+}
+
+.mcp-call-running .mcp-call-state {
+  color: #8fcbd3;
+}
+
+.mcp-call-failed .mcp-call-state {
+  color: #f3a0a0;
+}
+
+.mcp-call-chevron {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition:
+    transform 140ms ease,
+    color 140ms ease;
+}
+
+.mcp-call-head[aria-expanded='false'] .mcp-call-chevron {
+  transform: rotate(-90deg);
+}
+
+/* Read-only detail, flush rather than boxed: the command input this panel is
+   built around carries no border either. The hairline brackets the disclosure
+   to the row it belongs to. */
+.mcp-call-body {
+  margin: 9px 0 0 26px;
+  padding: 0 0 6px 17px;
+  border-left: 1px solid var(--line);
+  animation: mcp-call-open 160ms ease-out both;
+}
+
+.mcp-call-what {
+  margin: 0 0 9px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mcp-call-args {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 7px 12px;
+  margin: 0;
+}
+
+.mcp-call-args dt {
+  color: #789d8b;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.mcp-call-args dd {
+  margin: 0;
+  color: #bce6cf;
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.mcp-call-out {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin: 12px 0 0;
+  padding: 11px 0 0;
+  border-top: 1px solid var(--line);
+  color: #8edeb3;
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.mcp-call-out > b {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.mcp-call-failed .mcp-call-out {
+  color: #ffb3b3;
 }
 
 .command-line-shell {
@@ -10341,6 +10476,17 @@ textarea:focus-visible {
   }
 }
 
+@keyframes mcp-call-open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes mcp-signal-rise {
   from {
     height: 28%;
@@ -10700,10 +10846,6 @@ textarea:focus-visible {
 
   .command-channel > * {
     padding: 0 7px;
-  }
-
-  .mcp-activity-state {
-    display: none;
   }
 
   .command-model-selector select {
@@ -11973,8 +12115,9 @@ textarea:focus-visible {
   }
 
   .command-composer,
-  .mcp-activity,
-  .mcp-activity-signal i,
+  .mcp-calls,
+  .mcp-call-body,
+  .mcp-call-signal i,
   .command-transmit-scan::after {
     animation: none !important;
   }

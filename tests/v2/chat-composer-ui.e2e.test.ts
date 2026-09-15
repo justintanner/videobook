@@ -2653,9 +2653,11 @@ describe('chat composer browser flow', () => {
     await wait(700)
     observedCalls.length = 0
     await page.getByLabel('Send command').click()
+    // The row carries the raw tool name now; the humanized label moved into the
+    // expanded body, where there is room for it.
     await page.waitForFunction(() =>
-      document.querySelector('[data-testid="mcp-activity"]')?.textContent
-        ?.includes('Routing chat'))
+      document.querySelector('[data-testid="mcp-calls"] .mcp-call-running .mcp-call-name')
+        ?.textContent === 'chat')
     const shell = page.locator('.command-line-shell')
     const composer = page.locator('.command-composer')
     expect(await shell.getAttribute('aria-busy')).toBe('true')
@@ -2685,9 +2687,30 @@ describe('chat composer browser flow', () => {
     await errorResult.waitFor({ state: 'visible' })
     expect(await errorResult.textContent()).toContain('OPENAI_API_KEY')
 
+    // The row is the point of the change: it settles in place rather than
+    // disappearing, and opening it shows what was actually sent.
+    const chatRow = page.locator('.mcp-call[data-tool="chat"]')
+    await expect.poll(() => chatRow.getAttribute('class')).toContain('mcp-call-failed')
+    const chatHead = chatRow.locator('.mcp-call-head')
+    expect(await chatHead.getAttribute('aria-expanded')).toBe('false')
+    expect(await chatRow.locator('.mcp-call-body').count()).toBe(0)
+    await chatHead.click()
+    const chatBody = chatRow.locator('.mcp-call-body')
+    await chatBody.waitFor({ state: 'visible' })
+    expect(await chatHead.getAttribute('aria-expanded')).toBe('true')
+    expect(await chatBody.textContent()).toContain(routedPrompt)
+    expect(await chatBody.textContent()).toContain('OPENAI_API_KEY')
+    expect(await chatBody.locator('input, textarea, button').count()).toBe(0)
+    if (screenshotPath) {
+      await wait(220)
+      await page.screenshot({ path: screenshotPath.replace(/\.png$/, '-mcp-row.png') })
+    }
+    await chatHead.click()
+    await expect.poll(() => chatRow.locator('.mcp-call-body').count()).toBe(0)
+
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await input.focus()
-    await page.locator('[data-testid="mcp-activity"]').waitFor({ state: 'visible' })
+    await page.locator('[data-testid="mcp-calls"]').waitFor({ state: 'visible' })
     expect(await composer.evaluate((element) => window.getComputedStyle(element).animationName))
       .toBe('none')
   }, 60_000)

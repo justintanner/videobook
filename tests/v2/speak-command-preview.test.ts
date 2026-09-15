@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { CommandComposer } from '../../src/components/videobook/CommandComposer'
 import { SpeakCommandPreview } from '../../src/components/videobook/SpeakCommandPreview'
 import { fallbackChatModelCatalog } from '../../src/videobook/chat-models'
-import { idleMcpActivity } from '../../src/videobook/mcp-activity'
+import { emptyMcpCallLog } from '../../src/videobook/mcp-activity'
 import {
   handleSpeakPreviewKey,
   nextSpeakVoiceId,
@@ -217,7 +217,9 @@ describe('CommandComposer /voices prefill', () => {
       disabled: false,
       modelSelectionDisabled: false,
       connectionLabel: 'Ready',
-      mcpActivity: idleMcpActivity,
+      mcpCalls: emptyMcpCallLog,
+      mcpFlash: null,
+      onToggleMcpCall: () => {},
       selectedModel: fallbackChatModelCatalog.defaultModel,
       pendingInput: '/speak ',
       voiceCatalog: {

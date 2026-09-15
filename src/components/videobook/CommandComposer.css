@@ -130,10 +130,11 @@
 
   .command-line-shell,
   .command-result,
-  .mcp-activity,
   .confirm-sheet-head,
   .confirm-sheet-body,
   .confirm-sheet-foot { padding-left: 9px; padding-right: 11px; }
+  .mcp-calls { padding-left: 9px; padding-right: 11px; }
+  .mcp-call-head { width: calc(100% + 20px); margin-left: -9px; margin-right: -11px; padding-left: 9px; padding-right: 11px; }
   .command-line-shell > .composer-actions-panel { padding-left: 12px; padding-right: 12px; }
   .command-line-shell > .command-channel { justify-self: end; }
   .command-line-shell > .composer-actions-panel .workspace-actions-list > button { grid-template-columns: minmax(0, 1fr); gap: 4px; }
@@ -156,4 +157,10 @@
 @media (max-height: 500px) {
   .command-line-shell > .composer-actions-panel { max-height: min(280px, 48dvh); }
   .composer-actions-panel .composer-actions-help { display: none; }
+}
+
+/* Touch: the same 44px floor index.css applies to the library's controls, and
+   that the voice e2e holds the microphone to at four viewports. */
+@media (pointer: coarse) {
+  .mcp-call-head { min-height: 44px; }
 }

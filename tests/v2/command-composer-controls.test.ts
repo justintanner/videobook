@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { CommandComposer } from '../../src/components/videobook/CommandComposer'
 import { VoiceComms } from '../../src/components/videobook/VoiceComms'
 import { fallbackChatModelCatalog } from '../../src/videobook/chat-models'
-import { idleMcpActivity } from '../../src/videobook/mcp-activity'
+import { emptyMcpCallLog } from '../../src/videobook/mcp-activity'
 import type { VoiceConversation } from '../../src/videobook/use-voice-conversation'
 import type { VoiceCaption, VoicePhase } from '../../server/src/voice-contract'
 
@@ -28,7 +28,9 @@ function renderComposer(
     disabled: true,
     modelSelectionDisabled,
     connectionLabel: 'Working',
-    mcpActivity: idleMcpActivity,
+    mcpCalls: emptyMcpCallLog,
+    mcpFlash: null,
+    onToggleMcpCall: () => {},
     inputSession: 'chat',
     selectedModel: fallbackChatModelCatalog.defaultModel,
     context,
@@ -143,7 +145,9 @@ describe('CommandComposer controls', () => {
       disabled: false,
       modelSelectionDisabled: false,
       connectionLabel: 'Ready',
-      mcpActivity: idleMcpActivity,
+      mcpCalls: emptyMcpCallLog,
+      mcpFlash: null,
+      onToggleMcpCall: () => {},
       inputSession: 'chat',
       selectedModel: fallbackChatModelCatalog.defaultModel,
       voice: stubVoice({ phase: 'off', active: false, captions: [], message: 'Voice input + spoken replies' }),
@@ -280,7 +284,9 @@ describe('VoiceComms caption visibility', () => {
       disabled: false,
       modelSelectionDisabled: false,
       connectionLabel: 'Ready',
-      mcpActivity: idleMcpActivity,
+      mcpCalls: emptyMcpCallLog,
+      mcpFlash: null,
+      onToggleMcpCall: () => {},
       inputSession: 'chat',
       selectedModel: fallbackChatModelCatalog.defaultModel,
       voice: stubVoice({

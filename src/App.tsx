@@ -455,9 +455,17 @@ import {
   shouldDismissModalDialogFromBackdrop,
 } from '@/videobook/modal-dialog-interactions'
 import {
-  idleMcpActivity,
+  beginMcpCall,
+  emptyMcpCallLog,
+  mcpCallArgs,
+  mcpResultSummary,
+  settleMcpCall,
   shouldNotifyMcpActivity,
-  type McpActivity,
+  toggleMcpCall,
+  MCP_CALL_MIN_VISIBLE_MS,
+  type McpCallLog,
+  type McpCallPhase,
+  type McpFlash,
 } from '@/videobook/mcp-activity'
 import { useMcpConnection } from '@/videobook/useMcpConnection'
 import { useNotebookAutoRefresh } from '@/videobook/useNotebookAutoRefresh'
@@ -3408,7 +3416,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const voiceTypedTurnRef = useRef<((input: string, message: string) => void) | null>(null)
   const [lastEditActionId, setLastEditActionId] = useState('')
   const [busy, setBusy] = useState(false)
-  const [mcpActivity, setMcpActivity] = useState<McpActivity>(idleMcpActivity)
+  const [mcpCalls, setMcpCalls] = useState<McpCallLog>(emptyMcpCallLog)
+  const [mcpFlash, setMcpFlash] = useState<McpFlash>(null)
   const [processingArtifactId, setProcessingArtifactId] = useState<string | null>(null)
   const [online, setOnline] = useState(() => window.navigator.onLine)
   const [notice, setNoticeState] = useState<WorkspaceNotice | null>({
@@ -3434,7 +3443,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const activeWatchesRef = useRef(new Map<string, string>())
   const activeMcpCallsRef = useRef(new Map<number, { tool: string; startedAt: number }>())
   const mcpActivitySequenceRef = useRef(0)
-  const mcpActivityTimerRef = useRef(0)
+  const mcpFlashTimerRef = useRef(0)
+  const mcpSettleTimersRef = useRef(new Map<number, number>())
   const selectedCellIdsRef = useRef<ReadonlySet<string>>(new Set())
   const watchScopeRef = useRef<{
     bookId: string | null
@@ -3651,64 +3661,49 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     const sequence = mcpActivitySequenceRef.current + 1
     mcpActivitySequenceRef.current = sequence
-    window.clearTimeout(mcpActivityTimerRef.current)
-    activeMcpCallsRef.current.set(sequence, { tool, startedAt: performance.now() })
-    setMcpActivity({
-      phase: 'active',
-      tool,
-      count: activeMcpCallsRef.current.size,
-      sequence,
-    })
-    let phase: 'success' | 'error' = 'success'
+    const startedAt = performance.now()
+    activeMcpCallsRef.current.set(sequence, { tool, startedAt })
+    setMcpCalls((log) => beginMcpCall(log, { id: sequence, tool, args: mcpCallArgs(args) }))
+    let phase: Extract<McpCallPhase, 'done' | 'failed'> = 'done'
+    let detail = ''
     try {
-      return parseResult(await mcp.callTool(tool, args))
+      const value = parseResult(await mcp.callTool(tool, args))
+      detail = mcpResultSummary(value)
+      return value
     } catch (error) {
-      phase = 'error'
+      phase = 'failed'
+      detail = error instanceof Error ? error.message : String(error)
       throw error
     } finally {
-      const completed = activeMcpCallsRef.current.get(sequence)
       activeMcpCallsRef.current.delete(sequence)
-      const remaining = [...activeMcpCallsRef.current.values()].at(-1)
-      if (remaining) {
-        mcpActivitySequenceRef.current += 1
-        setMcpActivity({
-          phase: 'active',
-          tool: remaining.tool,
-          count: activeMcpCallsRef.current.size,
-          sequence: mcpActivitySequenceRef.current,
-        })
-      } else {
-        const settle = () => {
-          if (activeMcpCallsRef.current.size > 0) return
-          mcpActivitySequenceRef.current += 1
-          setMcpActivity({
-            phase,
-            tool,
-            count: 0,
-            sequence: mcpActivitySequenceRef.current,
-          })
-          mcpActivityTimerRef.current = window.setTimeout(() => {
-            if (activeMcpCallsRef.current.size > 0) return
-            mcpActivitySequenceRef.current += 1
-            setMcpActivity({
-              ...idleMcpActivity,
-              sequence: mcpActivitySequenceRef.current,
-            })
-          }, phase === 'error' ? 1100 : 620)
-        }
-        const elapsed = completed ? performance.now() - completed.startedAt : 420
-        const remainingActiveTime = Math.max(0, 420 - elapsed)
-        if (remainingActiveTime > 0) {
-          mcpActivityTimerRef.current = window.setTimeout(settle, remainingActiveTime)
-        } else {
-          settle()
-        }
+      const elapsedMs = performance.now() - startedAt
+      // The row stays either way, but a call that finishes in 30ms should still
+      // read as having run rather than blinking the panel rail.
+      const settle = () => {
+        mcpSettleTimersRef.current.delete(sequence)
+        setMcpCalls((log) => settleMcpCall(log, sequence, { phase, elapsedMs, detail }))
+        if (activeMcpCallsRef.current.size > 0) return
+        window.clearTimeout(mcpFlashTimerRef.current)
+        setMcpFlash(phase === 'failed' ? 'error' : 'success')
+        mcpFlashTimerRef.current = window.setTimeout(
+          () => setMcpFlash(null),
+          phase === 'failed' ? 1100 : 620,
+        )
       }
+      const held = Math.max(0, MCP_CALL_MIN_VISIBLE_MS - elapsedMs)
+      if (held === 0) settle()
+      else mcpSettleTimersRef.current.set(sequence, window.setTimeout(settle, held))
     }
   }, [mcp])
 
+  const handleToggleMcpCall = useCallback((id: number) => {
+    setMcpCalls((log) => toggleMcpCall(log, id))
+  }, [])
+
   useEffect(() => () => {
-    window.clearTimeout(mcpActivityTimerRef.current)
+    window.clearTimeout(mcpFlashTimerRef.current)
+    for (const timer of mcpSettleTimersRef.current.values()) window.clearTimeout(timer)
+    mcpSettleTimersRef.current.clear()
   }, [])
 
   useEffect(() => {
@@ -13150,7 +13145,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : mcp.state === 'ready'
             ? 'Load a book to begin'
             : 'Connecting to MCP…'}
-        mcpActivity={mcpActivity}
+        mcpCalls={mcpCalls}
+        mcpFlash={mcpFlash}
+        onToggleMcpCall={handleToggleMcpCall}
         selectedModel={chatModel}
         context={fullscreenComposerContext}
         mentionAssets={imageEditMentionAssets}

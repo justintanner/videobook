@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import { createPortal } from 'react-dom'
+import { McpCallRows } from './McpCallRows'
 import type { ServerCommand } from '@/lib/command-registry'
 import type { AssetMentionCandidate } from '@/videobook/mention-suggestions'
 import { composerReferenceDescription, composerReferenceSuggestions, replaceComposerMention, type ComposerReference } from '@/videobook/composer-references'
@@ -40,8 +41,9 @@ import {
 } from '@/videobook/command-history'
 import type { ChatModelOption } from '@/videobook/chat-models'
 import {
-  mcpToolLabel,
-  type McpActivity,
+  mcpCallsRunning,
+  type McpCallLog,
+  type McpFlash,
 } from '@/videobook/mcp-activity'
 import {
   handleSpeakPreviewKey,
@@ -106,7 +108,9 @@ interface CommandComposerProps {
   hidden?: boolean
   modelSelectionDisabled: boolean
   connectionLabel: string
-  mcpActivity: McpActivity
+  mcpCalls: McpCallLog
+  mcpFlash: McpFlash
+  onToggleMcpCall: (id: number) => void
   selectedModel: string
   context?: {
     description: string
@@ -172,7 +176,9 @@ export function CommandComposer({
   hidden = false,
   modelSelectionDisabled,
   connectionLabel,
-  mcpActivity,
+  mcpCalls,
+  mcpFlash,
+  onToggleMcpCall,
   selectedModel,
   context = null,
   mentionAssets = [],
@@ -231,9 +237,9 @@ export function CommandComposer({
     promise: Promise<void>
   } | null>(null)
   const successTimerRef = useRef(0)
-  const transmitting = sending || mcpActivity.phase === 'active'
-  const mcpSucceeded = !transmitting && mcpActivity.phase === 'success'
-  const mcpFailed = !transmitting && mcpActivity.phase === 'error'
+  const transmitting = sending || mcpCallsRunning(mcpCalls) > 0
+  const mcpSucceeded = !transmitting && mcpFlash === 'success'
+  const mcpFailed = !transmitting && mcpFlash === 'error'
   const selectedModelOption = chatModels.find((model) => model.id === selectedModel)
     ?? chatModels[0]
 
@@ -722,33 +728,7 @@ export function CommandComposer({
 
       {!hidden && !context && children}
 
-      {!hidden && mcpActivity.phase !== 'idle' && (
-        <div
-          className={`mcp-activity mcp-activity-${mcpActivity.phase}`}
-          data-testid="mcp-activity"
-          role="status"
-          aria-live="polite"
-        >
-          <span className="mcp-activity-signal" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
-          <span className="mcp-activity-copy">
-            <strong>MCP</strong>
-            <span>{mcpToolLabel(mcpActivity.tool)}</span>
-          </span>
-          <span className="mcp-activity-state">
-            {mcpActivity.phase === 'active'
-              ? mcpActivity.count > 1
-                ? `${mcpActivity.count} calls`
-                : 'working'
-              : mcpActivity.phase === 'success'
-                ? 'complete'
-                : 'failed'}
-          </span>
-        </div>
-      )}
+      {!hidden && <McpCallRows log={mcpCalls} onToggle={onToggleMcpCall} />}
 
       {!hidden && voice && <VoiceComms voice={voice} />}
 
