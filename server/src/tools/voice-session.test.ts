@@ -14,7 +14,7 @@ import { VoiceSession, VoiceSessions, voiceError } from "../voice-session.js";
 import { voiceRouter } from "../voice-http.js";
 import { attachVoiceAudio } from "../voice-audio.js";
 import { restrictHttpAccess } from "../http-access.js";
-import { voiceSessionConfig } from "../voice-config.js";
+import { VOICE_PCM_RATE, voiceSessionConfig, xaiVoiceSessionConfig } from "../voice-config.js";
 import type { Engine } from "videobook-engine";
 import { appendVoiceHistory } from "./chat-history.js";
 import { voiceWorkspaceContext } from "../voice-actions.js";
@@ -164,6 +164,21 @@ describe("voice session boundaries", () => {
     // can do it and that ambiguous speech is not approval.
     expect(session.instructions).toMatch(/Apply or cancel only on a clear instruction/u);
     expect(session.instructions).toMatch(/Applying spends money/u);
+  });
+
+  it("speaks as one terse character and fills optional parameters in itself", () => {
+    const context = { book: "voice-session" };
+    const session = voiceSessionConfig(context);
+    expect(session.audio?.output?.voice).toBe("cedar");
+    // The model read an optional staleness guard as a precondition and asked
+    // the speaker to recite a revision hash the cell details never display.
+    expect(session.instructions).toMatch(/Never ask the user for a parameter the discovered schema marks optional/u);
+    expect(session.instructions).toMatch(/expected_revision in particular is an optional staleness guard, never a precondition/u);
+    // Padding and apology are what made the copilot unbearable to talk to.
+    expect(session.instructions).toMatch(/Never apologize/u);
+    expect(session.instructions).toMatch(/The outcome comes first and is never traded for the joke/u);
+    // Both providers have to be the same character, not two personalities.
+    expect(xaiVoiceSessionConfig(context, VOICE_PCM_RATE).instructions).toBe(session.instructions);
   });
 
   it("rejects hostile origins and bounded malformed offers before provider access", async () => {

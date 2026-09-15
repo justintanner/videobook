@@ -56,10 +56,16 @@ Apicity commit `7c5e2e56`. Its revision and checksum are recorded in
 | Turn detection | Server VAD, threshold 0.5, 350 ms silence, 300 ms prefix |
 | Input | Near-field noise reduction; native speech-to-speech |
 | Display transcription | `gpt-4o-mini-transcribe` |
-| Output | `marin`, speed 1.05, concise replies, maximum 512 output tokens |
+| Output | `cedar`, speed 1.05, concise replies, maximum 512 output tokens |
 | Idle limit | 120 seconds; `VIDEOBOOK_VOICE_IDLE_TIMEOUT_MS` clamps to 10–600 seconds |
 | Lifetime/concurrency | 30 minutes; four sessions per server |
 | Startup deadline | 30 seconds for a pinned provider; 80 seconds for Auto, including failed-call cleanup and fallback |
+
+The copilot speaks as one character on both providers: dry and unimpressed, the
+outcome first and at most one short aside after it. It fills an action in from
+the request and the supplied workspace rather than interviewing the speaker, so
+a parameter the discovered schema marks optional is omitted rather than asked
+for. `expected_revision` is such a parameter on every tool that accepts it.
 
 xAI uses `grok-voice-think-fast-2.0`, Eve's voice, reasoning effort `none`, and the
 same 350 ms VAD silence setting. `VIDEOBOOK_XAI_VOICE_MODEL` overrides the xAI model.
