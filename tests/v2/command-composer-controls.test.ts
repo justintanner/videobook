@@ -126,7 +126,7 @@ describe('CommandComposer controls', () => {
     expect(html).not.toContain('aria-label="Chat model"')
   })
 
-  it('labels typed chat and realtime voice without relying on color alone', () => {
+  it('names every composer control without a visible micro-label or color alone', () => {
     const html = renderToStaticMarkup(createElement(CommandComposer, {
       commands: [],
       references: new Map(),
@@ -153,13 +153,19 @@ describe('CommandComposer controls', () => {
       onSuccessfulExecute: () => undefined,
     }))
 
-    expect(html).toContain('command-control-kind')
-    expect(html).toMatch(/>Chat</)
-    expect(html).toMatch(/>Voice</)
+    expect(html).not.toContain('command-control-kind')
+    expect(html).toContain('command-channel')
     expect(controlMarkup(html, 'Chat model')).toContain('aria-label="Chat model"')
     expect(controlMarkup(html, 'Voice provider')).toContain('aria-label="Voice provider"')
+    expect(controlMarkup(html, 'Open actions')).toContain('aria-label="Open actions"')
     expect(controlMarkup(html, 'Start voice conversation')).toContain('aria-label="Start voice conversation"')
     expect(controlMarkup(html, 'Send command')).toContain('aria-label="Send command"')
+    // Two independently focusable native selects, not one merged control.
+    expect(html.match(/<select/g)).toHaveLength(2)
+    // The voice half is marked by a glyph, so the halves differ by more than color.
+    expect(html).toMatch(/class="voice-provider-field"[^>]*>\s*<svg/)
+    // Nothing in the row is named by its position or its color.
+    for (const tag of html.match(/<button[^>]*>/g) ?? []) expect(tag).toMatch(/aria-label="[^"]+"/)
   })
 })
 
@@ -171,7 +177,8 @@ describe('VoiceComms caption visibility', () => {
     const { button, region, id } = controlledRegion(html)
     expect(button).toContain('aria-expanded="true"')
     expect(button).toContain('aria-label="Hide captions"')
-    expect(button).toContain('Hide captions')
+    expect(button).toMatch(/<svg/)
+    expect(button).not.toMatch(/>Hide captions</)
     expect(region).toContain(`id="${id}"`)
     expect(region).not.toContain(' hidden')
     expect(html).toContain('Listening… speak anytime.')
@@ -188,7 +195,8 @@ describe('VoiceComms caption visibility', () => {
     const { button, region } = controlledRegion(hidden)
     expect(button).toContain('aria-expanded="false"')
     expect(button).toContain('aria-label="Show captions"')
-    expect(button).toContain('Show captions')
+    expect(button).toMatch(/<svg/)
+    expect(button).not.toMatch(/>Show captions</)
     expect(region).toContain(' hidden=""')
     expect(hidden).toContain('>one</span>')
     expect(hidden).toContain('>three</span>')
@@ -202,7 +210,7 @@ describe('VoiceComms caption visibility', () => {
       })
       if (phase === 'off' && html === '') continue
       const { button, region } = controlledRegion(html)
-      expect(button, phase).toContain('Hide captions')
+      expect(button, phase).toContain('aria-label="Hide captions"')
       expect(region, phase).toMatch(/Opening|Listening|Transcribing|Waiting|Review|No captions/)
       expect(region, phase).not.toContain(' hidden')
     }
@@ -210,7 +218,10 @@ describe('VoiceComms caption visibility', () => {
 
   it('renders 1, 2 and many caption rows and skips blank YOU/COPILOT lines', () => {
     const one = renderComms('listening', [caption('a', 'only row')])
-    expect(one).toContain('YOU')
+    // The speaker is no longer drawn, so it has to reach a screen reader as text
+    // and reach CSS as an attribute. Exactly once, either way.
+    expect(one).toContain('<span class="sr-only">YOU</span>')
+    expect(one).toContain('data-role="user"')
     expect(one).toContain('only row')
     expect(one.match(/YOU/g)).toHaveLength(1)
 
@@ -219,7 +230,8 @@ describe('VoiceComms caption visibility', () => {
       caption('b', 'assistant line', 'assistant'),
     ])
     expect(two).toContain('user line')
-    expect(two).toContain('COPILOT')
+    expect(two).toContain('<span class="sr-only">COPILOT</span>')
+    expect(two).toContain('data-role="assistant"')
     expect(two).toContain('assistant line')
 
     const many = renderComms('thinking', [
@@ -229,7 +241,7 @@ describe('VoiceComms caption visibility', () => {
       caption('c', 'third'),
       { id: 'cut', role: 'user', text: '', final: true, interrupted: true },
     ])
-    expect(many).not.toMatch(/YOU<\/strong><span>\s*<\/span>/)
+    expect(many.match(/<p data-final=/g)).toHaveLength(4)
     expect(many).toContain('first')
     expect(many).toContain('second')
     expect(many).toContain('third')
@@ -279,7 +291,7 @@ describe('VoiceComms caption visibility', () => {
     expect(html).toContain('Use Apply or Cancel on screen.')
     expect(controlMarkup(html, 'Hide captions')).toContain('type="button"')
     expect(controlMarkup(html, 'Stop voice conversation')).toContain('aria-pressed="true"')
-    expect(html).toMatch(/>Chat</)
-    expect(html).toMatch(/>Voice</)
+    expect(controlMarkup(html, 'Chat model')).toContain('aria-label="Chat model"')
+    expect(controlMarkup(html, 'Voice provider')).toContain('aria-label="Voice provider"')
   })
 })

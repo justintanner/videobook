@@ -1,10 +1,18 @@
-.voice-controls { grid-area: voice; display: flex; align-items: center; gap: 6px; min-width: 0; }
-.voice-provider-field { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; min-height: 44px; }
-.voice-provider-select { width: 72px; min-height: 28px; padding: 2px 0 2px 4px; border: 1px solid #315c42; border-radius: 4px; color: #a8d9ba; background: #0a1c11; font: inherit; font-size: 10px; cursor: pointer; }
-.voice-provider-select:focus-visible { outline: 2px solid #d5ffe4; outline-offset: 2px; }
+/* Voice provider segment. Lives inside .command-channel next to the chat model
+   select, sharing one 32px border. It carries no visible field label any more:
+   the mic glyph marks it as voice and the select keeps the accessible name. */
+.voice-provider-field { display: flex; align-items: stretch; gap: 7px; min-width: 0; padding: 0 11px; color: #cfead9; }
+.voice-provider-field > svg { flex: 0 0 auto; align-self: center; color: #7fa992; }
+.voice-provider-select { min-width: 0; max-width: 84px; height: 100%; padding: 0; border: 0; outline: 0; appearance: none; color: inherit; background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
+.voice-provider-select option { color: var(--ink); background: #04120c; }
+.voice-provider-select:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+
+/* The microphone is one of the two primary controls, so it is 44px like Send --
+   the touch-target floor tests/v2/voice-chat.e2e.test.ts asserts at four
+   viewports. It is also the panel's only circle: round means live and continuous. */
+.voice-controls { grid-area: voice; display: flex; align-items: center; min-width: 0; }
 .voice-controls > .voice-toggle {
   --voice-level: 0;
-  grid-area: voice;
   display: grid;
   place-items: center;
   position: relative;
@@ -14,81 +22,94 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
-  color: #a2bbaa;
+  color: #7f9a89;
   background: transparent;
   cursor: pointer;
   isolation: isolate;
 }
 .voice-toggle .voice-ring { position: absolute; inset: 0; width: 44px; height: 44px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-dasharray: 8 3; opacity: .4; pointer-events: none; }
 .voice-toggle[aria-pressed='true'] { color: #8fffb8; background: #0b2b1b; }
-.voice-toggle[aria-pressed='true'] .voice-ring { opacity: calc(.55 + var(--voice-level) * .45); stroke-width: calc(1.5px + var(--voice-level) * 1.5px); filter: drop-shadow(0 0 calc(var(--voice-level) * 5px) #55ff9c); transform: scale(calc(.91 + var(--voice-level) * .09)); }
-.voice-toggle.voice-review { color: #ffe0a2; }
-.voice-toggle.voice-error { color: #ffae9f; }
-.voice-toggle:focus-visible { outline: 2px solid #d5ffe4; outline-offset: 3px; }
+.voice-toggle[aria-pressed='true'] .voice-ring { opacity: calc(.6 + var(--voice-level) * .4); stroke-width: calc(2.2px + var(--voice-level) * 1.4px); filter: drop-shadow(0 0 calc(var(--voice-level) * 5px) #55ff9c); transform: scale(calc(.92 + var(--voice-level) * .08)); }
+.voice-toggle.voice-review { color: #f2dcaa; background: rgba(60, 46, 16, .55); }
+.voice-toggle.voice-error { color: #ffae9f; background: rgba(60, 22, 22, .55); }
+.voice-toggle:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
 .voice-toggle:disabled { opacity: .45; cursor: default; }
-.command-composer:has(> .voice-comms),
-.command-composer:has(> .confirm-sheet) {
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100dvh - var(--app-gutter) * 2);
-  min-width: 0;
-}
-.command-composer:has(> .voice-comms) > *,
-.command-composer:has(> .confirm-sheet) > * { flex: 0 0 auto; min-width: 0; }
-.command-composer:has(> .confirm-sheet) > .confirm-sheet {
-  flex: 1 1 auto;
-  min-height: 88px;
-  max-height: min(70dvh, calc(100dvh - 12rem));
-}
-.command-composer:has(> .confirm-sheet):has(> .voice-comms) > .confirm-sheet {
-  max-height: min(52dvh, calc(100dvh - 16rem));
-}
+
+/* The transcript is a section of the composer panel, not a box of its own: no
+   border, no radius, no background, no gap between it and the command line. */
 .command-composer > .voice-comms {
   flex: 0 1 auto;
   min-height: 0;
-  max-height: min(240px, 28dvh);
+  max-height: min(248px, 30dvh);
   overflow: hidden;
 }
 .command-composer:has(> .confirm-sheet) > .voice-comms { max-height: min(140px, 20dvh); }
-.voice-comms { position: relative; display: flex; flex-direction: column; min-width: 0; border: 1px solid #315c42; border-left: 3px solid #77eda2; border-radius: 8px 8px 2px 2px; background: linear-gradient(110deg, #10291d 0%, #081910 75%); color: #c9e4d2; margin-bottom: 5px; padding: 8px 11px 6px; box-shadow: inset 0 1px #b3ffc712; }
-.voice-comms-header { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; min-width: 0; color: #97e9b3; }
-.voice-comms-header > strong { font-size: 10px; letter-spacing: .14em; }
-.voice-comms-status { font-size: 12px; }
-.voice-provider-badge { padding: 2px 4px; border: 1px solid #386349; border-radius: 3px; font-size: 9px; color: #ceeed9; }
-.voice-fallback { margin: 5px 0; color: #dfd3a1; font-size: 10px; }
+
+.voice-comms { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 16px 19px 0 17px; color: #9fc0ad; }
+
+/* The phase rail itself lives in index.css, next to the focus and in-flight rules
+   it has to cascade against. */
+
+.voice-fallback, .voice-comms-message, .voice-comms-review, .voice-resume, .voice-captions-latest { flex: 0 0 auto; }
+.voice-fallback { margin: 0 0 13px; color: #dfd3a1; font-size: 11px; }
 .voice-fallback > summary { cursor: pointer; }
-.voice-fallback > p { margin: 4px 0; overflow-wrap: anywhere; }
-.voice-comms-header > button { margin-left: auto; display: flex; align-items: center; gap: 4px; min-height: 32px; padding: 4px 6px; border: 1px solid #315c42; background: #0c2216; color: #d5eedc; font: inherit; font-size: 11px; cursor: pointer; }
-.voice-comms-header > button[aria-expanded='true'] > svg { transform: rotate(180deg); }
-.voice-comms button:focus-visible { outline: 2px solid #d5ffe4; outline-offset: 2px; }
-.voice-comms-message, .voice-comms-review { margin: 4px 0; font-size: 12px; line-height: 1.4; }
-.voice-comms-review { color: #ffe0a2; }
-.voice-comms.voice-review { border-left-color: #ffe0a2; }
-.voice-comms.voice-off { border-left-color: #557663; }
-.voice-comms.voice-error { border-left-color: #ffae9f; }
+.voice-fallback > p { margin: 4px 0 0; overflow-wrap: anywhere; }
+.voice-comms button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.voice-comms-message, .voice-comms-review { margin: 0 0 13px; font-size: 13px; line-height: 1.55; }
+.voice-comms-review { color: #f0dcb0; }
 .voice-comms.voice-error .voice-comms-message { color: #ffd5cc; }
-.voice-captions { flex: 1 1 auto; min-height: 1.6em; max-height: min(180px, 22dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+
+.voice-captions { flex: 1 1 auto; min-height: 0; max-height: min(180px, 22dvh); margin-left: -10px; padding-left: 10px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .voice-captions[hidden] { display: none !important; }
-.voice-captions > p { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 8px; margin: 5px 0; font-size: 13px; line-height: 1.5; }
-.voice-captions > p > strong { padding-top: 2px; font-size: 9px; letter-spacing: .07em; color: #87b198; }
+.voice-captions > p { position: relative; margin: 0 0 13px; font-size: 13px; line-height: 1.55; color: #9fc0ad; }
+.voice-captions > p:last-child { margin-bottom: 0; }
 .voice-captions > p > span { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
-.voice-captions-empty { display: block !important; color: #96ae9e; font-size: 12px; }
-.voice-captions em { color: #96ae9e; font-size: 10px; font-style: normal; }
-.voice-captions-latest { align-self: center; margin: 4px 0 0; min-height: 28px; padding: 3px 8px; border: 1px solid #548768; background: #173c26; color: #e0ffea; font: inherit; font-size: 11px; cursor: pointer; }
-.voice-disclosure { display: block; margin-top: 4px; color: #8cae97; font-size: 9px; }
-.voice-resume { display: flex; align-items: center; gap: 5px; margin: 5px 0; padding: 7px; color: #e0ffea; border: 1px solid #548768; background: #173c26; cursor: pointer; }
-@media (max-width: 380px) {
-  .voice-comms { padding: 6px 8px; }
-  .voice-comms-header { gap: 5px; }
-  .voice-captions > p { grid-template-columns: 48px minmax(0, 1fr); gap: 5px; }
+
+/* No speaker column. Your turns read brighter and heavier behind a 2px rule in
+   the margin; the copilot's stay quiet. The rule sits outside the 20px spine so
+   the copy itself still starts on it. The speaker name survives in .sr-only. */
+.voice-captions > p[data-role='user'] { font-weight: 600; color: #dbf1e3; }
+.voice-captions > p[data-role='user']::before { position: absolute; top: 4px; bottom: 4px; left: -10px; width: 2px; background: var(--green); content: ''; }
+
+.voice-captions-empty { display: block !important; color: #6f9a80; font-size: 13px; }
+.voice-captions em { color: #6f9a80; font-size: 11px; font-style: normal; }
+.voice-captions-latest { align-self: center; flex: 0 0 auto; height: 32px; margin: 8px 0 0; padding: 0 12px; border: 1px solid rgba(114, 231, 170, .26); border-radius: 2px; background: transparent; color: #cfead9; font: inherit; font-size: 11px; cursor: pointer; }
+.voice-resume { display: inline-flex; align-self: flex-start; align-items: center; gap: 7px; height: 32px; margin: 0 0 13px; padding: 0 12px; border: 1px solid rgba(114, 231, 170, .26); border-radius: 2px; background: transparent; color: #cfead9; font: inherit; font-size: 11px; cursor: pointer; }
+
+/* One 32px line carries provider, phase, the microphone disclosure and the way
+   back to the captions. It replaces the old header row, so the transcript opens
+   flush with the top of the panel. */
+.voice-comms-statusline { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; height: 32px; color: #7fa992; font-size: 11px; }
+.voice-comms-statusline > svg { flex: 0 0 auto; color: var(--green); }
+.voice-provider-badge { padding: 0; border: 0; color: #7fa992; font-size: 11px; }
+.voice-comms-status { font-size: 11px; }
+.voice-disclosure { color: #6f9a80; font-size: 11px; }
+.voice-comms-statusline > .voice-comms-status::before,
+.voice-comms-statusline > .voice-disclosure::before { margin-right: 6px; color: #4e6c5b; content: '·'; }
+.voice-captions-toggle { display: grid; flex: 0 0 auto; place-items: center; width: 32px; height: 32px; margin-left: 3px; padding: 0; border: 0; background: transparent; color: #7fa992; cursor: pointer; }
+.voice-captions-toggle[aria-expanded='false'] > svg { transform: rotate(180deg); }
+.voice-comms .voice-captions-toggle:focus-visible { outline-offset: -2px; }
+.voice-comms.voice-review .voice-comms-statusline > svg { color: #e3b869; }
+.voice-comms.voice-review .voice-comms-status { color: #c9a86a; }
+.voice-comms.voice-error .voice-comms-statusline > svg { color: var(--danger); }
+.voice-comms.voice-error .voice-comms-status { color: #e8b3b3; }
+.voice-comms.voice-off .voice-comms-statusline > svg { color: #557663; }
+
+@media (max-width: 600px) {
+  .voice-comms { padding: 12px 11px 0 9px; }
+  .voice-provider-field { padding: 0 7px; gap: 5px; }
+  .voice-captions { margin-left: -6px; padding-left: 6px; }
+  .voice-captions > p[data-role='user']::before { left: -6px; }
 }
+
 @media (max-height: 500px) {
-  .command-composer:has(> .confirm-sheet) > .confirm-sheet { min-height: 88px; max-height: min(42dvh, calc(100dvh - 8rem)); }
+  .command-composer > .confirm-sheet { min-height: 88px; max-height: min(42dvh, calc(100dvh - 8rem)); }
   .command-composer:has(> .confirm-sheet) > .voice-comms,
-  .command-composer > .voice-comms { max-height: min(88px, 22dvh); }
+  .command-composer > .voice-comms { max-height: min(104px, 24dvh); }
   .voice-captions { max-height: min(52px, 16dvh); }
   .voice-disclosure { display: none; }
   .command-composer:has(> .voice-comms) .confirm-sheet-foot,
   .command-composer:has(> .confirm-sheet) .confirm-sheet-foot { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 }
+
 @media (prefers-reduced-motion: reduce) { .voice-toggle[aria-pressed='true'] .voice-ring { transform: none; filter: none; } }

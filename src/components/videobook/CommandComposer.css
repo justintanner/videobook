@@ -3,13 +3,21 @@
   grid-template-columns: auto minmax(0, 1fr) auto auto auto;
 }
 
-.command-control-kind {
-  flex: 0 0 auto;
-  color: #87b198;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+/* Chat model + voice provider as one strip on the 32px secondary tier. The two
+   segments are divided by a hairline, not by two separate borders. */
+.command-line-shell > .command-channel {
+  grid-area: model;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  height: 32px;
+  border: 1px solid rgba(114, 231, 170, 0.26);
+  border-radius: 2px;
+  background: transparent;
+}
+
+.command-line-shell > .command-channel > * + * {
+  border-left: 1px solid rgba(114, 231, 170, 0.18);
 }
 
 .command-actions-controls {
@@ -34,8 +42,20 @@
   cursor: pointer;
 }
 
+.command-actions-controls > .command-actions-toggle,
+.command-actions-controls > .command-actions-close {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-color: rgba(114, 231, 170, 0.22);
+  border-radius: 2px;
+  color: #a8cdb7;
+}
+
 .command-actions-toggle[aria-expanded='true'] {
   border-color: var(--green);
+  color: var(--control-fg-hover);
   background: #103421;
 }
 
@@ -44,8 +64,6 @@
 .command-actions-toggle:focus-visible,
 .command-actions-close:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .command-editor-mount { grid-area: editor; }
-.command-line-shell > .command-model-selector,
-.command-line-shell > .command-context { grid-area: model; }
 .command-send { grid-area: send; }
 
 .command-line-shell > .composer-actions-panel {
@@ -53,7 +71,7 @@
   flex-direction: column;
   max-height: min(420px, 52dvh);
   overflow: hidden;
-  padding: 8px;
+  padding: 10px 20px;
 }
 
 .composer-actions-panel > header {
@@ -75,9 +93,9 @@
 .command-line-shell > .composer-actions-panel .workspace-actions-list > button { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: start; }
 .command-line-shell > .composer-actions-panel .workspace-actions-list > button.active { color: var(--control-fg-hover); background: var(--control-bg-active); }
 .command-line-shell > .composer-actions-panel .workspace-actions-list > button > span { display: grid; gap: 3px; white-space: normal; }
-.command-line-shell > .composer-actions-panel .workspace-actions-list > button strong { color: #c4ead5; font-size: 12px; }
+.command-line-shell > .composer-actions-panel .workspace-actions-list > button strong { color: #c4ead5; font-size: 13px; }
 .composer-actions-panel .workspace-actions-list small { font-size: 11px; overflow-wrap: anywhere; }
-.composer-actions-panel .workspace-actions-list code { font-size: 10px; overflow-wrap: anywhere; }
+.composer-actions-panel .workspace-actions-list code { font-size: 11px; overflow-wrap: anywhere; }
 .composer-actions-panel .composer-action-unavailable { grid-column: 1 / -1; color: #e3b869; }
 .composer-actions-panel p { font-size: 11px; margin: 8px 4px; color: #a6c5b3; }
 .composer-actions-panel .composer-actions-help { flex: 0 0 auto; margin: 8px 4px 0; }
@@ -110,8 +128,14 @@
     padding-bottom: 6px;
   }
 
-  .command-actions-toggle { min-height: 40px; }
-  .command-model-selector { justify-self: end; }
+  .command-line-shell,
+  .command-result,
+  .mcp-activity,
+  .confirm-sheet-head,
+  .confirm-sheet-body,
+  .confirm-sheet-foot { padding-left: 9px; padding-right: 11px; }
+  .command-line-shell > .composer-actions-panel { padding-left: 12px; padding-right: 12px; }
+  .command-line-shell > .command-channel { justify-self: end; }
   .command-line-shell > .composer-actions-panel .workspace-actions-list > button { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .composer-actions-panel > header label { font-size: 0; }
   .composer-actions-panel > header select { max-width: 110px; font-size: 11px; }
@@ -120,9 +144,13 @@
 
 @media (max-width: 420px) {
   .command-line-shell:has(> .voice-controls) {
-    grid-template-areas: 'editor editor editor' 'actions model model' 'voice voice send';
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: 'editor editor editor editor' 'actions model voice send';
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 6px;
   }
+
+  .command-line-shell > .command-channel { justify-self: stretch; min-width: 0; }
+  .command-model-selector select { max-width: none; }
 }
 
 @media (max-height: 500px) {

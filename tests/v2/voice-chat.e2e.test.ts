@@ -154,8 +154,8 @@ describe('voice chat in the real browser', () => {
     await toggle.focus()
     await expect.poll(() => toggle.evaluate(el => el === document.activeElement)).toBe(true)
     expect(await toggle.getAttribute('aria-pressed')).toBe('false')
-    expect(await page.locator('.command-control-kind', { hasText: 'Chat' }).count()).toBeGreaterThan(0)
-    expect(await page.locator('.command-control-kind', { hasText: 'Voice' }).count()).toBeGreaterThan(0)
+    expect(await page.locator('.command-channel .command-model-selector select').getAttribute('aria-label')).toBe('Chat model')
+    expect(await page.locator('.command-channel .voice-provider-field select').getAttribute('aria-label')).toBe('Voice provider')
     for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 640 }, { width: 640, height: 320 }]) {
       await page.setViewportSize(viewport)
       const bounds = await toggle.boundingBox()
@@ -305,7 +305,7 @@ describe('voice chat in the real browser', () => {
       await page.locator('.voice-fallback').waitFor({ state: 'visible' })
     } else expect(connected.fallbackReason).toBeUndefined()
     await expect.poll(() => page.locator('.voice-provider-badge').innerText()).toBe(connected.provider === 'xai' ? 'xAI' : 'OpenAI')
-    await expect.poll(async () => await page.locator('.voice-comms').innerText(), { timeout: 35_000 }).toContain('COPILOT')
+    await expect.poll(async () => await page.locator('.voice-captions p[data-role="assistant"]').count(), { timeout: 35_000 }).toBeGreaterThan(0)
     const timing = () => page.evaluate(() => performance.getEntriesByName('videobook-voice').map(entry => ({ at: entry.startTime, ...((entry as PerformanceMark).detail as { stage: string; model?: string; role?: string; microphoneSignalEndedAt?: number }) })))
     try {
       await expect.poll(async () => (await timing()).filter(entry => entry.stage === 'first-audio').length, { timeout: benchmarkTurns * 15_000 + 20_000 }).toBeGreaterThanOrEqual(benchmarkTurns)
@@ -506,7 +506,7 @@ describe('voice chat in the real browser', () => {
     await ensureImage()
     await useRecording('assets')
     await page.getByLabel('Start voice conversation').click()
-    await expect.poll(() => page.locator('.voice-captions').innerText(), { timeout: 40_000 }).toMatch(/COPILOT[\s\S]*(image|asset)/i)
+    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').last().innerText(), { timeout: 40_000 }).toMatch(/image|asset/i)
     expect(await page.locator('.confirm-sheet').count()).toBe(0)
     await page.getByLabel('Stop voice conversation').click()
     const before = result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } })) as { assets: unknown[] }
@@ -514,7 +514,7 @@ describe('voice chat in the real browser', () => {
     await page.getByLabel('Start voice conversation').click()
     await expect.poll(async () => (result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } })) as { assets: unknown[] }).assets.length, { timeout: 45_000 }).toBe(before.assets.length + 1)
     expect(await page.locator('.confirm-sheet').count()).toBe(0)
-    await expect.poll(() => page.locator('.voice-captions').innerText(), { timeout: 15_000 }).toMatch(/COPILOT[\s\S]*(duplicat|copied|created|done)/i)
+    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').last().innerText(), { timeout: 15_000 }).toMatch(/duplicat|copied|created|done/i)
     await page.getByLabel('Stop voice conversation').click()
   })
 
@@ -534,12 +534,12 @@ describe('voice chat in the real browser', () => {
     await useRecording('generate-video', 10_000)
     const before = result(await client.callTool({ name: 'list_jobs', arguments: { book_id: bookId } }))
     await page.getByLabel('Start voice conversation').click()
-    await expect.poll(() => page.locator('.voice-captions p[data-final="true"]').first().innerText(), { timeout: 30_000 }).toMatch(/YOU[\s\S]*Make me a video with A\s?(?:1|one)/i)
-    await expect.poll(() => page.locator('.voice-captions').innerText(), { timeout: 30_000 }).toMatch(/COPILOT/)
+    await expect.poll(() => page.locator('.voice-captions p[data-role="user"][data-final="true"]').first().innerText(), { timeout: 30_000 }).toMatch(/Make me a video with A\s?(?:1|one)/i)
+    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').count(), { timeout: 30_000 }).toBeGreaterThan(0)
     await expect.poll(() => page.evaluate(() => performance.getEntriesByName('videobook-voice').filter(entry => (entry as PerformanceMark).detail.stage === 'first-audio').length), { timeout: 15_000 }).toBeGreaterThan(0)
     await page.locator('.confirm-sheet').waitFor({ state: 'visible', timeout: 30_000 })
     expect(await page.locator('.confirm-sheet').innerText()).toMatch(/generat|cost|provider/i)
-    await expect.poll(() => page.locator('.voice-captions p[data-final="true"]').last().innerText(), { timeout: 30_000 }).toMatch(/COPILOT[\s\S]*(apply|review|cancel)/i)
+    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"][data-final="true"]').last().innerText(), { timeout: 30_000 }).toMatch(/apply|review|cancel/i)
     await expect.poll(() => page.evaluate(() => {
       const marks = performance.getEntriesByName('videobook-voice') as PerformanceMark[]
       const review = marks.find(entry => entry.detail.stage === 'action-review')

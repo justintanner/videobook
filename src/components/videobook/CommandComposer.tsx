@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from 'react'
 import {
-  Bot,
   Check,
   ChevronDown,
   ListFilter,
@@ -60,7 +59,7 @@ import {
   type ComposerOutcomeSlot,
 } from '@/components/videobook/composer-outcome-context'
 import { SpeakCommandPreview } from '@/components/videobook/SpeakCommandPreview'
-import { VoiceComms, VoiceToggle } from './VoiceComms'
+import { VoiceComms, VoiceProviderSelect, VoiceToggle } from './VoiceComms'
 import type { VoiceConversation } from '@/videobook/use-voice-conversation'
 
 export interface ComposerOutcome {
@@ -820,7 +819,7 @@ export function CommandComposer({
           <button type="button" className="command-actions-toggle" aria-label="Open actions" aria-expanded={Boolean(actionDiscovery)}
             data-workspace-action-surface="button" aria-keyshortcuts="Control+Shift+K Meta+Shift+K"
             disabled={actionsDisabled || sending} onClick={actionDiscovery ? closeActionSearch : onOpenActions}>
-            <ListFilter size={15} aria-hidden="true" />Actions
+            <ListFilter size={15} aria-hidden="true" />
           </button>
           {onDismissComposer && !actionDiscovery && <button type="button" className="command-actions-close"
             aria-label="Close actions input" onClick={onDismissComposer}><X size={15} /></button>}
@@ -853,32 +852,37 @@ export function CommandComposer({
           }}
           onKeyDown={handleInputKey}
         />
-        {context ? (
-          <span className="command-context" title={context.description}>
-            <WandSparkles size={13} aria-hidden="true" />
-            <strong>{context.label}</strong>
-          </span>
-        ) : (
-          <label
-            className="command-model-selector"
-            title={selectedModelOption?.description}
-          >
-            <span className="command-control-kind">Chat</span>
-            <Bot size={13} aria-hidden="true" />
-            <select
-              value={selectedModel}
-              disabled={modelSelectionDisabled || sending}
-              aria-label="Chat model"
-              data-testid="chat-model-selector"
-              onChange={(event) => onModelChange(event.target.value)}
+        {/* Chat model and voice provider share one bordered strip. The CHAT and
+            VOICE micro-labels are gone; each segment is named by its own select's
+            aria-label, and the voice half is marked by a mic glyph rather than by
+            colour. Both stay independently focusable native selects. */}
+        <div className="command-channel">
+          {context ? (
+            <span className="command-context" title={context.description}>
+              <WandSparkles size={12} aria-hidden="true" />
+              <strong>{context.label}</strong>
+            </span>
+          ) : (
+            <label
+              className="command-model-selector"
+              title={selectedModelOption?.description}
             >
-              {chatModels.map((model) => (
-                <option key={model.id} value={model.id}>{model.id}</option>
-              ))}
-            </select>
-            <ChevronDown size={12} aria-hidden="true" />
-          </label>
-        )}
+              <select
+                value={selectedModel}
+                disabled={modelSelectionDisabled || sending}
+                aria-label="Chat model"
+                data-testid="chat-model-selector"
+                onChange={(event) => onModelChange(event.target.value)}
+              >
+                {chatModels.map((model) => (
+                  <option key={model.id} value={model.id}>{model.id}</option>
+                ))}
+              </select>
+              <ChevronDown size={11} aria-hidden="true" />
+            </label>
+          )}
+          {voice && <VoiceProviderSelect voice={voice} />}
+        </div>
         {voice && <VoiceToggle voice={voice} onToggle={() => { previewPlayer.stop(); voice.toggle() }} />}
         <button
           type="submit"

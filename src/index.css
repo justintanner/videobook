@@ -6938,12 +6938,18 @@ textarea:focus-visible {
   grid-template-rows: 44px minmax(0, 1fr) auto;
   width: 100%;
   max-height: calc(100dvh - 72px - 56px - var(--app-gutter) - 12px);
-  border: 1px solid var(--green);
-  border-bottom: 0;
-  background: rgba(3, 15, 9, 0.98);
-  box-shadow:
-    inset 0 1px rgba(114, 231, 170, 0.08),
-    0 -18px 54px rgba(0, 0, 0, 0.5);
+  border: 0;
+  background: transparent;
+}
+
+.command-composer > .confirm-sheet {
+  flex: 1 1 auto;
+  min-height: 88px;
+  max-height: min(70dvh, calc(100dvh - 12rem));
+}
+
+.command-composer:has(> .voice-comms) > .confirm-sheet {
+  max-height: min(52dvh, calc(100dvh - 16rem));
 }
 
 .confirm-sheet-head {
@@ -6951,7 +6957,7 @@ textarea:focus-visible {
   min-width: 0;
   align-items: center;
   gap: 12px;
-  padding: 0 16px;
+  padding: 0 19px 0 17px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -7004,7 +7010,7 @@ textarea:focus-visible {
 .confirm-sheet-body {
   display: grid;
   min-height: 0;
-  padding: 12px 16px;
+  padding: 12px 19px 12px 17px;
   overflow: auto;
 }
 
@@ -7016,7 +7022,7 @@ textarea:focus-visible {
   align-items: center;
   gap: 16px;
   min-height: 44px;
-  padding: 6px 12px 6px 16px;
+  padding: 6px 19px 6px 17px;
   border-top: 1px solid var(--line);
 }
 
@@ -9630,20 +9636,78 @@ textarea:focus-visible {
   display: none;
 }
 
+/* One flat panel. The transcript, the review sheet, the activity strip and the
+   command line are sections of this surface, not boxes of their own: the border,
+   the 3px state rail and the background all live here, and every child sits on
+   the same 20px spine (3px rail + 17px left, 1px border + 19px right). */
 .command-composer {
   position: fixed;
   right: var(--app-gutter);
   bottom: var(--app-gutter);
   left: var(--app-gutter);
   z-index: 70;
-  display: grid;
-  gap: 0;
-  filter:
-    drop-shadow(0 20px 34px rgba(0, 0, 0, 0.62))
-    drop-shadow(0 0 10px rgba(71, 198, 125, 0.07));
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: calc(100dvh - var(--app-gutter) * 2);
+  border: 1px solid rgba(114, 231, 170, 0.22);
+  border-left: 3px solid var(--green);
+  border-radius: 2px;
+  background: #05150d;
+  box-shadow:
+    0 20px 34px rgba(0, 0, 0, 0.62),
+    0 0 18px rgba(55, 176, 107, 0.07),
+    inset 0 1px rgba(179, 255, 199, 0.04);
   transition:
+    border-color 160ms ease,
     opacity 140ms ease,
     transform 140ms ease;
+}
+
+.command-composer > * {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+/* The rail carries the state, so no child needs its own coloured chrome. The
+   voice phase sets it; an in-flight command outranks the phase for its duration.
+   The transmitting selector doubles the class so it beats the voice-phase rules
+   above, which are one class more specific than a bare state class would be. */
+.command-composer:has(> .voice-comms.voice-review) {
+  border-color: rgba(227, 184, 105, 0.3);
+  border-left-color: #e3b869;
+}
+
+.command-composer:has(> .voice-comms.voice-error) {
+  border-color: rgba(240, 126, 126, 0.34);
+  border-left-color: var(--danger);
+}
+
+.command-composer:has(> .voice-comms.voice-off) {
+  border-left-color: #557663;
+}
+
+/* Focus brightens the hairline only: the rail belongs to the phase. */
+.command-composer:has(> .command-line-shell:focus-within) {
+  border-top-color: rgba(114, 231, 170, 0.5);
+  border-right-color: rgba(114, 231, 170, 0.5);
+  border-bottom-color: rgba(114, 231, 170, 0.5);
+}
+
+.command-composer:has(> .command-line-shell.command-line-shell-transmitting) {
+  border-color: rgba(99, 199, 216, 0.42);
+  border-left-color: var(--cyan);
+  animation: command-transmit-pulse 1.35s ease-in-out infinite;
+}
+
+.command-composer:has(> .command-line-shell-success) {
+  animation: command-success-flash 620ms ease-out both;
+}
+
+.command-composer:has(> .command-line-shell-error) {
+  animation:
+    command-error-shake 360ms ease-out,
+    command-error-flash 1.1s ease-out both;
 }
 
 .app-screen-notebook .command-composer {
@@ -9672,13 +9736,12 @@ textarea:focus-visible {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  min-height: 31px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-bottom: 0;
+  min-height: 32px;
+  padding: 0 19px 0 17px;
+  border: 0;
   color: #8bb49d;
-  background: rgba(4, 17, 11, 0.98);
-  font-size: 10px;
+  background: transparent;
+  font-size: 11px;
 }
 
 .command-result span {
@@ -9692,7 +9755,6 @@ textarea:focus-visible {
 }
 
 .command-result-error {
-  border-color: rgba(240, 126, 126, 0.45);
   color: #ffaaaa;
 }
 
@@ -9702,31 +9764,21 @@ textarea:focus-visible {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 34px;
-  padding: 0 13px;
-  border: 1px solid rgba(99, 199, 216, 0.36);
-  border-bottom: 0;
+  min-height: 32px;
+  padding: 0 19px 0 17px;
+  border: 0;
   color: #8fcbd3;
-  background:
-    linear-gradient(90deg, rgba(99, 199, 216, 0.08), transparent 46%),
-    rgba(3, 16, 14, 0.98);
-  box-shadow: inset 3px 0 rgba(99, 199, 216, 0.5);
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  background: transparent;
+  font-size: 11px;
   animation: mcp-activity-enter 180ms ease-out both;
 }
 
 .mcp-activity-success {
-  border-color: rgba(114, 231, 170, 0.38);
   color: #8edeb3;
-  box-shadow: inset 3px 0 rgba(114, 231, 170, 0.62);
 }
 
 .mcp-activity-error {
-  border-color: rgba(240, 126, 126, 0.45);
   color: #f3a0a0;
-  box-shadow: inset 3px 0 rgba(240, 126, 126, 0.68);
 }
 
 .mcp-activity-signal {
@@ -9769,8 +9821,8 @@ textarea:focus-visible {
 .mcp-activity-copy strong {
   flex: 0 0 auto;
   color: currentColor;
-  font-size: 9px;
-  letter-spacing: 0.18em;
+  font-size: 11px;
+  letter-spacing: 0.14em;
 }
 
 .mcp-activity-copy span {
@@ -9782,8 +9834,7 @@ textarea:focus-visible {
 
 .mcp-activity-state {
   color: currentColor;
-  font-size: 8px;
-  letter-spacing: 0.14em;
+  font-size: 11px;
 }
 
 .command-line-shell {
@@ -9792,18 +9843,11 @@ textarea:focus-visible {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: 56px;
-  padding: 0 9px 0 17px;
-  border: 1px solid rgba(114, 231, 170, 0.62);
-  border-right-width: 3px;
-  border-left-width: 3px;
-  background: rgba(3, 17, 10, 0.995);
-  box-shadow:
-    inset 0 0 28px rgba(68, 176, 112, 0.09),
-    0 0 0 1px rgba(114, 231, 170, 0.1),
-    0 0 18px rgba(55, 176, 107, 0.09);
-  animation: command-idle-breathe 5s ease-in-out infinite;
+  padding: 0 19px 0 17px;
+  border: 0;
+  background: transparent;
 }
 
 .command-line-shell > :not(.command-transmit-scan):not(.command-suggestions) {
@@ -9811,28 +9855,6 @@ textarea:focus-visible {
   z-index: 1;
 }
 
-.command-line-shell-transmitting {
-  border-color: rgba(99, 199, 216, 0.7);
-  animation: command-transmit-pulse 1.35s ease-in-out infinite;
-}
-
-.command-line-shell-success {
-  animation: command-success-flash 620ms ease-out both;
-}
-
-.command-line-shell-error {
-  animation:
-    command-error-shake 360ms ease-out,
-    command-error-flash 1.1s ease-out both;
-}
-
-.command-line-shell:focus-within {
-  border-color: var(--green);
-  box-shadow:
-    inset 0 0 30px rgba(68, 176, 112, 0.12),
-    0 0 0 1px rgba(114, 231, 170, 0.18),
-    0 0 22px rgba(55, 176, 107, 0.14);
-}
 
 .command-chevron {
   color: var(--green);
@@ -9856,43 +9878,44 @@ textarea:focus-visible {
 }
 
 .command-model-selector {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 5px;
-  min-width: 138px;
-  height: 32px;
-  padding: 0 7px;
-  border: 1px solid rgba(99, 199, 216, 0.24);
-  color: #7bbac5;
-  background: rgba(10, 40, 40, 0.42);
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    color 160ms ease;
+  display: flex;
+  align-items: stretch;
+  gap: 7px;
+  min-width: 0;
+  padding: 0 11px;
+  color: #cfead9;
+  transition: color 160ms ease;
 }
 
 .command-model-selector:hover,
 .command-model-selector:focus-within {
-  border-color: rgba(99, 199, 216, 0.62);
-  color: #a5e0e8;
-  box-shadow: 0 0 14px rgba(99, 199, 216, 0.12);
+  color: var(--control-fg-hover);
+}
+
+.command-model-selector > svg {
+  flex: 0 0 auto;
+  align-self: center;
+  color: #7fa992;
 }
 
 .command-model-selector select {
   width: 100%;
-  max-width: 96px;
+  min-width: 0;
+  max-width: 132px;
+  height: 100%;
   padding: 0;
   border: 0;
   outline: 0;
   appearance: none;
   color: inherit;
   background: transparent;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font-size: 11px;
   cursor: pointer;
+}
+
+.command-model-selector select:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
 }
 
 .command-model-selector select:disabled {
@@ -9907,30 +9930,25 @@ textarea:focus-visible {
 
 .command-context {
   display: inline-flex;
-  min-width: 142px;
-  height: 32px;
-  box-sizing: border-box;
+  min-width: 0;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 9px;
-  border: 1px solid rgba(114, 231, 170, 0.34);
+  gap: 7px;
+  padding: 0 11px;
   color: #9ee0ba;
-  background: rgba(30, 92, 57, 0.22);
-  font-size: 9px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
   white-space: nowrap;
 }
 
 .command-send {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(114, 231, 170, 0.32);
+  border-radius: 2px;
   color: var(--green);
-  background: rgba(39, 106, 69, 0.18);
+  background: rgba(39, 106, 69, 0.22);
   cursor: pointer;
   transition:
     border-color 150ms ease,
@@ -9983,16 +10001,19 @@ textarea:focus-visible {
   animation: command-scan-sweep 1.35s linear infinite;
 }
 
+/* Anchored to the panel's outer edges: the command row it sits on has no border
+   of its own any more, so the offsets are the panel's 3px rail and 1px border. */
 .command-suggestions {
   position: absolute;
   right: -1px;
   bottom: calc(100% + 8px);
-  left: -1px;
+  left: -3px;
   z-index: 120;
   overflow: auto;
   max-height: 260px;
   padding: 6px;
-  border: 1px solid var(--line-bright);
+  border: 1px solid rgba(114, 231, 170, 0.28);
+  border-radius: 2px;
   background: rgba(3, 14, 9, 0.995);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.58);
 }
@@ -10288,32 +10309,17 @@ textarea:focus-visible {
   }
 }
 
-@keyframes command-idle-breathe {
-  0%, 100% {
-    box-shadow:
-      inset 0 0 24px rgba(68, 176, 112, 0.07),
-      0 0 0 1px rgba(114, 231, 170, 0.08),
-      0 0 12px rgba(55, 176, 107, 0.06);
-  }
-  50% {
-    box-shadow:
-      inset 0 0 31px rgba(68, 176, 112, 0.11),
-      0 0 0 1px rgba(114, 231, 170, 0.13),
-      0 0 20px rgba(55, 176, 107, 0.11);
-  }
-}
-
 @keyframes command-transmit-pulse {
   0%, 100% {
     box-shadow:
+      0 20px 34px rgba(0, 0, 0, 0.62),
       inset 0 0 24px rgba(99, 199, 216, 0.1),
-      0 0 0 1px rgba(99, 199, 216, 0.12),
       0 0 14px rgba(99, 199, 216, 0.12);
   }
   50% {
     box-shadow:
+      0 20px 34px rgba(0, 0, 0, 0.62),
       inset 0 0 36px rgba(99, 199, 216, 0.2),
-      0 0 0 1px rgba(99, 199, 216, 0.2),
       0 0 28px rgba(99, 199, 216, 0.24);
   }
 }
@@ -10330,15 +10336,17 @@ textarea:focus-visible {
 @keyframes command-success-flash {
   0% {
     border-color: rgba(114, 231, 170, 0.95);
+    border-left-color: var(--green);
     box-shadow:
       inset 0 0 26px rgba(114, 231, 170, 0.24),
       0 0 30px rgba(114, 231, 170, 0.3);
   }
   100% {
-    border-color: rgba(114, 231, 170, 0.62);
+    border-color: rgba(114, 231, 170, 0.22);
+    border-left-color: var(--green);
     box-shadow:
-      inset 0 0 28px rgba(68, 176, 112, 0.09),
-      0 0 18px rgba(55, 176, 107, 0.09);
+      0 20px 34px rgba(0, 0, 0, 0.62),
+      0 0 18px rgba(55, 176, 107, 0.07);
   }
 }
 
@@ -10353,13 +10361,15 @@ textarea:focus-visible {
 @keyframes command-error-flash {
   0% {
     border-color: rgba(240, 126, 126, 0.95);
+    border-left-color: var(--danger);
     box-shadow:
       inset 0 0 24px rgba(240, 126, 126, 0.22),
       0 0 26px rgba(240, 126, 126, 0.28);
   }
   100% {
-    border-color: rgba(240, 126, 126, 0.48);
-    box-shadow: inset 0 0 24px rgba(240, 126, 126, 0.08);
+    border-color: rgba(240, 126, 126, 0.42);
+    border-left-color: var(--danger);
+    box-shadow: 0 20px 34px rgba(0, 0, 0, 0.62);
   }
 }
 
@@ -10642,30 +10652,19 @@ textarea:focus-visible {
   }
 
   .command-line-shell {
-    gap: 6px;
-    padding-right: 7px;
-    padding-left: 11px;
+    gap: 8px;
   }
 
-  .command-model-selector {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    min-width: 108px;
-    padding: 0 5px;
+  .command-channel > * {
+    padding: 0 7px;
   }
 
-  .command-model-selector > svg:first-of-type,
   .mcp-activity-state {
     display: none;
   }
 
   .command-model-selector select {
     max-width: 78px;
-  }
-
-  .command-context {
-    min-width: 108px;
-    padding: 0 6px;
-    font-size: 8px;
   }
 }
 
@@ -11930,7 +11929,7 @@ textarea:focus-visible {
     opacity: 0.55;
   }
 
-  .command-line-shell,
+  .command-composer,
   .mcp-activity,
   .mcp-activity-signal i,
   .command-transmit-scan::after {
