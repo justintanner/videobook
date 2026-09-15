@@ -22,6 +22,7 @@ import {
   TIMESTAMP_PARAMS,
 } from "../chat-router.js";
 import { planStackedChainFromQuery, preflightChainPlan } from "../chain-plan.js";
+import { withoutUnrequestedSettings } from "../chat-generation-settings.js";
 import { rewriteChatGenerationPrompt } from "../chat-prompt-rewrite.js";
 import type { ChatRoutingNotebookContext } from "../chat-router.js";
 import { parseTime } from "../time-parse.js";
@@ -856,10 +857,23 @@ async function handleChatRequest(
   }
 
   // 7. Apply fixups (spread to avoid mutating decision.params for logging)
-  const params = normalizeChatRoutedParams(
+  const routedParams = normalizeChatRoutedParams(
     decision.tool,
     normalizeChatTimestampParams(decision.tool, decision.params ?? {}),
   );
+
+  // The routing prompt asks the model to omit optional parameters so each tool
+  // can apply its defaults; enforce that for generation rather than trusting
+  // it, since an invented duration or a muted soundtrack costs a real
+  // generation. Reads the query, not the routed prompt, so only what the
+  // person actually said counts as asking.
+  const params = routableTool.category === "generation"
+    ? withoutUnrequestedSettings({
+      query: expandedPrompt,
+      params: routedParams,
+      requiredParams: routableTool.requiredParams,
+    }).params
+    : routedParams;
 
   // Inject book_id
   params.book_id = bookId;

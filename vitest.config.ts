@@ -98,6 +98,7 @@ export default defineConfig({
       'server/src/generation-registry.test.ts',
       'server/src/retired-kling-seedance.test.ts',
       'server/src/retired-wan-2x.test.ts',
+      'server/src/chat-generation-settings.test.ts',
       'server/src/chat-prompt-rewrite.test.ts',
       'server/src/chat-router.test.ts',
       'server/src/chat-models.test.ts',

@@ -93,8 +93,8 @@ describe("voice chat action policy", () => {
     expect(engine.artifacts.get(artifactId)).toMatchObject({ ok: true, value: { label: "opening" } });
   });
 
-  it("retains generation aliases, options and the paid review gate", async () => {
-    const result = await prepare("Generate a cat video", {
+  it("retains generation aliases, the options the speaker asked for, and the paid review gate", async () => {
+    const result = await prepare("Generate a 5 second 720p cat video in 16:9", {
       tool: "generate_video",
       params: { prompt: "A cat playing", duration: "5", aspect_ratio: "16:9", resolution: "720p" },
       message: "Review this cat video generation.",
@@ -104,6 +104,19 @@ describe("voice chat action policy", () => {
       params: { duration: "5", aspect_ratio: "16:9", resolution: "720p" },
       confirmation: { required: true },
     });
+  });
+
+  it("drops generation options the speaker never asked for", async () => {
+    const result = await prepare("Generate a cat video", {
+      tool: "generate_video",
+      params: { prompt: "A cat playing", duration: "5", aspect_ratio: "16:9", resolution: "720p" },
+      message: "Review this cat video generation.",
+    });
+    const plan = chatActionPlanSchema.parse(value(result));
+    expect(plan.params).not.toHaveProperty("duration");
+    expect(plan.params).not.toHaveProperty("aspect_ratio");
+    expect(plan.params).not.toHaveProperty("resolution");
+    expect(plan.params).toMatchObject({ prompt: "A cat playing" });
   });
 
   it("retains the existing auto-apply policy for duplicate actions", async () => {
