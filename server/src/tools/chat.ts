@@ -53,7 +53,11 @@ import {
   NOTEBOOK_GRID_ADDRESS_SOURCE,
   replaceNotebookMentions,
 } from "videobook-engine/notebook-mentions";
-import { resolveNotebookPromptReferences } from "../notebook-reference-resolver.js";
+import {
+  notebookMediaAddresses,
+  resolveNotebookPromptReferences,
+  tagNotebookGridAddresses,
+} from "../notebook-reference-resolver.js";
 
 export type ChatDecision = {
   tool: string;
@@ -607,9 +611,19 @@ async function handleChatRequest(
     return error(cause instanceof Error ? cause.message : String(cause));
   }
   const notebookContext = buildChatNotebookContext(engine, notebookDocument);
+  const notebookAddresses = notebookDocument
+    ? notebookMediaAddresses(notebookDocument)
+    : new Set<string>();
+
+  // 0. Tag bare grid addresses ("the image at A1") so the steps below see the
+  // reference the speaker meant instead of prose.
+  const taggedPrompt = tagNotebookGridAddresses(prompt, notebookAddresses);
 
   // 1. Expand @s01 slot refs → the artifact ids they occupy
-  const expandedPrompt = expandSlotRefs(prompt, timelineSlotArtifactIds(engine));
+  const expandedPrompt = expandSlotRefs(
+    taggedPrompt,
+    timelineSlotArtifactIds(engine),
+  );
   const stackedPlan = planStackedChainFromQuery(expandedPrompt);
   if (stackedPlan) {
     const { getAllToolDefs } = await import("./index.js");
@@ -657,7 +671,7 @@ async function handleChatRequest(
       kind: "chat-action-plan",
       planId: uuidv7(),
       bookId,
-      prompt,
+      prompt: taggedPrompt,
       routedTool: "chain",
       tool: "chain",
       params: validated.data,
@@ -829,7 +843,9 @@ async function handleChatRequest(
   decision = {
     tool: stackedRoute.tool,
     params: stackedRoute.params,
-    message: stackedRoute.message,
+    // The voice path routes the spoken sentence here, so the sheet's title
+    // reads in the same vocabulary as the prompt beneath it.
+    message: tagNotebookGridAddresses(stackedRoute.message, notebookAddresses),
   };
 
   // 6. Validate tool exists in routable registry
@@ -881,6 +897,12 @@ async function handleChatRequest(
     Object.assign(params, await applySpeechRoutingDefaults(decision.tool, params));
   }
 
+  // The voice model writes its own params, so a bare address can survive there
+  // even when the query carried none.
+  if (typeof params.prompt === "string") {
+    params.prompt = tagNotebookGridAddresses(params.prompt, notebookAddresses);
+  }
+
   // 8. Look up handler from tool defs
   const targetDef = allDefs.find((d) => d.name === routableTool.actualTool);
 
@@ -926,7 +948,7 @@ async function handleChatRequest(
       kind: "chat-action-plan",
       planId: uuidv7(),
       bookId,
-      prompt,
+      prompt: taggedPrompt,
       routedTool: decision.tool,
       tool: targetDef.name,
       params: validated.data,
@@ -955,7 +977,7 @@ async function handleChatRequest(
   }
 
   if (!proposedDecision) appendChatHistory(engine, {
-    prompt,
+    prompt: taggedPrompt,
     tool: decision.tool,
     params: decision.params,
     message: decision.message,

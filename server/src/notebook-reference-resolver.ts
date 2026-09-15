@@ -8,10 +8,12 @@ import {
   resolveNotebookCellArtifactId,
 } from "videobook-engine";
 import {
+  notebookGridAddress,
   notebookGridTag,
   parseNotebookGridAddress,
 } from "videobook-engine/notebook-grid";
 import {
+  NOTEBOOK_GRID_ADDRESS_SOURCE,
   normalizeNotebookReference,
   replaceNotebookMentions,
   scanNotebookMentions,
@@ -249,4 +251,40 @@ export function resolveNotebookPromptReferences(input: {
         }))
     : [];
   return { prompt, resolved, unresolved, unconnected };
+}
+
+// A spoken or typed request names a cell the way the grid labels it: "the image
+// at A1". Bare like that it is prose, so nothing above resolves it, the draft
+// connects no inputs, and the generation prompt keeps words where an address
+// belongs. Tagging closes that gap, but only for addresses this notebook can
+// actually answer -- an unmatched token stays prose.
+const BARE_GRID_ADDRESS = new RegExp(
+  `(?<![\\w@-])(?:${NOTEBOOK_GRID_ADDRESS_SOURCE})(?![\\w-])`,
+  "giu",
+);
+
+/** Addresses of cells that already hold media this notebook can reference. */
+export function notebookMediaAddresses(
+  document: NotebookDocument,
+): ReadonlySet<string> {
+  const addresses = new Set<string>();
+  for (const cell of document.cells) {
+    if (mediaType(cell) === null) continue;
+    if (typeof resolveNotebookCellArtifactId(document, cell) !== "string") {
+      continue;
+    }
+    addresses.add(notebookGridAddress(cell.slot));
+  }
+  return addresses;
+}
+
+export function tagNotebookGridAddresses(
+  text: string,
+  addresses: ReadonlySet<string>,
+): string {
+  if (addresses.size === 0) return text;
+  return text.replace(BARE_GRID_ADDRESS, (match) => {
+    const address = match.toLowerCase();
+    return addresses.has(address) ? `@${address}` : match;
+  });
 }

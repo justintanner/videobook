@@ -133,4 +133,29 @@ describe("voice chat action policy", () => {
     const wrongNotebook = await prepare("List assets", { tool: "list_assets", params: {}, message: "List" }, "01900000-0000-7000-8000-000000000099");
     expect(wrongNotebook.isError).toBe(true);
   });
+
+  it("tags a spoken grid address so the drafted generation names the cell", async () => {
+    const source = await engine.artifacts.create("image", "motion reference");
+    if (!source.ok) throw new Error(source.error.message);
+    const image = await sharp({ create: { width: 64, height: 64, channels: 3, background: "#2f7d52" } }).png().toBuffer();
+    const stored = await engine.files.write(source.value.artifactId, "reference.png", image);
+    if (!stored.ok) throw new Error(stored.error.message);
+    const document = engine.notebooks.read(notebookId);
+    if (!document.ok) throw new Error(document.error.message);
+    const written = await engine.notebooks.write({
+      ...document.value,
+      cells: [...document.value.cells, engine.notebooks.createCell({
+        type: "image", slot: { row: 2, column: 0 }, outputArtifactId: source.value.artifactId,
+      })],
+    });
+    if (!written.ok) throw new Error(written.error.message);
+
+    const spoken = "Animate the image at C1 with a slow push in.";
+    const routed = await prepare(spoken, { tool: "generate_video", params: { prompt: spoken }, message: spoken });
+    const plan = chatActionPlanSchema.parse(value(routed));
+    const tagged = "Animate the image at @c1 with a slow push in.";
+    expect(plan.params.prompt).toBe(tagged);
+    expect(plan.prompt).toBe(tagged);
+    expect(plan.summary).toBe(tagged);
+  });
 });

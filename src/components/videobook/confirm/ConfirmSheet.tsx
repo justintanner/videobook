@@ -4,8 +4,9 @@ import {
   confirmSheetStatus,
   type ConfirmValidation,
 } from '@/videobook/confirm-validation'
-import { ConfirmSheetFooter } from './ConfirmSheetFooter'
-import { ConfirmSheetHeader, type ConfirmSheetEffect } from './ConfirmSheetHeader'
+import { ConfirmSheetActions } from './ConfirmSheetActions'
+import { ConfirmSheetFooter, type ConfirmSheetEffect } from './ConfirmSheetFooter'
+import { ConfirmSheetHeader } from './ConfirmSheetHeader'
 import { ConfirmSheetInitialFocus, useConfirmSheetKeys } from './useConfirmSheetKeys'
 
 interface ConfirmSheetProps {
@@ -28,10 +29,11 @@ interface ConfirmSheetProps {
   validation: ConfirmValidation
 }
 
-// The one shell every pending action renders through: identity strip, body,
-// and a footer whose single status slot explains why Apply is or isn't
-// available. Composer outcomes (a failed apply, an info line) land in that
-// slot while the sheet is open.
+// The one shell every pending action renders through: an identity strip that
+// carries Apply and Cancel, the body, and a footer whose single status slot
+// explains why Apply is or isn't available and what it will do. Composer
+// outcomes (a failed apply, an info line) land in that slot while the sheet
+// is open.
 export function ConfirmSheet({
   address = null,
   applyFormId,
@@ -83,8 +85,18 @@ export function ConfirmSheet({
       onKeyDown={onKeyDown}
     >
       <ConfirmSheetHeader
+        actions={(
+          <ConfirmSheetActions
+            applyDisabled={applyDisabled}
+            applyFormId={applyFormId}
+            applyLabel={applyLabel}
+            busy={busy}
+            busyLabel={status.message ?? busyLabel}
+            failed={status.state === 'failed'}
+            onCancel={onCancel}
+          />
+        )}
         address={address}
-        effect={effect}
         tag={tag}
         title={title}
         titleId={titleId}
@@ -96,12 +108,8 @@ export function ConfirmSheet({
         </Suspense>
       </div>
       <ConfirmSheetFooter
-        applyDisabled={applyDisabled}
-        applyFormId={applyFormId}
-        applyLabel={applyLabel}
-        busy={busy}
+        effect={effect}
         hints={hints}
-        onCancel={onCancel}
         onDismissStatus={dismissStatus}
         secondaryActions={secondaryActions}
         status={status}

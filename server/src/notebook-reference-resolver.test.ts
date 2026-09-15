@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createEngine, type Engine, type NotebookDocument } from "videobook-engine";
-import { resolveNotebookPromptReferences } from "./notebook-reference-resolver.js";
+import {
+  notebookMediaAddresses,
+  resolveNotebookPromptReferences,
+  tagNotebookGridAddresses,
+} from "./notebook-reference-resolver.js";
 
 const roots: string[] = [];
 
@@ -80,6 +84,43 @@ describe("notebook reference resolver", () => {
       artifactId: fixture.imageId,
       message: "@a5 is referenced but not connected",
     }]);
+  });
+
+  it("tags a bare grid address so the reference then resolves", async () => {
+    const fixture = await setup();
+    const addresses = notebookMediaAddresses(fixture.document);
+    expect([...addresses].sort()).toEqual(["a2", "a5"]);
+    const tagged = tagNotebookGridAddresses(
+      "Make a video with Seedance 2.5 using the image at A5 "
+        + "and the motion reference at A2.",
+      addresses,
+    );
+    expect(tagged).toBe(
+      "Make a video with Seedance 2.5 using the image at @a5 "
+        + "and the motion reference at @a2.",
+    );
+    expect(resolveNotebookPromptReferences({
+      engine: fixture.engine,
+      document: fixture.document,
+      prompt: tagged,
+    }).resolved).toMatchObject([
+      { mention: "@a5", artifactId: fixture.imageId },
+      { mention: "@a2", artifactId: fixture.videoId },
+    ]);
+  });
+
+  it("leaves prose and already-written references untouched", async () => {
+    const fixture = await setup();
+    const addresses = notebookMediaAddresses(fixture.document);
+    for (const text of [
+      "pending a7 has no output yet",
+      "empty a3 holds nothing",
+      "already tagged @a5 stays single",
+      "artifact @img-a5 keeps its slug",
+      "serial a52 is not an address",
+      "model wan2 is not an address",
+    ]) expect(tagNotebookGridAddresses(text, addresses), text).toBe(text);
+    expect(tagNotebookGridAddresses("image at A5", new Set())).toBe("image at A5");
   });
 
   it("reports unknown and outputless cells without altering their mentions", async () => {

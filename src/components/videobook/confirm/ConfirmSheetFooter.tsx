@@ -2,6 +2,11 @@ import type { ReactNode } from 'react'
 import { Ban, CircleAlert, TriangleAlert, X } from 'lucide-react'
 import type { ConfirmSheetStatus } from '@/videobook/confirm-validation'
 
+export interface ConfirmSheetEffect {
+  label: string
+  tone: 'default' | 'warning'
+}
+
 function StatusIcon({ state }: { state: ConfirmSheetStatus['state'] }) {
   if (state === 'blocking') return <Ban size={15} aria-hidden="true" />
   if (state === 'failed') return <CircleAlert size={15} aria-hidden="true" />
@@ -26,24 +31,19 @@ function ReadyHints() {
   )
 }
 
+// Why Apply is or isn't available, and what it will do. Apply and Cancel live
+// in the header; this row carries the reading, plus whatever the sheet offers
+// besides those two decisions.
 export function ConfirmSheetFooter({
-  applyDisabled,
-  applyFormId,
-  applyLabel,
-  busy,
+  effect,
   hints,
-  onCancel,
   onDismissStatus,
   secondaryActions,
   status,
   statusId,
 }: {
-  applyDisabled: boolean
-  applyFormId: string
-  applyLabel: string
-  busy: boolean
+  effect: ConfirmSheetEffect | null
   hints: ReactNode
-  onCancel: () => void
   onDismissStatus: () => void
   secondaryActions: ReactNode
   status: ConfirmSheetStatus
@@ -79,26 +79,17 @@ export function ConfirmSheetFooter({
           </button>
         )}
       </div>
-      <div className="confirm-sheet-actions">
-        {secondaryActions}
-        <button type="button" disabled={busy} onClick={onCancel}>
-          Cancel <kbd>Esc</kbd>
-        </button>
-        <button
-          type="submit"
-          form={applyFormId}
-          className="confirm-sheet-apply"
-          disabled={busy || applyDisabled}
-        >
-          {busy
-            ? status.message ?? 'Applying…'
-            : (
-                <>
-                  {status.state === 'failed' ? 'Retry' : applyLabel} <kbd>↵</kbd>
-                </>
-              )}
-        </button>
-      </div>
+      {(secondaryActions || effect) && (
+        <div className="confirm-sheet-aside">
+          {secondaryActions}
+          {effect && (
+            <span className={`confirm-sheet-effect confirm-sheet-effect-${effect.tone}`}>
+              {effect.tone === 'warning' && <TriangleAlert size={11} aria-hidden="true" />}
+              {effect.label}
+            </span>
+          )}
+        </div>
+      )}
     </footer>
   )
 }
