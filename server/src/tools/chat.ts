@@ -22,6 +22,7 @@ import {
   TIMESTAMP_PARAMS,
 } from "../chat-router.js";
 import { planStackedChainFromQuery, preflightChainPlan } from "../chain-plan.js";
+import { rewriteChatGenerationPrompt } from "../chat-prompt-rewrite.js";
 import type { ChatRoutingNotebookContext } from "../chat-router.js";
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
@@ -885,7 +886,9 @@ async function handleChatRequest(
   }
 
   // Inject script content as prompt for generation tools
-  if (scriptContents.length > 0 && routableTool.category === "generation") {
+  const scriptIsPrompt = scriptContents.length > 0
+    && routableTool.category === "generation";
+  if (scriptIsPrompt) {
     const combinedScript = scriptContents.map((s) => s.content).join("\n\n");
     params.prompt = combinedScript;
   }
@@ -901,6 +904,23 @@ async function handleChatRequest(
   // even when the query carried none.
   if (typeof params.prompt === "string") {
     params.prompt = tagNotebookGridAddresses(params.prompt, notebookAddresses);
+  }
+
+  // Rewrite the routed prompt against the target model's guide, so the sheet
+  // reviews the prompt the provider will see rather than the sentence that
+  // picked the tool. A script the speaker attached is their own wording and
+  // stands as written. Runs last: the rewrite has to see resolved mentions to
+  // hand them back intact.
+  if (
+    routableTool.category === "generation"
+    && !scriptIsPrompt
+    && typeof params.prompt === "string"
+  ) {
+    params.prompt = await rewriteChatGenerationPrompt(engine, {
+      bookId,
+      tool: routableTool.actualTool,
+      prompt: params.prompt,
+    });
   }
 
   // 8. Look up handler from tool defs
