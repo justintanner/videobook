@@ -186,7 +186,7 @@ describe('VoiceComms caption visibility', () => {
   })
 
   it('hides the transcript body without dropping caption data from the conversation', () => {
-    const captions = [caption('1', 'one'), caption('2', 'two'), caption('3', 'three')]
+    const captions = [caption('1', 'one'), caption('2', 'two', 'assistant'), caption('3', 'three')]
     const shown = renderComms('listening', captions, true)
     const hidden = renderComms('listening', captions, false)
     expect(shown).toContain('>one</span>')
@@ -239,13 +239,28 @@ describe('VoiceComms caption visibility', () => {
       caption('a', 'first'),
       caption('b', 'second', 'assistant'),
       caption('c', 'third'),
-      { id: 'cut', role: 'user', text: '', final: true, interrupted: true },
+      { id: 'cut', role: 'assistant', text: '', final: true, interrupted: true },
     ])
     expect(many.match(/<p data-final=/g)).toHaveLength(4)
     expect(many).toContain('first')
     expect(many).toContain('second')
     expect(many).toContain('third')
     expect(many).toContain('interrupted')
+
+    // Older exchanges leave the panel so it cannot outgrow the work behind it.
+    const long = renderComms('thinking', [
+      caption('u1', 'oldest ask'),
+      caption('a1', 'oldest reply', 'assistant'),
+      caption('u2', 'newer ask'),
+      caption('a2', 'newer reply', 'assistant'),
+      caption('u3', 'newest ask'),
+      caption('a3', 'newest reply', 'assistant'),
+    ])
+    expect(long.match(/<p data-final=/g)).toHaveLength(4)
+    expect(long).not.toContain('oldest ask')
+    expect(long).not.toContain('oldest reply')
+    expect(long).toContain('newer ask')
+    expect(long).toContain('newest reply')
   })
 
   it('keeps Apply/Cancel guidance and the captions toggle as a non-submit button during review', () => {

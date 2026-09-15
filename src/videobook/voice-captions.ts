@@ -4,8 +4,22 @@ export function captionToggleLabel(visible: boolean): 'Hide captions' | 'Show ca
   return visible ? 'Hide captions' : 'Show captions'
 }
 
+const VISIBLE_EXCHANGES = 2
+
+/**
+ * The last two back and forths, and nothing above them. An exchange starts
+ * when the speaker talks, so the window opens at the second-to-last user row
+ * and runs to the end, keeping whatever the copilot said in reply. The whole
+ * conversation stays in state for the model and the history log; this is only
+ * what the panel shows, so it cannot grow taller than the work behind it.
+ */
 export function displayableCaptions(captions: readonly VoiceCaption[]): VoiceCaption[] {
-  return captions.filter((caption) => caption.text.trim().length > 0 || Boolean(caption.interrupted))
+  const rows = captions.filter((caption) =>
+    caption.text.trim().length > 0 || Boolean(caption.interrupted))
+  const spoken = rows.flatMap((caption, index) =>
+    caption.role === 'user' ? [index] : [])
+  const from = spoken.at(-VISIBLE_EXCHANGES)
+  return from === undefined ? rows : rows.slice(from)
 }
 
 export function captionsEmptyCopy(phase: VoicePhase): string {
