@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { ZodRawShape } from "zod";
 import {
   CHAIN_TOOL_CATALOG,
+  chainApproveInputSchema,
   chainCancelInputSchema,
   chainPlanFingerprint,
   chainStatusInputSchema,
@@ -54,6 +55,18 @@ describe("chain catalog and refs", () => {
     expect(supportedChainTool("chain")).toBeNull();
     expect(supportedChainTool("chat")).toBeNull();
     expect(Object.keys(CHAIN_TOOL_CATALOG).length).toBeGreaterThan(2);
+  });
+
+  it("lets generation be chained, carrying how its output reaches the grid", () => {
+    const video = supportedChainTool("generate_kie_seedance_2_5_video");
+    expect(video?.completion).toBe("generation");
+    expect(video?.placement).toBe("generate_video");
+    expect(video?.artifactOutput).toBe("vid_asset_id");
+    expect(video?.gridFields).toContain("first_frame_ref");
+    expect(video?.gridFields).toContain("image_refs");
+    const image = supportedChainTool("generate_kie_nano_banana_pro_text_to_image");
+    expect(image?.placement).toBe("generate_image");
+    expect(image?.artifactOutput).toBe("img_asset_id");
   });
 
   it("substitutes structured $ref values and never interpolates strings", () => {
@@ -180,6 +193,76 @@ describe("preflightChainPlan", () => {
     const insertedC = await ctx.engine.notebooks.insertCell(notebookId, cellC);
     if (!insertedB.ok || !insertedC.ok) throw new Error("failed to place cells");
   }
+
+  it("marks only the money-spending steps for their own review", async () => {
+    const ctx = await context();
+    await seedVideos(ctx);
+    const result = await preflightChainPlan({
+      action: "run",
+      version: 1,
+      book_id: ctx.bookId,
+      notebook_id: ctx.notebookId,
+      steps: [
+        { id: "frame", tool: "extract_first_frame", params: { asset_id: "@b2" } },
+        {
+          id: "animate",
+          tool: "generate_kie_seedance_2_5_video",
+          params: {
+            prompt: "Animate it",
+            first_frame_ref: { $ref: { step_id: "frame", output: "image_asset_id" } },
+          },
+        },
+      ],
+    }, ctx);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.plan.steps.map((step) => step.requiresApproval)).toEqual([false, true]);
+    // Nothing needs the combined sheet: the frame auto-applies and the paid step
+    // stops on its own.
+    expect(result.plan.autoApply).toBe(true);
+  });
+
+  it("still shows one combined sheet when a free in-place mutation is in the chain", async () => {
+    const ctx = await context();
+    await seedVideos(ctx);
+    const result = await preflightChainPlan({
+      action: "run",
+      version: 1,
+      book_id: ctx.bookId,
+      notebook_id: ctx.notebookId,
+      steps: extractReplaceSteps(),
+    }, ctx);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.plan.steps.map((step) => step.requiresApproval)).toEqual([false, false]);
+    expect(result.plan.autoApply).toBe(false);
+  });
+
+  it("pins every element of an array grid field", async () => {
+    const ctx = await context();
+    await seedVideos(ctx);
+    const result = await preflightChainPlan({
+      action: "run",
+      version: 1,
+      book_id: ctx.bookId,
+      notebook_id: ctx.notebookId,
+      steps: [
+        {
+          id: "animate",
+          tool: "generate_kie_seedance_2_5_video",
+          params: { prompt: "Blend them", video_refs: ["@b2", "@c4"] },
+        },
+      ],
+    }, ctx);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const pins = result.plan.steps[0]?.pins ?? [];
+    expect(pins.map((pin) => [pin.field, pin.index])).toEqual([
+      ["video_refs", 0],
+      ["video_refs", 1],
+    ]);
+    expect(pins.map((pin) => pin.address.replace(/^@/, ""))).toEqual(["b2", "c4"]);
+  });
 
   it("accepts a valid extract then replace $ref plan", async () => {
     const ctx = await context();
@@ -419,5 +502,22 @@ describe("chain input schemas", () => {
       book_id: UUID_A,
       chain_id: UUID_B,
     }).action).toBe("cancel");
+  });
+
+  it("accepts an approve variant naming the waiting step", () => {
+    const parsed = chainApproveInputSchema.parse({
+      action: "approve",
+      book_id: UUID_A,
+      chain_id: UUID_B,
+      step_id: "animate",
+      actor: "voice",
+    });
+    expect(parsed.step_id).toBe("animate");
+    expect(parsed.actor).toBe("voice");
+    expect(chainApproveInputSchema.safeParse({
+      action: "approve",
+      book_id: UUID_A,
+      chain_id: UUID_B,
+    }).success).toBe(false);
   });
 });

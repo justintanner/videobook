@@ -206,6 +206,129 @@ describe("chain MCP tool", () => {
     };
   }
 
+  async function chainAction(
+    action: "status" | "cancel" | "approve",
+    chainId: string,
+    extra: Record<string, unknown> = {},
+  ): Promise<Record<string, unknown>> {
+    const result = await client.callTool({
+      name: "chain",
+      arguments: { action, book_id: bookId, chain_id: chainId, ...extra },
+    });
+    const parsed = parseText(result);
+    if (result.isError) throw new Error(String(parsed.text ?? "chain action failed"));
+    return parsed;
+  }
+
+  type PublicStep = {
+    id: string;
+    tool: string;
+    status: string;
+    error: string | null;
+    requires_approval: boolean;
+    approved_at: string | null;
+    review: { estimateUsd: number | null; estimateUnavailable: boolean; reason: string } | null;
+  };
+
+  function publicSteps(run: Record<string, unknown>): PublicStep[] {
+    return run.steps as PublicStep[];
+  }
+
+  /** A free local step, then a paid generation the chain must stop before running. */
+  function extractThenGenerate(): unknown[] {
+    return [
+      { id: "frame", tool: "extract_first_frame", params: { asset_id: "@b2" } },
+      {
+        id: "animate",
+        tool: "generate_kie_seedance_2_5_video",
+        params: {
+          prompt: "Animate the frame",
+          first_frame_ref: { $ref: { step_id: "frame", output: "image_asset_id" } },
+          duration: "5",
+        },
+      },
+    ];
+  }
+
+  it("stops before a paid step and reports what approving would spend", async () => {
+    await setupBook("pause-paid");
+    const accepted = await runChain(extractThenGenerate());
+    const chainId = String(accepted.chain_id);
+    const settled = await waitForChainRun(engine, chainId, 180_000);
+    expect(settled.status).toBe("awaiting-approval");
+    expect(settled.awaitingStepId).toBe("animate");
+
+    const run = await chainAction("status", chainId);
+    const steps = publicSteps(run);
+    expect(steps.map((step) => step.status)).toEqual(["completed", "awaiting-approval"]);
+    expect(steps[0]?.requires_approval).toBe(false);
+    expect(steps[1]?.requires_approval).toBe(true);
+    expect(steps[1]?.review?.reason).toContain("Step 2 of 2");
+    // Nothing was dispatched: the free step produced media, the paid one did not.
+    expect(steps[0]?.status).toBe("completed");
+    expect(engine.jobs.queue.list({ type: "await_notebook_output" })).toHaveLength(0);
+  });
+
+  it("cancelling a waiting step rejects it and drops the rest, keeping finished work", async () => {
+    await setupBook("reject-paid");
+    const accepted = await runChain([
+      ...extractThenGenerate(),
+      { id: "manifest", tool: "asset_manifest", params: { asset_id: "@b2" } },
+    ]);
+    const chainId = String(accepted.chain_id);
+    await waitForChainRun(engine, chainId, 180_000);
+
+    const cancelled = await chainAction("cancel", chainId);
+    expect(cancelled.status).toBe("cancelled");
+    const steps = publicSteps(cancelled);
+    expect(steps.map((step) => step.status)).toEqual(["completed", "rejected", "skipped"]);
+    // The frame the first step made is still there; cancelling rolls nothing back.
+    const finished = await waitForChainRun(engine, chainId, 180_000);
+    const frameId = String(finished.steps[0]?.outputs?.image_asset_id);
+    expect(engine.artifacts.get(frameId).ok).toBe(true);
+  });
+
+  it("approves a waiting step once, and a second approve changes nothing", async () => {
+    await setupBook("approve-once");
+    const accepted = await runChain(extractThenGenerate());
+    const chainId = String(accepted.chain_id);
+    await waitForChainRun(engine, chainId, 180_000);
+
+    const approved = await chainAction("approve", chainId, { step_id: "animate", actor: "chat" });
+    expect(approved.awaiting_step_id).toBeNull();
+    expect(publicSteps(approved)[1]?.approved_at).not.toBeNull();
+
+    // No provider key in tests, so the dispatch this approval authorised fails at
+    // the key guard rather than reaching a provider. The transition is the point.
+    const settled = await waitForChainRun(engine, chainId, 180_000);
+    expect(settled.status).toBe("failed");
+    expect(settled.steps[1]?.error).toContain("KIE_API_KEY");
+
+    const again = await client.callTool({
+      name: "chain",
+      arguments: { action: "approve", book_id: bookId, chain_id: chainId, step_id: "animate" },
+    });
+    const secondApproval = parseText(again);
+    expect(again.isError).toBeFalsy();
+    expect(publicSteps(secondApproval)[1]?.status).toBe("failed");
+  });
+
+  it("keeps a paused chain paused across a restart", async () => {
+    await setupBook("restart-paused");
+    const accepted = await runChain(extractThenGenerate());
+    const chainId = String(accepted.chain_id);
+    await waitForChainRun(engine, chainId, 180_000);
+
+    const { resumeOpenChains } = await import("../chain-executor.js");
+    const { getAllToolDefs } = await import("./index.js");
+    const defs = getAllToolDefs(engine);
+    resumeOpenChains(engine, (name) => defs.find((entry) => entry.name === name));
+
+    const after = await chainAction("status", chainId);
+    expect(after.status).toBe("awaiting-approval");
+    expect(publicSteps(after)[1]?.status).toBe("awaiting-approval");
+  });
+
   it("lists chain as a public MCP tool", async () => {
     await setupBook("list");
     const tools = await client.listTools();

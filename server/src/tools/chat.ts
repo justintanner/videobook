@@ -512,13 +512,15 @@ function appendChatHistory(
     .catch(() => {});
 }
 
-function autoApplyReason(tool: string): string {
+function autoApplyReason(tool: string, chainPausesPerStep = false): string {
   return tool === "duplicate_asset"
     ? "Duplication is reversible and only adds a copied asset and cell"
     : tool === "extract_audio"
     ? "Audio extraction is free, local, and only adds derived media"
     : tool === "chain"
-    ? "This chain only reads or auto-applies existing local actions"
+    ? chainPausesPerStep
+      ? "Every step that spends money stops for its own review before it runs"
+      : "This chain only reads or auto-applies existing local actions"
     : "Frame extraction is free and only adds a new image cell";
 }
 
@@ -956,6 +958,7 @@ async function handleChatRequest(
     const summary = decision.message.trim()
       || `${effect === "generation" ? "Generate" : "Apply"} with ${decision.tool}`;
     let autoApply = routableTool.autoApply;
+    let chainPausesPerStep = false;
     if (targetDef.name === "chain") {
       const preflight = await preflightChainPlan({
         action: "run",
@@ -977,6 +980,7 @@ async function handleChatRequest(
       });
       if (!preflight.ok) return error(preflight.error);
       autoApply = preflight.plan.autoApply;
+      chainPausesPerStep = preflight.plan.steps.some((step) => step.requiresApproval);
     }
     return json({
       kind: "chat-action-plan",
@@ -992,7 +996,7 @@ async function handleChatRequest(
       confirmation: {
         required: !autoApply,
         reason: autoApply
-          ? autoApplyReason(targetDef.name)
+          ? autoApplyReason(targetDef.name, chainPausesPerStep)
           : effect === "generation"
           ? "This request creates generated media and may incur provider spend"
           : "This request changes the current book",

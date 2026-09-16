@@ -172,6 +172,29 @@ describe('spoken decisions about the review on screen', () => {
     }
   })
 
+  it('lets a chain step be applied or cancelled, but never revised', () => {
+    expect(planVoiceReviewCommand({ decision: 'apply' }, { kind: 'chain-step' }))
+      .toEqual({ kind: 'command', input: '/apply' })
+    expect(planVoiceReviewCommand({ decision: 'cancel' }, { kind: 'chain-step' }))
+      .toEqual({ kind: 'command', input: '/cancel' })
+    const revised = planVoiceReviewCommand(
+      { decision: 'revise', prompt: 'make it longer' },
+      { kind: 'chain-step' },
+    )
+    expect(revised).toMatchObject({ kind: 'refused', outcome: { status: 'review' } })
+    if (revised.kind === 'refused') {
+      expect(revised.outcome.message).toContain('cancel to stop the whole chain')
+    }
+    const rewritten = planVoiceReviewCommand(
+      { decision: 'apply', prompt: 'different words' },
+      { kind: 'chain-step' },
+    )
+    expect(rewritten).toMatchObject({ kind: 'refused', outcome: { status: 'review' } })
+    if (rewritten.kind === 'refused') {
+      expect(rewritten.outcome.message).toContain("can't be rewritten")
+    }
+  })
+
   it('reads a failed apply as a review that is still waiting', () => {
     expect(pendingCommandVoiceOutcome('/apply', { ok: false, message: 'Write a prompt before applying.' }))
       .toEqual({ status: 'review', message: 'Write a prompt before applying.' })

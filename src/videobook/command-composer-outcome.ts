@@ -38,15 +38,20 @@ export function composerInputAfterOutcome(
 /**
  * How a pending action's outcome reads to the voice session. A failed apply
  * leaves the review on screen, so it stays a review rather than a failure;
- * work the server describes as started is queued, not finished.
+ * work the server describes as started is queued, not finished. A successful
+ * apply that puts another sheet up — the next paid step of a chain — is also a
+ * review, or the session would drop its lock and stop taking spoken decisions.
  */
 export function pendingCommandVoiceOutcome(
   input: string,
-  outcome: { ok: boolean; message: string },
+  outcome: { ok: boolean; message: string; nextInput?: string },
 ): VoiceOutcome {
   if (!outcome.ok) return { status: 'review', message: outcome.message }
   if (input.trim().toLowerCase() === '/cancel') {
     return { status: 'cancelled', message: outcome.message }
+  }
+  if (outcome.nextInput?.startsWith('/apply')) {
+    return { status: 'review', message: outcome.message }
   }
   return {
     status: /queued|started|running|processing/i.test(outcome.message)

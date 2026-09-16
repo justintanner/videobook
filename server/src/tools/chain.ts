@@ -5,9 +5,11 @@ import {
   type ChainPreflightContext,
 } from "../chain-plan.js";
 import {
+  approveChainStep,
   cancelChainRun,
   getChainRun,
   preflightAndAccept,
+  type ChainApprovalActor,
   type ChainRunRecord,
 } from "../chain-executor.js";
 import { AUTO_APPLY_TOOL_NAMES, effectForTool } from "../chat-router.js";
@@ -58,6 +60,7 @@ function publicRun(run: ChainRunRecord): Record<string, unknown> {
     request_id: run.requestId,
     status: run.status,
     error: run.error,
+    awaiting_step_id: run.awaitingStepId,
     steps: run.steps.map((step) => ({
       id: step.id,
       tool: step.tool,
@@ -65,6 +68,9 @@ function publicRun(run: ChainRunRecord): Record<string, unknown> {
       outputs: step.outputs,
       error: step.error,
       child_job_ids: step.childJobIds,
+      requires_approval: step.requiresApproval,
+      approved_at: step.approval?.approvedAt ?? null,
+      review: step.review,
     })),
   };
 }
@@ -73,10 +79,10 @@ export function chainDef(engine: Engine): ToolDef {
   return {
     name: "chain",
     description:
-      "Run a bounded ordered list of existing book actions, passing earlier step outputs through structured {$ref:{step_id,output}} references. Use action=run to start, action=status or action=cancel with chain_id to inspect or stop a run.",
+      "Run a bounded ordered list of existing book actions, passing earlier step outputs through structured {$ref:{step_id,output}} references. A step that spends money stops first and waits for its own review. Use action=run to start, action=status or action=cancel with chain_id to inspect or stop a run, and action=approve with chain_id and step_id to let a waiting step spend and carry on. Cancelling drops every remaining step.",
     scope: "book",
     schema: {
-      action: z.enum(["run", "status", "cancel"]).default("run"),
+      action: z.enum(["run", "status", "cancel", "approve"]).default("run"),
       version: z.literal(1).optional(),
       book_id: z.string().uuid().describe("Book UUID"),
       notebook_id: z.string().uuid().optional()
@@ -87,9 +93,14 @@ export function chainDef(engine: Engine): ToolDef {
         .describe("Existing chain id for status or cancel"),
       steps: z.array(chainStepSchema).optional()
         .describe("Ordered steps for action=run"),
+      step_id: z.string().min(1).max(64).optional()
+        .describe("Step waiting for approval, required for action=approve"),
+      actor: z.enum(["chat", "voice", "api"]).optional()
+        .describe("Which surface approved the step"),
     },
     handler: async (args) => {
-      const action = (args.action as "run" | "status" | "cancel" | undefined) ?? "run";
+      const action = (args.action as "run" | "status" | "cancel" | "approve" | undefined)
+        ?? "run";
       const bookId = args.book_id as string;
       const notebookId = args.notebook_id as string | undefined;
       const lookup = await toolLookup(engine);
@@ -99,6 +110,21 @@ export function chainDef(engine: Engine): ToolDef {
         const run = getChainRun(engine, chainId);
         if (!run || run.bookId !== bookId) return error("Chain run not found");
         return json(publicRun(run));
+      }
+      if (action === "approve") {
+        const chainId = args.chain_id;
+        const stepId = args.step_id;
+        if (typeof chainId !== "string") return error("chain_id is required");
+        if (typeof stepId !== "string") return error("step_id is required");
+        const existing = getChainRun(engine, chainId);
+        if (!existing || existing.bookId !== bookId) return error("Chain run not found");
+        try {
+          const actor = (args.actor as ChainApprovalActor | undefined) ?? "api";
+          const run = approveChainStep(engine, chainId, stepId, actor, lookup);
+          return run ? json(publicRun(run)) : error("Chain run not found");
+        } catch (cause) {
+          return error(cause instanceof Error ? cause.message : String(cause));
+        }
       }
       if (action === "cancel") {
         const chainId = args.chain_id;

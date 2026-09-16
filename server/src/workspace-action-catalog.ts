@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { GENERATION_ACTIONS } from "./generation-registry.js";
 import { WORKSPACE_TOOL_GROUPS } from "./workspace-action-groups.js";
+import { toolSpendsMoney } from "./paid-tools.js";
 import { WORKSPACE_ACTION_SURFACES } from "./workspace-action-surfaces.js";
 import { APPLICATION_COMMAND_IDS, UI_ACTION_IDS } from "./workspace-action-contract.js";
 import type {
@@ -47,16 +48,6 @@ const workflowTools: Readonly<Record<string, { actionId: string; reason: string 
     reason: "Import opens a native file picker and uploads media through the file workflow; users do not enter base64 data.",
   },
 };
-
-const billableTools = new Set([
-  "analyze_video", "analyze_jokes", "suggest_cuts", "suggest_sfx", "apply_sfx",
-  "transcribe", "translate_subtitles", "isolate_vocals", "clean_video_audio",
-  "make_cover_song", "extend_audio_asset", "rewrite_prompt", "rewrite_script",
-  "describe_image", "analyze_image_subjects", "edit_image_subjects", "rename_all",
-  "retag_asset", "verify_x_mentions",
-  "create_google_flow_voice", "backfill_asset_tags", "retry_generation", "retry_job",
-  "run_notebook", "run_notebook_cell", "enqueue_notebook_run", "continue_notebook_generation",
-]);
 
 function title(value: string): string {
   const words = value.replace(/^\//u, "").replaceAll(/[_-]/gu, " ");
@@ -116,7 +107,7 @@ function scopeForSchema(schema: ActionInputSchema): WorkspaceAction["scope"] {
 }
 
 function confirmationForTool(tool: ToolDef): WorkspaceAction["confirmation"] {
-  if (generationSpecs.has(tool.name) || billableTools.has(tool.name)) return "generation";
+  if (toolSpendsMoney(tool.name)) return "generation";
   if (["post", "storage_sync", "archive_clip"].includes(tool.name)) return "external";
   if (tool.name === "enqueue_sequence_export" || tool.annotations?.destructiveHint || /^(?:delete_|forget_|remove_|clean_failed|restore_)/u.test(tool.name)) {
     return "destructive";

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { routedActionReview } from '../../src/videobook/chat-action-review'
+import {
+  chainStepReview,
+  routedActionReview,
+  type ChainStepReviewValue,
+} from '../../src/videobook/chat-action-review'
 
 function values(
   tool: string,
@@ -254,5 +258,53 @@ describe('routedActionReview', () => {
         { label: 'Orientation', value: 'Keep source' },
       ],
     })
+  })
+})
+
+describe('chainStepReview', () => {
+  function stepReview(patch: Partial<ChainStepReviewValue> = {}): ChainStepReviewValue {
+    return {
+      stepId: 'animate',
+      index: 1,
+      total: 3,
+      tool: 'generate_kie_seedance_2_5_video',
+      title: 'Generate seedance 2 5 video',
+      address: '@b2',
+      params: { prompt: 'Animate the frame', duration: '5', resolution: '720p' },
+      estimateUsd: 0.38,
+      estimateUnavailable: false,
+      reason: 'Step 2 of 3',
+      ...patch,
+    }
+  }
+
+  it('names the step, its source, and what approving spends', () => {
+    const review = chainStepReview(stepReview(), 1)
+    expect(review.title).toBe('Step 2 of 3 · Generate seedance 2 5 video')
+    expect(review.postText).toBe('Animate the frame')
+    expect(review.effect).toEqual({
+      label: 'Spends about $0.38',
+      tone: 'warning',
+    })
+    const settings = Object.fromEntries(
+      review.settings.map((setting) => [setting.label, setting.value]),
+    )
+    expect(settings.Step).toBe('2 of 3')
+    expect(settings.Source).toBe('@b2')
+    expect(settings['Estimated cost']).toBe('$0.38')
+    expect(settings['Remaining steps']).toBe('1')
+  })
+
+  it('says a cost is unknown rather than showing it as free', () => {
+    const review = chainStepReview(
+      stepReview({ estimateUsd: null, estimateUnavailable: true }),
+      0,
+    )
+    const cost = review.settings.find((setting) => setting.label === 'Estimated cost')
+    expect(cost).toMatchObject({ value: 'Unknown', tone: 'warning' })
+    expect(review.effect?.label).toBe('Cost unknown for this model')
+    expect(
+      review.settings.find((setting) => setting.label === 'Remaining steps')?.value,
+    ).toBe('None')
   })
 })

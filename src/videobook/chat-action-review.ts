@@ -306,6 +306,80 @@ function chainReview(input: RoutedActionReviewInput): RoutedActionReview {
   }
 }
 
+export interface ChainStepReviewValue {
+  stepId: string
+  index: number
+  total: number
+  tool: string
+  title: string
+  address: string | null
+  params: Record<string, unknown>
+  estimateUsd: number | null
+  estimateUnavailable: boolean
+  reason: string
+}
+
+export interface ChainRunValue {
+  chainId: string
+  status: string
+  error: string | null
+  awaitingStepId: string | null
+  steps: Array<{
+    id: string
+    tool: string
+    status: string
+    error: string | null
+    requiresApproval: boolean
+    review: ChainStepReviewValue | null
+  }>
+}
+
+export function formatEstimatedCost(usd: number | null): string {
+  if (usd === null) return 'Unknown'
+  return usd < 0.01 ? `${Math.round(usd * 100)}¢` : `$${usd.toFixed(2)}`
+}
+
+/**
+ * One paused step of a chain. Unlike the combined sheet this names what the
+ * single step will do and what approving it spends, because that is the only
+ * thing the user is being asked to decide.
+ */
+export function chainStepReview(
+  review: ChainStepReviewValue,
+  remaining: number,
+): RoutedActionReview {
+  const settings = [
+    setting('Step', `${review.index + 1} of ${review.total}`),
+    ...(review.address ? [setting('Source', review.address)] : []),
+    ...Object.entries(review.params)
+      .filter(([key]) => key !== 'prompt' && key !== '_provider')
+      .slice(0, 5)
+      .map(([key, value]) => setting(
+        humanize(key),
+        genericValue(key, value, review.params),
+      )),
+    setting(
+      'Estimated cost',
+      formatEstimatedCost(review.estimateUsd),
+      review.estimateUnavailable ? 'warning' : 'default',
+    ),
+    setting('Remaining steps', remaining > 0 ? String(remaining) : 'None'),
+  ]
+  return {
+    title: `Step ${review.index + 1} of ${review.total} · ${review.title}`,
+    settings,
+    effect: {
+      label: review.estimateUnavailable
+        ? 'Cost unknown for this model'
+        : `Spends about ${formatEstimatedCost(review.estimateUsd)}`,
+      tone: 'warning',
+    },
+    postText: typeof review.params.prompt === 'string'
+      ? review.params.prompt
+      : undefined,
+  }
+}
+
 function recordLike(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>

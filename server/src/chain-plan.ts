@@ -15,6 +15,7 @@ import {
   normalizeNotebookReference,
 } from "videobook-engine/notebook-mentions";
 import { resolveNotebookArtifactReference } from "./notebook-reference-resolver.js";
+import { toolSpendsMoney } from "./paid-tools.js";
 
 const CHAIN_VERSION = 1;
 const CHAIN_MIN_STEPS = 1;
@@ -28,13 +29,21 @@ type ChainCompletionKind =
   | "extract_audio"
   | "replace_video_audio"
   | "trim_video"
-  | "extract_frame";
+  | "extract_frame"
+  | "generation";
 
-type ChainToolSpec = {
+/** Which producer/output cell pair the executor builds for a chained generation. */
+export type ChainPlacementKind = "generate_video" | "generate_image";
+
+export type ChainToolSpec = {
   outputs: Record<string, ChainOutputType>;
   completion: ChainCompletionKind;
   gridFields: readonly string[];
   inputTypes: Record<string, ChainOutputType>;
+  /** Present only for generation tools, whose artifacts need placing on the grid. */
+  placement?: ChainPlacementKind;
+  /** Output key carrying the artifact the generation produced. */
+  artifactOutput?: string;
 };
 
 export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
@@ -124,6 +133,61 @@ export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
     gridFields: ["asset_id"],
     inputTypes: { asset_id: "artifact", name: "string" },
   },
+  generate_kie_seedance_2_5_video: {
+    outputs: {
+      vid_asset_id: "artifact",
+      asset_id: "artifact",
+      cell_id: "string",
+      address: "string",
+      job_id: "string",
+      status: "string",
+    },
+    completion: "generation",
+    gridFields: [
+      "first_frame_ref",
+      "last_frame_ref",
+      "image_refs",
+      "video_refs",
+      "audio_refs",
+      "replace_audio_with",
+    ],
+    inputTypes: {
+      prompt: "string",
+      first_frame_ref: "artifact",
+      last_frame_ref: "artifact",
+      image_refs: "artifact",
+      video_refs: "artifact",
+      audio_refs: "artifact",
+      replace_audio_with: "artifact",
+      duration: "string",
+      resolution: "string",
+      aspect_ratio: "string",
+      output_format: "string",
+    },
+    placement: "generate_video",
+    artifactOutput: "vid_asset_id",
+  },
+  generate_kie_nano_banana_pro_text_to_image: {
+    outputs: {
+      img_asset_id: "artifact",
+      asset_id: "artifact",
+      cell_id: "string",
+      address: "string",
+      job_id: "string",
+      status: "string",
+    },
+    completion: "generation",
+    gridFields: ["image_refs"],
+    inputTypes: {
+      prompt: "string",
+      image_refs: "artifact",
+      aspect_ratio: "string",
+      resolution: "string",
+      output_format: "string",
+    },
+    placement: "generate_image",
+    artifactOutput: "img_asset_id",
+  },
 };
 
 type ChainRef = {
@@ -141,6 +205,8 @@ export type ChainStep = {
 
 export type PinnedChainTarget = {
   field: string;
+  /** Element position for array-valued fields; null for a plain string field. */
+  index: number | null;
   address: string;
   cellId: string | null;
   artifactId: string;
@@ -155,6 +221,8 @@ export type ChainPreflightStep = {
   pins: PinnedChainTarget[];
   autoApply: boolean;
   effect: "read" | "mutation" | "generation";
+  /** This step spends provider money, so it stops for its own review. */
+  requiresApproval: boolean;
 };
 
 export type ChainPreflightPlan = {
@@ -225,6 +293,14 @@ export const chainCancelInputSchema = z.object({
   action: z.literal("cancel"),
   book_id: z.string().uuid(),
   chain_id: z.string().uuid(),
+});
+
+export const chainApproveInputSchema = z.object({
+  action: z.literal("approve"),
+  book_id: z.string().uuid(),
+  chain_id: z.string().uuid(),
+  step_id: z.string().min(1).max(64),
+  actor: z.enum(["chat", "voice", "api"]).optional(),
 });
 
 export function isChainRef(value: unknown): value is ChainRef {
@@ -336,6 +412,7 @@ async function primaryObjectHash(
 async function resolvePinnedTarget(
   context: ChainPreflightContext,
   field: string,
+  index: number | null,
   raw: string,
 ): Promise<PinnedChainTarget | string> {
   const notebookId = context.notebookId;
@@ -360,11 +437,32 @@ async function resolvePinnedTarget(
   const objectHash = await primaryObjectHash(context.engine, resolved.artifactId);
   return {
     field,
+    index,
     address: resolved.cellAddress ?? normalizeNotebookReference(raw),
     cellId: resolved.cellId ?? null,
     artifactId: resolved.artifactId,
     objectHash,
   };
+}
+
+/**
+ * Resolve one grid-addressable value to a pin, or report why it cannot be one.
+ * Anything that is neither an address attempt nor an id is left alone for the
+ * tool's own schema to judge.
+ */
+async function pinGridField(
+  context: ChainPreflightContext,
+  stepId: string,
+  field: string,
+  index: number | null,
+  raw: string,
+): Promise<PinnedChainTarget | string | null> {
+  if (looksLikeGridAttempt(raw) && !asGridAddress(raw) && !raw.includes("-")) {
+    return `Step ${stepId} field ${field} is not a valid @a1-@bl8 target`;
+  }
+  if (!looksLikeGridAttempt(raw) && !raw.includes("-")) return null;
+  const pinned = await resolvePinnedTarget(context, field, index, raw);
+  return typeof pinned === "string" ? `Step ${stepId} ${pinned}` : pinned;
 }
 
 function collectRefs(params: Record<string, unknown>): Array<{
@@ -505,24 +603,20 @@ export async function preflightChainPlan(
     for (const field of spec.gridFields) {
       const raw = step.params[field];
       if (isChainRef(raw) || raw === undefined) continue;
-      if (typeof raw !== "string") {
-        return {
-          ok: false,
-          error: `Step ${step.id} field ${field} must be a string or {$ref}`,
-        };
-      }
-      if (looksLikeGridAttempt(raw) && !asGridAddress(raw) && !raw.includes("-")) {
-        return {
-          ok: false,
-          error: `Step ${step.id} field ${field} is not a valid @a1-@bl8 target`,
-        };
-      }
-      if (looksLikeGridAttempt(raw) || raw.includes("-")) {
-        const pinned = await resolvePinnedTarget(context, field, raw);
-        if (typeof pinned === "string") {
-          return { ok: false, error: `Step ${step.id} ${pinned}` };
+      const entries: Array<{ index: number | null; value: unknown }> = Array.isArray(raw)
+        ? raw.map((value, position) => ({ index: position, value }))
+        : [{ index: null, value: raw }];
+      for (const entry of entries) {
+        if (isChainRef(entry.value)) continue;
+        if (typeof entry.value !== "string") {
+          return {
+            ok: false,
+            error: `Step ${step.id} field ${field} must be a string or {$ref}`,
+          };
         }
-        pins.push(pinned);
+        const pinned = await pinGridField(context, step.id, field, entry.index, entry.value);
+        if (typeof pinned === "string") return { ok: false, error: pinned };
+        if (pinned) pins.push(pinned);
       }
     }
 
@@ -543,14 +637,16 @@ export async function preflightChainPlan(
 
     declared.set(step.id, { index, spec });
     const effect = context.effectForTool(step.tool);
+    const autoApplyStep = context.autoApplyTools.has(step.tool) || effect === "read";
     preflightSteps.push({
       id: step.id,
       tool: step.tool,
       params: step.params,
       spec,
       pins,
-      autoApply: context.autoApplyTools.has(step.tool) || effect === "read",
+      autoApply: autoApplyStep,
       effect,
+      requiresApproval: !autoApplyStep && toolSpendsMoney(step.tool),
     });
   }
 
@@ -559,7 +655,11 @@ export async function preflightChainPlan(
     : preflightSteps.some((step) => step.effect === "mutation")
       ? "mutation"
       : "read";
-  const autoApply = preflightSteps.every((step) => step.autoApply);
+  // A step that stops for its own review does not also need the combined sheet.
+  // A free in-place mutation still does, or it would run with no review at all.
+  const autoApply = preflightSteps.every(
+    (step) => step.autoApply || step.requiresApproval,
+  );
 
   return {
     ok: true,

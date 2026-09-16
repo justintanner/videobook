@@ -449,7 +449,12 @@ import {
   resolveChatModelSelection,
   type ChatModelCatalog,
 } from '@/videobook/chat-models'
-import { routedActionReview } from '@/videobook/chat-action-review'
+import {
+  chainStepReview,
+  routedActionReview,
+  type ChainRunValue,
+  type ChainStepReviewValue,
+} from '@/videobook/chat-action-review'
 import {
   handleModalDialogKeyDown,
   shouldDismissModalDialogFromBackdrop,
@@ -746,6 +751,12 @@ type PendingChatAction =
       plan: ChatActionPlan
       xPostReview?: XPostThreadReview | null
     }
+  | {
+      kind: 'chain-step'
+      chainId: string
+      review: ChainStepReviewValue
+      remaining: number
+    }
 
 type JobRecord = {
   id: number
@@ -1001,12 +1012,28 @@ function messageFor(value: unknown, fallback: string): string {
   return fallback
 }
 
-function asChainRun(value: unknown): {
-  chainId: string
-  status: string
-  error: string | null
-  steps: Array<{ id: string; tool: string; status: string; error: string | null }>
-} | null {
+function asChainStepReview(value: unknown): ChainStepReviewValue | null {
+  const item = recordValue(value)
+  const stepId = asString(item?.stepId)
+  const tool = asString(item?.tool)
+  const title = asString(item?.title)
+  const reason = asString(item?.reason)
+  if (!stepId || !tool || !title || !reason) return null
+  return {
+    stepId,
+    index: typeof item?.index === 'number' ? item.index : 0,
+    total: typeof item?.total === 'number' ? item.total : 1,
+    tool,
+    title,
+    address: asString(item?.address),
+    params: recordValue(item?.params) ?? {},
+    estimateUsd: typeof item?.estimateUsd === 'number' ? item.estimateUsd : null,
+    estimateUnavailable: item?.estimateUnavailable !== false,
+    reason,
+  }
+}
+
+function asChainRun(value: unknown): ChainRunValue | null {
   const item = recordValue(value)
   const chainId = asString(item?.chain_id)
   const status = asString(item?.status)
@@ -1023,6 +1050,8 @@ function asChainRun(value: unknown): {
           tool,
           status: stepStatus,
           error: asString(step?.error),
+          requiresApproval: step?.requires_approval === true,
+          review: asChainStepReview(step?.review),
         }]
       })
     : []
@@ -1030,6 +1059,7 @@ function asChainRun(value: unknown): {
     chainId,
     status,
     error: asString(item?.error),
+    awaitingStepId: asString(item?.awaiting_step_id),
     steps,
   }
 }
@@ -4678,11 +4708,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [screen])
   const dismissPendingCommandPlan = useCallback(() => {
     voiceOutcomeRef.current?.({ status: 'cancelled', message: 'Pending action cancelled on screen.' })
+    // Declining one step declines the chain: later steps consume its output, so
+    // running them would act on something that was never made.
+    if (pendingChatAction?.kind === 'chain-step' && bookId) {
+      const chainId = pendingChatAction.chainId
+      saveValue('videobook.active-chain', '')
+      void call('chain', { action: 'cancel', book_id: bookId, chain_id: chainId })
+        .catch(() => undefined)
+    }
     setPendingCommandPlan(null)
     setPendingChatAction(null)
     setPendingWatermarkReview(null)
     focusCommandComposer()
-  }, [focusCommandComposer])
+  }, [bookId, call, focusCommandComposer, pendingChatAction])
   const updatePendingXPostDraft = useCallback((patch: XPostDraftPatch) => {
     setPendingChatAction((current) => {
       if (current?.kind !== 'routed') return current
@@ -9140,6 +9178,103 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const isChainSettled = (status: string): boolean =>
+    status === 'completed'
+    || status === 'failed'
+    || status === 'cancelled'
+    || status === 'interrupted'
+    || status === 'awaiting-approval'
+
+  /**
+   * Follow a chain until nothing is running. A chain waiting on a review is
+   * settled for polling purposes, so the five-minute deadline covers one leg of
+   * work rather than the time a person takes to decide.
+   */
+  const pollChainRun = async (
+    book: string,
+    accepted: ChainRunValue,
+    isCurrent?: () => boolean,
+  ): Promise<ChainRunValue> => {
+    saveValue('videobook.active-chain', JSON.stringify({ bookId: book, chainId: accepted.chainId }))
+    const deadline = Date.now() + 5 * 60_000
+    let latest = accepted
+    while (Date.now() < deadline) {
+      const snapshot = asChainRun(await call('chain', {
+        action: 'status',
+        book_id: book,
+        chain_id: accepted.chainId,
+      }, { background: true }))
+      if (isCurrent?.() === false) throw new Error('Workspace changed. Check the previous project for the accepted action.')
+      if (!snapshot) break
+      latest = snapshot
+      const running = snapshot.steps.find((step) => step.status === 'running')
+      if (running) setNotice(`${running.tool.replaceAll('_', ' ')}…`)
+      if (isChainSettled(snapshot.status)) {
+        if (snapshot.status !== 'awaiting-approval') saveValue('videobook.active-chain', '')
+        return snapshot
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 250))
+    }
+    throw new Error(latest.error ?? 'Chain timed out')
+  }
+
+  /** Put one paused step on screen and hand the decision back to the user. */
+  const openChainStepReview = (snapshot: ChainRunValue): ComposerOutcome => {
+    const paused = snapshot.steps.find((step) => step.id === snapshot.awaitingStepId)
+    const review = paused?.review
+    if (!review) {
+      return { ok: false, message: 'The chain is waiting for approval but sent no review.' }
+    }
+    const remaining = snapshot.steps.filter((step) => step.status === 'pending').length
+    setPendingChatAction({
+      kind: 'chain-step',
+      chainId: snapshot.chainId,
+      review,
+      remaining,
+    })
+    setNotice(review.reason)
+    return { ok: true, message: review.reason, nextInput: '/apply', selectInput: false }
+  }
+
+  /**
+   * Spend on the step the user just approved, then follow the chain to whatever
+   * comes next: the following paused step, or the end of the run.
+   */
+  const approveChainStepNow = async (
+    pending: Extract<PendingChatAction, { kind: 'chain-step' }>,
+  ): Promise<ComposerOutcome> => {
+    if (!bookId) return { ok: false, message: 'Load or create a book first.' }
+    setPendingChatAction(null)
+    setBusy(true)
+    try {
+      const approved = asChainRun(await call('chain', {
+        action: 'approve',
+        book_id: bookId,
+        chain_id: pending.chainId,
+        step_id: pending.review.stepId,
+        actor: 'chat',
+      }))
+      if (!approved) throw new Error('The server did not return the chain run')
+      const settled = isChainSettled(approved.status)
+        ? approved
+        : await pollChainRun(bookId, approved)
+      if (settled.status === 'awaiting-approval') return openChainStepReview(settled)
+      await refreshBookData(bookId, notebook?.id)
+      if (settled.status !== 'completed') {
+        throw new Error(settled.error ?? `Chain ${settled.status}`)
+      }
+      const message = 'Chain complete'
+      setNotice(message)
+      return { ok: true, message }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setNotice(message, 'error')
+      return { ok: false, message }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const executeRoutedChatActionNow = async (
     plan: ChatActionPlan,
     isCurrent?: () => boolean,
@@ -9157,48 +9292,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Check the previous project for the accepted action.' }
       setPendingChatAction(null)
       const acceptedChain = asChainRun(result)
-      const chainResult = acceptedChain
-        && acceptedChain.status !== 'completed'
-        && acceptedChain.status !== 'failed'
-        && acceptedChain.status !== 'cancelled'
-        && acceptedChain.status !== 'interrupted'
-        ? await (async () => {
-            saveValue('videobook.active-chain', JSON.stringify({
-              bookId,
-              chainId: acceptedChain.chainId,
-            }))
-            const deadline = Date.now() + 5 * 60_000
-            let latest = acceptedChain
-            while (Date.now() < deadline) {
-              const snapshot = asChainRun(await call('chain', {
-                action: 'status',
-                book_id: bookId,
-                chain_id: acceptedChain.chainId,
-              }, { background: true }))
-              if (isCurrent?.() === false) throw new Error('Workspace changed. Check the previous project for the accepted action.')
-              if (!snapshot) break
-              latest = snapshot
-              const running = snapshot.steps.find((step) => step.status === 'running')
-              if (running) {
-                setNotice(`${running.tool.replaceAll('_', ' ')}…`)
-              }
-              if (
-                snapshot.status === 'completed'
-                || snapshot.status === 'failed'
-                || snapshot.status === 'cancelled'
-                || snapshot.status === 'interrupted'
-              ) {
-                saveValue('videobook.active-chain', '')
-                if (snapshot.status !== 'completed') {
-                  throw new Error(snapshot.error ?? `Chain ${snapshot.status}`)
-                }
-                return snapshot
-              }
-              await new Promise((resolve) => window.setTimeout(resolve, 250))
-            }
-            throw new Error(latest.error ?? 'Chain timed out')
-          })()
+      const settledChain = acceptedChain && !isChainSettled(acceptedChain.status)
+        ? await pollChainRun(bookId, acceptedChain, isCurrent)
         : acceptedChain
+      if (settledChain?.status === 'awaiting-approval') {
+        return openChainStepReview(settledChain)
+      }
+      const chainResult = settledChain
+      if (settledChain && settledChain.status !== 'completed') {
+        throw new Error(settledChain.error ?? `Chain ${settledChain.status}`)
+      }
       if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
       if (isDownloadVideoResult(result)) {
         const outcome = await completeVideoDownload(
@@ -10063,6 +10166,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       } finally {
         setBusy(false)
       }
+    }
+    if (pendingChatAction.kind === 'chain-step') {
+      return await approveChainStepNow(pendingChatAction)
     }
     return await executeRoutedChatActionNow(pendingChatAction.plan)
   }
@@ -11966,9 +12072,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           action: pendingGenerationDraft.action,
           models: pendingGenerationActionOptions,
         }
-      : pendingChatAction || pendingCommandPlan || pendingWatermarkReview
-        ? { kind: 'other' }
-        : { kind: 'none' }
+      : pendingChatAction?.kind === 'chain-step'
+        ? { kind: 'chain-step' }
+        : pendingChatAction || pendingCommandPlan || pendingWatermarkReview
+          ? { kind: 'other' }
+          : { kind: 'none' }
     const plan = planVoiceReviewCommand(command, pending)
     if (plan.kind === 'refused') return plan.outcome
     if (plan.kind === 'revise') {
@@ -12282,6 +12390,32 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             prompt={plan.prompt}
             settings={review?.settings ?? []}
             speedPreview={pendingChangeSpeedPreview}
+          />
+        </ConfirmSheet>
+      )
+    }
+    if (pendingChatAction.kind === 'chain-step') {
+      const stepReview = chainStepReview(
+        pendingChatAction.review,
+        pendingChatAction.remaining,
+      )
+      return (
+        <ConfirmSheet
+          kind="routed"
+          ariaLabel="Chain step review"
+          tag={`CHAIN · ${pendingChatAction.review.tool.toUpperCase()}`}
+          title={stepReview.title}
+          address={pendingChatAction.review.address}
+          effect={stepReview.effect}
+          validation={VALID_CONFIRMATION}
+          busy={busy}
+          applyFormId={COMMAND_COMPOSER_FORM_ID}
+          onCancel={dismissPendingCommandPlan}
+        >
+          <RoutedBody
+            prompt={stepReview.postText ?? ''}
+            settings={stepReview.settings}
+            speedPreview={null}
           />
         </ConfirmSheet>
       )

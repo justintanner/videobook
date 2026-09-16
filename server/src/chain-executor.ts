@@ -2,7 +2,10 @@ import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { Engine } from "videobook-engine";
 import type { ToolDef, ToolResult } from "./tools/tool-def.js";
-import { waitForJob } from "./queue.js";
+import { queue, waitForJob } from "./queue.js";
+import { placeChainGeneration } from "./chain-generation.js";
+import { buildChainStepReview, type ChainStepReview } from "./chain-step-review.js";
+import type { AwaitNotebookOutputPayload } from "./jobs/run-notebook.js";
 import {
   preflightChainPlan,
   revalidatePinnedTargets,
@@ -10,30 +13,46 @@ import {
   supportedChainTool,
   type ChainPreflightContext,
   type ChainPreflightPlan,
+  type ChainPlacementKind,
   type ChainPreflightStep,
   type PinnedChainTarget,
 } from "./chain-plan.js";
 
 const SETTINGS_KEY = "application.chain-runs.v1";
 const STEP_TIMEOUT_MS = 180_000;
+// Provider generation is minutes, not seconds; matches awaitNotebookOutput's own budget.
+const GENERATION_STEP_TIMEOUT_MS = 45 * 60_000;
 const POLL_MS = 50;
 
 type ChainStepStatus =
   | "pending"
+  | "awaiting-approval"
+  | "approved"
   | "running"
   | "completed"
   | "failed"
   | "skipped"
+  | "rejected"
   | "interrupted"
   | "cancelled";
 
 type ChainRunStatus =
   | "accepted"
   | "running"
+  | "awaiting-approval"
   | "completed"
   | "failed"
   | "cancelled"
   | "interrupted";
+
+export type ChainApprovalActor = "chat" | "voice" | "api";
+
+type ChainStepApproval = {
+  approvedAt: string;
+  actor: ChainApprovalActor;
+  estimateUsd: number | null;
+  estimateUnavailable: boolean;
+};
 
 type ChainStepRecord = {
   id: string;
@@ -44,6 +63,11 @@ type ChainStepRecord = {
   error: string | null;
   childJobIds: string[];
   pins: PinnedChainTarget[];
+  autoApply: boolean;
+  effect: "read" | "mutation" | "generation";
+  requiresApproval: boolean;
+  approval: ChainStepApproval | null;
+  review: ChainStepReview | null;
 };
 
 export type ChainRunRecord = {
@@ -60,6 +84,7 @@ export type ChainRunRecord = {
   error: string | null;
   autoApply: boolean;
   effect: "read" | "mutation" | "generation";
+  awaitingStepId: string | null;
 };
 
 type ChainStore = {
@@ -139,6 +164,11 @@ function isTerminal(status: ChainRunStatus): boolean {
     || status === "interrupted";
 }
 
+/** Terminal, or parked waiting on a person. Either way nothing is running. */
+function isSettled(status: ChainRunStatus): boolean {
+  return isTerminal(status) || status === "awaiting-approval";
+}
+
 function parseJsonResult(result: ToolResult): Record<string, unknown> {
   const text = result.content.find((entry) => entry.type === "text")?.text ?? "";
   try {
@@ -169,11 +199,11 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 async function waitWhile(
   signal: AbortSignal,
   timeoutMs: number,
-  pending: () => boolean,
+  pending: () => boolean | Promise<boolean>,
   label: string,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
-  while (pending()) {
+  while (await pending()) {
     if (signal.aborted) {
       throw signal.reason instanceof Error ? signal.reason : new Error("Cancelled");
     }
@@ -239,9 +269,16 @@ function applyPins(
 ): Record<string, unknown> {
   const next = { ...params };
   for (const pin of pins) {
-    if (typeof next[pin.field] === "string") {
-      next[pin.field] = pin.artifactId;
+    const index = pin.index ?? null;
+    if (index === null) {
+      if (typeof next[pin.field] === "string") next[pin.field] = pin.artifactId;
+      continue;
     }
+    const current = next[pin.field];
+    if (!Array.isArray(current) || typeof current[index] !== "string") continue;
+    const replaced = [...current];
+    replaced[index] = pin.artifactId;
+    next[pin.field] = replaced;
   }
   return next;
 }
@@ -340,6 +377,80 @@ async function completeExtractFrame(
   return { ...outputs, status: "completed" };
 }
 
+type GenerationCompletionContext = {
+  bookId: string;
+  notebookId: string | null;
+  chainId: string;
+  stepId: string;
+  tool: string;
+  placement: ChainPlacementKind;
+  artifactOutput: string;
+  params: Record<string, unknown>;
+  pins: readonly PinnedChainTarget[];
+};
+
+/**
+ * A generation handler returns as soon as the provider job is submitted, and the
+ * artifact it names is not on the grid and not yet usable. Place it the way a
+ * notebook run would, then wait for the same settlement job the notebook uses.
+ */
+async function completeGeneration(
+  engine: Engine,
+  context: GenerationCompletionContext,
+  outputs: Record<string, unknown>,
+  signal: AbortSignal,
+): Promise<Record<string, unknown>> {
+  const artifactId = outputs[context.artifactOutput];
+  if (typeof artifactId !== "string") {
+    throw new Error(`${context.tool} did not return ${context.artifactOutput}`);
+  }
+  const submission = outputs.job_id;
+  if (typeof submission === "string") {
+    await waitForNamedJob(submission, signal, STEP_TIMEOUT_MS);
+  }
+  const runId = `${context.chainId}:${context.stepId}`;
+  if (!context.notebookId) {
+    await waitWhile(signal, GENERATION_STEP_TIMEOUT_MS, async () => {
+      const status = await engine.status.get(artifactId);
+      if (!status.ok) throw new Error(status.error.message);
+      if (status.value === "error") throw new Error(`${context.tool} failed`);
+      return status.value !== "ready";
+    }, context.tool);
+    return { ...outputs, asset_id: artifactId, status: "completed" };
+  }
+  const placement = await placeChainGeneration({
+    engine,
+    notebookId: context.notebookId,
+    tool: context.tool,
+    placement: context.placement,
+    params: context.params,
+    artifactId,
+    runId,
+    pins: context.pins,
+  });
+  const awaitJobId = `chain-await-${context.chainId}-${context.stepId}-${artifactId}`;
+  await queue.enqueue(awaitJobId, {
+    type: "await_notebook_output",
+    bookId: context.bookId,
+    notebookId: context.notebookId,
+    cellId: placement.producerCellId,
+    outputCellId: placement.outputCellId,
+    providerArtifactId: artifactId,
+    runId,
+    // Scope the resume this job triggers, or it would sweep every runnable cell
+    // in the notebook and re-dispatch paid work nobody approved.
+    cellIds: [placement.producerCellId],
+  } satisfies AwaitNotebookOutputPayload);
+  await waitForNamedJob(awaitJobId, signal, GENERATION_STEP_TIMEOUT_MS);
+  return {
+    ...outputs,
+    asset_id: artifactId,
+    cell_id: placement.outputCellId,
+    address: placement.address,
+    status: "completed",
+  };
+}
+
 function childJobIdFromOutputs(outputs: Record<string, unknown>): string[] {
   return typeof outputs.job_id === "string" ? [outputs.job_id] : [];
 }
@@ -355,15 +466,25 @@ async function abortOwnedJobs(engine: Engine, jobIds: string[]): Promise<void> {
   }));
 }
 
-async function executeStep(
+type PreparedStep = {
+  def: ToolDef;
+  params: Record<string, unknown>;
+  beforeProcess: Set<number>;
+};
+
+/**
+ * Everything a step needs before it can be dispatched, and nothing that spends
+ * money. Pins are revalidated here, so a step approved after a long pause still
+ * fails loudly if its target moved in the meantime.
+ */
+async function prepareStep(
   engine: Engine,
   bookId: string,
   notebookId: string | null,
   step: ChainPreflightStep,
   priorOutputs: Map<string, Record<string, unknown>>,
   lookup: ToolLookup,
-  signal: AbortSignal,
-): Promise<{ outputs: Record<string, unknown>; childJobIds: string[] }> {
+): Promise<PreparedStep> {
   const stale = await revalidatePinnedTargets(engine, notebookId, step.pins);
   if (stale) throw new Error(stale);
   const substituted = substituteChainRefs(step.params, priorOutputs);
@@ -393,7 +514,17 @@ async function executeStep(
       }).map((job) => job.id)
       : [],
   );
-  const result = await def.handler(validated.data);
+  return { def, params: validated.data, beforeProcess };
+}
+
+async function dispatchStep(
+  engine: Engine,
+  context: { bookId: string; notebookId: string | null; chainId: string },
+  step: ChainPreflightStep,
+  prepared: PreparedStep,
+  signal: AbortSignal,
+): Promise<{ outputs: Record<string, unknown>; childJobIds: string[] }> {
+  const result = await prepared.def.handler(prepared.params);
   if (result.isError) {
     const text = result.content.find((entry) => entry.type === "text")?.text;
     throw new Error(text ?? `${step.tool} failed`);
@@ -405,19 +536,36 @@ async function executeStep(
   } else if (step.spec.completion === "replace_video_audio") {
     const assetId = typeof outputs.asset_id === "string"
       ? outputs.asset_id
-      : typeof validated.data.asset_id === "string"
-        ? validated.data.asset_id
+      : typeof prepared.params.asset_id === "string"
+        ? prepared.params.asset_id
         : null;
     if (!assetId) throw new Error("replace_video_audio did not return asset_id");
     outputs = await completeReplaceVideoAudio(
       engine,
       assetId,
-      beforeProcess,
+      prepared.beforeProcess,
       outputs,
       signal,
     );
   } else if (step.spec.completion === "extract_frame") {
     outputs = await completeExtractFrame(engine, outputs, signal);
+  } else if (step.spec.completion === "generation") {
+    const placement = step.spec.placement;
+    const artifactOutput = step.spec.artifactOutput;
+    if (!placement || !artifactOutput) {
+      throw new Error(`${step.tool} is missing chain generation metadata`);
+    }
+    outputs = await completeGeneration(engine, {
+      bookId: context.bookId,
+      notebookId: context.notebookId,
+      chainId: context.chainId,
+      stepId: step.id,
+      tool: step.tool,
+      placement,
+      artifactOutput,
+      params: prepared.params,
+      pins: step.pins,
+    }, outputs, signal);
   }
   return { outputs, childJobIds };
 }
@@ -440,6 +588,7 @@ function recordFromPlan(
     error: null,
     autoApply: plan.autoApply,
     effect: plan.effect,
+    awaitingStepId: null,
     steps: plan.steps.map((step) => ({
       id: step.id,
       tool: step.tool,
@@ -449,6 +598,11 @@ function recordFromPlan(
       error: null,
       childJobIds: [],
       pins: step.pins,
+      autoApply: step.autoApply,
+      effect: step.effect,
+      requiresApproval: step.requiresApproval,
+      approval: null,
+      review: null,
     })),
   };
 }
@@ -479,21 +633,48 @@ async function runChain(
         }
         run.status = "cancelled";
         run.error = "Cancelled";
+        run.awaitingStepId = null;
         run.updatedAt = nowIso();
         saveRun(engine, run);
         return;
       }
-      record.status = "running";
-      run.updatedAt = nowIso();
-      saveRun(engine, run);
       try {
-        const executed = await executeStep(
+        const prepared = await prepareStep(
           engine,
           plan.bookId,
           plan.notebookId,
           step,
           prior,
           lookup,
+        );
+        if (record.requiresApproval && !record.approval) {
+          record.review = await buildChainStepReview({
+            engine,
+            bookId: plan.bookId,
+            stepId: step.id,
+            tool: step.tool,
+            index,
+            total: plan.steps.length,
+            pins: step.pins,
+            dispatchParams: prepared.params,
+          });
+          record.status = "awaiting-approval";
+          run.status = "awaiting-approval";
+          run.awaitingStepId = record.id;
+          run.updatedAt = nowIso();
+          saveRun(engine, run);
+          return;
+        }
+        record.status = "running";
+        run.status = "running";
+        run.awaitingStepId = null;
+        run.updatedAt = nowIso();
+        saveRun(engine, run);
+        const executed = await dispatchStep(
+          engine,
+          { bookId: plan.bookId, notebookId: plan.notebookId, chainId: run.chainId },
+          step,
+          prepared,
           signal,
         );
         record.status = "completed";
@@ -513,6 +694,7 @@ async function runChain(
         }
         run.status = cancelled ? "cancelled" : "failed";
         run.error = message;
+        run.awaitingStepId = null;
         run.updatedAt = nowIso();
         saveRun(engine, run);
         if (record.childJobIds.length > 0) {
@@ -523,6 +705,7 @@ async function runChain(
     }
     run.status = "completed";
     run.error = null;
+    run.awaitingStepId = null;
     run.updatedAt = nowIso();
     saveRun(engine, run);
   } finally {
@@ -561,7 +744,9 @@ function resumeRun(
   plan: ChainPreflightPlan,
   lookup: ToolLookup,
 ): void {
-  if (inflight.has(run.chainId) || isTerminal(run.status)) return;
+  // A run parked on a review is resumed only by approveChainStep, which clears
+  // the marker first.
+  if (inflight.has(run.chainId) || isSettled(run.status) || run.awaitingStepId) return;
   const running = run.steps.find((step) => step.status === "running");
   if (running) {
     running.status = "interrupted";
@@ -588,6 +773,42 @@ function resumeRun(
   });
 }
 
+/**
+ * Record a decision to spend on one paused step and let the chain carry on.
+ * Approval is persisted before the run is resumed so a crash in between cannot
+ * lose the decision, and a second approve is a no-op rather than a second
+ * dispatch.
+ */
+export function approveChainStep(
+  engine: Engine,
+  chainId: string,
+  stepId: string,
+  actor: ChainApprovalActor,
+  lookup: ToolLookup,
+): ChainRunRecord | null {
+  const run = getChainRun(engine, chainId);
+  if (!run) return null;
+  const step = run.steps.find((candidate) => candidate.id === stepId);
+  if (!step) throw new Error(`Step ${stepId} is not part of this chain`);
+  if (step.approval) return run;
+  if (step.status !== "awaiting-approval") {
+    throw new Error(`Step ${stepId} is not waiting for approval`);
+  }
+  step.approval = {
+    approvedAt: nowIso(),
+    actor,
+    estimateUsd: step.review?.estimateUsd ?? null,
+    estimateUnavailable: step.review?.estimateUnavailable ?? true,
+  };
+  step.status = "approved";
+  run.status = "running";
+  run.awaitingStepId = null;
+  run.updatedAt = nowIso();
+  saveRun(engine, run);
+  resumeRun(engine, run, planFromRecord(run), lookup);
+  return run;
+}
+
 export function cancelChainRun(
   engine: Engine,
   chainId: string,
@@ -597,17 +818,25 @@ export function cancelChainRun(
   if (isTerminal(run.status)) return run;
   const controller = inflight.get(chainId);
   controller?.abort(new Error("Cancelled"));
-  const current = run.steps.find((step) => step.status === "running");
-  if (current) {
-    current.status = "cancelled";
-    current.error = "Cancelled";
-    void abortOwnedJobs(engine, current.childJobIds).catch(() => undefined);
+  const running = run.steps.find((step) => step.status === "running");
+  if (running) {
+    running.status = "cancelled";
+    running.error = "Cancelled";
+    void abortOwnedJobs(engine, running.childJobIds).catch(() => undefined);
+  }
+  const paused = run.steps.find((step) => step.status === "awaiting-approval");
+  if (paused) {
+    paused.status = "rejected";
+    paused.error = "Rejected";
   }
   for (const step of run.steps) {
-    if (step.status === "pending") step.status = "skipped";
+    if (step.status === "pending" || step.status === "approved") {
+      step.status = "skipped";
+    }
   }
   run.status = "cancelled";
-  run.error = "Cancelled";
+  run.error = paused ? "Rejected" : "Cancelled";
+  run.awaitingStepId = null;
   run.updatedAt = nowIso();
   return saveRun(engine, run);
 }
@@ -620,10 +849,42 @@ export async function waitForChainRun(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const run = getChainRun(engine, chainId);
-    if (run && isTerminal(run.status)) return run;
+    if (run && isSettled(run.status)) return run;
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }
   throw new Error(`Chain ${chainId} timed out after ${timeoutMs}ms`);
+}
+
+/**
+ * Rebuild an executable plan from what was persisted. Pre-upgrade records carry
+ * no policy fields, so they default to "needs approval" rather than risking a
+ * silent paid dispatch.
+ */
+function planFromRecord(run: ChainRunRecord): ChainPreflightPlan {
+  return {
+    version: 1,
+    bookId: run.bookId,
+    notebookId: run.notebookId,
+    requestId: run.requestId,
+    fingerprint: run.fingerprint,
+    autoApply: run.autoApply,
+    effect: run.effect,
+    steps: run.steps.map((step) => ({
+      id: step.id,
+      tool: step.tool,
+      params: step.params,
+      spec: supportedChainTool(step.tool) ?? {
+        outputs: {},
+        completion: "sync",
+        gridFields: [],
+        inputTypes: {},
+      },
+      pins: step.pins,
+      autoApply: step.autoApply ?? false,
+      effect: step.effect ?? "mutation",
+      requiresApproval: step.requiresApproval ?? true,
+    })),
+  };
 }
 
 export function resumeOpenChains(
@@ -633,6 +894,9 @@ export function resumeOpenChains(
   const store = readStore(engine);
   for (const run of Object.values(store.runs)) {
     if (isTerminal(run.status)) continue;
+    // A chain parked on a review stays parked. Resuming it would dispatch a step
+    // nobody approved.
+    if (run.status === "awaiting-approval") continue;
     const running = run.steps.find((step) => step.status === "running");
     if (running) {
       running.status = "interrupted";
@@ -646,30 +910,7 @@ export function resumeOpenChains(
       saveRun(engine, run);
       continue;
     }
-    const plan: ChainPreflightPlan = {
-      version: 1,
-      bookId: run.bookId,
-      notebookId: run.notebookId,
-      requestId: run.requestId,
-      fingerprint: run.fingerprint,
-      autoApply: run.autoApply,
-      effect: run.effect,
-      steps: run.steps.map((step) => ({
-        id: step.id,
-        tool: step.tool,
-        params: step.params,
-        spec: supportedChainTool(step.tool) ?? {
-          outputs: {},
-          completion: "sync",
-          gridFields: [],
-          inputTypes: {},
-        },
-        pins: step.pins,
-        autoApply: false,
-        effect: "mutation",
-      })),
-    };
-    resumeRun(engine, run, plan, lookup);
+    resumeRun(engine, run, planFromRecord(run), lookup);
   }
 }
 

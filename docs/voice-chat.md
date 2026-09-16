@@ -68,7 +68,9 @@ a parameter the discovered schema marks optional is omitted rather than asked
 for. `expected_revision` is such a parameter on every tool that accepts it.
 
 xAI uses `grok-voice-think-fast-2.0`, Eve's voice, reasoning effort `none`, and the
-same 350 ms VAD silence setting. `VIDEOBOOK_XAI_VOICE_MODEL` overrides the xAI model.
+same 350 ms VAD silence setting. `VIDEOBOOK_XAI_VOICE_MODEL` overrides the xAI model, and
+`VIDEOBOOK_XAI_REALTIME_URL` points the same client at another realtime endpoint — a local
+gateway, or the integration test's server; unset, voice talks to xAI.
 Its native speech model supplies input captions. These settings follow the current
 [xAI voice API](https://docs.x.ai/developers/rest-api-reference/inference/voice);
 they do not establish a latency ranking against other providers.
@@ -88,6 +90,21 @@ artifact ID; bulk actions require an explicit bulk request.
 schema validation and action-plan policy without another chat model request. Reads
 return their actual result. Auto-apply, reviewed mutations, generation consent,
 canonical revisions and queued domain work use the existing application handlers.
+A chained request is one action with several steps. Steps that only read or
+auto-apply run straight through; every step that spends provider money stops
+first and raises its own review carrying that step's estimated cost, or saying
+the cost is unknown when the model publishes no rate. Applying spends that step
+and moves to the next, which arrives as another review, so the session keeps its
+lock until the chain ends. Cancelling one step drops every remaining step —
+later steps consume its output — and leaves finished work in place. A chain step
+cannot be revised, only applied or cancelled.
+
+The supplied workspace is a snapshot taken when the conversation opened and is
+never refreshed, so cells created since — including by the copilot's own earlier
+actions — are missing from it. A spoken address the snapshot does not contain is
+passed through rather than refused: the action resolves it against the live
+workspace.
+
 Only Apply or Cancel on screen resolves a pending review. A spoken yes cannot approve
 an operation, and turning voice off leaves the review available. Spoken feedback
 distinguishes an action awaiting review, a queued job, completion, cancellation and
@@ -97,7 +114,12 @@ Spoken addresses such as “A1” or “A one” refer to `@a1`. Generic generat
 use the same default actions as typed chat and retain the address in the generation
 prompt. Exact action discovery returns that action's schema; broader searches still
 return up to eight matches. Voice completes discovery and preparation before
-speaking the actual result or asking for a missing detail.
+speaking the actual result or asking for a missing detail. Every speech segment starts
+a new turn, so a call the model made for an earlier one — the speaker added a clause,
+or just asked whether it was working — is dropped rather than run against the newer
+request. It is still answered as dropped: an unanswered call leaves the model
+believing the work is running, so it narrates a generation that never started while
+the screen stays empty.
 
 Sessions are bound to their book, notebook and owner. Turn, response and function IDs
 deduplicate events; old-scope proposals cannot enter the current workspace. Finalized

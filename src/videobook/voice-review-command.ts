@@ -15,6 +15,7 @@ export type ReviewAction = {
 export type PendingReview =
   | { kind: 'none' }
   | { kind: 'other' }
+  | { kind: 'chain-step' }
   | { kind: 'generation'; action: ReviewAction; models: readonly ReviewAction[] }
 
 export type VoiceReviewEdit =
@@ -179,10 +180,16 @@ export function planVoiceReviewCommand(
     if (model || settings.length > 0) {
       return refuse('review', 'Revise the model and settings first, then apply. Apply only takes a new prompt.')
     }
+    if (prompt && pending.kind === 'chain-step') {
+      return refuse('review', "A chain step can't be rewritten. Apply it as it stands, or cancel the chain.")
+    }
     if (prompt && pending.kind !== 'generation') {
       return refuse('review', 'Only a generation review takes a new prompt. Apply this one as it stands, or cancel it.')
     }
     return { kind: 'command', input: prompt ? `/apply ${prompt}` : '/apply' }
+  }
+  if (pending.kind === 'chain-step') {
+    return refuse('review', "A chain step can't be revised. Apply it, or cancel to stop the whole chain.")
   }
   if (pending.kind !== 'generation') {
     return refuse('review', 'Only a generation review has a prompt, a model and settings to revise.')
