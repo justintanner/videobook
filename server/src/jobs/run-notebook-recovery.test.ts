@@ -928,7 +928,7 @@ describe("awaiting notebook output startup recovery", () => {
         generationPlan: mismatchedPlan,
       } as unknown as Record<string, unknown>,
       5_000,
-    )).rejects.toThrow("paid execution requires a current persisted plan");
+    )).rejects.toThrow(/saved plan no longer matches this cell's contents.*rerun the cell to replan/s);
 
     const notebook = engine.notebooks.read(fixture.notebookId);
     expect(notebook.ok).toBe(true);
@@ -997,7 +997,7 @@ describe("awaiting notebook output startup recovery", () => {
         generationPlan: runPlan,
       } as unknown as Record<string, unknown>,
       5_000,
-    )).rejects.toThrow("paid execution requires a current persisted plan");
+    )).rejects.toThrow(/saved plan no longer matches this cell's contents.*rerun the cell to replan/s);
 
     const notebook = engine.notebooks.read(fixture.notebookId);
     expect(notebook.ok).toBe(true);
@@ -1026,7 +1026,7 @@ describe("awaiting notebook output startup recovery", () => {
       "stale-paid-ancestor-run",
       runPayload(fixture) as unknown as Record<string, unknown>,
       5_000,
-    )).rejects.toThrow("paid execution requires a current persisted plan");
+    )).rejects.toThrow(/saved plan no longer matches this cell's contents.*rerun the cell to replan/s);
 
     const notebook = engine.notebooks.read(fixture.notebookId);
     expect(notebook.ok).toBe(true);
@@ -1042,8 +1042,11 @@ describe("awaiting notebook output startup recovery", () => {
     expect(notebook.value.generationPlans?.[0]).toMatchObject({
       planId: fixture.plan.planId,
       status: "failed",
-      error: expect.stringContaining("paid execution requires a current persisted plan"),
+      error: expect.stringMatching(
+        /saved plan no longer matches this cell's contents.*rerun the cell to replan/s,
+      ),
     });
+    expect(notebook.value.generationPlans?.[0]?.error).not.toMatch(/cell revision/i);
     const upstreamGenerations = engine.generations.listForCell(
       fixture.notebookId,
       fixture.upstreamCellId,

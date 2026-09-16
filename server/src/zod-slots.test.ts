@@ -28,6 +28,10 @@ describe("zod default and required helpers", () => {
     expect(zodIsRequired(withDefault)).toBe(false);
     expect(zodIsRequired(z.string())).toBe(true);
     expect(zodIsRequired(z.string().optional())).toBe(false);
+    expect(zodIsRequired(z.string().nullable())).toBe(true);
+    expect(zodIsRequired(z.string().nullable().optional())).toBe(false);
+    expect(zodIsRequired(z.string().optional().nullable())).toBe(false);
+    expect(zodIsRequired(z.string().nullable().default(null))).toBe(false);
   });
 
   it("reads Apicity Zod defaults without using enum order as fallback", () => {

@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import { createPortal } from 'react-dom'
-import { McpCallRows } from './McpCallRows'
+import { ComposerHistory } from './ComposerHistory'
 import type { ServerCommand } from '@/lib/command-registry'
 import type { AssetMentionCandidate } from '@/videobook/mention-suggestions'
 import { composerReferenceDescription, composerReferenceSuggestions, replaceComposerMention, type ComposerReference } from '@/videobook/composer-references'
@@ -45,6 +45,15 @@ import {
   type McpCallLog,
   type McpFlash,
 } from '@/videobook/mcp-activity'
+import {
+  composerHistory,
+  composerHistoryEpoch,
+  composerHistoryGeneration,
+  historyAutoCloseHeld,
+  historyIdle,
+  scheduleHistoryAutoClose,
+} from '@/videobook/composer-history'
+import { composerActivityStatus } from '@/videobook/composer-status'
 import {
   handleSpeakPreviewKey,
   isSpeakCommandPreview,
@@ -237,15 +246,46 @@ export function CommandComposer({
     promise: Promise<void>
   } | null>(null)
   const successTimerRef = useRef(0)
-  const transmitting = sending || mcpCallsRunning(mcpCalls) > 0
+  const [historyOpen, setHistoryOpen] = useState(true)
+  const historyRows = useMemo(
+    () => composerHistory(voice?.captions ?? [], mcpCalls),
+    [mcpCalls, voice?.captions],
+  )
+  const historyEpoch = composerHistoryEpoch(historyRows)
+  const historyGeneration = composerHistoryGeneration(historyRows)
+  const activity = composerActivityStatus({
+    sending,
+    mcpRunning: mcpCallsRunning(mcpCalls),
+    voicePhase: voice?.phase,
+    voiceMessage: voice?.message,
+    retrying: voice?.retrying,
+    pendingReview: voice?.pendingReview,
+  })
+  const transmitting = activity.busy
   const mcpSucceeded = !transmitting && mcpFlash === 'success'
   const mcpFailed = !transmitting && mcpFlash === 'error'
+  const historyHeld = historyAutoCloseHeld({
+    runningCalls: mcpCallsRunning(mcpCalls),
+    voicePhase: voice?.phase,
+  })
+  const lastHistoryEpochRef = useRef(historyEpoch)
   const selectedModelOption = chatModels.find((model) => model.id === selectedModel)
     ?? chatModels[0]
 
   useLayoutEffect(() => {
     inputSessionRef.current = inputSession
   }, [inputSession])
+
+  useEffect(() => {
+    if (historyEpoch > lastHistoryEpochRef.current) setHistoryOpen(true)
+    lastHistoryEpochRef.current = historyEpoch
+  }, [historyEpoch])
+
+  useEffect(() => scheduleHistoryAutoClose({
+    open: historyOpen,
+    held: historyHeld,
+    onClose: () => setHistoryOpen(false),
+  }), [historyOpen, historyHeld, historyGeneration])
 
   useLayoutEffect(() => { if (latestVoiceTurn) loadedHistoryProjectRef.current = '' }, [latestVoiceTurn])
 
@@ -658,6 +698,11 @@ export function CommandComposer({
         return
       }
     }
+    if (event.key === 'Escape' && historyOpen && !historyIdle(voice?.phase, historyRows.length, Boolean(voice))) {
+      event.preventDefault()
+      setHistoryOpen(false)
+      return
+    }
     if (event.key === 'Escape' && (onDismissPanel || onDismissComposer)) {
       event.preventDefault()
       if (onDismissPanel) onDismissPanel()
@@ -728,9 +773,25 @@ export function CommandComposer({
 
       {!hidden && !context && children}
 
-      {!hidden && <McpCallRows log={mcpCalls} onToggle={onToggleMcpCall} />}
+      {!hidden && (
+        <ComposerHistory
+          captions={voice?.captions ?? []}
+          log={mcpCalls}
+          phase={voice?.phase}
+          voicePresent={Boolean(voice)}
+          open={historyOpen}
+          onToggle={() => setHistoryOpen((current) => !current)}
+          onToggleCall={onToggleMcpCall}
+        />
+      )}
 
-      {!hidden && voice && <VoiceComms voice={voice} />}
+      {!hidden && voice && (
+        <VoiceComms
+          voice={voice}
+          sending={sending}
+          mcpRunning={mcpCallsRunning(mcpCalls)}
+        />
+      )}
 
       <form
         id={COMMAND_COMPOSER_FORM_ID}

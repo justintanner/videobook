@@ -122,6 +122,10 @@ describe("chat routing catalog", () => {
       'allowed: resolution="720p"|"1080p"|"4k", aspect_ratio="16:9"|"9:16"|"1:1"|"auto"',
     );
     expect(prompt).toContain("Omit optional parameters");
+    const mediaSlot = getRoutableTool(tools, "set_notebook_media_slot");
+    expect(mediaSlot?.requiredParams).toContain("artifact_ref");
+    expect(mediaSlot?.params).toContain("artifact_ref");
+    expect(prompt).toMatch(/set_notebook_media_slot[^\n]*required:[^\n]*artifact_ref/);
   });
 
   it("keeps generic generation aliases", () => {

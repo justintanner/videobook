@@ -3820,7 +3820,7 @@ export function registerRunNotebookJob(engine: Engine): void {
       const paidAuthorized = paidCellAuthorized(document, cell, input);
       if (notebookCellIsPaid(cell) && !paidAuthorized) {
         const message =
-          `${notebookGridTag(cell.slot)}: paid execution requires a current persisted plan for this exact cell revision`;
+          `${notebookGridTag(cell.slot)}: the saved plan no longer matches this cell's contents; rerun the cell to replan`;
         errors.push(message);
         blocked.add(cell.id);
         continue;

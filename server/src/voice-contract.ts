@@ -8,6 +8,7 @@ export interface VoiceCaption {
   text: string;
   final: boolean;
   interrupted?: boolean;
+  sequence?: number;
 }
 
 /**
@@ -29,7 +30,7 @@ export interface VoiceOutcome {
 
 export type VoiceSessionEvent =
   | { type: "caption"; caption: VoiceCaption }
-  | { type: "activity"; phase: "listening" | "thinking"; interrupt?: boolean }
+  | { type: "activity"; phase: "listening" | "thinking"; interrupt?: boolean; retry?: boolean }
   | { type: "audio"; audio: string; responseId: string; itemId: string }
   | { type: "audio-done"; responseId: string }
   | { type: "action"; callId: string; prompt: string; plan: unknown }

@@ -208,12 +208,15 @@ export function zodIsRequired(schema: ZodLike | null | undefined): boolean {
   let cur: unknown = schema;
   let def = defOf(cur);
   while (def) {
-    if (
-      isType(cur, "ZodOptional", "optional") ||
-      isType(cur, "ZodNullable", "nullable") ||
-      isType(cur, "ZodDefault", "default")
-    ) {
+    if (isType(cur, "ZodOptional", "optional") || isType(cur, "ZodDefault", "default")) {
       return false;
+    }
+    if (isType(cur, "ZodNullable", "nullable")) {
+      const next = def.innerType;
+      if (!next) break;
+      cur = next;
+      def = defOf(cur);
+      continue;
     }
     if (!isType(cur, "ZodEffects", "effects") && !isType(cur, "ZodPipe", "pipe")) {
       return true;

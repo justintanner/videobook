@@ -2,6 +2,7 @@ import { createElement, createRef } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CommandComposer } from '../../src/components/videobook/CommandComposer'
+import { ComposerHistory } from '../../src/components/videobook/ComposerHistory'
 import { VoiceComms } from '../../src/components/videobook/VoiceComms'
 import { fallbackChatModelCatalog } from '../../src/videobook/chat-models'
 import { emptyMcpCallLog } from '../../src/videobook/mcp-activity'
@@ -52,6 +53,7 @@ function stubVoice(overrides: Partial<VoiceConversation> = {}): VoiceConversatio
     captions: [],
     playbackBlocked: false,
     pendingReview: false,
+    retrying: false,
     meterRef: createRef<HTMLButtonElement>(),
     toggle: () => undefined,
     stop: () => undefined,
@@ -75,7 +77,6 @@ function caption(id: string, text: string, role: VoiceCaption['role'] = 'user'):
 function renderComms(
   phase: VoicePhase,
   captions: VoiceCaption[],
-  captionsVisible?: boolean,
   extras: Partial<VoiceConversation> = {},
 ): string {
   return renderToStaticMarkup(createElement(VoiceComms, {
@@ -83,10 +84,25 @@ function renderComms(
       phase,
       captions,
       active: phase !== 'off' && phase !== 'error',
-      message: phase === 'error' ? 'OPENAI_API_KEY is missing' : 'Speak naturally. Interrupt anytime.',
+      message: phase === 'error' ? 'OPENAI_API_KEY is missing' : phase === 'connecting' ? 'Connecting voice' : 'Speak naturally. Interrupt anytime.',
       ...extras,
     }),
-    captionsVisible,
+  }))
+}
+
+function renderHistory(
+  phase: VoicePhase,
+  captions: VoiceCaption[],
+  open = true,
+): string {
+  return renderToStaticMarkup(createElement(ComposerHistory, {
+    captions,
+    log: emptyMcpCallLog,
+    phase,
+    voicePresent: true,
+    open,
+    onToggle: () => undefined,
+    onToggleCall: () => undefined,
   }))
 }
 
@@ -177,12 +193,12 @@ describe('VoiceComms caption visibility', () => {
   const phases: VoicePhase[] = ['off', 'connecting', 'listening', 'thinking', 'speaking', 'review', 'error']
 
   it('defaults to a visible transcript region whose name, expanded state and controls agree', () => {
-    const html = renderComms('listening', [])
+    const html = renderHistory('listening', [])
     const { button, region, id } = controlledRegion(html)
     expect(button).toContain('aria-expanded="true"')
-    expect(button).toContain('aria-label="Hide captions"')
+    expect(button).toContain('aria-label="Close history"')
     expect(button).toMatch(/<svg/)
-    expect(button).not.toMatch(/>Hide captions</)
+    expect(button).not.toMatch(/>Close history</)
     expect(region).toContain(`id="${id}"`)
     expect(region).not.toContain(' hidden')
     expect(html).toContain('Listening… speak anytime.')
@@ -191,16 +207,16 @@ describe('VoiceComms caption visibility', () => {
 
   it('hides the transcript body without dropping caption data from the conversation', () => {
     const captions = [caption('1', 'one'), caption('2', 'two', 'assistant'), caption('3', 'three')]
-    const shown = renderComms('listening', captions, true)
-    const hidden = renderComms('listening', captions, false)
+    const shown = renderHistory('listening', captions, true)
+    const hidden = renderHistory('listening', captions, false)
     expect(shown).toContain('>one</span>')
     expect(shown).toContain('>two</span>')
     expect(shown).toContain('>three</span>')
     const { button, region } = controlledRegion(hidden)
     expect(button).toContain('aria-expanded="false"')
-    expect(button).toContain('aria-label="Show captions"')
+    expect(button).toContain('aria-label="Show history"')
     expect(button).toMatch(/<svg/)
-    expect(button).not.toMatch(/>Show captions</)
+    expect(button).not.toMatch(/>Show history</)
     expect(region).toContain(' hidden=""')
     expect(hidden).toContain('>one</span>')
     expect(hidden).toContain('>three</span>')
@@ -208,20 +224,17 @@ describe('VoiceComms caption visibility', () => {
 
   it('shows an observable empty state for 0 captions across live, waiting, review and stopped phases', () => {
     for (const phase of phases) {
-      const html = renderComms(phase, [], true, {
-        message: phase === 'off' ? 'Comms off.' : phase === 'error' ? 'OPENAI_API_KEY is missing' : 'Speak naturally. Interrupt anytime.',
-        captions: [],
-      })
-      if (phase === 'off' && html === '') continue
+      if (phase === 'off') continue
+      const html = renderHistory(phase, [], true)
       const { button, region } = controlledRegion(html)
-      expect(button, phase).toContain('aria-label="Hide captions"')
+      expect(button, phase).toContain('aria-label="Close history"')
       expect(region, phase).toMatch(/Opening|Listening|Transcribing|Waiting|Review|No captions/)
       expect(region, phase).not.toContain(' hidden')
     }
   })
 
   it('renders 1, 2 and many caption rows and skips blank YOU/COPILOT lines', () => {
-    const one = renderComms('listening', [caption('a', 'only row')])
+    const one = renderHistory('listening', [caption('a', 'only row')])
     // The speaker is no longer drawn, so it has to reach a screen reader as text
     // and reach CSS as an attribute. Exactly once, either way.
     expect(one).toContain('<span class="sr-only">YOU</span>')
@@ -229,7 +242,7 @@ describe('VoiceComms caption visibility', () => {
     expect(one).toContain('only row')
     expect(one.match(/YOU/g)).toHaveLength(1)
 
-    const two = renderComms('speaking', [
+    const two = renderHistory('speaking', [
       caption('a', 'user line'),
       caption('b', 'assistant line', 'assistant'),
     ])
@@ -238,7 +251,7 @@ describe('VoiceComms caption visibility', () => {
     expect(two).toContain('data-role="assistant"')
     expect(two).toContain('assistant line')
 
-    const many = renderComms('thinking', [
+    const many = renderHistory('thinking', [
       caption('empty', '   '),
       caption('a', 'first'),
       caption('b', 'second', 'assistant'),
@@ -252,7 +265,7 @@ describe('VoiceComms caption visibility', () => {
     expect(many).toContain('interrupted')
 
     // Older exchanges leave the panel so it cannot outgrow the work behind it.
-    const long = renderComms('thinking', [
+    const long = renderHistory('thinking', [
       caption('u1', 'oldest ask'),
       caption('a1', 'oldest reply', 'assistant'),
       caption('u2', 'newer ask'),
@@ -310,9 +323,16 @@ describe('VoiceComms caption visibility', () => {
     expect(html).toContain('confirm-sheet-apply')
     expect(html).toContain('Cancel')
     expect(html).toContain('Use Apply or Cancel on screen.')
-    expect(controlMarkup(html, 'Hide captions')).toContain('type="button"')
+    expect(controlMarkup(html, 'Close history')).toContain('type="button"')
     expect(controlMarkup(html, 'Stop voice conversation')).toContain('aria-pressed="true"')
     expect(controlMarkup(html, 'Chat model')).toContain('aria-label="Chat model"')
     expect(controlMarkup(html, 'Voice provider')).toContain('aria-label="Voice provider"')
+  })
+
+  it('keeps Connecting voice distinct from Waiting for reply in the statusline', () => {
+    expect(renderComms('connecting', [])).toContain('Connecting voice')
+    expect(renderComms('connecting', [])).not.toContain('Waiting for reply')
+    expect(renderComms('thinking', [])).toContain('Waiting for reply')
+    expect(renderComms('thinking', [])).not.toContain('Connecting voice')
   })
 })

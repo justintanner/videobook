@@ -36,8 +36,8 @@ export type McpFlash = 'success' | 'error' | null
 
 export const emptyMcpCallLog: McpCallLog = { calls: [] }
 
-/** Rows past this age out of the panel; the newest is always the last one. */
-export const MCP_CALL_HISTORY = 12
+/** Backstop only; the last-two-exchanges window is what bounds the panel. */
+export const MCP_CALL_HISTORY = 256
 
 /** A call shorter than this still reads as having run before it settles. */
 export const MCP_CALL_MIN_VISIBLE_MS = 420

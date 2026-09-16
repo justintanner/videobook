@@ -9806,18 +9806,21 @@ textarea:focus-visible {
    line, this is a section of the panel, not a box on it. A collapsed row is 32px:
    the panel's secondary tier, and the height the old transient strip used, so
    nothing below it shifts as calls arrive and settle. */
-.mcp-calls {
-  order: 2;
+.composer-history {
   display: grid;
   align-content: start;
   gap: 2px;
   min-height: 0;
   max-height: min(232px, 28dvh);
-  padding: 0 19px 0 17px;
+  padding: 16px 19px 0 17px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   animation: mcp-activity-enter 180ms ease-out both;
+}
+
+.composer-history[hidden] {
+  display: none !important;
 }
 
 /* The row negates the spine and re-applies it as padding, so its hover reaches
@@ -12115,6 +12118,7 @@ textarea:focus-visible {
   }
 
   .command-composer,
+  .composer-history,
   .mcp-calls,
   .mcp-call-body,
   .mcp-call-signal i,

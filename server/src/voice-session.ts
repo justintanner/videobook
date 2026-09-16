@@ -418,7 +418,7 @@ export class VoiceSession {
       this.fail("The voice service stopped responding. Start voice to try again.");
       return;
     }
-    this.emit({ type: "activity", phase: "thinking", interrupt: this.providerName === "xai" });
+    this.emit({ type: "activity", phase: "thinking", interrupt: this.providerName === "xai", retry: true });
     this.recoveringTurn = this.currentTurn;
     if (recovery.responseId) {
       this.abandonedResponses.add(recovery.responseId);

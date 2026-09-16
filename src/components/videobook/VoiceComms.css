@@ -37,13 +37,17 @@
 
 /* The transcript is a section of the composer panel, not a box of its own: no
    border, no radius, no background, no gap between it and the command line. */
-.command-composer > .voice-comms {
+.command-composer > .composer-history-panel {
   flex: 0 1 auto;
   min-height: 0;
   max-height: min(248px, 30dvh);
   overflow: hidden;
 }
-.command-composer:has(> .confirm-sheet) > .voice-comms { max-height: min(140px, 20dvh); }
+.command-composer:has(> .confirm-sheet) > .composer-history-panel { max-height: min(140px, 20dvh); }
+.command-composer > .voice-comms {
+  flex: 0 0 auto;
+  min-height: 0;
+}
 
 .voice-comms { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 16px 19px 0 17px; color: #9fc0ad; }
 
@@ -59,17 +63,19 @@
 .voice-comms-review { color: #f0dcb0; }
 .voice-comms.voice-error .voice-comms-message { color: #ffd5cc; }
 
-.voice-captions { flex: 1 1 auto; min-height: 0; max-height: min(180px, 22dvh); margin-left: -10px; padding-left: 10px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.voice-captions[hidden] { display: none !important; }
-.voice-captions > p { position: relative; margin: 0 0 13px; font-size: 13px; line-height: 1.55; color: #9fc0ad; }
-.voice-captions > p:last-child { margin-bottom: 0; }
-.voice-captions > p > span { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.composer-history-panel { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.composer-history-panel > .voice-captions-toggle { align-self: flex-end; margin: 0 8px 0 0; }
+.voice-captions, .composer-history { flex: 1 1 auto; min-height: 0; max-height: min(180px, 22dvh); margin-left: -10px; padding-left: 10px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.voice-captions[hidden], .composer-history[hidden] { display: none !important; }
+.voice-captions > p, .composer-history > p { position: relative; margin: 0 0 13px; font-size: 13px; line-height: 1.55; color: #9fc0ad; }
+.voice-captions > p:last-child, .composer-history > p:last-child { margin-bottom: 0; }
+.voice-captions > p > span, .composer-history > p > span { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 
 /* No speaker column. Your turns read brighter and heavier behind a 2px rule in
    the margin; the copilot's stay quiet. The rule sits outside the 20px spine so
    the copy itself still starts on it. The speaker name survives in .sr-only. */
-.voice-captions > p[data-role='user'] { font-weight: 600; color: #dbf1e3; }
-.voice-captions > p[data-role='user']::before { position: absolute; top: 4px; bottom: 4px; left: -10px; width: 2px; background: var(--green); content: ''; }
+.voice-captions > p[data-role='user'], .composer-history > p[data-role='user'] { font-weight: 600; color: #dbf1e3; }
+.voice-captions > p[data-role='user']::before, .composer-history > p[data-role='user']::before { position: absolute; top: 4px; bottom: 4px; left: -10px; width: 2px; background: var(--green); content: ''; }
 
 .voice-captions-empty { display: block !important; color: #6f9a80; font-size: 13px; }
 .voice-captions em { color: #6f9a80; font-size: 11px; font-style: normal; }
@@ -98,15 +104,15 @@
 @media (max-width: 600px) {
   .voice-comms { padding: 12px 11px 0 9px; }
   .voice-provider-field { padding: 0 7px; gap: 5px; }
-  .voice-captions { margin-left: -6px; padding-left: 6px; }
-  .voice-captions > p[data-role='user']::before { left: -6px; }
+  .voice-captions, .composer-history { margin-left: -6px; padding-left: 6px; }
+  .voice-captions > p[data-role='user']::before, .composer-history > p[data-role='user']::before { left: -6px; }
 }
 
 @media (max-height: 500px) {
   .command-composer > .confirm-sheet { min-height: 88px; max-height: min(42dvh, calc(100dvh - 8rem)); }
-  .command-composer:has(> .confirm-sheet) > .voice-comms,
-  .command-composer > .voice-comms { max-height: min(104px, 24dvh); }
-  .voice-captions { max-height: min(52px, 16dvh); }
+  .command-composer:has(> .confirm-sheet) > .composer-history-panel,
+  .command-composer > .composer-history-panel { max-height: min(104px, 24dvh); }
+  .voice-captions, .composer-history { max-height: min(52px, 16dvh); }
   .voice-disclosure { display: none; }
   .command-composer:has(> .voice-comms) .confirm-sheet-foot,
   .command-composer:has(> .confirm-sheet) .confirm-sheet-foot { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }

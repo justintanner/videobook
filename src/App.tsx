@@ -454,6 +454,7 @@ import {
   handleModalDialogKeyDown,
   shouldDismissModalDialogFromBackdrop,
 } from '@/videobook/modal-dialog-interactions'
+import { nextHistorySequence } from '@/videobook/history-sequence'
 import {
   beginMcpCall,
   emptyMcpCallLog,
@@ -3442,7 +3443,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const mediaLibraryOpenerRef = useRef<HTMLElement | null>(null)
   const activeWatchesRef = useRef(new Map<string, string>())
   const activeMcpCallsRef = useRef(new Map<number, { tool: string; startedAt: number }>())
-  const mcpActivitySequenceRef = useRef(0)
+
   const mcpFlashTimerRef = useRef(0)
   const mcpSettleTimersRef = useRef(new Map<number, number>())
   const selectedCellIdsRef = useRef<ReadonlySet<string>>(new Set())
@@ -3659,8 +3660,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (options?.background || !shouldNotifyMcpActivity(tool)) {
       return parseResult(await mcp.callTool(tool, args))
     }
-    const sequence = mcpActivitySequenceRef.current + 1
-    mcpActivitySequenceRef.current = sequence
+    const sequence = nextHistorySequence()
     const startedAt = performance.now()
     activeMcpCallsRef.current.set(sequence, { tool, startedAt })
     setMcpCalls((log) => beginMcpCall(log, { id: sequence, tool, args: mcpCallArgs(args) }))

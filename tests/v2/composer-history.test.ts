@@ -1,0 +1,242 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ComposerHistory } from '../../src/components/videobook/ComposerHistory'
+import {
+  COMPOSER_HISTORY_CAP,
+  HISTORY_AUTO_CLOSE_MS,
+  composerHistory,
+  composerHistoryEpoch,
+  historyAutoCloseHeld,
+  historyIdle,
+  scheduleHistoryAutoClose,
+} from '../../src/videobook/composer-history'
+import {
+  beginMcpCall,
+  emptyMcpCallLog,
+  mcpCallArgs,
+  settleMcpCall,
+  type McpCallLog,
+} from '../../src/videobook/mcp-activity'
+import { nextHistorySequence, resetHistorySequence } from '../../src/videobook/history-sequence'
+import type { VoiceCaption } from '../../server/src/voice-contract'
+
+afterEach(() => {
+  resetHistorySequence()
+  vi.useRealTimers()
+})
+
+const caption = (
+  overrides: Partial<VoiceCaption> & Pick<VoiceCaption, 'id'>,
+): VoiceCaption => ({
+  role: 'user',
+  text: 'hello',
+  final: true,
+  sequence: overrides.sequence ?? Number(String(overrides.id).replace(/\D/g, '') || 1),
+  ...overrides,
+})
+
+function started(log: McpCallLog, id: number, tool: string, args: Record<string, unknown> = {}) {
+  return beginMcpCall(log, { id, tool, args: mcpCallArgs(args) })
+}
+
+describe('history sequence', () => {
+  it('stamps captions and calls from one monotonic clock', () => {
+    expect(nextHistorySequence()).toBe(1)
+    expect(nextHistorySequence()).toBe(2)
+  })
+})
+
+describe('composerHistory', () => {
+  it('keeps interrupted or non-empty rows and drops blank YOU/COPILOT rows', () => {
+    const rows = composerHistory([
+      caption({ id: 'empty', text: '   ', final: false, sequence: 1 }),
+      caption({ id: 'partial', text: 'hi', final: false, sequence: 2 }),
+      caption({ id: 'cut', text: '', interrupted: true, final: true, sequence: 3 }),
+    ], emptyMcpCallLog)
+    expect(rows.map((row) => row.kind === 'caption' ? row.caption.id : row.call.id))
+      .toEqual(['partial', 'cut'])
+  })
+
+  it('shows the last two exchanges plus every call that fired inside them', () => {
+    const log = started(
+      started(emptyMcpCallLog, 3, 'plan_chat_command'),
+      6,
+      'chain',
+    )
+    const captions = [
+      caption({ id: 'u1', text: 'oldest ask', sequence: 1 }),
+      caption({ id: 'a1', role: 'assistant', text: 'oldest reply', sequence: 2 }),
+      caption({ id: 'u2', text: 'newer ask', sequence: 4 }),
+      caption({ id: 'a2', role: 'assistant', text: 'newer reply', sequence: 5 }),
+      caption({ id: 'u3', text: 'newest ask', sequence: 7 }),
+      caption({ id: 'a3', role: 'assistant', text: 'newest reply', sequence: 8 }),
+    ]
+    const rows = composerHistory(captions, log)
+    expect(rows.map((row) => row.kind === 'caption' ? row.caption.id : `call:${row.call.tool}`))
+      .toEqual(['u2', 'a2', 'call:chain', 'u3', 'a3'])
+    expect(rows.some((row) => row.kind === 'caption' && row.caption.id === 'u1')).toBe(false)
+    expect(rows.some((row) => row.kind === 'call' && row.call.tool === 'plan_chat_command')).toBe(false)
+  })
+
+  it('keeps a streaming assistant row in place while it grows and when it turns final', () => {
+    const streaming = caption({
+      id: 'a1',
+      role: 'assistant',
+      text: 'Ready',
+      final: false,
+      sequence: 2,
+    })
+    const withCall = started(emptyMcpCallLog, 3, 'chat')
+    const growing = composerHistory([
+      caption({ id: 'u1', text: 'make a clip', sequence: 1 }),
+      { ...streaming, text: 'Ready to apply the cut.' },
+    ], withCall)
+    expect(growing.map((row) => row.kind === 'caption' ? row.caption.id : `call:${row.call.id}`))
+      .toEqual(['u1', 'a1', 'call:3'])
+    const final = composerHistory([
+      caption({ id: 'u1', text: 'make a clip', sequence: 1 }),
+      { ...streaming, text: 'Ready to apply the cut.', final: true },
+    ], withCall)
+    expect(final.map((row) => row.kind === 'caption' ? row.caption.id : `call:${row.call.id}`))
+      .toEqual(['u1', 'a1', 'call:3'])
+    expect(final[1]).toMatchObject({ kind: 'caption', caption: { final: true } })
+  })
+
+  it('keeps a short conversation whole, including anything said before the first turn', () => {
+    const greeting = caption({ id: 'a0', role: 'assistant', text: 'Voice ready.', sequence: 1 })
+    expect(composerHistory([greeting], emptyMcpCallLog).map((row) =>
+      row.kind === 'caption' ? row.caption.id : row.call.id)).toEqual(['a0'])
+    expect(composerHistory([
+      greeting,
+      caption({ id: 'u1', text: 'hello', sequence: 2 }),
+      caption({ id: 'a1', role: 'assistant', text: 'hi', sequence: 3 }),
+    ], emptyMcpCallLog).map((row) =>
+      row.kind === 'caption' ? row.caption.id : row.call.id)).toEqual(['a0', 'u1', 'a1'])
+  })
+
+  it('counts an exchange from the speaker, not from every row', () => {
+    expect(composerHistory([
+      caption({ id: 'u1', text: 'one', sequence: 1 }),
+      caption({ id: 'u2', text: 'two', sequence: 2 }),
+      caption({ id: 'u3', text: 'three', sequence: 3 }),
+    ], emptyMcpCallLog).map((row) =>
+      row.kind === 'caption' ? row.caption.id : row.call.id)).toEqual(['u2', 'u3'])
+    expect(composerHistory([
+      caption({ id: 'u1', text: 'one', sequence: 1 }),
+      caption({ id: 'blank', text: '   ', final: false, sequence: 2 }),
+      caption({ id: 'a1', role: 'assistant', text: 'reply', sequence: 3 }),
+    ], emptyMcpCallLog).map((row) =>
+      row.kind === 'caption' ? row.caption.id : row.call.id)).toEqual(['u1', 'a1'])
+  })
+
+  it('renders calls with voice off and with no captions, and empty copy only when merged list is empty', () => {
+    const log = started(emptyMcpCallLog, 1, 'chat')
+    const withCalls = renderToStaticMarkup(createElement(ComposerHistory, {
+      captions: [],
+      log,
+      phase: 'off',
+      voicePresent: false,
+      open: true,
+      onToggle: () => undefined,
+      onToggleCall: () => undefined,
+    }))
+    expect(withCalls).toContain('>chat<')
+    expect(withCalls).not.toContain('No captions this session.')
+
+    const empty = renderToStaticMarkup(createElement(ComposerHistory, {
+      captions: [],
+      log: emptyMcpCallLog,
+      phase: 'connecting',
+      voicePresent: true,
+      open: true,
+      onToggle: () => undefined,
+      onToggleCall: () => undefined,
+    }))
+    expect(empty).toContain('Opening your voice channel')
+    expect(historyIdle('off', 0, false)).toBe(true)
+    expect(historyIdle('connecting', 0, true)).toBe(false)
+  })
+
+  it('closes without touching call, review or voice controls', () => {
+    const log = started(emptyMcpCallLog, 1, 'chat')
+    const html = renderToStaticMarkup(createElement(ComposerHistory, {
+      captions: [caption({ id: 'u1', text: 'hello', sequence: 1 })],
+      log,
+      phase: 'review',
+      voicePresent: true,
+      open: true,
+      onToggle: () => undefined,
+      onToggleCall: () => undefined,
+    }))
+    expect(html).toContain('aria-label="Close history"')
+    expect(html).toMatch(/<button[^>]*type="button"[^>]*aria-label="Close history"/)
+    expect(html).toContain('mcp-call-running')
+    const closed = renderToStaticMarkup(createElement(ComposerHistory, {
+      captions: [caption({ id: 'u1', text: 'hello', sequence: 1 })],
+      log,
+      phase: 'speaking',
+      voicePresent: true,
+      open: false,
+      onToggle: () => undefined,
+      onToggleCall: () => undefined,
+    }))
+    expect(closed).toContain(' hidden=""')
+    expect(closed).toContain('aria-label="Show history"')
+    expect(closed).toContain('>hello</span>')
+    expect(closed).toContain('mcp-call-running')
+  })
+})
+
+describe('history auto-close', () => {
+  it('closes 60s after the newest row and holds during in-flight work', () => {
+    vi.useFakeTimers()
+    const closed: number[] = []
+    const hold = historyAutoCloseHeld({ runningCalls: 1, voicePhase: 'listening' })
+    expect(hold).toBe(true)
+    expect(historyAutoCloseHeld({ runningCalls: 0, voicePhase: 'connecting' })).toBe(true)
+    expect(historyAutoCloseHeld({ runningCalls: 0, voicePhase: 'thinking' })).toBe(true)
+    expect(historyAutoCloseHeld({ runningCalls: 0, voicePhase: 'speaking' })).toBe(true)
+    expect(historyAutoCloseHeld({ runningCalls: 0, voicePhase: 'review' })).toBe(true)
+    expect(historyAutoCloseHeld({ runningCalls: 0, voicePhase: 'listening' })).toBe(false)
+
+    const first = scheduleHistoryAutoClose({
+      open: true,
+      held: false,
+      onClose: () => { closed.push(1) },
+    })
+    vi.advanceTimersByTime(HISTORY_AUTO_CLOSE_MS - 1)
+    expect(closed).toEqual([])
+    first()
+    const second = scheduleHistoryAutoClose({
+      open: true,
+      held: false,
+      onClose: () => { closed.push(2) },
+    })
+    vi.advanceTimersByTime(HISTORY_AUTO_CLOSE_MS)
+    expect(closed).toEqual([2])
+    second()
+    const heldTimer = scheduleHistoryAutoClose({
+      open: true,
+      held: true,
+      onClose: () => { closed.push(3) },
+    })
+    vi.advanceTimersByTime(HISTORY_AUTO_CLOSE_MS * 2)
+    expect(closed).toEqual([2])
+    heldTimer()
+  })
+
+  it('tracks the newest sequence so a later row restarts the window', () => {
+    const log = settleMcpCall(started(emptyMcpCallLog, 4, 'chat'), 4, {
+      phase: 'done',
+      elapsedMs: 20,
+      detail: '',
+    })
+    const rows = composerHistory([
+      caption({ id: 'u1', text: 'one', sequence: 1 }),
+      caption({ id: 'a1', role: 'assistant', text: 'two', sequence: 2 }),
+    ], log)
+    expect(composerHistoryEpoch(rows)).toBe(4)
+    expect(COMPOSER_HISTORY_CAP).toBeGreaterThan(12)
+  })
+})

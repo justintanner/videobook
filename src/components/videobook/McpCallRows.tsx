@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useRef } from 'react'
+import { Fragment } from 'react'
 import { ChevronDown } from 'lucide-react'
 import {
   mcpCallState,
@@ -7,13 +7,6 @@ import {
   type McpCallLog,
 } from '@/videobook/mcp-activity'
 
-const PIN_THRESHOLD_PX = 24
-
-/**
- * The MCP call log, as rows. This is a section of the composer panel like the
- * transcript and the command line, so it carries no border, radius or
- * background of its own -- only the panel's 20px spine.
- */
 export function McpCallRows({
   log,
   onToggle,
@@ -21,42 +14,17 @@ export function McpCallRows({
   log: McpCallLog
   onToggle: (id: number) => void
 }) {
-  const scrollerRef = useRef<HTMLDivElement>(null)
-  const pinnedRef = useRef(true)
-  const newest = log.calls.at(-1)?.id ?? 0
-
-  // The newest row follows the command line unless the reader has scrolled up
-  // to read an older one, which is the same bargain the captions strike.
-  useLayoutEffect(() => {
-    const element = scrollerRef.current
-    if (!element || !pinnedRef.current) return
-    element.scrollTop = element.scrollHeight
-  }, [newest, log.calls])
-
   if (log.calls.length === 0) return null
-
   return (
-    <div
-      ref={scrollerRef}
-      className="mcp-calls"
-      data-testid="mcp-calls"
-      role="log"
-      aria-label="MCP tool calls"
-      aria-live="off"
-      onScroll={(event) => {
-        const element = event.currentTarget
-        pinnedRef.current =
-          element.scrollHeight - element.scrollTop - element.clientHeight < PIN_THRESHOLD_PX
-      }}
-    >
+    <>
       {log.calls.map((call) => (
         <McpCallRow key={call.id} call={call} onToggle={onToggle} />
       ))}
-    </div>
+    </>
   )
 }
 
-function McpCallRow({ call, onToggle }: { call: McpCall; onToggle: (id: number) => void }) {
+export function McpCallRow({ call, onToggle }: { call: McpCall; onToggle: (id: number) => void }) {
   return (
     <div className={`mcp-call mcp-call-${call.phase}`} data-tool={call.tool}>
       <button

@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { VoiceConnection } from './voice-connection'
+import { nextHistorySequence } from './history-sequence'
+import { COMPOSER_HISTORY_CAP } from './composer-history'
 import type { VoiceCaption, VoiceMode, VoiceOutcome, VoicePhase, VoiceProvider, VoiceReviewCommand, VoiceSessionEvent } from '../../server/src/voice-contract'
 
 const voiceModeKey = 'videobook.voice-provider'
@@ -27,6 +29,7 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
   const [captions, setCaptions] = useState<VoiceCaption[]>([])
   const [playbackBlocked, setPlaybackBlocked] = useState(false)
   const [pendingReview, setPendingReview] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const [mode, setMode] = useState<VoiceMode>(savedVoiceMode)
   const [provider, setProvider] = useState<VoiceProvider | null>(null)
   const [fallbackReason, setFallbackReason] = useState<string | undefined>()
@@ -43,6 +46,7 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
     setProvider(null)
     setFallbackReason(undefined)
     setPendingReview(false)
+    setRetrying(false)
   }, [options.bookId, options.notebookId, options.scope, options.available])
 
   const stop = () => connectionRef.current?.stop()
@@ -53,7 +57,9 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
     setCaptions([])
     setProvider(null)
     setFallbackReason(undefined)
-    setMessage('Speak naturally. Interrupt anytime.')
+    setRetrying(false)
+    setPhase('connecting')
+    setMessage('Connecting voice')
     const connection = new VoiceConnection({
       bookId: current.bookId, notebookId: current.notebookId,
       mode,
@@ -65,14 +71,23 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
       onPhase: (next, detail) => {
         if (connectionRef.current !== connection && next !== 'off') return
         setPhase(next)
+        if (next !== 'thinking') setRetrying(false)
         if (detail) setMessage(detail)
+      },
+      onRetrying: (next) => {
+        if (connectionRef.current !== connection) return
+        setRetrying(next)
       },
       onCaption: caption => {
         if (connectionRef.current !== connection) return
         setCaptions(previous => {
           const existing = previous.findIndex(value => value.id === caption.id)
-          if (existing < 0) return [...previous, caption].slice(-24)
-          return previous.map(value => value.id === caption.id ? caption : value)
+          if (existing < 0) {
+            return [...previous, { ...caption, sequence: caption.sequence ?? nextHistorySequence() }]
+              .slice(-COMPOSER_HISTORY_CAP)
+          }
+          const sequence = previous[existing]?.sequence ?? caption.sequence
+          return previous.map(value => value.id === caption.id ? { ...caption, sequence } : value)
         })
       },
       onAction: async event => {
@@ -101,7 +116,7 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
   }
 
   return {
-    phase, message, captions, playbackBlocked, pendingReview, meterRef, toggle, stop, mode, provider, fallbackReason,
+    phase, message, captions, playbackBlocked, pendingReview, retrying, meterRef, toggle, stop, mode, provider, fallbackReason,
     selectMode: (next: VoiceMode) => {
       if (next === mode) return
       connectionRef.current?.stop('Voice provider changed. Start voice to connect.')

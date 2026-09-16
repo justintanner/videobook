@@ -2656,7 +2656,7 @@ describe('chat composer browser flow', () => {
     // The row carries the raw tool name now; the humanized label moved into the
     // expanded body, where there is room for it.
     await page.waitForFunction(() =>
-      document.querySelector('[data-testid="mcp-calls"] .mcp-call-running .mcp-call-name')
+      document.querySelector('[data-testid="composer-history"] .mcp-call-running .mcp-call-name')
         ?.textContent === 'chat')
     const shell = page.locator('.command-line-shell')
     const composer = page.locator('.command-composer')
@@ -2710,7 +2710,7 @@ describe('chat composer browser flow', () => {
 
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await input.focus()
-    await page.locator('[data-testid="mcp-calls"]').waitFor({ state: 'visible' })
+    await page.locator('[data-testid="composer-history"]').waitFor({ state: 'visible' })
     expect(await composer.evaluate((element) => window.getComputedStyle(element).animationName))
       .toBe('none')
   }, 60_000)
@@ -2835,13 +2835,17 @@ describe('chat composer browser flow', () => {
         .toBe('Chat model')
       expect(await page.locator('.command-channel .voice-provider-field select').getAttribute('aria-label'))
         .toBe('Voice provider')
-      const captions = page.locator('.voice-captions')
-      expect(await page.getByLabel('Hide captions').isVisible()).toBe(true)
+      const captions = page.locator('[data-testid="composer-history"]')
+      expect(await page.getByLabel('Close history').isVisible()).toBe(true)
       expect(await captions.isVisible()).toBe(true)
-      await page.getByLabel('Hide captions').click()
+      const status = page.locator('.voice-comms-status')
+      expect(await status.innerText()).not.toBe('Waiting for reply')
+      expect(await status.innerText()).toMatch(/Connecting voice|Allow microphone|Listening|Connection error|Voice paused|Offline/)
+      await page.getByLabel('Close history').click()
       expect(await captions.isVisible()).toBe(false)
+      expect(await status.isVisible()).toBe(true)
       expect(await review.getByRole('button', { name: 'Apply' }).count()).toBe(1)
-      await page.getByLabel('Show captions').click()
+      await page.getByLabel('Show history').click()
       expect(await captions.isVisible()).toBe(true)
       for (const viewport of [
         { width: 1440, height: 1000 },
