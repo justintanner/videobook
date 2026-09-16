@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { VoiceComms } from '../../src/components/videobook/VoiceComms'
 import { ComposerHistory } from '../../src/components/videobook/ComposerHistory'
+import { composerHistory } from '../../src/videobook/composer-history'
 import { composerActivityStatus } from '../../src/videobook/composer-status'
 import { emptyMcpCallLog } from '../../src/videobook/mcp-activity'
 import type { VoiceConversation } from '../../src/videobook/use-voice-conversation'
@@ -122,12 +123,12 @@ describe('composer activity status', () => {
       voice: stubVoice({ phase: 'thinking', message: 'Speak naturally. Interrupt anytime.' }),
     }))
     const hidden = renderToStaticMarkup(createElement(ComposerHistory, {
-      captions: [],
-      log: emptyMcpCallLog,
+      rows: composerHistory([], emptyMcpCallLog),
       phase: 'connecting',
       voicePresent: true,
       open: false,
       onToggle: () => undefined,
+      onClose: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(connecting).toContain('Connecting voice')

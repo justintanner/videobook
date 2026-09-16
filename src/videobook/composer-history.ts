@@ -43,6 +43,19 @@ export function composerHistory(
   return from === undefined ? merged : merged.slice(from)
 }
 
+/**
+ * Drop what the user has already closed. Closing the chat does not clear the
+ * log -- the calls still happened and the rows are still their record -- it
+ * raises the floor, so the panel reads as idle until something new arrives
+ * above it and brings it back.
+ */
+export function composerHistoryAfter(
+  rows: readonly ComposerHistoryRow[],
+  closedThrough: number,
+): ComposerHistoryRow[] {
+  return rows.filter((row) => row.sequence > closedThrough)
+}
+
 export function composerHistoryEpoch(rows: readonly ComposerHistoryRow[]): number {
   return rows.at(-1)?.sequence ?? 0
 }

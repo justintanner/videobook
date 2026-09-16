@@ -9812,7 +9812,7 @@ textarea:focus-visible {
   gap: 2px;
   min-height: 0;
   max-height: min(232px, 28dvh);
-  padding: 16px 19px 0 17px;
+  padding: 6px 19px 0 17px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -9899,9 +9899,11 @@ textarea:focus-visible {
   color: #f3a0a0;
 }
 
-/* The strip read MCP bright and the tool name dim, which was right while it was
-   a status message. A row that stays is content, so the emphasis inverts: the
-   tool name is what you scan, MCP recedes to the channel it arrived on. */
+/* The strip read the channel bright and the tool name dim, which was right while
+   it was a status message. A row that stays is content, so the emphasis inverts:
+   the tool name is what you scan, ACTION recedes to the kind of thing it was.
+   The word is ACTION rather than MCP because the transport is not the user's
+   business -- the status line has said "Preparing an action" all along. */
 .mcp-call-copy {
   display: flex;
   min-width: 0;

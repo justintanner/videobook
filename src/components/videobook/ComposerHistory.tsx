@@ -1,42 +1,39 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 import { McpCallRow } from './McpCallRows'
 import {
   captionToggleLabel,
   captionsEmptyCopy,
 } from '@/videobook/voice-captions'
 import {
-  composerHistory,
   historyIdle,
   type ComposerHistoryRow,
 } from '@/videobook/composer-history'
 import type { VoiceCaption, VoicePhase } from '../../../server/src/voice-contract'
-import type { McpCallLog } from '@/videobook/mcp-activity'
 
 const PIN_THRESHOLD_PX = 28
 
 export function ComposerHistory({
-  captions,
-  log,
+  rows,
   phase,
   voicePresent,
   open,
   onToggle,
+  onClose,
   onToggleCall,
 }: {
-  captions: readonly VoiceCaption[]
-  log: McpCallLog
+  rows: readonly ComposerHistoryRow[]
   phase: VoicePhase | undefined
   voicePresent: boolean
   open: boolean
   onToggle: () => void
+  onClose: () => void
   onToggleCall: (id: number) => void
 }) {
   const captionId = useId()
   const scrollerRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
   const [showLatest, setShowLatest] = useState(false)
-  const rows = composerHistory(captions, log)
   const idle = historyIdle(phase, rows.length, voicePresent)
 
   useLayoutEffect(() => {
@@ -52,6 +49,32 @@ export function ComposerHistory({
 
   return (
     <div className="composer-history-panel" data-history-open={open ? 'true' : 'false'}>
+      {/* The panel's own chrome, on the spine every other child sits on. Collapse
+          keeps the transcript and hides it; close ends the chat and leaves the
+          command line, which is where a fresh load starts too. */}
+      <div className="composer-panel-controls">
+        <button
+          type="button"
+          className="voice-captions-toggle"
+          aria-controls={captionId}
+          aria-expanded={open}
+          aria-label={captionToggleLabel(open)}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onToggle}
+        >
+          <ChevronDown size={13} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="composer-history-close"
+          aria-label="Close chat"
+          title="Close chat"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onClose}
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      </div>
       <div
         ref={scrollerRef}
         id={captionId}
@@ -87,17 +110,6 @@ export function ComposerHistory({
           Latest
         </button>
       )}
-      <button
-        type="button"
-        className="voice-captions-toggle"
-        aria-controls={captionId}
-        aria-expanded={open}
-        aria-label={captionToggleLabel(open)}
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={onToggle}
-      >
-        <ChevronDown size={13} aria-hidden="true" />
-      </button>
     </div>
   )
 }
@@ -116,7 +128,7 @@ function HistoryRow({
   if (row.kind === 'call') {
     return <McpCallRow call={row.call} onToggle={onToggleCall} />
   }
-  const caption = row.caption
+  const caption: VoiceCaption = row.caption
   return (
     <p data-final={caption.final} data-role={caption.role}>
       <span className="sr-only">{caption.role === 'user' ? 'YOU' : 'COPILOT'}</span>

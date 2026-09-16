@@ -39,7 +39,7 @@ export function McpCallRow({ call, onToggle }: { call: McpCall; onToggle: (id: n
           <i />
         </span>
         <span className="mcp-call-copy">
-          <span className="mcp-call-channel">MCP</span>
+          <span className="mcp-call-channel">ACTION</span>
           <span className="mcp-call-name">{call.tool}</span>
         </span>
         <span className="mcp-call-trail">

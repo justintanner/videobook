@@ -47,6 +47,7 @@ import {
 } from '@/videobook/mcp-activity'
 import {
   composerHistory,
+  composerHistoryAfter,
   composerHistoryEpoch,
   composerHistoryGeneration,
   historyAutoCloseHeld,
@@ -247,9 +248,10 @@ export function CommandComposer({
   } | null>(null)
   const successTimerRef = useRef(0)
   const [historyOpen, setHistoryOpen] = useState(true)
+  const [closedThrough, setClosedThrough] = useState(0)
   const historyRows = useMemo(
-    () => composerHistory(voice?.captions ?? [], mcpCalls),
-    [mcpCalls, voice?.captions],
+    () => composerHistoryAfter(composerHistory(voice?.captions ?? [], mcpCalls), closedThrough),
+    [closedThrough, mcpCalls, voice?.captions],
   )
   const historyEpoch = composerHistoryEpoch(historyRows)
   const historyGeneration = composerHistoryGeneration(historyRows)
@@ -775,12 +777,12 @@ export function CommandComposer({
 
       {!hidden && (
         <ComposerHistory
-          captions={voice?.captions ?? []}
-          log={mcpCalls}
+          rows={historyRows}
           phase={voice?.phase}
           voicePresent={Boolean(voice)}
           open={historyOpen}
           onToggle={() => setHistoryOpen((current) => !current)}
+          onClose={() => setClosedThrough(historyEpoch)}
           onToggleCall={onToggleMcpCall}
         />
       )}

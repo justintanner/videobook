@@ -55,8 +55,21 @@ const toolLabels: Readonly<Record<string, string>> = {
   slash_commands: 'Loading commands',
 }
 
+/**
+ * Catalogs and pollers nobody asked for. They run on load and again on every
+ * refresh, so a row apiece is how a freshly reloaded page ends up showing a
+ * chat history the user never started.
+ */
+const QUIET_TOOLS: ReadonlySet<string> = new Set([
+  'list_jobs',
+  'list_chat_models',
+  'list_prompt_history',
+  'list_workspace_actions',
+  'slash_commands',
+])
+
 export function shouldNotifyMcpActivity(tool: string): boolean {
-  return tool !== 'list_jobs'
+  return !QUIET_TOOLS.has(tool)
 }
 
 export function mcpToolLabel(tool: string): string {

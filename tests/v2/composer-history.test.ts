@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,6 +7,7 @@ import {
   COMPOSER_HISTORY_CAP,
   HISTORY_AUTO_CLOSE_MS,
   composerHistory,
+  composerHistoryAfter,
   composerHistoryEpoch,
   historyAutoCloseHeld,
   historyIdle,
@@ -133,24 +135,24 @@ describe('composerHistory', () => {
   it('renders calls with voice off and with no captions, and empty copy only when merged list is empty', () => {
     const log = started(emptyMcpCallLog, 1, 'chat')
     const withCalls = renderToStaticMarkup(createElement(ComposerHistory, {
-      captions: [],
-      log,
+      rows: composerHistory([], log),
       phase: 'off',
       voicePresent: false,
       open: true,
       onToggle: () => undefined,
+      onClose: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(withCalls).toContain('>chat<')
     expect(withCalls).not.toContain('No captions this session.')
 
     const empty = renderToStaticMarkup(createElement(ComposerHistory, {
-      captions: [],
-      log: emptyMcpCallLog,
+      rows: composerHistory([], emptyMcpCallLog),
       phase: 'connecting',
       voicePresent: true,
       open: true,
       onToggle: () => undefined,
+      onClose: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(empty).toContain('Opening your voice channel')
@@ -161,24 +163,24 @@ describe('composerHistory', () => {
   it('closes without touching call, review or voice controls', () => {
     const log = started(emptyMcpCallLog, 1, 'chat')
     const html = renderToStaticMarkup(createElement(ComposerHistory, {
-      captions: [caption({ id: 'u1', text: 'hello', sequence: 1 })],
-      log,
+      rows: composerHistory([caption({ id: 'u1', text: 'hello', sequence: 1 })], log),
       phase: 'review',
       voicePresent: true,
       open: true,
       onToggle: () => undefined,
+      onClose: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(html).toContain('aria-label="Close history"')
     expect(html).toMatch(/<button[^>]*type="button"[^>]*aria-label="Close history"/)
     expect(html).toContain('mcp-call-running')
     const closed = renderToStaticMarkup(createElement(ComposerHistory, {
-      captions: [caption({ id: 'u1', text: 'hello', sequence: 1 })],
-      log,
+      rows: composerHistory([caption({ id: 'u1', text: 'hello', sequence: 1 })], log),
       phase: 'speaking',
       voicePresent: true,
       open: false,
       onToggle: () => undefined,
+      onClose: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(closed).toContain(' hidden=""')
@@ -224,6 +226,64 @@ describe('history auto-close', () => {
     vi.advanceTimersByTime(HISTORY_AUTO_CLOSE_MS * 2)
     expect(closed).toEqual([2])
     heldTimer()
+  })
+
+  it('pairs close with collapse and closes the chat back to the command line', () => {
+    const log = settleMcpCall(started(emptyMcpCallLog, 1, 'chat'), 1, {
+      phase: 'done',
+      elapsedMs: 30,
+      detail: '',
+    })
+    const rows = composerHistory([
+      caption({ id: 'u1', text: 'hello', sequence: 2 }),
+    ], log)
+    const html = renderToStaticMarkup(createElement(ComposerHistory, {
+      rows,
+      phase: 'listening',
+      voicePresent: true,
+      open: true,
+      onToggle: () => undefined,
+      onClose: () => undefined,
+      onToggleCall: () => undefined,
+    }))
+    // Both controls live in one strip, close after collapse.
+    expect(html).toContain('composer-panel-controls')
+    expect(html).toMatch(/aria-label="Close history"[\s\S]*aria-label="Close chat"/)
+    expect(html.indexOf('composer-panel-controls')).toBeLessThan(html.indexOf('composer-history voice-captions'))
+
+    // Closing raises the floor past everything on screen, so the panel goes idle.
+    const closedThrough = composerHistoryEpoch(rows)
+    const remaining = composerHistoryAfter(rows, closedThrough)
+    expect(remaining).toEqual([])
+    expect(historyIdle('off', remaining.length, false)).toBe(true)
+
+    // A later row arrives above the floor and brings the panel back.
+    const later = composerHistoryAfter(composerHistory([
+      caption({ id: 'u1', text: 'hello', sequence: 2 }),
+      caption({ id: 'u2', text: 'again', sequence: 9 }),
+    ], log), closedThrough)
+    expect(later.map((row) => row.kind === 'caption' ? row.caption.id : row.call.id)).toEqual(['u2'])
+    expect(composerHistoryEpoch(later)).toBeGreaterThan(closedThrough)
+  })
+
+  it('lines captions up with the call rows rather than the panel spine', () => {
+    const html = renderToStaticMarkup(createElement(ComposerHistory, {
+      rows: composerHistory([caption({ id: 'u1', text: 'hello', sequence: 1 })], emptyMcpCallLog),
+      phase: 'listening',
+      voicePresent: true,
+      open: true,
+      onToggle: () => undefined,
+      onClose: () => undefined,
+      onToggleCall: () => undefined,
+    }))
+    const css = readFileSync(
+      new URL('../../src/components/videobook/VoiceComms.css', import.meta.url),
+      'utf8',
+    )
+    expect(html).toContain('data-role="user"')
+    // 26px clears the row's 16px signal glyph and its 10px grid gap.
+    expect(css).toContain('.voice-captions > p, .composer-history > p { position: relative; margin: 0 0 13px; padding-left: 26px;')
+    expect(css).toContain('left: 16px; width: 2px; background: var(--green)')
   })
 
   it('tracks the newest sequence so a later row restarts the window', () => {

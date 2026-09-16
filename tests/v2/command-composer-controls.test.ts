@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CommandComposer } from '../../src/components/videobook/CommandComposer'
 import { ComposerHistory } from '../../src/components/videobook/ComposerHistory'
+import { composerHistory } from '../../src/videobook/composer-history'
 import { VoiceComms } from '../../src/components/videobook/VoiceComms'
 import { fallbackChatModelCatalog } from '../../src/videobook/chat-models'
 import { emptyMcpCallLog } from '../../src/videobook/mcp-activity'
@@ -96,12 +97,12 @@ function renderHistory(
   open = true,
 ): string {
   return renderToStaticMarkup(createElement(ComposerHistory, {
-    captions,
-    log: emptyMcpCallLog,
+    rows: composerHistory(captions, emptyMcpCallLog),
     phase,
     voicePresent: true,
     open,
     onToggle: () => undefined,
+    onClose: () => undefined,
     onToggleCall: () => undefined,
   }))
 }

@@ -12,6 +12,7 @@ import {
   mcpCallsRunning,
   mcpResultSummary,
   settleMcpCall,
+  shouldNotifyMcpActivity,
   toggleMcpCall,
   type McpCallLog,
 } from '../../src/videobook/mcp-activity'
@@ -180,5 +181,30 @@ describe('mcp call rows', () => {
     expect(html).toContain('class="mcp-call mcp-call-failed"')
     expect(html).toContain('>failed<')
     expect(html).toContain('No cost adapter for generate_veo31_video')
+  })
+
+  it('reads ACTION as the channel, not the transport it arrived on', () => {
+    const html = renderToStaticMarkup(createElement(McpCallRows, {
+      log: started(emptyMcpCallLog, 1, 'chat'),
+      onToggle: () => undefined,
+    }))
+    expect(html).toContain('<span class="mcp-call-channel">ACTION</span>')
+    expect(html).not.toContain('>MCP<')
+  })
+
+  it('keeps catalogs and pollers out of the history so a reload starts clean', () => {
+    for (const quiet of [
+      'list_jobs',
+      'list_chat_models',
+      'list_prompt_history',
+      'list_workspace_actions',
+      'slash_commands',
+    ]) {
+      expect(shouldNotifyMcpActivity(quiet)).toBe(false)
+    }
+    // Work the user actually asked for still earns a row.
+    for (const loud of ['chat', 'chain', 'get_notebook', 'run_notebook_cell']) {
+      expect(shouldNotifyMcpActivity(loud)).toBe(true)
+    }
   })
 })
