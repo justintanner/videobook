@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { WebSocket } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import express from "express";
 import { OpenAiError } from "@apicity/openai";
 import { XaiError } from "@apicity/xai";
@@ -379,6 +379,48 @@ describe("voice session boundaries", () => {
     session.receive({ ...final, item_id: "after-stop", event_id: "after-stop" });
     expect(engine.logs.read("voice-chat").filter(entry => entry.sessionId === session.id)).toHaveLength(1);
     expect(engine.logs.read("voice-session-closed").find(entry => entry.operationId === session.id)).toMatchObject({ count: 1, inputTokens: 20, outputTokens: 10 });
+  });
+
+  it("answers a tool call the speaker has already talked past", async () => {
+    const provider = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    const sent: { type?: string; item?: Record<string, unknown> }[] = [];
+    provider.on("connection", socket => {
+      socket.on("message", data => {
+        const event = JSON.parse(String(data)) as { type?: string; item?: Record<string, unknown> };
+        sent.push(event);
+        if (event.type === "session.update") socket.send(JSON.stringify({ type: "session.updated", event_id: "configured" }));
+      });
+    });
+    await once(provider, "listening");
+    const address = provider.address();
+    if (!address || typeof address === "string") throw new Error("No provider address");
+    process.env.VIDEOBOOK_XAI_REALTIME_URL = `ws://127.0.0.1:${address.port}`;
+    const session = new VoiceSession(books, bookId, notebookId, engine, "local-endpoint-key", 120_000, () => undefined, "xai", 48000);
+    try {
+      session.subscribe(() => undefined);
+      await session.start("", new AbortController().signal);
+      // The speaker asks for an image, then keeps talking, so the call the model
+      // made for the first turn lands after a second turn has started.
+      session.receive({ type: "input_audio_buffer.speech_started", item_id: "image-turn", event_id: "image-speech" });
+      session.receive({ type: "response.created", response: { id: "image-response" }, event_id: "image-reply" });
+      session.receive({ type: "input_audio_buffer.speech_started", item_id: "clause-turn", event_id: "clause-speech" });
+      session.receive({
+        type: "response.function_call_arguments.done", response_id: "image-response", call_id: "image-call",
+        name: "prepare_workspace_action", event_id: "image-call-done",
+        arguments: JSON.stringify({ tool: "generate_image", params: { prompt: "a kitten dancing on a train" } }),
+      });
+      await expect.poll(() => sent.some(event => event.type === "conversation.item.create")).toBe(true);
+      const answered = sent.filter(event => event.type === "conversation.item.create").map(event => event.item);
+      expect(answered).toHaveLength(1);
+      expect(answered[0]).toMatchObject({ type: "function_call_output", call_id: "image-call" });
+      expect(String(answered[0]?.output)).toMatch(/nothing is running/iu);
+      // The dropped turn must not provoke a reply of its own.
+      expect(sent.filter(event => event.type === "response.create")).toHaveLength(0);
+    } finally {
+      await session.close();
+      delete process.env.VIDEOBOOK_XAI_REALTIME_URL;
+      await new Promise<void>(resolve => provider.close(() => resolve()));
+    }
   });
 
   it("orders user history before a reply when transcription finishes after native speech", async () => {

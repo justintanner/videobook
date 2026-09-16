@@ -199,8 +199,13 @@ export class VoiceSession {
   private async startXai(): Promise<VoiceSessionDescriptor> {
     const configured = deferred<void>();
     let setupError: Error | undefined;
+    // Unset in production: voice talks to xAI. Set, it points the same client at
+    // another realtime endpoint -- a local gateway, or the integration test's
+    // server, which is the only way to watch what we send the model.
+    const endpoint = process.env.VIDEOBOOK_XAI_REALTIME_URL?.trim();
     const connection = await connectXaiRealtime({
       apiKey: this.apiKey, model: this.model, signal: this.abort.signal, timeout: 10_000,
+      ...(endpoint ? { baseURL: endpoint } : {}),
       onEvent: event => {
         if (event.type === "session.updated") configured.resolve();
         if (event.type === "error") {
@@ -439,9 +444,27 @@ export class VoiceSession {
     if (turnId === this.currentTurn) { this.needsResponse = true; this.continueResponse(); }
   }
 
+  /**
+   * A tool call outlives the turn that asked for it whenever the speaker keeps
+   * talking -- a second clause, or just "hello?" -- because every new speech
+   * segment starts a new turn. The call is dropped, but it still has to be
+   * answered: an unanswered function call leaves the model believing the work
+   * is running, so it narrates a generation that was never started while the
+   * screen stays empty. Say it was dropped and let the model re-plan for what
+   * the speaker is asking now. The stale turn never provokes a reply of its
+   * own; output() only continues the response for the current turn.
+   */
+  private abandon(callId: string, turnId: string): void {
+    this.output(callId, {
+      status: "failed",
+      message: "Dropped: the speaker talked again, so this call belongs to an earlier turn and did not go through. Nothing changed in the workspace and nothing is running. Answer the newest request, repeating this action for it if it is still wanted.",
+    }, turnId);
+  }
+
   private async runTool(event: OpenAiRealtimeServerEvent, turnId: string): Promise<void> {
     const callId = event.call_id!;
-    if (this.stopped || turnId !== this.currentTurn) return;
+    if (this.stopped) return;
+    if (turnId !== this.currentTurn) { this.abandon(callId, turnId); return; }
     try {
       if (!this.control || !turnId) throw new Error("Wait for a spoken user request.");
       const args: unknown = JSON.parse(event.arguments ?? "{}");
@@ -464,14 +487,17 @@ export class VoiceSession {
       const timeout = setTimeout(() => turn.saved.resolve(false), 10_000);
       const saved = await turn.saved.promise.finally(() => clearTimeout(timeout));
       if (!saved || !turn.text.trim()) throw new Error("The user transcript could not be saved. Ask the user to repeat the request.");
-      if (this.stopped || turnId !== this.currentTurn || !this.scopeAlive()) return;
+      if (this.stopped) return;
+      if (turnId !== this.currentTurn) { this.abandon(callId, turnId); return; }
+      if (!this.scopeAlive()) throw new Error("The workspace closed before this action ran. Nothing was prepared.");
       const decision = actionSchema.parse(args);
       if (decision.params.book_id !== undefined && decision.params.book_id !== this.bookId) throw new Error("Voice actions must stay in the current project.");
       if (decision.params.notebook_id !== undefined && decision.params.notebook_id !== this.notebookId) throw new Error("Voice actions must stay in the current notebook.");
       const result = await withBookContext({ bookId: this.bookId, engine: this.engine }, () => prepareVoiceChatAction(
         this.engine, { book_id: this.bookId, notebook_id: this.notebookId, prompt: turn.text }, { ...decision, message: turn.text },
       ));
-      if (this.stopped || turnId !== this.currentTurn) return;
+      if (this.stopped) return;
+      if (turnId !== this.currentTurn) { this.abandon(callId, turnId); return; }
       const raw = result.content[0]?.text ?? "null";
       if (result.isError) { this.output(callId, { status: "failed", message: raw }, turnId); return; }
       const value: unknown = JSON.parse(raw);
