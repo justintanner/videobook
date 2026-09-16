@@ -10,8 +10,8 @@ import { z } from "zod";
 import type { BookManager } from "./book-manager.js";
 import { getApiKey } from "./api-key.js";
 import { withBookContext } from "./book-context.js";
-import { discoverVoiceActions, voiceWorkspaceContext } from "./voice-actions.js";
-import { DEFAULT_VOICE_MODEL, DEFAULT_XAI_VOICE_MODEL, VOICE_PCM_RATE, voiceSessionConfig, xaiVoiceSessionConfig } from "./voice-config.js";
+import { discoverVoiceActions, voiceWorkspaceCells, voiceWorkspaceContext, voiceWorkspaceSignature } from "./voice-actions.js";
+import { DEFAULT_VOICE_MODEL, DEFAULT_XAI_VOICE_MODEL, VOICE_PCM_RATE, voiceInstructions, voiceSessionConfig, xaiVoiceSessionConfig } from "./voice-config.js";
 import { chatActionPlanSchema, prepareVoiceChatAction } from "./tools/chat.js";
 import { appendVoiceHistory } from "./tools/chat-history.js";
 import { appendDiagnostic } from "./diagnostics.js";
@@ -95,6 +95,10 @@ export class VoiceSession {
   readonly model: string;
   private provider: ReturnType<typeof createOpenAi>;
   private control: VoiceControl | null = null;
+  // Provider-specific, because the two realtime APIs take different session
+  // shapes. Set once the connection is open.
+  private pushSession: ((context: unknown) => void) | null = null;
+  private workspaceSignature: string | null = null;
   private callId: string | null = null;
   private negotiation: Promise<OpenAiRealtimeCallResponse> | null = null;
   private abort = new AbortController();
@@ -148,7 +152,10 @@ export class VoiceSession {
       else if (Date.now() - this.lastActivity > this.idleTimeoutMs) void this.close("Comms idle. Start voice to resume.");
       else if (Date.now() - this.startedAt > 30 * 60_000) void this.close("Comms session ended. Start voice to resume.");
       else {
-        try { this.recoverReply(); } catch (error) { this.fail(voiceError(error).message); }
+        try {
+          this.recoverReply();
+          this.syncWorkspace();
+        } catch (error) { this.fail(voiceError(error).message); }
       }
     }, Math.min(1000, idleTimeoutMs));
     this.timer.unref();
@@ -183,13 +190,21 @@ export class VoiceSession {
         await this.provider.post.v1.realtime.calls.hangup(call.callId).catch(() => undefined);
         throw new VoiceError("Voice start cancelled.", 499);
       }
-      this.control = await connectOpenAiRealtime({
+      const connection = await connectOpenAiRealtime({
         apiKey: this.apiKey, callId: call.callId, signal: this.abort.signal, timeout: 10_000,
         onEvent: (event) => { try { this.receive(event); } catch { this.fail("Voice could not process an event. Start voice to reconnect."); } },
         onError: (error) => { this.fail(voiceError(error).message); },
         onClose: () => { if (!this.stopped) this.fail("Voice connection lost. Start voice to reconnect."); },
       });
+      this.control = connection;
       if (this.stopped) throw new VoiceError("Voice start cancelled.", 499);
+      // Only instructions change mid-call; resending model or audio settings
+      // would renegotiate a live call for nothing.
+      this.pushSession = (context) => connection.send({
+        type: "session.update",
+        session: { type: "realtime", instructions: voiceInstructions(context) },
+      });
+      this.workspaceSignature = this.signature();
       return { id: this.id, token: this.token, provider: "openai", transport: "webrtc", sdp: call.sdp, model: this.model, idleTimeoutMs: this.idleTimeoutMs };
     } finally {
       signal.removeEventListener("abort", onAbort);
@@ -219,7 +234,12 @@ export class VoiceSession {
     });
     this.control = connection;
     if (this.stopped) { connection.close(); throw new VoiceError("Voice start cancelled.", 499); }
-    connection.send({ type: "session.update", session: xaiVoiceSessionConfig(voiceWorkspaceContext(this.engine, this.notebookId), this.inputRate) });
+    this.pushSession = (context) => connection.send({
+      type: "session.update",
+      session: xaiVoiceSessionConfig(context, this.inputRate),
+    });
+    this.pushSession(voiceWorkspaceContext(this.engine, this.notebookId));
+    this.workspaceSignature = this.signature();
     const deadline = setTimeout(() => { setupError = new XaiError("xAI voice setup timed out", 504); configured.resolve(); }, 10_000);
     const aborted = () => configured.resolve();
     this.abort.signal.addEventListener("abort", aborted, { once: true });
@@ -436,9 +456,33 @@ export class VoiceSession {
     this.continueResponse();
   }
 
+  private signature(): string {
+    try {
+      return voiceWorkspaceSignature(this.engine, this.notebookId);
+    } catch {
+      return this.workspaceSignature ?? "";
+    }
+  }
+
+  /**
+   * Push the board back into the live session when it has actually changed.
+   * The instructions carry a snapshot taken at connect, and a session lasts half
+   * an hour, so without this the model argues about cells it made itself. Only
+   * between turns: a session.update mid-response would land in the middle of the
+   * model's own sentence.
+   */
+  private syncWorkspace(): void {
+    if (!this.pushSession || !this.control || this.stopped) return;
+    if (this.activeResponse || this.speaking || this.pendingTools > 0 || this.needsResponse) return;
+    const signature = this.signature();
+    if (signature === this.workspaceSignature) return;
+    this.workspaceSignature = signature;
+    this.pushSession(voiceWorkspaceContext(this.engine, this.notebookId));
+  }
+
   private output(callId: string, result: unknown, turnId: string): void {
     if (this.stopped) return;
-    const serialized = JSON.stringify(result);
+    const serialized = JSON.stringify(this.withWorkspace(result));
     const output = serialized.length <= 40_000 ? serialized : JSON.stringify({ truncated: true, resultText: serialized.slice(0, 36_000) });
     this.control?.send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output } });
     if (turnId === this.currentTurn) { this.needsResponse = true; this.continueResponse(); }
@@ -461,6 +505,21 @@ export class VoiceSession {
     }, turnId);
   }
 
+  /**
+   * Every tool result carries the current board. The model reaches for a tool
+   * exactly when it is about to act on an address, so this is the cheapest
+   * moment to correct a stale picture. Cells only -- the conversation is
+   * already in its context and would crowd out the result itself.
+   */
+  private withWorkspace(result: unknown): unknown {
+    if (!result || typeof result !== "object" || Array.isArray(result)) return result;
+    try {
+      return { ...result, workspace: voiceWorkspaceCells(this.engine, this.notebookId) };
+    } catch {
+      return result;
+    }
+  }
+
   private async runTool(event: OpenAiRealtimeServerEvent, turnId: string): Promise<void> {
     const callId = event.call_id!;
     if (this.stopped) return;
@@ -470,7 +529,7 @@ export class VoiceSession {
       const args: unknown = JSON.parse(event.arguments ?? "{}");
       if (event.name === "find_workspace_actions") {
         const { query } = discoverySchema.parse(args);
-        this.output(callId, { actions: discoverVoiceActions(this.engine, query), workspace: voiceWorkspaceContext(this.engine, this.notebookId) }, turnId);
+        this.output(callId, { actions: discoverVoiceActions(this.engine, query) }, turnId);
         return;
       }
       if (event.name === "resolve_pending_review") {

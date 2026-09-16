@@ -414,8 +414,57 @@ describe("voice session boundaries", () => {
       expect(answered).toHaveLength(1);
       expect(answered[0]).toMatchObject({ type: "function_call_output", call_id: "image-call" });
       expect(String(answered[0]?.output)).toMatch(/nothing is running/iu);
+      // Every tool result carries the board, so a dropped call still leaves the
+      // model with a current picture to re-plan against.
+      expect(JSON.parse(String(answered[0]?.output))).toMatchObject({
+        workspace: { book: "voice-session", notebookId },
+      });
       // The dropped turn must not provoke a reply of its own.
       expect(sent.filter(event => event.type === "response.create")).toHaveLength(0);
+    } finally {
+      await session.close();
+      delete process.env.VIDEOBOOK_XAI_REALTIME_URL;
+      await new Promise<void>(resolve => provider.close(() => resolve()));
+    }
+  });
+
+  it("sends the model the board again once it changes", async () => {
+    const provider = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    const sent: { type?: string; session?: { instructions?: string } }[] = [];
+    provider.on("connection", socket => {
+      socket.on("message", data => {
+        const event = JSON.parse(String(data)) as { type?: string; session?: { instructions?: string } };
+        sent.push(event);
+        if (event.type === "session.update") socket.send(JSON.stringify({ type: "session.updated", event_id: "configured" }));
+      });
+    });
+    await once(provider, "listening");
+    const address = provider.address();
+    if (!address || typeof address === "string") throw new Error("No provider address");
+    process.env.VIDEOBOOK_XAI_REALTIME_URL = `ws://127.0.0.1:${address.port}`;
+    const session = new VoiceSession(books, bookId, notebookId, engine, "local-endpoint-key", 120_000, () => undefined, "xai", 48000);
+    try {
+      session.subscribe(() => undefined);
+      await session.start("", new AbortController().signal);
+      const instructionsOf = () => sent
+        .filter(event => event.type === "session.update")
+        .map(event => String(event.session?.instructions ?? ""));
+      expect(instructionsOf()).toHaveLength(1);
+      expect(instructionsOf()[0]).not.toMatch(/@b5/u);
+
+      // A cell the session never heard about, the way an action of its own or a
+      // click on the canvas would create one.
+      const cell = engine.notebooks.createCell({ type: "image", slot: { row: 1, column: 4 }, label: "Storyboard" });
+      const inserted = await engine.notebooks.insertCell(notebookId, cell);
+      expect(inserted.ok).toBe(true);
+
+      await expect.poll(() => instructionsOf().length, { timeout: 10_000 }).toBe(2);
+      expect(instructionsOf()[1]).toMatch(/@b5/u);
+      expect(instructionsOf()[1]).toMatch(/Storyboard/u);
+
+      // An unchanged board is not re-sent every second.
+      await new Promise(resolve => setTimeout(resolve, 2_500));
+      expect(instructionsOf()).toHaveLength(2);
     } finally {
       await session.close();
       delete process.env.VIDEOBOOK_XAI_REALTIME_URL;

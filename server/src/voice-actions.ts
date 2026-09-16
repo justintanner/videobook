@@ -37,15 +37,13 @@ export function discoverVoiceActions(engine: Engine, query: string) {
     });
 }
 
-export function voiceWorkspaceContext(engine: Engine, notebookId?: string) {
+/**
+ * The board as it stands right now. Kept separate from the conversation so it
+ * can ride along with every tool result without resending the transcript.
+ */
+export function voiceWorkspaceCells(engine: Engine, notebookId?: string) {
   const notebook = notebookId ? engine.notebooks.read(notebookId) : null;
   if (notebook && !notebook.ok) throw new Error(notebook.error.message);
-  const entries = [
-    ...engine.logs.read("chat", { limit: 12 }),
-    ...engine.logs.read("voice-chat", { limit: 12 }),
-  ].filter((entry) => !notebookId || !entry.notebookId || entry.notebookId === notebookId)
-    .sort((a, b) => Number(a.ts ?? 0) - Number(b.ts ?? 0));
-  const messages = entries.filter((entry, index) => !entry.interrupted && (!entry.id || !entries.slice(index + 1).some((next) => next.id === entry.id))).slice(-12);
   return {
     book: engine.book.get().name,
     notebookId,
@@ -57,6 +55,26 @@ export function voiceWorkspaceContext(engine: Engine, notebookId?: string) {
       artifactId: cell.outputArtifactId,
     })) : [],
     additionalCells: notebook?.ok ? Math.max(0, notebook.value.cells.length - 64) : 0,
+  };
+}
+
+/** A stable fingerprint of what the model would see, for spotting real changes. */
+export function voiceWorkspaceSignature(engine: Engine, notebookId?: string): string {
+  const workspace = voiceWorkspaceCells(engine, notebookId);
+  return JSON.stringify([workspace.book, workspace.additionalCells, workspace.cells]);
+}
+
+export function voiceWorkspaceContext(engine: Engine, notebookId?: string) {
+  const notebook = notebookId ? engine.notebooks.read(notebookId) : null;
+  if (notebook && !notebook.ok) throw new Error(notebook.error.message);
+  const entries = [
+    ...engine.logs.read("chat", { limit: 12 }),
+    ...engine.logs.read("voice-chat", { limit: 12 }),
+  ].filter((entry) => !notebookId || !entry.notebookId || entry.notebookId === notebookId)
+    .sort((a, b) => Number(a.ts ?? 0) - Number(b.ts ?? 0));
+  const messages = entries.filter((entry, index) => !entry.interrupted && (!entry.id || !entries.slice(index + 1).some((next) => next.id === entry.id))).slice(-12);
+  return {
+    ...voiceWorkspaceCells(engine, notebookId),
     recentConversation: messages.map((entry) => ({
       role: entry.role,
       text: String(entry.text ?? entry.message ?? "").slice(0, 2000),

@@ -10,7 +10,7 @@ import { chatActionPlanSchema, chatDef, prepareVoiceChatAction } from "./chat.js
 import type { ChatDecision } from "./chat.js";
 import { listAssetsDef } from "./list-assets.js";
 import type { ToolResult } from "./tool-def.js";
-import { discoverVoiceActions, voiceWorkspaceContext } from "../voice-actions.js";
+import { discoverVoiceActions, voiceWorkspaceCells, voiceWorkspaceContext, voiceWorkspaceSignature } from "../voice-actions.js";
 
 function value(result: ToolResult): unknown {
   if (result.isError) throw new Error(result.content[0]?.text);
@@ -66,6 +66,21 @@ describe("voice chat action policy", () => {
     expect(actions[0]?.requiresReview).toBe(true);
     expect(actions[0]?.parameters.properties).not.toHaveProperty("book_id");
     expect(voiceWorkspaceContext(engine, notebookId)).toMatchObject({ book: "voice-actions", notebookId });
+  });
+
+  it("separates the board from the conversation, and notices when it changes", async () => {
+    const before = voiceWorkspaceCells(engine, notebookId);
+    expect(before).not.toHaveProperty("recentConversation");
+    expect(voiceWorkspaceContext(engine, notebookId)).toHaveProperty("recentConversation");
+    const signature = voiceWorkspaceSignature(engine, notebookId);
+    expect(voiceWorkspaceSignature(engine, notebookId)).toBe(signature);
+
+    const cell = engine.notebooks.createCell({ type: "image", slot: { row: 0, column: 2 }, label: "Added" });
+    const inserted = await engine.notebooks.insertCell(notebookId, cell);
+    expect(inserted.ok).toBe(true);
+    expect(voiceWorkspaceSignature(engine, notebookId)).not.toBe(signature);
+    expect(voiceWorkspaceCells(engine, notebookId).cells.map(entry => entry.address))
+      .toContain("@a3");
   });
 
   it("keeps specific model discovery available alongside exact action lookup", () => {

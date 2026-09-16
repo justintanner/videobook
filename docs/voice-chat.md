@@ -99,11 +99,16 @@ lock until the chain ends. Cancelling one step drops every remaining step —
 later steps consume its output — and leaves finished work in place. A chain step
 cannot be revised, only applied or cancelled.
 
-The supplied workspace is a snapshot taken when the conversation opened and is
-never refreshed, so cells created since — including by the copilot's own earlier
-actions — are missing from it. A spoken address the snapshot does not contain is
-passed through rather than refused: the action resolves it against the live
-workspace.
+The workspace reaches the model three ways. It is in the instructions at
+connect; it rides along with every tool result, cells only, so the transcript is
+not resent and cannot crowd out the result; and a `session.update` replaces the
+instructions' copy whenever the board changes, checked once a second and only
+between turns, since an update mid-response would land inside the model's own
+sentence. Only the instructions change in that update — resending the model or
+the audio settings would renegotiate a live call for nothing. A picture can
+still lag a change made a moment ago, so a spoken address the model cannot find
+is passed through rather than refused, and the action resolves it against the
+live workspace.
 
 Only Apply or Cancel on screen resolves a pending review. A spoken yes cannot approve
 an operation, and turning voice off leaves the review available. Spoken feedback
