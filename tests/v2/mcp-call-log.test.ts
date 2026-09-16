@@ -194,8 +194,9 @@ describe('mcp call rows', () => {
 
   it('keeps catalogs and pollers out of the history so a reload starts clean', () => {
     for (const quiet of [
-      'list_jobs',
+      'get_notebook',
       'list_chat_models',
+      'list_jobs',
       'list_prompt_history',
       'list_workspace_actions',
       'slash_commands',
@@ -203,7 +204,7 @@ describe('mcp call rows', () => {
       expect(shouldNotifyMcpActivity(quiet)).toBe(false)
     }
     // Work the user actually asked for still earns a row.
-    for (const loud of ['chat', 'chain', 'get_notebook', 'run_notebook_cell']) {
+    for (const loud of ['chat', 'chain', 'run_notebook_cell', 'create_notebook_cell']) {
       expect(shouldNotifyMcpActivity(loud)).toBe(true)
     }
   })

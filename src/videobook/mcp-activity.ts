@@ -56,13 +56,15 @@ const toolLabels: Readonly<Record<string, string>> = {
 }
 
 /**
- * Catalogs and pollers nobody asked for. They run on load and again on every
- * refresh, so a row apiece is how a freshly reloaded page ends up showing a
- * chat history the user never started.
+ * Reads the app makes for itself: catalogs, pollers, and the board refreshes it
+ * runs to keep its own picture current. Nobody asked for them, they run on load
+ * and again after every change, and a row apiece is how a freshly reloaded page
+ * ends up showing a chat history the user never started.
  */
 const QUIET_TOOLS: ReadonlySet<string> = new Set([
-  'list_jobs',
+  'get_notebook',
   'list_chat_models',
+  'list_jobs',
   'list_prompt_history',
   'list_workspace_actions',
   'slash_commands',

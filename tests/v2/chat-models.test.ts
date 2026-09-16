@@ -67,8 +67,11 @@ describe('MCP activity', () => {
     expect(mcpToolLabel('get_primary_sequence')).toBe('Get Primary Sequence')
   })
 
-  it('keeps list_jobs polling out of user-facing notifications', () => {
+  it('keeps the reads the app makes for itself out of user-facing notifications', () => {
     expect(shouldNotifyMcpActivity('list_jobs')).toBe(false)
-    expect(shouldNotifyMcpActivity('get_notebook')).toBe(true)
+    // Board refreshes are the app keeping its own picture current, not work the
+    // user asked for -- a row apiece is what filled a fresh reload with history.
+    expect(shouldNotifyMcpActivity('get_notebook')).toBe(false)
+    expect(shouldNotifyMcpActivity('run_notebook_cell')).toBe(true)
   })
 })
