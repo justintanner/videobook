@@ -335,4 +335,43 @@ describe('VoiceComms caption visibility', () => {
     expect(renderComms('thinking', [])).toContain('Waiting for reply')
     expect(renderComms('thinking', [])).not.toContain('Connecting voice')
   })
+
+  it('does not stay transmitting after stop leaves a leftover pending review', () => {
+    const html = renderToStaticMarkup(createElement(CommandComposer, {
+      commands: [],
+      references: new Map(),
+      actions: [],
+      actionContext: { bookId: 'book-1', choices: {} },
+      actionDiscovery: null,
+      actionStatus: { loading: false, error: null },
+      actionsDisabled: false,
+      onOpenActions: () => undefined,
+      onCloseActionSearch: () => undefined,
+      bookId: 'book-1',
+      callTool: async () => ({}),
+      chatModels: fallbackChatModelCatalog.models,
+      disabled: false,
+      modelSelectionDisabled: false,
+      connectionLabel: 'Ready',
+      mcpCalls: emptyMcpCallLog,
+      mcpFlash: null,
+      onToggleMcpCall: () => {},
+      inputSession: 'chat',
+      selectedModel: fallbackChatModelCatalog.defaultModel,
+      voice: stubVoice({
+        phase: 'off',
+        active: false,
+        pendingReview: true,
+        captions: [caption('a', 'make a clip'), caption('b', 'review on screen', 'assistant')],
+        message: 'Comms off.',
+      }),
+      onEnsureCatalog: async () => undefined,
+      onExecute: async () => ({ ok: true, message: 'Done' }),
+      onModelChange: () => undefined,
+      onSuccessfulExecute: () => undefined,
+    }))
+    expect(html).not.toContain('aria-busy="true"')
+    expect(html).not.toContain('command-line-shell-transmitting')
+    expect(html).not.toContain('Preparing an action')
+  })
 })

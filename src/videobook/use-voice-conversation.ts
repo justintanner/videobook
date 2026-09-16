@@ -49,7 +49,11 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
     setRetrying(false)
   }, [options.bookId, options.notebookId, options.scope, options.available])
 
-  const stop = () => connectionRef.current?.stop()
+  const stop = () => {
+    setPendingReview(false)
+    setRetrying(false)
+    connectionRef.current?.stop()
+  }
   const toggle = () => {
     if (connectionRef.current?.active) { stop(); return }
     const current = latest.current
@@ -71,6 +75,7 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
       onPhase: (next, detail) => {
         if (connectionRef.current !== connection && next !== 'off') return
         setPhase(next)
+        if (next === 'off' || next === 'error') setPendingReview(false)
         if (next !== 'thinking') setRetrying(false)
         if (detail) setMessage(detail)
       },
@@ -119,6 +124,8 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
     phase, message, captions, playbackBlocked, pendingReview, retrying, meterRef, toggle, stop, mode, provider, fallbackReason,
     selectMode: (next: VoiceMode) => {
       if (next === mode) return
+      setPendingReview(false)
+      setRetrying(false)
       connectionRef.current?.stop('Voice provider changed. Start voice to connect.')
       setMode(next)
       setProvider(null)

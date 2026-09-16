@@ -88,6 +88,32 @@ describe('composer activity status', () => {
       .toBe(false)
   })
 
+  it('does not treat a leftover pending review as busy work after voice stops', () => {
+    const stopped = composerActivityStatus({
+      sending: false,
+      mcpRunning: 0,
+      voicePhase: 'off',
+      pendingReview: true,
+    })
+    expect(stopped.busy).toBe(false)
+    expect(stopped.label).not.toBe('Preparing an action')
+    expect(stopped.kind).not.toBe('preparing')
+    const failed = composerActivityStatus({
+      sending: false,
+      mcpRunning: 0,
+      voicePhase: 'error',
+      pendingReview: true,
+    })
+    expect(failed.busy).toBe(false)
+    expect(failed.label).not.toBe('Preparing an action')
+    expect(composerActivityStatus({
+      sending: false,
+      mcpRunning: 0,
+      voicePhase: 'thinking',
+      pendingReview: true,
+    })).toMatchObject({ kind: 'preparing', label: 'Preparing an action', busy: true })
+  })
+
   it('keeps Connecting voice and Waiting for reply visible when history is hidden', () => {
     const connecting = renderToStaticMarkup(createElement(VoiceComms, {
       voice: stubVoice({ phase: 'connecting', message: 'Connecting voice' }),

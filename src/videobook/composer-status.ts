@@ -31,6 +31,11 @@ export interface ComposerActivityInput {
 
 const PAUSED_MESSAGE = /page is hidden|paused for media playback|You are offline/i
 
+function preparingFromReview(phase: VoicePhase | undefined, pendingReview: boolean | undefined): boolean {
+  if (!pendingReview) return false
+  return phase === 'connecting' || phase === 'thinking' || phase === 'listening' || phase === 'speaking'
+}
+
 export function composerActivityStatus(input: ComposerActivityInput): ComposerActivityStatus {
   const phase = input.voicePhase
   if (phase === 'error') {
@@ -45,7 +50,7 @@ export function composerActivityStatus(input: ComposerActivityInput): ComposerAc
   if (input.sending) {
     return { kind: 'sending', label: 'Sending', busy: true }
   }
-  if (input.mcpRunning > 0 || input.pendingReview) {
+  if (input.mcpRunning > 0 || preparingFromReview(phase, input.pendingReview)) {
     return { kind: 'preparing', label: 'Preparing an action', busy: true }
   }
   if (phase === 'connecting') {
