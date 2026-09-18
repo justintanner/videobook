@@ -248,19 +248,40 @@ describe('composer focus through real workspace interactions', () => {
     const fit = await page.evaluate(() => {
       const wrapper = document.querySelector('.command-composer-contextual')
       const dock = document.querySelector('.composer-notebook-dock.inspector')
-      if (!(wrapper instanceof HTMLElement) || !(dock instanceof HTMLElement)) {
+      const header = dock?.querySelector(':scope > header')
+      const row = dock?.querySelector('.inspector-media-row-content')
+      const preview = dock?.querySelector('.inspector-cell-preview')
+      if (!(wrapper instanceof HTMLElement) || !(dock instanceof HTMLElement)
+        || !(header instanceof HTMLElement) || !(row instanceof HTMLElement)
+        || !(preview instanceof HTMLElement)) {
         throw new Error('Missing composer dock')
       }
+      const height = (element: HTMLElement) => Math.round(element.getBoundingClientRect().height)
       return {
         clipped: wrapper.scrollHeight - wrapper.clientHeight,
-        dockHeight: Math.round(dock.getBoundingClientRect().height),
-        wrapperHeight: Math.round(wrapper.getBoundingClientRect().height),
+        dockHeight: height(dock),
+        wrapperHeight: height(wrapper),
+        headerHeight: height(header),
+        headerToken: Math.round(Number.parseFloat(
+          getComputedStyle(dock).getPropertyValue('--dock-header-h'),
+        )),
+        rowHeight: height(row),
+        previewHeight: height(preview),
       }
     })
 
     expect(fit.clipped).toBeLessThanOrEqual(1)
     expect(fit.dockHeight).toBe(fit.wrapperHeight)
     expect(fit.dockHeight).toBeGreaterThan(360)
+    // The header is a flex item: a tall panel used to take its padding back
+    // rather than scrolling its own body.
+    expect(fit.headerHeight).toBe(fit.headerToken)
+    // A clip keeps to the widescreen box the preview column caps at instead of
+    // standing the whole depth of the dock.
+    expect(fit.previewHeight).toBeLessThan(fit.rowHeight)
+    expect(fit.previewHeight).toBeLessThanOrEqual(
+      Math.round(fit.rowHeight * 0.75),
+    )
   })
 
   it('returns completed add, duplicate and delete operations to chat', async () => {

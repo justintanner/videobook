@@ -262,7 +262,7 @@ describe('workspace action launcher with real endpoints', () => {
     await expect.poll(async () => JSON.stringify(await call('get_primary_sequence'))).toContain('Action soundtrack')
   })
 
-  it('opens edit forms from slash, cell menus, the inspector and Library with the same media target', async () => {
+  it('opens edit forms from slash, cell menus and Library with the same media target', async () => {
     await sendCommand('/crop @a2')
     await page.getByRole('heading', { level: 3, name: 'Crop image', exact: true }).waitFor()
     expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: /^Media/u }).inputValue()).toBe(imageId)
@@ -273,14 +273,6 @@ describe('workspace action launcher with real endpoints', () => {
     await menu.getByRole('menuitem', { name: 'More actions', exact: true }).click()
     await page.getByLabel('Videobook command input', { exact: true }).fill('/crop-image')
     await page.locator('[data-action-id="tool.crop_image"]').click()
-    await page.getByRole('button', { name: 'Send command', exact: true }).click()
-    expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: /^Media/u }).inputValue()).toBe(imageId)
-    await page.keyboard.press('Escape')
-    await page.getByLabel('Open @a2 cell menu', { exact: true }).click()
-    await page.getByRole('menuitem', { name: 'Edit cell', exact: true }).click()
-    await page.getByLabel('Inspector actions', { exact: true }).click()
-    await page.getByLabel('Videobook command input', { exact: true }).fill('/asset-manifest')
-    await page.locator('[data-action-id="tool.asset_manifest"]').click()
     await page.getByRole('button', { name: 'Send command', exact: true }).click()
     expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: /^Media/u }).inputValue()).toBe(imageId)
     await page.keyboard.press('Escape')
@@ -616,9 +608,13 @@ describe('workspace action launcher with real endpoints', () => {
     await sheet.getByLabel('Dismiss message', { exact: true }).click()
     const input = page.getByLabel('Videobook command input', { exact: true })
     await expect.poll(() => input.evaluate(element => element === document.activeElement)).toBe(true)
-    await input.press('Tab')
-    await page.keyboard.press('Tab')
-    await expect.poll(() => page.getByLabel('Send command', { exact: true }).evaluate(element => element === document.activeElement)).toBe(true)
+    // Out of the input, Tab walks the composer's own row to the send control.
+    for (const label of ['Chat model', 'Voice provider', 'Send command']) {
+      await page.keyboard.press('Tab')
+      await expect.poll(() => page.getByLabel(label, { exact: true })
+        .evaluate(element => element === document.activeElement), { timeout: 5_000 })
+        .toBe(true)
+    }
     await page.keyboard.press('Escape')
     await expect.poll(() => sheet.count()).toBe(0)
     expect((record(await call('get_primary_sequence'))?.clips as Record<string, unknown>[])[0]?.reverse).toBe(false)

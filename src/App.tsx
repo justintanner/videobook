@@ -12460,9 +12460,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           </code>
         </span>
         <div className="inspector-header-actions">
-          <button type="button" aria-label="Inspector actions" data-workspace-action-surface="inspector" title="More actions" onClick={() => void openWorkspaceActions(undefined, {
-            asset_id: selectedNotebookCell.outputArtifactId, cell_id: selectedNotebookCell.id,
-          })}><Ellipsis size={15} /></button>
           {selectedNotebookCell.outputArtifactId && (
             <button
               type="button"

@@ -3959,8 +3959,11 @@ textarea:focus-visible {
 }
 
 .composer-notebook-dock.inspector > header {
-  height: 40px;
-  padding: 0 12px;
+  /* A flex item, so a tall panel would have taken the header's padding back
+     out of it rather than scrolling its own body. */
+  flex: 0 0 auto;
+  height: var(--dock-header-h, 52px);
+  padding: 0 14px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -9795,6 +9798,11 @@ textarea:focus-visible {
      it, so no panel can grow past what the wrapper will show. */
   --dock-h: min(560px, 56dvh);
 
+  /* The bar a docked panel is titled by. It gives the title and its controls
+     room to breathe, and the media row subtracts it to know what height is
+     left, so raising it here never leaves a preview standing past the dock. */
+  --dock-header-h: 52px;
+
   position: fixed;
   right: var(--app-gutter);
   bottom: var(--app-gutter);
@@ -12722,14 +12730,16 @@ textarea:focus-visible {
 }
 
 .inspector-media-row-content {
-  --media-row-h: calc(var(--dock-h, 560px) - 40px - 24px);
+  --media-row-h: calc(var(--dock-h, 560px) - var(--dock-header-h, 52px) - 24px);
   /* Wide media would take the whole row height as width and leave the facts
      beside it a strip, so the column stops at a share of the dock. A portrait
      take never reaches it. */
+  --media-preview-cap-w: min(44cqi, 520px);
+  --media-preview-h: var(--media-row-h);
   --media-preview-w: clamp(
     96px,
-    calc(var(--media-row-h) * var(--media-aspect, 0.5625)),
-    min(44cqi, 520px)
+    calc(var(--media-preview-h) * var(--media-aspect, 0.5625)),
+    var(--media-preview-cap-w)
   );
 
   display: grid;
@@ -12791,6 +12801,18 @@ textarea:focus-visible {
   height: 100%;
   max-height: none;
   object-fit: contain;
+}
+
+/* Anything with a timeline fits the widescreen box the column cap describes.
+   A square or portrait clip took the row height as its own and stood the full
+   depth of the dock, which is more of a frame than a clip you watch under a
+   transport needs. A still picture has no transport and still takes the row. */
+.inspector-media-row-video,
+.inspector-media-row-audio {
+  --media-preview-h: min(
+    var(--media-row-h),
+    calc(var(--media-preview-cap-w) * 9 / 16)
+  );
 }
 
 /* Audio's stage: peaks over the transport, both on the preview ground. The
