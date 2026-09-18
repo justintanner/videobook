@@ -210,7 +210,9 @@ describe('composer focus through real workspace interactions', () => {
     await page.keyboard.press('Backspace')
     expect(await input().textContent()).toBe('draf')
     expect(await cell(videoCellId).count()).toBe(1)
-    for (const label of ['Zoom out', 'Reset zoom', 'Close inspector', 'Clear selection']) {
+    // The inspector side column became the chat dock, so the toolbar is zoom
+    // and selection now — there is no separate inspector to close.
+    for (const label of ['Zoom out', 'Reset zoom', 'Clear selection']) {
       await page.getByLabel(label, { exact: true }).click()
       await focused(input())
     }
@@ -218,6 +220,23 @@ describe('composer focus through real workspace interactions', () => {
     await focused(input())
     expect(await input().textContent()).toBe('draf')
     expect(catalogRequests).toBe(initialCatalogRequests)
+  })
+
+  it('selects a clip from its play ring, the way a picture selects from anywhere', async () => {
+    await page.locator('.react-flow__pane').click({ position: { x: 850, y: 450 } })
+    await focused(input())
+    expect(await cell(videoCellId).getAttribute('data-selection')).toBeNull()
+    // The ring sits dead centre of the tile: a press there plays the clip and
+    // selects the cell, so a clip answers a press the way a picture does.
+    await cell(videoCellId).getByLabel('Play @a1', { exact: true }).click()
+    expect(await cell(videoCellId).getAttribute('data-selection')).toBe('primary')
+    await expect.poll(async () => await cell(videoCellId)
+      .locator('video')
+      .evaluate(element =>
+        element instanceof HTMLMediaElement ? !element.paused : false),
+      { timeout: 15_000 }).toBe(true)
+    await cell(videoCellId).getByLabel('Pause @a1', { exact: true }).click()
+    await focused(input())
   })
 
   it('returns completed add, duplicate and delete operations to chat', async () => {

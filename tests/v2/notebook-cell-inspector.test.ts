@@ -929,13 +929,14 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="ElevenLabs Transcript"')
     expect(html).not.toContain('aria-label="Video analysis"')
     expect(html).not.toContain('<label>Address</label>')
-    expect(html).toContain(
-      'class="inspector-media-content inspector-compact-media-content"',
-    )
-    expect(html).toContain('class="inspector-media-field-label">VIDEO</span>')
+    expect(html).toContain('inspector-media-row-content')
+    expect(html).toContain('inspector-media-row-video')
+    // The dock header already names the kind, so the row drops the label the
+    // stack used to carry above the preview.
+    expect(html).not.toContain('class="inspector-media-field-label">VIDEO</span>')
     expect(html).not.toContain('<h3>Inputs</h3>')
-    expect(html.indexOf('class="inspector-media-field-label"')).toBeLessThan(
-      html.indexOf('aria-label="Cell output media"'),
+    expect(html.indexOf('aria-label="Cell output media"')).toBeLessThan(
+      html.indexOf('inspector-media-row-meta'),
     )
     expect(html).not.toContain('Dolt source')
     expect(html).toContain('inspector-delete-cell-button')
@@ -988,7 +989,7 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('inspector-image-media-content')
+    expect(html).toContain('inspector-media-row-content')
     expect(html).toContain('class="inspector-media-actions"')
     expect(html).toContain('aria-label="Image preview actions"')
     expect(html).toContain('aria-label="Edit @g5 image"')
@@ -1037,22 +1038,22 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('inspector-image-track-preview')
-    expect(html).toContain('inspector-image-meta')
-    expect(html).toContain('inspector-image-track-details')
-    expect(html).toContain('inspector-image-track-actions')
+    expect(html).toContain('inspector-media-row-preview')
+    expect(html).toContain('inspector-media-row-meta')
+    expect(html).toContain('inspector-media-row-details')
+    expect(html).toContain('inspector-media-row-actions')
     // The preview column is sized from the asset's own aspect.
-    expect(html).toContain('style="--image-aspect:0.56')
+    expect(html).toContain('style="--media-aspect:0.56')
     // Facts that used to sit only in the overlay badge.
     expect(html).toContain('<dt>Dimensions</dt>')
     expect(html).toContain('480 \u00d7 854')
     expect(html).toContain('<dt>Aspect</dt>')
     expect(html).toContain('9:16')
     // Actions and cleanup moved out of the preview into the actions track.
-    expect(html.indexOf('inspector-image-track-actions')).toBeLessThan(
+    expect(html.indexOf('inspector-media-row-actions')).toBeLessThan(
       html.indexOf('class="inspector-media-actions'),
     )
-    expect(html.indexOf('inspector-image-track-actions')).toBeLessThan(
+    expect(html.indexOf('inspector-media-row-actions')).toBeLessThan(
       html.indexOf('aria-label="Cell cleanup actions"'),
     )
   })
@@ -1154,12 +1155,12 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="Version 1 of 2"')
     expect(html).toContain('aria-label="Version 2 of 2, current output"')
     expect(html).toContain('/files/img-source-1/thumb.png')
-    expect(html).not.toContain('inspector-image-single-version')
+    expect(html).not.toContain('inspector-media-row-single-version')
     // The select stays in the markup as the rail's narrow-dock stand-in.
     expect(html).toContain('aria-label="Image version"')
   })
 
-  it('keeps the stacked layout for video and audio cells', () => {
+  it('lays a video cell out in the same tracks as an image', () => {
     const videoCell: NotebookCell = {
       ...cell,
       type: 'video',
@@ -1195,15 +1196,89 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('inspector-compact-media-content')
-    expect(html).not.toContain('inspector-image-media-content')
-    expect(html).not.toContain('inspector-image-meta')
-    expect(html).not.toContain('inspector-cell-media-open')
-    // A <video> owns its own click, so it keeps the fullscreen button in the
-    // action bar attached to the preview.
-    expect(html).toContain('class="inspector-media-actions"')
+    expect(html).toContain('inspector-media-row-content')
+    expect(html).toContain('inspector-media-row-video')
+    expect(html).toContain('inspector-media-row-preview')
+    expect(html).toContain('inspector-media-row-meta')
+    // A clip takes its own shape, so the preview column is 16:9 here.
+    expect(html).toContain('style="--media-aspect:1.77')
+    // Facts the overlay badge only hinted at, run time included.
+    expect(html).toContain('<dt>Dimensions</dt>')
+    expect(html).toContain('1920 \u00d7 1080')
+    expect(html).toContain('<dt>Duration</dt>')
+    expect(html).toContain('<dd>0:12</dd>')
+    // A <video> owns its own click, so fullscreen stays a button — but it sits
+    // in the actions track with delete now, not under the preview.
     expect(html).toContain('class="inspector-fullscreen-button"')
     expect(html).not.toContain('inspector-edit-button')
+    expect(html).not.toContain('inspector-cell-media-open')
+    expect(html.indexOf('inspector-media-row-actions')).toBeLessThan(
+      html.indexOf('class="inspector-media-actions'),
+    )
+  })
+
+  it('draws an audio cell as peaks over its transport', () => {
+    const audioCell: NotebookCell = {
+      ...cell,
+      type: 'audio',
+      label: 'audio-output',
+      slot: { row: 6, column: 4 },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: audioCell,
+      cells: [audioCell],
+      edges: [],
+      asset: {
+        artifactId: audioCell.outputArtifactId!,
+        id: 'audio-output',
+        type: 'audio',
+        mediaUrl: '/files/audio-output/original.m4a',
+        thumbnailUrl: null,
+        width: null,
+        height: null,
+        duration: 92.5,
+        waveform: [0.2, 0.9, 0.4, 0.8],
+        audioInfo: {
+          channelLayout: 'stereo',
+          channels: 2,
+          codec: 'aac',
+          durationSeconds: 92.5,
+          sampleRateHz: 48000,
+        },
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('inspector-media-row-content')
+    expect(html).toContain('inspector-media-row-audio')
+    // Audio has no frame to measure, so the preview column takes the wide
+    // default rather than a stray asset size.
+    expect(html).toContain('style="--media-aspect:1.77')
+    expect(html).toContain('class="inspector-audio-stage"')
+    expect(html).toContain('class="cell-waveform"')
+    expect(html).not.toContain('cell-waveform-pending')
+    // Full transport stays in the dock; the grid tile only has a play ring.
+    expect(html).toContain('<audio')
+    expect(html).toContain('aria-label="@g5 audio"')
+    // Role, run time and format read as facts now, not a teal summary strip.
+    expect(html).not.toContain('inspector-audio-summary')
+    expect(html).toContain('<dt>Role</dt>')
+    expect(html).toContain('<dd>Audio output</dd>')
+    expect(html).toContain('<dd>1:32.50</dd>')
+    expect(html).toContain('AAC \u00b7 48 kHz \u00b7 stereo')
+    // Nothing to open fullscreen, so audio carries no preview action bar.
+    expect(html).not.toContain('class="inspector-media-actions"')
   })
 
   it('opens generated video output in the shared fullscreen viewer', () => {
@@ -1297,16 +1372,16 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain(
-      'class="inspector-media-content inspector-compact-media-content"',
-    )
-    expect(html).toContain('class="inspector-media-field-label">AUDIO</span>')
+    expect(html).toContain('inspector-media-row-content')
     expect(html).toContain('class="inspector-cell-preview inspector-cell-preview-audio"')
     expect(html).toContain('<audio')
     expect(html).toContain('/files/aud-source/original.m4a')
-    expect(html).toContain('class="inspector-audio-role">Audio output</span>')
+    // The role the summary strip used to announce is a fact in the row now.
+    expect(html).toContain('<dt>Role</dt><dd>Continuous source</dd>')
     expect(html).toContain('<dt>Duration</dt><dd>1:00.01</dd>')
     expect(html).toContain('<dt>Format</dt><dd>AAC · 48 kHz · stereo</dd>')
+    // No peaks yet, so the stage draws the waiting run rather than a black box.
+    expect(html).toContain('cell-waveform-pending')
     expect(html).not.toContain('aria-label="Audio version"')
     expect(html).not.toContain('aria-label="Open @b3 fullscreen"')
     expect(html).not.toContain('aria-label="Edit @b3 image"')

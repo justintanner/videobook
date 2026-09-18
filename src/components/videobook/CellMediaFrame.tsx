@@ -75,9 +75,15 @@ export function CellMediaFrame({
     void element.play().catch(() => setPlaying(false))
   }
 
+  /*
+   * The ring sits dead centre of the tile, where a press is as likely to mean
+   * "select this cell" as "play it" — so it means both. The click keeps
+   * bubbling to the board, which is what selects a cell and opens its dock,
+   * and a picture and a clip answer a press in the middle the same way.
+   * `nodrag` on the button is what keeps the board from dragging the cell.
+   */
   const togglePlay = (event: SyntheticEvent) => {
     event.preventDefault()
-    event.stopPropagation()
     const element = mediaRef.current
     if (playing) {
       element?.pause()

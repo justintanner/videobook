@@ -4616,12 +4616,12 @@ textarea:focus-visible {
   scrollbar-width: thin;
 }
 
-.inspector-image-media-content,
+.inspector-media-row-content,
 .inspector-compact-media-content {
   padding-top: 12px;
 }
 
-.inspector-image-media-content .inspector-media-field-label {
+.inspector-media-row-content .inspector-media-field-label {
   margin-top: 0;
 }
 
@@ -12702,12 +12702,13 @@ textarea:focus-visible {
   }
 }
 
-/* ── Image cell dock: across the row ──────────────────────────────────────
-   A portrait preview in a full-width block left about nine tenths of the row
-   empty and pushed Edit, Fullscreen, tags, inputs and delete below the fold.
-   The preview now takes the row height at its own aspect and the rest fills
-   the width it was wasting. Image cells only: video and audio keep the stack,
-   so nothing here can reach .inspector-compact-media-content on its own. */
+/* ── Media cell dock: across the row ──────────────────────────────────────
+   A preview in a full-width block left most of the row empty and pushed the
+   action bar, tags, inputs and delete below the fold. The preview now takes
+   the row height at the shape the asset gives it, and the rest fills the
+   width it was wasting. Image, video and audio all lay out this way; only the
+   preview surface and the facts differ, and the container queries below fold
+   every kind back into one column when the dock is too narrow to share. */
 
 .composer-notebook-dock.inspector {
   --dock-h: min(360px, 42dvh);
@@ -12717,11 +12718,11 @@ textarea:focus-visible {
   container-type: inline-size;
 }
 
-.inspector-image-media-content {
-  --image-row-h: calc(var(--dock-h, 360px) - 40px - 24px);
-  --image-preview-w: clamp(
+.inspector-media-row-content {
+  --media-row-h: calc(var(--dock-h, 360px) - 40px - 24px);
+  --media-preview-w: clamp(
     96px,
-    calc(var(--image-row-h) * var(--image-aspect, 0.5625)),
+    calc(var(--media-row-h) * var(--media-aspect, 0.5625)),
     50cqi
   );
 
@@ -12730,14 +12731,14 @@ textarea:focus-visible {
   padding-bottom: 12px;
   overflow: hidden;
   gap: 14px;
-  grid-template-columns: var(--image-preview-w) 104px minmax(0, 1fr);
+  grid-template-columns: var(--media-preview-w) 104px minmax(0, 1fr);
 }
 
-.inspector-image-media-content.inspector-image-single-version {
-  grid-template-columns: var(--image-preview-w) minmax(0, 1fr);
+.inspector-media-row-content.inspector-media-row-single-version {
+  grid-template-columns: var(--media-preview-w) minmax(0, 1fr);
 }
 
-.inspector-image-track {
+.inspector-media-row-track {
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -12746,7 +12747,7 @@ textarea:focus-visible {
 
 /* Details and actions share one scroll region so a narrow dock scrolls the
    facts without ever moving the picture they describe. */
-.inspector-image-meta {
+.inspector-media-row-meta {
   display: grid;
   min-width: 0;
   min-height: 0;
@@ -12758,22 +12759,58 @@ textarea:focus-visible {
   scrollbar-width: thin;
 }
 
-.inspector-image-media-content .inspector-cell-preview {
+.inspector-media-row-content .inspector-cell-preview {
   height: 100%;
   min-height: 0;
   margin: 0;
 }
 
-.inspector-image-media-content .inspector-cell-media {
+.inspector-media-row-content .inspector-cell-media {
   height: 100%;
   min-height: 0;
 }
 
-.inspector-media-body .inspector-image-media-content .inspector-cell-media img {
+.inspector-media-body .inspector-media-row-content .inspector-cell-media img,
+.inspector-media-body .inspector-media-row-content .inspector-cell-media video {
   width: 100%;
   height: 100%;
   max-height: none;
   object-fit: contain;
+}
+
+/* Audio's stage: peaks over the transport, both on the preview ground. The
+   waveform reads the family hue the grid tile uses, so one cell is one type
+   wherever it is drawn. */
+.inspector-media-row-audio {
+  --cell-accent: #c989a2;
+  --cell-accent-bright: #f0b9d0;
+  --cell-accent-line: rgba(201, 137, 162, 0.46);
+  --cell-accent-soft: rgba(201, 137, 162, 0.18);
+}
+
+.inspector-media-row-audio .inspector-cell-preview-audio .inspector-cell-media {
+  padding: 0;
+}
+
+.inspector-audio-stage {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  align-content: stretch;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.inspector-audio-waveform {
+  position: relative;
+  display: block;
+  min-height: 72px;
+}
+
+.inspector-media-row-audio .inspector-cell-media audio {
+  width: calc(100% - 20px);
+  height: 34px;
+  margin: 0 10px 10px;
 }
 
 .inspector-cell-media-open {
@@ -12813,41 +12850,41 @@ textarea:focus-visible {
   background: var(--control-bg-hover);
 }
 
-.inspector-image-facts {
+.inspector-media-facts {
   display: grid;
   margin: 0 0 18px;
   gap: 8px;
   font-size: 11px;
 }
 
-.inspector-image-facts > div {
+.inspector-media-facts > div {
   display: grid;
   align-items: center;
   gap: 10px;
   grid-template-columns: 96px minmax(0, 1fr);
 }
 
-.inspector-image-facts dt {
+.inspector-media-facts dt {
   color: #7ea895;
 }
 
-.inspector-image-facts dd {
+.inspector-media-facts dd {
   margin: 0;
   color: #b7ddc8;
 }
 
-.inspector-image-versions {
+.inspector-media-versions {
   display: flex;
   min-height: 0;
   flex-direction: column;
   gap: 8px;
 }
 
-.inspector-image-versions .inspector-media-field-label {
+.inspector-media-versions .inspector-media-field-label {
   margin: 0;
 }
 
-.inspector-image-version-list {
+.inspector-media-version-list {
   display: flex;
   min-height: 0;
   flex-direction: column;
@@ -12860,7 +12897,7 @@ textarea:focus-visible {
   scrollbar-width: thin;
 }
 
-.inspector-image-version {
+.inspector-media-version {
   display: flex;
   width: 100%;
   align-items: center;
@@ -12872,11 +12909,12 @@ textarea:focus-visible {
   text-align: left;
 }
 
-.inspector-image-version img,
-.inspector-image-version-blank {
+.inspector-media-version img,
+.inspector-media-version-blank {
+  position: relative;
   display: block;
-  width: 48px;
-  height: 66px;
+  width: var(--version-thumb-w, 48px);
+  height: var(--version-thumb-h, 66px);
   flex: none;
   border: 1px solid var(--line);
   background: #020805;
@@ -12884,18 +12922,37 @@ textarea:focus-visible {
   opacity: 0.58;
 }
 
-.inspector-image-version.selected img,
-.inspector-image-version.selected .inspector-image-version-blank {
+/* A clip's take is a frame, so it keeps the picture's thumb. A waveform is not
+   — it reads along its length — so audio takes a landscape thumb and drops its
+   label underneath rather than squeezing the rail's 104px column. */
+.inspector-media-row-audio {
+  --version-thumb-w: 76px;
+  --version-thumb-h: 43px;
+}
+
+.inspector-media-row-audio .inspector-media-version {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The take's own peaks, at the rail's size, for audio: the only poster it has. */
+.inspector-media-version-blank .cell-waveform {
+  opacity: 0.85;
+}
+
+.inspector-media-version.selected img,
+.inspector-media-version.selected .inspector-media-version-blank {
   border-color: var(--green);
   opacity: 1;
 }
 
-.inspector-image-version:disabled {
+.inspector-media-version:disabled {
   cursor: default;
   opacity: 0.45;
 }
 
-.inspector-image-version-label {
+.inspector-media-version-label {
   display: grid;
   gap: 3px;
   color: #7ea895;
@@ -12903,70 +12960,78 @@ textarea:focus-visible {
   letter-spacing: 0.08em;
 }
 
-.inspector-image-version.selected .inspector-image-version-label {
+.inspector-media-version.selected .inspector-media-version-label {
   color: var(--ink);
 }
 
-.inspector-image-version-now {
+.inspector-media-version-now {
   color: var(--green);
   font-size: 9px;
 }
 
 /* The version select is the rail's stand-in, never its neighbour. */
-.inspector-image-track-details .inspector-audio-versions {
+.inspector-media-row-details .inspector-audio-versions {
   display: none;
 }
 
 /* Detached from the preview, the bar sizes to its button rather than the
    column it sits in: editing the picture should not out-shout the picture. */
-.inspector-image-track-actions .inspector-media-actions {
+.inspector-media-row-actions .inspector-media-actions {
   margin-top: 18px;
   border-top: 0;
   justify-content: start;
   grid-template-columns: max-content;
 }
 
-.inspector-image-track-actions .inspector-media-actions button {
+.inspector-media-row-actions .inspector-media-actions button {
   width: auto;
   padding: 0 18px;
   border: 1px solid var(--control-border);
 }
 
-.inspector-image-track-actions .inspector-media-actions button:hover,
-.inspector-image-track-actions .inspector-media-actions button:focus-visible {
+.inspector-media-row-actions .inspector-media-actions button:hover,
+.inspector-media-row-actions .inspector-media-actions button:focus-visible {
   border-color: var(--control-border-hover);
 }
 
-.inspector-image-track-actions .inspector-cell-actions {
+.inspector-media-row-actions .inspector-cell-actions {
   margin: 14px 0 0;
   padding-top: 14px;
 }
 
 /* Delete keeps the shared height but not the full width, and lines up with
    the action bar above it rather than drifting to the far edge of the track. */
-.inspector-image-track-actions .inspector-cell-actions {
+.inspector-media-row-actions .inspector-cell-actions {
   justify-content: flex-start;
 }
 
+/* Audio opens nothing fullscreen, so delete can be the only thing in the
+   track: a rule with nothing above it separates nothing. */
+.inspector-media-row-actions > .inspector-cell-actions:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 /* One control height across the dock, tag field included. */
-.inspector-image-media-content .inspector-media-actions button,
-.inspector-image-media-content .inspector-cell-actions > button,
-.inspector-image-media-content .asset-tag-input,
-.inspector-image-media-content .asset-tag-add {
+.inspector-media-row-content .inspector-media-actions button,
+.inspector-media-row-content .inspector-cell-actions > button,
+.inspector-media-row-content .asset-tag-input,
+.inspector-media-row-content .asset-tag-add {
   min-height: 40px;
 }
 
 @container (max-width: 1179px) {
-  .inspector-image-media-content,
-  .inspector-image-media-content.inspector-image-single-version {
-    grid-template-columns: var(--image-preview-w) minmax(0, 1fr);
+  .inspector-media-row-content,
+  .inspector-media-row-content.inspector-media-row-single-version {
+    grid-template-columns: var(--media-preview-w) minmax(0, 1fr);
   }
 
-  .inspector-image-track-versions {
+  .inspector-media-row-versions {
     display: none;
   }
 
-  .inspector-image-track-details .inspector-audio-versions {
+  .inspector-media-row-details .inspector-audio-versions {
     display: grid;
   }
 }
@@ -12974,42 +13039,49 @@ textarea:focus-visible {
 @container (max-width: 879px) {
   /* align-items is the cross axis here, so the grid's `start` would stop the
      tracks filling the width they just gained. */
-  .inspector-image-meta {
+  .inspector-media-row-meta {
     display: flex;
     align-items: stretch;
     flex-direction: column;
   }
 
-  .inspector-image-meta > .inspector-image-track {
+  .inspector-media-row-meta > .inspector-media-row-track {
     flex: none;
   }
 }
 
-/* Too narrow to put anything beside the picture: back to today's stack. */
+/* Too narrow to put anything beside the preview: back to the stack. */
 @container (max-width: 619px) {
-  .inspector-image-media-content,
-  .inspector-image-media-content.inspector-image-single-version {
+  .inspector-media-row-content,
+  .inspector-media-row-content.inspector-media-row-single-version {
     display: block;
     overflow: auto;
   }
 
-  .inspector-image-meta {
+  .inspector-media-row-meta {
     display: block;
     overflow: visible;
   }
 
-  .inspector-image-media-content .inspector-cell-preview {
+  .inspector-media-row-content .inspector-cell-preview {
     height: auto;
     margin: 0 0 22px;
   }
 
-  .inspector-image-media-content .inspector-cell-media {
+  .inspector-media-row-content .inspector-cell-media {
     height: auto;
     min-height: 180px;
   }
 
-  .inspector-media-body .inspector-image-media-content .inspector-cell-media img {
+  .inspector-media-body .inspector-media-row-content .inspector-cell-media img,
+  .inspector-media-body .inspector-media-row-content .inspector-cell-media video {
     height: auto;
     max-height: 320px;
+  }
+
+  /* Stacked, the stage has no row height to fill, so the peaks keep a band of
+     their own rather than collapsing onto the transport. */
+  .inspector-media-row-audio .inspector-audio-waveform {
+    height: 132px;
   }
 }

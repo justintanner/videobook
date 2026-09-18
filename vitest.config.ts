@@ -60,6 +60,7 @@ export default defineConfig({
       'src/videobook/media-insights.test.ts',
       'src/videobook/notebook-cell-presentation.test.ts',
       'src/videobook/cell-preview.test.ts',
+      'src/videobook/media-dock.test.ts',
       'src/videobook/waveform-path.test.ts',
       'src/videobook/jobs-presentation.test.ts',
       'src/videobook/notebook-cell-add-menu.test.ts',

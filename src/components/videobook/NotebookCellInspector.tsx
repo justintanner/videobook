@@ -22,6 +22,7 @@ import type {
   NotebookEdge,
 } from 'videobook-engine'
 import { ArtifactThumb } from './ArtifactThumb'
+import { CellWaveform, CellWaveformSkeleton } from './CellWaveform'
 import { MediaLibraryAssetPreview } from './MediaLibraryAssetPreview'
 import { VoiceOptionList } from './SpeakCommandPreview'
 import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
@@ -36,9 +37,7 @@ import {
   doltCellRows,
 } from '@/videobook/dolt-cell-source'
 import {
-  formatMediaAspectRatio,
   formatMediaTime,
-  notebookAudioPresentation,
   notebookAnalysisLlmExchanges,
   notebookCellActionPresentation,
   notebookCellInspectorActionLabel,
@@ -49,6 +48,13 @@ import {
   type NotebookAnalysisResponseFormat,
   type NotebookAudioInfo,
 } from '@/videobook/notebook-cell-presentation'
+import {
+  mediaDockAspect,
+  mediaDockFacts,
+  mediaDockKind,
+  mediaDockKindLabel,
+  type MediaDockKind,
+} from '@/videobook/media-dock'
 import {
   persistAndRunNotebookCell,
   type NotebookCellUpdate,
@@ -376,6 +382,8 @@ export type NotebookCellInspectorAsset = {
   height: number | null
   duration: number | null
   audioInfo: NotebookAudioInfo | null
+  /** Peaks for an audio poster; null before `extract_waveform` has run. */
+  waveform?: number[] | null
   analysisInfo?: NotebookAnalysisInfo | null
   transcript?: MediaTranscriptSources | null
   visionAnalysis?: MediaVisionAnalysis | null
@@ -477,13 +485,6 @@ type NotebookCellInspectorProps = {
     loading: boolean
     error: string | null
   }
-}
-
-function isPassiveOutputCell(cell: NotebookCell): boolean {
-  return cell.type === 'audio'
-    || cell.type === 'image'
-    || cell.type === 'video'
-    || cell.type === 'analysis'
 }
 
 function defaultInputNames(cell: NotebookCell): string[] {
@@ -616,6 +617,50 @@ function CellMediaActions({
   )
 }
 
+/**
+ * Audio's dock preview: the peaks the asset already carries, with the native
+ * transport under them. The grid tile's play ring only starts and stops, so
+ * scrubbing lives here — and the playhead the transport moves is drawn on the
+ * same waveform the tile shows, rather than on a bare pill.
+ */
+function InspectorAudioStage({
+  address,
+  waveform,
+  mediaUrl,
+}: {
+  address: string
+  waveform: number[]
+  mediaUrl: string
+}) {
+  const [progress, setProgress] = useState(0)
+
+  return (
+    <div className="inspector-audio-stage">
+      <span className="inspector-audio-waveform">
+        {waveform.length > 0
+          ? <CellWaveform peaks={waveform} progress={progress} />
+          : <CellWaveformSkeleton />}
+      </span>
+      <audio
+        key={mediaUrl}
+        src={mediaUrl}
+        aria-label={`@${address} audio`}
+        controls
+        preload="metadata"
+        onTimeUpdate={(event) => {
+          const element = event.currentTarget
+          setProgress(
+            Number.isFinite(element.duration) && element.duration > 0
+              ? Math.min(1, Math.max(0, element.currentTime / element.duration))
+              : 0,
+          )
+        }}
+        onEnded={() => setProgress(0)}
+      />
+    </div>
+  )
+}
+
 function NotebookCellMedia({
   asset,
   address,
@@ -636,12 +681,6 @@ function NotebookCellMedia({
   const isAudio = asset.type === 'audio'
   const isImage = asset.type === 'image'
   const canOpenFullscreen = allowFullscreen && (isImage || isVideo)
-  const audioPresentation = notebookAudioPresentation({
-    audioInfo: asset.audioInfo,
-    durationSeconds: asset.duration,
-    hasOutput: true,
-    inputs: undefined,
-  })
   const openFullscreen = () => {
     videoRef.current?.pause()
     onOpenFullscreen(asset)
@@ -668,7 +707,11 @@ function NotebookCellMedia({
             preload="metadata"
           />
         ) : isAudio && mediaUrl ? (
-          <audio key={mediaUrl} src={mediaUrl} controls preload="metadata" />
+          <InspectorAudioStage
+            address={address}
+            waveform={asset.waveform ?? []}
+            mediaUrl={mediaUrl}
+          />
         ) : isImage && canOpenFullscreen ? (
           <button
             type="button"
@@ -696,23 +739,6 @@ function NotebookCellMedia({
           />
         )}
       </div>
-      {isAudio && (
-        <div className="inspector-audio-summary">
-          <span className="inspector-audio-role">{audioPresentation.role}</span>
-          <dl className="inspector-audio-facts">
-            <div>
-              <dt>Duration</dt>
-              <dd>{audioPresentation.duration ?? 'Unknown'}</dd>
-            </div>
-            {audioPresentation.details.length > 0 && (
-              <div>
-                <dt>Format</dt>
-                <dd>{audioPresentation.details.join(' · ')}</dd>
-              </div>
-            )}
-          </dl>
-        </div>
-      )}
       {inlineActions && canOpenFullscreen && (
         <CellMediaActions
           address={address}
@@ -1372,16 +1398,37 @@ function CellAssetTags({
   )
 }
 
-/* The dock is wider than any portrait take needs, so versions show as a rail
-   of thumbs rather than hiding behind a select. Narrower docks hide this and
-   fall back to OutputVersionSelector; both are rendered, CSS picks one. */
-function ImageVersionRail({
+/** A take's thumb: its poster, or the peaks audio carries in place of one. */
+function MediaVersionThumb({
+  asset,
+}: {
+  asset: NotebookCellInspectorAsset | undefined
+}) {
+  const thumbUrl = asset?.thumbnailUrl ?? asset?.mediaUrl ?? null
+  if (asset?.type !== 'audio' && thumbUrl) {
+    return <img src={thumbUrl} alt="" />
+  }
+  return (
+    <span className="inspector-media-version-blank">
+      {(asset?.waveform?.length ?? 0) > 0 && (
+        <CellWaveform peaks={asset?.waveform ?? []} progress={0} />
+      )}
+    </span>
+  )
+}
+
+/* The dock is wider than any single take needs, so versions show as a rail of
+   thumbs rather than hiding behind a select. Narrower docks hide this and fall
+   back to OutputVersionSelector; both are rendered, CSS picks one. */
+function MediaVersionRail({
+  kind,
   artifactIds,
   assetsById,
   currentArtifactId,
   selectedArtifactId,
   onSelect,
 }: {
+  kind: MediaDockKind
   artifactIds: readonly string[]
   assetsById: ReadonlyMap<string, NotebookCellInspectorAsset>
   currentArtifactId: string | undefined
@@ -1389,14 +1436,14 @@ function ImageVersionRail({
   onSelect: (artifactId: string) => void
 }) {
   return (
-    <section className="inspector-image-versions" aria-label="Image versions">
+    <section
+      className="inspector-media-versions"
+      aria-label={`${mediaDockKindLabel(kind)} versions`}
+    >
       <span className="inspector-media-field-label">Versions</span>
-      <ul className="inspector-image-version-list">
+      <ul className="inspector-media-version-list">
         {artifactIds.map((artifactId, index) => {
           const versionAsset = assetsById.get(artifactId)
-          const thumbUrl = versionAsset?.thumbnailUrl
-            ?? versionAsset?.mediaUrl
-            ?? null
           const isCurrent = artifactId === currentArtifactId
           const isSelected = artifactId === selectedArtifactId
           return (
@@ -1404,8 +1451,8 @@ function ImageVersionRail({
               <button
                 type="button"
                 className={isSelected
-                  ? 'inspector-image-version selected'
-                  : 'inspector-image-version'}
+                  ? 'inspector-media-version selected'
+                  : 'inspector-media-version'}
                 disabled={!versionAsset}
                 aria-current={isSelected ? 'true' : undefined}
                 aria-label={`Version ${index + 1} of ${artifactIds.length}${
@@ -1413,13 +1460,11 @@ function ImageVersionRail({
                 }`}
                 onClick={() => onSelect(artifactId)}
               >
-                {thumbUrl
-                  ? <img src={thumbUrl} alt="" />
-                  : <span className="inspector-image-version-blank" />}
-                <span className="inspector-image-version-label">
+                <MediaVersionThumb asset={versionAsset} />
+                <span className="inspector-media-version-label">
                   v{index + 1}
                   {isCurrent && (
-                    <span className="inspector-image-version-now">now</span>
+                    <span className="inspector-media-version-now">now</span>
                   )}
                 </span>
               </button>
@@ -1431,42 +1476,38 @@ function ImageVersionRail({
   )
 }
 
-function ImageCellFacts({
+/** Size, shape, run time — what the preview shows without saying it. */
+function MediaCellFacts({
+  kind,
   address,
   asset,
+  inputs,
 }: {
+  kind: MediaDockKind
   address: string
   asset: NotebookCellInspectorAsset
+  inputs: Record<string, unknown> | undefined
 }) {
-  const dimensions = asset.width !== null && asset.height !== null
-    ? `${asset.width} × ${asset.height}`
-    : null
-  const aspect = formatMediaAspectRatio(asset.width, asset.height)
   return (
-    <dl className="inspector-image-facts">
-      <div>
-        <dt>Address</dt>
-        <dd><code className="inspector-cell-address">@{address}</code></dd>
-      </div>
-      {dimensions !== null && (
-        <div>
-          <dt>Dimensions</dt>
-          <dd>{dimensions}</dd>
+    <dl className="inspector-media-facts">
+      {mediaDockFacts(kind, address, asset, inputs).map((fact) => (
+        <div key={fact.key}>
+          <dt>{fact.term}</dt>
+          <dd>
+            {fact.emphasis === 'address'
+              ? <code className="inspector-cell-address">{fact.value}</code>
+              : fact.value}
+          </dd>
         </div>
-      )}
-      {aspect !== null && (
-        <div>
-          <dt>Aspect</dt>
-          <dd>{aspect}</dd>
-        </div>
-      )}
+      ))}
     </dl>
   )
 }
 
-type ImageTrackStyle = CSSProperties & { '--image-aspect'?: string }
+type MediaTrackStyle = CSSProperties & { '--media-aspect'?: string }
 
 function MediaCellInspector({
+  kind,
   cell,
   cells,
   edges,
@@ -1504,7 +1545,10 @@ function MediaCellInspector({
   | 'onDownloadTranscriptSrt'
   | 'bookId'
   | 'tagTools'
->) {
+> & {
+  /** Which dock this is; the caller has already ruled out every other type. */
+  kind: MediaDockKind
+}) {
   const versionArtifactIds = cell.type === 'audio'
     || (
       (cell.type === 'image' || cell.type === 'video')
@@ -1563,17 +1607,14 @@ function MediaCellInspector({
     : idleMediaInsightWork
 
   const address = notebookGridAddress(cell.slot)
-  const isImage = cell.type === 'image'
-  const previewAspect = previewAsset?.width && previewAsset.height
-    ? previewAsset.width / previewAsset.height
-    : null
+  const canOpenFullscreen = kind === 'image' || kind === 'video'
   const showVersions = versionArtifactIds.length > 1 && Boolean(previewAsset)
   const mediaPreview = previewAsset ? (
     <NotebookCellMedia
       asset={previewAsset}
       address={address}
-      allowFullscreen={isImage || cell.type === 'video'}
-      inlineActions={!isImage}
+      allowFullscreen={canOpenFullscreen}
+      inlineActions={false}
       onOpenFullscreen={onOpenFullscreen}
     />
   ) : (
@@ -1588,7 +1629,7 @@ function MediaCellInspector({
       availableArtifactIds={availableVersionArtifactIds}
       currentArtifactId={cell.outputArtifactId}
       selectedArtifactId={effectiveVersionArtifactId}
-      outputLabel={isImage ? 'Image' : 'Audio'}
+      outputLabel={mediaDockKindLabel(kind)}
       onSelect={selectVersion}
     />
   ) : null
@@ -1626,64 +1667,14 @@ function MediaCellInspector({
   const cleanupActions = (
     <CellCleanupActions busy={busy} deleting={deleting} onDelete={onDelete} />
   )
-
-  /* An image cell lays its parts across the row instead of down it: the
-     preview takes the row height at its own aspect and everything that used
-     to sit below the fold moves into the width it was wasting. The aspect
-     rides in as a custom property because only the asset knows it. */
-  if (isImage) {
-    const trackStyle: ImageTrackStyle = previewAspect !== null
-      ? { '--image-aspect': String(previewAspect) }
-      : {}
-    return (
-      <div className="inspector-body inspector-media-body">
-        <div
-          className={[
-            'inspector-media-content',
-            'inspector-compact-media-content',
-            'inspector-image-media-content',
-            showVersions ? '' : 'inspector-image-single-version',
-          ].filter(Boolean).join(' ')}
-          style={trackStyle}
-        >
-          <div className="inspector-image-track inspector-image-track-preview">
-            {mediaPreview}
-          </div>
-          {showVersions && (
-            <div className="inspector-image-track inspector-image-track-versions">
-              <ImageVersionRail
-                artifactIds={versionArtifactIds}
-                assetsById={versionAssetById}
-                currentArtifactId={cell.outputArtifactId}
-                selectedArtifactId={effectiveVersionArtifactId}
-                onSelect={selectVersion}
-              />
-            </div>
-          )}
-          <div className="inspector-image-meta">
-            <div className="inspector-image-track inspector-image-track-details">
-              {versionSelector}
-              {previewAsset && (
-                <ImageCellFacts address={address} asset={previewAsset} />
-              )}
-              {assetTags}
-            </div>
-            <div className="inspector-image-track inspector-image-track-actions">
-              <PublishedPostInspectorDetails inputs={cell.inputs} />
-              {inputSources}
-              {previewAsset && (
-                <CellMediaActions
-                  address={address}
-                  isImage
-                  onOpen={() => onOpenFullscreen(previewAsset)}
-                />
-              )}
-              {cleanupActions}
-            </div>
-          </div>
-        </div>
-      </div>
-    )
+  /* Every media cell lays its parts across the row instead of down it: the
+     preview takes the row height at the shape the asset gives it, and
+     everything that used to sit below the fold — versions, facts, tags,
+     inputs, actions — moves into the width the preview was wasting. The shape
+     rides in as a custom property because only the asset knows it. Under a
+     narrow dock the container queries fold this back into one column. */
+  const trackStyle: MediaTrackStyle = {
+    '--media-aspect': String(mediaDockAspect(kind, previewAsset ?? null)),
   }
 
   return (
@@ -1691,21 +1682,55 @@ function MediaCellInspector({
       <div
         className={[
           'inspector-media-content',
-          cell.type === 'video' || cell.type === 'audio'
-            ? 'inspector-compact-media-content'
-            : '',
+          'inspector-compact-media-content',
+          'inspector-media-row-content',
+          `inspector-media-row-${kind}`,
+          showVersions ? '' : 'inspector-media-row-single-version',
         ].filter(Boolean).join(' ')}
+        style={trackStyle}
       >
-        <span className="inspector-media-field-label">
-          {cell.type.replaceAll('_', ' ').toUpperCase()}
-        </span>
-        {versionSelector}
-        {mediaPreview}
-        {assetTags}
-        {insights}
-        <PublishedPostInspectorDetails inputs={cell.inputs} />
-        {inputSources}
-        {cleanupActions}
+        <div className="inspector-media-row-track inspector-media-row-preview">
+          {mediaPreview}
+        </div>
+        {showVersions && (
+          <div className="inspector-media-row-track inspector-media-row-versions">
+            <MediaVersionRail
+              kind={kind}
+              artifactIds={versionArtifactIds}
+              assetsById={versionAssetById}
+              currentArtifactId={cell.outputArtifactId}
+              selectedArtifactId={effectiveVersionArtifactId}
+              onSelect={selectVersion}
+            />
+          </div>
+        )}
+        <div className="inspector-media-row-meta">
+          <div className="inspector-media-row-track inspector-media-row-details">
+            {versionSelector}
+            {previewAsset && (
+              <MediaCellFacts
+                kind={kind}
+                address={address}
+                asset={previewAsset}
+                inputs={cell.inputs}
+              />
+            )}
+            {assetTags}
+            {insights}
+          </div>
+          <div className="inspector-media-row-track inspector-media-row-actions">
+            <PublishedPostInspectorDetails inputs={cell.inputs} />
+            {inputSources}
+            {previewAsset && canOpenFullscreen && (
+              <CellMediaActions
+                address={address}
+                isImage={kind === 'image'}
+                onOpen={() => onOpenFullscreen(previewAsset)}
+              />
+            )}
+            {cleanupActions}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -3452,9 +3477,11 @@ export function NotebookCellInspector({
     )
   }
 
-  if (isPassiveOutputCell(cell)) {
+  const dockKind = mediaDockKind(cell.type)
+  if (dockKind) {
     return (
       <MediaCellInspector
+        kind={dockKind}
         cell={cell}
         cells={cells}
         edges={edges}
