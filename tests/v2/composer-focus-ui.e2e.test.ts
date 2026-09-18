@@ -239,6 +239,30 @@ describe('composer focus through real workspace interactions', () => {
     await focused(input())
   })
 
+  it('shows a whole media dock rather than clipping it in the panel wrapper', async () => {
+    await cell(videoCellId).click({ position: { x: 20, y: 20 } })
+    await page.locator('.composer-notebook-dock.inspector').waitFor({ timeout: 15_000 })
+    // The wrapper and the panel read one --dock-h. When they drift apart the
+    // wrapper clips the panel and the facts, tags and transcript blocks below
+    // the fold are simply cut off.
+    const fit = await page.evaluate(() => {
+      const wrapper = document.querySelector('.command-composer-contextual')
+      const dock = document.querySelector('.composer-notebook-dock.inspector')
+      if (!(wrapper instanceof HTMLElement) || !(dock instanceof HTMLElement)) {
+        throw new Error('Missing composer dock')
+      }
+      return {
+        clipped: wrapper.scrollHeight - wrapper.clientHeight,
+        dockHeight: Math.round(dock.getBoundingClientRect().height),
+        wrapperHeight: Math.round(wrapper.getBoundingClientRect().height),
+      }
+    })
+
+    expect(fit.clipped).toBeLessThanOrEqual(1)
+    expect(fit.dockHeight).toBe(fit.wrapperHeight)
+    expect(fit.dockHeight).toBeGreaterThan(360)
+  })
+
   it('returns completed add, duplicate and delete operations to chat', async () => {
     await page.getByLabel('Add cell', { exact: true }).click()
     await page.getByLabel('Search cell types').fill('audio')

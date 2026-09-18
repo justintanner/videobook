@@ -3955,7 +3955,7 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  max-height: min(360px, 42dvh);
+  max-height: var(--dock-h, 560px);
 }
 
 .composer-notebook-dock.inspector > header {
@@ -9788,6 +9788,13 @@ textarea:focus-visible {
    the 3px state rail and the background all live here, and every child sits on
    the same 20px spine (3px rail + 17px left, 1px border + 19px right). */
 .command-composer {
+  /* How tall a docked panel may stand. 360px cut the facts, tags and transcript
+     blocks a media cell now stacks beside its preview; this is what a full
+     details column needs, and no more, because the board above still has to
+     show a row of cells. Both the panel wrapper and the panels themselves read
+     it, so no panel can grow past what the wrapper will show. */
+  --dock-h: min(560px, 56dvh);
+
   position: fixed;
   right: var(--app-gutter);
   bottom: var(--app-gutter);
@@ -9874,7 +9881,7 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  max-height: min(360px, 42dvh);
+  max-height: var(--dock-h, 560px);
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -12710,20 +12717,19 @@ textarea:focus-visible {
    preview surface and the facts differ, and the container queries below fold
    every kind back into one column when the dock is too narrow to share. */
 
-.composer-notebook-dock.inspector {
-  --dock-h: min(360px, 42dvh);
-}
-
 .inspector-media-body {
   container-type: inline-size;
 }
 
 .inspector-media-row-content {
-  --media-row-h: calc(var(--dock-h, 360px) - 40px - 24px);
+  --media-row-h: calc(var(--dock-h, 560px) - 40px - 24px);
+  /* Wide media would take the whole row height as width and leave the facts
+     beside it a strip, so the column stops at a share of the dock. A portrait
+     take never reaches it. */
   --media-preview-w: clamp(
     96px,
     calc(var(--media-row-h) * var(--media-aspect, 0.5625)),
-    50cqi
+    min(44cqi, 520px)
   );
 
   display: grid;
@@ -12759,10 +12765,19 @@ textarea:focus-visible {
   scrollbar-width: thin;
 }
 
+/* The preview keeps the asset's shape rather than stretching to the row: a
+   clip or a waveform that has hit the width cap sits at the top of its track
+   at its own height instead of growing a band of ground above and below. */
+.inspector-media-row-preview {
+  justify-content: start;
+}
+
 .inspector-media-row-content .inspector-cell-preview {
-  height: 100%;
+  height: auto;
+  max-height: 100%;
   min-height: 0;
   margin: 0;
+  aspect-ratio: var(--media-aspect, 0.5625);
 }
 
 .inspector-media-row-content .inspector-cell-media {
