@@ -2,6 +2,15 @@ import { createElement, createRef } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CommandComposer } from '../../src/components/videobook/CommandComposer'
+import {
+  COMPOSER_DOCK_HIDE_LABEL,
+  COMPOSER_DOCK_SHOW_LABEL,
+  composerDockDraftKey,
+  composerDockReviewPriority,
+  composerDockShouldOpen,
+  hideComposerDock,
+  initialMusicDockView,
+} from '../../src/videobook/composer-dock'
 import { ComposerHistory } from '../../src/components/videobook/ComposerHistory'
 import { composerHistory } from '../../src/videobook/composer-history'
 import { VoiceComms } from '../../src/components/videobook/VoiceComms'
@@ -187,6 +196,156 @@ describe('CommandComposer controls', () => {
     expect(html).toMatch(/class="voice-provider-field"[^>]*>\s*<svg/)
     // Nothing in the row is named by its position or its color.
     for (const tag of html.match(/<button[^>]*>/g) ?? []) expect(tag).toMatch(/aria-label="[^"]+"/)
+  })
+
+  it('keeps an enabled Hide chat control in ordinary, disabled, loading, error, action search and pending review states', () => {
+    const hide = (html: string) => controlMarkup(html, COMPOSER_DOCK_HIDE_LABEL)
+    expect(hide(renderComposer(false))).toContain(`aria-label="${COMPOSER_DOCK_HIDE_LABEL}"`)
+    expect(hide(renderComposer(false))).not.toContain('disabled')
+    expect(hide(renderComposer(true))).not.toContain('disabled')
+
+    const loading = renderToStaticMarkup(createElement(CommandComposer, {
+      commands: [],
+      references: new Map(),
+      actions: [],
+      actionContext: { bookId: 'book-1', choices: {} },
+      actionDiscovery: { key: 1, query: 'generate' },
+      actionStatus: { loading: true, error: null },
+      actionsDisabled: true,
+      onOpenActions: () => undefined,
+      onCloseActionSearch: () => undefined,
+      bookId: 'book-1',
+      callTool: async () => ({}),
+      chatModels: fallbackChatModelCatalog.models,
+      disabled: true,
+      modelSelectionDisabled: true,
+      connectionLabel: 'Connecting to MCP…',
+      mcpCalls: emptyMcpCallLog,
+      mcpFlash: null,
+      onToggleMcpCall: () => {},
+      inputSession: 'chat',
+      selectedModel: fallbackChatModelCatalog.defaultModel,
+      notice: { message: 'Could not load actions', tone: 'error' },
+      onEnsureCatalog: async () => undefined,
+      onExecute: async () => ({ ok: true, message: 'Done' }),
+      onModelChange: () => undefined,
+      onSuccessfulExecute: () => undefined,
+    }))
+    expect(hide(loading)).toContain(`aria-label="${COMPOSER_DOCK_HIDE_LABEL}"`)
+    expect(hide(loading)).not.toContain('disabled')
+    expect(loading).toContain('Could not load actions')
+    expect(loading).toContain('Loading actions')
+    expect(loading).toContain('aria-label="Close action search"')
+
+    const reviewing = renderToStaticMarkup(createElement(CommandComposer, {
+      commands: [],
+      references: new Map(),
+      actions: [],
+      actionContext: { bookId: 'book-1', choices: {} },
+      actionDiscovery: null,
+      actionStatus: { loading: false, error: null },
+      actionsDisabled: false,
+      onOpenActions: () => undefined,
+      onCloseActionSearch: () => undefined,
+      bookId: 'book-1',
+      callTool: async () => ({}),
+      chatModels: fallbackChatModelCatalog.models,
+      disabled: false,
+      modelSelectionDisabled: false,
+      connectionLabel: 'Ready',
+      mcpCalls: emptyMcpCallLog,
+      mcpFlash: null,
+      onToggleMcpCall: () => {},
+      inputSession: 'chat',
+      selectedModel: fallbackChatModelCatalog.defaultModel,
+      voice: stubVoice({ phase: 'review', pendingReview: true }),
+      onEnsureCatalog: async () => undefined,
+      onExecute: async () => ({ ok: true, message: 'Done' }),
+      onModelChange: () => undefined,
+      onSuccessfulExecute: () => undefined,
+      children: createElement('aside', { className: 'confirm-sheet', 'aria-label': 'Generation review' },
+        createElement('button', { type: 'button' }, 'Cancel'),
+      ),
+    }))
+    expect(hide(reviewing)).not.toContain('disabled')
+    expect(reviewing).toContain('Generation review')
+    expect(reviewing).toContain('Cancel')
+  })
+
+  it('hides the input area behind a compact reopen control without writing or cancelling', () => {
+    const dismissPending = () => {
+      throw new Error('hide must not dismiss a pending review')
+    }
+    const apply = () => {
+      throw new Error('hide must not apply')
+    }
+    const save = () => {
+      throw new Error('hide must not save')
+    }
+    const cancel = () => {
+      throw new Error('hide must not cancel')
+    }
+    let open = true
+    hideComposerDock({
+      setOpen: (next) => { open = next },
+      dismissPending,
+      apply,
+      save,
+      cancel,
+    })
+    expect(open).toBe(false)
+
+    const html = renderToStaticMarkup(createElement(CommandComposer, {
+      commands: [],
+      references: new Map(),
+      actions: [],
+      actionContext: { bookId: 'book-1', choices: {} },
+      actionDiscovery: null,
+      actionStatus: { loading: false, error: null },
+      actionsDisabled: false,
+      onOpenActions: () => undefined,
+      onCloseActionSearch: () => undefined,
+      dockOpen: false,
+      bookId: 'book-1',
+      callTool: async () => ({}),
+      chatModels: fallbackChatModelCatalog.models,
+      disabled: false,
+      modelSelectionDisabled: false,
+      connectionLabel: 'Ready',
+      mcpCalls: emptyMcpCallLog,
+      mcpFlash: null,
+      onToggleMcpCall: () => {},
+      inputSession: 'chat',
+      selectedModel: fallbackChatModelCatalog.defaultModel,
+      onEnsureCatalog: async () => undefined,
+      onExecute: async () => ({ ok: true, message: 'Done' }),
+      onModelChange: () => undefined,
+      onSuccessfulExecute: () => undefined,
+      children: createElement('aside', { className: 'confirm-sheet', 'aria-label': 'Generation review' },
+        createElement('button', { type: 'button' }, 'Cancel'),
+      ),
+    }))
+    expect(controlMarkup(html, COMPOSER_DOCK_SHOW_LABEL)).toContain(`aria-label="${COMPOSER_DOCK_SHOW_LABEL}"`)
+    expect(controlMarkup(html, COMPOSER_DOCK_HIDE_LABEL)).toBe('')
+    expect(html).toMatch(/class="command-composer-dock-body"[^>]*hidden/)
+    expect(html).toContain('Generation review')
+  })
+
+  it('isolates drafts by project and editing target and does not reopen from completions', () => {
+    expect(composerDockDraftKey('book-a', 'cell-1')).not.toBe(composerDockDraftKey('book-b', 'cell-1'))
+    expect(composerDockDraftKey('book-a', 'cell-1')).not.toBe(composerDockDraftKey('book-a', 'cell-2'))
+    expect(composerDockDraftKey('book-a', null)).toBe('book-a:chat')
+    expect(composerDockShouldOpen('selection')).toBe(true)
+    expect(composerDockShouldOpen('action')).toBe(true)
+    expect(composerDockShouldOpen('expand')).toBe(true)
+    expect(composerDockShouldOpen('reopen')).toBe(true)
+    expect(composerDockShouldOpen('completion')).toBe(false)
+    expect(composerDockShouldOpen('poll')).toBe(false)
+    expect(composerDockReviewPriority(true)).toBe(true)
+    expect(composerDockReviewPriority(false)).toBe(false)
+    expect(initialMusicDockView('applied')).toBe('sources')
+    expect(initialMusicDockView('needs-audio-track')).toBe('soundtrack')
+    expect(initialMusicDockView('ready')).toBe('soundtrack')
   })
 })
 

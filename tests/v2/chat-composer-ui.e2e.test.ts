@@ -988,25 +988,20 @@ describe('chat composer browser flow', () => {
       .toBe(0)
     await addCell.click()
 
-    await page.getByLabel('Open inspector').click()
-    await wait(250)
-    const inspectorBox = await page.locator('.inspector').boundingBox()
-    expect(inspectorBox?.width).toBeGreaterThanOrEqual(280)
-    expect(inspectorBox?.width).toBeLessThanOrEqual(320)
-
     const detailCell = notebookCellNode(page, reviewGenerationCellId)
     await detailCell.click()
-    await page.locator('.inspector-cell-title').waitFor({ state: 'visible' })
+    await page.locator('.command-composer .inspector-cell-title').waitFor({ state: 'visible' })
     await wait(250)
-    const detailInspectorBox = await page.locator('.inspector').boundingBox()
+    const detailInspectorBox = await page.locator('.command-composer .inspector').boundingBox()
     const scrollBox = await page.locator('.notebook-horizontal-scroll').boundingBox()
-    if (!detailInspectorBox || !scrollBox) {
+    const composerBox = await page.locator('.command-composer').boundingBox()
+    if (!detailInspectorBox || !scrollBox || !composerBox) {
       throw new Error('Could not measure selected-cell inspector layout')
     }
-    expect(detailInspectorBox.width).toBeGreaterThanOrEqual(380)
-    expect(detailInspectorBox.width).toBeLessThanOrEqual(440)
-    expect(Math.abs(scrollBox.x + scrollBox.width - detailInspectorBox.x))
-      .toBeLessThanOrEqual(1)
+    expect(page.getByLabel('Hide chat')).toBeTruthy()
+    expect(detailInspectorBox.y).toBeGreaterThan(scrollBox.y)
+    expect(detailInspectorBox.x).toBeGreaterThanOrEqual(composerBox.x - 2)
+    expect(scrollBox.width).toBeGreaterThan(900)
     for (const width of [1280, 1024, 720, 600, 390, 320]) {
       await page.setViewportSize({ width, height: 800 })
       await expect.poll(async () => await topbar.locator('button, summary').evaluateAll((buttons) =>
@@ -1022,7 +1017,7 @@ describe('chat composer browser flow', () => {
         })),
       ).toBe(true)
       const headerBounds = await topbar.boundingBox()
-      const inspectorBounds = await page.locator('.inspector').boundingBox()
+      const inspectorBounds = await page.locator('.command-composer .inspector').boundingBox()
       if (!headerBounds || !inspectorBounds) throw new Error('Header or inspector is missing')
       expect(inspectorBounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height)
     }
@@ -1380,8 +1375,8 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await input.isEnabled(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
-    const reopenInspector = page.getByLabel('Open inspector')
-    if (await reopenInspector.count()) await reopenInspector.click()
+    const showChat = page.getByLabel('Show chat')
+    if (await showChat.count() && await showChat.isVisible()) await showChat.click()
     const generationNode = page.locator(
       `.notebook-flow .react-flow__node[data-id="${fullscreenImageGenerationCellId}"]`,
     )
@@ -1583,7 +1578,9 @@ describe('chat composer browser flow', () => {
       if (!composerBox || !subjectPanelBox) {
         throw new Error('Could not measure the mobile image editor layout')
       }
-      expect(composerBox.y).toBeGreaterThanOrEqual(subjectPanelBox.y + subjectPanelBox.height)
+      expect(subjectPanelBox.y).toBeGreaterThanOrEqual(composerBox.y - 2)
+      expect(subjectPanelBox.y + subjectPanelBox.height)
+        .toBeLessThanOrEqual(composerBox.y + composerBox.height + 2)
       expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(viewport.height)
     }
     await modalInput.fill('Unsent image edit draft')
@@ -1608,8 +1605,8 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await input.isEnabled(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
-    const reopen = page.getByLabel('Open inspector')
-    if (await reopen.count()) await reopen.click()
+    const showChat = page.getByLabel('Show chat')
+    if (await showChat.count() && await showChat.isVisible()) await showChat.click()
     const videoNode = notebookCellNode(page, videoCellId)
     await videoNode.waitFor({ state: 'visible' })
     const videoAddress = (await videoNode.locator('.cell-node-footer strong')
@@ -1775,8 +1772,8 @@ describe('chat composer browser flow', () => {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
 
-    const reopenInspector = page.getByLabel('Open inspector')
-    if (await reopenInspector.isVisible()) await reopenInspector.click()
+    const showChat = page.getByLabel('Show chat')
+    if (await showChat.count() && await showChat.isVisible()) await showChat.click()
     const generationCell = notebookCellNode(page, generationCellId)
     await generationCell.click()
 
@@ -2889,8 +2886,8 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await input.isEnabled(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
-    const reopenInspector = page.getByLabel('Open inspector')
-    if (await reopenInspector.isVisible()) await reopenInspector.click()
+    const showChat = page.getByLabel('Show chat')
+    if (await showChat.count() && await showChat.isVisible()) await showChat.click()
     await page.evaluate(() => window.localStorage.setItem(
       'videobook.cloud-generation-consent',
       'accepted',

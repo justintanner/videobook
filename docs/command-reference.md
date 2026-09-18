@@ -359,7 +359,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/clip-reverse` — Preview reversing a sequence clip while retaining its source media; preview or workspace operation
 - `/clip-trim` — Preview trimming a sequence clip in frames; preview or workspace operation
 - `/close` — Close the active viewer, panel, or browser and return to the idle screen; UI: `close_viewer`
-- `/collapse` — Close the project selector (left), inspector (right), or both; UI: `sidebar_collapse`
+- `/collapse` — Close the project selector (left), chat controls (right), or both; UI: `sidebar_collapse`
 - `/commit-edit-intent` — Commit an unchanged previewed CommandPlan edit stage atomically; MCP: `commit_edit_intent`
 - `/concat` — Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell; MCP: `concat_images`
 - `/configure-asset-tagging` — Read or change how new assets are tagged in a book. Manual tagging, filtering and search keep working whatever this is set to.; MCP: `configure_asset_tagging`
@@ -401,7 +401,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/ensure-notebook-workflow-scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists; MCP: `ensure_notebook_workflow_scaffold`
 - `/entities` — Open the reusable entity library; UI: `open_entities`
 - `/estimate-cost` — Estimate the USD cost of a generation tool call before invoking it. Accepts one or more {tool_name, input} pairs and returns a single CostEstimate summed across all calls. Token-based providers (openai/anthropic/xai) use a chars/4 heuristic and price via a bundled local rate table. Tools without a registered cost adapter return a $0 estimate with a warning.; MCP: `estimate_cost`
-- `/expand` — Open the project selector (left), inspector (right), or both; UI: `sidebar_expand`
+- `/expand` — Open the project selector (left), chat controls (right), or both; UI: `sidebar_expand`
 - `/export` — Export asset to Downloads folder; MCP: `export_to_downloads`
 - `/export-sequence` — Review and export the current sequence; preview or workspace operation
 - `/export-to` — Export an asset into a different project; MCP: `export_asset_to_project`

@@ -9,7 +9,7 @@ import {
   SquareDashed,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
@@ -64,6 +64,7 @@ type NotebookMediaFullscreenProps = {
   onSelectedSubjectIdsChange?: (subjectIds: readonly string[]) => void
   onSelectionChange?: (selection: ImageEditSelection) => void
   onClose: () => void
+  dockPortal?: Element | null
   onMoreActions?: () => void
 }
 
@@ -404,6 +405,7 @@ export function NotebookMediaFullscreen({
   onSelectedSubjectIdsChange,
   onSelectionChange,
   onClose,
+  dockPortal = null,
   onMoreActions,
 }: NotebookMediaFullscreenProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -714,7 +716,7 @@ export function NotebookMediaFullscreen({
   const dialog = (
     <dialog
       ref={dialogRef}
-      className={`notebook-media-fullscreen${isVideo ? ' playback-only' : ' subject-editor'}`}
+      className={`notebook-media-fullscreen${isVideo ? ' playback-only' : ' subject-editor'}${dockPortal ? ' docked' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label={`Fullscreen preview for @${address}`}
@@ -847,6 +849,9 @@ export function NotebookMediaFullscreen({
               </button>
             )}
           </div>
+          {(dockPortal
+            ? (panel: ReactNode) => createPortal(panel, dockPortal)
+            : (panel: ReactNode) => panel)(
           <aside className="notebook-subject-panel" aria-label="Subject editor">
             <header>
               <span>SUBJECT WORKSPACE</span>
@@ -1173,7 +1178,8 @@ export function NotebookMediaFullscreen({
                 </button>
               </div>
             </div>
-          </aside>
+          </aside>,
+          )}
           <div
             ref={composerPortalRef}
             className="notebook-media-composer-host"

@@ -16,6 +16,7 @@ import { chatActionPlanSchema, prepareVoiceChatAction } from "./tools/chat.js";
 import { appendVoiceHistory } from "./tools/chat-history.js";
 import { appendDiagnostic } from "./diagnostics.js";
 import { VoiceReplyProgress } from "./voice-reply-progress.js";
+import { isVoiceTurnContinuation, joinVoiceTranscripts } from "./voice-continuation.js";
 import type { VoiceCaption, VoiceMode, VoiceOutcome, VoiceProvider, VoiceReviewCommand, VoiceSessionDescriptor, VoiceSessionEvent } from "./voice-contract.js";
 
 type VoiceControlEvent = Exclude<OpenAiRealtimeClientEvent, { type: "session.update" }>;
@@ -355,6 +356,7 @@ export class VoiceSession {
       this.caption(id, "user", "", false);
       this.speaking = true;
       this.needsResponse = false;
+      this.activeResponse = false;
       this.emit({ type: "activity", phase: "listening", interrupt: this.providerName === "xai" });
     } else if (event.type === "input_audio_buffer.speech_stopped") {
       this.speaking = false;
@@ -491,18 +493,49 @@ export class VoiceSession {
   /**
    * A tool call outlives the turn that asked for it whenever the speaker keeps
    * talking -- a second clause, or just "hello?" -- because every new speech
-   * segment starts a new turn. The call is dropped, but it still has to be
-   * answered: an unanswered function call leaves the model believing the work
-   * is running, so it narrates a generation that was never started while the
-   * screen stays empty. Say it was dropped and let the model re-plan for what
-   * the speaker is asking now. The stale turn never provokes a reply of its
-   * own; output() only continues the response for the current turn.
+   * segment starts a new turn. Continuation clauses reuse the pending
+   * prepare_workspace_action against the joined transcript. A genuinely new
+   * request still has to be answered so the model does not hang believing work
+   * is running: say it was dropped and let the model re-plan. The stale turn
+   * never provokes a reply of its own; output() only continues the response
+   * for the current turn.
    */
   private abandon(callId: string, turnId: string): void {
     this.output(callId, {
       status: "failed",
       message: "Dropped: the speaker talked again, so this call belongs to an earlier turn and did not go through. Nothing changed in the workspace and nothing is running. Answer the newest request, repeating this action for it if it is still wanted.",
     }, turnId);
+  }
+
+  private async waitTurnText(turnId: string): Promise<string> {
+    const turn = this.turn(turnId);
+    if (turn.final) return turn.text;
+    const timeout = setTimeout(() => turn.saved.resolve(false), 10_000);
+    await turn.saved.promise.finally(() => clearTimeout(timeout));
+    return turn.text;
+  }
+
+  /**
+   * Bind a superseded prepare_workspace_action to the conversation: join the
+   * original turn with later continuation clauses, or signal abandon when the
+   * speaker started a new request.
+   */
+  private async resolvePreparePrompt(originalTurnId: string): Promise<{ prompt: string; outputTurnId: string } | null> {
+    const original = (await this.waitTurnText(originalTurnId)).trim();
+    if (this.stopped) return null;
+    let latestId = this.currentTurn || originalTurnId;
+    let latest = latestId === originalTurnId ? original : (await this.waitTurnText(latestId)).trim();
+    if (this.stopped) return null;
+    if (this.currentTurn && this.currentTurn !== latestId) {
+      latestId = this.currentTurn;
+      latest = (await this.waitTurnText(latestId)).trim();
+    }
+    if (!latestId || latestId === originalTurnId) {
+      if (!original) return null;
+      return { prompt: original, outputTurnId: originalTurnId };
+    }
+    if (!isVoiceTurnContinuation(original, latest)) return null;
+    return { prompt: joinVoiceTranscripts(original, latest), outputTurnId: latestId };
   }
 
   /**
@@ -523,7 +556,10 @@ export class VoiceSession {
   private async runTool(event: OpenAiRealtimeServerEvent, turnId: string): Promise<void> {
     const callId = event.call_id!;
     if (this.stopped) return;
-    if (turnId !== this.currentTurn) { this.abandon(callId, turnId); return; }
+    if (turnId !== this.currentTurn && event.name !== "prepare_workspace_action") {
+      this.abandon(callId, turnId);
+      return;
+    }
     try {
       if (!this.control || !turnId) throw new Error("Wait for a spoken user request.");
       const args: unknown = JSON.parse(event.arguments ?? "{}");
@@ -542,35 +578,58 @@ export class VoiceSession {
         return;
       }
       if (this.reviewCall || this.waitingAction) throw new Error("A review is already on screen. Use resolve_pending_review to apply, cancel, or revise it before requesting another workspace action.");
-      const turn = this.turn(turnId);
-      const timeout = setTimeout(() => turn.saved.resolve(false), 10_000);
-      const saved = await turn.saved.promise.finally(() => clearTimeout(timeout));
-      if (!saved || !turn.text.trim()) throw new Error("The user transcript could not be saved. Ask the user to repeat the request.");
+      const resolved = await this.resolvePreparePrompt(turnId);
       if (this.stopped) return;
-      if (turnId !== this.currentTurn) { this.abandon(callId, turnId); return; }
+      if (!resolved?.prompt) {
+        if (turnId !== this.currentTurn) { this.abandon(callId, turnId); return; }
+        throw new Error("The user transcript could not be saved. Ask the user to repeat the request.");
+      }
+      let prompt = resolved.prompt;
+      let outputTurnId = resolved.outputTurnId;
       if (!this.scopeAlive()) throw new Error("The workspace closed before this action ran. Nothing was prepared.");
-      const decision = actionSchema.parse(args);
-      if (decision.params.book_id !== undefined && decision.params.book_id !== this.bookId) throw new Error("Voice actions must stay in the current project.");
-      if (decision.params.notebook_id !== undefined && decision.params.notebook_id !== this.notebookId) throw new Error("Voice actions must stay in the current notebook.");
-      const result = await withBookContext({ bookId: this.bookId, engine: this.engine }, () => prepareVoiceChatAction(
-        this.engine, { book_id: this.bookId, notebook_id: this.notebookId, prompt: turn.text }, { ...decision, message: turn.text },
-      ));
-      if (this.stopped) return;
-      if (turnId !== this.currentTurn) { this.abandon(callId, turnId); return; }
+      const parsed = actionSchema.parse(args);
+      if (parsed.params.book_id !== undefined && parsed.params.book_id !== this.bookId) throw new Error("Voice actions must stay in the current project.");
+      if (parsed.params.notebook_id !== undefined && parsed.params.notebook_id !== this.notebookId) throw new Error("Voice actions must stay in the current notebook.");
+      let result: Awaited<ReturnType<typeof prepareVoiceChatAction>> | undefined;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const decision = {
+          ...parsed,
+          message: prompt,
+          params: typeof parsed.params.prompt === "string"
+            ? { ...parsed.params, prompt }
+            : parsed.params,
+        };
+        result = await withBookContext({ bookId: this.bookId, engine: this.engine }, () => prepareVoiceChatAction(
+          this.engine, { book_id: this.bookId, notebook_id: this.notebookId, prompt }, decision,
+        ));
+        if (this.stopped) return;
+        if (this.currentTurn && this.currentTurn !== outputTurnId) {
+          const newer = (await this.waitTurnText(this.currentTurn)).trim();
+          if (!isVoiceTurnContinuation(prompt, newer)) {
+            this.abandon(callId, turnId);
+            return;
+          }
+          prompt = joinVoiceTranscripts(prompt, newer);
+          outputTurnId = this.currentTurn;
+          continue;
+        }
+        break;
+      }
+      if (!result) { this.abandon(callId, turnId); return; }
       const raw = result.content[0]?.text ?? "null";
-      if (result.isError) { this.output(callId, { status: "failed", message: raw }, turnId); return; }
+      if (result.isError) { this.output(callId, { status: "failed", message: raw }, outputTurnId); return; }
       const value: unknown = JSON.parse(raw);
       const plan = chatActionPlanSchema.safeParse(value);
-      if (!plan.success) { this.output(callId, { status: "completed", result: value }, turnId); return; }
+      if (!plan.success) { this.output(callId, { status: "completed", result: value }, outputTurnId); return; }
       const done = deferred<VoiceOutcome>();
       this.waitingAction = { callId, done };
-      this.emit({ type: "action", callId, prompt: turn.text, plan: plan.data });
+      this.emit({ type: "action", callId, prompt, plan: plan.data });
       const deadline = setTimeout(() => done.resolve({ status: "failed", message: "The command UI did not acknowledge this action. Check its current status before retrying." }), 60_000);
       const outcome = await done.promise.finally(() => clearTimeout(deadline));
-      this.lastAction = { turnId, callId, outcome };
+      this.lastAction = { turnId: outputTurnId, callId, outcome };
       if (this.waitingAction?.callId === callId) this.waitingAction = null;
       if (outcome.status === "review") this.reviewCall = callId;
-      this.output(callId, outcome, turnId);
+      this.output(callId, outcome, outputTurnId);
     } catch (error) {
       this.output(callId, { status: "failed", message: error instanceof z.ZodError ? "Invalid action parameters. Use the discovered schema." : error instanceof Error ? error.message : "The voice action failed." }, turnId);
     }

@@ -44,8 +44,6 @@ import {
   Layers2,
   Library,
   Mic,
-  PanelRightClose,
-  PanelRightOpen,
   Plus,
   Search,
   Settings,
@@ -491,6 +489,7 @@ import {
   restoreCommandComposerFocus,
   useCommandComposerFocus,
 } from '@/videobook/command-composer-focus'
+import { composerDockShouldOpen, pauseComposerDockMedia } from '@/videobook/composer-dock'
 import {
   parsePendingApplyCommand,
   pendingCommandVoiceOutcome,
@@ -3418,7 +3417,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [mediaDropSlot, setMediaDropSlot] = useState<NotebookGridSlot | null>(null)
   const [notebookView, setNotebookView] = useState({ y: 0, zoom: 1 })
   const [notebookSurface, setNotebookSurface] = useState({ width: 0, height: 0 })
-  const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [composerDockOpen, setComposerDockOpen] = useState(true)
+  const [imageDockHost, setImageDockHost] = useState<HTMLDivElement | null>(null)
+  const [musicDockHost, setMusicDockHost] = useState<HTMLDivElement | null>(null)
+  const [musicComposerTarget, setMusicComposerTarget] = useState<HTMLDivElement | null>(null)
   const [sourceViewCellId, setSourceViewCellId] = useState<string | null>(null)
   const [historyViewCellId, setHistoryViewCellId] = useState<string | null>(null)
   const [historyState, setHistoryState] = useState<{
@@ -5006,7 +5008,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [notebook, pendingGenerationDraft, requestPendingGenerationPreview])
   const selectPendingGenerationSource = useCallback((cellId: string) => {
     selectCanvasCell(cellId)
-    setInspectorOpen(true)
+    if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
   }, [selectCanvasCell])
   const updatePendingGenerationSources = useCallback((sourceCellIds: string[]) => {
     if (!pendingGenerationDraft || !notebook) return
@@ -5574,6 +5576,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       subjectMap: null,
       subjectMapLoading: asset.type === 'image' && Boolean(asset.objectHash),
     }
+    pauseComposerDockMedia(document.querySelector('.command-composer'))
     const requestId = imageSubjectMapRequestRef.current + 1
     imageSubjectMapRequestRef.current = requestId
     setMediaFullscreenComposerTarget(null)
@@ -10300,7 +10303,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const expand = route.action === 'expand'
       const side = asString(values.side) ?? 'both'
       if (!['left', 'right', 'both'].includes(side)) throw new Error('Choose left, right or both.')
-      if (side !== 'left') setInspectorOpen(expand)
+      if (side !== 'left' && (expand ? composerDockShouldOpen('expand') : true)) {
+        setComposerDockOpen(expand)
+      }
       if (side !== 'right') {
         if (expand) await openBookMenu()
         else setBookMenuOpen(false)
@@ -10310,7 +10315,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (route.action === 'close') {
       closeMediaFullscreen()
       setWorkspacePreview(null)
-      setInspectorOpen(false)
       return { ok: true, message: 'Viewer closed' }
     }
     if (route.action === 'play') {
@@ -10878,6 +10882,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           returnFocus,
           setup: { status: 'loading' },
         })
+        if (composerDockShouldOpen('action')) setComposerDockOpen(true)
         void prepareMusicVideoSetup(
           sessionKey,
           audioAsset.artifactId,
@@ -11553,7 +11558,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setSourceViewCellId(null)
     setHistoryViewCellId(null)
     setGenerationsViewCellId(null)
-    setInspectorOpen(true)
+    if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
   }
 
   const openCellSource = (cellId: string) => {
@@ -11561,7 +11566,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setHistoryViewCellId(null)
     setGenerationsViewCellId(null)
     setSourceViewCellId(cellId)
-    setInspectorOpen(true)
+    if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
   }
 
   const openCellHistory = (cellId: string, assetId: string) => {
@@ -11569,7 +11574,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setSourceViewCellId(null)
     setGenerationsViewCellId(null)
     setHistoryViewCellId(cellId)
-    setInspectorOpen(true)
+    if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
     if (!bookId) {
       setHistoryState({
         cellId,
@@ -11624,7 +11629,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setSourceViewCellId(null)
     setHistoryViewCellId(null)
     setGenerationsViewCellId(cellId)
-    setInspectorOpen(true)
+    if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
     if (!notebook || !bookId) {
       setGenerationsState({
         cellId,
@@ -12119,7 +12124,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [voice.reportOutcome, voice.shareTypedTurn])
   useCommandComposerFocus(
     `${screen}:${bookId}:${notebook?.id ?? ''}`,
-    showCommandComposer && mcp.state === 'ready' && !busy && (Boolean(bookId) || Boolean(currentActionComposer)),
+    showCommandComposer && composerDockOpen && mcp.state === 'ready' && !busy && (Boolean(bookId) || Boolean(currentActionComposer)),
   )
   const fullscreenComposerContext = fullscreenImageEditor
     ? {
@@ -12514,10 +12519,177 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return context
   }, [assets, bookId, books, notebook, selectedNotebookCell, selectedNotebookCells, sequence])
   const composerCommands = useMemo(() => pendingWorkspaceCommands(commands, Boolean(pendingCommandPlan || pendingChatAction || pendingWatermarkReview)), [commands, pendingCommandPlan, pendingChatAction, pendingWatermarkReview])
+  const notebookDockContent = selectedCell && selectedNotebookCell ? (
+    <div
+      className={[
+        'composer-notebook-dock',
+        'inspector',
+        deletingCellIds.has(selectedCell.id) ? 'inspector-deleting' : '',
+      ].filter(Boolean).join(' ')}
+    >
+      <header>
+        <span
+          key={selectedCell.id}
+          className="inspector-cell-title"
+          title={cellTypeLabel(selectedCell.data.kind)}
+        >
+          <CellIcon kind={selectedCell.data.kind} />
+          <strong>{cellTypeLabel(selectedCell.data.kind)}</strong>
+          <code className="inspector-cell-address">
+            {notebookGridTag(selectedNotebookCell.slot)}
+          </code>
+        </span>
+        <div className="inspector-header-actions">
+          <button type="button" aria-label="Inspector actions" data-workspace-action-surface="inspector" title="More actions" onClick={() => void openWorkspaceActions(undefined, {
+            asset_id: selectedNotebookCell.outputArtifactId, cell_id: selectedNotebookCell.id,
+          })}><Ellipsis size={15} /></button>
+          {selectedNotebookCell.outputArtifactId && (
+            <button
+              type="button"
+              className={historyViewCellId === selectedCell.id
+                ? 'inspector-source-toggle active'
+                : 'inspector-source-toggle'}
+              title={historyViewCellId === selectedCell.id
+                ? 'View cell'
+                : 'View history'}
+              aria-label={historyViewCellId === selectedCell.id
+                ? 'View cell'
+                : 'View history'}
+              aria-pressed={historyViewCellId === selectedCell.id}
+              onClick={() => {
+                if (historyViewCellId === selectedCell.id) {
+                  setHistoryViewCellId(null)
+                  return
+                }
+                openCellHistory(
+                  selectedCell.id,
+                  selectedNotebookCell.outputArtifactId!,
+                )
+              }}
+            >
+              <History size={15} />
+            </button>
+          )}
+          <button
+            type="button"
+            className={sourceViewCellId === selectedCell.id
+              ? 'inspector-source-toggle active'
+              : 'inspector-source-toggle'}
+            title={sourceViewCellId === selectedCell.id
+              ? 'View cell'
+              : 'View source'}
+            aria-label={sourceViewCellId === selectedCell.id
+              ? 'View cell'
+              : 'View source'}
+            aria-pressed={sourceViewCellId === selectedCell.id}
+            onClick={() => {
+              if (sourceViewCellId === selectedCell.id) {
+                setSourceViewCellId(null)
+                return
+              }
+              openCellSource(selectedCell.id)
+            }}
+          >
+            <Braces size={15} />
+          </button>
+        </div>
+      </header>
+      <NotebookCellInspector
+        key={`${selectedNotebookCell.id}:${selectedNotebookCell.prompt ?? ''}`}
+        notebookId={notebook?.id ?? ''}
+        bookId={bookId}
+        tagTools={mcp.state === 'ready' ? call : undefined}
+        cell={selectedNotebookCell}
+        cells={notebook?.cells ?? []}
+        edges={notebook?.edges ?? []}
+        asset={selectedCell.data.asset}
+        cellAssets={notebookCellAssets}
+        versionAssets={selectedCellVersionAssets}
+        status={selectedCell.data.status}
+        error={selectedCellError}
+        generationActions={generationActions}
+        mentionAssets={commandMentionAssets}
+        voiceCatalog={elevenLabsVoices}
+        busy={busy || Boolean(selectedMediaSlotState?.operation)}
+        deleting={deletingCellIds.has(selectedNotebookCell.id)}
+        sourceVisible={sourceViewCellId === selectedNotebookCell.id}
+        historyVisible={
+          historyViewCellId === selectedNotebookCell.id
+        }
+        history={
+          historyState
+          && historyState.cellId === selectedNotebookCell.id
+          && historyState.assetId === selectedNotebookCell.outputArtifactId
+            ? {
+                revisions: historyState.revisions,
+                loading: historyState.loading,
+                error: historyState.error,
+              }
+            : historyViewCellId === selectedNotebookCell.id
+              ? {
+                  revisions: [],
+                  loading: true,
+                  error: null,
+                }
+              : undefined
+        }
+        generationsVisible={
+          generationsViewCellId === selectedNotebookCell.id
+        }
+        generations={
+          generationsState
+          && generationsState.cellId === selectedNotebookCell.id
+            ? {
+                attempts: generationsState.attempts,
+                currentExecution: generationsState.currentExecution,
+                loading: generationsState.loading,
+                error: generationsState.error,
+              }
+            : generationsViewCellId === selectedNotebookCell.id
+              ? {
+                  attempts: [],
+                  currentExecution: null,
+                  loading: true,
+                  error: null,
+                }
+              : undefined
+        }
+        onUpdate={updateCell}
+        onSetInput={setSelectedCellInput}
+        onRun={runCell}
+        onDelete={deleteSelectedCell}
+        onOpenFullscreen={(asset) => {
+          openMediaFullscreen(selectedNotebookCell, asset)
+        }}
+        onPreviewPayload={previewGenerationPayload}
+        onLoadGenerationPayload={loadGenerationPayload}
+        mediaInsightWork={mediaInsightWork}
+        onTranscribeAsset={transcribeAsset}
+        onLoadTranscriptJson={loadTranscriptJson}
+        onDownloadTranscriptSrt={exportTranscriptSrt}
+      />
+    </div>
+  ) : null
+  const composerContextualContent = (
+    <>
+      <div
+        hidden={Boolean(fullscreenImageEditor || musicVideoSession)}
+        inert={fullscreenImageEditor || musicVideoSession ? true : undefined}
+      >
+        {notebookDockContent}
+      </div>
+      {fullscreenImageEditor
+        ? <div ref={setImageDockHost} className="composer-image-dock-host" />
+        : null}
+      {musicVideoSession
+        ? <div ref={setMusicDockHost} className="composer-music-dock-host" />
+        : null}
+    </>
+  )
 
   return (
     <main
-      className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} ${selectedCell ? 'inspector-detail' : 'inspector-overview'} ${mediaFullscreen ? 'media-fullscreen-open' : ''}`}
+      className={`app-shell app-screen-${screen} ${mediaFullscreen ? 'media-fullscreen-open' : ''}`}
       onDragEnter={handleAppFileDragEnter}
       onDragLeave={handleAppFileDragLeave}
       onDragOver={handleAppFileDragOver}
@@ -12705,7 +12877,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           rememberLastWorkSlot(node.data.slot)
                         }
                         setSourceViewCellId(null)
-                        setInspectorOpen(true)
+                        if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
                       }}
                       onPaneClick={() => {
                         closeCellContextMenu()
@@ -12800,192 +12972,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     </button>
                   </div>
                 )}
-                {!inspectorOpen && (
-                  <button
-                    type="button"
-                    className="inspector-reopen"
-                    title="Open inspector"
-                    aria-label="Open inspector"
-                    onClick={() => setInspectorOpen(true)}
-                  >
-                    <PanelRightOpen size={18} />
-                  </button>
-                )}
               </section>
-              <aside
-                className={[
-                  'inspector',
-                  inspectorOpen ? '' : 'inspector-closed',
-                  selectedCell && deletingCellIds.has(selectedCell.id)
-                    ? 'inspector-deleting'
-                    : '',
-                ].filter(Boolean).join(' ')}
-              >
-                <header>
-                  {selectedCell ? (
-                    <span
-                      key={selectedCell.id}
-                      className="inspector-cell-title"
-                      title={cellTypeLabel(selectedCell.data.kind)}
-                    >
-                      <CellIcon kind={selectedCell.data.kind} />
-                      <strong>{cellTypeLabel(selectedCell.data.kind)}</strong>
-                      {selectedNotebookCell && (
-                        <code className="inspector-cell-address">
-                          {notebookGridTag(selectedNotebookCell.slot)}
-                        </code>
-                      )}
-                    </span>
-                  ) : (
-                    <span>INSPECTOR</span>
-                  )}
-                  <div className="inspector-header-actions">
-                    <button type="button" aria-label="Inspector actions" data-workspace-action-surface="inspector" title="More actions" onClick={() => void openWorkspaceActions(undefined, {
-                      asset_id: selectedNotebookCell?.outputArtifactId, cell_id: selectedNotebookCell?.id,
-                    })}><Ellipsis size={15} /></button>
-                    {selectedCell && (
-                      <>
-                        {selectedNotebookCell?.outputArtifactId && (
-                          <button
-                            type="button"
-                            className={historyViewCellId === selectedCell.id
-                              ? 'inspector-source-toggle active'
-                              : 'inspector-source-toggle'}
-                            title={historyViewCellId === selectedCell.id
-                              ? 'View cell'
-                              : 'View history'}
-                            aria-label={historyViewCellId === selectedCell.id
-                              ? 'View cell'
-                              : 'View history'}
-                            aria-pressed={historyViewCellId === selectedCell.id}
-                            onClick={() => {
-                              if (historyViewCellId === selectedCell.id) {
-                                setHistoryViewCellId(null)
-                                return
-                              }
-                              openCellHistory(
-                                selectedCell.id,
-                                selectedNotebookCell.outputArtifactId!,
-                              )
-                            }}
-                          >
-                            <History size={15} />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className={sourceViewCellId === selectedCell.id
-                            ? 'inspector-source-toggle active'
-                            : 'inspector-source-toggle'}
-                          title={sourceViewCellId === selectedCell.id
-                            ? 'View cell'
-                            : 'View source'}
-                          aria-label={sourceViewCellId === selectedCell.id
-                            ? 'View cell'
-                            : 'View source'}
-                          aria-pressed={sourceViewCellId === selectedCell.id}
-                          onClick={() => {
-                            if (sourceViewCellId === selectedCell.id) {
-                              setSourceViewCellId(null)
-                              return
-                            }
-                            openCellSource(selectedCell.id)
-                          }}
-                        >
-                          <Braces size={15} />
-                        </button>
-                      </>
-                    )}
-                    <button type="button" data-composer-focus="return" aria-label="Close inspector" onClick={() => setInspectorOpen(false)}>
-                      <PanelRightClose size={16} />
-                    </button>
-                  </div>
-                </header>
-                {!selectedCell ? (
-                  <div className="inspector-body">
-                    <div className="empty-inspector compact">
-                      <CircleDot size={18} />
-                      <strong>Select a notebook cell</strong>
-                      <p>Cell editing appears here.</p>
-                    </div>
-                  </div>
-                ) : selectedNotebookCell ? (
-                  <NotebookCellInspector
-                    key={`${selectedNotebookCell.id}:${selectedNotebookCell.prompt ?? ''}`}
-                    notebookId={notebook?.id ?? ''}
-                    bookId={bookId}
-                    tagTools={mcp.state === 'ready' ? call : undefined}
-                    cell={selectedNotebookCell}
-                    cells={notebook?.cells ?? []}
-                    edges={notebook?.edges ?? []}
-                    asset={selectedCell.data.asset}
-                    cellAssets={notebookCellAssets}
-                    versionAssets={selectedCellVersionAssets}
-                    status={selectedCell.data.status}
-                    error={selectedCellError}
-                    generationActions={generationActions}
-                    mentionAssets={commandMentionAssets}
-                    voiceCatalog={elevenLabsVoices}
-                    busy={busy || Boolean(selectedMediaSlotState?.operation)}
-                    deleting={deletingCellIds.has(selectedNotebookCell.id)}
-                    sourceVisible={sourceViewCellId === selectedNotebookCell.id}
-                    historyVisible={
-                      historyViewCellId === selectedNotebookCell.id
-                    }
-                    history={
-                      historyState
-                      && historyState.cellId === selectedNotebookCell.id
-                      && historyState.assetId === selectedNotebookCell.outputArtifactId
-                        ? {
-                            revisions: historyState.revisions,
-                            loading: historyState.loading,
-                            error: historyState.error,
-                          }
-                        : historyViewCellId === selectedNotebookCell.id
-                          ? {
-                              revisions: [],
-                              loading: true,
-                              error: null,
-                            }
-                          : undefined
-                    }
-                    generationsVisible={
-                      generationsViewCellId === selectedNotebookCell.id
-                    }
-                    generations={
-                      generationsState
-                      && generationsState.cellId === selectedNotebookCell.id
-                        ? {
-                            attempts: generationsState.attempts,
-                            currentExecution: generationsState.currentExecution,
-                            loading: generationsState.loading,
-                            error: generationsState.error,
-                          }
-                        : generationsViewCellId === selectedNotebookCell.id
-                          ? {
-                              attempts: [],
-                              currentExecution: null,
-                              loading: true,
-                              error: null,
-                            }
-                          : undefined
-                    }
-                    onUpdate={updateCell}
-                    onSetInput={setSelectedCellInput}
-                    onRun={runCell}
-                    onDelete={deleteSelectedCell}
-                    onOpenFullscreen={(asset) => {
-                      openMediaFullscreen(selectedNotebookCell, asset)
-                    }}
-                    onPreviewPayload={previewGenerationPayload}
-                    onLoadGenerationPayload={loadGenerationPayload}
-                    mediaInsightWork={mediaInsightWork}
-                    onTranscribeAsset={transcribeAsset}
-                    onLoadTranscriptJson={loadTranscriptJson}
-                    onDownloadTranscriptSrt={exportTranscriptSrt}
-                  />
-                ) : null}
-              </aside>
             </>
           )}
 
@@ -13173,6 +13160,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             audioArtifactId={musicVideoSession.audioArtifactId}
             setup={musicVideoSession.setup}
             returnFocus={musicVideoSession.returnFocus}
+            dockPortal={musicDockHost}
+            composerPortalRef={setMusicComposerTarget}
             onApplySetup={applyMusicVideoSetup}
             onClose={closeMusicVideoEditor}
             onCommit={commitMusicVideoEdit}
@@ -13223,6 +13212,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             editFullscreenSubjects(mediaFullscreen, input)}
           onSelectionChange={updateMediaFullscreenSelection}
           onClose={closeMediaFullscreen}
+          dockPortal={imageDockHost}
           onMoreActions={() => void openWorkspaceActions(undefined, { asset_id: mediaFullscreen.asset.artifactId, cell_id: mediaFullscreen.cellId })}
         />
       )}
@@ -13250,6 +13240,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
       <CommandComposer
         hidden={!showCommandComposer}
+        dockOpen={composerDockOpen}
+        onDockOpenChange={setComposerDockOpen}
+        contextualContent={composerContextualContent}
         commands={composerCommands}
         references={composerReferenceMap}
         actions={workspaceActions}
@@ -13269,7 +13262,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         disabled={
           busy
           || mediaFullscreenSidebarEditing
-          || Boolean(musicVideoSession)
           || !bookId
           || mcp.state !== 'ready'
         }
@@ -13288,6 +13280,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         inputSession={composerSession}
         placeholder={fullscreenComposerPlaceholder}
         portalTarget={workspacePreview && currentActionComposer ? previewComposerTarget
+          : musicVideoSession ? musicComposerTarget
           : fullscreenImageEditor || (mediaFullscreen && currentActionComposer) ? mediaFullscreenComposerTarget : null}
         pendingInput={fullscreenImageEditor
           ? undefined

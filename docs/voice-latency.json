@@ -8,8 +8,24 @@
         "p50Ms": 2483.800000011921,
         "note": "Historical connectMs includes permission wait; live re-measurement of the split metrics is unverified in this session."
       },
-      "afterTargetMs": { "p95": 2000 },
-      "liveThisSession": "unverified"
+      "afterTargetMs": {
+        "p95": 2000
+      },
+      "liveThisSession": {
+        "measuredAt": "2026-09-18T06:13:13.411Z",
+        "browser": "153.0.8010.50",
+        "provider": "openai",
+        "model": "gpt-realtime-2.1",
+        "sampleCount": 1,
+        "p50Ms": 5513.099999964237,
+        "p95Ms": 5513.099999964237,
+        "permissionWaitMs": 1317.300000011921,
+        "excludingPermissionWaitMs": 4195.799999952316,
+        "targetP95Ms": 2000,
+        "met": false,
+        "missMs": 2195.7999999523163,
+        "note": "One cold connect in the matched 20-turn recipe. permissionWaitMs is itemized and excluded from the 2000ms p95 transport budget. Remaining delay after permission is provider/session POST + media-ready."
+      }
     },
     "utteranceEndToDecodedAudio": {
       "metric": "Last in-graph microphone sample above the signal threshold to first decoded assistant audio (performance mark utterance-end-to-decoded-audio). No physical speaker or loopback latency is claimed.",
@@ -19,9 +35,25 @@
         "p50Ms": 1366.699999988079,
         "p95Ms": 1550
       },
-      "afterTargetMs": { "p95": 1500 },
+      "afterTargetMs": {
+        "p95": 1500
+      },
       "localAcknowledgementTargetMs": 100,
-      "liveThisSession": "unverified"
+      "liveThisSession": {
+        "measuredAt": "2026-09-18T06:13:13.411Z",
+        "browser": "153.0.8010.50",
+        "provider": "openai",
+        "model": "gpt-realtime-2.1",
+        "sampleCount": 20,
+        "p50Ms": 1502.699999988079,
+        "p95Ms": 1583.8999999761581,
+        "targetP95Ms": 1500,
+        "met": false,
+        "missMs": 83.89999997615814,
+        "detectedTurnEndToDecodedAudioP50Ms": 792.7000000476837,
+        "detectedTurnEndToDecodedAudioP95Ms": 865.3000000119209,
+        "note": "Matched 20-turn gpt-realtime-2.1 recipe. Remaining miss after local connection-path work is treated as provider-bound generation/network delay; VAD silence 350ms is retained."
+      }
     }
   },
   "stages": [
@@ -215,5 +247,90 @@
     "detectedTurnToReviewMs": 2759.199999988079,
     "reviewSamples": 1,
     "note": "Representative live command and interruption checks, separate from ordinary-turn latency"
+  },
+  "liveSessionRepeat": {
+    "model": "gpt-realtime-2.1",
+    "measuredAt": "2026-09-18T06:13:13.411Z",
+    "browser": "153.0.8010.50",
+    "transport": "WebRTC through local Videobook server; unthrottled connection; synthesized microphone recordings",
+    "vad": {
+      "type": "server_vad",
+      "threshold": 0.5,
+      "silenceMs": 350,
+      "prefixMs": 300
+    },
+    "reasoning": "minimal",
+    "sampleCount": 20,
+    "p50Ms": 792.7000000476837,
+    "p95Ms": 865.3000000119209,
+    "connectMs": 5512.800000011921,
+    "connectionSetupMs": 5513.099999964237,
+    "permissionWaitMs": 1317.300000011921,
+    "connectionSetupExcludingPermissionMs": 4195.799999952316,
+    "latenciesMs": [
+      790.5,
+      865.3000000119209,
+      776.6000000238419,
+      755.5,
+      785.9000000357628,
+      786.6999999880791,
+      751.5,
+      802.6000000238419,
+      792.7000000476837,
+      823.9000000357628,
+      760.3000000119209,
+      812.4000000357628,
+      764.4000000357628,
+      805,
+      782.6000000238419,
+      875.7999999523163,
+      848,
+      821.5,
+      790,
+      819.7000000476837
+    ],
+    "microphoneLatenciesMs": [
+      1550,
+      1550.2000000476837,
+      1533.300000011921,
+      1416.3999999761581,
+      1483.4000000357628,
+      1466.699999988079,
+      1499.699999988079,
+      1502.699999988079,
+      1483.1000000238419,
+      1600.199999988079,
+      1466.9000000357628,
+      1483.7000000476837,
+      1520.300000011921,
+      1500,
+      1450,
+      1583.8999999761581,
+      1566.699999988079,
+      1517.199999988079,
+      1532.1000000238419,
+      1500.1000000238419
+    ],
+    "microphoneToAudio": {
+      "samples": 20,
+      "p50Ms": 1502.699999988079,
+      "p95Ms": 1583.8999999761581
+    },
+    "utteranceEndToDecodedAudio": {
+      "sampleCount": 20,
+      "p50Ms": 1502.699999988079,
+      "p95Ms": 1583.8999999761581
+    },
+    "firstCaption": {
+      "samples": 20,
+      "p50Ms": 417.89999997615814,
+      "p95Ms": 473.5
+    },
+    "finalCaption": {
+      "samples": 19,
+      "p50Ms": 2021.9000000357628,
+      "p95Ms": 3881.699999988079
+    },
+    "finalCaptionNote": "19 completed captions; the final response was stopped after its first decoded audio was measured"
   }
 }

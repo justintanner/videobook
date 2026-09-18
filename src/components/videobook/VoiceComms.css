@@ -37,14 +37,14 @@
 
 /* The transcript is a section of the composer panel, not a box of its own: no
    border, no radius, no background, no gap between it and the command line. */
-.command-composer > .composer-history-panel {
+.command-composer-dock-body > .composer-history-panel {
   flex: 0 1 auto;
   min-height: 0;
   max-height: min(248px, 30dvh);
   overflow: hidden;
 }
-.command-composer:has(> .confirm-sheet) > .composer-history-panel { max-height: min(140px, 20dvh); }
-.command-composer > .voice-comms {
+.command-composer:has(.confirm-sheet) .command-composer-dock-body > .composer-history-panel { max-height: min(140px, 20dvh); }
+.command-composer-dock-body > .voice-comms {
   flex: 0 0 auto;
   min-height: 0;
 }
@@ -119,13 +119,13 @@
 }
 
 @media (max-height: 500px) {
-  .command-composer > .confirm-sheet { min-height: 88px; max-height: min(42dvh, calc(100dvh - 8rem)); }
-  .command-composer:has(> .confirm-sheet) > .composer-history-panel,
-  .command-composer > .composer-history-panel { max-height: min(104px, 24dvh); }
+  .command-composer-dock-body > .confirm-sheet { min-height: 88px; max-height: min(42dvh, calc(100dvh - 8rem)); }
+  .command-composer:has(.confirm-sheet) .command-composer-dock-body > .composer-history-panel,
+  .command-composer-dock-body > .composer-history-panel { max-height: min(104px, 24dvh); }
   .voice-captions, .composer-history { max-height: min(52px, 16dvh); }
   .voice-disclosure { display: none; }
-  .command-composer:has(> .voice-comms) .confirm-sheet-foot,
-  .command-composer:has(> .confirm-sheet) .confirm-sheet-foot { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .command-composer:has(.voice-comms) .confirm-sheet-foot,
+  .command-composer:has(.confirm-sheet) .confirm-sheet-foot { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) { .voice-toggle[aria-pressed='true'] .voice-ring { transform: none; filter: none; } }

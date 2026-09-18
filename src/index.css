@@ -159,26 +159,16 @@ textarea:focus-visible {
 }
 
 .app-shell {
-  --inspector-width: clamp(280px, 20vw, 320px);
   --app-gap: 10px;
   --app-gutter: calc(var(--app-gap) * 2);
   position: relative;
   display: grid;
-  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) var(--inspector-width);
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
   width: 100%;
   height: 100%;
   background:
     radial-gradient(circle at 42% 18%, rgba(29, 91, 59, 0.13), transparent 36%),
     #030907;
-  transition: grid-template-columns 180ms ease;
-}
-
-.app-shell.inspector-detail {
-  --inspector-width: clamp(380px, 24vw, 440px);
-}
-
-.app-shell.inspector-hidden {
-  grid-template-columns: minmax(0, 1fr) 0;
 }
 
 .topbar {
@@ -1723,7 +1713,7 @@ textarea:focus-visible {
   left: 50%;
   z-index: 8;
   display: grid;
-  width: min(430px, calc(100% - 420px));
+  width: min(430px, calc(100% - var(--app-gutter) * 2));
   min-width: 300px;
   justify-items: center;
   padding: 28px 34px 30px;
@@ -3868,19 +3858,22 @@ textarea:focus-visible {
 
 .inspector {
   z-index: 20;
-  grid-row: 2;
-  grid-column: 2;
   min-width: 0;
-  height: 100%;
   overflow: hidden;
-  border-left: 1px solid var(--line);
-  background: var(--panel);
-  opacity: 1;
-  visibility: visible;
-  transition:
-    opacity 140ms ease,
-    transform 180ms ease,
-    visibility 180ms ease;
+  background: transparent;
+}
+
+.composer-notebook-dock.inspector {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: min(360px, 42dvh);
+}
+
+.composer-notebook-dock.inspector > header {
+  height: 40px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
 }
 
 .inspector-deleting {
@@ -6942,13 +6935,13 @@ textarea:focus-visible {
   background: transparent;
 }
 
-.command-composer > .confirm-sheet {
+.command-composer-dock-body > .confirm-sheet {
   flex: 1 1 auto;
   min-height: 88px;
   max-height: min(70dvh, calc(100dvh - 12rem));
 }
 
-.command-composer:has(> .voice-comms) > .confirm-sheet {
+.command-composer:has(.voice-comms) .command-composer-dock-body > .confirm-sheet {
   max-height: min(52dvh, calc(100dvh - 16rem));
 }
 
@@ -9712,54 +9705,138 @@ textarea:focus-visible {
   min-width: 0;
 }
 
+.command-composer-dock-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+  min-height: 0;
+  padding: 6px 8px 0;
+}
+
+.command-composer-hide,
+.command-composer-reopen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgba(114, 231, 170, 0.22);
+  border-radius: 2px;
+  color: #a8cdb7;
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.command-composer-hide {
+  width: 32px;
+  padding: 0;
+}
+
+.command-composer-hide:focus-visible,
+.command-composer-reopen:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.command-composer-hide:disabled,
+.command-composer-reopen:disabled {
+  opacity: 1;
+  cursor: pointer;
+}
+
+.command-composer-dock-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.command-composer-dock-body[hidden] {
+  display: none;
+}
+
+.command-composer-contextual {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: min(360px, 42dvh);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.command-composer-contextual[hidden] {
+  display: none;
+}
+
+.command-composer-contextual .notebook-subject-panel {
+  border-left: 0;
+  box-shadow: none;
+  max-height: min(280px, 36dvh);
+}
+
+.command-composer-contextual .notebook-subject-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.command-composer-contextual .music-video-source-panel,
+.command-composer-contextual .music-video-inspector {
+  border: 0;
+  background: transparent;
+}
+
+.command-composer[data-dock-open='false'] {
+  max-height: none;
+}
+
 /* The rail carries the state, so no child needs its own coloured chrome. The
    voice phase sets it; an in-flight command outranks the phase for its duration.
    The transmitting selector doubles the class so it beats the voice-phase rules
    above, which are one class more specific than a bare state class would be. */
-.command-composer:has(> .voice-comms.voice-review) {
+.command-composer:has(.voice-comms.voice-review) {
   border-color: rgba(227, 184, 105, 0.3);
   border-left-color: #e3b869;
 }
 
-.command-composer:has(> .voice-comms.voice-error) {
+.command-composer:has(.voice-comms.voice-error) {
   border-color: rgba(240, 126, 126, 0.34);
   border-left-color: var(--danger);
 }
 
-.command-composer:has(> .voice-comms.voice-off) {
+.command-composer:has(.voice-comms.voice-off) {
   border-left-color: #557663;
 }
 
 /* Focus brightens the hairline only: the rail belongs to the phase. */
-.command-composer:has(> .command-line-shell:focus-within) {
+.command-composer:has(.command-line-shell:focus-within) {
   border-top-color: rgba(114, 231, 170, 0.5);
   border-right-color: rgba(114, 231, 170, 0.5);
   border-bottom-color: rgba(114, 231, 170, 0.5);
 }
 
-.command-composer:has(> .command-line-shell.command-line-shell-transmitting) {
+.command-composer:has(.command-line-shell.command-line-shell-transmitting) {
   border-color: rgba(99, 199, 216, 0.42);
   border-left-color: var(--cyan);
   animation: command-transmit-pulse 1.35s ease-in-out infinite;
 }
 
-.command-composer:has(> .command-line-shell-success) {
+.command-composer:has(.command-line-shell-success) {
   animation: command-success-flash 620ms ease-out both;
 }
 
-.command-composer:has(> .command-line-shell-error) {
+.command-composer:has(.command-line-shell-error) {
   animation:
     command-error-shake 360ms ease-out,
     command-error-flash 1.1s ease-out both;
 }
 
 .app-screen-notebook .command-composer {
-  right: calc(var(--inspector-width) + var(--app-gutter));
-  left: var(--app-gutter);
-}
-
-.app-screen-notebook.inspector-hidden .command-composer {
   right: var(--app-gutter);
+  left: var(--app-gutter);
 }
 
 .command-result button {
@@ -10631,28 +10708,9 @@ textarea:focus-visible {
   }
 }
 
-@media (min-width: 1101px) {
-  .app-screen-notebook.inspector-visible .notebook-horizontal-scroll {
-    margin-right: 0;
-  }
-}
-
 @media (max-width: 1100px) {
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .inspector {
-    position: absolute;
-    grid-column: 1;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(var(--inspector-width), 90vw);
-    height: auto;
-    border-top: 1px solid var(--line);
-    background: rgba(3, 15, 9, 0.99);
-    box-shadow: -24px 0 60px rgba(0, 0, 0, 0.55);
   }
 
   .canvas {
@@ -10668,14 +10726,8 @@ textarea:focus-visible {
     left: var(--app-gutter);
   }
 
-  .app-screen-notebook.inspector-visible .command-composer {
-    pointer-events: none;
-    opacity: 0;
-    transform: translateY(12px);
-  }
-
   .canvas-welcome {
-    width: min(410px, calc(100% - 420px));
+    width: min(410px, calc(100% - var(--app-gutter) * 2));
   }
 }
 
@@ -10761,8 +10813,7 @@ textarea:focus-visible {
   }
 
   .command-composer,
-  .app-screen-notebook .command-composer,
-  .app-screen-notebook.inspector-hidden .command-composer {
+  .app-screen-notebook .command-composer {
     right: var(--app-gutter);
     bottom: var(--app-gutter);
     left: var(--app-gutter);
@@ -10896,6 +10947,17 @@ textarea:focus-visible {
 
 .notebook-media-fullscreen:not([open]) {
   display: none;
+}
+
+.notebook-media-fullscreen.docked {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.notebook-media-fullscreen.docked .notebook-media-composer-host {
+  position: relative;
+  right: auto;
+  left: auto;
+  bottom: auto;
 }
 
 .notebook-media-fullscreen.playback-only {
@@ -11831,11 +11893,17 @@ textarea:focus-visible {
 }
 
 .media-fullscreen-open .command-composer,
-.app-screen-notebook.media-fullscreen-open .command-composer,
-.app-screen-notebook.media-fullscreen-open.inspector-visible .command-composer {
+.app-screen-notebook.media-fullscreen-open .command-composer {
   pointer-events: none;
   visibility: hidden;
   opacity: 0;
+}
+
+.notebook-media-composer-host .command-composer,
+.music-video-composer-host .command-composer {
+  pointer-events: auto;
+  visibility: visible;
+  opacity: 1;
 }
 
 @media (max-width: 720px) {

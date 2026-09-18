@@ -130,6 +130,10 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/close");
     expect(commandNames).toContain("/collapse");
     expect(commandNames).toContain("/expand");
+    expect(commands.find((command) => command.command === "/expand")?.description)
+      .toMatch(/chat controls \(right\)/u);
+    expect(commands.find((command) => command.command === "/collapse")?.description)
+      .toMatch(/chat controls \(right\)/u);
     expect(commandNames).toContain("/sort");
     expect(commandNames).toContain("/keys");
     expect(commandNames).toContain("/archive-browse");

@@ -73,6 +73,13 @@ import {
 import { SpeakCommandPreview } from '@/components/videobook/SpeakCommandPreview'
 import { VoiceComms, VoiceProviderSelect, VoiceToggle } from './VoiceComms'
 import type { VoiceConversation } from '@/videobook/use-voice-conversation'
+import {
+  COMPOSER_DOCK_HIDE_LABEL,
+  COMPOSER_DOCK_SHOW_LABEL,
+  composerDockReviewPriority,
+  hideComposerDock,
+  pauseComposerDockMedia,
+} from '@/videobook/composer-dock'
 
 export interface ComposerOutcome {
   ok: boolean
@@ -111,6 +118,9 @@ interface CommandComposerProps {
   onOpenActions: () => void
   onCloseActionSearch: (prepared: boolean) => void
   onDismissComposer?: () => void
+  dockOpen?: boolean
+  onDockOpenChange?: (open: boolean) => void
+  contextualContent?: ReactNode
   bookId: string
   callTool: (tool: string, args: Record<string, unknown>) => Promise<unknown>
   chatModels: readonly ChatModelOption[]
@@ -179,6 +189,9 @@ export function CommandComposer({
   onOpenActions,
   onCloseActionSearch,
   onDismissComposer,
+  dockOpen,
+  onDockOpenChange,
+  contextualContent = null,
   bookId,
   callTool,
   chatModels,
@@ -226,6 +239,14 @@ export function CommandComposer({
     () => new Map(),
   )
   const inputRef = useRef<ComposerEditorHandle>(null)
+  const composerRootRef = useRef<HTMLElement | null>(null)
+  const reopenRef = useRef<HTMLButtonElement | null>(null)
+  const [uncontrolledDockOpen, setUncontrolledDockOpen] = useState(true)
+  const dockIsOpen = dockOpen ?? uncontrolledDockOpen
+  const setDockOpen = (open: boolean) => {
+    if (dockOpen === undefined) setUncontrolledDockOpen(open)
+    onDockOpenChange?.(open)
+  }
   const [editorSessions] = useState(() => new Map<string, EditorState>())
   const [selection, setSelection] = useState<ComposerSelection>({ start: input.length, end: input.length })
   const [actionQuery, setActionQuery] = useState(actionDiscovery?.query ?? '')
@@ -345,11 +366,33 @@ export function CommandComposer({
   }
 
   const focusInput = (select = false) => {
+    if (!dockIsOpen) return
     captureCommandComposerFocus(
       () => inputRef.current?.element() ?? null,
       () => { if (select) inputRef.current?.select() },
     )()
   }
+
+  const hideDock = () => {
+    hideComposerDock({
+      setOpen: setDockOpen,
+      stopVoice: voice?.stop,
+      pauseMedia: () => pauseComposerDockMedia(composerRootRef.current),
+    })
+    captureCommandComposerFocus(() => reopenRef.current)()
+  }
+
+  const showDock = () => {
+    setDockOpen(true)
+    captureCommandComposerFocus(() => inputRef.current?.element() ?? null)()
+  }
+
+  useEffect(() => {
+    if (dockIsOpen) return
+    previewPlayer.stop()
+    voice?.stop()
+    pauseComposerDockMedia(composerRootRef.current)
+  }, [dockIsOpen, previewPlayer, voice])
 
   const outcomeSlotValue = useMemo<ComposerOutcomeSlot>(() => ({
     outcome,
@@ -392,9 +435,9 @@ export function CommandComposer({
   const inputDisabled = preparedCommandMatches && preparedAction?.action.scope === 'global' ? actionsDisabled : disabled
 
   useLayoutEffect(() => {
-    if (!actionDiscovery) return
+    if (!actionDiscovery || !dockIsOpen) return
     captureCommandComposerFocus(() => inputRef.current?.element() ?? null)()
-  }, [actionDiscovery, portalTarget])
+  }, [actionDiscovery, dockIsOpen, portalTarget])
 
   const showOutcome = (next: ComposerOutcome) => {
     window.clearTimeout(successTimerRef.current)
@@ -738,9 +781,55 @@ export function CommandComposer({
     }
   }
 
+  const reviewPriority = composerDockReviewPriority(Boolean(children))
+
   const composer = (
     <ComposerOutcomeContext.Provider value={outcomeSlotValue}>
-    <section className="command-composer" data-composer-focus="return" hidden={hidden}>
+    <section
+      ref={composerRootRef}
+      className="command-composer"
+      data-composer-focus="return"
+      data-dock-open={dockIsOpen ? 'true' : 'false'}
+      hidden={hidden}
+    >
+      <div className="command-composer-dock-bar">
+        {dockIsOpen ? (
+          <button
+            type="button"
+            className="command-composer-hide"
+            data-composer-dock-hide=""
+            aria-label={COMPOSER_DOCK_HIDE_LABEL}
+            onClick={hideDock}
+          >
+            <X size={15} />
+          </button>
+        ) : (
+          <button
+            ref={reopenRef}
+            type="button"
+            className="command-composer-reopen"
+            data-composer-dock-show=""
+            aria-label={COMPOSER_DOCK_SHOW_LABEL}
+            onClick={showDock}
+          >
+            Show chat
+          </button>
+        )}
+      </div>
+      <div
+        className="command-composer-dock-body"
+        hidden={!dockIsOpen}
+        inert={!dockIsOpen ? true : undefined}
+      >
+      {contextualContent && (
+        <div
+          className="command-composer-contextual"
+          hidden={reviewPriority}
+          inert={reviewPriority ? true : undefined}
+        >
+          {contextualContent}
+        </div>
+      )}
       {!hidden && outcomeSlot === 'composer' && notice && (
         <div
           className={`command-result ${notice.tone === 'error' ? 'command-result-error' : 'command-result-ok'}`}
@@ -864,8 +953,7 @@ export function CommandComposer({
             disabled={actionsDisabled || sending} onClick={actionDiscovery ? closeActionSearch : onOpenActions}>
             <ListFilter size={15} aria-hidden="true" />
           </button>
-          {onDismissComposer && !actionDiscovery && <button type="button" className="command-actions-close"
-            aria-label="Close actions input" onClick={onDismissComposer}><X size={15} /></button>}
+
         </div>
         <RichComposerEditor
           ref={inputRef}
@@ -937,6 +1025,7 @@ export function CommandComposer({
         </button>
         {transmitting && <span className="command-transmit-scan" aria-hidden="true" />}
       </form>
+      </div>
     </section>
     </ComposerOutcomeContext.Provider>
   )

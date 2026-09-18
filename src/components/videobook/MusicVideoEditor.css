@@ -165,6 +165,46 @@
   overflow: auto;
 }
 
+.music-video-editor-main.docked {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(240px, 1fr) minmax(260px, 1fr) auto;
+  grid-template-areas:
+    'preview'
+    'timeline'
+    'composer';
+}
+
+.music-video-composer-host {
+  grid-area: composer;
+  min-width: 0;
+}
+
+.music-video-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.music-video-dock-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.music-video-dock-tabs > button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--mv-line);
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.music-video-dock-tabs > button[aria-pressed='true'] {
+  border-color: var(--green, #37b06b);
+}
+
 .music-video-source-panel,
 .music-video-preview-panel,
 .music-video-inspector,
@@ -826,6 +866,15 @@
       'timeline timeline';
   }
 
+  .music-video-editor-main.docked {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(220px, 1fr) minmax(240px, 1fr) auto;
+    grid-template-areas:
+      'preview'
+      'timeline'
+      'composer';
+  }
+
   .music-video-inspector {
     grid-template-rows: none;
     grid-template-columns: minmax(220px, 0.9fr) minmax(0, 2fr);
@@ -880,6 +929,13 @@
       'timeline';
     padding: 8px;
     overflow: auto;
+  }
+
+  .music-video-editor-main.docked {
+    grid-template-areas:
+      'preview'
+      'timeline'
+      'composer';
   }
 
   .music-video-source-panel,

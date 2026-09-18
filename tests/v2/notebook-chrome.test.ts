@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { notebookGrid } from '../../src/videobook/notebook-grid'
 
 const css = readFileSync(new URL('../../src/index.css', import.meta.url), 'utf8')
+const app = readFileSync(new URL('../../src/App.tsx', import.meta.url), 'utf8')
+const musicCss = readFileSync(new URL('../../src/components/videobook/MusicVideoEditor.css', import.meta.url), 'utf8')
+const fullscreen = readFileSync(new URL('../../src/components/videobook/NotebookMediaFullscreen.tsx', import.meta.url), 'utf8')
 
 function braceBlock(source: string, openAt: number): string {
   const bodyStart = source.indexOf('{', openAt)
@@ -88,13 +91,29 @@ describe('notebook chrome tokens', () => {
       .toBe('10px')
   })
 
-  it('keeps the inspector reopen control clear of the scrollbar lane', () => {
-    const reopen = rule(css, '.inspector-reopen')
-    expect(declaration(reopen, 'width')).toBe('40px')
-    expect(declaration(reopen, 'height')).toBe('40px')
-    expect(declaration(reopen, 'right')).toBe(
-      'calc(var(--notebook-chrome-inset) + var(--notebook-scrollbar-size) + var(--app-gap))',
+  it('does not reserve a side column for notebook inspector chrome', () => {
+    const shell = rule(css, '.app-shell')
+    expect(declaration(shell, 'grid-template')).toBe(
+      'auto minmax(0, 1fr) / minmax(0, 1fr)',
     )
+    expect(shell).not.toContain('--inspector-width')
+    expect(css).not.toContain('.app-shell.inspector-hidden')
+    expect(declaration(rule(css, '.app-screen-notebook .command-composer'), 'right'))
+      .toBe('var(--app-gutter)')
+    expect(app).toContain('composer-notebook-dock')
+    expect(app).toContain('contextualContent={composerContextualContent}')
+    expect(app).not.toContain('className="inspector-reopen"')
+  })
+
+  it('moves fullscreen image subject tools and music source/clip columns into the dock', () => {
+    expect(fullscreen).toContain('dockPortal')
+    expect(fullscreen).toContain("dockPortal ? ' docked'")
+    expect(declaration(rule(css, '.notebook-media-fullscreen.docked'), 'grid-template-columns'))
+      .toBe('minmax(0, 1fr)')
+    expect(musicCss).toContain('.music-video-editor-main.docked')
+    expect(rule(musicCss, '.music-video-editor-main.docked')).toContain("'preview'")
+    expect(rule(musicCss, '.music-video-editor-main.docked')).toContain("'timeline'")
+    expect(rule(musicCss, '.music-video-editor-main.docked')).not.toContain("'sources preview inspector'")
   })
 
   it('keeps confirm sheet actions outside the scrollable body', () => {

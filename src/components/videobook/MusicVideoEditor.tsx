@@ -28,6 +28,10 @@ import {
 import { createPortal } from 'react-dom'
 import type { Sequence, SequenceClip, TimedSequenceClip } from 'videobook-engine'
 import {
+  composerDockHideSkipsBlurCommit,
+  initialMusicDockView,
+} from '@/videobook/composer-dock'
+import {
   CanonicalSequencePlayer,
   type CanonicalSequencePlayerHandle,
   type TimelineKeyboardAction,
@@ -83,6 +87,8 @@ type MusicVideoEditorProps = {
   audioArtifactId: string
   setup: MusicVideoSetupState
   returnFocus: HTMLElement | null
+  dockPortal?: Element | null
+  composerPortalRef?: (element: HTMLDivElement | null) => void
   onApplySetup: () => Promise<MusicVideoCommitResult>
   onClose: () => void
   onCommit: (
@@ -286,6 +292,8 @@ export function MusicVideoEditor({
   audioArtifactId,
   setup,
   returnFocus,
+  dockPortal = null,
+  composerPortalRef,
   onApplySetup,
   onClose,
   onCommit,
@@ -311,6 +319,9 @@ export function MusicVideoEditor({
   const [undoSteps, setUndoSteps] = useState<RevisionStep[]>([])
   const [redoSteps, setRedoSteps] = useState<RevisionStep[]>([])
   const [previewSourceId, setPreviewSourceId] = useState<string | null>(null)
+  const [dockView, setDockView] = useState<'sources' | 'soundtrack' | 'clip'>(
+    () => initialMusicDockView(setup.status),
+  )
   const [waveformWait, setWaveformWait] = useState(false)
   const audioAsset = assets.find((asset) => asset.artifactId === audioArtifactId)
   const audioAssetRef = useRef(audioAsset)
@@ -510,6 +521,7 @@ export function MusicVideoEditor({
   const selectClip = (clip: SequenceClip) => {
     setPreviewSourceId(null)
     setSelectedClipId(clip.clipId)
+    setDockView('clip')
     setTrimDraft({
       clipId: clip.clipId,
       startFrame: clip.timelineStartFrame,
@@ -904,7 +916,16 @@ export function MusicVideoEditor({
         </div>
       </header>
 
-      <main className="music-video-editor-main">
+      <main className={`music-video-editor-main${dockPortal ? ' docked' : ''}`}>
+        {composerPortalRef ? <div ref={composerPortalRef} className="music-video-composer-host" /> : null}
+        {dockPortal ? createPortal((
+          <div className="music-video-dock">
+            <nav className="music-video-dock-tabs" aria-label="Music editor views">
+              <button type="button" aria-pressed={dockView === 'sources'} onClick={() => setDockView('sources')}>Sources</button>
+              <button type="button" aria-pressed={dockView === 'soundtrack'} onClick={() => setDockView('soundtrack')}>Soundtrack</button>
+              <button type="button" aria-pressed={dockView === 'clip'} onClick={() => setDockView('clip')}>Clip</button>
+            </nav>
+            <div hidden={dockView !== 'sources'}>
         <section className="music-video-source-panel" aria-label="Current book video sources">
           <header>
             <div className="music-video-panel-title">
@@ -958,6 +979,9 @@ export function MusicVideoEditor({
             <Plus size={15} /> Add selected
           </button>
         </section>
+            </div>
+          </div>
+        ), dockPortal) : null}
 
         <section className="music-video-preview-panel" aria-label="Program monitor">
           {previewAsset?.mediaUrl ? (
@@ -989,8 +1013,9 @@ export function MusicVideoEditor({
           )}
         </section>
 
-        <section className="music-video-inspector" aria-label="Selected clip controls">
-          <aside className="music-video-setup-card" data-status={setup.status}>
+        {dockPortal ? createPortal((
+        <section className="music-video-inspector" aria-label="Selected clip controls" hidden={dockView !== 'soundtrack' && dockView !== 'clip'}>
+          <aside className="music-video-setup-card" data-status={setup.status} hidden={dockView !== 'soundtrack'}>
             <span><AudioWaveform size={13} /> MASTER SOUNDTRACK</span>
             {setup.status === 'loading' && <p>Building the exact canonical setup plan…</p>}
             {setup.status === 'needs-audio-track' && (
@@ -1024,7 +1049,7 @@ export function MusicVideoEditor({
             )}
           </aside>
 
-          <div className="music-video-clip-panel">
+          <div className="music-video-clip-panel" hidden={dockView !== 'clip'}>
             {!selectedClip && (
               <div className="music-video-inspector-empty">
                 <span className="music-video-kicker">SELECTED CLIP</span>
@@ -1065,11 +1090,14 @@ export function MusicVideoEditor({
                         Number(event.currentTarget.value),
                         activeTrim.endFrame,
                       )}
-                      onBlur={(event) => void commitTrim(
-                        'start',
-                        Number(event.currentTarget.value),
-                        activeTrim.endFrame,
-                      )}
+                      onBlur={(event) => {
+                        if (composerDockHideSkipsBlurCommit(event.relatedTarget)) return
+                        void commitTrim(
+                          'start',
+                          Number(event.currentTarget.value),
+                          activeTrim.endFrame,
+                        )
+                      }}
                       onKeyUp={(event) => {
                         if (event.key !== 'Enter') return
                         void commitTrim(
@@ -1098,11 +1126,14 @@ export function MusicVideoEditor({
                         activeTrim.startFrame,
                         Number(event.currentTarget.value),
                       )}
-                      onBlur={(event) => void commitTrim(
-                        'end',
-                        activeTrim.startFrame,
-                        Number(event.currentTarget.value),
-                      )}
+                      onBlur={(event) => {
+                        if (composerDockHideSkipsBlurCommit(event.relatedTarget)) return
+                        void commitTrim(
+                          'end',
+                          activeTrim.startFrame,
+                          Number(event.currentTarget.value),
+                        )
+                      }}
                       onKeyUp={(event) => {
                         if (event.key !== 'Enter') return
                         void commitTrim(
@@ -1144,6 +1175,7 @@ export function MusicVideoEditor({
             )}
           </div>
         </section>
+        ), dockPortal) : null}
 
         <section className="music-video-timeline-panel" aria-label="Music video timeline">
           <header>

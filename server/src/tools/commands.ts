@@ -1254,7 +1254,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/collapse",
-    description: "Close the project selector (left), inspector (right), or both",
+    description: "Close the project selector (left), chat controls (right), or both",
     example: "/collapse left",
     category: "action",
     icon: "PanelLeftClose",
@@ -1268,7 +1268,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/expand",
-    description: "Open the project selector (left), inspector (right), or both",
+    description: "Open the project selector (left), chat controls (right), or both",
     example: "/expand right",
     category: "action",
     icon: "PanelLeftOpen",

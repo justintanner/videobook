@@ -11,6 +11,10 @@ import { XaiError } from "@apicity/xai";
 import { OpenAiRealtimeCallRequestSchema } from "@apicity/openai/zod";
 import { BookManager } from "../book-manager.js";
 import { VoiceSession, VoiceSessions, voiceError } from "../voice-session.js";
+import {
+  isVoiceTurnContinuation,
+  joinVoiceTranscripts,
+} from "../voice-continuation.js";
 import { voiceRouter } from "../voice-http.js";
 import { attachVoiceAudio } from "../voice-audio.js";
 import { restrictHttpAccess } from "../http-access.js";
@@ -20,6 +24,24 @@ import { appendVoiceHistory } from "./chat-history.js";
 import { voiceWorkspaceContext } from "../voice-actions.js";
 import { VoiceReplyProgress } from "../voice-reply-progress.js";
 import type { VoiceSessionEvent } from "../voice-contract.js";
+
+describe("voice turn continuation", () => {
+  it("joins later clauses onto the original request", () => {
+    expect(isVoiceTurnContinuation("generate an image", "of a kitten")).toBe(true);
+    expect(isVoiceTurnContinuation("of a kitten", "on a train from C1")).toBe(true);
+    expect(joinVoiceTranscripts("generate an image", "of a kitten")).toBe("generate an image of a kitten");
+    expect(joinVoiceTranscripts("generate an image of a kitten", "on a train from C1"))
+      .toBe("generate an image of a kitten on a train from C1");
+  });
+
+  it("treats a later independent request as new rather than a continuation", () => {
+    expect(isVoiceTurnContinuation("generate an image", "what's on the board")).toBe(false);
+    expect(isVoiceTurnContinuation("generate an image", "list my assets")).toBe(false);
+    expect(isVoiceTurnContinuation("generate an image", "hello?")).toBe(false);
+    expect(isVoiceTurnContinuation("generate an image", "cancel that")).toBe(false);
+    expect(isVoiceTurnContinuation("generate an image", "now generate a video")).toBe(false);
+  });
+});
 
 describe("voice reply progress", () => {
   it("retries a missing response once and bounds the second wait", () => {
@@ -381,7 +403,7 @@ describe("voice session boundaries", () => {
     expect(engine.logs.read("voice-session-closed").find(entry => entry.operationId === session.id)).toMatchObject({ count: 1, inputTokens: 20, outputTokens: 10 });
   });
 
-  it("answers a tool call the speaker has already talked past", async () => {
+  it("carries a superseded prepare_workspace_action onto a continuation clause", async () => {
     const provider = new WebSocketServer({ host: "127.0.0.1", port: 0 });
     const sent: { type?: string; item?: Record<string, unknown> }[] = [];
     provider.on("connection", socket => {
@@ -396,30 +418,114 @@ describe("voice session boundaries", () => {
     if (!address || typeof address === "string") throw new Error("No provider address");
     process.env.VIDEOBOOK_XAI_REALTIME_URL = `ws://127.0.0.1:${address.port}`;
     const session = new VoiceSession(books, bookId, notebookId, engine, "local-endpoint-key", 120_000, () => undefined, "xai", 48000);
+    const events: VoiceSessionEvent[] = [];
     try {
-      session.subscribe(() => undefined);
+      session.subscribe(event => events.push(event));
       await session.start("", new AbortController().signal);
-      // The speaker asks for an image, then keeps talking, so the call the model
-      // made for the first turn lands after a second turn has started.
       session.receive({ type: "input_audio_buffer.speech_started", item_id: "image-turn", event_id: "image-speech" });
+      session.receive({ type: "input_audio_buffer.speech_stopped", event_id: "image-stop" });
+      session.receive({
+        type: "conversation.item.input_audio_transcription.completed",
+        item_id: "image-turn", transcript: "generate an image", event_id: "image-final",
+      });
+      await expect.poll(() => engine.logs.read("voice-chat").filter(entry =>
+        entry.sessionId === session.id && entry.role === "user").length).toBe(1);
       session.receive({ type: "response.created", response: { id: "image-response" }, event_id: "image-reply" });
       session.receive({ type: "input_audio_buffer.speech_started", item_id: "clause-turn", event_id: "clause-speech" });
+      session.receive({ type: "input_audio_buffer.speech_stopped", event_id: "clause-stop" });
+      session.receive({
+        type: "conversation.item.input_audio_transcription.completed",
+        item_id: "clause-turn", transcript: "of a kitten", event_id: "clause-final",
+      });
+      await expect.poll(() => engine.logs.read("voice-chat").filter(entry =>
+        entry.sessionId === session.id && entry.role === "user").length).toBe(2);
       session.receive({
         type: "response.function_call_arguments.done", response_id: "image-response", call_id: "image-call",
         name: "prepare_workspace_action", event_id: "image-call-done",
-        arguments: JSON.stringify({ tool: "generate_image", params: { prompt: "a kitten dancing on a train" } }),
+        arguments: JSON.stringify({ tool: "generate_image", params: { prompt: "an image" } }),
+      });
+      session.receive({
+        type: "response.done", event_id: "image-response-done",
+        response: { id: "image-response", status: "completed" },
+      });
+      await expect.poll(() => events.some(event => event.type === "action")).toBe(true);
+      const action = events.find(event => event.type === "action");
+      if (!action || action.type !== "action") throw new Error("expected a carried-over action");
+      expect(action.prompt).toBe("generate an image of a kitten");
+      expect(action.plan).toMatchObject({
+        kind: "chat-action-plan",
+        effect: "generation",
+        params: { prompt: "generate an image of a kitten" },
+      });
+      session.acknowledge(action.callId, { status: "review", message: "Review the image generation." });
+      await expect.poll(() => sent.some(event => event.type === "conversation.item.create")).toBe(true);
+      const answered = sent.filter(event => event.type === "conversation.item.create").map(event => event.item);
+      expect(answered).toHaveLength(1);
+      expect(answered[0]).toMatchObject({ type: "function_call_output", call_id: "image-call" });
+      expect(JSON.parse(String(answered[0]?.output))).toMatchObject({
+        status: "review",
+        message: "Review the image generation.",
+        workspace: { book: "voice-session", notebookId },
+      });
+      expect(String(answered[0]?.output)).not.toMatch(/nothing is running/iu);
+      expect(sent.some(event => event.type === "response.create")).toBe(true);
+    } finally {
+      await session.close();
+      delete process.env.VIDEOBOOK_XAI_REALTIME_URL;
+      await new Promise<void>(resolve => provider.close(() => resolve()));
+    }
+  });
+
+  it("answers a superseded prepare_workspace_action without running it when the speaker starts a new request", async () => {
+    const provider = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    const sent: { type?: string; item?: Record<string, unknown> }[] = [];
+    provider.on("connection", socket => {
+      socket.on("message", data => {
+        const event = JSON.parse(String(data)) as { type?: string; item?: Record<string, unknown> };
+        sent.push(event);
+        if (event.type === "session.update") socket.send(JSON.stringify({ type: "session.updated", event_id: "configured" }));
+      });
+    });
+    await once(provider, "listening");
+    const address = provider.address();
+    if (!address || typeof address === "string") throw new Error("No provider address");
+    process.env.VIDEOBOOK_XAI_REALTIME_URL = `ws://127.0.0.1:${address.port}`;
+    const session = new VoiceSession(books, bookId, notebookId, engine, "local-endpoint-key", 120_000, () => undefined, "xai", 48000);
+    const events: VoiceSessionEvent[] = [];
+    try {
+      session.subscribe(event => events.push(event));
+      await session.start("", new AbortController().signal);
+      session.receive({ type: "input_audio_buffer.speech_started", item_id: "image-turn", event_id: "image-speech" });
+      session.receive({ type: "input_audio_buffer.speech_stopped", event_id: "image-stop" });
+      session.receive({
+        type: "conversation.item.input_audio_transcription.completed",
+        item_id: "image-turn", transcript: "generate an image", event_id: "image-final",
+      });
+      await expect.poll(() => engine.logs.read("voice-chat").filter(entry =>
+        entry.sessionId === session.id && entry.role === "user").length).toBe(1);
+      session.receive({ type: "response.created", response: { id: "image-response" }, event_id: "image-reply" });
+      session.receive({ type: "input_audio_buffer.speech_started", item_id: "new-turn", event_id: "new-speech" });
+      session.receive({ type: "input_audio_buffer.speech_stopped", event_id: "new-stop" });
+      session.receive({
+        type: "conversation.item.input_audio_transcription.completed",
+        item_id: "new-turn", transcript: "what's on the board", event_id: "new-final",
+      });
+      await expect.poll(() => engine.logs.read("voice-chat").filter(entry =>
+        entry.sessionId === session.id && entry.role === "user").length).toBe(2);
+      session.receive({
+        type: "response.function_call_arguments.done", response_id: "image-response", call_id: "image-call",
+        name: "prepare_workspace_action", event_id: "image-call-done",
+        arguments: JSON.stringify({ tool: "generate_image", params: { prompt: "an image" } }),
       });
       await expect.poll(() => sent.some(event => event.type === "conversation.item.create")).toBe(true);
       const answered = sent.filter(event => event.type === "conversation.item.create").map(event => event.item);
       expect(answered).toHaveLength(1);
       expect(answered[0]).toMatchObject({ type: "function_call_output", call_id: "image-call" });
       expect(String(answered[0]?.output)).toMatch(/nothing is running/iu);
-      // Every tool result carries the board, so a dropped call still leaves the
-      // model with a current picture to re-plan against.
       expect(JSON.parse(String(answered[0]?.output))).toMatchObject({
         workspace: { book: "voice-session", notebookId },
       });
-      // The dropped turn must not provoke a reply of its own.
+      expect(events.some(event => event.type === "action")).toBe(false);
       expect(sent.filter(event => event.type === "response.create")).toHaveLength(0);
     } finally {
       await session.close();
