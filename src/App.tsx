@@ -130,7 +130,15 @@ import {
 } from '@/components/videobook/BusRiverEdge'
 import { CellStateOverlay } from '@/components/videobook/cell-overlays/CellStateOverlay'
 import { AnalysisCellSummary } from '@/components/videobook/AnalysisCellSummary'
-import { NotebookMediaMetadata } from '@/components/videobook/NotebookMediaMetadata'
+import { CellMediaFrame } from '@/components/videobook/CellMediaFrame'
+import {
+  audioPreviewBadges,
+  audioPreviewMeter,
+  imagePreviewBadges,
+  previewMeter,
+  previewMetadataLabel,
+  videoPreviewBadges,
+} from '@/videobook/cell-preview'
 import { PublishedPostTileChrome } from '@/components/videobook/PublishedPostChrome'
 import {
   NotebookGridBoard,
@@ -350,7 +358,6 @@ import {
 import {
   formatMediaAspectRatio,
   formatMediaTime,
-  notebookAudioPresentation,
   isImageVideoGenerationResultCell,
   notebookCellActionPresentation,
   notebookCellExecutionObservation,
@@ -2269,84 +2276,6 @@ function emptyCellLabel(data: CanvasCellData): string {
   return data.prompt || notebookGridTag(data.slot)
 }
 
-type ImageCardMetadataBadgesProps = {
-  width: number | null
-  height: number | null
-  tool: string | null
-  model: string | null
-  prompt: string | null
-  provenance?: string | null
-}
-
-export function ImageCardMetadataBadges({
-  width,
-  height,
-  tool,
-  model,
-  prompt,
-  provenance = null,
-}: ImageCardMetadataBadgesProps) {
-  const dimensions = width !== null
-    && height !== null
-    && Number.isFinite(width)
-    && Number.isFinite(height)
-    && width > 0
-    && height > 0
-    ? `${width}×${height}`
-    : null
-  const aspectRatio = formatMediaAspectRatio(width, height)
-  const generator = tool ?? model
-  const generatorLabel = generator
-    ? abbreviateGenerationPhrases(generator)
-    : null
-
-  if (!dimensions && !aspectRatio && !generatorLabel && !provenance) return null
-
-  const ariaLabel = [
-    'Image metadata',
-    dimensions ? `Dimensions ${dimensions}` : null,
-    aspectRatio ? `Aspect ratio ${aspectRatio}` : null,
-    generatorLabel ? `Generator ${generatorLabel}` : null,
-    provenance ? `Extracted from ${provenance}` : null,
-    prompt ? `Prompt: ${prompt}` : null,
-  ].filter(Boolean).join('. ')
-
-  return (
-    <div
-      className="cell-image-metadata"
-      role="group"
-      aria-label={ariaLabel}
-    >
-      {dimensions && (
-        <span className="cell-image-metadata-badge" title="Dimensions">
-          {dimensions}
-        </span>
-      )}
-      {aspectRatio && (
-        <span className="cell-image-metadata-badge" title="Aspect ratio">
-          {aspectRatio}
-        </span>
-      )}
-      {generatorLabel && (
-        <span
-          className="cell-image-metadata-badge cell-image-metadata-generator"
-          title={generatorLabel}
-        >
-          {generatorLabel}
-        </span>
-      )}
-      {provenance && (
-        <span
-          className="cell-image-metadata-badge cell-image-metadata-generator"
-          title={`Extracted from ${provenance}`}
-        >
-          {provenance}
-        </span>
-      )}
-    </div>
-  )
-}
-
 function assetPreviewUrl(asset: AssetRecord | undefined): string | null {
   return asset?.thumbnailUrl ?? asset?.mediaUrl ?? null
 }
@@ -2392,26 +2321,6 @@ function SplitVideoPreview({ data }: { data: CanvasCellData }) {
         label="Last"
         time={range?.endSeconds ?? null}
       />
-    </div>
-  )
-}
-
-function AudioCellSummary({ data }: { data: CanvasCellData }) {
-  const presentation = notebookAudioPresentation({
-    audioInfo: data.asset?.audioInfo ?? null,
-    durationSeconds: data.asset?.duration ?? null,
-    hasOutput: Boolean(data.outputArtifactId),
-    inputs: data.inputs,
-  })
-  return (
-    <div className="cell-audio-summary">
-      <span className="cell-audio-role">{presentation.role}</span>
-      {presentation.duration && (
-        <strong className="cell-audio-duration">{presentation.duration}</strong>
-      )}
-      {presentation.details.length > 0 && (
-        <span className="cell-audio-details">{presentation.details.join(' · ')}</span>
-      )}
     </div>
   )
 }
@@ -2979,12 +2888,46 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     ? generationTitles.get(data.tool) ?? null
     : null
   const promptCell = textCell || (generationCell && Boolean(data.prompt))
-  const videoDurationLabel = data.kind === 'video'
-    && data.videoDurationSeconds !== undefined
-    ? formatMediaTime(data.videoDurationSeconds)
+  const address = notebookGridTag(data.slot)
+  const frameProvenance = data.frameProvenance
+    ? [
+        data.frameProvenance.sourceAddress,
+        data.frameProvenance.atSeconds === null
+          ? null
+          : formatMediaTime(data.frameProvenance.atSeconds),
+      ].filter(Boolean).join(' · ') || null
     : null
-  const videoHeaderMetadata = data.kind === 'video'
-    && Boolean(data.videoAspectRatio || videoDurationLabel)
+  const audioPreviewInput = {
+    audioInfo: data.asset?.audioInfo ?? null,
+    durationSeconds: data.asset?.duration ?? null,
+    hasOutput: Boolean(data.outputArtifactId),
+    inputs: data.inputs,
+  }
+  const audioPreviewCell = audioCell && playableAudio
+  const visualPreviewCell = visualMediaCell && Boolean(mediaUrl || thumbnailUrl)
+  const audioBadges = audioPreviewCell ? audioPreviewBadges(audioPreviewInput) : []
+  const audioMeter = audioPreviewCell ? audioPreviewMeter(audioPreviewInput) : null
+  const visualBadges = !visualPreviewCell
+    ? []
+    : imageMediaCell
+      ? imagePreviewBadges({
+        width: data.asset?.width ?? null,
+        height: data.asset?.height ?? null,
+        tool: imageToolTitle,
+        model: data.model ?? data.tool ?? null,
+        provenance: frameProvenance,
+      })
+      : videoPreviewBadges({
+        aspectRatio: data.videoAspectRatio ?? null,
+        width: data.asset?.width ?? null,
+        height: data.asset?.height ?? null,
+        tool: data.tool ? generationTitles.get(data.tool) ?? null : null,
+        model: data.model ?? data.tool ?? null,
+        provenance: frameProvenance,
+      })
+  const visualMeter = visualPreviewCell && playableVideo
+    ? previewMeter(data.videoDurationSeconds ?? data.asset?.duration ?? null)
+    : null
   const running = notebookCellIsActiveStatus(data.status)
   const failed = data.status === 'error'
   const outputVersions = notebookOutputVersionArtifactIds(
@@ -3125,24 +3068,6 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
               )}
             </span>
           )}
-          {videoHeaderMetadata && (
-            <span className="cell-media-chips" aria-label="Video metadata">
-              {videoDurationLabel && (
-                <time
-                  className="cell-aspect-ratio"
-                  dateTime={`PT${data.videoDurationSeconds}S`}
-                  title="Duration"
-                >
-                  {videoDurationLabel}
-                </time>
-              )}
-              {data.videoAspectRatio && (
-                <span className="cell-aspect-ratio" title="Aspect ratio">
-                  {data.videoAspectRatio}
-                </span>
-              )}
-            </span>
-          )}
           {action && !generationCell && (
             <button
               type="button"
@@ -3156,7 +3081,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
               {action.label}
             </button>
           )}
-          {!action && !videoHeaderMetadata && versionedOutput && (
+          {!action && versionedOutput && (
             <span
               className="cell-version-count"
               aria-label={`Current output version ${activeOutputVersion} of ${outputVersions.length}`}
@@ -3185,47 +3110,37 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             fallbackShotCount={asNumber(data.inputs?.shotCount)}
             fallbackSourceDurationSeconds={asNumber(data.inputs?.sourceDurationSeconds)}
           />
-        ) : audioCell ? (
-          <div className="cell-copy cell-copy-audio">
-            {playableAudio && mediaUrl ? <audio src={mediaUrl} controls preload="metadata" /> : null}
-            {data.kind === 'audio'
-              || (data.kind === 'extract_audio' && data.outputArtifactId)
-              ? <AudioCellSummary data={data} />
-              : <span>{emptyCellLabel(data)}</span>}
-          </div>
-        ) : visualMediaCell && (mediaUrl || thumbnailUrl) ? (
-          <div className="cell-media" title={imagePrompt ?? undefined}>
-            {playableVideo && mediaUrl ? (
-              <video src={mediaUrl} poster={thumbnailUrl ?? undefined} muted playsInline preload="metadata" />
-            ) : (
-              <img src={thumbnailUrl ?? mediaUrl ?? ''} alt={data.label ?? notebookGridTag(data.slot)} />
-            )}
-            {imageMediaCell ? (
-              <ImageCardMetadataBadges
-                width={data.asset?.width ?? null}
-                height={data.asset?.height ?? null}
-                tool={imageToolTitle}
-                model={data.model ?? data.tool ?? null}
-                prompt={imagePrompt}
-                provenance={data.frameProvenance
-                  ? [
-                      data.frameProvenance.sourceAddress,
-                      data.frameProvenance.atSeconds === null
-                        ? null
-                        : formatMediaTime(data.frameProvenance.atSeconds),
-                    ].filter(Boolean).join(' · ') || null
-                  : null}
-              />
-            ) : data.kind !== 'video' && (
-              <NotebookMediaMetadata
-                className="cell-media-metadata"
-                width={data.asset?.width ?? null}
-                height={data.asset?.height ?? null}
-                durationSeconds={playableVideo ? data.asset?.duration ?? null : null}
-              />
-            )}
+        ) : audioPreviewCell ? (
+          <CellMediaFrame
+            address={address}
+            posterUrl={null}
+            waveform={data.asset?.waveform ?? []}
+            mediaUrl={mediaUrl ?? null}
+            playbackKind={mediaUrl ? 'audio' : null}
+            alt={data.label ?? address}
+            badges={audioBadges}
+            meter={audioMeter}
+            metadataLabel={previewMetadataLabel(typeLabel, audioBadges, audioMeter, null)}
+            pendingLabel="Waveform pending"
+            pendingIcon={<AudioWaveform size={26} aria-hidden="true" />}
+          />
+        ) : visualPreviewCell ? (
+          <CellMediaFrame
+            address={address}
+            posterUrl={thumbnailUrl ?? (playableVideo ? null : mediaUrl ?? null)}
+            waveform={null}
+            mediaUrl={mediaUrl ?? null}
+            playbackKind={playableVideo && mediaUrl ? 'video' : null}
+            alt={data.label ?? address}
+            title={imagePrompt ?? undefined}
+            badges={visualBadges}
+            meter={visualMeter}
+            metadataLabel={previewMetadataLabel(typeLabel, visualBadges, visualMeter, imagePrompt)}
+            pendingLabel="Poster pending"
+            pendingIcon={<Film size={26} aria-hidden="true" />}
+          >
             <PublishedPostTileChrome inputs={data.inputs} />
-          </div>
+          </CellMediaFrame>
         ) : (
           <div className={`cell-copy ${promptCell ? 'cell-copy-text' : ''}`}>
             {modelLine && <span className="cell-model-line">{modelLine}</span>}

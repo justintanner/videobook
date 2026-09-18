@@ -131,6 +131,7 @@ export type NotebookAnalysisLlmExchange = {
 type NotebookAudioPresentation = {
   details: string[]
   duration: string | null
+  durationSeconds: number | null
   role: string
 }
 
@@ -450,9 +451,11 @@ export function notebookAudioPresentation(input: {
       : input.hasOutput
         ? 'Audio output'
         : 'Select audio media'
+  const playableDuration = duration !== null && duration > 0 ? duration : null
   return {
     role,
-    duration: duration !== null && duration > 0 ? formatMediaTime(duration) : null,
+    duration: playableDuration === null ? null : formatMediaTime(playableDuration),
+    durationSeconds: playableDuration,
     details: [
       input.audioInfo?.codec.toUpperCase() ?? null,
       input.audioInfo ? `${input.audioInfo.sampleRateHz / 1000} kHz` : null,

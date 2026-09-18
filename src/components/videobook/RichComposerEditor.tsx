@@ -48,7 +48,7 @@ interface RichComposerEditorProps {
 
 function ReferenceContent({ token, reference }: { token: string; reference?: ComposerReference }) {
   return <>
-    <ArtifactThumb asset={reference?.asset} kindHint={reference?.type} thumbnailOnly />
+    <ArtifactThumb asset={reference?.asset} kindHint={reference?.type} />
     <span className="composer-reference-address">{token}</span>
   </>
 }

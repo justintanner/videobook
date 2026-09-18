@@ -960,7 +960,7 @@ export function CommandComposer({
                 onClick={() => acceptSuggestion(suggestion)}
               >
                 {suggestion.type === 'cell' ? <>
-                  <ArtifactThumb asset={suggestion.reference.asset} kindHint={suggestion.reference.type} thumbnailOnly />
+                  <ArtifactThumb asset={suggestion.reference.asset} kindHint={suggestion.reference.type} />
                   <span className="composer-reference-copy"><strong>{suggestion.label}</strong>
                     {suggestion.reference.label && <span>{suggestion.reference.label}</span>}
                     <small>{suggestion.description}</small></span>

@@ -31,6 +31,7 @@ import {
   composerDockHideSkipsBlurCommit,
   initialMusicDockView,
 } from '@/videobook/composer-dock'
+import { waveformEnvelopePath } from '@/videobook/waveform-path'
 import {
   CanonicalSequencePlayer,
   type CanonicalSequencePlayerHandle,
@@ -258,23 +259,6 @@ function SourceThumb({ asset }: { asset: MusicVideoAsset }) {
     )
   }
   return <Film size={24} />
-}
-
-function waveformPath(peaks: number[]): string {
-  if (peaks.length === 0) return ''
-  const maximumSamples = 720
-  const step = Math.max(1, Math.ceil(peaks.length / maximumSamples))
-  const values: number[] = []
-  for (let index = 0; index < peaks.length; index += step) {
-    values.push(Math.max(
-      ...peaks.slice(index, index + step).map((peak) => Math.abs(peak)),
-    ))
-  }
-  return values.map((peak, index) => {
-    const x = values.length === 1 ? 50 : index / (values.length - 1) * 100
-    const amplitude = Math.max(2, Math.min(46, peak * 46))
-    return `M${x.toFixed(3)} ${50 - amplitude}V${50 + amplitude}`
-  }).join('')
 }
 
 function setupLimit(setup: MusicVideoSetupState, sequence: Sequence): number {
@@ -879,7 +863,7 @@ export function MusicVideoEditor({
   const timelineStyle = {
     '--music-video-timeline-width': `${timelineZoom * 100}%`,
   } as CSSProperties
-  const path = waveformPath(audioAsset?.waveform ?? [])
+  const path = waveformEnvelopePath(audioAsset?.waveform ?? [])
   const rulerSegments = Math.max(4, Math.round(timelineZoom * 4))
   const rulerMarks = Array.from(
     { length: rulerSegments + 1 },

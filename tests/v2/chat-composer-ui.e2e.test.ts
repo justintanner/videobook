@@ -1390,7 +1390,7 @@ describe('chat composer browser flow', () => {
       `.notebook-flow .react-flow__node[data-id="${fullscreenImageCellId}"]`,
     )
     const cardMedia = fullscreenNode.locator('.cell-media')
-    const cardMetadata = fullscreenNode.locator('.cell-image-metadata')
+    const cardMetadata = fullscreenNode.locator('.cell-media-rail')
     await cardMetadata.waitFor({ state: 'visible' })
     expect(await fullscreenNode.locator('.cell-media-caption').count()).toBe(0)
     expect(await cardMedia.getAttribute('title')).toBe('A fullscreen image fixture')

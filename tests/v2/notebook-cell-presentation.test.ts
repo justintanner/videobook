@@ -220,6 +220,7 @@ describe('notebook cell presentation', () => {
     expect(notebookAudioPresentation(input)).toEqual({
       role: 'Scene audio',
       duration: '0:15',
+      durationSeconds: 15,
       details: ['AAC', '48 kHz', 'stereo'],
     })
     expect(notebookAudioSummary(input)).toBe(

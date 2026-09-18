@@ -16,11 +16,9 @@ export type ArtifactThumbAsset = {
 export function ArtifactThumb({
   asset,
   kindHint,
-  thumbnailOnly = false,
 }: {
   asset?: ArtifactThumbAsset | null
   kindHint?: string
-  thumbnailOnly?: boolean
 }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const thumbnailUrl = asset?.thumbnailUrl
@@ -37,16 +35,11 @@ export function ArtifactThumb({
     || kindHint === 'splice'
   const image = kind === 'image'
     || kindHint === 'generate_image'
-  const videoUrl = !thumbnailOnly && !thumbnailUrl && (kind === 'video' || kind === 'final')
-    ? asset?.mediaUrl
-    : null
 
   return (
     <span className="inspector-source-thumb" aria-hidden="true">
       {thumbnailUrl && thumbnailUrl !== failedUrl ? (
         <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" onError={() => setFailedUrl(thumbnailUrl)} />
-      ) : videoUrl ? (
-        <video src={videoUrl} muted playsInline preload="metadata" />
       ) : audio ? (
         <AudioWaveform size={16} />
       ) : video ? (

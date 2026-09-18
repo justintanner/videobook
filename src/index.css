@@ -2265,6 +2265,12 @@ textarea:focus-visible {
   --cell-state-color: #72e7aa;
   --cell-state-soft: rgba(114, 231, 170, 0.22);
   --cell-state-glow: rgba(114, 231, 170, 0.38);
+  /* The family hue, read by the border mark, the address slug and every part
+     of the preview frame. One token so a cell reads as one type. */
+  --cell-accent: #72e7aa;
+  --cell-accent-bright: #b7f5d3;
+  --cell-accent-line: rgba(114, 231, 170, 0.42);
+  --cell-accent-soft: rgba(114, 231, 170, 0.16);
   position: relative;
   display: block;
   width: 240px;
@@ -2295,6 +2301,10 @@ textarea:focus-visible {
 }
 
 .cell-family-image {
+  --cell-accent: #63c7d8;
+  --cell-accent-bright: #a8e4f0;
+  --cell-accent-line: rgba(99, 199, 216, 0.42);
+  --cell-accent-soft: rgba(99, 199, 216, 0.16);
   border-color: rgba(99, 199, 216, 0.48);
   border-radius: 12px;
 }
@@ -2305,11 +2315,19 @@ textarea:focus-visible {
 }
 
 .cell-family-audio {
+  --cell-accent: #c989a2;
+  --cell-accent-bright: #f0b9d0;
+  --cell-accent-line: rgba(201, 137, 162, 0.46);
+  --cell-accent-soft: rgba(201, 137, 162, 0.18);
   border-color: rgba(201, 137, 162, 0.46);
   border-radius: 8px;
 }
 
 .cell-family-data {
+  --cell-accent: #9aa89f;
+  --cell-accent-bright: #c8d4cc;
+  --cell-accent-line: rgba(154, 168, 159, 0.4);
+  --cell-accent-soft: rgba(154, 168, 159, 0.16);
   border-color: rgba(154, 168, 159, 0.4);
 }
 
@@ -2775,7 +2793,7 @@ textarea:focus-visible {
 
 .cell-node-footer strong {
   min-width: 0;
-  color: var(--cyan);
+  color: var(--cell-accent);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.25;
@@ -2943,8 +2961,7 @@ textarea:focus-visible {
   font-size: 10px;
 }
 
-.cell-generation-chips,
-.cell-media-chips {
+.cell-generation-chips {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -2952,8 +2969,7 @@ textarea:focus-visible {
   margin-left: auto;
 }
 
-.cell-generation-chips .cell-aspect-ratio,
-.cell-media-chips .cell-aspect-ratio {
+.cell-generation-chips .cell-aspect-ratio {
   margin-left: 0;
 }
 
@@ -2982,7 +2998,9 @@ textarea:focus-visible {
   color: #d3a8ba;
 }
 
-.cell-image-metadata {
+/* The badge rail: what the media is, in the top right of any preview frame.
+   Image, video and audio differ only in which badges they hand it. */
+.cell-media-rail {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -2996,7 +3014,7 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
-.cell-image-metadata-badge {
+.cell-media-badge {
   display: inline-flex;
   min-width: 0;
   height: 20px;
@@ -3004,7 +3022,7 @@ textarea:focus-visible {
   align-items: center;
   padding: 0 6px;
   overflow: hidden;
-  border: 1px solid rgba(114, 231, 170, 0.42);
+  border: 1px solid var(--cell-accent-line);
   border-radius: 999px;
   color: #b9dfcb;
   background: rgba(2, 10, 7, 0.86);
@@ -3018,13 +3036,17 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.cell-image-metadata-generator {
+.cell-media-badge-wide {
   max-width: 104px;
-  color: #9de1b8;
+  color: var(--cell-accent-bright);
 }
 
-.cell-family-image .cell-image-metadata-badge {
-  border-color: rgba(99, 199, 216, 0.42);
+.cell-family-image .cell-media-badge {
+  color: #a8dbe6;
+}
+
+.cell-family-audio .cell-media-badge {
+  color: #e6c6d3;
 }
 
 .inspector-generations {
@@ -3260,12 +3282,169 @@ textarea:focus-visible {
 }
 
 .cell-media img,
-.cell-media video {
+.cell-media video,
+.cell-waveform {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* Audio's poster: the artifact's peaks, mirrored around the midline. */
+.cell-waveform {
+  display: block;
+  color: var(--cell-accent);
+}
+
+.cell-waveform-midline {
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.16;
+}
+
+.cell-waveform-bars {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.82;
+}
+
+.cell-waveform-pending .cell-waveform-bars {
+  opacity: 0.26;
+}
+
+.cell-waveform-played {
+  stroke: var(--cell-accent-bright);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.cell-waveform-playhead {
+  stroke: var(--cell-accent-bright);
+  stroke-width: 1;
+}
+
+/* Nothing in the grid is ever an empty black square: a frame with no poster
+   and no peaks shows its kind and says what it is waiting for. */
+.cell-media-pending-face {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--cell-accent);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.cell-media-pending-face::before {
+  position: absolute;
+  inset: 10px;
+  border: 1px dashed var(--cell-accent-line);
+  border-radius: 2px;
+  content: '';
+}
+
+.cell-media-pending-face > span {
+  color: #8cba9f;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* The corner meter: how long the media runs. */
+.cell-media-meter {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 1;
+  display: inline-flex;
+  height: 18px;
+  align-items: center;
+  padding: 0 6px;
+  border: 1px solid var(--cell-accent-line);
+  border-radius: 999px;
+  color: #b9dfcb;
+  background: rgba(2, 10, 7, 0.86);
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.cell-family-audio .cell-media-meter {
+  color: #e6c6d3;
+}
+
+/* The play ring: the one mark that separates playable media from a still. */
+.cell-media-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--cell-accent-line);
+  border-radius: 999px;
+  color: var(--cell-accent);
+  background: rgba(2, 10, 7, 0.58);
+  opacity: 0.72;
+  cursor: pointer;
+  transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.cell-media-play svg {
+  margin-left: 2px;
+}
+
+.cell-media-play:hover,
+.cell-media-play:focus-visible {
+  border-color: var(--cell-accent);
+  color: #041109;
+  background: var(--cell-accent);
+  opacity: 1;
+}
+
+.cell-media-playing .cell-media-play {
+  opacity: 0;
+}
+
+.cell-media-playing .cell-media-play svg {
+  margin-left: 0;
+}
+
+.cell-media:hover .cell-media-play,
+.cell-media-playing .cell-media-play:focus-visible {
+  opacity: 1;
+}
+
+/* The progress hairline, zero width until playback starts. */
+.cell-media-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  height: 2px;
+  background: var(--cell-accent-soft);
+  pointer-events: none;
+}
+
+.cell-media-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--cell-accent);
 }
 
 .notebook-media-metadata {
@@ -3283,15 +3462,6 @@ textarea:focus-visible {
 .notebook-media-metadata > span + time {
   padding-left: 6px;
   border-left: 1px solid rgba(114, 231, 170, 0.24);
-}
-
-.cell-media-metadata {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  padding: 4px 6px;
-  font-size: 9px;
-  letter-spacing: 0.04em;
 }
 
 .cell-published-post {
@@ -3719,88 +3889,6 @@ textarea:focus-visible {
   font-size: inherit;
   line-height: inherit;
   letter-spacing: 0;
-}
-
-.cell-copy-audio {
-  min-width: 0;
-  align-content: center;
-  gap: 10px;
-  color: #83d7e3;
-  background:
-    repeating-linear-gradient(
-      90deg,
-      transparent 0 8px,
-      rgba(112, 202, 216, 0.08) 8px 10px
-    ),
-    radial-gradient(circle at 50% 50%, rgba(71, 151, 164, 0.16), transparent 60%);
-}
-
-.cell-copy-audio span {
-  color: #91bfc5;
-  line-height: 1.6;
-  letter-spacing: 0.04em;
-}
-
-.cell-audio-prompt {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-  min-width: 0;
-  padding: 0 16px;
-  text-align: left;
-}
-
-.cell-audio-prompt p {
-  display: -webkit-box;
-  margin: 0;
-  overflow: hidden;
-  color: #91bfc5;
-  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.55;
-  letter-spacing: 0.015em;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-}
-
-.cell-audio-summary {
-  display: grid;
-  width: 100%;
-  justify-items: center;
-  gap: 3px;
-}
-
-.cell-copy-audio .cell-audio-role {
-  color: #91bfc5;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-}
-
-.cell-audio-duration {
-  color: #d5fbff;
-  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 21px;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: 0.08em;
-  text-shadow: 0 0 16px rgba(99, 218, 232, 0.44);
-}
-
-.cell-copy-audio .cell-audio-details {
-  color: #6f999f;
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.cell-copy-audio audio {
-  display: block;
-  width: min(100%, 180px);
-  min-width: 0;
-  max-width: 100%;
-  height: 28px;
 }
 
 .cell-split-frames {
