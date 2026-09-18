@@ -988,18 +988,218 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain(
-      'class="inspector-media-content inspector-compact-media-content inspector-image-media-content"',
-    )
+    expect(html).toContain('inspector-image-media-content')
     expect(html).toContain(
       'class="inspector-media-actions inspector-media-actions-image"',
     )
     expect(html).toContain('aria-label="Image preview actions"')
     expect(html).toContain('aria-label="Edit @g5 image"')
     expect(html).toContain('aria-label="Open @g5 fullscreen"')
-    expect(html.indexOf('aria-label="Edit @g5 image"')).toBeLessThan(
-      html.indexOf('aria-label="Open @g5 fullscreen"'),
+    expect(html.indexOf('class="inspector-edit-button"')).toBeLessThan(
+      html.indexOf('class="inspector-fullscreen-button"'),
     )
+  })
+
+  it('lays an image cell out in tracks beside the preview', () => {
+    const imageCell: NotebookCell = {
+      ...cell,
+      type: 'image',
+      label: 'image-output',
+      slot: { row: 6, column: 4 },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: imageCell,
+      cells: [imageCell],
+      edges: [],
+      asset: {
+        artifactId: imageCell.outputArtifactId!,
+        id: 'image-output',
+        type: 'image',
+        mediaUrl: '/files/image-output/original.png',
+        thumbnailUrl: null,
+        width: 480,
+        height: 854,
+        duration: null,
+        audioInfo: null,
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('inspector-image-track-preview')
+    expect(html).toContain('inspector-image-meta')
+    expect(html).toContain('inspector-image-track-details')
+    expect(html).toContain('inspector-image-track-actions')
+    // The preview column is sized from the asset's own aspect.
+    expect(html).toContain('style="--image-aspect:0.56')
+    // Facts that used to sit only in the overlay badge.
+    expect(html).toContain('<dt>Dimensions</dt>')
+    expect(html).toContain('480 \u00d7 854')
+    expect(html).toContain('<dt>Aspect</dt>')
+    expect(html).toContain('9:16')
+    // Actions and cleanup moved out of the preview into the actions track.
+    expect(html.indexOf('inspector-image-track-actions')).toBeLessThan(
+      html.indexOf('class="inspector-media-actions'),
+    )
+    expect(html.indexOf('inspector-image-track-actions')).toBeLessThan(
+      html.indexOf('aria-label="Cell cleanup actions"'),
+    )
+  })
+
+  it('opens the fullscreen viewer from the image itself', () => {
+    const imageCell: NotebookCell = {
+      ...cell,
+      type: 'image',
+      label: 'image-output',
+      slot: { row: 6, column: 4 },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: imageCell,
+      cells: [imageCell],
+      edges: [],
+      asset: {
+        artifactId: imageCell.outputArtifactId!,
+        id: 'image-output',
+        type: 'image',
+        mediaUrl: '/files/image-output/original.png',
+        thumbnailUrl: null,
+        width: 1536,
+        height: 1024,
+        duration: null,
+        audioInfo: null,
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('class="inspector-cell-media-open"')
+    expect(html).toContain('class="inspector-cell-media-zoom"')
+    // The picture is the button, so the label rides on it, not on a wrapper.
+    expect(html.indexOf('class="inspector-cell-media-open"')).toBeLessThan(
+      html.indexOf('<img src="/files/image-output/original.png"'),
+    )
+  })
+
+  it('shows saved image versions as a rail of takes', () => {
+    const imageCell: NotebookCell = {
+      ...cell,
+      type: 'image',
+      label: 'image-output',
+      slot: { row: 6, column: 4 },
+      inputs: { outputVersionArtifactIds: ['image-one', 'image-two'] },
+      outputArtifactId: 'image-two',
+    }
+    const currentAsset = {
+      artifactId: 'image-two',
+      id: 'img-source-2',
+      type: 'image',
+      mediaUrl: '/files/img-source-2/original.png',
+      thumbnailUrl: '/files/img-source-2/thumb.png',
+      width: 480,
+      height: 854,
+      duration: null,
+      audioInfo: null,
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: imageCell,
+      cells: [imageCell],
+      edges: [],
+      asset: currentAsset,
+      versionAssets: [
+        {
+          ...currentAsset,
+          artifactId: 'image-one',
+          id: 'img-source-1',
+          mediaUrl: '/files/img-source-1/original.png',
+          thumbnailUrl: '/files/img-source-1/thumb.png',
+        },
+        currentAsset,
+      ],
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('aria-label="Image versions"')
+    expect(html).toContain('aria-label="Version 1 of 2"')
+    expect(html).toContain('aria-label="Version 2 of 2, current output"')
+    expect(html).toContain('/files/img-source-1/thumb.png')
+    expect(html).not.toContain('inspector-image-single-version')
+    // The select stays in the markup as the rail's narrow-dock stand-in.
+    expect(html).toContain('aria-label="Image version"')
+  })
+
+  it('keeps the stacked layout for video and audio cells', () => {
+    const videoCell: NotebookCell = {
+      ...cell,
+      type: 'video',
+      label: 'video-output',
+      slot: { row: 6, column: 4 },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: videoCell,
+      cells: [videoCell],
+      edges: [],
+      asset: {
+        artifactId: videoCell.outputArtifactId!,
+        id: 'video-output',
+        type: 'video',
+        mediaUrl: '/files/video-output/original.mp4',
+        thumbnailUrl: '/files/video-output/thumb.png',
+        width: 1920,
+        height: 1080,
+        duration: 12,
+        audioInfo: null,
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('inspector-compact-media-content')
+    expect(html).not.toContain('inspector-image-media-content')
+    expect(html).not.toContain('inspector-image-meta')
+    expect(html).not.toContain('inspector-cell-media-open')
+    // Video keeps its action bar attached to the preview.
+    expect(html).toContain('class="inspector-media-actions"')
   })
 
   it('opens generated video output in the shared fullscreen viewer', () => {

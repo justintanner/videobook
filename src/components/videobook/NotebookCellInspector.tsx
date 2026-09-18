@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import { Fragment, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import type {
   GenerationStatus,
   NotebookCell,
@@ -35,6 +36,7 @@ import {
   doltCellRows,
 } from '@/videobook/dolt-cell-source'
 import {
+  formatMediaAspectRatio,
   formatMediaTime,
   notebookAudioPresentation,
   notebookAnalysisLlmExchanges,
@@ -569,15 +571,60 @@ function compatibleSource(
   return true
 }
 
+/* Edit and Fullscreen both open the fullscreen editor. The image dock renders
+   this itself in its actions track, so the preview keeps only the picture. */
+function CellMediaActions({
+  address,
+  isImage,
+  onOpen,
+}: {
+  address: string
+  isImage: boolean
+  onOpen: () => void
+}) {
+  return (
+    <div
+      className={`inspector-media-actions${isImage ? ' inspector-media-actions-image' : ''}`}
+      role="group"
+      aria-label={`${isImage ? 'Image' : 'Video'} preview actions`}
+    >
+      {isImage && (
+        <span className="inspector-media-action-slot">
+          <button
+            type="button"
+            className="inspector-edit-button"
+            aria-label={`Edit @${address} image`}
+            onClick={onOpen}
+          >
+            <Pencil size={14} />Edit
+          </button>
+        </span>
+      )}
+      <span className="inspector-media-action-slot">
+        <button
+          type="button"
+          className="inspector-fullscreen-button"
+          aria-label={`Open @${address} fullscreen`}
+          onClick={onOpen}
+        >
+          <Maximize2 size={14} />Fullscreen
+        </button>
+      </span>
+    </div>
+  )
+}
+
 function NotebookCellMedia({
   asset,
   address,
   allowFullscreen,
+  inlineActions = true,
   onOpenFullscreen,
 }: {
   asset: NotebookCellInspectorAsset
   address: string
   allowFullscreen: boolean
+  inlineActions?: boolean
   onOpenFullscreen: (asset: NotebookCellInspectorAsset) => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -620,6 +667,18 @@ function NotebookCellMedia({
           />
         ) : isAudio && mediaUrl ? (
           <audio key={mediaUrl} src={mediaUrl} controls preload="metadata" />
+        ) : isImage && canOpenFullscreen ? (
+          <button
+            type="button"
+            className="inspector-cell-media-open"
+            aria-label={`Open @${address} fullscreen`}
+            onClick={openFullscreen}
+          >
+            <img key={previewUrl} src={previewUrl} alt={`@${address}`} />
+            <span className="inspector-cell-media-zoom" aria-hidden="true">
+              <Maximize2 size={12} />
+            </span>
+          </button>
         ) : (
           <img key={previewUrl} src={previewUrl} alt={`@${address}`} />
         )}
@@ -650,35 +709,12 @@ function NotebookCellMedia({
           </dl>
         </div>
       )}
-      {canOpenFullscreen && (
-        <div
-          className={`inspector-media-actions${isImage ? ' inspector-media-actions-image' : ''}`}
-          role="group"
-          aria-label={`${isImage ? 'Image' : 'Video'} preview actions`}
-        >
-          {isImage && (
-            <span className="inspector-media-action-slot">
-              <button
-                type="button"
-                className="inspector-edit-button"
-                aria-label={`Edit @${address} image`}
-                onClick={openFullscreen}
-              >
-                <Pencil size={14} />Edit
-              </button>
-            </span>
-          )}
-          <span className="inspector-media-action-slot">
-            <button
-              type="button"
-              className="inspector-fullscreen-button"
-              aria-label={`Open @${address} fullscreen`}
-              onClick={openFullscreen}
-            >
-              <Maximize2 size={14} />Fullscreen
-            </button>
-          </span>
-        </div>
+      {inlineActions && canOpenFullscreen && (
+        <CellMediaActions
+          address={address}
+          isImage={isImage}
+          onOpen={openFullscreen}
+        />
       )}
     </section>
   )
@@ -1332,6 +1368,100 @@ function CellAssetTags({
   )
 }
 
+/* The dock is wider than any portrait take needs, so versions show as a rail
+   of thumbs rather than hiding behind a select. Narrower docks hide this and
+   fall back to OutputVersionSelector; both are rendered, CSS picks one. */
+function ImageVersionRail({
+  artifactIds,
+  assetsById,
+  currentArtifactId,
+  selectedArtifactId,
+  onSelect,
+}: {
+  artifactIds: readonly string[]
+  assetsById: ReadonlyMap<string, NotebookCellInspectorAsset>
+  currentArtifactId: string | undefined
+  selectedArtifactId: string
+  onSelect: (artifactId: string) => void
+}) {
+  return (
+    <section className="inspector-image-versions" aria-label="Image versions">
+      <span className="inspector-media-field-label">Versions</span>
+      <ul className="inspector-image-version-list">
+        {artifactIds.map((artifactId, index) => {
+          const versionAsset = assetsById.get(artifactId)
+          const thumbUrl = versionAsset?.thumbnailUrl
+            ?? versionAsset?.mediaUrl
+            ?? null
+          const isCurrent = artifactId === currentArtifactId
+          const isSelected = artifactId === selectedArtifactId
+          return (
+            <li key={artifactId}>
+              <button
+                type="button"
+                className={isSelected
+                  ? 'inspector-image-version selected'
+                  : 'inspector-image-version'}
+                disabled={!versionAsset}
+                aria-current={isSelected ? 'true' : undefined}
+                aria-label={`Version ${index + 1} of ${artifactIds.length}${
+                  isCurrent ? ', current output' : ''
+                }`}
+                onClick={() => onSelect(artifactId)}
+              >
+                {thumbUrl
+                  ? <img src={thumbUrl} alt="" />
+                  : <span className="inspector-image-version-blank" />}
+                <span className="inspector-image-version-label">
+                  v{index + 1}
+                  {isCurrent && (
+                    <span className="inspector-image-version-now">now</span>
+                  )}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+function ImageCellFacts({
+  address,
+  asset,
+}: {
+  address: string
+  asset: NotebookCellInspectorAsset
+}) {
+  const dimensions = asset.width !== null && asset.height !== null
+    ? `${asset.width} × ${asset.height}`
+    : null
+  const aspect = formatMediaAspectRatio(asset.width, asset.height)
+  return (
+    <dl className="inspector-image-facts">
+      <div>
+        <dt>Address</dt>
+        <dd><code className="inspector-cell-address">@{address}</code></dd>
+      </div>
+      {dimensions !== null && (
+        <div>
+          <dt>Dimensions</dt>
+          <dd>{dimensions}</dd>
+        </div>
+      )}
+      {aspect !== null && (
+        <div>
+          <dt>Aspect</dt>
+          <dd>{aspect}</dd>
+        </div>
+      )}
+    </dl>
+  )
+}
+
+type ImageTrackStyle = CSSProperties & { '--image-aspect'?: string }
+
 function MediaCellInspector({
   cell,
   cells,
@@ -1428,82 +1558,150 @@ function MediaCellInspector({
     ? mediaInsightWork?.[previewAsset.artifactId] ?? idleMediaInsightWork
     : idleMediaInsightWork
 
+  const address = notebookGridAddress(cell.slot)
+  const isImage = cell.type === 'image'
+  const previewAspect = previewAsset?.width && previewAsset.height
+    ? previewAsset.width / previewAsset.height
+    : null
+  const showVersions = versionArtifactIds.length > 1 && Boolean(previewAsset)
+  const mediaPreview = previewAsset ? (
+    <NotebookCellMedia
+      asset={previewAsset}
+      address={address}
+      allowFullscreen={isImage || cell.type === 'video'}
+      inlineActions={!isImage}
+      onOpenFullscreen={onOpenFullscreen}
+    />
+  ) : (
+    <div className="inspector-media-empty">
+      <span>Output pending</span>
+      <p>Connect a source and rerun its producer to populate this preview.</p>
+    </div>
+  )
+  const versionSelector = showVersions && previewAsset ? (
+    <OutputVersionSelector
+      artifactIds={versionArtifactIds}
+      availableArtifactIds={availableVersionArtifactIds}
+      currentArtifactId={cell.outputArtifactId}
+      selectedArtifactId={effectiveVersionArtifactId}
+      outputLabel={isImage ? 'Image' : 'Audio'}
+      onSelect={selectVersion}
+    />
+  ) : null
+  const assetTags = previewAsset ? (
+    <CellAssetTags bookId={bookId} tagTools={tagTools} asset={previewAsset} />
+  ) : null
+  const insights = previewAsset && mediaCellHasSpokenAudio(previewAsset.type) ? (
+    <MediaInsightsPanel
+      artifactId={previewAsset.artifactId}
+      transcript={previewAsset.transcript ?? null}
+      busy={busy}
+      transcribing={insightWork.transcribing}
+      error={insightWork.error}
+      onTranscribe={onTranscribeAsset
+        ? () => onTranscribeAsset(previewAsset.artifactId)
+        : undefined}
+      onLoadTranscriptJson={onLoadTranscriptJson
+        ? (source) => onLoadTranscriptJson(previewAsset.artifactId, source)
+        : undefined}
+      onDownloadTranscriptSrt={onDownloadTranscriptSrt
+        ? () => onDownloadTranscriptSrt(previewAsset.artifactId)
+        : undefined}
+    />
+  ) : null
+  const inputSources = (
+    <InputSources
+      cell={cell}
+      cells={cells}
+      edges={edges}
+      busy={busy}
+      cellAssets={cellAssets}
+      onSetInput={onSetInput}
+    />
+  )
+  const cleanupActions = (
+    <CellCleanupActions busy={busy} deleting={deleting} onDelete={onDelete} />
+  )
+
+  /* An image cell lays its parts across the row instead of down it: the
+     preview takes the row height at its own aspect and everything that used
+     to sit below the fold moves into the width it was wasting. The aspect
+     rides in as a custom property because only the asset knows it. */
+  if (isImage) {
+    const trackStyle: ImageTrackStyle = previewAspect !== null
+      ? { '--image-aspect': String(previewAspect) }
+      : {}
+    return (
+      <div className="inspector-body inspector-media-body">
+        <div
+          className={[
+            'inspector-media-content',
+            'inspector-compact-media-content',
+            'inspector-image-media-content',
+            showVersions ? '' : 'inspector-image-single-version',
+          ].filter(Boolean).join(' ')}
+          style={trackStyle}
+        >
+          <div className="inspector-image-track inspector-image-track-preview">
+            {mediaPreview}
+          </div>
+          {showVersions && (
+            <div className="inspector-image-track inspector-image-track-versions">
+              <ImageVersionRail
+                artifactIds={versionArtifactIds}
+                assetsById={versionAssetById}
+                currentArtifactId={cell.outputArtifactId}
+                selectedArtifactId={effectiveVersionArtifactId}
+                onSelect={selectVersion}
+              />
+            </div>
+          )}
+          <div className="inspector-image-meta">
+            <div className="inspector-image-track inspector-image-track-details">
+              {versionSelector}
+              {previewAsset && (
+                <ImageCellFacts address={address} asset={previewAsset} />
+              )}
+              {assetTags}
+            </div>
+            <div className="inspector-image-track inspector-image-track-actions">
+              <PublishedPostInspectorDetails inputs={cell.inputs} />
+              {inputSources}
+              {previewAsset && (
+                <CellMediaActions
+                  address={address}
+                  isImage
+                  onOpen={() => onOpenFullscreen(previewAsset)}
+                />
+              )}
+              {cleanupActions}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="inspector-body inspector-media-body">
       <div
         className={[
           'inspector-media-content',
-          cell.type === 'image' || cell.type === 'video' || cell.type === 'audio'
+          cell.type === 'video' || cell.type === 'audio'
             ? 'inspector-compact-media-content'
             : '',
-          cell.type === 'image' ? 'inspector-image-media-content' : '',
         ].filter(Boolean).join(' ')}
       >
         <span className="inspector-media-field-label">
           {cell.type.replaceAll('_', ' ').toUpperCase()}
         </span>
-        {versionArtifactIds.length > 1 && previewAsset && (
-          <OutputVersionSelector
-            artifactIds={versionArtifactIds}
-            availableArtifactIds={availableVersionArtifactIds}
-            currentArtifactId={cell.outputArtifactId}
-            selectedArtifactId={effectiveVersionArtifactId}
-            outputLabel={cell.type === 'image' ? 'Image' : 'Audio'}
-            onSelect={selectVersion}
-          />
-        )}
-        {previewAsset ? (
-          <NotebookCellMedia
-            asset={previewAsset}
-            address={notebookGridAddress(cell.slot)}
-            allowFullscreen={cell.type === 'image' || cell.type === 'video'}
-            onOpenFullscreen={onOpenFullscreen}
-          />
-        ) : (
-          <div className="inspector-media-empty">
-            <span>Output pending</span>
-            <p>Connect a source and rerun its producer to populate this preview.</p>
-          </div>
-        )}
-        {previewAsset && (
-          <CellAssetTags
-            bookId={bookId}
-            tagTools={tagTools}
-            asset={previewAsset}
-          />
-        )}
-        {previewAsset && mediaCellHasSpokenAudio(previewAsset.type) && (
-          <MediaInsightsPanel
-            artifactId={previewAsset.artifactId}
-            transcript={previewAsset.transcript ?? null}
-            busy={busy}
-            transcribing={insightWork.transcribing}
-            error={insightWork.error}
-            onTranscribe={onTranscribeAsset
-              ? () => onTranscribeAsset(previewAsset.artifactId)
-              : undefined}
-            onLoadTranscriptJson={onLoadTranscriptJson
-              ? (source) => onLoadTranscriptJson(previewAsset.artifactId, source)
-              : undefined}
-            onDownloadTranscriptSrt={onDownloadTranscriptSrt
-              ? () => onDownloadTranscriptSrt(previewAsset.artifactId)
-              : undefined}
-          />
-        )}
+        {versionSelector}
+        {mediaPreview}
+        {assetTags}
+        {insights}
         <PublishedPostInspectorDetails inputs={cell.inputs} />
-        <InputSources
-          cell={cell}
-          cells={cells}
-          edges={edges}
-          busy={busy}
-          cellAssets={cellAssets}
-          onSetInput={onSetInput}
-        />
-        <CellCleanupActions
-          busy={busy}
-          deleting={deleting}
-          onDelete={onDelete}
-        />
+        {inputSources}
+        {cleanupActions}
       </div>
     </div>
   )

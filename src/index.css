@@ -12488,3 +12488,296 @@ textarea:focus-visible {
     flex: 1 1 100%;
   }
 }
+
+/* ── Image cell dock: across the row ──────────────────────────────────────
+   A portrait preview in a full-width block left about nine tenths of the row
+   empty and pushed Edit, Fullscreen, tags, inputs and delete below the fold.
+   The preview now takes the row height at its own aspect and the rest fills
+   the width it was wasting. Image cells only: video and audio keep the stack,
+   so nothing here can reach .inspector-compact-media-content on its own. */
+
+.composer-notebook-dock.inspector {
+  --dock-h: min(360px, 42dvh);
+}
+
+.inspector-media-body {
+  container-type: inline-size;
+}
+
+.inspector-image-media-content {
+  --image-row-h: calc(var(--dock-h, 360px) - 40px - 24px);
+  --image-preview-w: clamp(
+    96px,
+    calc(var(--image-row-h) * var(--image-aspect, 0.5625)),
+    50cqi
+  );
+
+  display: grid;
+  min-height: 0;
+  padding-bottom: 12px;
+  overflow: hidden;
+  gap: 14px;
+  grid-template-columns: var(--image-preview-w) 104px minmax(0, 1fr);
+}
+
+.inspector-image-media-content.inspector-image-single-version {
+  grid-template-columns: var(--image-preview-w) minmax(0, 1fr);
+}
+
+.inspector-image-track {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+/* Details and actions share one scroll region so a narrow dock scrolls the
+   facts without ever moving the picture they describe. */
+.inspector-image-meta {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  align-items: start;
+  gap: 14px;
+  grid-template-columns: minmax(0, 56fr) minmax(0, 51fr);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+.inspector-image-media-content .inspector-cell-preview {
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+}
+
+.inspector-image-media-content .inspector-cell-media {
+  height: 100%;
+  min-height: 0;
+}
+
+.inspector-media-body .inspector-image-media-content .inspector-cell-media img {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
+
+.inspector-cell-media-open {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+.inspector-cell-media-zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line-bright);
+  color: var(--green);
+  background: rgba(2, 10, 6, 0.9);
+  place-items: center;
+}
+
+.inspector-cell-media-open:hover .inspector-cell-media-zoom,
+.inspector-cell-media-open:focus-visible .inspector-cell-media-zoom {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
+  background: var(--control-bg-hover);
+}
+
+.inspector-image-facts {
+  display: grid;
+  margin: 0 0 18px;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.inspector-image-facts > div {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+
+.inspector-image-facts dt {
+  color: #7ea895;
+}
+
+.inspector-image-facts dd {
+  margin: 0;
+  color: #b7ddc8;
+}
+
+.inspector-image-versions {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspector-image-versions .inspector-media-field-label {
+  margin: 0;
+}
+
+.inspector-image-version-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+.inspector-image-version {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.inspector-image-version img,
+.inspector-image-version-blank {
+  display: block;
+  width: 48px;
+  height: 66px;
+  flex: none;
+  border: 1px solid var(--line);
+  background: #020805;
+  object-fit: cover;
+  opacity: 0.58;
+}
+
+.inspector-image-version.selected img,
+.inspector-image-version.selected .inspector-image-version-blank {
+  border-color: var(--green);
+  opacity: 1;
+}
+
+.inspector-image-version:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.inspector-image-version-label {
+  display: grid;
+  gap: 3px;
+  color: #7ea895;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.inspector-image-version.selected .inspector-image-version-label {
+  color: var(--ink);
+}
+
+.inspector-image-version-now {
+  color: var(--green);
+  font-size: 9px;
+}
+
+/* The version select is the rail's stand-in, never its neighbour. */
+.inspector-image-track-details .inspector-audio-versions {
+  display: none;
+}
+
+/* Detached from the preview, the action bar needs its own frame. */
+.inspector-image-track-actions .inspector-media-actions {
+  margin-top: 18px;
+  border: 1px solid var(--line);
+}
+
+.inspector-image-track-actions .inspector-cell-actions {
+  margin: 14px 0 0;
+  padding-top: 14px;
+}
+
+/* Delete keeps the shared height but not the full width, and lines up with
+   the action bar above it rather than drifting to the far edge of the track. */
+.inspector-image-track-actions .inspector-cell-actions {
+  justify-content: flex-start;
+}
+
+/* One control height across the dock, tag field included. */
+.inspector-image-media-content .inspector-media-actions button,
+.inspector-image-media-content .inspector-cell-actions > button,
+.inspector-image-media-content .asset-tag-input,
+.inspector-image-media-content .asset-tag-add {
+  min-height: 40px;
+}
+
+@container (max-width: 1179px) {
+  .inspector-image-media-content,
+  .inspector-image-media-content.inspector-image-single-version {
+    grid-template-columns: var(--image-preview-w) minmax(0, 1fr);
+  }
+
+  .inspector-image-track-versions {
+    display: none;
+  }
+
+  .inspector-image-track-details .inspector-audio-versions {
+    display: grid;
+  }
+}
+
+@container (max-width: 879px) {
+  /* align-items is the cross axis here, so the grid's `start` would stop the
+     tracks filling the width they just gained. */
+  .inspector-image-meta {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inspector-image-meta > .inspector-image-track {
+    flex: none;
+  }
+}
+
+/* Too narrow to put anything beside the picture: back to today's stack. */
+@container (max-width: 619px) {
+  .inspector-image-media-content,
+  .inspector-image-media-content.inspector-image-single-version {
+    display: block;
+    overflow: auto;
+  }
+
+  .inspector-image-meta {
+    display: block;
+    overflow: visible;
+  }
+
+  .inspector-image-media-content .inspector-cell-preview {
+    height: auto;
+    margin: 0 0 22px;
+  }
+
+  .inspector-image-media-content .inspector-cell-media {
+    height: auto;
+    min-height: 180px;
+  }
+
+  .inspector-media-body .inspector-image-media-content .inspector-cell-media img {
+    height: auto;
+    max-height: 320px;
+  }
+}
