@@ -123,6 +123,7 @@ import {
 } from '@/components/videobook/CommandComposer'
 import { composerReferences } from '@/videobook/composer-references'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
+import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
 import { JobsScreen } from '@/components/videobook/JobsScreen'
 import {
   BusRiverEdge,
@@ -489,7 +490,11 @@ import {
   restoreCommandComposerFocus,
   useCommandComposerFocus,
 } from '@/videobook/command-composer-focus'
-import { composerDockShouldOpen, pauseComposerDockMedia } from '@/videobook/composer-dock'
+import {
+  composerDockShouldOpen,
+  composerPanelDrawsClose,
+  pauseComposerDockMedia,
+} from '@/videobook/composer-dock'
 import {
   parsePendingApplyCommand,
   pendingCommandVoiceOutcome,
@@ -12592,6 +12597,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           >
             <Braces size={15} />
           </button>
+          <ComposerDockClose />
         </div>
       </header>
       <NotebookCellInspector
@@ -12670,6 +12676,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       />
     </div>
   ) : null
+  /* Whichever contextual panel is on screen draws the dock's close control in
+     its own header row, so the composer only drops its strip once one has. */
+  const composerPanelHasHeader = composerPanelDrawsClose({
+    musicSession: Boolean(musicVideoSession),
+    imageEditorDocked: Boolean(fullscreenImageEditor && imageDockHost),
+    cellInspector: Boolean(notebookDockContent),
+  })
   const composerContextualContent = (
     <>
       <div
@@ -13243,6 +13256,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         dockOpen={composerDockOpen}
         onDockOpenChange={setComposerDockOpen}
         contextualContent={composerContextualContent}
+        contextualHasHeader={composerPanelHasHeader}
         commands={composerCommands}
         references={composerReferenceMap}
         actions={workspaceActions}

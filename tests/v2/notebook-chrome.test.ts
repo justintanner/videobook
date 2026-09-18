@@ -183,6 +183,47 @@ describe('notebook chrome tokens', () => {
     expect(declaration(controlFocus, 'outline')).toBe('1px solid var(--green)')
   })
 
+  it('sizes the fullscreen more-actions button like the close it sits beside', () => {
+    const more = rule(css, '.notebook-media-more-actions')
+    const close = rule(css, '.notebook-media-fullscreen-close,\n.notebook-media-capture-button')
+    expect(pixelCount(declaration(more, 'width')))
+      .toBe(pixelCount(declaration(close, 'width')))
+    expect(pixelCount(declaration(more, 'height')))
+      .toBe(pixelCount(declaration(close, 'height')))
+    expect(declaration(rule(css, '.notebook-media-fullscreen-actions'), 'display'))
+      .toBe('flex')
+  })
+
+  it('folds the docked subject workspace into one row at rest', () => {
+    const collapsed = rule(
+      css,
+      '.command-composer-contextual .notebook-subject-panel[data-collapsed="true"]',
+    )
+    expect(declaration(collapsed, 'display')).toBe('flex')
+    expect(declaration(collapsed, 'align-items')).toBe('center')
+    const hidden = rule(
+      css,
+      '.notebook-subject-panel[data-collapsed="true"] > .notebook-subject-panel-body,\n.notebook-subject-panel[data-collapsed="true"] > .notebook-subject-actions',
+    )
+    expect(declaration(hidden, 'display')).toBe('none')
+    const toolbar = rule(
+      css,
+      '.notebook-subject-panel[data-collapsed="true"] > .notebook-subject-toolbar',
+    )
+    expect(pixelCount(declaration(toolbar, 'min-height'))).toBe(40)
+    // The row it folds into is what lets it host the dock's close control.
+    expect(fullscreen).toContain('<ComposerDockClose />')
+    expect(fullscreen).toContain('notebook-subject-panel-controls')
+  })
+
+  it('gives the dock close one class both panels wear', () => {
+    const close = rule(css, '.composer-dock-close')
+    expect(pixelCount(declaration(close, 'width'))).toBe(30)
+    expect(pixelCount(declaration(close, 'height'))).toBe(30)
+    expect(css).not.toContain('.inspector-dock-close')
+    expect(app).toContain('<ComposerDockClose />')
+  })
+
   it('overrides only the gutter token at the 720px breakpoint', () => {
     const queryAt = css.indexOf('@media (max-width: 720px) {')
     expect(queryAt).toBeGreaterThan(-1)

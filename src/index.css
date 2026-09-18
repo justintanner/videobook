@@ -3985,6 +3985,37 @@ textarea:focus-visible {
   flex: 0 0 auto;
 }
 
+/* Leaving the dock is not another way of looking at what is in it, so the close
+   control sits apart from the controls it shares a row with — in the cell
+   inspector's header and in the subject workspace's alike. */
+.composer-dock-close-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  background: rgba(101, 190, 145, 0.28);
+}
+
+.composer-dock-close {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid transparent;
+  color: #5d7e6b;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  place-items: center;
+}
+
+.composer-dock-close:hover,
+.composer-dock-close:focus-visible {
+  color: var(--row-fg-hover);
+  background: var(--row-bg-hover);
+}
+
 .inspector > header .inspector-source-toggle {
   border: 1px solid transparent;
 }
@@ -4232,17 +4263,9 @@ textarea:focus-visible {
   border-top: 1px solid var(--line);
 }
 
-.inspector-media-actions-image {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .inspector-media-action-slot {
   display: flex;
   min-width: 0;
-}
-
-.inspector-media-action-slot + .inspector-media-action-slot {
-  border-left: 1px solid var(--line);
 }
 
 .inspector-media-actions button {
@@ -9783,6 +9806,86 @@ textarea:focus-visible {
   flex-wrap: wrap;
 }
 
+/* Docked, the workspace's height comes straight off the picture, so at rest it
+   folds its header and toolbar into one row and hands the stage back. */
+.command-composer-contextual .notebook-subject-panel[data-collapsed="true"] {
+  display: flex;
+  max-height: none;
+  align-items: center;
+  gap: 12px;
+  padding-right: 6px;
+}
+
+.notebook-subject-panel[data-collapsed="true"] > header {
+  flex: 0 0 auto;
+  padding: 0 0 0 14px;
+  border-bottom: 0;
+}
+
+.notebook-subject-panel[data-collapsed="true"] > header > span,
+.notebook-subject-panel[data-collapsed="true"] > header p {
+  display: none;
+}
+
+.notebook-subject-panel[data-collapsed="true"] > header h2 {
+  margin: 0;
+  color: #8fb9a1;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.notebook-subject-panel[data-collapsed="true"] > .notebook-subject-toolbar {
+  min-height: 40px;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  padding: 0;
+  border-bottom: 0;
+}
+
+.notebook-subject-panel[data-collapsed="true"] > .notebook-subject-panel-body,
+.notebook-subject-panel[data-collapsed="true"] > .notebook-subject-actions {
+  display: none;
+}
+
+.notebook-subject-panel[data-collapsed="true"] .notebook-subject-opacity {
+  display: none;
+}
+
+.notebook-subject-panel-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: auto;
+}
+
+.notebook-subject-collapse {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid transparent;
+  color: #5d7e6b;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  place-items: center;
+  transition: transform 140ms ease;
+}
+
+.notebook-subject-collapse:hover,
+.notebook-subject-collapse:focus-visible {
+  color: var(--row-fg-hover);
+  background: var(--row-bg-hover);
+}
+
+.notebook-subject-panel[data-collapsed="true"] .notebook-subject-collapse svg {
+  transform: rotate(180deg);
+}
+
 .command-composer-contextual .music-video-source-panel,
 .command-composer-contextual .music-video-inspector {
   border: 0;
@@ -11869,6 +11972,28 @@ textarea:focus-visible {
   gap: 8px;
 }
 
+/* Was unstyled, so it rendered as a UA button off the close button's baseline.
+   It is the same kind of control, at the same size, one notch quieter. */
+.notebook-media-more-actions {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid rgba(188, 230, 207, 0.28);
+  color: #9cc4ae;
+  background: rgba(0, 0, 0, 0.72);
+  cursor: pointer;
+  place-items: center;
+}
+
+.notebook-media-more-actions:hover,
+.notebook-media-more-actions:focus-visible {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
+  background: var(--control-bg-hover);
+  outline: 0;
+}
+
 .notebook-media-fullscreen-close,
 .notebook-media-capture-button {
   display: grid;
@@ -12575,17 +12700,22 @@ textarea:focus-visible {
   cursor: zoom-in;
 }
 
+/* Carrying its own word now that no button repeats it. */
 .inspector-cell-media-zoom {
   position: absolute;
   right: 8px;
   bottom: 8px;
-  display: grid;
-  width: 24px;
+  display: inline-flex;
   height: 24px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
   border: 1px solid var(--line-bright);
   color: var(--green);
   background: rgba(2, 10, 6, 0.9);
-  place-items: center;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .inspector-cell-media-open:hover .inspector-cell-media-zoom,
@@ -12699,10 +12829,24 @@ textarea:focus-visible {
   display: none;
 }
 
-/* Detached from the preview, the action bar needs its own frame. */
+/* Detached from the preview, the bar sizes to its button rather than the
+   column it sits in: editing the picture should not out-shout the picture. */
 .inspector-image-track-actions .inspector-media-actions {
   margin-top: 18px;
-  border: 1px solid var(--line);
+  border-top: 0;
+  justify-content: start;
+  grid-template-columns: max-content;
+}
+
+.inspector-image-track-actions .inspector-media-actions button {
+  width: auto;
+  padding: 0 18px;
+  border: 1px solid var(--control-border);
+}
+
+.inspector-image-track-actions .inspector-media-actions button:hover,
+.inspector-image-track-actions .inspector-media-actions button:focus-visible {
+  border-color: var(--control-border-hover);
 }
 
 .inspector-image-track-actions .inspector-cell-actions {

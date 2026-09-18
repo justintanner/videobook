@@ -60,3 +60,32 @@ export function initialMusicDockView(
 ): 'sources' | 'soundtrack' {
   return setupStatus === 'applied' ? 'sources' : 'soundtrack'
 }
+
+export interface ComposerDockCloseOwner {
+  dockOpen: boolean
+  panelHasHeader: boolean
+  reviewPriority: boolean
+}
+
+/* The dock's own strip exists only to hold the hide control, so a contextual
+   panel that already draws a header row takes the control and the strip goes
+   away. Only while that panel is really on screen, though: a pending review
+   covers it, and a closed dock still needs somewhere to reopen from. */
+export function composerDockCloseInPanel(owner: ComposerDockCloseOwner): boolean {
+  return owner.dockOpen && owner.panelHasHeader && !owner.reviewPriority
+}
+
+export interface ComposerPanelHeaders {
+  musicSession: boolean
+  imageEditorDocked: boolean
+  cellInspector: boolean
+}
+
+/* Which contextual panel is on screen decides whether one of them draws the
+   dock's close control in a header row of its own. The music editor keeps its
+   own chrome and does not, so the composer's strip stays for it. */
+export function composerPanelDrawsClose(panels: ComposerPanelHeaders): boolean {
+  if (panels.musicSession) return false
+  if (panels.imageEditorDocked) return true
+  return panels.cellInspector
+}

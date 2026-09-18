@@ -65,6 +65,8 @@ export default defineConfig({
       'src/videobook/notebook-video-axis-arrange.test.ts',
       'src/videobook/notebook-group-images.test.ts',
       'src/videobook/command-plan.test.ts',
+      'src/videobook/composer-dock.test.ts',
+      'src/videobook/subject-workspace.test.ts',
       'src/videobook/confirm-sheet-keys.test.ts',
       'src/videobook/confirm-validation.test.ts',
       'src/videobook/mcp-client.test.ts',

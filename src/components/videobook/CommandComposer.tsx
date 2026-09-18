@@ -67,6 +67,10 @@ import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
 import type { ElevenLabsVoicesState } from '@/videobook/use-elevenlabs-voices'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import {
+  ComposerDockContext,
+  type ComposerDockControls,
+} from '@/components/videobook/composer-dock-context'
+import {
   ComposerOutcomeContext,
   type ComposerOutcomeSlot,
 } from '@/components/videobook/composer-outcome-context'
@@ -76,6 +80,7 @@ import type { VoiceConversation } from '@/videobook/use-voice-conversation'
 import {
   COMPOSER_DOCK_HIDE_LABEL,
   COMPOSER_DOCK_SHOW_LABEL,
+  composerDockCloseInPanel,
   composerDockReviewPriority,
   hideComposerDock,
   pauseComposerDockMedia,
@@ -121,6 +126,7 @@ interface CommandComposerProps {
   dockOpen?: boolean
   onDockOpenChange?: (open: boolean) => void
   contextualContent?: ReactNode
+  contextualHasHeader?: boolean
   bookId: string
   callTool: (tool: string, args: Record<string, unknown>) => Promise<unknown>
   chatModels: readonly ChatModelOption[]
@@ -192,6 +198,7 @@ export function CommandComposer({
   dockOpen,
   onDockOpenChange,
   contextualContent = null,
+  contextualHasHeader = false,
   bookId,
   callTool,
   chatModels,
@@ -782,9 +789,22 @@ export function CommandComposer({
   }
 
   const reviewPriority = composerDockReviewPriority(Boolean(children))
+  /* The strip above the dock body exists only to carry the hide control, so it
+     stands down whenever a contextual panel draws that control in its own
+     header row. */
+  const closeInPanel = composerDockCloseInPanel({
+    dockOpen: dockIsOpen,
+    panelHasHeader: contextualHasHeader,
+    reviewPriority,
+  })
+  const dockControls: ComposerDockControls = {
+    hide: hideDock,
+    hideLabel: COMPOSER_DOCK_HIDE_LABEL,
+  }
 
   const composer = (
     <ComposerOutcomeContext.Provider value={outcomeSlotValue}>
+    <ComposerDockContext.Provider value={dockControls}>
     <section
       ref={composerRootRef}
       className="command-composer"
@@ -792,30 +812,32 @@ export function CommandComposer({
       data-dock-open={dockIsOpen ? 'true' : 'false'}
       hidden={hidden}
     >
-      <div className="command-composer-dock-bar">
-        {dockIsOpen ? (
-          <button
-            type="button"
-            className="command-composer-hide"
-            data-composer-dock-hide=""
-            aria-label={COMPOSER_DOCK_HIDE_LABEL}
-            onClick={hideDock}
-          >
-            <X size={15} />
-          </button>
-        ) : (
-          <button
-            ref={reopenRef}
-            type="button"
-            className="command-composer-reopen"
-            data-composer-dock-show=""
-            aria-label={COMPOSER_DOCK_SHOW_LABEL}
-            onClick={showDock}
-          >
-            Show chat
-          </button>
-        )}
-      </div>
+      {!closeInPanel && (
+        <div className="command-composer-dock-bar">
+          {dockIsOpen ? (
+            <button
+              type="button"
+              className="command-composer-hide"
+              data-composer-dock-hide=""
+              aria-label={COMPOSER_DOCK_HIDE_LABEL}
+              onClick={hideDock}
+            >
+              <X size={15} />
+            </button>
+          ) : (
+            <button
+              ref={reopenRef}
+              type="button"
+              className="command-composer-reopen"
+              data-composer-dock-show=""
+              aria-label={COMPOSER_DOCK_SHOW_LABEL}
+              onClick={showDock}
+            >
+              Show chat
+            </button>
+          )}
+        </div>
+      )}
       <div
         className="command-composer-dock-body"
         hidden={!dockIsOpen}
@@ -1027,6 +1049,7 @@ export function CommandComposer({
       </form>
       </div>
     </section>
+    </ComposerDockContext.Provider>
     </ComposerOutcomeContext.Provider>
   )
 

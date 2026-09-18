@@ -1,5 +1,6 @@
 import {
   Camera,
+  ChevronDown,
   Eraser,
   Eye,
   EyeOff,
@@ -9,10 +10,11 @@ import {
   SquareDashed,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
+import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
 import type { ImageSubject, ImageSubjectMap } from '@/videobook/image-subject-map'
 import { focusableModalDialogElements } from '@/videobook/modal-dialog-interactions'
 import {
@@ -29,6 +31,7 @@ import {
   type ImageEditSelection,
   type ImageRegionReplacement,
 } from '@/videobook/image-edit-regions'
+import { subjectWorkspaceExpanded } from '@/videobook/subject-workspace'
 import type { NotebookCellInspectorAsset } from './NotebookCellInspector'
 
 export type ImageSubjectEditInput = {
@@ -427,6 +430,10 @@ export function NotebookMediaFullscreen({
     () => new Set(),
   )
   const [drawMode, setDrawMode] = useState(false)
+  /* What the viewer last asked of the collapse control; null while the
+     workspace follows the work instead. */
+  const [workspaceRequest, setWorkspaceRequest] = useState<boolean | null>(null)
+  const workspaceBodyId = useId()
   const [draftBox, setDraftBox] = useState<ImageEditRegion['box'] | null>(null)
   const [hoveredRegionId, setHoveredRegionId] = useState<string | null>(null)
   const [replacements, setReplacements] = useState<Record<string, string>>({})
@@ -712,6 +719,18 @@ export function NotebookMediaFullscreen({
   const showRegionList = regions.length > 0
     || (ready && (subjectMap?.subjects.length ?? 0) > 0)
   const analysisFailed = subjectMap?.status === 'failed'
+  const docked = Boolean(dockPortal)
+  const workspaceExpanded = subjectWorkspaceExpanded({
+    docked,
+    requested: workspaceRequest,
+    working: checkingCache || analyzing || pendingAction !== null,
+    hasContent: ready
+      || analysisFailed
+      || drawMode
+      || regions.length > 0
+      || selectedSubjects.length > 0
+      || Boolean(analysisUnavailableReason),
+  })
 
   const dialog = (
     <dialog
@@ -852,7 +871,11 @@ export function NotebookMediaFullscreen({
           {(dockPortal
             ? (panel: ReactNode) => createPortal(panel, dockPortal)
             : (panel: ReactNode) => panel)(
-          <aside className="notebook-subject-panel" aria-label="Subject editor">
+          <aside
+            className="notebook-subject-panel"
+            aria-label="Subject editor"
+            data-collapsed={docked && !workspaceExpanded ? 'true' : 'false'}
+          >
             <header>
               <span>SUBJECT WORKSPACE</span>
               <h2>People &amp; objects</h2>
@@ -864,7 +887,10 @@ export function NotebookMediaFullscreen({
                 className={ready && !overlaysHidden ? 'active' : ''}
                 aria-pressed={ready ? !overlaysHidden : undefined}
                 disabled={analyzeDisabled}
-                onClick={() => void analyzeSubjects()}
+                onClick={() => {
+                  setWorkspaceRequest(true)
+                  void analyzeSubjects()
+                }}
               >
                 {checkingCache || analyzing
                   ? <BusyIndicator size={14} />
@@ -885,6 +911,7 @@ export function NotebookMediaFullscreen({
                 aria-pressed={drawMode}
                 disabled={pendingAction !== null || composerEditing}
                 onClick={() => {
+                  setWorkspaceRequest(true)
                   setDrawMode((current) => !current)
                   setRemovalPreview(false)
                   setOverlaysHidden(false)
@@ -926,8 +953,34 @@ export function NotebookMediaFullscreen({
                   />
                 </label>
               )}
+              {docked && (
+                /* Collapsed, this row is the whole workspace, so it carries the
+                   controls the composer's own strip used to stack above it. */
+                <div className="notebook-subject-panel-controls">
+                  <button
+                    type="button"
+                    className="notebook-subject-collapse"
+                    aria-expanded={workspaceExpanded}
+                    aria-controls={workspaceBodyId}
+                    aria-label={workspaceExpanded
+                      ? 'Collapse subject workspace'
+                      : 'Expand subject workspace'}
+                    title={workspaceExpanded
+                      ? 'Collapse subject workspace'
+                      : 'Expand subject workspace'}
+                    onClick={() => setWorkspaceRequest(!workspaceExpanded)}
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                  <ComposerDockClose />
+                </div>
+              )}
             </div>
-            <div className="notebook-subject-panel-body" aria-live="polite">
+            <div
+              id={workspaceBodyId}
+              className="notebook-subject-panel-body"
+              aria-live="polite"
+            >
               {analysisUnavailableReason ? (
                 <div className="notebook-subject-state unavailable">
                   <Layers2 size={22} />

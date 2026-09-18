@@ -952,7 +952,7 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('aria-label="Edit @b3 image"')
   })
 
-  it('renders compact image edit and fullscreen actions for the same viewer', () => {
+  it('offers only edit in an image action bar, leaving fullscreen to the picture', () => {
     const imageCell: NotebookCell = {
       ...cell,
       type: 'image',
@@ -989,15 +989,16 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('inspector-image-media-content')
-    expect(html).toContain(
-      'class="inspector-media-actions inspector-media-actions-image"',
-    )
+    expect(html).toContain('class="inspector-media-actions"')
     expect(html).toContain('aria-label="Image preview actions"')
     expect(html).toContain('aria-label="Edit @g5 image"')
-    expect(html).toContain('aria-label="Open @g5 fullscreen"')
-    expect(html.indexOf('class="inspector-edit-button"')).toBeLessThan(
-      html.indexOf('class="inspector-fullscreen-button"'),
+    // The picture is already the fullscreen control, so the bar does not repeat
+    // it — and the badge on the picture says so in a word.
+    expect(html).not.toContain('inspector-fullscreen-button')
+    expect(html).toContain(
+      'class="inspector-cell-media-open" aria-label="Open @g5 fullscreen"',
     )
+    expect(html).toMatch(/class="inspector-cell-media-zoom"[\s\S]*?Full<\/span>/)
   })
 
   it('lays an image cell out in tracks beside the preview', () => {
@@ -1198,8 +1199,11 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('inspector-image-media-content')
     expect(html).not.toContain('inspector-image-meta')
     expect(html).not.toContain('inspector-cell-media-open')
-    // Video keeps its action bar attached to the preview.
+    // A <video> owns its own click, so it keeps the fullscreen button in the
+    // action bar attached to the preview.
     expect(html).toContain('class="inspector-media-actions"')
+    expect(html).toContain('class="inspector-fullscreen-button"')
+    expect(html).not.toContain('inspector-edit-button')
   })
 
   it('opens generated video output in the shared fullscreen viewer', () => {

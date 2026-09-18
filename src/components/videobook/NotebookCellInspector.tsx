@@ -571,8 +571,11 @@ function compatibleSource(
   return true
 }
 
-/* Edit and Fullscreen both open the fullscreen editor. The image dock renders
-   this itself in its actions track, so the preview keeps only the picture. */
+/* One button either way, because both open the same fullscreen editor. An
+   image preview is already a fullscreen control, so it offers the edit the
+   picture cannot; a video preview owns its own click, so it offers fullscreen.
+   The image dock renders this itself in its actions track, so the preview
+   keeps only the picture. */
 function CellMediaActions({
   address,
   isImage,
@@ -584,12 +587,12 @@ function CellMediaActions({
 }) {
   return (
     <div
-      className={`inspector-media-actions${isImage ? ' inspector-media-actions-image' : ''}`}
+      className="inspector-media-actions"
       role="group"
       aria-label={`${isImage ? 'Image' : 'Video'} preview actions`}
     >
-      {isImage && (
-        <span className="inspector-media-action-slot">
+      <span className="inspector-media-action-slot">
+        {isImage ? (
           <button
             type="button"
             className="inspector-edit-button"
@@ -598,17 +601,16 @@ function CellMediaActions({
           >
             <Pencil size={14} />Edit
           </button>
-        </span>
-      )}
-      <span className="inspector-media-action-slot">
-        <button
-          type="button"
-          className="inspector-fullscreen-button"
-          aria-label={`Open @${address} fullscreen`}
-          onClick={onOpen}
-        >
-          <Maximize2 size={14} />Fullscreen
-        </button>
+        ) : (
+          <button
+            type="button"
+            className="inspector-fullscreen-button"
+            aria-label={`Open @${address} fullscreen`}
+            onClick={onOpen}
+          >
+            <Maximize2 size={14} />Fullscreen
+          </button>
+        )}
       </span>
     </div>
   )
@@ -675,8 +677,10 @@ function NotebookCellMedia({
             onClick={openFullscreen}
           >
             <img key={previewUrl} src={previewUrl} alt={`@${address}`} />
+            {/* The picture is the only way to fullscreen now, so its badge
+                says so rather than leaving the affordance to be guessed. */}
             <span className="inspector-cell-media-zoom" aria-hidden="true">
-              <Maximize2 size={12} />
+              <Maximize2 size={13} />Full
             </span>
           </button>
         ) : (
