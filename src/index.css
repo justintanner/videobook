@@ -4094,7 +4094,7 @@ textarea:focus-visible {
   flex: 0 0 auto;
   padding: 0;
   border: 1px solid transparent;
-  color: #5d7e6b;
+  color: #7fa992;
   background: transparent;
   cursor: pointer;
   line-height: 0;
@@ -9831,17 +9831,55 @@ textarea:focus-visible {
   min-width: 0;
 }
 
+/* The dock's own header row, drawn whenever no contextual panel offers one. It
+   names the panel, carries the status line and gives the close a companion, so
+   the row is never a band holding one glyph and nothing below it shifts when a
+   status line clears. A closed dock keeps the old strip: there is nothing under
+   it to head, only the way back in. */
 .command-composer-dock-bar {
   display: flex;
-  justify-content: flex-end;
   align-items: center;
   position: relative;
   z-index: 2;
-  min-height: 0;
-  padding: 6px 8px 0;
+  min-height: 36px;
+  padding: 3px 8px 3px 17px;
+  border-bottom: 1px solid rgba(114, 231, 170, 0.12);
 }
 
-.command-composer-hide,
+.command-composer[data-dock-open='false'] .command-composer-dock-bar {
+  justify-content: flex-end;
+  min-height: 0;
+  padding: 6px 8px;
+  border-bottom: 0;
+}
+
+.command-composer-dock-title {
+  flex: 0 0 auto;
+  color: #7fa992;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.command-composer-dock-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 12px;
+  margin: 0 12px;
+  background: rgba(101, 190, 145, 0.2);
+}
+
+/* The status line rides the header's own padding, and the close takes the far
+   end of the row whether or not a status line is there to share it with. */
+.command-composer-dock-bar .command-result {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.command-composer-dock-bar .composer-dock-close-divider {
+  margin-left: auto;
+}
+
 .command-composer-reopen {
   display: inline-flex;
   align-items: center;
@@ -9857,18 +9895,11 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
-.command-composer-hide {
-  width: 32px;
-  padding: 0;
-}
-
-.command-composer-hide:focus-visible,
 .command-composer-reopen:focus-visible {
   outline: 2px solid var(--green);
   outline-offset: 2px;
 }
 
-.command-composer-hide:disabled,
 .command-composer-reopen:disabled {
   opacity: 1;
   cursor: pointer;
@@ -10045,21 +10076,31 @@ textarea:focus-visible {
   left: var(--app-gutter);
 }
 
-.command-result button {
+.command-result-dismiss {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
   padding: 0;
   border: 0;
-  color: var(--muted);
+  border-radius: 2px;
+  color: #7fa992;
   background: transparent;
   cursor: pointer;
 }
 
+.command-result-dismiss:hover,
+.command-result-dismiss:focus-visible {
+  color: var(--row-fg-hover);
+  background: var(--row-bg-hover);
+}
+
+/* A status line is as wide as the words in it, so the dismiss control sits
+   beside the sentence it clears instead of at the far edge of a dock that spans
+   the window. */
 .command-result {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
   gap: 8px;
   min-height: 32px;
@@ -10070,7 +10111,12 @@ textarea:focus-visible {
   font-size: 11px;
 }
 
+.command-result > svg {
+  flex: 0 0 auto;
+}
+
 .command-result span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

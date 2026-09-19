@@ -8,15 +8,15 @@ import {
   type ReactNode,
 } from 'react'
 import {
-  Check,
   ChevronDown,
   ListFilter,
   Send,
   WandSparkles,
-  X,
 } from 'lucide-react'
 import { createPortal } from 'react-dom'
+import { ComposerDockClose } from './ComposerDockClose'
 import { ComposerHistory } from './ComposerHistory'
+import { ComposerStatusLine } from './ComposerStatusLine'
 import type { ServerCommand } from '@/lib/command-registry'
 import type { AssetMentionCandidate } from '@/videobook/mention-suggestions'
 import { composerReferenceDescription, composerReferenceSuggestions, replaceComposerMention, type ComposerReference } from '@/videobook/composer-references'
@@ -81,6 +81,7 @@ import {
   COMPOSER_DOCK_HIDE_LABEL,
   COMPOSER_DOCK_SHOW_LABEL,
   composerDockCloseInPanel,
+  composerDockNoticeInHeader,
   composerDockReviewPriority,
   hideComposerDock,
   pauseComposerDockMedia,
@@ -789,9 +790,8 @@ export function CommandComposer({
   }
 
   const reviewPriority = composerDockReviewPriority(Boolean(children))
-  /* The strip above the dock body exists only to carry the hide control, so it
-     stands down whenever a contextual panel draws that control in its own
-     header row. */
+  /* The row above the dock body is the dock's own header, so it stands down
+     whenever a contextual panel draws one of its own for the close to sit in. */
   const closeInPanel = composerDockCloseInPanel({
     dockOpen: dockIsOpen,
     panelHasHeader: contextualHasHeader,
@@ -801,6 +801,15 @@ export function CommandComposer({
     hide: hideDock,
     hideLabel: COMPOSER_DOCK_HIDE_LABEL,
   }
+  const noticeInHeader = composerDockNoticeInHeader({ dockOpen: dockIsOpen, closeInPanel })
+  const noticeLine = !hidden && outcomeSlot === 'composer' && notice ? (
+    <ComposerStatusLine
+      message={notice.message}
+      tone={notice.tone}
+      dismissLabel="Dismiss notice"
+      onDismiss={onDismissNotice}
+    />
+  ) : null
 
   const composer = (
     <ComposerOutcomeContext.Provider value={outcomeSlotValue}>
@@ -815,15 +824,14 @@ export function CommandComposer({
       {!closeInPanel && (
         <div className="command-composer-dock-bar">
           {dockIsOpen ? (
-            <button
-              type="button"
-              className="command-composer-hide"
-              data-composer-dock-hide=""
-              aria-label={COMPOSER_DOCK_HIDE_LABEL}
-              onClick={hideDock}
-            >
-              <X size={15} />
-            </button>
+            <>
+              <span className="command-composer-dock-title">chat</span>
+              {noticeInHeader && noticeLine && (
+                <span className="command-composer-dock-divider" aria-hidden="true" />
+              )}
+              {noticeInHeader && noticeLine}
+              <ComposerDockClose />
+            </>
           ) : (
             <button
               ref={reopenRef}
@@ -852,36 +860,15 @@ export function CommandComposer({
           {contextualContent}
         </div>
       )}
-      {!hidden && outcomeSlot === 'composer' && notice && (
-        <div
-          className={`command-result ${notice.tone === 'error' ? 'command-result-error' : 'command-result-ok'}`}
-          role={notice.tone === 'error' ? 'alert' : 'status'}
-          aria-live="polite"
-        >
-          {notice.tone === 'error' ? <X size={13} /> : <Check size={13} />}
-          <span>{notice.message}</span>
-          {onDismissNotice && (
-            <button type="button" onClick={onDismissNotice} aria-label="Dismiss notice">
-              <X size={12} />
-            </button>
-          )}
-        </div>
-      )}
+      {!noticeInHeader && noticeLine}
 
       {!hidden && outcomeSlot === 'composer' && outcome && outcome.message !== notice?.message && (
-        <div
-          className={`command-result ${outcome.ok ? 'command-result-ok' : 'command-result-error'}`}
-          role="status"
-          aria-live="polite"
-        >
-          {outcome.ok ? <Check size={13} /> : <X size={13} />}
-          <span>{outcome.message}</span>
-          {!outcome.ok && (
-            <button type="button" onClick={() => setOutcome(null)} aria-label="Dismiss error">
-              <X size={12} />
-            </button>
-          )}
-        </div>
+        <ComposerStatusLine
+          message={outcome.message}
+          tone={outcome.ok ? 'info' : 'error'}
+          dismissLabel="Dismiss error"
+          onDismiss={outcome.ok ? undefined : () => setOutcome(null)}
+        />
       )}
 
       {!hidden && !context && children}

@@ -75,6 +75,20 @@ export function composerDockCloseInPanel(owner: ComposerDockCloseOwner): boolean
   return owner.dockOpen && owner.panelHasHeader && !owner.reviewPriority
 }
 
+export interface ComposerDockNoticeOwner {
+  dockOpen: boolean
+  closeInPanel: boolean
+}
+
+/* Where the status line reads. The dock's own header row names the panel and
+   carries the close, so the notice belongs beside them — one row, and the row
+   still stands when the notice clears. A panel that took the close draws no
+   such row, and a closed dock shows nothing but the way back in, so in both
+   cases the notice stays in the body above the command line. */
+export function composerDockNoticeInHeader(owner: ComposerDockNoticeOwner): boolean {
+  return owner.dockOpen && !owner.closeInPanel
+}
+
 export interface ComposerPanelHeaders {
   musicSession: boolean
   imageEditorDocked: boolean

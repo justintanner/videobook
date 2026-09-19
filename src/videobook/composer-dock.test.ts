@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   composerDockCloseInPanel,
+  composerDockNoticeInHeader,
   composerDockReviewPriority,
   type ComposerDockCloseOwner,
 } from './composer-dock'
@@ -27,5 +28,22 @@ describe('composer dock close ownership', () => {
     expect(composerDockCloseInPanel(owner({ dockOpen: false }))).toBe(false)
     expect(composerDockCloseInPanel(owner({ dockOpen: false, panelHasHeader: false })))
       .toBe(false)
+  })
+})
+
+describe('where the composer status line reads', () => {
+  it('rides the dock header the composer draws for its own close', () => {
+    const closeInPanel = composerDockCloseInPanel(owner({ panelHasHeader: false }))
+    expect(composerDockNoticeInHeader({ dockOpen: true, closeInPanel })).toBe(true)
+  })
+
+  it('stays in the body when a panel took the close and drew no header for it', () => {
+    const closeInPanel = composerDockCloseInPanel(owner())
+    expect(composerDockNoticeInHeader({ dockOpen: true, closeInPanel })).toBe(false)
+  })
+
+  it('stays in the body while the dock is closed, where the body hides it', () => {
+    const closeInPanel = composerDockCloseInPanel(owner({ dockOpen: false }))
+    expect(composerDockNoticeInHeader({ dockOpen: false, closeInPanel })).toBe(false)
   })
 })
