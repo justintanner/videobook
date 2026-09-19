@@ -9831,11 +9831,6 @@ textarea:focus-visible {
   min-width: 0;
 }
 
-/* The dock's own header row, drawn whenever no contextual panel offers one. It
-   names the panel, carries the status line and gives the close a companion, so
-   the row is never a band holding one glyph and nothing below it shifts when a
-   status line clears. A closed dock keeps the old strip: there is nothing under
-   it to head, only the way back in. */
 .command-composer-dock-bar {
   display: flex;
   align-items: center;
@@ -9844,13 +9839,6 @@ textarea:focus-visible {
   min-height: 36px;
   padding: 3px 8px 3px 17px;
   border-bottom: 1px solid rgba(114, 231, 170, 0.12);
-}
-
-.command-composer[data-dock-open='false'] .command-composer-dock-bar {
-  justify-content: flex-end;
-  min-height: 0;
-  padding: 6px 8px;
-  border-bottom: 0;
 }
 
 .command-composer-dock-title {
@@ -9880,36 +9868,16 @@ textarea:focus-visible {
   margin-left: auto;
 }
 
-.command-composer-reopen {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 0 8px;
-  border: 1px solid rgba(114, 231, 170, 0.22);
-  border-radius: 2px;
-  color: #a8cdb7;
-  background: transparent;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.command-composer-reopen:focus-visible {
-  outline: 2px solid var(--green);
-  outline-offset: 2px;
-}
-
-.command-composer-reopen:disabled {
-  opacity: 1;
-  cursor: pointer;
-}
-
 .command-composer-dock-body {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+.command-composer > .command-composer-dock-body {
+  flex: 0 1 auto;
+  overflow: auto;
 }
 
 .command-composer-dock-body[hidden] {
@@ -10024,10 +9992,6 @@ textarea:focus-visible {
 .command-composer-contextual .music-video-inspector {
   border: 0;
   background: transparent;
-}
-
-.command-composer[data-dock-open='false'] {
-  max-height: none;
 }
 
 /* The rail carries the state, so no child needs its own coloured chrome. The

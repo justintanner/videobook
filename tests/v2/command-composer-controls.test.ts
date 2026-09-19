@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 import { CommandComposer } from '../../src/components/videobook/CommandComposer'
 import {
   COMPOSER_DOCK_HIDE_LABEL,
-  COMPOSER_DOCK_SHOW_LABEL,
   composerDockDraftKey,
   composerDockReviewPriority,
   composerDockShouldOpen,
@@ -198,11 +197,10 @@ describe('CommandComposer controls', () => {
     for (const tag of html.match(/<button[^>]*>/g) ?? []) expect(tag).toMatch(/aria-label="[^"]+"/)
   })
 
-  it('keeps an enabled Hide chat control in ordinary, disabled, loading, error, action search and pending review states', () => {
+  it('keeps an enabled collapse control in expanded loading, error, action search and pending review states', () => {
     const hide = (html: string) => controlMarkup(html, COMPOSER_DOCK_HIDE_LABEL)
-    expect(hide(renderComposer(false))).toContain(`aria-label="${COMPOSER_DOCK_HIDE_LABEL}"`)
-    expect(hide(renderComposer(false))).not.toContain('disabled')
-    expect(hide(renderComposer(true))).not.toContain('disabled')
+    expect(hide(renderComposer(false))).toBe('')
+    expect(hide(renderComposer(true))).toBe('')
 
     const loading = renderToStaticMarkup(createElement(CommandComposer, {
       commands: [],
@@ -210,6 +208,7 @@ describe('CommandComposer controls', () => {
       actions: [],
       actionContext: { bookId: 'book-1', choices: {} },
       actionDiscovery: { key: 1, query: 'generate' },
+      dockOpen: true,
       actionStatus: { loading: true, error: null },
       actionsDisabled: true,
       onOpenActions: () => undefined,
@@ -259,6 +258,7 @@ describe('CommandComposer controls', () => {
       inputSession: 'chat',
       selectedModel: fallbackChatModelCatalog.defaultModel,
       voice: stubVoice({ phase: 'review', pendingReview: true }),
+      dockOpen: true,
       onEnsureCatalog: async () => undefined,
       onExecute: async () => ({ ok: true, message: 'Done' }),
       onModelChange: () => undefined,
@@ -267,12 +267,13 @@ describe('CommandComposer controls', () => {
         createElement('button', { type: 'button' }, 'Cancel'),
       ),
     }))
+    expect(hide(reviewing)).toContain(`aria-label="${COMPOSER_DOCK_HIDE_LABEL}"`)
     expect(hide(reviewing)).not.toContain('disabled')
     expect(reviewing).toContain('Generation review')
     expect(reviewing).toContain('Cancel')
   })
 
-  it('hides the input area behind a compact reopen control without writing or cancelling', () => {
+  it('collapses panels while keeping the normal input without writing or cancelling', () => {
     const dismissPending = () => {
       throw new Error('hide must not dismiss a pending review')
     }
@@ -325,7 +326,9 @@ describe('CommandComposer controls', () => {
         createElement('button', { type: 'button' }, 'Cancel'),
       ),
     }))
-    expect(controlMarkup(html, COMPOSER_DOCK_SHOW_LABEL)).toContain(`aria-label="${COMPOSER_DOCK_SHOW_LABEL}"`)
+    expect(html).not.toContain('Show chat')
+    expect(controlMarkup(html, 'Videobook command input')).toContain('aria-label="Videobook command input"')
+    expect(controlMarkup(html, 'Send command')).toContain('aria-label="Send command"')
     expect(controlMarkup(html, COMPOSER_DOCK_HIDE_LABEL)).toBe('')
     expect(html).toMatch(/class="command-composer-dock-body"[^>]*hidden/)
     expect(html).toContain('Generation review')

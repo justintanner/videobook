@@ -177,6 +177,13 @@ describe('composer focus through real workspace interactions', () => {
 
   it('starts in chat and preserves separate drafts through screen and project navigation', async () => {
     await focused(input())
+    expect(await page.getByLabel('Show chat', { exact: true }).count()).toBe(0)
+    expect(await page.locator('.command-composer-dock-bar').count()).toBe(0)
+    const composerBox = await page.locator('.command-composer').boundingBox()
+    const inputRowBox = await page.locator('.command-line-shell').boundingBox()
+    expect(composerBox).not.toBeNull()
+    expect(inputRowBox).not.toBeNull()
+    expect(composerBox!.height - inputRowBox!.height).toBeLessThanOrEqual(2)
     await page.keyboard.type('primary draft')
     expect(await input().textContent()).toBe('primary draft')
     for (const screen of ['Library', 'Jobs']) {
@@ -220,6 +227,30 @@ describe('composer focus through real workspace interactions', () => {
     await focused(input())
     expect(await input().textContent()).toBe('draf')
     expect(catalogRequests).toBe(initialCatalogRequests)
+  })
+
+  it('keeps the one-line input when panels collapse instead of hiding behind Show chat', async () => {
+    await focused(input())
+    await input().fill('draft')
+    await cell(videoCellId).click()
+    await focused(input())
+    expect(await cell(videoCellId).getAttribute('data-selection')).toBe('primary')
+    await page.getByLabel('Collapse chat', { exact: true }).click()
+    await focused(input())
+    expect(await page.locator('.command-composer .inspector').isVisible()).toBe(false)
+    expect(await page.getByLabel('Show chat', { exact: true }).count()).toBe(0)
+    expect(await page.locator('.command-composer-dock-bar').count()).toBe(0)
+    expect(await input().textContent()).toBe('draft')
+    expect(await cell(videoCellId).getAttribute('data-selection')).toBe('primary')
+    await page.keyboard.type('s')
+    expect(await input().textContent()).toBe('drafts')
+    await page.keyboard.press('Backspace')
+    await page.getByLabel('Open actions', { exact: true }).click()
+    await page.getByLabel('Close action search', { exact: true }).waitFor({ state: 'visible' })
+    await page.getByLabel('Collapse chat', { exact: true }).click()
+    await focused(input())
+    expect(await page.getByLabel('Close action search', { exact: true }).count()).toBe(0)
+    expect(await input().textContent()).toBe('draft')
   })
 
   it('selects a clip from its play ring, the way a picture selects from anywhere', async () => {

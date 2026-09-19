@@ -3337,7 +3337,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [mediaDropSlot, setMediaDropSlot] = useState<NotebookGridSlot | null>(null)
   const [notebookView, setNotebookView] = useState({ y: 0, zoom: 1 })
   const [notebookSurface, setNotebookSurface] = useState({ width: 0, height: 0 })
-  const [composerDockOpen, setComposerDockOpen] = useState(true)
+  const [composerDockOpen, setComposerDockOpen] = useState(false)
   const [imageDockHost, setImageDockHost] = useState<HTMLDivElement | null>(null)
   const [musicDockHost, setMusicDockHost] = useState<HTMLDivElement | null>(null)
   const [musicComposerTarget, setMusicComposerTarget] = useState<HTMLDivElement | null>(null)
@@ -5508,6 +5508,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setMediaFullscreenComposerSending(false)
     setMediaFullscreenSidebarEditing(false)
     setMediaFullscreen(session)
+    setComposerDockOpen(true)
     if (asset.type !== 'image' || !asset.objectHash) return
     void call('get_image_subject_map', {
       book_id: bookId,
@@ -5785,6 +5786,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const openWorkspaceActions = async (actionId?: string, values?: Record<string, unknown>, query?: string, returnFocus?: HTMLElement | null) => {
     if (mcp.state !== 'ready') return
+    setComposerDockOpen(true)
     const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const opener = returnFocus ?? actionDialog?.opener ?? (active === document.body || active?.closest('.command-composer')
       ? document.querySelector<HTMLElement>('[aria-label="Videobook command input"]') : active)
@@ -12044,7 +12046,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [voice.reportOutcome, voice.shareTypedTurn])
   useCommandComposerFocus(
     `${screen}:${bookId}:${notebook?.id ?? ''}`,
-    showCommandComposer && composerDockOpen && mcp.state === 'ready' && !busy && (Boolean(bookId) || Boolean(currentActionComposer)),
+    showCommandComposer && mcp.state === 'ready' && !busy && (Boolean(bookId) || Boolean(currentActionComposer)),
   )
   const fullscreenComposerContext = fullscreenImageEditor
     ? {

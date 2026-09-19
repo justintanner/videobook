@@ -79,7 +79,6 @@ import { VoiceComms, VoiceProviderSelect, VoiceToggle } from './VoiceComms'
 import type { VoiceConversation } from '@/videobook/use-voice-conversation'
 import {
   COMPOSER_DOCK_HIDE_LABEL,
-  COMPOSER_DOCK_SHOW_LABEL,
   composerDockCloseInPanel,
   composerDockNoticeInHeader,
   composerDockReviewPriority,
@@ -248,9 +247,9 @@ export function CommandComposer({
   )
   const inputRef = useRef<ComposerEditorHandle>(null)
   const composerRootRef = useRef<HTMLElement | null>(null)
-  const reopenRef = useRef<HTMLButtonElement | null>(null)
-  const [uncontrolledDockOpen, setUncontrolledDockOpen] = useState(true)
+  const [uncontrolledDockOpen, setUncontrolledDockOpen] = useState(false)
   const dockIsOpen = dockOpen ?? uncontrolledDockOpen
+  const dockWasOpenRef = useRef(dockIsOpen)
   const setDockOpen = (open: boolean) => {
     if (dockOpen === undefined) setUncontrolledDockOpen(open)
     onDockOpenChange?.(open)
@@ -374,7 +373,6 @@ export function CommandComposer({
   }
 
   const focusInput = (select = false) => {
-    if (!dockIsOpen) return
     captureCommandComposerFocus(
       () => inputRef.current?.element() ?? null,
       () => { if (select) inputRef.current?.select() },
@@ -382,21 +380,20 @@ export function CommandComposer({
   }
 
   const hideDock = () => {
+    setDismissed(true)
+    if (actionDiscovery) onCloseActionSearch(false)
     hideComposerDock({
       setOpen: setDockOpen,
       stopVoice: voice?.stop,
       pauseMedia: () => pauseComposerDockMedia(composerRootRef.current),
     })
-    captureCommandComposerFocus(() => reopenRef.current)()
-  }
-
-  const showDock = () => {
-    setDockOpen(true)
-    captureCommandComposerFocus(() => inputRef.current?.element() ?? null)()
+    focusInput()
   }
 
   useEffect(() => {
-    if (dockIsOpen) return
+    const wasOpen = dockWasOpenRef.current
+    dockWasOpenRef.current = dockIsOpen
+    if (!wasOpen || dockIsOpen) return
     previewPlayer.stop()
     voice?.stop()
     pauseComposerDockMedia(composerRootRef.current)
@@ -443,9 +440,9 @@ export function CommandComposer({
   const inputDisabled = preparedCommandMatches && preparedAction?.action.scope === 'global' ? actionsDisabled : disabled
 
   useLayoutEffect(() => {
-    if (!actionDiscovery || !dockIsOpen) return
+    if (!actionDiscovery) return
     captureCommandComposerFocus(() => inputRef.current?.element() ?? null)()
-  }, [actionDiscovery, dockIsOpen, portalTarget])
+  }, [actionDiscovery, portalTarget])
 
   const showOutcome = (next: ComposerOutcome) => {
     window.clearTimeout(successTimerRef.current)
@@ -537,6 +534,7 @@ export function CommandComposer({
     const preserveDraft = reviewCommand !== undefined
     const message = (reviewCommand ?? input).trim()
     if (!message || sending || inputDisabled || actionDiscovery || composingRef.current) return
+    setDockOpen(true)
     if (!preserveDraft) setVoiceReviewDraft(false)
     const chosenAction = preparedAction?.action.command === message.split(/\s/u)[0] ? preparedAction : null
     const executionSession = inputSession
@@ -751,7 +749,7 @@ export function CommandComposer({
         return
       }
     }
-    if (event.key === 'Escape' && historyOpen && !historyIdle(voice?.phase, historyRows.length, Boolean(voice))) {
+    if (event.key === 'Escape' && dockIsOpen && historyOpen && !historyIdle(voice?.phase, historyRows.length, Boolean(voice))) {
       event.preventDefault()
       setHistoryOpen(false)
       return
@@ -821,29 +819,14 @@ export function CommandComposer({
       data-dock-open={dockIsOpen ? 'true' : 'false'}
       hidden={hidden}
     >
-      {!closeInPanel && (
+      {dockIsOpen && !closeInPanel && (
         <div className="command-composer-dock-bar">
-          {dockIsOpen ? (
-            <>
-              <span className="command-composer-dock-title">chat</span>
-              {noticeInHeader && noticeLine && (
-                <span className="command-composer-dock-divider" aria-hidden="true" />
-              )}
-              {noticeInHeader && noticeLine}
-              <ComposerDockClose />
-            </>
-          ) : (
-            <button
-              ref={reopenRef}
-              type="button"
-              className="command-composer-reopen"
-              data-composer-dock-show=""
-              aria-label={COMPOSER_DOCK_SHOW_LABEL}
-              onClick={showDock}
-            >
-              Show chat
-            </button>
+          <span className="command-composer-dock-title">chat</span>
+          {noticeInHeader && noticeLine && (
+            <span className="command-composer-dock-divider" aria-hidden="true" />
           )}
+          {noticeInHeader && noticeLine}
+          <ComposerDockClose />
         </div>
       )}
       <div
@@ -892,6 +875,7 @@ export function CommandComposer({
           mcpRunning={mcpCallsRunning(mcpCalls)}
         />
       )}
+      </div>
 
       <form
         id={COMMAND_COMPOSER_FORM_ID}
@@ -1023,7 +1007,7 @@ export function CommandComposer({
           )}
           {voice && <VoiceProviderSelect voice={voice} />}
         </div>
-        {voice && <VoiceToggle voice={voice} onToggle={() => { previewPlayer.stop(); voice.toggle() }} />}
+        {voice && <VoiceToggle voice={voice} onToggle={() => { setDockOpen(true); previewPlayer.stop(); voice.toggle() }} />}
         <button
           type="submit"
           className="command-send"
@@ -1034,7 +1018,6 @@ export function CommandComposer({
         </button>
         {transmitting && <span className="command-transmit-scan" aria-hidden="true" />}
       </form>
-      </div>
     </section>
     </ComposerDockContext.Provider>
     </ComposerOutcomeContext.Provider>

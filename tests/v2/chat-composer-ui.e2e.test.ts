@@ -836,6 +836,11 @@ describe('chat composer browser flow', () => {
           timeout: MCP_ROUNDTRIP_MS,
         }).toBe(0)
       }
+      const collapse = page.getByLabel('Collapse chat', { exact: true })
+      if (await collapse.isVisible().catch(() => false)) {
+        await collapse.click()
+        await expect.poll(async () => await collapse.isVisible()).toBe(false)
+      }
       const input = page.getByLabel('Videobook command input')
       if (await input.count()) await input.fill('').catch(() => undefined)
     }
@@ -998,7 +1003,7 @@ describe('chat composer browser flow', () => {
     if (!detailInspectorBox || !scrollBox || !composerBox) {
       throw new Error('Could not measure selected-cell inspector layout')
     }
-    expect(page.getByLabel('Hide chat')).toBeTruthy()
+    expect(await page.getByLabel('Collapse chat').isVisible()).toBe(true)
     expect(detailInspectorBox.y).toBeGreaterThan(scrollBox.y)
     expect(detailInspectorBox.x).toBeGreaterThanOrEqual(composerBox.x - 2)
     expect(scrollBox.width).toBeGreaterThan(900)
@@ -1375,8 +1380,6 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await input.isEnabled(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
-    const showChat = page.getByLabel('Show chat')
-    if (await showChat.count() && await showChat.isVisible()) await showChat.click()
     const generationNode = page.locator(
       `.notebook-flow .react-flow__node[data-id="${fullscreenImageGenerationCellId}"]`,
     )
@@ -1605,8 +1608,6 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await input.isEnabled(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
-    const showChat = page.getByLabel('Show chat')
-    if (await showChat.count() && await showChat.isVisible()) await showChat.click()
     const videoNode = notebookCellNode(page, videoCellId)
     await videoNode.waitFor({ state: 'visible' })
     const videoAddress = (await videoNode.locator('.cell-node-footer strong')
@@ -1772,8 +1773,6 @@ describe('chat composer browser flow', () => {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
 
-    const showChat = page.getByLabel('Show chat')
-    if (await showChat.count() && await showChat.isVisible()) await showChat.click()
     const generationCell = notebookCellNode(page, generationCellId)
     await generationCell.click()
 
@@ -2819,10 +2818,11 @@ describe('chat composer browser flow', () => {
       await expect.poll(async () => await input.isEnabled(), {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe(true)
-      await expect.poll(async () => await page.getByLabel('Start voice conversation').isEnabled(), {
+      const startVoice = page.getByLabel('Start voice conversation')
+      await expect.poll(async () => await startVoice.isEnabled(), {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe(true)
-      await page.getByLabel('Start voice conversation').click()
+      await startVoice.click()
       await page.getByLabel('Voice comms').waitFor({ state: 'visible', timeout: 15_000 })
       await input.fill(prompt)
       await page.getByLabel('Send command').click()
@@ -2886,14 +2886,17 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await input.isEnabled(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
-    const showChat = page.getByLabel('Show chat')
-    if (await showChat.count() && await showChat.isVisible()) await showChat.click()
     await page.evaluate(() => window.localStorage.setItem(
       'videobook.cloud-generation-consent',
       'accepted',
     ))
 
     const expectDirectStart = async (cellId: string) => {
+      const collapse = page!.getByLabel('Collapse chat', { exact: true })
+      if (await collapse.isVisible()) {
+        await collapse.click()
+        await expect.poll(async () => await collapse.isVisible()).toBe(false)
+      }
       await notebookCellNode(page!, cellId).click()
       const generate = page!.getByLabel('Primary cell action')
         .getByRole('button', { name: 'Generate' })
