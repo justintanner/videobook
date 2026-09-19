@@ -8995,7 +8995,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       preferredTool?: string
       reason?: string
       routedParams?: Record<string, unknown>
-      summary?: string
       isCurrent?: () => boolean
     },
   ): Promise<ComposerOutcome> => {
@@ -9088,8 +9087,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ],
         reason: options?.reason
           ?? 'Generation can incur provider spend and sends the prompt and required references',
-        summary: options?.summary
-          ?? `Generate ${command.mediaKind} as ${notebookGridTag(draft.cell.slot)}${references}`,
+        // Never the chat model's own sentence: a review states what will
+        // actually run, down to the sources it really carries, so it cannot
+        // promise a reference the draft does not have.
+        summary: `Generate ${command.mediaKind} as ${notebookGridTag(draft.cell.slot)}${references}`,
       })
       requestPendingGenerationPreview(draft, currentNotebook)
       return generationApplyReadyOutcome(
@@ -9605,7 +9606,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         preferredTool: plan.tool,
         reason: plan.confirmation.reason,
         routedParams: plan.params,
-        summary: plan.summary,
       })
     }
     if (plan.confirmation.required === false) {
