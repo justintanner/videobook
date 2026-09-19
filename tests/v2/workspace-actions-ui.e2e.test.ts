@@ -609,7 +609,10 @@ describe('workspace action launcher with real endpoints', () => {
     const input = page.getByLabel('Videobook command input', { exact: true })
     await expect.poll(() => input.evaluate(element => element === document.activeElement)).toBe(true)
     // Out of the input, Tab walks the composer's own row to the send control.
-    for (const label of ['Chat model', 'Voice provider', 'Send command']) {
+    // The microphone stays unavailable while the review owns the composer, so
+    // Tab steps from the lit mode cell straight to send.
+    expect(await page.getByLabel('Start voice conversation', { exact: true }).isDisabled()).toBe(true)
+    for (const label of ['Chat model', 'Send command']) {
       await page.keyboard.press('Tab')
       await expect.poll(() => page.getByLabel(label, { exact: true })
         .evaluate(element => element === document.activeElement), { timeout: 5_000 })

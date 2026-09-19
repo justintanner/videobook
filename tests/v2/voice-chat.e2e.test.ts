@@ -45,6 +45,9 @@ function result(value: unknown): Record<string, unknown> | unknown[] {
   return JSON.parse(response.content[0]?.text ?? '{}') as Record<string, unknown> | unknown[]
 }
 
+
+const PROVIDER_OPTION: Record<string, string> = { auto: 'Auto', openai: 'OpenAI', xai: 'xAI' }
+
 describe('voice chat in the real browser', () => {
   let root: string
   let appUrl: string
@@ -55,6 +58,24 @@ describe('voice chat in the real browser', () => {
   let bookId: string
   const children: ChildProcess[] = []
   const startupOutput: string[] = []
+
+  function liveModeCell() {
+    return page.locator('.composer-mode-switch .composer-mode-cell-live')
+  }
+
+  async function selectVoiceProvider(mode: string) {
+    await liveModeCell().click()
+    await page.getByRole('menuitemradio', { name: PROVIDER_OPTION[mode], exact: true }).click()
+  }
+
+  // Voice off, the bar names the chat model, so the provider that is remembered
+  // is read back from the engine menu rather than off the strip.
+  async function checkedVoiceProvider(): Promise<string> {
+    await liveModeCell().click()
+    const checked = await page.getByRole('menuitemradio', { checked: true }).last().getAttribute('aria-label')
+    await page.keyboard.press('Escape')
+    return checked ?? ''
+  }
 
   function start(args: string[], env: NodeJS.ProcessEnv) {
     const child = spawn(process.execPath, args, { cwd: process.cwd(), env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -76,7 +97,7 @@ describe('voice chat in the real browser', () => {
     await page.goto(appUrl)
     await page.getByLabel('Start voice conversation').waitFor({ state: 'visible', timeout: 30_000 })
     await waitFor(() => page.getByLabel('Start voice conversation').isEnabled())
-    await page.getByLabel('Voice provider', { exact: true }).selectOption(voiceMode)
+    await selectVoiceProvider(voiceMode)
   }
 
   async function ensureImage() {
@@ -119,7 +140,7 @@ describe('voice chat in the real browser', () => {
     await page.goto(appUrl)
     await page.getByLabel('Videobook command input').waitFor({ state: 'visible', timeout: 30_000 })
     await waitFor(() => page.getByLabel('Start voice conversation').isEnabled())
-    await page.getByLabel('Voice provider', { exact: true }).selectOption(voiceMode)
+    await selectVoiceProvider(voiceMode)
   }, 90_000)
 
   afterAll(async () => {
@@ -148,32 +169,37 @@ describe('voice chat in the real browser', () => {
     const input = page.getByLabel('Videobook command input')
     await input.fill('Keep this typed draft')
     const toggle = page.getByLabel('Start voice conversation')
-    const provider = page.getByLabel('Voice provider', { exact: true })
-    await provider.focus()
-    await expect.poll(() => provider.evaluate(el => el === document.activeElement)).toBe(true)
+    const model = page.getByLabel('Chat model', { exact: true })
+    await model.focus()
+    await expect.poll(() => model.evaluate(el => el === document.activeElement)).toBe(true)
     await toggle.focus()
     await expect.poll(() => toggle.evaluate(el => el === document.activeElement)).toBe(true)
     expect(await toggle.getAttribute('aria-pressed')).toBe('false')
-    expect(await page.locator('.command-channel .command-model-selector select').getAttribute('aria-label')).toBe('Chat model')
-    expect(await page.locator('.command-channel .voice-provider-field select').getAttribute('aria-label')).toBe('Voice provider')
+    // Voice off: the strip is the lit model cell plus the idle microphone, and
+    // the provider is one click away inside that cell's menu.
+    expect(await page.locator('.composer-mode-switch .composer-mode-cell-live').getAttribute('aria-label')).toBe('Chat model')
+    expect(await page.locator('.composer-mode-switch .composer-mode-cell-idle').getAttribute('aria-label')).toBe('Start voice conversation')
     for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 640 }, { width: 640, height: 320 }]) {
       await page.setViewportSize(viewport)
       const bounds = await toggle.boundingBox()
+      const actions = await page.locator('.command-actions-toggle').boundingBox()
       expect(bounds).not.toBeNull()
-      expect(bounds!.width).toBeGreaterThanOrEqual(44)
-      expect(bounds!.height).toBeGreaterThanOrEqual(44)
+      // The composer row sits on one tier: every cell matches the actions
+      // button rather than standing 44px tall beside 32px neighbours.
+      expect(bounds!.height).toBe(actions!.height)
+      expect(bounds!.width).toBe(actions!.width)
       expect(bounds!.x).toBeGreaterThanOrEqual(0)
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width)
       expect(await page.getByLabel('Send command').isVisible()).toBe(true)
       expect(await page.getByLabel('Chat model').isVisible()).toBe(true)
-      expect(await page.getByLabel('Voice provider', { exact: true }).isVisible()).toBe(true)
+      expect(await page.getByLabel('Send command').boundingBox()).toMatchObject({ height: actions!.height })
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       expect(overflow).toBeLessThanOrEqual(1)
-      const providerBounds = await provider.boundingBox()
-      expect(providerBounds!.height).toBeGreaterThanOrEqual(28)
-      expect(providerBounds!.x).toBeGreaterThanOrEqual(0)
-      expect(providerBounds!.x + providerBounds!.width).toBeLessThanOrEqual(viewport.width)
-      const controls = await page.locator('.command-actions-controls, .command-model-selector, .voice-controls, .command-send').evaluateAll(elements => elements.map(element => {
+      const modelBounds = await model.boundingBox()
+      expect(modelBounds!.height).toBe(actions!.height)
+      expect(modelBounds!.x).toBeGreaterThanOrEqual(0)
+      expect(modelBounds!.x + modelBounds!.width).toBeLessThanOrEqual(viewport.width)
+      const controls = await page.locator('.command-actions-controls, .composer-mode-switch, .command-send').evaluateAll(elements => elements.map(element => {
         const box = element.getBoundingClientRect()
         return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }
       }))
@@ -192,22 +218,21 @@ describe('voice chat in the real browser', () => {
   })
 
   it('remembers the provider selection without starting the microphone', async () => {
-    const provider = page.getByLabel('Voice provider', { exact: true })
-    await provider.selectOption('xai')
+    await selectVoiceProvider('xai')
     expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
     await page.reload()
     await waitFor(() => page.getByLabel('Start voice conversation').isEnabled())
-    expect(await provider.inputValue()).toBe('xai')
+    expect(await checkedVoiceProvider()).toBe('xAI')
     expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
     expect(await page.locator('.voice-comms').count()).toBe(0)
-    await provider.selectOption(voiceMode)
+    await selectVoiceProvider(voiceMode)
   })
 
   it.skipIf(live)('recovers from a missing key without changing the draft and never restarts on reload', async () => {
     await page.getByLabel('Videobook command input').fill('Keep this typed draft')
     await page.evaluate(() => performance.clearMarks('videobook-voice'))
     for (const mode of ['openai', 'xai', 'auto']) {
-      await page.getByLabel('Voice provider', { exact: true }).selectOption(mode)
+      await selectVoiceProvider(mode)
       await page.getByLabel('Start voice conversation').click()
       await page.getByRole('alert').waitFor({ state: 'visible', timeout: 15_000 })
       const failure = await page.getByLabel('Voice comms').innerText()
@@ -374,7 +399,7 @@ describe('voice chat in the real browser', () => {
 
   it.skipIf(!live || process.env.VIDEOBOOK_VOICE_TEST_OPENAI_UNAVAILABLE !== '1')('cancels Auto during xAI fallback without reviving capture or retaining a session', async () => {
     await useRecording('ready')
-    await page.getByLabel('Voice provider', { exact: true }).selectOption('auto')
+    await selectVoiceProvider('auto')
     await page.getByLabel('Videobook command input').fill('Keep the cancelled connection draft')
     await page.evaluate(() => performance.clearMarks('videobook-voice'))
     const starts: string[] = []
@@ -527,7 +552,7 @@ describe('voice chat in the real browser', () => {
     await expect.poll(() => page.locator('.voice-ring').evaluate(element => getComputedStyle(element).transform)).toBe('none')
     const requests: string[] = []
     page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/api/voice')) requests.push(request.url()) })
-    await page.getByLabel('Voice provider', { exact: true }).selectOption(voiceMode === 'openai' ? 'xai' : 'openai')
+    await selectVoiceProvider(voiceMode === 'openai' ? 'xai' : 'openai')
     await expect.poll(() => page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
     await delay(500)
     expect(requests).toHaveLength(0)

@@ -8,10 +8,8 @@ import {
   type ReactNode,
 } from 'react'
 import {
-  ChevronDown,
   ListFilter,
   Send,
-  WandSparkles,
 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { ComposerDockClose } from './ComposerDockClose'
@@ -75,7 +73,8 @@ import {
   type ComposerOutcomeSlot,
 } from '@/components/videobook/composer-outcome-context'
 import { SpeakCommandPreview } from '@/components/videobook/SpeakCommandPreview'
-import { VoiceComms, VoiceProviderSelect, VoiceToggle } from './VoiceComms'
+import { VoiceComms } from './VoiceComms'
+import { ComposerModeSwitch } from './ComposerModeSwitch'
 import type { VoiceConversation } from '@/videobook/use-voice-conversation'
 import {
   COMPOSER_DOCK_HIDE_LABEL,
@@ -299,8 +298,6 @@ export function CommandComposer({
     voicePhase: voice?.phase,
   })
   const lastHistoryEpochRef = useRef(historyEpoch)
-  const selectedModelOption = chatModels.find((model) => model.id === selectedModel)
-    ?? chatModels[0]
 
   useLayoutEffect(() => {
     inputSessionRef.current = inputSession
@@ -976,45 +973,27 @@ export function CommandComposer({
           }}
           onKeyDown={handleInputKey}
         />
-        {/* Chat model and voice provider share one bordered strip. The CHAT and
-            VOICE micro-labels are gone; each segment is named by its own select's
-            aria-label, and the voice half is marked by a mic glyph rather than by
-            colour. Both stay independently focusable native selects. */}
-        <div className="command-channel">
-          {context ? (
-            <span className="command-context" title={context.description}>
-              <WandSparkles size={12} aria-hidden="true" />
-              <strong>{context.label}</strong>
-            </span>
-          ) : (
-            <label
-              className="command-model-selector"
-              title={selectedModelOption?.description}
-            >
-              <select
-                value={selectedModel}
-                disabled={modelSelectionDisabled || sending}
-                aria-label="Chat model"
-                data-testid="chat-model-selector"
-                onChange={(event) => onModelChange(event.target.value)}
-              >
-                {chatModels.map((model) => (
-                  <option key={model.id} value={model.id}>{model.id}</option>
-                ))}
-              </select>
-              <ChevronDown size={11} aria-hidden="true" />
-            </label>
-          )}
-          {voice && <VoiceProviderSelect voice={voice} />}
-        </div>
-        {voice && <VoiceToggle voice={voice} onToggle={() => { setDockOpen(true); previewPlayer.stop(); voice.toggle() }} />}
+        {/* Mode and engine are one strip now: the lit cell names the mode you
+            are in and carries that mode's engine, and the dim cell switches
+            mode. ComposerModeSwitch owns the whole cluster, microphone
+            included, so this row has one control per job. */}
+        <ComposerModeSwitch
+          chatModels={chatModels}
+          selectedModel={selectedModel}
+          modelSelectionDisabled={modelSelectionDisabled}
+          sending={sending}
+          context={context}
+          voice={voice}
+          onModelChange={onModelChange}
+          onToggleVoice={() => { setDockOpen(true); previewPlayer.stop(); voice?.toggle() }}
+        />
         <button
           type="submit"
           className="command-send"
           disabled={actionDiscovery ? actionsDisabled || actionMatches.length === 0 || actionStatus.loading : inputDisabled || sending || !input.trim()}
           aria-label={actionDiscovery ? 'Prepare action' : 'Send command'}
         >
-          {sending ? <BusyIndicator size={16} /> : <Send size={16} />}
+          {sending ? <BusyIndicator size={15} /> : <Send size={15} />}
         </button>
         {transmitting && <span className="command-transmit-scan" aria-hidden="true" />}
       </form>

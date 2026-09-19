@@ -14,6 +14,11 @@ import { ComposerHistory } from '../../src/components/videobook/ComposerHistory'
 import { composerHistory } from '../../src/videobook/composer-history'
 import { VoiceComms } from '../../src/components/videobook/VoiceComms'
 import { fallbackChatModelCatalog } from '../../src/videobook/chat-models'
+import {
+  composerEngineMenu,
+  engineMenuInitialIndex,
+  engineMenuItems,
+} from '../../src/videobook/composer-engine-menu'
 import { emptyMcpCallLog } from '../../src/videobook/mcp-activity'
 import type { VoiceConversation } from '../../src/videobook/use-voice-conversation'
 import type { VoiceCaption, VoicePhase } from '../../server/src/voice-contract'
@@ -126,10 +131,44 @@ function controlledRegion(html: string): { button: string; region: string; id: s
 }
 
 describe('CommandComposer controls', () => {
-  it('shows the complete selected model identifier', () => {
+  it('shows the model by name on the bar and keeps its full id for the menu', () => {
     const html = renderComposer(true)
 
-    expect(html).toContain('>gpt-6-astra</option>')
+    // The bar carries the short name; gpt-6-astra now lives one click deep, in
+    // the engine menu, which is closed in this static render.
+    expect(controlMarkup(html, 'Chat model')).toContain('aria-haspopup="menu"')
+    expect(html).toContain('>Astra</span>')
+    expect(html).not.toContain('gpt-6-astra')
+  })
+
+  it('offers the model and the speech provider from the one engine menu', () => {
+    const groups = composerEngineMenu({
+      chatModels: fallbackChatModelCatalog.models,
+      selectedModel: fallbackChatModelCatalog.defaultModel,
+      modelSelectable: true,
+      voiceMode: 'auto',
+    })
+
+    expect(groups.map((group) => group.id)).toEqual(['model', 'speech'])
+    const items = engineMenuItems(groups)
+    expect(items.map((item) => item.label)).toEqual(['Astra', 'Auto', 'OpenAI', 'xAI'])
+    expect(items.map((item) => item.position)).toEqual([0, 1, 2, 3])
+    expect(items.find((item) => item.label === 'Astra')?.detail).toBe('gpt-6-astra')
+    // The provider stays pickable from text mode, before voice is ever started.
+    expect(engineMenuInitialIndex(items)).toBe(0)
+    expect(items.filter((item) => item.checked).map((item) => item.label)).toEqual(['Astra', 'Auto'])
+  })
+
+  it('drops the model group when a context composer owns the request', () => {
+    const groups = composerEngineMenu({
+      chatModels: fallbackChatModelCatalog.models,
+      selectedModel: fallbackChatModelCatalog.defaultModel,
+      modelSelectable: false,
+      voiceMode: 'openai',
+    })
+
+    expect(groups.map((group) => group.id)).toEqual(['speech'])
+    expect(engineMenuItems(groups).map((item) => item.position)).toEqual([0, 1, 2])
   })
 
   it('keeps model selection available while command execution is busy', () => {
@@ -143,7 +182,7 @@ describe('CommandComposer controls', () => {
     expect(controlMarkup(renderComposer(true), 'Chat model')).toContain('disabled')
   })
 
-  it('shows image edit context instead of the chat model selector', () => {
+  it('shows image edit context instead of the chat model name', () => {
     const html = renderComposer(false, {
       description: 'Two selected subjects',
       label: '@C3 IMAGE EDIT',
@@ -183,16 +222,18 @@ describe('CommandComposer controls', () => {
     }))
 
     expect(html).not.toContain('command-control-kind')
-    expect(html).toContain('command-channel')
+    expect(html).toContain('composer-mode-switch')
+    // Voice is off, so the strip is the lit text cell plus the idle microphone.
     expect(controlMarkup(html, 'Chat model')).toContain('aria-label="Chat model"')
-    expect(controlMarkup(html, 'Voice provider')).toContain('aria-label="Voice provider"')
+    expect(controlMarkup(html, 'Chat model')).toContain('composer-mode-cell-live')
+    expect(html).toContain('>TEXT</span>')
     expect(controlMarkup(html, 'Open actions')).toContain('aria-label="Open actions"')
-    expect(controlMarkup(html, 'Start voice conversation')).toContain('aria-label="Start voice conversation"')
+    expect(controlMarkup(html, 'Start voice conversation')).toContain('aria-pressed="false"')
+    expect(controlMarkup(html, 'Start voice conversation')).toContain('composer-mode-cell-idle')
     expect(controlMarkup(html, 'Send command')).toContain('aria-label="Send command"')
-    // Two independently focusable native selects, not one merged control.
-    expect(html.match(/<select/g)).toHaveLength(2)
-    // The voice half is marked by a glyph, so the halves differ by more than color.
-    expect(html).toMatch(/class="voice-provider-field"[^>]*>\s*<svg/)
+    // The old pair of native selects is gone; one menu button carries both.
+    expect(html.match(/<select/g)).toBeNull()
+    expect(html).not.toContain('aria-label="Voice provider"')
     // Nothing in the row is named by its position or its color.
     for (const tag of html.match(/<button[^>]*>/g) ?? []) expect(tag).toMatch(/aria-label="[^"]+"/)
   })
@@ -487,9 +528,13 @@ describe('VoiceComms caption visibility', () => {
     expect(html).toContain('Cancel')
     expect(html).toContain('Use Apply or Cancel on screen.')
     expect(controlMarkup(html, 'Close history')).toContain('type="button"')
+    // Talking, the strip flips: the text cell becomes the way out and the voice
+    // cell is the lit one, naming the provider that is carrying the call.
     expect(controlMarkup(html, 'Stop voice conversation')).toContain('aria-pressed="true"')
-    expect(controlMarkup(html, 'Chat model')).toContain('aria-label="Chat model"')
-    expect(controlMarkup(html, 'Voice provider')).toContain('aria-label="Voice provider"')
+    expect(controlMarkup(html, 'Stop voice conversation')).toContain('composer-mode-cell-idle')
+    expect(controlMarkup(html, 'Voice provider')).toContain('composer-mode-cell-live')
+    expect(html).toContain('>VOICE</span>')
+    expect(html).not.toContain('aria-label="Chat model"')
   })
 
   it('keeps Connecting voice distinct from Waiting for reply in the statusline', () => {

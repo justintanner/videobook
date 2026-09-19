@@ -1,0 +1,245 @@
+/* The composer's right-hand cluster. One strip on the actions button's 32px
+   tier, so the whole command row reads as a single height: the lit cell states
+   the mode and carries that mode's engine inline, the dim cell is a glyph-only
+   square that switches mode. Nothing here is named by colour alone — the lit
+   cell keeps its word, and the idle cell keeps its aria-label. */
+.composer-mode-switch {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  height: 32px;
+}
+
+.composer-mode-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(114, 231, 170, 0.26);
+  color: #7fa992;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.composer-mode-cell:first-child { border-radius: 2px 0 0 2px; }
+.composer-mode-cell:last-of-type { border-radius: 0 2px 2px 0; }
+.composer-mode-cell:only-of-type { border-radius: 2px; }
+.composer-mode-cell + .composer-mode-cell { margin-left: -1px; }
+
+/* The idle half is exactly the actions button: a 32px square holding a glyph. */
+.composer-mode-cell-idle {
+  flex: 0 0 auto;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
+}
+
+.composer-mode-cell-idle:not(:disabled):hover,
+.composer-mode-cell-idle:not(:disabled):focus-visible {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg);
+  background: var(--control-bg-hover);
+}
+
+/* The lit half takes the same "on" treatment every other control in the app
+   uses, so being in a mode looks like every other engaged state. */
+.composer-mode-cell-live {
+  z-index: 1;
+  padding: 0 11px;
+  border-color: var(--green);
+  color: var(--control-fg-hover);
+  background: #103421;
+}
+
+.composer-mode-cell-live[data-voice-phase] {
+  color: #8fffb8;
+  background: #0b2b1b;
+}
+
+.composer-mode-cell-live[data-voice-phase='review'] {
+  border-color: rgba(242, 220, 170, 0.62);
+  color: #f2dcaa;
+  background: rgba(60, 46, 16, 0.55);
+}
+
+.composer-mode-cell-idle[data-voice-phase='error'] {
+  border-color: rgba(240, 126, 126, 0.5);
+  color: #ffae9f;
+}
+
+.composer-mode-cell:focus-visible {
+  z-index: 2;
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.composer-mode-cell:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.composer-mode-name {
+  flex: 0 0 auto;
+}
+
+.composer-mode-divider {
+  flex: 0 0 auto;
+  opacity: 0.45;
+}
+
+/* The engine reads as a name, not a shouted label: same colour as the mode word
+   it follows, but larger and unspaced, so the pair scans as "mode · engine". */
+.composer-mode-engine {
+  min-width: 0;
+  max-width: 132px;
+  overflow: hidden;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The microphone level the connection reports, in the glyph slot. Voice mode is
+   always live, so the meter is what marks the cell rather than a static mic. */
+.composer-mode-meter {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+
+.composer-mode-meter > span {
+  width: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  transform: scaleY(calc(0.3 + var(--voice-level, 0) * 0.7));
+  transform-origin: bottom;
+  transition: transform 90ms linear;
+}
+
+.composer-mode-meter > span:nth-child(1) { height: 6px; }
+.composer-mode-meter > span:nth-child(2) { height: 12px; }
+.composer-mode-meter > span:nth-child(3) { height: 9px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-mode-meter > span { transition: none; }
+}
+
+/* One menu, both groups, whichever mode opened it: the chat model stays
+   reachable from voice, and the speech provider stays pickable before voice has
+   ever been started. */
+.composer-engine-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  width: min(336px, calc(100vw - 32px));
+  margin: 0;
+  padding: 6px 0;
+  border: 1px solid var(--line-bright);
+  border-radius: 2px;
+  background: #04120c;
+  box-shadow: 0 -14px 30px rgba(0, 0, 0, 0.62);
+  list-style: none;
+}
+
+.composer-engine-group {
+  padding: 7px 14px 5px;
+  color: #7fa992;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.composer-engine-group:not(:first-child) {
+  margin-top: 5px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+}
+
+.composer-engine-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 14px;
+  border: 0;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-engine-item[aria-checked='true'] {
+  background: rgba(47, 127, 82, 0.2);
+}
+
+.composer-engine-item:hover,
+.composer-engine-item:focus-visible {
+  outline: 0;
+  color: var(--row-fg-hover);
+  background: var(--row-bg-hover);
+}
+
+.composer-engine-check {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 13px;
+  margin-top: 2px;
+  color: var(--green);
+}
+
+.composer-engine-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.composer-engine-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.composer-engine-head > strong {
+  color: var(--control-fg-hover);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.composer-engine-head > small {
+  margin-left: auto;
+  color: #7fa992;
+  font-size: 10px;
+}
+
+.composer-engine-note {
+  color: #8fb9a1;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+/* Out of room, the engine name goes first and the mode word stays: which mode
+   you are in is the thing the strip exists to say. */
+@media (max-width: 600px) {
+  .composer-mode-cell-live { gap: 6px; padding: 0 9px; }
+  .composer-mode-divider,
+  .composer-mode-engine { display: none; }
+}

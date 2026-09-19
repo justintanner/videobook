@@ -1,24 +1,9 @@
 .command-line-shell {
-  grid-template-areas: 'actions editor model voice send';
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  grid-template-areas: 'actions editor mode send';
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
 }
 
-/* Chat model + voice provider as one strip on the 32px secondary tier. The two
-   segments are divided by a hairline, not by two separate borders. */
-.command-line-shell > .command-channel {
-  grid-area: model;
-  display: flex;
-  align-items: stretch;
-  min-width: 0;
-  height: 32px;
-  border: 1px solid rgba(114, 231, 170, 0.26);
-  border-radius: 2px;
-  background: transparent;
-}
-
-.command-line-shell > .command-channel > * + * {
-  border-left: 1px solid rgba(114, 231, 170, 0.18);
-}
+.command-line-shell > .composer-mode-switch { grid-area: mode; }
 
 .command-actions-controls {
   grid-area: actions;
@@ -122,8 +107,8 @@
 
 @media (max-width: 600px) {
   .command-line-shell {
-    grid-template-areas: 'editor editor editor editor' 'actions model voice send';
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: 'editor editor editor' 'actions mode send';
+    grid-template-columns: auto minmax(0, 1fr) auto;
     padding-top: 5px;
     padding-bottom: 6px;
   }
@@ -139,7 +124,7 @@
   .composer-history { padding-left: 9px; padding-right: 11px; }
   .mcp-call-head { width: calc(100% + 20px); margin-left: -9px; margin-right: -11px; padding-left: 9px; padding-right: 11px; }
   .command-line-shell > .composer-actions-panel { padding-left: 12px; padding-right: 12px; }
-  .command-line-shell > .command-channel { justify-self: end; }
+  .command-line-shell > .composer-mode-switch { justify-self: end; }
   .command-line-shell > .composer-actions-panel .workspace-actions-list > button { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .composer-actions-panel > header label { font-size: 0; }
   .composer-actions-panel > header select { max-width: 110px; font-size: 11px; }
@@ -147,14 +132,12 @@
 }
 
 @media (max-width: 420px) {
-  .command-line-shell:has(> .voice-controls) {
-    grid-template-areas: 'editor editor editor editor' 'actions model voice send';
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
-    gap: 6px;
-  }
+  /* Same two-row shape as 600px, tightened: the editor owns the top row and
+     the controls share the bottom one. */
+  .command-line-shell:has(> .composer-mode-switch) { gap: 6px; }
 
-  .command-line-shell > .command-channel { justify-self: stretch; min-width: 0; }
-  .command-model-selector select { max-width: none; }
+  .command-line-shell > .composer-mode-switch { justify-self: stretch; min-width: 0; }
+  .composer-mode-switch > .composer-mode-cell-live { flex: 1 1 auto; }
 }
 
 @media (max-height: 500px) {
@@ -162,8 +145,9 @@
   .composer-actions-panel .composer-actions-help { display: none; }
 }
 
-/* Touch: the same 44px floor index.css applies to the library's controls, and
-   that the voice e2e holds the microphone to at four viewports. */
+/* Touch: the same 44px floor index.css applies to the library's controls. The
+   composer row keeps its own 32px tier -- every cell in it is a wide target
+   rather than a tall one -- so only the call rows grow here. */
 @media (pointer: coarse) {
   .mcp-call-head { min-height: 44px; }
 }

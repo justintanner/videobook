@@ -2638,9 +2638,15 @@ describe('chat composer browser flow', () => {
     expect(await runningCell.locator('.cell-state-shimmer > span').count()).toBe(0)
     expect(await runningCell.locator('.cell-target-handle').count()).toBe(2)
     expect(await runningCell.locator('.cell-target-connection-count').count()).toBe(0)
-    const selector = page.getByLabel('Chat model')
-    expect(await selector.locator('option').allTextContents()).toEqual(['gpt-6-astra'])
-    expect(await selector.inputValue()).toBe('gpt-6-astra')
+    // The bar carries the model's name; its full id is one click deep, on the
+    // matching row of the engine menu.
+    const selector = page.getByLabel('Chat model', { exact: true })
+    expect(await selector.innerText()).toContain('Astra')
+    await selector.click()
+    const astra = page.getByRole('menuitemradio', { name: 'Astra', exact: true })
+    expect(await astra.getAttribute('aria-checked')).toBe('true')
+    expect(await astra.innerText()).toContain('gpt-6-astra')
+    await page.keyboard.press('Escape')
 
     // @c3 is the only fixture cell with real media output, so it is the grid
     // address the server-side resolver can rewrite to an artifact id.
@@ -2752,8 +2758,8 @@ describe('chat composer browser flow', () => {
     }
     try {
       await openApp()
-      const selector = page.getByLabel('Chat model')
-      expect(await selector.inputValue()).toBe('gpt-6-astra')
+      const selector = page.getByLabel('Chat model', { exact: true })
+      expect(await selector.innerText()).toContain('Astra')
       const input = page.getByLabel('Videobook command input')
       await input.waitFor({ state: 'visible', timeout: 30_000 })
       await expect.poll(async () => await input.isEnabled(), {
@@ -2828,10 +2834,19 @@ describe('chat composer browser flow', () => {
       await page.getByLabel('Send command').click()
       const review = page.getByLabel('Chat action review')
       await review.waitFor({ state: 'visible', timeout: 30_000 })
-      expect(await page.locator('.command-channel .command-model-selector select').getAttribute('aria-label'))
-        .toBe('Chat model')
-      expect(await page.locator('.command-channel .voice-provider-field select').getAttribute('aria-label'))
-        .toBe('Voice provider')
+      // Exactly one lit cell, naming the engaged mode's engine, and one glyph
+      // cell that switches mode. Which pair is showing depends on whether the
+      // call survived: without a key the connection errors straight back to
+      // text, and the strip has to say so rather than keep claiming voice.
+      const liveCell = page.locator('.composer-mode-switch .composer-mode-cell-live')
+      const idleCell = page.locator('.composer-mode-switch .composer-mode-cell-idle')
+      expect(await liveCell.count()).toBe(1)
+      expect(await idleCell.count()).toBe(1)
+      const talking = await page.getByLabel('Stop voice conversation').count() > 0
+      expect(await liveCell.getAttribute('aria-label'))
+        .toBe(talking ? 'Voice provider' : 'Chat model')
+      expect(await idleCell.getAttribute('aria-label'))
+        .toBe(talking ? 'Stop voice conversation' : 'Start voice conversation')
       const captions = page.locator('[data-testid="composer-history"]')
       expect(await page.getByLabel('Close history').isVisible()).toBe(true)
       expect(await captions.isVisible()).toBe(true)
