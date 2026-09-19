@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { useContext, useId, useLayoutEffect, useRef, useState } from 'react'
 import { ChevronDown, X } from 'lucide-react'
 import { McpCallRow } from './McpCallRows'
 import {
@@ -9,9 +9,61 @@ import {
   historyIdle,
   type ComposerHistoryRow,
 } from '@/videobook/composer-history'
-import type { VoiceCaption, VoicePhase } from '../../../server/src/voice-contract'
+import type { VoicePhase } from '../../../server/src/voice-contract'
+import { ComposerHistoryChromeContext } from './composer-history-chrome'
 
 const PIN_THRESHOLD_PX = 28
+
+export function ComposerHistoryControls() {
+  const chrome = useContext(ComposerHistoryChromeContext)
+  if (!chrome || chrome.idle || !chrome.hosted) return null
+  return (
+    <ComposerHistoryControlsStrip
+      captionId={chrome.captionId}
+      open={chrome.open}
+      onToggle={chrome.onToggle}
+      onClose={chrome.onClose}
+    />
+  )
+}
+
+function ComposerHistoryControlsStrip({
+  captionId,
+  open,
+  onToggle,
+  onClose,
+}: {
+  captionId: string
+  open: boolean
+  onToggle: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="composer-panel-controls">
+      <button
+        type="button"
+        className="voice-captions-toggle"
+        aria-controls={captionId}
+        aria-expanded={open}
+        aria-label={captionToggleLabel(open)}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onToggle}
+      >
+        <ChevronDown size={13} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="composer-history-close"
+        aria-label="Close chat"
+        title="Close chat"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onClose}
+      >
+        <X size={15} aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
 
 export function ComposerHistory({
   rows,
@@ -30,11 +82,14 @@ export function ComposerHistory({
   onClose: () => void
   onToggleCall: (id: number) => void
 }) {
-  const captionId = useId()
+  const localCaptionId = useId()
+  const chrome = useContext(ComposerHistoryChromeContext)
+  const captionId = chrome?.captionId ?? localCaptionId
   const scrollerRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
   const [showLatest, setShowLatest] = useState(false)
   const idle = historyIdle(phase, rows.length, voicePresent)
+  const hosted = Boolean(chrome?.hosted)
 
   useLayoutEffect(() => {
     const element = scrollerRef.current
@@ -49,32 +104,14 @@ export function ComposerHistory({
 
   return (
     <div className="composer-history-panel" data-history-open={open ? 'true' : 'false'}>
-      {/* The panel's own chrome, on the spine every other child sits on. Collapse
-          keeps the transcript and hides it; close ends the chat and leaves the
-          command line, which is where a fresh load starts too. */}
-      <div className="composer-panel-controls">
-        <button
-          type="button"
-          className="voice-captions-toggle"
-          aria-controls={captionId}
-          aria-expanded={open}
-          aria-label={captionToggleLabel(open)}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={onToggle}
-        >
-          <ChevronDown size={13} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="composer-history-close"
-          aria-label="Close chat"
-          title="Close chat"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={onClose}
-        >
-          <X size={15} aria-hidden="true" />
-        </button>
-      </div>
+      {!hosted && (
+        <ComposerHistoryControlsStrip
+          captionId={captionId}
+          open={open}
+          onToggle={onToggle}
+          onClose={onClose}
+        />
+      )}
       <div
         ref={scrollerRef}
         id={captionId}
@@ -128,7 +165,7 @@ function HistoryRow({
   if (row.kind === 'call') {
     return <McpCallRow call={row.call} onToggle={onToggleCall} />
   }
-  const caption: VoiceCaption = row.caption
+  const caption = row.caption
   return (
     <p data-final={caption.final} data-role={caption.role}>
       <span className="sr-only">{caption.role === 'user' ? 'YOU' : 'COPILOT'}</span>

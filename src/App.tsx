@@ -124,6 +124,7 @@ import {
 import { composerReferences } from '@/videobook/composer-references'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
+import { ComposerHistoryControls } from '@/components/videobook/ComposerHistory'
 import { JobsScreen } from '@/components/videobook/JobsScreen'
 import {
   BusRiverEdge,
@@ -12511,6 +12512,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           >
             <Braces size={15} />
           </button>
+          <ComposerHistoryControls />
           <ComposerDockClose />
         </div>
       </header>

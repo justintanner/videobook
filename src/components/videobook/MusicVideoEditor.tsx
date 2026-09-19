@@ -31,6 +31,7 @@ import {
   composerDockHideSkipsBlurCommit,
   initialMusicDockView,
 } from '@/videobook/composer-dock'
+import { restoreFocusElement } from '@/videobook/command-composer-focus'
 import { waveformEnvelopePath } from '@/videobook/waveform-path'
 import {
   CanonicalSequencePlayer,
@@ -430,7 +431,10 @@ export function MusicVideoEditor({
     return () => {
       document.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = previousOverflow
-      returnFocus?.focus()
+      restoreFocusElement(returnFocus)
+      document.querySelector<HTMLElement>(
+        '[aria-label="Videobook command input"]',
+      )?.focus()
     }
   }, [onClose, returnFocus])
 
@@ -888,6 +892,21 @@ export function MusicVideoEditor({
           <p>Master soundtrack · {formatTime(durationFrames, fps)} · {fps.toFixed(2)} fps</p>
         </div>
         <div className="music-video-header-actions">
+          {dockPortal && setup.status === 'needs-audio-track' && (
+            <button type="button" disabled={Boolean(working)} onClick={() => void createTrack('audio')}>
+              <Plus size={15} /> Create soundtrack track
+            </button>
+          )}
+          {dockPortal && (setup.status === 'ready' || setup.status === 'applying') && (
+            <button type="button" disabled={Boolean(working)} onClick={() => void applySetup()}>
+              <AudioWaveform size={15} /> Apply soundtrack
+            </button>
+          )}
+          {dockPortal && setup.status === 'error' && (
+            <button type="button" disabled={Boolean(working)} onClick={() => void onReviewSetup()}>
+              <RefreshCw size={15} /> Review again
+            </button>
+          )}
           <button type="button" disabled={Boolean(working) || undoSteps.length === 0} onClick={() => void undo()}>
             <Undo2 size={16} /> Undo
           </button>
@@ -1005,9 +1024,11 @@ export function MusicVideoEditor({
             {setup.status === 'needs-audio-track' && (
               <>
                 <p>{setup.message}</p>
-                <button type="button" disabled={Boolean(working)} onClick={() => void createTrack('audio')}>
-                  <Plus size={15} /> Create soundtrack track
-                </button>
+                {!dockPortal && (
+                  <button type="button" disabled={Boolean(working)} onClick={() => void createTrack('audio')}>
+                    <Plus size={15} /> Create soundtrack track
+                  </button>
+                )}
               </>
             )}
             {(setup.status === 'ready' || setup.status === 'applying') && (
@@ -1015,9 +1036,11 @@ export function MusicVideoEditor({
                 <strong>{setup.summary}</strong>
                 <p>{setup.operationCount} atomic operations · ends at frame {setup.timelineLimitFrame}</p>
                 {setup.warnings.map((warning) => <small key={warning}>{warning}</small>)}
-                <button type="button" disabled={Boolean(working)} onClick={() => void applySetup()}>
-                  <AudioWaveform size={15} /> Apply soundtrack
-                </button>
+                {!dockPortal && (
+                  <button type="button" disabled={Boolean(working)} onClick={() => void applySetup()}>
+                    <AudioWaveform size={15} /> Apply soundtrack
+                  </button>
+                )}
               </>
             )}
             {setup.status === 'applied' && (
@@ -1026,9 +1049,11 @@ export function MusicVideoEditor({
             {setup.status === 'error' && (
               <>
                 <p className="music-video-error">{setup.message}</p>
-                <button type="button" disabled={Boolean(working)} onClick={() => void onReviewSetup()}>
-                  <RefreshCw size={15} /> Review again
-                </button>
+                {!dockPortal && (
+                  <button type="button" disabled={Boolean(working)} onClick={() => void onReviewSetup()}>
+                    <RefreshCw size={15} /> Review again
+                  </button>
+                )}
               </>
             )}
           </aside>

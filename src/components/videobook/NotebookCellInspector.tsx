@@ -666,12 +666,14 @@ function NotebookCellMedia({
   address,
   allowFullscreen,
   inlineActions = true,
+  overlayMetadata = true,
   onOpenFullscreen,
 }: {
   asset: NotebookCellInspectorAsset
   address: string
   allowFullscreen: boolean
   inlineActions?: boolean
+  overlayMetadata?: boolean
   onOpenFullscreen: (asset: NotebookCellInspectorAsset) => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -729,7 +731,7 @@ function NotebookCellMedia({
         ) : (
           <img key={previewUrl} src={previewUrl} alt={`@${address}`} />
         )}
-        {!isAudio && (
+        {!isAudio && overlayMetadata && (
           <NotebookMediaMetadata
             className="inspector-cell-metadata"
             width={asset.width}
@@ -1615,6 +1617,7 @@ function MediaCellInspector({
       address={address}
       allowFullscreen={canOpenFullscreen}
       inlineActions={false}
+      overlayMetadata={false}
       onOpenFullscreen={onOpenFullscreen}
     />
   ) : (

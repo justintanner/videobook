@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ComposerHistory } from '../../src/components/videobook/ComposerHistory'
+import {
+  ComposerHistory,
+  ComposerHistoryControls,
+} from '../../src/components/videobook/ComposerHistory'
+import { ComposerHistoryChromeContext } from '../../src/components/videobook/composer-history-chrome'
 import {
   COMPOSER_HISTORY_CAP,
   HISTORY_AUTO_CLOSE_MS,
@@ -250,6 +254,41 @@ describe('history auto-close', () => {
     expect(html).toContain('composer-panel-controls')
     expect(html).toMatch(/aria-label="Close history"[\s\S]*aria-label="Close chat"/)
     expect(html.indexOf('composer-panel-controls')).toBeLessThan(html.indexOf('composer-history voice-captions'))
+
+    const hosted = {
+      idle: false,
+      hosted: true,
+      open: true,
+      captionId: 'hist',
+      onToggle: () => undefined,
+      onClose: () => undefined,
+    }
+    const hostedHtml = renderToStaticMarkup(createElement(
+      ComposerHistoryChromeContext.Provider,
+      { value: hosted },
+      createElement('div', { className: 'inspector' },
+        createElement('header', null,
+          createElement('span', { className: 'inspector-cell-title' }, 'Image'),
+          createElement('div', { className: 'inspector-header-actions' },
+            createElement(ComposerHistoryControls),
+          ),
+        ),
+      ),
+      createElement(ComposerHistory, {
+        rows,
+        phase: 'listening',
+        voicePresent: true,
+        open: true,
+        onToggle: () => undefined,
+        onClose: () => undefined,
+        onToggleCall: () => undefined,
+      }),
+    ))
+    const headerEnd = hostedHtml.indexOf('</header>')
+    expect(headerEnd).toBeGreaterThan(0)
+    expect(hostedHtml.slice(0, headerEnd)).toContain('composer-panel-controls')
+    expect(hostedHtml.slice(hostedHtml.indexOf('composer-history-panel')))
+      .not.toContain('composer-panel-controls')
 
     // Closing raises the floor past everything on screen, so the panel goes idle.
     const closedThrough = composerHistoryEpoch(rows)

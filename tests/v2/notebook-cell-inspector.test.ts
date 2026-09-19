@@ -921,10 +921,12 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('preload="metadata"')
     expect(html).toContain('controls=""')
     expect(html).toContain('/files/vid-source/original.mp4')
-    expect(html).toContain('class="notebook-media-metadata inspector-cell-metadata"')
-    expect(html).toContain('<span>1920×1080</span>')
-    expect(html).toContain('dateTime="PT30S"')
-    expect(html).toContain('aria-label="Duration 0:30"')
+    expect(html).toContain('inspector-media-facts')
+    expect(html).not.toContain('inspector-cell-metadata')
+    expect(html).toContain('<dt>Dimensions</dt>')
+    expect(html).toContain('1920 \u00d7 1080')
+    expect(html).toContain('<dt>Duration</dt>')
+    expect(html).toContain('<dd>0:30</dd>')
     expect(html).toContain('aria-label="GPT-4o Translation"')
     expect(html).toContain('aria-label="ElevenLabs Transcript"')
     expect(html).not.toContain('aria-label="Video analysis"')
@@ -990,6 +992,8 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('inspector-media-row-content')
+    expect(html).toContain('inspector-media-facts')
+    expect(html).not.toContain('inspector-cell-metadata')
     expect(html).toContain('class="inspector-media-actions"')
     expect(html).toContain('aria-label="Image preview actions"')
     expect(html).toContain('aria-label="Edit @g5 image"')
@@ -1044,7 +1048,9 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('inspector-media-row-actions')
     // The preview column is sized from the asset's own aspect.
     expect(html).toContain('style="--media-aspect:0.56')
-    // Facts that used to sit only in the overlay badge.
+    // Facts that used to sit only in the overlay badge, which the row no longer paints.
+    expect(html).not.toContain('inspector-cell-metadata')
+    expect(html).toContain('inspector-media-facts')
     expect(html).toContain('<dt>Dimensions</dt>')
     expect(html).toContain('480 \u00d7 854')
     expect(html).toContain('<dt>Aspect</dt>')
@@ -1323,6 +1329,8 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('aria-label="Open @b3 fullscreen"')
+    expect(html).toContain('class="notebook-media-metadata inspector-cell-metadata"')
+    expect(html).not.toContain('inspector-media-facts')
     expect(html).toContain('<span>3840×2160</span>')
     expect(html).toContain('<svg')
     expect(html).toContain('Fullscreen</button>')
@@ -1515,7 +1523,9 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Version 2 of 2 · current')
     expect(html).toContain('value="image-two" selected=""')
     expect(html).toContain('/files/img-frame-2/original.jpg')
-    expect(html).toContain('<span>320×240</span>')
+    expect(html).not.toContain('inspector-cell-metadata')
+    expect(html).toContain('<dt>Dimensions</dt>')
+    expect(html).toContain('320 \u00d7 240')
     expect(html).not.toContain('aria-label="Duration 0:30"')
   })
 

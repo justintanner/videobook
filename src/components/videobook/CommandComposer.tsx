@@ -14,6 +14,10 @@ import {
 import { createPortal } from 'react-dom'
 import { ComposerDockClose } from './ComposerDockClose'
 import { ComposerHistory } from './ComposerHistory'
+import {
+  ComposerHistoryChromeContext,
+  type ComposerHistoryChromeValue,
+} from './composer-history-chrome'
 import { ComposerStatusLine } from './ComposerStatusLine'
 import type { ServerCommand } from '@/lib/command-registry'
 import type { AssetMentionCandidate } from '@/videobook/mention-suggestions'
@@ -81,6 +85,7 @@ import {
   composerDockCloseInPanel,
   composerDockNoticeInHeader,
   composerDockReviewPriority,
+  composerHistoryChromeHosted,
   hideComposerDock,
   pauseComposerDockMedia,
 } from '@/videobook/composer-dock'
@@ -260,6 +265,7 @@ export function CommandComposer({
   const [renderedActionKey, setRenderedActionKey] = useState(actionDiscovery?.key)
   const [preparedAction, setPreparedAction] = useState<{ action: WorkspaceAction; values?: Record<string, unknown> } | null>(null)
   const suggestionId = useId()
+  const historyCaptionId = useId()
   const inputSessionRef = useRef(inputSession)
   const killBufferRef = useRef('')
   const historyRef = useRef<string[]>([])
@@ -787,11 +793,26 @@ export function CommandComposer({
   const reviewPriority = composerDockReviewPriority(Boolean(children))
   /* The row above the dock body is the dock's own header, so it stands down
      whenever a contextual panel draws one of its own for the close to sit in. */
-  const closeInPanel = composerDockCloseInPanel({
+  const closeOwner = {
     dockOpen: dockIsOpen,
     panelHasHeader: contextualHasHeader,
     reviewPriority,
-  })
+  }
+  const closeInPanel = composerDockCloseInPanel(closeOwner)
+  const historyChromeHosted = composerHistoryChromeHosted(closeOwner)
+  const historyIsIdle = historyIdle(
+    voice?.phase,
+    historyRows.length,
+    Boolean(voice),
+  )
+  const historyChrome: ComposerHistoryChromeValue = {
+    idle: historyIsIdle,
+    hosted: historyChromeHosted,
+    open: historyOpen,
+    captionId: historyCaptionId,
+    onToggle: () => setHistoryOpen((current) => !current),
+    onClose: () => setClosedThrough(historyEpoch),
+  }
   const dockControls: ComposerDockControls = {
     hide: hideDock,
     hideLabel: COMPOSER_DOCK_HIDE_LABEL,
@@ -809,6 +830,7 @@ export function CommandComposer({
   const composer = (
     <ComposerOutcomeContext.Provider value={outcomeSlotValue}>
     <ComposerDockContext.Provider value={dockControls}>
+    <ComposerHistoryChromeContext.Provider value={historyChrome}>
     <section
       ref={composerRootRef}
       className="command-composer"
@@ -998,6 +1020,7 @@ export function CommandComposer({
         {transmitting && <span className="command-transmit-scan" aria-hidden="true" />}
       </form>
     </section>
+    </ComposerHistoryChromeContext.Provider>
     </ComposerDockContext.Provider>
     </ComposerOutcomeContext.Provider>
   )

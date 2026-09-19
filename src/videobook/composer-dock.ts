@@ -1,4 +1,21 @@
 export const COMPOSER_DOCK_HIDE_LABEL = 'Collapse chat'
+export const COMPOSER_DOCK_MAX_PX = 560
+export const COMPOSER_DOCK_MAX_DVH = 56
+export const COMPOSER_DOCK_HEADER_PX = 40
+export const COMPOSER_MEDIA_ROW_PAD_PX = 24
+
+export function composerDockHeightPx(viewportHeightPx: number): number {
+  return Math.min(
+    COMPOSER_DOCK_MAX_PX,
+    (COMPOSER_DOCK_MAX_DVH * viewportHeightPx) / 100,
+  )
+}
+
+export function composerMediaRowHeightPx(viewportHeightPx: number): number {
+  return composerDockHeightPx(viewportHeightPx)
+    - COMPOSER_DOCK_HEADER_PX
+    - COMPOSER_MEDIA_ROW_PAD_PX
+}
 
 type ComposerDockOpenReason =
   | 'selection'
@@ -60,6 +77,15 @@ export function initialMusicDockView(
   return setupStatus === 'applied' ? 'sources' : 'soundtrack'
 }
 
+export function musicDockViewAfterSetup(
+  setupStatus: string,
+  current: 'sources' | 'soundtrack' | 'clip',
+): 'sources' | 'soundtrack' | 'clip' {
+  return setupStatus === 'applied' && current === 'soundtrack'
+    ? 'sources'
+    : current
+}
+
 export interface ComposerDockCloseOwner {
   dockOpen: boolean
   panelHasHeader: boolean
@@ -68,6 +94,10 @@ export interface ComposerDockCloseOwner {
 
 export function composerDockCloseInPanel(owner: ComposerDockCloseOwner): boolean {
   return owner.dockOpen && owner.panelHasHeader && !owner.reviewPriority
+}
+
+export function composerHistoryChromeHosted(owner: ComposerDockCloseOwner): boolean {
+  return composerDockCloseInPanel(owner)
 }
 
 export interface ComposerDockNoticeOwner {

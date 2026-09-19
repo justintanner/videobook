@@ -216,6 +216,20 @@ describe('notebook chrome tokens', () => {
     expect(fullscreen).toContain('notebook-subject-panel-controls')
   })
 
+  it('gives the inspector and history chrome one 40px header row', () => {
+    const composer = rule(css, '.command-composer')
+    expect(declaration(composer, '--dock-h')).toBe('min(560px, 56dvh)')
+    expect(declaration(composer, '--dock-header-h')).toBe('40px')
+    expect(declaration(rule(css, '.composer-notebook-dock.inspector > header'), 'height'))
+      .toBe('var(--dock-header-h, 40px)')
+    expect(css).toContain(
+      '--media-row-h: calc(var(--dock-h, 560px) - var(--dock-header-h, 40px) - 24px)',
+    )
+    expect(declaration(rule(css, '.inspector-media-body'), 'padding-bottom')).toBe('0')
+    expect(app).toContain('<ComposerHistoryControls />')
+    expect(fullscreen).toContain('<ComposerHistoryControls />')
+  })
+
   it('gives the dock close one class both panels wear', () => {
     const close = rule(css, '.composer-dock-close')
     expect(pixelCount(declaration(close, 'width'))).toBe(30)

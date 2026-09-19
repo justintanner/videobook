@@ -58,6 +58,13 @@ function flushFocus(owner: Document, state: ComposerFocusState): void {
     if (overlay && !overlay.contains(target)) return
     const active = owner.activeElement
     if (active && active !== target && active.matches(editingSelector) && !active.closest('[hidden], [inert]')) return
+    if (
+      overlay
+      && active instanceof Element
+      && overlay.contains(active)
+      && !active.closest('.command-composer')
+      && active !== target
+    ) return
   }
   target.focus({ preventScroll: true })
   pending.afterFocus?.()
@@ -184,6 +191,37 @@ export function useCommandComposerFocus(scope: string, enabled: boolean): void {
     if (!window.matchMedia('(pointer: fine)').matches) return
     queueFocus(document, state)
   }, [enabled, scope])
+}
+
+export function dismissQueuedComposerFocus(): void {
+  const state = focusState(document)
+  state.epoch += 1
+  state.pending = null
+}
+
+export function restoreFocusElement(element: HTMLElement | null): void {
+  dismissQueuedComposerFocus()
+  const label = element?.getAttribute('aria-label')
+  const fullscreenTrigger = Boolean(label?.includes('fullscreen'))
+  if (fullscreenTrigger) {
+    if (element?.isConnected) {
+      element.focus()
+      return
+    }
+    if (label) {
+      document.querySelector<HTMLElement>(
+        `[aria-label="${CSS.escape(label)}"]`,
+      )?.focus()
+    }
+    return
+  }
+  if (element?.isConnected) {
+    element.focus()
+    return
+  }
+  document.querySelector<HTMLElement>(
+    '[aria-label="Videobook command input"]',
+  )?.focus()
 }
 
 export function restoreCommandComposerFocus(

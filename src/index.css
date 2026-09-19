@@ -3962,7 +3962,7 @@ textarea:focus-visible {
   /* A flex item, so a tall panel would have taken the header's padding back
      out of it rather than scrolling its own body. */
   flex: 0 0 auto;
-  height: var(--dock-header-h, 52px);
+  height: var(--dock-header-h, 40px);
   padding: 0 14px;
   border-bottom: 1px solid var(--line);
 }
@@ -3990,7 +3990,7 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 48px;
+  height: var(--dock-header-h, 40px);
   padding: 0 18px;
   border-bottom: 1px solid var(--line);
   color: #5f8971;
@@ -4068,6 +4068,21 @@ textarea:focus-visible {
   height: 30px;
   align-items: center;
   gap: 2px;
+}
+
+.inspector-header-actions .composer-panel-controls,
+.notebook-subject-panel-controls .composer-panel-controls {
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+}
+
+.inspector-header-actions .voice-captions-toggle,
+.inspector-header-actions .composer-history-close,
+.notebook-subject-panel-controls .voice-captions-toggle,
+.notebook-subject-panel-controls .composer-history-close {
+  width: 30px;
+  height: 30px;
 }
 
 .inspector-cell-title svg,
@@ -4159,7 +4174,7 @@ textarea:focus-visible {
 }
 
 .inspector-body {
-  height: calc(100% - 48px);
+  height: calc(100% - var(--dock-header-h, 40px));
   overflow: auto;
   padding: 18px 22px 28px;
   animation: inspector-body-enter 180ms ease-out;
@@ -4608,6 +4623,7 @@ textarea:focus-visible {
   flex-direction: column;
   overflow: hidden;
   padding-top: 0;
+  padding-bottom: 0;
 }
 
 .inspector-media-content {
@@ -9801,7 +9817,7 @@ textarea:focus-visible {
   /* The bar a docked panel is titled by. It gives the title and its controls
      room to breathe, and the media row subtracts it to know what height is
      left, so raising it here never leaves a preview standing past the dock. */
-  --dock-header-h: 52px;
+  --dock-header-h: 40px;
 
   position: fixed;
   right: var(--app-gutter);
@@ -11108,6 +11124,9 @@ textarea:focus-visible {
   right: auto;
   left: auto;
   bottom: auto;
+  min-height: 0;
+  max-height: calc(100dvh - var(--app-gutter) * 2);
+  overflow: auto;
 }
 
 .notebook-media-fullscreen.playback-only {
@@ -11644,6 +11663,10 @@ textarea:focus-visible {
   z-index: 1;
 }
 
+.notebook-media-fullscreen.docked .notebook-media-composer-host .command-composer {
+  max-height: min(560px, 56dvh);
+}
+
 .notebook-media-fullscreen.subject-editor .notebook-subject-stage-label {
   bottom: 92px;
 }
@@ -12078,6 +12101,17 @@ textarea:focus-visible {
   opacity: 1;
 }
 
+.music-video-composer-host .command-composer {
+  position: relative;
+  inset: auto;
+  z-index: 1;
+  width: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 @media (max-width: 720px) {
   .media-library-backdrop {
     padding: 10px;
@@ -12113,6 +12147,10 @@ textarea:focus-visible {
   .notebook-media-fullscreen.subject-editor {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(120px, 1fr) minmax(0, 1fr) auto;
+  }
+
+  .notebook-media-fullscreen.subject-editor.docked {
+    grid-template-rows: minmax(120px, 1fr) auto;
   }
 
   .notebook-media-fullscreen.playback-only {
@@ -12674,7 +12712,7 @@ textarea:focus-visible {
 }
 
 .inspector-media-row-content {
-  --media-row-h: calc(var(--dock-h, 560px) - var(--dock-header-h, 52px) - 24px);
+  --media-row-h: calc(var(--dock-h, 560px) - var(--dock-header-h, 40px) - 24px);
   /* Wide media would take the whole row height as width and leave the facts
      beside it a strip, so the column stops at a share of the dock. A portrait
      take never reaches it. */
@@ -12833,8 +12871,8 @@ textarea:focus-visible {
 
 .inspector-media-facts {
   display: grid;
-  margin: 0 0 18px;
-  gap: 8px;
+  margin: 0 0 8px;
+  gap: 6px;
   font-size: 11px;
 }
 

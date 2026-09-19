@@ -15,7 +15,9 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
+import { ComposerHistoryControls } from '@/components/videobook/ComposerHistory'
 import type { ImageSubject, ImageSubjectMap } from '@/videobook/image-subject-map'
+import { restoreFocusElement } from '@/videobook/command-composer-focus'
 import { focusableModalDialogElements } from '@/videobook/modal-dialog-interactions'
 import {
   bestSubjectSnap,
@@ -518,7 +520,9 @@ export function NotebookMediaFullscreen({
         else appShell.setAttribute('aria-hidden', shellAriaHidden)
       }
       document.body.style.overflow = bodyOverflow
-      if (restoreFocusRef.current?.isConnected) restoreFocusRef.current.focus()
+      const restore = restoreFocusRef.current
+      restoreFocusElement(restore)
+      requestAnimationFrame(() => restoreFocusElement(restore))
     }
   }, [hasMedia, returnFocus])
 
@@ -957,6 +961,7 @@ export function NotebookMediaFullscreen({
                 /* Collapsed, this row is the whole workspace, so it carries the
                    controls the composer's own strip used to stack above it. */
                 <div className="notebook-subject-panel-controls">
+                  <ComposerHistoryControls />
                   <button
                     type="button"
                     className="notebook-subject-collapse"
