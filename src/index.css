@@ -10004,6 +10004,10 @@ textarea:focus-visible {
   overscroll-behavior: contain;
 }
 
+.command-composer-contextual:has(.inspector-media-row-image, .inspector-media-row-video) {
+  --dock-h: min(360px, 38dvh);
+}
+
 .command-composer-contextual[hidden] {
   display: none;
 }
@@ -12828,11 +12832,11 @@ textarea:focus-visible {
   object-fit: contain;
 }
 
-/* Anything with a timeline fits the widescreen box the column cap describes.
-   A square or portrait clip took the row height as its own and stood the full
-   depth of the dock, which is more of a frame than a clip you watch under a
-   transport needs. A still picture has no transport and still takes the row. */
-.inspector-media-row-video,
+.inspector-media-row-image,
+.inspector-media-row-video {
+  --media-preview-h: min(var(--media-row-h), 220px);
+}
+
 .inspector-media-row-audio {
   --media-preview-h: min(
     var(--media-row-h),
@@ -13139,6 +13143,23 @@ textarea:focus-visible {
   .inspector-media-body .inspector-media-row-content .inspector-cell-media video {
     height: auto;
     max-height: 320px;
+  }
+
+  .inspector-media-row-image .inspector-cell-preview,
+  .inspector-media-row-video .inspector-cell-preview {
+    height: var(--media-preview-h);
+    aspect-ratio: auto;
+  }
+
+  .inspector-media-row-image .inspector-cell-media,
+  .inspector-media-row-video .inspector-cell-media {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .inspector-media-body :is(.inspector-media-row-image, .inspector-media-row-video) .inspector-cell-media :is(img, video) {
+    height: 100%;
+    max-height: 100%;
   }
 
   /* Stacked, the stage has no row height to fill, so the peaks keep a band of

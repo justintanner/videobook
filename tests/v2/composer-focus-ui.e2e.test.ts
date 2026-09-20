@@ -303,13 +303,14 @@ describe('composer focus through real workspace interactions', () => {
 
     expect(fit.clipped).toBeLessThanOrEqual(1)
     expect(fit.dockHeight).toBe(fit.wrapperHeight)
-    expect(fit.dockHeight).toBeGreaterThan(360)
+    expect(fit.dockHeight).toBeLessThanOrEqual(360)
     // The header is a flex item: a tall panel used to take its padding back
     // rather than scrolling its own body.
     expect(fit.headerHeight).toBe(fit.headerToken)
     // A clip keeps to the widescreen box the preview column caps at instead of
     // standing the whole depth of the dock.
     expect(fit.previewHeight).toBeLessThan(fit.rowHeight)
+    expect(fit.previewHeight).toBeLessThanOrEqual(220)
     expect(fit.previewHeight).toBeLessThanOrEqual(
       Math.round(fit.rowHeight * 0.75),
     )
