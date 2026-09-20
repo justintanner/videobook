@@ -115,7 +115,6 @@ function renderHistory(
     voicePresent: true,
     open,
     onToggle: () => undefined,
-    onClose: () => undefined,
     onToggleCall: () => undefined,
   }))
 }
@@ -400,9 +399,9 @@ describe('VoiceComms caption visibility', () => {
     const html = renderHistory('listening', [])
     const { button, region, id } = controlledRegion(html)
     expect(button).toContain('aria-expanded="true"')
-    expect(button).toContain('aria-label="Close history"')
-    expect(button).toMatch(/<svg/)
-    expect(button).not.toMatch(/>Close history</)
+    expect(button).toContain('aria-label="Hide history"')
+    expect(button).toContain('>History</button>')
+    expect(button).not.toMatch(/>Hide history</)
     expect(region).toContain(`id="${id}"`)
     expect(region).not.toContain(' hidden')
     expect(html).toContain('Listening… speak anytime.')
@@ -419,7 +418,7 @@ describe('VoiceComms caption visibility', () => {
     const { button, region } = controlledRegion(hidden)
     expect(button).toContain('aria-expanded="false"')
     expect(button).toContain('aria-label="Show history"')
-    expect(button).toMatch(/<svg/)
+    expect(button).toContain('>History</button>')
     expect(button).not.toMatch(/>Show history</)
     expect(region).toContain(' hidden=""')
     expect(hidden).toContain('>one</span>')
@@ -431,7 +430,7 @@ describe('VoiceComms caption visibility', () => {
       if (phase === 'off') continue
       const html = renderHistory(phase, [], true)
       const { button, region } = controlledRegion(html)
-      expect(button, phase).toContain('aria-label="Close history"')
+      expect(button, phase).toContain('aria-label="Hide history"')
       expect(region, phase).toMatch(/Opening|Listening|Transcribing|Waiting|Review|No captions/)
       expect(region, phase).not.toContain(' hidden')
     }
@@ -439,9 +438,7 @@ describe('VoiceComms caption visibility', () => {
 
   it('renders 1, 2 and many caption rows and skips blank YOU/COPILOT lines', () => {
     const one = renderHistory('listening', [caption('a', 'only row')])
-    // The speaker is no longer drawn, so it has to reach a screen reader as text
-    // and reach CSS as an attribute. Exactly once, either way.
-    expect(one).toContain('<span class="sr-only">YOU</span>')
+    expect(one).toContain('<span class="composer-history-kind">YOU</span>')
     expect(one).toContain('data-role="user"')
     expect(one).toContain('only row')
     expect(one.match(/YOU/g)).toHaveLength(1)
@@ -451,7 +448,7 @@ describe('VoiceComms caption visibility', () => {
       caption('b', 'assistant line', 'assistant'),
     ])
     expect(two).toContain('user line')
-    expect(two).toContain('<span class="sr-only">COPILOT</span>')
+    expect(two).toContain('<span class="composer-history-kind">COPILOT</span>')
     expect(two).toContain('data-role="assistant"')
     expect(two).toContain('assistant line')
 
@@ -462,7 +459,7 @@ describe('VoiceComms caption visibility', () => {
       caption('c', 'third'),
       { id: 'cut', role: 'assistant', text: '', final: true, interrupted: true },
     ])
-    expect(many.match(/<p data-final=/g)).toHaveLength(4)
+    expect(many.match(/<p[^>]*data-final=/g)).toHaveLength(4)
     expect(many).toContain('first')
     expect(many).toContain('second')
     expect(many).toContain('third')
@@ -477,7 +474,7 @@ describe('VoiceComms caption visibility', () => {
       caption('u3', 'newest ask'),
       caption('a3', 'newest reply', 'assistant'),
     ])
-    expect(long.match(/<p data-final=/g)).toHaveLength(4)
+    expect(long.match(/<p[^>]*data-final=/g)).toHaveLength(4)
     expect(long).not.toContain('oldest ask')
     expect(long).not.toContain('oldest reply')
     expect(long).toContain('newer ask')
@@ -486,6 +483,7 @@ describe('VoiceComms caption visibility', () => {
 
   it('keeps Apply/Cancel guidance and the captions toggle as a non-submit button during review', () => {
     const html = renderToStaticMarkup(createElement(CommandComposer, {
+      dockOpen: true,
       commands: [],
       references: new Map(),
       actions: [],
@@ -528,10 +526,10 @@ describe('VoiceComms caption visibility', () => {
     expect(html).toContain('Cancel')
     // The sheet on screen names both decisions and the keys for them, so the
     // transcript does not narrate it: no guidance line, no status line.
-    expect(html).toContain('Review is on screen.')
+    expect(html).toContain('review on screen')
     expect(html).not.toContain('Use Apply or Cancel on screen.')
     expect(html).not.toContain('voice-comms-statusline')
-    expect(controlMarkup(html, 'Close history')).toContain('type="button"')
+    expect(controlMarkup(html, 'Hide history')).toContain('type="button"')
     // Talking, the strip flips: the text cell becomes the way out and the voice
     // cell is the lit one, naming the provider that is carrying the call.
     expect(controlMarkup(html, 'Stop voice conversation')).toContain('aria-pressed="true"')

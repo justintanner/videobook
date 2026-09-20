@@ -1,4 +1,4 @@
-import { Check, X } from 'lucide-react'
+import { X } from 'lucide-react'
 
 export type ComposerStatusTone = 'error' | 'info'
 
@@ -26,7 +26,7 @@ export function ComposerStatusLine({
       role={failed ? 'alert' : 'status'}
       aria-live="polite"
     >
-      {failed ? <X size={13} aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
+      <span className="composer-history-kind">{failed ? 'ERROR' : 'STATUS'}</span>
       <span>{message}</span>
       {onDismiss && (
         <button

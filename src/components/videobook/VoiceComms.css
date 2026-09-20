@@ -12,23 +12,20 @@
   min-height: 0;
 }
 
-.voice-comms { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 10px 19px 0 17px; color: #9fc0ad; }
+.voice-comms { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 0 19px 0 17px; color: #9fc0ad; font-size: 13px; line-height: 1.6; }
 
 /* The phase rail itself lives in index.css, next to the focus and in-flight rules
    it has to cascade against. */
 
 .voice-fallback, .voice-comms-message, .voice-resume, .voice-captions-latest { flex: 0 0 auto; }
-.voice-fallback { margin: 0 0 8px; padding-left: 42px; color: #dfd3a1; font-size: 13px; }
+.voice-fallback { margin: 4px 0; padding: 8px 12px; color: #dfd3a1; font: inherit; }
 .voice-fallback > summary { cursor: pointer; }
 .voice-fallback > p { margin: 4px 0 0; overflow-wrap: anywhere; }
 .voice-comms button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
-.voice-comms-message { margin: 0 0 8px; padding-left: 42px; font-size: 13px; line-height: 1.5; color: #cdeedb; }
+.voice-comms-message { margin: 4px 0; padding: 8px 12px; font: inherit; color: #cdeedb; }
 .voice-comms.voice-error .voice-comms-message { color: #ffd5cc; }
 
 .composer-history-panel { position: relative; display: flex; flex-direction: column; min-width: 0; }
-/* The panel's own chrome: collapse the transcript, or close the chat. Two matched
-   32px controls on one baseline, ending on the same 19px right spine every other
-   child sits on. Borderless, because nothing else in this panel carries chrome. */
 .composer-panel-controls { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 4px; min-height: 38px; padding: 6px 19px 0 17px; }
 /* No spine of its own here: the transcript used to sit inside .voice-comms and
    stepped out of that padding to hang the speaker rule, but it is a direct
@@ -37,34 +34,22 @@
    against the border. */
 .voice-captions, .composer-history { flex: 1 1 auto; min-height: 0; max-height: min(180px, 22dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .voice-captions[hidden], .composer-history[hidden] { display: none !important; }
-.voice-captions > p, .composer-history > p { position: relative; margin: 0 0 8px; padding-left: 42px; font-size: 13px; line-height: 1.5; color: #cdeedb; }
-.voice-captions > p:last-child, .composer-history > p:last-child { margin-bottom: 0; }
-.voice-captions > p > span, .composer-history > p > span { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
-
-/* No speaker column. Your turns read brighter and heavier behind a 2px rule in
-   the margin; the copilot's stay quiet. Spoken copy is indented past the call
-   row's signal glyph so it starts in the same column as the row's own text, and
-   the rule rides in that glyph column. The speaker name survives in .sr-only. */
-.voice-captions > p[data-role='user'], .composer-history > p[data-role='user'] { font-weight: 600; color: #dbf1e3; }
-.voice-captions > p[data-role='user']::before, .composer-history > p[data-role='user']::before { position: absolute; top: 3px; bottom: 3px; left: 15px; width: 2px; background: var(--green); content: ''; }
-
-.voice-captions-empty { display: block !important; padding-left: 42px; color: #6f9a80; font-size: 13px; }
-.voice-captions em { color: #6f9a80; font-size: 11px; font-style: normal; }
+.composer-history-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.composer-history-entry[data-role='user'] { border-left-color: var(--green); background: rgba(114, 231, 170, .035); }
+.composer-history-entry[data-role='user'] .composer-history-kind { color: var(--green); }
+.composer-history-entry[data-role='assistant'] { border-left-color: #789d8b; }
+.voice-captions-empty { color: #6f9a80; }
+.voice-captions em { color: #6f9a80; font: inherit; }
 .voice-captions-latest { align-self: center; flex: 0 0 auto; height: 32px; margin: 8px 0 0; padding: 0 12px; border: 1px solid rgba(114, 231, 170, .26); border-radius: 2px; background: transparent; color: #cfead9; font: inherit; font-size: 11px; cursor: pointer; }
 .voice-resume { display: inline-flex; align-self: flex-start; align-items: center; gap: 7px; height: 32px; margin: 0 0 13px; padding: 0 12px; border: 1px solid rgba(114, 231, 170, .26); border-radius: 2px; background: transparent; color: #cfead9; font: inherit; font-size: 11px; cursor: pointer; }
 
-/* One 32px line carries provider, phase, the microphone disclosure and the way
-   back to the captions. It replaces the old header row, so the transcript opens
-   flush with the top of the panel. */
-.voice-comms-statusline { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-start; gap: 6px; min-width: 0; height: 28px; color: #8fbba1; font-size: 13px; }
+.voice-comms-statusline { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-start; gap: 6px; min-width: 0; min-height: 40px; margin: 4px 0; padding: 8px 12px; color: #8fbba1; font: inherit; }
 .voice-comms-glyph { display: grid; flex: 0 0 32px; place-items: center; margin-right: 4px; color: var(--green); }
 .voice-provider-badge { padding: 0; border: 0; color: #7fae90; font-size: 13px; }
 .voice-comms-status { font-size: 13px; }
-.voice-captions-toggle, .composer-history-close { display: grid; flex: 0 0 auto; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; color: #7fa992; cursor: pointer; }
-.voice-captions-toggle:hover, .composer-history-close:hover { color: var(--control-fg-hover); }
-.composer-history-close:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
-.voice-captions-toggle[aria-expanded='false'] > svg { transform: rotate(180deg); }
-.voice-comms .voice-captions-toggle:focus-visible { outline-offset: -2px; }
+.voice-captions-toggle { display: grid; flex: 0 0 auto; place-items: center; height: 30px; padding: 0 6px; border: 0; background: transparent; color: #7fa992; font: inherit; font-size: 13px; cursor: pointer; }
+.voice-captions-toggle:hover, .voice-captions-toggle[aria-expanded='true'] { color: var(--control-fg-hover); }
+.voice-captions-toggle:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
 .voice-comms.voice-review .voice-comms-glyph { color: #e3b869; }
 .voice-comms.voice-review .voice-comms-status { color: #c9a86a; }
 .voice-comms.voice-error .voice-comms-glyph { color: var(--danger); }
@@ -72,9 +57,7 @@
 .voice-comms.voice-off .voice-comms-glyph { color: #557663; }
 
 @media (max-width: 600px) {
-  /* Narrower spine, same rail: the gutter is measured from each line's own
-     content box, so the speaker rule needs no override here. */
-  .voice-comms { padding: 10px 11px 0 9px; }
+  .voice-comms { padding: 0 11px 0 9px; }
 }
 
 @media (max-height: 500px) {

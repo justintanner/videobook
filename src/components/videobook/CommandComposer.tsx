@@ -49,7 +49,6 @@ import {
 } from '@/videobook/mcp-activity'
 import {
   composerHistory,
-  composerHistoryAfter,
   composerHistoryEpoch,
   composerHistoryGeneration,
   historyAutoCloseHeld,
@@ -281,10 +280,9 @@ export function CommandComposer({
   } | null>(null)
   const successTimerRef = useRef(0)
   const [historyOpen, setHistoryOpen] = useState(true)
-  const [closedThrough, setClosedThrough] = useState(0)
   const historyRows = useMemo(
-    () => composerHistoryAfter(composerHistory(voice?.captions ?? [], mcpCalls), closedThrough),
-    [closedThrough, mcpCalls, voice?.captions],
+    () => composerHistory(voice?.captions ?? [], mcpCalls),
+    [mcpCalls, voice?.captions],
   )
   const historyEpoch = composerHistoryEpoch(historyRows)
   const historyGeneration = composerHistoryGeneration(historyRows)
@@ -302,7 +300,7 @@ export function CommandComposer({
   const historyHeld = historyAutoCloseHeld({
     runningCalls: mcpCallsRunning(mcpCalls),
     voicePhase: voice?.phase,
-  })
+  }) || mcpCalls.calls.some((call) => call.expanded)
   const lastHistoryEpochRef = useRef(historyEpoch)
 
   useLayoutEffect(() => {
@@ -685,6 +683,15 @@ export function CommandComposer({
   }
 
   const handleInputKey = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      const popover = document.querySelector<HTMLElement>('.mcp-call-popover:popover-open')
+      if (popover) {
+        event.preventDefault()
+        event.stopPropagation()
+        popover.hidePopover()
+        return
+      }
+    }
 
     if (composingRef.current || event.isComposing || event.keyCode === 229) {
       if (event.key === 'Enter') event.preventDefault()
@@ -811,7 +818,6 @@ export function CommandComposer({
     open: historyOpen,
     captionId: historyCaptionId,
     onToggle: () => setHistoryOpen((current) => !current),
-    onClose: () => setClosedThrough(historyEpoch),
   }
   const dockControls: ComposerDockControls = {
     hide: hideDock,
@@ -840,12 +846,12 @@ export function CommandComposer({
     >
       {dockIsOpen && !closeInPanel && (
         <div className="command-composer-dock-bar">
-          <span className="command-composer-dock-title">chat</span>
+          {historyIsIdle && <span className="command-composer-dock-title">chat</span>}
+          <ComposerHistoryControls />
           {noticeInHeader && noticeLine && (
             <span className="command-composer-dock-divider" aria-hidden="true" />
           )}
           {noticeInHeader && noticeLine}
-          <ComposerHistoryControls />
           <ComposerDockClose />
         </div>
       )}
@@ -881,9 +887,8 @@ export function CommandComposer({
           rows={historyRows}
           phase={voice?.phase}
           voicePresent={Boolean(voice)}
-          open={historyOpen}
+          open={historyOpen && dockIsOpen}
           onToggle={() => setHistoryOpen((current) => !current)}
-          onClose={() => setClosedThrough(historyEpoch)}
           onToggleCall={onToggleMcpCall}
         />
       )}

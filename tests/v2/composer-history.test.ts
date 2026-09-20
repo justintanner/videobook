@@ -12,7 +12,6 @@ import {
   COMPOSER_HISTORY_CAP,
   HISTORY_AUTO_CLOSE_MS,
   composerHistory,
-  composerHistoryAfter,
   composerHistoryEpoch,
   historyAutoCloseHeld,
   historyIdle,
@@ -145,10 +144,9 @@ describe('composerHistory', () => {
       voicePresent: false,
       open: true,
       onToggle: () => undefined,
-      onClose: () => undefined,
       onToggleCall: () => undefined,
     }))
-    expect(withCalls).toContain('>chat<')
+    expect(withCalls).toContain('>Routing chat<')
     expect(withCalls).not.toContain('No captions this session.')
 
     const empty = renderToStaticMarkup(createElement(ComposerHistory, {
@@ -157,7 +155,6 @@ describe('composerHistory', () => {
       voicePresent: true,
       open: true,
       onToggle: () => undefined,
-      onClose: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(empty).toContain('Opening your voice channel')
@@ -173,11 +170,10 @@ describe('composerHistory', () => {
       voicePresent: true,
       open: true,
       onToggle: () => undefined,
-      onClose: () => undefined,
       onToggleCall: () => undefined,
     }))
-    expect(html).toContain('aria-label="Close history"')
-    expect(html).toMatch(/<button[^>]*type="button"[^>]*aria-label="Close history"/)
+    expect(html).toContain('aria-label="Hide history"')
+    expect(html).toMatch(/<button[^>]*type="button"[^>]*aria-label="Hide history"/)
     expect(html).toContain('mcp-call-running')
     const closed = renderToStaticMarkup(createElement(ComposerHistory, {
       rows: composerHistory([caption({ id: 'u1', text: 'hello', sequence: 1 })], log),
@@ -185,7 +181,6 @@ describe('composerHistory', () => {
       voicePresent: true,
       open: false,
       onToggle: () => undefined,
-      onClose: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(closed).toContain(' hidden=""')
@@ -233,7 +228,7 @@ describe('history auto-close', () => {
     heldTimer()
   })
 
-  it('pairs close with collapse and closes the chat back to the command line', () => {
+  it('uses a text history toggle without adding another close control', () => {
     const log = settleMcpCall(started(emptyMcpCallLog, 1, 'chat'), 1, {
       phase: 'done',
       elapsedMs: 30,
@@ -248,12 +243,12 @@ describe('history auto-close', () => {
       voicePresent: true,
       open: true,
       onToggle: () => undefined,
-      onClose: () => undefined,
       onToggleCall: () => undefined,
     }))
-    // Both controls live in one strip, close after collapse.
     expect(html).toContain('composer-panel-controls')
-    expect(html).toMatch(/aria-label="Close history"[\s\S]*aria-label="Close chat"/)
+    expect(html).toContain('aria-label="Hide history"')
+    expect(html).not.toContain('aria-label="Close chat"')
+    expect(html).not.toContain('lucide-chevron-down')
     expect(html.indexOf('composer-panel-controls')).toBeLessThan(html.indexOf('composer-history voice-captions'))
 
     const hosted = {
@@ -262,7 +257,6 @@ describe('history auto-close', () => {
       open: true,
       captionId: 'hist',
       onToggle: () => undefined,
-      onClose: () => undefined,
     }
     const hostedHtml = renderToStaticMarkup(createElement(
       ComposerHistoryChromeContext.Provider,
@@ -281,7 +275,6 @@ describe('history auto-close', () => {
         voicePresent: true,
         open: true,
         onToggle: () => undefined,
-        onClose: () => undefined,
         onToggleCall: () => undefined,
       }),
     ))
@@ -307,50 +300,28 @@ describe('history auto-close', () => {
       new URL('../../src/components/videobook/CommandComposer.tsx', import.meta.url),
       'utf8',
     )
-    expect(composerTsx).toContain('<ComposerHistoryControls />\n          <ComposerDockClose />')
-
-    // Closing raises the floor past everything on screen, so the panel goes idle.
-    const closedThrough = composerHistoryEpoch(rows)
-    const remaining = composerHistoryAfter(rows, closedThrough)
-    expect(remaining).toEqual([])
-    expect(historyIdle('off', remaining.length, false)).toBe(true)
-
-    // A later row arrives above the floor and brings the panel back.
-    const later = composerHistoryAfter(composerHistory([
-      caption({ id: 'u1', text: 'hello', sequence: 2 }),
-      caption({ id: 'u2', text: 'again', sequence: 9 }),
-    ], log), closedThrough)
-    expect(later.map((row) => row.kind === 'caption' ? row.caption.id : row.call.id)).toEqual(['u2'])
-    expect(composerHistoryEpoch(later)).toBeGreaterThan(closedThrough)
+    expect(composerTsx.match(/<ComposerDockClose \/>/g)).toHaveLength(1)
   })
 
-  it('lines captions up with the call rows rather than the panel spine', () => {
+  it('labels both speakers and actions with the same history row structure', () => {
     const html = renderToStaticMarkup(createElement(ComposerHistory, {
-      rows: composerHistory([caption({ id: 'u1', text: 'hello', sequence: 1 })], emptyMcpCallLog),
+      rows: composerHistory([
+        caption({ id: 'u1', text: 'hello', sequence: 1 }),
+        caption({ id: 'a1', role: 'assistant', text: 'ready', sequence: 3 }),
+      ], started(emptyMcpCallLog, 2, 'chat')),
       phase: 'listening',
       voicePresent: true,
       open: true,
       onToggle: () => undefined,
-      onClose: () => undefined,
       onToggleCall: () => undefined,
     }))
-    const css = readFileSync(
-      new URL('../../src/components/videobook/VoiceComms.css', import.meta.url),
-      'utf8',
-    )
     expect(html).toContain('data-role="user"')
-    // 42px clears the row's fixed 32px glyph gutter and its 10px grid gap, so a
-    // chat line and an ACTION row start in the same column.
-    expect(css).toContain('.voice-captions > p, .composer-history > p { position: relative; margin: 0 0 8px; padding-left: 42px;')
-    // The speaker rule rides in the middle of that gutter.
-    expect(css).toContain('left: 15px; width: 2px; background: var(--green)')
-    // Everything voice-comms writes below the log sits on the same rail, and
-    // reads at the same 13px ink as the call row's own text.
-    expect(css).toContain('.voice-comms-message { margin: 0 0 8px; padding-left: 42px; font-size: 13px; line-height: 1.5; color: #cdeedb; }')
-    expect(css).toContain('font-size: 13px; line-height: 1.5; color: #cdeedb; }')
-    expect(css).toContain('.voice-comms-glyph { display: grid; flex: 0 0 32px;')
-    // The review sheet says what to press, so the transcript stops repeating it.
-    expect(css).not.toContain('voice-comms-review')
+    expect(html).toContain('data-role="assistant"')
+    expect(html).toContain('>YOU</span>')
+    expect(html).toContain('>COPILOT</span>')
+    expect(html).toContain('>ACTION</span>')
+    expect(html.match(/class="composer-history-entry/g)).toHaveLength(3)
+    expect(html).not.toContain('composer-history-close')
   })
 
   it('tracks the newest sequence so a later row restarts the window', () => {

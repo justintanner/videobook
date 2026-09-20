@@ -122,7 +122,8 @@
   .confirm-sheet-body,
   .confirm-sheet-foot { padding-left: 9px; padding-right: 11px; }
   .composer-history { padding-left: 9px; padding-right: 11px; }
-  .mcp-call-head { width: calc(100% + 20px); margin-left: -9px; margin-right: -11px; padding-left: 9px; padding-right: 11px; }
+  .composer-history-entry { grid-template-columns: 62px minmax(0, 1fr) auto; gap: 8px; padding-left: 8px; padding-right: 8px; }
+  .mcp-call-trail { gap: 4px; }
   .command-composer-dock-bar .composer-panel-controls { padding: 0; }
   .command-line-shell > .composer-actions-panel { padding-left: 12px; padding-right: 12px; }
   .command-line-shell > .composer-mode-switch { justify-self: end; }
@@ -146,9 +147,6 @@
   .composer-actions-panel .composer-actions-help { display: none; }
 }
 
-/* Touch: the same 44px floor index.css applies to the library's controls. The
-   composer row keeps its own 32px tier -- every cell in it is a wide target
-   rather than a tall one -- so only the call rows grow here. */
 @media (pointer: coarse) {
-  .mcp-call-head { min-height: 44px; }
+  .composer-history-entry { min-height: 44px; }
 }

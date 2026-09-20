@@ -4119,11 +4119,11 @@ textarea:focus-visible {
 }
 
 .inspector-header-actions .voice-captions-toggle,
-.inspector-header-actions .composer-history-close,
-.notebook-subject-panel-controls .voice-captions-toggle,
-.notebook-subject-panel-controls .composer-history-close {
-  width: 30px;
+.notebook-subject-panel-controls .voice-captions-toggle {
+  width: auto;
   height: 30px;
+  padding: 0 6px;
+  line-height: 1.6;
 }
 
 .inspector-cell-title svg,
@@ -9964,24 +9964,14 @@ textarea:focus-visible {
   margin-left: auto;
 }
 
-/* The dock bar hosts the transcript's collapse and close the same way a
-   contextual panel's header does, so the transcript never stacks a second
-   chrome row of its own beneath it. */
 .command-composer-dock-bar .composer-panel-controls {
   min-height: 0;
-  margin-left: auto;
   padding: 0;
   gap: 0;
 }
 
-.command-composer-dock-bar .voice-captions-toggle,
-.command-composer-dock-bar .composer-history-close {
-  width: 30px;
-  height: 30px;
-}
-
-.command-composer-dock-bar:has(.composer-panel-controls) .composer-dock-close-divider {
-  margin-left: 6px;
+.command-composer-dock-bar .voice-captions-toggle {
+  padding-left: 0;
 }
 
 .command-composer-dock-body {
@@ -10183,12 +10173,14 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
-  padding: 0 19px 0 17px;
+  min-height: 40px;
+  margin: 4px 0;
+  padding: 8px 19px 8px 17px;
   border: 0;
   color: #8bb49d;
   background: transparent;
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .command-result > svg {
@@ -10197,9 +10189,7 @@ textarea:focus-visible {
 
 .command-result span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .command-result-ok {
@@ -10210,21 +10200,18 @@ textarea:focus-visible {
   color: #ffaaaa;
 }
 
-/* The MCP call log. One row per call, sitting on the panel's 20px spine with no
-   border, radius or background of its own -- like the transcript and the command
-   line, this is a section of the panel, not a box on it. A collapsed row is 32px:
-   the panel's secondary tier, and the height the old transient strip used, so
-   nothing below it shifts as calls arrive and settle. */
 .composer-history {
   display: grid;
   align-content: start;
-  gap: 2px;
+  gap: 0;
   min-height: 0;
   max-height: min(232px, 28dvh);
-  padding: 6px 19px 0 17px;
+  padding: 8px 19px 8px 17px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+  font-size: 13px;
+  line-height: 1.6;
   animation: mcp-activity-enter 180ms ease-out both;
 }
 
@@ -10232,27 +10219,37 @@ textarea:focus-visible {
   display: none !important;
 }
 
-/* The row negates the spine and re-applies it as padding, so its hover reaches
-   the panel's edges the way a list row should. */
-.mcp-call-head {
+.composer-history-entry {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  width: calc(100% + 36px);
-  min-height: 28px;
-  margin: 0 -19px 0 -17px;
-  padding: 0 19px 0 17px;
+  grid-template-columns: 70px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  min-height: 40px;
+  margin: 4px 0;
+  padding: 8px 12px;
   border: 0;
-  color: #789d8b;
+  border-left: 2px solid transparent;
+  color: #cdeedb;
   background: transparent;
   font: inherit;
-  font-size: 13px;
+  font-weight: 400;
   text-align: left;
+}
+
+.composer-history-kind {
+  color: #8fbba1;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.mcp-call-head {
+  border-left-color: #608e98;
   cursor: pointer;
 }
 
-.mcp-call-head:hover {
+.mcp-call-head:hover,
+.mcp-call-head[aria-expanded='true'] {
   background: var(--row-bg-hover);
 }
 
@@ -10260,13 +10257,21 @@ textarea:focus-visible {
   color: var(--row-fg-hover);
 }
 
-.mcp-call-head:hover .mcp-call-chevron {
-  color: #9ee0ba;
-}
-
 .mcp-call-head:focus-visible {
   outline: 1px solid var(--green);
   outline-offset: -2px;
+}
+
+.mcp-call-channel {
+  color: #8fcbd3;
+}
+
+.mcp-call-trail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #8fbba1;
+  white-space: nowrap;
 }
 
 .mcp-call-signal {
@@ -10274,161 +10279,102 @@ textarea:focus-visible {
   align-items: end;
   justify-content: center;
   gap: 2px;
-  width: 32px;
+  width: 13px;
   height: 11px;
-  color: #4e6c5b;
+  color: #8fcbd3;
 }
 
 .mcp-call-signal i {
   width: 3px;
-  height: 70%;
-  background: currentColor;
-  box-shadow: 0 0 7px currentColor;
-}
-
-/* In flight is the only row that animates, and one of only two that carry any
-   colour at all. A finished row is quiet: the elapsed time is its whole report. */
-.mcp-call-running .mcp-call-signal {
-  color: #8fcbd3;
-}
-
-.mcp-call-running .mcp-call-signal i {
   height: 35%;
+  background: currentColor;
   animation: mcp-signal-rise 720ms ease-in-out infinite alternate;
 }
 
-.mcp-call-running .mcp-call-signal i:nth-child(2) {
-  animation-delay: 120ms;
-}
+.mcp-call-signal i:nth-child(2) { animation-delay: 120ms; }
+.mcp-call-signal i:nth-child(3) { animation-delay: 240ms; }
+.mcp-call-running .mcp-call-state { color: #8fcbd3; }
+.mcp-call-failed .mcp-call-head { border-left-color: #f3a0a0; }
+.mcp-call-failed .mcp-call-channel,
+.mcp-call-failed .mcp-call-state { color: #f3a0a0; }
 
-.mcp-call-running .mcp-call-signal i:nth-child(3) {
-  animation-delay: 240ms;
-}
-
-.mcp-call-failed .mcp-call-signal {
-  color: #f3a0a0;
-}
-
-/* The strip read the channel bright and the tool name dim, which was right while
-   it was a status message. A row that stays is content, so the emphasis inverts:
-   the tool name is what you scan, ACTION recedes to the kind of thing it was.
-   The word is ACTION rather than MCP because the transport is not the user's
-   business -- the status line has said "Preparing an action" all along. */
-.mcp-call-copy {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 9px;
-}
-
-.mcp-call-channel {
+.mcp-call-details-icon {
   flex: 0 0 auto;
-  color: #7fae90;
-  font-size: 13px;
-  letter-spacing: 0.12em;
-}
-
-.mcp-call-name {
-  min-width: 0;
-  overflow: hidden;
-  color: #cdeedb;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mcp-call-trail {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.mcp-call-state {
   color: #8fbba1;
+}
+
+.mcp-call-popover {
+  position: fixed;
+  inset: auto;
+  width: min(560px, calc(100vw - 24px));
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(114, 231, 170, .3);
+  border-radius: 4px;
+  background: #081a12;
+  color: #cdeedb;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, .55);
+  font: inherit;
   font-size: 13px;
-  white-space: nowrap;
+  line-height: 1.6;
 }
 
-.mcp-call-running .mcp-call-state {
-  color: #8fcbd3;
+.mcp-call-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px 8px 16px;
+  border-bottom: 1px solid var(--line);
 }
 
-.mcp-call-failed .mcp-call-state {
-  color: #f3a0a0;
+.mcp-call-popover-head > span { min-width: 0; overflow-wrap: anywhere; }
+
+.mcp-call-popover-head > button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #8fbba1;
+  cursor: pointer;
 }
 
-.mcp-call-chevron {
-  flex: 0 0 auto;
-  color: var(--muted);
-  transition:
-    transform 140ms ease,
-    color 140ms ease;
-}
+.mcp-call-popover-head > button:hover { background: var(--row-bg-hover); }
+.mcp-call-popover-head > button:focus-visible { outline: 1px solid var(--green); }
 
-.mcp-call-head[aria-expanded='false'] .mcp-call-chevron {
-  transform: rotate(-90deg);
-}
-
-/* Read-only detail, flush rather than boxed: the command input this panel is
-   built around carries no border either. The hairline brackets the disclosure
-   to the row it belongs to. */
-.mcp-call-body {
-  margin: 9px 0 0 42px;
-  padding: 0 0 6px 17px;
-  border-left: 1px solid var(--line);
-  animation: mcp-call-open 160ms ease-out both;
-}
-
-.mcp-call-what {
-  margin: 0 0 9px;
-  color: var(--muted);
-  font-size: 11px;
-}
+.mcp-call-body { padding: 12px 16px 16px; }
+.mcp-call-what { margin: 0 0 12px; color: #8fbba1; overflow-wrap: anywhere; }
 
 .mcp-call-args {
   display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
   align-items: baseline;
-  gap: 7px 12px;
+  gap: 8px 12px;
   margin: 0;
 }
 
-.mcp-call-args dt {
-  color: #789d8b;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
-
-.mcp-call-args dd {
-  margin: 0;
-  color: #bce6cf;
-  font-size: 13px;
-  line-height: 1.55;
-  overflow-wrap: anywhere;
-}
+.mcp-call-args dt { color: #8fbba1; overflow-wrap: anywhere; }
+.mcp-call-args dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 
 .mcp-call-out {
   display: flex;
   align-items: baseline;
   gap: 9px;
   margin: 12px 0 0;
-  padding: 11px 0 0;
+  padding: 12px 0 0;
   border-top: 1px solid var(--line);
   color: #8edeb3;
-  font-size: 13px;
-  line-height: 1.55;
   overflow-wrap: anywhere;
 }
 
-.mcp-call-out > b {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-weight: 400;
-}
-
-.mcp-call-failed .mcp-call-out {
-  color: #ffb3b3;
-}
+.mcp-call-out > b { flex: 0 0 auto; color: var(--muted); font-weight: 400; }
+.mcp-call-out > span { min-width: 0; }
+.mcp-call-failed .mcp-call-out { color: #ffb3b3; }
 
 /* The message row is the last line of the same list: a fixed 32px gutter for
    the actions toggle, then the editor on the transcript's 42px text rail, and
@@ -10829,17 +10775,6 @@ textarea:focus-visible {
   to {
     opacity: 1;
     transform: translateY(0) scaleX(1);
-  }
-}
-
-@keyframes mcp-call-open {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -12503,7 +12438,6 @@ textarea:focus-visible {
 
   .command-composer,
   .composer-history,
-  .mcp-call-body,
   .mcp-call-signal i,
   .command-transmit-scan::after {
     animation: none !important;

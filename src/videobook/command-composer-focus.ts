@@ -26,7 +26,7 @@ type ComposerFocusState = {
 const documentStates = new WeakMap<Document, ComposerFocusState>()
 const composerSelector = '.command-composer [aria-label="Videobook command input"]'
 const editingSelector = 'input:not([type="file"]), textarea, select, [contenteditable="true"], video[controls], audio[controls]'
-const overlaySelector = 'dialog[open], [aria-modal="true"], [role="menu"], details.canvas-add-menu[open]'
+const overlaySelector = 'dialog[open], :popover-open, [aria-modal="true"], [role="menu"], details.canvas-add-menu[open]'
 
 function focusState(owner: Document): ComposerFocusState {
   const existing = documentStates.get(owner)

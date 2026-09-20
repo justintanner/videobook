@@ -96,10 +96,6 @@ export function composerDockCloseInPanel(owner: ComposerDockCloseOwner): boolean
   return owner.dockOpen && owner.panelHasHeader && !owner.reviewPriority
 }
 
-/* An open dock always has exactly one header row -- a contextual panel's own,
-   or the dock bar that carries the title and the close. Either can host the
-   transcript's collapse and close, so the transcript never draws a second
-   chrome row of its own underneath. */
 export function composerHistoryChromeHosted(owner: ComposerDockCloseOwner): boolean {
   return owner.dockOpen
 }

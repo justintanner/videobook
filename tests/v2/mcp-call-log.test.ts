@@ -138,15 +138,15 @@ describe('mcp call rows', () => {
     expect(render(emptyMcpCallLog)).toBe('')
   })
 
-  it('shows a collapsed call as one line carrying the raw tool name', () => {
+  it('shows a readable action with details in a native popover', () => {
     const html = render(started(emptyMcpCallLog, 1, 'plan_chat_command', { prompt: 'pan @a3' }))
     expect(html).toContain('class="mcp-call mcp-call-running"')
-    expect(html).toContain('>plan_chat_command<')
+    expect(html).toContain('>Planning chat command<')
     expect(html).toContain('aria-expanded="false"')
     expect(html).toContain('>working<')
-    // Collapsed means collapsed: the arguments are not in the document at all.
-    expect(html).not.toContain('mcp-call-body')
-    expect(html).not.toContain('pan @a3')
+    expect(html).toContain('popover="auto"')
+    expect(html).toContain('aria-haspopup="dialog"')
+    expect(html).toContain('role="dialog"')
   })
 
   it('opens onto the arguments, the humanized name and the result', () => {
@@ -188,7 +188,7 @@ describe('mcp call rows', () => {
       log: started(emptyMcpCallLog, 1, 'chat'),
       onToggle: () => undefined,
     }))
-    expect(html).toContain('<span class="mcp-call-channel">ACTION</span>')
+    expect(html).toContain('<span class="composer-history-kind mcp-call-channel">ACTION</span>')
     expect(html).not.toContain('>MCP<')
   })
 

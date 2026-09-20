@@ -6,8 +6,8 @@ import {
 } from '../../src/videobook/voice-captions'
 
 describe('voice caption visibility helpers', () => {
-  it('names the control Close history or Show history from visibility', () => {
-    expect(captionToggleLabel(true)).toBe('Close history')
+  it('names the control Hide history or Show history from visibility', () => {
+    expect(captionToggleLabel(true)).toBe('Hide history')
     expect(captionToggleLabel(false)).toBe('Show history')
   })
 

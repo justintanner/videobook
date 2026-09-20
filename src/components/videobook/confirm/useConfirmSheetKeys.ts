@@ -51,7 +51,7 @@ export function useConfirmSheetKeys(options: {
       const target = event.target
       if (target !== document.body && (!(target instanceof Element) || !target.closest('.command-composer'))) return
       if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) return
-      if (document.querySelector('dialog[open], [aria-modal="true"], [role="menu"], details.canvas-add-menu[open]')) return
+      if (document.querySelector('dialog[open], :popover-open, [aria-modal="true"], [role="menu"], details.canvas-add-menu[open]')) return
       event.preventDefault()
       onCancel()
     }

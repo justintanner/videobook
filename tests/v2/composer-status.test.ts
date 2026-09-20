@@ -131,7 +131,6 @@ describe('composer activity status', () => {
       voicePresent: true,
       open: false,
       onToggle: () => undefined,
-      onClose: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(connecting).toContain('Connecting voice')

@@ -1,5 +1,4 @@
 import { useContext, useId, useLayoutEffect, useRef, useState } from 'react'
-import { ChevronDown, X } from 'lucide-react'
 import { McpCallRow } from './McpCallRows'
 import {
   captionToggleLabel,
@@ -22,7 +21,6 @@ export function ComposerHistoryControls() {
       captionId={chrome.captionId}
       open={chrome.open}
       onToggle={chrome.onToggle}
-      onClose={chrome.onClose}
     />
   )
 }
@@ -31,12 +29,10 @@ function ComposerHistoryControlsStrip({
   captionId,
   open,
   onToggle,
-  onClose,
 }: {
   captionId: string
   open: boolean
   onToggle: () => void
-  onClose: () => void
 }) {
   return (
     <div className="composer-panel-controls">
@@ -49,17 +45,7 @@ function ComposerHistoryControlsStrip({
         onMouseDown={(event) => event.preventDefault()}
         onClick={onToggle}
       >
-        <ChevronDown size={14} aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="composer-history-close"
-        aria-label="Close chat"
-        title="Close chat"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={onClose}
-      >
-        <X size={14} aria-hidden="true" />
+        History
       </button>
     </div>
   )
@@ -71,7 +57,6 @@ export function ComposerHistory({
   voicePresent,
   open,
   onToggle,
-  onClose,
   onToggleCall,
 }: {
   rows: readonly ComposerHistoryRow[]
@@ -79,7 +64,6 @@ export function ComposerHistory({
   voicePresent: boolean
   open: boolean
   onToggle: () => void
-  onClose: () => void
   onToggleCall: (id: number) => void
 }) {
   const localCaptionId = useId()
@@ -109,7 +93,6 @@ export function ComposerHistory({
           captionId={captionId}
           open={open}
           onToggle={onToggle}
-          onClose={onClose}
         />
       )}
       <div
@@ -129,8 +112,8 @@ export function ComposerHistory({
         }}
       >
         {rows.length === 0
-          ? <p className="voice-captions-empty">{captionsEmptyCopy(phase ?? 'off')}</p>
-          : rows.map((row) => <HistoryRow key={rowKey(row)} row={row} onToggleCall={onToggleCall} />)}
+          ? <p className="composer-history-entry voice-captions-empty"><span className="composer-history-kind">STATUS</span><span>{captionsEmptyCopy(phase ?? 'off')}</span></p>
+          : rows.map((row) => <HistoryRow key={rowKey(row)} row={row} active={open} onToggleCall={onToggleCall} />)}
       </div>
       {open && showLatest && (
         <button
@@ -157,19 +140,21 @@ function rowKey(row: ComposerHistoryRow): string {
 
 function HistoryRow({
   row,
+  active,
   onToggleCall,
 }: {
   row: ComposerHistoryRow
+  active: boolean
   onToggleCall: (id: number) => void
 }) {
   if (row.kind === 'call') {
-    return <McpCallRow call={row.call} onToggle={onToggleCall} />
+    return <McpCallRow call={row.call} active={active} onToggle={onToggleCall} />
   }
   const caption = row.caption
   return (
-    <p data-final={caption.final} data-role={caption.role}>
-      <span className="sr-only">{caption.role === 'user' ? 'YOU' : 'COPILOT'}</span>
-      <span>{caption.text}{caption.interrupted && <em> · interrupted</em>}</span>
+    <p className="composer-history-entry" data-final={caption.final} data-role={caption.role}>
+      <span className="composer-history-kind">{caption.role === 'user' ? 'YOU' : 'COPILOT'}</span>
+      <span className="composer-history-text">{caption.text}{caption.interrupted && <em> · interrupted</em>}</span>
     </p>
   )
 }

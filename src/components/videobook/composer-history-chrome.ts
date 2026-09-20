@@ -6,7 +6,6 @@ export interface ComposerHistoryChromeValue {
   open: boolean
   captionId: string
   onToggle: () => void
-  onClose: () => void
 }
 
 export const ComposerHistoryChromeContext = createContext<ComposerHistoryChromeValue | null>(null)
