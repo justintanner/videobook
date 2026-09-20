@@ -219,7 +219,7 @@ describe('composer focus through real workspace interactions', () => {
     expect(await cell(videoCellId).count()).toBe(1)
     // The inspector side column became the chat dock, so the toolbar is zoom
     // and selection now — there is no separate inspector to close.
-    for (const label of ['Zoom out', 'Reset zoom', 'Clear selection']) {
+    for (const label of ['Zoom out', 'Fit grid to width', 'Clear selection']) {
       await page.getByLabel(label, { exact: true }).click()
       await focused(input())
     }
@@ -345,7 +345,7 @@ describe('composer focus through real workspace interactions', () => {
     await page.keyboard.press('Tab')
     await focused(page.getByLabel('Auto-arrange notebook'))
     for (let index = 0; index < 12; index += 1) {
-      await page.getByLabel('Reset zoom', { exact: true }).click()
+      await page.getByLabel('Fit grid to width', { exact: true }).click()
       await page.keyboard.press('Tab')
       await page.waitForTimeout(35)
       expect(await input().evaluate(element => document.activeElement === element)).toBe(false)
@@ -500,7 +500,7 @@ describe('composer focus through real workspace interactions', () => {
     await page.goto(appUrl)
     await ready()
     expect(await input().evaluate(element => document.activeElement === element)).toBe(false)
-    await page.getByLabel('Reset zoom', { exact: true }).tap()
+    await page.getByLabel('Fit grid to width', { exact: true }).tap()
     await page.waitForTimeout(50)
     expect(await input().evaluate(element => document.activeElement === element)).toBe(false)
   })

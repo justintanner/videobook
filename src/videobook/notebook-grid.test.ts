@@ -4,6 +4,7 @@ import {
   allocateNotebookHorizontalGenerationSlots,
   allocateNotebookVideoGenerationSlots,
   changedNotebookGridNodes,
+  fitNotebookGridZoom,
   nextHorizontalSlotFrom,
   nextNotebookCreationSlot,
   nextNotebookGridSlot,
@@ -23,6 +24,7 @@ import {
   resolveNotebookGridGroupMove,
   resolveNotebookGridMove,
   snapNotebookGridMove,
+  stepNotebookGridZoom,
   type NotebookGridData,
 } from './notebook-grid'
 import {
@@ -438,11 +440,38 @@ describe('notebook grid', () => {
       .toEqual({ row: 0, column: 0 })
   })
 
-  it('snaps zoom to 75% or 100%', () => {
+  it('preserves fractional zoom within readable limits', () => {
     expect(normalizeNotebookGridZoom(0.1)).toBe(notebookGrid.minimumZoom)
-    expect(normalizeNotebookGridZoom(0.8)).toBe(notebookGrid.minimumZoom)
-    expect(normalizeNotebookGridZoom(0.9)).toBe(notebookGrid.maximumZoom)
+    expect(normalizeNotebookGridZoom(0.8)).toBe(0.8)
+    expect(normalizeNotebookGridZoom(0.635)).toBe(0.635)
     expect(normalizeNotebookGridZoom(4)).toBe(notebookGrid.maximumZoom)
     expect(normalizeNotebookGridZoom(Number.NaN)).toBe(1)
+  })
+
+  it('fits all eight columns and the unscaled caption rail inside measured width', () => {
+    const metrics = notebookGridMetrics([])
+    for (const width of [1230, 1426, 1870]) {
+      const zoom = fitNotebookGridZoom(width)
+      const frame = notebookGridFrameSize(metrics, zoom)
+      expect(frame.width + notebookGrid.laneCaptionWidth).toBeCloseTo(width)
+      expect(notebookGridViewport(metrics, zoom).zoom).toBe(zoom)
+      expect(frame.height).toBeCloseTo(metrics.height * zoom)
+    }
+    expect(fitNotebookGridZoom(360)).toBe(0.5)
+    expect(fitNotebookGridZoom(2510)).toBe(1)
+    expect(fitNotebookGridZoom(0)).toBe(1)
+    expect(fitNotebookGridZoom(Number.NaN)).toBe(1)
+    expect(notebookGridMetrics([], { viewportHeight: 600, zoom: 0.6 }).rowCount).toBe(4)
+  })
+
+  it('steps manual zoom to the next preset from fractional fit or pinch zoom', () => {
+    expect(stepNotebookGridZoom(0.635, -0.25)).toBe(0.5)
+    expect(stepNotebookGridZoom(0.635, 0.25)).toBe(0.75)
+    expect(stepNotebookGridZoom(0.75, 0.25)).toBe(1)
+    expect(stepNotebookGridZoom(0.75, -0.25)).toBe(0.5)
+    expect(stepNotebookGridZoom(0.9, -0.25)).toBe(0.75)
+    expect(stepNotebookGridZoom(0.5, -0.25)).toBe(0.5)
+    expect(stepNotebookGridZoom(1, 0.25)).toBe(1)
+    expect(stepNotebookGridZoom(0.635, 0)).toBe(0.635)
   })
 })

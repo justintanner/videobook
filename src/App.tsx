@@ -28,7 +28,6 @@ import {
   type Node,
   type NodeProps,
   type ReactFlowInstance,
-  type Viewport,
 } from '@xyflow/react'
 import {
   Activity,
@@ -323,11 +322,11 @@ import {
   type EditCommandStage,
 } from '@/videobook/command-plan'
 import { useLastWorkSlot } from '@/videobook/last-work-slot'
+import { useNotebookViewport } from '@/videobook/useNotebookViewport'
 import { resolveMusicVideoCommandAsset } from '@/videobook/music-video-command'
 import {
   changedNotebookGridNodes,
   nextNotebookCreationSlot,
-  normalizeNotebookGridZoom,
   parseNotebookGridAddress,
   notebookGrid,
   notebookGridAddress,
@@ -3342,8 +3341,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
   const [mediaDropActive, setMediaDropActive] = useState(false)
   const [mediaDropSlot, setMediaDropSlot] = useState<NotebookGridSlot | null>(null)
-  const [notebookView, setNotebookView] = useState({ y: 0, zoom: 1 })
-  const [notebookSurface, setNotebookSurface] = useState({ width: 0, height: 0 })
+  const {
+    scrollRef: notebookScrollRef,
+    surface: notebookSurface,
+    zoom: notebookZoom,
+    fitting: notebookFitting,
+    updateViewport: updateNotebookViewport,
+    adjustZoom: adjustNotebookZoom,
+    fitToWidth: resetNotebookZoom,
+  } = useNotebookViewport(bookId, notebook?.id, screen === 'notebook')
+  const [commandRowHeight, setCommandRowHeight] = useState(58)
+  const notebookCanvasStyle = useMemo(() => ({
+    '--notebook-command-row-height': `${commandRowHeight}px`,
+  }) as CSSProperties, [commandRowHeight])
   const [composerDockOpen, setComposerDockOpen] = useState(false)
   const [imageDockHost, setImageDockHost] = useState<HTMLDivElement | null>(null)
   const [musicDockHost, setMusicDockHost] = useState<HTMLDivElement | null>(null)
@@ -3391,7 +3401,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setNoticeState({ text, tone })
   }, [])
   const flowRef = useRef<ReactFlowInstance<CanvasNode, NotebookFlowEdge> | null>(null)
-  const notebookScrollRef = useRef<HTMLDivElement | null>(null)
   const bookMenuRequestRef = useRef(0)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recorderStreamRef = useRef<MediaStream | null>(null)
@@ -4586,14 +4595,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       {
         viewportWidth: notebookSurface.width,
         viewportHeight: notebookSurface.height,
-        zoom: notebookView.zoom,
+        zoom: notebookZoom,
       },
     ),
     [
       notebookOccupiedSlots,
       notebookSurface.height,
       notebookSurface.width,
-      notebookView.zoom,
+      notebookZoom,
     ],
   )
   const notebookMetrics = useMemo(
@@ -4604,7 +4613,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             preview: previewSlot,
             viewportWidth: notebookSurface.width,
             viewportHeight: notebookSurface.height,
-            zoom: notebookView.zoom,
+            zoom: notebookZoom,
           },
         )
       : notebookBaseMetrics,
@@ -4613,13 +4622,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       notebookBaseMetrics,
       notebookSurface.height,
       notebookSurface.width,
-      notebookView.zoom,
+      notebookZoom,
       previewSlot,
     ],
   )
   const notebookFrameSize = useMemo(
-    () => notebookGridFrameSize(notebookMetrics, notebookView.zoom),
-    [notebookMetrics, notebookView.zoom],
+    () => notebookGridFrameSize(notebookMetrics, notebookZoom),
+    [notebookMetrics, notebookZoom],
   )
   const notebookLaneSections = useMemo(
     () => groupNotebookLaneSections(
@@ -4629,45 +4638,24 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const notebookFlowStyle = useMemo<CSSProperties>(
     () => ({
+      '--notebook-lane-caption-width': `${notebookGrid.laneCaptionWidth}px`,
+      '--notebook-address-scale': 1 / notebookZoom,
       width: `calc(${notebookFrameSize.width}px + var(--notebook-lane-caption-width))`,
       height: notebookFrameSize.height,
-    }),
-    [notebookFrameSize.height, notebookFrameSize.width],
+    }) as CSSProperties,
+    [notebookFrameSize.height, notebookFrameSize.width, notebookZoom],
   )
   const notebookViewport = useMemo(
     () => notebookGridViewport(
       notebookMetrics,
-      notebookView.zoom,
-      notebookView.y,
+      notebookZoom,
     ),
-    [notebookMetrics, notebookView.y, notebookView.zoom],
+    [notebookMetrics, notebookZoom],
   )
-  const updateNotebookViewport = useCallback((viewport: Viewport) => {
-    const zoom = normalizeNotebookGridZoom(viewport.zoom)
-    setNotebookView((current) => {
-      const y = zoom === current.zoom
-        ? current.y
-        : Number.isFinite(viewport.y)
-          ? viewport.y
-          : 0
-      return current.zoom === zoom && current.y === y
-        ? current
-        : { y, zoom }
-    })
-  }, [])
-  const adjustNotebookZoom = useCallback((change: number) => {
-    setNotebookView((current) => ({
-      ...current,
-      zoom: normalizeNotebookGridZoom(current.zoom + change),
-    }))
-  }, [])
-  const resetNotebookZoom = useCallback(() => {
-    setNotebookView({ y: 0, zoom: 1 })
-  }, [])
   const revealLatestNotebookResult = useCallback(() => {
     if (screen !== 'notebook') return
     revealNotebookResult(() => notebookScrollRef.current)
-  }, [screen])
+  }, [notebookScrollRef, screen])
   const dismissPendingCommandPlan = useCallback(() => {
     voiceOutcomeRef.current?.({ status: 'cancelled', message: 'Pending action cancelled on screen.' })
     // Declining one step declines the chain: later steps consume its output, so
@@ -5027,33 +5015,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     )
   }, [pendingGenerationDraft, updatePendingGenerationSources])
 
-  useLayoutEffect(() => {
-    const container = notebookScrollRef.current
-    if (!container) return
-    const sync = () => {
-      setNotebookSurface((current) => {
-        const next = {
-          width: container.clientWidth,
-          height: container.clientHeight,
-        }
-        return current.width === next.width && current.height === next.height
-          ? current
-          : next
-      })
-    }
-    sync()
-    const observer = new ResizeObserver(sync)
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [notebook?.id])
-
-  useLayoutEffect(() => {
-    const container = notebookScrollRef.current
-    if (!container) return
-    container.scrollLeft = 0
-    container.scrollTop = 0
-  }, [bookId, notebook?.id])
-
   /* Bring the slot a review is about into the middle of the canvas when the
      sheet opens. A viewport move, not a focus move: the zoom is untouched and
      the keyboard stays wherever the sheet put it. */
@@ -5065,14 +5026,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (screen !== 'notebook' || reviewFocusRow === null) return
     revealNotebookReviewRow(
       () => notebookScrollRef.current,
-      { row: reviewFocusRow, zoom: notebookView.zoom },
+      { row: reviewFocusRow, zoom: notebookZoom },
       {
         reducedMotion: typeof window !== 'undefined'
           && typeof window.matchMedia === 'function'
           && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       },
     )
-  }, [notebookView.zoom, reviewFocusRow, screen])
+  }, [notebookScrollRef, notebookZoom, reviewFocusRow, screen])
 
   const selectedCell = useMemo(
     () => presentedNodes.find((node) => node.id === selectedCellId) ?? null,
@@ -12725,7 +12686,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         </div>
         {screen === 'notebook' && notebook && (
           <NotebookToolbar
-            zoom={notebookView.zoom}
+            fitting={notebookFitting}
+            zoom={notebookZoom}
             busy={busy}
             arrangeDisabled={busy || mcp.state !== 'ready' || notebook.cells.length === 0}
             selectedCount={selectedNotebookCells.length}
@@ -12767,7 +12729,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       <>
           {screen === 'notebook' && (
             <>
-              <section className="canvas">
+              <section className="canvas" style={notebookCanvasStyle}>
                 {!notebook ? (
                   <div className="canvas-empty-state">
                     <strong>No notebook available</strong>
@@ -13228,6 +13190,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         onExecute={executeWorkspaceAction} onReview={reviewWorkspaceAction} />}
 
       <CommandComposer
+        onCommandRowHeightChange={setCommandRowHeight}
         hidden={!showCommandComposer}
         dockOpen={composerDockOpen}
         onDockOpenChange={setComposerDockOpen}

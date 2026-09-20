@@ -108,14 +108,13 @@ export function NotebookCellContextMenu({
     const menu = menuRef.current
     if (!menu) return
     const margin = 8
-    const bounds = menu.getBoundingClientRect()
     const left = Math.max(
       margin,
-      Math.min(position.x, window.innerWidth - bounds.width - margin),
+      Math.min(position.x, window.innerWidth - menu.offsetWidth - margin - 1),
     )
     const top = Math.max(
       margin,
-      Math.min(position.y, window.innerHeight - bounds.height - margin),
+      Math.min(position.y, window.innerHeight - menu.offsetHeight - margin - 1),
     )
     menu.style.left = `${left}px`
     menu.style.top = `${top}px`

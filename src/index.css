@@ -1692,11 +1692,9 @@ textarea:focus-visible {
 .canvas {
   --notebook-chrome-inset: var(--app-gutter);
   --notebook-chrome-gap: var(--app-gap);
+  --notebook-chrome-top: 8px;
   --notebook-scrollbar-size: 10px;
-  /* 20px composer offset + 56px command shell + 10px gap = 86; the 10px
-     horizontal scrollbar inside the viewport completes the rhythm
-     (originY 20 + bar 10 + gap 10 = 40) */
-  --notebook-composer-clearance: calc(var(--app-gutter) + 56px + var(--app-gap));
+  --notebook-composer-clearance: calc(var(--app-gutter) + var(--notebook-command-row-height, 58px) + 4px);
   position: relative;
   grid-row: 2;
   grid-column: 1;
@@ -1835,11 +1833,12 @@ textarea:focus-visible {
 
 .notebook-horizontal-scroll {
   width: auto;
-  height: calc(100% - var(--notebook-chrome-inset));
+  height: calc(100% - var(--notebook-chrome-top));
   min-width: 0;
   min-height: 0;
-  margin: var(--notebook-chrome-inset) var(--notebook-chrome-inset) 0;
+  margin: var(--notebook-chrome-top) var(--notebook-chrome-inset) 0;
   overflow: auto;
+  overflow-anchor: none;
   overscroll-behavior-x: contain;
   overscroll-behavior-y: contain;
   /* auto re-enables the ::-webkit-scrollbar rules below (Chrome ignores
@@ -1880,7 +1879,6 @@ textarea:focus-visible {
 }
 
 .notebook-flow-frame {
-  --notebook-lane-caption-width: 28px;
   position: relative;
   margin-inline: auto;
   padding-left: var(--notebook-lane-caption-width);
@@ -1985,7 +1983,7 @@ textarea:focus-visible {
   align-items: center;
   gap: 6px;
   width: calc(var(--notebook-lane-caption-width) - 8px);
-  padding: 7px 2px;
+  padding: 6px 2px;
   border: 1px solid rgba(126, 207, 159, 0.16);
   border-radius: 3px;
   color: #8fb89e;
@@ -2098,12 +2096,13 @@ textarea:focus-visible {
   position: absolute;
   top: 8px;
   left: 10px;
-  color: rgba(126, 207, 159, 0.28);
+  color: #7fae92;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: calc(12px * var(--notebook-address-scale, 1));
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: lowercase;
+  white-space: nowrap;
 }
 
 .notebook-grid-square-dropzone {
@@ -2833,13 +2832,12 @@ textarea:focus-visible {
 }
 
 .cell-node-footer strong {
-  min-width: 0;
+  flex-shrink: 0;
   color: var(--cell-accent);
-  font-size: 14px;
+  font-size: calc(14px * var(--notebook-address-scale, 1));
   font-weight: 600;
   line-height: 1.25;
-  overflow-wrap: anywhere;
-  white-space: normal;
+  white-space: nowrap;
 }
 
 .cell-node-footer-actions {
@@ -9925,6 +9923,13 @@ textarea:focus-visible {
 .command-composer > * {
   flex: 0 0 auto;
   min-width: 0;
+}
+
+.app-shell > .command-composer {
+  position: absolute;
+  grid-row: 2;
+  grid-column: 1;
+  max-height: calc(100% - var(--app-gutter) - 8px);
 }
 
 .command-composer-dock-bar {

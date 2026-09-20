@@ -5,6 +5,7 @@ import { notebookGrid } from '@/videobook/notebook-grid'
 
 type NotebookToolbarProps = {
   zoom: number
+  fitting: boolean
   busy: boolean
   arrangeDisabled: boolean
   selectedCount: number
@@ -21,6 +22,7 @@ type NotebookToolbarProps = {
 
 export function NotebookToolbar({
   zoom,
+  fitting,
   busy,
   arrangeDisabled,
   selectedCount,
@@ -65,11 +67,12 @@ export function NotebookToolbar({
         <button
           type="button"
           className="canvas-zoom-level"
-          title="Reset zoom to 100%"
-          aria-label="Reset zoom"
+          title={`Fit grid to width (${Math.round(zoom * 100)}%)`}
+          aria-label="Fit grid to width"
+          aria-pressed={fitting}
           onClick={onResetZoom}
         >
-          {Math.round(zoom * 100)}%
+          {fitting ? 'Fit' : `${Math.round(zoom * 100)}%`}
         </button>
         <button
           type="button"

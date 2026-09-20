@@ -1214,12 +1214,116 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
+  it('fits eight columns with readable addresses and compact canvas spacing', async () => {
+    const page = await openApp()
+    const fit = page.getByLabel('Fit grid to width', { exact: true })
+    await fit.click()
+    await collapseComposerDock(page)
+    const scroll = page.locator('.notebook-horizontal-scroll')
+    const readLayout = () => scroll.evaluate(element => {
+      const header = document.querySelector('.topbar')
+      const composer = document.querySelector('.command-composer')
+      const viewport = element.querySelector('.react-flow__viewport')
+      if (!header || !composer || !viewport) throw new Error('Missing notebook layout')
+      const bounds = element.getBoundingClientRect()
+      const zoom = new DOMMatrix(getComputedStyle(viewport).transform).a
+      const squares = [...element.querySelectorAll('.notebook-grid-square')].slice(0, 8)
+      const addresses = [...element.querySelectorAll('.cell-node-footer strong')]
+      return {
+        zoom,
+        topGap: bounds.top - header.getBoundingClientRect().bottom,
+        bottomGap: composer.getBoundingClientRect().top - bounds.bottom,
+        overflow: element.scrollWidth - element.clientWidth,
+        columnsVisible: squares.every(square => {
+          const rect = square.getBoundingClientRect()
+          return rect.left >= bounds.left && rect.right <= bounds.left + element.clientWidth + 1
+        }),
+        emptyTextSize: Math.min(...squares.map(square => {
+          const label = square.querySelector('.notebook-grid-square-label')
+          if (!label) throw new Error('Missing slot address')
+          return parseFloat(getComputedStyle(label).fontSize) * zoom
+        })),
+        addressTextSize: Math.min(...addresses.map(address => parseFloat(getComputedStyle(address).fontSize) * zoom)),
+        addressesInsideCards: addresses.every(address => {
+          const card = address.closest('.cell-node')?.getBoundingClientRect()
+          const rect = address.getBoundingClientRect()
+          return card && rect.left >= card.left && rect.right <= card.right
+            && rect.top >= card.top && rect.bottom <= card.bottom
+        }),
+      }
+    })
+
+    for (const width of [1280, 1476, 1920]) {
+      await page.setViewportSize({ width, height: 850 })
+      await expect.poll(async () => (await readLayout()).overflow).toBeLessThanOrEqual(1)
+      const layout = await readLayout()
+      expect(layout).toMatchObject({ columnsVisible: true, addressesInsideCards: true })
+      expect(layout.topGap).toBeCloseTo(8)
+      expect(layout.bottomGap).toBeCloseTo(4)
+      expect(layout.emptyTextSize).toBeCloseTo(12, 2)
+      expect(layout.addressTextSize).toBeCloseTo(14, 2)
+      expect(await fit.getAttribute('aria-pressed')).toBe('true')
+      expect(await fit.textContent()).toBe('Fit')
+    }
+
+    for (const width of [1024, 390]) {
+      await page.setViewportSize({ width, height: 850 })
+      await expect.poll(async () => (await readLayout()).zoom).toBe(0.5)
+      const layout = await readLayout()
+      expect(layout.overflow).toBeGreaterThan(0)
+      expect(layout.addressesInsideCards).toBe(true)
+      expect(layout.addressTextSize).toBeCloseTo(14, 2)
+      expect(layout.bottomGap).toBeCloseTo(4)
+      await scroll.evaluate(element => { element.scrollLeft = element.scrollWidth })
+      const last = page.locator('.notebook-grid-square-label').filter({ hasText: /^@a8$/u })
+      const bounds = await last.boundingBox()
+      expect(bounds!.x).toBeGreaterThanOrEqual(0)
+      expect(bounds!.x + bounds!.width).toBeLessThan(width)
+    }
+
+    await page.setViewportSize({ width: 1476, height: 850 })
+    await fit.click()
+    const input = page.getByLabel('Videobook command input')
+    await input.fill('Keep my draft while resizing the notebook')
+    const selected = notebookCellNode(page, videoCellId)
+    await selected.click()
+    await scroll.evaluate(element => { element.scrollTop = 40 })
+    const rowBefore = await scroll.evaluate(element => {
+      const viewport = element.querySelector('.react-flow__viewport')!
+      return element.scrollTop / new DOMMatrix(getComputedStyle(viewport).transform).a
+    })
+    await page.setViewportSize({ width: 1280, height: 850 })
+    await expect.poll(async () => (await readLayout()).overflow).toBeLessThanOrEqual(1)
+    await expect.poll(async () => scroll.evaluate((element, expectedRow) => {
+      const viewport = element.querySelector('.react-flow__viewport')!
+      return Math.abs(element.scrollTop / new DOMMatrix(getComputedStyle(viewport).transform).a - expectedRow)
+    }, rowBefore)).toBeLessThanOrEqual(2)
+    expect(await selected.getAttribute('data-selection')).toBe('primary')
+    expect(await input.textContent()).toBe('Keep my draft while resizing the notebook')
+
+    await page.getByLabel('Zoom in', { exact: true }).click()
+    await expect.poll(async () => await fit.textContent()).toBe('75%')
+    await page.setViewportSize({ width: 1476, height: 850 })
+    expect(await fit.textContent()).toBe('75%')
+    await scroll.evaluate(element => { element.scrollLeft = 120 })
+    await fit.click()
+    await expect.poll(async () => (await readLayout()).overflow).toBeLessThanOrEqual(1)
+    expect(await scroll.evaluate(element => element.scrollLeft)).toBe(0)
+    expect(await input.textContent()).toBe('Keep my draft while resizing the notebook')
+    await input.fill('')
+    await page.getByLabel('Clear selection', { exact: true }).click()
+    await page.getByLabel('Open Library', { exact: true }).click()
+    await page.getByRole('button', { name: '/videobook', exact: true }).click()
+    await expect.poll(async () => (await readLayout()).overflow).toBeLessThanOrEqual(1)
+    expect(await fit.getAttribute('aria-pressed')).toBe('true')
+  }, 60_000)
+
   it('preserves selection, zoom, scroll, and drafts while external cells update', async () => {
     const page = await openApp()
     const selected = notebookCellNode(page, videoCellId)
     await selected.click()
-    await page.getByLabel('Reset zoom', { exact: true }).click()
-    await page.getByLabel('Zoom out', { exact: true }).click()
+    await page.getByLabel('Fit grid to width', { exact: true }).click()
+    await page.getByLabel('Zoom in', { exact: true }).click()
     const input = page.getByLabel('Videobook command input')
     const draft = 'Keep this draft while other clients edit the notebook'
     await input.fill(draft)
@@ -1263,7 +1367,7 @@ describe('chat composer browser flow', () => {
       await expect.poll(async () => await added.count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
       cellId = ''
       expect(await selected.getAttribute('data-selection')).toBe('primary')
-      expect(await page.getByLabel('Reset zoom', { exact: true }).textContent()).toContain('75%')
+      expect(await page.getByLabel('Fit grid to width', { exact: true }).textContent()).toContain('75%')
       expect(await input.textContent()).toBe(draft)
       expect(await input.evaluate((element) => document.activeElement === element)).toBe(true)
       expect(await input.isEnabled()).toBe(true)
@@ -1273,7 +1377,7 @@ describe('chat composer browser flow', () => {
       if (cellId) await tool('delete_notebook_cell', { cell_id: cellId })
       await client.close()
       await input.fill('')
-      await page.getByLabel('Reset zoom', { exact: true }).click()
+      await page.getByLabel('Fit grid to width', { exact: true }).click()
       notebookDirty = true
     }
   }, 60_000)
@@ -3868,7 +3972,7 @@ describe('chat composer browser flow', () => {
 
     await trigger.click()
     expect(await search.inputValue()).toBe('')
-    await page.getByLabel('Reset zoom', { exact: true }).click()
+    await page.getByLabel('Fit grid to width', { exact: true }).click()
     await expect.poll(async () => await menu.getAttribute('open')).toBeNull()
     await expect.poll(async () => await page.getByLabel('Videobook command input')
       .evaluate((element) => document.activeElement === element)).toBe(true)
@@ -3970,10 +4074,10 @@ describe('chat composer browser flow', () => {
       const before = record(await tool('get_notebook', scope))
       for (const width of [1440, 390]) {
         await page.setViewportSize({ width, height: 800 })
-        await page.getByLabel('Reset zoom').click()
+        await page.getByLabel('Fit grid to width').click()
         await expectLaneCaptionsOutsideGrid(page)
-        await page.getByLabel('Zoom out').click()
-        await expect.poll(async () => await page.getByLabel('Reset zoom').textContent())
+        await page.getByLabel('Zoom in').click()
+        await expect.poll(async () => await page.getByLabel('Fit grid to width').textContent())
           .toContain('75%')
         await expectLaneCaptionsOutsideGrid(page)
         await page.locator('.notebook-horizontal-scroll').evaluate((element) =>
@@ -4018,8 +4122,9 @@ describe('chat composer browser flow', () => {
     const selected = notebookCellNode(page, fullscreenImageCellId)
     await selected.click()
     expect(await selected.getAttribute('data-selection')).toBe('primary')
-    await page.getByLabel('Zoom out').click()
-    const zoomLevel = page.getByLabel('Reset zoom')
+    await page.getByLabel('Fit grid to width').click()
+    await page.getByLabel('Zoom in').click()
+    const zoomLevel = page.getByLabel('Fit grid to width')
     await expect.poll(async () => await zoomLevel.textContent()).toContain('75%')
 
     const autoArrange = page.getByLabel('Auto-arrange notebook')

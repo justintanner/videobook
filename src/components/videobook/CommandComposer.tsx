@@ -164,6 +164,7 @@ interface CommandComposerProps {
   onModelChange: (model: string) => void
   onStartVoice?: () => void
   onSendingChange?: (sending: boolean) => void
+  onCommandRowHeightChange?: (height: number) => void
   onSuccessfulExecute: () => void
   voiceCatalog?: ElevenLabsVoicesState
   voice?: VoiceConversation
@@ -229,6 +230,7 @@ export function CommandComposer({
   onModelChange,
   onStartVoice,
   onSendingChange,
+  onCommandRowHeightChange,
   onSuccessfulExecute,
   voiceCatalog,
   voice,
@@ -252,6 +254,22 @@ export function CommandComposer({
   )
   const inputRef = useRef<ComposerEditorHandle>(null)
   const composerRootRef = useRef<HTMLElement | null>(null)
+  const commandRowRef = useRef<HTMLFormElement | null>(null)
+
+  useLayoutEffect(() => {
+    const row = commandRowRef.current
+    const root = composerRootRef.current
+    if (hidden || portalTarget || !row || !root || !onCommandRowHeightChange) return
+    const sync = () => {
+      const style = getComputedStyle(root)
+      onCommandRowHeightChange(row.getBoundingClientRect().height
+        + parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth))
+    }
+    sync()
+    const observer = new ResizeObserver(sync)
+    observer.observe(row)
+    return () => observer.disconnect()
+  }, [hidden, onCommandRowHeightChange, portalTarget])
   const [uncontrolledDockOpen, setUncontrolledDockOpen] = useState(false)
   const dockRequestedOpen = dockOpen ?? uncontrolledDockOpen
   const dockWasOpenRef = useRef(dockRequestedOpen)
@@ -945,6 +963,7 @@ export function CommandComposer({
       </div>
 
       <form
+        ref={commandRowRef}
         id={COMMAND_COMPOSER_FORM_ID}
         className={`command-line-shell ${transmitting ? 'command-line-shell-transmitting' : ''} ${mcpSucceeded ? 'command-line-shell-success' : ''} ${mcpFailed ? 'command-line-shell-error' : ''}`}
         aria-busy={transmitting}

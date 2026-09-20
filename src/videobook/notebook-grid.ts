@@ -31,7 +31,8 @@ export const notebookGrid = {
   maximumRowCount: NOTEBOOK_GRID_ROW_COUNT,
   minimumRowCount: 3,
   trailingRowCount: 1,
-  minimumZoom: 0.75,
+  laneCaptionWidth: 28,
+  minimumZoom: 0.5,
   maximumZoom: 1,
   zoomStep: 0.25,
 } as const
@@ -358,10 +359,22 @@ interface NotebookGridMetricsOptions {
 
 export function normalizeNotebookGridZoom(zoom: number): number {
   if (!Number.isFinite(zoom)) return 1
-  const midpoint = (notebookGrid.minimumZoom + notebookGrid.maximumZoom) / 2
-  return zoom < midpoint
-    ? notebookGrid.minimumZoom
-    : notebookGrid.maximumZoom
+  return Math.min(notebookGrid.maximumZoom, Math.max(notebookGrid.minimumZoom, zoom))
+}
+
+export function fitNotebookGridZoom(viewportWidth: number): number {
+  if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return 1
+  return normalizeNotebookGridZoom((viewportWidth - notebookGrid.laneCaptionWidth) / gridWidth())
+}
+
+export function stepNotebookGridZoom(zoom: number, change: number): number {
+  const current = normalizeNotebookGridZoom(zoom)
+  if (!Number.isFinite(change) || change === 0) return current
+  const step = notebookGrid.zoomStep
+  const index = change > 0
+    ? Math.floor((current + 0.000001) / step) + 1
+    : Math.ceil((current - 0.000001) / step) - 1
+  return normalizeNotebookGridZoom(index * step)
 }
 
 function gridWidth(): number {

@@ -17,7 +17,7 @@ import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
 import { ComposerHistoryControls } from '@/components/videobook/ComposerHistory'
 import type { ImageSubject, ImageSubjectMap } from '@/videobook/image-subject-map'
-import { restoreFocusElement } from '@/videobook/command-composer-focus'
+import { capturePointerComposerFocus, restoreFocusElement } from '@/videobook/command-composer-focus'
 import { focusableModalDialogElements } from '@/videobook/modal-dialog-interactions'
 import {
   bestSubjectSnap,
@@ -417,6 +417,7 @@ export function NotebookMediaFullscreen({
   const videoRef = useRef<HTMLVideoElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
+  const dismissFocusRef = useRef<(() => void) | null>(null)
   const mountedRef = useRef(false)
   const drawStartRef = useRef<{ x: number; y: number } | null>(null)
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
@@ -520,6 +521,12 @@ export function NotebookMediaFullscreen({
         else appShell.setAttribute('aria-hidden', shellAriaHidden)
       }
       document.body.style.overflow = bodyOverflow
+      const dismissFocus = dismissFocusRef.current
+      if (dismissFocus) {
+        dismissFocusRef.current = null
+        dismissFocus()
+        return
+      }
       const restore = restoreFocusRef.current
       restoreFocusElement(restore)
       requestAnimationFrame(() => restoreFocusElement(restore))
@@ -774,7 +781,10 @@ export function NotebookMediaFullscreen({
           ref={closeRef}
           type="button"
           className="notebook-media-fullscreen-close"
-          onClick={onClose}
+          onClick={(event) => {
+            if (event.detail > 0) dismissFocusRef.current = capturePointerComposerFocus()
+            onClose()
+          }}
           aria-label="Close fullscreen preview"
           data-composer-focus="return"
         >
