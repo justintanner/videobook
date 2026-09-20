@@ -193,7 +193,7 @@ export function useCommandComposerFocus(scope: string, enabled: boolean): void {
   }, [enabled, scope])
 }
 
-export function dismissQueuedComposerFocus(): void {
+function dismissQueuedComposerFocus(): void {
   const state = focusState(document)
   state.epoch += 1
   state.pending = null

@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.v2-test.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node", "vite/client"]
   },
   "include": ["tests/v2/**/*.e2e.test.ts"],
   "exclude": []

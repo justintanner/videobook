@@ -1,5 +1,5 @@
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, type Server } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import sharp from "sharp";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  installLocalSearchProviderFixtures,
   registerLocalClapSearchProvider,
   registerLocalClipSearchProvider,
 } from "./local-search-models.js";
@@ -163,9 +164,9 @@ describe("local search provider registration", () => {
     expect(requests).toEqual([]);
   });
 
-  it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === "1")("prepares an existing image through the queue and finds its indexed source using cached offline models", async () => {
-    process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(homedir(), ".cache", "videobook", "models");
+  it("prepares an existing image through the queue and finds its indexed source using cached offline models", async () => {
     const { engine, artifactId, bookId } = await queuedImage("offline-similar");
+    installLocalSearchProviderFixtures(engine);
     await expect(queue.enqueueAndWait("index-for-similar", {
       type: "semantic_index", assetId: artifactId, bookId,
     }, 30_000)).resolves.toMatchObject({ semanticVisual: "ready" });
@@ -206,9 +207,9 @@ describe("local search provider registration", () => {
     expect(await engine.files.read(artifactId, "original.png")).toMatchObject({ ok: true, value: image });
   });
 
-  it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === "1")("keeps malformed-image failure job-local and indexes a corrected retry with the cached model", async () => {
-    process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(homedir(), ".cache", "videobook", "models");
+  it("keeps malformed-image failure job-local and indexes a corrected retry with the cached model", async () => {
     const { engine, artifactId, image, bookId } = await queuedImage("malformed-queue");
+    installLocalSearchProviderFixtures(engine);
     expect((await engine.files.write(artifactId, "original.png", Buffer.from("invalid image"))).ok).toBe(true);
     const payload = { type: "semantic_index", assetId: artifactId, bookId };
     await expect(queue.enqueueAndWait("malformed-model", payload, 30_000)).rejects.toThrow();
@@ -227,9 +228,9 @@ describe("local search provider registration", () => {
     expect(requests).toEqual([]);
   });
 
-  it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === "1")("indexes audio in the actual queue without passing its source to the image decoder", async () => {
-    process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(homedir(), ".cache", "videobook", "models");
+  it("indexes audio in the actual queue without passing its source to the image decoder", async () => {
     const engine = createTestEngine("audio-queue");
+    installLocalSearchProviderFixtures(engine);
     await engine.ready;
     await setEngineRoot(join(tempDir, "audio-queue"), engine);
     registerSemanticIndexJob(engine);

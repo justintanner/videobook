@@ -2,7 +2,7 @@ export const COMPOSER_DOCK_HIDE_LABEL = 'Collapse chat'
 export const COMPOSER_DOCK_MAX_PX = 560
 export const COMPOSER_DOCK_MAX_DVH = 56
 export const COMPOSER_DOCK_HEADER_PX = 40
-export const COMPOSER_MEDIA_ROW_PAD_PX = 24
+const COMPOSER_MEDIA_ROW_PAD_PX = 24
 
 export function composerDockHeightPx(viewportHeightPx: number): number {
   return Math.min(

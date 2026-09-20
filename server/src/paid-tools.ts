@@ -5,7 +5,7 @@ import { GENERATION_ACTIONS } from "./generation-registry.js";
  * analysis, transcription, tagging, and the notebook run entry points that
  * dispatch paid cells on our behalf.
  */
-export const BILLABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
+const BILLABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "analyze_video", "analyze_jokes", "suggest_cuts", "suggest_sfx", "apply_sfx",
   "transcribe", "translate_subtitles", "isolate_vocals", "clean_video_audio",
   "make_cover_song", "extend_audio_asset", "rewrite_prompt", "rewrite_script",

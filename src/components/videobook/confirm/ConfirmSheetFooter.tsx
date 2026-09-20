@@ -7,8 +7,6 @@ import {
   type ConfirmSheetEffect,
 } from './ConfirmSheetHints'
 
-export type { ConfirmSheetEffect }
-
 function StatusIcon({ state }: { state: ConfirmSheetStatus['state'] }) {
   if (state === 'blocking') return <Ban size={14} aria-hidden="true" />
   if (state === 'failed') return <CircleAlert size={14} aria-hidden="true" />

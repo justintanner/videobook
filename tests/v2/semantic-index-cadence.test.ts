@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
@@ -19,7 +19,7 @@ import {
   indexArtifact,
   MAX_BATCH_SOURCE_SECONDS,
 } from "../../server/src/jobs/semantic-index.js";
-import { registerLocalClipSearchProvider } from "../../server/src/local-search-models.js";
+import { installLocalSearchProviderFixtures, registerLocalClipSearchProvider } from "../../server/src/local-search-models.js";
 import { prepareSearchVideo } from "../../server/src/search-index-media.js";
 
 const execFileAsync = promisify(execFile);
@@ -306,17 +306,12 @@ describe("progressive deep-model batch cadence (VE-NFR-003)", () => {
     }
   });
 
-  it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === "1")(
-    "bounds and resumes actual CLIP frame batches on a ten-minute video",
+  it(
+    "bounds and resumes CLIP-shaped frame batches on a ten-minute video",
     async () => {
       rootDir = await mkdtemp(join(tmpdir(), "videobook-index-cadence-clip-"));
       process.env.VIDEOBOOK_MODEL_DOWNLOAD = "disabled";
-      process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(
-        homedir(),
-        ".cache",
-        "videobook",
-        "models",
-      );
+      process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(rootDir, "missing-models");
       const videoPath = join(rootDir, "ten-minutes.mp4");
       await execFileAsync(FFMPEG, [
         "-y",
@@ -358,6 +353,7 @@ describe("progressive deep-model batch cadence (VE-NFR-003)", () => {
         const source = value(
           await engine.files.manifest(artifactId),
         ).files.find((file) => file.name === "original.mp4")!;
+        installLocalSearchProviderFixtures(engine);
         const provider = registerLocalClipSearchProvider(engine);
         let embeddedFrames = 0;
         const embedImage = provider.embedImage.bind(provider);

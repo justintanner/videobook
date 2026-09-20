@@ -1,7 +1,7 @@
 // A pending review names an address it is about to write to and the addresses
 // it reads. The canvas should already be looking at the first and marking the
 // rest, so the review says what it will do somewhere you can see it happen.
-import { notebookGrid, type NotebookGridSlot } from './notebook-grid'
+import { notebookGrid } from './notebook-grid'
 
 export type NotebookReviewRole = 'target' | 'source'
 
@@ -90,8 +90,4 @@ export function revealNotebookReviewRow(
     if (Math.abs(top - target.scrollTop) <= SETTLED_PX) return
     target.scrollTo({ top, behavior: options.reducedMotion ? 'auto' : 'smooth' })
   })
-}
-
-export function notebookReviewSlotRow(slot: NotebookGridSlot | null): number | null {
-  return slot ? slot.row : null
 }

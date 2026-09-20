@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { mkdtemp, rm, stat, unlink } from 'node:fs/promises'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { MVP_CONTRACT_VERSION, type EditIntent, type Engine, type Result } from 'videobook-engine'
@@ -13,6 +13,7 @@ import { registerPrepareSearchReferenceJob } from '../../server/src/jobs/prepare
 import { queue, setEngineRoot } from '../../server/src/queue.js'
 import { semanticSearchDefs } from '../../server/src/tools/semantic-search.js'
 import { searchReferenceStore } from '../../server/src/search-reference-store.js'
+import { installLocalSearchProviderFixtures } from '../../server/src/local-search-models.js'
 
 function value<T>(result: Result<T>): T {
   if (!result.ok) throw new Error(result.error.message)
@@ -25,7 +26,7 @@ const runtime: TransformersRuntime = await import(new URL('./transformers-runtim
 it.each(['direct-index', 'migration-index', 'semantic_index', 'prepare_search_reference', 'browse', 'ingest-status', 'retry-ingest', 'edit-history', 'library-moments'])(
   '%s does not hydrate missing media from the application object store', runWorkflow, 20_000,
 )
-it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === '1')(
+it(
   'runs cached-model search, indexing, edits and history without model or object requests, then backs up explicitly',
   () => runWorkflow('cached'), 60_000,
 )
@@ -71,7 +72,7 @@ async function runWorkflow(operation: string) {
     process.env.B2_BUCKET = 'fixture-bucket'
     process.env.B2_ENDPOINT = `http://127.0.0.1:${address.port}`
     process.env.VIDEOBOOK_MODEL_DOWNLOAD = 'disabled'
-    process.env.VIDEOBOOK_MODEL_CACHE_DIR = operation === 'cached' ? join(homedir(), '.cache', 'videobook', 'models') : join(root, 'missing-models')
+    process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(root, 'missing-models')
     runtime.env.remoteHost = `http://127.0.0.1:${address.port}/models/`
     const remoteObjects = contentStoreFromEnvironment()
     if (!remoteObjects) throw new Error('No remote adapter')
@@ -107,6 +108,7 @@ async function runWorkflow(operation: string) {
     registerSemanticIndexJob(scopedBookEngine)
     registerPrepareSearchReferenceJob(scopedBookEngine)
     if (operation === 'cached') {
+      installLocalSearchProviderFixtures(engine)
       expect(await queue.enqueueAndWait('offline-index', { type: 'semantic_index', assetId: id, bookId: summary.bookId }, 30_000)).toMatchObject({ semanticVisual: 'ready' })
       const descriptor = await queue.enqueueAndWait('offline-reference', {
         type: 'prepare_search_reference', assetId: id, bookId: summary.bookId, mediaKind: 'image', name: 'Reference',

@@ -1,5 +1,5 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { LOCAL_CLIP_MANIFEST, type Engine, type Result } from 'videobook-engine'
@@ -12,7 +12,7 @@ import { queue, setEngineRoot } from '../../server/src/queue.js'
 import { mediaLibraryDefs } from '../../server/src/tools/media-library.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import { repairSearchIndexes } from '../../src/videobook/search-index-repair.js'
-import { registerLocalClipSearchProvider } from '../../server/src/local-search-models.js'
+import { installLocalSearchProviderFixtures, registerLocalClipSearchProvider } from '../../server/src/local-search-models.js'
 import { runFfmpeg } from '../../server/src/ffmpeg.js'
 
 function value<T>(result: Result<T>): T {
@@ -130,8 +130,9 @@ it('completes an empty repair without loading models', async () => {
   expect(await repair()).toEqual({ indexed: 0, failed: 0, failures: [] })
 }, 20_000)
 
-it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === '1')('repairs images and frameless videos, continues past corrupt media, and skips repaired assets on retry', async () => {
-  process.env.VIDEOBOOK_MODEL_CACHE_DIR = join(homedir(), '.cache', 'videobook', 'models')
+it('repairs images and frameless videos, continues past corrupt media, and skips repaired assets on retry', async () => {
+  await startQueue()
+  installLocalSearchProviderFixtures(engine)
   const imageId = await source()
   const imageHash = value(await engine.files.manifest(imageId)).files[0]!.objectHash
   value(engine.temporalSearch.manifests.register(LOCAL_CLIP_MANIFEST))
@@ -151,7 +152,6 @@ it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === '1')('repairs images and framel
   }))
   value(await engine.files.write(videoId, 'original.mp4', await readFile(videoPath)))
   expect((await searchLibraryAssets(books, { kinds: ['image', 'video'] })).unindexed_visual_assets).toBe(3)
-  await startQueue()
   const summary = await repair()
   expect(summary).toMatchObject({ indexed: 2, failed: 1 })
   expect(engine.jobs.queue.list({ type: 'repair_search_indexes' })[0]?.result).toMatchObject({ failures: [{ artifactId: brokenId }] })

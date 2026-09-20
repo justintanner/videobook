@@ -334,7 +334,7 @@ export interface ChainRunValue {
   }>
 }
 
-export function formatEstimatedCost(usd: number | null): string {
+function formatEstimatedCost(usd: number | null): string {
   if (usd === null) return 'Unknown'
   return usd < 0.01 ? `${Math.round(usd * 100)}¢` : `$${usd.toFixed(2)}`
 }
