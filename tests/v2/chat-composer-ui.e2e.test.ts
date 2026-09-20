@@ -451,6 +451,7 @@ describe('chat composer browser flow', () => {
       operation: 'text_to_video',
       tool: 'generate_kie_seedance_2_5_video',
       inputs: {
+        generationMode: 't2v',
         generationSettings: {
           duration: '5',
           resolution: '720p',
@@ -1187,7 +1188,7 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
-  it('fits eight columns with readable addresses and compact canvas spacing', async () => {
+  it('fits eight columns with readable cell details and compact canvas spacing', async () => {
     const page = await openApp()
     const fit = page.getByLabel('Fit grid to width', { exact: true })
     await fit.click()
@@ -1202,6 +1203,8 @@ describe('chat composer browser flow', () => {
       const zoom = new DOMMatrix(getComputedStyle(viewport).transform).a
       const squares = [...element.querySelectorAll('.notebook-grid-square')].slice(0, 8)
       const addresses = [...element.querySelectorAll('.cell-node-footer strong')]
+      const details = [...element.querySelectorAll('.cell-node-type-label, .cell-media-badge, .cell-media-meter, .cell-aspect-ratio, .cell-model-line, .cell-status, .cell-media-slot-upload strong, .cell-media-slot-upload span, .cell-media-slot-library')]
+      const prompts = [...element.querySelectorAll('.cell-copy-text p')]
       return {
         zoom,
         topGap: bounds.top - header.getBoundingClientRect().bottom,
@@ -1217,6 +1220,24 @@ describe('chat composer browser flow', () => {
           return parseFloat(getComputedStyle(label).fontSize) * zoom
         })),
         addressTextSize: Math.min(...addresses.map(address => parseFloat(getComputedStyle(address).fontSize) * zoom)),
+        detailTextSize: Math.min(...details.map(detail => parseFloat(getComputedStyle(detail).fontSize) * zoom)),
+        promptTextSize: Math.min(...prompts.map(prompt => parseFloat(getComputedStyle(prompt).fontSize) * zoom)),
+        detailsInsideCards: details.every(detail => {
+          const card = detail.closest('.cell-node')?.getBoundingClientRect()
+          const rect = detail.getBoundingClientRect()
+          return card && rect.left >= card.left && rect.right <= card.right + 1
+            && rect.top >= card.top && rect.bottom <= card.bottom + 1
+        }),
+        promptsUseWholeLines: prompts.every(prompt => {
+          const style = getComputedStyle(prompt)
+          const lines = parseFloat(style.height) / parseFloat(style.lineHeight)
+          return lines >= 0.99 && Math.abs(lines - Math.round(lines)) < 0.01
+        }),
+        headersDoNotOverlap: [...element.querySelectorAll('.cell-node-header')].every(cellHeader => {
+          const type = cellHeader.querySelector('.cell-node-type')?.getBoundingClientRect()
+          const chips = cellHeader.querySelector('.cell-generation-chips')?.getBoundingClientRect()
+          return !type || !chips || type.right <= chips.left + 1 || type.bottom <= chips.top + 1
+        }),
         addressesInsideCards: addresses.every(address => {
           const card = address.closest('.cell-node')?.getBoundingClientRect()
           const rect = address.getBoundingClientRect()
@@ -1225,6 +1246,15 @@ describe('chat composer browser flow', () => {
         }),
       }
     })
+    const expectReadableDetails = (layout: Awaited<ReturnType<typeof readLayout>>) => {
+      expect(layout.detailTextSize).toBeCloseTo(11, 2)
+      expect(layout.promptTextSize).toBeCloseTo(13, 2)
+      expect(layout).toMatchObject({
+        detailsInsideCards: true,
+        promptsUseWholeLines: true,
+        headersDoNotOverlap: true,
+      })
+    }
 
     for (const width of [1280, 1476, 1920]) {
       await page.setViewportSize({ width, height: 850 })
@@ -1235,6 +1265,7 @@ describe('chat composer browser flow', () => {
       expect(layout.bottomGap).toBeCloseTo(4)
       expect(layout.emptyTextSize).toBeCloseTo(12, 2)
       expect(layout.addressTextSize).toBeCloseTo(14, 2)
+      expectReadableDetails(layout)
       await expectGridWithoutSidebar(page)
       expect(await fit.getAttribute('aria-pressed')).toBe('true')
       expect(await fit.textContent()).toBe('Fit')
@@ -1247,6 +1278,7 @@ describe('chat composer browser flow', () => {
       expect(layout.overflow).toBeGreaterThan(0)
       expect(layout.addressesInsideCards).toBe(true)
       expect(layout.addressTextSize).toBeCloseTo(14, 2)
+      expectReadableDetails(layout)
       expect(layout.bottomGap).toBeCloseTo(4)
       await scroll.evaluate(element => { element.scrollLeft = element.scrollWidth })
       const last = page.locator('.notebook-grid-square-label').filter({ hasText: /^@a8$/u })
@@ -1279,6 +1311,10 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await fit.textContent()).toBe('75%')
     await page.setViewportSize({ width: 1476, height: 850 })
     expect(await fit.textContent()).toBe('75%')
+    expectReadableDetails(await readLayout())
+    await page.getByLabel('Zoom in', { exact: true }).click()
+    await expect.poll(async () => await fit.textContent()).toBe('100%')
+    expectReadableDetails(await readLayout())
     await scroll.evaluate(element => { element.scrollLeft = 120 })
     await fit.click()
     await expect.poll(async () => (await readLayout()).overflow).toBeLessThanOrEqual(1)
@@ -3171,7 +3207,7 @@ describe('chat composer browser flow', () => {
         chipLabels: [...chips.querySelectorAll('.cell-aspect-ratio')]
           .map((chip) => chip.textContent?.trim()),
         contentGap: chipsRect.left - typeRect.right,
-        headerHeight: Number.parseFloat(getComputedStyle(element).height),
+        headerHeight: headerRect.height,
         labelClipped: label.scrollWidth > label.clientWidth,
         renderedLabel: type.textContent?.trim(),
         typeCenterOffset: Math.abs(typeRect.top + typeRect.height / 2 - headerCenter),
@@ -3183,11 +3219,11 @@ describe('chat composer browser flow', () => {
     expect(layout).toMatchObject({
       accessibleLabel: 'GEN VIDEO',
       chipLabels: ['10s', '9:16'],
-      headerHeight: 34,
       labelClipped: false,
       renderedLabel: 'GEN VID',
       whiteSpace: 'nowrap',
     })
+    expect(layout.headerHeight).toBeCloseTo(24, 1)
     expect(layout.contentGap).toBeGreaterThanOrEqual(0)
     expect(layout.typeCenterOffset).toBeLessThan(1)
     expect(layout.chipsCenterOffset).toBeLessThan(1)

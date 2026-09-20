@@ -253,13 +253,13 @@ textarea:focus-visible {
 }
 
 .cell-run-button {
-  max-width: 120px;
+  max-width: 100%;
   padding: 4px 7px;
   border: 1px solid rgba(114, 231, 170, 0.42);
   overflow: hidden;
   color: var(--green);
   background: rgba(35, 112, 70, 0.25);
-  font-size: 9px;
+  font-size: var(--cell-label-font-size);
   letter-spacing: 0.08em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2025,7 +2025,7 @@ textarea:focus-visible {
   left: 10px;
   color: #7fae92;
   font-family: var(--mono);
-  font-size: calc(12px * var(--notebook-address-scale, 1));
+  font-size: calc(12px * var(--notebook-detail-scale, 1));
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: lowercase;
@@ -2170,8 +2170,8 @@ textarea:focus-visible {
   top: -1px;
   z-index: 13;
   display: grid;
-  width: 20px;
-  height: 20px;
+  width: 1.8em;
+  height: 1.8em;
   place-items: center;
   transform: translate(-50%, -50%);
   border: 1px solid rgba(114, 231, 170, 0.72);
@@ -2180,7 +2180,7 @@ textarea:focus-visible {
   background: #06150d;
   box-shadow: 0 0 7px rgba(114, 231, 170, 0.18);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 9px;
+  font-size: var(--cell-label-font-size);
   font-weight: 650;
   line-height: 1;
   pointer-events: none;
@@ -2229,6 +2229,8 @@ textarea:focus-visible {
 }
 
 .cell-node {
+  --cell-label-font-size: calc(11px * var(--notebook-detail-scale, 1));
+  --cell-body-font-size: calc(13px * var(--notebook-detail-scale, 1));
   --cell-state-color: #72e7aa;
   --cell-state-soft: rgba(114, 231, 170, 0.22);
   --cell-state-glow: rgba(114, 231, 170, 0.38);
@@ -2524,15 +2526,15 @@ textarea:focus-visible {
 }
 
 .cell-state-overlay-copy strong {
-  font-size: 10px;
+  font-size: var(--cell-label-font-size);
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   opacity: 0.95;
 }
 
 .cell-state-timer {
-  font-size: 15px;
+  font-size: calc(15px * var(--notebook-detail-scale, 1));
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
@@ -2632,7 +2634,7 @@ textarea:focus-visible {
 }
 
 .cell-state-failed-body strong {
-  font-size: 9px;
+  font-size: var(--cell-label-font-size);
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -2646,7 +2648,7 @@ textarea:focus-visible {
   overflow: hidden;
   color: color-mix(in srgb, var(--cell-state-color) 90%, white);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 9px;
+  font-size: var(--cell-label-font-size);
   line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -2666,7 +2668,7 @@ textarea:focus-visible {
   color: #fff;
   background: color-mix(in srgb, var(--cell-state-color) 85%, black);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 9px;
+  font-size: var(--cell-label-font-size);
   font-weight: 700;
   letter-spacing: 0.12em;
   cursor: pointer;
@@ -2689,40 +2691,47 @@ textarea:focus-visible {
 }
 
 .cell-node-header {
-  flex: 0 0 34px;
-  gap: 8px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-height: max(34px, calc(24px * var(--notebook-detail-scale, 1)));
+  padding: 4px 8px;
+  font-size: var(--cell-label-font-size);
+  letter-spacing: 0.04em;
 }
 
 .cell-family-video .cell-node-header {
-  color: #7fc79c;
+  color: #a5d8b9;
 }
 
 .cell-family-image .cell-node-header {
-  color: #77b9c7;
+  color: #a8dbe6;
 }
 
 .cell-family-audio .cell-node-header {
-  color: #b98da0;
+  color: #e0b5c7;
 }
 
 .cell-family-data .cell-node-header {
-  color: #8fa396;
+  color: #bdcbc3;
 }
 
 .cell-family-gen .cell-node-header {
-  color: #8fd4ab;
+  color: #9ee0b8;
 }
 
 .cell-node-type {
   display: inline-flex;
   min-width: 0;
   align-items: center;
-  gap: 7px;
+  gap: 0.35em;
   line-height: 1;
 }
 
 .cell-node-type > svg {
   flex: none;
+  width: 1em;
+  height: 1em;
 }
 
 .cell-node-type-label {
@@ -2734,7 +2743,7 @@ textarea:focus-visible {
 .cell-version-count {
   display: inline-flex;
   min-width: 40px;
-  height: 22px;
+  height: 1.8em;
   align-items: center;
   justify-content: center;
   gap: 4px;
@@ -2744,7 +2753,7 @@ textarea:focus-visible {
   color: #9de1b8;
   background: rgba(37, 104, 66, 0.2);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 9px;
+  font-size: var(--cell-label-font-size);
   font-weight: 650;
   letter-spacing: 0;
 }
@@ -2761,7 +2770,7 @@ textarea:focus-visible {
 .cell-node-footer strong {
   flex-shrink: 0;
   color: var(--cell-accent);
-  font-size: calc(14px * var(--notebook-address-scale, 1));
+  font-size: calc(14px * var(--notebook-detail-scale, 1));
   font-weight: 600;
   line-height: 1.25;
   white-space: nowrap;
@@ -2769,7 +2778,8 @@ textarea:focus-visible {
 
 .cell-node-footer-actions {
   display: inline-flex;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   align-items: center;
   gap: 6px;
 }
@@ -2929,8 +2939,11 @@ textarea:focus-visible {
 
 .cell-generation-chips {
   display: inline-flex;
+  max-width: 100%;
   flex: none;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
   margin-left: auto;
 }
@@ -2941,17 +2954,17 @@ textarea:focus-visible {
 
 .cell-aspect-ratio {
   display: inline-flex;
-  height: 20px;
+  height: 1.65em;
   flex: none;
   align-items: center;
   margin-left: auto;
-  padding: 0 6px;
+  padding: 0 0.4em;
   border: 1px solid rgba(114, 231, 170, 0.3);
   border-radius: 4px;
   color: #9de1b8;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 10px;
-  letter-spacing: 0.04em;
+  font-size: var(--cell-label-font-size);
+  letter-spacing: 0;
 }
 
 .cell-family-image .cell-aspect-ratio {
@@ -2983,10 +2996,11 @@ textarea:focus-visible {
 .cell-media-badge {
   display: inline-flex;
   min-width: 0;
-  height: 20px;
+  max-width: 100%;
+  height: 1.65em;
   flex: none;
   align-items: center;
-  padding: 0 6px;
+  padding: 0 0.4em;
   overflow: hidden;
   border: 1px solid var(--cell-accent-line);
   border-radius: 999px;
@@ -2994,16 +3008,16 @@ textarea:focus-visible {
   background: rgba(2, 10, 7, 0.86);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 9px;
+  font-size: var(--cell-label-font-size);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
+  pointer-events: auto;
 }
 
 .cell-media-badge-wide {
-  max-width: 104px;
   color: var(--cell-accent-bright);
 }
 
@@ -3203,24 +3217,31 @@ textarea:focus-visible {
 
 .cell-status {
   display: inline-grid;
-  min-width: 22px;
-  height: 20px;
-  flex: none;
+  min-width: 0;
+  height: 1.65em;
+  flex: 0 1 auto;
   place-items: center;
   padding: 0 6px;
   border: 1px solid rgba(114, 231, 170, 0.22);
   border-radius: 999px;
-  color: #789d88;
+  color: #b4d9c4;
   background: rgba(45, 117, 74, 0.09);
-  font-size: 9px;
+  font-size: var(--cell-label-font-size);
   letter-spacing: 0.05em;
   line-height: 1;
   text-transform: uppercase;
 }
 
+.cell-status > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cell-status-completed {
-  width: 20px;
-  min-width: 20px;
+  width: 1.65em;
+  min-width: 1.65em;
   padding: 0;
   border-color: rgba(114, 231, 170, 0.36);
   color: #91d9af;
@@ -3229,6 +3250,8 @@ textarea:focus-visible {
 
 .cell-status svg {
   display: block;
+  width: 1em;
+  height: 1em;
 }
 
 .cell-media,
@@ -3318,8 +3341,8 @@ textarea:focus-visible {
 .cell-media-pending-face > span {
   color: #8cba9f;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 9px;
-  letter-spacing: 0.14em;
+  font-size: var(--cell-label-font-size);
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -3330,7 +3353,7 @@ textarea:focus-visible {
   bottom: 8px;
   z-index: 1;
   display: inline-flex;
-  height: 18px;
+  height: 1.65em;
   align-items: center;
   padding: 0 6px;
   border: 1px solid var(--cell-accent-line);
@@ -3338,7 +3361,7 @@ textarea:focus-visible {
   color: #b9dfcb;
   background: rgba(2, 10, 7, 0.86);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 9px;
+  font-size: var(--cell-label-font-size);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
   line-height: 1;
@@ -3446,7 +3469,7 @@ textarea:focus-visible {
   color: #b9dfcb;
   background: rgba(2, 10, 7, 0.86);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 10px;
+  font-size: var(--cell-label-font-size);
   letter-spacing: 0.02em;
   line-height: 1.3;
 }
@@ -3623,14 +3646,14 @@ textarea:focus-visible {
 
 .cell-media-slot-upload strong {
   color: #b8dfc9;
-  font-size: 12px;
+  font-size: var(--cell-body-font-size);
   font-weight: 600;
 }
 
 .cell-media-slot-upload span {
   max-width: 150px;
-  color: #6f987f;
-  font-size: 9px;
+  color: #91bea3;
+  font-size: var(--cell-label-font-size);
   line-height: 1.4;
 }
 
@@ -3643,7 +3666,7 @@ textarea:focus-visible {
   border: 1px solid var(--line);
   color: #9bd5b3;
   background: rgba(4, 24, 14, 0.48);
-  font-size: 9px;
+  font-size: var(--cell-label-font-size);
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
@@ -3671,7 +3694,7 @@ textarea:focus-visible {
   overflow: hidden;
   color: #d39a9a;
   background: rgba(39, 12, 12, 0.92);
-  font-size: 8px;
+  font-size: var(--cell-label-font-size);
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3680,44 +3703,59 @@ textarea:focus-visible {
 .cell-copy span {
   max-height: 5.6em;
   overflow: hidden;
-  font-size: 13px;
+  font-size: var(--cell-body-font-size);
   line-height: 1.45;
   letter-spacing: 0.07em;
 }
 
 .cell-copy-text {
-  display: block;
+  container-type: size;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: start;
   overflow: hidden;
-  padding: 16px 18px 18px;
+  padding: 10px 12px;
   color: #b9dfcb;
   text-align: left;
 }
 
-.cell-model-line {
-  display: block;
+.cell-copy-text:has(.cell-model-line) {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.cell-copy .cell-model-line {
+  display: -webkit-box;
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  margin-bottom: 8px;
+  max-height: max(1lh, round(down, min(40cqh, 2lh), 1lh));
+  margin-bottom: 0.4em;
   overflow: hidden;
   color: #72e7aa;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 10px;
+  font-size: var(--cell-label-font-size);
   font-weight: 650;
-  letter-spacing: 0.1em;
-  text-align: center;
+  line-height: 1.3;
+  letter-spacing: 0.025em;
+  text-align: left;
   text-overflow: ellipsis;
   text-transform: uppercase;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .cell-copy-text p {
   display: -webkit-box;
+  min-height: 0;
+  width: 100%;
+  max-height: round(down, 100%, 1lh);
   margin: 0;
   overflow: hidden;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.58;
+  font-size: var(--cell-body-font-size);
+  line-height: 1.45;
   letter-spacing: 0.015em;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
@@ -3745,15 +3783,15 @@ textarea:focus-visible {
 
 .analysis-cell-summary strong {
   color: #b7e8ca;
-  font-size: 13px;
+  font-size: var(--cell-body-font-size);
   font-weight: 650;
   letter-spacing: 0.04em;
 }
 
 .analysis-cell-summary span,
 .analysis-cell-overflow {
-  color: #719c82;
-  font-size: 10px;
+  color: #91bea3;
+  font-size: var(--cell-label-font-size);
   letter-spacing: 0.04em;
 }
 
@@ -3771,7 +3809,7 @@ textarea:focus-visible {
   gap: 8px;
   padding-top: 5px;
   border-top: 1px solid rgba(114, 231, 170, 0.1);
-  font-size: 10px;
+  font-size: var(--cell-label-font-size);
 }
 
 .analysis-cell-shots li span {
@@ -3799,7 +3837,7 @@ textarea:focus-visible {
   gap: 6px;
   color: #79a98c;
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--cell-label-font-size);
   letter-spacing: 0.08em;
   list-style: none;
   text-transform: uppercase;
@@ -3843,7 +3881,7 @@ textarea:focus-visible {
 
 .analysis-cell-output-json .inspector-source-json {
   padding: 7px 0;
-  font-size: 8px;
+  font-size: var(--cell-label-font-size);
   line-height: 1.45;
   overflow-wrap: normal;
   white-space: pre;
@@ -3893,6 +3931,7 @@ textarea:focus-visible {
   bottom: 5px;
   left: 5px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 5px;
@@ -3900,7 +3939,7 @@ textarea:focus-visible {
   border: 1px solid rgba(114, 231, 170, 0.25);
   color: #b8dfc9;
   background: rgba(2, 10, 7, 0.84);
-  font-size: 8px;
+  font-size: var(--cell-label-font-size);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }

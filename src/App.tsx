@@ -3146,8 +3146,8 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           </CellMediaFrame>
         ) : (
           <div className={`cell-copy ${promptCell ? 'cell-copy-text' : ''}`}>
-            {modelLine && <span className="cell-model-line">{modelLine}</span>}
-            {promptCell ? <p>{data.prompt || emptyCellLabel(data)}</p> : <Sparkles size={28} />}
+            {modelLine && <span className="cell-model-line" title={modelLine}>{modelLine}</span>}
+            {promptCell ? <p title={data.prompt || undefined}>{data.prompt || emptyCellLabel(data)}</p> : <Sparkles size={28} />}
             {!promptCell && (
               <span>{modelLine ? 'Add a prompt' : emptyCellLabel(data)}</span>
             )}
@@ -4635,7 +4635,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const notebookFlowStyle = useMemo<CSSProperties>(
     () => ({
-      '--notebook-address-scale': 1 / notebookZoom,
+      '--notebook-detail-scale': 1 / notebookZoom,
       width: notebookFrameSize.width,
       height: notebookFrameSize.height,
     }) as CSSProperties,
