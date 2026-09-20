@@ -316,6 +316,55 @@ describe('composer focus through real workspace interactions', () => {
     )
   })
 
+  it('keeps chat history out of media previews and restores it after clearing selection', async () => {
+    const uploaded = record(await call('upload_file', {
+      filename: 'image.png', data: (await readFile(imagePath)).toString('base64'),
+    }))
+    const assets = record(await call('list_assets'))
+    const asset = (Array.isArray(assets?.assets) ? assets.assets : [])
+      .map(record).find(value => value?.id === uploaded?.assetId)
+    const image = record(await call('create_notebook_cell', {
+      cell: {
+        type: 'image', slot: { row: 0, column: 2 },
+        output_artifact_id: asset?.artifact_id,
+      },
+    }))
+    const imageCellId = String(image?.id ?? '')
+    await cell(imageCellId).waitFor({ timeout: 15_000 })
+    await input().fill('/notebooks')
+    await page.getByLabel('Send command', { exact: true }).click()
+    await ready()
+    const history = page.getByRole('log', { name: 'Chat history' })
+    await history.waitFor({ state: 'visible' })
+    let previousCalls = await history.locator('.mcp-call[data-tool="list_notebooks"]').count()
+    expect(previousCalls).toBeGreaterThan(0)
+    const draft = 'Keep my draft while previewing'
+    await input().fill(draft)
+
+    for (const id of [videoCellId, imageCellId]) {
+      await cell(id).click({ position: { x: 20, y: 20 } })
+      await page.getByRole('region', { name: 'Cell output media' }).waitFor()
+      expect(await history.count()).toBe(0)
+      expect(await page.locator('.voice-captions-toggle').count()).toBe(0)
+      expect(await input().textContent()).toBe(draft)
+
+      await input().fill('/notebooks')
+      await page.getByLabel('Send command', { exact: true }).click()
+      await ready()
+      expect(await page.getByRole('region', { name: 'Cell output media' }).isVisible()).toBe(true)
+      expect(await history.count()).toBe(0)
+      expect(await page.locator('.voice-captions-toggle').count()).toBe(0)
+      await input().fill(draft)
+      await input().press('Escape')
+      await page.getByLabel('Clear selection', { exact: true }).click()
+      await history.waitFor({ state: 'visible' })
+      const currentCalls = await history.locator('.mcp-call[data-tool="list_notebooks"]').count()
+      expect(currentCalls).toBeGreaterThan(previousCalls)
+      previousCalls = currentCalls
+      expect(await input().textContent()).toBe(draft)
+    }
+  })
+
   it('returns completed add, duplicate and delete operations to chat', async () => {
     await page.getByLabel('Add cell', { exact: true }).click()
     await page.getByLabel('Search cell types').fill('audio')

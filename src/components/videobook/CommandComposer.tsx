@@ -819,7 +819,7 @@ export function CommandComposer({
         return
       }
     }
-    if (event.key === 'Escape' && dockIsOpen && historyOpen && !historyIdle(voice?.phase, historyRows.length, Boolean(voice))) {
+    if (event.key === 'Escape' && dockIsOpen && historyVisible && historyOpen && !historyIdle(voice?.phase, historyRows.length, Boolean(voice))) {
       event.preventDefault()
       setHistoryOpen(false)
       return
@@ -858,6 +858,7 @@ export function CommandComposer({
   }
 
   const reviewPriority = composerDockReviewPriority(Boolean(children))
+  const historyVisible = !contextualContent || reviewPriority
   /* The row above the dock body is the dock's own header, so it stands down
      whenever a contextual panel draws one of its own for the close to sit in. */
   const closeOwner = {
@@ -866,7 +867,7 @@ export function CommandComposer({
     reviewPriority,
   }
   const closeInPanel = composerDockCloseInPanel(closeOwner)
-  const historyChromeHosted = composerHistoryChromeHosted(closeOwner)
+  const historyChromeHosted = historyVisible && composerHistoryChromeHosted(closeOwner)
   const historyIsIdle = historyIdle(
     voice?.phase,
     historyRows.length,
@@ -942,7 +943,7 @@ export function CommandComposer({
 
       {!hidden && !context && children}
 
-      {!hidden && (
+      {!hidden && historyVisible && (
         <ComposerHistory
           rows={historyRows}
           phase={voice?.phase}
@@ -953,7 +954,7 @@ export function CommandComposer({
         />
       )}
 
-      {!hidden && voice && (
+      {!hidden && voice && (historyVisible || voice.phase !== 'off' || voice.playbackBlocked) && (
         <VoiceComms
           voice={voice}
           sending={sending}

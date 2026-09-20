@@ -1,4 +1,4 @@
-import { createElement, createRef } from 'react'
+import { createElement, createRef, type ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CommandComposer } from '../../src/components/videobook/CommandComposer'
@@ -10,7 +10,7 @@ import {
   hideComposerDock,
   initialMusicDockView,
 } from '../../src/videobook/composer-dock'
-import { ComposerHistory } from '../../src/components/videobook/ComposerHistory'
+import { ComposerHistory, ComposerHistoryControls } from '../../src/components/videobook/ComposerHistory'
 import { composerHistory } from '../../src/videobook/composer-history'
 import { VoiceComms } from '../../src/components/videobook/VoiceComms'
 import { fallbackChatModelCatalog } from '../../src/videobook/chat-models'
@@ -26,6 +26,7 @@ import type { VoiceCaption, VoicePhase } from '../../server/src/voice-contract'
 function renderComposer(
   modelSelectionDisabled: boolean,
   context: { description: string; label: string } | null = null,
+  overrides: Partial<ComponentProps<typeof CommandComposer>> = {},
 ): string {
   return renderToStaticMarkup(createElement(CommandComposer, {
     commands: [],
@@ -53,6 +54,7 @@ function renderComposer(
     onExecute: async () => ({ ok: true, message: 'Done' }),
     onModelChange: () => undefined,
     onSuccessfulExecute: () => undefined,
+    ...overrides,
   }))
 }
 
@@ -130,6 +132,58 @@ function controlledRegion(html: string): { button: string; region: string; id: s
 }
 
 describe('CommandComposer controls', () => {
+  it('hides previous conversation and idle voice status while a contextual preview is open', () => {
+    const voice = stubVoice({
+      phase: 'off',
+      active: false,
+      message: 'Comms off.',
+      captions: [caption('user-1', 'Previous question'), caption('assistant-1', 'Previous answer', 'assistant')],
+    })
+    const contextualContent = createElement('section', null,
+      createElement('header', null, createElement(ComposerHistoryControls)),
+      createElement('div', { 'aria-label': 'Media preview' }),
+    )
+    const chat = renderComposer(false, null, { dockOpen: true, voice })
+    expect(chat).toContain('Previous question')
+    expect(chat).toContain('Previous answer')
+    expect(chat).toContain('Comms off.')
+
+    const preview = renderComposer(false, null, {
+      dockOpen: true, voice, contextualContent, contextualHasHeader: true,
+    })
+    expect(preview).toContain('aria-label="Media preview"')
+    expect(preview).toContain('aria-label="Videobook command input"')
+    expect(preview).not.toContain('Previous question')
+    expect(preview).not.toContain('Previous answer')
+    expect(preview).not.toContain('Comms off.')
+    expect(preview).not.toContain('aria-label="Chat history"')
+    expect(preview).not.toContain('voice-captions-toggle')
+
+    const review = renderComposer(false, null, {
+      dockOpen: true, voice, contextualContent,
+      children: createElement('aside', { className: 'confirm-sheet' }, 'Review action'),
+    })
+    expect(review).toContain('Review action')
+    expect(review).toContain('Previous question')
+    expect(review).toContain('aria-label="Chat history"')
+  })
+
+  it('keeps voice errors and playback recovery available while previewing', () => {
+    const contextualContent = createElement('div', { 'aria-label': 'Media preview' })
+    const error = renderComposer(false, null, {
+      dockOpen: true, contextualContent,
+      voice: stubVoice({ phase: 'error', active: false, message: 'Voice connection lost' }),
+    })
+    expect(error).toContain('Voice connection lost')
+    expect(error).toContain('role="alert"')
+    const playback = renderComposer(false, null, {
+      dockOpen: true, contextualContent,
+      voice: stubVoice({ playbackBlocked: true }),
+    })
+    expect(playback).toContain('Enable spoken replies')
+    expect(playback).not.toContain('aria-label="Chat history"')
+  })
+
   it('shows the model by name on the bar and keeps its full id for the menu', () => {
     const html = renderComposer(true)
 
