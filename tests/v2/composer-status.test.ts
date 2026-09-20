@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { VoiceComms } from '../../src/components/videobook/VoiceComms'
 import { ComposerHistory } from '../../src/components/videobook/ComposerHistory'
 import { composerHistory } from '../../src/videobook/composer-history'
-import { composerActivityStatus } from '../../src/videobook/composer-status'
+import {
+  composerActivityStatus,
+  composerActivityWorthShowing,
+} from '../../src/videobook/composer-status'
 import { emptyMcpCallLog } from '../../src/videobook/mcp-activity'
 import type { VoiceConversation } from '../../src/videobook/use-voice-conversation'
 
@@ -138,5 +141,34 @@ describe('composer activity status', () => {
     expect(hidden).toContain(' hidden=""')
     expect(hidden).toContain('aria-label="Show history"')
     expect(connecting).toContain('Voice comms')
+  })
+
+  it('says nothing the rest of the screen is already saying', () => {
+    // A review sheet is visibly on screen and a live microphone is lit in the
+    // mode switch, so naming either in the transcript is a line of chrome.
+    for (const kind of ['review', 'listening', 'idle'] as const) {
+      expect(composerActivityWorthShowing({ kind, label: 'anything', busy: false })).toBe(false)
+    }
+    // Everything that is news keeps its line.
+    for (const kind of ['permission', 'connecting', 'waiting', 'preparing', 'retrying', 'sending', 'paused', 'error', 'speaking'] as const) {
+      expect(composerActivityWorthShowing({ kind, label: 'anything', busy: false })).toBe(true)
+    }
+    // An unnamed state draws nothing either.
+    expect(composerActivityWorthShowing({ kind: 'error', label: '', busy: false })).toBe(false)
+  })
+
+  it('drops the review narration once the sheet is on screen to say it', () => {
+    const review = renderToStaticMarkup(createElement(VoiceComms, {
+      voice: stubVoice({ phase: 'review', message: 'Review on screen', active: true }),
+    }))
+    expect(review).not.toContain('Use Apply or Cancel on screen.')
+    expect(review).not.toContain('voice-comms-statusline')
+    expect(review).not.toContain('mic on')
+
+    // A microphone waiting on permission still gets its words.
+    const permission = renderToStaticMarkup(createElement(VoiceComms, {
+      voice: stubVoice({ phase: 'connecting', message: 'Please allow microphone access' }),
+    }))
+    expect(permission).toContain('Allow microphone access')
   })
 })

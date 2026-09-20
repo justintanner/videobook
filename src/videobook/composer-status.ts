@@ -73,3 +73,14 @@ export function composerActivityStatus(input: ComposerActivityInput): ComposerAc
   }
   return { kind: 'idle', label: phase === 'off' ? 'Offline' : '', busy: false }
 }
+
+// States the rest of the screen already shows: a review sheet is visibly on
+// screen, and a live or idle microphone is lit in the mode switch beside the
+// message box. Naming them again in the transcript is a line of chrome that
+// says nothing, so the status line is drawn only for the states that are news
+// -- a permission prompt, a connection, a reply being waited on, a failure.
+const SILENT_ACTIVITY = new Set<ComposerActivityKind>(['idle', 'listening', 'review'])
+
+export function composerActivityWorthShowing(status: ComposerActivityStatus): boolean {
+  return !SILENT_ACTIVITY.has(status.kind) && status.label !== ''
+}

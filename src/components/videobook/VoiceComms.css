@@ -17,13 +17,12 @@
 /* The phase rail itself lives in index.css, next to the focus and in-flight rules
    it has to cascade against. */
 
-.voice-fallback, .voice-comms-message, .voice-comms-review, .voice-resume, .voice-captions-latest { flex: 0 0 auto; }
-.voice-fallback { margin: 0 0 8px; padding-left: 42px; color: #dfd3a1; font-size: 11px; }
+.voice-fallback, .voice-comms-message, .voice-resume, .voice-captions-latest { flex: 0 0 auto; }
+.voice-fallback { margin: 0 0 8px; padding-left: 42px; color: #dfd3a1; font-size: 13px; }
 .voice-fallback > summary { cursor: pointer; }
 .voice-fallback > p { margin: 4px 0 0; overflow-wrap: anywhere; }
 .voice-comms button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
-.voice-comms-message, .voice-comms-review { margin: 0 0 8px; padding-left: 42px; font-size: 13px; line-height: 1.5; }
-.voice-comms-review { color: #f0dcb0; }
+.voice-comms-message { margin: 0 0 8px; padding-left: 42px; font-size: 13px; line-height: 1.5; color: #cdeedb; }
 .voice-comms.voice-error .voice-comms-message { color: #ffd5cc; }
 
 .composer-history-panel { position: relative; display: flex; flex-direction: column; min-width: 0; }
@@ -38,7 +37,7 @@
    against the border. */
 .voice-captions, .composer-history { flex: 1 1 auto; min-height: 0; max-height: min(180px, 22dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .voice-captions[hidden], .composer-history[hidden] { display: none !important; }
-.voice-captions > p, .composer-history > p { position: relative; margin: 0 0 8px; padding-left: 42px; font-size: 13px; line-height: 1.5; color: #9fc0ad; }
+.voice-captions > p, .composer-history > p { position: relative; margin: 0 0 8px; padding-left: 42px; font-size: 13px; line-height: 1.5; color: #cdeedb; }
 .voice-captions > p:last-child, .composer-history > p:last-child { margin-bottom: 0; }
 .voice-captions > p > span, .composer-history > p > span { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 
@@ -57,13 +56,10 @@
 /* One 32px line carries provider, phase, the microphone disclosure and the way
    back to the captions. It replaces the old header row, so the transcript opens
    flush with the top of the panel. */
-.voice-comms-statusline { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-start; gap: 6px; min-width: 0; height: 28px; color: #7fa992; font-size: 11px; }
+.voice-comms-statusline { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-start; gap: 6px; min-width: 0; height: 28px; color: #8fbba1; font-size: 13px; }
 .voice-comms-glyph { display: grid; flex: 0 0 32px; place-items: center; margin-right: 4px; color: var(--green); }
-.voice-provider-badge { padding: 0; border: 0; color: #7fa992; font-size: 11px; }
-.voice-comms-status { font-size: 11px; }
-.voice-disclosure { color: #6f9a80; font-size: 11px; }
-.voice-comms-statusline > .voice-comms-status::before,
-.voice-comms-statusline > .voice-disclosure::before { margin-right: 6px; color: #4e6c5b; content: '·'; }
+.voice-provider-badge { padding: 0; border: 0; color: #7fae90; font-size: 13px; }
+.voice-comms-status { font-size: 13px; }
 .voice-captions-toggle, .composer-history-close { display: grid; flex: 0 0 auto; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; color: #7fa992; cursor: pointer; }
 .voice-captions-toggle:hover, .composer-history-close:hover { color: var(--control-fg-hover); }
 .composer-history-close:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
@@ -86,7 +82,6 @@
   .command-composer:has(.confirm-sheet) .command-composer-dock-body > .composer-history-panel,
   .command-composer-dock-body > .composer-history-panel { max-height: min(104px, 24dvh); }
   .voice-captions, .composer-history { max-height: min(52px, 16dvh); }
-  .voice-disclosure { display: none; }
   .command-composer:has(.voice-comms) .confirm-sheet-foot,
   .command-composer:has(.confirm-sheet) .confirm-sheet-foot { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 }

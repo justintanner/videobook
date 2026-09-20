@@ -526,7 +526,11 @@ describe('VoiceComms caption visibility', () => {
     expect(html).toContain('Generation review')
     expect(html).toContain('confirm-sheet-apply')
     expect(html).toContain('Cancel')
-    expect(html).toContain('Use Apply or Cancel on screen.')
+    // The sheet on screen names both decisions and the keys for them, so the
+    // transcript does not narrate it: no guidance line, no status line.
+    expect(html).toContain('Review is on screen.')
+    expect(html).not.toContain('Use Apply or Cancel on screen.')
+    expect(html).not.toContain('voice-comms-statusline')
     expect(controlMarkup(html, 'Close history')).toContain('type="button"')
     // Talking, the strip flips: the text cell becomes the way out and the voice
     // cell is the lit one, naming the provider that is carrying the call.

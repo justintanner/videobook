@@ -344,9 +344,13 @@ describe('history auto-close', () => {
     expect(css).toContain('.voice-captions > p, .composer-history > p { position: relative; margin: 0 0 8px; padding-left: 42px;')
     // The speaker rule rides in the middle of that gutter.
     expect(css).toContain('left: 15px; width: 2px; background: var(--green)')
-    // Everything voice-comms writes below the log sits on the same rail.
-    expect(css).toContain('.voice-comms-message, .voice-comms-review { margin: 0 0 8px; padding-left: 42px;')
+    // Everything voice-comms writes below the log sits on the same rail, and
+    // reads at the same 13px ink as the call row's own text.
+    expect(css).toContain('.voice-comms-message { margin: 0 0 8px; padding-left: 42px; font-size: 13px; line-height: 1.5; color: #cdeedb; }')
+    expect(css).toContain('font-size: 13px; line-height: 1.5; color: #cdeedb; }')
     expect(css).toContain('.voice-comms-glyph { display: grid; flex: 0 0 32px;')
+    // The review sheet says what to press, so the transcript stops repeating it.
+    expect(css).not.toContain('voice-comms-review')
   })
 
   it('tracks the newest sequence so a later row restarts the window', () => {
