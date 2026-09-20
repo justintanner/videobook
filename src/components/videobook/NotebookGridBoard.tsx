@@ -1,5 +1,4 @@
-import { AudioWaveform, Braces, Image, Sparkles, Video } from 'lucide-react'
-import { ViewportPortal, type Viewport } from '@xyflow/react'
+import { ViewportPortal } from '@xyflow/react'
 import {
   notebookGrid,
   notebookGridAddress,
@@ -10,10 +9,7 @@ import {
   type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
 import type { NotebookReviewRole } from '@/videobook/notebook-review-focus'
-import type {
-  NotebookLaneFamily,
-  NotebookLaneSection,
-} from '@/videobook/notebook-lane-policy'
+import type { NotebookLaneSection } from '@/videobook/notebook-lane-policy'
 
 interface NotebookGridBoardProps {
   sections: readonly NotebookLaneSection[]
@@ -27,20 +23,6 @@ interface NotebookGridBoardProps {
   reviewRoles: ReadonlyMap<string, NotebookReviewRole>
 }
 
-interface NotebookLaneCaptionsProps {
-  sections: readonly NotebookLaneSection[]
-  viewport: Viewport
-}
-
-function laneIcon(family: NotebookLaneFamily | null) {
-  if (family === 'image') return <Image size={11} strokeWidth={2.2} aria-hidden="true" />
-  if (family === 'gen') return <Sparkles size={11} strokeWidth={2.2} aria-hidden="true" />
-  if (family === 'video') return <Video size={11} strokeWidth={2.2} aria-hidden="true" />
-  if (family === 'audio') return <AudioWaveform size={11} strokeWidth={2.2} aria-hidden="true" />
-  if (family === 'work') return <Braces size={11} strokeWidth={2.2} aria-hidden="true" />
-  return null
-}
-
 function laneBandStyle(section: NotebookLaneSection) {
   const width = notebookGrid.columnCount * notebookGrid.columnPitch - notebookGrid.gap
   const height = section.rowCount * notebookGrid.rowPitch - notebookGrid.gap
@@ -49,49 +31,6 @@ function laneBandStyle(section: NotebookLaneSection) {
     height,
     transform: `translate(${notebookGrid.originX}px, ${notebookGrid.originY + section.startRow * notebookGrid.rowPitch}px)`,
   }
-}
-
-function laneCaptionStyle(
-  section: NotebookLaneSection,
-  viewport: Viewport,
-) {
-  return {
-    top: (notebookGrid.originY + section.startRow * notebookGrid.rowPitch)
-      * viewport.zoom + viewport.y + 8,
-  }
-}
-
-export function NotebookLaneCaptions({
-  sections,
-  viewport,
-}: NotebookLaneCaptionsProps) {
-  return (
-    <div className="notebook-lane-captions">
-      {sections.map((section) => {
-        const family = section.family ?? 'mixed'
-        return (
-          <span
-            className={`notebook-lane-caption notebook-lane-caption-${family}`}
-            data-lane-caption={section.caption}
-            data-lane-family={family}
-            data-lane-kind={section.kind}
-            data-lane-start-row={section.startRow}
-            key={`caption-${section.startRow}-${family}`}
-            role="heading"
-            aria-level={2}
-            aria-label={`${section.caption} lane`}
-            title={section.caption}
-            style={laneCaptionStyle(section, viewport)}
-          >
-            {laneIcon(section.family)}
-            <span className="notebook-lane-caption-text" aria-hidden="true">
-              {section.kind === 'mixed' ? 'Mixed' : section.caption}
-            </span>
-          </span>
-        )
-      })}
-    </div>
-  )
 }
 
 export function NotebookGridBoard({

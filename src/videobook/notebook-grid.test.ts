@@ -448,12 +448,12 @@ describe('notebook grid', () => {
     expect(normalizeNotebookGridZoom(Number.NaN)).toBe(1)
   })
 
-  it('fits all eight columns and the unscaled caption rail inside measured width', () => {
+  it('fits all eight columns across the full measured width', () => {
     const metrics = notebookGridMetrics([])
     for (const width of [1230, 1426, 1870]) {
       const zoom = fitNotebookGridZoom(width)
       const frame = notebookGridFrameSize(metrics, zoom)
-      expect(frame.width + notebookGrid.laneCaptionWidth).toBeCloseTo(width)
+      expect(frame.width).toBeCloseTo(width)
       expect(notebookGridViewport(metrics, zoom).zoom).toBe(zoom)
       expect(frame.height).toBeCloseTo(metrics.height * zoom)
     }

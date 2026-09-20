@@ -140,10 +140,7 @@ import {
   videoPreviewBadges,
 } from '@/videobook/cell-preview'
 import { PublishedPostTileChrome } from '@/components/videobook/PublishedPostChrome'
-import {
-  NotebookGridBoard,
-  NotebookLaneCaptions,
-} from '@/components/videobook/NotebookGridBoard'
+import { NotebookGridBoard } from '@/components/videobook/NotebookGridBoard'
 import {
   MomentSearch,
   type MomentSearchHandle,
@@ -4638,9 +4635,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const notebookFlowStyle = useMemo<CSSProperties>(
     () => ({
-      '--notebook-lane-caption-width': `${notebookGrid.laneCaptionWidth}px`,
       '--notebook-address-scale': 1 / notebookZoom,
-      width: `calc(${notebookFrameSize.width}px + var(--notebook-lane-caption-width))`,
+      width: notebookFrameSize.width,
       height: notebookFrameSize.height,
     }) as CSSProperties,
     [notebookFrameSize.height, notebookFrameSize.width, notebookZoom],
@@ -12748,10 +12744,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       className="notebook-flow-frame"
                       style={notebookFlowStyle}
                     >
-                      <NotebookLaneCaptions
-                        sections={notebookLaneSections}
-                        viewport={notebookViewport}
-                      />
                       <MediaSlotContext.Provider value={mediaSlotContextValue}>
                         <CellRunContext.Provider value={runCell}>
                           <PrimaryCellContext.Provider value={selectedCellId}>

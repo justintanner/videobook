@@ -157,45 +157,17 @@ function notebookCellNode(page: Page, cellId: string) {
   )
 }
 
-async function expectLaneCaptionsOutsideGrid(page: Page): Promise<void> {
-  const captions = await page.locator('.notebook-lane-caption').evaluateAll((elements) =>
-    elements.map((element) => {
-      const frame = element.closest('.notebook-flow-frame')
-      const flow = frame?.querySelector('.notebook-flow')
-      const band = frame?.querySelector(
-        `.notebook-lane[data-lane-start-row="${element.getAttribute('data-lane-start-row')}"]`,
-      )
-      const text = element.querySelector('.notebook-lane-caption-text')
-      if (!flow || !band || !text) throw new Error('Missing lane presentation')
-      const bounds = element.getBoundingClientRect()
-      const flowBounds = flow.getBoundingClientRect()
-      const bandBounds = band.getBoundingClientRect()
-      const textBounds = text.getBoundingClientRect()
-      return {
-        caption: element.getAttribute('data-lane-caption'),
-        accessibleLabel: element.getAttribute('aria-label'),
-        title: element.getAttribute('title'),
-        mixed: element.getAttribute('data-lane-kind') === 'mixed',
-        text: text.textContent,
-        outsideGrid: bounds.right < flowBounds.left,
-        insideBand: bounds.top >= bandBounds.top
-          && bounds.bottom <= bandBounds.bottom,
-        vertical: textBounds.height > textBounds.width,
-        upright: getComputedStyle(text).textOrientation === 'upright',
-      }
-    }))
-  expect(captions.length).toBeGreaterThan(0)
-  for (const caption of captions) {
-    expect(caption, caption.caption ?? 'Lane caption').toMatchObject({
-      accessibleLabel: `${caption.caption} lane`,
-      title: caption.caption,
-      text: caption.mixed ? 'Mixed' : caption.caption,
-      outsideGrid: true,
-      insideBand: true,
-      vertical: true,
-      upright: true,
-    })
-  }
+async function expectGridWithoutSidebar(page: Page): Promise<void> {
+  expect(await page.locator('.notebook-lane-captions, .notebook-lane-caption').count()).toBe(0)
+  const layout = await page.locator('.notebook-flow-frame').evaluate((element) => {
+    const flow = element.querySelector('.notebook-flow')
+    if (!flow) throw new Error('Missing notebook flow')
+    const frame = element.getBoundingClientRect()
+    const grid = flow.getBoundingClientRect()
+    return { leftInset: grid.left - frame.left, unusedWidth: frame.width - grid.width }
+  })
+  expect(layout.leftInset).toBeCloseTo(0)
+  expect(layout.unusedWidth).toBeCloseTo(0)
 }
 
 async function dragNotebookConnection(
@@ -972,6 +944,7 @@ describe('chat composer browser flow', () => {
     ) {
       throw new Error('Could not measure notebook layout')
     }
+    expect(topbarBox.height).toBeLessThanOrEqual(50)
     expect(toolbarBox.x).toBeGreaterThanOrEqual(brandBox.x + brandBox.width)
     expect(toolbarBox.x - brandBox.x - brandBox.width).toBeLessThanOrEqual(12)
     expect(toolbarBox.x + toolbarBox.width).toBeLessThanOrEqual(navigationBox.x)
@@ -1262,6 +1235,7 @@ describe('chat composer browser flow', () => {
       expect(layout.bottomGap).toBeCloseTo(4)
       expect(layout.emptyTextSize).toBeCloseTo(12, 2)
       expect(layout.addressTextSize).toBeCloseTo(14, 2)
+      await expectGridWithoutSidebar(page)
       expect(await fit.getAttribute('aria-pressed')).toBe('true')
       expect(await fit.textContent()).toBe('Fit')
     }
@@ -4010,10 +3984,10 @@ describe('chat composer browser flow', () => {
     notebookDirty = true
   }, 60_000)
 
-  it('keeps vertical lane captions outside full and mixed rows', async () => {
+  it('keeps full and mixed rows aligned without a lane sidebar', async () => {
     const page = await openApp()
     const client = new Client(
-      { name: 'videobook-lane-captions-e2e', version: '1.0.0' },
+      { name: 'videobook-grid-width-e2e', version: '1.0.0' },
       {
         capabilities: {},
         supportedProtocolVersions: ['2026-07-28'],
@@ -4023,7 +3997,7 @@ describe('chat composer browser flow', () => {
     await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
     const tool = async (name: string, args: Record<string, unknown>) =>
       resultValue(await client.callTool({ name, arguments: args }))
-    const name = 'lane-caption-check'
+    const name = 'grid-width-check'
     let fixtureBookId = ''
     let switched = false
     try {
@@ -4040,7 +4014,7 @@ describe('chat composer browser flow', () => {
       await expect.poll(async () => await page.locator('.notebook-lane-starter').count(), {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe(3)
-      await expectLaneCaptionsOutsideGrid(page)
+      await expectGridWithoutSidebar(page)
 
       const cells = [
         ...Array.from({ length: 8 }, (_, column) => ({
@@ -4060,29 +4034,29 @@ describe('chat composer browser flow', () => {
       await expect.poll(async () => await page.locator('.cell-node').count(), {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe(cells.length)
-      const mixed = page.locator('.notebook-lane-caption[data-lane-kind="mixed"]')
-      expect(await mixed.getAttribute('title')).toBe('Images · Gen · Videos · Audio · Work')
-      await expectLaneCaptionsOutsideGrid(page)
-      const imageCaption = page.locator('.notebook-lane-caption[data-lane-start-row="0"]')
-      const fullRowPosition = await imageCaption.boundingBox()
+      const mixed = page.locator('.notebook-lane[data-lane-kind="mixed"]')
+      expect(await mixed.getAttribute('data-lane-caption')).toBe('Images · Gen · Videos · Audio · Work')
+      await expectGridWithoutSidebar(page)
+      const imageLane = page.locator('.notebook-lane[data-lane-start-row="0"]')
+      const fullRowPosition = await imageLane.boundingBox()
       await tool('delete_notebook_cell', { ...scope, cell_id: createdIds[7] })
       await expect.poll(async () => await page.locator('.cell-node').count(), {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe(cells.length - 1)
-      expect(await imageCaption.boundingBox()).toEqual(fullRowPosition)
+      expect(await imageLane.boundingBox()).toEqual(fullRowPosition)
 
       const before = record(await tool('get_notebook', scope))
       for (const width of [1440, 390]) {
         await page.setViewportSize({ width, height: 800 })
         await page.getByLabel('Fit grid to width').click()
-        await expectLaneCaptionsOutsideGrid(page)
+        await expectGridWithoutSidebar(page)
         await page.getByLabel('Zoom in').click()
         await expect.poll(async () => await page.getByLabel('Fit grid to width').textContent())
           .toContain('75%')
-        await expectLaneCaptionsOutsideGrid(page)
+        await expectGridWithoutSidebar(page)
         await page.locator('.notebook-horizontal-scroll').evaluate((element) =>
           element.scrollTo({ left: 200, top: 110 }))
-        await expectLaneCaptionsOutsideGrid(page)
+        await expectGridWithoutSidebar(page)
       }
       const lastSlot = page.locator('.notebook-grid-square-label').filter({ hasText: /^@bl8$/u })
       await lastSlot.scrollIntoViewIfNeeded()
@@ -4092,7 +4066,7 @@ describe('chat composer browser flow', () => {
       expect(lastBounds!.y).toBeGreaterThanOrEqual(0)
       expect(lastBounds!.x + lastBounds!.width).toBeLessThanOrEqual(390)
       expect(lastBounds!.y + lastBounds!.height).toBeLessThanOrEqual(800)
-      await expectLaneCaptionsOutsideGrid(page)
+      await expectGridWithoutSidebar(page)
       const after = record(await tool('get_notebook', scope))
       expect(after?.cells).toEqual(before?.cells)
       expect(after?.edges).toEqual(before?.edges)
@@ -4178,8 +4152,6 @@ describe('chat composer browser flow', () => {
     expect(await zoomLevel.textContent()).toContain('75%')
     expect(await selected.getAttribute('data-selection')).toBe('primary')
 
-    await expect.poll(async () => await page!.locator('.notebook-lane-caption').count())
-      .toBeGreaterThan(0)
     const lanes = await page.locator('.notebook-lane').evaluateAll((elements) =>
       elements.map((element) => ({
         caption: element.getAttribute('data-lane-caption'),
@@ -4194,7 +4166,7 @@ describe('chat composer browser flow', () => {
     expect(laneForRow(Number(generationSlot?.row))?.caption).toBe('Gen')
     expect(laneForRow(Number(outputVideoSlot?.row))?.caption).toBe('Videos')
     expect(await selected.getAttribute('data-lane-family')).toBe('image')
-    await expectLaneCaptionsOutsideGrid(page)
+    await expectGridWithoutSidebar(page)
     if (process.env.LANES_SCREENSHOT) {
       await page.screenshot({ path: process.env.LANES_SCREENSHOT })
     }
