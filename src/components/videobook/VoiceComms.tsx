@@ -16,7 +16,7 @@ export function VoiceComms({
   mcpRunning?: number
 }) {
   const idle = voice.phase === 'off' && voice.captions.length === 0 && voice.message === 'Voice input + spoken replies'
-  if (idle) return null
+  if (idle || voice.phase === 'connecting') return null
   const status = composerActivityStatus({
     sending,
     mcpRunning,

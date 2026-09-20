@@ -1,12 +1,14 @@
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { Check, ChevronDown, Mic, Type, WandSparkles } from 'lucide-react'
+import { Check, ChevronDown, LoaderCircle, Mic, Type, WandSparkles } from 'lucide-react'
 import type { ChatModelOption } from '@/videobook/chat-models'
 import type { VoiceConversation } from '@/videobook/use-voice-conversation'
+import { composerActivityStatus } from '@/videobook/composer-status'
 import {
   composerEngineMenu,
   engineMenuInitialIndex,
@@ -64,11 +66,22 @@ export function ComposerModeSwitch({
   const menuRef = useRef<HTMLUListElement>(null)
   const [open, setOpen] = useState(false)
   const [index, setIndex] = useState(0)
+  const voiceStatusId = useId()
 
   const meterRef = voice?.meterRef
   const voiceActive = Boolean(voice?.active)
   const voicePhase = voice?.phase
   const voiceDisabled = Boolean(voice?.disabled)
+  const voiceStatus = composerActivityStatus({
+    sending: false,
+    mcpRunning: 0,
+    voicePhase,
+    voiceMessage: voice?.message,
+    retrying: voice?.retrying,
+    pendingReview: voice?.pendingReview,
+  })
+  const voiceEngineName = voiceModeLabel(voice?.provider ?? voice?.mode ?? 'auto')
+  const voiceTitle = [voiceStatus.label, voiceEngineName, voice?.fallbackReason].filter(Boolean).join(' · ')
   const groups = composerEngineMenu({
     chatModels,
     selectedModel,
@@ -179,12 +192,16 @@ export function ComposerModeSwitch({
           type="button"
           data-voice-phase={voicePhase}
           aria-label="Voice provider"
-          title="Auto tries OpenAI, then xAI if it cannot connect"
+          aria-describedby={voiceStatusId}
+          aria-busy={voicePhase === 'connecting'}
+          title={voiceTitle}
         >
-          <VoiceLevelMeter />
+          {voicePhase === 'connecting'
+            ? <LoaderCircle className="composer-mode-connecting" size={14} aria-hidden="true" />
+            : <VoiceLevelMeter />}
           <span className="composer-mode-name">VOICE</span>
           <span className="composer-mode-divider" aria-hidden="true">·</span>
-          <span className="composer-mode-engine">{voiceModeLabel(voice.mode)}</span>
+          <span className="composer-mode-engine">{voicePhase === 'connecting' ? voiceStatus.label : voiceEngineName}</span>
           {!menuDisabled && <ChevronDown size={11} aria-hidden="true" />}
         </button>
       : <button
@@ -193,13 +210,16 @@ export function ComposerModeSwitch({
           className="composer-mode-cell composer-mode-cell-idle"
           data-voice-phase={voicePhase}
           aria-label="Start voice conversation"
+          aria-describedby={voiceStatusId}
           aria-pressed={false}
-          disabled={voiceDisabled}
+          disabled={voiceDisabled || sending}
           title="Voice input + spoken replies"
           onClick={onToggleVoice}
         >
           <Mic size={15} aria-hidden="true" />
         </button>)}
+
+    {voice && <span id={voiceStatusId} className="sr-only" role="status">{voiceStatus.label}</span>}
 
     {open && <ul
       ref={menuRef}

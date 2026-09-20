@@ -539,9 +539,8 @@ describe('VoiceComms caption visibility', () => {
     expect(html).not.toContain('aria-label="Chat model"')
   })
 
-  it('keeps Connecting voice distinct from Waiting for reply in the statusline', () => {
-    expect(renderComms('connecting', [])).toContain('Connecting voice')
-    expect(renderComms('connecting', [])).not.toContain('Waiting for reply')
+  it('omits connection rows while keeping Waiting for reply in the statusline', () => {
+    expect(renderComms('connecting', [])).toBe('')
     expect(renderComms('thinking', [])).toContain('Waiting for reply')
     expect(renderComms('thinking', [])).not.toContain('Connecting voice')
   })

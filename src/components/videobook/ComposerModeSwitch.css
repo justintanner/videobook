@@ -11,6 +11,10 @@
   height: 32px;
 }
 
+.command-composer .command-line-shell > .composer-mode-switch:has(.composer-engine-menu) {
+  z-index: 3;
+}
+
 .composer-mode-cell {
   position: relative;
   display: flex;
@@ -133,8 +137,18 @@
 .composer-mode-meter > span:nth-child(2) { height: 12px; }
 .composer-mode-meter > span:nth-child(3) { height: 9px; }
 
+.composer-mode-connecting {
+  flex: 0 0 auto;
+  animation: composer-mode-connect-spin 1s linear infinite;
+}
+
+@keyframes composer-mode-connect-spin {
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .composer-mode-meter > span { transition: none; }
+  .composer-mode-connecting { animation: none; }
 }
 
 /* One menu, both groups, whichever mode opened it: the chat model stays

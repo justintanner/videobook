@@ -2,6 +2,7 @@ import { createElement, createRef } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { VoiceComms } from '../../src/components/videobook/VoiceComms'
+import { ComposerModeSwitch } from '../../src/components/videobook/ComposerModeSwitch'
 import { ComposerHistory } from '../../src/components/videobook/ComposerHistory'
 import { composerHistory } from '../../src/videobook/composer-history'
 import {
@@ -33,6 +34,18 @@ function stubVoice(overrides: Partial<VoiceConversation> = {}): VoiceConversatio
     shareTypedTurn: () => undefined,
     ...overrides,
   }
+}
+
+function voiceButtonMarkup(voice: VoiceConversation): string {
+  return renderToStaticMarkup(createElement(ComposerModeSwitch, {
+    chatModels: [],
+    selectedModel: 'astra',
+    modelSelectionDisabled: false,
+    sending: false,
+    voice,
+    onModelChange: () => undefined,
+    onToggleVoice: () => undefined,
+  }))
 }
 
 describe('composer activity status', () => {
@@ -118,10 +131,9 @@ describe('composer activity status', () => {
     })).toMatchObject({ kind: 'preparing', label: 'Preparing an action', busy: true })
   })
 
-  it('keeps Connecting voice and Waiting for reply visible when history is hidden', () => {
-    const connecting = renderToStaticMarkup(createElement(VoiceComms, {
-      voice: stubVoice({ phase: 'connecting', message: 'Connecting voice' }),
-    }))
+  it('keeps connection status on the button and Waiting for reply visible when history is hidden', () => {
+    const voice = stubVoice({ phase: 'connecting', message: 'Connecting voice' })
+    const connecting = voiceButtonMarkup(voice)
     const waiting = renderToStaticMarkup(createElement(VoiceComms, {
       voice: stubVoice({ phase: 'thinking', message: 'Speak naturally. Interrupt anytime.' }),
     }))
@@ -139,7 +151,9 @@ describe('composer activity status', () => {
     expect(waiting).not.toContain('Connecting voice')
     expect(hidden).toContain(' hidden=""')
     expect(hidden).toContain('aria-label="Show history"')
-    expect(connecting).toContain('Voice comms')
+    expect(connecting).toContain('composer-mode-connecting')
+    expect(connecting).toContain('role="status"')
+    expect(renderToStaticMarkup(createElement(VoiceComms, { voice }))).toBe('')
   })
 
   it('says nothing the rest of the screen is already saying', () => {
@@ -164,10 +178,7 @@ describe('composer activity status', () => {
     expect(review).not.toContain('voice-comms-statusline')
     expect(review).not.toContain('mic on')
 
-    // A microphone waiting on permission still gets its words.
-    const permission = renderToStaticMarkup(createElement(VoiceComms, {
-      voice: stubVoice({ phase: 'connecting', message: 'Please allow microphone access' }),
-    }))
+    const permission = voiceButtonMarkup(stubVoice({ phase: 'connecting', message: 'Please allow microphone access' }))
     expect(permission).toContain('Allow microphone access')
   })
 })

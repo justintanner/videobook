@@ -162,6 +162,7 @@ interface CommandComposerProps {
     context?: ComposerExecuteContext,
   ) => Promise<ComposerOutcome>
   onModelChange: (model: string) => void
+  onStartVoice?: () => void
   onSendingChange?: (sending: boolean) => void
   onSuccessfulExecute: () => void
   voiceCatalog?: ElevenLabsVoicesState
@@ -226,6 +227,7 @@ export function CommandComposer({
   onDismissPanel,
   onExecute,
   onModelChange,
+  onStartVoice,
   onSendingChange,
   onSuccessfulExecute,
   voiceCatalog,
@@ -251,8 +253,8 @@ export function CommandComposer({
   const inputRef = useRef<ComposerEditorHandle>(null)
   const composerRootRef = useRef<HTMLElement | null>(null)
   const [uncontrolledDockOpen, setUncontrolledDockOpen] = useState(false)
-  const dockIsOpen = dockOpen ?? uncontrolledDockOpen
-  const dockWasOpenRef = useRef(dockIsOpen)
+  const dockRequestedOpen = dockOpen ?? uncontrolledDockOpen
+  const dockWasOpenRef = useRef(dockRequestedOpen)
   const setDockOpen = (open: boolean) => {
     if (dockOpen === undefined) setUncontrolledDockOpen(open)
     onDockOpenChange?.(open)
@@ -280,6 +282,7 @@ export function CommandComposer({
   } | null>(null)
   const successTimerRef = useRef(0)
   const [historyOpen, setHistoryOpen] = useState(true)
+  const [voiceStartHistoryEpoch, setVoiceStartHistoryEpoch] = useState(0)
   const historyRows = useMemo(
     () => composerHistory(voice?.captions ?? [], mcpCalls),
     [mcpCalls, voice?.captions],
@@ -294,7 +297,7 @@ export function CommandComposer({
     retrying: voice?.retrying,
     pendingReview: voice?.pendingReview,
   })
-  const transmitting = activity.busy
+  const transmitting = activity.busy && activity.kind !== 'connecting' && activity.kind !== 'permission'
   const mcpSucceeded = !transmitting && mcpFlash === 'success'
   const mcpFailed = !transmitting && mcpFlash === 'error'
   const historyHeld = historyAutoCloseHeld({
@@ -351,6 +354,17 @@ export function CommandComposer({
   }
 
   const speakPreviewOpen = !actionDiscovery && !context && !dismissed && isSpeakCommandPreview(input)
+  const voiceStatusOnly = voice?.active
+    && !contextualContent
+    && !children
+    && !notice
+    && !outcome
+    && !actionDiscovery
+    && !speakPreviewOpen
+    && historyEpoch <= voiceStartHistoryEpoch
+    && !(historyOpen && historyRows.length > 0)
+    && !voice.playbackBlocked
+  const dockIsOpen = dockRequestedOpen && !voiceStatusOnly
   const catalogVoices = voiceCatalog?.voices ?? []
   const activeVoiceId = resolveSpeakVoiceId(catalogVoices, selectedVoiceId)
   const stopPreview = previewPlayer.stop
@@ -391,14 +405,42 @@ export function CommandComposer({
     focusInput()
   }
 
+  const toggleVoice = () => {
+    if (!voice) return
+    if (voice.active) {
+      voice.stop()
+      focusInput()
+      return
+    }
+    if (voice.disabled || sending) return
+    previewPlayer.stop()
+    pauseComposerDockMedia(composerRootRef.current)
+    setInput('')
+    setSelection({ start: 0, end: 0 })
+    setVoiceReviewDraft(false)
+    setPreparedAction(null)
+    setOutcome(null)
+    setDismissed(true)
+    setHistoryOpen(false)
+    setVoiceStartHistoryEpoch(historyEpoch)
+    historyCursorRef.current = -1
+    historyDraftRef.current = ''
+    if (actionDiscovery) onCloseActionSearch(false)
+    onDismissNotice?.()
+    onStartVoice?.()
+    setDockOpen(true)
+    voice.toggle()
+    focusInput()
+  }
+
   useEffect(() => {
     const wasOpen = dockWasOpenRef.current
-    dockWasOpenRef.current = dockIsOpen
-    if (!wasOpen || dockIsOpen) return
+    dockWasOpenRef.current = dockRequestedOpen
+    if (!wasOpen || dockRequestedOpen) return
     previewPlayer.stop()
     voice?.stop()
     pauseComposerDockMedia(composerRootRef.current)
-  }, [dockIsOpen, previewPlayer, voice])
+  }, [dockRequestedOpen, previewPlayer, voice])
 
   const outcomeSlotValue = useMemo<ComposerOutcomeSlot>(() => ({
     outcome,
@@ -1013,7 +1055,7 @@ export function CommandComposer({
           context={context}
           voice={voice}
           onModelChange={onModelChange}
-          onToggleVoice={() => { setDockOpen(true); previewPlayer.stop(); voice?.toggle() }}
+          onToggleVoice={toggleVoice}
         />
         <button
           type="submit"

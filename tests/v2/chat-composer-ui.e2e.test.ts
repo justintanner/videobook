@@ -2821,6 +2821,72 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
+  it('starts voice with a clean composer after media, generation and action selection', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await openApp()
+    const input = page.getByLabel('Videobook command input')
+    const composer = page.locator('.command-composer')
+    const inspector = composer.locator('.composer-notebook-dock')
+    const client = new Client(
+      { name: 'videobook-voice-reset-e2e', version: '1.0.0' },
+      {
+        capabilities: {},
+        supportedProtocolVersions: ['2026-07-28'],
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+      },
+    )
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    const readNotebook = async () => resultValue(await client.callTool({
+      name: 'get_notebook',
+      arguments: { book_id: bookId, notebook_id: notebookId },
+    }))
+    const before = await readNotebook()
+    const startAndCheck = async () => {
+      if (!page) throw new Error('Browser page was not initialized')
+      const start = page.getByLabel('Start voice conversation')
+      await expect.poll(() => start.isEnabled()).toBe(true)
+      await start.click()
+      await expect.poll(() => inspector.count()).toBe(0)
+      expect(await input.textContent()).toBe('')
+      expect(await page.locator('.react-flow__node.selected').count()).toBe(0)
+      expect(await composer.locator('.command-suggestions').count()).toBe(0)
+      await page.getByLabel('Voice comms').waitFor({ state: 'visible' })
+      expect(await composer.getAttribute('data-dock-open')).toBe('true')
+      expect(await input.evaluate((element) => document.activeElement === element)).toBe(true)
+      const stop = page.getByLabel('Stop voice conversation')
+      if (await stop.count()) await stop.click()
+      await start.waitFor({ state: 'visible' })
+      expect(await inspector.count()).toBe(0)
+      expect(await input.textContent()).toBe('')
+    }
+    try {
+      for (const [cellId, collapsed] of [
+        [fullscreenImageCellId, true],
+        [reviewGenerationCellId, false],
+        [videoCellId, true],
+        [musicAudioCellId, false],
+      ] as const) {
+        await collapseComposerDock(page)
+        await notebookCellNode(page, cellId).click()
+        await inspector.waitFor({ state: 'visible' })
+        await input.fill('Previous draft @a1')
+        if (collapsed) await collapseComposerDock(page)
+        await startAndCheck()
+      }
+      await input.fill('/speak Previous narration')
+      await page.getByTestId('speak-command-preview').waitFor({ state: 'visible' })
+      await startAndCheck()
+      await input.fill('Previous chat draft')
+      await page.getByLabel('Open actions').click()
+      await input.fill('generate image')
+      await page.getByLabel('Close action search').waitFor({ state: 'visible' })
+      await startAndCheck()
+      expect(await readNotebook()).toEqual(before)
+    } finally {
+      await client.close()
+    }
+  }, 90_000)
+
   it('keeps captions, composer and review reachable at desktop, phone and short heights', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     const prompt = 'extract audio from b2 and use it to replace the audio on the video in c4'

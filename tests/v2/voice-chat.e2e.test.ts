@@ -228,7 +228,7 @@ describe('voice chat in the real browser', () => {
     await selectVoiceProvider(voiceMode)
   })
 
-  it.skipIf(live)('recovers from a missing key without changing the draft and never restarts on reload', async () => {
+  it.skipIf(live)('recovers from a missing key with a cleared draft and never restarts on reload', async () => {
     await page.getByLabel('Videobook command input').fill('Keep this typed draft')
     await page.evaluate(() => performance.clearMarks('videobook-voice'))
     for (const mode of ['openai', 'xai', 'auto']) {
@@ -252,7 +252,7 @@ describe('voice chat in the real browser', () => {
       'permission-wait-end',
       'session-request',
     ]))
-    expect(await page.getByLabel('Videobook command input').innerText()).toBe('Keep this typed draft')
+    expect(await page.getByLabel('Videobook command input').textContent()).toBe('')
     expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
     await page.screenshot({ path: 'test-results/voice/error.png' })
     await page.reload()
@@ -263,10 +263,12 @@ describe('voice chat in the real browser', () => {
 
   it.skipIf(live)('shows and hides captions without submitting, stopping the microphone or losing the draft', async () => {
     const input = page.getByLabel('Videobook command input')
-    await input.fill('Captions stay with this draft')
     await page.getByLabel('Start voice conversation').click()
     await page.getByLabel('Voice comms').waitFor({ state: 'visible', timeout: 15_000 })
+    await input.fill('Captions stay with this draft')
     const captions = page.locator('.voice-captions')
+    expect(await captions.isVisible()).toBe(false)
+    await page.getByLabel('Show history').click()
     const hide = page.getByLabel('Hide history')
     expect(await hide.isVisible()).toBe(true)
     expect(await captions.isVisible()).toBe(true)
@@ -284,7 +286,7 @@ describe('voice chat in the real browser', () => {
     await page.getByLabel('Hide history').press('Space')
     expect(await captions.isVisible()).toBe(false)
     await page.getByLabel('Show history').click()
-    expect(await captions.isVisible()).toBe(true)
+    await expect.poll(() => captions.isVisible()).toBe(true)
     expect(await input.innerText()).toBe('Captions stay with this draft')
     expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
     expect(await page.locator('.confirm-sheet').count()).toBe(0)
@@ -294,31 +296,71 @@ describe('voice chat in the real browser', () => {
     await page.getByLabel('Show history').click()
   })
 
-  it('handles native microphone permission denial and rapid start/stop without losing the draft', async () => {
-    await page.getByLabel('Videobook command input').fill('Permission recovery draft')
+  it('keeps voice connection compact through microphone permission and rapid start/stop', async () => {
     const devtools = await page.context().newCDPSession(page)
     const { targetInfo } = await devtools.send('Target.getTargetInfo')
+    const permission = { permission: { name: 'microphone' }, origin: appUrl, browserContextId: targetInfo.browserContextId }
+    await devtools.send('Browser.setPermission', { ...permission, setting: 'granted' })
+    const input = page.getByLabel('Videobook command input')
+    const composer = page.locator('.command-composer')
+    let releaseConnection: () => void = () => undefined
+    const connectionGate = new Promise<void>(resolve => { releaseConnection = resolve })
+    await page.route('**/api/voice', async route => {
+      await connectionGate
+      await route.continue().catch(() => undefined)
+    })
+    try {
+      for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 640 }]) {
+        await page.setViewportSize(viewport)
+        if (await composer.getAttribute('data-dock-open') === 'true') await page.getByLabel('Collapse chat', { exact: true }).click()
+        await input.fill('Previous voice draft')
+        const before = await composer.boundingBox()
+        const inputBefore = await input.boundingBox()
+        await page.emulateMedia({ reducedMotion: 'no-preference' })
+        await page.getByLabel('Start voice conversation').click()
+        const provider = page.getByLabel('Voice provider', { exact: true })
+        await expect.poll(() => provider.getAttribute('data-voice-phase')).toBe('connecting')
+        await expect.poll(() => page.locator('.composer-mode-switch [role="status"]').innerText()).toBe('Connecting voice')
+        expect(await composer.getAttribute('data-dock-open')).toBe('false')
+        expect(await page.getByLabel('Voice comms').isVisible()).toBe(false)
+        expect(await composer.boundingBox()).toEqual(before)
+        expect((await input.boundingBox())?.height).toBe(inputBefore?.height)
+        expect(await composer.evaluate(element => getComputedStyle(element).animationName)).toBe('none')
+        const spinner = provider.locator('.composer-mode-connecting')
+        expect(await spinner.evaluate(element => getComputedStyle(element).animationName)).toBe('composer-mode-connect-spin')
+        await page.screenshot({ path: `test-results/voice/connecting-${viewport.width}.png` })
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        expect(await spinner.evaluate(element => getComputedStyle(element).animationName)).toBe('none')
+        await page.getByLabel('Stop voice conversation').click()
+        expect(await input.textContent()).toBe('')
+      }
+    } finally {
+      releaseConnection()
+      await page.unroute('**/api/voice')
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await input.fill('Permission recovery draft')
     await devtools.send('Browser.setPermission', { permission: { name: 'microphone' }, setting: 'denied', origin: appUrl, browserContextId: targetInfo.browserContextId })
     await page.getByLabel('Start voice conversation').click()
     await expect.poll(() => page.getByLabel('Voice comms').innerText(), { timeout: 10_000 }).toContain('Microphone access is blocked')
-    expect(await page.getByLabel('Videobook command input').innerText()).toBe('Permission recovery draft')
+    expect(await page.getByLabel('Videobook command input').textContent()).toBe('')
     await devtools.send('Browser.setPermission', { permission: { name: 'microphone' }, setting: 'granted', origin: appUrl, browserContextId: targetInfo.browserContextId })
     for (let cycle = 0; cycle < 3; cycle += 1) {
       await page.getByLabel('Start voice conversation').click()
       await page.getByLabel('Stop voice conversation').click()
       expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
     }
-    expect(await page.getByLabel('Videobook command input').innerText()).toBe('Permission recovery draft')
+    expect(await page.getByLabel('Videobook command input').textContent()).toBe('')
     await devtools.detach()
   })
 
   it.skipIf(!live)('captures real microphone audio, decodes a spoken response, captions and history, then stops', async () => {
     await openMicrophone(join(root, 'microphone.wav'))
     await page.evaluate(() => performance.clearMarks('videobook-voice'))
-    await page.getByLabel('Videobook command input').fill('Keep this typed draft')
     await page.emulateMedia({ reducedMotion: 'no-preference' })
     const negotiation = page.waitForResponse(response => response.url().endsWith('/api/voice') && response.request().method() === 'POST')
     await page.getByLabel('Start voice conversation').click()
+    await page.getByLabel('Videobook command input').fill('Keep this typed draft')
     const response = await negotiation
     const sent = response.request().postDataJSON() as { mode?: string; sampleRate?: number; bookId?: string; notebookId?: string; sdp?: string }
     expect(sent.sampleRate).toBe(48_000)
@@ -427,7 +469,7 @@ describe('voice chat in the real browser', () => {
     expect(session.fallbackReason).toContain('OPENAI_API_KEY')
     await expect.poll(() => page.locator('.voice-comms-status').innerText(), { timeout: 15_000 }).toBe('Listening')
     await page.getByLabel('Stop voice conversation').click()
-    expect(await page.getByLabel('Videobook command input').innerText()).toBe('Keep the cancelled connection draft')
+    expect(await page.getByLabel('Videobook command input').textContent()).toBe('')
   })
 
   it.skipIf(!live)('routes a spoken mutation through Apply, preserves the draft and speaks the actual outcome', async () => {
@@ -440,9 +482,9 @@ describe('voice chat in the real browser', () => {
       if (value.params?.name === 'chat') chatCalls.push(value)
     })
     const input = page.getByLabel('Videobook command input')
-    await input.fill('Keep my unfinished @a1 note')
     const negotiated = page.waitForResponse(response => response.url().endsWith('/api/voice') && response.request().method() === 'POST')
     await page.getByLabel('Start voice conversation').click()
+    await input.fill('Keep my unfinished @a1 note')
     const session = await (await negotiated).json() as { id: string; token: string; provider: string }
     expect((await page.request.get(`${serverUrl}/api/voice/${session.id}/events`, { headers: { Authorization: 'Bearer wrong-owner' } })).status()).toBe(404)
     expect((await page.request.delete(`${serverUrl}/api/voice/${session.id}`, { headers: { Authorization: 'Bearer wrong-owner' } })).status()).toBe(404)
@@ -490,9 +532,9 @@ describe('voice chat in the real browser', () => {
     await ensureImage()
     await useRecording('review')
     const input = page.getByLabel('Videobook command input')
-    await input.fill('Retain this @a1 draft')
     const negotiated = page.waitForResponse(response => response.url().endsWith('/api/voice') && response.request().method() === 'POST')
     await page.getByLabel('Start voice conversation').click()
+    await input.fill('Retain this @a1 draft')
     const session = await (await negotiated).json() as { id: string }
     await page.locator('.confirm-sheet').waitFor({ state: 'visible', timeout: 45_000 })
     // The recording asks for the rename, waits, then says "Yes, apply that

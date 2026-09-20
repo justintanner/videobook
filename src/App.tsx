@@ -12658,7 +12658,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     imageEditorDocked: Boolean(fullscreenImageEditor && imageDockHost),
     cellInspector: Boolean(notebookDockContent),
   })
-  const composerContextualContent = (
+  const composerContextualContent = notebookDockContent || fullscreenImageEditor || musicVideoSession ? (
     <>
       <div
         hidden={Boolean(fullscreenImageEditor || musicVideoSession)}
@@ -12673,7 +12673,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? <div ref={setMusicDockHost} className="composer-music-dock-host" />
         : null}
     </>
-  )
+  ) : null
 
   return (
     <main
@@ -13297,6 +13297,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         onExecute={executeComposerCommand}
         voiceCatalog={elevenLabsVoices}
         voice={voice}
+        onStartVoice={() => {
+          selectCanvasCell(null)
+          closeCellContextMenu()
+          setActionComposer(null)
+          setSourceViewCellId(null)
+          setHistoryViewCellId(null)
+          setGenerationsViewCellId(null)
+        }}
         onModelChange={changeChatModel}
         onSendingChange={fullscreenImageEditor
           ? setMediaFullscreenComposerSending
