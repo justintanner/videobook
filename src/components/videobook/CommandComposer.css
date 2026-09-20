@@ -1,6 +1,6 @@
 .command-line-shell {
   grid-template-areas: 'actions editor mode send';
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: 32px minmax(0, 1fr) auto auto;
 }
 
 .command-line-shell > .composer-mode-switch { grid-area: mode; }
@@ -108,7 +108,7 @@
 @media (max-width: 600px) {
   .command-line-shell {
     grid-template-areas: 'editor editor editor' 'actions mode send';
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
     padding-top: 5px;
     padding-bottom: 6px;
   }
@@ -123,6 +123,7 @@
   .confirm-sheet-foot { padding-left: 9px; padding-right: 11px; }
   .composer-history { padding-left: 9px; padding-right: 11px; }
   .mcp-call-head { width: calc(100% + 20px); margin-left: -9px; margin-right: -11px; padding-left: 9px; padding-right: 11px; }
+  .command-composer-dock-bar .composer-panel-controls { padding: 0; }
   .command-line-shell > .composer-actions-panel { padding-left: 12px; padding-right: 12px; }
   .command-line-shell > .composer-mode-switch { justify-self: end; }
   .command-line-shell > .composer-actions-panel .workspace-actions-list > button { grid-template-columns: minmax(0, 1fr); gap: 4px; }

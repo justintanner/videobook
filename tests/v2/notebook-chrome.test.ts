@@ -119,7 +119,9 @@ describe('notebook chrome tokens', () => {
   it('keeps confirm sheet actions outside the scrollable body', () => {
     const sheet = rule(css, '.confirm-sheet')
     expect(declaration(sheet, 'display')).toBe('grid')
-    expect(declaration(sheet, 'grid-template-rows')).toBe('44px minmax(0, 1fr) auto')
+    // The footer track is `auto` so it takes no height at all on a ready sheet,
+    // whose hints the 40px header carries instead.
+    expect(declaration(sheet, 'grid-template-rows')).toBe('40px minmax(0, 1fr) auto')
     const body = rule(css, '.confirm-sheet-body')
     expect(declaration(body, 'min-height')).toBe('0')
     expect(declaration(body, 'overflow')).toBe('auto')
@@ -161,10 +163,20 @@ describe('notebook chrome tokens', () => {
       .toBe(cardCap)
   })
 
-  it('groups generation review settings with the inspector auto-fit grid', () => {
+  it('lets the generation settings box grow or scroll instead of clipping', () => {
+    // Both rows size to their content, so the settings box is never squeezed to
+    // a height its own fields exceed.
+    expect(declaration(rule(css, '.confirm-generation'), 'grid-template-rows'))
+      .toBe('auto auto')
     const settings = rule(css, '.generation-review-settings')
+    // 132px fits a whole provider default, so 'Default · adaptive' and
+    // 'Output format' stop truncating in a 328px column.
     expect(declaration(settings, 'grid-template-columns'))
-      .toBe('repeat(auto-fit, minmax(112px, 1fr))')
+      .toBe('repeat(auto-fit, minmax(132px, 1fr))')
+    expect(declaration(settings, 'min-height')).toBe('0')
+    expect(declaration(settings, 'overflow')).toBe('auto')
+    const section = rule(css, '.generation-review-settings-section')
+    expect(declaration(section, 'grid-template-rows')).toBe('auto minmax(0, 1fr)')
     const primary = rule(css, '.inspector-generation-primary')
     expect(declaration(primary, 'grid-template-columns'))
       .toBe('repeat(auto-fit, minmax(112px, 1fr))')

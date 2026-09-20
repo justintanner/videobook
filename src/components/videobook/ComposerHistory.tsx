@@ -49,7 +49,7 @@ function ComposerHistoryControlsStrip({
         onMouseDown={(event) => event.preventDefault()}
         onClick={onToggle}
       >
-        <ChevronDown size={13} aria-hidden="true" />
+        <ChevronDown size={14} aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -59,7 +59,7 @@ function ComposerHistoryControlsStrip({
         onMouseDown={(event) => event.preventDefault()}
         onClick={onClose}
       >
-        <X size={15} aria-hidden="true" />
+        <X size={14} aria-hidden="true" />
       </button>
     </div>
   )

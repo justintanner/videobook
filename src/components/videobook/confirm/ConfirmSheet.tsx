@@ -4,9 +4,14 @@ import {
   confirmSheetStatus,
   type ConfirmValidation,
 } from '@/videobook/confirm-validation'
+import {
+  confirmSheetHintsInHeader,
+} from '@/videobook/confirm-sheet-chrome'
 import { ConfirmSheetActions } from './ConfirmSheetActions'
-import { ConfirmSheetFooter, type ConfirmSheetEffect } from './ConfirmSheetFooter'
+import { ConfirmSheetFooter } from './ConfirmSheetFooter'
 import { ConfirmSheetHeader } from './ConfirmSheetHeader'
+import { ConfirmSheetReadyHints, type ConfirmSheetEffect } from './ConfirmSheetHints'
+import { useConfirmSheetWideChrome } from './useConfirmSheetChrome'
 import { ConfirmSheetInitialFocus, useConfirmSheetKeys } from './useConfirmSheetKeys'
 
 interface ConfirmSheetProps {
@@ -61,6 +66,12 @@ export function ConfirmSheet({
   const outcome = composer && composer.outcome !== staleOutcome ? composer.outcome : null
   const notice = composer && composer.notice !== staleNotice ? composer.notice : null
   const status = confirmSheetStatus({ busy, busyLabel, validation, outcome, notice })
+  const wideEnough = useConfirmSheetWideChrome()
+  const hintsInHeader = confirmSheetHintsInHeader({
+    state: status.state,
+    hasSecondaryActions: Boolean(secondaryActions),
+    wideEnough,
+  })
   const applyDisabled = validation.blocking !== null
   const { sheetRef, onKeyDown } = useConfirmSheetKeys({
     applyFormId,
@@ -97,6 +108,9 @@ export function ConfirmSheet({
           />
         )}
         address={address}
+        effect={hintsInHeader ? effect : null}
+        hints={hintsInHeader ? hints ?? <ConfirmSheetReadyHints /> : null}
+        hintsId={hintsInHeader ? statusId : undefined}
         tag={tag}
         title={title}
         titleId={titleId}
@@ -107,14 +121,16 @@ export function ConfirmSheet({
           <ConfirmSheetInitialFocus sheetRef={sheetRef} />
         </Suspense>
       </div>
-      <ConfirmSheetFooter
-        effect={effect}
-        hints={hints}
-        onDismissStatus={dismissStatus}
-        secondaryActions={secondaryActions}
-        status={status}
-        statusId={statusId}
-      />
+      {!hintsInHeader && (
+        <ConfirmSheetFooter
+          effect={effect}
+          hints={hints}
+          onDismissStatus={dismissStatus}
+          secondaryActions={secondaryActions}
+          status={status}
+          statusId={statusId}
+        />
+      )}
     </aside>
   )
 }

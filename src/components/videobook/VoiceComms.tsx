@@ -31,7 +31,7 @@ export function VoiceComms({
     {voice.playbackBlocked && <button className="voice-resume" type="button" onClick={voice.resumePlayback}><Volume2 size={14} aria-hidden="true" />Enable spoken replies</button>}
     {voice.phase === 'review' && <p className="voice-comms-review">Use Apply or Cancel on screen.</p>}
     <div className="voice-comms-statusline">
-      <Radio size={12} aria-hidden="true" />
+      <span className="voice-comms-glyph"><Radio size={14} aria-hidden="true" /></span>
       {voice.provider && <span className="voice-provider-badge">{voice.provider === 'xai' ? 'xAI' : 'OpenAI'}</span>}
       <span className="voice-comms-status" role="status">{status.label}</span>
       {voice.active && voice.phase !== 'connecting' && <span className="voice-disclosure">mic on</span>}

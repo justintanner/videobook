@@ -37,9 +37,10 @@ describe('composer dock close ownership', () => {
       .toBe(false)
   })
 
-  it('hosts history chrome in the same panel header that took the close', () => {
+  it('hosts history chrome in whichever header row an open dock already draws', () => {
     expect(composerHistoryChromeHosted(owner())).toBe(true)
-    expect(composerHistoryChromeHosted(owner({ panelHasHeader: false }))).toBe(false)
+    expect(composerHistoryChromeHosted(owner({ panelHasHeader: false }))).toBe(true)
+    expect(composerHistoryChromeHosted(owner({ reviewPriority: true }))).toBe(true)
     expect(composerHistoryChromeHosted(owner({ dockOpen: false }))).toBe(false)
   })
 })

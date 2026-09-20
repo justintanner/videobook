@@ -514,6 +514,12 @@ import {
 } from '@/videobook/voice-review-command'
 import { revealNotebookResult } from '@/videobook/notebook-result-reveal'
 import {
+  NO_NOTEBOOK_REVIEW,
+  notebookReviewRoles,
+  revealNotebookReviewRow,
+  type NotebookReviewAddresses,
+} from '@/videobook/notebook-review-focus'
+import {
   notebookAddressExpectationsAreStale,
   type NotebookAddressExpectation,
   type NotebookCoordinateActionPlan,
@@ -3583,6 +3589,35 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : [],
     [assetById, notebook, pendingGenerationDraft],
   )
+  /* Which addresses the open review is about. A generation names the slot it
+     will write to even when no cell lives there yet; a frame or a split names
+     only the cell it reads. Whatever it names, the canvas scrolls to the first
+     of them and marks the rest while the sheet is up. */
+  const pendingReviewAddresses = useMemo<NotebookReviewAddresses>(() => {
+    if (!pendingChatAction) return NO_NOTEBOOK_REVIEW
+    if (pendingChatAction.kind === 'generation' && pendingGenerationDraft) {
+      return {
+        target: notebookGridAddress(pendingGenerationDraft.cell.slot),
+        sources: pendingGenerationSources.map((source) => source.address),
+      }
+    }
+    if (pendingChatAction.kind === 'frame' || pendingChatAction.kind === 'split') {
+      return {
+        target: null,
+        sources: pendingChatAction.expectations.map((item) => item.address),
+      }
+    }
+    if (pendingChatAction.kind === 'notebook') {
+      const [target, ...rest] = pendingChatAction.plan.expectations
+        .map((item) => item.address)
+      return { target: target ?? null, sources: rest }
+    }
+    return NO_NOTEBOOK_REVIEW
+  }, [pendingChatAction, pendingGenerationDraft, pendingGenerationSources])
+  const pendingReviewRoles = useMemo(
+    () => notebookReviewRoles(pendingReviewAddresses),
+    [pendingReviewAddresses],
+  )
   const pendingGenerationSourceOptions = useMemo<GenerationReviewSource[]>(
     () => pendingGenerationDraft && notebook
       ? notebookChatGenerationSourceOptions(
@@ -4524,8 +4559,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [cellRunErrors, nodes, queuedCellIds, revealingCellIds])
   const canvasPresentationNodes = useMemo(() => presentedNodes.map((node) => {
     const selected = selectedCellIds.has(node.id)
-    return node.selected === selected ? node : { ...node, selected }
-  }), [presentedNodes, selectedCellIds])
+    const role = pendingReviewRoles.get(notebookGridAddress(node.data.slot))
+    const className = role ? `notebook-review-${role}` : undefined
+    return node.selected === selected && node.className === className
+      ? node
+      : { ...node, selected, className }
+  }), [pendingReviewRoles, presentedNodes, selectedCellIds])
   const focusedEdges = useMemo(
     () => notebookEdgesWithCellFocus(edges, selectedCellId),
     [edges, selectedCellId],
@@ -5014,6 +5053,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     container.scrollLeft = 0
     container.scrollTop = 0
   }, [bookId, notebook?.id])
+
+  /* Bring the slot a review is about into the middle of the canvas when the
+     sheet opens. A viewport move, not a focus move: the zoom is untouched and
+     the keyboard stays wherever the sheet put it. */
+  const reviewFocusRow = useMemo(() => {
+    const address = pendingReviewAddresses.target ?? pendingReviewAddresses.sources[0] ?? null
+    return address ? parseNotebookGridAddress(address)?.row ?? null : null
+  }, [pendingReviewAddresses])
+  useEffect(() => {
+    if (screen !== 'notebook' || reviewFocusRow === null) return
+    revealNotebookReviewRow(
+      () => notebookScrollRef.current,
+      { row: reviewFocusRow, zoom: notebookView.zoom },
+      {
+        reducedMotion: typeof window !== 'undefined'
+          && typeof window.matchMedia === 'function'
+          && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      },
+    )
+  }, [notebookView.zoom, reviewFocusRow, screen])
 
   const selectedCell = useMemo(
     () => presentedNodes.find((node) => node.id === selectedCellId) ?? null,
@@ -12880,6 +12939,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                               previewSlot={previewSlot}
                               mediaDropActive={mediaDropActive && !busy}
                               mediaDropSlot={mediaDropSlot}
+                              reviewRoles={pendingReviewRoles}
                             />
                                 </ReactFlow>
                               </CellContextMenuContext.Provider>

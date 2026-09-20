@@ -2053,6 +2053,47 @@ textarea:focus-visible {
     box-shadow 120ms ease;
 }
 
+/* ---- what an open review is about ----
+   The slot the apply writes to, ringed on the canvas so the sheet's address is
+   somewhere you can see it; the cells it reads, marked in the input colour.
+   Both clear the moment the sheet applies or cancels. */
+.notebook-grid-square-review {
+  z-index: 2;
+}
+
+.notebook-grid-square-review.notebook-review-target {
+  border: 1px dashed var(--green);
+  background: rgba(114, 231, 170, 0.06);
+  box-shadow:
+    0 0 0 1px rgba(114, 231, 170, 0.3),
+    0 0 26px rgba(114, 231, 170, 0.16);
+}
+
+.notebook-grid-square-review.notebook-review-source {
+  border: 1px solid var(--cyan);
+  box-shadow: 0 0 0 1px rgba(99, 199, 216, 0.22);
+}
+
+.notebook-grid-square-review > .notebook-grid-square-label {
+  color: var(--green);
+}
+
+.notebook-grid-square-review.notebook-review-source > .notebook-grid-square-label {
+  color: var(--cyan);
+}
+
+.react-flow__node.notebook-review-target > .cell-node {
+  border-color: var(--green);
+  box-shadow:
+    0 0 0 1px rgba(114, 231, 170, 0.3),
+    0 0 26px rgba(114, 231, 170, 0.16);
+}
+
+.react-flow__node.notebook-review-source > .cell-node {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px rgba(99, 199, 216, 0.22);
+}
+
 .notebook-grid-square-label {
   position: absolute;
   top: 8px;
@@ -7043,8 +7084,12 @@ textarea:focus-visible {
   grid-area: model;
 }
 
+/* Label above, scrolling field grid below: the label stays put while a long
+   settings list scrolls under it. */
 .generation-review-settings-section {
   grid-area: settings;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
 }
 
 .generation-review-estimate-section {
@@ -7058,7 +7103,9 @@ textarea:focus-visible {
 
 .confirm-sheet {
   display: grid;
-  grid-template-rows: 44px minmax(0, 1fr) auto;
+  /* Header, body, and a footer row that is simply absent while the sheet is
+     ready -- the header carries the hints then, so `auto` resolves to 0. */
+  grid-template-rows: 40px minmax(0, 1fr) auto;
   width: 100%;
   max-height: calc(100dvh - 72px - 56px - var(--app-gutter) - 12px);
   border: 0;
@@ -7088,8 +7135,28 @@ textarea:focus-visible {
 
 .confirm-sheet-head > .section-label,
 .confirm-sheet-head > .confirm-sheet-address,
+.confirm-sheet-head > .confirm-sheet-effect,
+.confirm-sheet-head > .confirm-sheet-head-divider,
+.confirm-sheet-head > .confirm-sheet-head-hints,
 .confirm-sheet-head > .confirm-sheet-actions {
   flex: 0 0 auto;
+}
+
+/* Leaving the sheet is not one of the settings, so the keys that drive Apply
+   and Cancel sit apart from what the sheet is about. */
+.confirm-sheet-head-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+}
+
+.confirm-sheet-head-hints {
+  display: inline-flex;
+  align-items: center;
+  color: #8fbba1;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .confirm-sheet-head h2 {
@@ -7196,7 +7263,7 @@ textarea:focus-visible {
 
 .confirm-sheet-status-ready,
 .confirm-sheet-status-info {
-  color: var(--muted);
+  color: #8fbba1;
   font-size: 10px;
   letter-spacing: 0.04em;
 }
@@ -8303,12 +8370,16 @@ textarea:focus-visible {
   grid-template-columns:
     190px
     minmax(0, 1fr)
-    300px
-    170px;
+    328px
+    176px;
   grid-template-areas:
     'inputs prompt model estimate'
     'inputs prompt settings estimate';
-  grid-template-rows: auto minmax(0, 1fr);
+  /* Both rows size to their content. The settings box carries however many
+     fields the provider declares, and a 1fr second row used to squeeze it to a
+     height its own controls exceeded -- they were cut off by its border with
+     no scrollbar to say so. */
+  grid-template-rows: auto auto;
   gap: 12px;
   align-items: stretch;
 }
@@ -8724,12 +8795,14 @@ textarea:focus-visible {
   line-height: 1.55;
 }
 
+/* Shorter rows, bigger text: the sheet reads at one size and six fields give
+   back 12px. */
 .generation-review-model-section select,
 .generation-review-settings input,
 .generation-review-settings select {
-  min-height: 34px;
+  min-height: 32px;
   padding: 6px 8px;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .generation-review-prompt-section textarea:focus,
@@ -8770,16 +8843,23 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+/* A provider with more fields than the box can show scrolls inside it rather
+   than spilling past its border. The sheet body stays the only outer scroller:
+   sections scroll or grow, they never clip. */
 .generation-review-settings {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 8px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 .generation-review-settings label > span {
   overflow: hidden;
-  color: #789e87;
-  font-size: 9px;
+  color: #8fbba1;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -8787,7 +8867,7 @@ textarea:focus-visible {
 .generation-review-toggle {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  min-height: 34px;
+  min-height: 32px;
   padding: 6px 8px;
   border: 1px solid var(--line);
 }
@@ -9884,6 +9964,26 @@ textarea:focus-visible {
   margin-left: auto;
 }
 
+/* The dock bar hosts the transcript's collapse and close the same way a
+   contextual panel's header does, so the transcript never stacks a second
+   chrome row of its own beneath it. */
+.command-composer-dock-bar .composer-panel-controls {
+  min-height: 0;
+  margin-left: auto;
+  padding: 0;
+  gap: 0;
+}
+
+.command-composer-dock-bar .voice-captions-toggle,
+.command-composer-dock-bar .composer-history-close {
+  width: 30px;
+  height: 30px;
+}
+
+.command-composer-dock-bar:has(.composer-panel-controls) .composer-dock-close-divider {
+  margin-left: 6px;
+}
+
 .command-composer-dock-body {
   display: flex;
   flex-direction: column;
@@ -10136,18 +10236,18 @@ textarea:focus-visible {
    the panel's edges the way a list row should. */
 .mcp-call-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   width: calc(100% + 36px);
-  min-height: 32px;
+  min-height: 28px;
   margin: 0 -19px 0 -17px;
   padding: 0 19px 0 17px;
   border: 0;
   color: #789d8b;
   background: transparent;
   font: inherit;
-  font-size: 11px;
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
 }
@@ -10172,9 +10272,10 @@ textarea:focus-visible {
 .mcp-call-signal {
   display: inline-flex;
   align-items: end;
+  justify-content: center;
   gap: 2px;
-  width: 16px;
-  height: 12px;
+  width: 32px;
+  height: 11px;
   color: #4e6c5b;
 }
 
@@ -10222,16 +10323,16 @@ textarea:focus-visible {
 
 .mcp-call-channel {
   flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.14em;
+  color: #7fae90;
+  font-size: 13px;
+  letter-spacing: 0.12em;
 }
 
 .mcp-call-name {
   min-width: 0;
   overflow: hidden;
-  color: #bce6cf;
-  font-size: 11px;
+  color: #cdeedb;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -10243,8 +10344,8 @@ textarea:focus-visible {
 }
 
 .mcp-call-state {
-  color: #789d8b;
-  font-size: 11px;
+  color: #8fbba1;
+  font-size: 13px;
   white-space: nowrap;
 }
 
@@ -10272,7 +10373,7 @@ textarea:focus-visible {
    built around carries no border either. The hairline brackets the disclosure
    to the row it belongs to. */
 .mcp-call-body {
-  margin: 9px 0 0 26px;
+  margin: 9px 0 0 42px;
   padding: 0 0 6px 17px;
   border-left: 1px solid var(--line);
   animation: mcp-call-open 160ms ease-out both;
@@ -10329,13 +10430,16 @@ textarea:focus-visible {
   color: #ffb3b3;
 }
 
+/* The message row is the last line of the same list: a fixed 32px gutter for
+   the actions toggle, then the editor on the transcript's 42px text rail, and
+   the mode switch and Send ending on the 19px right spine. */
 .command-line-shell {
   position: relative;
   order: 3;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: 32px minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-height: 56px;
   padding: 0 19px 0 17px;
   border: 0;
@@ -10361,7 +10465,7 @@ textarea:focus-visible {
   outline: 0;
   color: #bce6cf;
   background: transparent;
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: 0.01em;
 }
 

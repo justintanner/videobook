@@ -7,6 +7,7 @@ import {
   ComposerHistoryControls,
 } from '../../src/components/videobook/ComposerHistory'
 import { ComposerHistoryChromeContext } from '../../src/components/videobook/composer-history-chrome'
+import { composerHistoryChromeHosted } from '../../src/videobook/composer-dock'
 import {
   COMPOSER_HISTORY_CAP,
   HISTORY_AUTO_CLOSE_MS,
@@ -290,6 +291,24 @@ describe('history auto-close', () => {
     expect(hostedHtml.slice(hostedHtml.indexOf('composer-history-panel')))
       .not.toContain('composer-panel-controls')
 
+    // An open dock always draws one header row -- a panel's own, or the dock
+    // bar -- so the strip is flattened into it rather than stacked beneath.
+    expect(composerHistoryChromeHosted({
+      dockOpen: true,
+      panelHasHeader: false,
+      reviewPriority: true,
+    })).toBe(true)
+    const appCss = readFileSync(
+      new URL('../../src/index.css', import.meta.url),
+      'utf8',
+    )
+    expect(appCss).toContain('.command-composer-dock-bar .composer-panel-controls {')
+    const composerTsx = readFileSync(
+      new URL('../../src/components/videobook/CommandComposer.tsx', import.meta.url),
+      'utf8',
+    )
+    expect(composerTsx).toContain('<ComposerHistoryControls />\n          <ComposerDockClose />')
+
     // Closing raises the floor past everything on screen, so the panel goes idle.
     const closedThrough = composerHistoryEpoch(rows)
     const remaining = composerHistoryAfter(rows, closedThrough)
@@ -320,9 +339,14 @@ describe('history auto-close', () => {
       'utf8',
     )
     expect(html).toContain('data-role="user"')
-    // 26px clears the row's 16px signal glyph and its 10px grid gap.
-    expect(css).toContain('.voice-captions > p, .composer-history > p { position: relative; margin: 0 0 13px; padding-left: 26px;')
-    expect(css).toContain('left: 16px; width: 2px; background: var(--green)')
+    // 42px clears the row's fixed 32px glyph gutter and its 10px grid gap, so a
+    // chat line and an ACTION row start in the same column.
+    expect(css).toContain('.voice-captions > p, .composer-history > p { position: relative; margin: 0 0 8px; padding-left: 42px;')
+    // The speaker rule rides in the middle of that gutter.
+    expect(css).toContain('left: 15px; width: 2px; background: var(--green)')
+    // Everything voice-comms writes below the log sits on the same rail.
+    expect(css).toContain('.voice-comms-message, .voice-comms-review { margin: 0 0 8px; padding-left: 42px;')
+    expect(css).toContain('.voice-comms-glyph { display: grid; flex: 0 0 32px;')
   })
 
   it('tracks the newest sequence so a later row restarts the window', () => {

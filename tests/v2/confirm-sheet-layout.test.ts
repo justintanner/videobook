@@ -35,18 +35,36 @@ function section(html: string, tag: 'header' | 'footer'): string {
 }
 
 describe('confirm sheet layout', () => {
-  it('puts Apply and Cancel in the header and what applying does in the footer', () => {
+  it('puts the decision, what it does and the keys that do it on one row', () => {
+    // Nothing to report, so no footer: the effect chip and the shortcut hints
+    // sit beside the buttons they describe instead of 44px away from them.
     const html = sheet()
     const head = section(html, 'header')
-    const foot = section(html, 'footer')
+    expect(html).not.toContain('confirm-sheet-foot')
     expect(head).toContain('class="confirm-sheet-apply"')
     expect(head).toContain('Cancel <kbd>Esc</kbd>')
+    expect(head).toContain('Queues 1 job · new cell')
+    expect(head).toContain('confirm-sheet-head-hints')
+    expect(head).toContain('<kbd>⌘↵</kbd> apply from any field')
+    // Effect, then the divider and the hints, then the two buttons.
+    expect(head.indexOf('confirm-sheet-effect'))
+      .toBeLessThan(head.indexOf('confirm-sheet-head-hints'))
+    expect(head.indexOf('confirm-sheet-head-hints'))
+      .toBeLessThan(head.indexOf('confirm-sheet-actions'))
+    // The submit button reaches the composer's form from outside it.
+    expect(head).toContain('form="command-composer-form"')
+  })
+
+  it('hands the hints back to the footer as soon as the sheet has something to say', () => {
+    const html = sheet({ validation: { blocking: 'Add a prompt', notice: null } })
+    const head = section(html, 'header')
+    const foot = section(html, 'footer')
+    expect(head).not.toContain('confirm-sheet-head-hints')
     expect(head).not.toContain('confirm-sheet-effect')
+    expect(foot).toContain('Add a prompt')
     expect(foot).toContain('Queues 1 job · new cell')
     expect(foot).not.toContain('confirm-sheet-apply')
     expect(foot).not.toContain('>Cancel ')
-    // The submit button reaches the composer's form from outside it.
-    expect(head).toContain('form="command-composer-form"')
   })
 
   it('keeps optional actions out of the header so the title keeps its room', () => {

@@ -2,12 +2,14 @@ import { AudioWaveform, Braces, Image, Sparkles, Video } from 'lucide-react'
 import { ViewportPortal, type Viewport } from '@xyflow/react'
 import {
   notebookGrid,
+  notebookGridAddress,
   notebookGridTag,
   notebookGridPosition,
   notebookGridSlotKey,
   type NotebookGridMetrics,
   type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
+import type { NotebookReviewRole } from '@/videobook/notebook-review-focus'
 import type {
   NotebookLaneFamily,
   NotebookLaneSection,
@@ -20,6 +22,9 @@ interface NotebookGridBoardProps {
   previewSlot: NotebookGridSlot | null
   mediaDropActive: boolean
   mediaDropSlot: NotebookGridSlot | null
+  // What an open review is about, by grid address. A target with no cell in it
+  // yet is marked here, on the empty square itself.
+  reviewRoles: ReadonlyMap<string, NotebookReviewRole>
 }
 
 interface NotebookLaneCaptionsProps {
@@ -96,6 +101,7 @@ export function NotebookGridBoard({
   previewSlot,
   mediaDropActive,
   mediaDropSlot,
+  reviewRoles,
 }: NotebookGridBoardProps) {
   const previewPosition = previewSlot ? notebookGridPosition(previewSlot) : null
   const occupiedSlotKeys = new Set(occupiedSlots.map(notebookGridSlotKey))
@@ -133,10 +139,15 @@ export function NotebookGridBoard({
             const slotKey = notebookGridSlotKey(slot)
             const mediaDropzone = mediaDropActive && !occupiedSlotKeys.has(slotKey)
             const mediaDropTarget = mediaDropzone && slotKey === mediaDropSlotKey
+            const reviewRole = occupiedSlotKeys.has(slotKey)
+              ? undefined
+              : reviewRoles.get(notebookGridAddress(slot))
             const className = `notebook-grid-square${mediaDropzone
               ? ' notebook-grid-square-dropzone'
               : ''}${mediaDropTarget
               ? ' notebook-grid-square-drop-target'
+              : ''}${reviewRole
+              ? ` notebook-grid-square-review notebook-review-${reviewRole}`
               : ''}`
             return (
               <span

@@ -44,7 +44,7 @@ export function McpCallRow({ call, onToggle }: { call: McpCall; onToggle: (id: n
         </span>
         <span className="mcp-call-trail">
           <span className="mcp-call-state">{mcpCallState(call)}</span>
-          <ChevronDown className="mcp-call-chevron" size={13} aria-hidden="true" />
+          <ChevronDown className="mcp-call-chevron" size={14} aria-hidden="true" />
         </span>
       </button>
 

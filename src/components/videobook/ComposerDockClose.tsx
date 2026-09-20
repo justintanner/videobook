@@ -19,7 +19,7 @@ export function ComposerDockClose() {
         title={dock.hideLabel}
         onClick={dock.hide}
       >
-        <X size={15} />
+        <X size={14} />
       </button>
     </>
   )

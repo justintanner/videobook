@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { ComposerDockClose } from './ComposerDockClose'
-import { ComposerHistory } from './ComposerHistory'
+import { ComposerHistory, ComposerHistoryControls } from './ComposerHistory'
 import {
   ComposerHistoryChromeContext,
   type ComposerHistoryChromeValue,
@@ -845,6 +845,7 @@ export function CommandComposer({
             <span className="command-composer-dock-divider" aria-hidden="true" />
           )}
           {noticeInHeader && noticeLine}
+          <ComposerHistoryControls />
           <ComposerDockClose />
         </div>
       )}
@@ -963,7 +964,7 @@ export function CommandComposer({
           <button type="button" className="command-actions-toggle" aria-label="Open actions" aria-expanded={Boolean(actionDiscovery)}
             data-workspace-action-surface="button" aria-keyshortcuts="Control+Shift+K Meta+Shift+K"
             disabled={actionsDisabled || sending} onClick={actionDiscovery ? closeActionSearch : onOpenActions}>
-            <ListFilter size={15} aria-hidden="true" />
+            <ListFilter size={14} aria-hidden="true" />
           </button>
 
         </div>
@@ -1015,7 +1016,7 @@ export function CommandComposer({
           disabled={actionDiscovery ? actionsDisabled || actionMatches.length === 0 || actionStatus.loading : inputDisabled || sending || !input.trim()}
           aria-label={actionDiscovery ? 'Prepare action' : 'Send command'}
         >
-          {sending ? <BusyIndicator size={15} /> : <Send size={15} />}
+          {sending ? <BusyIndicator size={14} /> : <Send size={14} />}
         </button>
         {transmitting && <span className="command-transmit-scan" aria-hidden="true" />}
       </form>
