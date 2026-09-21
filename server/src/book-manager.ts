@@ -206,6 +206,11 @@ export class BookManager {
       await mkdir(temporaryRoot, { recursive: false });
       temporaryEngine = this.createEngine(temporaryRoot, slug);
       await temporaryEngine.ready;
+      const audioTracks = temporaryEngine.sequences.getPrimary().tracks.filter((track) => track.kind === "audio");
+      for (const track of audioTracks.slice(1)) {
+        const removed = await temporaryEngine.sequences.removeTrack(track.trackId);
+        if (!removed.ok) throw new Error(removed.error.message);
+      }
       const created = temporaryEngine.book.get();
       temporaryEngine.close();
       temporaryEngine = null;

@@ -871,6 +871,28 @@ describe('chat composer browser flow', () => {
       let current = await call<Sequence>('get_primary_sequence')
       const mainTrack = current.tracks.find((track) => track.kind === 'video')!
       const audioTracks = current.tracks.filter((track) => track.kind === 'audio')
+      expect(audioTracks).toHaveLength(1)
+      expect(await timeline.locator('.timeline-track-audio').count()).toBe(1)
+      expect(await timeline.locator('.timeline-track-video').count()).toBe(1)
+      const horizontal = timeline.locator('.timeline-horizontal')
+      const fitTimeline = async (videoClipCount: number) => {
+        await timeline.getByRole('button', { name: 'Fit', exact: true }).click()
+        await expect.poll(() => horizontal.evaluate((element) => ({
+          left: element.scrollLeft,
+          overflow: element.scrollWidth - element.clientWidth,
+        }))).toEqual({ left: 0, overflow: 0 })
+        const fitted = await timeline.evaluate((element) => ({
+          videoClipCount: element.querySelector('.timeline-track-video')!.querySelectorAll('.timeline-clip').length,
+          contained: [...element.querySelectorAll('.timeline-track-lane')].every((lane) => {
+            const bounds = lane.getBoundingClientRect()
+            return [...lane.querySelectorAll('.timeline-clip')].every((clip) => {
+              const rect = clip.getBoundingClientRect()
+              return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1
+            })
+          }),
+        }))
+        expect(fitted).toEqual({ videoClipCount, contained: true })
+      }
       let clipCount = 0
       const append = async (trackName: string) => {
         await timeline.getByLabel(`Add clip to ${trackName}`, { exact: true }).click()
@@ -886,7 +908,10 @@ describe('chat composer browser flow', () => {
       await append(mainTrack.name)
       await append(audioTracks[0]!.name)
       await append(audioTracks[0]!.name)
-      await append(audioTracks[1]!.name)
+      await timeline.getByRole('button', { name: '+ Audio track', exact: true }).click()
+      await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).tracks.filter((track) => track.kind === 'audio').length, { timeout: MCP_ROUNDTRIP_MS }).toBe(2)
+      const secondAudio = (await call<Sequence>('get_primary_sequence')).tracks.filter((track) => track.kind === 'audio')[1]!
+      await append(secondAudio.name)
       current = await call<Sequence>('get_primary_sequence')
       expect(current.clips.filter((clip) => clip.trackId === mainTrack.trackId).map((clip) => clip.timelineStartFrame).sort((a, b) => a - b)).toEqual([0, 90])
       const audioBefore = current.clips.filter((clip) => clip.trackId !== mainTrack.trackId)
@@ -935,6 +960,8 @@ describe('chat composer browser flow', () => {
       await timeline.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
       expect(await timeline.locator('.timeline-clip').count()).toBe(4)
       await collapseComposerDock(page)
+      await fitTimeline(1)
+      await timeline.getByLabel('Zoom timeline in', { exact: true }).click()
       for (let index = 0; index < 20; index += 1) await call('add_sequence_track', { kind: 'audio' })
       current = await call<Sequence>('get_primary_sequence')
       const sourceClip = current.clips.find((clip) => clip.trackId === mainTrack.trackId)!
@@ -952,7 +979,6 @@ describe('chat composer browser flow', () => {
       await expect.poll(() => timeline.locator('.notebook-timeline-header').textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('25:03')
       expect(await timeline.locator('.timeline-clip').count()).toBeLessThan(40)
       expect(await timeline.locator('.timeline-track-audio').count()).toBeLessThan(10)
-      const horizontal = timeline.locator('.timeline-horizontal')
       await horizontal.evaluate((element) => { element.scrollLeft = element.scrollWidth })
       await expect.poll(() => horizontal.evaluate((element) => element.scrollLeft)).toBeGreaterThan(50_000)
       const audioScroll = timeline.locator('.timeline-audio-viewport')
@@ -963,6 +989,16 @@ describe('chat composer browser flow', () => {
       const lastAudio = current.tracks.filter((track) => track.kind === 'audio').at(-1)!
       await timeline.getByLabel(`Remove ${lastAudio.name}`, { exact: true }).click()
       await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).tracks.some((track) => track.trackId === lastAudio.trackId), { timeout: MCP_ROUNDTRIP_MS }).toBe(false)
+      const notebookZoom = page.getByRole('group', { name: 'Notebook zoom controls' })
+      await notebookZoom.getByLabel('Zoom out', { exact: true }).click()
+      if (await notebookZoom.getByLabel('Zoom out', { exact: true }).isEnabled()) await notebookZoom.getByLabel('Zoom out', { exact: true }).click()
+      for (const zoom of [50, 75, 100]) {
+        await expect.poll(() => notebookZoom.getByLabel('Fit grid to width', { exact: true }).textContent()).toBe(`${zoom}%`)
+        await fitTimeline(501)
+        if (zoom < 100) await notebookZoom.getByLabel('Zoom in', { exact: true }).click()
+      }
+      await page.getByLabel('Fit grid to width', { exact: true }).click()
+      await fitTimeline(501)
       await page.screenshot({ path: '/tmp/videobook-timeline-long.png' })
     } finally {
       await page.evaluate((id) => localStorage.setItem('videobook.active-book', id), bookId)

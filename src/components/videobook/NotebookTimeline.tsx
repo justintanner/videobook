@@ -24,6 +24,7 @@ export interface NotebookTimelineProps {
 const width = notebookGrid.columnCount * notebookGrid.columnPitch - notebookGrid.gap
 const labelWidth = 200
 const laneHeight = 36
+const endPadding = 120
 const blockStyle = { width, height: notebookGrid.squareSize }
 
 function timeLabel(seconds: number): string {
@@ -78,20 +79,21 @@ function TimelinePicker({ assembly }: Pick<NotebookTimelineProps, 'assembly'>) {
 }
 
 export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, address, onSeek, onPreview, onExport, onRemove }: NotebookTimelineProps) {
-  const [zoom, setZoom] = useState(48)
+  const [zoom, setZoom] = useState<number | 'fit'>(48)
   const [scrollLeft, setScrollLeft] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
   const [selectedClip, setSelectedClip] = useState<string | null>(null)
   const audioViewport = useRef<HTMLDivElement>(null)
   const horizontalViewport = useRef<HTMLDivElement>(null)
   const [audioHeight, setAudioHeight] = useState(120)
+  const [laneWidth, setLaneWidth] = useState(width - labelWidth)
   const fps = sequence ? sequence.frameRate.numerator / sequence.frameRate.denominator : 30
   const clipEndFrame = sequence?.clips.reduce((end, clip) => Math.max(end, clip.timelineStartFrame + clip.durationFrames), 0) ?? 0
   const endFrame = sequence?.captions.reduce((end, cue) => Math.max(end, cue.timelineStartFrame + cue.durationFrames), clipEndFrame) ?? clipEndFrame
   const duration = endFrame / fps
-  const pixelsPerSecond = Math.min(zoom, 8_000_000 / Math.max(1, duration))
-  const laneWidth = width - labelWidth
-  const contentWidth = Math.max(laneWidth, duration * pixelsPerSecond + 120)
+  const fittedZoom = Math.max(1, laneWidth - endPadding) / Math.max(1, duration)
+  const pixelsPerSecond = Math.min(zoom === 'fit' ? fittedZoom : zoom, 8_000_000 / Math.max(1, duration))
+  const contentWidth = zoom === 'fit' ? laneWidth : Math.max(laneWidth, duration * pixelsPerSecond + endPadding)
   const boundedLeft = Math.min(scrollLeft, contentWidth - laneWidth)
   const mainVideo = sequence?.tracks.reduce<SequenceTrack | undefined>((main, track) =>
     track.kind === 'video' && (!main || track.ordinal < main.ordinal) ? track : main, undefined)
@@ -110,9 +112,14 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
   const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.artifactId, asset])), [assets])
   useEffect(() => {
     const element = audioViewport.current
-    if (!element) return
-    const observer = new ResizeObserver(() => setAudioHeight(element.clientHeight))
+    const horizontal = horizontalViewport.current
+    if (!element || !horizontal) return
+    const observer = new ResizeObserver(() => {
+      setAudioHeight(element.clientHeight)
+      setLaneWidth(Math.max(1, Math.min(horizontal.clientWidth, element.clientWidth - labelWidth)))
+    })
     observer.observe(element)
+    observer.observe(horizontal)
     return () => observer.disconnect()
   }, [])
   const firstTrack = Math.max(0, Math.min(Math.floor(scrollTop / laneHeight), tracks.length - 1) - 1)
@@ -184,9 +191,9 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
           <button type="button" disabled={!sequence || endFrame === 0} onClick={onPreview}>Preview</button>
           <button type="button" disabled={busy || endFrame === 0} onClick={onExport}>Export</button>
           <button type="button" disabled={busy || !canRemove} onClick={() => selected && void assembly.removeClip(selected.clipId)}>Remove clip</button>
-          <button type="button" aria-label="Zoom timeline out" onClick={() => setZoom((value) => Math.max(0.25, value / 2))}>−</button>
-          <button type="button" aria-label="Zoom timeline in" onClick={() => setZoom((value) => Math.min(768, value * 2))}>+</button>
-          <button type="button" onClick={() => { setZoom(laneWidth / Math.max(1, duration)); setScrollLeft(0); horizontalViewport.current?.scrollTo({ left: 0 }) }}>Fit</button>
+          <button type="button" aria-label="Zoom timeline out" onClick={() => setZoom(Math.max(Math.min(0.25, fittedZoom), pixelsPerSecond / 2))}>−</button>
+          <button type="button" aria-label="Zoom timeline in" onClick={() => setZoom(Math.min(Math.max(768, fittedZoom), pixelsPerSecond * 2))}>+</button>
+          <button type="button" aria-pressed={zoom === 'fit'} onClick={() => { setZoom('fit'); setScrollLeft(0); horizontalViewport.current?.scrollTo({ left: 0 }) }}>Fit</button>
           <button type="button" disabled={busy} aria-label="Remove Timeline element" onClick={onRemove}><Trash2 size={14} /></button>
         </div>
       </header>

@@ -40,6 +40,8 @@ describe('v2 book manager', () => {
 
     expect(firstBook.value.engine.notebooks.list().map((entry) => entry.name)).toEqual(['Main'])
     expect(secondBook.value.engine.notebooks.list().map((entry) => entry.name)).toEqual(['Main'])
+    expect(firstBook.value.engine.sequences.getPrimary().tracks.filter((track) => track.kind === 'audio')).toHaveLength(1)
+    expect(secondBook.value.engine.sequences.getPrimary().tracks.filter((track) => track.kind === 'audio')).toHaveLength(1)
 
     const artifact = await firstBook.value.engine.artifacts.create('image', 'moon garden')
     expect(artifact.ok).toBe(true)
@@ -93,6 +95,12 @@ describe('v2 book manager', () => {
     expect(created.ok).toBe(true)
     if (!created.ok) return
     const bookId = created.value.bookId
+    const managed = books.get(bookId)
+    if (!managed.ok) throw new Error(managed.error.message)
+    const primary = managed.value.engine.sequences.getPrimary()
+    const added = await managed.value.engine.sequences.addTrack(primary.sequenceId, { kind: 'audio', name: 'Ambience' })
+    if (!added.ok) throw new Error(added.error.message)
+    const savedTracks = added.value.tracks
 
     await books.close()
     books = new BookManager({
@@ -104,6 +112,7 @@ describe('v2 book manager', () => {
     expect(reopened.ok).toBe(true)
     if (!reopened.ok) return
     expect(reopened.value.engine.book.get().name).toBe('restart-recovery')
+    expect(reopened.value.engine.sequences.getPrimary().tracks).toEqual(savedTracks)
   })
 
   it('reserves duplicate names before concurrent creates publish any roots', async () => {

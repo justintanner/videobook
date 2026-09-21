@@ -243,6 +243,7 @@ describe('timeline endpoints over HTTP MCP', () => {
     await idle()
     const audio = await upload('audio', 2, 880)
     const longAudio = await upload('audio', 3, 1320)
+    await call('add_sequence_track', { kind: 'audio' })
     const current = await sequence()
     const mainTrack = current.tracks.find((track) => track.kind === 'video')!
     const audioTracks = current.tracks.filter((track) => track.kind === 'audio')

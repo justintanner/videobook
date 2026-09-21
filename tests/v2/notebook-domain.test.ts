@@ -841,6 +841,7 @@ describe('v2 notebook domain tools', () => {
       revision: string
       tracks: Array<{ trackId: string; kind: string; name: string; ordinal: number }>
     }
+    expect(initial.tracks.filter((track) => track.kind === 'audio')).toHaveLength(1)
     const added = resultJson(await invoke('add_sequence_track', {
       kind: 'video',
       name: 'B-roll',
