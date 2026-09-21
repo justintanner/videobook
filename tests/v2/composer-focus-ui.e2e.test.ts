@@ -293,6 +293,17 @@ describe('composer focus through real workspace interactions', () => {
       },
     }))
     const imageCellId = String(image?.id ?? '')
+    const imageSource = record(await call('create_notebook_cell', {
+      cell: {
+        type: 'generate_image', slot: { row: 1, column: 2 },
+        output_artifact_id: asset?.artifact_id,
+      },
+    }))
+    await call('connect_notebook_cells', {
+      source_cell_id: imageSource?.id,
+      target_cell_id: imageCellId,
+      target_input: 'media',
+    })
     await call('connect_notebook_cells', {
       source_cell_id: videoCellId,
       target_cell_id: imageCellId,
@@ -374,6 +385,23 @@ describe('composer focus through real workspace interactions', () => {
             expect(secondThumb!.y).toBeCloseTo(firstThumb!.y, 1)
           }
           expect(await dock.getByLabel('segment input', { exact: true }).locator('img').count()).toBe(1)
+          const sourceImages = thumbs.locator('img')
+          await expect.poll(async () => sourceImages.evaluateAll(images => images.map(image => {
+            const frame = image.parentElement!
+            const frameBox = frame.getBoundingClientRect()
+            const imageBox = image.getBoundingClientRect()
+            return {
+              loaded: image instanceof HTMLImageElement && image.naturalWidth > 0,
+              fit: getComputedStyle(image).objectFit,
+              insideFrame: imageBox.left >= frameBox.left - 1
+                && imageBox.top >= frameBox.top - 1
+                && imageBox.right <= frameBox.right + 1
+                && imageBox.bottom <= frameBox.bottom + 1,
+            }
+          }))).toEqual([
+            { loaded: true, fit: 'contain', insideFrame: true },
+            { loaded: true, fit: 'contain', insideFrame: true },
+          ])
         }
         if (process.env.VIDEOBOOK_CAPTURE_MEDIA_DOCK === '1') {
           await page.screenshot({ path: `/tmp/videobook-media-${id === imageCellId ? 'image' : 'video'}-${viewport.width}.png` })
