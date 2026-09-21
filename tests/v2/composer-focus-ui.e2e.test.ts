@@ -311,7 +311,27 @@ describe('composer focus through real workspace interactions', () => {
     })
     await cell(imageCellId).waitFor({ timeout: 15_000 })
 
-    for (const id of [videoCellId, imageCellId]) {
+    const audioPath = join(rootDir, 'audio.wav')
+    await promisify(execFile)(FFMPEG, [
+      '-y', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=8',
+      '-c:a', 'pcm_s16le', audioPath,
+    ])
+    const uploadedAudio = record(await call('upload_file', {
+      filename: 'audio.wav', data: (await readFile(audioPath)).toString('base64'),
+    }))
+    const audioAssets = record(await call('list_assets'))
+    const audioAsset = (Array.isArray(audioAssets?.assets) ? audioAssets.assets : [])
+      .map(record).find(value => value?.id === uploadedAudio?.assetId)
+    const audioCell = record(await call('create_notebook_cell', {
+      cell: {
+        type: 'audio', slot: { row: 0, column: 3 },
+        output_artifact_id: audioAsset?.artifact_id,
+      },
+    }))
+    const audioCellId = String(audioCell?.id ?? '')
+    await cell(audioCellId).waitFor({ timeout: 15_000 })
+
+    for (const id of [audioCellId, videoCellId, imageCellId]) {
       await page.setViewportSize({ width: 1440, height: 1000 })
       await cell(id).click({ position: { x: 20, y: 20 } })
       const dock = page.locator('.composer-notebook-dock.inspector')
@@ -340,14 +360,26 @@ describe('composer focus through real workspace interactions', () => {
           const box = element.getBoundingClientRect()
           const previewBox = preview.getBoundingClientRect()
           const actionBox = actions.getBoundingClientRect()
+          const audio = preview.querySelector('audio')
+          const waveform = preview.querySelector('.inspector-audio-waveform')
+          const audioBox = audio?.getBoundingClientRect()
+          const waveformBox = waveform?.getBoundingClientRect()
           const rowStyle = getComputedStyle(row)
           const rowHeight = row.clientHeight - parseFloat(rowStyle.paddingTop)
             - parseFloat(rowStyle.paddingBottom)
           return {
             clipped: wrapper.scrollHeight > wrapper.clientHeight + 1,
             oversized: box.height > 360.5,
-            fullHeight: Math.abs(previewBox.height - rowHeight) <= 1,
-            actionsBeside: actionBox.left >= previewBox.right,
+            previewFits: audio ? previewBox.height <= rowHeight + 1
+              : Math.abs(previewBox.height - rowHeight) <= 1,
+            audioFits: !audioBox || Boolean(waveformBox
+              && waveformBox.top >= previewBox.top
+              && waveformBox.bottom <= audioBox.top
+              && audioBox.left >= previewBox.left
+              && audioBox.right <= previewBox.right
+              && audioBox.bottom <= previewBox.bottom),
+            actionsOutsidePreview: actionBox.left >= previewBox.right
+              || Boolean(audio && actionBox.top >= previewBox.bottom),
             actionsVisible: actionBox.top >= box.top && actionBox.bottom <= box.bottom,
             headerHeight: Math.round(header.getBoundingClientRect().height),
             headerToken: Math.round(parseFloat(getComputedStyle(element).getPropertyValue('--dock-header-h'))),
@@ -356,8 +388,9 @@ describe('composer focus through real workspace interactions', () => {
         })).toMatchObject({
           clipped: false,
           oversized: false,
-          fullHeight: true,
-          actionsBeside: true,
+          previewFits: true,
+          audioFits: true,
+          actionsOutsidePreview: true,
           actionsVisible: true,
           headerHeight: 40,
           headerToken: 40,
@@ -404,18 +437,21 @@ describe('composer focus through real workspace interactions', () => {
           ])
         }
         if (process.env.VIDEOBOOK_CAPTURE_MEDIA_DOCK === '1') {
-          await page.screenshot({ path: `/tmp/videobook-media-${id === imageCellId ? 'image' : 'video'}-${viewport.width}.png` })
+          const kind = id === imageCellId ? 'image' : id === audioCellId ? 'audio' : 'video'
+          await page.screenshot({ path: `/tmp/videobook-media-${kind}-${viewport.width}.png` })
         }
       }
       if (id === imageCellId) {
         const preview = dock.locator('.inspector-cell-preview')
         const previewBounds = await preview.boundingBox()
+        const dockBounds = await dock.boundingBox()
         await dock.getByLabel('segment input', { exact: true }).click()
         const sourceOptions = dock.getByRole('listbox', { name: 'segment input options' })
         await sourceOptions.getByRole('option', { name: /@a1/ }).click({ trial: true })
         await page.keyboard.press('Escape')
         const scrolledPreviewBounds = await preview.boundingBox()
-        expect(scrolledPreviewBounds?.y).toBeCloseTo(previewBounds!.y, 1)
+        const scrolledDockBounds = await dock.boundingBox()
+        expect(scrolledPreviewBounds!.y - scrolledDockBounds!.y).toBeCloseTo(previewBounds!.y - dockBounds!.y, 1)
         expect(scrolledPreviewBounds?.height).toBeCloseTo(previewBounds!.height, 1)
         await dock.getByRole('button', { name: 'Edit @a3 image', exact: true }).click()
         await page.getByRole('dialog', { name: 'Fullscreen preview for @a3' }).waitFor()
@@ -425,13 +461,25 @@ describe('composer focus through real workspace interactions', () => {
         page.once('dialog', dialog => void dialog.accept())
         await dock.getByRole('button', { name: 'Delete cell', exact: true }).click()
         await expect.poll(() => cell(imageCellId).count(), { timeout: 15_000 }).toBe(0)
-      } else {
+      } else if (id === videoCellId) {
         const video = dock.locator('video')
         await video.evaluate(element => element instanceof HTMLVideoElement ? element.play() : undefined)
         await expect.poll(() => video.evaluate(element => element instanceof HTMLVideoElement && !element.paused)).toBe(true)
         await dock.getByRole('button', { name: 'Open @a1 fullscreen', exact: true }).click()
         await page.getByRole('dialog', { name: 'Fullscreen preview for @a1' }).waitFor()
         await page.getByLabel('Close fullscreen preview').click()
+      } else {
+        const audio = dock.locator('audio')
+        await audio.focus()
+        await page.keyboard.press('Space')
+        await expect.poll(() => audio.evaluate(element => element instanceof HTMLAudioElement
+          && element.currentTime > 0 && !element.paused)).toBe(true)
+        await page.keyboard.press('Space')
+        expect(await audio.evaluate(element => element instanceof HTMLAudioElement && element.paused)).toBe(true)
+        await audio.evaluate(element => {
+          if (element instanceof HTMLAudioElement) element.currentTime = 3
+        })
+        await expect.poll(() => dock.locator('.inspector-audio-waveform .cell-waveform-playhead').count()).toBe(1)
       }
     }
   })

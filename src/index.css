@@ -10049,7 +10049,7 @@ textarea:focus-visible {
   overscroll-behavior: contain;
 }
 
-.command-composer-contextual:has(.inspector-media-row-image, .inspector-media-row-video) {
+.command-composer-contextual:has(.inspector-media-row-content) {
   --dock-h: min(360px, 38dvh);
 }
 
@@ -12993,17 +12993,6 @@ textarea:focus-visible {
   object-fit: contain;
 }
 
-.inspector-media-row-audio {
-  --media-preview-h: min(
-    var(--media-row-h),
-    calc(var(--media-preview-cap-w) * 9 / 16)
-  );
-}
-
-.inspector-media-row-audio .inspector-cell-preview {
-  height: var(--media-preview-h);
-}
-
 /* Audio's stage: peaks over the transport, both on the preview ground. The
    waveform reads the family hue the grid tile uses, so one cell is one type
    wherever it is drawn. */
@@ -13030,7 +13019,7 @@ textarea:focus-visible {
 .inspector-audio-waveform {
   position: relative;
   display: block;
-  min-height: 72px;
+  min-height: 0;
 }
 
 .inspector-media-row-audio .inspector-cell-media audio {
@@ -13383,13 +13372,17 @@ textarea:focus-visible {
   .inspector-media-summary-actions {
     margin-left: 0;
   }
+}
 
-  .inspector-media-row-content.inspector-media-row-audio {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
+@media (min-height: 600px) {
+  @container (max-width: 619px) {
+    .inspector-media-row-content.inspector-media-row-audio {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+    }
 
-  .inspector-media-row-audio .inspector-cell-preview {
-    height: 132px;
+    .inspector-media-row-audio .inspector-cell-preview {
+      height: 112px;
+    }
   }
 }
