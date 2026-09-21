@@ -1055,12 +1055,16 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('480 \u00d7 854')
     expect(html).toContain('<dt>Aspect</dt>')
     expect(html).toContain('9:16')
-    // Actions and cleanup moved out of the preview into the actions track.
-    expect(html.indexOf('inspector-media-row-actions')).toBeLessThan(
+    // Fullscreen and cleanup stack under the picture they act on, so both
+    // sit inside the preview track rather than the actions track.
+    expect(html.indexOf('inspector-media-row-preview')).toBeLessThan(
       html.indexOf('class="inspector-media-actions'),
     )
-    expect(html.indexOf('inspector-media-row-actions')).toBeLessThan(
-      html.indexOf('aria-label="Cell cleanup actions"'),
+    expect(html.indexOf('class="inspector-media-actions')).toBeLessThan(
+      html.indexOf('inspector-media-row-meta'),
+    )
+    expect(html.indexOf('aria-label="Cell cleanup actions"')).toBeLessThan(
+      html.indexOf('inspector-media-row-meta'),
     )
   })
 
@@ -1213,13 +1217,16 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('1920 \u00d7 1080')
     expect(html).toContain('<dt>Duration</dt>')
     expect(html).toContain('<dd>0:12</dd>')
-    // A <video> owns its own click, so fullscreen stays a button — but it sits
-    // in the actions track with delete now, not under the preview.
+    // A <video> owns its own click, so fullscreen stays a button — one that
+    // sits under the preview with delete, not across the row with the facts.
     expect(html).toContain('class="inspector-fullscreen-button"')
     expect(html).not.toContain('inspector-edit-button')
     expect(html).not.toContain('inspector-cell-media-open')
-    expect(html.indexOf('inspector-media-row-actions')).toBeLessThan(
+    expect(html.indexOf('inspector-media-row-preview')).toBeLessThan(
       html.indexOf('class="inspector-media-actions'),
+    )
+    expect(html.indexOf('class="inspector-media-actions')).toBeLessThan(
+      html.indexOf('inspector-media-row-meta'),
     )
   })
 

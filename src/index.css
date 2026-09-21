@@ -12811,17 +12811,21 @@ textarea:focus-visible {
     calc(var(--media-preview-h) * var(--media-aspect, 0.5625)),
     var(--media-preview-cap-w)
   );
+  /* The column carries the fullscreen and delete buttons under the picture,
+     so it never narrows past their labels; a portrait take that is thinner
+     than that keeps its own width and sits centred on the ground. */
+  --media-preview-col-w: max(var(--media-preview-w), 152px);
 
   display: grid;
   min-height: 0;
   padding-bottom: 12px;
   overflow: hidden;
   gap: 14px;
-  grid-template-columns: var(--media-preview-w) 104px minmax(0, 1fr);
+  grid-template-columns: var(--media-preview-col-w) 104px minmax(0, 1fr);
 }
 
 .inspector-media-row-content.inspector-media-row-single-version {
-  grid-template-columns: var(--media-preview-w) minmax(0, 1fr);
+  grid-template-columns: var(--media-preview-col-w) minmax(0, 1fr);
 }
 
 .inspector-media-row-track {
@@ -12876,6 +12880,13 @@ textarea:focus-visible {
 .inspector-media-row-image,
 .inspector-media-row-video {
   --media-preview-h: min(var(--media-row-h), 220px);
+}
+
+/* Stretched to the button column, a narrow take would grow past the cap the
+   dock gives it, so the height stays put and the picture letterboxes. */
+.inspector-media-row-image .inspector-cell-preview,
+.inspector-media-row-video .inspector-cell-preview {
+  max-height: var(--media-preview-h);
 }
 
 .inspector-media-row-audio {
@@ -13081,43 +13092,35 @@ textarea:focus-visible {
   display: none;
 }
 
-/* Detached from the preview, the bar sizes to its button rather than the
-   column it sits in: editing the picture should not out-shout the picture. */
-.inspector-media-row-actions .inspector-media-actions {
-  margin-top: 18px;
+/* Under the picture the two buttons are one stack the width of the column:
+   they act on what sits above them, so they line up with its edges rather
+   than with the facts across the row. */
+.inspector-media-row-preview .inspector-media-actions {
+  margin-top: 12px;
   border-top: 0;
-  justify-content: start;
-  grid-template-columns: max-content;
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.inspector-media-row-actions .inspector-media-actions button {
-  width: auto;
-  padding: 0 18px;
+.inspector-media-row-preview .inspector-media-actions button {
+  width: 100%;
+  padding: 0 12px;
   border: 1px solid var(--control-border);
 }
 
-.inspector-media-row-actions .inspector-media-actions button:hover,
-.inspector-media-row-actions .inspector-media-actions button:focus-visible {
+.inspector-media-row-preview .inspector-media-actions button:hover,
+.inspector-media-row-preview .inspector-media-actions button:focus-visible {
   border-color: var(--control-border-hover);
 }
 
-.inspector-media-row-actions .inspector-cell-actions {
-  margin: 14px 0 0;
-  padding-top: 14px;
-}
-
-/* Delete keeps the shared height but not the full width, and lines up with
-   the action bar above it rather than drifting to the far edge of the track. */
-.inspector-media-row-actions .inspector-cell-actions {
-  justify-content: flex-start;
-}
-
-/* Audio opens nothing fullscreen, so delete can be the only thing in the
-   track: a rule with nothing above it separates nothing. */
-.inspector-media-row-actions > .inspector-cell-actions:first-child {
-  margin-top: 0;
+.inspector-media-row-preview .inspector-cell-actions {
+  margin: 10px 0 0;
   padding-top: 0;
   border-top: 0;
+}
+
+.inspector-media-row-preview .inspector-cell-actions.inspector-compact-actions > button {
+  width: 100%;
+  padding: 0 12px;
 }
 
 /* One control height across the dock, tag field included. */
@@ -13131,7 +13134,7 @@ textarea:focus-visible {
 @container (max-width: 1179px) {
   .inspector-media-row-content,
   .inspector-media-row-content.inspector-media-row-single-version {
-    grid-template-columns: var(--media-preview-w) minmax(0, 1fr);
+    grid-template-columns: var(--media-preview-col-w) minmax(0, 1fr);
   }
 
   .inspector-media-row-versions {

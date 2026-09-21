@@ -1673,7 +1673,8 @@ function MediaCellInspector({
   /* Every media cell lays its parts across the row instead of down it: the
      preview takes the row height at the shape the asset gives it, and
      everything that used to sit below the fold — versions, facts, tags,
-     inputs, actions — moves into the width the preview was wasting. The shape
+     inputs — moves into the width the preview was wasting, while the buttons
+     that act on the picture stay under the picture. The shape
      rides in as a custom property because only the asset knows it. Under a
      narrow dock the container queries fold this back into one column. */
   const trackStyle: MediaTrackStyle = {
@@ -1692,8 +1693,18 @@ function MediaCellInspector({
         ].filter(Boolean).join(' ')}
         style={trackStyle}
       >
+        {/* Fullscreen and delete belong to the picture, not to the facts
+            beside it, so they stack under the preview they act on. */}
         <div className="inspector-media-row-track inspector-media-row-preview">
           {mediaPreview}
+          {previewAsset && canOpenFullscreen && (
+            <CellMediaActions
+              address={address}
+              isImage={kind === 'image'}
+              onOpen={() => onOpenFullscreen(previewAsset)}
+            />
+          )}
+          {cleanupActions}
         </div>
         {showVersions && (
           <div className="inspector-media-row-track inspector-media-row-versions">
@@ -1724,14 +1735,6 @@ function MediaCellInspector({
           <div className="inspector-media-row-track inspector-media-row-actions">
             <PublishedPostInspectorDetails inputs={cell.inputs} />
             {inputSources}
-            {previewAsset && canOpenFullscreen && (
-              <CellMediaActions
-                address={address}
-                isImage={kind === 'image'}
-                onOpen={() => onOpenFullscreen(previewAsset)}
-              />
-            )}
-            {cleanupActions}
           </div>
         </div>
       </div>
