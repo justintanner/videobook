@@ -1,3 +1,4 @@
+import { notebookOccupiedSlots } from 'videobook-engine/notebook-grid'
 import { v7 as uuidv7 } from 'uuid'
 import { nextVerticalSlotFrom } from 'videobook-engine/notebook-grid'
 import type {
@@ -154,7 +155,7 @@ function splitSlots(
   outputCount: number,
   sourceSlot: NotebookGridSlot,
 ): { action: NotebookGridSlot; outputs: NotebookGridSlot[] } {
-  const occupied = cells.map((cell) => cell.slot)
+  const occupied = notebookOccupiedSlots(cells)
   const action = nextVerticalSlotFrom(sourceSlot, occupied)
   const outputs: NotebookGridSlot[] = []
   let cursor = action

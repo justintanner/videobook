@@ -1,3 +1,4 @@
+import { notebookCellOccupiedSlots } from 'videobook-engine/notebook-grid'
 import type {
   NotebookCell,
   NotebookDocument,
@@ -82,6 +83,10 @@ export function planImageGrouping(
 
   const targets = images.map((_, index) => lineTarget(anchor, index))
   const targetKeys = new Set(targets.map(notebookGridSlotKey))
+  if (document.cells.some((cell) => cell.type === 'timeline'
+    && notebookCellOccupiedSlots(cell).some((slot) => targetKeys.has(notebookGridSlotKey(slot))))) {
+    return { ok: false, code: 'capacity', message: 'Choose an arrangement that leaves the timeline row free.' }
+  }
 
   const displaced = readingOrder(
     document.cells.filter((cell) =>
@@ -94,7 +99,7 @@ export function planImageGrouping(
   const occupied: NotebookGridSlot[] = [
     ...document.cells
       .filter((cell) => !movingIds.has(cell.id))
-      .map((cell) => cell.slot),
+      .flatMap(notebookCellOccupiedSlots),
     ...targets,
   ]
   if (displaced.length > freeSlotCount(occupied)) {

@@ -121,6 +121,22 @@ function familyOf(type: NotebookCellType) {
 }
 
 describe('notebook family-lane auto-arrange', () => {
+  it('keeps Timeline rows intact while arranging every other family around them', () => {
+    const source = document([
+      cell('timeline', 1, 0, 'timeline'),
+      ...Array.from({ length: 9 }, (_, index) => cell(`image-${index}`, 10 + index, 3, 'image')),
+      cell('video', 25, 4, 'video'),
+      cell('audio', 27, 6, 'audio'),
+    ])
+    const slots = assignmentMap(planNotebookArrangement(source))
+    expect(slots.get('timeline')).toEqual({ row: 1, column: 0 })
+    expect([...slots].filter(([id]) => id !== 'timeline').every(([, slot]) => slot.row !== 1)).toBe(true)
+    expect(slots.get('image-8')).toEqual({ row: 2, column: 0 })
+    expect(slots.get('video')).toEqual({ row: 3, column: 0 })
+    const arranged = applyAssignments(source, slots)
+    expect(planNotebookArrangement(arranged)).toEqual(planNotebookArrangement(source))
+  })
+
   it('packs Images, Gen, and Videos into contiguous a/b/c rows', () => {
     const source = document([
       cell('vid-b', 8, 11, 'video'),

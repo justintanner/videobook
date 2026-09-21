@@ -8,6 +8,7 @@ import type {
 } from "videobook-engine";
 import {
   NOTEBOOK_GRID_ROW_COUNT,
+  notebookOccupiedSlots,
   notebookGridTag,
   parseNotebookGridAddress,
 } from "videobook-engine/notebook-grid";
@@ -53,9 +54,8 @@ function duplicateDestination(
       ? `${notebookGridTag(source.slot)} has no cell below it; choose a destination`
       : "Choose a destination because the source asset is not in this notebook");
   }
-  const occupied = notebook.cells.find((cell) =>
-    cell.slot.row === destination.row
-    && cell.slot.column === destination.column);
+  const occupied = notebookOccupiedSlots(notebook.cells).some((slot) =>
+    slot.row === destination.row && slot.column === destination.column);
   if (occupied) {
     throw new Error(`Notebook cell ${notebookGridTag(destination)} is occupied`);
   }

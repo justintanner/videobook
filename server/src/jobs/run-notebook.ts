@@ -284,7 +284,8 @@ export function notebookCellIsPaid(cell: NotebookCell): boolean {
 export function notebookCellIsRunnable(cell: NotebookCell): boolean {
   if (cell.inputs?.mediaRole === "extract-audio-output") return true;
   return (
-    cell.type !== "audio"
+    cell.type !== "timeline"
+    && cell.type !== "audio"
     && cell.type !== "image"
     && cell.type !== "video"
     && cell.type !== "character"

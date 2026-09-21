@@ -18,7 +18,7 @@ export function listAssetsDef(engine: Engine): ToolDef {
   return {
     name: "list_assets",
     description:
-      "List a bounded asset page with media and thumbnail URLs, optionally including notebook-referenced assets outside the page.",
+      "List a bounded asset page with media and thumbnail URLs, optionally including notebook and sequence-referenced assets outside the page.",
     schema: {
       book_id: z.string().describe("Book id"),
       sort: z.enum(["newest", "oldest"]).optional().describe("Sort order by creation date"),
@@ -112,6 +112,11 @@ export function listAssetsDef(engine: Engine): ToolDef {
                 })),
           )
         : new Set<string>();
+      if (include_referenced) {
+        for (const clip of engine.sequences.getPrimary().clips) {
+          referencedArtifactIds.add(clip.source.artifactId);
+        }
+      }
       // Hydration is deliberately unfiltered: a notebook needs the media it
       // references whether or not that asset carries the filtered tags.
       const referencedAssets = include_referenced

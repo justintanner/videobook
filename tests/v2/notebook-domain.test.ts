@@ -7,6 +7,7 @@ import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
 import {
   notebookCellDefinitionFingerprint,
+  notebookCellIsRunnable,
   notebookCellFingerprint,
   updateGenerationPlanState,
   writeGenerationPlanProvenance,
@@ -34,6 +35,39 @@ describe('v2 notebook domain tools', () => {
   afterEach(async () => {
     await books.close()
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  })
+
+  it('preserves full-row Timeline occupancy across MCP moves and relayout', async () => {
+    const created = await books.create('timeline-row')
+    if (!created.ok) throw new Error(created.error.message)
+    const managed = books.get(created.value.bookId)
+    if (!managed.ok) throw new Error(managed.error.message)
+    const engine = managed.value.engine
+    const notebookId = engine.notebooks.list()[0]!.id
+    const defs = new Map(videobookDomainDefs(engine, books).map((def) => [def.name, def]))
+    const invoke = (tool: string, args: Record<string, unknown>) => defs.get(tool)!.handler({ book_id: created.value.bookId, notebook_id: notebookId, ...args })
+    const timeline = resultJson(await invoke('create_notebook_cell', { cell: { type: 'timeline', slot: { row: 1, column: 0 } } })) as { id: string }
+    const prompt = resultJson(await invoke('create_notebook_cell', { cell: { type: 'prompt', slot: { row: 0, column: 7 }, prompt: 'A cat' } })) as { id: string }
+    const sequence = engine.sequences.getPrimary()
+    for (let column = 0; column < 8; column += 1) {
+      expect((await invoke('create_notebook_cell', { cell: { type: 'prompt', slot: { row: 1, column } } })).isError).toBe(true)
+      expect((await invoke('move_notebook_cells', { slots: [{ id: prompt.id, row: 1, column }] })).isError).toBe(true)
+    }
+    expect((await invoke('create_notebook_cell', { cell: { type: 'timeline', slot: { row: 3, column: 0 } } })).isError).toBe(true)
+    expect((await invoke('move_notebook_cells', { slots: [{ id: timeline.id, row: 0, column: 0 }] })).isError).toBe(true)
+    expect((await invoke('connect_notebook_cells', { source_cell_id: prompt.id, target_cell_id: timeline.id, target_input: 'input' })).isError).toBe(true)
+    expect((await invoke('connect_notebook_cells', { source_cell_id: timeline.id, target_cell_id: prompt.id, target_input: 'input' })).isError).toBe(true)
+    await executeRelayoutNotebook(engine, { type: 'relayout_notebook', bookId: created.value.bookId, notebookId })
+    const graph = engine.notebooks.read(notebookId)
+    if (!graph.ok) throw new Error(graph.error.message)
+    const row = graph.value.cells.find((cell) => cell.id === timeline.id)!
+    expect(row.slot).toEqual({ row: 1, column: 0 })
+    expect(notebookCellIsRunnable(row)).toBe(false)
+    expect(graph.value.cells.filter((cell) => cell.slot.row === 1)).toHaveLength(1)
+    resultJson(await invoke('delete_notebook_cell', { cell_id: timeline.id }))
+    expect(engine.sequences.getPrimary().clips).toEqual(sequence.clips)
+    expect(engine.sequences.getPrimary().sequenceId).toBe(sequence.sequenceId)
+    resultJson(await invoke('create_notebook_cell', { cell: { type: 'prompt', slot: { row: 1, column: 7 } } }))
   })
 
   it('validates creation and preview slots against the full notebook grid', () => {

@@ -1,3 +1,4 @@
+import { notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import type {
   Engine,
   EditIntent,
@@ -1318,6 +1319,6 @@ function firstEmptyNotebookSlot(notebook: {
   cells: NotebookCell[];
 }): { row: number; column: number } {
   return firstEmptyNotebookGridSlot(
-    notebook.cells.map((cell) => cell.slot),
+    notebookOccupiedSlots(notebook.cells),
   );
 }

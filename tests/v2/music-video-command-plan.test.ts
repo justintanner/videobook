@@ -78,7 +78,7 @@ function toolsFor(engine: Engine) {
 
 async function plan(
   engine: Engine,
-  request: Record<string, unknown>,
+  request: Record<string, unknown> | Record<string, unknown>[],
   expectedRevision = engine.head,
 ) {
   const tools = toolsFor(engine)
@@ -96,7 +96,7 @@ async function plan(
 
 async function commitPlan(
   engine: Engine,
-  request: Record<string, unknown>,
+  request: Record<string, unknown> | Record<string, unknown>[],
 ): Promise<Sequence> {
   const tools = toolsFor(engine)
   const planned = await plan(engine, request)
@@ -129,6 +129,80 @@ describe('music-video canonical sequence plans', () => {
       })
     }
     rootDir = undefined
+  })
+
+  it('assembles unlimited sequential clips and ripples removal on only the selected track', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-row-timeline-'))
+    const engine = createEngine({ rootDir, initialBookName: 'row-timeline' })
+    activeEngine = engine
+    const video = await createTimedArtifact(engine, 'video', 'short video', 15)
+    const audio = await createTimedArtifact(engine, 'audio', 'long audio', 480_000)
+    let sequence = engine.sequences.getPrimary()
+    const videoTrack = sequence.tracks.find((track) => track.kind === 'video')!
+    const audioTracks = sequence.tracks.filter((track) => track.kind === 'audio')
+    for (let index = 0; index < 12; index += 1) {
+      sequence = await commitPlan(engine, { kind: 'append', track_id: videoTrack.trackId, artifact_id: video.artifactId })
+    }
+    const videos = sequence.clips.filter((clip) => clip.trackId === videoTrack.trackId)
+    expect(videos.map((clip) => clip.timelineStartFrame).sort((a, b) => a - b)).toEqual(Array.from({ length: 12 }, (_, index) => index * 15))
+    expect(new Set(videos.map((clip) => clip.clipId)).size).toBe(12)
+    expect(videos.every((clip) => clip.durationFrames === 15 && 'audioPolicy' in clip && clip.audioPolicy === 'preserve-pitch' && !clip.audio?.muted)).toBe(true)
+    for (const track of audioTracks.slice(0, 2)) {
+      sequence = await commitPlan(engine, { kind: 'append', track_id: track.trackId, artifact_id: audio.artifactId })
+      sequence = await commitPlan(engine, { kind: 'append', track_id: track.trackId, artifact_id: audio.artifactId })
+    }
+    const otherTracks = sequence.clips.filter((clip) => clip.trackId !== videoTrack.trackId)
+    expect(otherTracks.map((clip) => clip.timelineStartFrame).sort((a, b) => a - b)).toEqual([0, 0, 300, 300])
+    const removed = videos.find((clip) => clip.timelineStartFrame === 15)!
+    sequence = await commitPlan(engine, { kind: 'remove_clip', clip_id: removed.clipId, ripple: true })
+    expect(sequence.clips.some((clip) => clip.clipId === removed.clipId)).toBe(false)
+    expect(sequence.clips.filter((clip) => clip.trackId !== videoTrack.trackId)).toEqual(otherTracks)
+    expect(sequence.clips.filter((clip) => clip.trackId === videoTrack.trackId).map((clip) => clip.timelineStartFrame).sort((a, b) => a - b))
+      .toEqual(Array.from({ length: 11 }, (_, index) => index * 15))
+    const stale = sequence.revision
+    const tracksBefore = sequence.tracks.length
+    for (let index = 0; index < 6; index += 1) {
+      expect((await engine.sequences.addTrack(sequence.sequenceId, { kind: 'audio' })).ok).toBe(true)
+    }
+    expect(engine.sequences.getPrimary().tracks).toHaveLength(tracksBefore + 6)
+    await expect(plan(engine, { kind: 'append', track_id: videoTrack.trackId, artifact_id: video.artifactId }, stale)).rejects.toThrow('Sequence revision changed')
+    await expect(plan(engine, { kind: 'append', track_id: audioTracks[0]!.trackId, artifact_id: video.artifactId })).rejects.toThrow('Choose an audio source')
+    expect((await engine.sequences.updateTrack(videoTrack.trackId, { locked: true })).ok).toBe(true)
+    await expect(plan(engine, { kind: 'append', track_id: videoTrack.trackId, artifact_id: video.artifactId })).rejects.toThrow('locked')
+    expect((await engine.sequences.updateTrack(videoTrack.trackId, { locked: false })).ok).toBe(true)
+    expect((await engine.files.write(video.artifactId, 'original.mp4', Buffer.from('replaced source bytes'))).ok).toBe(true)
+    await expect(plan(engine, { kind: 'append', track_id: videoTrack.trackId, artifact_id: video.artifactId })).rejects.toThrow('current source media')
+    engine.close()
+    activeEngine = createEngine({ rootDir })
+    expect(activeEngine.sequences.getPrimary().clips).toEqual(sequence.clips)
+  })
+
+  it('keeps batched appends in request order independently on each track', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-append-batch-'))
+    const engine = createEngine({ rootDir, initialBookName: 'append-batch' })
+    activeEngine = engine
+    const first = await createTimedArtifact(engine, 'video', 'first', 60)
+    const second = await createTimedArtifact(engine, 'video', 'second', 30)
+    const audio = await createTimedArtifact(engine, 'audio', 'audio', 96_000)
+    const before = engine.sequences.getPrimary()
+    const videoTrack = before.tracks.find((track) => track.kind === 'video')!.trackId
+    const audioTrack = before.tracks.find((track) => track.kind === 'audio')!.trackId
+    await commitPlan(engine, { kind: 'append', track_id: videoTrack, artifact_id: second.artifactId })
+    const after = await commitPlan(engine, [
+      { kind: 'append', track_id: videoTrack, artifact_id: first.artifactId },
+      { kind: 'append', track_id: audioTrack, artifact_id: audio.artifactId },
+      { kind: 'append', track_id: videoTrack, artifact_id: second.artifactId },
+      { kind: 'append', track_id: audioTrack, artifact_id: audio.artifactId },
+    ])
+    expect(after.clips.filter((clip) => clip.trackId === videoTrack).sort((left, right) => left.timelineStartFrame - right.timelineStartFrame)
+      .map((clip) => [clip.source.artifactId, clip.timelineStartFrame, clip.durationFrames]))
+      .toEqual([[second.artifactId, 0, 30], [first.artifactId, 30, 60], [second.artifactId, 90, 30]])
+    expect(after.clips.filter((clip) => clip.trackId === audioTrack).map((clip) => clip.timelineStartFrame).sort((a, b) => a - b)).toEqual([0, 60])
+    await expect(plan(engine, [
+      { kind: 'append', track_id: videoTrack, artifact_id: first.artifactId },
+      { kind: 'remove_clip', clip_id: after.clips[0]!.clipId, ripple: true },
+    ])).rejects.toThrow('plan other edits separately')
+    expect(engine.sequences.getPrimary()).toEqual(after)
   })
 
   it('applies an idempotent master soundtrack and atomic ordered appends', async () => {

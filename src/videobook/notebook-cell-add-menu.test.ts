@@ -14,12 +14,13 @@ describe('notebook cell add menu', () => {
   })
 
   it('returns every option for a blank search and none for an unknown search', () => {
-    expect(filterNotebookCellAddItems('')).toHaveLength(13)
+    expect(filterNotebookCellAddItems('')).toHaveLength(14)
     expect(filterNotebookCellAddItems('missing cell type')).toEqual([])
   })
 
   it('recognizes only cell types exposed by the add menu', () => {
     expect(isNotebookCellAddType('prompt')).toBe(true)
+    expect(isNotebookCellAddType('timeline')).toBe(true)
     expect(isNotebookCellAddType('analysis')).toBe(false)
   })
 

@@ -29,6 +29,7 @@ const notebookCellAddItems = [
   { type: 'split_video', label: 'Split video', group: 'Edit' },
   { type: 'concat', label: 'Concat', group: 'Edit' },
   { type: 'splice', label: 'Splice', group: 'Edit' },
+  { type: 'timeline', label: 'Timeline', group: 'Edit' },
 ] as const satisfies readonly NotebookCellAddItemShape[]
 
 type NotebookCellAddItem = (typeof notebookCellAddItems)[number]

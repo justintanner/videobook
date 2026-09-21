@@ -56,6 +56,7 @@ const cellFamilyByType: Record<NotebookCellType, NotebookCellFamily> = {
   image: 'image',
   prompt: 'gen',
   splice: 'video',
+  timeline: 'data',
   split_video: 'video',
   video: 'video',
 }

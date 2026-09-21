@@ -1,3 +1,4 @@
+import { notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import type { Engine, NotebookCell } from "videobook-engine";
 import {
   nextHorizontalSlotFrom,
@@ -75,7 +76,7 @@ export async function createPublishedPostCell(args: {
       if (!anchor) {
         throw new Error(`Source cell not found for posted asset ${args.assetId}`);
       }
-      const occupied = notebook.cells.map((cell) => cell.slot);
+      const occupied = notebookOccupiedSlots(notebook.cells);
       const slot = nextHorizontalSlotFrom(slotRight(anchor.slot), occupied);
       const cell = args.engine.notebooks.createCell({
         type: publishedCellType(anchor),

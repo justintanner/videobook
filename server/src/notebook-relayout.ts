@@ -5,6 +5,7 @@ import type {
   NotebookGridSlot,
 } from "videobook-engine";
 import {
+  notebookCellOccupiedSlots,
   nearestOriginNotebookGridSlot,
   nextHorizontalSlotFrom,
   nextVerticalSlotFrom,
@@ -85,6 +86,11 @@ function assignDirectionalSlots(document: NotebookDocument): NotebookDocument {
   }
 
   const cells = [...document.cells].sort(bySlotThenId);
+  for (const cell of cells) {
+    if (cell.type !== "timeline") continue;
+    newSlots.set(cell.id, cell.slot);
+    occupied.push(...notebookCellOccupiedSlots(cell));
+  }
 
   for (const cell of cells) {
     if (

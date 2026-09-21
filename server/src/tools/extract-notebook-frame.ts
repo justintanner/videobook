@@ -1,3 +1,4 @@
+import { notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import type {
   Engine,
   NotebookCell,
@@ -120,7 +121,7 @@ export function extractNotebookFrameDef(engine: Engine): ToolDef {
           }
           const anchor = notebook.cells.find((cell) => cell.id === source.id);
           if (!anchor) throw new Error(`Source cell not found: ${source.id}`);
-          const occupied = notebook.cells.map((cell) => cell.slot);
+          const occupied = notebookOccupiedSlots(notebook.cells);
           const slot = nextHorizontalSlotFrom(slotRight(anchor.slot), occupied);
           const cell = engine.notebooks.createCell({
             type: "image",

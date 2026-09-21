@@ -10,6 +10,8 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { chromium } from 'playwright'
 import type { Browser, ConsoleMessage, Page, Route } from 'playwright'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { MVP_CONTRACT_VERSION, type EditIntent, type NotebookDocument, type Sequence } from 'videobook-engine'
+import { v7 as uuidv7 } from 'uuid'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
 
 const execFileAsync = promisify(execFile)
@@ -829,6 +831,146 @@ describe('chat composer browser flow', () => {
     }).toBe(true)
     return page
   }
+
+  it('assembles and persists a full-row Timeline with bounded rendering for long sequences', async () => {
+    const page = await openApp()
+    const client = new Client({ name: 'timeline-browser-e2e', version: '1' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    let timelineBookId = ''
+    const call = async <T,>(name: string, args: Record<string, unknown> = {}): Promise<T> => resultValue(await client.callTool({
+      name, arguments: { book_id: timelineBookId, ...args },
+    })) as T
+    try {
+      timelineBookId = (await call<{ bookId: string }>('create_book', { name: 'timeline-ui-e2e' })).bookId
+      const timelineNotebookId = (await call<Array<{ id: string }>>('list_notebooks'))[0]!.id
+      const uploadedVideo = await call<{ assetId: string }>('upload_file', { filename: 'split-source.mp4', data: (await readFile(join(rootDir, 'split-source.mp4'))).toString('base64') })
+      await call('upload_file', { filename: 'music-video-master.wav', data: (await readFile(join(rootDir, 'music-video-master.wav'))).toString('base64') })
+      await call('create_notebook_cell', { notebook_id: timelineNotebookId, cell: { type: 'video', slot: { row: 0, column: 7 }, output_artifact_id: uploadedVideo.assetId } })
+      await expect.poll(async () => (await call<Array<{ state: string }>>('list_jobs')).every((job) => job.state === 'done'), { timeout: 60_000 }).toBe(true)
+      await page.evaluate((id) => localStorage.setItem('videobook.active-book', id), timelineBookId)
+      await page.reload({ waitUntil: 'commit' })
+      await expect.poll(() => page.locator('.brand-project-menu-toggle strong').textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe('timeline-ui-e2e')
+      const addTimeline = async () => {
+        await page.getByLabel('Add cell', { exact: true }).click()
+        await page.getByLabel('Search cell types').fill('Timeline')
+        await page.getByRole('button', { name: 'Timeline', exact: true }).click()
+      }
+      await addTimeline()
+      const timeline = page.locator('.notebook-timeline')
+      await timeline.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      const dimensions = await timeline.evaluate((element) => ({ width: (element as HTMLElement).offsetWidth, height: (element as HTMLElement).offsetHeight }))
+      expect(dimensions).toEqual({ width: 2088, height: 240 })
+      const notebook = await call<NotebookDocument>('get_notebook', { notebook_id: timelineNotebookId })
+      const timelineCell = notebook.cells.find((cell) => cell.type === 'timeline')!
+      expect(timelineCell.slot).toEqual({ row: 1, column: 0 })
+      await addTimeline()
+      expect(await timeline.count()).toBe(1)
+      expect((await call<NotebookDocument>('get_notebook', { notebook_id: timelineNotebookId })).cells.filter((cell) => cell.type === 'timeline')).toHaveLength(1)
+      let current = await call<Sequence>('get_primary_sequence')
+      const mainTrack = current.tracks.find((track) => track.kind === 'video')!
+      const audioTracks = current.tracks.filter((track) => track.kind === 'audio')
+      let clipCount = 0
+      const append = async (trackName: string) => {
+        await timeline.getByLabel(`Add clip to ${trackName}`, { exact: true }).click()
+        const picker = page.getByRole('dialog', { name: 'Add a timeline clip' })
+        await picker.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+        expect(await picker.getByLabel('Filter timeline sources').evaluate((element) => element === document.activeElement)).toBe(true)
+        await picker.locator('.timeline-source-list button').first().click()
+        clipCount += 1
+        await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).clips.length, { timeout: MCP_ROUNDTRIP_MS }).toBe(clipCount)
+        await picker.waitFor({ state: 'hidden', timeout: MCP_ROUNDTRIP_MS })
+      }
+      await append(mainTrack.name)
+      await append(mainTrack.name)
+      await append(audioTracks[0]!.name)
+      await append(audioTracks[0]!.name)
+      await append(audioTracks[1]!.name)
+      current = await call<Sequence>('get_primary_sequence')
+      expect(current.clips.filter((clip) => clip.trackId === mainTrack.trackId).map((clip) => clip.timelineStartFrame).sort((a, b) => a - b)).toEqual([0, 90])
+      const audioBefore = current.clips.filter((clip) => clip.trackId !== mainTrack.trackId)
+      const secondClip = current.clips.find((clip) => clip.trackId === mainTrack.trackId && clip.timelineStartFrame === 90)!
+      await timeline.locator(`[data-clip-id="${secondClip.clipId}"]`).click()
+      await expect.poll(() => page.locator('.timeline-preview-body footer span').first().textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe('F90')
+      const firstClip = current.clips.find((clip) => clip.trackId === mainTrack.trackId && clip.timelineStartFrame === 0)!
+      await timeline.locator(`[data-clip-id="${firstClip.clipId}"]`).click()
+      await timeline.getByRole('button', { name: 'Remove clip', exact: true }).click()
+      await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).clips.length, { timeout: MCP_ROUNDTRIP_MS }).toBe(4)
+      current = await call<Sequence>('get_primary_sequence')
+      expect(current.clips.filter((clip) => clip.trackId !== mainTrack.trackId)).toEqual(audioBefore)
+      expect(current.clips.find((clip) => clip.trackId === mainTrack.trackId)?.timelineStartFrame).toBe(0)
+      await timeline.getByRole('button', { name: '+ Audio track', exact: true }).click()
+      await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).tracks.length, { timeout: MCP_ROUNDTRIP_MS }).toBe(current.tracks.length + 1)
+      await timeline.getByRole('button', { name: 'Preview', exact: true }).click()
+      const player = page.locator('.timeline-preview-body .canonical-player')
+      await player.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      await player.focus()
+      await player.press('Space')
+      await expect.poll(async () => Number((await player.locator('footer span').first().textContent())?.replace('F', '')), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(3)
+      await player.press('k')
+      expect(await player.locator('video').count()).toBe(1)
+      expect(await player.locator('audio').count()).toBeGreaterThanOrEqual(2)
+      const contained = await player.locator('video').evaluate((element) => {
+        const media = element.getBoundingClientRect()
+        const dock = element.closest('.timeline-preview-body')!.getBoundingClientRect()
+        return media.top >= dock.top - 1 && media.bottom <= dock.bottom + 1
+      })
+      await page.screenshot({ path: '/tmp/videobook-timeline-preview.png' })
+      expect(contained).toBe(true)
+      const exportCalls = observedCalls.filter((call) => call.name === 'plan_sequence_export').length
+      await timeline.getByRole('button', { name: 'Export', exact: true }).click()
+      await expect.poll(() => observedCalls.filter((call) => call.name === 'plan_sequence_export').length, { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(exportCalls)
+      await page.getByRole('dialog', { name: 'Command plan review' }).waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      await page.keyboard.press('Escape')
+      await dismissConfirmStatus(page)
+      await collapseComposerDock(page)
+      page.once('dialog', (dialog) => { void dialog.accept() })
+      await timeline.getByLabel('Remove Timeline element').click()
+      await timeline.waitFor({ state: 'hidden', timeout: MCP_ROUNDTRIP_MS })
+      expect((await call<Sequence>('get_primary_sequence')).clips).toEqual(current.clips)
+      await addTimeline()
+      await timeline.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      await page.reload({ waitUntil: 'commit' })
+      await timeline.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      expect(await timeline.locator('.timeline-clip').count()).toBe(4)
+      await collapseComposerDock(page)
+      for (let index = 0; index < 20; index += 1) await call('add_sequence_track', { kind: 'audio' })
+      current = await call<Sequence>('get_primary_sequence')
+      const sourceClip = current.clips.find((clip) => clip.trackId === mainTrack.trackId)!
+      const intent: EditIntent = {
+        intentVersion: MVP_CONTRACT_VERSION, commandId: uuidv7(), sequenceId: current.sequenceId,
+        baseRevision: current.revision, actor: 'timeline-browser-test', sourceSurface: 'ui', confirmationPolicy: 'reversible-single-step',
+        operations: Array.from({ length: 500 }, (_, index) => ({ kind: 'insert-clip', mode: 'insert', placement: {
+          trackId: mainTrack.trackId, timelineStartFrame: (index + 1) * 90, durationFrames: 90,
+          source: sourceClip.source, audioPolicy: 'preserve-pitch',
+        } })),
+      }
+      const preview = await call<{ valid: boolean; previewHash: string }>('preview_edit_intent', { intent })
+      expect(preview.valid).toBe(true)
+      await call('commit_edit_intent', { intent, preview_hash: preview.previewHash })
+      await expect.poll(() => timeline.locator('.notebook-timeline-header').textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('25:03')
+      expect(await timeline.locator('.timeline-clip').count()).toBeLessThan(40)
+      expect(await timeline.locator('.timeline-track-audio').count()).toBeLessThan(10)
+      const horizontal = timeline.locator('.timeline-horizontal')
+      await horizontal.evaluate((element) => { element.scrollLeft = element.scrollWidth })
+      await expect.poll(() => horizontal.evaluate((element) => element.scrollLeft)).toBeGreaterThan(50_000)
+      const audioScroll = timeline.locator('.timeline-audio-viewport')
+      await audioScroll.evaluate((element) => { element.scrollTop = element.scrollHeight })
+      await expect.poll(() => timeline.locator('.timeline-track-label').allTextContents()).toContain(current.tracks.filter((track) => track.kind === 'audio').at(-1)!.name)
+      await timeline.getByLabel('Zoom timeline in', { exact: true }).click()
+      expect(await timeline.locator('.timeline-clip').count()).toBeLessThan(40)
+      const lastAudio = current.tracks.filter((track) => track.kind === 'audio').at(-1)!
+      await timeline.getByLabel(`Remove ${lastAudio.name}`, { exact: true }).click()
+      await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).tracks.some((track) => track.trackId === lastAudio.trackId), { timeout: MCP_ROUNDTRIP_MS }).toBe(false)
+      await page.screenshot({ path: '/tmp/videobook-timeline-long.png' })
+    } finally {
+      await page.evaluate((id) => localStorage.setItem('videobook.active-book', id), bookId)
+      if (timelineBookId) await call('delete_book', { confirm_name: 'timeline-ui-e2e' })
+      await client.close()
+      notebookDirty = true
+    }
+  }, 180_000)
 
   it('creates and renames projects as slugs in the main dropdown', async () => {
     const page = await openApp()

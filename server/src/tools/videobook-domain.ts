@@ -1,3 +1,4 @@
+import { notebookCellOccupiedSlots, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import type {
   Engine,
   EntityDocument,
@@ -1424,7 +1425,7 @@ export function videobookDomainDefs(
                 ...(cell.label === undefined ? {} : { label: cell.label }),
                 slot: nextHorizontalSlotFrom(
                   slotRight(cell.slot),
-                  cells.map((candidate) => candidate.slot),
+                  notebookOccupiedSlots(cells),
                 ),
                 inputs: {
                   analysisRole: "result",
@@ -1667,10 +1668,13 @@ export function videobookDomainDefs(
               if (requested.length === 1) {
                 const destination = requested[0]!;
                 const source = cellsById.get(destination.id)!;
-                const occupied = notebook.cells.find((cell) =>
-                  cell.id !== source.id
-                  && cell.slot.row === destination.row
-                  && cell.slot.column === destination.column);
+                const footprint = new Set(notebookCellOccupiedSlots({ type: source.type, slot: destination })
+                  .map((slot) => `${slot.row}:${slot.column}`));
+                const occupied = notebook.cells.find((cell) => cell.id !== source.id
+                  && notebookCellOccupiedSlots(cell).some((slot) => footprint.has(`${slot.row}:${slot.column}`)));
+                if (occupied && (source.type === "timeline" || occupied.type === "timeline")) {
+                  throw new Error("Choose an empty row for the timeline and keep its occupied row free");
+                }
                 const moved = {
                   ...notebook,
                   cells: notebook.cells.map((cell) => {

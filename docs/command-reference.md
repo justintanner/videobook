@@ -182,7 +182,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `inspect_generation_request` (historical names, not exposed: `generation_payload`) — Read the persisted Kie request payload, task meta, and failure info for a single asset. Used by the /inbox hover inspector to show what was sent to the provider.
 - `invert_image` — In-place inverts an img-* asset and regenerates crops.
 - `isolate_vocals` — Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).
-- `list_assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook-referenced assets outside the page.
+- `list_assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook and sequence-referenced assets outside the page.
 - `list_book_actions` — List authored semantic revisions for a book
 - `list_books` — List all Videobook books
 - `list_cell_generations` — List recorded generation attempts for a notebook cell: one attempt per dispatch, each with its per-attempt transition timeline.
@@ -520,7 +520,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/keys` — Open the provider API keys / settings screen; UI: `open_provider_keys`
 - `/keywords` — Animate transcript keywords in face-safe open space, or omit words for automatic selection; MCP: `animate_keywords`
 - `/landscape` — Show landscape crop (1920x1080); UI: `viewer_set_landscape`
-- `/list-assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook-referenced assets outside the page.; MCP: `list_assets`
+- `/list-assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook and sequence-referenced assets outside the page.; MCP: `list_assets`
 - `/list-book-actions` — List authored semantic revisions for a book; MCP: `list_book_actions`
 - `/list-books` — List all Videobook books; MCP: `list_books`
 - `/list-cell-generations` — List recorded generation attempts for a notebook cell: one attempt per dispatch, each with its per-attempt transition timeline.; MCP: `list_cell_generations`

@@ -51,11 +51,11 @@ describe('timeline endpoints over HTTP MCP', () => {
     await expect.poll(async () => (await jobs()).every((job) => ['done', 'failed', 'aborted'].includes(job.state)), { timeout: 60_000 }).toBe(true)
     expect((await jobs()).filter((job) => job.state !== 'done')).toEqual([])
   }
-  const upload = async (kind: 'video' | 'audio', duration = 4) => {
+  const upload = async (kind: 'video' | 'audio', duration = 4, frequency = 440) => {
     const filename = `${++fixtureId}.${kind === 'video' ? 'mp4' : 'wav'}`
     const path = join(rootDir, filename)
     await execFileAsync(FFMPEG, ['-y', '-f', 'lavfi', '-i',
-      kind === 'video' ? `testsrc2=s=160x90:r=30:d=${duration}` : `sine=frequency=440:duration=${duration}`,
+      kind === 'video' ? `testsrc2=s=160x90:r=30:d=${duration}` : `sine=frequency=${frequency}:duration=${duration}`,
       ...(kind === 'video' ? ['-c:v', 'libx264', '-pix_fmt', 'yuv420p'] : ['-c:a', 'pcm_s16le']), path])
     const result = await call<{ assetId: string; processingError?: string }>('upload_file', { filename, data: (await readFile(path)).toString('base64') })
     expect(result.processingError).toBeUndefined()
@@ -232,6 +232,66 @@ describe('timeline endpoints over HTTP MCP', () => {
     } })
     expect(rejected.isError).toBe(true)
     expect(await sequence()).toEqual(before)
+  })
+
+  it('exports full-length Timeline appends with original video sound and multiple audio tracks', async () => {
+    const path = join(rootDir, 'video-with-sound.mp4')
+    await execFileAsync(FFMPEG, ['-y', '-f', 'lavfi', '-i', 'testsrc2=s=160x90:r=30:d=1',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=1',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', path])
+    const video = await call<{ assetId: string }>('upload_file', { filename: 'video-with-sound.mp4', data: (await readFile(path)).toString('base64') })
+    await idle()
+    const audio = await upload('audio', 2, 880)
+    const longAudio = await upload('audio', 3, 1320)
+    const current = await sequence()
+    const mainTrack = current.tracks.find((track) => track.kind === 'video')!
+    const audioTracks = current.tracks.filter((track) => track.kind === 'audio')
+    for (const [trackId, artifactId] of [
+      [mainTrack.trackId, video.assetId], [mainTrack.trackId, video.assetId],
+      [audioTracks[0]!.trackId, audio], [audioTracks[1]!.trackId, longAudio],
+    ]) {
+      const planned = await call<{ stages: Array<{ intent: EditIntent }> }>('plan_sequence_edit', {
+        source_surface: 'ui', actor: 'timeline-test', expected_revision: (await sequence()).revision,
+        request: { kind: 'append', track_id: trackId, artifact_id: artifactId },
+      })
+      const intent = planned.stages[0]!.intent
+      const preview = await call<{ valid: boolean; previewHash: string }>('preview_edit_intent', { intent })
+      expect(preview.valid).toBe(true)
+      await call('commit_edit_intent', { intent, preview_hash: preview.previewHash })
+    }
+    expect(primaryClips(await sequence()).map((clip) => clip.timelineStartFrame).sort((a, b) => a - b)).toEqual([0, 30])
+    const settings = { sequence_revision: 'current', orientation: 'landscape', captions: 'omit' }
+    const validation = await call<{ revision: string }>('validate_sequence_export', settings)
+    await call('enqueue_sequence_export', { ...settings, sequence_revision: validation.revision, confirm: true })
+    await idle()
+    const output = (await jobs()).find((job) => job.type === 'export_sequence')!.result!.artifactId
+    const response = await fetch(`${server!.url.replace('/mcp', '')}/files/${bookId}/${output}/original.mp4`)
+    expect(response.status).toBe(200)
+    const exported = join(rootDir, 'timeline-export.mp4')
+    await writeFile(exported, Buffer.from(await response.arrayBuffer()))
+    const probe = await probeVideo(exported)
+    expect(probe.videoDuration).toBeCloseTo(3, 1)
+    expect(probe.audioDuration).toBeCloseTo(3, 1)
+    const signal = async (start: string) => (await execFileAsync(FFMPEG, ['-v', 'error', '-ss', start, '-i', exported,
+      '-t', '0.5', '-vn', '-ac', '1', '-ar', '16000', '-f', 'f32le', 'pipe:1'], { encoding: 'buffer', maxBuffer: 2_000_000 })).stdout
+    const amplitude = (pcm: Buffer, frequency: number) => {
+      let real = 0
+      let imaginary = 0
+      const samples = pcm.length / 4
+      for (let index = 0; index < samples; index += 1) {
+        const angle = 2 * Math.PI * frequency * index / 16000
+        const sample = pcm.readFloatLE(index * 4)
+        real += sample * Math.cos(angle)
+        imaginary += sample * Math.sin(angle)
+      }
+      return 2 * Math.hypot(real, imaginary) / samples
+    }
+    const mixed = await signal('0.25')
+    for (const frequency of [440, 880, 1320]) expect(amplitude(mixed, frequency)).toBeGreaterThan(0.004)
+    const tail = await signal('2.25')
+    expect(amplitude(tail, 1320)).toBeGreaterThan(0.004)
+    expect(amplitude(tail, 440)).toBeLessThan(0.001)
+    expect(amplitude(tail, 880)).toBeLessThan(0.001)
   })
 
   it('exports the trimmed duration after editing audio fades', async () => {

@@ -1,3 +1,4 @@
+import { notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import type {
   Engine,
   NotebookCell,
@@ -564,7 +565,7 @@ function allocateGenerationResult(
   },
 ): AllocatedGenerationResult {
   const producer = requireProducer(document, producerCellId, spec);
-  const occupied = document.cells.map((cell) => cell.slot);
+  const occupied = notebookOccupiedSlots(document.cells);
   const created = engine.notebooks.createCell({
     type: spec.outputType,
     label: generationOutputLabel(producer, spec.labelSuffix),

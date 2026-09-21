@@ -48,6 +48,31 @@ function node(id: string, row: number, column: number): Node<TestData> {
 }
 
 describe('notebook grid', () => {
+  it('reserves whole Timeline rows for creation, moves and generation', () => {
+    const timeline = { ...node('timeline', 1, 0), data: { ...node('timeline', 1, 0).data, kind: 'timeline' } }
+    const cells = [node('source', 0, 7), timeline]
+    for (let column = 0; column < 8; column += 1) {
+      expect(resolveNotebookGridMove(cells, 'source', { row: 1, column }).map((item) => item.data.slot))
+        .toEqual(cells.map((item) => item.data.slot))
+    }
+    expect(resolveNotebookGridMove(cells, 'timeline', { row: 0, column: 3 }).map((item) => item.data.slot))
+      .toEqual(cells.map((item) => item.data.slot))
+    expect(resolveNotebookGridMove(cells, 'timeline', { row: 2, column: 5 })[1]?.data.slot).toEqual({ row: 2, column: 0 })
+    expect(resolveNotebookGridGroupMove(cells, 'source', ['source', 'timeline'], { row: 0, column: 6 }).map((item) => item.data.slot))
+      .toEqual(cells.map((item) => item.data.slot))
+    expect(resolveNotebookGridGroupMove(cells, 'source', ['source', 'timeline'], { row: 2, column: 7 }).map((item) => item.data.slot))
+      .toEqual([{ row: 2, column: 7 }, { row: 3, column: 0 }])
+    const row = { type: 'timeline' as const, slot: timeline.data.slot }
+    expect(nextNotebookGridSlot([timeline, ...Array.from({ length: 8 }, (_, column) => node(String(column), 0, column))]))
+      .toEqual({ row: 2, column: 0 })
+    expect(nextNotebookCreationSlot('timeline', [row, { type: 'image', slot: { row: 0, column: 7 } }]))
+      .toEqual({ row: 2, column: 0 })
+    expect(nextNotebookVideoGenerationSlot([row, { type: 'image', slot: { row: 0, column: 0 } }]))
+      .toEqual({ row: 2, column: 0 })
+    expect(() => nextNotebookCreationSlot('timeline', Array.from({ length: 64 }, (_, row) => ({ type: 'image' as const, slot: { row, column: 7 } }))))
+      .toThrow('empty row')
+  })
+
   it('maps pixels into the fixed @a1 through @bl8 board', () => {
     expect(notebookGridSlot({ x: -800, y: -100 })).toEqual({
       row: 0,

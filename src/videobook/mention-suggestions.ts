@@ -1,3 +1,4 @@
+import { notebookCellOccupiedSlots } from 'videobook-engine/notebook-grid'
 import { formatMediaTime } from './notebook-cell-presentation'
 import {
   NOTEBOOK_GRID_COLUMN_COUNT,
@@ -253,7 +254,7 @@ export function notebookAddressSuggestions(
   const filter = notebookMentionPrefixAtEnd(input)
   if (filter === undefined) return []
   const occupied = new Map(
-    cells.map((cell) => [`${cell.slot.row}:${cell.slot.column}`, cell]),
+    cells.flatMap((cell) => notebookCellOccupiedSlots(cell).map((slot) => [`${slot.row}:${slot.column}`, cell] as const)),
   )
   const suggestions: NotebookAddressSuggestion[] = []
   for (let row = 0; row < NOTEBOOK_GRID_ROW_COUNT; row += 1) {
@@ -261,6 +262,7 @@ export function notebookAddressSuggestions(
       const tag = notebookGridTag({ row, column })
       if (!tag.slice(1).includes(filter) || excludeValues.has(tag)) continue
       const cell = occupied.get(`${row}:${column}`)
+      if (cell?.type === 'timeline' && column !== cell.slot.column) continue
       suggestions.push({
         value: tag,
         label: tag,

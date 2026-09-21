@@ -1,6 +1,9 @@
 import type { Node, XYPosition } from '@xyflow/react'
 import {
   firstEmptyNotebookGridSlot,
+  firstEmptyNotebookGridRow,
+  notebookCellOccupiedSlots,
+  notebookOccupiedSlots,
   isNotebookGridSlot,
   nextHorizontalSlotFrom,
   nextVerticalSlotFrom,
@@ -83,7 +86,8 @@ export function snapNotebookGridMove<T extends NotebookGridData>(
   id: string,
   requested: NotebookGridSlot,
 ): Array<Node<T>> {
-  const slot = boundedSlot(requested)
+  const moving = nodes.find((node) => node.id === id)
+  const slot = boundedSlot(moving?.data.kind === 'timeline' ? { ...requested, column: 0 } : requested)
   return nodes.map((node) => node.id === id
     ? { ...node, position: notebookGridPosition(slot) }
     : node)
@@ -96,11 +100,18 @@ export function resolveNotebookGridMove<T extends NotebookGridData>(
 ): Array<Node<T>> {
   const moving = nodes.find((node) => node.id === id)
   if (!moving) return [...nodes]
-  const target = boundedSlot(requested)
+  const target = boundedSlot(moving.data.kind === 'timeline' ? { ...requested, column: 0 } : requested)
   const source = moving.data.slot
+  const targetKeys = new Set(notebookCellOccupiedSlots({ type: String(moving.data.kind), slot: target }).map(notebookGridSlotKey))
   const occupied = nodes.find((node) =>
     node.id !== id
-    && notebookGridSlotKey(node.data.slot) === notebookGridSlotKey(target))
+    && notebookCellOccupiedSlots({ type: String(node.data.kind), slot: node.data.slot })
+      .some((slot) => targetKeys.has(notebookGridSlotKey(slot))))
+  if (occupied && (moving.data.kind === 'timeline' || occupied.data.kind === 'timeline')) {
+    return nodes.map((node) => node.id === id
+      ? { ...node, position: notebookGridPosition(source) }
+      : node)
+  }
 
   return nodes.map((node) => {
     const slot = node.id === id
@@ -143,12 +154,16 @@ export function resolveNotebookGridGroupMove<T extends NotebookGridData>(
     return [node.id, slot]
   }))
   const targetKeys = new Set(
-    [...targets.values()].map(notebookGridSlotKey),
+    moving.flatMap((node) => notebookCellOccupiedSlots({
+      type: String(node.data.kind), slot: targets.get(node.id)!,
+    })).map(notebookGridSlotKey),
   )
   const rejected = [...targets.values()].some((slot) => !isNotebookGridSlot(slot))
+    || moving.some((node) => node.data.kind === 'timeline' && columnDelta !== 0)
     || nodes.some((node) =>
       !movingIds.has(node.id)
-      && targetKeys.has(notebookGridSlotKey(node.data.slot)))
+      && notebookCellOccupiedSlots({ type: String(node.data.kind), slot: node.data.slot })
+        .some((slot) => targetKeys.has(notebookGridSlotKey(slot))))
 
   if (rejected) {
     return nodes.map((node) => movingIds.has(node.id)
@@ -181,7 +196,9 @@ export function changedNotebookGridNodes<T extends NotebookGridData>(
 export function nextNotebookGridSlot<T extends NotebookGridData>(
   nodes: readonly Node<T>[],
 ): NotebookGridSlot {
-  return firstEmptyNotebookGridSlot(nodes.map((node) => node.data.slot))
+  return firstEmptyNotebookGridSlot(nodes.flatMap((node) => notebookCellOccupiedSlots({
+    type: String(node.data.kind), slot: node.data.slot,
+  })))
 }
 
 const imageCellTypes = new Set([
@@ -244,7 +261,7 @@ export function nextNotebookVideoGenerationSlot(
   sourceSlots: readonly NotebookGridSlot[] = [],
   lastWorkSlot: NotebookGridSlot | null = null,
 ): NotebookGridSlot {
-  const occupied = cells.map((cell) => cell.slot)
+  const occupied = notebookOccupiedSlots(cells)
   if (sourceSlots.length > 0) {
     const waveRow = Math.max(...sourceSlots.map((slot) => slot.row)) + 1
     const baseRowSources = sourceSlots.every((slot) => slot.row === 0)
@@ -272,7 +289,7 @@ export function allocateNotebookVideoGenerationSlots(
   sourceSlots: readonly NotebookGridSlot[] = [],
   lastWorkSlot: NotebookGridSlot | null = null,
 ): { tile: NotebookGridSlot; output: NotebookGridSlot } {
-  const occupied = cells.map((cell) => cell.slot)
+  const occupied = notebookOccupiedSlots(cells)
   const tile = nextNotebookVideoGenerationSlot(cells, sourceSlots, lastWorkSlot)
   const output = nextVerticalSlotFrom(slotBelowForPair(tile), [...occupied, tile])
   return { tile, output }
@@ -284,7 +301,7 @@ export function nextNotebookHorizontalGenerationSlot(
   sourceSlots: readonly NotebookGridSlot[] = [],
   lastWorkSlot: NotebookGridSlot | null = null,
 ): NotebookGridSlot {
-  const occupied = cells.map((cell) => cell.slot)
+  const occupied = notebookOccupiedSlots(cells)
   if (sourceSlots.length === 0) {
     const lastWork = optionalLastWorkSlot(lastWorkSlot)
     return nextHorizontalSlotFrom(lastWork ?? { row: 0, column: 0 }, occupied)
@@ -307,7 +324,7 @@ export function allocateNotebookHorizontalGenerationSlots(
   sourceSlots: readonly NotebookGridSlot[] = [],
   lastWorkSlot: NotebookGridSlot | null = null,
 ): { tile: NotebookGridSlot; output: NotebookGridSlot } {
-  const occupied = cells.map((cell) => cell.slot)
+  const occupied = notebookOccupiedSlots(cells)
   const tile = nextNotebookHorizontalGenerationSlot(
     cells,
     sourceSlots,
@@ -326,6 +343,7 @@ export function nextNotebookCreationSlot(
   cells: ReadonlyArray<{ type: string; slot: NotebookGridSlot }>,
   lastWorkSlot: NotebookGridSlot | null = null,
 ): NotebookGridSlot {
+  if (type === 'timeline') return firstEmptyNotebookGridRow(notebookOccupiedSlots(cells))
   if (type === 'generate_video') {
     return nextNotebookVideoGenerationSlot(cells, [], lastWorkSlot)
   }
@@ -334,9 +352,9 @@ export function nextNotebookCreationSlot(
   }
   const lastWork = optionalLastWorkSlot(lastWorkSlot)
   if (lastWork) {
-    return nextHorizontalSlotFrom(lastWork, cells.map((cell) => cell.slot))
+    return nextHorizontalSlotFrom(lastWork, notebookOccupiedSlots(cells))
   }
-  return firstEmptyNotebookGridSlot(cells.map((cell) => cell.slot))
+  return firstEmptyNotebookGridSlot(notebookOccupiedSlots(cells))
 }
 
 export interface NotebookGridMetrics {

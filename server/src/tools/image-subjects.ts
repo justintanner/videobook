@@ -1,3 +1,4 @@
+import { notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Engine, Job, NotebookCell } from "videobook-engine";
@@ -553,7 +554,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
                 if (!currentSource || !sourceCellAcceptsArtifact(currentSource, artifact_id)) {
                   throw new Error("The pinned source cell changed before placement");
                 }
-                const occupied = current.cells.map((cell) => cell.slot);
+                const occupied = notebookOccupiedSlots(current.cells);
                 const producer = engine.notebooks.createCell({
                   type: "generate_image",
                   label: actionLabel,

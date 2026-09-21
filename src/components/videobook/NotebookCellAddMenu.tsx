@@ -32,6 +32,7 @@ const cellPaletteIcons: Record<NotebookCellAddType, LucideIcon> = {
   split_video: Film,
   concat: Film,
   splice: Film,
+  timeline: Film,
 }
 
 type NotebookCellAddMenuProps = {

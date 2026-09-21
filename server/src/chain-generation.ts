@@ -1,3 +1,4 @@
+import { notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import type { Engine, NotebookCell } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine";
 import { mutateNotebook } from "./notebook-mutations.js";
@@ -83,7 +84,7 @@ export async function placeChainGeneration(
       const anchorSlot = anchors[0]?.slot
         ?? lastCreatedCellSlot(notebook.cells)
         ?? { row: 1, column: 1 };
-      const occupied = notebook.cells.map((cell) => cell.slot);
+      const occupied = notebookOccupiedSlots(notebook.cells);
       const producer = input.engine.notebooks.createCell({
         type: input.placement,
         label: producerLabel(input.tool, input.placement, input.params.prompt),

@@ -30,6 +30,16 @@ export function sequenceContinuationRevision(sequence: Sequence): string {
 const intentSchema = z.record(z.string(), z.unknown());
 const editRequestSchema = z.discriminatedUnion("kind", [
   z.object({
+    kind: z.literal("append"),
+    artifact_id: z.string().uuid(),
+    track_id: z.string().uuid(),
+  }),
+  z.object({
+    kind: z.literal("remove_clip"),
+    clip_id: z.string().uuid(),
+    ripple: z.boolean(),
+  }),
+  z.object({
     kind: z.literal("insert"),
     artifact_id: z.string().uuid(),
     track_id: z.string().uuid().optional(),
@@ -730,6 +740,55 @@ async function operationsForRequest(
   sequence: Sequence,
   request: EditRequest,
 ): Promise<EditOperation[]> {
+  if (request.kind === "remove_clip") {
+    return [{ kind: "remove-clip", clipId: request.clip_id, ripple: request.ripple }];
+  }
+  if (request.kind === "append") {
+    const track = sequence.tracks.find((entry) => entry.trackId === request.track_id);
+    if (!track || track.kind === "caption") throw new Error("Choose a video or audio track");
+    if (track.locked) throw new Error("The destination track is locked");
+    const artifact = engine.artifacts.get(request.artifact_id);
+    if (!artifact.ok) throw new Error(artifact.error.message);
+    const compatible = track.kind === "audio"
+      ? artifact.value.kind === "audio"
+      : artifact.value.kind === "video" || artifact.value.kind === "final";
+    if (!compatible) throw new Error(`Choose ${track.kind === "audio" ? "an audio" : "a video"} source for this track`);
+    const manifest = await engine.files.manifest(request.artifact_id);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    const file = findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
+    const streams = engine.streams.list(request.artifact_id);
+    if (!streams.ok) throw new Error(streams.error.message);
+    const stream = streams.value.find((entry) => entry.kind === track.kind
+      && entry.sourcePath === file?.name && entry.objectHash === file.objectHash);
+    if (!stream) throw new Error("Wait for the current source media to finish processing before adding it");
+    const durationFrames = sourceTicksToSequenceFrames(
+      stream.durationTicks, stream.timeBase, sequence.frameRate, "ceil",
+    );
+    return [{
+      kind: "insert-clip",
+      mode: "insert",
+      placement: {
+        trackId: track.trackId,
+        timelineStartFrame: sequence.clips.reduce((end, clip) =>
+          clip.trackId === track.trackId ? Math.max(end, clipEnd(clip)) : end, 0),
+        durationFrames,
+        source: {
+          kind: "timed",
+          artifactId: request.artifact_id,
+          range: {
+            streamId: stream.streamId,
+            objectHash: stream.objectHash,
+            startTick: 0,
+            durationTicks: stream.durationTicks,
+            timeBase: stream.timeBase,
+          },
+        },
+        speed: { numerator: 1, denominator: 1 },
+        reverse: false,
+        audioPolicy: "preserve-pitch",
+      },
+    }];
+  }
   if (request.kind === "music_video_setup") {
     return audioSetupOperations(
       engine,
@@ -1251,8 +1310,21 @@ async function buildSequenceEditPlan(
   }
   const commandId = uuidv7();
   const requests = Array.isArray(input) ? input : [input];
+  const appendsOnly = requests.every((request) => request.kind === "append");
+  if (!appendsOnly && requests.some((request) => request.kind === "append")) {
+    throw new Error("Append batches can only contain append requests; plan other edits separately");
+  }
   const operations = (await Promise.all(requests.map((request) =>
     operationsForRequest(engine, sequence, request)))).flat();
+  if (appendsOnly) {
+    const trackEnds = new Map<string, number>();
+    for (const operation of operations) {
+      if (operation.kind !== "insert-clip") continue;
+      const placement = operation.placement;
+      placement.timelineStartFrame = trackEnds.get(placement.trackId) ?? placement.timelineStartFrame;
+      trackEnds.set(placement.trackId, placement.timelineStartFrame + placement.durationFrames);
+    }
+  }
   const confirmationRequired = requests.length > 1 || operations.length > 1;
   const intent: EditIntent = {
     intentVersion: MVP_CONTRACT_VERSION,

@@ -67,6 +67,10 @@ import type {
 } from 'videobook-engine'
 import { parseAssetTags, type AssetTags } from './videobook/asset-tags'
 import { sequenceContentRevision } from './videobook/sequence-revision'
+import { useTimelineAssembly } from './videobook/useTimelineAssembly'
+import { NotebookTimeline, type NotebookTimelineProps } from './components/videobook/NotebookTimeline'
+import type { CanonicalSequencePlayerHandle } from './components/videobook/CanonicalSequencePlayer'
+
 import {
   clearReferencesConfirmation,
   forgetConfirmation,
@@ -104,6 +108,7 @@ import {
 import {
   NOTEBOOK_GRID_COLUMN_COUNT,
   NOTEBOOK_GRID_ROW_COUNT,
+  notebookCellOccupiedSlots,
 } from 'videobook-engine/notebook-grid'
 import { resolveGeneratedVideoArtifact } from 'videobook-engine/notebook-media-artifact'
 import {
@@ -331,6 +336,7 @@ import {
   notebookGridFrameSize,
   notebookGridMetrics,
   notebookGridSlot,
+  notebookGridSlotKey,
   notebookGridSquareAt,
   notebookGridTag,
   notebookGridViewport,
@@ -555,6 +561,8 @@ import {
   type MediaInsightWatchStep,
 } from '@/videobook/media-insight-watch'
 import { guardedAsyncResult } from '@/videobook/async-request-guard'
+
+const TimelineSequencePlayer = lazy(() => import('./components/videobook/CanonicalSequencePlayer').then((module) => ({ default: module.CanonicalSequencePlayer })))
 
 const WatermarkBody = lazy(async () => {
   const module = await import('@/components/videobook/confirm/bodies/WatermarkBody')
@@ -947,6 +955,7 @@ const notebookCellTypes = new Set<string>([
   'generate_audio',
   'concat',
   'splice',
+  'timeline',
 ] satisfies NotebookCellType[])
 
 function asString(value: unknown): string | null {
@@ -3202,7 +3211,21 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   )
 }
 
-const nodeTypes = { cell: CellNode }
+type TimelineContextValue = Omit<NotebookTimelineProps, 'address' | 'onSeek' | 'onPreview' | 'onRemove'> & {
+  onSeek: (cellId: string, frame: number) => void
+  onPreview: (cellId: string) => void
+  onRemove: (cellId: string) => void
+}
+const TimelineContext = createContext<TimelineContextValue | null>(null)
+function TimelineNode({ id, data }: NodeProps<CanvasNode>) {
+  const context = useContext(TimelineContext)
+  if (!context) return null
+  return <NotebookTimeline {...context} address={notebookGridTag(data.slot)}
+    onSeek={(frame) => context.onSeek(id, frame)}
+    onPreview={() => context.onPreview(id)}
+    onRemove={() => context.onRemove(id)} />
+}
+const nodeTypes = { cell: CellNode, timeline: TimelineNode }
 const edgeTypes = { busRiver: BusRiverEdge }
 const flowProOptions = { hideAttribution: true }
 const notebookDefaultEdgeOptions = { selectable: false }
@@ -3690,6 +3713,36 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }, [mcp])
 
+  const [timelineFrame, setTimelineFrame] = useState(0)
+  const timelinePlayerRef = useRef<CanonicalSequencePlayerHandle>(null)
+  const pendingTimelineSeekRef = useRef<number | null>(null)
+  const attachTimelinePlayer = useCallback((player: CanonicalSequencePlayerHandle | null) => {
+    timelinePlayerRef.current = player
+    if (player && pendingTimelineSeekRef.current !== null) {
+      player.seekTo(pendingTimelineSeekRef.current)
+      pendingTimelineSeekRef.current = null
+    }
+  }, [])
+  const timeline = useTimelineAssembly({
+    bookId,
+    ready: mcp.state === 'ready' && !busy,
+    sequence,
+    call,
+    parseSequence: asSequence,
+    parseAssets: asAssets,
+    onSequence: (next) => {
+      watchSnapshotClockRef.current = performance.now()
+      setSequence(next)
+    },
+    onAssets: (loaded) => setAssets((current) => {
+      const merged = new Map(current.map((asset) => [asset.artifactId, asset]))
+      for (const asset of loaded) merged.set(asset.artifactId, asset)
+      return [...merged.values()]
+    }),
+  })
+  const timelinePlaybackAssets = useMemo(() => assets.flatMap((asset) => asset.mediaUrl
+    ? [{ artifactId: asset.artifactId, mediaUrl: asset.mediaUrl }] : []), [assets])
+
   const handleToggleMcpCall = useCallback((id: number) => {
     setMcpCalls((log) => toggleMcpCall(log, id))
   }, [])
@@ -3923,12 +3976,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   useNotebookAutoRefresh({
     bookId,
     notebookId: notebook?.id ?? null,
-    enabled: mcp.state === 'ready' && screen === 'notebook' && !busy
+    enabled: mcp.state === 'ready' && screen === 'notebook' && !busy && !timeline.busy
       && !nodes.some((node) => node.dragging),
     refresh: async (isCurrent) => {
       if (mcp.state !== 'ready' || !notebook || activeMcpCallsRef.current.size > 0) return
       const fetchedAt = performance.now()
-      const [notebookResult, assetResult, jobResult] = await Promise.allSettled([
+      const [notebookResult, assetResult, jobResult, sequenceResult] = await Promise.allSettled([
         call('get_notebook', {
           book_id: bookId,
           notebook_id: notebook.id,
@@ -3940,6 +3993,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           include_referenced: true,
         }, { background: true }),
         call('list_jobs', { book_id: bookId, limit: 200 }, { background: true }),
+        notebook.cells.some((cell) => cell.type === 'timeline')
+          ? call('get_primary_sequence', { book_id: bookId }, { background: true })
+          : Promise.resolve(null),
       ])
       if (!isCurrent() || activeMcpCallsRef.current.size > 0
         || fetchedAt < watchSnapshotClockRef.current) return
@@ -3951,6 +4007,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const nextAssets = asAssets(assetResult.value)
       const nextJobs = asJobs(jobResult.value)
       setAssets((current) => jsonEqual(current, nextAssets) ? current : nextAssets)
+      if (sequenceResult.status === 'fulfilled' && sequenceResult.value) {
+        const nextSequence = asSequence(sequenceResult.value)
+        if (nextSequence) setSequence((current) => jsonEqual(current, nextSequence) ? current : nextSequence)
+      }
       applyJobsSnapshot(nextJobs)
       applyNotebook(nextNotebook, nextAssets, nextJobs)
     },
@@ -4576,7 +4636,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     [edges, selectedCellId],
   )
   const notebookOccupiedSlots = useMemo(
-    () => nodes.map((node) => node.data.slot),
+    () => nodes.flatMap((node) => notebookCellOccupiedSlots({ type: node.data.kind, slot: node.data.slot })),
     [nodes],
   )
   const notebookLaneCells = useMemo(
@@ -6110,21 +6170,30 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const createCell = async (type: NotebookCellType, position?: { x: number; y: number }) => {
     if (!bookId || !notebook) return
-    const slot = position
-      ? notebookGridDropSlot(position, notebookBaseMetrics)
-      : nextNotebookCreationSlot(type, notebook.cells, lastWorkSlot)
-    if (
-      position
-      && nodes.some((node) =>
-        node.data.slot.row === slot.row
-        && node.data.slot.column === slot.column)
-    ) {
-      setNotice('Choose an empty grid square for the new cell', 'error')
+    const existing = type === 'timeline' ? notebook.cells.find((cell) => cell.type === 'timeline') : null
+    if (existing) {
+      selectCanvasCell(existing.id)
+      setComposerDockOpen(true)
+      document.querySelector(`[data-id="${existing.id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      return
+    }
+    let slot: NotebookGridSlot
+    try {
+      slot = position ? notebookGridDropSlot(position, notebookBaseMetrics)
+        : nextNotebookCreationSlot(type, notebook.cells, lastWorkSlot)
+      if (type === 'timeline') slot = { row: slot.row, column: 0 }
+      const footprint = new Set(notebookCellOccupiedSlots({ type, slot }).map(notebookGridSlotKey))
+      if (notebookOccupiedSlots.some((occupied) => footprint.has(notebookGridSlotKey(occupied)))) {
+        setNotice(type === 'timeline' ? 'Choose a completely empty row for Timeline' : 'Choose an empty grid square for the new cell', 'error')
+        return
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
       return
     }
     setBusy(true)
     try {
-      await call('create_notebook_cell', {
+      const created = recordValue(await call('create_notebook_cell', {
         book_id: bookId,
         notebook_id: notebook.id,
         cell: {
@@ -6136,9 +6205,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             ? { prompt: '' }
             : {}),
         },
-      })
+      }))
       await refreshBookData(bookId, notebook.id)
       rememberLastWorkSlot(slot)
+      if (type === 'timeline' && typeof created?.id === 'string') {
+        selectCanvasCell(created.id)
+        setComposerDockOpen(true)
+        requestAnimationFrame(() => document.querySelector(`[data-id="${created.id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
+      }
       setNotice(`Added ${notebookGridTag(slot)} cell`)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
@@ -6612,8 +6686,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice('Drop an image, video, or audio file on an open square', 'error')
       return
     }
-    if (notebook.cells.some((cell) =>
-      cell.slot.row === slot.row && cell.slot.column === slot.column)) {
+    if (notebookOccupiedSlots.some((occupied) =>
+      occupied.row === slot.row && occupied.column === slot.column)) {
       setNotice('Choose an empty grid square for the media file', 'error')
       return
     }
@@ -11118,9 +11192,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!point) return null
     const slot = notebookGridSquareAt(point, notebookMetrics)
     if (!slot) return null
-    return nodes.some((node) =>
-      node.data.slot.row === slot.row
-      && node.data.slot.column === slot.column)
+    return notebookOccupiedSlots.some((occupied) =>
+      occupied.row === slot.row && occupied.column === slot.column)
       ? null
       : slot
   }
@@ -11666,9 +11739,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     && contextMenuCell
     && contextMenuDuplicateAssetId
     && contextMenuCell.slot.row + 1 < notebookGrid.maximumRowCount
-    && !notebook.cells.some((cell) =>
-      cell.slot.row === contextMenuCell.slot.row + 1
-      && cell.slot.column === contextMenuCell.slot.column),
+    && !notebookOccupiedSlots.some((slot) =>
+      slot.row === contextMenuCell.slot.row + 1
+      && slot.column === contextMenuCell.slot.column),
   )
   const contextMenuSplitSource = selectedCellId === openContextMenuCellId
     ? selectedSplitSource
@@ -12458,7 +12531,37 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return context
   }, [assets, bookId, books, notebook, selectedNotebookCell, selectedNotebookCells, sequence])
   const composerCommands = useMemo(() => pendingWorkspaceCommands(commands, Boolean(pendingCommandPlan || pendingChatAction || pendingWatermarkReview)), [commands, pendingCommandPlan, pendingChatAction, pendingWatermarkReview])
-  const notebookDockContent = selectedCell && selectedNotebookCell ? (
+  const timelineContext: TimelineContextValue = {
+    sequence,
+    assets,
+    assembly: timeline,
+    disabled: busy || mcp.state !== 'ready',
+    frame: timelineFrame,
+    onSeek: (cellId, frame) => {
+      selectCanvasCell(cellId)
+      setComposerDockOpen(true)
+      setTimelineFrame(frame)
+      if (timelinePlayerRef.current) timelinePlayerRef.current.seekTo(frame)
+      else pendingTimelineSeekRef.current = frame
+    },
+    onPreview: (cellId) => { selectCanvasCell(cellId); setComposerDockOpen(true) },
+    onExport: () => { void executeCommand('/export-sequence').then((outcome) => { if (!outcome.ok) setNotice(outcome.message, 'error') }) },
+    onRemove: (cellId) => {
+      const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
+      if (cell) void deleteNotebookCells([cell])
+    },
+  }
+  const notebookDockContent = selectedNotebookCell?.type === 'timeline' && sequence ? (
+    <div className="composer-notebook-dock inspector timeline-preview-dock">
+      <header><span className="inspector-cell-title"><Film size={16} /><strong>Timeline</strong><code>{notebookGridTag(selectedNotebookCell.slot)}</code></span><ComposerDockClose /></header>
+      <div className="timeline-preview-body">
+        {sequence.clips.length > 0 || sequence.captions.length > 0 ? <Suspense fallback={<p>Loading timeline preview…</p>}>
+          <TimelineSequencePlayer key={bookId} ref={attachTimelinePlayer} sequence={sequence} assets={timelinePlaybackAssets}
+            onFrameUpdate={setTimelineFrame} onKeyboardAction={() => undefined} editingEnabled={false} />
+        </Suspense> : <p>Add video or audio clips to preview the timeline.</p>}
+      </div>
+    </div>
+  ) : selectedCell && selectedNotebookCell ? (
     <div
       className={[
         'composer-notebook-dock',
@@ -12744,6 +12847,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       className="notebook-flow-frame"
                       style={notebookFlowStyle}
                     >
+                      <TimelineContext.Provider value={timelineContext}>
                       <MediaSlotContext.Provider value={mediaSlotContextValue}>
                         <CellRunContext.Provider value={runCell}>
                           <PrimaryCellContext.Provider value={selectedCellId}>
@@ -12901,6 +13005,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           </PrimaryCellContext.Provider>
                         </CellRunContext.Provider>
                       </MediaSlotContext.Provider>
+                      </TimelineContext.Provider>
                     </div>
                   </div>
                 )}

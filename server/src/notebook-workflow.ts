@@ -1,3 +1,4 @@
+import { notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import type {
   Engine,
   NotebookCell,
@@ -985,7 +986,7 @@ export function buildSevenStageScaffold(
     const role = roleOf(cell);
     if (role && !roleCells.has(role)) roleCells.set(role, cell);
   }
-  const occupiedSlots = document.cells.map((cell) => cell.slot);
+  const occupiedSlots = notebookOccupiedSlots(document.cells);
   let lastWork = lastCreatedCellSlot(document.cells);
   const scaffoldSlot = (role: string): NotebookGridSlot => {
     const existing = roleCells.get(role);
