@@ -1735,11 +1735,11 @@ function MediaCellInspector({
           <div className="inspector-media-row-track inspector-media-row-details">
             {versionSelector}
             {assetTags}
-            {insights}
+            {inputSources}
           </div>
           <div className="inspector-media-row-track inspector-media-row-actions">
             <PublishedPostInspectorDetails inputs={cell.inputs} />
-            {inputSources}
+            {insights}
           </div>
         </div>
       </div>

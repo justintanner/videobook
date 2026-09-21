@@ -293,6 +293,11 @@ describe('composer focus through real workspace interactions', () => {
       },
     }))
     const imageCellId = String(image?.id ?? '')
+    await call('connect_notebook_cells', {
+      source_cell_id: videoCellId,
+      target_cell_id: imageCellId,
+      target_input: 'segment',
+    })
     await cell(imageCellId).waitFor({ timeout: 15_000 })
 
     for (const id of [videoCellId, imageCellId]) {
@@ -352,6 +357,24 @@ describe('composer focus through real workspace interactions', () => {
         expect(await remove.isEnabled()).toBe(true)
         const bounds = await remove.boundingBox()
         expect(bounds?.height).toBeCloseTo(32, 1)
+        if (id === imageCellId) {
+          const tags = await dock.getByRole('region', { name: 'Asset tags' }).boundingBox()
+          const sources = await dock.locator('.inspector-input-sources').boundingBox()
+          expect(sources!.y).toBeGreaterThanOrEqual(tags!.y + tags!.height)
+          const thumbs = dock.locator('.inspector-source-picker summary .inspector-source-thumb')
+          expect(await thumbs.count()).toBe(2)
+          const [firstThumb, secondThumb] = await thumbs.evaluateAll(elements => elements.map(element => {
+            const { x, y, width, height } = element.getBoundingClientRect()
+            return { x, y, width, height }
+          }))
+          expect(firstThumb!.height).toBeGreaterThan(40)
+          expect(secondThumb!.height).toBeGreaterThan(40)
+          if (viewport.width >= 1024) {
+            expect(secondThumb!.x).toBeGreaterThan(firstThumb!.x + firstThumb!.width)
+            expect(secondThumb!.y).toBeCloseTo(firstThumb!.y, 1)
+          }
+          expect(await dock.getByLabel('segment input', { exact: true }).locator('img').count()).toBe(1)
+        }
         if (process.env.VIDEOBOOK_CAPTURE_MEDIA_DOCK === '1') {
           await page.screenshot({ path: `/tmp/videobook-media-${id === imageCellId ? 'image' : 'video'}-${viewport.width}.png` })
         }
@@ -369,6 +392,8 @@ describe('composer focus through real workspace interactions', () => {
         await dock.getByRole('button', { name: 'Edit @a3 image', exact: true }).click()
         await page.getByRole('dialog', { name: 'Fullscreen preview for @a3' }).waitFor()
         await page.getByLabel('Close fullscreen preview').click()
+        await dock.getByRole('button', { name: 'Remove @a1 from segment input', exact: true }).click()
+        await expect.poll(() => dock.getByRole('button', { name: 'Remove @a1 from segment input', exact: true }).count()).toBe(0)
         page.once('dialog', dialog => void dialog.accept())
         await dock.getByRole('button', { name: 'Delete cell', exact: true }).click()
         await expect.poll(() => cell(imageCellId).count(), { timeout: 15_000 }).toBe(0)
