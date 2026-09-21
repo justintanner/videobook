@@ -178,7 +178,9 @@ textarea:focus-visible {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: minmax(0, max-content) minmax(max-content, 1fr) auto;
-  grid-template-rows: 48px;
+  /* 48px left the 32px controls sitting in 8px of air; the bar reads as a
+     strip of buttons rather than a header. */
+  grid-template-rows: 60px;
   align-items: center;
   min-width: 0;
   border: 1px solid var(--line);
@@ -1697,13 +1699,16 @@ textarea:focus-visible {
   --notebook-chrome-top: 20px;
   --notebook-scrollbar-size: 10px;
   --notebook-composer-clearance: calc(var(--app-gutter) + var(--notebook-command-row-height, 58px) + var(--app-gap) + 16px);
+  /* How far up the dissolve reaches. The clearance alone would start the ramp
+     level with the dock and read as an edge; the extra band puts most of the
+     gradient above it, where it is visible. */
+  --notebook-fade-height: calc(var(--notebook-composer-clearance) + 88px);
   position: relative;
   grid-row: 2;
   grid-column: 1;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding-bottom: var(--notebook-composer-clearance);
   background: #030907;
 }
 
@@ -1843,6 +1848,23 @@ textarea:focus-visible {
      first has a full gutter. Padding inside the scroll keeps both margins the
      same and still scrolls past the end of the grid. */
   padding-right: var(--notebook-chrome-inset);
+  /* The clearance is padding on the scroll, not on the canvas: the grid runs
+     the full height and dissolves into the ground under the composer, rather
+     than stopping dead at a flat black band. The last row still scrolls clear
+     of the dock because the padding is part of the scrollable extent. */
+  padding-bottom: var(--notebook-composer-clearance);
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    #000 0,
+    #000 calc(100% - var(--notebook-fade-height)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    #000 0,
+    #000 calc(100% - var(--notebook-fade-height)),
+    transparent 100%
+  );
   overflow: auto;
   overflow-anchor: none;
   overscroll-behavior-x: contain;
@@ -2249,6 +2271,12 @@ textarea:focus-visible {
 .cell-node {
   --cell-label-font-size: calc(11px * var(--notebook-detail-scale, 1));
   --cell-body-font-size: calc(13px * var(--notebook-detail-scale, 1));
+  /* The gutter every band inside a cell reads. Scaled like the font sizes,
+     because a fixed padding shrinks with the zoom while the text it is meant
+     to hold off the edge does not — which is why the inside looked tight at
+     Fit however large the number was. */
+  --cell-gutter: calc(16px * var(--notebook-detail-scale, 1));
+  --cell-gutter-tight: calc(12px * var(--notebook-detail-scale, 1));
   --cell-state-color: #72e7aa;
   --cell-state-soft: rgba(114, 231, 170, 0.22);
   --cell-state-glow: rgba(114, 231, 170, 0.38);
@@ -2715,7 +2743,7 @@ textarea:focus-visible {
   min-height: max(28px, calc(20px * var(--notebook-detail-scale, 1)));
   /* Vertical padding only matters when the chips wrap to a second line; the
      min-height carries the common case. */
-  padding: 3px 12px 3px 14px;
+  padding: 3px var(--cell-gutter);
   font-size: var(--cell-label-font-size);
   letter-spacing: 0.04em;
 }
@@ -2781,7 +2809,7 @@ textarea:focus-visible {
 .cell-node-footer {
   min-height: 34px;
   gap: 8px;
-  padding: 0 8px 0 14px;
+  padding: 0 calc(var(--cell-gutter) - 8px) 0 var(--cell-gutter);
   border-top: 1px solid var(--line);
   color: #779b87;
   font-size: 12px;
@@ -3016,7 +3044,7 @@ textarea:focus-visible {
   justify-content: flex-start;
   flex-wrap: nowrap;
   gap: 8px;
-  padding: 0 12px;
+  padding: 0 var(--cell-gutter);
   overflow: hidden;
   background: linear-gradient(180deg, rgba(2, 10, 7, 0), rgba(2, 10, 7, 0.94) 62%);
   font-size: var(--cell-label-font-size);
@@ -3401,7 +3429,7 @@ textarea:focus-visible {
   display: inline-flex;
   min-height: 1.85em;
   align-items: center;
-  padding: 0 12px 0 1.6em;
+  padding: 0 var(--cell-gutter) 0 1.6em;
   border: 0;
   color: #b9dfcb;
   background: linear-gradient(90deg, rgba(2, 10, 7, 0), rgba(2, 10, 7, 0.94) 45%);
@@ -3761,7 +3789,7 @@ textarea:focus-visible {
   grid-template-rows: minmax(0, 1fr);
   align-items: start;
   overflow: hidden;
-  padding: 12px 14px;
+  padding: var(--cell-gutter-tight) var(--cell-gutter);
   color: #b9dfcb;
   text-align: left;
 }

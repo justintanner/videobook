@@ -74,6 +74,28 @@ describe('notebook chrome tokens', () => {
       .toBe('calc(var(--app-gutter) + var(--notebook-command-row-height, 58px) + var(--app-gap) + 16px)')
     expect(declaration(canvas, '--notebook-chrome-top')).toBe('20px')
     expect(rule(css, '.notebook-flow-frame')).not.toContain('margin-top')
+    // The clearance is the scroll container's bottom padding, not the
+    // canvas's: the canvas reserving it would clip the grid at a hard edge
+    // instead of letting it run under the dock and dissolve.
+    expect(canvas).not.toContain('padding-bottom')
+  })
+
+  it('dissolves the grid under the composer instead of clipping it', () => {
+    const scroll = rule(css, '.notebook-horizontal-scroll')
+    // Bottom padding on a scroll container is part of its scrollable extent,
+    // so the last row still scrolls clear of the dock.
+    expect(declaration(scroll, 'padding-bottom'))
+      .toBe('var(--notebook-composer-clearance)')
+    for (const property of ['mask-image', '-webkit-mask-image']) {
+      const mask = declaration(scroll, property).replace(/\s+/gu, ' ')
+      expect(mask).toContain('linear-gradient( 180deg, #000 0,')
+      expect(mask).toContain('calc(100% - var(--notebook-fade-height))')
+      expect(mask).toContain('transparent 100% )')
+    }
+    // Most of the ramp has to sit above the dock to read as a fade rather
+    // than an edge.
+    expect(declaration(rule(css, '.canvas'), '--notebook-fade-height'))
+      .toBe('calc(var(--notebook-composer-clearance) + 88px)')
   })
 
   it('aligns the scroll container and both scrollbars on the chrome inset', () => {
