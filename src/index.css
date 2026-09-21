@@ -13323,6 +13323,7 @@ textarea:focus-visible {
 .inspector-media-row-content .asset-tag-input-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 32px;
+  width: min(100%, 280px);
 }
 
 .inspector-media-row-content .asset-tag-input,
