@@ -47,12 +47,31 @@ interface NotebookAddressSuggestion {
   value: string
   label: string
   description: string
+  cellType: string | null
+  empty: boolean
   type: 'cell'
 }
 
 interface NotebookAddressCell {
   slot: NotebookGridSlot
   type: string
+  label?: string
+}
+
+/** One line of the @mention menu: a poster frame, the slug, and what is known. */
+export interface MentionMenuRow {
+  value: string
+  label: string
+  description: string
+  caption: string | null
+  thumbnailUrl: string | null
+  mediaKind: MentionMediaKind | null
+  empty: boolean
+}
+
+export interface MentionMenuLimits {
+  rows?: number
+  empties?: number
 }
 
 function positiveFinite(value: number | null): value is number {
@@ -177,6 +196,29 @@ export function assetMentionMetadata(
   return metadata
 }
 
+export type MentionMediaKind = 'audio' | 'image' | 'video' | 'other'
+
+/** The poster frame for a mention row: a real thumbnail, or the image itself. */
+export function mentionThumbnailUrl(
+  asset: Pick<AssetMentionRecord, 'type' | 'thumbnailUrl' | 'mediaUrl'>,
+): string | null {
+  return asset.thumbnailUrl ?? (asset.type === 'image' ? asset.mediaUrl : null)
+}
+
+/** Collapses an asset type or a cell type onto the glyph shown without a poster. */
+export function mentionMediaKind(kind: string): MentionMediaKind {
+  const normalized = kind.toLowerCase()
+  if (normalized.includes('audio')) return 'audio'
+  if (normalized.includes('image')) return 'image'
+  if (
+    normalized.includes('video')
+    || normalized === 'final'
+    || normalized === 'concat'
+    || normalized === 'splice'
+  ) return 'video'
+  return 'other'
+}
+
 export function assetMentionSuggestions(
   assets: readonly AssetMentionCandidate[],
   input: string,
@@ -225,10 +267,67 @@ export function notebookAddressSuggestions(
         description: cell
           ? `${cell.type.replaceAll('_', ' ').toUpperCase()} cell`
           : 'Empty grid square',
+        cellType: cell?.type ?? null,
+        empty: !cell,
         type: 'cell',
       })
       if (suggestions.length === 12) return suggestions
     }
   }
   return suggestions
+}
+
+const MENTION_MENU_ROW_LIMIT = 8
+const MENTION_MENU_EMPTY_LIMIT = 16
+
+/**
+ * The @mention menu in grid-address order, squares holding media first.
+ *
+ * Empty squares are interchangeable — one line each would repeat the same
+ * sentence down the whole menu — so they trail the rows that carry media and
+ * the caller renders them as one strip of chips.
+ */
+export function mentionMenuRows(
+  assets: readonly AssetMentionCandidate[],
+  cells: readonly NotebookAddressCell[],
+  input: string,
+  excludeValues: ReadonlySet<string> = new Set(),
+  limits: MentionMenuLimits = {},
+): MentionMenuRow[] {
+  const captions = new Map(cells.map((cell) =>
+    [notebookGridTag(cell.slot), cell.label?.trim() || null]))
+  const seen = new Set<string>()
+  const matches: MentionMenuRow[] = []
+  for (const suggestion of assetMentionSuggestions(assets, input, excludeValues)) {
+    if (seen.has(suggestion.value)) continue
+    seen.add(suggestion.value)
+    matches.push({
+      value: suggestion.value,
+      label: suggestion.label,
+      description: assetMentionMetadata(suggestion.asset).join(' · '),
+      caption: captions.get(suggestion.value) ?? null,
+      thumbnailUrl: mentionThumbnailUrl(suggestion.asset),
+      mediaKind: mentionMediaKind(suggestion.asset.type),
+      empty: false,
+    })
+  }
+  for (const suggestion of notebookAddressSuggestions(cells, input, excludeValues)) {
+    if (seen.has(suggestion.value)) continue
+    seen.add(suggestion.value)
+    matches.push({
+      value: suggestion.value,
+      label: suggestion.label,
+      description: suggestion.description,
+      caption: captions.get(suggestion.value) ?? null,
+      thumbnailUrl: null,
+      mediaKind: suggestion.cellType ? mentionMediaKind(suggestion.cellType) : null,
+      empty: suggestion.empty,
+    })
+  }
+  return [
+    ...matches.filter((row) => !row.empty)
+      .slice(0, limits.rows ?? MENTION_MENU_ROW_LIMIT),
+    ...matches.filter((row) => row.empty)
+      .slice(0, limits.empties ?? MENTION_MENU_EMPTY_LIMIT),
+  ]
 }

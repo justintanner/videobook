@@ -60,9 +60,7 @@ import {
   type NotebookCellUpdate,
 } from '@/videobook/notebook-cell-actions'
 import {
-  assetMentionMetadata,
-  assetMentionSuggestions,
-  notebookAddressSuggestions,
+  mentionMenuRows,
   type AssetMentionCandidate,
 } from '@/videobook/mention-suggestions'
 import {
@@ -2213,7 +2211,10 @@ function ExecutableCellInspector({
   const promptPreviewRequestRef = useRef(0)
   const [promptCaret, setPromptCaret] = useState(draft.prompt.length)
   const [promptSuggestionIndex, setPromptSuggestionIndex] = useState(0)
-  const [promptSuggestionsDismissed, setPromptSuggestionsDismissed] = useState(false)
+  // The menu opens only while a mention is being typed. Opening a cell whose
+  // prompt already ends in one, or clicking back into the text beside it, must
+  // not raise it — nothing was asked for.
+  const [promptMentionOpen, setPromptMentionOpen] = useState(false)
   const [promptMentionPreview, setPromptMentionPreview] = useState<{
     error: string | null
     loading: boolean
@@ -2333,32 +2334,22 @@ function ExecutableCellInspector({
   )
   const promptSuggestionItems = useMemo<AutocompleteItem[]>(() => {
     const input = draft.prompt.slice(0, promptCaret)
-    const seen = new Set<string>()
-    return [
-      ...assetMentionSuggestions(mentionAssets, input, cyclicInputMentions)
-        .map((suggestion) => ({
-          type: 'mention' as const,
-          value: suggestion.value,
-          label: suggestion.label,
-          description: assetMentionMetadata(suggestion.asset).join(' · '),
-          colorScheme: 'cyan' as const,
-        })),
-      ...notebookAddressSuggestions(cells, input, cyclicInputMentions)
-        .map((suggestion) => ({
-          type: 'mention' as const,
-          value: suggestion.value,
-          label: suggestion.label,
-          description: suggestion.description,
-          colorScheme: 'amber' as const,
-        })),
-    ].filter((suggestion) => {
-      if (seen.has(suggestion.value)) return false
-      seen.add(suggestion.value)
-      return true
-    }).slice(0, 12)
+    return mentionMenuRows(mentionAssets, cells, input, cyclicInputMentions)
+      .map((row) => ({
+        type: 'mention' as const,
+        value: row.value,
+        label: row.label,
+        description: row.description,
+        caption: row.caption,
+        thumbnailSrc: row.thumbnailUrl,
+        mediaKind: row.mediaKind ?? undefined,
+        empty: row.empty,
+        // Every slug wears the amber of the token it becomes in the prompt.
+        colorScheme: 'amber' as const,
+      }))
   }, [cells, cyclicInputMentions, draft.prompt, mentionAssets, promptCaret])
-  const showPromptSuggestions = promptSuggestionItems.length > 0
-    && !promptSuggestionsDismissed
+  const showPromptSuggestions = promptMentionOpen
+    && promptSuggestionItems.length > 0
   const promptMentions = providerPayloadPreviewMentions(
     promptMentionPreview.value,
   )
@@ -2488,7 +2479,7 @@ function ExecutableCellInspector({
     setDraft((current) => ({ ...current, prompt }))
     setPromptCaret(caret)
     setPromptSuggestionIndex(0)
-    setPromptSuggestionsDismissed(false)
+    setPromptMentionOpen(true)
     requestPromptMentionPreview(prompt)
   }
   const insertPromptSuggestion = (suggestion: AutocompleteItem) => {
@@ -2501,7 +2492,7 @@ function ExecutableCellInspector({
     const prompt = `${before}${suggestion.value}${separator}${after}`
     const caret = before.length + suggestion.value.length + separator.length
     updatePrompt(prompt, caret)
-    setPromptSuggestionsDismissed(true)
+    setPromptMentionOpen(false)
     requestAnimationFrame(() => {
       promptTextareaRef.current?.focus({ preventScroll: true })
       promptTextareaRef.current?.setSelectionRange(caret, caret)
@@ -2696,7 +2687,7 @@ function ExecutableCellInspector({
                 )}
                 onClick={(event) => setPromptCaret(event.currentTarget.selectionStart)}
                 onSelect={(event) => setPromptCaret(event.currentTarget.selectionStart)}
-                onBlur={() => setPromptSuggestionsDismissed(true)}
+                onBlur={() => setPromptMentionOpen(false)}
                 onKeyDown={(event) => {
                   if (!showPromptSuggestions) return
                   if (event.key === 'ArrowDown') {
@@ -2721,7 +2712,7 @@ function ExecutableCellInspector({
                   }
                   if (event.key === 'Escape') {
                     event.preventDefault()
-                    setPromptSuggestionsDismissed(true)
+                    setPromptMentionOpen(false)
                   }
                 }}
               />

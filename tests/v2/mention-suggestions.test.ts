@@ -68,6 +68,8 @@ describe('asset mention suggestions', () => {
         value: '@a1',
         label: '@a1',
         description: 'VIDEO cell',
+        cellType: 'video',
+        empty: false,
         type: 'cell',
       },
       // Row a fills first (@a2-@a8); rows b-z carry no "a", so the two-letter
@@ -76,12 +78,16 @@ describe('asset mention suggestions', () => {
         value: `@a${index + 2}`,
         label: `@a${index + 2}`,
         description: 'Empty grid square',
+        cellType: null,
+        empty: true,
         type: 'cell',
       })),
       ...Array.from({ length: 4 }, (_, index) => ({
         value: `@aa${index + 1}`,
         label: `@aa${index + 1}`,
         description: 'Empty grid square',
+        cellType: null,
+        empty: true,
         type: 'cell',
       })),
     ])
@@ -91,6 +97,8 @@ describe('asset mention suggestions', () => {
       value: '@bl8',
       label: '@bl8',
       description: 'PROMPT cell',
+      cellType: 'prompt',
+      empty: false,
       type: 'cell',
     }])
   })
