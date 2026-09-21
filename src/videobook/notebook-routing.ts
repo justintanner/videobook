@@ -1,7 +1,14 @@
 import type { NotebookDocument } from 'videobook-engine'
 import { notebookGrid } from './notebook-grid'
 
-export const notebookGutterLaneOffsets = [10, 20, 30] as const
+/* Three bus lanes across the gutter, at quarter, half and three-quarter
+   depth. Derived from the gap so a density change moves the lanes with it
+   instead of pushing the outer lane inside the neighbouring cell. */
+export const notebookGutterLaneOffsets: readonly [number, number, number] = [
+  notebookGrid.gap * 0.25,
+  notebookGrid.gap * 0.5,
+  notebookGrid.gap * 0.75,
+]
 export const notebookSourcePortOffsets = [0.25, 0.5, 0.75] as const
 
 type NotebookRiverSide = 'left' | 'right'

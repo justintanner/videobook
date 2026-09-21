@@ -53,7 +53,7 @@ describe('notebook chrome tokens', () => {
   it('keeps grid origins at zero so the chrome inset owns the gutter', () => {
     const shell = rule(css, '.app-shell')
     const gutter = declaration(shell, '--app-gutter')
-    expect(gutter).toBe(`calc(var(--app-gap) * 2)`)
+    expect(pixelCount(gutter)).toBe(28)
     expect(notebookGrid.originX).toBe(0)
     expect(notebookGrid.originY).toBe(0)
     expect(pixelCount(declaration(shell, '--app-gap'))).toBe(10)
@@ -71,8 +71,8 @@ describe('notebook chrome tokens', () => {
     const canvas = rule(css, '.canvas')
     expect(declaration(canvas, '--notebook-chrome-inset')).toBe('var(--app-gutter)')
     expect(declaration(canvas, '--notebook-composer-clearance'))
-      .toBe('calc(var(--app-gutter) + var(--notebook-command-row-height, 58px) + 4px)')
-    expect(declaration(canvas, '--notebook-chrome-top')).toBe('8px')
+      .toBe('calc(var(--app-gutter) + var(--notebook-command-row-height, 58px) + var(--app-gap) + 16px)')
+    expect(declaration(canvas, '--notebook-chrome-top')).toBe('20px')
     expect(rule(css, '.notebook-flow-frame')).not.toContain('margin-top')
   })
 
@@ -82,6 +82,9 @@ describe('notebook chrome tokens', () => {
       .toBe('var(--notebook-chrome-top) var(--notebook-chrome-inset) 0')
     expect(declaration(scroll, 'height'))
       .toBe('calc(100% - var(--notebook-chrome-top))')
+    // The last column clears the scrollbar lane by the same gutter the first
+    // column gets on the left.
+    expect(declaration(scroll, 'padding-right')).toBe('var(--notebook-chrome-inset)')
     expect(declaration(scroll, 'scrollbar-gutter')).toBe('stable')
     expect(declaration(scroll, 'scrollbar-width')).toBe('auto')
     expect(declaration(scroll, 'scrollbar-color')).toBe('auto')

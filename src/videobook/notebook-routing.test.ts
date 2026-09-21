@@ -351,14 +351,14 @@ describe('notebook bus and river routing', () => {
         sourcePortIndex: 1,
         targetSide: 'top',
         targetPortIndex: 1,
-        sourceBusOffset: 10,
-        targetBusOffset: 30,
-        riverOffset: 20,
+        sourceBusOffset: notebookGutterLaneOffsets[0],
+        targetBusOffset: notebookGutterLaneOffsets[2],
+        riverOffset: notebookGutterLaneOffsets[1],
         riverSide: 'right',
         directRowGutter: false,
         targetPrimary: true,
       },
-    )).toBe('M 100 200 V 203 Q 100 206 103 206 H 232 Q 240 206 240 214 V 756 Q 240 764 248 764 H 398 Q 400 764 400 762 V 760')
+    )).toBe('M 100 200 V 201 Q 100 202 101 202 H 224 Q 232 202 232 210 V 760 Q 232 768 240 768 H 396 Q 400 768 400 764 V 760')
   })
 
   it('routes side ports directly into their adjacent river', () => {
@@ -380,14 +380,14 @@ describe('notebook bus and river routing', () => {
         sourcePortIndex: 1,
         targetSide: 'top',
         targetPortIndex: 1,
-        sourceBusOffset: 10,
-        targetBusOffset: 30,
-        riverOffset: 20,
+        sourceBusOffset: notebookGutterLaneOffsets[0],
+        targetBusOffset: notebookGutterLaneOffsets[2],
+        riverOffset: notebookGutterLaneOffsets[1],
         riverSide: 'right',
         directRowGutter: false,
         targetPrimary: true,
       },
-    )).toBe('M 224.5 120 H 232.25 Q 240 120 240 127.75 V 756 Q 240 764 248 764 H 398 Q 400 764 400 762 V 760')
+    )).toBe('M 224.5 120 H 228.25 Q 232 120 232 123.75 V 760 Q 232 768 240 768 H 396 Q 400 768 400 764 V 760')
   })
 
   it('keeps adjacent same-column routes in their shared row gutter', () => {
@@ -401,7 +401,7 @@ describe('notebook bus and river routing', () => {
         sourceRightX: 220,
         sourceBottomY: 196,
         targetLeftX: 20,
-        targetTopY: 236,
+        targetTopY: 220,
         targetHeight: 240,
       },
       {
@@ -409,14 +409,14 @@ describe('notebook bus and river routing', () => {
         sourcePortIndex: 1,
         targetSide: 'top',
         targetPortIndex: 1,
-        sourceBusOffset: 20,
-        targetBusOffset: 20,
-        riverOffset: 20,
+        sourceBusOffset: notebookGutterLaneOffsets[2],
+        targetBusOffset: notebookGutterLaneOffsets[2],
+        riverOffset: notebookGutterLaneOffsets[1],
         riverSide: 'right',
         directRowGutter: true,
         targetPrimary: true,
       },
-    )).toBe('M 100 200 V 208 Q 100 216 108 216 H 135.5 Q 140 216 140 220.5 V 225')
+    )).toBe('M 100 200 V 207 Q 100 214 107 214 H 134.5 Q 140 214 140 219.5 V 225')
   })
 
   it('routes adjacent same-row forward connections as one horizontal segment', () => {
@@ -437,10 +437,10 @@ describe('notebook bus and river routing', () => {
     const points = notebookBusRiverPoints(coordinates, route!)
 
     expect(points).toEqual([
-      { x: 524.5, y: 400 },
-      { x: 560, y: 400 },
+      { x: 508.5, y: 384 },
+      { x: 528, y: 384 },
     ])
-    expect(notebookBusRiverPath(coordinates, route!)).toBe('M 524.5 400 H 560')
+    expect(notebookBusRiverPath(coordinates, route!)).toBe('M 508.5 384 H 528')
     expect(points.every((point) => point.y >= notebookGridPosition(sourceSlot).y)).toBe(true)
     expect(segmentIntersectsCard(points[0]!, points[1]!, targetSlot)).toBe(false)
   })
@@ -455,7 +455,7 @@ describe('notebook bus and river routing', () => {
     const route = notebookBusRiverRoutes(document).get('edge')
     expect(route?.targetSide).toBe('left')
     expect(notebookBusRiverPath(routeCoordinates(sourceSlot, targetSlot, route!), route!))
-      .toBe('M 244.5 120 H 840')
+      .toBe('M 244.5 120 H 792')
   })
 
   it('routes cross-row forward connections through the target-column gutter', () => {
@@ -466,9 +466,9 @@ describe('notebook bus and river routing', () => {
       [{ id: 'edge', source: 'source', target: 'target', targetInput: 'input' }],
     )
     const route = notebookBusRiverRoutes(document).get('edge')
-    expect(route).toMatchObject({ targetSide: 'left', riverOffset: 20 })
+    expect(route).toMatchObject({ targetSide: 'left', riverOffset: notebookGutterLaneOffsets[1] })
     expect(notebookBusRiverPath(routeCoordinates(sourceSlot, targetSlot, route!), route!))
-      .toBe('M 244.5 120 H 532 Q 540 120 540 128 V 672 Q 540 680 548 680 H 560')
+      .toBe('M 244.5 120 H 508 Q 516 120 516 128 V 642 Q 516 648 522 648 H 528')
   })
 
   it('keeps backward connections on the target top edge', () => {

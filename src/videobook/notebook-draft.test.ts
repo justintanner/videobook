@@ -7,6 +7,7 @@ import {
   notebookEdgesWithCellFocus,
   notebookNodes,
 } from './notebook-draft'
+import { notebookGutterLaneOffsets } from './notebook-routing'
 
 const source: NotebookDocument = {
   id: '018f7cf5-0d31-7d96-8c0f-800000000001',
@@ -230,7 +231,7 @@ describe('notebook draft conversion', () => {
     }
 
     expect(notebookNodes(labeled)[0]).toMatchObject({
-      position: { x: 560, y: 2520 },
+      position: { x: 528, y: 2376 },
       data: { slot: { row: 9, column: 2 } },
     })
     expect(notebookNodes(labeled)[0]?.draggable).toBeUndefined()
@@ -269,9 +270,9 @@ describe('notebook draft conversion', () => {
         sourcePortIndex: 1,
         targetSide: 'left',
         targetPortIndex: 1,
-        sourceBusOffset: 20,
-        targetBusOffset: 20,
-        riverOffset: 20,
+        sourceBusOffset: notebookGutterLaneOffsets[1],
+        targetBusOffset: notebookGutterLaneOffsets[1],
+        riverOffset: notebookGutterLaneOffsets[1],
         riverSide: 'right',
         directRowGutter: false,
         targetPrimary: true,

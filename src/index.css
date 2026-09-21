@@ -160,7 +160,9 @@ textarea:focus-visible {
 
 .app-shell {
   --app-gap: 10px;
-  --app-gutter: calc(var(--app-gap) * 2);
+  /* Set outright rather than off --app-gap: the gap also spaces chrome that
+     should stay tight while the page margin grows. */
+  --app-gutter: 28px;
   position: relative;
   display: grid;
   grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
@@ -1692,9 +1694,9 @@ textarea:focus-visible {
 .canvas {
   --notebook-chrome-inset: var(--app-gutter);
   --notebook-chrome-gap: var(--app-gap);
-  --notebook-chrome-top: 8px;
+  --notebook-chrome-top: 20px;
   --notebook-scrollbar-size: 10px;
-  --notebook-composer-clearance: calc(var(--app-gutter) + var(--notebook-command-row-height, 58px) + 4px);
+  --notebook-composer-clearance: calc(var(--app-gutter) + var(--notebook-command-row-height, 58px) + var(--app-gap) + 16px);
   position: relative;
   grid-row: 2;
   grid-column: 1;
@@ -1837,6 +1839,10 @@ textarea:focus-visible {
   min-width: 0;
   min-height: 0;
   margin: var(--notebook-chrome-top) var(--notebook-chrome-inset) 0;
+  /* The last column would otherwise end against the scrollbar lane while the
+     first has a full gutter. Padding inside the scroll keeps both margins the
+     same and still scrolls past the end of the grid. */
+  padding-right: var(--notebook-chrome-inset);
   overflow: auto;
   overflow-anchor: none;
   overscroll-behavior-x: contain;
@@ -2019,17 +2025,29 @@ textarea:focus-visible {
   box-shadow: 0 0 0 1px rgba(99, 199, 216, 0.22);
 }
 
+/* An address on every empty square is noise: a mostly-empty lane reads as a
+   wall of labels. Only the square that starts a run carries one at rest, at
+   full contrast rather than dimmed; a drag lights up every dropzone, which is
+   when the rest of the addresses are worth reading. */
 .notebook-grid-square-label {
   position: absolute;
-  top: 8px;
-  left: 10px;
+  top: 10px;
+  left: 13px;
   color: #7fae92;
   font-family: var(--mono);
-  font-size: calc(12px * var(--notebook-detail-scale, 1));
+  font-size: calc(11px * var(--notebook-detail-scale, 1));
   font-weight: 600;
   letter-spacing: 0.04em;
+  opacity: 0;
   text-transform: lowercase;
+  transition: opacity 120ms ease;
   white-space: nowrap;
+}
+
+.notebook-grid-square-run-start > .notebook-grid-square-label,
+.notebook-grid-square-dropzone > .notebook-grid-square-label,
+.notebook-grid-square-review > .notebook-grid-square-label {
+  opacity: 1;
 }
 
 .notebook-grid-square-dropzone {
@@ -2694,8 +2712,10 @@ textarea:focus-visible {
   flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 4px 6px;
-  min-height: max(34px, calc(24px * var(--notebook-detail-scale, 1)));
-  padding: 4px 8px;
+  min-height: max(28px, calc(20px * var(--notebook-detail-scale, 1)));
+  /* Vertical padding only matters when the chips wrap to a second line; the
+     min-height carries the common case. */
+  padding: 3px 12px 3px 14px;
   font-size: var(--cell-label-font-size);
   letter-spacing: 0.04em;
 }
@@ -2759,8 +2779,9 @@ textarea:focus-visible {
 }
 
 .cell-node-footer {
-  min-height: 50px;
+  min-height: 34px;
   gap: 8px;
+  padding: 0 8px 0 14px;
   border-top: 1px solid var(--line);
   color: #779b87;
   font-size: 12px;
@@ -2977,36 +2998,50 @@ textarea:focus-visible {
   color: #d3a8ba;
 }
 
-/* The badge rail: what the media is, in the top right of any preview frame.
-   Image, video and audio differ only in which badges they hand it. */
+/* The badge rail: what the media is, on one line under the picture rather
+   than over it. Floating it top right meant it wrapped to two or three rows
+   on a portrait frame and covered whatever the frame was of. A single strip
+   on the bottom edge cannot wrap and cannot land on a face; the scrim keeps
+   it legible over any media. Image, video and audio differ only in which
+   badges they hand it. */
 .cell-media-rail {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 1;
   display: flex;
-  max-width: calc(100% - 16px);
+  min-height: 1.85em;
   align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 4px;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 0 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(2, 10, 7, 0), rgba(2, 10, 7, 0.94) 62%);
+  font-size: var(--cell-label-font-size);
   pointer-events: none;
 }
 
+/* Leave the meter its corner: the last badge ellipsises rather than running
+   under it. */
+.cell-media:has(.cell-media-meter) .cell-media-rail {
+  padding-right: 4.8em;
+}
+
+/* No pill: the rail's scrim carries the contrast, so the badges are plain
+   text separated by a middot. */
 .cell-media-badge {
   display: inline-flex;
   min-width: 0;
   max-width: 100%;
-  height: 1.65em;
   flex: none;
   align-items: center;
-  padding: 0 0.4em;
+  padding: 0;
   overflow: hidden;
-  border: 1px solid var(--cell-accent-line);
-  border-radius: 999px;
+  border: 0;
   color: #b9dfcb;
-  background: rgba(2, 10, 7, 0.86);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  background: none;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
   font-size: var(--cell-label-font-size);
   font-variant-numeric: tabular-nums;
@@ -3017,7 +3052,16 @@ textarea:focus-visible {
   pointer-events: auto;
 }
 
+.cell-media-badge + .cell-media-badge::before {
+  margin-right: 8px;
+  color: rgba(185, 223, 203, 0.45);
+  content: '·';
+}
+
+/* The generator name is the one badge long enough to need truncating, so it
+   is the one that gives way. */
 .cell-media-badge-wide {
+  flex: 0 1 auto;
   color: var(--cell-accent-bright);
 }
 
@@ -3346,20 +3390,21 @@ textarea:focus-visible {
   text-transform: uppercase;
 }
 
-/* The corner meter: how long the media runs. */
+/* The corner meter: how long the media runs. It shares the badge rail's
+   strip, so it carries the same scrim rather than a pill of its own — and
+   still reads when a cell has a meter and no badges. */
 .cell-media-meter {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
-  z-index: 1;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
   display: inline-flex;
-  height: 1.65em;
+  min-height: 1.85em;
   align-items: center;
-  padding: 0 6px;
-  border: 1px solid var(--cell-accent-line);
-  border-radius: 999px;
+  padding: 0 12px 0 1.6em;
+  border: 0;
   color: #b9dfcb;
-  background: rgba(2, 10, 7, 0.86);
+  background: linear-gradient(90deg, rgba(2, 10, 7, 0), rgba(2, 10, 7, 0.94) 45%);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
   font-size: var(--cell-label-font-size);
   font-variant-numeric: tabular-nums;
@@ -3419,12 +3464,14 @@ textarea:focus-visible {
 }
 
 /* The progress hairline, zero width until playback starts. */
+/* Above the badge rail and the meter, which now share this edge: the
+   playback position is a 2px hairline and has to stay readable over both. */
 .cell-media-progress {
   position: absolute;
   right: 0;
   bottom: 0;
   left: 0;
-  z-index: 1;
+  z-index: 3;
   height: 2px;
   background: var(--cell-accent-soft);
   pointer-events: none;
@@ -3714,7 +3761,7 @@ textarea:focus-visible {
   grid-template-rows: minmax(0, 1fr);
   align-items: start;
   overflow: hidden;
-  padding: 10px 12px;
+  padding: 12px 14px;
   color: #b9dfcb;
   text-align: left;
 }

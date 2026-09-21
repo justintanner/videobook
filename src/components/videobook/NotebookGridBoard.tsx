@@ -76,12 +76,21 @@ export function NotebookGridBoard({
             const column = metrics.minColumn + index
             const slot = { row, column }
             const slotKey = notebookGridSlotKey(slot)
-            const mediaDropzone = mediaDropActive && !occupiedSlotKeys.has(slotKey)
+            const occupied = occupiedSlotKeys.has(slotKey)
+            const mediaDropzone = mediaDropActive && !occupied
             const mediaDropTarget = mediaDropzone && slotKey === mediaDropSlotKey
-            const reviewRole = occupiedSlotKeys.has(slotKey)
+            const reviewRole = occupied
               ? undefined
               : reviewRoles.get(notebookGridAddress(slot))
-            const className = `notebook-grid-square${mediaDropzone
+            // The square that opens a run of empty ones is the only one
+            // labelled at rest; the rest read their address from this one.
+            const runStart = !occupied && (
+              index === 0
+              || occupiedSlotKeys.has(notebookGridSlotKey({ row, column: column - 1 }))
+            )
+            const className = `notebook-grid-square${runStart
+              ? ' notebook-grid-square-run-start'
+              : ''}${mediaDropzone
               ? ' notebook-grid-square-dropzone'
               : ''}${mediaDropTarget
               ? ' notebook-grid-square-drop-target'

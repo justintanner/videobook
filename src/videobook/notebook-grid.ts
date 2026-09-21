@@ -19,14 +19,14 @@ export interface NotebookGridData extends Record<string, unknown> {
 
 export const notebookGrid = {
   /* Origins are 0: the scroll container's --notebook-chrome-inset margin in
-     src/index.css supplies the 20px gutter, so the first cell lands on the
+     src/index.css supplies the page gutter, so the first cell lands on the
      same line as the header logo and the horizontal scrollbar track. */
   originX: 0,
   originY: 0,
   squareSize: 240,
-  gap: 40,
-  columnPitch: 280,
-  rowPitch: 280,
+  gap: 24,
+  columnPitch: 264,
+  rowPitch: 264,
   columnCount: NOTEBOOK_GRID_COLUMN_COUNT,
   maximumRowCount: NOTEBOOK_GRID_ROW_COUNT,
   minimumRowCount: 3,
