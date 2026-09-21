@@ -2,6 +2,7 @@ import "./load-env.js";
 import cors from "cors";
 import express from "express";
 import { createHash } from "node:crypto";
+import { once } from "node:events";
 import { createWriteStream } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -33,6 +34,7 @@ const enginePackage = require("videobook-engine/package.json") as {
   version: string;
 };
 const app = express();
+const port = Number(process.env.PORT ?? 3001);
 const voiceSessions = new VoiceSessions(bookManager);
 const SEARCH_REFERENCE_LIMIT_BYTES = 500 * 1024 * 1024;
 const mcpHandler = createHttpHandler(scopedBookEngine, bookManager);
@@ -253,10 +255,10 @@ async function hydrateLibrary(): Promise<void> {
 
 async function start(): Promise<void> {
   registerAllJobHandlers(scopedBookEngine);
-  const port = Number(process.env.PORT ?? 3001);
-  const server = app.listen(port, "127.0.0.1", () => {
-    logger.info("server-listening", { port: Number(port) });
-  });
+  const server = app.listen(port, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  logger.info("server-listening", { port: address && typeof address !== "string" ? address.port : port });
   attachVoiceAudio(server, voiceSessions);
   await hydrateLibrary();
 }
@@ -283,6 +285,6 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 start().catch((error) => {
-  logger.error("startup-failed", { error });
+  logger.error("startup-failed", { error, port });
   process.exit(1);
 });

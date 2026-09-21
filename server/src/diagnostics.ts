@@ -22,7 +22,7 @@ const events = new Set<string>(EVENTS);
 const errorCodes = new Set<string>([
   ...ENGINE_ERROR_CODES, "UNKNOWN", "ENOENT", "EACCES", "EPERM", "ENOSPC",
   "EIO", "EMFILE", "ENFILE", "ENOMEM", "ECONNREFUSED", "ECONNRESET",
-  "ETIMEDOUT", "EPIPE", "ENOTFOUND", "ABORT_ERR",
+  "ETIMEDOUT", "EPIPE", "ENOTFOUND", "EADDRINUSE", "EADDRNOTAVAIL", "ABORT_ERR",
 ]);
 const names = { tool: new Set<string>(), jobType: new Set<string>() };
 
