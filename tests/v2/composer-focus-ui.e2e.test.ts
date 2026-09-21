@@ -134,7 +134,12 @@ describe('composer focus through real workspace interactions', () => {
     vite = startProcess([
       'node_modules/vite/bin/vite.js', '--host', '127.0.0.1',
       '--port', String(vitePort), '--strictPort',
-    ], { ...env, VIDEOBOOK_SERVER_URL: origin, VIDEOBOOK_VITE_CACHE_DIR: join(rootDir, 'vite-cache') })
+    ], {
+      ...env,
+      VIDEOBOOK_SERVER_URL: origin,
+      VIDEOBOOK_VITE_CACHE_DIR: join(rootDir, 'vite-cache'),
+      VIDEOBOOK_VITE_HMR: '0',
+    })
     await waitForHttp(appUrl, vite, 200)
     browser = await chromium.launch({ headless: true })
   }, 60_000)
@@ -270,50 +275,112 @@ describe('composer focus through real workspace interactions', () => {
     await focused(input())
   })
 
-  it('shows a whole media dock rather than clipping it in the panel wrapper', async () => {
-    await cell(videoCellId).click({ position: { x: 20, y: 20 } })
-    await page.locator('.composer-notebook-dock.inspector').waitFor({ timeout: 15_000 })
-    // The wrapper and the panel read one --dock-h. When they drift apart the
-    // wrapper clips the panel and the facts, tags and transcript blocks below
-    // the fold are simply cut off.
-    const fit = await page.evaluate(() => {
-      const wrapper = document.querySelector('.command-composer-contextual')
-      const dock = document.querySelector('.composer-notebook-dock.inspector')
-      const header = dock?.querySelector(':scope > header')
-      const row = dock?.querySelector('.inspector-media-row-content')
-      const preview = dock?.querySelector('.inspector-cell-preview')
-      if (!(wrapper instanceof HTMLElement) || !(dock instanceof HTMLElement)
-        || !(header instanceof HTMLElement) || !(row instanceof HTMLElement)
-        || !(preview instanceof HTMLElement)) {
-        throw new Error('Missing composer dock')
-      }
-      const height = (element: HTMLElement) => Math.round(element.getBoundingClientRect().height)
-      return {
-        clipped: wrapper.scrollHeight - wrapper.clientHeight,
-        dockHeight: height(dock),
-        wrapperHeight: height(wrapper),
-        headerHeight: height(header),
-        headerToken: Math.round(Number.parseFloat(
-          getComputedStyle(dock).getPropertyValue('--dock-header-h'),
-        )),
-        rowHeight: height(row),
-        previewHeight: height(preview),
-      }
-    })
+  it('fits full-height media previews beside compact controls across viewport sizes', async () => {
+    const portraitPath = join(rootDir, 'portrait.png')
+    await promisify(execFile)(FFMPEG, [
+      '-y', '-f', 'lavfi', '-i', 'testsrc2=s=480x854', '-frames:v', '1', portraitPath,
+    ])
+    const uploaded = record(await call('upload_file', {
+      filename: 'portrait.png', data: (await readFile(portraitPath)).toString('base64'),
+    }))
+    const assets = record(await call('list_assets'))
+    const asset = (Array.isArray(assets?.assets) ? assets.assets : [])
+      .map(record).find(value => value?.id === uploaded?.assetId)
+    const image = record(await call('create_notebook_cell', {
+      cell: {
+        type: 'image', slot: { row: 0, column: 2 },
+        output_artifact_id: asset?.artifact_id,
+      },
+    }))
+    const imageCellId = String(image?.id ?? '')
+    await cell(imageCellId).waitFor({ timeout: 15_000 })
 
-    expect(fit.clipped).toBeLessThanOrEqual(1)
-    expect(fit.dockHeight).toBe(fit.wrapperHeight)
-    expect(fit.dockHeight).toBeLessThanOrEqual(360)
-    // The header is a flex item: a tall panel used to take its padding back
-    // rather than scrolling its own body.
-    expect(fit.headerHeight).toBe(fit.headerToken)
-    // A clip keeps to the widescreen box the preview column caps at instead of
-    // standing the whole depth of the dock.
-    expect(fit.previewHeight).toBeLessThan(fit.rowHeight)
-    expect(fit.previewHeight).toBeLessThanOrEqual(220)
-    expect(fit.previewHeight).toBeLessThanOrEqual(
-      Math.round(fit.rowHeight * 0.75),
-    )
+    for (const id of [videoCellId, imageCellId]) {
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      await cell(id).click({ position: { x: 20, y: 20 } })
+      const dock = page.locator('.composer-notebook-dock.inspector')
+      await dock.waitFor({ timeout: 15_000 })
+      for (const viewport of [
+        { width: 1920, height: 1080 },
+        { width: 1440, height: 1000 },
+        { width: 1024, height: 500 },
+        { width: 667, height: 375 },
+        { width: 390, height: 844 },
+        { width: 320, height: 640 },
+      ]) {
+        await page.setViewportSize(viewport)
+        await expect.poll(async () => dock.evaluate((element) => {
+          const wrapper = element.closest('.command-composer-contextual')
+          const header = element.querySelector(':scope > header')
+          const row = element.querySelector('.inspector-media-row-content')
+          const preview = element.querySelector('.inspector-cell-preview')
+          const actions = element.querySelector('.inspector-media-summary-actions')
+          const metadata = element.querySelector('.inspector-media-row-meta')
+          if (!(wrapper instanceof HTMLElement) || !(header instanceof HTMLElement)
+            || !(row instanceof HTMLElement) || !(preview instanceof HTMLElement)
+            || !(actions instanceof HTMLElement) || !(metadata instanceof HTMLElement)) {
+            throw new Error('Missing composer dock')
+          }
+          const box = element.getBoundingClientRect()
+          const previewBox = preview.getBoundingClientRect()
+          const actionBox = actions.getBoundingClientRect()
+          const rowStyle = getComputedStyle(row)
+          const rowHeight = row.clientHeight - parseFloat(rowStyle.paddingTop)
+            - parseFloat(rowStyle.paddingBottom)
+          return {
+            clipped: wrapper.scrollHeight > wrapper.clientHeight + 1,
+            oversized: box.height > 360.5,
+            fullHeight: Math.abs(previewBox.height - rowHeight) <= 1,
+            actionsBeside: actionBox.left >= previewBox.right,
+            actionsVisible: actionBox.top >= box.top && actionBox.bottom <= box.bottom,
+            headerHeight: Math.round(header.getBoundingClientRect().height),
+            headerToken: Math.round(parseFloat(getComputedStyle(element).getPropertyValue('--dock-header-h'))),
+            horizontalOverflow: metadata.scrollWidth > metadata.clientWidth + 1,
+          }
+        })).toMatchObject({
+          clipped: false,
+          oversized: false,
+          fullHeight: true,
+          actionsBeside: true,
+          actionsVisible: true,
+          headerHeight: 40,
+          headerToken: 40,
+          horizontalOverflow: false,
+        })
+        expect(await dock.locator('.inspector-media-row-preview > button').count()).toBe(0)
+        const remove = dock.getByRole('button', { name: 'Delete cell', exact: true })
+        expect(await remove.isEnabled()).toBe(true)
+        const bounds = await remove.boundingBox()
+        expect(bounds?.height).toBeCloseTo(32, 1)
+        if (process.env.VIDEOBOOK_CAPTURE_MEDIA_DOCK === '1') {
+          await page.screenshot({ path: `/tmp/videobook-media-${id === imageCellId ? 'image' : 'video'}-${viewport.width}.png` })
+        }
+      }
+      if (id === imageCellId) {
+        const preview = dock.locator('.inspector-cell-preview')
+        const previewBounds = await preview.boundingBox()
+        await dock.getByLabel('segment input', { exact: true }).click()
+        const sourceOptions = dock.getByRole('listbox', { name: 'segment input options' })
+        await sourceOptions.getByRole('option', { name: /@a1/ }).click({ trial: true })
+        await page.keyboard.press('Escape')
+        const scrolledPreviewBounds = await preview.boundingBox()
+        expect(scrolledPreviewBounds?.y).toBeCloseTo(previewBounds!.y, 1)
+        expect(scrolledPreviewBounds?.height).toBeCloseTo(previewBounds!.height, 1)
+        await dock.getByRole('button', { name: 'Edit @a3 image', exact: true }).click()
+        await page.getByRole('dialog', { name: 'Fullscreen preview for @a3' }).waitFor()
+        await page.getByLabel('Close fullscreen preview').click()
+        page.once('dialog', dialog => void dialog.accept())
+        await dock.getByRole('button', { name: 'Delete cell', exact: true }).click()
+        await expect.poll(() => cell(imageCellId).count(), { timeout: 15_000 }).toBe(0)
+      } else {
+        const video = dock.locator('video')
+        await video.evaluate(element => element instanceof HTMLVideoElement ? element.play() : undefined)
+        await expect.poll(() => video.evaluate(element => element instanceof HTMLVideoElement && !element.paused)).toBe(true)
+        await dock.getByRole('button', { name: 'Open @a1 fullscreen', exact: true }).click()
+        await page.getByRole('dialog', { name: 'Fullscreen preview for @a1' }).waitFor()
+        await page.getByLabel('Close fullscreen preview').click()
+      }
+    }
   })
 
   it('keeps chat history out of media previews and restores it after clearing selection', async () => {

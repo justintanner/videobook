@@ -11,6 +11,7 @@ import {
   Pencil,
   Plus,
   Save,
+  Trash2,
   X,
 } from 'lucide-react'
 import { Fragment, useMemo, useRef, useState } from 'react'
@@ -570,11 +571,6 @@ function compatibleSource(
   return true
 }
 
-/* One button either way, because both open the same fullscreen editor. An
-   image preview is already a fullscreen control, so it offers the edit the
-   picture cannot; a video preview owns its own click, so it offers fullscreen.
-   The image dock renders this itself in its actions track, so the preview
-   keeps only the picture. */
 function CellMediaActions({
   address,
   isImage,
@@ -596,6 +592,7 @@ function CellMediaActions({
             type="button"
             className="inspector-edit-button"
             aria-label={`Edit @${address} image`}
+            title={`Edit @${address} image`}
             onClick={onOpen}
           >
             <Pencil size={14} />Edit
@@ -605,6 +602,7 @@ function CellMediaActions({
             type="button"
             className="inspector-fullscreen-button"
             aria-label={`Open @${address} fullscreen`}
+            title={`Open @${address} fullscreen`}
             onClick={onOpen}
           >
             <Maximize2 size={14} />Fullscreen
@@ -969,6 +967,7 @@ function SourceCellPicker({
       }}
     >
       <summary
+        data-composer-focus="preserve"
         aria-label={`${input.replaceAll('_', ' ')} input`}
         title={`${input.replaceAll('_', ' ')} input`}
         aria-disabled={busy}
@@ -1103,6 +1102,7 @@ function AttachSourcePicker({
       }}
     >
       <summary
+        data-composer-focus="preserve"
         aria-label="Attach media input"
         title="Attach media input"
         aria-disabled={busy}
@@ -1268,10 +1268,12 @@ function InputSources({
 function DeleteCellButton({
   busy,
   deleting,
+  iconOnly = false,
   onDelete,
 }: {
   busy: boolean
   deleting: boolean
+  iconOnly?: boolean
   onDelete: () => Promise<void>
 }) {
   return (
@@ -1279,11 +1281,14 @@ function DeleteCellButton({
       type="button"
       className="danger-button inspector-delete-cell-button"
       aria-busy={deleting}
+      title="Delete cell"
       onClick={() => void onDelete()}
       disabled={busy || deleting}
     >
-      <CircleX size={13} />
-      <span>{deleting ? 'Deleting…' : 'Delete cell'}</span>
+      {iconOnly ? <Trash2 size={14} /> : <CircleX size={13} />}
+      <span className={iconOnly ? 'sr-only' : undefined}>
+        {deleting ? 'Deleting…' : 'Delete cell'}
+      </span>
     </button>
   )
 }
@@ -1291,19 +1296,25 @@ function DeleteCellButton({
 function CellCleanupActions({
   busy,
   deleting,
+  iconOnly,
   onDelete,
 }: Pick<
   NotebookCellInspectorProps,
   | 'busy'
   | 'deleting'
   | 'onDelete'
->) {
+> & { iconOnly?: boolean }) {
   return (
     <section
       className="inspector-cell-actions inspector-compact-actions"
       aria-label="Cell cleanup actions"
     >
-      <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+      <DeleteCellButton
+        busy={busy}
+        deleting={deleting}
+        iconOnly={iconOnly}
+        onDelete={onDelete}
+      />
     </section>
   )
 }
@@ -1488,16 +1499,15 @@ function MediaCellFacts({
   asset: NotebookCellInspectorAsset
   inputs: Record<string, unknown> | undefined
 }) {
+  const facts = mediaDockFacts(kind, address, asset, inputs)
+    .filter((fact) => fact.key !== 'address')
+
   return (
     <dl className="inspector-media-facts">
-      {mediaDockFacts(kind, address, asset, inputs).map((fact) => (
+      {facts.map((fact) => (
         <div key={fact.key}>
           <dt>{fact.term}</dt>
-          <dd>
-            {fact.emphasis === 'address'
-              ? <code className="inspector-cell-address">{fact.value}</code>
-              : fact.value}
-          </dd>
+          <dd>{fact.value}</dd>
         </div>
       ))}
     </dl>
@@ -1665,16 +1675,6 @@ function MediaCellInspector({
       onSetInput={onSetInput}
     />
   )
-  const cleanupActions = (
-    <CellCleanupActions busy={busy} deleting={deleting} onDelete={onDelete} />
-  )
-  /* Every media cell lays its parts across the row instead of down it: the
-     preview takes the row height at the shape the asset gives it, and
-     everything that used to sit below the fold — versions, facts, tags,
-     inputs — moves into the width the preview was wasting, while the buttons
-     that act on the picture stay under the picture. The shape
-     rides in as a custom property because only the asset knows it. Under a
-     narrow dock the container queries fold this back into one column. */
   const trackStyle: MediaTrackStyle = {
     '--media-aspect': String(mediaDockAspect(kind, previewAsset ?? null)),
   }
@@ -1691,18 +1691,8 @@ function MediaCellInspector({
         ].filter(Boolean).join(' ')}
         style={trackStyle}
       >
-        {/* Fullscreen and delete belong to the picture, not to the facts
-            beside it, so they stack under the preview they act on. */}
         <div className="inspector-media-row-track inspector-media-row-preview">
           {mediaPreview}
-          {previewAsset && canOpenFullscreen && (
-            <CellMediaActions
-              address={address}
-              isImage={kind === 'image'}
-              onOpen={() => onOpenFullscreen(previewAsset)}
-            />
-          )}
-          {cleanupActions}
         </div>
         {showVersions && (
           <div className="inspector-media-row-track inspector-media-row-versions">
@@ -1717,8 +1707,7 @@ function MediaCellInspector({
           </div>
         )}
         <div className="inspector-media-row-meta">
-          <div className="inspector-media-row-track inspector-media-row-details">
-            {versionSelector}
+          <div className="inspector-media-summary">
             {previewAsset && (
               <MediaCellFacts
                 kind={kind}
@@ -1727,6 +1716,24 @@ function MediaCellInspector({
                 inputs={cell.inputs}
               />
             )}
+            <div className="inspector-media-summary-actions">
+              {previewAsset && canOpenFullscreen && (
+                <CellMediaActions
+                  address={address}
+                  isImage={kind === 'image'}
+                  onOpen={() => onOpenFullscreen(previewAsset)}
+                />
+              )}
+              <CellCleanupActions
+                busy={busy}
+                deleting={deleting}
+                iconOnly
+                onDelete={onDelete}
+              />
+            </div>
+          </div>
+          <div className="inspector-media-row-track inspector-media-row-details">
+            {versionSelector}
             {assetTags}
             {insights}
           </div>

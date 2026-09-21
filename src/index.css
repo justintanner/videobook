@@ -12914,23 +12914,14 @@ textarea:focus-visible {
   }
 }
 
-/* ── Media cell dock: across the row ──────────────────────────────────────
-   A preview in a full-width block left most of the row empty and pushed the
-   action bar, tags, inputs and delete below the fold. The preview now takes
-   the row height at the shape the asset gives it, and the rest fills the
-   width it was wasting. Image, video and audio all lay out this way; only the
-   preview surface and the facts differ, and the container queries below fold
-   every kind back into one column when the dock is too narrow to share. */
-
 .inspector-media-body {
   container-type: inline-size;
+  height: calc(var(--dock-h, 560px) - var(--dock-header-h, 40px));
+  min-height: 0;
 }
 
 .inspector-media-row-content {
   --media-row-h: calc(var(--dock-h, 560px) - var(--dock-header-h, 40px) - 24px);
-  /* Wide media would take the whole row height as width and leave the facts
-     beside it a strip, so the column stops at a share of the dock. A portrait
-     take never reaches it. */
   --media-preview-cap-w: min(44cqi, 520px);
   --media-preview-h: var(--media-row-h);
   --media-preview-w: clamp(
@@ -12938,10 +12929,7 @@ textarea:focus-visible {
     calc(var(--media-preview-h) * var(--media-aspect, 0.5625)),
     var(--media-preview-cap-w)
   );
-  /* The column carries the fullscreen and delete buttons under the picture,
-     so it never narrows past their labels; a portrait take that is thinner
-     than that keeps its own width and sits centred on the ground. */
-  --media-preview-col-w: max(var(--media-preview-w), 152px);
+  --media-preview-col-w: var(--media-preview-w);
 
   display: grid;
   min-height: 0;
@@ -12949,6 +12937,7 @@ textarea:focus-visible {
   overflow: hidden;
   gap: 14px;
   grid-template-columns: var(--media-preview-col-w) 104px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .inspector-media-row-content.inspector-media-row-single-version {
@@ -12962,33 +12951,29 @@ textarea:focus-visible {
   flex-direction: column;
 }
 
-/* Details and actions share one scroll region so a narrow dock scrolls the
-   facts without ever moving the picture they describe. */
 .inspector-media-row-meta {
   display: grid;
   min-width: 0;
   min-height: 0;
   overflow: auto;
+  align-content: start;
   align-items: start;
-  gap: 14px;
-  grid-template-columns: minmax(0, 56fr) minmax(0, 51fr);
+  gap: 12px 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   scrollbar-width: thin;
 }
 
-/* The preview keeps the asset's shape rather than stretching to the row: a
-   clip or a waveform that has hit the width cap sits at the top of its track
-   at its own height instead of growing a band of ground above and below. */
 .inspector-media-row-preview {
-  justify-content: start;
+  overflow: hidden;
 }
 
 .inspector-media-row-content .inspector-cell-preview {
-  height: auto;
-  max-height: 100%;
+  height: 100%;
+  max-height: none;
   min-height: 0;
   margin: 0;
-  aspect-ratio: var(--media-aspect, 0.5625);
+  aspect-ratio: auto;
 }
 
 .inspector-media-row-content .inspector-cell-media {
@@ -13004,23 +12989,15 @@ textarea:focus-visible {
   object-fit: contain;
 }
 
-.inspector-media-row-image,
-.inspector-media-row-video {
-  --media-preview-h: min(var(--media-row-h), 220px);
-}
-
-/* Stretched to the button column, a narrow take would grow past the cap the
-   dock gives it, so the height stays put and the picture letterboxes. */
-.inspector-media-row-image .inspector-cell-preview,
-.inspector-media-row-video .inspector-cell-preview {
-  max-height: var(--media-preview-h);
-}
-
 .inspector-media-row-audio {
   --media-preview-h: min(
     var(--media-row-h),
     calc(var(--media-preview-cap-w) * 9 / 16)
   );
+}
+
+.inspector-media-row-audio .inspector-cell-preview {
+  height: var(--media-preview-h);
 }
 
 /* Audio's stage: peaks over the transport, both on the preview ground. The
@@ -13096,26 +13073,29 @@ textarea:focus-visible {
 }
 
 .inspector-media-facts {
-  display: grid;
-  margin: 0 0 8px;
-  gap: 6px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  margin: 0;
+  gap: 8px 20px;
   font-size: 11px;
 }
 
 .inspector-media-facts > div {
   display: grid;
-  align-items: center;
-  gap: 10px;
-  grid-template-columns: 96px minmax(0, 1fr);
+  min-width: 0;
+  gap: 3px;
 }
 
 .inspector-media-facts dt {
-  color: #7ea895;
+  color: #668c75;
+  font-size: 10px;
 }
 
 .inspector-media-facts dd {
   margin: 0;
   color: #b7ddc8;
+  overflow-wrap: anywhere;
 }
 
 .inspector-media-versions {
@@ -13219,43 +13199,82 @@ textarea:focus-visible {
   display: none;
 }
 
-/* Under the picture the two buttons are one stack the width of the column:
-   they act on what sits above them, so they line up with its edges rather
-   than with the facts across the row. */
-.inspector-media-row-preview .inspector-media-actions {
-  margin-top: 12px;
-  border-top: 0;
-  grid-template-columns: minmax(0, 1fr);
+.inspector-media-summary {
+  display: flex;
+  min-width: 0;
+  grid-column: 1 / -1;
+  align-items: start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.inspector-media-row-preview .inspector-media-actions button {
-  width: 100%;
-  padding: 0 12px;
-  border: 1px solid var(--control-border);
+.inspector-media-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
 }
 
-.inspector-media-row-preview .inspector-media-actions button:hover,
-.inspector-media-row-preview .inspector-media-actions button:focus-visible {
+.inspector-media-summary-actions .inspector-media-actions,
+.inspector-media-summary-actions .inspector-cell-actions {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.inspector-media-summary-actions .inspector-media-actions button,
+.inspector-media-summary-actions .inspector-cell-actions > button {
+  width: auto;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  color: #7ea895;
+  background: transparent;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.inspector-media-summary-actions button:hover:not(:disabled),
+.inspector-media-summary-actions button:focus-visible {
   border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
+  background: var(--control-bg-hover);
 }
 
-.inspector-media-row-preview .inspector-cell-actions {
-  margin: 10px 0 0;
-  padding-top: 0;
-  border-top: 0;
+.inspector-media-summary-actions .inspector-delete-cell-button:hover:not(:disabled),
+.inspector-media-summary-actions .inspector-delete-cell-button:focus-visible {
+  border-color: rgba(205, 111, 111, 0.4);
+  color: #e39a9a;
+  background: rgba(92, 28, 28, 0.22);
 }
 
-.inspector-media-row-preview .inspector-cell-actions.inspector-compact-actions > button {
-  width: 100%;
-  padding: 0 12px;
+.inspector-media-row-details {
+  gap: 12px;
 }
 
-/* One control height across the dock, tag field included. */
-.inspector-media-row-content .inspector-media-actions button,
-.inspector-media-row-content .inspector-cell-actions > button,
+.inspector-media-row-content .asset-tag-editor {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.inspector-media-row-content .asset-tag-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+}
+
 .inspector-media-row-content .asset-tag-input,
 .inspector-media-row-content .asset-tag-add {
-  min-height: 40px;
+  min-width: 0;
+  min-height: 32px;
+}
+
+.inspector-media-row-content .asset-tag-chips:empty {
+  display: none;
 }
 
 @container (max-width: 1179px) {
@@ -13274,68 +13293,54 @@ textarea:focus-visible {
 }
 
 @container (max-width: 879px) {
-  /* align-items is the cross axis here, so the grid's `start` would stop the
-     tracks filling the width they just gained. */
   .inspector-media-row-meta {
     display: flex;
     align-items: stretch;
     flex-direction: column;
   }
 
-  .inspector-media-row-meta > .inspector-media-row-track {
+  .inspector-media-row-meta > * {
     flex: none;
   }
 }
 
-/* Too narrow to put anything beside the preview: back to the stack. */
 @container (max-width: 619px) {
   .inspector-media-row-content,
   .inspector-media-row-content.inspector-media-row-single-version {
-    display: block;
-    overflow: auto;
+    --media-preview-col-w: min(36cqi, var(--media-preview-w));
+    gap: 10px;
   }
 
-  .inspector-media-row-meta {
-    display: block;
-    overflow: visible;
+  .inspector-media-row-content.inspector-media-row-image {
+    --media-preview-cap-w: 48cqi;
+    --media-preview-col-w: var(--media-preview-w);
   }
 
-  .inspector-media-row-content .inspector-cell-preview {
-    height: auto;
-    margin: 0 0 22px;
+  .inspector-media-summary {
+    flex-direction: column-reverse;
+    align-items: stretch;
   }
 
-  .inspector-media-row-content .inspector-cell-media {
-    height: auto;
-    min-height: 180px;
+  .inspector-media-summary-actions {
+    margin-left: 0;
   }
 
-  .inspector-media-body .inspector-media-row-content .inspector-cell-media img,
-  .inspector-media-body .inspector-media-row-content .inspector-cell-media video {
-    height: auto;
-    max-height: 320px;
+  .inspector-media-row-content .inspector-source-picker summary {
+    grid-template-columns: minmax(0, 1fr) 16px;
+    gap: 4px;
+    padding: 4px 6px;
   }
 
-  .inspector-media-row-image .inspector-cell-preview,
-  .inspector-media-row-video .inspector-cell-preview {
-    height: var(--media-preview-h);
-    aspect-ratio: auto;
+  .inspector-media-row-content .inspector-source-picker summary .inspector-source-thumb {
+    display: none;
   }
 
-  .inspector-media-row-image .inspector-cell-media,
-  .inspector-media-row-video .inspector-cell-media {
-    height: 100%;
-    min-height: 0;
+  .inspector-media-row-content.inspector-media-row-audio {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
-  .inspector-media-body :is(.inspector-media-row-image, .inspector-media-row-video) .inspector-cell-media :is(img, video) {
-    height: 100%;
-    max-height: 100%;
-  }
-
-  /* Stacked, the stage has no row height to fill, so the peaks keep a band of
-     their own rather than collapsing onto the transport. */
-  .inspector-media-row-audio .inspector-audio-waveform {
+  .inspector-media-row-audio .inspector-cell-preview {
     height: 132px;
   }
 }
