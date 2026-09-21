@@ -10053,15 +10053,19 @@ textarea:focus-visible {
   display: none;
 }
 
+.composer-image-dock-host {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 .command-composer-contextual .notebook-subject-panel {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   border-left: 0;
   box-shadow: none;
   max-height: min(280px, 36dvh);
-}
-
-.command-composer-contextual .notebook-subject-toolbar {
-  display: flex;
-  flex-wrap: wrap;
 }
 
 /* Docked, the workspace's height comes straight off the picture, so at rest it
@@ -10074,18 +10078,21 @@ textarea:focus-visible {
   padding-right: 6px;
 }
 
-.notebook-subject-panel[data-collapsed="true"] > header {
+.command-composer-contextual .notebook-subject-panel > header {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
   flex: 0 0 auto;
   padding: 0 0 0 14px;
   border-bottom: 0;
 }
 
-.notebook-subject-panel[data-collapsed="true"] > header > span,
-.notebook-subject-panel[data-collapsed="true"] > header p {
+.command-composer-contextual .notebook-subject-panel > header > span,
+.command-composer-contextual .notebook-subject-panel > header p {
   display: none;
 }
 
-.notebook-subject-panel[data-collapsed="true"] > header h2 {
+.command-composer-contextual .notebook-subject-panel > header h2 {
   margin: 0;
   color: #8fb9a1;
   font-size: 10px;
@@ -10094,8 +10101,17 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.notebook-subject-panel[data-collapsed="true"] > .notebook-subject-toolbar {
+.command-composer-contextual .notebook-subject-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 2;
+  grid-row: 1;
   min-height: 40px;
+  padding: 4px 6px 4px 12px;
+  border-bottom: 0;
+}
+
+.notebook-subject-panel[data-collapsed="true"] > .notebook-subject-toolbar {
   flex: 1 1 auto;
   flex-wrap: nowrap;
   justify-content: flex-end;
@@ -10103,6 +10119,40 @@ textarea:focus-visible {
   border-bottom: 0;
 }
 
+.command-composer-contextual .notebook-subject-panel-body {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.command-composer-contextual .notebook-subject-state {
+  min-height: 0;
+  padding: 4px 0;
+}
+
+.command-composer-contextual .notebook-subject-actions {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 8px 14px;
+}
+
+.command-composer-contextual .notebook-subject-actions > div {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.command-composer-contextual .notebook-subject-actions > p {
+  grid-column: 1;
+}
+
+.command-composer-contextual .notebook-subject-actions > div > button {
+  width: auto;
+  min-width: 88px;
+  padding: 0 12px;
+}
+
+.notebook-subject-actions[hidden],
 .notebook-subject-panel[data-collapsed="true"] > .notebook-subject-panel-body,
 .notebook-subject-panel[data-collapsed="true"] > .notebook-subject-actions {
   display: none;
@@ -11187,7 +11237,7 @@ textarea:focus-visible {
   display: grid;
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
   max-width: none;
@@ -11206,6 +11256,7 @@ textarea:focus-visible {
 
 .notebook-media-fullscreen.docked {
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .notebook-media-fullscreen.docked .notebook-media-composer-host {
@@ -11213,6 +11264,9 @@ textarea:focus-visible {
   right: auto;
   left: auto;
   bottom: auto;
+  grid-column: 1;
+  grid-row: 3;
+  margin: 0;
   min-height: 0;
   max-height: calc(100dvh - var(--app-gutter) * 2);
   overflow: auto;
@@ -11220,6 +11274,7 @@ textarea:focus-visible {
 
 .notebook-media-fullscreen.playback-only {
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   padding: 24px;
   place-items: center;
   background: #000;
@@ -11307,6 +11362,10 @@ textarea:focus-visible {
 .notebook-subject-stage {
   position: relative;
   display: grid;
+  grid-column: 1;
+  grid-row: 2;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   padding: 28px;
@@ -11345,31 +11404,32 @@ textarea:focus-visible {
 }
 
 .notebook-subject-stage-label {
-  position: absolute;
-  bottom: 18px;
-  left: 20px;
   display: flex;
+  min-width: 0;
   align-items: center;
-  gap: 9px;
-  padding: 7px 9px;
-  border: 1px solid rgba(90, 145, 113, 0.34);
-  color: #719681;
-  background: rgba(0, 8, 4, 0.86);
-  font-size: 9px;
+  gap: 12px;
+  color: #8fb9a1;
+  font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .notebook-subject-stage-label span {
+  flex: 0 0 auto;
   color: #c3eed5;
 }
 
 .notebook-subject-stage-label strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 500;
 }
 
 .notebook-subject-panel {
   display: grid;
+  grid-column: 2;
+  grid-row: 2;
   min-width: 0;
   min-height: 0;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
@@ -11754,10 +11814,15 @@ textarea:focus-visible {
 
 .notebook-media-fullscreen.docked .notebook-media-composer-host .command-composer {
   max-height: min(560px, 56dvh);
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
 }
 
-.notebook-media-fullscreen.subject-editor .notebook-subject-stage-label {
-  bottom: 92px;
+.notebook-media-composer-host .command-composer-dock-body:has(.notebook-subject-panel),
+.notebook-media-composer-host .command-composer-contextual:has(.notebook-subject-panel) {
+  min-height: 0;
+  overflow: clip;
 }
 
 .media-library-backdrop {
@@ -12122,17 +12187,37 @@ textarea:focus-visible {
   font-size: 9px;
 }
 
-.notebook-media-fullscreen-actions {
+.notebook-media-fullscreen-header {
+  z-index: 440;
+  display: flex;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(92, 145, 114, 0.3);
+  background: #06110b;
+}
+
+.notebook-media-fullscreen.playback-only .notebook-media-fullscreen-header {
   position: fixed;
   top: 20px;
   right: 20px;
-  z-index: 440;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.notebook-media-fullscreen-actions {
+  position: relative;
   display: flex;
+  flex: 0 0 auto;
+  align-items: center;
   gap: 8px;
 }
 
-/* Was unstyled, so it rendered as a UA button off the close button's baseline.
-   It is the same kind of control, at the same size, one notch quieter. */
 .notebook-media-more-actions {
   display: grid;
   width: 42px;
@@ -12235,11 +12320,11 @@ textarea:focus-visible {
 
   .notebook-media-fullscreen.subject-editor {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(120px, 1fr) minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(120px, 1fr) minmax(0, 1fr) auto;
   }
 
   .notebook-media-fullscreen.subject-editor.docked {
-    grid-template-rows: minmax(120px, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .notebook-media-fullscreen.playback-only {
@@ -12250,20 +12335,19 @@ textarea:focus-visible {
     padding: 12px;
   }
 
-  .notebook-media-fullscreen.subject-editor .notebook-subject-stage-label {
-    bottom: 12px;
-    left: 9px;
-  }
-
   .notebook-media-composer-host {
     position: relative;
     right: auto;
     bottom: auto;
     left: auto;
+    grid-column: 1;
+    grid-row: 4;
     margin: 10px 12px;
   }
 
   .notebook-subject-panel {
+    grid-column: 1;
+    grid-row: 3;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto auto;
     align-content: start;
@@ -12299,13 +12383,56 @@ textarea:focus-visible {
     grid-column: 1 / -1;
   }
 
-  .notebook-media-fullscreen-actions {
+  .notebook-media-fullscreen-header {
+    gap: 8px;
+    padding: 6px 10px;
+  }
+
+  .notebook-media-fullscreen.playback-only .notebook-media-fullscreen-header {
     top: 10px;
     right: 10px;
+  }
+
+  .command-composer-contextual .notebook-subject-panel > header {
+    display: none;
+  }
+
+  .command-composer-contextual .notebook-subject-toolbar {
+    grid-column: 1 / -1;
+  }
+
+  .command-composer-contextual .notebook-subject-panel[data-collapsed="true"] {
+    padding-left: 9px;
+  }
+}
+
+@media (max-width: 460px), (max-height: 500px) {
+  .command-composer-contextual .notebook-subject-panel {
+    grid-template-rows: max-content max-content max-content;
+    align-content: start;
+    overflow: auto;
+  }
+
+  .command-composer-contextual .notebook-subject-panel-body {
+    min-height: auto;
+    overflow: visible;
   }
 }
 
 @media (max-width: 460px) {
+  .notebook-subject-panel[data-collapsed="true"] > .notebook-subject-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .command-composer-contextual .notebook-subject-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .command-composer-contextual .notebook-subject-actions > div {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
   .notebook-media-composer-host {
     margin-right: 8px;
     margin-left: 8px;

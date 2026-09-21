@@ -172,7 +172,6 @@ function ImageSubjectOverlay({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      <title>Detected people and objects</title>
       <image
         href={mediaUrl}
         width={width}
@@ -762,44 +761,71 @@ export function NotebookMediaFullscreen({
         aria-hidden="true"
         onFocus={() => focusDialogEdge('last')}
       />
-      <div className="notebook-media-fullscreen-actions">
-        {isVideo && playbackUrl && onCaptureFrame && (
+      <header className="notebook-media-fullscreen-header">
+        {!isVideo && (
+          <div className="notebook-subject-stage-label">
+            <span>@{address}</span>
+            <strong>
+              {removalPreview
+                ? 'Removal preview'
+                : drawMode
+                  ? 'Draw region'
+                  : ready
+                    ? `${subjectMap.subjects.length} subjects`
+                    : 'Image editor'}
+            </strong>
+          </div>
+        )}
+        <div className="notebook-media-fullscreen-actions">
+          {isVideo && playbackUrl && onCaptureFrame && (
+            <button
+              type="button"
+              className="notebook-media-capture-button"
+              disabled={capturePending}
+              onClick={() => void captureCurrentFrame()}
+              aria-label="Extract frame"
+              title="Extract frame"
+            >
+              {capturePending
+                ? <BusyIndicator size={20} />
+                : <Camera size={20} />}
+            </button>
+          )}
+          {onMoreActions && (
+            <button
+              type="button"
+              className="notebook-media-more-actions"
+              aria-label="More media actions"
+              title="More media actions"
+              data-workspace-action-surface="fullscreen"
+              onClick={onMoreActions}
+            >
+              <Ellipsis size={20} />
+            </button>
+          )}
           <button
+            ref={closeRef}
             type="button"
-            className="notebook-media-capture-button"
-            disabled={capturePending}
-            onClick={() => void captureCurrentFrame()}
-            aria-label="Extract frame"
-            title="Extract frame"
+            className="notebook-media-fullscreen-close"
+            onClick={(event) => {
+              if (event.detail > 0) dismissFocusRef.current = capturePointerComposerFocus()
+              onClose()
+            }}
+            aria-label="Close fullscreen preview"
+            data-composer-focus="return"
           >
-            {capturePending
-              ? <BusyIndicator size={20} />
-              : <Camera size={20} />}
+            <X size={20} />
           </button>
-        )}
-        <button
-          ref={closeRef}
-          type="button"
-          className="notebook-media-fullscreen-close"
-          onClick={(event) => {
-            if (event.detail > 0) dismissFocusRef.current = capturePointerComposerFocus()
-            onClose()
-          }}
-          aria-label="Close fullscreen preview"
-          data-composer-focus="return"
-        >
-          <X size={20} />
-        </button>
-        {onMoreActions && <button type="button" className="notebook-media-more-actions" aria-label="More media actions" data-workspace-action-surface="fullscreen" onClick={onMoreActions}><Ellipsis size={20} /></button>}
-        {isVideo && (captureError || captureMessage) && (
-          <p
-            className={`notebook-media-capture-status ${captureError ? 'error' : 'success'}`}
-            role="status"
-          >
-            {captureError ?? captureMessage}
-          </p>
-        )}
-      </div>
+          {isVideo && (captureError || captureMessage) && (
+            <p
+              className={`notebook-media-capture-status ${captureError ? 'error' : 'success'}`}
+              role="status"
+            >
+              {captureError ?? captureMessage}
+            </p>
+          )}
+        </div>
+      </header>
       {isVideo ? (
         <div className="notebook-media-playback-stage">
           {playbackUrl ? (
@@ -859,18 +885,6 @@ export function NotebookMediaFullscreen({
             ) : (
               <img src={mediaUrl ?? ''} alt={`@${address}`} />
             )}
-            <div className="notebook-subject-stage-label">
-              <span>@{address}</span>
-              <strong>
-                {removalPreview
-                  ? 'Removal preview'
-                  : drawMode
-                    ? 'Draw region'
-                    : ready
-                      ? `${subjectMap.subjects.length} subjects`
-                      : 'Image editor'}
-              </strong>
-            </div>
             {snapOffer && hoveredRegion && !drawMode && (
               <button
                 type="button"
@@ -1199,7 +1213,10 @@ export function NotebookMediaFullscreen({
                 </>
               )}
             </div>
-            <div className="notebook-subject-actions">
+            <div
+              className="notebook-subject-actions"
+              hidden={!showRegionList && !actionError && !actionMessage}
+            >
               <p className="notebook-subject-composer-guidance">
                 {replacementTargets.length > 0
                   ? 'Assign a replacement image to each region, then replace, or mention one in the image edit bar.'

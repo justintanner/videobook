@@ -1491,6 +1491,80 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
+  it('keeps fullscreen image controls aligned and reachable across viewport sizes', async () => {
+    const page = await openApp()
+    await collapseComposerDock(page)
+    await notebookCellNode(page, fullscreenImageCellId).click()
+    await page.getByLabel('Open @c3 fullscreen').click()
+    const dialog = page.getByRole('dialog', { name: 'Fullscreen preview for @c3' })
+    await dialog.waitFor({ state: 'visible' })
+    await dialog.getByRole('button', { name: 'Subjects', exact: true }).waitFor()
+    const close = dialog.getByLabel('Close fullscreen preview')
+    const more = dialog.getByLabel('More media actions')
+    const draw = dialog.getByRole('button', { name: 'Draw region', exact: true })
+    const input = dialog.getByLabel('Videobook command input')
+
+    for (const viewport of [
+      { width: 2048, height: 1024 },
+      { width: 1024, height: 768 },
+      { width: 390, height: 844 },
+      { width: 320, height: 568 },
+      { width: 667, height: 375 },
+    ]) {
+      await page.setViewportSize(viewport)
+      for (const expanded of [false, true]) {
+        if (expanded) await draw.click()
+        const layout = await dialog.evaluate((element) => {
+          const bounds = (selector: string) => {
+            const target = element.querySelector(selector)
+            if (!target) throw new Error(`Missing fullscreen control: ${selector}`)
+            const { x, y, width, height, bottom, right } = target.getBoundingClientRect()
+            return { x, y, width, height, bottom, right }
+          }
+          return {
+            close: bounds('.notebook-media-fullscreen-close'),
+            more: bounds('.notebook-media-more-actions'),
+            label: bounds('.notebook-subject-stage-label'),
+            stage: bounds('.notebook-subject-stage'),
+            image: bounds('.notebook-subject-stage image'),
+            composer: bounds('.command-composer'),
+            panel: bounds('.notebook-subject-panel'),
+          }
+        })
+        expect(Math.abs(layout.close.y - layout.more.y)).toBeLessThanOrEqual(1)
+        expect(layout.close.x - layout.more.right).toBeGreaterThanOrEqual(4)
+        expect(layout.close.x - layout.more.right).toBeLessThanOrEqual(12)
+        expect(layout.label.right).toBeLessThan(layout.more.x)
+        expect(Math.abs(layout.label.y + layout.label.height / 2
+          - layout.close.y - layout.close.height / 2)).toBeLessThanOrEqual(1)
+        expect(layout.stage.y).toBeGreaterThanOrEqual(layout.close.bottom)
+        expect(layout.stage.bottom).toBeLessThanOrEqual(layout.composer.y + 1)
+        expect(layout.image.y).toBeGreaterThanOrEqual(layout.stage.y)
+        expect(layout.image.bottom).toBeLessThanOrEqual(layout.stage.bottom + 1)
+        expect(layout.image.height).toBeGreaterThan(60)
+        expect(layout.panel.y).toBeGreaterThanOrEqual(layout.composer.y)
+        expect(layout.composer.bottom).toBeLessThanOrEqual(viewport.height)
+        for (const control of [close, more, draw, input]) {
+          const name = await control.getAttribute('aria-label') ?? await control.textContent()
+          expect(await control.evaluate((element) => {
+            const bounds = element.getBoundingClientRect()
+            const hit = document.elementFromPoint(
+              bounds.x + bounds.width / 2,
+              bounds.y + bounds.height / 2,
+            )
+            return hit !== null && element.contains(hit)
+          }), `${name} at ${viewport.width}×${viewport.height}, expanded=${expanded}`).toBe(true)
+        }
+        if (expanded) {
+          await draw.click()
+          await dialog.getByLabel('Collapse subject workspace').click()
+        }
+      }
+    }
+    await close.click()
+    await dialog.waitFor({ state: 'hidden' })
+  }, 60_000)
+
   it('opens generation output fullscreen and restores the trigger focus', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()
@@ -1522,12 +1596,13 @@ describe('chat composer browser flow', () => {
     if (!cardMediaBox || !cardMetadataBox) {
       throw new Error('Could not measure image card metadata')
     }
-    const metadataTopInset = cardMetadataBox.y - cardMediaBox.y
+    const metadataBottomInset = cardMediaBox.y + cardMediaBox.height
+      - cardMetadataBox.y - cardMetadataBox.height
     const metadataRightInset =
       cardMediaBox.x + cardMediaBox.width
         - cardMetadataBox.x - cardMetadataBox.width
-    expect(metadataTopInset).toBeGreaterThanOrEqual(-1)
-    expect(metadataTopInset).toBeLessThanOrEqual(16)
+    expect(metadataBottomInset).toBeGreaterThanOrEqual(-1)
+    expect(metadataBottomInset).toBeLessThanOrEqual(1)
     expect(metadataRightInset).toBeGreaterThanOrEqual(-1)
     expect(metadataRightInset).toBeLessThanOrEqual(16)
     await fullscreenNode.click()
@@ -1548,7 +1623,7 @@ describe('chat composer browser flow', () => {
     if (!triggerBox) throw new Error('Could not measure fullscreen trigger')
     const editTriggerBox = await editTrigger.boundingBox()
     if (!editTriggerBox) throw new Error('Could not measure edit trigger')
-    expect(triggerBox.width).toBeGreaterThan(editTriggerBox.width)
+    expect(triggerBox.width).toBeGreaterThanOrEqual(inspectorPreviewBox.width - 2)
     expect(triggerBox.height).toBeGreaterThan(editTriggerBox.height)
     expect(triggerBox.height).toBeGreaterThanOrEqual(44)
     const triggerPoint = {
@@ -1698,7 +1773,11 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await modalInput.isEnabled(), {
       timeout: 5_000,
     }).toBe(true)
-    for (const viewport of [{ width: 420, height: 800 }, { width: 667, height: 375 }]) {
+    for (const viewport of [
+      { width: 420, height: 800 },
+      { width: 320, height: 568 },
+      { width: 667, height: 375 },
+    ]) {
       await page.setViewportSize(viewport)
       const composerBox = await dialog.locator('.command-composer').boundingBox()
       const subjectPanelBox = await dialog.locator('.notebook-subject-panel').boundingBox()
@@ -1709,12 +1788,35 @@ describe('chat composer browser flow', () => {
       expect(subjectPanelBox.y + subjectPanelBox.height)
         .toBeLessThanOrEqual(composerBox.y + composerBox.height + 2)
       expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(viewport.height)
+      for (const control of [
+        dialog.getByLabel('Collapse subject workspace'),
+        subjectCheckbox,
+        remove,
+      ]) {
+        await control.scrollIntoViewIfNeeded()
+        const name = await control.getAttribute('aria-label')
+          ?? await control.getAttribute('type')
+          ?? await control.textContent()
+        expect(await control.evaluate((element) => {
+          const bounds = element.getBoundingClientRect()
+          const hit = document.elementFromPoint(
+            bounds.x + bounds.width / 2,
+            bounds.y + bounds.height / 2,
+          )
+          return hit !== null && element.contains(hit)
+        }), `${name} at ${viewport.width}×${viewport.height}`).toBe(true)
+      }
+      await dialog.getByLabel('Collapse subject workspace').click()
+      expect(await dialog.locator('.notebook-subject-panel').evaluate((element) =>
+        element.scrollWidth <= element.clientWidth)).toBe(true)
+      await dialog.getByLabel('Expand subject workspace').click()
     }
     await modalInput.fill('Unsent image edit draft')
     const send = dialog.getByLabel('Send command')
     await send.focus()
     await page.keyboard.press('Tab')
-    expect(await close.evaluate((element) => document.activeElement === element)).toBe(true)
+    expect(await dialog.getByLabel('More media actions')
+      .evaluate((element) => document.activeElement === element)).toBe(true)
     await page.setViewportSize({ width: 1440, height: 1000 })
     await close.click()
     await dialog.waitFor({ state: 'hidden' })
@@ -1765,8 +1867,11 @@ describe('chat composer browser flow', () => {
     expect(await sidebarPlaybackState()).toEqual(pausedAtOpen)
 
     const fullscreenVideo = dialog.locator('video')
-    await page.getByLabel('Close fullscreen preview').press('Tab')
+    await dialog.getByLabel('Extract frame', { exact: true }).press('Tab')
     expect(await dialog.getByLabel('More media actions').evaluate((element) => document.activeElement === element)).toBe(true)
+    await page.keyboard.press('Tab')
+    expect(await dialog.getByLabel('Close fullscreen preview')
+      .evaluate((element) => document.activeElement === element)).toBe(true)
     await page.keyboard.press('Tab')
     expect(await fullscreenVideo.evaluate((element) => document.activeElement === element))
       .toBe(true)

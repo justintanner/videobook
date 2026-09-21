@@ -298,16 +298,6 @@
   display: grid;
   gap: 8px;
 }
-.notebook-media-more-actions {
-  position: absolute;
-  z-index: 20;
-  top: 16px;
-  right: 116px;
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-}
 .workspace-action-linked-results {
   list-style: none;
   padding: 0;

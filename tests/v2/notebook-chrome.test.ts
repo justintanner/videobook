@@ -246,7 +246,7 @@ describe('notebook chrome tokens', () => {
     expect(declaration(hidden, 'display')).toBe('none')
     const toolbar = rule(
       css,
-      '.notebook-subject-panel[data-collapsed="true"] > .notebook-subject-toolbar',
+      '.command-composer-contextual .notebook-subject-toolbar',
     )
     expect(pixelCount(declaration(toolbar, 'min-height'))).toBe(40)
     // The row it folds into is what lets it host the dock's close control.
