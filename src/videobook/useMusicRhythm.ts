@@ -52,6 +52,18 @@ export function useMusicRhythm({ bookId, ready, sequence, call, onSequence }: Op
     return readAnalysis(await call('get_music_analysis', { book_id: bookId, asset_id: clip.source.artifactId, stream_id: clip.source.range.streamId }, { background: true }))
   }
 
+  function acceptRhythm(next: RhythmState, targetSequence: Sequence) {
+    const source = soundtrackClip(targetSequence, next.settings)?.source
+    setData(current => {
+      const cached = current.scope === scope ? current.analysis : null
+      const matches = cached?.analysis && source
+        && cached.analysis.artifactId === source.artifactId
+        && cached.analysis.objectHash === source.range.objectHash
+        && cached.analysis.streamId === source.range.streamId
+      return { scope, rhythm: next, analysis: matches ? cached : null }
+    })
+  }
+
   async function observe(ticket: number, next: RhythmState, result: MusicAnalysisState | null) {
     while (ticket === epoch.current) {
       setData({ scope, rhythm: next, analysis: result })
@@ -69,6 +81,8 @@ export function useMusicRhythm({ bookId, ready, sequence, call, onSequence }: Op
     setActivity({ scope, busy: true, error: '' })
     try {
       const next = readState(await call('get_sequence_rhythm', { book_id: bookId, sequence_id: sequence.sequenceId }, { background: true }))
+      if (ticket !== epoch.current) return
+      acceptRhythm(next, sequence)
       const result = await readFor(next.settings)
       await observe(ticket, next, result)
     } catch (error) {
@@ -89,6 +103,7 @@ export function useMusicRhythm({ bookId, ready, sequence, call, onSequence }: Op
       }, { background: true }))
       if (ticket !== epoch.current) return
       const next = readState(result?.state)
+      acceptRhythm(next, targetSequence)
       onSequence(result?.sequence)
       const current = await readFor(next.settings, targetSequence)
       await observe(ticket, next, current)
@@ -125,7 +140,7 @@ export function useMusicRhythm({ bookId, ready, sequence, call, onSequence }: Op
 
   return { rhythm, master, analysis, markers, mapped, status, load, save, analyze, cancel,
     stop: () => { epoch.current += 1 },
-    busy: activity.scope === scope && activity.busy,
+    busy: !ready || activity.scope === scope && activity.busy,
     error: activity.scope === scope ? activity.error || data.analysis?.error || '' : '',
   }
 }

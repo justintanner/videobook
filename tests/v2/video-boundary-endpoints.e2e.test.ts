@@ -164,6 +164,8 @@ describe('video boundary endpoints over HTTP MCP', () => {
     const final = (await jobs()).find((job) => job.type === 'export_sequence')!.result!.artifactId
     const sound = await audioHash(final)
     const frames = await frameCount(final)
+    const secondFrame = await frame(final, 1 / 30)
+    expect(secondFrame[2]).toBeGreaterThan(150)
     const before = await bytes(final, 'original.mp4')
     const mismatch = await client.callTool({ name: 'inject_first_frame', arguments: { book_id: bookId, target_asset_id: final, image_asset_id: image, orientation: 'portrait' } })
     expect(mismatch.isError).toBe(true)
@@ -171,7 +173,8 @@ describe('video boundary endpoints over HTTP MCP', () => {
     await call('inject_first_frame', { target_asset_id: final, image_asset_id: image, ...(orientation === 'landscape' ? { orientation } : {}) })
     await idle()
     expect((await frame(final, 0))[0]).toBeGreaterThan(240)
-    expect((await frame(final, 1 / 30))[2]).toBeGreaterThan(240)
+    const preservedFrame = await frame(final, 1 / 30)
+    for (let channel = 0; channel < 3; channel++) expect(Math.abs(preservedFrame[channel]! - secondFrame[channel]!)).toBeLessThan(3)
     expect(await frameCount(final)).toBe(frames)
     expect(await audioHash(final)).toBe(sound)
     expect((await sharp(await bytes(final, 'original.jpg')).stats()).channels[0]!.mean).toBeGreaterThan(240)

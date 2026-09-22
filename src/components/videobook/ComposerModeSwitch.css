@@ -12,7 +12,7 @@
 }
 
 .command-composer .command-line-shell > .composer-mode-switch:has(.composer-engine-menu) {
-  z-index: 3;
+  z-index: 150;
 }
 
 .composer-mode-cell {

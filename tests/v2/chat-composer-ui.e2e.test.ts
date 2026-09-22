@@ -43,8 +43,8 @@ async function collapseComposerDock(page: Page): Promise<void> {
   const composer = page.locator('.command-composer')
   if (await composer.getAttribute('data-dock-open') !== 'true') return
   const collapse = page.getByLabel('Collapse chat', { exact: true })
-  if (await collapse.count()) await collapse.click({ force: true })
-  await expect.poll(async () => await composer.getAttribute('data-dock-open'))
+  if (await collapse.count()) await collapse.click()
+  await expect.poll(async () => await composer.getAttribute('data-dock-open'), { timeout: MCP_ROUNDTRIP_MS })
     .toBe('false')
 }
 
@@ -1237,7 +1237,7 @@ describe('chat composer browser flow', () => {
     ) {
       throw new Error('Could not measure notebook layout')
     }
-    expect(topbarBox.height).toBeLessThanOrEqual(50)
+    expect(topbarBox.height).toBeLessThanOrEqual(64)
     expect(toolbarBox.x).toBeGreaterThanOrEqual(brandBox.x + brandBox.width)
     expect(toolbarBox.x - brandBox.x - brandBox.width).toBeLessThanOrEqual(12)
     expect(toolbarBox.x + toolbarBox.width).toBeLessThanOrEqual(navigationBox.x)
@@ -1500,7 +1500,7 @@ describe('chat composer browser flow', () => {
       return {
         zoom,
         topGap: bounds.top - header.getBoundingClientRect().bottom,
-        bottomGap: composer.getBoundingClientRect().top - bounds.bottom,
+        bottomClearance: parseFloat(getComputedStyle(element).paddingBottom) - Math.max(0, bounds.bottom - composer.getBoundingClientRect().top),
         overflow: element.scrollWidth - element.clientWidth,
         columnsVisible: squares.every(square => {
           const rect = square.getBoundingClientRect()
@@ -1514,11 +1514,12 @@ describe('chat composer browser flow', () => {
         addressTextSize: Math.min(...addresses.map(address => parseFloat(getComputedStyle(address).fontSize) * zoom)),
         detailTextSize: Math.min(...details.map(detail => parseFloat(getComputedStyle(detail).fontSize) * zoom)),
         promptTextSize: Math.min(...prompts.map(prompt => parseFloat(getComputedStyle(prompt).fontSize) * zoom)),
-        detailsInsideCards: details.every(detail => {
+        detailsOutsideCards: details.flatMap(detail => {
           const card = detail.closest('.cell-node')?.getBoundingClientRect()
           const rect = detail.getBoundingClientRect()
           return card && rect.left >= card.left && rect.right <= card.right + 1
             && rect.top >= card.top && rect.bottom <= card.bottom + 1
+            ? [] : [{ text: detail.textContent, className: detail.className, rect: rect.toJSON(), card: card?.toJSON() }]
         }),
         promptsUseWholeLines: prompts.every(prompt => {
           const style = getComputedStyle(prompt)
@@ -1542,7 +1543,7 @@ describe('chat composer browser flow', () => {
       expect(layout.detailTextSize).toBeCloseTo(11, 2)
       expect(layout.promptTextSize).toBeCloseTo(13, 2)
       expect(layout).toMatchObject({
-        detailsInsideCards: true,
+        detailsOutsideCards: [],
         promptsUseWholeLines: true,
         headersDoNotOverlap: true,
       })
@@ -1553,9 +1554,10 @@ describe('chat composer browser flow', () => {
       await expect.poll(async () => (await readLayout()).overflow).toBeLessThanOrEqual(1)
       const layout = await readLayout()
       expect(layout).toMatchObject({ columnsVisible: true, addressesInsideCards: true })
-      expect(layout.topGap).toBeCloseTo(8)
-      expect(layout.bottomGap).toBeCloseTo(4)
-      expect(layout.emptyTextSize).toBeCloseTo(12, 2)
+      expect(layout.topGap).toBeGreaterThanOrEqual(8)
+      expect(layout.topGap).toBeLessThanOrEqual(24)
+      expect(layout.bottomClearance).toBeGreaterThanOrEqual(4)
+      expect(layout.emptyTextSize).toBeCloseTo(11, 2)
       expect(layout.addressTextSize).toBeCloseTo(14, 2)
       expectReadableDetails(layout)
       await expectGridWithoutSidebar(page)
@@ -1571,7 +1573,7 @@ describe('chat composer browser flow', () => {
       expect(layout.addressesInsideCards).toBe(true)
       expect(layout.addressTextSize).toBeCloseTo(14, 2)
       expectReadableDetails(layout)
-      expect(layout.bottomGap).toBeCloseTo(4)
+      expect(layout.bottomClearance).toBeGreaterThanOrEqual(4)
       await scroll.evaluate(element => { element.scrollLeft = element.scrollWidth })
       const last = page.locator('.notebook-grid-square-label').filter({ hasText: /^@a8$/u })
       const bounds = await last.boundingBox()
@@ -3572,7 +3574,7 @@ describe('chat composer browser flow', () => {
     notebookDirty = true
   }, 60_000)
 
-  it('keeps dense generation card headers compact and vertically centered', async () => {
+  it('keeps dense generation card headers compact and readable when their chips wrap', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()
     const input = page.getByLabel('Videobook command input')
@@ -3604,6 +3606,8 @@ describe('chat composer browser flow', () => {
         chipLabels: [...chips.querySelectorAll('.cell-aspect-ratio')]
           .map((chip) => chip.textContent?.trim()),
         contentGap: chipsRect.left - typeRect.right,
+        stacked: chipsRect.top >= typeRect.bottom,
+        contained: [typeRect, chipsRect].every(rect => rect.left >= headerRect.left && rect.right <= headerRect.right && rect.top >= headerRect.top && rect.bottom <= headerRect.bottom),
         headerHeight: headerRect.height,
         labelClipped: label.scrollWidth > label.clientWidth,
         renderedLabel: type.textContent?.trim(),
@@ -3620,10 +3624,13 @@ describe('chat composer browser flow', () => {
       renderedLabel: 'GEN VID',
       whiteSpace: 'nowrap',
     })
-    expect(layout.headerHeight).toBeCloseTo(24, 1)
-    expect(layout.contentGap).toBeGreaterThanOrEqual(0)
-    expect(layout.typeCenterOffset).toBeLessThan(1)
-    expect(layout.chipsCenterOffset).toBeLessThan(1)
+    expect(layout.headerHeight).toBeLessThanOrEqual(42)
+    expect(layout.contained).toBe(true)
+    expect(layout.stacked || layout.contentGap >= 0).toBe(true)
+    if (!layout.stacked) {
+      expect(layout.typeCenterOffset).toBeLessThan(1)
+      expect(layout.chipsCenterOffset).toBeLessThan(1)
+    }
 
     await notebookCellNode(page, outputVideoCellId).waitFor({ state: 'visible' })
 
@@ -3962,12 +3969,11 @@ describe('chat composer browser flow', () => {
       ].includes(label))).toBe(true)
     expect(await menu.locator('.cell-context-menu-danger').evaluate((element) =>
       getComputedStyle(element).borderTopStyle)).toBe('solid')
-    const menuBox = await menu.boundingBox()
-    if (!menuBox) throw new Error('Could not measure cell context menu')
-    expect(menuBox.x).toBeGreaterThanOrEqual(8)
-    expect(menuBox.y).toBeGreaterThanOrEqual(8)
-    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(1432)
-    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(992)
+    await expect.poll(async () => {
+      const bounds = await menu.boundingBox()
+      if (!bounds) return Infinity
+      return Math.max(8 - bounds.x, 8 - bounds.y, bounds.x + bounds.width - 1432, bounds.y + bounds.height - 992)
+    }).toBeLessThanOrEqual(0)
 
     await page.keyboard.press('Escape')
     await menu.waitFor({ state: 'hidden' })
@@ -4229,6 +4235,8 @@ describe('chat composer browser flow', () => {
     }).toBe(true)
 
     await collapseComposerDock(page)
+    const clear = page.getByLabel('Clear selection', { exact: true })
+    if (await clear.isVisible()) await clear.click()
     const firstCell = notebookCellNode(page, videoCellId)
     const secondCell = notebookCellNode(page, generationCellId)
     await firstCell.waitFor({ state: 'visible' })

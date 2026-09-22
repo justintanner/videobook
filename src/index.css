@@ -3060,10 +3060,10 @@ textarea:focus-visible {
 /* No pill: the rail's scrim carries the contrast, so the badges are plain
    text separated by a middot. */
 .cell-media-badge {
-  display: inline-flex;
+  display: block;
   min-width: 0;
   max-width: 100%;
-  flex: none;
+  flex: 0 1 auto;
   align-items: center;
   padding: 0;
   overflow: hidden;

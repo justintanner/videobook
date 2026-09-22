@@ -107,18 +107,24 @@ export function NotebookCellContextMenu({
   useLayoutEffect(() => {
     const menu = menuRef.current
     if (!menu) return
-    const margin = 8
-    const left = Math.max(
-      margin,
-      Math.min(position.x, window.innerWidth - menu.offsetWidth - margin - 1),
-    )
-    const top = Math.max(
-      margin,
-      Math.min(position.y, window.innerHeight - menu.offsetHeight - margin - 1),
-    )
-    menu.style.left = `${left}px`
-    menu.style.top = `${top}px`
+    const place = () => {
+      const margin = 8
+      const left = Math.max(
+        margin,
+        Math.min(position.x, window.innerWidth - menu.offsetWidth - margin - 1),
+      )
+      const top = Math.max(
+        margin,
+        Math.min(position.y, window.innerHeight - menu.offsetHeight - margin - 1),
+      )
+      menu.style.left = `${left}px`
+      menu.style.top = `${top}px`
+    }
+    place()
+    const observer = new ResizeObserver(place)
+    observer.observe(menu)
     enabledItems(menu)[0]?.focus({ preventScroll: true })
+    return () => observer.disconnect()
   }, [position.x, position.y])
 
   useEffect(() => {

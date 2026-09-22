@@ -32,7 +32,8 @@ export function useNotebookViewport(bookId: string, notebookId: string | undefin
     anchorRef.current = { left: 0, top: 0 }
     const sync = () => {
       rememberPosition()
-      const width = container.clientWidth
+      const style = getComputedStyle(container)
+      const width = Math.max(0, container.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight))
       const height = container.clientHeight
       setSurface(current => current.width === width && current.height === height
         ? current

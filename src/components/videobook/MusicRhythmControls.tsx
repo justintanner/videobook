@@ -95,7 +95,7 @@ export function MusicRhythmControls({ rhythm, sequence, assets, frame }: Props) 
         {clips.map((clip) => <option key={clip.clipId} value={clip.clipId}>{assets.find((asset) => asset.artifactId === clip.source.artifactId)?.label ?? 'Audio'} · {(clip.timelineStartFrame / fps).toFixed(1)}s</option>)}
       </select></label>
       <button type="button" disabled={!master || rhythm.busy || pending} onClick={() => void rhythm.analyze(Boolean(rhythm.analysis))}>{rhythm.analysis ? 'Analyze again' : 'Analyze beats'}</button>
-      {pending && <button type="button" onClick={() => void rhythm.cancel()}>Cancel analysis</button>}
+      {pending && <button type="button" disabled={rhythm.busy} onClick={() => void rhythm.cancel()}>Cancel analysis</button>}
       <span role="status">{pending ? 'Analyzing soundtrack…' : rhythm.status === 'no-beats' ? 'No reliable beats found. Set a grid below.' : bpm ? `${bpm.toFixed(1)} BPM · ${rhythm.mapped.length} beats` : 'Analyze the song or set a beat grid.'}</span>
       <button type="button" disabled={rhythm.busy} onClick={() => void rhythm.load()}>Reload beats</button>
     </div>

@@ -36,7 +36,7 @@ describe('workspace action launcher with real endpoints', () => {
     await input.fill(value)
     if (await page.locator('.command-suggestions').isVisible()) await input.press('Escape')
     await input.press('Enter')
-    await expect.poll(() => input.isEnabled()).toBe(true)
+    await expect.poll(() => input.isEnabled(), { timeout: 15_000 }).toBe(true)
   }
 
   async function call(name: string, args: Record<string, unknown> = {}): Promise<unknown> {
@@ -192,9 +192,9 @@ describe('workspace action launcher with real endpoints', () => {
     await page.screenshot({ path: '/tmp/videobook-actions-prompt.png' })
   })
 
-  it('opens a typed form for every catalog action without starting mutations', async () => {
+  it.each([0, 1, 2, 3])('opens a typed form for every catalog action without starting mutations (batch %i)', async (batch) => {
     await openActions()
-    for (const action of catalog.actions) {
+    for (const action of catalog.actions.filter((_, index) => index % 4 === batch)) {
       const search = page.getByLabel('Videobook command input', { exact: true })
       await search.fill(action.command)
       await page.locator(`.workspace-actions-list [data-action-id="${action.id}"]`).click()
@@ -296,7 +296,7 @@ describe('workspace action launcher with real endpoints', () => {
     expect(record(await call('get_prompt_entity', { entity_id: entity.id }))?.description).toBe('Keep this description')
     await page.keyboard.press('Escape')
     await openActions('/delete-prompt-entity')
-    await page.getByLabel('Entity', { exact: false }).selectOption(String(entity.id))
+    await page.getByRole('combobox', { name: /^Entity\b/u }).selectOption(String(entity.id))
     await page.getByRole('button', { name: 'Review action', exact: true }).click()
     expect(JSON.stringify(await call('list_prompts'))).toContain('Editable prompt')
     await page.getByRole('button', { name: 'Confirm and run', exact: true }).click()
@@ -316,11 +316,11 @@ describe('workspace action launcher with real endpoints', () => {
   it('switches an advanced provider while retaining the draft and reviews unknown cost without generating', async () => {
     const original = catalog.actions.find(action => action.id === 'tool.generate_kie_qwen_3_0_edit_image')!
     await openActions(original.command)
-    await page.getByLabel('Prompt', { exact: false }).first().fill('Keep the same scene and use a watercolor style')
+    await page.getByRole('textbox', { name: /^Prompt\b/u }).fill('Keep the same scene and use a watercolor style')
     await page.getByText('Advanced provider and model', { exact: true }).click()
     await page.getByLabel('Provider and model', { exact: true }).selectOption('tool.generate_fal_qwen_3_0_edit_image')
     await page.getByRole('heading', { level: 3, name: 'Generate fal qwen 3 0 edit image' }).waitFor()
-    expect(await page.getByLabel('Prompt', { exact: false }).first().inputValue()).toBe('Keep the same scene and use a watercolor style')
+    expect(await page.getByRole('textbox', { name: /^Prompt\b/u }).inputValue()).toBe('Keep the same scene and use a watercolor style')
     const refs = page.getByRole('dialog', { name: 'Workspace actions' }).locator('select').filter({ has: page.locator(`option[value="${imageId}"]`) })
     await refs.first().selectOption(imageId)
     const before = JSON.stringify(await call('list_jobs'))
